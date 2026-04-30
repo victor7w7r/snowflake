@@ -4,6 +4,7 @@
   populateFirmwareCommands,
 }:
 ''
+  echo "Creating boot partition..."
   gap=8
   bootSizeMB=${toString bootSize}
   persistSizeMB=${toString persistSize}
@@ -26,6 +27,7 @@
   mkfs.vfat --invariant -i 0x2178694e -n BOOT firmware_part.img
   mkdir firmware
 
+  echo "Populating firmware..."
   ${populateFirmwareCommands}
 
   find firmware -exec touch --date=2000-01-01 {} +

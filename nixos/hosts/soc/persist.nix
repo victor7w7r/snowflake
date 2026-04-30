@@ -3,6 +3,7 @@ let
   fakeInvoke = ''faketime -f "1970-01-01 00:00:01" fakeroot'';
 in
 ''
+  echo "Creating persist partition in f2fs..."
   persistSizeMB=${toString persistSize}
   bytes=$(( persistSizeMB * 1024 * 1024 ))
   bytes=$(( ((bytes + 2097151) / 2097152) * 2097152 ))

@@ -39,14 +39,16 @@ stdenv.mkDerivation {
   ];
 
   buildCommand = ''
+    mkdir -p $out
+
     ${persist}
     ${boot}
     dd conv=notrunc if=./persist.img of=boot.img seek=$START count=$SECTORS
+
+    echo "Copying uboot and compressing boot image..."
     ${postBuildCommands}
-    zstd -T$NIX_BUILD_CORES --rm boot.img
+    zstd -T$NIX_BUILD_CORES --rm boot.img && cp -a ./boot.img.zst
 
     ${store}
-    mkdir -p $out
-    cp -a ./boot.img.zst ./store.img.zst $out/
   '';
 }
