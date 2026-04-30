@@ -24,6 +24,28 @@
   "-e DEFAULT_BBR"
   "-e DEFAULT_FQ"
 
+  "-e USB_ETH"
+  "-e USB_LIBCOMPOSITE"
+  "-e USB_F_ETHER"
+  "-e USB_UAS"
+  "-e USB_STORAGE"
+  "-e USB_HID"
+  "-e USB_EHCI_HCD"
+  "-e USB_OHCI_HCD"
+  "-e MMC_BLOCK"
+  "-e MMC_SDHCI"
+  "-e NVMEM_SUNXI_SID"
+
+  "-e STMMAC_ETH"
+  "-e DWMAC_SUN8I"
+  "-e PHYLIB"
+  "-e SUN8I_EPHY"
+
+  "-e SUN6I_RTC_CCU"
+  "-e DUMP_REG"
+
+  "-e MFD_AC200"
+
   "-e NO_HZ"
   "-e NO_HZ_COMMON"
   "-e NO_HZ_IDLE"
