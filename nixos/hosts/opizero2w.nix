@@ -73,6 +73,8 @@ in
       "earlycon"
       "console=ttyS0,115200n8"
       "console=tty0"
+      "clk_ignore_unused"
+      "systemd.setenv=SYSTEMD_SULOGIN_FORCE=1"
     ];
     initrd = {
       systemd.contents."/share/terminfo".source = "${pkgs.ncurses}/share/terminfo";
@@ -80,12 +82,21 @@ in
         "sunxi-mmc"
         "usb_storage"
         "uas"
+        "g_ether"
         "uhci_hcd"
         "ehci_hcd"
         "xhci_pci"
+        "xhci_pci"
+        "usbhid"
+        "sprdbt_tty"
+        "sdhci_pci"
         "sdhci_acpi"
         "sdhci"
-        "g_ether"
+        "uwe5622_bsp_sdio"
+        "libcomposite"
+        "sprdwl_ng"
+        "mmc_block"
+        "nvmem_sunxi_sid"
       ];
     };
     loader = {
