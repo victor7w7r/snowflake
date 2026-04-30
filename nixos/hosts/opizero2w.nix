@@ -20,7 +20,7 @@ in
   imports = [
     (import ./soc {
       inherit config pkgs host;
-      postBuildCommands = "dd if=${uboot}/u-boot-sunxi-with-spl.bin of=$bootImg bs=1024 seek=8 conv=notrunc";
+      postBuildCommands = "dd if=${uboot}/u-boot-sunxi-with-spl.bin of=boot.img bs=1024 seek=8 conv=notrunc";
       populateFirmwareCommands = ''
         mkdir -p firmware/boot
         ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
@@ -70,7 +70,7 @@ in
 
   boot = {
     kernelParams = [
-      #"earlycon"
+      "earlycon"
       "console=ttyS0,115200n8"
       "console=tty0"
     ];

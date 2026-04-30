@@ -18,13 +18,7 @@
   ...
 }:
 let
-  store = import ./store.nix {
-    inherit
-      storeLabel
-      isHDD
-      closureInfo
-      ;
-  };
+  store = import ./store.nix { inherit storeLabel isHDD closureInfo; };
   boot = import ./boot.nix { inherit bootSize persistSize populateFirmwareCommands; };
   persist = import ./persist.nix { inherit persistSize persistLabel; };
   #nativePkgs = import pkgs.path { system = pkgs.system; };
@@ -35,33 +29,24 @@ stdenv.mkDerivation {
     bcachefs-tools
     dosfstools
     fakeroot
-    xfsprogs
     f2fs-tools
-    gnutar
     libfaketime
     mtools
-    pv
     systemdUkify
     util-linux
+    xfsprogs
     zstd
   ];
 
   buildCommand = ''
-    export bootImg=boot.img
-
     ${persist}
     ${boot}
-
-    eval $(partx $bootImg -o START,SECTORS --nr 2 --pairs)
-    dd conv=notrunc if=./persist.img of=$bootImg seek=$START count=$SECTORS
-
+    dd conv=notrunc if=./persist.img of=boot.img seek=$START count=$SECTORS
     ${postBuildCommands}
+    zstd -T$NIX_BUILD_CORES --rm boot.img
+
     ${store}
-
-    zstd -T$NIX_BUILD_CORES --rm $bootImg
-    zstd -T$NIX_BUILD_CORES --rm store.img
-
     mkdir -p $out
-    cp -a ./* $out/
+    cp -a ./boot.img.zst ./store.img.zst $out/
   '';
 }

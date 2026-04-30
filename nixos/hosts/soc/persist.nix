@@ -1,7 +1,4 @@
-{
-  persistSize ? 2048,
-  persistLabel ? "persist",
-}:
+{ persistSize, persistLabel }:
 let
   fakeInvoke = ''faketime -f "1970-01-01 00:00:01" fakeroot'';
 in

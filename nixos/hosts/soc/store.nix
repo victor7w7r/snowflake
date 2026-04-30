@@ -1,26 +1,16 @@
 {
   closureInfo,
   isHDD,
-  storeLabel ? "store",
+  storeLabel,
 }:
-let
-  fsOpts =
-    if isHDD then
-      ''export SYSTEMD_REPART_MKFS_OPTIONS_XFS="-f -m crc=1 -n size=64k"''
-    else
-      ''export SYSTEMD_REPART_MKFS_OPTIONS_BCACHEFS="--compression=lz4 --background_compression=zstd"'';
-  fakeInvoke = ''faketime -f "1970-01-01 00:00:01" fakeroot'';
-in
 ''
-  ${fsOpts}
-
   mkdir -p repart.d
   cat <<EOF > repart.d/10-store.conf
   [Partition]
   Type=root
   Label=${storeLabel}
   Format=${if isHDD then "xfs" else "bcachefs"}
-  SizeMinBytes=16G
+  SizeMinBytes=12G
   PaddingBytes=2G
   Minimize=no
   Weight=1000
@@ -40,6 +30,15 @@ in
     echo "CopyFiles=$path:''${path#/nix}" >> repart.d/10-store.conf
   done
 
-  ${fakeInvoke} systemd-repart --dry-run=no --empty=create \
-    --size=auto --definitions=./repart.d store.img
+  ${
+    if isHDD then
+      ''export SYSTEMD_REPART_MKFS_OPTIONS_XFS="-f -m crc=1 -n size=64k"''
+    else
+      ''export SYSTEMD_REPART_MKFS_OPTIONS_BCACHEFS="--compression=lz4 --background_compression=zstd"''
+  }
+
+  faketime -f "1970-01-01 00:00:01" fakeroot \
+    systemd-repart --dry-run=no --empty=create --size=auto --definitions=./repart.d store.img
+
+  zstd -T$NIX_BUILD_CORES --rm store.img
 ''
