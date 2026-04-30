@@ -73,7 +73,7 @@ in
       "earlycon"
       "console=ttyS0,115200n8"
       "console=tty0"
-      "clk_ignore_unused"
+      "mmc_core.use_spi_crc=0"
       "systemd.setenv=SYSTEMD_SULOGIN_FORCE=1"
     ];
     initrd = {
