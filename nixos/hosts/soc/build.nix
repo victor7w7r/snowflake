@@ -47,7 +47,7 @@ stdenv.mkDerivation {
 
     echo "Copying uboot and compressing boot image..."
     ${postBuildCommands}
-    zstd -T$NIX_BUILD_CORES --rm boot.img && cp -a ./boot.img.zst
+    zstd -T$NIX_BUILD_CORES --rm boot.img && cp -a ./boot.img.zst $out/
 
     ${store}
   '';

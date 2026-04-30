@@ -43,5 +43,5 @@
   faketime -f "1970-01-01 00:00:01" fakeroot \
     systemd-repart --dry-run=no --empty=create --size=auto --definitions=./repart.d store.img
 
-  zstd -T$NIX_BUILD_CORES --rm store.img && cp -a ./store.img.zst
+  zstd -T$NIX_BUILD_CORES --rm store.img && cp -a ./store.img.zst $out/
 ''
