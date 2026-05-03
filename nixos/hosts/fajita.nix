@@ -134,4 +134,15 @@ in
     enable = true;
     name = "qcom/sdm845-oneplus-fajita.dtb";
   };
+
+  mobile = {
+    system.android.device_name = "OnePlus6T";
+    device = {
+      name = "oneplus-fajita";
+      supportLevel = "best-effort";
+      identity.name = "OnePlus 6T";
+    };
+    hardware.screen.height = 2340;
+  };
+
 }
