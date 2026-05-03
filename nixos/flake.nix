@@ -255,11 +255,13 @@
                 nixpkgs.config.allowUnsupportedSystem = true;
                 nixpkgs.overlays = [
                   inputs.emacs-overlay.overlay
-                  (final: prev: {
-                    cached-nix-shell = prev.cached-nix-shell.overrideAttrs (old: {
-                      CARGO_FEATURE_NO_ASM = "1";
-                    });
-                  })
+                  /*
+                    (final: prev: {
+                      cached-nix-shell = prev.cached-nix-shell.overrideAttrs (old: {
+                        CARGO_FEATURE_NO_ASM = "1";
+                      });
+                    })
+                  */
                 ];
               }
             )
