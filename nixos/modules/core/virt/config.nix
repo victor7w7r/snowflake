@@ -32,6 +32,7 @@
       qemu = {
         package = pkgs.qemu_kvm;
         runAsRoot = true;
+        vhostUserPackages = with pkgs; [ virtiofsd ];
         swtpm.enable = true;
       };
     };
@@ -39,7 +40,13 @@
 
   users.extraGroups.podman.members = [ username ];
 
+  systemd = {
+    packages = [ pkgs.waydroid-helper ];
+    services.waydroid-mount.wantedBy = [ "multi-user.target" ];
+  };
+
   programs = {
     mdevctl.enable = true;
+    virt-manager.enable = true;
   };
 }

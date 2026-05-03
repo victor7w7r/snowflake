@@ -135,6 +135,7 @@ in
     radeontop
     ryzenadj
     tbtools
+    qjoypad
     thunderbolt
   ];
 
@@ -147,6 +148,7 @@ in
     enableAllFirmware = true;
     amdgpu.opencl.enable = true;
     uinput.enable = true;
+    xone.enable = true;
   };
 
   programs.rog-control-center.enable = true;
@@ -165,7 +167,8 @@ in
         hotplug_type = "Asus";
       };
     };
-
+    tuned.enable = false;
+    inputplumber.enable = lib.mkForce false;
     btrfs.autoScrub = {
       enable = true;
       fileSystems = [

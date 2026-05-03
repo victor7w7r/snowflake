@@ -10,6 +10,7 @@
     glances.enable = false;
     locate.enable = true;
     lvm.boot.thin.enable = true;
+    envfs.enable = true;
     #restic.enable = true;
     logrotate.enable = true;
     orca.enable = lib.mkForce false;
