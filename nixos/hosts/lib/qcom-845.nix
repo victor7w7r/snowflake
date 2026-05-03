@@ -16,6 +16,9 @@
   mobile.hardware = {
     soc = "qualcomm-sdm845";
   };
+  mobile.system = {
+    type = "android";
+  };
 
   nixpkgs.config.allowUnfreePredicate =
     pkg:
