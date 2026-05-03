@@ -20,7 +20,7 @@
       zsh-forgit
     ]
     ++ [
-      github-copilot-cli
+      #github-copilot-cli
       #jan
       #ollama-rocm
     ]
