@@ -61,7 +61,7 @@ in
     consoleLogLevel = 4;
     loader = {
       grub.enable = false;
-      systemd-boot.enable = true;
+      systemd-boot.enable = lib.mkForce true;
       systemd-boot.extraFiles.${config.hardware.deviceTree.name} =
         "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}";
       efi.canTouchEfiVariables = false;
