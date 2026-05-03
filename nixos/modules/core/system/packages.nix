@@ -1,6 +1,5 @@
 {
   host,
-  inputs,
   pkgs,
   ...
 }:
@@ -16,6 +15,7 @@
       choose
       cmd-wrapped
       cod
+      distrobox
       efibootmgr
       emptty
       evemu

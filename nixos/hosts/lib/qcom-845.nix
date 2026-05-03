@@ -13,6 +13,9 @@
   hardware.graphics.enable32Bit = lib.mkForce false;
   mobile.quirks.qualcomm.sdm845-modem.enable = true;
   mobile.quirks.audio.alsa-ucm-meld = true;
+  mobile.hardware = {
+    soc = "qualcomm-sdm845";
+  };
 
   nixpkgs.config.allowUnfreePredicate =
     pkg:

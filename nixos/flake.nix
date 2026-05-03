@@ -203,6 +203,7 @@
       };
 
       nixosConfigurations = {
+        #/data/data/com.termux.nix/files/usr/bin/login
         #nix build -L ".#nixosConfigurations.opizero2w.config.system.build.sdImage"
         #nix build -L ".#nixosConfigurations.opizero2w.config.system.build.toplevel"
         opizero2w = nixpkgs.lib.nixosSystem {
@@ -242,6 +243,7 @@
         };
 
         #nix build -L ".#packages.aarch64-linux.uboot"
+        #nix build -L ".#nixosConfigurations.opizero2w.config.system.build.toplevel"
         #nix build -L ".#nixosConfigurations.fajita.config.mobile.outputs.generatedFilesystems.rootfs"
         fajita = nixpkgs.lib.nixosSystem {
           system = systemarm;
