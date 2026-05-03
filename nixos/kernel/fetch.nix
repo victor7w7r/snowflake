@@ -70,6 +70,13 @@
     hash = kernelData.armbian.hash;
   };
 
+  uwe5622 = pkgs.fetchFromGitHub {
+    owner = kernelData.uwe5622.user;
+    repo = kernelData.uwe5622.repo;
+    rev = kernelData.uwe5622.rev;
+    hash = kernelData.uwe5622.hash;
+  };
+
   sdm845 = pkgs.fetchFromGitea {
     domain = kernelData.sdm845.domain;
     owner = kernelData.sdm845.owner;

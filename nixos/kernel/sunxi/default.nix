@@ -1,4 +1,5 @@
 {
+  lib,
   pkgs,
   kernelData,
   ...
@@ -10,6 +11,12 @@ let
 
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
   patches = configure.passthru.patches;
+  majorMinor = lib.versions.majorMinor kernelData.linux.version;
+  fetch = (
+    pkgs.callPackage ../fetch.nix {
+      inherit kernelData majorMinor;
+    }
+  );
   kernel =
     (pkgs.linuxManualConfig {
       inherit (configure) src;
@@ -33,9 +40,9 @@ let
       ];
     }).overrideAttrs
       (attrs: {
-        postPatch = ''
-           ${attrs.postPatch}
-          ${import ./wifi-patch.nix}
+        prePatch = ''
+          ${import ./wifi-patch.nix { uwe5622 = fetch.uwe5622; }}
+          ${import ./dts.nix { armbian = fetch.armbian; }}
         '';
         nativeBuildInputs = (attrs.nativeBuildInputs or [ ]);
         passthru = attrs.passthru // {

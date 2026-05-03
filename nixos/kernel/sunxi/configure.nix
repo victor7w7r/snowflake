@@ -23,11 +23,35 @@ let
   );
   selectedPatches = map (path: [ "${patchesRoute}/${path}" ]) patchesList;
 
-  patches = selectedPatches ++ [
-    "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
-    "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
-    "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
+  wifiPatches = [
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-allwinner-v6.3.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-allwinner-bugfix-v6.3.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-allwinner-v6.3-compilation-fix.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.4-post.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-warnings.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-park-link-v6.1-post.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.1.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.6-fix-tty-sdio.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-setting-mac-address-for-netdev.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/wireless-uwe5622-Fix-compilation-with-6.7-kernel.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/wireless-uwe5622-reduce-system-load.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.9.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.11.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-spanning-writes.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-timer-api-changes-for-6.15-only-sunxi.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.16.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.17.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.18.patch"
   ];
+
+  patches =
+    selectedPatches
+    ++ wifiPatches
+    ++ [
+      "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
+      "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
+      "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
+    ];
 in
 
 pkgs.stdenv.mkDerivation {
@@ -37,6 +61,12 @@ pkgs.stdenv.mkDerivation {
 
   nativeBuildInputs = kernel.nativeBuildInputs ++ kernel.buildInputs;
   installPhase = "cp .config $out";
+
+  prePatch = ''
+    ${import ./wifi-patch.nix { uwe5622 = fetch.uwe5622; }}
+    ${import ./dts.nix { armbian = fetch.armbian; }}
+  '';
+
   buildPhase = ''
     export ARCH=arm64
 
