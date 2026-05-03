@@ -36,7 +36,7 @@
       xh
     ]
     ++ [
-      dblab
+      #dblab
       gobang
       rainfrog
       ktlint
