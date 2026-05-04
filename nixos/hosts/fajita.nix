@@ -24,7 +24,7 @@ in
   ];
 
   system.build.uboot = kernel.uboot;
-
+  #(import "${inputs.mobile-nixos}/overlay/overlay.nix")
   fileSystems = {
     "/boot" = {
       device = "/dev/disk/by-partlabel/esp";
@@ -69,7 +69,6 @@ in
     };
     kernelParams = [
       "console=ttyMSM0,115200"
-      "console=tty0"
       "dtb=/${config.hardware.deviceTree.name}"
     ];
     initrd = {
@@ -133,16 +132,6 @@ in
   hardware.deviceTree = {
     enable = true;
     name = "qcom/sdm845-oneplus-fajita.dtb";
-  };
-
-  mobile = {
-    system.android.device_name = "OnePlus6T";
-    device = {
-      name = "oneplus-fajita";
-      supportLevel = "best-effort";
-      identity.name = "OnePlus 6T";
-    };
-    hardware.screen.height = 2340;
   };
 
 }

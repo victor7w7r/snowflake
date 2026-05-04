@@ -140,26 +140,10 @@
         inherit system;
         overlays = [
           nix-cachyos-kernel.overlays.pinned
-          (self: super: {
-            gui-assets = super.gui-assets.overrideAttrs (oldAttrs: {
-              nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ self.coreutils ];
-              postPatch = (oldAttrs.postPatch or "") + ''
-                # Creamos un binario falso de svgo en el directorio de build
-                mkdir -p $TMPDIR/bin
-                echo "#!/bin/sh" > $TMPDIR/bin/svgo
-                echo "cat \$@" >> $TMPDIR/bin/svgo
-                chmod +x $TMPDIR/bin/svgo
-                export PATH=$TMPDIR/bin:$PATH
-              '';
-            });
-          })
         ];
       };
       armPkgs = import nixpkgs {
         system = systemarm;
-        overlays = [
-          (import "${inputs.mobile-nixos}/overlay/overlay.nix")
-        ];
       };
 
       home = (pkgs.callPackage ./modules/home { inherit self inputs username; }).home-manager;
