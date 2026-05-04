@@ -1,7 +1,6 @@
 {
   config,
   pkgs,
-  lib,
   additionalContent ? "",
   additionalBuildInputs ? [ ],
 }:
