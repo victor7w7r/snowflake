@@ -12,7 +12,6 @@
   Label=${storeLabel}
   Format=${if isHDD then "xfs" else "bcachefs"}
   SizeMinBytes=12G
-  PaddingBytes=2G
   Minimize=no
   Weight=1000
   CopyFiles=${closureInfo}/registration:/nix-path-registration
@@ -41,7 +40,7 @@
 
   echo "Creating and compressing store partition..."
   faketime -f "1970-01-01 00:00:01" fakeroot \
-    systemd-repart --dry-run=no --empty=create --size=auto --definitions=./repart.d store.img
+    systemd-repart --root=. --dry-run=no --empty=create --size=auto --definitions=./repart.d store.img
 
   zstd -T$NIX_BUILD_CORES --rm store.img && cp -a ./store.img.zst $out/
 ''
