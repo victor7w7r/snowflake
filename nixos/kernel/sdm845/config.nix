@@ -166,7 +166,6 @@
   "-d KEXEC_JUMP"
   "-d INPUT_JOYSTICK"
   "-d INPUT_TABLET"
-  "-d INPUT_TOUCHSCREEN"
   "-d KALLSYMS_ALL"
   "-d HZ_1000"
   "-d NO_HZ_FULL"
@@ -180,7 +179,6 @@
   "-d SECURITY_SELINUX"
   "-d SECURITY_TOMOYO"
   "-d XFS_FS"
-  "-d BTRFS_FS"
 
   "-d STAGING"
   "-d SPARD_WLAN_SUPPORT"
