@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   host,
   pkgs,
   kernelData,
@@ -31,7 +32,7 @@ in
     */
 
     (import ./lib/tarball.nix {
-      inherit config pkgs;
+      inherit config pkgs lib;
       additionalBuildInputs = ''
         cp ${uboot}/u-boot-sunxi-with-spl.bin $out/
         mkdir -p boot
