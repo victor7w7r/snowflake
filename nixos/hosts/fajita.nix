@@ -76,7 +76,6 @@ in
         contents."/share".source = "${pkgs.libinput.out}/share";
         storePaths = [ pkgs.libinput ];
       };
-      includeDefaultModules = false;
       kernelModules = [
         "i2c_qcom_geni"
         "rmi_core"

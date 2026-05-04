@@ -19,7 +19,6 @@ let
       inputs
       ;
   };
-  btrfs = (import ./lib/btrfs.nix);
   bcachefs = (import ./lib/bcachefs.nix);
   shared = (import ./lib/shared.nix) {
     sharedDir = "/run/media/games";
@@ -111,6 +110,37 @@ in
         "sdhci_pci"
         "zram"
       ];
+      systemd = {
+        services.zram-format = {
+          wantedBy = [ "initrd.target" ];
+          requiredBy = [ "sysroot.mount" ];
+          before = [
+            "dev-mapper-persist.device"
+            "dev-mapper-storage.device"
+            "initrd-fs.target"
+            "sysroot.mount"
+          ];
+          after = [ "systemd-modules-load.service" ];
+          unitConfig.DefaultDependencies = false;
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          path = [
+            pkgs.util-linux
+            pkgs.systemd
+            pkgs.e2fsprogs
+            pkgs.coreutils
+          ];
+          script = ''
+            set -e
+            mkdir -p /media
+
+            echo 4G > /sys/block/zram1/disksize
+            mkfs.ext4 -m 0 -O "^has_journal,^huge_file,^flex_bg" /dev/zram1
+          '';
+        };
+      };
       luks.devices.syscrypt = {
         device = "/dev/disk/by-partlabel/disk-main-swapcrypt";
         crypttabExtraOpts = [ "tpm2-device=auto" ];
@@ -171,11 +201,8 @@ in
     inputplumber.enable = lib.mkForce false;
     btrfs.autoScrub = {
       enable = true;
-      fileSystems = [
-        "/nix/persist"
-        "/nix"
-      ];
-      interval = "monthly";
+      fileSystems = [ "/run/media/games" ];
+      interval = "weekly";
     };
 
     asusd = {
@@ -199,9 +226,7 @@ in
       adjustor.enable = true;
       adjustor.loadAcpiCallModule = true;
     };
-    inputplumber.enable = lib.mkForce false;
     powerstation.enable = false;
-    tuned.enable = false;
     udev.extraRules = ''
       ACTION=="add", SUBSYSTEM=="pci", DRIVER=="amdgpu", RUN+="${pkgs.coreutils}/bin/chmod a+w /sys/%p/power_dpm_force_performance_level /sys/%p/pp_od_clk_voltage"
       SUBSYSTEM=="usb", ATTR{idVendor}=="2808", ATTR{idProduct}=="a753", MODE="0660", GROUP="input"
