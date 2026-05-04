@@ -7,6 +7,21 @@
 {
 
   imports = [
+    pkgs.callPackage
+    "${inputs.mobile-nixos}/overlay/qrtr/qrtr.nix"
+    { }
+    pkgs.callPackage
+    "${inputs.mobile-nixos}/overlay/qrtr/qmic.nix"
+    { }
+    pkgs.callPackage
+    "${inputs.mobile-nixos}/overlay/qrtr/tqftpserv.nix"
+    { }
+    pkgs.callPackage
+    "${inputs.mobile-nixos}/overlay/qrtr/pd-mapper.nix"
+    { }
+    pkgs.callPackage
+    "${inputs.mobile-nixos}/overlay/qrtr/rmtfs.nix"
+    { }
     "${inputs.mobile-nixos}/modules/quirks/qualcomm/sdm845-modem.nix"
     "${inputs.mobile-nixos}/modules/quirks/audio.nix"
   ];
