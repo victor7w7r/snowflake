@@ -24,7 +24,6 @@ in
   ];
 
   system.build.uboot = kernel.uboot;
-  #(import "${inputs.mobile-nixos}/overlay/overlay.nix")
   fileSystems = {
     "/boot" = {
       device = "/dev/disk/by-partlabel/esp";

@@ -17,8 +17,7 @@
         pkgs
         ;
     })
-  ]
-  ++ (import "${inputs.mobile-nixos}/modules/module-list.nix");
+  ];
 
   zramSwap = {
     enable = true;

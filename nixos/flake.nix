@@ -253,13 +253,6 @@
                 nixpkgs.config.allowUnsupportedSystem = true;
                 nixpkgs.overlays = [
                   inputs.emacs-overlay.overlay
-                  /*
-                    (final: prev: {
-                      cached-nix-shell = prev.cached-nix-shell.overrideAttrs (old: {
-                        CARGO_FEATURE_NO_ASM = "1";
-                      });
-                    })
-                  */
                 ];
               }
             )
@@ -273,8 +266,7 @@
             sops-nix.nixosModules.sops
             (import ./modules/core)
             (import ./modules/home)
-          ]
-          ++ (import "${inputs.mobile-nixos}/modules/module-list.nix");
+          ];
           specialArgs = {
             host = "v7w7r-fajita";
             system = systemarm;
