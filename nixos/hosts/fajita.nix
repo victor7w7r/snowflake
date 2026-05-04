@@ -30,6 +30,7 @@ in
   ];
 
   system.build.uboot = kernel.uboot;
+
   fileSystems = {
     "/boot" = {
       device = "/dev/disk/by-partlabel/esp";

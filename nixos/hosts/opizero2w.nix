@@ -18,13 +18,26 @@ in
   ];
 
   imports = [
-    (import ./soc {
+    /*
+      (import ./soc {
       inherit config pkgs host;
       postBuildCommands = "dd if=${uboot}/u-boot-sunxi-with-spl.bin of=boot.img bs=1024 seek=8 conv=notrunc";
       populateFirmwareCommands = ''
         mkdir -p firmware/boot
         ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
           -c ${config.system.build.toplevel} -d firmware/boot
+      '';
+      })
+    */
+
+    (import ./lib/tarball.nix {
+      inherit config pkgs;
+      additionalBuildInputs = ''
+        cp ${uboot}/u-boot-sunxi-with-spl.bin $out/
+        mkdir -p boot
+        ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
+          -c ${config.system.build.toplevel} -d boot
+        tar -cv -C . boot | zstd -T$NIX_BUILD_CORES > $out/boot.tar.zst
       '';
     })
   ];
