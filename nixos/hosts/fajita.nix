@@ -72,7 +72,7 @@ in
     ];
     initrd = {
       extraUtilsCommands = ''
-        copy_bin_and_libs ${(pkgs.callPackage ../custom/buffybox.nix { })}/bin/buffyboard
+        copy_bin_and_libs ${(pkgs.callPackage ./custom/buffybox.nix { })}/bin/buffyboard
         cp -a ${pkgs.libinput.out}/share $out/
       '';
       includeDefaultModules = false;

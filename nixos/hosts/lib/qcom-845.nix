@@ -31,7 +31,6 @@
   hardware.firmware = lib.mkAfter [ (pkgs.callPackage ../custom/oneplus.nix { }) ];
 
   systemd.services.ModemManager.serviceConfig.ExecStart = [
-    ""
     "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"
   ];
 
