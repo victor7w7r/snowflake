@@ -163,7 +163,7 @@
               kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             }).kernel.uboot;
 
-          fajita-tarball = self.nixosConfigurations.fajita.config.system.build.tarball;
+          opi-tarball = self.nixosConfigurations.opizero2w.config.system.build.tarball;
 
           qcomconfig =
             (armPkgs.callPackage ./kernel/sdm845 {
