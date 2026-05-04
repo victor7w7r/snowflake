@@ -163,6 +163,8 @@
               kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             }).kernel.uboot;
 
+          fajita-tarball = self.nixosConfigurations.fajita.config.system.build.tarball;
+
           qcomconfig =
             (armPkgs.callPackage ./kernel/sdm845 {
               inherit inputs;
