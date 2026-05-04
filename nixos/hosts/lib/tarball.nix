@@ -9,7 +9,6 @@ let
   closureInfo = pkgs.buildPackages.closureInfo {
     rootPaths = [ config.system.build.toplevel ];
   };
-  storePaths = "$(cat ${closureInfo}/store-paths)";
 in
 {
   system.build.tarball = pkgs.stdenvNoCC.mkDerivation {
@@ -18,10 +17,11 @@ in
     nativeBuildInputs = with pkgs; [ zstd ] ++ additionalBuildInputs;
 
     buildCommand = ''
-      mkdir -p $out nix/store
+      mkdir -p $out
+      mkdir -p nix
       cp ${closureInfo}/registration nix/nix-path-registration
       echo "nix/nix-path-registration" > path_list
-      echo "${lib.concatStringsSep "\n" (map (p: lib.removePrefix "/" p) storePaths)}" >> path_list
+      sed 's|^/||' ${closureInfo}/store-paths >> path_list
       tar -cv -C / -T path_list | zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
 
       ${if additionalContent != "" then additionalContent else ""}
