@@ -11,6 +11,12 @@ let
   f2fs = import ./lib/f2fs.nix;
 in
 {
+  nixpkgs.overlays = [
+    (_final: super: {
+      makeModulesClosure = x: super.makeModulesClosure (x // { allowMissing = true; });
+    })
+  ];
+
   imports = [
     (import ./lib/qcom-845.nix {
       inherit
