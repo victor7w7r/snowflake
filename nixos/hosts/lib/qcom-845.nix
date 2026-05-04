@@ -7,18 +7,24 @@
 {
 
   nixpkgs.overlays = [
-    (final: super: {
-      pd-mapper = final.callPackage "${inputs.mobile-nixos}/overlay/qrtr/pd-mapper.nix" { };
-      tqftpserv = final.callPackage "${inputs.mobile-nixos}/overlay/qrtr/tqftpserv.nix" { };
-      rmtfs = final.callPackage "${inputs.mobile-nixos}/overlay/qrtr/rmtfs.nix" {
-        inherit (inputs.mobile-pkgs) qmic;
-      };
-      adbd = final.callPackage "${inputs.mobile-nixos}/overlay/adbd" {
-        libhybris = final.callPackage "${inputs.mobile-nixos}/overlay/libhybris" {
-          inherit (inputs.mobile-pkgs) android-headers;
+    (
+      pkgs: prev:
+      let
+        mobile-pkgs = import "${inputs.mobile-nixos}/overlay/overlay.nix" pkgs prev;
+      in
+      {
+        pd-mapper = pkgs.callPackage "${inputs.mobile-nixos}/overlay/qrtr/pd-mapper.nix" { };
+        tqftpserv = pkgs.callPackage "${inputs.mobile-nixos}/overlay/qrtr/tqftpserv.nix" { };
+        rmtfs = pkgs.callPackage "${inputs.mobile-nixos}/overlay/qrtr/rmtfs.nix" {
+          inherit (mobile-pkgs) qmic;
         };
-      };
-    })
+        adbd = pkgs.callPackage "${inputs.mobile-nixos}/overlay/adbd" {
+          libhybris = pkgs.callPackage "${inputs.mobile-nixos}/overlay/libhybris" {
+            inherit (mobile-pkgs) android-headers;
+          };
+        };
+      }
+    )
   ];
 
   imports = [
