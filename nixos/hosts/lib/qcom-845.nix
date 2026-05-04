@@ -6,22 +6,22 @@
 }:
 {
 
+  nixpkgs.overlays = [
+    (final: super: {
+      pd-mapper = final.callPackage "${inputs.mobile-nixos}/overlay/qrtr/pd-mapper.nix" { };
+      tqftpserv = final.callPackage "${inputs.mobile-nixos}/overlay/qrtr/tqftpserv.nix" { };
+      rmtfs = final.callPackage "${inputs.mobile-nixos}/overlay/qrtr/rmtfs.nix" {
+        inherit (inputs.mobile-pkgs) qmic;
+      };
+      adbd = final.callPackage "${inputs.mobile-nixos}/overlay/adbd" {
+        libhybris = final.callPackage "${inputs.mobile-nixos}/overlay/libhybris" {
+          inherit (inputs.mobile-pkgs) android-headers;
+        };
+      };
+    })
+  ];
+
   imports = [
-    pkgs.callPackage
-    "${inputs.mobile-nixos}/overlay/qrtr/qrtr.nix"
-    { }
-    pkgs.callPackage
-    "${inputs.mobile-nixos}/overlay/qrtr/qmic.nix"
-    { }
-    pkgs.callPackage
-    "${inputs.mobile-nixos}/overlay/qrtr/tqftpserv.nix"
-    { }
-    pkgs.callPackage
-    "${inputs.mobile-nixos}/overlay/qrtr/pd-mapper.nix"
-    { }
-    pkgs.callPackage
-    "${inputs.mobile-nixos}/overlay/qrtr/rmtfs.nix"
-    { }
     "${inputs.mobile-nixos}/modules/quirks/qualcomm/sdm845-modem.nix"
     "${inputs.mobile-nixos}/modules/quirks/audio.nix"
   ];
@@ -30,6 +30,7 @@
     SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT}=="1", SUBSYSTEMS=="input", ATTRS{name}=="pmi8998_haptics", TAG+="uaccess", ENV{FEEDBACKD_TYPE}="vibra"
     SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}+="-1, 0, 0; 0, -1, 0; 0, 0, -1"
   '';
+
   environment.systemPackages = [ (pkgs.callPackage ../custom/sdm845-alsa.nix { }) ];
   hardware.enableRedistributableFirmware = true;
   hardware.graphics.enable32Bit = lib.mkForce false;
