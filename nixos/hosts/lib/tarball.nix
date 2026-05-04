@@ -17,12 +17,13 @@ in
 
     buildCommand = ''
       mkdir -p $out
-      mkdir -p nix
-      cp ${closureInfo}/registration nix/nix-path-registration
-      echo "nix/nix-path-registration" > path_list
-      sed 's|^/||' ${closureInfo}/store-paths >> path_list
-      tar -cv -C / -T path_list | zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
-
+      mkdir -p root/nix/store
+      cp ${closureInfo}/registration root/nix/nix-path-registration
+      cat ${closureInfo}/store-paths | while read -r path; do
+        mkdir -p "root$(dirname "$path")"
+        ln -s "$path" "root$path"
+      done
+      tar -cvh -C root . | zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
       ${if additionalContent != "" then additionalContent else ""}
     '';
   };
