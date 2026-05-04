@@ -40,12 +40,8 @@ let
     }).overrideAttrs
       (attrs: {
         passthru = attrs.passthru // {
-          isModular = false;
           inherit kconfigToNix uboot configure;
-          features = {
-            isModular = false;
-            efiBootStub = true;
-          };
+          features.efiBootStub = true;
         };
       });
 in
