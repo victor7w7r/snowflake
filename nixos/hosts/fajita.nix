@@ -71,10 +71,11 @@ in
       "dtb=/${config.hardware.deviceTree.name}"
     ];
     initrd = {
-      extraUtilsCommands = ''
-        copy_bin_and_libs ${(pkgs.callPackage ./custom/buffybox.nix { })}/bin/buffyboard
-        cp -a ${pkgs.libinput.out}/share $out/
-      '';
+      systemd = {
+        extraBin.buffyboard = "${(pkgs.callPackage ./custom/buffybox.nix { })}/bin/buffyboard";
+        contents."/share".source = "${pkgs.libinput.out}/share";
+        storePaths = [ pkgs.libinput ];
+      };
       includeDefaultModules = false;
       kernelModules = [
         "i2c_qcom_geni"
