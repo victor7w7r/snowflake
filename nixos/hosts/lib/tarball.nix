@@ -27,7 +27,7 @@ in
       mkdir -p root/nix/store
 
       echo "Copying store files..."
-      rsync -a --reflink=auto --info=progress2 \
+      rsyncy -a --reflink=auto --info=progress2 \
         --files-from=${closureInfo}/store-paths / root/nix/store/
 
       cp ${closureInfo}/registration root/nix/nix-path-registration
