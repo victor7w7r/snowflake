@@ -7,5 +7,7 @@
   cp -r ${uwe5622}/unisocwcn drivers/net/wireless/uwe5622/
   cp -r ${uwe5622}/tty-sdio drivers/net/wireless/uwe5622/
 
+  chmod -R +w drivers/net/wireless/uwe5622/
+
   echo "obj-\$(CONFIG_SPARD_WLAN_SUPPORT) += uwe5622/" >> "drivers/net/wireless/Makefile"
 ''
