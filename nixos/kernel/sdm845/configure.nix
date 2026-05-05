@@ -19,12 +19,10 @@ pkgs.stdenv.mkDerivation {
   inherit patches;
   src = fetch.sdm845;
   name = "linux-${majorMinor}${localVer}-config";
-  stdenv = pkgs.gcc14Stdenv.override {
-    stdenv = pkgs.ccacheStdenv;
-  };
 
   nativeBuildInputs = kernel.nativeBuildInputs ++ kernel.buildInputs;
   installPhase = "cp .config $out";
+
   buildPhase = ''
     export ARCH=arm64
 
@@ -32,8 +30,12 @@ pkgs.stdenv.mkDerivation {
     patchShebangs scripts/config
     scripts/config ${lib.concatStringsSep " " config}
     scripts/config --undefine CONFIG_LOCALVERSION
-    make $makeFlags olddefconfig
+    make ARCH=arm64 $makeFlags olddefconfig
   '';
+
+  meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {
+    platforms = [ "aarch64-linux" ];
+  };
 
   passthru = {
     inherit localVer patches;
