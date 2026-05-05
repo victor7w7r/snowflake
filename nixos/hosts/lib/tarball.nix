@@ -26,12 +26,12 @@ in
 
       echo "Copying store files..."
       cat ${closureInfo}/store-paths | \
-        xargs -I % cp -a --reflink=auto % -t root/nix/store
+        xargs -I % cp -aL --reflink=auto % -t root/nix/store
 
       cp ${closureInfo}/registration root/nix/nix-path-registration
 
       echo "Compressing with $SIZE..."
-      tar -cvh -C root . | \
+      tar -cv -C root . | \
         zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
       ${if additionalContent != "" then additionalContent else ""}
     '';
