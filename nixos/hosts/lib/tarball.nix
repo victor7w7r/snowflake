@@ -26,7 +26,7 @@ in
 
       echo "Copying store files..."
       cat ${closureInfo}/store-paths | \
-        xargs -I % cp -aL --reflink=auto % -t root/nix/store
+        xargs -d '\n' cp -rLp --reflink=auto -t root/nix/store
 
       cp ${closureInfo}/registration root/nix/nix-path-registration
 
