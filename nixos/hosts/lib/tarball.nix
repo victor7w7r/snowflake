@@ -26,7 +26,7 @@ in
       mkdir -p root/nix/store
 
       echo "Copying store files..."
-      rsyncy -aHAx --progress --files-from=${closureInfo}/store-paths / root/nix/store/
+      rsyncy -aHAxr --progress --files-from=${closureInfo}/store-paths / root
 
       cp ${closureInfo}/registration root/nix/nix-path-registration
 
