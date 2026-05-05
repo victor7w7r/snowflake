@@ -89,9 +89,6 @@ in
         "rmi_i2c"
         "qcom_spmi_haptics"
         "mmc_block"
-      ];
-
-      availableKernelModules = [
         "configfs"
         "libcomposite"
         "g_ffs"

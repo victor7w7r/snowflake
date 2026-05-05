@@ -17,7 +17,6 @@ in
       with pkgs;
       [
         zstd
-        pv
       ]
       ++ additionalBuildInputs;
 
@@ -25,18 +24,14 @@ in
       mkdir -p $out
       mkdir -p root/nix/store
 
-      TOTAL_FILES=$(wc -l < ${closureInfo}/store-paths)
-
       echo "Copying store files..."
       cat ${closureInfo}/store-paths | \
-        pv -l -p -e -r -s $TOTAL_FILES | \
         xargs -I % cp -a --reflink=auto % -t root/nix/store
 
       cp ${closureInfo}/registration root/nix/nix-path-registration
-      SIZE=$(du -sbL root | cut -f1)
 
       echo "Compressing with $SIZE..."
-      tar -ch -C root . | pv -p -e -r -s $SIZE | \
+      tar -cvh -C root . | \
         zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
       ${if additionalContent != "" then additionalContent else ""}
     '';

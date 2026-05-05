@@ -1,6 +1,17 @@
 {
   description = "victor7w7r nixtrap config for common and specific hosts";
 
+  /*
+    "sdm845": {
+      "domain": "codeberg.org",
+      "owner": "sdm845",
+      "repo": "linux",
+      "version": "7.0.0-rc2-next-20260306",
+      "rev": "909f32cbbca41c174ffd2dbba8d5f512ef9ba0a0",
+      "hash": "sha256-XY8U1V3NcnzJo3Zg7HT7tDrGPT2Bp1Nwq26quG+AYts="
+    },
+  */
+
   nixConfig = {
     extra-sandbox-paths = [
       "/nix/var/cache/ccache"
