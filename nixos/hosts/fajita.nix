@@ -27,6 +27,27 @@ in
         pkgs
         ;
     })
+
+    (import ./lib/tarball.nix {
+      inherit config pkgs;
+      additionalBuildInputs = with pkgs; [
+        systemdUkify
+      ];
+      additionalContent =
+        let
+          vmlinux = config.boot.kernelPackages.kernel;
+          initrd = "${config.system.build.initialRamdisk}/${config.system.boot.loader.initrdFile}";
+        in
+        ''
+          cp ${kernel.uboot} $out/boot.img
+          cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-boot-aarch64.efi $out/
+          cp "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}" $out/
+          ukify build --linux="${vmlinux}/${config.system.boot.loader.kernelFile}" --initrd="${initrd}" \
+            --uname="${vmlinux.modDirVersion}" \
+            --os-release="${config.system.build.etc}/etc/os-release" \
+            --output=$out/nixos.efi
+        '';
+    })
   ];
 
   system.build.uboot = kernel.uboot;
