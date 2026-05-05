@@ -17,6 +17,7 @@ in
       with pkgs;
       [
         zstd
+        rsyncy
       ]
       ++ additionalBuildInputs;
 
@@ -25,8 +26,7 @@ in
       mkdir -p root/nix/store
 
       echo "Copying store files..."
-      cat ${closureInfo}/store-paths | \
-        xargs -d '\n' cp -rLp --reflink=auto -t root/nix/store
+      rsyncy -aHAx --info=progress2 --files-from=${closureInfo}/store-paths / root/nix/store/
 
       cp ${closureInfo}/registration root/nix/nix-path-registration
 
