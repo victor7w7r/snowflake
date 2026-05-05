@@ -51,15 +51,20 @@ pkgs.stdenv.mkDerivation {
     ${import ./dts.nix { armbian = fetch.armbian; }}
   '';
 
-  buildPhase = ''
-    export ARCH=arm64
-    make ./sunxi64.config
+  /*
     #cp "${./sunxi64.config}" ".config"
     #export LSMOD=$(mktemp)
     #cat "${modules}" | sort > $LSMOD
     #(yes "" | make LSMOD=$LSMOD localmodconfig) || true
 
     #make ARCH=arm64 $makeFlags olddefconfig
+  */
+
+  buildPhase = ''
+    export ARCH=arm64
+
+    cp ${./sunxi64.config} .config
+    chmod -R +w .config
     patchShebangs scripts/config
     scripts/config ${lib.concatStringsSep " " config}
     make ARCH=arm64 $makeFlags olddefconfig
