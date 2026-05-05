@@ -34,9 +34,11 @@ let
         "NIX_ENFORCE_NO_NATIVE=0"
         "KCFLAGS=-Wno-unknown-warning-option -Wno-ignored-optimization-argument"
       ];
+      isModular = true;
     }).overrideAttrs
       (attrs: {
         nativeBuildInputs = (attrs.nativeBuildInputs or [ ]);
+        isModular = true;
         passthru = attrs.passthru // {
           inherit kconfigToNix uboot configure;
           features.efiBootStub = true;

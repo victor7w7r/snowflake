@@ -18,7 +18,7 @@
           media-downloader
           mtr-gui
           music-discord-rpc
-          (pkgs.callPackage ./custom/jdownloader.nix { })
+          #(pkgs.callPackage ./custom/jdownloader.nix { })
         ]
       else
         [ ]
