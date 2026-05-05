@@ -7,11 +7,7 @@
 }:
 let
   majorMinor = lib.versions.majorMinor kernelData.linux.version;
-  fetch = (
-    pkgs.callPackage ../fetch.nix {
-      inherit kernelData majorMinor;
-    }
-  );
+  fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   localVer = "-v7w7r-sunxi-hardened";
   config = (import ./config.nix);
   modules = ./modules.db;
@@ -57,13 +53,13 @@ pkgs.stdenv.mkDerivation {
 
   buildPhase = ''
     export ARCH=arm64
+    make ./sunxi64.config
+    #cp "${./sunxi64.config}" ".config"
+    #export LSMOD=$(mktemp)
+    #cat "${modules}" | sort > $LSMOD
+    #(yes "" | make LSMOD=$LSMOD localmodconfig) || true
 
-    cp "${./sunxi64.config}" ".config"
-    export LSMOD=$(mktemp)
-    cat "${modules}" | sort > $LSMOD
-    (yes "" | make LSMOD=$LSMOD localmodconfig) || true
-
-    make ARCH=arm64 $makeFlags olddefconfig
+    #make ARCH=arm64 $makeFlags olddefconfig
     patchShebangs scripts/config
     scripts/config ${lib.concatStringsSep " " config}
     make ARCH=arm64 $makeFlags olddefconfig
@@ -74,7 +70,7 @@ pkgs.stdenv.mkDerivation {
   };
 
   passthru = {
-    version = kernelData.linux.version;
     inherit localVer patches;
+    version = kernelData.linux.version;
   };
 }

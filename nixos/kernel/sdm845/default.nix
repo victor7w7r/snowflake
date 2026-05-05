@@ -21,15 +21,12 @@ let
       allowImportFromDerivation = false;
       version = "${configure.version}${configure.passthru.localVer}";
       modDirVersion = "${configure.version}${configure.passthru.localVer}";
+      stdenv = pkgs.gcc14Stdenv;
 
       kernelPatches = map (file: {
         name = baseNameOf (toString file);
         patch = file;
       }) patches;
-
-      stdenv = lib.recursiveUpdate pkgs.stdenv {
-        hostPlatform.linux-kernel.extraConfig = "";
-      };
 
       extraMakeFlags = [
         "LOCALVERSION=${configure.passthru.localVer}"
@@ -39,6 +36,7 @@ let
       ];
     }).overrideAttrs
       (attrs: {
+        nativeBuildInputs = (attrs.nativeBuildInputs or [ ]);
         passthru = attrs.passthru // {
           inherit kconfigToNix uboot configure;
           features.efiBootStub = true;

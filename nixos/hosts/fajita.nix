@@ -30,9 +30,7 @@ in
 
     (import ./lib/tarball.nix {
       inherit config pkgs;
-      additionalBuildInputs = with pkgs; [
-        systemdUkify
-      ];
+      additionalBuildInputs = with pkgs; [ systemdUkify ];
       additionalContent =
         let
           vmlinux = config.boot.kernelPackages.kernel;
@@ -130,5 +128,4 @@ in
     enable = true;
     name = "qcom/sdm845-oneplus-fajita.dtb";
   };
-
 }
