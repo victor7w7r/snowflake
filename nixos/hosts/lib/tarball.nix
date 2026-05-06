@@ -23,6 +23,9 @@ in
 
     buildCommand = ''
       mkdir -p $out
+
+      ${if additionalContent != "" then additionalContent else ""}
+
       mkdir -p root/nix/store
 
       echo "Copying store files..."
@@ -33,7 +36,6 @@ in
       echo "Compressing with $SIZE..."
       tar -cv -C root . | \
         zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
-      ${if additionalContent != "" then additionalContent else ""}
     '';
   };
 
