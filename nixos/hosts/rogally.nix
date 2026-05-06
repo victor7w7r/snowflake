@@ -26,7 +26,6 @@ let
   };
 in
 {
-
   nixpkgs.overlays = [
     (_final: super: {
       makeModulesClosure = x: super.makeModulesClosure (x // { allowMissing = true; });
@@ -110,37 +109,36 @@ in
         "sdhci_pci"
         "zram"
       ];
-      systemd = {
-        services.zram-format = {
-          wantedBy = [ "initrd.target" ];
-          requiredBy = [ "sysroot.mount" ];
-          before = [
-            "dev-mapper-persist.device"
-            "dev-mapper-storage.device"
-            "initrd-fs.target"
-            "sysroot.mount"
-          ];
-          after = [ "systemd-modules-load.service" ];
-          unitConfig.DefaultDependencies = false;
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-          };
-          path = [
-            pkgs.util-linux
-            pkgs.systemd
-            pkgs.e2fsprogs
-            pkgs.coreutils
-          ];
-          script = ''
-            set -e
-            mkdir -p /media
-
-            echo 4G > /sys/block/zram1/disksize
-            mkfs.ext4 -m 0 -O "^has_journal,^huge_file,^flex_bg" /dev/zram1
-          '';
+      systemd.services.zram-format = {
+        wantedBy = [ "initrd.target" ];
+        requiredBy = [ "sysroot.mount" ];
+        before = [
+          "dev-mapper-persist.device"
+          "dev-mapper-storage.device"
+          "initrd-fs.target"
+          "sysroot.mount"
+        ];
+        after = [ "systemd-modules-load.service" ];
+        unitConfig.DefaultDependencies = false;
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
         };
+        path = [
+          pkgs.util-linux
+          pkgs.systemd
+          pkgs.e2fsprogs
+          pkgs.coreutils
+        ];
+        script = ''
+          set -e
+          mkdir -p /media
+
+          echo 4G > /sys/block/zram1/disksize
+          mkfs.ext4 -m 0 -O "^has_journal,^huge_file,^flex_bg" /dev/zram1
+        '';
       };
+
       luks.devices.syscrypt = {
         device = "/dev/disk/by-partlabel/disk-main-swapcrypt";
         crypttabExtraOpts = [ "tpm2-device=auto" ];
