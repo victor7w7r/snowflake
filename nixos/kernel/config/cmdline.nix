@@ -21,7 +21,7 @@ let
     else
       "";
   intel =
-    if host != "v7w7r-rc71l" then
+    if host != "v7w7r-rc71l" && host != "v7w7r-opizero2w" && host != "v7w7r-fajita" then
       "i915.enable_guc=2 kvm_intel.emulate_invalid_guest_state=0 kvm_intel.nested=1 "
       + "intel_pstate=passive intel_iommu=on pcie_ports=compat"
     else

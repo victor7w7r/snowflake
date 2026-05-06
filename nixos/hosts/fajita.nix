@@ -46,7 +46,7 @@ in
         in
         ''
           cp ${uboot} $out/boot.img
-          cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-boot-aarch64.efi $out/
+          cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-bootaa64.efi $out/
           cp "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}" $out/
           ukify build --linux="${vmlinux}/${config.system.boot.loader.kernelFile}" --initrd="${initrd}" \
             --uname="${vmlinux.modDirVersion}" \

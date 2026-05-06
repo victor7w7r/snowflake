@@ -84,7 +84,6 @@ in
     kernelParams = [
       "earlycon"
       "console=ttyS0,115200n8"
-      "mmc_core.use_spi_crc=0"
       "systemd.setenv=SYSTEMD_SULOGIN_FORCE=1"
     ];
     initrd = {

@@ -22,7 +22,6 @@
   "-e F2FS_FS_SECURITY"
   "-e F2FS_FS_ZSTD"
   "-e DEFAULT_BBR"
-  "-e DEFAULT_FQ"
 
   "-e USB_ETH"
   "-e USB_LIBCOMPOSITE"
@@ -30,7 +29,10 @@
   "-e USB_UAS"
   "-e USB_STORAGE"
   "-e USB_HID"
+  "-e USB_MUSB_HOST"
   "-e USB_EHCI_HCD"
+  "-e USB_MUSB_SUNXI"
+  "-e USB_MUSB_HDRC"
   "-e USB_OHCI_HCD"
   "-e MMC_BLOCK"
   "-e MMC_SDHCI"
@@ -44,8 +46,7 @@
   "-e SUN6I_RTC_CCU"
   "-e DUMP_REG"
 
-  "-e MFD_AC200"
-
+  "-e ARM_ALLWINNER_SUN50I_CPUFREQ_NVMEM"
   "-e NO_HZ"
   "-e NO_HZ_COMMON"
   "-e NO_HZ_IDLE"
@@ -62,9 +63,9 @@
   "-e TMPFS"
   "-e TMPFS_POSIX_ACL"
   "-e SUNXI_ADDR_MGT"
-  "-e PHYLIB"
   "-e SPARD_WLAN_SUPPORT"
   "-e SUNXI_MMC"
+  "-e IR_SUNXI"
   "-e AW_WIFI_DEVICE_UWE5622"
   "-e TCP_CONG_BBR"
   "-e SUN8I_EMAC"
@@ -83,13 +84,16 @@
   "-e XFS_BTREE_IN_MEM"
   "-e XFS_ONLINE_SCRUB"
   "-e XFS_ONLINE_REPAIR"
+  "-e VIDEO_SUNXI"
+  "-e SUNXI_WATCHDOG"
+  "-e VIDEO_SUNXI_CEDRUS"
 
   "-m WLAN_UWE5622"
   "-m PHY_SUN6I_DSI"
-  "-m SPRDWL_NG"
-  "-m TTY_OVERY_SDIO"
-
-  "-m ARM_ALLWINNER_SUN50I_CPUFREQ_NVMEM"
+  "-m MFD_AC200"
+  "-m MFD_AC200_SUNXI"
+  "-m AC200_PHY"
+  "-m AC200_PHY_SUNXI"
   "-m ARM_SCMI_CPUFREQ"
   "-m NET_SCH_FQ_CODEL"
   "-m SPRDWL_NG"
@@ -99,7 +103,6 @@
 
   "-d ACPI"
   "-d ACCESSIBILITY"
-  "-d AW_WIFI_DEVICE_UWE5622"
   "-d DEBUG_FS"
   "-d DRM_RADEON"
   "-d KEXEC"
@@ -130,16 +133,14 @@
   "-d SND_SOC"
   "-d SND_SUN4I_CODEC"
   "-d STAGING"
-  "-d SPARD_WLAN_SUPPORT"
   "-d WLAN_VENDOR_ATH"
   "-d WLAN_VENDOR_BROADCOM"
   "-d WLAN_VENDOR_INTEL"
   "-d WLAN_VENDOR_MARVELL"
   "-d WLAN_VENDOR_TI"
-  "-d WLAN_UWE5622"
   "-d WATCHDOG"
   "-d ZRAM_BACKEND_842"
 ]
-++ (import ../config/develop.nix)
+#++ (import ../config/develop.nix)
 ++ (import ../config/cmdline.nix) { host = ""; }
-++ (import ../config/vendors.nix) { isPC = false; }
+#++ (import ../config/vendors.nix) { isPC = false; }
