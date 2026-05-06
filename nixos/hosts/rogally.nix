@@ -47,6 +47,7 @@ in
     };
 
     "/nix" = bcachefs {
+      device = "/dev/disk/by-partlabel/disk-main-system";
       extraOptions = [
         "X-mount.subdir=subvolumes/nix"
         "x-systemd.device-timeout=300"
@@ -55,6 +56,7 @@ in
     };
 
     "/nix/persist" = bcachefs {
+      device = "/dev/disk/by-partlabel/disk-main-system";
       extraOptions = [
         "X-mount.subdir=subvolumes/persist"
         "x-systemd.device-timeout=300"
@@ -141,8 +143,7 @@ in
           mkfs.ext4 -m 0 -O "^has_journal,^huge_file,^flex_bg" /dev/zram1
         '';
       };
-
-      luks.devices.syscrypt = {
+      luks.devices.swapcrypt = {
         device = "/dev/disk/by-partlabel/disk-main-swapcrypt";
         crypttabExtraOpts = [ "tpm2-device=auto" ];
         preLVM = true;
