@@ -144,6 +144,6 @@ in
 
   hardware.deviceTree = {
     enable = true;
-    name = "${uboot}/sdm845-oneplus-fajita.dtb";
+    name = "dtbs/sdm845-oneplus-fajita.dtb";
   };
 }
