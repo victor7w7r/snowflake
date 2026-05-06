@@ -9,7 +9,10 @@
 let
   kernel = (pkgs.callPackage ../kernel/sdm845) { inherit kernelData; };
   f2fs = import ./lib/f2fs.nix;
-
+  uboot = pkgs.callPackage ../kernel/sdm845/uboot.nix {
+    device = "fajita";
+    inherit kernelData;
+  };
 in
 {
   nixpkgs.overlays = [
@@ -39,10 +42,6 @@ in
         let
           vmlinux = config.boot.kernelPackages.kernel;
           initrd = "${config.system.build.initialRamdisk}/${config.system.boot.loader.initrdFile}";
-          uboot = pkgs.callPackage ../kernel/sdm845/uboot.nix {
-            device = "fajita";
-            inherit kernelData;
-          };
         in
         ''
           mkdir -p EFI/BOOT EFI/loader/entries
@@ -145,6 +144,6 @@ in
 
   hardware.deviceTree = {
     enable = true;
-    name = "qcom/sdm845-oneplus-fajita.dtb";
+    name = "${uboot}/sdm845-oneplus-fajita.dtb";
   };
 }
