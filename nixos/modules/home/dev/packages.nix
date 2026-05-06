@@ -13,17 +13,16 @@
       #neovim
       cool-retro-term
       git-credential-manager
-      /*
-        (inputs.claude-desktop.packages.${system}.claude-desktop.override {
-        nodePackages = { inherit (pkgs) asar; };
-        })
-      */
+
       lazygit
     ]
     ++ (
       if (host == "v7w7r-macmini81") then
         [
           jetbrains.datagrip
+          (inputs.claude-desktop.packages.${system}.claude-desktop.override {
+            nodePackages = { inherit (pkgs) asar; };
+          })
         ]
       else
         [ ]
