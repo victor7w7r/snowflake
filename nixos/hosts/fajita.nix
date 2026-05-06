@@ -132,6 +132,7 @@ in
     memoryPercent = 60;
     priority = 100;
   };
+
   hardware.deviceTree = {
     enable = true;
     name = "qcom/sdm845-oneplus-fajita.dtb";
