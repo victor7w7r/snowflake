@@ -87,6 +87,9 @@ in
     kernelParams = [
       "resume=/dev/mapper/swapcrypt"
       "amd_pstate=passive"
+      "systemd.gpt_auto=0"
+      "rootwait"
+      "zram.num_devices=2"
     ]
     ++ params { };
     #kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-lts-lto;
