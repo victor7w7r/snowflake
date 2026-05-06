@@ -219,7 +219,7 @@
         #nix build -L ".#nixosConfigurations.opizero2w.config.system.build.tarball"
         #dd if=u-boot-sunxi-with-spl.bin of=/dev/sde bs=1024 seek=8 conv=notrunc
         #mount /dev/sde1 /mnt && rm -rf /mnt/* && tar --zstd -xvf boot.tar.zst -C /mnt/ --no-same-owner && umount /dev/sde1 && udisksctl power-off -b /dev/sde
-        #mount -o noatime,nodiratime,lazytime,logbufs=8,logbsize=256k /dev/sde1 /mnt && rm -rf /mnt/* && tar --zstd -xvf store.tar.zst -C /mnt/ && sync && umount /dev/sde1
+        #mount -o noatime,nodiratime,lazytime,logbufs=8,logbsize=256k /dev/sde1 /mnt && rm -rf /mnt/* && tar --zstd -xvf store.tar.zst -C /mnt/ && sync && umount /dev/sde1 && udisksctl power-off -b /dev/sde
         opizero2w = nixpkgs.lib.nixosSystem {
           system = systemarm;
           modules = [
@@ -259,7 +259,7 @@
         #nix build -L ".#nixosConfigurations.opizero2w.config.system.build.toplevel"
         #nix build -L ".#packages.aarch64-linux.uboot"
         #nix build -L ".#nixosConfigurations.fajita.config.system.build.tarball"
-        #mount /dev/sde17 /mnt && rm -rf /mnt/* && tar --zstd -xvf boot.tar.zst -C /mnt/ --no-same-owner && umount /dev/sde17
+        #mount /dev/sde17 /mnt && rm -rf /mnt/* && tar --zstd -xvf efi.tar.zst -C /mnt/ --no-same-owner && umount /dev/sde17
         #export OPTS="noatime,compress_chksum,compress_algorithm=zstd,age_extent_cache,compress_extension=so,inline_xattr,inline_data,inline_dentry,errors=remount-ro,compress_extension=bin,atgc,flush_merge,discard,checkpoint_merge,gc_merge"
         #mount -o $OPTS /dev/sde18 /mnt && rm -rf /mnt/* && tar --zstd -xvf store.tar.zst -C /mnt/
         fajita = nixpkgs.lib.nixosSystem {
