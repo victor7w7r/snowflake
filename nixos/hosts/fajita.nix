@@ -9,11 +9,15 @@
 let
   kernel = (pkgs.callPackage ../kernel/sdm845) { inherit kernelData; };
   f2fs = import ./lib/f2fs.nix;
+
 in
 {
   nixpkgs.overlays = [
-    (_final: super: {
-      makeModulesClosure = x: super.makeModulesClosure (x // { allowMissing = true; });
+    (_: prev: {
+      makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
+    })
+    (pkgs: prev: {
+      mkbootimg = pkgs.callPackage "${inputs.mobile-nixos}/overlay/mkbootimg" { };
     })
   ];
 
