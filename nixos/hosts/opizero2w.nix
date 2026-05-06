@@ -142,159 +142,159 @@ in
       overlays = [
         {
           name = "h616-gpu";
-          dtbo = "allwinner/overlays/sun50i-h616-gpu.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-gpu.dtbo";
         }
         {
           name = "h616-i2c0";
-          dtbo = "allwinner/overlays/sun50i-h616-i2c0-pi.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-i2c0-pi.dtbo";
         }
         {
           name = "h616-i2c1";
-          dtbo = "allwinner/overlays/sun50i-h616-i2c1-pi.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-i2c1-pi.dtbo";
         }
         {
           name = "h616-i2c2-ph";
-          dtbo = "allwinner/overlays/sun50i-h616-i2c2-ph.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-i2c2-ph.dtbo";
         }
         {
           name = "h616-i2c2-pi";
-          dtbo = "allwinner/overlays/sun50i-h616-i2c2-pi.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-i2c2-pi.dtbo";
         }
         {
           name = "h616-i2c3-pg";
-          dtbo = "allwinner/overlays/sun50i-h616-i2c3-pg.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-i2c3-pg.dtbo";
         }
         {
           name = "h616-i2c3-ph";
-          dtbo = "allwinner/overlays/sun50i-h616-i2c3-ph.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-i2c3-ph.dtbo";
         }
         {
           name = "h616-i2c4-pg";
-          dtbo = "allwinner/overlays/sun50i-h616-i2c4-pg.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-i2c4-pg.dtbo";
         }
         {
           name = "h616-i2c4-ph";
-          dtbo = "allwinner/overlays/sun50i-h616-i2c4-ph.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-i2c4-ph.dtbo";
         }
         {
           name = "h616-ir";
-          dtbo = "allwinner/overlays/sun50i-h616-ir.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-ir.dtbo";
         }
         {
           name = "h616-keys";
-          dtbo = "allwinner/overlays/sun50i-h616-keys.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-keys.dtbo";
         }
         {
           name = "h616-light";
-          dtbo = "allwinner/overlays/sun50i-h616-light.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-light.dtbo";
         }
         {
           name = "h616-mcp2515";
-          dtbo = "allwinner/overlays/sun50i-h616-mcp2515.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-mcp2515.dtbo";
         }
         {
           name = "h616-pwm1-ph3";
-          dtbo = "allwinner/overlays/sun50i-h616-pwm1-ph3.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-pwm1-ph3.dtbo";
         }
         {
           name = "h616-pwm1-pi11";
-          dtbo = "allwinner/overlays/sun50i-h616-pwm1-pi11.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-pwm1-pi11.dtbo";
         }
         {
           name = "h616-pwm2-ph2";
-          dtbo = "allwinner/overlays/sun50i-h616-pwm2-ph2.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-pwm2-ph2.dtbo";
         }
         {
           name = "h616-pwm2-pi12";
-          dtbo = "allwinner/overlays/sun50i-h616-pwm2-pi12.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-pwm2-pi12.dtbo";
         }
         {
           name = "h616-pwm3-ph0";
-          dtbo = "allwinner/overlays/sun50i-h616-pwm3-ph0.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-pwm3-ph0.dtbo";
         }
         {
           name = "h616-pwm3-pi13";
-          dtbo = "allwinner/overlays/sun50i-h616-pwm3-pi13.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-pwm3-pi13.dtbo";
         }
         {
           name = "h616-pwm4-ph1";
-          dtbo = "allwinner/overlays/sun50i-h616-pwm4-ph1.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-pwm4-ph1.dtbo";
         }
         {
           name = "h616-pwm4-pi14";
-          dtbo = "allwinner/overlays/sun50i-h616-pwm4-pi14.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-pwm4-pi14.dtbo";
         }
         {
           name = "h616-spidev0_0";
-          dtbo = "allwinner/overlays/sun50i-h616-spidev0_0.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-spidev0_0.dtbo";
         }
         {
           name = "h616-spidev1_0";
-          dtbo = "allwinner/overlays/sun50i-h616-spidev1_0.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-spidev1_0.dtbo";
         }
         {
           name = "h616-spidev1_1";
-          dtbo = "allwinner/overlays/sun50i-h616-spidev1_1.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-spidev1_1.dtbo";
         }
         {
           name = "h616-spidev1_2";
-          dtbo = "allwinner/overlays/sun50i-h616-spidev1_2.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-spidev1_2.dtbo";
         }
         {
           name = "h616-spidev";
-          dtbo = "allwinner/overlays/sun50i-h616-spi-spidev.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-spi-spidev.dtbo";
         }
         {
           name = "h616-tft35_spi";
-          dtbo = "allwinner/overlays/sun50i-h616-tft35_spi.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-tft35_spi.dtbo";
         }
         {
           name = "h616-uart2-pg";
-          dtbo = "allwinner/overlays/sun50i-h616-uart2-pg.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart2-pg.dtbo";
         }
         {
           name = "h616-uart2-pg-rts-cts";
-          dtbo = "allwinner/overlays/sun50i-h616-uart2-pg-rts-cts.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart2-pg-rts-cts.dtbo";
         }
         {
           name = "h616-uart2-ph";
-          dtbo = "allwinner/overlays/sun50i-h616-uart2-ph.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart2-ph.dtbo";
         }
         {
           name = "h616-uart2-ph-rts-cts";
-          dtbo = "allwinner/overlays/sun50i-h616-uart2-ph-rts-cts.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart2-ph-rts-cts.dtbo";
         }
         {
           name = "h616-uart2-pi";
-          dtbo = "allwinner/overlays/sun50i-h616-uart2-pi.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart2-pi.dtbo";
         }
         {
           name = "h616-uart2-pi-rts-cts";
-          dtbo = "allwinner/overlays/sun50i-h616-uart2-pi-rts-cts.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart2-pi-rts-cts.dtbo";
         }
         {
           name = "h616-uart3-pi";
-          dtbo = "allwinner/overlays/sun50i-h616-uart3-pi.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart3-pi.dtbo";
         }
         {
           name = "h616-uart3-pi-rts-cts";
-          dtbo = "allwinner/overlays/sun50i-h616-uart3-pi-rts-cts.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart3-pi-rts-cts.dtbo";
         }
         {
           name = "h616-uart4-pi";
-          dtbo = "allwinner/overlays/sun50i-h616-uart4-pi.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart4-pi.dtbo";
         }
         {
           name = "h616-uart4-pi-rts-cts";
-          dtbo = "allwinner/overlays/sun50i-h616-uart4-pi-rts-cts.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart4-pi-rts-cts.dtbo";
         }
         {
           name = "h616-uart5";
-          dtbo = "allwinner/overlays/sun50i-h616-uart5.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-uart5.dtbo";
         }
         {
           name = "h616-ws2812";
-          dtbo = "allwinner/overlays/sun50i-h616-ws2812.dtbo";
+          dtboFile = "allwinner/overlays/sun50i-h616-ws2812.dtbo";
         }
       ];
     };
