@@ -38,7 +38,7 @@ in
     };
     bcachefs_filesystems = {
       broot = (import ../lib/bcachefs.nix).filesystem {
-        uuid = "f9d26816-07f4-42cf-a9ae-f698ff56b172";
+        uuid = "2564fcf6-551f-4358-b238-2fe638b1c159";
         passwordFile = "/tmp/key.txt";
         subvolumes = {
           "subvolumes/nix" = {

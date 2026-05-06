@@ -85,7 +85,7 @@ in
     resumeDevice = "/dev/mapper/swapcrypt";
     supportedFilesystems = [ "bcachefs" ];
     kernelParams = [
-      "resume=/dev/vg0/swapcrypt"
+      "resume=/dev/mapper/swapcrypt"
       "amd_pstate=passive"
     ]
     ++ params { };
