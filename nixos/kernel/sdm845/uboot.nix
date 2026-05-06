@@ -30,12 +30,15 @@ let
       CONFIG_CMD_BLKMAP=y
       CONFIG_BLKMAP=y
       CONFIG_CMD_UFETCH=y
+      CONFIG_CMD_BOOTEFI=y
+      CONFIG_EFI_LOADER=y
       CONFIG_CMD_SELECT_FONT=y
       CONFIG_VIDEO_FONT_16X32=y
       CONFIG_BOOTDELAY=5
     '';
     filesToInstall = [
-      "u-boot*"
+      "u-boot-nodtb.bin"
+      "u-boot.dtb"
       "dts/upstream/src/arm64/qcom/sdm845-oneplus-${device}.dtb"
     ];
     prePatch = ''
@@ -71,9 +74,9 @@ pkgs.stdenvNoCC.mkDerivation {
   ];
   installPhase = ''
     mkdir -p $out
-    cp sdm845-oneplus-${device}.dtb $out/
-    gzip u-boot-nodtb.bin
-    cat u-boot.dtb >> u-boot-nodtb.bin.gz
+
+    gzip -c u-boot-nodtb.bin > u-boot.bin.gz
+
     mkbootimg \
       --kernel u-boot-nodtb.bin.gz \
       --dtb ./${"sdm845-oneplus-${device}.dtb"} \
@@ -82,7 +85,10 @@ pkgs.stdenvNoCC.mkDerivation {
       --ramdisk_offset 0x01000000 \
       --tags_offset 0x100 \
       --pagesize 4096 \
+      --header_version 2 \
       -o "boot.img"
+
+    cp sdm845-oneplus-${device}.dtb $out/
     cp boot.img $out/
   '';
 }
