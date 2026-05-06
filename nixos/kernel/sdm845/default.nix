@@ -9,10 +9,7 @@ let
   configure = pkgs.callPackage ./configure.nix { inherit kernelData kernel; };
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
   patches = configure.passthru.patches;
-  uboot = pkgs.callPackage ./uboot.nix {
-    inherit device kernel kernelData;
-    inherit (configure) src;
-  };
+  uboot = pkgs.callPackage ./uboot.nix { inherit device kernelData; };
   kernel =
     (pkgs.linuxManualConfig {
       inherit (configure) src;

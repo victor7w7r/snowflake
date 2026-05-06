@@ -35,9 +35,13 @@ in
         let
           vmlinux = config.boot.kernelPackages.kernel;
           initrd = "${config.system.build.initialRamdisk}/${config.system.boot.loader.initrdFile}";
+          uboot = pkgs.callPackage ../kernel/sdm845/uboot.nix {
+            device = "fajita";
+            inherit kernelData;
+          };
         in
         ''
-          cp ${kernel.uboot} $out/boot.img
+          cp ${uboot} $out/boot.img
           cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-boot-aarch64.efi $out/
           cp "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}" $out/
           ukify build --linux="${vmlinux}/${config.system.boot.loader.kernelFile}" --initrd="${initrd}" \
