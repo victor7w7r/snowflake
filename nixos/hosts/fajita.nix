@@ -45,13 +45,23 @@ in
           };
         in
         ''
-          cp ${uboot} $out/boot.img
-          cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-bootaa64.efi $out/
-          cp "${config.hardware.deviceTree.package}/${config.hardware.deviceTree.name}" $out/
+          mkdir -p EFI/BOOT EFI/loader/entries
+
+          cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-bootaa64.efi EFI/BOOT/BOOTAA64.EFI
+          echo "timeout 5" > EFI/loader/loader.conf
+          echo "console-mode keep" >> EFI/loader/loader.conf
+          echo "title NixOS" > EFI/loader/entries/nix.conf
+          echo "efi /EFI/nixos.efi" >> EFI/loader/entries/nix.conf
+
           ukify build --linux="${vmlinux}/${config.system.boot.loader.kernelFile}" --initrd="${initrd}" \
             --uname="${vmlinux.modDirVersion}" \
             --os-release="${config.system.build.etc}/etc/os-release" \
-            --output=$out/nixos.efi
+            --output=EFI/nixos.efi
+
+          tar -cv -C EFI . | zstd -T$NIX_BUILD_CORES > $out/efi.tar.zst
+          cp ${uboot}/boot.img $out/
+          cp ${uboot}/sdm845-oneplus-fajita.dtb $out/
+
         '';
     })
   ];

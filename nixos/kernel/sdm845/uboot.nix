@@ -70,15 +70,19 @@ pkgs.stdenvNoCC.mkDerivation {
     gzip
   ];
   installPhase = ''
+    mkdir -p $out
+    cp sdm845-oneplus-${device}.dtb $out/
     gzip u-boot-nodtb.bin
     cat u-boot.dtb >> u-boot-nodtb.bin.gz
     mkbootimg \
+      --kernel u-boot-nodtb.bin.gz \
+      --dtb ./${"sdm845-oneplus-${device}.dtb"} \
       --base 0x0 \
       --kernel_offset 0x8000 \
       --ramdisk_offset 0x01000000 \
       --tags_offset 0x100 \
       --pagesize 4096 \
-      --kernel u-boot-nodtb.bin.gz \
-      -o "$out"
+      -o "boot.img"
+    cp boot.img $out/
   '';
 }

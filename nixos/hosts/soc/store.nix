@@ -4,7 +4,6 @@
   storeLabel,
 }:
 ''
-
   mkdir -p repart.d
   cat <<EOF > repart.d/10-store.conf
   [Partition]
