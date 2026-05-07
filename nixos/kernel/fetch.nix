@@ -11,6 +11,11 @@
     hash = kernelData.linux.hash;
   };
 
+  linux-vanilla = pkgs.fetchurl {
+    url = kernelData.linux-vanilla.url;
+    hash = kernelData.linux-vanilla.hash;
+  };
+
   asus = pkgs.fetchgit {
     url = kernelData.asus.url;
     rev = kernelData.asus.rev;

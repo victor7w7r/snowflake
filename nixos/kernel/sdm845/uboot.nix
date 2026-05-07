@@ -7,16 +7,16 @@
 }:
 let
   majorMinor = lib.versions.majorMinor kernelData.sdm845.version;
-  fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
+  #fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   uboot = pkgs.buildUBoot {
-    extraMakeFlags = [ "DEVICE_TREE=qcom/sdm845-oneplus-${device}" ];
-    defconfig = "qcom_defconfig phone.config";
-    version = "master";
-    extraMeta.platforms = [ "aarch64-linux" ];
     src = fetchGit {
-      url = "https://git.codelinaro.org/clo/qcomlt/u-boot.git";
-      rev = "6fc40f2499b1a517487933d7d81a482f6dce7751";
+      url = "https://gitlab.postmarketos.org/tauchgang/u-boot.git";
+      rev = "540db1c376fe304c423964809428ba0a0d1db378";
     };
+    version = "master";
+    extraMakeFlags = [ "DEVICE_TREE=qcom/sdm845-oneplus-${device}" ];
+    defconfig = "qcom_defconfig qcom-phone.config tauchgang.config";
+    extraMeta.platforms = [ "aarch64-linux" ];
     nativeBuildInputs = with pkgs; [
       xxd
       bison
@@ -31,7 +31,8 @@ let
       "u-boot.dtb"
       "dts/upstream/src/arm64/qcom/sdm845-oneplus-${device}.dtb"
     ];
-    prePatch = ''
+    /*
+      prePatch = ''
       #cat configs/qcom_defconfig board/qualcomm/qcom-phone.config > f
       #mv f configs/qcom_defconfig
 
@@ -49,7 +50,8 @@ let
       #cp -r ${fetch.sdm845}/include/dt-bindings/sound/qcom,q6voice.h dts/upstream/include/dt-bindings/sound
       #cp -r ${fetch.sdm845}/include/uapi/linux/input-event-codes.h dts/upstream/include/dt-bindings/input/linux-event-codes.h
       #chmod -R +w dts/upstream/src/arm64/
-    '';
+      '';
+    */
   };
 in
 pkgs.stdenvNoCC.mkDerivation {

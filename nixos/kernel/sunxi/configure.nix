@@ -19,9 +19,30 @@ let
   );
   selectedPatches = map (path: [ "${patchesRoute}/${path}" ]) patchesList;
 
+  patches = [
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-warnings.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-park-link-v6.1-post.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-setting-mac-address-for-netdev.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/wireless-uwe5622-Fix-compilation-with-6.7-kernel.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/wireless-uwe5622-reduce-system-load.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-spanning-writes.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-timer-api-changes-for-6.15-only-sunxi.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.17.patch"
+    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.18.patch"
+  ]
+  ++ selectedPatches
+  /*
+    ++ [
+      "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
+      "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
+      "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
+    ]
+  */
+  ;
 in
 
 pkgs.stdenv.mkDerivation {
+  inherit patches;
   src = fetch.linux;
   name = "linux-${majorMinor}${localVer}-config";
 
@@ -34,7 +55,6 @@ pkgs.stdenv.mkDerivation {
   '';
 
   /*
-    #cp "${./sunxi64.config}" ".config"
     #export LSMOD=$(mktemp)
     #cat "${modules}" | sort > $LSMOD
     #(yes "" | make LSMOD=$LSMOD localmodconfig) || true
@@ -43,12 +63,13 @@ pkgs.stdenv.mkDerivation {
   */
 
   buildPhase = ''
-    export ARCH=arm64
-
-    cp ${./sunxi64.config} .config
-    chmod -R +w .config
+    cp ${fetch.armbian}/config/kernel/linux-sunxi64-current.config .config
+    make ARCH=arm64 $makeFlags olddefconfig
     patchShebangs scripts/config
-    scripts/config ${lib.concatStringsSep " " config}
+    ./scripts/config --enable CONFIG_WLAN_UWE5622
+    ./scripts/config --enable CONFIG_PHY_SUN4I_USB
+    ./scripts/config --enable CONFIG_AC200_PHY_SUNXI
+    #scripts/config ${lib.concatStringsSep " " config}
     make ARCH=arm64 $makeFlags olddefconfig
   '';
 
@@ -57,7 +78,7 @@ pkgs.stdenv.mkDerivation {
   };
 
   passthru = {
-    inherit localVer;
+    inherit localVer patches;
     version = kernelData.linux.version;
   };
 }
