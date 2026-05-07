@@ -6,7 +6,7 @@ QCOMCONFIG="qcomconfig"
 
 runbuild() {
     local PC=$1
-    nix build -L ".#packages.aarch64-linux.${PC}" --no-link --print-out-paths
+    nix develop -L ".#packages.aarch64-linux.${PC}" #--no-link --print-out-paths
 }
 
 if res=$(runbuild $SUNXICONFIG); then

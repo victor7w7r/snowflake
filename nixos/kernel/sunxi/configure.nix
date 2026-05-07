@@ -30,7 +30,7 @@ let
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.17.patch"
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.18.patch"
   ]
-  ++ selectedPatches
+  #++ selectedPatches
   /*
     ++ [
       "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
@@ -46,14 +46,19 @@ pkgs.stdenv.mkDerivation {
   src = fetch.linux;
   name = "linux-${majorMinor}${localVer}-config";
 
-  nativeBuildInputs = kernel.nativeBuildInputs ++ kernel.buildInputs;
+  nativeBuildInputs =
+    with pkgs;
+    kernel.nativeBuildInputs
+    ++ kernel.buildInputs
+    ++ [
+      ncurses
+    ];
   installPhase = "cp .config $out";
 
   prePatch = ''
     ${import ./wifi-patch.nix { uwe5622 = fetch.uwe5622; }}
     ${import ./dts.nix { armbian = fetch.armbian; }}
   '';
-
   /*
     #export LSMOD=$(mktemp)
     #cat "${modules}" | sort > $LSMOD
@@ -64,13 +69,20 @@ pkgs.stdenv.mkDerivation {
 
   buildPhase = ''
     cp ${fetch.armbian}/config/kernel/linux-sunxi64-current.config .config
-    make ARCH=arm64 $makeFlags olddefconfig
+
+    chmod -R +w .config
     patchShebangs scripts/config
-    ./scripts/config --enable CONFIG_WLAN_UWE5622
-    ./scripts/config --enable CONFIG_PHY_SUN4I_USB
-    ./scripts/config --enable CONFIG_AC200_PHY_SUNXI
-    #scripts/config ${lib.concatStringsSep " " config}
     make ARCH=arm64 $makeFlags olddefconfig
+
+    scripts/config ${lib.concatStringsSep " " config}
+
+    cat << 'EOF' >> .config
+    CONFIG_WLAN_UWE5622=y
+    CONFIG_PHY_SUN4I_USB=y
+    CONFIG_AC200_PHY_SUNXI=y
+    EOF
+
+    #make ARCH=arm64 $makeFlags oldconfig
   '';
 
   meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {

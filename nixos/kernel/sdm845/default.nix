@@ -1,15 +1,12 @@
 {
-  lib,
   pkgs,
   kernelData,
-  device ? "fajita",
   ...
 }:
 let
   configure = pkgs.callPackage ./configure.nix { inherit kernelData kernel; };
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
   patches = configure.passthru.patches;
-  uboot = pkgs.callPackage ./uboot.nix { inherit device kernelData; };
   kernel =
     (pkgs.linuxManualConfig {
       inherit (configure) src;
@@ -37,7 +34,7 @@ let
         nativeBuildInputs = (attrs.nativeBuildInputs or [ ]);
         passthru = attrs.passthru // {
           isModular = true;
-          inherit kconfigToNix uboot configure;
+          inherit kconfigToNix configure;
           features = {
             efiBootStub = true;
             isModular = true;

@@ -1,22 +1,21 @@
 {
-  lib,
   pkgs,
-  kernelData,
   device ? "fajita",
   ...
 }:
 let
-  majorMinor = lib.versions.majorMinor kernelData.sdm845.version;
-  #fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   uboot = pkgs.buildUBoot {
     src = fetchGit {
       url = "https://gitlab.postmarketos.org/tauchgang/u-boot.git";
-      rev = "540db1c376fe304c423964809428ba0a0d1db378";
+      rev = "3b00343d6a936499cbe8db9e022c1faa04708125";
     };
     version = "master";
     extraMakeFlags = [ "DEVICE_TREE=qcom/sdm845-oneplus-${device}" ];
     defconfig = "qcom_defconfig qcom-phone.config tauchgang.config";
     extraMeta.platforms = [ "aarch64-linux" ];
+    postPatch = ''
+      sed -i 's/bootcmd=.*/bootcmd=scsi scan; load scsi 0:11 ''${kernel_addr_r} \/EFI\/BOOT\/BOOTAA64.EFI; bootefi ''${kernel_addr_r}/' board/qualcomm/qcom-phone.env
+    '';
     nativeBuildInputs = with pkgs; [
       xxd
       bison
@@ -31,27 +30,6 @@ let
       "u-boot.dtb"
       "dts/upstream/src/arm64/qcom/sdm845-oneplus-${device}.dtb"
     ];
-    /*
-      prePatch = ''
-      #cat configs/qcom_defconfig board/qualcomm/qcom-phone.config > f
-      #mv f configs/qcom_defconfig
-
-      #rm dts/upstream/src/arm64/qcom/sdm845-oneplus-enchilada.dts
-      #rm dts/upstream/src/arm64/qcom/sdm845-oneplus-fajita.dts
-
-      cp ${./qcom-phone.env} board/qualcomm/qcom-phone.env
-      cp ${./qcom-phone.config} board/qualcomm/qcom-phone.config
-
-      #cp -r ${./common.dtsi} dts/upstream/src/arm64/qcom/sdm845-oneplus-common.dtsi
-      #cp -r ${./${device}.dts} dts/upstream/src/arm64/qcom/sdm845-oneplus-${device}.dts
-      #cp -r ${./common.dtsi} dts/upstream/src/arm64/qcom/sdm845-oneplus-common.dtsi
-
-      #cp -r ${fetch.sdm845}/include/dt-bindings/input/qcom,spmi-haptics.h dts/upstream/include/dt-bindings/input
-      #cp -r ${fetch.sdm845}/include/dt-bindings/sound/qcom,q6voice.h dts/upstream/include/dt-bindings/sound
-      #cp -r ${fetch.sdm845}/include/uapi/linux/input-event-codes.h dts/upstream/include/dt-bindings/input/linux-event-codes.h
-      #chmod -R +w dts/upstream/src/arm64/
-      '';
-    */
   };
 in
 pkgs.stdenvNoCC.mkDerivation {
@@ -66,9 +44,7 @@ pkgs.stdenvNoCC.mkDerivation {
   ];
   installPhase = ''
     mkdir -p $out
-
     gzip -c u-boot-nodtb.bin > u-boot.bin.gz
-
     mkbootimg \
       --kernel u-boot.bin.gz \
       --dtb ./${"sdm845-oneplus-${device}.dtb"} \

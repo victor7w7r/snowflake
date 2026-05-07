@@ -11,7 +11,6 @@ let
   f2fs = import ./lib/f2fs.nix;
   uboot = pkgs.callPackage ../kernel/sdm845/uboot.nix {
     device = "fajita";
-    inherit kernelData;
   };
 in
 {
@@ -40,30 +39,30 @@ in
 
     (import ./lib/tarball.nix {
       inherit config pkgs;
-      additionalBuildInputs = with pkgs; [ systemdUkify ];
       additionalContent =
         let
           vmlinux = config.boot.kernelPackages.kernel;
           initrd = "${config.system.build.initialRamdisk}/${config.system.boot.loader.initrdFile}";
         in
         ''
-          mkdir -p EFI/BOOT EFI/loader/entries
+          mkdir -p boot/EFI/BOOT boot/loader/entries boot/EFI/nixos
 
-          cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-bootaa64.efi EFI/BOOT/BOOTAA64.EFI
-          echo "timeout 5" > EFI/loader/loader.conf
-          echo "console-mode keep" >> EFI/loader/loader.conf
-          echo "title NixOS" > EFI/loader/entries/nix.conf
-          echo "efi /EFI/nixos.efi" >> EFI/loader/entries/nix.conf
+          cp ${uboot}/sdm845-oneplus-fajita.dtb boot/EFI/nixos/sdm845-oneplus-fajita.dtb
+          cp ${vmlinux} boot/EFI/nixos/vmlinuz
+          cp ${initrd} boot/EFI/nixos/initrd
 
-          ukify build --linux="${vmlinux}/${config.system.boot.loader.kernelFile}" --initrd="${initrd}" \
-            --uname="${vmlinux.modDirVersion}" \
-            --os-release="${config.system.build.etc}/etc/os-release" \
-            --output=EFI/nixos.efi
+          cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-bootaa64.efi boot/EFI/BOOT/BOOTAA64.EFI
+          echo "timeout 3" > boot/loader/loader.conf
+          echo "console-mode keep" >> boot/loader/loader.conf
 
-          tar -cv -C EFI . | zstd -T$NIX_BUILD_CORES > $out/efi.tar.zst
+          echo "title NixOS" > boot/loader/entries/nix.conf
+          echo "linux /EFI/nixos/vmlinuz" >> boot/loader/entries/nix.conf
+          echo "initrd /EFI/nixos/initrd" >> boot/loader/entries/nix.conf
+          echo "options init=${config.system.build.toplevel}/init ${toString config.boot.kernelParams}" >> boot/loader/entries/nix.conf
+          echo "devicetree /EFI/nixos/sdm845-oneplus-fajita.dtb" >> boot/loader/entries/nix.conf
+
+          tar -cv -C boot . | zstd -T$NIX_BUILD_CORES > $out/efi.tar.zst
           cp ${uboot}/boot.img $out/
-          cp ${uboot}/sdm845-oneplus-fajita.dtb $out/
-
         '';
     })
   ];
@@ -112,7 +111,7 @@ in
     };
     kernelParams = [
       "console=ttyMSM0,115200"
-      "dtb=/${config.hardware.deviceTree.name}"
+      "earlycon=msm_geni_serial,0xa84000"
     ];
     initrd = {
       systemd = {

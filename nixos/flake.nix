@@ -168,6 +168,11 @@
               kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             }).kernel.kconfigToNix;
 
+          sunxipatch =
+            (armPkgs.callPackage ./kernel/sunxi {
+              kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
+            }).kernel.configure;
+
           uboot =
             (armPkgs.callPackage ./kernel/sdm845 {
               inherit inputs;
