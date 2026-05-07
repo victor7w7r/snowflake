@@ -15,6 +15,9 @@ let
   };
 in
 {
+
+  system.build.uboot = uboot;
+
   nixpkgs.overlays = [
     (_: prev: {
       makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
@@ -64,8 +67,6 @@ in
         '';
     })
   ];
-
-  system.build.uboot = kernel.uboot;
 
   fileSystems = {
     "/boot" = {
