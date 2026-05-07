@@ -6,6 +6,7 @@
   "--set-val HZ 300"
   "--set-val NR_CPUS 8"
 
+  "-e STMMAC_ETH"
   "-e ARM_ALLWINNER_SUN50I_CPUFREQ_NVMEM"
   "-e ANDROID_BINDER_IPC"
   "-e ANDROID_BINDERFS"
@@ -66,6 +67,10 @@
   "-d KEXEC"
   "-d KEXEC_JUMP"
   "-d KALLSYMS_ALL"
+  "-d NFC"
+  "-d INPUT_JOYSTICK"
+  "-d INPUT_TOUCHSCREEN"
+  "-d MOUSE_PS2"
   "-d HZ_1000"
   "-d NO_HZ_FULL"
   "-d NTSYNC"
@@ -80,6 +85,10 @@
   "-d SECURITY_TOMOYO"
   "-d XEN"
 
+  "-d PM_DEBUG"
+  "-d FTRACE_SYSCALLS"
+  "-d FUNCTION_TRACER"
+  "-d HAMRADIO"
   "-d PINCTRL"
   "-d PINMUX"
   "-d PINCONF"
@@ -89,6 +98,5 @@
   "-d SND_SUN4I_CODEC"
   "-d ZRAM_BACKEND_842"
 ]
-++ (import ../config/develop.nix)
 ++ (import ../config/cmdline.nix) { host = ""; }
 #++ (import ../config/vendors.nix) { isPC = false; }

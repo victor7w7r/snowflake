@@ -19,27 +19,9 @@ let
   );
   selectedPatches = map (path: [ "${patchesRoute}/${path}" ]) patchesList;
 
-  patches = [
-    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-warnings.patch"
-    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-park-link-v6.1-post.patch"
-    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-setting-mac-address-for-netdev.patch"
-    "${fetch.armbian}/patch/misc/wireless-uwe5622/wireless-uwe5622-Fix-compilation-with-6.7-kernel.patch"
-    "${fetch.armbian}/patch/misc/wireless-uwe5622/wireless-uwe5622-reduce-system-load.patch"
-    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-spanning-writes.patch"
-    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-timer-api-changes-for-6.15-only-sunxi.patch"
-    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.17.patch"
-    "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.18.patch"
-  ]
-  ++ selectedPatches
-  ++ [
-    "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
-    "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
-    "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
-  ];
 in
 
 pkgs.stdenv.mkDerivation {
-  inherit patches;
   src = fetch.linux;
   name = "linux-${majorMinor}${localVer}-config";
 
@@ -75,7 +57,7 @@ pkgs.stdenv.mkDerivation {
   };
 
   passthru = {
-    inherit localVer patches;
+    inherit localVer;
     version = kernelData.linux.version;
   };
 }
