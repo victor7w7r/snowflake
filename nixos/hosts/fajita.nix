@@ -41,7 +41,7 @@ in
       inherit config pkgs;
       additionalContent =
         let
-          vmlinux = config.boot.kernelPackages.kernel;
+          vmlinux = "${config.boot.kernelPackages.kernel}/Image";
           initrd = "${config.system.build.initialRamdisk}/${config.system.boot.loader.initrdFile}";
         in
         ''

@@ -30,15 +30,12 @@ let
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.17.patch"
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.18.patch"
   ]
-  #++ selectedPatches
-  /*
-    ++ [
-      "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
-      "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
-      "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
-    ]
-  */
-  ;
+  ++ selectedPatches
+  ++ [
+    "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
+    "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
+    "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
+  ];
 in
 
 pkgs.stdenv.mkDerivation {
@@ -59,6 +56,7 @@ pkgs.stdenv.mkDerivation {
     ${import ./wifi-patch.nix { uwe5622 = fetch.uwe5622; }}
     ${import ./dts.nix { armbian = fetch.armbian; }}
   '';
+
   /*
     #export LSMOD=$(mktemp)
     #cat "${modules}" | sort > $LSMOD

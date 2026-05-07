@@ -25,7 +25,6 @@ let
       allowImportFromDerivation = false;
       version = "${configure.version}${configure.passthru.localVer}";
       modDirVersion = "${configure.version}${configure.passthru.localVer}";
-      stdenv = pkgs.gcc14Stdenv;
 
       kernelPatches = map (file: {
         name = baseNameOf (toString file);
