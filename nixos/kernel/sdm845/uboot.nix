@@ -78,7 +78,7 @@ pkgs.stdenvNoCC.mkDerivation {
     gzip -c u-boot-nodtb.bin > u-boot.bin.gz
 
     mkbootimg \
-      --kernel u-boot-nodtb.bin.gz \
+      --kernel u-boot.bin.gz \
       --dtb ./${"sdm845-oneplus-${device}.dtb"} \
       --base 0x0 \
       --kernel_offset 0x8000 \

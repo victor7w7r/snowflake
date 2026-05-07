@@ -101,7 +101,7 @@ in
       ${mkdir} -p ${efi}/refind/themes && ${cp} -r ${inputs.catppuccin-refind} ${efi}/refind/themes/catppuccin
       ${wget} -P ${efi}/refind/drivers_x64 ${efifs}/ntfs_x64.efi &> /dev/null
 
-      ${cp} ${edk2}/shell.efi ${efi}/refind/tools_x64/shellx64.efi
+      ${cp} ${edk2}/shell.efi ${efi}/tools/shellx64.efi
       ${cp} ${memtest}/BOOTX64.efi ${efi}/refind/tools_x64/memtest86.efi
       ${cp} ${fwupd}/fwupdx64.efi ${efi}/refind/tools_x64/fwupx64.efi
       ${mv} ${efi}/refind/tools_x64 ${efi}/tools
@@ -141,10 +141,9 @@ in
         ''
           if [ -d /var/lib/sbctl/keys ]; then
             ${sbctl} sign -s ${efi}/refind/refind_x64.efi &> /dev/null
-            ${sbctl} sign -s ${efi}/refind/tools_x64/shellx64.efi &> /dev/null
-            ${sbctl} sign -s ${efi}/refind/tools_x64/memtest86.efi &> /dev/null
-            ${sbctl} sign -s ${efi}/refind/tools_x64/gptsync_x64.efi &> /dev/null
-            ${sbctl} sign -s ${efi}/refind/tools_x64/fwupx64.efi &> /dev/null
+            ${sbctl} sign -s ${efi}/tools/shellx64.efi &> /dev/null
+            ${sbctl} sign -s ${efi}/tools/memtest86.efi &> /dev/null
+            ${sbctl} sign -s ${efi}/tools/fwupx64.efi &> /dev/null
             ${sbctl} sign -s ${efi}/refind/drivers_x64/btrfs_x64.efi &> /dev/null
             ${sbctl} sign -s ${efi}/refind/drivers_x64/ntfs_x64.efi &> /dev/null
             ${sbctl} sign -s ${efi}/nixos.efi
