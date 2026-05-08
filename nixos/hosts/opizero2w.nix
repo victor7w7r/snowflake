@@ -312,50 +312,52 @@ in
               name = "h616-tft35_spi";
               dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-tft35_spi.dtbo";
             }
-            {
-              name = "h616-uart2-pg";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-pg.dtbo";
-            }
-            {
-              name = "h616-uart2-pg-rts-cts";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-pg-rts-cts.dtbo";
-            }
-            {
-              name = "h616-uart2-ph";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-ph.dtbo";
-            }
-            {
-              name = "h616-uart2-ph-rts-cts";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-ph-rts-cts.dtbo";
-            }
-            {
-              name = "h616-uart2-pi";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-pi.dtbo";
-            }
-            {
-              name = "h616-uart2-pi-rts-cts";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-pi-rts-cts.dtbo";
-            }
-            {
-              name = "h616-uart3-pi";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart3-pi.dtbo";
-            }
-            {
-              name = "h616-uart3-pi-rts-cts";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart3-pi-rts-cts.dtbo";
-            }
-            {
-              name = "h616-uart4-pi";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart4-pi.dtbo";
-            }
-            {
-              name = "h616-uart4-pi-rts-cts";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart4-pi-rts-cts.dtbo";
-            }
-            {
-              name = "h616-uart5";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart5.dtbo";
-            }
+            /*
+              {
+                name = "h616-uart2-pg";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-pg.dtbo";
+              }
+              {
+                name = "h616-uart2-pg-rts-cts";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-pg-rts-cts.dtbo";
+              }
+              {
+                name = "h616-uart2-ph";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-ph.dtbo";
+              }
+              {
+                name = "h616-uart2-ph-rts-cts";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-ph-rts-cts.dtbo";
+              }
+              {
+                name = "h616-uart2-pi";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-pi.dtbo";
+              }
+              {
+                name = "h616-uart2-pi-rts-cts";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart2-pi-rts-cts.dtbo";
+              }
+              {
+                name = "h616-uart3-pi";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart3-pi.dtbo";
+              }
+              {
+                name = "h616-uart3-pi-rts-cts";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart3-pi-rts-cts.dtbo";
+              }
+              {
+                name = "h616-uart4-pi";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart4-pi.dtbo";
+              }
+              {
+                name = "h616-uart4-pi-rts-cts";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart4-pi-rts-cts.dtbo";
+              }
+              {
+                name = "h616-uart5";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart5.dtbo";
+                }
+            */
             {
               name = "h616-ws2812";
               dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-ws2812.dtbo";
