@@ -67,20 +67,20 @@ pkgs.stdenv.mkDerivation {
 
   buildPhase = ''
     cp ${fetch.armbian}/config/kernel/linux-sunxi64-current.config .config
-
     chmod -R +w .config
     patchShebangs scripts/config
-    make ARCH=arm64 $makeFlags olddefconfig
-
-    scripts/config ${lib.concatStringsSep " " config}
 
     cat << 'EOF' >> .config
-    CONFIG_WLAN_UWE5622=y
-    CONFIG_PHY_SUN4I_USB=y
-    CONFIG_AC200_PHY_SUNXI=y
+    CONFIG_UNISOC_WIFI_PS=y
+    CONFIG_WLAN_UWE5622=m
+    CONFIG_WLAN_UWE5621=m
+    CONFIG_TTY_OVERY_SDIO=m
+    CONFIG_AC200_PHY_SUNXI=m
+    CONFIG_MFD_AC200_SUNXI=m
     EOF
 
-    #make ARCH=arm64 $makeFlags oldconfig
+    scripts/config ${lib.concatStringsSep " " config}
+    make ARCH=arm64 $makeFlags olddefconfig
   '';
 
   meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {
