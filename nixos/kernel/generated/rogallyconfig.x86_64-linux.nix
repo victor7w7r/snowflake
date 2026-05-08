@@ -368,8 +368,7 @@
   "CONFIG_HOTPLUG_CPU" = "y";
   "CONFIG_LEGACY_VSYSCALL_XONLY" = "y";
   "CONFIG_CMDLINE_BOOL" = "y";
-  "CONFIG_CMDLINE" =
-    "vt.default_red=30,243,166,249,137,245,148,186,88,243,166,249,137,245,148,166 vt.default_grn=30,139,227,226,180,194,226,194,91,139,227,226,180,194,226,173 vt.default_blu=46,168,161,175,250,231,213,222,112,168,161,175,250,231,213,200 pti=on page_alloc.shuffle=1 elevator=none page_poison=1 oops=panic randomize_kstack_offset=on iommu=pt pcie_acs_override=downstream,multifunction kvm.ignore_msrs=1 kvm.report_ignored_msrs=0 rcutree.enable_rcu_lazy=1 rcupdate.rcu_expedited=1 threadirqs mitigations=off nospectre_v1 nospectre_v2 spec_store_bypass_disable=off amd_iommu=on amdgpu.sg_display=0 split_lock_detect=off tsc=reliable nowatchdog nmi_watchdog=0  sysrq_always_enabled=0 ";
+  "CONFIG_CMDLINE" = "vt.default_red=30,243,166,249,137,245,148,186,88,243,166,249,137,245,148,166 vt.default_grn=30,139,227,226,180,194,226,194,91,139,227,226,180,194,226,173 vt.default_blu=46,168,161,175,250,231,213,222,112,168,161,175,250,231,213,200 pti=on page_alloc.shuffle=1 elevator=none page_poison=1 oops=panic randomize_kstack_offset=on iommu=pt pcie_acs_override=downstream,multifunction kvm.ignore_msrs=1 kvm.report_ignored_msrs=0 rcutree.enable_rcu_lazy=1 rcupdate.rcu_expedited=1 threadirqs mitigations=off nospectre_v1 nospectre_v2 spec_store_bypass_disable=off amd_iommu=on amdgpu.sg_display=0 split_lock_detect=off tsc=reliable nowatchdog nmi_watchdog=0  sysrq_always_enabled=0 ";
   "CONFIG_MODIFY_LDT_SYSCALL" = "y";
   "CONFIG_HAVE_LIVEPATCH" = "y";
   "CONFIG_X86_BUS_LOCK_DETECT" = "y";
@@ -1720,10 +1719,13 @@
   "CONFIG_USB_OHCI_HCD" = "y";
   "CONFIG_USB_OHCI_HCD_PCI" = "y";
   "CONFIG_USB_UHCI_HCD" = "y";
+  "CONFIG_USB_ACM" = "y";
+  "CONFIG_USB_WDM" = "y";
   "CONFIG_USB_STORAGE" = "m";
   "CONFIG_USB_SERIAL" = "m";
   "CONFIG_USB_SERIAL_GENERIC" = "y";
   "CONFIG_USB_SERIAL_CP210X" = "m";
+  "CONFIG_USB_SERIAL_FTDI_SIO" = "m";
   "CONFIG_TYPEC" = "m";
   "CONFIG_TYPEC_UCSI" = "m";
   "CONFIG_UCSI_ACPI" = "m";

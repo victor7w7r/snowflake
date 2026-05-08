@@ -25,6 +25,7 @@
   "-e PREEMPT_NONE_BUILD"
   "-e ZRAM_DEF_COMP_LZ4"
   "-e ZRAM_LZ4_COMPRESS"
+  "-e USB_NET_CDC_NCM"
   "-e REGMAP"
   "-e TMPFS"
   "-e TMPFS_POSIX_ACL"
