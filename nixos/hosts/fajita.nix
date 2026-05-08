@@ -110,8 +110,11 @@ in
       systemd-boot.consoleMode = "0";
     };
     kernelParams = [
-      "console=ttyMSM0,115200"
+      "console=tty0"
+      "console=ttyMSM0,115200n8"
       "earlycon=msm_geni_serial,0xa84000"
+      "pd_ignore_unused"
+      "clk_ignore_unused"
     ];
     initrd = {
       systemd = {
