@@ -22,6 +22,9 @@
       else
         { };
     tmpfiles.rules = [
+      "R /srv - - - - -"
+      "R /lost+found - - - - -"
+      "d /mnt 0755 root root - -"
       "w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409"
       "w! /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise"
       "w /proc/sys/vm/compaction_proactiveness - - - - 20"

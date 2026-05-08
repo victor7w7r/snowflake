@@ -1,14 +1,4 @@
-{
-  config,
-  pkgs,
-  host,
-  lib,
-  username,
-  ...
-}:
-let
-  specialHosts = (host == "v7w7r-macmini81" || host == "v7w7r-youyeetoox1");
-in
+{ username, ... }:
 {
   environment.persistence."/nix/persist" = {
     hideMounts = true;
