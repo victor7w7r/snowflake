@@ -198,18 +198,20 @@ in
             }
           )
           [
-            {
-              name = "h616-i2c2-ph";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-i2c2-ph.dtbo";
-            }
-            {
-              name = "h616-i2c3-ph";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-i2c3-ph.dtbo";
-            }
-            {
-              name = "h616-i2c4-ph";
-              dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-i2c4-ph.dtbo";
-            }
+            /*
+              {
+                name = "h616-i2c2-ph";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-i2c2-ph.dtbo";
+              }
+              {
+                name = "h616-i2c3-ph";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-i2c3-ph.dtbo";
+              }
+              {
+                name = "h616-i2c4-ph";
+                dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-i2c4-ph.dtbo";
+                }
+            */
             {
               name = "h616-i2c3-pg";
               dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-i2c3-pg.dtbo";
