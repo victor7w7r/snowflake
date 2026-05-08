@@ -12,7 +12,7 @@ let
   config = (import ./config.nix);
   modules = ./modules.db;
 
-  patchesRoute = "${fetch.armbian}/patch/kernel/archive/sunxi-6.18";
+  patchesRoute = "${fetch.armbian}/patch/kernel/archive/sunxi-6.12";
   patchLines = lib.splitString "\n" (builtins.readFile "${patchesRoute}/series.conf");
   patchesList = lib.filter (line: line != "" && !(lib.hasPrefix "#" line || lib.hasPrefix "-" line)) (
     map lib.strings.trim patchLines
