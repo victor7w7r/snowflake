@@ -6,7 +6,17 @@
   ...
 }:
 let
-  majorMinor = lib.versions.majorMinor kernelData.sdm845.version;
+  version = rec {
+    string = "${
+      version + "." + patchlevel + "." + sublevel + (lib.optionalString (extraversion != "") extraversion)
+    }";
+    file = "${fetch.sdm845}/Makefile";
+    version = toString (builtins.match ".+VERSION = ([0-9]+).+" (builtins.readFile file));
+    patchlevel = toString (builtins.match ".+PATCHLEVEL = ([0-9]+).+" (builtins.readFile file));
+    sublevel = toString (builtins.match ".+SUBLEVEL = ([0-9]+).+" (builtins.readFile file));
+    extraversion = toString (builtins.match ".+EXTRAVERSION = ([a-z0-9-]+).+" (builtins.readFile file));
+  };
+  majorMinor = lib.versions.majorMinor version;
   fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   localVer = "-v7w7r-sdm845";
   config = (import ./config.nix);
@@ -38,7 +48,6 @@ pkgs.stdenv.mkDerivation {
   };
 
   passthru = {
-    inherit localVer patches;
-    version = kernelData.sdm845.version;
+    inherit localVer patches version;
   };
 }
