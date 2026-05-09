@@ -16,6 +16,11 @@ let
     postPatch = ''
       sed -i 's/bootcmd=.*/bootcmd=scsi scan; load scsi 0:11 ''${kernel_addr_r} \/EFI\/BOOT\/BOOTAA64.EFI; bootefi ''${kernel_addr_r}/' board/qualcomm/qcom-phone.env
     '';
+    extraConfig = ''
+      bootmenu_10=Flash Boot and DTBO=run update_boot; run update_dtbo
+      update_boot=fatload mmc 0:1 ''${loadaddr} boot.img && mmc dev 1 && mmc write ''${loadaddr} 0x8000 0x20000
+      update_dtbo=fatload mmc 0:1 ''${loadaddr} dtbo.img && mmc dev 1 && mmc write ''${loadaddr} 0x40000 0x4000
+    '';
     nativeBuildInputs = with pkgs; [
       xxd
       bison

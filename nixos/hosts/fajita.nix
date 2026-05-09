@@ -1,6 +1,7 @@
 {
   inputs,
   kernelData,
+  fetchurl,
   config,
   lib,
   pkgs,
@@ -42,14 +43,18 @@ in
       additionalContent =
         let
           vmlinux = "${config.boot.kernelPackages.kernel}/Image";
+          ofox = fetchurl {
+            url = "https://github.com/Wishmasterflo/ofox_fajita/releases/download/V7/OrangeFox-R12.0-Unofficial-fajita-V7.img";
+            sha256 = "0y7kb2mr7zd2irfgsmfgdpb0ffff3cb4hf3hfj7mndalma3xdhzn";
+          };
           initrd = "${config.system.build.initialRamdisk}/${config.system.boot.loader.initrdFile}";
         in
         ''
           mkdir -p boot/EFI/BOOT boot/loader/entries boot/EFI/nixos
 
           cp ${uboot}/sdm845-oneplus-fajita.dtb boot/EFI/nixos/sdm845-oneplus-fajita.dtb
-          cp ${vmlinux} boot/EFI/nixos/vmlinuz
-          cp ${initrd} boot/EFI/nixos/initrd
+          cp ${vmlinux} boot/EFI/nixos/vmlinuz && cp ${initrd} boot/EFI/nixos/initrd && cp ${ofox} boot/ofox.twrp
+          cp ${../kernel/sdm845/dtbo.img} boot/dtbo.img && cp ${uboot}/boot.img boot/uboot.img
 
           cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-bootaa64.efi boot/EFI/BOOT/BOOTAA64.EFI
           echo "timeout 3" > boot/loader/loader.conf
@@ -65,6 +70,17 @@ in
           echo "devicetree /EFI/nixos/sdm845-oneplus-fajita.dtb" >> boot/loader/entries/nix.conf
 
           tar -cv -C boot . | zstd -T$NIX_BUILD_CORES > $out/efi.tar.zst
+
+          cat <<EOF > $out/switch-uboot.sh
+          #!/bin/sh
+
+          mount -t /dev/block/sda17 /mnt
+          dd if=/dev/zero of=/dev/block/sda4
+          dd if=/dev/zero of=/dev/block/sda5
+          dd if=/mnt/uboot.img of=/dev/block/sda2
+          reboot
+          EOF
+
           cp ${uboot}/boot.img $out/
         '';
     })
