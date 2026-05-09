@@ -37,11 +37,11 @@ let
         "NIX_ENFORCE_NO_NATIVE=0"
         "KCFLAGS=-Wno-unknown-warning-option -Wno-ignored-optimization-argument"
       ];
+      #${import ./dts.nix { armbian = fetch.armbian; }}
     }).overrideAttrs
       (attrs: {
         prePatch = ''
           ${import ./wifi-patch.nix { uwe5622 = fetch.uwe5622; }}
-          ${import ./dts.nix { armbian = fetch.armbian; }}
         '';
         nativeBuildInputs = (attrs.nativeBuildInputs or [ ]);
         passthru = attrs.passthru // {

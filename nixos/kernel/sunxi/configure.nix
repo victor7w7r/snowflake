@@ -6,16 +6,18 @@
   ...
 }:
 let
-  majorMinor = lib.versions.majorMinor kernelData.linux.version;
+  majorMinor = lib.versions.majorMinor kernelData.linux-legacy.version;
   fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   localVer = "-v7w7r-sunxi-hardened";
   config = (import ./config.nix);
   modules = ./modules.db;
 
+  patchesRoute = "${fetch.armbian}/patch/kernel/archive/sunxi-6.12";
   patchLines = lib.splitString "\n" (builtins.readFile ./patches.config);
   patchesList = lib.filter (line: line != "" && !(lib.hasPrefix "#" line || lib.hasPrefix "-" line)) (
     map lib.strings.trim patchLines
   );
+  selectedPatches = map (path: [ "${patchesRoute}/${path}" ]) patchesList;
 
   patches = [
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-warnings.patch"
@@ -28,11 +30,15 @@ let
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.17.patch"
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.18.patch"
   ]
-  ++ patchesList
+  ++ selectedPatches
   ++ [
-    "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
-    "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
-    "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
+    "${fetch.patches}/${majorMinor}/0002-bbr3.patch"
+    "${fetch.patches}/${majorMinor}/0003-cachy.patch"
+    "${fetch.patches}/${majorMinor}/0004-fixes.patch"
+    "${fetch.patches}/${majorMinor}/0007-zstd.patch"
+    "${fetch.linux-legacy-hardened}"
+    #"${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
+    #"${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
   ];
 in
 
@@ -50,9 +56,9 @@ pkgs.stdenv.mkDerivation {
     ];
   installPhase = "cp .config $out";
 
+  #${import ./dts.nix { armbian = fetch.armbian; }}
   prePatch = ''
     ${import ./wifi-patch.nix { uwe5622 = fetch.uwe5622; }}
-    ${import ./dts.nix { armbian = fetch.armbian; }}
   '';
 
   /*
@@ -64,7 +70,7 @@ pkgs.stdenv.mkDerivation {
   */
 
   buildPhase = ''
-    cp ${fetch.armbian}/config/kernel/linux-sunxi64-current.config .config
+    cp ${fetch.armbian}/config/kernel/linux-sunxi64-legacy.config .config
     chmod -R +w .config
     patchShebangs scripts/config
 

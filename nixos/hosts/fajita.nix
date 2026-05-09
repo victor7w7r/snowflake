@@ -54,6 +54,9 @@ in
           cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-bootaa64.efi boot/EFI/BOOT/BOOTAA64.EFI
           echo "timeout 3" > boot/loader/loader.conf
           echo "console-mode keep" >> boot/loader/loader.conf
+          echo "auto-reboot true" >> boot/loader/loader.conf
+          echo "auto-reboot-to-firmware-setup true" >> boot/loader/loader.conf
+          echo "auto-poweroff true" >> boot/loader/loader.conf
 
           echo "title NixOS" > boot/loader/entries/nix.conf
           echo "linux /EFI/nixos/vmlinuz" >> boot/loader/entries/nix.conf

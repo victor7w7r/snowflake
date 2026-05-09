@@ -16,6 +16,21 @@
     hash = kernelData.linux-legacy.hash;
   };
 
+  linux-legacy-hardened = pkgs.fetchurl {
+    url = kernelData.linux-legacy-hardened.url;
+    hash = kernelData.linux-legacy-hardened.hash;
+    postFetch = ''
+      ${''
+        ${pkgs.patchutils}/bin/filterdiff -x "*/arch/Kconfig" \
+        -x "*/include/linux/user_namespace.h" \
+        -x "*/kernel/sysctl.c" \
+        -x "*/kernel/user_namespace.c" \
+        "$out" > temp.patch || true
+        cat temp.patch > "$out" || true
+      ''}
+    '';
+  };
+
   asus = pkgs.fetchgit {
     url = kernelData.asus.url;
     rev = kernelData.asus.rev;
