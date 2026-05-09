@@ -11,7 +11,7 @@ let
 
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
   patches = configure.passthru.patches;
-  majorMinor = lib.versions.majorMinor kernelData.linux.version;
+  majorMinor = lib.versions.majorMinor kernelData.linux-legacy.version;
   fetch = (
     pkgs.callPackage ../fetch.nix {
       inherit kernelData majorMinor;

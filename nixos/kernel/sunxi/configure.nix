@@ -95,6 +95,6 @@ pkgs.stdenv.mkDerivation {
 
   passthru = {
     inherit localVer patches;
-    version = kernelData.linux.version;
+    version = kernelData.linux-legacy.version;
   };
 }
