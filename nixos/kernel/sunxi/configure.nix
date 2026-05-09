@@ -85,6 +85,8 @@ pkgs.stdenv.mkDerivation {
 
     scripts/config ${lib.concatStringsSep " " config}
     make ARCH=arm64 $makeFlags olddefconfig
+
+    ./scripts/config --enable CONFIG_DMIID
   '';
 
   meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {

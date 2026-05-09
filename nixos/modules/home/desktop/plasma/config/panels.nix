@@ -53,8 +53,8 @@
               "applications:zen-beta.desktop"
               "applications:kitty.desktop"
               "applications:dev.zed.Zed.desktop"
-              "applications:claude.desktop"
-            ];
+            ]
+            ++ (if host == "v7w7r-macmini81" then [ "applications:claude.desktop" ] else [ ]);
           };
         }
       ];

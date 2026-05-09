@@ -5,6 +5,8 @@
     directories = [
       "/etc/NetworkManager/system-connections"
       "/etc/nixos"
+      "/etc/asusd"
+      "/etc/hhd"
       "/var/log"
       "/var/lib"
     ];
@@ -39,6 +41,7 @@
         ".config/nix"
         ".config/onlyoffice"
         ".config/sops"
+        ".config/rog"
         ".config/vlc"
         ".config/zen"
         ".local/state"

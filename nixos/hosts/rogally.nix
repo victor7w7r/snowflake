@@ -183,7 +183,10 @@ in
     xone.enable = true;
   };
 
-  programs.rog-control-center.enable = true;
+  programs.rog-control-center = {
+    enable = true;
+    autoStart = true;
+  };
 
   services = {
     acpid.enable = true;
@@ -207,20 +210,7 @@ in
       interval = "weekly";
     };
 
-    asusd = {
-      enable = true;
-      asusdConfig.text = ''
-        bat_charge_limit: 80,
-        platform_profile_on_battery: Quiet,
-        change_platform_profile_on_battery: true,
-        platform_profile_on_ac: BalancePerformance,
-        change_platform_profile_on_ac: true,
-        profile_quiet_epp: Power,
-        profile_balanced_epp: BalancePower,
-        profile_custom_epp: BalancePerformance,
-        profile_performance_epp: BalancePerformance,
-      '';
-    };
+    asusd.enable = true;
     handheld-daemon = {
       enable = true;
       user = username;
