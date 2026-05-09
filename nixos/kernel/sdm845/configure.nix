@@ -16,7 +16,7 @@ let
     sublevel = toString (builtins.match ".+SUBLEVEL = ([0-9]+).+" (builtins.readFile file));
     extraversion = toString (builtins.match ".+EXTRAVERSION = ([a-z0-9-]+).+" (builtins.readFile file));
   };
-  majorMinor = lib.versions.majorMinor version;
+  majorMinor = lib.versions.majorMinor version.string;
   fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   localVer = "-v7w7r-sdm845";
   config = (import ./config.nix);
@@ -48,6 +48,7 @@ pkgs.stdenv.mkDerivation {
   };
 
   passthru = {
-    inherit localVer patches version;
+    inherit localVer patches;
+    version = version.string;
   };
 }
