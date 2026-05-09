@@ -12,12 +12,10 @@ let
   config = (import ./config.nix);
   modules = ./modules.db;
 
-  patchesRoute = "${fetch.armbian}/patch/kernel/archive/sunxi-6.12";
-  patchLines = lib.splitString "\n" (builtins.readFile "${patchesRoute}/series.conf");
+  patchLines = lib.splitString "\n" (builtins.readFile ./patches.config);
   patchesList = lib.filter (line: line != "" && !(lib.hasPrefix "#" line || lib.hasPrefix "-" line)) (
     map lib.strings.trim patchLines
   );
-  selectedPatches = map (path: [ "${patchesRoute}/${path}" ]) patchesList;
 
   patches = [
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-warnings.patch"
@@ -30,7 +28,7 @@ let
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.17.patch"
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.18.patch"
   ]
-  ++ selectedPatches
+  ++ patchesList
   ++ [
     "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
     "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
@@ -40,7 +38,7 @@ in
 
 pkgs.stdenv.mkDerivation {
   inherit patches;
-  src = fetch.linux;
+  src = fetch.linux-legacy;
   name = "linux-${majorMinor}${localVer}-config";
 
   nativeBuildInputs =
