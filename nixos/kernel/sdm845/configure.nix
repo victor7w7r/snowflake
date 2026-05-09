@@ -7,9 +7,7 @@
 }:
 let
   version = rec {
-    string = "${
-      version + "." + patchlevel + "." + sublevel + (lib.optionalString (extraversion != "") extraversion)
-    }";
+    string = "${version + "." + patchlevel + "." + sublevel}";
     file = "${fetch.sdm845}/Makefile";
     version = toString (builtins.match ".+VERSION = ([0-9]+).+" (builtins.readFile file));
     patchlevel = toString (builtins.match ".+PATCHLEVEL = ([0-9]+).+" (builtins.readFile file));
