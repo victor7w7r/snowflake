@@ -1,10 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0
-/*
- * SDM845 OnePlus 6T (fajita) device tree.
- *
- * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- */
-
 #include "sdm845-oneplus-common.dtsi"
 
 / {
@@ -20,6 +13,35 @@
 		charge-full-design-microamp-hours = <3700000>;
 		voltage-min-design-microvolt = <3400000>;
 		voltage-max-design-microvolt = <4400000>;
+		constant-charge-current-max-microamp = <1800000>;
+	};
+
+	main_cam_ois: main-cam-ois-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "main_cam_ois";
+
+		regulator-min-microvolt = <2850000>;
+		regulator-max-microvolt = <2850000>;
+		regulator-enable-ramp-delay = <100>;
+
+		gpio = <&tlmm 40 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+
+		vin-supply = <&vreg_l21a_2p95>;
+	};
+
+	main_cam_vaf: main-cam-vaf-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "main_cam_vaf";
+
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+		regulator-enable-ramp-delay = <100>;
+
+		gpio = <&tlmm 31 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+
+		vin-supply = <&vreg_bob>;
 	};
 };
 
@@ -29,37 +51,21 @@
 	compatible = "samsung,s6e3fc2x01";
 };
 
-&i2c4 {
-	/* nxp,tfa9894 @ 0x34 */
+&framebuffer {
+	height = <2340>;
 };
 
 &bq27441_fg {
 	monitored-battery = <&battery>;
 };
 
-&sound {
-	model = "OnePlus 6T";
-	audio-routing = "RX_BIAS", "MCLK",
-			"AMIC1", "MIC BIAS3",
-			"AMIC2", "MIC BIAS2",
-			"AMIC3", "MIC BIAS4",
-			"AMIC4", "MIC BIAS1",
-			"AMIC5", "MIC BIAS3";
-};
-
 &pmi8998_charger {
 	monitored-battery = <&battery>;
 };
 
-/*
- * The TFA9894 codec is currently unsupported.
- * We need to delete the node to allow the soundcard
- * to probe for headphones/earpiece.
-/delete-node/ &speaker_playback_dai;
- */
-
 &rmi4_f12 {
 	touchscreen-y-mm = <148>;
+	syna,clip-y-high = <2339>;
 };
 
 &wcd9340 {
