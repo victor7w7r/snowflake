@@ -8,14 +8,11 @@
 }:
 let
   version = rec {
-    string = "${
-      version + "." + patchlevel + "." + sublevel + (lib.optionalString (extraversion != "") extraversion)
-    }";
     file = "${fetch.sdm845}/Makefile";
     version = toString (builtins.match ".+VERSION = ([0-9]+).+" (builtins.readFile file));
     patchlevel = toString (builtins.match ".+PATCHLEVEL = ([0-9]+).+" (builtins.readFile file));
     sublevel = toString (builtins.match ".+SUBLEVEL = ([0-9]+).+" (builtins.readFile file));
-    extraversion = toString (builtins.match ".+EXTRAVERSION = ([a-z0-9-]+).+" (builtins.readFile file));
+    string = "${version + "." + patchlevel + "." + sublevel}";
   };
   majorMinor = lib.versions.majorMinor version.string;
   isCross = stdenv.hostPlatform != stdenv.buildPlatform;
@@ -27,7 +24,7 @@ let
     # "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
   ];
 in
-pkgs.stdenv.mkDerivation (oldAttrs: {
+pkgs.stdenv.mkDerivation {
   inherit patches;
   src = fetch.sdm845;
   name = "linux-${majorMinor}${localVer}-config";
@@ -35,20 +32,19 @@ pkgs.stdenv.mkDerivation (oldAttrs: {
   nativeBuildInputs = kernel.nativeBuildInputs ++ kernel.buildInputs;
   installPhase = "cp .config $out";
 
-  makeFlags =
-    oldAttrs.makeFlags
-    ++ lib.optionals isCross [
-      "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
-    ];
+  makeFlags = [
+    "ARCH=arm64"
+  ]
+  ++ lib.optionals isCross [
+    "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
+  ];
 
   buildPhase = ''
-    export ARCH=arm64
-
     cp arch/arm64/configs/sdm845.config .config
     patchShebangs scripts/config
     scripts/config ${lib.concatStringsSep " " config}
     scripts/config --undefine CONFIG_LOCALVERSION
-    make ARCH=arm64 $makeFlags olddefconfig
+    make $makeFlags olddefconfig
   '';
 
   meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {
@@ -65,4 +61,4 @@ pkgs.stdenv.mkDerivation (oldAttrs: {
     inherit localVer patches;
     version = version.string;
   };
-})
+}

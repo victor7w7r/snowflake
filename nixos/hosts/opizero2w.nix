@@ -25,7 +25,10 @@ in
 
   system.build.bootFiles = pkgs.stdenvNoCC.mkDerivation {
     name = "bootFiles";
-    buildCommand = bootFiles;
+    buildCommand = ''
+      mkdir -p $out
+      ${bootFiles}
+    '';
   };
 
   imports = [
