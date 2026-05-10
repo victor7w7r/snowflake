@@ -6,14 +6,16 @@
   ...
 }:
 let
-  majorMinor = lib.versions.majorMinor kernelData.linux-legacy.version;
+  majorMinor = lib.versions.majorMinor kernelData.linux.version;
   fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   localVer = "-v7w7r-sunxi-hardened";
   config = (import ./config.nix);
   modules = ./modules.db;
 
-  patchesRoute = "${fetch.armbian}/patch/kernel/archive/sunxi-6.12";
-  patchLines = lib.splitString "\n" (builtins.readFile ./patches.config);
+  patchesRoute = "${fetch.armbian}/patch/kernel/archive/sunxi-6.18";
+  patchLines = lib.splitString "\n" (
+    builtins.readFile "${fetch.armbian}/patch/kernel/archive/sunxi-6.18/series.conf"
+  );
   patchesList = lib.filter (line: line != "" && !(lib.hasPrefix "#" line || lib.hasPrefix "-" line)) (
     map lib.strings.trim patchLines
   );
@@ -32,45 +34,36 @@ let
   ]
   ++ selectedPatches
   ++ [
-    "${fetch.patches}/${majorMinor}/0002-bbr3.patch"
-    "${fetch.patches}/${majorMinor}/0003-cachy.patch"
-    "${fetch.patches}/${majorMinor}/0004-fixes.patch"
-    "${fetch.patches}/${majorMinor}/0007-zstd.patch"
-    "${fetch.linux-legacy-hardened}"
-    #"${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
-    #"${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
+    "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
+    "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
+    "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
   ];
 in
 
 pkgs.stdenv.mkDerivation {
   inherit patches;
-  src = fetch.linux-legacy;
+  src = fetch.linux;
   name = "linux-${majorMinor}${localVer}-config";
 
-  nativeBuildInputs =
-    with pkgs;
-    kernel.nativeBuildInputs
-    ++ kernel.buildInputs
-    ++ [
-      ncurses
-    ];
+  nativeBuildInputs = kernel.nativeBuildInputs ++ kernel.buildInputs;
   installPhase = "cp .config $out";
 
-  #${import ./dts.nix { armbian = fetch.armbian; }}
   prePatch = ''
     ${import ./wifi-patch.nix { uwe5622 = fetch.uwe5622; }}
   '';
 
   /*
-    #export LSMOD=$(mktemp)
-    #cat "${modules}" | sort > $LSMOD
-    #(yes "" | make LSMOD=$LSMOD localmodconfig) || true
+    ${import ./dts.nix { armbian = fetch.armbian; }}
 
-    #make ARCH=arm64 $makeFlags olddefconfig
+      #export LSMOD=$(mktemp)
+      #cat "${modules}" | sort > $LSMOD
+      #(yes "" | make LSMOD=$LSMOD localmodconfig) || true
+
+      #make ARCH=arm64 $makeFlags olddefconfig
   */
 
   buildPhase = ''
-    cp ${fetch.armbian}/config/kernel/linux-sunxi64-legacy.config .config
+    cp ${fetch.armbian}/config/kernel/linux-sunxi64-current.config .config
     chmod -R +w .config
     patchShebangs scripts/config
 
@@ -86,7 +79,6 @@ pkgs.stdenv.mkDerivation {
     scripts/config ${lib.concatStringsSep " " config}
     make ARCH=arm64 $makeFlags olddefconfig
 
-    ./scripts/config --enable CONFIG_DMIID
   '';
 
   meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {
@@ -95,6 +87,6 @@ pkgs.stdenv.mkDerivation {
 
   passthru = {
     inherit localVer patches;
-    version = kernelData.linux-legacy.version;
+    version = kernelData.linux.version;
   };
 }

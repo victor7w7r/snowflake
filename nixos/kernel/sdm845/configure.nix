@@ -7,11 +7,14 @@
 }:
 let
   version = rec {
+    string = "${
+      version + "." + patchlevel + "." + sublevel + (lib.optionalString (extraversion != "") extraversion)
+    }";
     file = "${fetch.sdm845}/Makefile";
     version = toString (builtins.match ".+VERSION = ([0-9]+).+" (builtins.readFile file));
     patchlevel = toString (builtins.match ".+PATCHLEVEL = ([0-9]+).+" (builtins.readFile file));
     sublevel = toString (builtins.match ".+SUBLEVEL = ([0-9]+).+" (builtins.readFile file));
-    string = "${version + "." + patchlevel + "." + sublevel}";
+    extraversion = toString (builtins.match ".+EXTRAVERSION = ([a-z0-9-]+).+" (builtins.readFile file));
   };
   majorMinor = lib.versions.majorMinor version.string;
   fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });

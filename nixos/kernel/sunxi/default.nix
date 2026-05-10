@@ -37,7 +37,8 @@ let
         "NIX_ENFORCE_NO_NATIVE=0"
         "KCFLAGS=-Wno-unknown-warning-option -Wno-ignored-optimization-argument"
       ];
-      #${import ./dts.nix { armbian = fetch.armbian; }}
+
+      # ${import ./dts.nix { armbian = fetch.armbian; }}
     }).overrideAttrs
       (attrs: {
         prePatch = ''
