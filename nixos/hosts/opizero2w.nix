@@ -112,11 +112,14 @@ in
           "/share/terminfo".source = "${pkgs.ncurses}/share/terminfo";
           "/etc/ssl/certs/ca-certificates.crt".source = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
         };
-        initrdBin = [ pkgs.coreutils ];
-        storePaths = [
-          "${pkgs.bashInteractive}/bin/bash"
+        initrdBin = [
+          pkgs.coreutils
           pkgs.util-linux
           pkgs.ncurses
+          pkgs.mtdutils
+        ];
+        storePaths = [
+          "${pkgs.bashInteractive}/bin/bash"
         ];
         settings.Manager = {
           DefaultTimeoutStartSec = "15s";
@@ -128,6 +131,7 @@ in
           nix = "${pkgs.nix}/bin/nix";
           ip = "${pkgs.iproute2}/bin/ip";
           curl = "${pkgs.curl}/bin/curl";
+
           ping = "${pkgs.iputils}/bin/ping";
           cryptsetup = "${pkgs.cryptsetup}/bin/cryptsetup";
           busybox = "${pkgs.busybox-sandbox-shell}/bin/busybox";
@@ -143,31 +147,17 @@ in
         };
       };
       kernelModules = [
-        "autofs"
-        "sunxi-mmc"
-        "usb_storage"
-        "uas"
         "g_ether"
-        "uhci_hcd"
-        "ehci_hcd"
-        "xhci_pci"
-        "xhci_pci"
-        "usbhid"
-        "sun8i-rsb"
-        "phy_sun4i_usb"
-        "ohci_sunxi"
-        "ehci_sunxi"
-        "axp20x_rsb"
-        "axp20x_regulator"
-        "sprdbt_tty"
-        "sdhci_pci"
-        "sdhci_acpi"
         "sdhci"
-        "uwe5622_bsp_sdio"
+        "sdhci_pci"
+        "uas"
         "libcomposite"
+        "uhci_hcd"
+
+        "sun8i-rsb"
+        "uwe5622_bsp_sdio"
+        "sprdbt_tty"
         "sprdwl_ng"
-        "mmc_block"
-        "nvmem_sunxi_sid"
       ];
     };
     loader = {
