@@ -13,9 +13,8 @@ let
       config = (import ./config.aarch64-linux.nix);
       configfile = configure;
       allowImportFromDerivation = false;
-      version = "${configure.version}${configure.passthru.localVer}";
-      modDirVersion = "${configure.version}${configure.passthru.localVer}";
-      stdenv = pkgs.gcc14Stdenv;
+      version = "${configure.passthru.version}${configure.passthru.localVer}";
+      modDirVersion = "${configure.passthru.version}${configure.passthru.localVer}";
 
       kernelPatches = map (file: {
         name = baseNameOf (toString file);
