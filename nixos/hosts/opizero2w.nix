@@ -8,6 +8,13 @@ let
   uboot = import ./custom/sunxi-uboot.nix { inherit pkgs; };
   f2fs = import ./lib/f2fs.nix;
   kernel = (pkgs.callPackage ../kernel/sunxi) { inherit kernelData; };
+  bootFiles = ''
+    cp ${uboot}/u-boot-sunxi-with-spl.bin $out/
+    mkdir -p boot
+    ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
+      -c ${config.system.build.toplevel} -d boot
+    tar -cv -C . boot | zstd -T$NIX_BUILD_CORES > $out/boot.tar.zst
+  '';
 in
 {
   nixpkgs.overlays = [
@@ -15,6 +22,11 @@ in
       makeModulesClosure = x: super.makeModulesClosure (x // { allowMissing = true; });
     })
   ];
+
+  system.build.bootFiles = pkgs.stdenvNoCC.mkDerivation {
+    name = "bootFiles";
+    buildCommand = bootFiles;
+  };
 
   imports = [
     /*
@@ -31,13 +43,7 @@ in
 
     (import ./lib/tarball.nix {
       inherit config pkgs;
-      additionalContent = ''
-        cp ${uboot}/u-boot-sunxi-with-spl.bin $out/
-        mkdir -p boot
-        ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
-          -c ${config.system.build.toplevel} -d boot
-        tar -cv -C . boot | zstd -T$NIX_BUILD_CORES > $out/boot.tar.zst
-      '';
+      additionalContent = bootFiles;
     })
   ];
 
