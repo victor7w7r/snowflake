@@ -164,6 +164,7 @@
   "-d DEBUG_FS"
   "-d DRM_RADEON"
   "-d FB_HYPERV"
+  "-d LOCALVERSION_AUTO"
   "-d KEXEC"
   "-d KEXEC_JUMP"
   "-d INPUT_JOYSTICK"

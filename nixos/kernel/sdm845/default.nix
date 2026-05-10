@@ -13,15 +13,14 @@ let
       config = (import ./config.aarch64-linux.nix);
       configfile = configure;
       allowImportFromDerivation = false;
-      version = (
-        builtins.trace "${configure.passthru.version}${configure.passthru.localVer}" "${configure.passthru.version}${configure.passthru.localVer}"
-      );
+      version = "${configure.passthru.version}${configure.passthru.localVer}";
       modDirVersion = "${configure.passthru.version}${configure.passthru.localVer}";
 
       kernelPatches = map (file: {
         name = baseNameOf (toString file);
         patch = file;
       }) patches;
+
       extraMakeFlags = [
         "LOCALVERSION=${configure.passthru.localVer}"
         "NIX_CC_WRAPPER_SUPPRESS_TARGET_WARNING=1"

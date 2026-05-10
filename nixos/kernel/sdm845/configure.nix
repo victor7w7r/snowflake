@@ -16,7 +16,7 @@ let
     sublevel = toString (builtins.match ".+SUBLEVEL = ([0-9]+).+" (builtins.readFile file));
     extraversion = toString (builtins.match ".+EXTRAVERSION = ([a-z0-9-]+).+" (builtins.readFile file));
   };
-  majorMinor = lib.versions.majorMinor builtins.trace version.string;
+  majorMinor = lib.versions.majorMinor version.string;
   fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   localVer = "-v7w7r-sdm845";
   config = (import ./config.nix);
@@ -46,6 +46,11 @@ pkgs.stdenv.mkDerivation {
   meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {
     platforms = [ "aarch64-linux" ];
   };
+
+  postPatch = ''
+    sed -i 's/localversion_next=.*//' scripts/setlocalversion
+    echo "" > .scmversion
+  '';
 
   passthru = {
     inherit localVer patches;
