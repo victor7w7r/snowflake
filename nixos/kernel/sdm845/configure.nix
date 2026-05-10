@@ -49,6 +49,7 @@ pkgs.stdenv.mkDerivation {
 
   postPatch = ''
     sed -i 's/localversion_next=.*//' scripts/setlocalversion
+    rm -rf  localversion-next
     echo "" > .scmversion
   '';
 

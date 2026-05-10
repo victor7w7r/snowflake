@@ -21,6 +21,12 @@ let
         patch = file;
       }) patches;
 
+      postPatch = ''
+        sed -i 's/localversion_next=.*//' scripts/setlocalversion
+        rm -rf  localversion-next
+        echo "" > .scmversion
+      '';
+
       extraMakeFlags = [
         "LOCALVERSION=${configure.passthru.localVer}"
         "NIX_CC_WRAPPER_SUPPRESS_TARGET_WARNING=1"
