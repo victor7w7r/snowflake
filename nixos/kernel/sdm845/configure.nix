@@ -1,6 +1,7 @@
 {
   lib,
   pkgs,
+  stdenv,
   kernel,
   kernelData,
   ...
@@ -17,6 +18,7 @@ let
     extraversion = toString (builtins.match ".+EXTRAVERSION = ([a-z0-9-]+).+" (builtins.readFile file));
   };
   majorMinor = lib.versions.majorMinor version.string;
+  isCross = stdenv.hostPlatform != stdenv.buildPlatform;
   fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   localVer = "-v7w7r-sdm845";
   config = (import ./config.nix);
@@ -25,13 +27,19 @@ let
     # "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
   ];
 in
-pkgs.stdenv.mkDerivation {
+pkgs.stdenv.mkDerivation (oldAttrs: {
   inherit patches;
   src = fetch.sdm845;
   name = "linux-${majorMinor}${localVer}-config";
 
   nativeBuildInputs = kernel.nativeBuildInputs ++ kernel.buildInputs;
   installPhase = "cp .config $out";
+
+  makeFlags =
+    oldAttrs.makeFlags
+    ++ lib.optionals isCross [
+      "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
+    ];
 
   buildPhase = ''
     export ARCH=arm64
@@ -57,4 +65,4 @@ pkgs.stdenv.mkDerivation {
     inherit localVer patches;
     version = version.string;
   };
-}
+})
