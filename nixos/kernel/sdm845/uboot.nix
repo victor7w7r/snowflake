@@ -8,7 +8,7 @@ let
     #bootcmd=scsi scan; load scsi 0:11 ${kernel_addr_r} /EFI/BOOT/BOOTAA64.EFI; bootefi ${kernel_addr_r}
     src = fetchGit {
       url = "https://gitlab.postmarketos.org/tauchgang/u-boot.git";
-      rev = "540db1c376fe304c423964809428ba0a0d1db378";
+      rev = "3b00343d6a936499cbe8db9e022c1faa04708125";
     };
     version = "master";
     extraMakeFlags = [ "DEVICE_TREE=qcom/sdm845-oneplus-fajita" ];
