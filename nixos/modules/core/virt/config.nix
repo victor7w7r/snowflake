@@ -6,7 +6,7 @@
 }:
 {
   virtualisation = {
-    waydroid.enable = true;
+    waydroid.enable = false;
     spiceUSBRedirection.enable = true;
     kvmgt.enable = host != "v7w7r-rc71l" && host != "v7w7r-opizero2w" && host != "v7w7r-fajita";
     podman = {
@@ -40,10 +40,12 @@
 
   users.extraGroups.podman.members = [ username ];
 
-  systemd = {
+  /*
+    systemd = {
     packages = [ pkgs.waydroid-helper ];
     services.waydroid-mount.wantedBy = [ "multi-user.target" ];
-  };
+    };
+  */
 
   programs = {
     mdevctl.enable = true;

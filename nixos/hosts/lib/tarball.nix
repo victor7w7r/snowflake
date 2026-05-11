@@ -26,12 +26,12 @@ in
 
       ${if additionalContent != "" then additionalContent else ""}
 
-      mkdir -p root/nix/store
+      mkdir -p root/store
 
       echo "Copying store files..."
       rsyncy -aHAxr --progress --files-from=${closureInfo}/store-paths / root/
 
-      cp ${closureInfo}/registration root/nix/nix-path-registration
+      cp ${closureInfo}/registration root/nix-path-registration
 
       echo "Compressing with $SIZE..."
       tar -cv -C root . | \
