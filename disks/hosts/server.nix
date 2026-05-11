@@ -10,7 +10,7 @@ let
     shared = (import ../lib/f2fs.nix) {
       name = "shared";
       size = "100%";
-      mountpoint = "/nix/persist/shared";
+      mountpoint = "/run/media/shared";
       priority = 3;
     };
   };
