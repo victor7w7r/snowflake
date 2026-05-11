@@ -24,7 +24,7 @@ in
   ];
 
   system.build.bootFiles =
-    pkgs.runCommand "boot-files" { nativeBuildInputs = with pkgs; [ zstd-tools ]; }
+    pkgs.runCommand "boot-files" { nativeBuildInputs = with pkgs; [ zstd ]; }
       ''
         mkdir -p $out
         ${bootFiles}
