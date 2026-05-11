@@ -90,7 +90,6 @@ in
     kernelParams = [
       "earlycon"
       "console=ttyS0,115200n8"
-      "systemd.setenv=SYSTEMD_SULOGIN_FORCE=1"
     ];
     initrd = {
       supportedFilesystems = [
@@ -156,13 +155,8 @@ in
         "sdhci"
         "sdhci_pci"
         "uas"
+        "sunxi_gmac"
         "libcomposite"
-        "uhci_hcd"
-
-        "sun8i-rsb"
-        "uwe5622_bsp_sdio"
-        "sprdbt_tty"
-        "sprdwl_ng"
       ];
     };
     loader = {
