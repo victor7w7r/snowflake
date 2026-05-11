@@ -1,7 +1,6 @@
 {
   inputs,
   kernelData,
-  fetchurl,
   config,
   lib,
   pkgs,
@@ -16,7 +15,7 @@ let
   bootFiles =
     let
       vmlinux = "${config.boot.kernelPackages.kernel}/Image";
-      ofox = fetchurl {
+      ofox = pkgs.fetchurl {
         url = "https://github.com/Wishmasterflo/ofox_fajita/releases/download/V7/OrangeFox-R12.0-Unofficial-fajita-V7.img";
         sha256 = "0y7kb2mr7zd2irfgsmfgdpb0ffff3cb4hf3hfj7mndalma3xdhzn";
       };
