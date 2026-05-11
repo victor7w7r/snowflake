@@ -58,6 +58,7 @@ in
 
   system.build.bootFiles = pkgs.stdenvNoCC.mkDerivation {
     name = "bootFiles";
+    nativeBuildInputs = with pkgs; [ zstd ];
     buildCommand = ''
       mkdir -p $out
       ${bootFiles}
