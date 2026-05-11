@@ -33,7 +33,7 @@ in
 
       cp ${closureInfo}/registration root/nix-path-registration
 
-      mkdir -p /root/var/nix/daemon-socket
+      mkdir -p root/var/nix/daemon-socket
       echo "Compressing with $SIZE..."
       tar -cv -C root . | \
         zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
