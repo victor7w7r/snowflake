@@ -23,7 +23,7 @@ let
       mkdir -p boot/EFI/BOOT boot/loader/entries boot/EFI/nixos
 
       cp ${uboot}/sdm845-oneplus-fajita.dtb boot/EFI/nixos/sdm845-oneplus-fajita.dtb
-      cp ${vmlinux} boot/EFI/nixos/vmlinuz && cp ${initrd} boot/EFI/nixos/initrd && cp ${ofox} boot/ofox.twrp
+      cp ${vmlinux} boot/EFI/nixos/vmlinuz && cp ${initrd} boot/EFI/nixos/initrd && cp ${ofox} boot/ofox.img
       cp ${../kernel/sdm845/dtbo.img} boot/dtbo.img && cp ${uboot}/boot.img boot/uboot.img
 
       cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-bootaa64.efi boot/EFI/BOOT/BOOTAA64.EFI
@@ -44,10 +44,11 @@ let
       cat <<EOF > $out/switch-uboot.sh
       #!/bin/sh
 
-      mount -t /dev/block/sda17 /mnt
-      dd if=/dev/zero of=/dev/block/sda4
-      dd if=/dev/zero of=/dev/block/sda5
-      dd if=/mnt/uboot.img of=/dev/block/sda2
+      mount -t vfat /dev/block/by-name/esp /mnt
+      dd if=/dev/zero of=/dev/block/by-name/dtbo_a bs=4096 conv=notrunc,fsync
+      dd if=/dev/zero of=/dev/block/by-name/dtbo_b bs=4096 conv=notrunc,fsync
+      dd if=/mnt/uboot.img of=/dev/block/by-name/boot_a bs=4096 conv=notrunc,fsync
+      dd if=/mnt/uboot.img of=/dev/block/by-name/boot_b bs=4096 conv=notrunc,fsync
       reboot
       EOF
 
@@ -117,8 +118,8 @@ in
       ];
     };
     "/nix" = f2fs {
-      label = "nixos";
-      device = "/dev/disk/by-partlabel/nixos";
+      label = "userdata";
+      device = "/dev/disk/by-partlabel/userdata";
     };
   };
 
