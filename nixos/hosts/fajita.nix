@@ -15,7 +15,7 @@ let
       vmlinux = "${config.boot.kernelPackages.kernel}/Image";
       ofox = pkgs.fetchurl {
         url = "https://github.com/Wishmasterflo/ofox_fajita/releases/download/V7/OrangeFox-R12.0-Unofficial-fajita-V7.img";
-        sha256 = "0y7kb2mr7zd2irfgsmfgdpb0ffff3cb4hf3hfj7mndalma3xdhzn";
+        sha256 = "sha256-YeufeirpubeGhq2ORkQA7z/ZCo7XzqggUoOiPXK7PTQ=";
       };
       initrd = "${config.system.build.initialRamdisk}/${config.system.boot.loader.initrdFile}";
     in
