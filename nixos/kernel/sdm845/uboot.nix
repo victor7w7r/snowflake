@@ -9,6 +9,7 @@ let
       url = "https://git.codelinaro.org/clo/qcomlt/u-boot.git";
       rev = "6fc40f2499b1a517487933d7d81a482f6dce7751";
     };
+    version = "master";
     extraMakeFlags = [ "DEVICE_TREE=qcom/sdm845-oneplus-${device}" ];
     defconfig = "qcom_defconfig phone.config";
     extraMeta.platforms = [ "aarch64-linux" ];
