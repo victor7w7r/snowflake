@@ -191,7 +191,8 @@ in
     deviceTree = {
       enable = true;
       name = "allwinner/sun50i-h618-orangepi-zero2w.dtb";
-      overlays =
+      /*
+        overlays =
         map
           (
             overlay:
@@ -297,7 +298,8 @@ in
               dtboFile = "${config.boot.kernelPackages.kernel}/dtbs/allwinner/overlay/sun50i-h616-uart5.dtbo";
             }
 
-          ];
+            ];
+      */
     };
   };
 }
