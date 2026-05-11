@@ -9,9 +9,7 @@
 let
   kernel = (pkgs.callPackage ../kernel/sdm845) { inherit kernelData; };
   f2fs = import ./lib/f2fs.nix;
-  uboot = pkgs.callPackage ../kernel/sdm845/uboot.nix {
-    device = "fajita";
-  };
+  uboot = pkgs.callPackage ../kernel/sdm845/uboot.nix { device = "fajita"; };
   bootFiles =
     let
       vmlinux = "${config.boot.kernelPackages.kernel}/Image";

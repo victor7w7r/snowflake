@@ -1,6 +1,7 @@
 {
   lib,
   pkgs,
+  stdenv,
   kernel,
   kernelData,
   ...
@@ -20,7 +21,7 @@ let
     map lib.strings.trim patchLines
   );
   selectedPatches = map (path: [ "${patchesRoute}/${path}" ]) patchesList;
-
+  isCross = stdenv.hostPlatform != stdenv.buildPlatform;
   patches = [
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-warnings.patch"
     "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-park-link-v6.1-post.patch"
@@ -47,6 +48,13 @@ pkgs.stdenv.mkDerivation {
 
   nativeBuildInputs = kernel.nativeBuildInputs ++ kernel.buildInputs;
   installPhase = "cp .config $out";
+
+  makeFlags = [
+    "ARCH=arm64"
+  ]
+  ++ lib.optionals isCross [
+    "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
+  ];
 
   prePatch = ''
     ${import ./wifi-patch.nix { uwe5622 = fetch.uwe5622; }}
@@ -77,7 +85,7 @@ pkgs.stdenv.mkDerivation {
     EOF
 
     scripts/config ${lib.concatStringsSep " " config}
-    make ARCH=arm64 $makeFlags olddefconfig
+    make $makeFlags olddefconfig
 
   '';
 
