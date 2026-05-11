@@ -10,6 +10,9 @@ let
   kernel = (pkgs.callPackage ../kernel/sdm845) { inherit kernelData; };
   f2fs = import ./lib/f2fs.nix;
   uboot = pkgs.callPackage ../kernel/sdm845/uboot.nix { device = "fajita"; };
+  shell = "${
+    pkgs.edk2-uefi-shell.overrideAttrs { env.NIX_CFLAGS_COMPILE = "-Wno-error=maybe-uninitialized"; }
+  }/shell.efi";
   bootFiles =
     let
       vmlinux = "${config.boot.kernelPackages.kernel}/Image";
@@ -23,8 +26,9 @@ let
       mkdir -p boot/EFI/BOOT boot/loader/entries boot/EFI/nixos
 
       cp ${uboot}/sdm845-oneplus-fajita.dtb boot/EFI/nixos/sdm845-oneplus-fajita.dtb
-      cp ${vmlinux} boot/EFI/nixos/vmlinuz && cp ${initrd} boot/EFI/nixos/initrd && cp ${ofox} boot/ofox.img
+      cp ${vmlinux} boot/EFI/nixos/vmlinuz && cp ${initrd} boot/EFI/nixos/initrd && cp ${ofox} boot/ofox.img && cp ${shell} boot/EFI/shell.efi
       cp ${../kernel/sdm845/dtbo.img} boot/dtbo.img && cp ${uboot}/boot.img boot/uboot.img
+      cp ${../kernel/sdm845/parted} boot/parted
 
       cp ${pkgs.systemd}/lib/systemd/boot/efi/systemd-bootaa64.efi boot/EFI/BOOT/BOOTAA64.EFI
       echo "timeout 3" > boot/loader/loader.conf
@@ -37,7 +41,10 @@ let
       echo "linux /EFI/nixos/vmlinuz" >> boot/loader/entries/nix.conf
       echo "initrd /EFI/nixos/initrd" >> boot/loader/entries/nix.conf
       echo "options init=${config.system.build.toplevel}/init ${toString config.boot.kernelParams}" >> boot/loader/entries/nix.conf
-      echo "devicetree /EFI/nixos/sdm845-oneplus-fajita.dtb" >> boot/loader/entries/nix.conf
+      #echo "devicetree /EFI/nixos/sdm845-oneplus-fajita.dtb" >> boot/loader/entries/nix.conf
+
+      echo "title Shell" > boot/loader/entries/shell.conf
+      echo "efi /EFI/shell.efi" >> boot/loader/entries/shell.conf
 
       tar -cv -C boot . | zstd -T$NIX_BUILD_CORES > $out/efi.tar.zst
 
@@ -134,31 +141,39 @@ in
       efi.canTouchEfiVariables = false;
       systemd-boot.consoleMode = "0";
     };
+    blacklistedKernelModules = [
+      "qcrypto"
+      "ipa"
+    ];
     kernelParams = [
-      "console=tty0"
-      "console=ttyMSM0,115200n8"
-      "earlycon=msm_geni_serial,0xa84000"
-      "pd_ignore_unused"
       "clk_ignore_unused"
+      "pd_ignore_unused"
+      "arm64.nopauth"
+      "console=ttyMSM0,115200n8"
+      "console=tty0"
+
+      "rd.systemd.default_standard_output=kmsg+console"
+      "rd.systemd.default_standard_error=kmsg+console"
+      "rd.systemd.journald.forward_to_console=1"
+      "rd.systemd.log_target=console"
+      "rd.systemd.journald.forward_to_console=1"
     ];
     initrd = {
+      includeDefaultModules = false;
       systemd = {
+        tpm2.enable = false;
         extraBin.buffyboard = "${(pkgs.callPackage ./custom/buffybox.nix { })}/bin/buffyboard";
         contents."/share".source = "${pkgs.libinput.out}/share";
         storePaths = [ pkgs.libinput ];
       };
       kernelModules = [
-        "i2c_qcom_geni"
-        "rmi_core"
-        "rmi_i2c"
-        "qcom_spmi_haptics"
-        "mmc_block"
-        "configfs"
-        "libcomposite"
-        "g_ffs"
-        "usbhid"
-        "hid_generic"
+        "qcom_pd_mapper"
+        "sd_mod"
+        "scsi_mod"
         "dm_mod"
+        "ufshcd-core"
+        "ufs-qcom"
+        "phy-qcom-qmp-ufs"
       ];
     };
   };

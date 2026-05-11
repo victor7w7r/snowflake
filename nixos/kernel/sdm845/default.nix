@@ -37,11 +37,11 @@ let
           echo "" > .scmversion
         '';
         passthru = attrs.passthru // {
-          isModular = true;
+          isModular = false;
           inherit kconfigToNix configure;
           features = {
             efiBootStub = true;
-            isModular = true;
+            isModular = false;
           };
         };
       });

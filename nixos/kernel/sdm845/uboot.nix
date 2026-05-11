@@ -6,20 +6,23 @@
 let
   uboot = pkgs.buildUBoot {
     src = fetchGit {
-      url = "https://gitlab.postmarketos.org/tauchgang/u-boot.git";
-      rev = "3b00343d6a936499cbe8db9e022c1faa04708125";
+      url = "https://git.codelinaro.org/clo/qcomlt/u-boot.git";
+      rev = "6fc40f2499b1a517487933d7d81a482f6dce7751";
     };
-    version = "master";
     extraMakeFlags = [ "DEVICE_TREE=qcom/sdm845-oneplus-${device}" ];
-    defconfig = "qcom_defconfig qcom-phone.config tauchgang.config";
+    defconfig = "qcom_defconfig phone.config";
     extraMeta.platforms = [ "aarch64-linux" ];
-    postPatch = ''
-      sed -i 's/bootcmd=.*/bootcmd=scsi scan; load scsi 0:11 ''${kernel_addr_r} \/EFI\/BOOT\/BOOTAA64.EFI; bootefi ''${kernel_addr_r}/' board/qualcomm/qcom-phone.env
+    prePatch = ''
+      cp ${./qcom-phone.env} board/qualcomm/qcom-phone.env
     '';
     extraConfig = ''
-      bootmenu_10=Flash Boot and DTBO=run update_boot; run update_dtbo
-      update_boot=fatload mmc 0:1 ''${loadaddr} boot.img && mmc dev 1 && mmc write ''${loadaddr} 0x8000 0x20000
-      update_dtbo=fatload mmc 0:1 ''${loadaddr} dtbo.img && mmc dev 1 && mmc write ''${loadaddr} 0x40000 0x4000
+      CONFIG_CMD_HASH=y
+      CONFIG_CMD_BLKMAP=y
+      CONFIG_BLKMAP=y
+      CONFIG_CMD_UFETCH=y
+      CONFIG_CMD_SELECT_FONT=y
+      CONFIG_VIDEO_FONT_16X32=y
+      CONFIG_BOOTDELAY=5
     '';
     nativeBuildInputs = with pkgs; [
       xxd
@@ -31,8 +34,7 @@ let
     ];
 
     filesToInstall = [
-      "u-boot-nodtb.bin"
-      "u-boot.dtb"
+      "u-boot*"
       "dts/upstream/src/arm64/qcom/sdm845-oneplus-${device}.dtb"
     ];
   };
