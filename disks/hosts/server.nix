@@ -129,15 +129,15 @@ in
         };
       };
 
-      bcache0 = {
+      zbcache0 = {
         type = "disk";
+        name = "bcache0";
         device = "/dev/bcache0";
         content = {
           vg = "vg0";
           type = "lvm_pv";
         };
       };
-
     };
 
     lvm_vg.vg0 = {
