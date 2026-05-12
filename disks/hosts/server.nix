@@ -32,8 +32,8 @@ let
     };
     cloudcachecrypt = (import ../lib/luks.nix) {
       name = "cloudcachecrypt";
-      size = "nvme";
-      group = "ssd";
+      size = "180G";
+      group = "nvme";
       priority = 5;
       postCreate = "make-bcache -C /dev/mapper/cloudcachecrypt";
     };
@@ -93,7 +93,7 @@ in
         };
       };
 
-      node."/tmp" = {
+      nodev."/" = {
         fsType = "tmpfs";
         mountOptions = [ "size=2G" ];
       };
