@@ -84,15 +84,6 @@ in
         };
       };
 
-      bcache0 = {
-        type = "disk";
-        device = "/dev/bcache0";
-        content = {
-          vg = "vg0";
-          type = "lvm_pv";
-        };
-      };
-
       cloud1 = {
         type = "disk";
         device = "${idpart}/ata-MM1000GBKAL_9XG3YGXQ";
@@ -135,6 +126,15 @@ in
         content = {
           type = "mdraid";
           name = "raid0";
+        };
+      };
+
+      bcache0 = {
+        type = "disk";
+        device = "/dev/bcache0";
+        content = {
+          vg = "vg0";
+          type = "lvm_pv";
         };
       };
 
