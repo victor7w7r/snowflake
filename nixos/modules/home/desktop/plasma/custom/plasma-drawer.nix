@@ -12,8 +12,8 @@ stdenv.mkDerivation {
   src = fetchFromGitHub {
     owner = "p-connor";
     repo = "plasma-drawer";
-    rev = "27878b8aa5e71762fa246e34c2034b905c733f1f";
-    sha256 = "sha256-t+Y3zyW1hXMRkWjp2+W863tB9t61aGDJ9unC28mvNk4=";
+    rev = "a1eec560875e9715ea3cf6e861b7a052abfd70f2";
+    sha256 = "sha256-1RShJo74wS2Y98RyAlTozR0mcrF+3oKJ9yv7L/u1Uzo=";
   };
 
   postPatch = ''
