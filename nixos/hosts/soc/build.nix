@@ -32,7 +32,6 @@ stdenv.mkDerivation {
     f2fs-tools
     libfaketime
     mtools
-    systemdUkify
     util-linux
     xfsprogs
     zstd

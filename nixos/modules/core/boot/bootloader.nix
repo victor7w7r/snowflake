@@ -23,8 +23,6 @@ let
   efibootmgr = "${pkgs.efibootmgr}/bin/efibootmgr";
   lsblk = "${pkgs.util-linux}/bin/lsblk";
   sed = "${pkgs.gnused}/bin/sed";
-  ukify = "${pkgs.buildPackages.systemdUkify}/lib/systemd/ukify";
-  basename = "${pkgs.coreutils}/bin/basename";
   wget = "${pkgs.wget2}/bin/wget2";
   efifs = "https://github.com/pbatard/EfiFs/releases/download/v1.11";
   mocha = "themes/catppuccin/assets/mocha";
@@ -32,58 +30,14 @@ let
   latest = config.boot.kernelPackages.kernel;
   kernelFile = config.system.boot.loader.kernelFile;
 
-  refind-opts = ''
-    banner ${mocha}/background.png
-    banner_scale fillscreen
-    dont_scan_dirs +,EFI
-    enable_touch
-    enable_mouse
-    icons_dir ${mocha}/icons
-    hideui hwtest,arrows,badges
-    scanfor manual,external,internal
-    showtools shell, memtest, bootorder, apple_recovery, windows_recovery
-    dont_scan_dirs ESP:/EFI/BOOT,EFI/refind,EFI/tools,emergency
-    selection_big ${mocha}/selection_big.png
-    selection_small ${mocha}/selection_small.png
-    timeout 2
-    use_nvram false
-  '';
-
   debugFlags = "boot.trace=1 debug udev.log_level=7 rd.systemd.show_status=true";
-
-  nixosBuilder =
-    {
-      name ? "NixOS",
-      loader ? "\EFI/nixos.efi",
-      subentries ? ''
-        submenuentry "Verbose" {
-          add_options "${debugFlags}"
-        }
-        submenuentry "Console Only" {
-          add_options "systemd.unit=multi-user.target"
-        }
-        submenuentry "Rescue" {
-          add_options "systemd.unit=rescue.target"
-        }
-      '',
-    }:
-    ''
-      menuentry "${name}" {
-        icon /EFI/refind/${mocha}/icons/os_nixos.png
-        loader ${loader}
-        ostype Linux
-        options "init=$TOPLEVEL/init ${toString config.boot.kernelParams}"
-        ${subentries}
-      }
-    '';
 in
 {
   system.boot.loader.id = "refind";
-  system.build.installBootLoader = pkgs.writeScript "installBootLoader.sh" ''
+  system.build.installBootLoader = pkgs.writeScript "boot-loader" ''
     #!${pkgs.bash}/bin/bash
 
     TOPLEVEL=$1
-    BASE=$(${basename} $TOPLEVEL)
 
     [[ ! -d ${efi}/BOOT ]] && ${mkdir} -p ${efi}/BOOT
 
@@ -120,22 +74,48 @@ in
       --loader /EFI/refind/refind_x64.efi --label "rEFInd" \
       --unicode &> /dev/null
 
-    [[ -f ${efi}/nixos.efi ]] && ${rm} ${efi}/nixos.efi
+    if [[ -f ${efi}/vmlinuz ]] && ${rm} ${efi}/vmlinuz
+    if [[ -f ${efi}/initrd ]] && ${rm} ${efi}/initrd
 
-    ${ukify} build --linux="${latest}/${kernelFile}" --initrd="${initrd}" \
-      --uname="${latest.modDirVersion}" \
-      --os-release="${config.system.build.etc}/etc/os-release" \
-      --output=${efi}/nixos.efi
+    cp ${latest}/${kernelFile} ${efi}/vmlinuz
+    cp ${initrd} ${efi}/initrd
 
-    ${mkdir} -p /boot/emergency/cache
-    ${cp} ${efi}/nixos.efi /boot/emergency/cache/nixos-$BASE.efi
-    echo "$BASE" > /boot/emergency/actual.txt
+    echo "$BASE" >> ${efi}/versions.txt
+    cp ${initrd} /boot/emergency/initrd_$TOPLEVEL
 
     ${cat} > ${efi}/refind/refind.conf << EOF
-      ${refind-opts}
-      ${nixosBuilder { }}
-    EOF
+      banner ${mocha}/background.png
+      banner_scale fillscreen
+      dont_scan_dirs +,EFI
+      enable_touch
+      enable_mouse
+      icons_dir ${mocha}/icons
+      hideui hwtest,arrows,badges
+      scanfor manual,external,internal
+      showtools shell, memtest, bootorder, apple_recovery, windows_recovery
+      dont_scan_dirs ESP:/EFI/BOOT,EFI/refind,EFI/tools,emergency
+      selection_big ${mocha}/selection_big.png
+      selection_small ${mocha}/selection_small.png
+      timeout 2
+      use_nvram false
 
+      menuentry "NixOS" {
+        icon /EFI/refind/${mocha}/icons/os_nixos.png
+        loader EFI/vmlinuz
+        initrd EFI/initrd
+        ostype Linux
+        options "init=$TOPLEVEL/init ${toString config.boot.kernelParams}"
+        submenuentry "Verbose" {
+          add_options "${debugFlags}"
+        }
+        submenuentry "Console Only" {
+          add_options "systemd.unit=multi-user.target"
+        }
+        submenuentry "Rescue" {
+          add_options "systemd.unit=rescue.target"
+        }
+      }
+    EOF
     ${
       if host != "v7w7r-macmini81" then
         ''

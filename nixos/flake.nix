@@ -31,8 +31,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
-    nixpkgs.url = "github:NixOS/nixpkgs/768447fd6212";
-    #nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    #nixpkgs.url = "github:NixOS/nixpkgs/768447fd6212";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     hardware.url = "https://flakehub.com/f/NixOS/nixos-hardware/0.1";
     hyprpicker.url = "github:hyprwm/hyprpicker";
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";

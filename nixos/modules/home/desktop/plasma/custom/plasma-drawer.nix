@@ -21,7 +21,7 @@ stdenv.mkDerivation {
       --replace-fail 'kpackagetool6 -t Plasma/Applet' 'kpackagetool6'
 
     substituteInPlace Makefile \
-      --replace-fail 'desktoptojson' '${libsForQt5.kcoreaddons}/bin/desktoptojson' \
+      --replace-fail 'desktoptojson' '${kdePackages.kcoreaddons}/bin/desktoptojson' \
       --replace-fail 'kpackagetool6' 'kpackagetool6 --packageroot $(out)/share/plasma/plasmoids'
   '';
 
