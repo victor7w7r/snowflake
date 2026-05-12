@@ -18,6 +18,8 @@
   "-e F2FS_FS_SECURITY"
   "-e F2FS_FS_ZSTD"
   "-e DEFAULT_BBR"
+  "-e SUN4I_EMAC"
+  "-e SUNXI_GMAC"
   "-e USB_LIBCOMPOSITE"
   "-e NO_HZ"
   "-e NO_HZ_COMMON"

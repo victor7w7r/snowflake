@@ -35,6 +35,7 @@
         ".ssh"
         ".cache"
         ".config/bruno"
+        ".config/Claude"
         ".config/freerdp"
         ".config/JetBrains"
         ".config/legcord"

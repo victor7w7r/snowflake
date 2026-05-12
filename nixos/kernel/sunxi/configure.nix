@@ -68,6 +68,8 @@ pkgs.stdenv.mkDerivation {
       #(yes "" | make LSMOD=$LSMOD localmodconfig) || true
 
       #make ARCH=arm64 $makeFlags olddefconfig
+      #
+      #
   */
 
   buildPhase = ''
@@ -75,6 +77,10 @@ pkgs.stdenv.mkDerivation {
     chmod -R +w .config
     make $makeFlags olddefconfig
     patchShebangs scripts/config
+
+    scripts/config ${lib.concatStringsSep " " config}
+
+    make $makeFlags olddefconfig
 
     cat << 'EOF' >> .config
     CONFIG_UNISOC_WIFI_PS=y
@@ -84,10 +90,6 @@ pkgs.stdenv.mkDerivation {
     CONFIG_AC200_PHY_SUNXI=m
     CONFIG_MFD_AC200_SUNXI=m
     EOF
-
-    scripts/config ${lib.concatStringsSep " " config}
-    make $makeFlags olddefconfig
-
   '';
 
   meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {
