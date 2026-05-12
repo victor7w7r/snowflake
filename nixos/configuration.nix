@@ -127,7 +127,6 @@ in
         extra-substituters = [
           "https://nix-gaming.cachix.org"
           "https://nix-community.cachix.org"
-          "https://attic.xuyh0120.win/lantian"
           "https://cache.saumon.network/proxmox-nixos"
         ];
         extra-trusted-public-keys = [

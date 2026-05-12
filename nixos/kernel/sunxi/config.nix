@@ -7,6 +7,11 @@
   "--set-val NR_CPUS 8"
 
   "-e STMMAC_ETH"
+
+  "-e MFD_AC200"
+  "-e MFD_AC200_SUNXI"
+  "-e AC200_PHY"
+  "-e AC200_PHY_SUNXI"
   "-e ARM_ALLWINNER_SUN50I_CPUFREQ_NVMEM"
   "-e ANDROID_BINDER_IPC"
   "-e ANDROID_BINDERFS"
@@ -18,6 +23,7 @@
   "-e F2FS_FS_SECURITY"
   "-e F2FS_FS_ZSTD"
   "-e DEFAULT_BBR"
+  "-e PWM_SUNXI_ENHANCE"
   "-e SUN4I_EMAC"
   "-e SUNXI_GMAC"
   "-e USB_LIBCOMPOSITE"
@@ -45,11 +51,7 @@
   "-e VIDEO_SUNXI"
   "-e VIDEO_SUNXI_CEDRUS"
 
-  "-m MFD_AC200"
-  "-m MFD_AC200_SUNXI"
-  "-m AC200_PHY"
   "-m DRM_LIMA"
-  "-m AC200_PHY_SUNXI"
   "-m MMC_SDHCI"
   "-m NET_SCH_FQ_CODEL"
   "-m USB_ETH"

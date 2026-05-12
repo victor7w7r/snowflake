@@ -38,12 +38,8 @@ let
         "KCFLAGS=-Wno-unknown-warning-option -Wno-ignored-optimization-argument"
       ];
 
-      # ${import ./dts.nix { armbian = fetch.armbian; }}
     }).overrideAttrs
       (attrs: {
-        prePatch = ''
-          ${import ./wifi-patch.nix { uwe5622 = fetch.uwe5622; }}
-        '';
         nativeBuildInputs = (attrs.nativeBuildInputs or [ ]);
         passthru = attrs.passthru // {
           inherit kconfigToNix configure;

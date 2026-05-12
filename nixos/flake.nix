@@ -10,7 +10,6 @@
       "https://cache.nixos.org/"
       "https://nix-gaming.cachix.org"
       "https://nix-community.cachix.org"
-      "https://attic.xuyh0120.win/lantian"
       "https://cache.garnix.io"
       "https://cache.saumon.network/proxmox-nixos"
     ];
