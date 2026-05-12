@@ -44,9 +44,15 @@ pkgs.stdenv.mkDerivation {
 
   buildPhase = ''
     cp arch/arm64/configs/sdm845.config .config
+    make $makeFlags olddefconfig
     patchShebangs scripts/config
-    scripts/config ${lib.concatStringsSep " " config}
+    cat << 'EOF' >> .config
+    USB_G_SERIAL=y
+    U_SERIAL_CONSOLE=y
+    USB_U_SERIAL=y
+    EOF
     scripts/config --undefine CONFIG_LOCALVERSION
+    scripts/config ${lib.concatStringsSep " " config}
     make $makeFlags olddefconfig
   '';
 

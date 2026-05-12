@@ -5,15 +5,10 @@
 }:
 let
   uboot = pkgs.buildUBoot {
-    #bootcmd=scsi scan; load scsi 0:11 ${kernel_addr_r} /EFI/BOOT/BOOTAA64.EFI; bootefi ${kernel_addr_r}
     src = fetchGit {
-      url = "https://gitlab.postmarketos.org/tauchgang/u-boot.git";
-      rev = "3b00343d6a936499cbe8db9e022c1faa04708125";
+      url = "https://git.codelinaro.org/clo/qcomlt/u-boot.git";
+      rev = "6fc40f2499b1a517487933d7d81a482f6dce7751";
     };
-    version = "master";
-    extraMakeFlags = [ "DEVICE_TREE=qcom/sdm845-oneplus-fajita" ];
-    defconfig = "qcom_defconfig qcom-phone.config tauchgang.config";
-    extraMeta.platforms = [ "aarch64-linux" ];
     extraConfig = ''
       CONFIG_CMD_HASH=y
       CONFIG_CMD_BLKMAP=y
@@ -23,6 +18,11 @@ let
       CONFIG_VIDEO_FONT_16X32=y
       CONFIG_BOOTDELAY=5
     '';
+    version = "master";
+    prePatch = "cp ${./qcom-phone.env} board/qualcomm/qcom-phone.env";
+    extraMakeFlags = [ "DEVICE_TREE=qcom/sdm845-oneplus-fajita" ];
+    defconfig = "qcom_defconfig phone.config";
+    extraMeta.platforms = [ "aarch64-linux" ];
     nativeBuildInputs = with pkgs; [
       xxd
       bison

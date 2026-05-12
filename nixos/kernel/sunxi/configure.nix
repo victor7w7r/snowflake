@@ -73,6 +73,7 @@ pkgs.stdenv.mkDerivation {
   buildPhase = ''
     cp ${fetch.armbian}/config/kernel/linux-sunxi64-current.config .config
     chmod -R +w .config
+    make $makeFlags olddefconfig
     patchShebangs scripts/config
 
     cat << 'EOF' >> .config

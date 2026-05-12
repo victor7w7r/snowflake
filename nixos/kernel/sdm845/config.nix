@@ -47,6 +47,9 @@
   "-e SECCOMP"
   "-e BLK_DEV_INITRD"
   "-e BINFMT_ELF"
+  "-e USB_G_SERIAL"
+  "-e U_SERIAL_CONSOLE"
+  "-e USB_U_SERIAL"
   "-e UNIX"
 
   "-e ANDROID_BINDERFS"

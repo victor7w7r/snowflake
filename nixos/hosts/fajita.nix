@@ -147,7 +147,7 @@ in
       "clk_ignore_unused"
       "pd_ignore_unused"
       "arm64.nopauth"
-      "console=ttyMSM0,115200n8"
+      "console=ttyGS0,115200"
       "console=tty0"
 
       "rd.systemd.default_standard_output=kmsg+console"
