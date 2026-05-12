@@ -96,10 +96,10 @@ in
       cloud1 = {
         type = "disk";
         device = "${idpart}/ata-MM1000GBKAL_9XG3YGXQ";
+        size = "100%";
         content = {
           type = "mdraid";
           name = "raid0";
-          size = "100%";
         };
       };
 
