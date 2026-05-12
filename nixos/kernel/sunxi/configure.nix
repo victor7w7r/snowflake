@@ -87,8 +87,6 @@ pkgs.stdenv.mkDerivation {
     CONFIG_WLAN_UWE5622=m
     CONFIG_WLAN_UWE5621=m
     CONFIG_TTY_OVERY_SDIO=m
-    CONFIG_AC200_PHY_SUNXI=m
-    CONFIG_MFD_AC200_SUNXI=m
     EOF
   '';
 
