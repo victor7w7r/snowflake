@@ -4,7 +4,7 @@
     "lazytime"
     "noatime"
     "compress_chksum"
-    "compress_algorithm=zstd:3"
+    "compress_algorithm=zstd"
     "age_extent_cache"
     "compress_extension=so"
     "inline_xattr"
