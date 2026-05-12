@@ -93,16 +93,6 @@ in
         };
       };
 
-      nodev."/" = {
-        fsType = "tmpfs";
-        mountOptions = [ "size=2G" ];
-      };
-
-      lvm_vg.vg0 = {
-        type = "lvm_vg";
-        inherit lvs;
-      };
-
       cloud1 = {
         type = "disk";
         device = "${idpart}/ata-MM1000GBKAL_9XG3YGXQ";
@@ -153,25 +143,36 @@ in
         };
       };
 
-      mdadm.raid0 = {
-        type = "mdadm";
-        level = 4;
-        content = (import ../lib/luks.nix) {
-          entireDisk = true;
-          allowDiscards = false;
-          name = "cloud";
-          size = "100%";
-          group = "cloud"; # FIX
-          postMount = ''
-            cryptsetup open ${partlabel}/disk-nvme-cloudcachecrypt cloudcachecrypt --key-file /tmp/key.txt || true
-            cryptsetup open ${partlabel}/disk-nvme-cloudlogcrypt cloudlogcrypt --key-file /tmp/key.txt || true
-          '';
-          postCreate = ''
-            make-bcache -B /dev/mapper/cloud
-            #CACHE_SET_UUID=$(sudo bcache-super-show /dev/disk/by-id/ata-Micron_2400_MTFDKBK512QFM_232240F15D36-part9 | grep 'cset.uuid' | awk '{print $2}')
-            #echo $CACHE_SET_UUID > /sys/block/bcache1/bcache/attach
-          '';
-        };
+    };
+
+    lvm_vg.vg0 = {
+      type = "lvm_vg";
+      inherit lvs;
+    };
+
+    nodev."/" = {
+      fsType = "tmpfs";
+      mountOptions = [ "size=2G" ];
+    };
+
+    mdadm.raid0 = {
+      type = "mdadm";
+      level = 4;
+      content = (import ../lib/luks.nix) {
+        entireDisk = true;
+        allowDiscards = false;
+        name = "cloud";
+        size = "100%";
+        group = "cloud"; # FIX
+        postMount = ''
+          cryptsetup open ${partlabel}/disk-nvme-cloudcachecrypt cloudcachecrypt --key-file /tmp/key.txt || true
+          cryptsetup open ${partlabel}/disk-nvme-cloudlogcrypt cloudlogcrypt --key-file /tmp/key.txt || true
+        '';
+        postCreate = ''
+          make-bcache -B /dev/mapper/cloud
+          #CACHE_SET_UUID=$(sudo bcache-super-show /dev/disk/by-id/ata-Micron_2400_MTFDKBK512QFM_232240F15D36-part9 | grep 'cset.uuid' | awk '{print $2}')
+          #echo $CACHE_SET_UUID > /sys/block/bcache1/bcache/attach
+        '';
       };
     };
   };
