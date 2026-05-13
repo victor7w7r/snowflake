@@ -32,6 +32,16 @@ in
 
   fileSystems = {
     inherit (boot) "/boot" "/boot/emergency";
+    "/" = {
+      device = "/dev/zram1";
+      fsType = "ext4";
+      neededForBoot = true;
+      options = [
+        "noatime"
+        "x-systemd.device-timeout=0"
+      ];
+    };
+
     /*
       "/" = zfs { preDataset = "local"; };
       "/nix" = f2fs {
