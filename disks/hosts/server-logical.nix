@@ -16,18 +16,37 @@ let
       };
     };
   };
+  partlabel = "/dev/disk/by-partlabel";
 in
 {
   disko.devices = {
-    disk.cloud = {
-      type = "disk";
-      device = "/dev/mapper/cloud";
-      content = {
-        vg = "vg0";
-        type = "lvm_pv";
+    disk = {
+      bcache = {
+        type = "disk";
+        device = "/dev/bcache0";
+        content = (import ../lib/luks.nix) {
+          entireDisk = true;
+          allowDiscards = false;
+          name = "cloud";
+          size = "100%";
+          device = "/dev/bcache0";
+          postMount = ''
+            cryptsetup open ${partlabel}/disk-nvme-cloudcachecrypt cloudcachecrypt --key-file /tmp/key.txt || true
+            cryptsetup open ${partlabel}/disk-nvme-cloudlogcrypt cloudlogcrypt --key-file /tmp/key.txt || true
+          '';
+        };
       };
-    };
 
+      cloud = {
+        type = "disk";
+        device = "/dev/mapper/cloud";
+        content = {
+          vg = "vg0";
+          type = "lvm_pv";
+        };
+      };
+
+    };
     lvm_vg.vg0 = {
       type = "lvm_vg";
       inherit lvs;

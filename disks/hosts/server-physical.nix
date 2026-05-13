@@ -140,17 +140,6 @@ in
     mdadm.raid0 = {
       type = "mdadm";
       level = 5;
-      content = (import ../lib/luks.nix) {
-        entireDisk = true;
-        allowDiscards = false;
-        name = "cloud";
-        size = "100%";
-        device = "/dev/bcache0";
-        postMount = ''
-          cryptsetup open ${partlabel}/disk-nvme-cloudcachecrypt cloudcachecrypt --key-file /tmp/key.txt || true
-          cryptsetup open ${partlabel}/disk-nvme-cloudlogcrypt cloudlogcrypt --key-file /tmp/key.txt || true
-        '';
-      };
     };
   };
 }
