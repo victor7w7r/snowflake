@@ -1,7 +1,7 @@
 let
   lvs = {
     thinpool = {
-      size = "3.5T";
+      size = "100%";
       lvm_type = "thin-pool";
     };
     cloud = (import ../lib/xfs.nix) {
@@ -41,8 +41,8 @@ in
         type = "disk";
         device = "/dev/mapper/cloud";
         content = {
-          vg = "vg0";
           type = "lvm_pv";
+          vg = "vg0";
         };
       };
 
