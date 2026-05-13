@@ -1,6 +1,7 @@
 {
   mountpoint,
   name ? null,
+  nameLvm ? null,
   size ? null,
   logdev ? null,
   logsize ? null,
@@ -57,7 +58,7 @@ let
         if logsize != null then ",logsize=${logsize}" else ""
       }"
       "-L"
-      name
+      (if name != null then name else nameLvm)
     ];
   };
 in
