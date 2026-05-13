@@ -19,9 +19,9 @@ let
 in
 {
   disko.devices = {
-    disk.bcache0 = {
+    disk.cloud = {
       type = "disk";
-      device = "/dev/bcache0";
+      device = "/dev/mapper/cloud";
       content = {
         vg = "vg0";
         type = "lvm_pv";

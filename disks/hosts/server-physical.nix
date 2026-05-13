@@ -56,12 +56,15 @@ let
   idpart = "/dev/disk/by-id";
 
   /*
-    sudo mdadm --create /dev/md/raid0 --level=5 --raid-devices=5  \
-    /dev/disk/by-id/ata-MM1000GBKAL_9XG3YGXQ \
-    /dev/disk/by-id/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154 \
-    /dev/disk/by-id/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H \
-    /dev/disk/by-id/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X \
-    /dev/disk/by-id/ata-TOSHIBA_DT01ACA100_Y7JAA68MS
+     sudo mdadm --create /dev/md/raid0 --level=5 --raid-devices=5  \
+     /dev/disk/by-id/ata-MM1000GBKAL_9XG3YGXQ \
+     /dev/disk/by-id/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154 \
+     /dev/disk/by-id/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H \
+     /dev/disk/by-id/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X \
+     /dev/disk/by-id/ata-TOSHIBA_DT01ACA100_Y7JAA68MS
+     sudo make-bcache -B /dev/md/raid0
+     #CACHE_SET_UUID=$(sudo bcache-super-show /dev/mapper/cloud | grep 'cset.uuid' | awk '{print $2}')
+     #echo $CACHE_SET_UUID > /sys/block/bcache0/bcache/attach
   */
 
 in
@@ -86,50 +89,52 @@ in
         };
       };
 
-      cloud1 = {
-        type = "disk";
-        device = "${idpart}/ata-MM1000GBKAL_9XG3YGXQ";
-        content = {
-          type = "mdraid";
-          name = "raid0";
+      /*
+        cloud1 = {
+          type = "disk";
+          device = "${idpart}/ata-MM1000GBKAL_9XG3YGXQ";
+          content = {
+            type = "mdraid";
+            name = "raid0";
+          };
         };
-      };
 
-      cloud2 = {
-        type = "disk";
-        device = "${idpart}/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154";
-        content = {
-          type = "mdraid";
-          name = "raid0";
+        cloud2 = {
+          type = "disk";
+          device = "${idpart}/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154";
+          content = {
+            type = "mdraid";
+            name = "raid0";
+          };
         };
-      };
 
-      cloud3 = {
-        type = "disk";
-        device = "${idpart}/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H";
-        content = {
-          type = "mdraid";
-          name = "raid0";
+        cloud3 = {
+          type = "disk";
+          device = "${idpart}/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H";
+          content = {
+            type = "mdraid";
+            name = "raid0";
+          };
         };
-      };
 
-      cloud4 = {
-        type = "disk";
-        device = "${idpart}/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X";
-        content = {
-          type = "mdraid";
-          name = "raid0";
+        cloud4 = {
+          type = "disk";
+          device = "${idpart}/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X";
+          content = {
+            type = "mdraid";
+            name = "raid0";
+          };
         };
-      };
 
-      cloud5 = {
-        type = "disk";
-        device = "${idpart}/ata-TOSHIBA_DT01ACA100_Y7JAA68MS";
-        content = {
-          type = "mdraid";
-          name = "raid0";
-        };
-      };
+        cloud5 = {
+          type = "disk";
+          device = "${idpart}/ata-TOSHIBA_DT01ACA100_Y7JAA68MS";
+          content = {
+            type = "mdraid";
+            name = "raid0";
+          };
+          };
+      */
     };
 
     mdadm.raid0 = {
@@ -140,15 +145,10 @@ in
         allowDiscards = false;
         name = "cloud";
         size = "100%";
-        device = "/dev/md/raid0";
+        device = "/dev/bcache0";
         postMount = ''
           cryptsetup open ${partlabel}/disk-nvme-cloudcachecrypt cloudcachecrypt --key-file /tmp/key.txt || true
           cryptsetup open ${partlabel}/disk-nvme-cloudlogcrypt cloudlogcrypt --key-file /tmp/key.txt || true
-        '';
-        postCreate = ''
-          #make-bcache -B /dev/mapper/cloud
-          #CACHE_SET_UUID=$(sudo bcache-super-show /dev/md/raid0 | grep 'cset.uuid' | awk '{print $2}')
-          #echo $CACHE_SET_UUID > /sys/block/bcache1/bcache/attach
         '';
       };
     };
