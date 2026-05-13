@@ -1,6 +1,6 @@
 {
-  name,
   mountpoint,
+  name ? null,
   size ? null,
   logdev ? null,
   logsize ? null,
