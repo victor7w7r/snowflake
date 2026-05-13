@@ -1,34 +1,31 @@
 {
-  stdenv,
-  fetchFromGitHub,
-  kdePackages,
-  libsForQt5,
-  zip,
+  pkgs,
+  stdenvNoCC,
+  fetchurl,
 }:
-stdenv.mkDerivation {
+stdenvNoCC.mkDerivation {
   pname = "plasma-drawer";
-  version = "unstable-dev-2025-02-23";
-
-  src = fetchFromGitHub {
-    owner = "p-connor";
-    repo = "plasma-drawer";
-    rev = "a1eec560875e9715ea3cf6e861b7a052abfd70f2";
-    sha256 = "sha256-1RShJo74wS2Y98RyAlTozR0mcrF+3oKJ9yv7L/u1Uzo=";
+  version = "2.0.2";
+  src = fetchurl {
+    url = "https://github.com/p-connor/plasma-drawer/releases/download/v2.0.2/plasma-drawer-2.0.2.plasmoid";
+    sha256 = "sha256-yPIhR21MM/XHzisJJX6kjE/Vt3EaE5iIlIJliQjOoaE=";
   };
-
-  postPatch = ''
-    substituteInPlace Makefile \
-      --replace-fail 'kpackagetool6 -t Plasma/Applet' 'kpackagetool6'
-
-    substituteInPlace Makefile \
-      --replace-fail 'desktoptojson' '${kdePackages.kcoreaddons}/bin/desktoptojson' \
-      --replace-fail 'kpackagetool6' 'kpackagetool6 --packageroot $(out)/share/plasma/plasmoids'
+  unpackPhase = ''
+    echo "Skipping unpackPhase"
   '';
-
-  nativeBuildInputs = [
-    kdePackages.kpackage
-    kdePackages.kconfig
-    zip
-  ];
+  nativeBuildInputs = [ pkgs.unzip ];
+  propagatedUserEnvPkgs = with pkgs.kdePackages; [ kconfig ];
   dontWrapQtApps = true;
+
+  installPhase = ''
+    runHook preInstall
+
+    mkdir tmpdir
+    unzip $src -d tmpdir
+
+    mkdir -p $out/share/plasma/plasmoids/p-connor.plasma-drawer
+    cp -r tmpdir/* $out/share/plasma/plasmoids/p-connor.plasma-drawer
+
+    runHook postInstall
+  '';
 }
