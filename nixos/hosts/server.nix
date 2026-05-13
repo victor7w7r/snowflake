@@ -21,7 +21,6 @@ let
     efiDisk = "emmc";
     emergencyDisk = "nvme";
   };
-  zfs = import ./lib/zfs.nix;
   f2fs = import ./lib/f2fs.nix;
 in
 {
@@ -33,36 +32,38 @@ in
 
   fileSystems = {
     inherit (boot) "/boot" "/boot/emergency";
-    "/" = zfs { preDataset = "local"; };
-    "/nix" = f2fs {
-      label = "store";
-      depends = [ "/" ];
-    };
-    "/nix/persist" = zfs {
-      pool = "zpersist";
-      dataset = "persist";
-      depends = [ "/nix" ];
-    };
-    "/nix/persist/vm" = zfs {
-      pool = "zpersist";
-      dataset = "proxmox";
-      options = [
-        "zfsutil"
-        "nofail"
-      ];
-      depends = [ "/nix/persist" ];
-    };
-    "/nix/persist/shared" = f2fs {
-      label = "shared";
-      neededForBoot = false;
-      depends = [ "/nix/persist" ];
-    };
-    "/nix/persist/cloud" = zfs {
-      pool = "zcloud";
-      dataset = "cloud";
-      neededForBoot = false;
-      depends = [ "/nix/persist" ];
-    };
+    /*
+      "/" = zfs { preDataset = "local"; };
+      "/nix" = f2fs {
+        label = "store";
+        depends = [ "/" ];
+      };
+      "/nix/persist" = zfs {
+        pool = "zpersist";
+        dataset = "persist";
+        depends = [ "/nix" ];
+      };
+      "/nix/persist/vm" = zfs {
+        pool = "zpersist";
+        dataset = "proxmox";
+        options = [
+          "zfsutil"
+          "nofail"
+        ];
+        depends = [ "/nix/persist" ];
+      };
+      "/nix/persist/shared" = f2fs {
+        label = "shared";
+        neededForBoot = false;
+        depends = [ "/nix/persist" ];
+      };
+      "/nix/persist/cloud" = zfs {
+        pool = "zcloud";
+        dataset = "cloud";
+        neededForBoot = false;
+        depends = [ "/nix/persist" ];
+        };
+    */
   };
 
   swapDevices = [
@@ -89,22 +90,17 @@ in
     kernelParams = [ "resume=/dev/zd0" ] ++ params { };
     kernelPackages = helpers.kernelModuleLLVMOverride (kernelBuild.packages);
     swraid.enable = true;
-    zfs = {
-      package = pkgs.zfs_unstable;
-      forceImportAll = false;
-      forceImportRoot = true;
-    };
     initrd = {
       availableKernelModules = [ "i915" ];
       kernelModules = [
         "cpufreq_reflex"
         "mmc_block"
         "overlay"
-        "zfs"
         "md_mod"
         "raid456"
         "btrfs"
         "sdhci_pci"
+        "bcache"
         "usb_storage"
         "br_netfilter"
         "uas"
@@ -116,7 +112,7 @@ in
         "sdhci"
         "tpm-tis"
       ];
-      supportedFilesystems = [ "zfs" ];
+      supportedFilesystems = [ "bcachefs" ];
       systemd = {
         storePaths = [
           "${pkgs.btrfs-progs}/bin/btrfs"
@@ -125,87 +121,81 @@ in
           "${pkgs.coreutils}/bin/sleep"
           "${pkgs.systemd}/bin/udevadm"
         ];
-        services = {
-          zfs-import-zroot.enable = false;
-          zfs-import-zcloud.enable = false;
-          zfs-import-zswap.enable = false;
-          zfs-import-zpersist.enable = false;
-
-          zfs-setimport = {
+        services.setup-storage-stack =
+          let
+            partlabel = "/dev/disk/by-partlabel";
+            idpart = "/dev/disk/by-id";
+            keydevice = "${idpart}/usb-Generic_Mass-Storage_20240418000000-0:0-part1";
+          in
+          {
             wantedBy = [ "initrd.target" ];
+            requiredBy = [ "sysroot.mount" ];
             before = [
-              "rollback-zfs.service"
+              "dev-mapper-persist.device"
+              "dev-mapper-storage.device"
               "initrd-fs.target"
               "sysroot.mount"
             ];
-            after = [
-              "systemd-modules-load.service"
-            ];
+            after = [ "systemd-modules-load.service" ];
             unitConfig.DefaultDependencies = false;
-            path = [
-              config.boot.zfs.package
-              pkgs.util-linux
-              pkgs.systemd
-              pkgs.coreutils
-            ];
-            script = ''
-              set -e
-              mkdir -p /media
-              DEVICE="/dev/disk/by-id/usb-MXT-USB_Storage_Device_150101v01-0:0-part1"
-
-              udevadm trigger --action=add --subsystem-match=block
-              for i in {1..30}; do
-                if [ ! -e "$DEVICE" ]; then
-                    udevadm settle --timeout=3 || true
-                fi
-                if [ -e "$DEVICE" ]; then
-                    echo "Appear in attempt $i"
-                    if mount -t btrfs -o rw,noatime,ssd,discard=async "$DEVICE" /media; then
-                        break
-                    fi
-                fi
-                echo "Waiting SCSI/USB... ($i/30)"
-                sleep 1
-                done
-
-              zpool import -f -N -a -d /dev/disk/by-id
-              zfs rollback -r zroot/local/root@empty
-              cat /media/secret.key | zfs load-key zswap/local/swap
-              cat /media/secret.key | zfs load-key zpersist/safe/persist
-              cat /media/secret.key | zfs load-key zcloud/safe/cloud
-              cat /media/secret.key | zfs load-key zpersist/safe/proxmox
-            '';
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
             };
+            path = [
+              pkgs.util-linux
+              pkgs.bcachefs-tools
+              pkgs.cryptsetup
+              pkgs.systemd
+              pkgs.e2fsprogs
+              pkgs.coreutils
+              pkgs.lvm2
+            ];
+            script = ''
+              set -e
+              mkdir -p /media
+
+              echo 4G > /sys/block/zram1/disksize
+              mkfs.ext4 -m 0 -O "^has_journal,^huge_file,^flex_bg" /dev/zram1
+
+              for i in {1..10}; do
+                if [ -e "${keydevice}" ]; then
+                    echo "Appear in attempt $i"
+                    if mount -t btrfs -o ro,noatime,ssd,discard=async "${keydevice}" /media; then
+                        echo "Found key device"
+                        break
+                    fi
+                fi
+                echo "Waiting key device... ($i/10)"
+                udevadm settle --timeout=2 || true && udevadm trigger --action=add --subsystem-match=block
+                sleep 1
+               done
+
+               cryptsetup open ${idpart}/ata-WDC_WD5000LPSX-75A6WT0_WX12A21JEEPK persist --key-file /media/secret.key
+               cryptsetup open ${idpart}/ata-ST500LT012-1DG142_S3PMCMHT storage --key-file /media/secret.key
+               cryptsetup open ${partlabel}/disk-ssd-swapcrypt swapcrypt --key-file /media/secret.key
+               cryptsetup open ${partlabel}/disk-ssd-persistcachecrypt persistcachecrypt --key-file /media/secret.key
+               cryptsetup open ${partlabel}/disk-ssd-persistlogcrypt persistlogcrypt --key-file /media/secret.key
+               cryptsetup open ${partlabel}/disk-ssd-storagecachecrypt storagecachecrypt --key-file /media/secret.key
+               cryptsetup open ${partlabel}/disk-ssd-storagelogcrypt storagelogcrypt --key-file /media/secret.key
+
+               for i in {1..30}; do
+                 if [ -e /dev/bcache0 ] && [ -e /dev/bcache1 ] && [ -e /dev/mapper/persist ]  && [ -e /dev/mapper/storage ]; then
+                    echo "Appear in attempt $i"
+                    udevadm trigger --action=add --subsystem-match=block
+                    udevadm settle
+                    lvm vgscan --mknodes
+                    lvm vgchange -ay vg0
+                    lvm vgchange -ay vg1
+                    break
+                 fi
+                 echo "Waiting persist and storage devices... ($i/30)"
+                 udevadm settle --timeout=3 || true && udevadm trigger --action=add --subsystem-match=block
+                 sleep 1
+                done
+            '';
           };
-        };
       };
     };
   };
-
-  services.zfs = {
-    autoScrub = {
-      enable = true;
-      interval = "Sat, 02:00";
-      pools = [
-        "zpersist"
-        "zcloud"
-      ];
-    };
-    autoSnapshot = {
-      enable = true;
-      frequent = 4;
-      hourly = 24;
-      daily = 7;
-      weekly = 4;
-      monthly = 12;
-      flags = "-k -p";
-    };
-    trim.enable = true;
-    trim.interval = "weekly";
-  };
-
-  #hardware.intel-gpu-tools = true;
 }
