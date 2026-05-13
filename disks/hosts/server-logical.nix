@@ -5,11 +5,11 @@ let
       lvm_type = "thin-pool";
     };
     cloud = (import ../lib/xfs.nix) {
-      name = "cloud";
       size = "3T";
       mountpoint = "/nix/persist/cloud";
       logdev = "/dev/mapper/cloudlogcrypt";
       isRaid = true;
+      entireDisk = false;
       extraEntireDisk = {
         pool = "thinpool";
         lvm_type = "thinlv";
