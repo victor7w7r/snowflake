@@ -5,11 +5,11 @@
   ...
 }:
 let
-  uboot = import ./custom/sunxi-uboot.nix { inherit pkgs; };
+  #uboot = import ./custom/sunxi-uboot.nix { inherit pkgs; };
   f2fs = import ./lib/f2fs.nix;
   kernel = (pkgs.callPackage ../kernel/sunxi) { inherit kernelData; };
+  #cp ${uboot}/u-boot-sunxi-with-spl.bin $out/
   bootFiles = ''
-    cp ${uboot}/u-boot-sunxi-with-spl.bin $out/
     mkdir -p boot
     ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
       -c ${config.system.build.toplevel} -d boot
