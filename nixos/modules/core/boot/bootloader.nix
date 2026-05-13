@@ -58,7 +58,7 @@ in
       ${cp} ${edk2}/shell.efi ${efi}/tools/shellx64.efi
       ${cp} ${memtest}/BOOTX64.efi ${efi}/refind/tools_x64/memtest86.efi
       ${cp} ${fwupd}/fwupdx64.efi ${efi}/refind/tools_x64/fwupx64.efi
-      ${mv} ${efi}/refind/tools_x64 ${efi}/tools
+      [ ! -d ${efi}/tools ] && ${mv} ${efi}/refind/tools_x64 ${efi}/tools
     fi
 
     EFI_INFO=$(${lsblk} -o NAME,PARTTYPE,PKNAME,PARTTYPENAME,FSTYPE \
@@ -74,14 +74,14 @@ in
       --loader /EFI/refind/refind_x64.efi --label "rEFInd" \
       --unicode &> /dev/null
 
-    if [[ -f ${efi}/vmlinuz ]] && ${rm} ${efi}/vmlinuz
-    if [[ -f ${efi}/initrd ]] && ${rm} ${efi}/initrd
+    [[ -f ${efi}/vmlinuz ]] && ${rm} ${efi}/vmlinuz
+    [[ -f ${efi}/initrd ]] && ${rm} ${efi}/initrd
 
-    cp ${latest}/${kernelFile} ${efi}/vmlinuz
-    cp ${initrd} ${efi}/initrd
+    ${cp} ${latest}/${kernelFile} ${efi}/vmlinuz
+    ${cp} ${initrd} ${efi}/initrd
 
     echo "$BASE" >> ${efi}/versions.txt
-    cp ${initrd} /boot/emergency/initrd_$TOPLEVEL
+    #${cp} ${initrd} /boot/emergency/initrd_$TOPLEVEL
 
     ${cat} > ${efi}/refind/refind.conf << EOF
       banner ${mocha}/background.png
@@ -101,8 +101,8 @@ in
 
       menuentry "NixOS" {
         icon /EFI/refind/${mocha}/icons/os_nixos.png
-        loader EFI/vmlinuz
-        initrd EFI/initrd
+        loader /EFI/vmlinuz
+        initrd /EFI/initrd
         ostype Linux
         options "init=$TOPLEVEL/init ${toString config.boot.kernelParams}"
         submenuentry "Verbose" {
