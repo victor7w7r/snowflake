@@ -48,6 +48,16 @@ let
 
   partlabel = "/dev/disk/by-partlabel";
   idpart = "/dev/disk/by-id";
+
+  /*
+    sudo mdadm --create /dev/md0 --level=5 --raid-devices=5  \
+    /dev/disk/by-id/ata-MM1000GBKAL_9XG3YGXQ \
+    /dev/disk/by-id/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154 \
+    /dev/disk/by-id/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H \
+    /dev/disk/by-id/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X \
+    /dev/disk/by-id/ata-TOSHIBA_DT01ACA100_Y7JAA68MS
+  */
+
 in
 {
   disko.devices = {
@@ -118,13 +128,13 @@ in
 
     mdadm.raid0 = {
       type = "mdadm";
-      level = 4;
+      level = 5;
       content = (import ../lib/luks.nix) {
         entireDisk = true;
         allowDiscards = false;
         name = "cloud";
         size = "100%";
-        group = "cloud"; # FIX
+        device = "/dev/md0";
         postMount = ''
           cryptsetup open ${partlabel}/disk-nvme-cloudcachecrypt cloudcachecrypt --key-file /tmp/key.txt || true
           cryptsetup open ${partlabel}/disk-nvme-cloudlogcrypt cloudlogcrypt --key-file /tmp/key.txt || true

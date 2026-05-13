@@ -112,7 +112,7 @@ in
           allowDiscards = false;
           name = "persist";
           size = "100%";
-          group = "persist";
+          device = "${idpart}/ata-WDC_WD5000LPSX-75A6WT0_WX12A21JEEPK";
           postMount = ''
             cryptsetup open ${partlabel}/disk-ssd-persistcachecrypt persistcachecrypt --key-file /tmp/key.txt || true
             cryptsetup open ${partlabel}/disk-ssd-persistlogcrypt persistlogcrypt --key-file /tmp/key.txt || true
@@ -133,8 +133,8 @@ in
           entireDisk = true;
           allowDiscards = false;
           name = "storage";
+          device = "${idpart}/ata-ST500LT012-1DG142_S3PMCMHT";
           size = "100%";
-          group = "storage";
           postMount = ''
             cryptsetup open ${partlabel}/disk-ssd-storagecachecrypt storagecachecrypt --key-file /tmp/key.txt || true
             cryptsetup open ${partlabel}/disk-ssd-storagelogcrypt storagelogcrypt --key-file /tmp/key.txt || true

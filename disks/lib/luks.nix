@@ -1,6 +1,6 @@
 {
   name,
-  group,
+  device,
   priority ? null,
   size ? "100%",
   content ? null,
@@ -19,7 +19,7 @@ let
     settings = { inherit keyFile allowDiscards; };
     preCreateHook = (if isForTest then ''echo -n "test" > /tmp/key.txt'' else "");
     postCreateHook = ''
-      cryptsetup config /dev/disk/by-partlabel/disk-${group}-${name} --label "${name}"
+      cryptsetup config ${device} --label "${name}"
       ${postCreate}
     '';
   };
