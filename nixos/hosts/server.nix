@@ -22,6 +22,7 @@ let
     emergencyDisk = "nvme";
   };
   f2fs = import ./lib/f2fs.nix;
+  xfs = (import ./lib/xfs.nix);
 in
 {
   nixpkgs.overlays = [
@@ -42,48 +43,45 @@ in
       ];
     };
 
-    /*
-      "/" = zfs { preDataset = "local"; };
-      "/nix" = f2fs {
-        label = "store";
-        depends = [ "/" ];
-      };
-      "/nix/persist" = zfs {
-        pool = "zpersist";
-        dataset = "persist";
-        depends = [ "/nix" ];
-      };
-      "/nix/persist/vm" = zfs {
-        pool = "zpersist";
-        dataset = "proxmox";
-        options = [
-          "zfsutil"
-          "nofail"
-        ];
-        depends = [ "/nix/persist" ];
-      };
-      "/nix/persist/shared" = f2fs {
-        label = "shared";
-        neededForBoot = false;
-        depends = [ "/nix/persist" ];
-      };
-      "/nix/persist/cloud" = zfs {
-        pool = "zcloud";
-        dataset = "cloud";
-        neededForBoot = false;
-        depends = [ "/nix/persist" ];
-        };
-    */
+    "/run/media/shared" = f2fs {
+      label = "shared";
+      neededForBoot = false;
+    };
+
+    "/nix" = f2fs {
+      label = "store";
+      depends = [ "/" ];
+    };
+
+    "/nix/persist" = xfs {
+      depends = [ "/nix" ];
+      device = "/dev/mapper/persist";
+      extraOptions = [
+        "x-systemd.device-timeout=300"
+        "x-systemd.mount-timeout=300"
+      ];
+    };
+
+    "/nix/persist/cloud" = xfs {
+      depends = [ "/nix/persist" ];
+      device = "/dev/vg0/cloud";
+      extraOptions = [
+        "largeio"
+        "swalloc"
+        "sunit=1024"
+        "swidth=4096"
+        "inode64"
+        "x-systemd.device-timeout=300"
+        "x-systemd.mount-timeout=300"
+      ];
+    };
   };
 
   swapDevices = [
     {
-      device = "/dev/zvol/zswap/local/swap";
+      device = "/dev/mapper/swapcrypt";
       discardPolicy = "both";
-      options = [
-        "nofail"
-        "x-systemd.device-timeout=5s"
-      ];
+      options = [ "nofail" ];
     }
   ];
 
@@ -96,10 +94,27 @@ in
 
   powerManagement.cpuFreqGovernor = "schedutil";
 
+  systemd.tmpfiles.rules = [
+    "w /sys/block/bcache0/bcache/cache_mode - - - - writethrough"
+  ];
+
   boot = {
-    kernelParams = [ "resume=/dev/zd0" ] ++ params { };
+    resumeDevice = "/dev/mapper/swapcrypt";
+    kernelParams = [
+      "systemd.gpt_auto=0"
+      "rootwait"
+      "zram.num_devices=2"
+    ]
+    ++ params { };
     kernelPackages = helpers.kernelModuleLLVMOverride (kernelBuild.packages);
-    swraid.enable = true;
+    swraid = {
+      enable = true;
+      mdadmConf = ''
+        MAILADDR root
+        ARRAY /dev/md/raid0 metadata=1.2 spares=1 UUID=00a19bfc:a0b32154:4ed293e4:28565a8f
+      '';
+    };
+    supportedFilesystems = [ "bcachefs" ];
     initrd = {
       availableKernelModules = [ "i915" ];
       kernelModules = [
@@ -122,7 +137,7 @@ in
         "sdhci"
         "tpm-tis"
       ];
-      supportedFilesystems = [ "bcachefs" ];
+      services.lvm.enable = true;
       systemd = {
         storePaths = [
           "${pkgs.btrfs-progs}/bin/btrfs"
@@ -140,13 +155,17 @@ in
           {
             wantedBy = [ "initrd.target" ];
             requiredBy = [ "sysroot.mount" ];
+            requires = [ "dev-md-raid0.device" ];
             before = [
+              "dev-vg0-cloud.device"
               "dev-mapper-persist.device"
-              "dev-mapper-storage.device"
               "initrd-fs.target"
               "sysroot.mount"
             ];
-            after = [ "systemd-modules-load.service" ];
+            after = [
+              "systemd-modules-load.service"
+              "dev-md-raid0.device"
+            ];
             unitConfig.DefaultDependencies = false;
             serviceConfig = {
               Type = "oneshot";
@@ -181,22 +200,19 @@ in
                 sleep 1
                done
 
-               cryptsetup open ${idpart}/ata-WDC_WD5000LPSX-75A6WT0_WX12A21JEEPK persist --key-file /media/secret.key
-               cryptsetup open ${idpart}/ata-ST500LT012-1DG142_S3PMCMHT storage --key-file /media/secret.key
-               cryptsetup open ${partlabel}/disk-ssd-swapcrypt swapcrypt --key-file /media/secret.key
-               cryptsetup open ${partlabel}/disk-ssd-persistcachecrypt persistcachecrypt --key-file /media/secret.key
-               cryptsetup open ${partlabel}/disk-ssd-persistlogcrypt persistlogcrypt --key-file /media/secret.key
-               cryptsetup open ${partlabel}/disk-ssd-storagecachecrypt storagecachecrypt --key-file /media/secret.key
-               cryptsetup open ${partlabel}/disk-ssd-storagelogcrypt storagelogcrypt --key-file /media/secret.key
+               cryptsetup open ${partlabel}/disk-nvme-swapcrypt swapcrypt --key-file /media/secret.key
+               cryptsetup open ${partlabel}/disk-nvme-cloudcachecrypt cloudcachecrypt --key-file /media/secret.key
+               cryptsetup open ${partlabel}/disk-nvme-cloudlogcrypt cloudlogcrypt --key-file /media/secret.key
+               cryptsetup open ${partlabel}/disk-nvme-persist persist --key-file /media/secret.key
 
                for i in {1..30}; do
-                 if [ -e /dev/bcache0 ] && [ -e /dev/bcache1 ] && [ -e /dev/mapper/persist ]  && [ -e /dev/mapper/storage ]; then
+                 if [ -e /dev/bcache0 ]; then
                     echo "Appear in attempt $i"
+                    cryptsetup open /dev/bcache0 cloud --key-file /media/secret.key
                     udevadm trigger --action=add --subsystem-match=block
                     udevadm settle
                     lvm vgscan --mknodes
                     lvm vgchange -ay vg0
-                    lvm vgchange -ay vg1
                     break
                  fi
                  echo "Waiting persist and storage devices... ($i/30)"

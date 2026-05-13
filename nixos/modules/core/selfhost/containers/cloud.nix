@@ -23,11 +23,11 @@
 
     bindMounts = {
       "/opt/seafile-mysql/db" = {
-        hostPath = "/nix/persist/containers/seafile/mysql";
+        hostPath = "/nix/persist/cloud/seafile/mysql";
         isReadOnly = false;
       };
       "/opt/seafile-data" = {
-        hostPath = "/nix/persist/containers/seafile/shared";
+        hostPath = "/nix/persist/cloud/seafile/shared";
         isReadOnly = false;
       };
     };
