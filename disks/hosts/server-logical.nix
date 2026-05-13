@@ -1,12 +1,12 @@
 let
   lvs = {
     thinpool = {
-      size = "3.5T";
+      size = "3T";
       lvm_type = "thin-pool";
     };
     cloud = (import ../lib/xfs.nix) {
       name = "cloud";
-      size = "3.5T";
+      size = "3T";
       mountpoint = "/nix/persist/cloud";
       logdev = "/dev/mapper/cloudlogcrypt";
       isRaid = true;

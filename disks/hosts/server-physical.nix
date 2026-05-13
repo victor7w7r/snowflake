@@ -35,7 +35,7 @@ let
       size = "180G";
       device = "${partlabel}/disk-nvme-cloudcachecrypt";
       priority = 4;
-      postCreate = "make-bcache -C /dev/mapper/cloudcachecrypt";
+      postCreate = "sudo make-bcache -B /dev/md/raid0 -C /dev/mapper/cloudcachecrypt";
     };
     persist = (import ../lib/luks.nix) {
       name = "persist";
@@ -62,9 +62,6 @@ let
      /dev/disk/by-id/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H \
      /dev/disk/by-id/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X \
      /dev/disk/by-id/ata-TOSHIBA_DT01ACA100_Y7JAA68MS
-     sudo make-bcache -B /dev/md/raid0
-     #CACHE_SET_UUID=$(sudo bcache-super-show /dev/mapper/cloud | grep 'cset.uuid' | awk '{print $2}')
-     #echo $CACHE_SET_UUID > /sys/block/bcache0/bcache/attach
   */
 
 in
