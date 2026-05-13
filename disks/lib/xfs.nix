@@ -1,7 +1,7 @@
 {
   name,
-  size,
   mountpoint,
+  size ? null,
   logdev ? null,
   logsize ? null,
   extraOptions ? [ ],
