@@ -19,21 +19,21 @@ let
     emergency = (import ../lib/emergency.nix) { priority = 1; };
     swapcrypt = (import ../lib/luks.nix) {
       name = "swapcrypt";
+      device = "${partlabel}/disk-nvme-swapcrypt";
       size = "16G";
-      group = "nvme";
       content = (import ../lib/swap.nix) { };
       priority = 3;
     };
     cloudlogcrypt = (import ../lib/luks.nix) {
       name = "cloudlogcrypt";
       size = "1G";
-      group = "nvme";
+      device = "${partlabel}/disk-nvme-cloudlogcrypt";
       priority = 4;
     };
     cloudcachecrypt = (import ../lib/luks.nix) {
       name = "cloudcachecrypt";
       size = "180G";
-      group = "nvme";
+      device = "${partlabel}/disk-nvme-cloudcachecrypt";
       priority = 5;
       postCreate = "make-bcache -C /dev/mapper/cloudcachecrypt";
     };

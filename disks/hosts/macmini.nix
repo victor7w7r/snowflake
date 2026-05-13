@@ -1,6 +1,9 @@
 let
   winmod = import ../lib/windows.nix;
 
+  partlabel = "/dev/disk/by-partlabel";
+  idpart = "/dev/disk/by-id";
+
   macpartitions = {
     esp = (import ../lib/esp.nix) { };
     macos = {
@@ -23,34 +26,34 @@ let
     win = winmod.win { priority = 4; };
     swapcrypt = (import ../lib/luks.nix) {
       name = "swapcrypt";
+      device = "${partlabel}/disk-ssd-swapcrypt";
       size = "64G";
-      group = "ssd";
       content = (import ../lib/swap.nix) { };
       priority = 5;
     };
     persistlogcrypt = (import ../lib/luks.nix) {
       name = "persistlogcrypt";
+      device = "${partlabel}/disk-ssd-persistlogcrypt";
       size = "512M";
-      group = "ssd";
       priority = 6;
     };
     storagelogcrypt = (import ../lib/luks.nix) {
       name = "storagelogcrypt";
+      device = "${partlabel}/disk-ssd-storagelogcrypt";
       size = "512M";
-      group = "ssd";
       priority = 7;
     };
     persistcachecrypt = (import ../lib/luks.nix) {
       name = "persistcachecrypt";
+      device = "${partlabel}/disk-ssd-persistcachecrypt";
       size = "90G";
-      group = "ssd";
       priority = 8;
       postCreate = "make-bcache -C /dev/mapper/persistcachecrypt";
     };
     storagecachecrypt = (import ../lib/luks.nix) {
       name = "storagecachecrypt";
+      device = "${partlabel}/disk-ssd-storagecachecrypt";
       size = "90G";
-      group = "ssd";
       priority = 9;
       postCreate = "make-bcache -C /dev/mapper/storagecachecrypt";
     };
@@ -80,8 +83,6 @@ let
     };
   };
 
-  partlabel = "/dev/disk/by-partlabel";
-  idpart = "/dev/disk/by-id";
 in
 {
   disko.devices = {
