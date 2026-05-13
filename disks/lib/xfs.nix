@@ -66,5 +66,6 @@ if entireDisk then
 else
   {
     inherit name size;
-    content = bodyContent // (if extraSetupDisk != null then extraSetupDisk else { });
+    content = bodyContent;
   }
+  // (if extraSetupDisk != null then extraSetupDisk else { })
