@@ -9,7 +9,7 @@ let
       mountpoint = "/nix/persist/cloud";
       logdev = "/dev/mapper/cloudlogcrypt";
       isRaid = true;
-      entireDisk = false;
+      entireDisk = true;
       extraEntireDisk = {
         pool = "thinpool";
         lvm_type = "thinlv";
