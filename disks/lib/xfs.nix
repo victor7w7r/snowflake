@@ -62,7 +62,7 @@ let
   };
 in
 if entireDisk then
-  bodyContent // extraEntireDisk
+  bodyContent // (if extraEntireDisk != null then extraEntireDisk else { })
 else
   {
     inherit name size;
