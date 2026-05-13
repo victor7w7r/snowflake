@@ -16,7 +16,7 @@
       "3.south-america.pool.ntp.org"
     ];
     networkmanager = {
-      enable = host != "v7w7r-youyeetoox1" && system != "aarch64-linux";
+      enable = host != "v7w7r-youyeetoox1" && host != "v7w7r-fajita";
       settings.main.rc-manager = "resolvconf";
       wifi.powersave = false;
       unmanaged =
