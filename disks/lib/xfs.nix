@@ -14,7 +14,7 @@ let
   agcount = if isRaid || isVmStorage || isSolid then "4" else "2";
 in
 {
-  inherit size name;
+  inherit name;
   content = {
     inherit mountpoint;
     format = "xfs";
@@ -65,6 +65,7 @@ in
     if hasFilesystem then
       {
         type = "filesystem";
+        inherit size;
       }
     else
       { }

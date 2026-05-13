@@ -44,7 +44,6 @@ let
       priority = 5;
       content = (import ../lib/xfs.nix) {
         name = "persist";
-        size = "100%";
         mountpoint = "/nix/persist";
         hasFilesystem = false;
         isSolid = true;
