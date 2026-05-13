@@ -15,6 +15,7 @@ let
 in
 {
   inherit name;
+  type = "filesystem";
   content = {
     inherit mountpoint;
     format = "xfs";
@@ -64,7 +65,6 @@ in
   // (
     if hasFilesystem then
       {
-        type = "filesystem";
         inherit size;
       }
     else
