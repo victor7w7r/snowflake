@@ -1,7 +1,7 @@
 let
   lvs = {
     thinpool = {
-      size = "3T";
+      size = "3.5T";
       lvm_type = "thin-pool";
     };
     cloud = (import ../lib/xfs.nix) {
