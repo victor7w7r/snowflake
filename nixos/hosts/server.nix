@@ -170,7 +170,7 @@ in
           let
             partlabel = "/dev/disk/by-partlabel";
             idpart = "/dev/disk/by-id";
-            keydevice = "${idpart}/usb-Generic_Mass-Storage_20240418000000-0:0-part1";
+            keydevice = "${idpart}/usb-Mass_Storage_Device_121220160204-0:0-part1";
           in
           {
             wantedBy = [ "initrd.target" ];
