@@ -85,52 +85,51 @@ in
           partitions = nvmepartitions;
         };
       };
-      /*
-        cloud1 = {
-          type = "disk";
-          device = "${idpart}/ata-MM1000GBKAL_9XG3YGXQ";
-          content = {
-            type = "mdraid";
-            name = "raid0";
-          };
-        };
 
-        cloud2 = {
-          type = "disk";
-          device = "${idpart}/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154";
-          content = {
-            type = "mdraid";
-            name = "raid0";
-          };
+      cloud1 = {
+        type = "disk";
+        device = "${idpart}/ata-MM1000GBKAL_9XG3YGXQ";
+        content = {
+          type = "mdraid";
+          name = "raid0";
         };
+      };
 
-        cloud3 = {
-          type = "disk";
-          device = "${idpart}/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H";
-          content = {
-            type = "mdraid";
-            name = "raid0";
-          };
+      cloud2 = {
+        type = "disk";
+        device = "${idpart}/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154";
+        content = {
+          type = "mdraid";
+          name = "raid0";
         };
+      };
 
-        cloud4 = {
-          type = "disk";
-          device = "${idpart}/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X";
-          content = {
-            type = "mdraid";
-            name = "raid0";
-          };
+      cloud3 = {
+        type = "disk";
+        device = "${idpart}/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H";
+        content = {
+          type = "mdraid";
+          name = "raid0";
         };
+      };
 
-        cloud5 = {
-          type = "disk";
-          device = "${idpart}/ata-TOSHIBA_DT01ACA100_Y7JAA68MS";
-          content = {
-            type = "mdraid";
-            name = "raid0";
-          };
-          };
-      */
+      cloud4 = {
+        type = "disk";
+        device = "${idpart}/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X";
+        content = {
+          type = "mdraid";
+          name = "raid0";
+        };
+      };
+
+      cloud5 = {
+        type = "disk";
+        device = "${idpart}/ata-TOSHIBA_DT01ACA100_Y7JAA68MS";
+        content = {
+          type = "mdraid";
+          name = "raid0";
+        };
+      };
     };
 
     mdadm.raid0 = {

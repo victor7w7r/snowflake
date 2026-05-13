@@ -6,6 +6,7 @@
   logsize ? null,
   extraOptions ? [ ],
   entireDisk ? false,
+  extraEntireDisk ? null,
   isRaid ? false,
   isVmStorage ? false,
   isSolid ? false,
@@ -61,7 +62,7 @@ let
   };
 in
 if entireDisk then
-  bodyContent
+  bodyContent // extraEntireDisk
 else
   {
     inherit name size;

@@ -1,15 +1,19 @@
 let
   lvs = {
     thinpool = {
-      size = "3.5G";
+      size = "3.5T";
       lvm_type = "thin-pool";
     };
-    persist = (import ../lib/xfs.nix) {
-      name = "persist";
-      size = "100%";
+    cloud = (import ../lib/xfs.nix) {
+      name = "cloud";
+      size = "3.5T";
       mountpoint = "/nix/persist/cloud";
       logdev = "/dev/mapper/cloudlogcrypt";
       isRaid = true;
+      extraEntireDisk = {
+        pool = "thinpool";
+        lvm_type = "thinlv";
+      };
     };
   };
 in
@@ -17,7 +21,6 @@ in
   disko.devices = {
     disk.bcache0 = {
       type = "disk";
-      name = "bcache0";
       device = "/dev/bcache0";
       content = {
         vg = "vg0";
@@ -30,9 +33,11 @@ in
       inherit lvs;
     };
 
-    nodev."/" = {
+    /*
+      nodev."/" = {
       fsType = "tmpfs";
       mountOptions = [ "size=2G" ];
-    };
+      };
+    */
   };
 }
