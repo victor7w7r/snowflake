@@ -50,15 +50,17 @@ in
       ${cp} ${refind}/refind_x64.efi ${efi}/BOOT/BOOTX64.efi
 
       ${rm} -rf ${efi}/refind/docs ${efi}/refind/refind.conf-sample ${efi}/refind/images ${efi}/refind/drivers_x64/ext*
-      ${if (host != "v7w7r-macmini81") then "${rm} -rf ${efi}/refind/drivers_x64/hfs_x64.efi" else ""}
+      ${rm} -rf ${efi}/refind/drivers_x64/hfs_x64.efi
       ${rm} -rf ${efi}/refind/drivers_x64/iso9660_x64.efi ${efi}/refind/drivers_x64/reiserfs_x64.efi
       ${mkdir} -p ${efi}/refind/themes && ${cp} -r ${inputs.catppuccin-refind} ${efi}/refind/themes/catppuccin
-      ${wget} -P ${efi}/refind/drivers_x64 ${efifs}/ntfs_x64.efi &> /dev/null
 
-      ${cp} ${edk2}/shell.efi ${efi}/tools/shellx64.efi
       ${cp} ${memtest}/BOOTX64.efi ${efi}/refind/tools_x64/memtest86.efi
       ${cp} ${fwupd}/fwupdx64.efi ${efi}/refind/tools_x64/fwupx64.efi
-      [ ! -d ${efi}/tools ] && ${mv} ${efi}/refind/tools_x64 ${efi}/tools
+
+      if [ ! -d ${efi}/tools ]; then
+       ${mv} ${efi}/refind/tools_x64 ${efi}/tools
+       ${cp} ${edk2}/shell.efi ${efi}/tools/shellx64.efi
+      fi
     fi
 
     EFI_INFO=$(${lsblk} -o NAME,PARTTYPE,PKNAME,PARTTYPENAME,FSTYPE \
