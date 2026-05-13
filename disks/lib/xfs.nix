@@ -15,8 +15,8 @@ let
 in
 {
   inherit name;
-  type = "filesystem";
   content = {
+    type = "filesystem";
     inherit mountpoint;
     format = "xfs";
     mountOptions = [
