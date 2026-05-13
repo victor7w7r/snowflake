@@ -45,7 +45,7 @@ let
       content = (import ../lib/xfs.nix) {
         name = "persist";
         mountpoint = "/nix/persist";
-        hasFilesystem = false;
+        entireDisk = true;
         isSolid = true;
         isVmStorage = true;
       };

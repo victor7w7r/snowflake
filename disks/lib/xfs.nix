@@ -5,17 +5,14 @@
   logdev ? null,
   logsize ? null,
   extraOptions ? [ ],
-  hasFilesystem ? true,
+  entireDisk ? false,
   isRaid ? false,
   isVmStorage ? false,
   isSolid ? false,
 }:
 let
   agcount = if isRaid || isVmStorage || isSolid then "4" else "2";
-in
-{
-  inherit name;
-  content = {
+  bodyContent = {
     type = "filesystem";
     inherit mountpoint;
     format = "xfs";
@@ -61,13 +58,12 @@ in
       "-L"
       name
     ];
+  };
+in
+if entireDisk then
+  bodyContent
+else
+  {
+    inherit name size;
+    content = bodyContent;
   }
-  // (
-    if hasFilesystem then
-      {
-        inherit size;
-      }
-    else
-      { }
-  );
-}
