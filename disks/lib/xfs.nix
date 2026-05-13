@@ -5,6 +5,7 @@
   logdev ? null,
   logsize ? null,
   extraOptions ? [ ],
+  hasFilesystem ? true,
   isRaid ? false,
   isVmStorage ? false,
   isSolid ? false,
@@ -16,7 +17,6 @@ in
   inherit size name;
   content = {
     inherit mountpoint;
-    type = "filesystem";
     format = "xfs";
     mountOptions = [
       "noatime"
@@ -60,5 +60,13 @@ in
       "-L"
       name
     ];
-  };
+  }
+  // (
+    if hasFilesystem then
+      {
+        type = "filesystem";
+      }
+    else
+      { }
+  );
 }

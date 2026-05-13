@@ -42,6 +42,7 @@ let
       size = "100%";
       device = "${partlabel}/disk-nvme-persist";
       priority = 5;
+      hasFilesystem = false;
       content = (import ../lib/xfs.nix) {
         name = "persist";
         size = "100%";
