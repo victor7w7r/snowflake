@@ -8,6 +8,7 @@
     genact
     exfatprogs
     f2fs-tools
+    mdadm
     lavat
     lm_sensors
     lshw

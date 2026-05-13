@@ -5,6 +5,10 @@
 }:
 {
   boot = {
+    swraid.enable = true;
+    swraid.mdadmConf = ''
+      MAILADDR root
+    '';
     loader.grub.memtest86.enable = true;
     kernelModules = [
       "rtl8821cu"
@@ -17,6 +21,8 @@
       availableKernelModules = [
         "dm-thin-pool"
         "dm-snapshot"
+        "md_mod"
+        "raid456"
         "bcache"
       ];
       services.lvm.enable = true;

@@ -22,27 +22,33 @@ let
       device = "${partlabel}/disk-nvme-swapcrypt";
       size = "16G";
       content = (import ../lib/swap.nix) { };
-      priority = 3;
+      priority = 2;
     };
     cloudlogcrypt = (import ../lib/luks.nix) {
       name = "cloudlogcrypt";
       size = "1G";
       device = "${partlabel}/disk-nvme-cloudlogcrypt";
-      priority = 4;
+      priority = 3;
     };
     cloudcachecrypt = (import ../lib/luks.nix) {
       name = "cloudcachecrypt";
       size = "180G";
       device = "${partlabel}/disk-nvme-cloudcachecrypt";
-      priority = 5;
+      priority = 4;
       postCreate = "make-bcache -C /dev/mapper/cloudcachecrypt";
     };
-    persist = (import ../lib/xfs.nix) {
+    persist = (import ../lib/luks.nix) {
       name = "persist";
       size = "100%";
-      mountpoint = "/nix/persist";
-      isSolid = true;
-      isVmStorage = true;
+      device = "${partlabel}/disk-nvme-persist";
+      priority = 5;
+      content = (import ../lib/xfs.nix) {
+        name = "persist";
+        size = "100%";
+        mountpoint = "/nix/persist";
+        isSolid = true;
+        isVmStorage = true;
+      };
     };
   };
 
@@ -50,7 +56,7 @@ let
   idpart = "/dev/disk/by-id";
 
   /*
-    sudo mdadm --create /dev/md0 --level=5 --raid-devices=5  \
+    sudo mdadm --create /dev/md/raid0 --level=5 --raid-devices=5  \
     /dev/disk/by-id/ata-MM1000GBKAL_9XG3YGXQ \
     /dev/disk/by-id/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154 \
     /dev/disk/by-id/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H \
@@ -79,51 +85,52 @@ in
           partitions = nvmepartitions;
         };
       };
-
-      cloud1 = {
-        type = "disk";
-        device = "${idpart}/ata-MM1000GBKAL_9XG3YGXQ";
-        content = {
-          type = "mdraid";
-          name = "raid0";
+      /*
+        cloud1 = {
+          type = "disk";
+          device = "${idpart}/ata-MM1000GBKAL_9XG3YGXQ";
+          content = {
+            type = "mdraid";
+            name = "raid0";
+          };
         };
-      };
 
-      cloud2 = {
-        type = "disk";
-        device = "${idpart}/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154";
-        content = {
-          type = "mdraid";
-          name = "raid0";
+        cloud2 = {
+          type = "disk";
+          device = "${idpart}/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154";
+          content = {
+            type = "mdraid";
+            name = "raid0";
+          };
         };
-      };
 
-      cloud3 = {
-        type = "disk";
-        device = "${idpart}/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H";
-        content = {
-          type = "mdraid";
-          name = "raid0";
+        cloud3 = {
+          type = "disk";
+          device = "${idpart}/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H";
+          content = {
+            type = "mdraid";
+            name = "raid0";
+          };
         };
-      };
 
-      cloud4 = {
-        type = "disk";
-        device = "${idpart}/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X";
-        content = {
-          type = "mdraid";
-          name = "raid0";
+        cloud4 = {
+          type = "disk";
+          device = "${idpart}/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X";
+          content = {
+            type = "mdraid";
+            name = "raid0";
+          };
         };
-      };
 
-      cloud5 = {
-        type = "disk";
-        device = "${idpart}/ata-TOSHIBA_DT01ACA100_Y7JAA68MS";
-        content = {
-          type = "mdraid";
-          name = "raid0";
-        };
-      };
+        cloud5 = {
+          type = "disk";
+          device = "${idpart}/ata-TOSHIBA_DT01ACA100_Y7JAA68MS";
+          content = {
+            type = "mdraid";
+            name = "raid0";
+          };
+          };
+      */
     };
 
     mdadm.raid0 = {
@@ -134,14 +141,14 @@ in
         allowDiscards = false;
         name = "cloud";
         size = "100%";
-        device = "/dev/md0";
+        device = "/dev/md/raid0";
         postMount = ''
           cryptsetup open ${partlabel}/disk-nvme-cloudcachecrypt cloudcachecrypt --key-file /tmp/key.txt || true
           cryptsetup open ${partlabel}/disk-nvme-cloudlogcrypt cloudlogcrypt --key-file /tmp/key.txt || true
         '';
         postCreate = ''
-          make-bcache -B /dev/mapper/cloud
-          #CACHE_SET_UUID=$(sudo bcache-super-show /dev/disk/by-id/ata-Micron_2400_MTFDKBK512QFM_232240F15D36-part9 | grep 'cset.uuid' | awk '{print $2}')
+          #make-bcache -B /dev/mapper/cloud
+          #CACHE_SET_UUID=$(sudo bcache-super-show /dev/md/raid0 | grep 'cset.uuid' | awk '{print $2}')
           #echo $CACHE_SET_UUID > /sys/block/bcache1/bcache/attach
         '';
       };

@@ -33,6 +33,7 @@
       luksmeta
       keyd
       killall
+      mdadm
       modprobed-db
       mokutil
       rsyncy

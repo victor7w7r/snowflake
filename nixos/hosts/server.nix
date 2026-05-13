@@ -88,7 +88,7 @@ in
   boot = {
     kernelParams = [ "resume=/dev/zd0" ] ++ params { };
     kernelPackages = helpers.kernelModuleLLVMOverride (kernelBuild.packages);
-
+    swraid.enable = true;
     zfs = {
       package = pkgs.zfs_unstable;
       forceImportAll = false;
@@ -101,6 +101,8 @@ in
         "mmc_block"
         "overlay"
         "zfs"
+        "md_mod"
+        "raid456"
         "btrfs"
         "sdhci_pci"
         "usb_storage"
