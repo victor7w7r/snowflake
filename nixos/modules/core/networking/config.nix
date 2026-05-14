@@ -42,7 +42,7 @@
       '';
     };
     firewall = {
-      enable = false;
+      enable = true;
       allowPing = true;
       checkReversePath = "loose";
       logRefusedPackets = true;
