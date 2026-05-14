@@ -1,10 +1,14 @@
-{ ... }:
+{ lib, ... }:
 {
   containers.notes = {
     autoStart = true;
     privateNetwork = true;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.3";
+    extraFlags = [
+      "--capability=CAP_NET_ADMIN"
+      "--capability=CAP_SYS_ADMIN"
+    ];
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
     ];
@@ -27,13 +31,10 @@
     };
 
     config =
-      { pkgs, lib, ... }:
+      { ... }:
       {
         system.stateVersion = "26.05";
-        boot = {
-          isContainer = true;
-          kernel.sysctl."net.ipv4.ip_forward" = 1;
-        };
+        boot.isContainer = true;
 
         networking = {
           firewall.enable = false;
@@ -46,6 +47,7 @@
 
         services = {
           resolved.enable = true;
+          journald.extraConfig = "SystemMaxUse=100M";
           couchdb = {
             enable = true;
             bindAddress = "0.0.0.0";
@@ -86,12 +88,6 @@
           };
         };
 
-        environment.systemPackages = with pkgs; [
-          curl
-          dig
-          gnugrep
-        ];
-
         systemd.tmpfiles.rules = [
           "d /opt/couchdb/data 0770 couchdb couchdb - -"
           "d /opt/couchdb/etc/local.d 0770 couchdb couchdb - -"
@@ -100,31 +96,15 @@
           "d /web/config 0770 couchdb couchdb - -"
         ];
 
-        virtualisation = {
-          docker = {
-            enable = true;
-            daemon.settings = {
-              "bridge" = "none";
-              "storage-driver" = "overlay2";
-              dns = [
-                "8.8.8.8"
-                "1.1.1.1"
-              ];
-            };
-          };
-          oci-containers = {
-            backend = "docker";
-            containers."obsidian-web" = {
-              image = "sytone/obsidian-remote:latest";
-              autoStart = true;
-              extraOptions = [ "--network=host" ];
-              environment = { };
-              volumes = [
-                "/web/vaults:/vaults"
-                "/web/config:/config"
-              ];
-            };
-          };
+        virtualisation.oci-containers.containers."obsidian-web" = {
+          image = "docker.io/sytone/obsidian-remote:latest";
+          autoStart = true;
+          extraOptions = [ "--network=host" ];
+          environment = { };
+          volumes = [
+            "/web/vaults:/vaults"
+            "/web/config:/config"
+          ];
         };
       };
   };

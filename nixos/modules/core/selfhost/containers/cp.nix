@@ -1,10 +1,14 @@
-{ ... }:
+{ lib, ... }:
 {
   containers.cp = {
     autoStart = false;
     privateNetwork = true;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.7";
+    extraFlags = [
+      "--capability=CAP_NET_ADMIN"
+      "--capability=CAP_SYS_ADMIN"
+    ];
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
     ];
@@ -20,7 +24,7 @@
     };
 
     config =
-      { pkgs, lib, ... }:
+      { pkgs, ... }:
       {
         system.stateVersion = "26.05";
         boot.isContainer = true;

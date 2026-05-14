@@ -1,4 +1,4 @@
-{ ... }:
+{ lib, ... }:
 {
   hardware.graphics.enable = true;
 
@@ -14,7 +14,7 @@
     };
 
     config =
-      { pkgs, lib, ... }:
+      { pkgs, ... }:
       {
         networking.firewall.allowedTCPPorts = [ 3500 ];
         system.stateVersion = "26.05";
