@@ -8,8 +8,9 @@
   };
 
   networking = {
-    interfaces."enp1s0".wakeOnLan.enable = true;
     useNetworkd = true;
+    useDHCP = false;
+    interfaces."enp1s0".wakeOnLan.enable = true;
     firewall = {
       trustedInterfaces = [
         "brint"
@@ -23,7 +24,6 @@
         iptables -A FORWARD -i brint -o brint -j ACCEPT
       '';
     };
-    useDHCP = false;
     nat = {
       enable = true;
       externalInterface = "br0";
@@ -47,11 +47,6 @@
           Name = "br0";
           Kind = "bridge";
         };
-        bridgeConfig = {
-          STP = false;
-          HelloTimeSec = 1;
-          ForwardDelaySec = 0;
-        };
       };
       "20-br-int".netdevConfig = {
         Name = "brint";
@@ -66,8 +61,9 @@
       };
       "10-lan-bridge" = {
         matchConfig.Name = "br0";
-        linkConfig.RequiredForOnline = "routable";
-        networkConfig.IPv6AcceptRA = true;
+        linkConfig.RequiredForOnline = "no";
+        bridgeConfig = { };
+        networkConfig.ConfigureWithoutCarrier = true;
         address = [ "192.168.1.100/24" ];
         gateway = [ "192.168.1.1" ];
       };
@@ -75,14 +71,18 @@
       "20-brint-bridge" = {
         matchConfig.Name = "brint";
         address = [ "10.10.0.1/24" ];
-        linkConfig.ActivationPolicy = "always-up";
-        networkConfig = {
+        bridgeConfig = { };
+        networkConfig.ConfigureWithoutCarrier = true;
+        linkConfig.RequiredForOnline = "no";
+        /*
+          networkConfig = {
           IPv6AcceptRA = true;
           DNS = [
             "1.1.1.1"
             "8.8.8.8"
           ];
-        };
+          };
+        */
       };
     };
   };

@@ -5,8 +5,6 @@
   containers.cloud = {
     autoStart = true;
     privateNetwork = true;
-    enableTun = true;
-    ephemeral = false;
     hostBridge = "brint";
     localAddress = "10.10.0.2/24";
     additionalCapabilities = [
