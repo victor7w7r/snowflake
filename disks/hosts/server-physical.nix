@@ -56,14 +56,21 @@ let
   idpart = "/dev/disk/by-id";
 
   /*
-     sudo mdadm --create /dev/md/raid0 --level=5 --raid-devices=5  \
+    --create /dev/md/raid0 --level=5 --raid-devices=5  \
+     sudo bcache unregister /dev/md127
+     sudo mdadm --stop /dev/md127
+     sudo mdadm \
+     --assemble /dev/md/raid0 --name=raid0 --update=name \
      /dev/disk/by-id/ata-MM1000GBKAL_9XG3YGXQ \
      /dev/disk/by-id/ata-WDC_WD10EZEX-60ZF5A0_WD-WMC1S2944154 \
      /dev/disk/by-id/ata-WDC_WD10SPZX-24Z10_WD-WXU1E887FE3H \
      /dev/disk/by-id/ata-WDC_WD10SPZX-75Z10T1_WXB1A281J35X \
      /dev/disk/by-id/ata-TOSHIBA_DT01ACA100_Y7JAA68MS
+     sudo bcache register /dev/md/raid0
+     sudo cryptsetup open /dev/disk/by-partlabel/disk-nvme-persist persist --key-file=/tmp/key.txt
+     sudo cryptsetup open /dev/disk/by-partlabel/disk-nvme-cloudcachecrypt cloudcachecrypt --key-file /tmp/key.txt
+     sudo cryptsetup open /dev/disk/by-partlabel/disk-nvme-cloudlogcrypt cloudlogcrypt --key-file /tmp/key.txt
   */
-
 in
 {
   disko.devices = {
