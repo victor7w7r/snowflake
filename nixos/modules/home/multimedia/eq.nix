@@ -1,8 +1,6 @@
 { host, lib, ... }:
 let
-  dir = "easyeffects/db";
-
-  "${dir}/easyeffectsrc".text = ''
+  general = ''
     [StreamInputs]
     inputDevice=alsa_input.usb-046d_C922_Pro_Stream_Webcam_F3B8EEAF-02.iec958-stereo
 
@@ -19,13 +17,13 @@ let
     width=1360
   '';
 
-  "${dir}/bassEnhancerrc".text = ''
+  bass = ''
     [soe][BassEnhancer#0]
     blend=3
     inputGain=0.2
   '';
 
-  "${dir}/bassLoudnessrc".text = ''
+  loudness = ''
     [soe][BassLoudness#0]
     inputGain=-1.9
     link=-9.299999999999999
@@ -33,7 +31,7 @@ let
     output=-4.700000000000005
   '';
 
-  "${dir}/crystalizerrc".text = ''
+  crystalizer = ''
     [soe][Crystalizer#0]
     intensityBand0=4
     intensityBand1=2
@@ -51,7 +49,7 @@ let
     outputGain=0.1
   '';
 
-  "${dir}/equalizerrc".text = ''
+  equalizer = ''
     [soe][Equalizer#0]
     inputGain=3.5
 
@@ -92,13 +90,13 @@ let
     band6Gain=-0.53
   '';
 
-  "${dir}/filterrc".text = ''
+  filterSound = ''
     [soe][Filter#0]
     bypass=true
     type=7
   '';
 
-  "${dir}/pitchrc".text = ''
+  pitch = ''
     [soe][Pitch#0]
     bypass=true
     cents=50
@@ -110,14 +108,37 @@ in
   services.easyeffects.enable = host != "v7w7r-fajita";
   home.activation.createEqFiles = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     CONFIG_DIR="$HOME/.config/easyeffects/db"
-    EASYEFFECTS_1="$CONFIG_DIR/config.conf";
+    GENERAL="$CONFIG_DIR/easyeffectsrc"
+    BASS="$CONFIG_DIR/bassEnhancerrc"
+    LOUDNESS="$CONFIG_DIR/bassLoudnessrc"
+    CRYSTALIZER="$CONFIG_DIR/crystalizerrc"
+    EQUALIZER="$CONFIG_DIR/equalizerrc"
+    FILTER="$CONFIG_DIR/filterrc"
+    PITCH="$CONFIG_DIR/pitchrc"
 
     if [ ! -d $CONFIG_DIR ]; then
-      $DRY_RUN_CMD chmod -R 644 "$CONFIG_DIR"
-      $DRY_RUN_CMD cat <<EOF > "$CONFIG_FILE"
-
+      $DRY_RUN_CMD cat <<EOF > "$GENERAL"
+      ${general}
       EOF
+      $DRY_RUN_CMD cat <<EOF > "$BASS"
+      ${bass}
+      EOF
+      $DRY_RUN_CMD cat <<EOF > "$LOUDNESS"
+      ${loudness}
+      EOF
+      $DRY_RUN_CMD cat <<EOF > "$CRYSTALIZER"
+      ${crystalizer}
+      EOF
+      $DRY_RUN_CMD cat <<EOF > "$EQUALIZER"
+      ${equalizer}
+      EOF
+      $DRY_RUN_CMD cat <<EOF > "$FILTER"
+      ${filterSound}
+      EOF
+      $DRY_RUN_CMD cat <<EOF > "$PITCH"
+      ${pitch}
+      EOF
+      $DRY_RUN_CMD chmod -R 644 "$CONFIG_DIR"
     fi
-
   '';
 }
