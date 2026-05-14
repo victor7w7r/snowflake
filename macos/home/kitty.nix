@@ -10,9 +10,16 @@
       enableBashIntegration = true;
       enableZshIntegration = true;
     };
+    extraConfig = ''
+      text_composition_strategy legacy
+
+      map ctrl+shift+plus change_background_opacity +0.1
+      map ctrl+shift+minus change_background_opacity -0.1
+      map ctrl+shift+backspace change_background_opacity 1.0
+    '';
     settings = {
       background_blur = 5;
-      background_opacity = "0.5";
+      background_opacity = "0.7";
       close_on_child_death = true;
       confirm_os_window_close = 0;
       cursor_blink_interval = 400;
@@ -22,7 +29,7 @@
       enabled_layouts = "fat, tall, vertical";
 
       foreground = "#cdd6f4";
-      background = "#1e1e2e";
+      background = "#12121c";
       selection_foreground = "#1e1e2e";
       selection_background = "#f5e0dc";
       cursor = "#f5e0dc";
@@ -70,6 +77,7 @@
       allow_remote_control = true;
       listen_on = "unix:/tmp/kitty";
       notify_on_cmd_finish = "unfocused";
+
       scrollback_pager = "less --chop-long-lines --raw-control-chars +INPUT_LINE_NUMBER";
     };
   };

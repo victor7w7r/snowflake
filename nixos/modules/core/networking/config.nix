@@ -1,6 +1,5 @@
 {
   lib,
-  system,
   host,
   ...
 }:
@@ -43,8 +42,9 @@
       '';
     };
     firewall = {
-      allowPing = true;
       enable = true;
+      allowPing = true;
+      checkReversePath = "loose";
       logRefusedPackets = true;
       allowedTCPPorts = [
         22
@@ -58,6 +58,7 @@
         8080
         8081
         8082
+        8443
         5984
         5900
         9090

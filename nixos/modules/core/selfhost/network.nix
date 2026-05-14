@@ -10,24 +10,21 @@
   networking = {
     interfaces."enp1s0".wakeOnLan.enable = true;
     useNetworkd = true;
+    nftables.enable = true;
     firewall = {
-      trustedInterfaces = [ "brint" ];
-      checkReversePath = false;
-      allowedTCPPorts = [
-        443
-        80
-        8443
+      trustedInterfaces = [
+        "brint"
+        "br0"
       ];
       extraCommands = ''
-        iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o br0 -j MASQUERADE
-        iptables -A FORWARD -i brint -j ACCEPT
-        iptables -A FORWARD -o brint -m state --state RELATED,ESTABLISHED -j ACCEPT
+        iptables -A FORWARD -i brint -o br0 -j ACCEPT
+        iptables -A FORWARD -i br0 -o brint -m state --state RELATED,ESTABLISHED -j ACCEPT
       '';
     };
     useDHCP = false;
     nat = {
       enable = true;
-      externalInterface = "enp1s0";
+      externalInterface = "br0";
       internalIPs = [ "10.10.0.0/24" ];
       internalInterfaces = [
         "ve-+"
