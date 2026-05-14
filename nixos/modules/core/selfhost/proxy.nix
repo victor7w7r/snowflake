@@ -13,10 +13,6 @@
         forceSSL = false;
         listen = [
           {
-            addr = "127.0.0.1";
-            port = 8080;
-          }
-          {
             addr = "0.0.0.0";
             port = 8080;
           }
@@ -40,7 +36,7 @@
             '';
           };
           "/chat" = {
-            proxyPass = "http://10.10.0.4:8080";
+            proxyPass = "http://192.168.100.5:8080";
           };
         };
       };
@@ -51,23 +47,19 @@
         forceSSL = false;
         listen = [
           {
-            addr = "127.0.0.1";
-            port = 8081;
-          }
-          {
             addr = "0.0.0.0";
             port = 8081;
           }
         ];
         locations = {
           "/" = {
-            proxyPass = "http://10.10.0.2:80";
+            proxyPass = "http://192.168.100.2:80";
           };
           "/git" = {
-            proxyPass = "http://10.10.0.3:6610";
+            proxyPass = "http://192.168.100.4:6610";
           };
           "/ssh" = {
-            proxyPass = "http://10.10.0.3:6611";
+            proxyPass = "http://192.168.100.4:6611";
           };
         };
       };
@@ -78,25 +70,21 @@
         forceSSL = false;
         listen = [
           {
-            addr = "127.0.0.1";
-            port = 8082;
-          }
-          {
             addr = "0.0.0.0";
             port = 8082;
           }
         ];
         locations = {
           "/" = {
-            proxyPass = "http://10.10.0.1:8080";
+            proxyPass = "http://192.168.100.3:8080";
           };
           "/db" = {
             #TCP TUNNEL
-            proxyPass = "http://10.10.0.1:5984";
+            proxyPass = "http://192.168.100.3:5984";
           };
           "/mc" = {
             #TCP TUNNEL
-            proxyPass = "http://10.10.0.5:25565";
+            proxyPass = "http://192.168.100.6:25565";
           };
         };
       };
