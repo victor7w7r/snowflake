@@ -10,10 +10,14 @@
   networking = {
     interfaces."enp1s0".wakeOnLan.enable = true;
     useNetworkd = true;
-    firewall.allowedTCPPorts = [
-      443
-      8443
-    ];
+    firewall = {
+      trustedInterfaces = [ "brint" ];
+      allowedTCPPorts = [
+        443
+        80
+        8443
+      ];
+    };
     useDHCP = false;
     nat = {
       enable = true;
