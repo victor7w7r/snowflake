@@ -50,7 +50,7 @@
         system.stateVersion = "26.05";
         boot.isContainer = true;
         networking = {
-          defaultGateway = "192.168.1.100";
+          defaultGateway = "10.10.0.1";
           useHostResolvConf = lib.mkForce false;
           nameservers = [
             "1.1.1.1"
