@@ -61,8 +61,6 @@
         gateway = [ "192.168.1.1" ];
         networkConfig = {
           IPv6AcceptRA = true;
-          IPForward = "yes";
-          IPMasquerade = "both";
           DNS = [
             "1.1.1.1"
             "8.8.8.8"
