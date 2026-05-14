@@ -1,11 +1,18 @@
 { lib, ... }:
 {
-  #docker exec -it seafile python3 /scripts/start.py
+  #podman exec -it seafile python3 /scripts/start.py
   containers.cloud = {
     autoStart = true;
     privateNetwork = true;
+    ephemeral = false;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.2";
+    extraFlags = [
+      "--capability=CAP_NET_ADMIN"
+      "--capability=CAP_SYS_ADMIN"
+      "--property=TasksMax=infinity"
+      "--bind=/sys/fs/cgroup:/sys/fs/cgroup"
+    ];
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
     ];
