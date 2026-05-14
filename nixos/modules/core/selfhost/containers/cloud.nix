@@ -1,4 +1,4 @@
-{ ... }:
+{ lib, ... }:
 {
   #docker exec -it seafile python3 /scripts/start.py
   containers.cloud = {
@@ -21,16 +21,10 @@
     };
 
     config =
-      { pkgs, lib, ... }:
+      { ... }:
       {
         system.stateVersion = "26.05";
         boot.isContainer = true;
-        environment.systemPackages = with pkgs; [
-          netcat
-          tcpdump
-          nmap
-          arp-scan
-        ];
         networking = {
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
@@ -42,83 +36,85 @@
         services.resolved.enable = true;
         services.journald.extraConfig = "SystemMaxUse=100M";
         systemd = {
-          tmpfiles.rules = [
-            "d /opt/seafile-data 0770 1000 1000 - -"
-          ];
+          tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
+          /*
+            services.create-seafile-net = {
+                serviceConfig.Type = "oneshot";
+                wantedBy = [
+                  "docker-seafile-mysql.service"
+                  "docker-seafile.service"
+                ];
+                script = ''
+                  check=$(${pkgs.docker}/bin/docker network ls -qf name=seafile-net)
+                  if [ -z "$check" ]; then
+                    ${pkgs.docker}/bin/docker network create seafile-net
+                  fi
+                '';
+              };
+            };
+          */
 
-          services.create-seafile-net = {
-            serviceConfig.Type = "oneshot";
-            wantedBy = [
-              "docker-seafile-mysql.service"
-              "docker-seafile.service"
-            ];
-            script = ''
-              check=$(${pkgs.docker}/bin/docker network ls -qf name=seafile-net)
-              if [ -z "$check" ]; then
-                ${pkgs.docker}/bin/docker network create seafile-net
-              fi
-            '';
-          };
-        };
-
-        virtualisation.docker = {
-          enable = true;
-          autoPrune = {
+          /*
+            virtualisation.docker = {
             enable = true;
-            dates = "weekly";
-          };
-          rootless = {
-            enable = false;
-            setSocketVariable = true;
-          };
-        };
-
-        virtualisation.oci-containers.containers = {
-          "seafile-mysql" = {
-            image = "docker.io/mariadb:10.11";
-            environment = {
-              MYSQL_ROOT_PASSWORD = "db_dev";
-              MYSQL_LOG_CONSOLE = "true";
-              MARIADB_AUTO_UPGRADE = "1";
+            autoPrune = {
+              enable = true;
+              dates = "weekly";
             };
-            volumes = [ "/opt/seafile-mysql/db:/var/lib/mysql" ];
-            extraOptions = [ "--network=host" ];
-          };
-
-          "seafile-memcached" = {
-            image = "docker.io/memcached:1.6.18";
-            cmd = [
-              "memcached"
-              "-m"
-              "256"
-            ];
-            extraOptions = [
-              "--network=host"
-            ];
-          };
-
-          "seafile" = {
-            image = "docker.io/seafileltd/seafile-mc:11.0-latest";
-            autoStart = true;
-            extraOptions = [
-              "--network=host"
-              "--privileged"
-            ];
-            ports = [ "80:80" ];
-            environment = {
-              DB_HOST = "seafile-mysql";
-              DB_ROOT_PASSWD = "db_dev";
-              TIME_ZONE = "America/Guayaquil";
-              SEAFILE_ADMIN_EMAIL = "arkano036@gmail.com";
-              SEAFILE_ADMIN_PASSWORD = "asecret";
-              #SEAFILE_SERVER_HOSTNAME
-              #SEAFILE_SERVER_LETSENCRYPT
+            rootless = {
+              enable = false;
+              setSocketVariable = true;
             };
-            dependsOn = [
-              "seafile-mysql"
-              "seafile-memcached"
-            ];
-            volumes = [ "/opt/seafile-data:/shared" ];
+            };
+          */
+
+          virtualisation.oci-containers.containers = {
+            "seafile-mysql" = {
+              image = "docker.io/mariadb:10.11";
+              environment = {
+                MYSQL_ROOT_PASSWORD = "db_dev";
+                MYSQL_LOG_CONSOLE = "true";
+                MARIADB_AUTO_UPGRADE = "1";
+              };
+              volumes = [ "/opt/seafile-mysql/db:/var/lib/mysql" ];
+              extraOptions = [ "--network=host" ];
+            };
+
+            "seafile-memcached" = {
+              image = "docker.io/memcached:1.6.18";
+              cmd = [
+                "memcached"
+                "-m"
+                "256"
+              ];
+              extraOptions = [
+                "--network=host"
+              ];
+            };
+
+            "seafile" = {
+              image = "docker.io/seafileltd/seafile-mc:11.0-latest";
+              autoStart = true;
+              extraOptions = [
+                "--network=host"
+                "--privileged"
+              ];
+              ports = [ "80:80" ];
+              environment = {
+                DB_HOST = "seafile-mysql";
+                DB_ROOT_PASSWD = "db_dev";
+                TIME_ZONE = "America/Guayaquil";
+                SEAFILE_ADMIN_EMAIL = "arkano036@gmail.com";
+                SEAFILE_ADMIN_PASSWORD = "asecret";
+                #SEAFILE_SERVER_HOSTNAME
+                #SEAFILE_SERVER_LETSENCRYPT
+              };
+              dependsOn = [
+                "seafile-mysql"
+                "seafile-memcached"
+              ];
+              volumes = [ "/opt/seafile-data:/shared" ];
+            };
           };
         };
       };
