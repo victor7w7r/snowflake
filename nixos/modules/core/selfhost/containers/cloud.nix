@@ -10,6 +10,9 @@
     extraFlags = [
       "--capability=CAP_NET_ADMIN"
       "--capability=CAP_SYS_ADMIN"
+      "--capability=CAP_MKNOD"
+      "--property=DeviceAllow=block-* rw"
+      "--property=Delegate=yes"
     ];
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
