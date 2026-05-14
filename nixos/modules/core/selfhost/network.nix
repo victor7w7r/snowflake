@@ -46,9 +46,9 @@
           Kind = "bridge";
         };
         bridgeConfig = {
-          HelloTimeSec = "1";
-          ForwardDelaySec = "0";
           STP = false;
+          HelloTimeSec = 1;
+          ForwardDelaySec = 0;
         };
       };
       "20-br-int".netdevConfig = {
