@@ -70,6 +70,7 @@ in
         "sunit=1024"
         "swidth=4096"
         "inode64"
+        "logdev=/dev/mapper/cloudlogcrypt"
         "x-systemd.device-timeout=300"
         "x-systemd.mount-timeout=300"
       ];
