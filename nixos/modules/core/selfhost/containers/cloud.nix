@@ -10,8 +10,6 @@
     extraFlags = [
       "--capability=CAP_NET_ADMIN"
       "--capability=CAP_SYS_ADMIN"
-      "--property=TasksMax=infinity"
-      "--bind=/sys/fs/cgroup:/sys/fs/cgroup"
     ];
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
@@ -40,40 +38,11 @@
             "8.8.8.8"
           ];
         };
-        services.resolved.enable = true;
-        services.journald.extraConfig = "SystemMaxUse=100M";
-        systemd = {
-          tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
-          /*
-            services.create-seafile-net = {
-                serviceConfig.Type = "oneshot";
-                wantedBy = [
-                  "docker-seafile-mysql.service"
-                  "docker-seafile.service"
-                ];
-                script = ''
-                  check=$(${pkgs.docker}/bin/docker network ls -qf name=seafile-net)
-                  if [ -z "$check" ]; then
-                    ${pkgs.docker}/bin/docker network create seafile-net
-                  fi
-                '';
-              };
-            };
-          */
+        services = {
+          resolved.enable = true;
+          journald.extraConfig = "SystemMaxUse=100M";
         };
-        /*
-          virtualisation.docker = {
-          enable = true;
-          autoPrune = {
-            enable = true;
-            dates = "weekly";
-          };
-          rootless = {
-            enable = false;
-            setSocketVariable = true;
-          };
-          };
-        */
+        systemd.tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
 
         virtualisation.oci-containers.containers = {
           "seafile-mysql" = {
