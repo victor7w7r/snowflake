@@ -266,6 +266,7 @@
                 nixpkgs.hostPlatform = "aarch64-linux";
                 nixpkgs.config.allowUnsupportedSystem = true;
                 nixpkgs.overlays = [
+                  (import "${inputs.mobile-nixos}/overlay/overlay.nix")
                   inputs.emacs-overlay.overlay
                 ];
               }
@@ -291,7 +292,8 @@
               inputs
               username
               ;
-          };
+          }
+          ++ (import "${inputs.mobile-nixos}/modules/module-list.nix");
         };
 
         macmini = nixpkgs.lib.nixosSystem {

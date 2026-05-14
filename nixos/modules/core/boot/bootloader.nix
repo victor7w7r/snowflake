@@ -128,7 +128,8 @@ in
             ${sbctl} sign -s ${efi}/tools/fwupx64.efi &> /dev/null
             ${sbctl} sign -s ${efi}/refind/drivers_x64/btrfs_x64.efi &> /dev/null
             ${sbctl} sign -s ${efi}/refind/drivers_x64/ntfs_x64.efi &> /dev/null
-            ${sbctl} sign -s ${efi}/nixos.efi
+            ${sbctl} sign -s ${efi}/vmlinuz
+            ${sbctl} sign -s ${efi}/initrd
           fi
         ''
       else
