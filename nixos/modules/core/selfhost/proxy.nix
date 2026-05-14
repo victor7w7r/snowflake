@@ -16,6 +16,10 @@
             addr = "127.0.0.1";
             port = 8080;
           }
+          {
+            addr = "0.0.0.0";
+            port = 8080;
+          }
         ];
         locations = {
           "/" = {
@@ -50,6 +54,10 @@
             addr = "127.0.0.1";
             port = 8081;
           }
+          {
+            addr = "0.0.0.0";
+            port = 8081;
+          }
         ];
         locations = {
           "/" = {
@@ -73,14 +81,18 @@
             addr = "127.0.0.1";
             port = 8082;
           }
+          {
+            addr = "0.0.0.0";
+            port = 8082;
+          }
         ];
         locations = {
           "/" = {
-            proxyPass = "http://10.10.0.3:8080";
+            proxyPass = "http://10.10.0.1:8080";
           };
           "/db" = {
             #TCP TUNNEL
-            proxyPass = "http://10.10.0.3:5984";
+            proxyPass = "http://10.10.0.1:5984";
           };
           "/mc" = {
             #TCP TUNNEL
