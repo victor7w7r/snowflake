@@ -10,6 +10,9 @@
       "CAP_NET_ADMIN"
       "CAP_MKNOD"
       "CAP_SYS_CHROOT"
+      "CAP_SETGID"
+      "CAP_SETUID"
+      "CAP_AUDIT_WRITE"
     ];
     forwardPorts = [
       {
@@ -48,7 +51,8 @@
     };
 
     extraFlags = [
-      "--system-call-filter=keyctl"
+      "--system-call-filter=@keyring"
+      "--system-call-filter=@memlock"
       "--system-call-filter=bpf"
     ];
 
@@ -56,24 +60,19 @@
       { pkgs, lib, ... }:
       {
         system.stateVersion = "26.05";
-        boot.isContainer = true;
+        boot = {
+          isContainer = true;
+          kernel.sysctl."net.ipv4.ip_forward" = 1;
+        };
 
         networking = {
           defaultGateway = "10.10.0.1";
+          firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
           nameservers = [
             "1.1.1.1"
             "8.8.8.8"
           ];
-          firewall = {
-            enable = true;
-            trustedInterfaces = [ "docker0" ];
-            allowedTCPPorts = [
-              5984
-              8080
-              8443
-            ];
-          };
         };
 
         services = {
@@ -137,7 +136,7 @@
             enable = true;
             daemon.settings = {
               "bridge" = "none";
-              "storage-driver" = "vfs";
+              "storage-driver" = "overlay2";
               dns = [
                 "8.8.8.8"
                 "1.1.1.1"

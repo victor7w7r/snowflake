@@ -10,6 +10,9 @@
       "CAP_NET_ADMIN"
       "CAP_MKNOD"
       "CAP_SYS_CHROOT"
+      "CAP_SETGID"
+      "CAP_SETUID"
+      "CAP_AUDIT_WRITE"
     ];
     forwardPorts = [
       {
@@ -40,7 +43,8 @@
     };
 
     extraFlags = [
-      "--system-call-filter=keyctl"
+      "--system-call-filter=@keyring"
+      "--system-call-filter=@memlock"
       "--system-call-filter=bpf"
     ];
 
@@ -56,14 +60,7 @@
             "1.1.1.1"
             "8.8.8.8"
           ];
-          firewall = {
-            enable = true;
-            allowedTCPPorts = [
-              80
-              6112
-              7002
-            ];
-          };
+          firewall.enable = false;
         };
 
         environment.systemPackages = with pkgs; [
@@ -133,7 +130,7 @@
             enable = true;
             daemon.settings = {
               "bridge" = "none";
-              "storage-driver" = "vfs";
+              "storage-driver" = "overlay2";
               dns = [
                 "8.8.8.8"
                 "1.1.1.1"

@@ -13,22 +13,20 @@
     firewall = {
       trustedInterfaces = [
         "brint"
+        "vb-+"
+        "ve-+"
         "br0"
       ];
       extraCommands = ''
-        iptables -A FORWARD -i brint -j ACCEPT
-        iptables -A FORWARD -o brint -j ACCEPT
-        iptables -A FORWARD -i seafile-net -j ACCEPT
-        iptables -A FORWARD -o seafile-net -j ACCEPT
         iptables -A FORWARD -i brint -o br0 -j ACCEPT
         iptables -A FORWARD -i br0 -o brint -m state --state RELATED,ESTABLISHED -j ACCEPT
+        iptables -A FORWARD -i brint -o brint -j ACCEPT
       '';
     };
     useDHCP = false;
     nat = {
       enable = true;
       externalInterface = "br0";
-      internalIPs = [ "10.10.0.0/24" ];
       internalInterfaces = [
         "ve-+"
         "vb-+"
