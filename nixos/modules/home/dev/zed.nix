@@ -20,6 +20,7 @@
       "kotlin"
       "log"
       "lua"
+      "make"
       "material-icon-theme"
       "mcp-server-github"
       "nix"
@@ -49,46 +50,31 @@
         };
       };
 
-      inlay_hints.enabled = true;
-      indent_guides.coloring = "indent_aware";
+      outline_panel.button = false;
+      collaboration_panel.button = false;
+      minimap.show = "auto";
+      project_panel.dock = "left";
+      git_panel.dock = "left";
 
-      telemetry = {
-        diagnostics = false;
-        metrics = false;
-      };
-
-      /*
-        node = {
-          path = lib.getExe pkgs.nodejs;
-          npm_path = lib.getExe' pkgs.nodejs "npm";
-        };
-
-        "context_servers": {
-          "mcp-server-github": {
-            "enabled": true,
-            "settings": {
-              "github_personal_access_token": ""
-            }
-          }
-        },
-        "agent": {
+      agent = {
+        dock = "right";
+        sidebar_side = "right";
+        favorite_models = [ ];
+        model_parameters = [ ];
+        /*
           "default_model": {
             "provider": "copilot_chat",
             "model": "gpt-5-mini"
           },
-          "model_parameters": []
-        },
-        "agent_servers": {
-          "Auggie CLI": {
-            "type": "custom",
-            "command": "auggie",
-            "args": ["--acp"],
-            "env": {}
-          }
-        }
-      */
+        */
+      };
 
-      hour_format = "hour24";
+      inlay_hints.enabled = true;
+      indent_guides.coloring = "indent_aware";
+      telemetry = {
+        diagnostics = false;
+        metrics = false;
+      };
       base_keymap = "VSCode";
       auto_update = false;
       vim_mode = false;
@@ -122,7 +108,7 @@
 
         nixd = {
           binary = {
-            path = "/run/current-system/sw/bin/nixd"; # "/home/victor7w7r/.nix-profile/bin/nixd";
+            path = "/run/current-system/sw/bin/nixd";
           };
           initialization_options = {
             formatting = {
@@ -142,6 +128,31 @@
       };
 
       icon_theme = "Material Icon Theme";
+
+      /*
+        node = {
+          path = lib.getExe pkgs.nodejs;
+          npm_path = lib.getExe' pkgs.nodejs "npm";
+        };
+
+        "context_servers": {
+          "mcp-server-github": {
+            "enabled": true,
+            "settings": {
+              "github_personal_access_token": ""
+            }
+          }
+        },
+
+        "agent_servers": {
+          "Auggie CLI": {
+            "type": "custom",
+            "command": "auggie",
+            "args": ["--acp"],
+            "env": {}
+          }
+        }
+      */
     };
   };
 }
