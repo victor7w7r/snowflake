@@ -1,6 +1,7 @@
 {
   inputs,
   host,
+  config,
   kernelData,
   pkgs,
   ...
@@ -120,8 +121,11 @@ in
   };
 
   boot = {
+    extraModulePackages = [ config.boot.kernelPackages.r8168 ];
+    blacklistedKernelModules = [ "r8169" ];
     resumeDevice = "/dev/mapper/swapcrypt";
     kernelParams = [
+      "pcie_aspm=off"
       "systemd.gpt_auto=0"
       "rootwait"
       "zram.num_devices=2"
@@ -136,9 +140,6 @@ in
       '';
     };
     supportedFilesystems = [ "bcachefs" ];
-    extraModprobeConfig = ''
-      options r8169 disable_aspm=1
-    '';
     initrd = {
       availableKernelModules = [ "i915" ];
       kernelModules = [
