@@ -16,7 +16,11 @@
         "brint"
         "br0"
       ];
+      extraInputRules = ''
+        type filter hook input priority 0; policy accept;
+      '';
       extraForwardRules = ''
+        type filter hook forward priority 0; policy accept;
         iifname "brint" oifname "br0" accept
         iifname "br0" oifname "brint" ct state established,related accept
       '';
