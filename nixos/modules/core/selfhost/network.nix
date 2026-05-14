@@ -12,6 +12,7 @@
     useNetworkd = true;
     firewall = {
       trustedInterfaces = [ "brint" ];
+      checkReversePath = false;
       allowedTCPPorts = [
         443
         80
@@ -22,6 +23,7 @@
     nat = {
       enable = true;
       externalInterface = "br0";
+      internalIPs = [ "10.10.0.0/24" ];
       internalInterfaces = [
         "ve-+"
         "vb-+"
@@ -59,6 +61,8 @@
         gateway = [ "192.168.1.1" ];
         networkConfig = {
           IPv6AcceptRA = true;
+          IPForward = "yes";
+          IPMasquerade = "both";
           DNS = [
             "1.1.1.1"
             "8.8.8.8"
