@@ -1,7 +1,7 @@
 { ... }:
 {
   programs.nixvim = {
-    enable = false;
+    enable = true;
     colorschemes.catppuccin.enable = true;
     plugins.lualine.enable = true;
   };
