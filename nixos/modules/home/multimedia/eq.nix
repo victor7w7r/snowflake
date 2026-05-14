@@ -1,6 +1,7 @@
 { host, lib, ... }:
 let
   dir = "easyeffects/db";
+
   "${dir}/easyeffectsrc".text = ''
     [StreamInputs]
     inputDevice=alsa_input.usb-046d_C922_Pro_Stream_Webcam_F3B8EEAF-02.iec958-stereo
@@ -109,6 +110,7 @@ in
   services.easyeffects.enable = host != "v7w7r-fajita";
   home.activation.createEqFiles = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     CONFIG_DIR="$HOME/.config/easyeffects/db"
+    EASYEFFECTS_1="$CONFIG_DIR/config.conf";
 
     if [ ! -d $CONFIG_DIR ]; then
       $DRY_RUN_CMD chmod -R 644 "$CONFIG_DIR"

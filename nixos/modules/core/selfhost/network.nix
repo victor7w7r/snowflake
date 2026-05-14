@@ -10,19 +10,14 @@
   networking = {
     interfaces."enp1s0".wakeOnLan.enable = true;
     useNetworkd = true;
-    nftables.enable = true;
     firewall = {
       trustedInterfaces = [
         "brint"
         "br0"
       ];
-      extraInputRules = ''
-        type filter hook input priority 0; policy accept;
-      '';
-      extraForwardRules = ''
-        type filter hook forward priority 0; policy accept;
-        iifname "brint" oifname "br0" accept
-        iifname "br0" oifname "brint" ct state established,related accept
+      extraCommands = ''
+        iptables -A FORWARD -i brint -o br0 -j ACCEPT
+        iptables -A FORWARD -i br0 -o brint -m state --state RELATED,ESTABLISHED -j ACCEPT
       '';
     };
     useDHCP = false;
