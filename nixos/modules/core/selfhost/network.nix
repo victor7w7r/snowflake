@@ -16,9 +16,9 @@
         "brint"
         "br0"
       ];
-      extraCommands = ''
-        iptables -A FORWARD -i brint -o br0 -j ACCEPT
-        iptables -A FORWARD -i br0 -o brint -m state --state RELATED,ESTABLISHED -j ACCEPT
+      extraForwardRules = ''
+        iifname "brint" oifname "br0" accept
+        iifname "br0" oifname "brint" ct state established,related accept
       '';
     };
     useDHCP = false;
