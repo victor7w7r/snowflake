@@ -42,7 +42,7 @@
       {
         system.stateVersion = "26.05";
         boot.isContainer = true;
-
+        boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
         networking = {
           defaultGateway = "10.10.0.1";
           useHostResolvConf = lib.mkForce false;

@@ -115,30 +115,31 @@ in
     EQUALIZER="$CONFIG_DIR/equalizerrc"
     FILTER="$CONFIG_DIR/filterrc"
     PITCH="$CONFIG_DIR/pitchrc"
+    $DRY_RUN_CMD chmod -R 644 "$CONFIG_DIR"
 
-    if [ ! -f "$GENERAL" ]; then
-      $DRY_RUN_CMD cat <<EOF > "$GENERAL"
-      ${general}
-      EOF
-      $DRY_RUN_CMD cat <<EOF > "$BASS"
-      ${bass}
-      EOF
-      $DRY_RUN_CMD cat <<EOF > "$LOUDNESS"
-      ${loudness}
-      EOF
-      $DRY_RUN_CMD cat <<EOF > "$CRYSTALIZER"
-      ${crystalizer}
-      EOF
-      $DRY_RUN_CMD cat <<EOF > "$EQUALIZER"
-      ${equalizer}
-      EOF
-      $DRY_RUN_CMD cat <<EOF > "$FILTER"
-      ${filterSound}
-      EOF
-      $DRY_RUN_CMD cat <<EOF > "$PITCH"
-      ${pitch}
-      EOF
-      $DRY_RUN_CMD chmod -R 644 "$CONFIG_DIR"
+    if [ -f "$GENERAL" ]; then
+      exit 0
     fi
+    $DRY_RUN_CMD cat <<EOA > "$GENERAL"
+    ${general}
+    EOA
+    $DRY_RUN_CMD cat <<EOB > "$BASS"
+    ${bass}
+    EOB
+    $DRY_RUN_CMD cat <<EOC > "$LOUDNESS"
+    ${loudness}
+    EOC
+    $DRY_RUN_CMD cat <<EOD > "$CRYSTALIZER"
+    ${crystalizer}
+    EOD
+    $DRY_RUN_CMD cat <<EOE > "$EQUALIZER"
+    ${equalizer}
+    EOE
+    $DRY_RUN_CMD cat <<EOF > "$FILTER"
+    ${filterSound}
+    EOF
+    $DRY_RUN_CMD cat <<EOG > "$PITCH"
+    ${pitch}
+    EOG
   '';
 }

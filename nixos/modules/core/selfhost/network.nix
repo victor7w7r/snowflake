@@ -16,6 +16,10 @@
         "br0"
       ];
       extraCommands = ''
+        iptables -A FORWARD -i brint -j ACCEPT
+        iptables -A FORWARD -o brint -j ACCEPT
+        iptables -A FORWARD -i seafile-net -j ACCEPT
+        iptables -A FORWARD -o seafile-net -j ACCEPT
         iptables -A FORWARD -i brint -o br0 -j ACCEPT
         iptables -A FORWARD -i br0 -o brint -m state --state RELATED,ESTABLISHED -j ACCEPT
       '';
