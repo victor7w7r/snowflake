@@ -1,27 +1,27 @@
 { ... }:
 {
   #docker exec -it seafile python3 /scripts/start.py
-  #systemctl restart docker-seafile.service
   containers.cloud = {
     autoStart = true;
     privateNetwork = true;
+    enableTun = true;
     hostBridge = "brint";
     localAddress = "10.10.0.2/24";
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
     ];
-    forwardPorts = [
+    extraFlags = [
+      "--private-users-ownership=chown"
+    ];
+    /*
+      forwardPorts = [
       {
         containerPort = 80;
         hostPort = 80;
         protocol = "tcp";
       }
-    ];
-    extraFlags = [
-      "--capability=CAP_NET_ADMIN"
-      "--capability=CAP_SYS_ADMIN"
-    ];
-
+      ];
+    */
     bindMounts = {
       "/opt/seafile-mysql/db" = {
         hostPath = "/nix/persist/cloud/seafile/mysql";
@@ -32,7 +32,20 @@
         isReadOnly = false;
       };
     };
-
+    allowedDevices = [
+      {
+        node = "/dev/fuse";
+        modifier = "rwm";
+      }
+      {
+        node = "/dev/mapper/control";
+        modifier = "rw";
+      }
+      {
+        node = "/dev/console";
+        modifier = "rwm";
+      }
+    ];
     config =
       { pkgs, lib, ... }:
       {
@@ -47,20 +60,47 @@
         networking = {
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
+          nameservers = [
+            "1.1.1.1"
+          ];
         };
         services.resolved.enable = true;
-        systemd.tmpfiles.rules = [
-          "d /opt/seafile-data 0770 1000 1000 - -"
-        ];
+        services.journald.extraConfig = "SystemMaxUse=100M";
+        systemd = {
+          tmpfiles.rules = [
+            "d /opt/seafile-data 0770 1000 1000 - -"
+          ];
 
-        virtualisation.podman = {
+          services.create-seafile-net = {
+            serviceConfig.Type = "oneshot";
+            wantedBy = [
+              "docker-seafile-mysql.service"
+              "docker-seafile.service"
+            ];
+            script = ''
+              check=$(${pkgs.docker}/bin/docker network ls -qf name=seafile-net)
+              if [ -z "$check" ]; then
+                ${pkgs.docker}/bin/docker network create seafile-net
+              fi
+            '';
+          };
+        };
+
+        virtualisation.docker = {
           enable = true;
-          defaultNetwork.settings.dns_enabled = true;
+          autoPrune = {
+            enable = true;
+            dates = "weekly";
+          };
+          rootless = {
+            enable = false;
+            setSocketVariable = true;
+          };
         };
 
         virtualisation.oci-containers.containers = {
           "seafile-mysql" = {
-            image = "mariadb:10.11";
+            image = "docker.io/mariadb:10.11";
             environment = {
               MYSQL_ROOT_PASSWORD = "db_dev";
               MYSQL_LOG_CONSOLE = "true";
@@ -71,7 +111,7 @@
           };
 
           "seafile-memcached" = {
-            image = "memcached:1.6.18";
+            image = "docker.io/memcached:1.6.18";
             cmd = [
               "memcached"
               "-m"
@@ -83,7 +123,7 @@
           };
 
           "seafile" = {
-            image = "seafileltd/seafile-mc:11.0-latest";
+            image = "docker.io/seafileltd/seafile-mc:11.0-latest";
             autoStart = true;
             extraOptions = [
               "--network=host"
