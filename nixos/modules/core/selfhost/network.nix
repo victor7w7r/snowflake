@@ -40,9 +40,16 @@
   systemd.network = {
     enable = true;
     netdevs = {
-      "br0".netdevConfig = {
-        Name = "br0";
-        Kind = "bridge";
+      "br0" = {
+        netdevConfig = {
+          Name = "br0";
+          Kind = "bridge";
+        };
+        bridgeConfig = {
+          HelloTimeSec = "1";
+          ForwardDelaySec = "0";
+          STP = false;
+        };
       };
       "20-br-int".netdevConfig = {
         Name = "brint";
@@ -61,11 +68,7 @@
       "10-lan-bridge" = {
         matchConfig.Name = "br0";
         linkConfig.RequiredForOnline = "routable";
-        bridgeConfig = {
-          HelloTimeSec = "1";
-          ForwardDelaySec = "0";
-          STP = false;
-        };
+        networkConfig.IPv6AcceptRA = true;
         address = [ "192.168.1.100/24" ];
         gateway = [ "192.168.1.1" ];
       };
