@@ -136,6 +136,9 @@ in
       '';
     };
     supportedFilesystems = [ "bcachefs" ];
+    extraModprobeConfig = ''
+      options r8169 disable_aspm=1
+    '';
     initrd = {
       availableKernelModules = [ "i915" ];
       kernelModules = [

@@ -52,21 +52,22 @@
     networks = {
       "10-lan" = {
         matchConfig.Name = [ "enp1s0" ];
-        linkConfig.RequiredForOnline = "yes";
+        linkConfig = {
+          RequiredForOnline = "yes";
+          LinkDownOnPowerOff = "no";
+        };
         networkConfig.Bridge = "br0";
       };
       "10-lan-bridge" = {
         matchConfig.Name = "br0";
         linkConfig.RequiredForOnline = "routable";
+        bridgeConfig = {
+          HelloTimeSec = "1";
+          ForwardDelaySec = "0";
+          STP = false;
+        };
         address = [ "192.168.1.100/24" ];
         gateway = [ "192.168.1.1" ];
-        networkConfig = {
-          IPv6AcceptRA = true;
-          DNS = [
-            "1.1.1.1"
-            "8.8.8.8"
-          ];
-        };
       };
 
       "20-brint-bridge" = {
