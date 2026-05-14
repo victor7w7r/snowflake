@@ -45,11 +45,13 @@
 
         networking = {
           defaultGateway = "10.10.0.1";
-          useHostResolvConf = lib.mkForce false;
-          nameservers = [
+          useHostResolvConf = lib.mkForce true;
+          /*
+            nameservers = [
             "1.1.1.1"
             "8.8.8.8"
-          ];
+            ];
+          */
           firewall = {
             enable = true;
             allowedTCPPorts = [
@@ -61,7 +63,7 @@
           };
         };
 
-        services.resolved.enable = true;
+        #services.resolved.enable = true;
 
         systemd = {
           tmpfiles.rules = [
