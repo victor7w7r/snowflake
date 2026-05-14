@@ -18,11 +18,16 @@
         80
         8443
       ];
+      extraCommands = ''
+        iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o br0 -j MASQUERADE
+        iptables -A FORWARD -i brint -j ACCEPT
+        iptables -A FORWARD -o brint -m state --state RELATED,ESTABLISHED -j ACCEPT
+      '';
     };
     useDHCP = false;
     nat = {
       enable = true;
-      externalInterface = "br0";
+      externalInterface = "enp1s0";
       internalIPs = [ "10.10.0.0/24" ];
       internalInterfaces = [
         "ve-+"

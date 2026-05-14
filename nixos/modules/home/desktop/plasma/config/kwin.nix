@@ -34,6 +34,10 @@
       Effect-translucency.MoveResize = 100;
       Effect-translucency.PopupMenus = 18;
       Effect-translucency.TornOffMenus = 19;
+      EdgeBarrier = {
+        CornerBarrier = false;
+        EdgeBarrier = 0;
+      };
       Input.TabletMode = "off";
       Plugins = lib.mkForce {
         blurEnabled = false;

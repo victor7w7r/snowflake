@@ -10,6 +10,12 @@
           && "$TERMINAL_EMULATOR" != "JetBrains-JediTerm" ]]; then
           exec tmux new-session -A -s default
       fi
+
+      if [[ -n "$KITTY_PID" ]]; then
+        alias ssh="kitty +kitten ssh $@"
+        alias ssh-compat="TERM=xterm-256color \ssh"
+        alias adb="kitty +kitten adb $@"
+      fi
     '')
     (lib.mkOrder 550 ''
       unsetopt BEEP
