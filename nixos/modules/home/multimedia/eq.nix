@@ -116,7 +116,7 @@ in
     FILTER="$CONFIG_DIR/filterrc"
     PITCH="$CONFIG_DIR/pitchrc"
 
-    if [ ! -d $CONFIG_DIR ]; then
+    if [ ! -f "$GENERAL" ]; then
       $DRY_RUN_CMD cat <<EOF > "$GENERAL"
       ${general}
       EOF
