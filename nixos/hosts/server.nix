@@ -138,24 +138,27 @@ in
     initrd = {
       availableKernelModules = [ "i915" ];
       kernelModules = [
+        "btrfs"
+        "br_netfilter"
+        "bcache"
+        "cryptd"
         "cpufreq_reflex"
+        "dm_crypt"
         "mmc_block"
-        "overlay"
         "md_mod"
         "raid456"
-        "btrfs"
-        "sdhci_pci"
-        "bcache"
+        "ahci"
         "usb_storage"
-        "br_netfilter"
         "uas"
         "uhci_hcd"
         "ehci_hcd"
         "xhci_pci"
-        "usbcore"
         "sdhci_acpi"
         "sdhci"
+        "sdhci_pci"
         "tpm-tis"
+        "usbcore"
+        "zram"
       ];
       services.lvm.enable = true;
       systemd = {
