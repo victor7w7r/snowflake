@@ -29,7 +29,7 @@
     };
 
     config =
-      { ... }:
+      { pkgs, ... }:
       {
         system.stateVersion = "26.05";
         boot.isContainer = true;
@@ -41,11 +41,24 @@
             "8.8.8.8"
           ];
         };
+        environment.systemPackages = with pkgs; [
+          fuse-overlayfs
+          utillinux
+          dbus
+        ];
         services = {
           resolved.enable = true;
           journald.extraConfig = "SystemMaxUse=100M";
         };
         systemd.tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
+
+        virtualisation.podman = {
+          enable = true;
+          extraPackages = with pkgs; [
+            conmon
+            fuse-overlayfs
+          ];
+        };
 
         virtualisation.oci-containers.containers = {
           "seafile-mysql" = {
