@@ -1,20 +1,13 @@
 { ... }:
-
 {
   hardware.graphics.enable = true;
 
   containers.llm = {
     autoStart = false;
     privateNetwork = true;
-    hostBridge = "brint";
-    localAddress = "10.10.0.4/24";
-    forwardPorts = [
-      {
-        containerPort = 3500;
-        hostPort = 3500;
-        protocol = "tcp";
-      }
-    ];
+    hostAddress = "192.168.100.1";
+    localAddress = "192.168.100.5";
+
     bindMounts."/dev/dri" = {
       hostPath = "/dev/dri";
       isReadOnly = false;

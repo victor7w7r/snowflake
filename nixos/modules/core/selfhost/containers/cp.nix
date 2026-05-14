@@ -1,35 +1,12 @@
-{ pkgs, ... }:
+{ ... }:
 {
   containers.cp = {
     autoStart = false;
     privateNetwork = true;
-    hostBridge = "brint";
-    localAddress = "10.10.0.6/24";
+    hostAddress = "192.168.100.1";
+    localAddress = "192.168.100.7";
     additionalCapabilities = [
-      "CAP_SYS_ADMIN"
-      "CAP_NET_ADMIN"
-      "CAP_MKNOD"
-      "CAP_SYS_CHROOT"
-      "CAP_SETGID"
-      "CAP_SETUID"
-      "CAP_AUDIT_WRITE"
-    ];
-    forwardPorts = [
-      {
-        containerPort = 80;
-        hostPort = 80;
-        protocol = "tcp";
-      }
-      {
-        containerPort = 6112;
-        hostPort = 6112;
-        protocol = "tcp";
-      }
-      {
-        containerPort = 7002;
-        hostPort = 7002;
-        protocol = "tcp";
-      }
+      ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
     ];
     bindMounts = {
       "/opt/wand/houdini" = {
@@ -42,14 +19,8 @@
       };
     };
 
-    extraFlags = [
-      "--system-call-filter=@keyring"
-      "--system-call-filter=@memlock"
-      "--system-call-filter=bpf"
-    ];
-
     config =
-      { lib, ... }:
+      { pkgs, lib, ... }:
       {
         system.stateVersion = "26.05";
         boot.isContainer = true;

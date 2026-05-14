@@ -13,16 +13,10 @@
     interfaces."enp1s0".wakeOnLan.enable = true;
     firewall = {
       trustedInterfaces = [
-        "brint"
         "vb-+"
         "ve-+"
         "br0"
       ];
-      extraCommands = ''
-        iptables -A FORWARD -i brint -o br0 -j ACCEPT
-        iptables -A FORWARD -i br0 -o brint -m state --state RELATED,ESTABLISHED -j ACCEPT
-        iptables -A FORWARD -i brint -o brint -j ACCEPT
-      '';
     };
     nat = {
       enable = true;
@@ -30,7 +24,6 @@
       internalInterfaces = [
         "ve-+"
         "vb-+"
-        "brint"
       ];
     };
     nameservers = [
@@ -41,22 +34,16 @@
 
   systemd.network = {
     enable = true;
-    netdevs = {
-      "br0" = {
-        netdevConfig = {
-          Name = "br0";
-          Kind = "bridge";
-        };
-      };
-      "20-br-int".netdevConfig = {
-        Name = "brint";
+    netdevs."br0" = {
+      netdevConfig = {
+        Name = "br0";
         Kind = "bridge";
       };
     };
+
     networks = {
       "10-lan" = {
-        matchConfig.Name = [ "enp1s0" ];
-        linkConfig.RequiredForOnline = "yes";
+        matchConfig.Name = "enp1s0";
         networkConfig.Bridge = "br0";
       };
       "10-lan-bridge" = {
@@ -66,23 +53,6 @@
         networkConfig.ConfigureWithoutCarrier = true;
         address = [ "192.168.1.100/24" ];
         gateway = [ "192.168.1.1" ];
-      };
-
-      "20-brint-bridge" = {
-        matchConfig.Name = "brint";
-        address = [ "10.10.0.1/24" ];
-        bridgeConfig = { };
-        networkConfig.ConfigureWithoutCarrier = true;
-        linkConfig.RequiredForOnline = "no";
-        /*
-          networkConfig = {
-          IPv6AcceptRA = true;
-          DNS = [
-            "1.1.1.1"
-            "8.8.8.8"
-          ];
-          };
-        */
       };
     };
   };

@@ -4,24 +4,11 @@
   containers.cloud = {
     autoStart = true;
     privateNetwork = true;
-    enableTun = true;
-    hostBridge = "brint";
-    localAddress = "10.10.0.2/24";
+    hostAddress = "192.168.100.1";
+    localAddress = "192.168.100.2";
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
     ];
-    extraFlags = [
-      "--private-users-ownership=chown"
-    ];
-    /*
-      forwardPorts = [
-      {
-        containerPort = 80;
-        hostPort = 80;
-        protocol = "tcp";
-      }
-      ];
-    */
     bindMounts = {
       "/opt/seafile-mysql/db" = {
         hostPath = "/nix/persist/cloud/seafile/mysql";
@@ -32,20 +19,7 @@
         isReadOnly = false;
       };
     };
-    allowedDevices = [
-      {
-        node = "/dev/fuse";
-        modifier = "rwm";
-      }
-      {
-        node = "/dev/mapper/control";
-        modifier = "rw";
-      }
-      {
-        node = "/dev/console";
-        modifier = "rwm";
-      }
-    ];
+
     config =
       { pkgs, lib, ... }:
       {
@@ -62,6 +36,7 @@
           useHostResolvConf = lib.mkForce false;
           nameservers = [
             "1.1.1.1"
+            "8.8.8.8"
           ];
         };
         services.resolved.enable = true;

@@ -3,15 +3,8 @@
   containers.minecraft = {
     autoStart = false;
     privateNetwork = true;
-    hostBridge = "brint";
-    localAddress = "10.10.0.5/24";
-    forwardPorts = [
-      {
-        containerPort = 25565;
-        hostPort = 25565;
-        protocol = "tcp";
-      }
-    ];
+    hostAddress = "192.168.100.1";
+    localAddress = "192.168.100.6";
     bindMounts = {
       "/var/lib/minecraft" = {
         hostPath = "/nix/persist/containers/minecraft";

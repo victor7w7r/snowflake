@@ -3,28 +3,10 @@
   containers.git = {
     autoStart = true;
     privateNetwork = true;
-    hostBridge = "brint";
-    localAddress = "10.10.0.3/24";
+    hostAddress = "192.168.100.1";
+    localAddress = "192.168.100.4";
     additionalCapabilities = [
-      "CAP_SYS_ADMIN"
-      "CAP_NET_ADMIN"
-      "CAP_MKNOD"
-      "CAP_SYS_CHROOT"
-      "CAP_SETGID"
-      "CAP_SETUID"
-      "CAP_AUDIT_WRITE"
-    ];
-    forwardPorts = [
-      {
-        containerPort = 6610;
-        hostPort = 6610;
-        protocol = "tcp";
-      }
-      {
-        containerPort = 6611;
-        hostPort = 6611;
-        protocol = "tcp";
-      }
+      ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
     ];
     bindMounts = {
       "/opt/onedev" = {
@@ -32,12 +14,6 @@
         isReadOnly = false;
       };
     };
-
-    extraFlags = [
-      "--system-call-filter=@keyring"
-      "--system-call-filter=@memlock"
-      "--system-call-filter=bpf"
-    ];
 
     config =
       { lib, ... }:
@@ -48,7 +24,6 @@
           kernel.sysctl."net.ipv4.ip_forward" = 1;
         };
         networking = {
-          defaultGateway = "10.10.0.1";
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
           nameservers = [

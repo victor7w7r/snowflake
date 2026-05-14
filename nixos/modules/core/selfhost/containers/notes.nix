@@ -3,35 +3,11 @@
   containers.notes = {
     autoStart = true;
     privateNetwork = true;
-    hostBridge = "brint";
-    localAddress = "10.10.0.1/24";
+    hostAddress = "192.168.100.1";
+    localAddress = "192.168.100.3";
     additionalCapabilities = [
-      "CAP_SYS_ADMIN"
-      "CAP_NET_ADMIN"
-      "CAP_MKNOD"
-      "CAP_SYS_CHROOT"
-      "CAP_SETGID"
-      "CAP_SETUID"
-      "CAP_AUDIT_WRITE"
+      ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
     ];
-    forwardPorts = [
-      {
-        containerPort = 5984;
-        hostPort = 5984;
-        protocol = "tcp";
-      }
-      {
-        containerPort = 8080;
-        hostPort = 8080;
-        protocol = "tcp";
-      }
-      {
-        containerPort = 8443;
-        hostPort = 8443;
-        protocol = "tcp";
-      }
-    ];
-
     bindMounts = {
       "/opt/couchdb/data" = {
         hostPath = "/nix/persist/containers/notes/data";
@@ -50,12 +26,6 @@
       };
     };
 
-    extraFlags = [
-      "--system-call-filter=@keyring"
-      "--system-call-filter=@memlock"
-      "--system-call-filter=bpf"
-    ];
-
     config =
       { pkgs, lib, ... }:
       {
@@ -66,7 +36,6 @@
         };
 
         networking = {
-          defaultGateway = "10.10.0.1";
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
           nameservers = [
