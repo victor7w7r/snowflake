@@ -27,6 +27,10 @@
         hostPath = config.sops.secrets.seafile-db-env.path;
         isReadOnly = true;
       };
+      "/opt/seafile-data/seafile/conf/.env" = {
+        hostPath = config.sops.secrets.seafile-db-env.path;
+        isReadOnly = true;
+      };
       "/opt/seafile-data" = {
         hostPath = "/nix/persist/cloud/seafile/shared";
         isReadOnly = false;
