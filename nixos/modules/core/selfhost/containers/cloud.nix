@@ -96,6 +96,7 @@
             autoStart = true;
             extraOptions = [
               "--network=seafile-net"
+              "--dns=8.8.8.8"
               "--privileged"
             ];
             ports = [ "80:80" ];
