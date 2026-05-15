@@ -87,7 +87,6 @@
         virtualisation.podman = {
           enable = true;
           extraPackages = with pkgs; [
-            conmon
             fuse-overlayfs
           ];
         };
