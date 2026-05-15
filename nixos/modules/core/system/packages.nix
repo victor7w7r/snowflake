@@ -43,6 +43,8 @@
       progress
       pv
       rage
+      seadrive-fuse
+
       #sampler
       ssh-to-age
       sbctl

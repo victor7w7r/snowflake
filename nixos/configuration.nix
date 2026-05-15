@@ -150,6 +150,8 @@ in
     age.sshKeyPaths = [ "/nix/persist/etc/ssh/ssh_host_ed25519_key" ];
     secrets = {
       tunnel = { };
+      seafile-env = { };
+      seafile-db-env = { };
       cloudflare-token = { };
       password-db = { };
       seckey-d = { };

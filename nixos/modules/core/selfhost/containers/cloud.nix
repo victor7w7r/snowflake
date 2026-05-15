@@ -1,9 +1,5 @@
-{ lib, pkgs, ... }:
+{ config, lib, ... }:
 {
-  #docker exec -it seafile python3 /scripts/start.py
-  environment.systemPackages = with pkgs; [
-    seadrive-fuse
-  ];
   containers.cloud = {
     autoStart = true;
     privateNetwork = true;
@@ -22,6 +18,14 @@
       "/opt/seafile-mysql/db" = {
         hostPath = "/nix/persist/cloud/seafile/mysql";
         isReadOnly = false;
+      };
+      "/etc/seafile-env" = {
+        hostPath = config.sops.secrets.seafile-env.path;
+        isReadOnly = true;
+      };
+      "/etc/seafile-db-env" = {
+        hostPath = config.sops.secrets.seafile-db-env.path;
+        isReadOnly = true;
       };
       "/opt/seafile-data" = {
         hostPath = "/nix/persist/cloud/seafile/shared";
@@ -75,11 +79,7 @@
         virtualisation.oci-containers.containers = {
           "seafile-mysql" = {
             image = "mariadb:10.11";
-            environment = {
-              MYSQL_ROOT_PASSWORD = "db_dev";
-              MYSQL_LOG_CONSOLE = "true";
-              MARIADB_AUTO_UPGRADE = "1";
-            };
+            environmentFiles = [ "/etc/seafile-db-env" ];
             volumes = [ "/opt/seafile-mysql/db:/var/lib/mysql" ];
             extraOptions = [ "--network=seafile-net" ];
           };
@@ -103,15 +103,7 @@
               "--privileged"
             ];
             ports = [ "80:80" ];
-            environment = {
-              DB_HOST = "seafile-mysql";
-              DB_ROOT_PASSWD = "db_dev";
-              TIME_ZONE = "America/Guayaquil";
-              SEAFILE_ADMIN_EMAIL = "arkano036@gmail.com";
-              SEAFILE_ADMIN_PASSWORD = "asecret";
-              #SEAFILE_SERVER_HOSTNAME
-              #SEAFILE_SERVER_LETSENCRYPT
-            };
+            environmentFiles = [ "/etc/seafile-env" ];
             dependsOn = [
               "seafile-mysql"
               "seafile-memcached"
