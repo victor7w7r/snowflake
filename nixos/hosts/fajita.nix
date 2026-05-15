@@ -69,6 +69,7 @@ in
   boot = {
     kernelPackages = kernel.packages;
     consoleLogLevel = 4;
+  }
 /*    blacklistedKernelModules = [
       "qcrypto"
       "ipa"
