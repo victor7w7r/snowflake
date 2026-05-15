@@ -7,46 +7,56 @@ let
   configure = pkgs.callPackage ./configure.nix { inherit kernelData kernel; };
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
   patches = configure.passthru.patches;
-  kernel =
-    (pkgs.linuxManualConfig {
-      inherit (configure) src;
-      config = (import ./config.aarch64-linux.nix);
-      configfile = configure;
-      allowImportFromDerivation = false;
-      version = "${configure.passthru.version}${configure.passthru.localVer}";
-      modDirVersion = "${configure.passthru.version}${configure.passthru.localVer}";
+  kconfigFile = pkgs.writeText "kconfig-mobile" (
+    lib.concatStringsSep "\n" (
+      lib.mapAttrsToList (name: value: "${name}=${value}") (import ./config.aarch64-linux.nix)
+    )
+  );
+  build =
+    (pkgs.mobile-nixos.kernel-builder {
+      inherit (configure) patches src;
+      configfile = ./sdm845.config;
+      isModular = false;
+      enableRemovingWerror = true;
 
-      kernelPatches = map (file: {
-        name = baseNameOf (toString file);
-        patch = file;
-      }) patches;
+      version = "${configure.version}${configure.passthru.localVer}";
+      modDirVersion = "${configure.version}${configure.passthru.localVer}";
+      #makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
+      isCompressed = "gz";
 
-      extraMakeFlags = [
-        "LOCALVERSION=${configure.passthru.localVer}"
-        "NIX_CC_WRAPPER_SUPPRESS_TARGET_WARNING=1"
-        "NIX_ENFORCE_NO_NATIVE=0"
-        "KCFLAGS=-Wno-unknown-warning-option -Wno-ignored-optimization-argument"
-        "dtbs"
-      ];
-    }).overrideAttrs
+     /* postInstall = ''
+        mkdir -p $out
+
+        cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
+
+        ln -sv Image.gz "$out/vmlinuz" || true
+        cp .config $out/config-${configure.version}
+
+        depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
+      '';*/
+    })
+
+    .overrideAttrs
       (attrs: {
-        nativeBuildInputs = (attrs.nativeBuildInputs or [ ]);
-        postPatch = ''
-          sed -i 's/localversion_next=.*//' scripts/setlocalversion
-          rm -rf  localversion-next
-          echo "" > .scmversion
-        '';
         passthru = attrs.passthru // {
-          isModular = false;
           inherit kconfigToNix configure;
-          features = {
-            efiBootStub = true;
-            isModular = false;
-          };
         };
+        /*
+          installFlags = [ "INSTALL_MOD_PATH=$out" ];
+
+          configurePhase = ''
+            runHook preConfigure
+
+            cp ${kconfigFile} .config
+            chmod +w .config
+            make olddefconfig
+
+            runHook postConfigure
+            '';
+        */
       });
 in
 {
-  inherit kernel;
-  packages = pkgs.linuxPackagesFor kernel;
+  inherit build;
+  packages = pkgs.linuxPackagesFor build;
 }

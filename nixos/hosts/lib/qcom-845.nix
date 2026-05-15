@@ -5,29 +5,6 @@
   ...
 }:
 {
-  /*
-    nixpkgs.overlays = [
-        (
-          pkgs: prev:
-          let
-            mobile-pkgs =
-          in
-          {
-            pd-mapper = pkgs.callPackage "${inputs.mobile-nixos}/overlay/qrtr/pd-mapper.nix" { };
-            tqftpserv = pkgs.callPackage "${inputs.mobile-nixos}/overlay/qrtr/tqftpserv.nix" { };
-            rmtfs = pkgs.callPackage "${inputs.mobile-nixos}/overlay/qrtr/rmtfs.nix" {
-              inherit (mobile-pkgs) qmic;
-            };
-            adbd = pkgs.callPackage "${inputs.mobile-nixos}/overlay/adbd" {
-              libhybris = pkgs.callPackage "${inputs.mobile-nixos}/overlay/libhybris" {
-                inherit (mobile-pkgs) android-headers;
-              };
-            };
-          }
-        )
-    ];
-  */
-
   imports = [
     "${inputs.mobile-nixos}/modules/quirks/qualcomm/sdm845-modem.nix"
     "${inputs.mobile-nixos}/modules/quirks/audio.nix"
@@ -44,8 +21,65 @@
 
   mobile.quirks.qualcomm.sdm845-modem.enable = true;
   mobile.quirks.audio.alsa-ucm-meld = true;
+  mobile.usb = {
+    mode = "gadgetfs";
+    idVendor = lib.mkDefault "18D1";
+    idProduct = lib.mkDefault "D001";
+    gadgetfs.functions = {
+      adb = "ffs.adb";
+      mass_storage = "mass_storage.0";
+      rndis = "rndis.usb0";
+    };
+  };
 
-  nixpkgs.config.allowUnfreePredicate =
+  mobile = {
+    hardware = {
+      soc = "qualcomm-sdm845";
+      ram = 8192;
+      screen.width = 1080;
+    };
+
+    boot.stage-1 = {
+      compression = "xz";
+      kernel.package = (pkgs.callPackage ../../kernel/sdm845 { inherit kernelData; }).build;
+      firmware = [
+        (pkgs.runCommand "initrd-firmware" { } ''
+          cp -vrf ${config.mobile.device.firmware} $out
+          chmod -R +w $out
+          find $out/lib/firmware/qcom/sdm845 -name "modem.mbn" -delete -print
+          cp -vf ${pkgs.linux-firmware}/lib/firmware/qcom/{a630_sqe.fw,a630_gmu.bin} $out/lib/firmware/qcom
+        '')
+      ];
+    };
+
+    device = {
+      identity.manufacturer = "OnePlus";
+      firmware = pkgs.callPackage "${inputs.mobile-nixos}/devices/oneplus-enchilada/firmware" { };
+    };
+
+    system = {
+      type = "android";
+      android = {
+        ab_partitions = lib.mkDefault true;
+        bootimg.flash = {
+          offset_base = "0x00000000";
+          offset_kernel = "0x00008000";
+          offset_ramdisk = "0x01000000";
+          offset_second = "0x00000000";
+          offset_tags = "0x00000100";
+          pagesize = "4096";
+        };
+        appendDTB = lib.mkDefault [
+          "${
+            pkgs.callPackage ../../kernel/sdm845/dtb.nix { inherit kernelData device; }
+          }/sdm845-oneplus-${device}.dtb"
+        ];
+      };
+    };
+  };
+
+
+  /*nixpkgs.config.allowUnfreePredicate =
     pkg:
     builtins.elem (lib.getName pkg) [
       "firmware-oneplus-sdm845"
@@ -54,7 +88,7 @@
   hardware.firmware = lib.mkAfter [ (pkgs.callPackage ../custom/oneplus.nix { }) ];
 
   systemd.services.ModemManager.serviceConfig.ExecStart = [
-    "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"
+  "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"*/
   ];
 
 }

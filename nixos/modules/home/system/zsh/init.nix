@@ -14,7 +14,6 @@
       if [[ -n "$KITTY_PID" ]]; then
         alias ssh="kitty +kitten ssh $@"
         alias ssh-compat="TERM=xterm-256color \ssh"
-        alias adb="kitty +kitten adb $@"
       fi
     '')
     (lib.mkOrder 550 ''
