@@ -38,7 +38,11 @@
         services = {
           resolved.enable = true;
           journald.extraConfig = "SystemMaxUse=100M";
-          create-seafile-net = {
+        };
+
+        systemd = {
+          tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
+          services.create-seafile-net = {
             serviceConfig.Type = "oneshot";
             wantedBy = [
               "docker-seafile-mysql.service"
@@ -52,10 +56,6 @@
             '';
           };
         };
-
-        systemd.tmpfiles.rules = [
-          "d /opt/seafile-data 0770 1000 1000 - -"
-        ];
 
         virtualisation.docker = {
           enable = true;
