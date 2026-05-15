@@ -18,6 +18,7 @@
           media-downloader
           mtr-gui
           music-discord-rpc
+          seafile-client
           #(pkgs.callPackage ./custom/jdownloader.nix { })
         ]
       else

@@ -115,7 +115,6 @@ in
     EQUALIZER="$CONFIG_DIR/equalizerrc"
     FILTER="$CONFIG_DIR/filterrc"
     PITCH="$CONFIG_DIR/pitchrc"
-    $DRY_RUN_CMD chmod -R 644 "$CONFIG_DIR"
 
     if [ -f "$GENERAL" ]; then
       exit 0

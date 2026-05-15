@@ -44,7 +44,7 @@
       pv
       rage
       seadrive-fuse
-
+      seafile-shared
       #sampler
       ssh-to-age
       sbctl
