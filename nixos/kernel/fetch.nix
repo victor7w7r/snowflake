@@ -98,7 +98,7 @@
   };
 
   sdm845 = pkgs.fetchFromGitLab {
-    user = kernelData.sdm845.user;
+    owner = kernelData.sdm845.user;
     repo = kernelData.sdm845.repo;
     rev = kernelData.sdm845.rev;
     hash = kernelData.sdm845.hash;
