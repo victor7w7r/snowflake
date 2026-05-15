@@ -3,11 +3,12 @@
   containers.cp = {
     autoStart = false;
     privateNetwork = true;
+    enableTun = true;
+    ephemeral = false;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.7";
     extraFlags = [
-      "--capability=CAP_NET_ADMIN"
-      "--capability=CAP_SYS_ADMIN"
+      "--private-users-ownership=chown"
     ];
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
@@ -29,13 +30,8 @@
         system.stateVersion = "26.05";
         boot.isContainer = true;
         networking = {
-          defaultGateway = "10.10.0.1";
-          useHostResolvConf = lib.mkForce false;
-          nameservers = [
-            "1.1.1.1"
-            "8.8.8.8"
-          ];
           firewall.enable = false;
+          useHostResolvConf = lib.mkForce false;
         };
 
         environment.systemPackages = with pkgs; [
@@ -100,17 +96,15 @@
           };
         };
 
-        virtualisation = {
-          docker = {
+        virtualisation.docker = {
+          enable = true;
+          autoPrune = {
             enable = true;
-            daemon.settings = {
-              "bridge" = "none";
-              "storage-driver" = "overlay2";
-              dns = [
-                "8.8.8.8"
-                "1.1.1.1"
-              ];
-            };
+            dates = "weekly";
+          };
+          rootless = {
+            enable = false;
+            setSocketVariable = true;
           };
         };
       };

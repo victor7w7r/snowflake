@@ -6,8 +6,7 @@
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.3";
     extraFlags = [
-      "--capability=CAP_NET_ADMIN"
-      "--capability=CAP_SYS_ADMIN"
+      "--private-users-ownership=chown"
     ];
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
@@ -35,16 +34,10 @@
       {
         system.stateVersion = "26.05";
         boot.isContainer = true;
-
         networking = {
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
-          nameservers = [
-            "1.1.1.1"
-            "8.8.8.8"
-          ];
         };
-
         services = {
           resolved.enable = true;
           journald.extraConfig = "SystemMaxUse=100M";
@@ -96,6 +89,19 @@
           "d /web/config 0770 couchdb couchdb - -"
         ];
 
+        virtualisation.docker = {
+          enable = true;
+          autoPrune = {
+            enable = true;
+            dates = "weekly";
+          };
+          rootless = {
+            enable = false;
+            setSocketVariable = true;
+          };
+        };
+
+        virtualisation.oci-containers.backend = "docker";
         virtualisation.oci-containers.containers."obsidian-web" = {
           image = "docker.io/sytone/obsidian-remote:latest";
           autoStart = true;

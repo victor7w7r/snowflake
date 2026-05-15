@@ -3,15 +3,17 @@
   containers.git = {
     autoStart = true;
     privateNetwork = true;
+    enableTun = true;
+    ephemeral = false;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.4";
     extraFlags = [
-      "--capability=CAP_NET_ADMIN"
-      "--capability=CAP_SYS_ADMIN"
+      "--private-users-ownership=chown"
     ];
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
     ];
+
     bindMounts = {
       "/opt/onedev" = {
         hostPath = "/nix/persist/containers/git";
@@ -27,17 +29,28 @@
         networking = {
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
-          nameservers = [
-            "1.1.1.1"
-            "8.8.8.8"
-          ];
         };
         services = {
           resolved.enable = true;
           journald.extraConfig = "SystemMaxUse=100M";
         };
+        systemd.tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
+
+        virtualisation.docker = {
+          enable = true;
+          autoPrune = {
+            enable = true;
+            dates = "weekly";
+          };
+          rootless = {
+            enable = false;
+            setSocketVariable = true;
+          };
+        };
+
+        virtualisation.oci-containers.backend = "docker";
         virtualisation.oci-containers.containers.onedev = {
-          image = "docker.io/1dev/server";
+          image = "1dev/server";
           autoStart = true;
           ports = [
             "6610:6610"
@@ -53,6 +66,5 @@
           ];
         };
       };
-
   };
 }
