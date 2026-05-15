@@ -1,14 +1,16 @@
 { lib, ... }:
 {
   #podman exec -it seafile python3 /scripts/start.py
-  systemd.services."container@cloud".environment.SYSTEMD_NSPAWN_UNIFIED_HIERARCHY = "1";
-  environment.etc."systemd/nspawn/test.nspawn".text = ''
-    [Exec]
-    SystemCallFilter=add_key keyctl bpf
-  '';
+  systemd.services."container@cloud" = {
+    environment = {
+      SYSTEMD_NSPAWN_USE_CGNS = "0";
+      SYSTEMD_NSPAWN_UNIFIED_HIERARCHY = "1";
+    };
+  };
   containers.cloud = {
     autoStart = true;
     privateNetwork = true;
+    enableTun = true;
     ephemeral = false;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.2";
@@ -18,6 +20,25 @@
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
     ];
+    allowedDevices = [
+      {
+        node = "/dev/fuse";
+        modifier = "rwm";
+      }
+      {
+        node = "/dev/mapper/control";
+        modifier = "rwm";
+      }
+      {
+        node = "/dev/console";
+        modifier = "rwm";
+      }
+      {
+        node = "/dev/kmsg";
+        modifier = "rwm";
+      }
+    ];
+
     bindMounts = {
       "/opt/seafile-mysql/db" = {
         hostPath = "/nix/persist/cloud/seafile/mysql";
@@ -25,6 +46,16 @@
       };
       "/opt/seafile-data" = {
         hostPath = "/nix/persist/cloud/seafile/shared";
+        isReadOnly = false;
+      };
+      kmsg = {
+        hostPath = "/dev/kmsg";
+        mountPoint = "/dev/kmsg";
+        isReadOnly = false;
+      };
+      fuse = {
+        hostPath = "/dev/fuse";
+        mountPoint = "/dev/fuse";
         isReadOnly = false;
       };
     };
