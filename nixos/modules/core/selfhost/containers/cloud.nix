@@ -34,10 +34,6 @@
         networking = {
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
-          nameservers = [
-            "1.1.1.1"
-            "8.8.8.8"
-          ];
         };
         services = {
           resolved.enable = true;
@@ -48,7 +44,17 @@
           "d /opt/seafile-data 0770 1000 1000 - -"
         ];
 
-        virtualisation.docker.enable = true;
+        virtualisation.docker = {
+          enable = true;
+          autoPrune = {
+            enable = true;
+            dates = "weekly";
+          };
+          rootless = {
+            enable = false;
+            setSocketVariable = true;
+          };
+        };
         virtualisation.oci-containers.containers = {
           "seafile-mysql" = {
             image = "mariadb:10.11";
@@ -68,9 +74,7 @@
               "-m"
               "256"
             ];
-            extraOptions = [
-              "--network=host"
-            ];
+            extraOptions = [ "--network=host" ];
           };
 
           "seafile" = {
