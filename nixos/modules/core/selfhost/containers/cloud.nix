@@ -55,6 +55,7 @@
             setSocketVariable = true;
           };
         };
+        virtualisation.oci-containers.backend = "docker";
         virtualisation.oci-containers.containers = {
           "seafile-mysql" = {
             image = "mariadb:10.11";
