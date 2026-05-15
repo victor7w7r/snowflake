@@ -1,6 +1,11 @@
 { lib, ... }:
 {
   #podman exec -it seafile python3 /scripts/start.py
+  systemd.services."container@cloud".environment.SYSTEMD_NSPAWN_UNIFIED_HIERARCHY = "1";
+  environment.etc."systemd/nspawn/test.nspawn".text = ''
+    [Exec]
+    SystemCallFilter=add_key keyctl bpf
+  '';
   containers.cloud = {
     autoStart = true;
     privateNetwork = true;
@@ -8,11 +13,7 @@
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.2";
     extraFlags = [
-      "--capability=CAP_NET_ADMIN"
-      "--capability=CAP_SYS_ADMIN"
-      "--capability=CAP_MKNOD"
-      "--property=DeviceAllow=block-* rw"
-      "--property=Delegate=yes"
+      "--private-users-ownership=chown"
     ];
     additionalCapabilities = [
       ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
@@ -43,7 +44,7 @@
         };
         environment.systemPackages = with pkgs; [
           fuse-overlayfs
-          utillinux
+          util-linux
           dbus
         ];
         services = {
