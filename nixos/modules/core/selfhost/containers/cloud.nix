@@ -27,7 +27,7 @@
     };
 
     config =
-      { ... }:
+      { pkgs, ... }:
       {
         system.stateVersion = "26.05";
         boot.isContainer = true;
@@ -38,6 +38,19 @@
         services = {
           resolved.enable = true;
           journald.extraConfig = "SystemMaxUse=100M";
+          create-seafile-net = {
+            serviceConfig.Type = "oneshot";
+            wantedBy = [
+              "docker-seafile-mysql.service"
+              "docker-seafile.service"
+            ];
+            script = ''
+              check=$(${pkgs.docker}/bin/docker network ls -qf name=seafile-net)
+              if [ -z "$check" ]; then
+                ${pkgs.docker}/bin/docker network create seafile-net
+              fi
+            '';
+          };
         };
 
         systemd.tmpfiles.rules = [
@@ -65,7 +78,7 @@
               MARIADB_AUTO_UPGRADE = "1";
             };
             volumes = [ "/opt/seafile-mysql/db:/var/lib/mysql" ];
-            extraOptions = [ "--network=host" ];
+            extraOptions = [ "--network=seafile-net" ];
           };
 
           "seafile-memcached" = {
@@ -75,14 +88,14 @@
               "-m"
               "256"
             ];
-            extraOptions = [ "--network=host" ];
+            extraOptions = [ "--network=seafile-net" ];
           };
 
           "seafile" = {
             image = "seafileltd/seafile-mc:11.0-latest";
             autoStart = true;
             extraOptions = [
-              "--network=host"
+              "--network=seafile-net"
               "--privileged"
             ];
             ports = [ "80:80" ];
