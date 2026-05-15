@@ -49,10 +49,11 @@
 
         systemd = {
           tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
-          services.create-seafile-net = {
+          /*services.create-seafile-net = {
             serviceConfig.Type = "oneshot";
             wantedBy = [
-              "docker-seafile-mysql.service"
+              "docker-seafile-db.service"
+              "docker-seafile-cache.service"
               "docker-seafile.service"
             ];
             script = ''
@@ -61,7 +62,7 @@
                 ${pkgs.docker}/bin/docker network create seafile-net
               fi
             '';
-          };
+            };*/
         };
 
         virtualisation.docker = {
@@ -77,38 +78,32 @@
         };
         virtualisation.oci-containers.backend = "docker";
         virtualisation.oci-containers.containers = {
-          "seafile-mysql" = {
+          "seafile-db" = {
             image = "mariadb:10.11";
             environmentFiles = [ "/etc/seafile-db-env" ];
             volumes = [ "/opt/seafile-mysql/db:/var/lib/mysql" ];
-            extraOptions = [ "--network=seafile-net" ];
+            extraOptions = [ "--network=host" ];
           };
 
-          "seafile-memcached" = {
-            image = "memcached:1.6.18";
-            cmd = [
-              "memcached"
-              "-m"
-              "256"
-            ];
-            extraOptions = [ "--network=seafile-net" ];
+          "seafile-cache" = {
+            image = "redis";
+            extraOptions = [ "--network=host" ];
           };
 
           "seafile" = {
-            image = "seafileltd/seafile-mc:11.0-latest";
-            autoStart = true;
+            image = "seafileltd/seafile-mc:13.0-latest";
             extraOptions = [
-              "--network=seafile-net"
+              "--network=host"
               "--dns=8.8.8.8"
               "--privileged"
             ];
             ports = [ "80:80" ];
+            volumes = [ "/opt/seafile-data:/shared" ];
             environmentFiles = [ "/etc/seafile-env" ];
             dependsOn = [
-              "seafile-mysql"
-              "seafile-memcached"
+              "seafile-db"
+              "seafile-cache"
             ];
-            volumes = [ "/opt/seafile-data:/shared" ];
           };
         };
       };
