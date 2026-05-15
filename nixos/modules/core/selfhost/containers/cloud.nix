@@ -1,7 +1,6 @@
 { lib, pkgs, ... }:
 {
   #docker exec -it seafile python3 /scripts/start.py
-  boot.fuse.userAllowOther = true;
   environment.systemPackages = with pkgs; [
     seadrive-fuse
   ];
