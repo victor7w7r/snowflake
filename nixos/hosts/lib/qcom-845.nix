@@ -69,11 +69,11 @@
           offset_tags = "0x00000100";
           pagesize = "4096";
         };
-        appendDTB = lib.mkDefault [
+       /* appendDTB = lib.mkDefault [
           "${
             pkgs.callPackage ../../kernel/sdm845/dtb.nix { inherit kernelData device; }
           }/sdm845-oneplus-${device}.dtb"
-        ];
+        ];*/
       };
     };
   };
