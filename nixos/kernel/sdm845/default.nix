@@ -1,10 +1,11 @@
 {
+  lib,
   pkgs,
   kernelData,
   ...
 }:
 let
-  configure = pkgs.callPackage ./configure.nix { inherit kernelData kernel; };
+  configure = pkgs.callPackage ./configure.nix { inherit kernelData; };
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
   patches = configure.passthru.patches;
   kconfigFile = pkgs.writeText "kconfig-mobile" (
@@ -24,16 +25,18 @@ let
       #makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
       isCompressed = "gz";
 
-     /* postInstall = ''
-        mkdir -p $out
+      /*
+        postInstall = ''
+          mkdir -p $out
 
-        cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
+          cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
 
-        ln -sv Image.gz "$out/vmlinuz" || true
-        cp .config $out/config-${configure.version}
+          ln -sv Image.gz "$out/vmlinuz" || true
+          cp .config $out/config-${configure.version}
 
-        depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
-      '';*/
+          depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
+        '';
+      */
     })
 
     .overrideAttrs

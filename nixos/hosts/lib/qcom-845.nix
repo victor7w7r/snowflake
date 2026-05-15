@@ -1,5 +1,7 @@
 {
+  config,
   lib,
+  kernelData,
   inputs,
   pkgs,
   ...
@@ -69,26 +71,29 @@
           offset_tags = "0x00000100";
           pagesize = "4096";
         };
-       /* appendDTB = lib.mkDefault [
-          "${
-            pkgs.callPackage ../../kernel/sdm845/dtb.nix { inherit kernelData device; }
-          }/sdm845-oneplus-${device}.dtb"
-        ];*/
+        /*
+          appendDTB = lib.mkDefault [
+            "${
+              pkgs.callPackage ../../kernel/sdm845/dtb.nix { inherit kernelData device; }
+            }/sdm845-oneplus-${device}.dtb"
+          ];
+        */
       };
     };
   };
 
+  /*
+    nixpkgs.config.allowUnfreePredicate =
+      pkg:
+      builtins.elem (lib.getName pkg) [
+        "firmware-oneplus-sdm845"
+        "firmware-oneplus-sdm845-xz"
+      ];
+    hardware.firmware = lib.mkAfter [ (pkgs.callPackage ../custom/oneplus.nix { }) ];
 
-  /*nixpkgs.config.allowUnfreePredicate =
-    pkg:
-    builtins.elem (lib.getName pkg) [
-      "firmware-oneplus-sdm845"
-      "firmware-oneplus-sdm845-xz"
+    systemd.services.ModemManager.serviceConfig.ExecStart = [
+    "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"
     ];
-  hardware.firmware = lib.mkAfter [ (pkgs.callPackage ../custom/oneplus.nix { }) ];
-
-  systemd.services.ModemManager.serviceConfig.ExecStart = [
-  "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"
-  ];*/
+  */
 
 }

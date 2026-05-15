@@ -2,7 +2,6 @@
   lib,
   pkgs,
   stdenv,
-  kernel,
   kernelData,
   ...
 }:
@@ -32,7 +31,15 @@ pkgs.stdenv.mkDerivation {
   src = fetch.sdm845;
   name = "linux-${majorMinor}${localVer}-config";
 
-  nativeBuildInputs = kernel.nativeBuildInputs ++ kernel.buildInputs;
+  nativeBuildInputs = with pkgs; [
+    gnumake
+    gcc14
+    bc
+    bison
+    flex
+    perl
+    python3
+  ];
   installPhase = "cp .config $out";
 
   makeFlags = [
