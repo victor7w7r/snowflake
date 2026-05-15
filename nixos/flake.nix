@@ -281,7 +281,7 @@
             sops-nix.nixosModules.sops
             (import ./modules/core)
             (import ./modules/home)
-          ];
+          ] ++ (import "${inputs.mobile-nixos}/modules/module-list.nix");
           specialArgs = {
             host = "v7w7r-fajita";
             system = systemarm;
@@ -292,8 +292,7 @@
               inputs
               username
               ;
-          }
-          ++ (import "${inputs.mobile-nixos}/modules/module-list.nix");
+          };
         };
 
         macmini = nixpkgs.lib.nixosSystem {
