@@ -7,6 +7,18 @@
 let
   configure = pkgs.callPackage ./configure.nix { inherit kernelData; };
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
+  /*
+    postInstall = ''
+      mkdir -p $out
+
+      cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
+
+      ln -sv Image.gz "$out/vmlinuz" || true
+      cp .config $out/config-${configure.version}
+
+      depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
+    '';
+  */
   patches = configure.passthru.patches;
   kconfigFile = pkgs.writeText "kconfig-mobile" (
     lib.concatStringsSep "\n" (
@@ -18,25 +30,11 @@ let
       inherit (configure) patches src;
       configfile = ./sdm845.config;
       isModular = false;
-      enableRemovingWerror = true;
+      isCompressed = "gz";
 
       version = "${configure.version}${configure.passthru.localVer}";
       modDirVersion = "${configure.version}${configure.passthru.localVer}";
-      #makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
-      isCompressed = "gz";
-
-      /*
-        postInstall = ''
-          mkdir -p $out
-
-          cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
-
-          ln -sv Image.gz "$out/vmlinuz" || true
-          cp .config $out/config-${configure.version}
-
-          depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
-        '';
-      */
+      makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
     })
 
     .overrideAttrs
