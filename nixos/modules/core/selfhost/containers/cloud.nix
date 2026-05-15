@@ -49,7 +49,7 @@
 
         systemd = {
           tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
-          /*services.create-seafile-net = {
+          services.create-seafile-net = {
             serviceConfig.Type = "oneshot";
             wantedBy = [
               "docker-seafile-db.service"
@@ -62,7 +62,7 @@
                 ${pkgs.docker}/bin/docker network create seafile-net
               fi
             '';
-            };*/
+            };
         };
 
         virtualisation.docker = {
@@ -82,18 +82,18 @@
             image = "mariadb:10.11";
             environmentFiles = [ "/etc/seafile-db-env" ];
             volumes = [ "/opt/seafile-mysql/db:/var/lib/mysql" ];
-            extraOptions = [ "--network=host" ];
+            extraOptions = [ "--network=seafile-net" ];
           };
 
           "seafile-cache" = {
             image = "redis";
-            extraOptions = [ "--network=host" ];
+            extraOptions = [ "--network=seafile-net" ];
           };
 
           "seafile" = {
             image = "seafileltd/seafile-mc:13.0-latest";
             extraOptions = [
-              "--network=host"
+              "--network=seafile-net"
               "--dns=8.8.8.8"
               "--privileged"
             ];
