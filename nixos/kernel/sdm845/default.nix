@@ -58,7 +58,6 @@ let
           sed -i 's/^CONFIG_NFT_TPROXY=m/CONFIG_NFT_TPROXY=y/' $buildRoot/.config
           sed -i 's/^CONFIG_NF_TABLES_BRIDGE=m/CONFIG_NF_TABLES_BRIDGE=y/' $buildRoot/.config
           sed -i 's/^CONFIG_NF_TPROXY_IPV6=m/CONFIG_NF_TPROXY_IPV6=y/' $buildRoot/.config
-          sed -i 's/^.*CONFIG_LOCALVERSION.*/CONFIG_LOCALVERSION="-v7w7r-sdm845"/' $buildRoot/.config
         '';
         #installFlags = [ "INSTALL_MOD_PATH=$out" ];
       });
