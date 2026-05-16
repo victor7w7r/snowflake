@@ -59,9 +59,9 @@ let
           };
         */
         #installFlags = [ "INSTALL_MOD_PATH=$out" ];
-       /* configurePhase = ''
+        configurePhase = ''
           scripts/config --enable CONFIG_BRIDGE
-          '';*/
+        '';
       });
 
 in
