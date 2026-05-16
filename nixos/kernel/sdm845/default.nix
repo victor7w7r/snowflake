@@ -47,6 +47,7 @@ let
         '';
         #installFlags = [ "INSTALL_MOD_PATH=$out" ];
         preInstall = ''
+          mkdir -p build
           cp ${./sdm845.config} build/.config
         '';
         configurePhase = "scripts/config --enable CONFIG_BRIDGE";
