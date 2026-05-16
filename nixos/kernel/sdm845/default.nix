@@ -33,7 +33,7 @@ let
       configfile = ./sdm845.config;
       isModular = false;
       isCompressed = "gz";
-      #version = "${configure.version}${configure.passthru.localVer}";
+      version = "${configure.version}${configure.passthru.localVer}";
       #modDirVersion = "${configure.version}${configure.passthru.localVer}";
       makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
     })
