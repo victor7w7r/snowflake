@@ -34,7 +34,6 @@ let
       isCompressed = "gz";
       version = "${configure.version}${configure.passthru.localVer}";
       modDirVersion = "${configure.version}${configure.passthru.localVer}";
-      #postPatch = "scripts/config --enable CONFIG_BRIDGE";
     })
 
     .overrideAttrs
@@ -42,7 +41,9 @@ let
         passthru = attrs.passthru // {
           inherit kconfigToNix configure;
         };
-
+        postConfigure = ''
+          sed -i 's/^CONFIG_BRIDGE=m/CONFIG_BRIDGE=y/' $buildRoot/.config
+        '';
         #installFlags = [ "INSTALL_MOD_PATH=$out" ];
       });
 
