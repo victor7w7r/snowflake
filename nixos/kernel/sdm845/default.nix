@@ -32,7 +32,8 @@ let
       configfile = ./sdm845.config;
       isModular = false;
       isCompressed = "gz";
-      version = configure.version;
+      version = "${configure.version}${configure.passthru.localVer}";
+      makeFlags = [ "LOCALVERSION=-v7w7r-sdm845" ];
       modDirVersion = "${configure.version}${configure.passthru.localVer}";
     })
 
@@ -41,6 +42,7 @@ let
         passthru = attrs.passthru // {
           inherit kconfigToNix configure;
         };
+
         postConfigure = ''
           sed -i 's/^CONFIG_BRIDGE=m/CONFIG_BRIDGE=y/' $buildRoot/.config
           sed -i 's/^CONFIG_BRIDGE_NETFILTER=m/CONFIG_BRIDGE_NETFILTER=y/' $buildRoot/.config
