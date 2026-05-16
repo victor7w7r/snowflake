@@ -42,8 +42,8 @@ let
           inherit kconfigToNix configure;
         };
 
-        preConfigure = ''
-
+        postConfigure = ''
+          echo $buildRoot
         '';
         #installFlags = [ "INSTALL_MOD_PATH=$out" ];
         preInstall = ''
