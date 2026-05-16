@@ -23,6 +23,14 @@
 
   mobile.quirks.qualcomm.sdm845-modem.enable = true;
   mobile.quirks.audio.alsa-ucm-meld = true;
+  mobile.kernel.structuredConfig = [
+    (
+      helpers: with helpers; {
+        BRIDGE = yes;
+        BRIDGE_NETFILTER = yes;
+      }
+    )
+  ];
   mobile.usb = {
     mode = "gadgetfs";
     idVendor = lib.mkDefault "18D1";
