@@ -58,11 +58,10 @@ let
           inherit kconfigToNix configure;
           };
         */
-        installFlags = [ "INSTALL_MOD_PATH=$out" ];
-
-        configurePhase = ''
+        #installFlags = [ "INSTALL_MOD_PATH=$out" ];
+       /* configurePhase = ''
           scripts/config --enable CONFIG_BRIDGE
-        '';
+          '';*/
       });
 
 in
