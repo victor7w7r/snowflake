@@ -5,8 +5,20 @@
   ...
 }:
 let
-  configure = pkgs.callPackage ./configure.nix { inherit kernelData; };
-  kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
+  version = rec {
+    file = "${fetch.sdm845}/Makefile";
+    version = toString (builtins.match ".+VERSION = ([0-9]+).+" (builtins.readFile file));
+    patchlevel = toString (builtins.match ".+PATCHLEVEL = ([0-9]+).+" (builtins.readFile file));
+    sublevel = toString (builtins.match ".+SUBLEVEL = ([0-9]+).+" (builtins.readFile file));
+    extraversion = toString (builtins.match ".+EXTRAVERSION = ([a-z0-9-]+).+" (builtins.readFile file));
+    string = "${
+      version + "." + patchlevel + "." + sublevel + (lib.optionalString (extraversion != "") extraversion)
+    }";
+  };
+  majorMinor = lib.versions.majorMinor version.string;
+
+  #configure = pkgs.callPackage ./configure.nix { inherit kernelData; };
+  #kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
   /*
     postInstall = ''
       mkdir -p $out
@@ -27,36 +39,38 @@ let
       )
     );
   */
-  build =
-    (pkgs.mobile-nixos.kernel-builder {
-      inherit (configure) src;
+  fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
+  build = (
+    pkgs.mobile-nixos.kernel-builder {
+      src = fetch.sdm845;
       configfile = ./sdm845.config;
       isModular = false;
       isCompressed = "gz";
-      version = "${configure.version}${configure.passthru.localVer}";
+      version = version.string;
       #modDirVersion = "${configure.version}${configure.passthru.localVer}";
       makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
-    })
+    }
+  );
 
+  /*
     .overrideAttrs
-      (attrs: {
-        passthru = attrs.passthru // {
-          inherit kconfigToNix configure;
-        };
-        /*
-          installFlags = [ "INSTALL_MOD_PATH=$out" ];
+    (attrs: {
+      passthru = attrs.passthru // {
+        inherit kconfigToNix configure;
+      };
+        installFlags = [ "INSTALL_MOD_PATH=$out" ];
 
-          configurePhase = ''
-            runHook preConfigure
+        configurePhase = ''
+          runHook preConfigure
 
-            cp ${kconfigFile} .config
-            chmod +w .config
-            make olddefconfig
+          cp ${kconfigFile} .config
+          chmod +w .config
+          make olddefconfig
 
-            runHook postConfigure
-            '';
-        */
-      });
+          runHook postConfigure
+          '';
+    });
+  */
 in
 {
   inherit build;
