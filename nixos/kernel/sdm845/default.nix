@@ -47,17 +47,15 @@ let
       isModular = false;
       isCompressed = "gz";
       version = version.string;
-      #modDirVersion = "${configure.version}${configure.passthru.localVer}";
+      modDirVersion = "${configure.version}${configure.passthru.localVer}";
       makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
     })
 
     .overrideAttrs
       (attrs: {
-        /*
-          passthru = attrs.passthru // {
+        passthru = attrs.passthru // {
           inherit kconfigToNix configure;
-          };
-        */
+        };
         #installFlags = [ "INSTALL_MOD_PATH=$out" ];
         configurePhase = ''
           scripts/config --enable CONFIG_BRIDGE
