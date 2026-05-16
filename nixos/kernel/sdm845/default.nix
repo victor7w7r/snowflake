@@ -34,6 +34,7 @@ let
       isCompressed = "gz";
       version = "${configure.version}${configure.passthru.localVer}";
       modDirVersion = "${configure.version}${configure.passthru.localVer}";
+      postPatch = "scripts/config --enable CONFIG_BRIDGE";
     })
 
     .overrideAttrs
@@ -42,15 +43,7 @@ let
           inherit kconfigToNix configure;
         };
 
-        postConfigure = ''
-          echo $buildRoot
-        '';
         #installFlags = [ "INSTALL_MOD_PATH=$out" ];
-        preInstall = ''
-          mkdir -p build
-          cp ${./sdm845.config} build/.config
-        '';
-        configurePhase = "scripts/config --enable CONFIG_BRIDGE";
       });
 
 in
