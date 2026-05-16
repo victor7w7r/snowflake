@@ -62,7 +62,6 @@ let
 
         configurePhase = ''
           scripts/config --enable CONFIG_BRIDGE
-          make olddefconfig
         '';
       });
 
