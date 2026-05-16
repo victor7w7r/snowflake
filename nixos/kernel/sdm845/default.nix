@@ -34,7 +34,7 @@ let
       isCompressed = "gz";
       version = "${configure.version}${configure.passthru.localVer}";
       modDirVersion = "${configure.version}${configure.passthru.localVer}";
-      postPatch = "scripts/config --enable CONFIG_BRIDGE";
+      #postPatch = "scripts/config --enable CONFIG_BRIDGE";
     })
 
     .overrideAttrs
