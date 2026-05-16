@@ -43,6 +43,9 @@ let
           inherit kconfigToNix configure;
         };
         #installFlags = [ "INSTALL_MOD_PATH=$out" ];
+        preInstall = ''
+          cp ${./sdm845.config} ./config
+        '';
         configurePhase = ''
           scripts/config --enable CONFIG_BRIDGE
         '';
