@@ -32,10 +32,12 @@ in
         ;
     })
 
-    /*(import ./lib/tarball.nix {
+    /*
+      (import ./lib/tarball.nix {
       inherit config pkgs;
       additionalContent = bootFiles;
-      })*/
+      })
+    */
   ];
 
   fileSystems = {
@@ -66,44 +68,42 @@ in
     hardware.screen.height = 2340;
   };
 
-  boot = {
-    kernelPackages = kernel.packages;
-    consoleLogLevel = 4;
-  };
-/*    blacklistedKernelModules = [
-      "qcrypto"
-      "ipa"
-    ];
-    kernelParams = [
-      "clk_ignore_unused"
-      "pd_ignore_unused"
-      "arm64.nopauth"
-      "console=ttyGS0,115200"
-      "console=tty0"
-
-      "rd.systemd.default_standard_output=kmsg+console"
-      "rd.systemd.default_standard_error=kmsg+console"
-      "rd.systemd.journald.forward_to_console=1"
-      "rd.systemd.log_target=console"
-      "rd.systemd.journald.forward_to_console=1"
-    ];
-    initrd = {
-      includeDefaultModules = false;
-      systemd = {
-        tpm2.enable = false;
-        extraBin.buffyboard = "${(pkgs.callPackage ./custom/buffybox.nix { })}/bin/buffyboard";
-        contents."/share".source = "${pkgs.libinput.out}/share";
-        storePaths = [ pkgs.libinput ];
-      };
-      kernelModules = [
-        "qcom_pd_mapper"
-        "sd_mod"
-        "scsi_mod"
-        "dm_mod"
-        "ufshcd-core"
-        "ufs-qcom"
-        "phy-qcom-qmp-ufs"
+  /*
+    blacklistedKernelModules = [
+        "qcrypto"
+        "ipa"
       ];
+      kernelParams = [
+        "clk_ignore_unused"
+        "pd_ignore_unused"
+        "arm64.nopauth"
+        "console=ttyGS0,115200"
+        "console=tty0"
+
+        "rd.systemd.default_standard_output=kmsg+console"
+        "rd.systemd.default_standard_error=kmsg+console"
+        "rd.systemd.journald.forward_to_console=1"
+        "rd.systemd.log_target=console"
+        "rd.systemd.journald.forward_to_console=1"
+      ];
+      initrd = {
+        includeDefaultModules = false;
+        systemd = {
+          tpm2.enable = false;
+          extraBin.buffyboard = "${(pkgs.callPackage ./custom/buffybox.nix { })}/bin/buffyboard";
+          contents."/share".source = "${pkgs.libinput.out}/share";
+          storePaths = [ pkgs.libinput ];
+        };
+        kernelModules = [
+          "qcom_pd_mapper"
+          "sd_mod"
+          "scsi_mod"
+          "dm_mod"
+          "ufshcd-core"
+          "ufs-qcom"
+          "phy-qcom-qmp-ufs"
+        ];
+      };
     };
-  };*/
+  */
 }
