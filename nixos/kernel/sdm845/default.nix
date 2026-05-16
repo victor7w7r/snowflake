@@ -34,7 +34,6 @@ let
       isCompressed = "gz";
       version = "${configure.version}${configure.passthru.localVer}";
       modDirVersion = "${configure.version}${configure.passthru.localVer}";
-      makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
     })
 
     .overrideAttrs
@@ -42,9 +41,13 @@ let
         passthru = attrs.passthru // {
           inherit kconfigToNix configure;
         };
+
+        preConfigure = ''
+
+        '';
         #installFlags = [ "INSTALL_MOD_PATH=$out" ];
         preInstall = ''
-          cp ${./sdm845.config} .config
+          cp ${./sdm845.config} build/.config
         '';
         configurePhase = "scripts/config --enable CONFIG_BRIDGE";
       });

@@ -5,12 +5,8 @@
     privateNetwork = true;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.3";
-    extraFlags = [
-      "--private-users-ownership=chown"
-    ];
-    additionalCapabilities = [
-      ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
-    ];
+    extraFlags = [ "--private-users-ownership=chown" ];
+    additionalCapabilities = [ ''all" --system-call-filter="add_key keyctl bpf" --capability="all'' ];
     bindMounts = {
       "/opt/couchdb/data" = {
         hostPath = "/nix/persist/containers/notes/data";
