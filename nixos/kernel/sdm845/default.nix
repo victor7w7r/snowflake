@@ -40,8 +40,8 @@ let
     );
   */
   fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
-  build = (
-    pkgs.mobile-nixos.kernel-builder {
+  build =
+    (pkgs.mobile-nixos.kernel-builder {
       src = fetch.sdm845;
       configfile = ./sdm845.config;
       isModular = false;
@@ -49,28 +49,23 @@ let
       version = version.string;
       #modDirVersion = "${configure.version}${configure.passthru.localVer}";
       makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
-    }
-  );
+    })
 
-  /*
     .overrideAttrs
-    (attrs: {
-      passthru = attrs.passthru // {
-        inherit kconfigToNix configure;
-      };
+      (attrs: {
+        /*
+          passthru = attrs.passthru // {
+          inherit kconfigToNix configure;
+          };
+        */
         installFlags = [ "INSTALL_MOD_PATH=$out" ];
 
         configurePhase = ''
-          runHook preConfigure
-
-          cp ${kconfigFile} .config
-          chmod +w .config
+          scripts/config --enable CONFIG_BRIDGE
           make olddefconfig
+        '';
+      });
 
-          runHook postConfigure
-          '';
-    });
-  */
 in
 {
   inherit build;
