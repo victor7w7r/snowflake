@@ -1,24 +1,11 @@
 {
-  lib,
   pkgs,
   kernelData,
   ...
 }:
 let
-  version = rec {
-    file = "${fetch.sdm845}/Makefile";
-    version = toString (builtins.match ".+VERSION = ([0-9]+).+" (builtins.readFile file));
-    patchlevel = toString (builtins.match ".+PATCHLEVEL = ([0-9]+).+" (builtins.readFile file));
-    sublevel = toString (builtins.match ".+SUBLEVEL = ([0-9]+).+" (builtins.readFile file));
-    extraversion = toString (builtins.match ".+EXTRAVERSION = ([a-z0-9-]+).+" (builtins.readFile file));
-    string = "${
-      version + "." + patchlevel + "." + sublevel + (lib.optionalString (extraversion != "") extraversion)
-    }";
-  };
-  majorMinor = lib.versions.majorMinor version.string;
-
-  #configure = pkgs.callPackage ./configure.nix { inherit kernelData; };
-  #kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
+  configure = pkgs.callPackage ./configure.nix { inherit kernelData; };
+  kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
   /*
     postInstall = ''
       mkdir -p $out
@@ -39,14 +26,13 @@ let
       )
     );
   */
-  fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   build =
     (pkgs.mobile-nixos.kernel-builder {
-      src = fetch.sdm845;
+      inherit (configure) src;
       configfile = ./sdm845.config;
       isModular = false;
       isCompressed = "gz";
-      version = version.string;
+      version = "${configure.version}${configure.passthru.localVer}";
       modDirVersion = "${configure.version}${configure.passthru.localVer}";
       makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
     })
