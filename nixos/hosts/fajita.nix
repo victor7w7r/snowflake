@@ -16,8 +16,11 @@ in
     (_: prev: {
       makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
     })
-    (pkgs: prev: {
-      mkbootimg = pkgs.callPackage "${inputs.mobile-nixos}/overlay/mkbootimg" { };
+    (self: super: {
+      libinput = super.libinput.overrideAttrs (oldAttrs: {
+        nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ super.pkg-config ];
+        buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ super.lua ];
+      });
     })
   ];
 
