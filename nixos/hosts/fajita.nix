@@ -16,10 +16,9 @@ in
     (_: prev: {
       makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
     })
-    (self: super: {
-      libinput = super.libinput.overrideAttrs (oldAttrs: {
-        nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [ super.pkg-config ];
-        buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ super.lua ];
+    (final: prev: {
+      libinput = prev.libinput.overrideAttrs (oldAttrs: {
+        buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ final.lua ];
       });
     })
   ];
