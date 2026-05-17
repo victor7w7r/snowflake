@@ -48,22 +48,29 @@ in
         ;
     })
 
-    /*
-      (import ./lib/tarball.nix {
-      inherit config pkgs;
-      additionalContent = bootFiles;
-      })
-    */
+    (import ./lib/tarball.nix { inherit config pkgs; })
   ];
 
   fileSystems = {
+    "/" = {
+      device = "none";
+      fsType = "tmpfs";
+      options = [
+        "defaults"
+        "size=2G"
+        "mode=755"
+      ];
+    };
     "/nix" = f2fs {
-      label = "userdata";
-      device = "/dev/disk/by-partlabel/userdata";
+      label = "NIXOS_SYSTEM";
+      device = "/dev/disk/by-label/NIXOS_SYSTEM";
     };
   };
 
   boot.kernelPackages = kernel.packages;
+  boot.kernelParams = lib.mkAfter [
+    "earlycon=uart,mmio32,0x01c28000"
+  ];
 
   zramSwap = {
     enable = true;
@@ -85,6 +92,12 @@ in
     };
     hardware.screen.height = 2340;
   };
+
+  initrd.supportedFilesystems = [
+    "btrfs"
+    "ext4"
+    "f2fs"
+  ];
 
   /*
     blacklistedKernelModules = [

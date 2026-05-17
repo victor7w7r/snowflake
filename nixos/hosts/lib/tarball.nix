@@ -26,17 +26,16 @@ in
 
       ${if additionalContent != "" then additionalContent else ""}
 
-      mkdir -p root/store
+      mkdir -p root/nix/store
 
       echo "Copying store files..."
-      rsyncy -aHAxr --progress --files-from=${closureInfo}/store-paths / root/
+      rsyncy -aHAxr --progress --files-from=${closureInfo}/store-paths / root/nix/
 
       cp ${closureInfo}/registration root/nix-path-registration
 
-      mkdir -p root/var/nix/daemon-socket
+      mkdir -p root/nix/var/nix/daemon-socket
       echo "Compressing with $SIZE..."
-      tar -cv -C root . | \
-        zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
+      tar -cv -C root . | zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
     '';
   };
 
