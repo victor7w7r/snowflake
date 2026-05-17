@@ -31,6 +31,7 @@ let
       kernelFunc =
         {
           randstructSeed ? null,
+          ...
         }:
         (pkgs.mobile-nixos.kernel-builder {
           inherit (configure) patches src;
