@@ -7,16 +7,17 @@ let
   configure = pkgs.callPackage ./configure.nix { inherit kernelData; };
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
   /*
-    postInstall = ''
-      mkdir -p $out
+    installFlags = [ "INSTALL_MOD_PATH=$out" ];
+      postInstall = ''
+        mkdir -p $out1
 
-      cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
+        cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
 
-      ln -sv Image.gz "$out/vmlinuz" || true
-      cp .config $out/config-${configure.version}
+        ln -sv Image.gz "$out/vmlinuz" || true
+        cp .config $out/config-${configure.version}
 
-      depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
-    '';
+        depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
+      '';
   */
   /*
     patches = configure.passthru.patches;
@@ -61,7 +62,6 @@ let
           sed -i 's/^CONFIG_NF_TABLES_BRIDGE=m/CONFIG_NF_TABLES_BRIDGE=y/' $buildRoot/.config
           sed -i 's/^CONFIG_NF_TPROXY_IPV6=m/CONFIG_NF_TPROXY_IPV6=y/' $buildRoot/.config
         '';
-        #installFlags = [ "INSTALL_MOD_PATH=$out" ];
       });
 
 in

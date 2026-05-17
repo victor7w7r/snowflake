@@ -88,6 +88,7 @@
         ".local/share/zoxide"
         ".cargo"
         ".gnupg"
+        ".ccnet"
         ".rustup"
         ".steam"
         ".zsh"
