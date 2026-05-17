@@ -44,7 +44,7 @@
     firewall = {
       enable = true;
       allowPing = true;
-      checkReversePath = "loose";
+      checkReversePath = false;
       logRefusedPackets = true;
       allowedTCPPorts = [
         22
