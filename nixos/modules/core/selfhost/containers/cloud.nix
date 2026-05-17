@@ -50,7 +50,7 @@
           mysql = {
             enable = true;
             package = pkgs.mariadb;
-            configFile = /etc/seafile-db-env;
+            configFile = "/etc/seafile-db-env";
             ensureDatabases = [
               "seafile_db"
               "ccnet_db"
