@@ -17,6 +17,17 @@ in
       makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
     })
     (final: prev: {
+      kdePackages = (prev.kdePackages or { }) // {
+        plasma-workspace = prev.kdePackages.plasma-workspace.overrideAttrs (oldAttrs: {
+          cmakeFlags = (oldAttrs.cmakeFlags or [ ]) ++ [
+            "-DGLIBC_LOCALE_GEN=OFF"
+            "-DUBUNTU_PACKAGEKIT=OFF"
+            "-DGLIBC_LOCALE_PREGENERATED=ON"
+          ];
+        });
+      };
+    })
+    (final: prev: {
       libinput = prev.libinput.overrideAttrs (oldAttrs: {
         nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
           final.pkg-config

@@ -2,21 +2,19 @@
   pkgs,
   system,
   inputs,
-  stdenv,
-  fetchFromGitHub,
   ...
 }:
 
 let
-  common = stdenv.mkDerivation {
+  common = pkgs.stdenv.mkDerivation {
     pname = "breezy-desktop-common";
     version = "v2.9.12";
 
-    src = fetchFromGitHub {
+    src = pkgs.fetchFromGitHub {
       owner = "wheaney";
       repo = "breezy-desktop";
       rev = "v2.9.12";
-      hash = "sha256-WkNsn0ACLqub6wqBaAAAGRB9X+WD6J1fb3LM+2Kigzc=";
+      hash = "sha256-uAjA9YN82W8W951JRibFqC9nGZ4/8RU6hXPErrPsmTg=";
     };
 
     dontBuild = true;
@@ -33,15 +31,15 @@ let
     '';
   };
 
-  breezy-kwin = stdenv.mkDerivation {
+  breezy-kwin = pkgs.stdenv.mkDerivation {
     pname = "breezy-desktop-kwin";
     version = "v2.9.12";
 
-    src = fetchFromGitHub {
+    src = pkgs.fetchFromGitHub {
       owner = "wheaney";
       repo = "breezy-desktop";
       rev = "v2.9.12";
-      hash = "sha256-WkNsn0ACLqub6wqBaAAAGRB9X+WD6J1fb3LM+2Kigzc=";
+      hash = "sha256-uAjA9YN82W8W951JRibFqC9nGZ4/8RU6hXPErrPsmTg=";
     };
 
     dontConfigure = true;
@@ -108,7 +106,7 @@ let
       chmod +x $out/bin/breezy-desktop-kwin-uninstall
     '';
   };
-  xrlinux = stdenv.mkDerivation {
+  xrlinux = pkgs.stdenv.mkDerivation {
     pname = "xrlinuxdriver";
     version = "2.1.5";
 
