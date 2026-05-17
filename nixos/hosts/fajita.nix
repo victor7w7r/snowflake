@@ -23,7 +23,6 @@ in
           final.lua
         ];
         buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ final.lua ];
-        mesonFlags = (oldAttrs.mesonFlags or [ ]) ++ [ "-Dlua=enabled" ];
       });
     })
   ];
