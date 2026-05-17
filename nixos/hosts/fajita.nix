@@ -71,6 +71,11 @@ in
   boot.kernelParams = lib.mkAfter [
     "earlycon=uart,mmio32,0x01c28000"
   ];
+  boot.initrd.supportedFilesystems = [
+    "btrfs"
+    "ext4"
+    "f2fs"
+  ];
 
   zramSwap = {
     enable = true;
@@ -92,12 +97,6 @@ in
     };
     hardware.screen.height = 2340;
   };
-
-  initrd.supportedFilesystems = [
-    "btrfs"
-    "ext4"
-    "f2fs"
-  ];
 
   /*
     blacklistedKernelModules = [
