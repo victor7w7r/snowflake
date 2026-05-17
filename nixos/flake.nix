@@ -10,7 +10,7 @@
       "https://cache.nixos.org/"
       "https://nix-gaming.cachix.org"
       "https://nix-community.cachix.org"
-      #"https://cache.garnix.io"
+      "https://cache.garnix.io"
       "https://cache.saumon.network/proxmox-nixos"
     ];
     extra-trusted-public-keys = [
