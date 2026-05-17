@@ -7,11 +7,11 @@
       "/etc/nixos"
       "/etc/asusd"
       "/etc/hhd"
+      "/var/log/"
       "/var/lib/bluetooth"
       "/var/lib/chrony"
       "/var/lib/containers"
       "/var/lib/fail2ban"
-      "/var/log/journal"
       "/var/lib/lastlog"
       "/var/lib/libvirt"
       "/var/lib/lxc"
@@ -31,7 +31,6 @@
       "/etc/ssh/ssh_host_rsa_key.pub"
       "/etc/ssh/ssh_host_rsa_key"
       "/etc/machine-id"
-      "/var/log/lastlog"
     ];
     users.root.directories = [
       ".zsh"
