@@ -9,10 +9,11 @@
           if host != "v7w7r-fajita" && host != "v7w7r-opizero2w" then
             [
               kdePackages.xdg-desktop-portal-kde
-              xdg-desktop-portal-gtk
             ]
           else
-            [ ]
+            [
+              xdg-desktop-portal-gtk
+            ]
         );
       xdgOpenUsePortal = true;
     };
