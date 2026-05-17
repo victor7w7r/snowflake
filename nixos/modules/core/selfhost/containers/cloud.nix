@@ -1,9 +1,5 @@
 { config, lib, ... }:
 {
-  systemd.tmpfiles.rules = [
-    "d /nix/persist/cloud/seafile/mysql 0770 root root - -"
-    "d /nix/persist/cloud/seafile/shared 0770 root root - -"
-  ];
   containers.cloud = {
     autoStart = true;
     privateNetwork = true;
