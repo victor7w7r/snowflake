@@ -139,18 +139,20 @@ in
       };
     };
 
-  systemd.tmpfiles.rules =
-
-    [
-      "L+ /nix/var/cache/ccache/ccache.conf - - - - ${ccacheConfigFile}"
-    ];
+  systemd.tmpfiles.rules = [
+    "L+ /nix/var/cache/ccache/ccache.conf - - - - ${ccacheConfigFile}"
+  ];
 
   sops = {
     defaultSopsFile = ./secrets/sec.yaml;
     age.sshKeyPaths = [ "/nix/persist/etc/ssh/ssh_host_ed25519_key" ];
     secrets = {
       tunnel = { };
-      seafile-env = { };
+      seafile-env = {
+        mode = "0444";
+        owner = "root";
+        group = "mysql";
+      };
       seafile-db-env = { };
       cloudflare-token = { };
       password-db = { };
