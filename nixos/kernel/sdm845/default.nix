@@ -1,4 +1,5 @@
 {
+  lib,
   pkgs,
   kernelData,
   ...
@@ -6,10 +7,16 @@
 let
   configure = pkgs.callPackage ./configure.nix { inherit kernelData; };
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
+  patches = configure.passthru.patches;
+  kconfigFile = pkgs.writeText "kconfig-mobile" (
+    lib.concatStringsSep "\n" (
+      lib.mapAttrsToList (name: value: "${name}=${value}") (import ./config.aarch64-linux.nix)
+    )
+  );
   /*
     installFlags = [ "INSTALL_MOD_PATH=$out" ];
       postInstall = ''
-        mkdir -p $out1
+        mkdir -p $out
 
         cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
 
@@ -19,17 +26,9 @@ let
         depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
       '';
   */
-  /*
-    patches = configure.passthru.patches;
-    kconfigFile = pkgs.writeText "kconfig-mobile" (
-      lib.concatStringsSep "\n" (
-        lib.mapAttrsToList (name: value: "${name}=${value}") (import ./config.aarch64-linux.nix)
-      )
-    );
-  */
   build =
     (pkgs.mobile-nixos.kernel-builder {
-      inherit (configure) src;
+      inherit (configure) patches src;
       configfile = ./sdm845.config;
       isModular = false;
       isCompressed = "gz";

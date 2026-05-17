@@ -7,12 +7,8 @@
     ephemeral = false;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.2";
-    extraFlags = [
-      "--private-users-ownership=chown"
-    ];
-    additionalCapabilities = [
-      ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
-    ];
+    extraFlags = [ "--private-users-ownership=chown" ];
+    additionalCapabilities = [ ''all" --system-call-filter="add_key keyctl bpf" --capability="all'' ];
 
     bindMounts = {
       "/opt/seafile-mysql/db" = {
@@ -46,27 +42,29 @@
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
         };
+        systemd.tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
         services = {
           resolved.enable = true;
           journald.extraConfig = "SystemMaxUse=100M";
-        };
-
-        systemd = {
-          tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
-          services.create-seafile-net = {
-            serviceConfig.Type = "oneshot";
-            wantedBy = [
-              "docker-seafile-db.service"
-              "docker-seafile-cache.service"
-              "docker-seafile.service"
+          redis.enable = true;
+          mysql = {
+            enable = true;
+            package = pkgs.mariadb;
+            configFile = /etc/seafile-db-env;
+            ensureDatabases = [
+              "seafile_db"
+              "ccnet_db"
+              "seahub_db"
             ];
-            script = ''
-              check=$(${pkgs.docker}/bin/docker network ls -qf name=seafile-net)
-              if [ -z "$check" ]; then
-                ${pkgs.docker}/bin/docker network create seafile-net
-              fi
-            '';
-            };
+            ensureUsers = [
+              {
+                name = "seafile";
+                ensurePermissions = {
+                  "seafile.*" = "ALL PRIVILEGES";
+                };
+              }
+            ];
+          };
         };
 
         virtualisation.docker = {
@@ -82,32 +80,22 @@
         };
         virtualisation.oci-containers.backend = "docker";
         virtualisation.oci-containers.containers = {
-          "seafile-db" = {
-            image = "mariadb:10.11";
-            environmentFiles = [ "/etc/seafile-db-env" ];
-            volumes = [ "/opt/seafile-mysql/db:/var/lib/mysql" ];
-            extraOptions = [ "--network=seafile-net" ];
+          admin = {
+            image = "phpmyadmin";
+            extraOptions = [ "--network=host" ];
+            ports = [ "8080:80" ];
+            environment.PMA_HOST = "127.0.0.1";
           };
-
-          "seafile-cache" = {
-            image = "redis";
-            extraOptions = [ "--network=seafile-net" ];
-          };
-
-          "seafile" = {
+          seafile = {
             image = "seafileltd/seafile-mc:13.0-latest";
             extraOptions = [
-              "--network=seafile-net"
+              "--network=host"
               "--dns=8.8.8.8"
               "--privileged"
             ];
             ports = [ "80:80" ];
             volumes = [ "/opt/seafile-data:/shared" ];
             environmentFiles = [ "/etc/seafile-env" ];
-            dependsOn = [
-              "seafile-db"
-              "seafile-cache"
-            ];
           };
         };
       };
