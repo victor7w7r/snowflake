@@ -1,12 +1,19 @@
-{ pkgs, ... }:
+{ pkgs, host, ... }:
 {
   xdg = {
     portal = {
       enable = true;
-      extraPortals = with pkgs; [
-        kdePackages.xdg-desktop-portal-kde
-        xdg-desktop-portal-gtk
-      ];
+      extraPortals =
+        with pkgs;
+        (
+          if host != "v7w7r-fajita" && host != "v7w7r-opizero2w" then
+            [
+              kdePackages.xdg-desktop-portal-kde
+              xdg-desktop-portal-gtk
+            ]
+          else
+            [ ]
+        );
       xdgOpenUsePortal = true;
     };
     mime.enable = true;
