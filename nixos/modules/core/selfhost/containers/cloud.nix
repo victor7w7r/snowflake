@@ -62,7 +62,6 @@
         services = {
           resolved.enable = true;
           journald.extraConfig = "SystemMaxUse=100M";
-          redis.enable = true;
         };
 
         virtualisation.docker = {
@@ -88,7 +87,7 @@
             image = "phpmyadmin";
             ports = [ "8080:80" ];
             environment.PMA_HOST = "seafile-db";
-            extraOptions = [ "--network=host" ];
+            extraOptions = [ "--network=seafile-net" ];
             dependsOn = [ "seafile-db" ];
           };
           seafile-cache = {
