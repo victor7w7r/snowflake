@@ -54,14 +54,9 @@
         locations = {
           "/" = {
             proxyPass = "http://192.168.100.2:80";
-            /*
-              extraConfig = ''
-              proxy_set_header Host $host;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              '';
-            */
+          };
+          "/cloud" = {
+            proxyPass = "http://192.168.100.2:8080";
           };
           "/git" = {
             proxyPass = "http://192.168.100.4:6610";
