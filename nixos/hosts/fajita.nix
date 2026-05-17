@@ -53,6 +53,8 @@ in
     };
   };
 
+  boot.kernelPackages = kernel.packages;
+
   zramSwap = {
     enable = true;
     algorithm = "zstd";
