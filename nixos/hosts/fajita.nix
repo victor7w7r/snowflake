@@ -18,7 +18,12 @@ in
     })
     (final: prev: {
       libinput = prev.libinput.overrideAttrs (oldAttrs: {
+        nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
+          final.pkg-config
+          final.lua
+        ];
         buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ final.lua ];
+        mesonFlags = (oldAttrs.mesonFlags or [ ]) ++ [ "-Dlua=enabled" ];
       });
     })
   ];
