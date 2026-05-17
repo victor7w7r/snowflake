@@ -148,11 +148,7 @@ in
     age.sshKeyPaths = [ "/nix/persist/etc/ssh/ssh_host_ed25519_key" ];
     secrets = {
       tunnel = { };
-      seafile-env = {
-        mode = "0444";
-        owner = "root";
-        group = "mysql";
-      };
+      seafile-env = { };
       seafile-db-env = { };
       cloudflare-token = { };
       password-db = { };

@@ -1,5 +1,9 @@
 { config, lib, ... }:
 {
+  systemd.tmpfiles.rules = [
+    "d /nix/persist/cloud/seafile/mysql 0770 root root - -"
+    "d /nix/persist/cloud/seafile/shared 0770 root root - -"
+  ];
   containers.cloud = {
     autoStart = true;
     privateNetwork = true;
@@ -42,7 +46,10 @@
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
         };
-        systemd.tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
+        systemd.tmpfiles.rules = [
+          "d /opt/seafile-data 0770 1000 1000 - -"
+          "d /opt/seafile-mysql/db 0700 mysql mysql - -"
+        ];
         services = {
           resolved.enable = true;
           journald.extraConfig = "SystemMaxUse=100M";
