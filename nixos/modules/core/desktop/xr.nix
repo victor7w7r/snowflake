@@ -4,6 +4,7 @@
   inputs,
   stdenv,
   fetchFromGitHub,
+  ...
 }:
 
 let
