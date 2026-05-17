@@ -20,9 +20,9 @@ in
       libinput = prev.libinput.overrideAttrs (oldAttrs: {
         nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
           final.pkg-config
-          final.lua
+          final.lua5_4
         ];
-        buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ final.lua ];
+        buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ final.lua5_4 ];
       });
     })
   ];
