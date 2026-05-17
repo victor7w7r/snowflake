@@ -8,5 +8,6 @@
   ++ (if (host == "v7w7r-rc71l" || host == "v7w7r-macmini81") then [ (import ./plasma.nix) ] else [ ])
   ++ (
     if (host == "v7w7r-fajita") then [ (import ./mobile.nix) ] else [ (import ./display-manager.nix) ]
-  );
+  )
+  ++ (if (host == "v7w7r-macmini81" || host == "v7w7r-rc71l") then [ (import ./xr.nix) ] else [ ]);
 }
