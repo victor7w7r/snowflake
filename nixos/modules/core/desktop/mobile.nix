@@ -20,11 +20,11 @@ in
         enable = true;
         settings.General.DisplayServer = "wayland";
       };
-      #sessionPackages = [ pkgs.kdePackages.plasma-mobile ];
-      defaultSession = "plasma-mobile";
+      sessionPackages = [ pkgs.kdePackages.plasma ];
+      #defaultSession = "plasma-mobile";
       autoLogin = {
         enable = true;
-        user = "victor7w7wr";
+        user = "victor7w7r";
       };
     };
   };
