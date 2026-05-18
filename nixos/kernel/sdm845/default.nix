@@ -33,7 +33,7 @@ let
           postInstall = ''
             cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
             ln -sv Image.gz "$out/vmlinuz" || true
-            depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
+            depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}${configure.passthru.localVer}"
           '';
         }).overrideAttrs
           (attrs: {
