@@ -15,6 +15,7 @@
       "/var/lib/lastlog"
       "/var/lib/libvirt"
       "/var/lib/lxc"
+      "/var/lib/nixos-containers"
       "/var/lib/NetworkManager"
       "/var/lib/nixos"
       "/var/lib/qemu"
