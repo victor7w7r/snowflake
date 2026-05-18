@@ -20,7 +20,7 @@ in
         enable = true;
         settings.General.DisplayServer = "wayland";
       };
-      sessionPackages = [ pkgs.kdePackages.plasma-mobile ];
+      #sessionPackages = [ pkgs.kdePackages.plasma-mobile ];
       defaultSession = "plasma-mobile";
       autoLogin = {
         enable = true;
