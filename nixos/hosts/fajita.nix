@@ -16,16 +16,19 @@ in
       makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
     })
     (final: prev: {
-      kdePackages = prev.kdePackages // {
-        plasma-workspace = prev.kdePackages.plasma-workspace.overrideAttrs (oldAttrs: {
-          cmakeFlags = (oldAttrs.cmakeFlags or [ ]) ++ [
-            "-DGLIBC_LOCALE_GEN=OFF"
-            "-DUBUNTU_PACKAGEKIT=OFF"
-            "-DGLIBC_LOCALE_PREGENERATED=ON"
-          ];
-        });
-      };
-      #plasma-workspace = final.kdePackages.plasma-workspace;
+      kdePackages = prev.kdePackages.overrideScope (
+        kfinal: kprev: {
+          plasma-workspace = kprev.plasma-workspace.overrideAttrs (oldAttrs: {
+            cmakeFlags = (oldAttrs.cmakeFlags or [ ]) ++ [
+              "-DGLIBC_LOCALE_GEN=OFF"
+              "-DUBUNTU_PACKAGEKIT=OFF"
+              "-DGLIBC_LOCALE_PREGENERATED=ON"
+            ];
+          });
+        }
+      );
+
+      plasma-workspace = final.kdePackages.plasma-workspace;
     })
     (final: prev: {
       libinput = prev.libinput.overrideAttrs (oldAttrs: {
