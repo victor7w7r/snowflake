@@ -3,6 +3,8 @@
   containers.notes = {
     autoStart = true;
     privateNetwork = true;
+    enableTun = true;
+    ephemeral = false;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.3";
     extraFlags = [ "--private-users-ownership=chown" ];
@@ -27,22 +29,39 @@
     };
 
     config =
-      { config, ... }:
+      { config, pkgs, ... }:
       {
+        system.stateVersion = "26.05";
         imports = [ inputs.agenix.nixosModules.default ];
         age = {
           identityPaths = [ "/etc/ssh/id_ed25519" ];
-          secrets.password-db.file = ../secrets/password-db.age;
+          secrets = {
+            password-db.file = ../secrets/password-db.age;
+            tailnet.file = ../secrets/tailnet.age;
+          };
         };
-        system.stateVersion = "26.05";
         boot.isContainer = true;
         networking = {
+          hostName = "v7w7r-notes";
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
         };
         services = {
-          resolved.enable = true;
+          resolved = {
+            enable = true;
+            extraConfig = "DNSStubListener=no";
+          };
           journald.extraConfig = "SystemMaxUse=100M";
+          tailscale = {
+            enable = true;
+            openFirewall = true;
+            useRoutingFeatures = "client";
+            authKeyFile = config.age.secrets.tailnet.path;
+            extraUpFlags = [
+              "--accept-dns=true"
+              "--accept-routes"
+            ];
+          };
           couchdb = {
             enable = true;
             bindAddress = "0.0.0.0";
@@ -83,13 +102,43 @@
           };
         };
 
-        systemd.tmpfiles.rules = [
-          "d /opt/couchdb/data 0770 couchdb couchdb - -"
-          "d /opt/couchdb/etc/local.d 0770 couchdb couchdb - -"
-          "d /run/secrets/couchdb-admins.ini 0770 couchdb couchdb - -"
-          "d /web/vaults 0770 couchdb couchdb - -"
-          "d /web/config 0770 couchdb couchdb - -"
-        ];
+        systemd = {
+          tmpfiles.rules = [
+            "d /opt/couchdb/data 0770 couchdb couchdb - -"
+            "d /opt/couchdb/etc/local.d 0770 couchdb couchdb - -"
+            "d /run/secrets/couchdb-admins.ini 0770 couchdb couchdb - -"
+            "d /web/vaults 0770 couchdb couchdb - -"
+            "d /web/config 0770 couchdb couchdb - -"
+          ];
+          services = {
+            tailscaled = {
+              after = [ "systemd-resolved.service" ];
+              wants = [ "systemd-resolved.service" ];
+            };
+            funnel-client = {
+              wantedBy = [ "multi-user.target" ];
+              after = [ "tailscaled.service" ];
+              wants = [ "tailscaled.service" ];
+              serviceConfig = {
+                RestartSec = "5";
+                Restart = "on-failure";
+                User = "root";
+                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:80";
+              };
+            };
+            funnel-db = {
+              wantedBy = [ "multi-user.target" ];
+              after = [ "tailscaled.service" ];
+              wants = [ "tailscaled.service" ];
+              serviceConfig = {
+                RestartSec = "5";
+                Restart = "on-failure";
+                User = "root";
+                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 8443 127.0.0.1:5984";
+              };
+            };
+          };
+        };
 
         virtualisation.docker = {
           enable = true;
@@ -108,7 +157,6 @@
           image = "docker.io/sytone/obsidian-remote:latest";
           autoStart = true;
           extraOptions = [ "--network=host" ];
-          environment = { };
           volumes = [
             "/web/vaults:/vaults"
             "/web/config:/config"

@@ -1,33 +1,46 @@
-{ lib, ... }:
+{ inputs, lib, ... }:
 {
   hardware.graphics.enable = true;
 
   containers.llm = {
     autoStart = false;
     privateNetwork = true;
+    enableTun = true;
+    ephemeral = false;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.5";
-
-    bindMounts."/dev/dri" = {
-      hostPath = "/dev/dri";
-      isReadOnly = false;
+    bindMounts = {
+      "/etc/ssh" = {
+        hostPath = "/home/victor7w7r/.ssh";
+        isReadOnly = true;
+      };
+      "/dev/dri" = {
+        hostPath = "/dev/dri";
+        isReadOnly = false;
+      };
     };
 
     config =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
       {
-        networking.firewall.allowedTCPPorts = [ 3500 ];
         system.stateVersion = "26.05";
+        imports = [ inputs.agenix.nixosModules.default ];
+        age = {
+          identityPaths = [ "/etc/ssh/id_ed25519" ];
+          secrets.tailnet.file = ../secrets/tailnet.age;
+        };
+        boot.isContainer = true;
+        networking = {
+          hostName = "v7w7r-llm";
+          firewall.enable = false;
+          useHostResolvConf = lib.mkForce false;
+        };
         hardware.graphics = {
           enable = true;
           extraPackages = [ pkgs.intel-compute-runtime ];
         };
 
-        nixpkgs.config.allowUnfreePredicate =
-          pkg:
-          builtins.elem (lib.getName pkg) [
-            "open-webui"
-          ];
+        nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "open-webui" ];
 
         systemd.services.ollama.environment = {
           OLLAMA_INTEL_GPU = "1";
@@ -35,12 +48,26 @@
         };
 
         services = {
+          resolved = {
+            enable = true;
+            extraConfig = "DNSStubListener=no";
+          };
+          journald.extraConfig = "SystemMaxUse=100M";
+          tailscale = {
+            enable = true;
+            openFirewall = true;
+            useRoutingFeatures = "client";
+            authKeyFile = config.age.secrets.tailnet.path;
+            extraUpFlags = [
+              "--accept-dns=true"
+              "--accept-routes"
+            ];
+          };
           open-webui = {
             enable = true;
             port = 3500;
             environment.OLLAMA_BASE_URL = "http://127.0.0.1:11434";
           };
-
           ollama = {
             enable = true;
             loadModels = [
@@ -48,6 +75,24 @@
               "dolphin-llama3:8b"
               "solar:10.7b"
             ];
+          };
+        };
+
+        systemd.services = {
+          tailscaled = {
+            after = [ "systemd-resolved.service" ];
+            wants = [ "systemd-resolved.service" ];
+          };
+          funnel = {
+            wantedBy = [ "multi-user.target" ];
+            after = [ "tailscaled.service" ];
+            wants = [ "tailscaled.service" ];
+            serviceConfig = {
+              RestartSec = "5";
+              Restart = "on-failure";
+              User = "root";
+              ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:3500";
+            };
           };
         };
       };

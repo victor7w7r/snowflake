@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ inputs, lib, ... }:
 {
   containers.git = {
     autoStart = true;
@@ -7,34 +7,77 @@
     ephemeral = false;
     hostAddress = "192.168.100.1";
     localAddress = "192.168.100.4";
-    extraFlags = [
-      "--private-users-ownership=chown"
-    ];
-    additionalCapabilities = [
-      ''all" --system-call-filter="add_key keyctl bpf" --capability="all''
-    ];
+    extraFlags = [ "--private-users-ownership=chown" ];
+    additionalCapabilities = [ ''all" --system-call-filter="add_key keyctl bpf" --capability="all'' ];
 
-    bindMounts = {
-      "/opt/onedev" = {
-        hostPath = "/nix/persist/containers/git";
-        isReadOnly = false;
-      };
+    bindMounts."/opt/onedev" = {
+      hostPath = "/nix/persist/containers/git";
+      isReadOnly = false;
     };
 
     config =
-      { ... }:
+      { config, pkgs, ... }:
       {
         system.stateVersion = "26.05";
+        imports = [ inputs.agenix.nixosModules.default ];
+        age = {
+          identityPaths = [ "/etc/ssh/id_ed25519" ];
+          secrets.tailnet.file = ../secrets/tailnet.age;
+        };
         boot.isContainer = true;
         networking = {
+          hostName = "v7w7r-git";
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
         };
         services = {
-          resolved.enable = true;
+          resolved = {
+            enable = true;
+            extraConfig = "DNSStubListener=no";
+          };
           journald.extraConfig = "SystemMaxUse=100M";
+          tailscale = {
+            enable = true;
+            openFirewall = true;
+            useRoutingFeatures = "client";
+            authKeyFile = config.age.secrets.tailnet.path;
+            extraUpFlags = [
+              "--accept-dns=true"
+              "--accept-routes"
+            ];
+          };
         };
-        systemd.tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
+        systemd = {
+          tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
+          services = {
+            tailscaled = {
+              after = [ "systemd-resolved.service" ];
+              wants = [ "systemd-resolved.service" ];
+            };
+            funnel-client = {
+              wantedBy = [ "multi-user.target" ];
+              after = [ "tailscaled.service" ];
+              wants = [ "tailscaled.service" ];
+              serviceConfig = {
+                RestartSec = "5";
+                Restart = "on-failure";
+                User = "root";
+                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:6610";
+              };
+            };
+            funnel-ssh = {
+              wantedBy = [ "multi-user.target" ];
+              after = [ "tailscaled.service" ];
+              wants = [ "tailscaled.service" ];
+              serviceConfig = {
+                RestartSec = "5";
+                Restart = "on-failure";
+                User = "root";
+                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 8443 127.0.0.1:6611";
+              };
+            };
+          };
+        };
 
         virtualisation.docker = {
           enable = true;

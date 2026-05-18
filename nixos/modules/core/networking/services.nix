@@ -33,7 +33,14 @@
     };
     croc.enable = true;
     dnsmasq.enable = true;
-    tailscale.enable = host != "v7w7r-opizero2w";
+    tailscale = {
+      enable = true;
+      openFirewall = true;
+      extraUpFlags = [
+        "--accept-dns=true"
+        "--accept-routes"
+      ];
+    };
     ttyd = {
       enable = true;
       writeable = true;

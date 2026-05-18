@@ -27,40 +27,72 @@
     config =
       { config, pkgs, ... }:
       {
+        system.stateVersion = "26.05";
         imports = [ inputs.agenix.nixosModules.default ];
         age = {
           identityPaths = [ "/etc/ssh/id_ed25519" ];
           secrets = {
             seafile-db-env.file = ../secrets/seafile-db-env.age;
             seafile-env.file = ../secrets/seafile-env.age;
+            tailnet.file = ../secrets/tailnet.age;
           };
         };
-        system.stateVersion = "26.05";
         boot.isContainer = true;
         networking = {
+          hostName = "v7w7r-cloud";
           firewall.enable = false;
           useHostResolvConf = lib.mkForce false;
         };
-        systemd = {
-          tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
-          services.create-seafile-net = {
-            serviceConfig.Type = "oneshot";
-            wantedBy = [
-              "docker-seafile-db.service"
-              "docker-seafile-cache.service"
-              "docker-seafile.service"
+        services = {
+          journald.extraConfig = "SystemMaxUse=100M";
+          resolved = {
+            enable = true;
+            extraConfig = "DNSStubListener=no";
+          };
+          tailscale = {
+            enable = true;
+            openFirewall = true;
+            useRoutingFeatures = "client";
+            authKeyFile = config.age.secrets.tailnet.path;
+            extraUpFlags = [
+              "--accept-dns=true"
+              "--accept-routes"
             ];
-            script = ''
-              check=$(${pkgs.docker}/bin/docker network ls -qf name=seafile-net)
-              if [ -z "$check" ]; then
-                ${pkgs.docker}/bin/docker network create seafile-net
-              fi
-            '';
           };
         };
-        services = {
-          resolved.enable = true;
-          journald.extraConfig = "SystemMaxUse=100M";
+        systemd = {
+          tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
+          services = {
+            tailscaled = {
+              after = [ "systemd-resolved.service" ];
+              wants = [ "systemd-resolved.service" ];
+            };
+            funnel = {
+              wantedBy = [ "multi-user.target" ];
+              after = [ "tailscaled.service" ];
+              wants = [ "tailscaled.service" ];
+              serviceConfig = {
+                RestartSec = "5";
+                Restart = "on-failure";
+                User = "root";
+                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:80";
+              };
+            };
+            create-seafile-net = {
+              serviceConfig.Type = "oneshot";
+              wantedBy = [
+                "docker-seafile-db.service"
+                "docker-seafile-cache.service"
+                "docker-seafile.service"
+              ];
+              script = ''
+                check=$(${pkgs.docker}/bin/docker network ls -qf name=seafile-net)
+                if [ -z "$check" ]; then
+                  ${pkgs.docker}/bin/docker network create seafile-net
+                fi
+              '';
+            };
+          };
         };
 
         virtualisation.docker = {

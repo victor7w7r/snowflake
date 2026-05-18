@@ -24,11 +24,13 @@ let
   ];
 in
 {
+  #nix run github:ryantm/agenix -- -e ...
   "secrets/seckey-a.age".publicKeys = systems ++ users;
   "secrets/seckey-b.age".publicKeys = systems ++ users;
   "secrets/seckey-c.age".publicKeys = systems ++ users;
   "secrets/seckey-d.age".publicKeys = systems ++ users;
   "modules/core/selfhost/secrets/password-db.age".publicKeys = systems ++ users;
+  "modules/core/selfhost/secrets/tailnet.age".publicKeys = systems ++ users;
   "modules/core/selfhost/secrets/seafile-db-env.age".publicKeys = systems ++ users;
   "modules/core/selfhost/secrets/seafile-env.age".publicKeys = systems ++ users;
   "modules/core/selfhost/secrets/tunnel.age".publicKeys = systems ++ users;
