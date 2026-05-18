@@ -24,6 +24,11 @@ let
           version = "${configure.version}${configure.passthru.localVer}";
           makeFlags = [ "LOCALVERSION=-v7w7r-sdm845" ];
           installTargets = [ "modules_install" ];
+          nativeBuildInputs = with pkgs; [
+            python3
+            zstd
+            kmod
+          ];
           modDirVersion = "${configure.version}${configure.passthru.localVer}";
           postInstall = ''
             cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
