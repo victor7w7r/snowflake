@@ -22,6 +22,7 @@ in
       };
       sessionPackages = [ pkgs.kdePackages.plasma ];
       #defaultSession = "plasma-mobile";
+      defaultSession = "plasma";
       autoLogin = {
         enable = true;
         user = "victor7w7r";
