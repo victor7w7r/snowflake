@@ -15,17 +15,15 @@ in
     (_: prev: {
       makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
     })
-    /*
-      (final: prev: {
-        libinput = prev.libinput.overrideAttrs (oldAttrs: {
-          nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
-            final.pkg-config
-            final.lua5_4
-          ];
-          buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ final.lua5_4 ];
-        });
-      })
-    */
+    (final: prev: {
+      libinput = prev.libinput.overrideAttrs (oldAttrs: {
+        nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
+          final.pkg-config
+          final.lua5_4
+        ];
+        buildInputs = (oldAttrs.buildInputs or [ ]) ++ [ final.lua5_4 ];
+      });
+    })
   ];
 
   imports = [
