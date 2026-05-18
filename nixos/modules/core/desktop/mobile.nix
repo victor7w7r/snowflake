@@ -3,15 +3,17 @@ let
   ini = pkgs.formats.ini { };
 in
 {
-  environment.etc."xdg/kdeglobals".source = ini.generate "kdeglobals" {
-    KDE.LookAndFeelPackage = "org.kde.plasma.phone";
-  };
-  environment.etc."xdg/kwinrc".source = ini.generate "kwinrc" {
-    Wayland."InputMethod[$e]" =
-      "/run/current-system/sw/share/applications/com.github.maliit.keyboard.desktop";
-    Wayland.VirtualKeyboardEnabled = "true";
-    "org.kde.kdecoration2".NoPlugin = "true";
-  };
+  /*
+    environment.etc."xdg/kdeglobals".source = ini.generate "kdeglobals" {
+      KDE.LookAndFeelPackage = "org.kde.plasma.phone";
+    };
+    environment.etc."xdg/kwinrc".source = ini.generate "kwinrc" {
+      Wayland."InputMethod[$e]" =
+        "/run/current-system/sw/share/applications/com.github.maliit.keyboard.desktop";
+      Wayland.VirtualKeyboardEnabled = "true";
+      "org.kde.kdecoration2".NoPlugin = "true";
+      };
+  */
 
   environment = {
     plasma6.excludePackages = with pkgs; [
