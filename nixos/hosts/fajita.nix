@@ -15,19 +15,21 @@ in
     (_: prev: {
       makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
     })
-    (final: prev: {
-      kdePackages = prev.kdePackages // {
-        plasma-workspace = prev.kdePackages.plasma-workspace.overrideAttrs (oldAttrs: {
-          cmakeFlags = (oldAttrs.cmakeFlags or [ ]) ++ [
-            "-DGLIBC_LOCALE_GEN=OFF"
-            "-DUBUNTU_PACKAGEKIT=OFF"
-            "-DGLIBC_LOCALE_PREGENERATED=ON"
-          ];
-        });
-      };
+    /*
+      (final: prev: {
+        kdePackages = prev.kdePackages // {
+          plasma-workspace = prev.kdePackages.plasma-workspace.overrideAttrs (oldAttrs: {
+            cmakeFlags = (oldAttrs.cmakeFlags or [ ]) ++ [
+              "-DGLIBC_LOCALE_GEN=OFF"
+              "-DUBUNTU_PACKAGEKIT=OFF"
+              "-DGLIBC_LOCALE_PREGENERATED=ON"
+            ];
+          });
+        };
 
-      plasma-workspace = final.kdePackages.plasma-workspace;
-    })
+        plasma-workspace = final.kdePackages.plasma-workspace;
+      })
+    */
     (final: prev: {
       libinput = prev.libinput.overrideAttrs (oldAttrs: {
         nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
