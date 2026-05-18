@@ -59,7 +59,6 @@ in
       kdePackages.okular
       kdePackages.plasma-workspace
       kdePackages.plasma-desktop
-      kdePackages.plasma-mobile
       kdePackages.plasma-integration
       kdePackages.partitionmanager
       kdePackages.polkit-qt-1
@@ -108,6 +107,9 @@ in
         };
         #settings.General.DisplayServer = "wayland";
       };
+      sessionPackages = with pkgs; [
+        kdePackages.plasma-mobile
+      ];
       defaultSession = "plasma-mobile";
       #defaultSession = "plasma";
       autoLogin = {
