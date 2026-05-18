@@ -7,26 +7,11 @@
 let
   configure = pkgs.callPackage ./configure.nix { inherit kernelData; };
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
-  patches = configure.passthru.patches;
-
   kconfigFile = pkgs.writeText "kconfig-mobile" (
     lib.concatStringsSep "\n" (
       lib.mapAttrsToList (name: value: "${name}=${value}") (import ./config.aarch64-linux.nix)
     )
   );
-  /*
-    installFlags = [ "INSTALL_MOD_PATH=$out" ];
-      postInstall = ''
-        mkdir -p $out
-
-        cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
-
-        ln -sv Image.gz "$out/vmlinuz" || true
-        cp .config $out/config-${configure.version}
-
-        depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
-      '';
-  */
   build =
     let
       kernelFunc =
