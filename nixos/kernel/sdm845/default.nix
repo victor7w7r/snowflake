@@ -8,6 +8,7 @@ let
   configure = pkgs.callPackage ./configure.nix { inherit kernelData; };
   kconfigToNix = pkgs.callPackage ../generated/generate.nix { inherit configure; };
   patches = configure.passthru.patches;
+
   kconfigFile = pkgs.writeText "kconfig-mobile" (
     lib.concatStringsSep "\n" (
       lib.mapAttrsToList (name: value: "${name}=${value}") (import ./config.aarch64-linux.nix)
@@ -29,26 +30,26 @@ let
   build =
     let
       kernelFunc =
-        {
-          randstructSeed ? null,
-          ...
-        }:
+        { ... }:
         (pkgs.mobile-nixos.kernel-builder {
           inherit (configure) patches src;
           configfile = ./sdm845.config;
-          isModular = false;
+          isModular = true;
           isCompressed = "gz";
           version = "${configure.version}${configure.passthru.localVer}";
           makeFlags = [ "LOCALVERSION=-v7w7r-sdm845" ];
+          installTargets = [ "modules_install" ];
           modDirVersion = "${configure.version}${configure.passthru.localVer}";
-        })
-
-        .overrideAttrs
+          postInstall = ''
+            cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
+            ln -sv Image.gz "$out/vmlinuz" || true
+            depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}"
+          '';
+        }).overrideAttrs
           (attrs: {
             passthru = attrs.passthru // {
               inherit kconfigToNix configure;
             };
-
             postConfigure = ''
               sed -i 's/^CONFIG_BRIDGE=m/CONFIG_BRIDGE=y/' $buildRoot/.config
               sed -i 's/^CONFIG_BRIDGE_NETFILTER=m/CONFIG_BRIDGE_NETFILTER=y/' $buildRoot/.config
