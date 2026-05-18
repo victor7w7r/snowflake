@@ -25,7 +25,7 @@ in
           ];
         });
       };
-      plasma-workspace = final.kdePackages.plasma-workspace;
+      #plasma-workspace = final.kdePackages.plasma-workspace;
     })
     (final: prev: {
       libinput = prev.libinput.overrideAttrs (oldAttrs: {
