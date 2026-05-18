@@ -99,7 +99,11 @@ in
       sddm = {
         enable = true;
         package = lib.mkForce pkgs.kdePackages.sddm;
-        settings.General.DisplayServer = "wayland";
+        wayland = {
+          enable = true;
+          compositor = "kwin";
+        };
+        #settings.General.DisplayServer = "wayland";
       };
       #sessionPackages = [ pkgs.kdePackages.plasma ];
       #defaultSession = "plasma-mobile";
