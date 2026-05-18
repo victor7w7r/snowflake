@@ -142,24 +142,4 @@ in
   systemd.tmpfiles.rules = [
     "L+ /nix/var/cache/ccache/ccache.conf - - - - ${ccacheConfigFile}"
   ];
-
-  sops = {
-    defaultSopsFile = ./secrets/sec.yaml;
-    age.sshKeyPaths = [ "/nix/persist/etc/ssh/ssh_host_ed25519_key" ];
-    secrets = {
-      tunnel = { };
-      seafile-env = { };
-      seafile-db-env = { };
-      cloudflare-token = { };
-      password-db = { };
-      seckey-d = { };
-      ssh-vm-pub = { };
-      ssh-vm-key = { };
-      age-vm-key = { };
-    };
-    templates."couchdb-admins.ini".content = ''
-      [admins]
-      admin = ${config.sops.placeholder.password-db}
-    '';
-  };
 }

@@ -199,9 +199,7 @@ let
       cp -r ../lib/$(if [ "${system}" = "x86_64-linux" ]; then echo "x86_64"; else echo "aarch64"; fi)/*.so $out/lib/ || true
     '';
 
-    fixupPhase = ''
-      patchelf --set-rpath '$ORIGIN/../lib' $out/bin/xrDriver
-    '';
+    fixupPhase = "patchelf --set-rpath '$ORIGIN/../lib' $out/bin/xrDriver";
   };
 in
 {

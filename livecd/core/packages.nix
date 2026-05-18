@@ -23,7 +23,6 @@
     ssh-to-age
     sbctl
     sl
-    sops
     ternimal
     tpm2-tools
     tmux

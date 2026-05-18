@@ -1,4 +1,4 @@
-{ config, ... }:
+{ ... }:
 {
   services.nginx = {
     enable = true;
@@ -8,7 +8,7 @@
 
     virtualHosts = {
       "funnel" = {
-        serverName = config.sops.placeholder.tunnel;
+        serverName = "_";
         addSSL = false;
         forceSSL = false;
         listen = [
@@ -42,7 +42,7 @@
       };
 
       "funnel-2" = {
-        serverName = config.sops.placeholder.tunnel;
+        serverName = "_";
         addSSL = false;
         forceSSL = false;
         listen = [
@@ -68,7 +68,7 @@
       };
 
       "funnel-3" = {
-        serverName = config.sops.placeholder.tunnel;
+        serverName = "_";
         addSSL = false;
         forceSSL = false;
         listen = [

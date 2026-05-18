@@ -24,13 +24,15 @@
   };
 
   inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    impermanence.url = "github:nix-community/impermanence";
+    agenix.url = "github:ryantm/agenix";
+
     nixvim = {
       url = "github:nix-community/nixvim";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
-    #nixpkgs.url = "github:NixOS/nixpkgs/768447fd6212";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
     hardware.url = "https://flakehub.com/f/NixOS/nixos-hardware/0.1";
     hyprpicker.url = "github:hyprwm/hyprpicker";
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
@@ -52,7 +54,6 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    impermanence.url = "github:nix-community/impermanence";
     gestures.url = "github:ferstar/gestures";
     nix-gaming.url = "github:fufexan/nix-gaming";
     thorium.url = "github:almahdi/nix-thorium";
@@ -104,10 +105,6 @@
       url = "github:hyprwm/hyprland-plugins";
       inputs.hyprland.follows = "hyprland";
     };
-    sops-nix = {
-      url = "github:Mic92/sops-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     catppuccin-refind = {
       url = "github:catppuccin/refind";
       flake = false;
@@ -130,7 +127,7 @@
       home-manager,
       nix-flatpak,
       nixvim,
-      sops-nix,
+      agenix,
       nixos-hardware,
       ...
     }@inputs:
@@ -236,7 +233,7 @@
             disko.nixosModules.disko
             nur.modules.nixos.default
             nixvim.nixosModules.nixvim
-            sops-nix.nixosModules.sops
+            agenix.nixosModules.default
             (import ./modules/core)
             (import ./modules/home)
           ];
@@ -246,7 +243,6 @@
             kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             inherit
               self
-              sops-nix
               inputs
               username
               ;
@@ -280,7 +276,7 @@
             home-manager.nixosModules.home-manager
             nur.modules.nixos.default
             nixvim.nixosModules.nixvim
-            sops-nix.nixosModules.sops
+            agenix.nixosModules.default
             (import ./modules/core)
             (import ./modules/home)
           ]
@@ -291,7 +287,6 @@
             kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             inherit
               self
-              sops-nix
               inputs
               username
               ;
@@ -321,14 +316,13 @@
             (import ./hosts/macmini.nix)
             (import ./modules/core)
             (import ./modules/home)
-            sops-nix.nixosModules.sops
+            agenix.nixosModules.default
           ];
           specialArgs = {
             host = "v7w7r-macmini81";
             kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             inherit
               self
-              sops-nix
               inputs
               username
               system
@@ -359,14 +353,13 @@
             (import ./modules/home)
             nur.modules.nixos.default
             impermanence.nixosModules.impermanence
-            sops-nix.nixosModules.sops
+            agenix.nixosModules.default
           ];
           specialArgs = {
             host = "v7w7r-rc71l";
             kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             inherit
               self
-              sops-nix
               nix-cachyos-kernel
               inputs
               username
@@ -401,14 +394,13 @@
             (import ./modules/core)
             (import ./modules/home)
             nur.modules.nixos.default
-            sops-nix.nixosModules.sops
+            agenix.nixosModules.default
           ];
           specialArgs = {
             host = "v7w7r-youyeetoox1";
             kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             inherit
               self
-              sops-nix
               inputs
               username
               system
@@ -440,14 +432,13 @@
             (import ./modules/core)
             (import ./modules/home)
             nur.modules.nixos.default
-            sops-nix.nixosModules.sops
+            agenix.nixosModules.default
           ];
           specialArgs = {
             host = "v7w7r-nixvm";
             kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             inherit
               self
-              sops-nix
               inputs
               username
               system

@@ -1,4 +1,4 @@
-{ config, lib, ... }:
+{ inputs, lib, ... }:
 {
   containers.cloud = {
     autoStart = true;
@@ -9,22 +9,13 @@
     localAddress = "192.168.100.2";
     extraFlags = [ "--private-users-ownership=chown" ];
     additionalCapabilities = [ ''all" --system-call-filter="add_key keyctl bpf" --capability="all'' ];
-
     bindMounts = {
       "/opt/seafile-mysql/db" = {
         hostPath = "/nix/persist/cloud/seafile/mysql";
         isReadOnly = false;
       };
-      "/etc/seafile-env" = {
-        hostPath = config.sops.secrets.seafile-env.path;
-        isReadOnly = true;
-      };
-      "/etc/seafile-db-env" = {
-        hostPath = config.sops.secrets.seafile-db-env.path;
-        isReadOnly = true;
-      };
-      "/opt/seafile-data/seafile/conf/.env" = {
-        hostPath = config.sops.secrets.seafile-db-env.path;
+      "/etc/ssh" = {
+        hostPath = "/home/victor7w7r/.ssh";
         isReadOnly = true;
       };
       "/opt/seafile-data" = {
@@ -34,8 +25,16 @@
     };
 
     config =
-      { pkgs, ... }:
+      { config, pkgs, ... }:
       {
+        imports = [ inputs.agenix.nixosModules.default ];
+        age = {
+          identityPaths = [ "/etc/ssh/id_ed25519" ];
+          secrets = {
+            seafile-db-env.file = ../secrets/seafile-db-env.age;
+            seafile-env.file = ../secrets/seafile-env.age;
+          };
+        };
         system.stateVersion = "26.05";
         boot.isContainer = true;
         networking = {
@@ -79,7 +78,7 @@
         virtualisation.oci-containers.containers = {
           seafile-db = {
             image = "mariadb:10.11";
-            environmentFiles = [ "/etc/seafile-db-env" ];
+            environmentFiles = config.age.secrets.seafile-db-env.path;
             volumes = [ "/opt/seafile-mysql/db:/var/lib/mysql" ];
             extraOptions = [ "--network=seafile-net" ];
           };
@@ -103,7 +102,7 @@
             ];
             ports = [ "80:80" ];
             volumes = [ "/opt/seafile-data:/shared" ];
-            environmentFiles = [ "/etc/seafile-env" ];
+            environmentFiles = config.age.secrets.seafile-env.path;
             dependsOn = [
               "seafile-db"
               "seafile-cache"

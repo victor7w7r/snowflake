@@ -65,7 +65,6 @@
         ".config/onlyoffice"
         ".config/rog"
         ".config/Seafile"
-        ".config/sops"
         ".config/vlc"
         ".config/zen"
         ".local/share/baloo"

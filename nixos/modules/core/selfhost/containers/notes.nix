@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ inputs, lib, ... }:
 {
   containers.notes = {
     autoStart = true;
@@ -12,6 +12,10 @@
         hostPath = "/nix/persist/containers/notes/data";
         isReadOnly = false;
       };
+      "/etc/ssh" = {
+        hostPath = "/home/victor7w7r/.ssh";
+        isReadOnly = true;
+      };
       "/web/vaults" = {
         hostPath = "/nix/persist/containers/notes/web/vaults";
         isReadOnly = false;
@@ -20,14 +24,16 @@
         hostPath = "/nix/persist/containers/notes/web/config";
         isReadOnly = false;
       };
-      "/run/secrets/rendered/couchdb-admins.ini" = {
-        hostPath = "/run/secrets/rendered/couchdb-admins.ini";
-      };
     };
 
     config =
-      { ... }:
+      { config, ... }:
       {
+        imports = [ inputs.agenix.nixosModules.default ];
+        age = {
+          identityPaths = [ "/etc/ssh/id_ed25519" ];
+          secrets.password-db.file = ../secrets/password-db.age;
+        };
         system.stateVersion = "26.05";
         boot.isContainer = true;
         networking = {
@@ -73,7 +79,7 @@
               };
 
             };
-            extraConfigFiles = [ "/run/secrets/couchdb-admins.ini" ];
+            extraConfigFiles = [ config.age.secrets.password-db.path ];
           };
         };
 
