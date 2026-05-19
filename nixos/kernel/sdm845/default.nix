@@ -30,6 +30,11 @@ let
             kmod
           ];
           modDirVersion = "${configure.version}${configure.passthru.localVer}";
+          postPatch = ''
+            rm -f localversion*
+            sed -i 's/localversion_next=.*//' scripts/setlocalversion
+            echo "" > .scmversion
+          '';
           postInstall = ''
             cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
             ln -sv Image.gz "$out/vmlinuz" || true

@@ -11,12 +11,16 @@ let
     version = toString (builtins.match ".+VERSION = ([0-9]+).+" (builtins.readFile file));
     patchlevel = toString (builtins.match ".+PATCHLEVEL = ([0-9]+).+" (builtins.readFile file));
     sublevel = toString (builtins.match ".+SUBLEVEL = ([0-9]+).+" (builtins.readFile file));
-    extraversion = toString (builtins.match ".+EXTRAVERSION = ([a-z0-9-]+).+" (builtins.readFile file));
+    extraversionRaw = builtins.match ".*EXTRAVERSION = ([^\n\r]+).*" (builtins.readFile file);
+    extraversion =
+      if extraversionRaw != null then lib.strings.trim (builtins.head extraversionRaw) else "";
     string = "${
       version + "." + patchlevel + "." + sublevel + (lib.optionalString (extraversion != "") extraversion)
     }";
   };
-  majorMinor = lib.versions.majorMinor version.string;
+  majorMinor = (
+    builtins.trace (lib.versions.majorMinor version.string) (lib.versions.majorMinor version.string)
+  );
   isCross = stdenv.hostPlatform != stdenv.buildPlatform;
   fetch = (pkgs.callPackage ../fetch.nix { inherit kernelData majorMinor; });
   localVer = "-v7w7r-sdm845";
@@ -66,12 +70,6 @@ pkgs.stdenv.mkDerivation {
       "x86_64-linux"
     ];
   };
-
-  postPatch = ''
-    sed -i 's/localversion_next=.*//' scripts/setlocalversion
-    rm -rf  localversion-next
-    echo "" > .scmversion
-  '';
 
   passthru = {
     inherit localVer patches;
