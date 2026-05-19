@@ -210,6 +210,7 @@
   "CONFIG_PGTABLE_LEVELS" = "4";
   "CONFIG_ARCH_SUPPORTS_UPROBES" = "y";
   "CONFIG_ARCH_PROC_KCORE_TEXT" = "y";
+  "CONFIG_BROKEN_GAS_INST" = "y";
   "CONFIG_BUILTIN_RETURN_ADDRESS_STRIPS_PAC" = "y";
   "CONFIG_ARCH_SUNXI" = "y";
   "CONFIG_AMPERE_ERRATUM_AC03_CPU_38" = "y";
@@ -259,7 +260,6 @@
   "CONFIG_SCHED_HRTICK" = "y";
   "CONFIG_ARCH_SPARSEMEM_ENABLE" = "y";
   "CONFIG_HW_PERF_EVENTS" = "y";
-  "CONFIG_CC_HAVE_SHADOW_CALL_STACK" = "y";
   "CONFIG_PARAVIRT" = "y";
   "CONFIG_ARCH_SUPPORTS_KEXEC" = "y";
   "CONFIG_ARCH_SUPPORTS_KEXEC_FILE" = "y";
@@ -279,17 +279,11 @@
   "CONFIG_ARM64_LSE_ATOMICS" = "y";
   "CONFIG_ARM64_USE_LSE_ATOMICS" = "y";
   "CONFIG_ARM64_CNP" = "y";
-  "CONFIG_CC_HAS_BRANCH_PROT_PAC_RET" = "y";
   "CONFIG_AS_HAS_CFI_NEGATE_RA_STATE" = "y";
   "CONFIG_ARM64_TLB_RANGE" = "y";
-  "CONFIG_AS_HAS_ARMV8_5" = "y";
   "CONFIG_ARM64_BTI" = "y";
-  "CONFIG_CC_HAS_BRANCH_PROT_PAC_RET_BTI" = "y";
   "CONFIG_ARM64_E0PD" = "y";
-  "CONFIG_ARM64_AS_HAS_MTE" = "y";
-  "CONFIG_ARM64_MTE" = "y";
   "CONFIG_ARM64_EPAN" = "y";
-  "CONFIG_AS_HAS_MOPS" = "y";
   "CONFIG_ARM64_POE" = "y";
   "CONFIG_ARCH_PKEY_BITS" = "3";
   "CONFIG_ARM64_HAFT" = "y";
@@ -299,7 +293,6 @@
   "CONFIG_RELOCATABLE" = "y";
   "CONFIG_RANDOMIZE_BASE" = "y";
   "CONFIG_RANDOMIZE_MODULE_REGION_FULL" = "y";
-  "CONFIG_CC_HAVE_STACKPROTECTOR_SYSREG" = "y";
   "CONFIG_CMDLINE" = "vt.default_red=30,243,166,249,137,245,148,186,88,243,166,249,137,245,148,166 vt.default_grn=30,139,227,226,180,194,226,194,91,139,227,226,180,194,226,173 vt.default_blu=46,168,161,175,250,231,213,222,112,168,161,175,250,231,213,200 pti=on page_alloc.shuffle=1 elevator=none page_poison=1 oops=panic randomize_kstack_offset=on iommu=pt pcie_acs_override=downstream,multifunction kvm.ignore_msrs=1 kvm.report_ignored_msrs=0 rcutree.enable_rcu_lazy=1 rcupdate.rcu_expedited=1 threadirqs  split_lock_detect=off tsc=reliable nowatchdog nmi_watchdog=0  sysrq_always_enabled=0 i915.enable_guc=2 kvm_intel.emulate_invalid_guest_state=0 kvm_intel.nested=1 intel_pstate=passive intel_iommu=on pcie_ports=compat";
   "CONFIG_CMDLINE_FROM_BOOTLOADER" = "y";
   "CONFIG_EFI_STUB" = "y";
@@ -365,7 +358,6 @@
   "CONFIG_KVM" = "y";
   "CONFIG_HAVE_LIVEPATCH" = "y";
   "CONFIG_CPU_MITIGATIONS" = "y";
-  "CONFIG_ARCH_HAS_SUBPAGE_FAULTS" = "y";
   "CONFIG_HOTPLUG_SMT" = "y";
   "CONFIG_ARCH_SUPPORTS_SCHED_SMT" = "y";
   "CONFIG_ARCH_SUPPORTS_SCHED_CLUSTER" = "y";
@@ -420,7 +412,6 @@
   "CONFIG_SECCOMP_FILTER" = "y";
   "CONFIG_HAVE_ARCH_KSTACK_ERASE" = "y";
   "CONFIG_HAVE_STACKPROTECTOR" = "y";
-  "CONFIG_ARCH_SUPPORTS_SHADOW_CALL_STACK" = "y";
   "CONFIG_ARCH_SUPPORTS_LTO_CLANG" = "y";
   "CONFIG_ARCH_SUPPORTS_LTO_CLANG_THIN" = "y";
   "CONFIG_LTO_NONE" = "y";
@@ -644,8 +635,6 @@
   "CONFIG_ZONE_DMA32" = "y";
   "CONFIG_ARCH_USES_HIGH_VMA_FLAGS" = "y";
   "CONFIG_ARCH_HAS_PKEYS" = "y";
-  "CONFIG_ARCH_USES_PG_ARCH_2" = "y";
-  "CONFIG_ARCH_USES_PG_ARCH_3" = "y";
   "CONFIG_VM_EVENT_COUNTERS" = "y";
   "CONFIG_ARCH_HAS_PTE_SPECIAL" = "y";
   "CONFIG_MEMFD_CREATE" = "y";
@@ -4515,7 +4504,6 @@
   "CONFIG_ARCH_HAS_DEBUG_VIRTUAL" = "y";
   "CONFIG_HAVE_ARCH_KASAN" = "y";
   "CONFIG_HAVE_ARCH_KASAN_SW_TAGS" = "y";
-  "CONFIG_HAVE_ARCH_KASAN_HW_TAGS" = "y";
   "CONFIG_HAVE_ARCH_KASAN_VMALLOC" = "y";
   "CONFIG_CC_HAS_KASAN_GENERIC" = "y";
   "CONFIG_CC_HAS_KASAN_SW_TAGS" = "y";
