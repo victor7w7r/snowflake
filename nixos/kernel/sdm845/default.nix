@@ -29,7 +29,6 @@ let
           ];
 
           isModular = true;
-          installTargets = [ "modules_install" ];
 
           version = "${configure.version}${configure.passthru.localVer}";
           modDirVersion = "${configure.version}${configure.passthru.localVer}";
@@ -52,6 +51,7 @@ let
         }).overrideAttrs
           (attrs: {
             postConfigure = import ./post-configure.nix;
+            installTargets = [ "modules_install" ];
             passthru = attrs.passthru // {
               inherit kconfigToNix kconfigFile configure;
             };
