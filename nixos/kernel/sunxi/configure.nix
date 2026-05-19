@@ -73,6 +73,7 @@ pkgs.stdenv.mkDerivation {
   */
 
   buildPhase = ''
+    export ARCH=arm64
     cp ${fetch.armbian}/config/kernel/linux-sunxi64-current.config .config
     chmod -R +w .config
     make $makeFlags olddefconfig
@@ -89,7 +90,10 @@ pkgs.stdenv.mkDerivation {
   '';
 
   meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {
-    platforms = [ "aarch64-linux" ];
+    platforms = [
+      "aarch64-linux"
+      "x86_64-linux"
+    ];
   };
 
   passthru = {

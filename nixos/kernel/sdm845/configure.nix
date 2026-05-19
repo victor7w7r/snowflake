@@ -50,15 +50,20 @@ pkgs.stdenv.mkDerivation {
   ];
 
   buildPhase = ''
-    cp arch/arm64/configs/sdm845.config .config
-    make $makeFlags olddefconfig
+    export ARCH=arm64
+    export KCONFIG_CONFIG=$PWD/.config
+    make defconfig
+    scripts/kconfig/merge_config.sh -m .config arch/arm64/configs/sdm845.config
     patchShebangs scripts/config
     scripts/config ${lib.concatStringsSep " " config}
     make $makeFlags olddefconfig
   '';
 
   meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {
-    platforms = [ "aarch64-linux" ];
+    platforms = [
+      "aarch64-linux"
+      "x86_64-linux"
+    ];
   };
 
   passthru = {

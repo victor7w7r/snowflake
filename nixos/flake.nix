@@ -140,6 +140,7 @@
         inherit system;
         overlays = [
           nix-cachyos-kernel.overlays.pinned
+          (import "${inputs.mobile-nixos}/overlay/overlay.nix")
         ];
       };
       armPkgs = import nixpkgs {
@@ -159,13 +160,6 @@
             (armPkgs.callPackage ./kernel/sunxi {
               kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             }).kernel.kconfigToNix;
-
-          sunxipatch =
-            (armPkgs.callPackage ./kernel/sunxi {
-              kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
-            }).kernel.configure;
-
-          opi-tarball = self.nixosConfigurations.opizero2w.config.system.build.tarball;
 
           qcomconfig =
             (armPkgs.callPackage ./kernel/sdm845 {
@@ -196,6 +190,21 @@
             (pkgs.callPackage ./kernel {
               host = "v7w7r-macmini81";
               inherit helpers inputs;
+              kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
+            }).kernel.kconfigToNix;
+
+          qcomconfig =
+            (pkgs.callPackage ./kernel/sdm845 {
+              kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
+            }).build.kconfigToNix;
+
+          qcomconfigflat =
+            (pkgs.callPackage ./kernel/sdm845 {
+              kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
+            }).build.kconfigFile;
+
+          sunxiconfig =
+            (pkgs.callPackage ./kernel/sunxi {
               kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             }).kernel.kconfigToNix;
         };
