@@ -61,12 +61,14 @@
         systemd = {
           tmpfiles.rules = [ "d /opt/seafile-data 0770 1000 1000 - -" ];
           services = {
+            tailscaled-autoconnect.serviceConfig = lib.mkIf config.boot.isContainer {
+              Type = lib.mkForce "exec";
+            };
             tailscaled = {
               after = [ "systemd-resolved.service" ];
               wants = [ "systemd-resolved.service" ];
             };
-            /*
-              funnel = {
+            funnel = {
               wantedBy = [ "multi-user.target" ];
               after = [ "tailscaled.service" ];
               wants = [ "tailscaled.service" ];
@@ -76,8 +78,7 @@
                 User = "root";
                 ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:80";
               };
-              };
-            */
+            };
             create-seafile-net = {
               serviceConfig.Type = "oneshot";
               wantedBy = [

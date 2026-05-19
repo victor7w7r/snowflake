@@ -112,30 +112,31 @@
               after = [ "systemd-resolved.service" ];
               wants = [ "systemd-resolved.service" ];
             };
-            /*
-              funnel-client = {
-                wantedBy = [ "multi-user.target" ];
-                after = [ "tailscaled.service" ];
-                wants = [ "tailscaled.service" ];
-                serviceConfig = {
-                  RestartSec = "5";
-                  Restart = "on-failure";
-                  User = "root";
-                  ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:80";
-                };
+            tailscaled-autoconnect.serviceConfig = lib.mkIf config.boot.isContainer {
+              Type = lib.mkForce "exec";
+            };
+            funnel-client = {
+              wantedBy = [ "multi-user.target" ];
+              after = [ "tailscaled.service" ];
+              wants = [ "tailscaled.service" ];
+              serviceConfig = {
+                RestartSec = "5";
+                Restart = "on-failure";
+                User = "root";
+                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:80";
               };
-              funnel-db = {
-                wantedBy = [ "multi-user.target" ];
-                after = [ "tailscaled.service" ];
-                wants = [ "tailscaled.service" ];
-                serviceConfig = {
-                  RestartSec = "5";
-                  Restart = "on-failure";
-                  User = "root";
-                  ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 8443 127.0.0.1:5984";
-                };
-                };
-            */
+            };
+            funnel-db = {
+              wantedBy = [ "multi-user.target" ];
+              after = [ "tailscaled.service" ];
+              wants = [ "tailscaled.service" ];
+              serviceConfig = {
+                RestartSec = "5";
+                Restart = "on-failure";
+                User = "root";
+                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 8443 127.0.0.1:5984";
+              };
+            };
           };
         };
 
