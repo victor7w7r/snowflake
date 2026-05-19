@@ -1,5 +1,5 @@
 ''
-    cat >> .config <<EOF
+    cat >> $buildRoot/.config <<EOF
   CONFIG_BRIDGE_NETFILTER=y
   CONFIG_FRAMEBUFFER_CONSOLE=y
   CONFIG_HID_SENSOR_ACCEL_3D=y
