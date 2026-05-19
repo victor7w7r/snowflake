@@ -17,35 +17,46 @@ let
       kernelFunc =
         { ... }:
         (pkgs.mobile-nixos.kernel-builder {
-          inherit (configure) patches src;
+          patches = [ ];
+          inherit (configure) src;
           configfile = ./sdm845.config;
-          isModular = true;
-          isCompressed = "gz";
-          version = "${configure.version}${configure.passthru.localVer}";
-          makeFlags = [ "LOCALVERSION=${configure.passthru.localVer}" ];
+
           nativeBuildInputs = with pkgs; [
             python3
             zstd
             kmod
+            gzip
           ];
+
+          isModular = true;
+          enableRemovingWerror = true;
+          installTargets = [ "modules_install" ];
+
+          version = "${configure.version}${configure.passthru.localVer}";
           modDirVersion = "${configure.version}${configure.passthru.localVer}";
+          makeFlags = [ "LOCALVERSION=${configure.passthru.localVer}" ];
+          makeImageDtbWith = "qcom/sdm845-oneplus-fajita.dtb";
+          isCompressed = "gz";
+
+          postInstall = ''
+            mkdir -p $out
+            cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
+            ln -sv Image.gz "$out/vmlinuz" || true
+            cp .config $out/config-${configure.version}
+            depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}${configure.passthru.localVer}"
+          '';
           postPatch = ''
             rm -f localversion*
             sed -i 's/localversion_next=.*//' scripts/setlocalversion
             echo "" > .scmversion
-          '';
-          postInstall = ''
-            cp -v "$buildRoot/arch/arm64/boot/Image.gz" "$out/Image.gz"
-            ln -sv Image.gz "$out/vmlinuz" || true
-            depmod -b "$out" -F "$buildRoot/System.map" "${configure.version}${configure.passthru.localVer}"
           '';
         }).overrideAttrs
           (attrs: {
             passthru = attrs.passthru // {
               inherit kconfigToNix kconfigFile configure;
             };
-            installTargets = [ "modules_install" ];
-            postConfigure = ''
+            /*
+              postConfigure = ''
               sed -i 's/^CONFIG_BRIDGE=m/CONFIG_BRIDGE=y/' $buildRoot/.config
               sed -i 's/^CONFIG_BRIDGE_NETFILTER=m/CONFIG_BRIDGE_NETFILTER=y/' $buildRoot/.config
               sed -i 's/^CONFIG_IP6_NF_IPTABLES=m/CONFIG_IP6_NF_IPTABLES=y/' $buildRoot/.config
@@ -62,7 +73,8 @@ let
               sed -i 's/^CONFIG_NFT_TPROXY=m/CONFIG_NFT_TPROXY=y/' $buildRoot/.config
               sed -i 's/^CONFIG_NF_TABLES_BRIDGE=m/CONFIG_NF_TABLES_BRIDGE=y/' $buildRoot/.config
               sed -i 's/^CONFIG_NF_TPROXY_IPV6=m/CONFIG_NF_TPROXY_IPV6=y/' $buildRoot/.config
-            '';
+              '';
+            */
           });
     in
     (lib.makeOverridable kernelFunc) { };

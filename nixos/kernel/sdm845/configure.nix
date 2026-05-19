@@ -26,15 +26,15 @@ let
   localVer = "-v7w7r-sdm845";
   config = (import ./config.nix);
   patches = [
-    # "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
-    # "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
+    "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
+    "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
   ];
 in
 pkgs.stdenv.mkDerivation {
   inherit patches;
   src = fetch.sdm845;
   name = "linux-${majorMinor}${localVer}-config";
-
+  stdenv = pkgs.gcc14Stdenv;
   nativeBuildInputs = with pkgs; [
     gnumake
     gcc14
@@ -44,8 +44,8 @@ pkgs.stdenv.mkDerivation {
     perl
     python3
   ];
-  installPhase = "cp .config $out";
 
+  installPhase = "cp .config $out";
   makeFlags = [
     "ARCH=arm64"
   ]
@@ -55,11 +55,8 @@ pkgs.stdenv.mkDerivation {
 
   buildPhase = ''
     export ARCH=arm64
-    export KCONFIG_CONFIG=$PWD/.config
-    make defconfig
-    scripts/kconfig/merge_config.sh -m .config arch/arm64/configs/sdm845.config
+    cp arch/arm64/configs/sdm845.config .config
     patchShebangs scripts/config
-    scripts/config --undefine CONFIG_LOCALVERSION
     scripts/config ${lib.concatStringsSep " " config}
     make $makeFlags olddefconfig
   '';
