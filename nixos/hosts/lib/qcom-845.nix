@@ -58,6 +58,7 @@
     rndis = "rndis.usb0";
   };
 
+  mobile.system.type = "android";
   mobile.system.android = {
     ab_partitions = lib.mkDefault true;
     bootimg.flash = {
