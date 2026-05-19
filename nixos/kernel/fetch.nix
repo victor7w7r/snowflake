@@ -79,6 +79,10 @@
           -x "*/drivers/input/joystick/xpad.c" \
           "$out/${majorMinor}/misc/0001-handheld.patch" > handheld-filter.patch || true
           cat handheld-filter.patch > "$out/${majorMinor}/misc/0001-handheld.patch" || true
+
+          ${pkgs.patchutils}/bin/filterdiff -x "*/security/selinux/selinuxfs.c" \
+          "$out/${majorMinor}/misc/0001-hardened.patch" > hardened-filter.patch || true
+          cat hardened-filter.patch > "$out/${majorMinor}/misc/0001-hardened.patch" || true
         ''}
     '';
   };
