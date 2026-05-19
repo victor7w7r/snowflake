@@ -44,7 +44,7 @@ x86_gen() {
 q_gen() {
     if res=$(runbuild $QCOMCONFIG); then
         cat "$res" >"kernel/sdm845/config.aarch64-linux.nix"
-        nix build -L ".#packages.${ACTUALARCH}.qcomconfigflat" --no-link --print-out-paths
+        cp $(nix build -L ".#packages.${ACTUALARCH}.qcomconfigflat" --no-link --print-out-paths) "kernel/sdm845/sdm845.config"
     else
         exit 1
     fi
