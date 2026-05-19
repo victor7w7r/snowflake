@@ -60,7 +60,6 @@
 
   mobile.system.type = "android";
   mobile.system.android = {
-    ab_partitions = lib.mkDefault true;
     bootimg.flash = {
       offset_base = "0x00000000";
       offset_kernel = "0x00008000";

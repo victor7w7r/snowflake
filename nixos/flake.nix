@@ -144,6 +144,9 @@
       };
       armPkgs = import nixpkgs {
         system = systemarm;
+        overlays = [
+          (import "${inputs.mobile-nixos}/overlay/overlay.nix")
+        ];
       };
 
       home = (pkgs.callPackage ./modules/home { inherit self inputs username; }).home-manager;
@@ -162,19 +165,17 @@
               kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
             }).kernel.configure;
 
-          uboot =
-            (armPkgs.callPackage ./kernel/sdm845 {
-              inherit inputs;
-              kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
-            }).kernel.uboot;
-
           opi-tarball = self.nixosConfigurations.opizero2w.config.system.build.tarball;
 
           qcomconfig =
             (armPkgs.callPackage ./kernel/sdm845 {
-              inherit inputs;
               kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
-            }).kernel.kconfigToNix;
+            }).build.kconfigToNix;
+
+          qcomconfigflat =
+            (armPkgs.callPackage ./kernel/sdm845 {
+              kernelData = nixpkgs.lib.trivial.importJSON ./kernel.json;
+            }).build.kconfigFile;
         };
         "${system}" = {
           rogallyconfig =

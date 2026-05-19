@@ -38,7 +38,7 @@ let
         }).overrideAttrs
           (attrs: {
             passthru = attrs.passthru // {
-              inherit kconfigToNix configure;
+              inherit kconfigToNix kconfigFile configure;
             };
             postConfigure = ''
               sed -i 's/^CONFIG_BRIDGE=m/CONFIG_BRIDGE=y/' $buildRoot/.config

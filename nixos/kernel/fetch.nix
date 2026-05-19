@@ -97,8 +97,9 @@
     hash = kernelData.uwe5622.hash;
   };
 
-  sdm845 = pkgs.fetchFromGitLab {
-    owner = kernelData.sdm845.user;
+  sdm845 = pkgs.fetchFromGitea {
+    domain = kernelData.sdm845.domain;
+    owner = kernelData.sdm845.owner;
     repo = kernelData.sdm845.repo;
     rev = kernelData.sdm845.rev;
     hash = kernelData.sdm845.hash;

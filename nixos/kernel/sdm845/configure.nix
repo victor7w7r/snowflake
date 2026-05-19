@@ -53,7 +53,6 @@ pkgs.stdenv.mkDerivation {
     cp arch/arm64/configs/sdm845.config .config
     make $makeFlags olddefconfig
     patchShebangs scripts/config
-    scripts/config --undefine CONFIG_LOCALVERSION
     scripts/config ${lib.concatStringsSep " " config}
     make $makeFlags olddefconfig
   '';
@@ -61,12 +60,6 @@ pkgs.stdenv.mkDerivation {
   meta = pkgs.linuxPackages.kernel.passthru.configfile.meta // {
     platforms = [ "aarch64-linux" ];
   };
-
-  postPatch = ''
-    sed -i 's/localversion_next=.*//' scripts/setlocalversion
-    rm -rf  localversion-next
-    echo "" > .scmversion
-  '';
 
   passthru = {
     inherit localVer patches;
