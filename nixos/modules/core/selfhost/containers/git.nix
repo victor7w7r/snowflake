@@ -62,7 +62,7 @@
                 RestartSec = "5";
                 Restart = "on-failure";
                 User = "root";
-                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:6610";
+                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel 6610";
               };
             };
             funnel-ssh = {
@@ -73,7 +73,7 @@
                 RestartSec = "5";
                 Restart = "on-failure";
                 User = "root";
-                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 8443 127.0.0.1:6611";
+                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel 6611 --https 8443";
               };
             };
           };

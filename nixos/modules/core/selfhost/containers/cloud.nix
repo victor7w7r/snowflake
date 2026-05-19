@@ -76,7 +76,7 @@
                 RestartSec = "5";
                 Restart = "on-failure";
                 User = "root";
-                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:80";
+                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel 80";
               };
             };
             create-seafile-net = {
