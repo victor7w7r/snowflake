@@ -42,6 +42,21 @@
     };
   };
 
+  mobile.system.android = {
+    ab_partitions = lib.mkDefault true;
+    bootimg.flash = {
+      offset_base = "0x00000000";
+      offset_kernel = "0x00008000";
+      offset_ramdisk = "0x01000000";
+      offset_second = "0x00000000";
+      offset_tags = "0x00000100";
+      pagesize = "4096";
+    };
+    appendDTB = lib.mkDefault [
+      "dtbs/qcom/sdm845-${config.mobile.device.name}.dtb"
+    ];
+  };
+
   mobile = {
     hardware = {
       soc = "qualcomm-sdm845";
@@ -65,28 +80,6 @@
     device = {
       identity.manufacturer = "OnePlus";
       firmware = pkgs.callPackage "${inputs.mobile-nixos}/devices/oneplus-enchilada/firmware" { };
-    };
-
-    system = {
-      type = "android";
-      android = {
-        ab_partitions = lib.mkDefault true;
-        bootimg.flash = {
-          offset_base = "0x00000000";
-          offset_kernel = "0x00008000";
-          offset_ramdisk = "0x01000000";
-          offset_second = "0x00000000";
-          offset_tags = "0x00000100";
-          pagesize = "4096";
-        };
-        /*
-          appendDTB = lib.mkDefault [
-            "${
-              pkgs.callPackage ../../kernel/sdm845/dtb.nix { inherit kernelData device; }
-            }/sdm845-oneplus-${device}.dtb"
-          ];
-        */
-      };
     };
   };
 
