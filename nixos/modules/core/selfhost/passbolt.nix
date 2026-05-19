@@ -47,7 +47,7 @@
     passbolt = {
       image = "passbolt/passbolt";
       dependsOn = [ "pb-mariadb" ];
-      environmentFiles = config.age.secrets.seafile-env.path;
+      environmentFiles = [ config.age.secrets.seafile-env.path ];
       volumes = [
         "/nix/persist/containers/passbolt/gpg:/etc/passbolt/gpg"
         "/nix/persist/containers/passbolt/jwt:/etc/passbolt/jwt"

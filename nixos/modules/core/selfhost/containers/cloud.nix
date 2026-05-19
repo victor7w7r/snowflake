@@ -108,7 +108,7 @@
         virtualisation.oci-containers.containers = {
           seafile-db = {
             image = "mariadb:10.11";
-            environmentFiles = config.age.secrets.seafile-db-env.path;
+            environmentFiles = [ config.age.secrets.seafile-db-env.path ];
             volumes = [ "/opt/seafile-mysql/db:/var/lib/mysql" ];
             extraOptions = [ "--network=seafile-net" ];
           };
@@ -132,7 +132,7 @@
             ];
             ports = [ "80:80" ];
             volumes = [ "/opt/seafile-data:/shared" ];
-            environmentFiles = config.age.secrets.seafile-env.path;
+            environmentFiles = [ config.age.secrets.seafile-env.path ];
             dependsOn = [
               "seafile-db"
               "seafile-cache"
