@@ -48,10 +48,7 @@
         };
 
         services = {
-          resolved = {
-            enable = true;
-            extraConfig = "DNSStubListener=no";
-          };
+          resolved.enable = true;
           journald.extraConfig = "SystemMaxUse=100M";
           tailscale = {
             enable = true;

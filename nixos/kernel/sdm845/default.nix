@@ -23,7 +23,6 @@ let
           isCompressed = "gz";
           version = "${configure.version}${configure.passthru.localVer}";
           makeFlags = [ "LOCALVERSION=${configure.passthru.localVer}" ];
-          installTargets = [ "modules_install" ];
           nativeBuildInputs = with pkgs; [
             python3
             zstd
@@ -45,6 +44,7 @@ let
             passthru = attrs.passthru // {
               inherit kconfigToNix kconfigFile configure;
             };
+            installTargets = [ "modules_install" ];
             postConfigure = ''
               sed -i 's/^CONFIG_BRIDGE=m/CONFIG_BRIDGE=y/' $buildRoot/.config
               sed -i 's/^CONFIG_BRIDGE_NETFILTER=m/CONFIG_BRIDGE_NETFILTER=y/' $buildRoot/.config

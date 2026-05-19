@@ -45,10 +45,8 @@
         };
         services = {
           journald.extraConfig = "SystemMaxUse=100M";
-          resolved = {
-            enable = true;
-            extraConfig = "DNSStubListener=no";
-          };
+          resolved.enable = true;
+
           tailscale = {
             enable = true;
             openFirewall = true;
