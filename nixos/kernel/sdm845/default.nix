@@ -40,8 +40,7 @@ let
             passthru = attrs.passthru // {
               inherit kconfigToNix kconfigFile configure;
             };
-            /*
-              postConfigure = ''
+            postConfigure = ''
               sed -i 's/^CONFIG_BRIDGE=m/CONFIG_BRIDGE=y/' $buildRoot/.config
               sed -i 's/^CONFIG_BRIDGE_NETFILTER=m/CONFIG_BRIDGE_NETFILTER=y/' $buildRoot/.config
               sed -i 's/^CONFIG_IP6_NF_IPTABLES=m/CONFIG_IP6_NF_IPTABLES=y/' $buildRoot/.config
@@ -58,8 +57,7 @@ let
               sed -i 's/^CONFIG_NFT_TPROXY=m/CONFIG_NFT_TPROXY=y/' $buildRoot/.config
               sed -i 's/^CONFIG_NF_TABLES_BRIDGE=m/CONFIG_NF_TABLES_BRIDGE=y/' $buildRoot/.config
               sed -i 's/^CONFIG_NF_TPROXY_IPV6=m/CONFIG_NF_TPROXY_IPV6=y/' $buildRoot/.config
-              '';
-            */
+            '';
           });
     in
     (lib.makeOverridable kernelFunc) { };
