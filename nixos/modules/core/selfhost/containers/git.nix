@@ -51,28 +51,30 @@
               after = [ "systemd-resolved.service" ];
               wants = [ "systemd-resolved.service" ];
             };
-            funnel-client = {
-              wantedBy = [ "multi-user.target" ];
-              after = [ "tailscaled.service" ];
-              wants = [ "tailscaled.service" ];
-              serviceConfig = {
-                RestartSec = "5";
-                Restart = "on-failure";
-                User = "root";
-                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:6610";
+            /*
+              funnel-client = {
+                wantedBy = [ "multi-user.target" ];
+                after = [ "tailscaled.service" ];
+                wants = [ "tailscaled.service" ];
+                serviceConfig = {
+                  RestartSec = "5";
+                  Restart = "on-failure";
+                  User = "root";
+                  ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 443 127.0.0.1:6610";
+                };
               };
-            };
-            funnel-ssh = {
-              wantedBy = [ "multi-user.target" ];
-              after = [ "tailscaled.service" ];
-              wants = [ "tailscaled.service" ];
-              serviceConfig = {
-                RestartSec = "5";
-                Restart = "on-failure";
-                User = "root";
-                ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 8443 127.0.0.1:6611";
-              };
-            };
+              funnel-ssh = {
+                wantedBy = [ "multi-user.target" ];
+                after = [ "tailscaled.service" ];
+                wants = [ "tailscaled.service" ];
+                serviceConfig = {
+                  RestartSec = "5";
+                  Restart = "on-failure";
+                  User = "root";
+                  ExecStart = "${pkgs.tailscale}/bin/tailscale funnel --https 8443 127.0.0.1:6611";
+                };
+                };
+            */
           };
         };
 

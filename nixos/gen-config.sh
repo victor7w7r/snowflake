@@ -22,9 +22,9 @@ runbuild() {
 }
 
 x86_gen() {
-    if res=$(run-build $SRVCONFIG); then cat "$res" >"${GENDIR}/${SRVCONFIG}.x86_64-linux.nix"; else exit 1; fi
-    if res=$(run-build $MCONFIG); then cat "$res" >"${GENDIR}/${MCONFIG}.x86_64-linux.nix"; else exit 1; fi
-    if res=$(run-build $ROGCONFIG); then cat "$res" >"${GENDIR}/${ROGCONFIG}.x86_64-linux.nix"; else exit 1; fi
+    if res=$(runbuild $SRVCONFIG); then cat "$res" >"${GENDIR}/${SRVCONFIG}.x86_64-linux.nix"; else exit 1; fi
+    if res=$(runbuild $MCONFIG); then cat "$res" >"${GENDIR}/${MCONFIG}.x86_64-linux.nix"; else exit 1; fi
+    if res=$(runbuild $ROGCONFIG); then cat "$res" >"${GENDIR}/${ROGCONFIG}.x86_64-linux.nix"; else exit 1; fi
 }
 
 q_gen() {
