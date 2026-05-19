@@ -22,7 +22,7 @@ let
           isModular = true;
           isCompressed = "gz";
           version = "${configure.version}${configure.passthru.localVer}";
-          makeFlags = [ "LOCALVERSION=-v7w7r-sdm845" ];
+          makeFlags = [ "LOCALVERSION=${configure.passthru.localVer}" ];
           installTargets = [ "modules_install" ];
           nativeBuildInputs = with pkgs; [
             python3

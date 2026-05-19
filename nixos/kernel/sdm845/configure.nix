@@ -55,6 +55,7 @@ pkgs.stdenv.mkDerivation {
     make defconfig
     scripts/kconfig/merge_config.sh -m .config arch/arm64/configs/sdm845.config
     patchShebangs scripts/config
+    scripts/config --undefine CONFIG_LOCALVERSION
     scripts/config ${lib.concatStringsSep " " config}
     make $makeFlags olddefconfig
   '';
@@ -65,6 +66,12 @@ pkgs.stdenv.mkDerivation {
       "x86_64-linux"
     ];
   };
+
+  postPatch = ''
+    sed -i 's/localversion_next=.*//' scripts/setlocalversion
+    rm -rf  localversion-next
+    echo "" > .scmversion
+  '';
 
   passthru = {
     inherit localVer patches;
