@@ -1,4 +1,3 @@
-#nix run .#write-flake
 {
   flake-file.inputs = {
     home-manager = {
