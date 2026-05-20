@@ -52,6 +52,7 @@ let
           (attrs: {
             postConfigure = ''
                 cat >> $buildRoot/.config <<EOF
+              CONFIG_USB_F_FFS=m
               CONFIG_DEVTMPFS=y
               CONFIG_DEVPTS_FS=y
               CONFIG_RAMFS=y

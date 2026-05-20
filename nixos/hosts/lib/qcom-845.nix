@@ -47,7 +47,6 @@
   mobile.kernel.structuredConfig = [
     (
       helpers: with helpers; {
-        USB_F_FS = yes;
         SYSFS = yes;
         RAMFS = yes;
         TMPFS = yes;
@@ -55,8 +54,7 @@
         PROC_FS = yes;
         DEVTMPFS = yes;
         CRYPTO_CRC32C = yes;
-        USB_CONFIGFS = yes;
-        USB_CONFIGFS_F_FS = yes;
+        USB_F_FFS = module;
       }
     )
   ];
