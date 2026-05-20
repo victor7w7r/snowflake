@@ -12,9 +12,6 @@ let
 in
 {
   nixpkgs.overlays = [
-    (_: prev: {
-      makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
-    })
     (final: prev: {
       libinput = prev.libinput.overrideAttrs (oldAttrs: {
         nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [

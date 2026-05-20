@@ -50,7 +50,6 @@ let
           '';
         }).overrideAttrs
           (attrs: {
-            postConfigure = import ./post-configure.nix;
             installTargets = [ "modules_install" ];
             passthru = attrs.passthru // {
               inherit kconfigToNix kconfigFile configure;

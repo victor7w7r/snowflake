@@ -40,14 +40,25 @@
   };
   #stage-1.shell.enable
 
-  mobile.boot.stage-1.kernel.additionalModules = [
-    "sysfs"
-    "ramfs"
-    "tmpfs"
-    "devpts"
-    "proc"
-    "devtmpfs"
+  mobile.boot.stage-1.kernel.modules = [
     "f2fs"
+  ];
+
+  mobile.kernel.structuredConfig = [
+    (
+      helpers: with helpers; {
+        USB_F_FS = yes;
+        SYSFS = yes;
+        RAMFS = yes;
+        TMPFS = yes;
+        DEVPTS_FS = yes;
+        PROC_FS = yes;
+        DEVTMPFS = yes;
+        CRYPTO_CRC32C = yes;
+        USB_CONFIGFS = yes;
+        USB_CONFIGFS_F_FS = yes;
+      }
+    )
   ];
 
   mobile.boot.stage-1.firmware = [
