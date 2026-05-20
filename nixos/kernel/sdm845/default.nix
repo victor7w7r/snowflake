@@ -53,6 +53,7 @@ let
             postConfigure = ''
                 cat >> $buildRoot/.config <<EOF
               CONFIG_DEVTMPFS=y
+              CONFIG_DEVPTS_FS=y
               CONFIG_RAMFS=y
               EOF
             '';
