@@ -23,66 +23,6 @@
     ];
   };
 
-  inputs = {
-    impermanence.url = "github:nix-community/impermanence";
-    nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
-    agenix.url = "github:ryantm/agenix";
-
-    nixvim = {
-      url = "github:nix-community/nixvim";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    hardware.url = "https://flakehub.com/f/NixOS/nixos-hardware/0.1";
-    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
-    proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
-    emacs-overlay = {
-      url = "github:nix-community/emacs-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    mobile-nixos = {
-      url = "github:mobile-nixos/mobile-nixos";
-      flake = false;
-    };
-    nix-flatpak.url = "https://flakehub.com/f/gmodena/nix-flatpak/0.7.0";
-    compose2nix = {
-      url = "https://flakehub.com/f/aksiksi/compose2nix/0.3.3";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    disko = {
-      url = "github:nix-community/disko";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    gestures.url = "github:ferstar/gestures";
-    nix-gaming.url = "github:fufexan/nix-gaming";
-    nix-alien.url = "https://flakehub.com/f/thiagokokada/nix-alien/0.1";
-    nix-search-tv.url = "github:3timeslazy/nix-search-tv";
-    hyprpicker.url = "github:hyprwm/hyprpicker";
-    xrlinux = {
-      url = "github:wheaney/XRLinuxDriver";
-      flake = false;
-    };
-    plasma-manager = {
-      url = "github:nix-community/plasma-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.home-manager.follows = "home-manager";
-    };
-    hyprland.url = "https://flakehub.com/f/hyprwm/Hyprland/0.53";
-    pyprland.url = "github:hyprland-community/pyprland";
-    hyprland-plugins = {
-      url = "github:hyprwm/hyprland-plugins";
-      inputs.hyprland.follows = "hyprland";
-    };
-    catppuccin-refind = {
-      url = "github:catppuccin/refind";
-      flake = false;
-    };
-    kwin-effects-better-blur-dx = {
-      url = "github:xarblu/kwin-effects-better-blur-dx";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-  };
-
   outputs =
     {
       nixpkgs,
