@@ -1,5 +1,4 @@
-# Exposes flake apps under the name of each host / home for building with nh.
-{ den, lib, ... }:
+{ den, ... }:
 {
   perSystem =
     { pkgs, ... }:

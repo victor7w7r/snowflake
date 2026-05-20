@@ -1,6 +1,4 @@
 {
-  description = "victor7w7r nixtrap config for common and specific hosts";
-
   nixConfig = {
     extra-sandbox-paths = [
       "/nix/var/cache/ccache"
