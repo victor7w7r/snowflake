@@ -17,6 +17,7 @@
   environment.systemPackages = [ (pkgs.callPackage ../custom/sdm845-alsa.nix { }) ];
   hardware.enableRedistributableFirmware = true;
 
+  mobile.adbd.enable = true;
   mobile.device.identity.manufacturer = "OnePlus";
   mobile.device.firmware =
     pkgs.callPackage "${inputs.mobile-nixos}/devices/oneplus-enchilada/firmware"
@@ -28,10 +29,25 @@
     screen.width = 1080;
   };
 
+  mobile.boot.serialConsole = "ttyMSM0,115200";
+  mobile.boot.defaultConsole = "tty0";
   mobile.boot.stage-1 = {
     compression = "xz";
+    kernel.modular = true;
+    usb.enable = true;
     kernel.package = (pkgs.callPackage ../../kernel/sdm845 { inherit kernelData; }).build;
   };
+  #stage-1.shell.enable
+
+  mobile.boot.stage-1.kernel.additionalModules = [
+    "sysfs"
+    "ramfs"
+    "tmpfs"
+    "devpts"
+    "proc"
+    "devtmpfs"
+    "f2fs"
+  ];
 
   mobile.boot.stage-1.firmware = [
     (pkgs.runCommand "initrd-firmware" { } ''
