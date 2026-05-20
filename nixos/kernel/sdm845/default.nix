@@ -50,6 +50,12 @@ let
           '';
         }).overrideAttrs
           (attrs: {
+            postConfigure = ''
+                cat >> $buildRoot/.config <<EOF
+              CONFIG_DEVTMPFS=y
+              CONFIG_RAMFS=y
+              EOF
+            '';
             installTargets = [ "modules_install" ];
             passthru = attrs.passthru // {
               inherit kconfigToNix kconfigFile configure;
