@@ -24,7 +24,6 @@
   };
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     impermanence.url = "github:nix-community/impermanence";
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
     agenix.url = "github:ryantm/agenix";
@@ -35,7 +34,6 @@
     };
 
     hardware.url = "https://flakehub.com/f/NixOS/nixos-hardware/0.1";
-    hyprpicker.url = "github:hyprwm/hyprpicker";
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
     proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
     emacs-overlay = {
@@ -57,43 +55,12 @@
     };
     gestures.url = "github:ferstar/gestures";
     nix-gaming.url = "github:fufexan/nix-gaming";
-    thorium.url = "github:almahdi/nix-thorium";
-    opi-zero2w.url = "github:virusdave/nixos-opi-zero2w";
     nix-alien.url = "https://flakehub.com/f/thiagokokada/nix-alien/0.1";
     nix-search-tv.url = "github:3timeslazy/nix-search-tv";
-
-    claude-desktop = {
-      url = "github:k3d3/claude-desktop-linux-flake";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    batfetch = {
-      url = "github:ashish-kus/batfetch";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    swiftfetch = {
-      url = "github:ly-sec/swiftfetch";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    nix-doom-emacs-unstraightened = {
-      url = "github:marienz/nix-doom-emacs-unstraightened";
-      inputs.nixpkgs.follows = "";
-    };
-    firefox-addons = {
-      url = "gitlab:rycee/nur-expressions?dir=pkgs/firefox-addons";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    zen-browser = {
-      url = "github:0xc000022070/zen-browser-flake";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    hyprpicker.url = "github:hyprwm/hyprpicker";
     xrlinux = {
       url = "github:wheaney/XRLinuxDriver";
       flake = false;
-    };
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
     plasma-manager = {
       url = "github:nix-community/plasma-manager";
