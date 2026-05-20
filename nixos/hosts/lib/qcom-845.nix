@@ -34,6 +34,7 @@
   mobile.boot.stage-1 = {
     compression = "xz";
     kernel.modular = true;
+    kernel.allowMissingModules = false;
     usb.enable = true;
     kernel.package = (pkgs.callPackage ../../kernel/sdm845 { inherit kernelData; }).build;
   };

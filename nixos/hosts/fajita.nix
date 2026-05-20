@@ -12,9 +12,6 @@ let
 in
 {
   nixpkgs.overlays = [
-    (_: prev: {
-      makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
-    })
     (final: prev: {
       libinput = prev.libinput.overrideAttrs (oldAttrs: {
         nativeBuildInputs = (oldAttrs.nativeBuildInputs or [ ]) ++ [
@@ -57,11 +54,6 @@ in
   };
 
   boot.kernelPackages = kernel.packages;
-  boot.initrd.supportedFilesystems = [
-    "btrfs"
-    "ext4"
-    "f2fs"
-  ];
 
   zramSwap = {
     enable = true;
