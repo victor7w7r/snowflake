@@ -26,8 +26,8 @@ let
   localVer = "-v7w7r-sdm845";
   config = (import ./config.nix);
   patches = [
-    "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
-    "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
+    #"${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
+    #"${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
   ];
 in
 pkgs.stdenv.mkDerivation {
@@ -55,7 +55,10 @@ pkgs.stdenv.mkDerivation {
 
   buildPhase = ''
     export ARCH=arm64
-    cp arch/arm64/configs/sdm845.config .config
+    make defconfig
+    if [ -f arch/arm64/configs/sdm845.config ]; then
+        scripts/kconfig/merge_config.sh -m .config arch/arm64/configs/sdm845.config
+    fi
     patchShebangs scripts/config
     scripts/config ${lib.concatStringsSep " " config}
     make $makeFlags olddefconfig
