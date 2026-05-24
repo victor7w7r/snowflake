@@ -5,15 +5,10 @@
     [
       ariang
       axel
-      curlFull
       doggo
-      ethtool
       gping
       hblock
-      inetutils
-      iptables
       lazyssh
-      net-tools
       netscanner
       openresolv
       #rquickshare
@@ -21,8 +16,6 @@
       slirp4netns
       sshs
       speedtest-cli
-      wget
-      wget2
       (pkgs.callPackage ./custom/aim.nix { })
       (pkgs.callPackage ./custom/goto.nix { })
       #https://github.com/akinoiro/ssh-list

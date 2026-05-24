@@ -3,20 +3,13 @@
   environment.systemPackages =
     with pkgs;
     [
-      go-mtpfs
-      exfatprogs
-      f2fs-tools
       iio-sensor-proxy
-      mtools
       viddy
-      simple-mtpfs
-      sshfs
+
     ]
     ++ [
       gpart
-      ntfs2btrfs
       partclone
-      tparted
       wiper
       wipefreespace
       #https://aur.archlinux.org/packages/chkufsd-bin
@@ -32,8 +25,6 @@
     ++ [
       alsa-utils
       cshatag
-      ddrescue
-      ddrutility
       ext4magic
       extundelete
       foremost
@@ -43,7 +34,6 @@
       scrounge-ntfs
       sof-firmware
       stress
-      testdisk
       #https://aur.archlinux.org/packages/r-linux
       (pkgs.callPackage ./custom/btrfs-du.nix { })
       (pkgs.callPackage ./custom/btrfs-data-recovery.nix { })
@@ -58,14 +48,10 @@
       edid-generator
       fanctl
       fan2go
-      i2c-tools
       hwinfo
-      lm_sensors
-      lshw
       read-edid
       rwedid
       smartmontools
-      usbutils
     ];
 
 }

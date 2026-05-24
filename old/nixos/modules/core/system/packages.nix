@@ -16,29 +16,25 @@
       cmd-wrapped
       cod
       distrobox
-      efibootmgr
+
       emptty
       evemu
-      gnused
-      gnutar
+
       inotify-tools
-      file
+
       firejail
       hexyl
       libinput
       iio-sensor-proxy
       jump
       libiio
-      lsof
       luksmeta
       keyd
-      killall
       mdadm
       modprobed-db
-      mokutil
       rsyncy
-      p7zip
-      picocom
+      efibootmgr
+
       phraze
       progress
       pv
@@ -46,18 +42,16 @@
       seadrive-fuse
       seafile-shared
       #sampler
-      ssh-to-age
-      sbctl
       sd
       sig
       tre-command
-      tpm2-tools
+
       tmux
       veracrypt
       vtm
       wol
       wtfutil
-      xz
+
       #(pkgs.callPackage ./custom/hf.nix { })
       #(pkgs.callPackage ./custom/loop.nix { })
       #(pkgs.callPackage ./custom/procmux.nix { })
@@ -65,49 +59,10 @@
       (pkgs.callPackage ./custom/texoxide.nix { })
     ]
     ++ [
-      superfile
-      termscp
-      tran
-      trash-cli
-      #tuifimanager
-      walk
-      #https://codeberg.org/sylphenix/sff
-      (pkgs.callPackage ./custom/fman.nix { })
+
     ]
     ++ (if host != "v7w7r-rc71l" && system != "aarch64-linux" then [ intel-undervolt ] else [ ])
     ++ (if system != "aarch64-linux" then [ boxxy ] else [ ])
-    ++ [
-      dust
-      duff
-      dua
-      gdu
-      fclones
-      fdupes
-      mmv-go
-      ncdu
-      rdfind
-      parted
-      rnr
-      (pkgs.callPackage ./custom/diskonaut.nix { })
-    ]
-    ++ [
-      fatrace
-      kmon
-      lazyjournal
-      lnav
-      pik
-      s-tui
-      systemctl-tui
-      sysz
-      watchexec
-      zps
-      #nvtopPackages.full
-      #(pkgs.callPackage ./custom/journalview.nix { })
-      #https://github.com/jasonwitty/socktop
-      #https://github.com/XhuyZ/lazysys
-      #pcp
-      #uv pip install tiptop
-    ]
     ++ [
       alejandra
       cached-nix-shell

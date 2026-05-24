@@ -33,7 +33,7 @@ let
   debugFlags = "boot.trace=1 debug udev.log_level=7 rd.systemd.show_status=true";
 in
 {
-  system.boot.loader.id = "refind";
+
   system.build.installBootLoader = pkgs.writeScript "boot-loader" ''
     #!${pkgs.bash}/bin/bash
 

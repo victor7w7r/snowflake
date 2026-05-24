@@ -1,44 +1,19 @@
 { username, ... }:
 {
   environment.persistence."/nix/persist" = {
-    hideMounts = true;
     directories = [
       "/etc/NetworkManager/system-connections"
-      "/etc/nixos"
       "/etc/asusd"
       "/etc/hhd"
-      "/var/log/"
       "/var/lib/bluetooth"
-      "/var/lib/chrony"
       "/var/lib/containers"
-      "/var/lib/fail2ban"
-      "/var/lib/lastlog"
       "/var/lib/libvirt"
       "/var/lib/lxc"
       "/var/lib/nixos-containers"
       "/var/lib/NetworkManager"
-      "/var/lib/nixos"
       "/var/lib/qemu"
       "/var/lib/sbctl"
-      "/var/lib/systemd"
-      "/var/lib/tailscale"
       "/var/lib/waydroid"
-    ];
-    files = [
-      "/etc/adjtime"
-      "/etc/logo.svg"
-      "/etc/ssh/ssh_host_ed25519_key"
-      "/etc/ssh/ssh_host_ed25519_key.pub"
-      "/etc/ssh/ssh_host_rsa_key.pub"
-      "/etc/ssh/ssh_host_rsa_key"
-      "/etc/machine-id"
-    ];
-    users.root.directories = [
-      ".zsh"
-      ".tmux"
-      ".cache/antidote"
-      ".local/share/cod"
-      ".local/share/zoxide"
     ];
     users."${username}" = {
       directories = [
@@ -67,6 +42,7 @@
         ".config/Seafile"
         ".config/vlc"
         ".config/zen"
+        ".config/zed"
         ".local/share/baloo"
         ".local/share/cod"
         ".local/share/containers"

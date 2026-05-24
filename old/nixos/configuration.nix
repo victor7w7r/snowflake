@@ -96,7 +96,6 @@ in
         dates = "weekly";
         options = "--delete-older-than 7d";
       };
-      settings.http2 = false;
       daemonCPUSchedPolicy = if is-term-hosts then "batch" else "idle";
       daemonIOSchedPriority = if is-term-hosts then 0 else 5;
       distributedBuilds = true;

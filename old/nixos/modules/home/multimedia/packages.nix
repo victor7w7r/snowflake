@@ -13,18 +13,6 @@
       #https://davidepucci.it/doc/spotitube/#installation
     ]
     ++ [
-      calf
-      deepfilternet
-      lsp-plugins
-      libebur128
-      #zam-plugins
-      zita-convolver
-      mda_lv2
-      speexdsp
-      soundtouch
-      rnnoise
-    ]
-    ++ [
       tenacity
       #davinci-resolve
       inkscape-with-extensions
