@@ -1,7 +1,9 @@
-{ ... }:
+{ pkgs, ... }:
 {
   programs.zed-editor = {
     enable = true;
+    package = pkgs.zed-editor-fhs;
+    extraPackages = with pkgs; [nixd];
     extensions = [
       "astro"
       "basher"
@@ -50,6 +52,13 @@
         };
       };
 
+      whitespace_map = {
+        space = "•";
+        tab = " ";
+      };
+
+      load_direnv = "shell_hook";
+
       outline_panel.button = false;
       collaboration_panel.button = false;
       minimap.show = "auto";
@@ -82,6 +91,11 @@
       buffer_font_size = 12;
       show_whitespaces = "all";
 
+      features.edit_prediction_provider = "copilot";
+      edit_predictions.mode = "subtle";
+      autosave = "on_focus_change";
+      cursor_blink = true;
+
       theme = {
         mode = "system";
         light = "Tokyo Night";
@@ -89,7 +103,7 @@
       };
 
       terminal = {
-        blinking = "on";
+        blinking = "terminal_controlled";
         copy_on_select = true;
         dock = "bottom";
         env.TERM = "kitty";
@@ -98,6 +112,8 @@
         shell = "system";
         toolbar.title = true;
       };
+
+	title_bar.show_sign_in = false;
 
       lsp = {
         rust-analyzer = {

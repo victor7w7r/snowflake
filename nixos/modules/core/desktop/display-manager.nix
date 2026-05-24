@@ -42,7 +42,7 @@
         accelSpeed = "0.75";
       };
     };
-    xserver.enable = false;
+    xserver.enable = true;
     displayManager = {
       sddm = {
         enable = false;

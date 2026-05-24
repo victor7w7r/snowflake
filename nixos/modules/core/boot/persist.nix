@@ -67,6 +67,7 @@
         ".config/Seafile"
         ".config/vlc"
         ".config/zen"
+	".config/zed"
         ".local/share/baloo"
         ".local/share/cod"
         ".local/share/containers"

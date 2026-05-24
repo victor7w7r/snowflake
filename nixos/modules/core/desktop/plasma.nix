@@ -34,11 +34,22 @@
     '';
   };
   security.pam.services = {
-    sddm.kwallet.enable = true;
+
+    ly.kwallet = {
+      enable = true;
+      package = pkgs.kdePackages.kwallet-pam;
+    };
+
+    sddm.kwallet = {
+      enable = true;
+      package = pkgs.kdePackages.kwallet-pam;
+    };
+
     "${username}".kwallet = {
       enable = true;
       package = pkgs.kdePackages.kwallet-pam;
     };
+
   };
   environment = {
     plasma6.excludePackages = with pkgs; [
