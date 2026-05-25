@@ -29,6 +29,7 @@ in
       {
         environment.systemPackages = with pkgs; [
           curlFull
+          cyme
           ethtool
           file
           gnused
@@ -44,6 +45,7 @@ in
           net-tools
           p7zip
           usbutils
+          viddy
           wget
           wget2
           xz

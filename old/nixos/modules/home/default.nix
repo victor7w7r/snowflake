@@ -78,7 +78,7 @@ in
     useUserPackages = true;
     useGlobalPkgs = true;
     sharedModules = [
-      inputs.plasma-manager.homeModules.plasma-manager
+
       inputs.nix-doom-emacs-unstraightened.homeModule
     ];
     users = {

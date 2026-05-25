@@ -4,6 +4,7 @@ let
     nixos =
       { pkgs, ... }:
       {
+        environment.systemPackages = with pkgs; [ unicorn ];
         boot.binfmt = {
           emulatedSystems = lib.mkAfter [
             "x86_64-linux"

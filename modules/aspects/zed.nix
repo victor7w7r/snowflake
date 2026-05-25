@@ -1,6 +1,6 @@
 { lib, hosts-attrs, ... }:
 {
-  den.aspects.gui.provides = lib.genAttrs hosts-attrs.peripheralgui (_: {
+  den.aspects.zed.provides = lib.genAttrs hosts-attrs.peripheralgui (_: {
     homeManager =
       { pkgs, ... }:
       {

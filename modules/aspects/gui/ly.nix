@@ -40,5 +40,15 @@
     })
     // lib.genAttrs [ "handheld" ] (_: {
       nixos.services.displayManager.ly.settings.battery_id = "BAT0";
+    })
+    // lib.genAttrs hosts-attrs.desktop (_: {
+      nixos =
+        { pkgs, ... }:
+        {
+          security.pam.services.ly.kwallet = {
+            enable = true;
+            package = pkgs.kdePackages.kwallet-pam;
+          };
+        };
     });
 }

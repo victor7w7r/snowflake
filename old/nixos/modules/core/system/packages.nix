@@ -15,7 +15,6 @@
       choose
       cmd-wrapped
       cod
-      distrobox
 
       emptty
       evemu

@@ -1,6 +1,6 @@
 { config, pkgs, ... }:
 {
-  den.aspects.emacs.nixos.programs.doom-emacs = {
+  den.aspects.emacs.homeManager.programs.doom-emacs = {
     enable = false;
     emacs = pkgs.emacs-nox;
     doomDir = ./.;

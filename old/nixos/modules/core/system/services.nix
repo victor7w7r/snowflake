@@ -40,16 +40,6 @@
       };
     */
 
-    journald.extraConfig = ''
-      Storage=persistent
-      Compress=yes
-      MaxLevelStore=debug
-      SystemMaxUse=500M
-      RuntimeMaxUse=200M
-      ForwardToConsole=yes
-      MaxLevelConsole=debug
-      TTYPath=/dev/ttyS0
-    '';
   }
   // (
     if host != "v7w7r-opizero2w" then

@@ -1,6 +1,6 @@
 { lib, hosts-attrs, ... }:
 {
-  den.aspects.gui.provides = lib.genAttrs hosts-attrs.peripheralgui (_: {
+  den.aspects.kitty.provides = lib.genAttrs hosts-attrs.peripheralgui (_: {
     homeManager.programs.kitty = {
       enable = true;
       font = {

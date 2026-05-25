@@ -1,24 +1,24 @@
 {
-  den.aspects.base.provides.sysmon.nixos =
+  den.aspects.base.provides.netmon.nixos =
     { pkgs, ... }:
     {
       environment.systemPackages = with pkgs; [
-        fatrace
-        kmon
-        lazyjournal
-        lnav
-        pik
-        s-tui
-        systemctl-tui
-        sysz
-        watchexec
-        zps
-        #nvtopPackages.full
-        #(pkgs.callPackage ./custom/journalview.nix { })
-        #https://github.com/jasonwitty/socktop
-        #https://github.com/XhuyZ/lazysys
-        #pcp
-        #uv pip install tiptop
+        ariang
+        axel
+        doggo
+        gping
+        hblock
+        lazyssh
+        netscanner
+        openresolv
+        #rquickshare
+        rustscan
+        slirp4netns
+        sshs
+        speedtest-cli
+        #(pkgs.callPackage ./custom/aim.nix { })
+        #(pkgs.callPackage ./custom/goto.nix { })
+        #https://github.com/akinoiro/ssh-list
       ];
     };
 }

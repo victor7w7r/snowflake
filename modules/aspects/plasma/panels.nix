@@ -1,0 +1,368 @@
+{ host, ... }:
+{
+  den.aspects.plasma.provides.panels = {
+    nixos.systemd.services.random-icon = {
+      unitConfig.DefaultDependencies = "no";
+      serviceConfig.Type = "oneshot";
+      requires = [ "home-victor7w7r-.ssh.mount" ];
+      after = [ "home-victor7w7r-.ssh.mount" ];
+      wantedBy = [ "multi-user.target" ];
+      script = ''
+        TARGET_DIR="/nix/persist/etc"
+        FILE_NAME="logo.svg"
+        [[ -f "$TARGET_DIR/$FILE_NAME" ]] && rm "$TARGET_DIR/$FILE_NAME"
+        case $((RANDOM % 5)) in
+          0) cp /etc/nixos/nixos/assets/logo-1.svg "$TARGET_DIR/$FILE_NAME" ;;
+          1) cp /etc/nixos/nixos/assets/logo-2.svg "$TARGET_DIR/$FILE_NAME" ;;
+          2) cp /etc/nixos/nixos/assets/logo-3.svg "$TARGET_DIR/$FILE_NAME" ;;
+          3) cp /etc/nixos/nixos/assets/logo-4.svg "$TARGET_DIR/$FILE_NAME" ;;
+          4) cp /etc/nixos/nixos/assets/logo-5.svg "$TARGET_DIR/$FILE_NAME" ;;
+        esac
+      '';
+    };
+
+    homeManager.programs.plasma.panels = [
+      {
+        #https://github.com/DocBrown101/org.kde.plasma.nixos.channelstatus
+        location = "bottom";
+        alignment = "center";
+        lengthMode = "fit";
+        floating = true;
+        height = 44;
+        hiding = "autohide";
+        screen = 0;
+        opacity = "translucent";
+        widgets = [
+          {
+            name = "p-connor.plasma-drawer";
+            config = {
+              General = {
+                appIconSize = 64;
+                customButtonImage = "com.system76.CosmicLauncher";
+                disableAnimations = true;
+                favoriteSystemActions = [
+                  "shutdown"
+                  "reboot"
+                  "logout"
+                  "suspend"
+                  "lock-screen"
+                  "switch-user"
+                ];
+                maxNumberColumns = 12;
+                searchRunners = [
+                  "krunner_services"
+                  "krunner_recentdocuments"
+                  "baloosearch"
+                ];
+                showSystemActions = false;
+                systemActionIconSize = 32;
+                useCustomButtonImage = true;
+                useSymbolicSystemActionIcons = true;
+              };
+            };
+          }
+          {
+            iconTasks = {
+              appearance = {
+                showTooltips = true;
+                highlightWindows = true;
+                indicateAudioStreams = false;
+                fill = true;
+              };
+              launchers = [
+                "preferred://filemanager"
+                "applications:zen-beta.desktop"
+                "applications:kitty.desktop"
+                "applications:dev.zed.Zed.desktop"
+              ];
+            };
+          }
+        ];
+      }
+      {
+        location = "top";
+        alignment = "center";
+        lengthMode = "fill";
+        floating = true;
+        height = 32;
+        hiding = "none";
+        screen = "all";
+        opacity = "adaptive";
+        widgets = [
+          {
+            name = "org.51n7.kMenu";
+            config = {
+              popupHeight = 309;
+              popupWidth = 240;
+              General = {
+                customButtonImage = "/nix/persist/etc/logo.svg";
+                useCustomButtonImage = true;
+                menuJson = ''[  {    "name": "Acerca De Esta PC...",    "icon": "help-hint",    "command": "kinfocenter"  },  {    "separator": true  },  {    "name": "Ajustes...",    "icon": "settings-configure",    "command": "systemsettings"  },  {    "name": "Monitor de recursos",    "icon": "settings-configure",    "command": "missioncenter"  },  {    "separator": true  },  {    "name": "Reposo",    "icon": "system-suspend",    "command": "systemctl suspend -f"  },  {    "name": "Hibernar",    "icon": "system-suspend",    "command": "systemctl hibernate"  },   {    "name": "Reiniciar",    "icon": "system-reboot",    "command": "systemctl reboot"  },  {    "name": "Reiniciar a UEFI",    "icon": "system-reboot",    "command": "systemctl reboot --firmware-setup"  },  {    "name": "Apagar...",    "icon": "system-shutdown",    "command": "qdbus org.kde.LogoutPrompt /LogoutPrompt promptShutDown"  },  {    "separator": true  },  {    "name": "Bloquear",    "icon": "system-lock-screen",    "command": "qdbus org.freedesktop.ScreenSaver /ScreenSaver Lock"  },  {    "name": "Cerrar Sesión",    "icon": "system-log-out",    "command": "qdbus org.kde.LogoutPrompt /LogoutPrompt promptLogout"  }]'';
+              };
+
+              ConfigDialog = {
+                DialogHeight = 540;
+                DialogWidth = 720;
+              };
+            };
+          }
+          {
+            name = "com.github.antroids.application-title-bar";
+            config = {
+              Appearance = {
+                overrideElementsMaximized = true;
+                widgetButtonsAnimation = 0;
+                widgetButtonsAuroraeTheme = "Layan";
+                widgetButtonsIconsTheme = "Aurorae";
+                widgetButtonsMargins = 9;
+                widgetElements = "windowTitle";
+                widgetElementsDisabledMode = "HideKeepSpace";
+                widgetElementsMaximized = [
+                  "spacer"
+                  "windowCloseButton"
+                  "spacer"
+                  "windowMinimizeButton"
+                  "spacer"
+                  "windowMaximizeButton"
+                  "windowTitle"
+                ];
+                windowTitleFontSize = 9;
+                windowTitleFontSizeMode = "VerticalFit";
+                windowTitleHideEmpty = true;
+                windowTitleMarginsLeft = 14;
+                windowTitleMarginsRight = 3;
+                windowTitleMarginsTop = 2;
+                windowTitleSource = "AppName";
+                windowTitleSourceMaximized = "AppName";
+                windowTitleUndefined = "";
+              };
+              ConfigDialog = {
+                DialogHeight = 540;
+                DialogWidth = 720;
+              };
+            };
+          }
+          {
+            name = "org.kde.plasma.appmenu";
+            config = {
+              immutability = 1;
+              ConfigDialog = {
+                DialogHeight = 540;
+                DialogWidth = 720;
+              };
+            };
+          }
+          "org.kde.plasma.panelspacer"
+          {
+            name = "org.kde.plasma.systemmonitor";
+            config =
+              let
+                fan =
+                  if host == "v7w7r-macmini81" then
+                    "lmsensors/applesmc-acpi-0"
+                  else if host == "v7w7r-rc71l" then
+                    "lmsensors/asus-isa-000a"
+                  else
+                    "";
+              in
+              {
+                CurrentPreset = "org.kde.plasma.systemmonitor";
+                PreloadWeight = 75;
+                popupHeight = 124;
+                popupWidth = 230;
+                ConfigDialog = {
+                  DialogHeight = 538;
+                  DialogWidth = 720;
+                };
+                Appearance = {
+                  chartFace = "org.kde.ksysguard.piechart";
+                  showTitle = true;
+                  title = "Ventilador";
+                };
+                Sensors."highPrioritySensorIds" = ''["${fan}/fan1"]'';
+                Sensors."totalSensors" = ''["${fan}/fan1"]'';
+                SensorColors."${fan}/temp1" = "245,161,86";
+                "org.kde.ksysguard.piechart/General" = {
+                  rangeTo =
+                    if host == "v7w7r-macmini81" then
+                      4500
+                    else if host == "v7w7r-rc71l" then
+                      7800
+                    else
+                      "";
+                  rangeAuto = false;
+                };
+              };
+          }
+          {
+            name = "org.kde.plasma.systemmonitor.memory";
+            config = {
+              CurrentPreset = "org.kde.plasma.systemmonitor";
+              PreloadWeight = 100;
+              popupHeight = 203;
+              popupWidth = 150;
+              ConfigDialog = {
+                DialogHeight = 540;
+                DialogWidth = 720;
+              };
+              Appearance = {
+                chartFace = "org.kde.ksysguard.piechart";
+                showTitle = true;
+                title = "Memoria";
+              };
+              Sensors."highPrioritySensorIds" = ''["memory/physical/usedPercent"]'';
+              Sensors."lowPrioritySensorIds" =
+                ''["memory/physical/total","memory/swap/usedPercent","memory/swap/total"]'';
+              Sensors."totalSensors" = ''["memory/physical/usedPercent"]'';
+              SensorColors."memory/physical/usedPercent" = "86,245,178";
+            };
+          }
+          {
+            name = "org.kde.plasma.systemmonitor.cpucore";
+            config = {
+              CurrentPreset = "org.kde.plasma.systemmonitor";
+              PreloadWeight = 100;
+              popupHeight = 374;
+              popupWidth = 374;
+              ConfigDialog = {
+                DialogHeight = 540;
+                DialogWidth = 720;
+              };
+              Appearance = {
+                chartFace = "org.kde.ksysguard.piechart";
+                title = "CPU";
+                updateRateLimit = 2000;
+              };
+              SensorColors."cpu/all/usage" = "245,86,99";
+              Sensors."highPrioritySensorIds" = ''["cpu/all/usage"]'';
+              Sensors."lowPrioritySensorIds" = ''["cpu/cpu.*usage" ]'';
+              Sensors."totalSensors" = ''["cpu/all/usage" ]'';
+            };
+          }
+          {
+            name = "org.kde.plasma.systemmonitor.cpucore";
+            config = {
+              CurrentPreset = "org.kde.plasma.systemmonitor";
+              ConfigDialog = {
+                DialogHeight = 522;
+                DialogWidth = 720;
+              };
+              popupHeight = 393;
+              popupWidth = 381;
+              Appearance = {
+                chartFace = "org.kde.ksysguard.piechart";
+                title = "Temperatura";
+                updateRateLimit = 2000;
+              };
+
+              Sensors."highPrioritySensorIds" = ''["cpu/all/averageTemperature"]'';
+              Sensors."totalSensors" = ''["cpu/all/averageTemperature"]'';
+              SensorColors."cpu/cpu.*/usage" = "165,75,255";
+              "org.kde.ksysguard.piechart/General" = {
+                rangeTo = 100;
+                rangeAuto = false;
+              };
+            };
+          }
+          {
+            name = "KdeControlStation";
+            config.Appearance = {
+              brightness_widget_flat = true;
+              brightness_widget_thin = true;
+              brightness_widget_title = false;
+              layout = 2;
+              showCmd1 = true;
+              showCmd2 = true;
+              showColorSwitcher = false;
+              showNightLight = false;
+              showPercentage = true;
+              showSessionActions = false;
+              transparency = true;
+              usePlasmaSliders = true;
+              volume_widget_flat = true;
+              volume_widget_thin = true;
+              volume_widget_title = false;
+            };
+          }
+          {
+            name = "org.kde.plasma.systemtray";
+            config.General = {
+              scaleIconsToFit = true;
+              showAllItems = false;
+              spacing = 2;
+              disabledStatusNotifiers = [
+                "blueman"
+                "Easy Effects"
+                "KMix"
+              ];
+              shownItems = [
+                "org.kde.plasma.keyboardlayout"
+                "org.kde.plasma.networkmanagement"
+                "org.kde.plasma.volume"
+                "org.kde.plasma.clipboard"
+                "org.kde.plasma.notifications"
+              ];
+              extraItems = [
+                "org.kde.plasma.cameraindicator"
+                "org.kde.plasma.notifications"
+                "org.kde.plasma.brightness"
+                "org.kde.plasma.networkmanagement"
+                "org.kde.plasma.keyboardlayout"
+                "org.kde.plasma.bluetooth"
+                "org.kde.plasma.clipboard"
+                "org.kde.plasma.volume"
+                "org.kde.plasma.devicenotifier"
+              ];
+              hiddenItems = [
+                "org.kde.plasma.notifications"
+                "org.kde.plasma.keyboardlayout"
+                "org.kde.plasma.vault"
+                "org.kde.plasma.printmanager"
+                "org.kde.plasma.brightness"
+                "org.kde.plasma.cameraindicator"
+                "com.github.wwmm.easyeffects"
+                "org.kde.plasma.devicenotifier"
+              ];
+              knownItems = [
+                "org.kde.kdeconnect"
+                "org.kde.plasma.cameraindicator"
+                "org.kde.plasma.clipboard"
+                "org.kde.plasma.devicenotifier"
+                "org.kde.plasma.manage-inputmethod"
+                "org.kde.plasma.mediacontroller"
+                "org.kde.plasma.notifications"
+                "org.kde.plasma.battery"
+                "org.kde.plasma.brightness"
+                "org.kde.plasma.keyboardindicator"
+                "org.kde.plasma.networkmanagement"
+                "org.kde.plasma.volume"
+                "org.kde.plasma.weather"
+                "org.kde.kscreen"
+                "org.kde.plasma.bluetooth"
+                "org.kde.plasma.keyboardlayout"
+              ];
+            };
+          }
+          {
+            name = "org.kde.plasma.battery";
+            config.General.showPercentage = true;
+          }
+          {
+            digitalClock = {
+              time = {
+                showSeconds = "onlyInTooltip";
+                format = "12h";
+              };
+              date = {
+                enable = true;
+                format.custom = "ddd. dd/MM";
+                position = "belowTime";
+              };
+              calendar.firstDayOfWeek = "monday";
+            };
+          }
+        ];
+      }
+    ];
+  };
+}
