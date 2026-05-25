@@ -203,7 +203,6 @@
             (import ./pkgs)
             nixos-hardware.nixosModules.apple-t2
             nur.modules.nixos.default
-            nix-flatpak.nixosModules.nix-flatpak
             impermanence.nixosModules.impermanence
             home-manager.nixosModules.home-manager
             nixvim.nixosModules.nixvim
@@ -278,7 +277,7 @@
             (import ./configuration.nix)
             (import ./pkgs)
             nixos-hardware.nixosModules.common-pc-ssd
-            proxmox-nixos.nixosModules.proxmox-ve
+
             nixos-hardware.nixosModules.common-cpu-intel
             home-manager.nixosModules.home-manager
             nix-flatpak.nixosModules.nix-flatpak

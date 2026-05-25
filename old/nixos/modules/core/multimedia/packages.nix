@@ -13,29 +13,13 @@
       tuicam
     ]
     ++ [
-      asak
-      kew
-      #linuxwave
-      musikcube
-      playerctl
-      psst
-      spotdl
-      sptlrx
-      youtube-tui
-      ytfzf
-      ytmdl
-    ]
-    ++ [
       asciinema-agg
       dipc
       jp2a
       slides
       ttygif
       vhs
-      #(pkgs.callPackage ./custom/audio-share.nix { }) SOUND
-      (pkgs.callPackage ./custom/cliwrap.nix { })
-      (pkgs.callPackage ./custom/lyricstify.nix { })
-      (pkgs.callPackage ./custom/gspot.nix { })
+
       #spotify-adblock-git
       #spotify-adkiller-dns-block-git
       #https://github.com/carlocastoldi/blockify

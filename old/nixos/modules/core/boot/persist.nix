@@ -2,18 +2,10 @@
 {
   environment.persistence."/nix/persist" = {
     directories = [
-      "/etc/NetworkManager/system-connections"
-      "/etc/asusd"
-      "/etc/hhd"
       "/var/lib/bluetooth"
       "/var/lib/containers"
-      "/var/lib/libvirt"
-      "/var/lib/lxc"
       "/var/lib/nixos-containers"
-      "/var/lib/NetworkManager"
-      "/var/lib/qemu"
       "/var/lib/sbctl"
-      "/var/lib/waydroid"
     ];
     users."${username}" = {
       directories = [

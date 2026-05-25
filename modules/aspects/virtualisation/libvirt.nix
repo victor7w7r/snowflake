@@ -5,6 +5,12 @@
       nixos =
         { pkgs, ... }:
         {
+          environment.persistence."/nix/persist".directories = lib.mkAfter [
+            "/var/lib/libvirt"
+            "/var/lib/lxc"
+            "/var/lib/qemu"
+          ];
+
           environment.systemPackages = with pkgs; [
             bridge-utils
             dialog
@@ -43,6 +49,8 @@
             };
           };
         };
+
+      homeManager.programs.looking-glass-client.enable = true;
     })
     // lib.genAttrs [ "main" ] (t: {
       virtualisation.kvmgt.enable = true;

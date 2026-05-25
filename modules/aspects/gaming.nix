@@ -1,5 +1,8 @@
 { lib, ... }:
 {
+
+  flake-file.inputs.nix-gaming.url = "github:fufexan/nix-gaming";
+
   den.aspects.gui.provides = lib.genAttrs [ "handheld" ] (_: {
     nixos =
       { pkgs, ... }:
@@ -23,6 +26,11 @@
     homeManager =
       { pkgs, ... }:
       {
+        services.ludusavi.enable = true;
+        programs = {
+          gamemode.enable = true;
+          mangohud.enable = true;
+        };
         home.packages = with pkgs; [
           #bottles
           umu-launcher

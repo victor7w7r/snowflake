@@ -1,5 +1,5 @@
 {
-  den.aspects.dev.provides.git.homeManager.programs.mise = {
+  den.aspects.dev.provides.mise.homeManager.programs.mise = {
     enable = true;
     enableZshIntegration = true;
     enableBashIntegration = true;
@@ -15,5 +15,4 @@
       };
     };
   };
-
 }

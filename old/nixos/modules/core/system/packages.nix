@@ -24,15 +24,12 @@
       firejail
       hexyl
       libinput
-      iio-sensor-proxy
       jump
       libiio
       luksmeta
       keyd
       mdadm
       modprobed-db
-      rsyncy
-      efibootmgr
 
       phraze
       progress

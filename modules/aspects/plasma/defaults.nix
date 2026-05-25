@@ -50,12 +50,15 @@
           };
         };
 
-        services.gpg-agent = {
-          pinentry.package = pkgs.kwalletcli;
-          enableSshSupport = true;
-          defaultCacheTtl = 34560000;
-          maxCacheTtl = 34560000;
-          extraConfig = "pinentry-program ${pkgs.kwalletcli}/bin/pinentry-kwallet";
+        services = {
+          kdeconnect.enable = true;
+          gpg-agent = {
+            pinentry.package = pkgs.kwalletcli;
+            enableSshSupport = true;
+            defaultCacheTtl = 34560000;
+            maxCacheTtl = 34560000;
+            extraConfig = "pinentry-program ${pkgs.kwalletcli}/bin/pinentry-kwallet";
+          };
         };
       };
 

@@ -7,16 +7,19 @@
 {
   den.aspects.gui.provides =
     lib.genAttrs hosts-attrs.graphic (_: {
-      nixos.xdg = {
-        mime.enable = true;
-        autostart.enable = true;
-        menus.enable = true;
-        sounds.enable = true;
-        icons.enable = true;
-        terminal-exec.enable = true;
-        portal = {
-          enable = true;
-          xdgOpenUsePortal = true;
+      nixos = {
+        environment.pathsToLink = lib.mkAfter [ "/share/xdg-desktop-portal" ];
+        xdg = {
+          mime.enable = true;
+          autostart.enable = true;
+          menus.enable = true;
+          sounds.enable = true;
+          icons.enable = true;
+          terminal-exec.enable = true;
+          portal = {
+            enable = true;
+            xdgOpenUsePortal = true;
+          };
         };
       };
 

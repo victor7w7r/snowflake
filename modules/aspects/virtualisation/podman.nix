@@ -4,10 +4,14 @@
     nixos =
       { pkgs, ... }:
       {
+        environment.persistence."/nix/persist".directories = lib.mkAfter [
+          "/var/lib/waydroid"
+        ];
         #users.extraGroups.podman.members = [ username ];
         environment.systemPackages = with pkgs; [
           arion
           ctop
+          devbox
           distrobox
           distrobox-tui
           dive
@@ -37,6 +41,8 @@
           ];
         };
       };
+
+    homeManager.programs.lazydocker.enable = true;
   });
 
 }

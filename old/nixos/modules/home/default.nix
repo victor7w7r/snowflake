@@ -79,7 +79,6 @@ in
     useGlobalPkgs = true;
     sharedModules = [
 
-      inputs.nix-doom-emacs-unstraightened.homeModule
     ];
     users = {
       ${username} = homeConfig { user = username; };

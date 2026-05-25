@@ -7,6 +7,5 @@
       url = "github:mobile-nixos/mobile-nixos";
       flake = false;
     };
-    proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
   };
 }
