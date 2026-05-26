@@ -28,9 +28,12 @@ in
       { pkgs, ... }:
       {
         environment.systemPackages = with pkgs; [
+          choose
           curlFull
+          cod
           cyme
           dos2unix
+          emptty
           ethtool
           file
           glow
@@ -41,6 +44,7 @@ in
           inetutils
           iptables
           jless
+          jump
           killall
           lemmeknow
           lm_sensors
@@ -50,8 +54,10 @@ in
           net-tools
           p7zip
           rsyncy
+          tmux
           usbutils
           viddy
+          vtm
           wget
           wget2
           xz
@@ -61,7 +67,11 @@ in
     homeManager =
       { pkgs, ... }:
       {
-        home.packages = with pkgs; [ home-manager ];
+        home.packages = with pkgs; [
+          axel
+          inxi
+          home-manager
+        ];
         programs = {
           fd.enable = true;
           ripgrep-all.enable = true;

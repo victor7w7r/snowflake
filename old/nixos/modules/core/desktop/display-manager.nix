@@ -1,8 +1,0 @@
-{
-  ...
-}:
-{
-  environment.pathsToLink = [
-    "/share/applications"
-  ];
-}

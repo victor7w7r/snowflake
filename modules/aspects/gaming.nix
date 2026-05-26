@@ -1,6 +1,5 @@
 { lib, ... }:
 {
-
   flake-file.inputs.nix-gaming.url = "github:fufexan/nix-gaming";
 
   den.aspects.gui.provides = lib.genAttrs [ "handheld" ] (_: {

@@ -60,6 +60,8 @@
             extraConfig = "pinentry-program ${pkgs.kwalletcli}/bin/pinentry-kwallet";
           };
         };
+
+        home.packages = with pkgs; [ caffeine-ng ];
       };
 
     /*

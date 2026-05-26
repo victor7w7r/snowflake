@@ -16,6 +16,12 @@
           ytfzf
           ytmdl
           #linuxwave
+          #spotify-adblock-git
+          #spotify-adkiller-dns-block-git
+          #https://github.com/carlocastoldi/blockify
+          #https://github.com/trizen/clyrics
+          #https://github.com/SathyaBhat/spotify-dl
+          #https://github.com/foresterre/imagineer
           #(pkgs.callPackage ./custom/audio-share.nix { })
           #(pkgs.callPackage ./custom/cliwrap.nix { })
           #(pkgs.callPackage ./custom/lyricstify.nix { })

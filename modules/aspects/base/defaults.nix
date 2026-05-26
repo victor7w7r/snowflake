@@ -1,5 +1,40 @@
 {
   den.aspects.base = {
+    nixos =
+      { pkgs, ... }:
+      {
+        environment = {
+          enableAllTerminfo = true;
+          pathsToLink = [ "/share/applications" ];
+          sessionVariables = {
+            LIBVIRT_DEFAULT_URI = [ "qemu:///system" ];
+            NIXOS_OZONE_WL = "1";
+          };
+        };
+
+        programs = {
+          #bash.blesh.enable = true;
+          gnupg.agent = {
+            enable = true;
+            enableSSHSupport = true;
+            pinentryPackage = pkgs.pinentry-tty;
+          };
+          pay-respects.enable = true;
+          yazi = {
+            enable = true;
+            /*
+              settings.manager = {
+              show_hidden = true;
+              show_symlink = true;
+              };
+            */
+          };
+          zsh.enable = true;
+          less.enable = true;
+          skim.enable = true;
+        };
+      };
+
     homeManager = {
       services.pueue.enable = true;
       programs = {
@@ -46,6 +81,8 @@
         tealdeer.enable = true;
         navi.enable = true;
         topgrade.enable = true;
+        asciinema.enable = true;
+        rtorrent.enable = true;
 
         zoxide = {
           enable = true;

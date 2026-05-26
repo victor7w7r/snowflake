@@ -7,44 +7,28 @@
   environment.systemPackages =
     with pkgs;
     [
-      age
       atool
       brightnessctl
       brush
       cheat
-      choose
       cmd-wrapped
-      cod
-
-      emptty
-      evemu
-
       inotify-tools
-
       firejail
       hexyl
-      libinput
-      jump
-      libiio
       luksmeta
-      keyd
       mdadm
       modprobed-db
-
       phraze
       progress
       pv
-      rage
       seadrive-fuse
       seafile-shared
       #sampler
       sd
       sig
       tre-command
-
-      tmux
       veracrypt
-      vtm
+
       wol
       wtfutil
 

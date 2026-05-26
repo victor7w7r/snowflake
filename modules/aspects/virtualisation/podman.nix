@@ -42,7 +42,12 @@
         };
       };
 
-    homeManager.programs.lazydocker.enable = true;
+    homeManager =
+      { pkgs, ... }:
+      {
+        home.packages = with pkgs; [ distroshelf ];
+        programs.lazydocker.enable = true;
+      };
   });
 
 }

@@ -151,7 +151,6 @@ in
     };
   };
 
-  environment.defaultPackages = [ ];
   environment.systemPackages = with pkgs; [
     alsa-plugins
     alsa-utils
