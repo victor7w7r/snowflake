@@ -3,7 +3,7 @@
   flake-file.inputs.impermanence.url = "github:nix-community/impermanence";
 
   den.aspects.persistence.nixos =
-    { ... }:
+    { user, ... }:
     {
       imports = [ inputs.impermanence.nixosModules.impermanence ];
 
@@ -28,13 +28,31 @@
           "/etc/ssh/ssh_host_rsa_key"
           "/etc/machine-id"
         ];
-        users.root.directories = [
-          ".zsh"
-          ".tmux"
-          ".cache/antidote"
-          ".local/share/cod"
-          ".local/share/zoxide"
-        ];
+        users = {
+          "${user}".directories = [
+            "Documentos"
+            "Descargas"
+            "Imágenes"
+            "repositories"
+            "scripts"
+            "remote"
+            ".cache/thumbnails"
+            ".local/share/cod"
+            ".local/share/zoxide"
+            ".local/share/nix"
+            ".config/freerdp"
+            ".config/Seafile"
+            ".local/share/Trash"
+            ".ssh"
+            ".gnupg"
+            ".ccnet"
+          ];
+          root.directories = [
+            ".zsh"
+            ".tmux"
+            ".cache/antidote"
+          ];
+        };
       };
     };
 }

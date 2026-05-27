@@ -1,66 +1,48 @@
 { lib, hosts-attrs, ... }:
-let
-  tpm-configs = lib.genAttrs hosts-attrs.tpm (_: {
-    nixos =
-      { pkgs, ... }:
-      {
-        environment.systemPackages = with pkgs; [
-          mokutil
-          tpm2-tools
-          sbctl
-        ];
-      };
-  });
-  efi-configs = lib.genAttrs hosts-attrs.efi (_: {
-    nixos =
-      { pkgs, ... }:
-      {
-        environment.systemPackages = with pkgs; [
-          efibooteditor
-          efibootmgr
-        ];
-      };
-  });
-in
 {
   den.aspects.base.provides.coreutils = {
     nixos =
       { pkgs, ... }:
       {
         environment.systemPackages = with pkgs; [
+          atool
+          cheat
+          brush
           choose
-          curlFull
+          cmd-wrapped
           cod
-          cyme
-          dos2unix
           emptty
-          ethtool
           file
+          fsarchiver
           glow
           gnused
           gnutar
-          i2c-tools
-          iio-sensor-proxy
-          inetutils
-          iptables
-          jless
+          inotify-tools
           jump
           killall
           lemmeknow
-          lm_sensors
-          lshw
           lsof
-          mtools
-          net-tools
+          modprobed-db
           p7zip
+          progress
+          pv
           rsyncy
+          #sampler
+          seadrive-fuse
+          seafile-shared
+          sd
+          sig
           tmux
-          usbutils
+          tre-command
           viddy
           vtm
-          wget
-          wget2
           xz
+          wtfutil
+          #(pkgs.callPackage ./custom/hf.nix { })
+          #(pkgs.callPackage ./custom/loop.nix { })
+          #(pkgs.callPackage ./custom/procmux.nix { })
+          #(pkgs.callPackage ./custom/progressline.nix { })
+          #(pkgs.callPackage ./custom/texoxide.nix { })
         ];
       };
 
@@ -79,6 +61,15 @@ in
         };
       };
 
-    provides = tpm-configs // efi-configs;
+    provides = lib.genAttrs hosts-attrs.efi (_: {
+      nixos =
+        { pkgs, ... }:
+        {
+          environment.systemPackages = with pkgs; [
+            efibooteditor
+            efibootmgr
+          ];
+        };
+    });
   };
 }

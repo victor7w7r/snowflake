@@ -1,6 +1,14 @@
 { lib, hosts-attrs, ... }:
 {
   den.aspects.sound.provides = lib.genAttrs hosts-attrs.peripheralgui (_: {
+    nixos =
+      { user, ... }:
+      {
+        environment.persistence."/nix/persist".users."${user}".directories = [
+          ".config/easyeffects/db"
+        ];
+      };
+
     homeManager = {
       services.easyeffects.enable = true;
       home.activation.createEqFiles =

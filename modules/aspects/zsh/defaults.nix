@@ -1,6 +1,19 @@
 {
   den.aspects.zsh = {
-    nixos.environment.pathsToLink = [ "/share/zsh" ];
+    nixos =
+      { user, ... }:
+      {
+        environment = {
+          pathsToLink = [ "/share/zsh" ];
+          persistence."/nix/persist".users."${user}" = {
+            files = [ ".zsh_history" ];
+            directories = [
+              ".cache/antidote"
+              ".zsh"
+            ];
+          };
+        };
+      };
     homeManager.programs.zsh = {
       enable = true;
       autocd = true;

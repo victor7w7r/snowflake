@@ -2,14 +2,29 @@
 {
   den.aspects.gui.provides = lib.genAttrs hosts-attrs.softwaregui (_: {
     nixos =
-      { pkgs, ... }:
+      { user, pkgs, ... }:
       {
-        services.xserver.enable = true;
-        environment.systemPackages = with pkgs; [
-          evemu
-          keyd
-          libinput
-        ];
+        services = {
+          gvfs.enable = true;
+          xserver.enable = true;
+        };
+        hardware.uinput.enable = true;
+        environment = {
+          persistence."/nix/persist".users."${user}".directories = lib.mkAfter [
+            ".config/legcord"
+            ".config/onlyoffice"
+            ".config/vlc"
+            ".local/share/PrismLauncher"
+            ".local/share/com.vixalien.sticky"
+            ".local/share/onlyoffice"
+            ".local/share/vlc"
+          ];
+          systemPackages = with pkgs; [
+            evemu
+            keyd
+            libinput
+          ];
+        };
       };
     homeManager =
       { pkgs, ... }:

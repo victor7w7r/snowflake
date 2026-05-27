@@ -74,8 +74,6 @@ in
     }
   ];
 
-  powerManagement.cpuFreqGovernor = "schedutil";
-
   zramSwap = {
     enable = true;
     algorithm = "zstd";
@@ -147,85 +145,6 @@ in
         device = "/dev/disk/by-partlabel/disk-main-swapcrypt";
         crypttabExtraOpts = [ "tpm2-device=auto" ];
         preLVM = true;
-      };
-    };
-  };
-
-  environment.systemPackages = with pkgs; [
-    alsa-plugins
-    alsa-utils
-    alsa-firmware
-    alsa-ucm-conf
-    asusctl
-    amdgpu_top
-    bluetui
-    bluetuith
-    kdePackages.plasma-thunderbolt
-    pciutils
-    powertop
-    radeontop
-    ryzenadj
-    tbtools
-    qjoypad
-    thunderbolt
-  ];
-
-  systemd.services.supergfxd.path = [
-    pkgs.kmod
-    pkgs.pciutils
-  ];
-
-  hardware = {
-    enableAllFirmware = true;
-    amdgpu.opencl.enable = true;
-    uinput.enable = true;
-    xone.enable = true;
-  };
-
-  programs.rog-control-center = {
-    enable = true;
-    autoStart = true;
-  };
-
-  services = {
-    acpid.enable = true;
-    #auto-cpufreq.enable = true;
-    supergfxd = {
-      enable = true;
-      settings = {
-        vfio_enable = true;
-        vfio_save = false;
-        always_reboot = false;
-        no_logind = false;
-        logout_timeout_s = 20;
-        hotplug_type = "Asus";
-      };
-    };
-    tuned.enable = false;
-    inputplumber.enable = lib.mkForce false;
-    btrfs.autoScrub = {
-      enable = true;
-      fileSystems = [ "/run/media/games" ];
-      interval = "weekly";
-    };
-
-    asusd.enable = true;
-    handheld-daemon = {
-      enable = true;
-      user = username;
-      ui.enable = true;
-      adjustor.enable = true;
-      adjustor.loadAcpiCallModule = true;
-    };
-    powerstation.enable = false;
-    udev.extraRules = ''
-      ACTION=="add", SUBSYSTEM=="pci", DRIVER=="amdgpu", RUN+="${pkgs.coreutils}/bin/chmod a+w /sys/%p/power_dpm_force_performance_level /sys/%p/pp_od_clk_voltage"
-      SUBSYSTEM=="usb", ATTR{idVendor}=="2808", ATTR{idProduct}=="a753", MODE="0660", GROUP="input"
-    '';
-    fprintd = {
-      enable = true;
-      package = pkgs.fprintd.override {
-        libfprint = pkgs.callPackage ./custom/focaltech.nix { };
       };
     };
   };

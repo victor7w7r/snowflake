@@ -13,9 +13,22 @@
 
   den.aspects.plasma.provides = lib.genAttrs hosts-attrs.softwaregui (_: {
     nixos =
-      { pkgs, ... }:
+      { user, pkgs, ... }:
       {
         programs.kde-pim.enable = true;
+
+        environment.persistence."/nix/persist".users."${user}" = {
+          directories = [
+            ".local/share/baloo"
+            ".local/share/klipper"
+            ".local/share/krdc"
+            ".local/share/kwalletd"
+          ];
+          files = [
+            ".config/kwalletrc"
+            ".config/kwinoutputconfig.json"
+          ];
+        };
 
         security.pam.services."victor7w7r".kwallet = {
           enable = true;

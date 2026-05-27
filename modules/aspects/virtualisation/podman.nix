@@ -2,26 +2,28 @@
 {
   den.aspects.virtualisation.provides = lib.genAttrs [ "main" "generic" "superlab" ] (t: {
     nixos =
-      { pkgs, ... }:
+      { user, pkgs, ... }:
       {
-        environment.persistence."/nix/persist".directories = lib.mkAfter [
-          "/var/lib/waydroid"
-        ];
         #users.extraGroups.podman.members = [ username ];
-        environment.systemPackages = with pkgs; [
-          arion
-          ctop
-          devbox
-          distrobox
-          distrobox-tui
-          dive
-          #distrobuilder
-          fuse-overlayfs
-          oxker
-          pods
-          podman-tui
-        ];
-
+        environment = {
+          systemPackages = with pkgs; [
+            arion
+            ctop
+            devbox
+            distrobox
+            distrobox-tui
+            dive
+            #distrobuilder
+            fuse-overlayfs
+            oxker
+            pods
+            podman-tui
+          ];
+          persistence."/nix/persist" = {
+            directories = lib.mkAfter [ "/var/lib/waydroid" ];
+            users."${user}".directories = lib.mkAfter [ ".local/share/containers" ];
+          };
+        };
         virtualisation.podman = {
           enable = true;
           autoPrune.enable = true;

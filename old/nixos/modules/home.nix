@@ -77,9 +77,6 @@ in
     backupCommand = "${pkgs.trash-cli}/bin/trash";
     useUserPackages = true;
     useGlobalPkgs = true;
-    sharedModules = [
-
-    ];
     users = {
       ${username} = homeConfig { user = username; };
       root = homeConfig { };

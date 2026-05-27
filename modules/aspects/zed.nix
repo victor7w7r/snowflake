@@ -1,6 +1,15 @@
 { lib, hosts-attrs, ... }:
 {
   den.aspects.zed.provides = lib.genAttrs hosts-attrs.peripheralgui (_: {
+    nixos =
+      { user, ... }:
+      {
+        environment.persistence."/nix/persist".users."${user}".directories = [
+          ".local/share/zed"
+          ".config/zed"
+        ];
+      };
+
     homeManager =
       { pkgs, ... }:
       {

@@ -6,10 +6,12 @@
         environment.systemPackages = with pkgs; [
           atac
           httpie
+          dos2unix
           curlie
           fw
-          ktlint
+          jless
           just
+          ktlint
           posting
           rainfrog
           shellcheck

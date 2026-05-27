@@ -4,8 +4,10 @@
 
   den.aspects.gui.provides = lib.genAttrs [ "handheld" ] (_: {
     nixos =
-      { pkgs, ... }:
+      { user, pkgs, ... }:
       {
+        environment.persistence."/nix/persist".directories = lib.mkAfter [ ".steam" ];
+
         hardware.steam-hardware.enable = true;
         programs.steam = {
           enable = true;

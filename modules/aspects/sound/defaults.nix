@@ -6,6 +6,10 @@
       {
         environment.systemPackages = with pkgs; [
           asak
+          alsa-plugins
+          alsa-utils
+          alsa-firmware
+          alsa-ucm-conf
           kew
           musikcube
           playerctl
@@ -34,7 +38,6 @@
       {
         home.packages = with pkgs; [
           #zam-plugins
-          alsa-utils
           calf
           deepfilternet
           lsp-plugins

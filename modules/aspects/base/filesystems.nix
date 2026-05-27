@@ -6,6 +6,7 @@
         go-mtpfs
         exfatprogs
         f2fs-tools
+        mtools
         ntfs2btrfs
         simple-mtpfs
         sshfs

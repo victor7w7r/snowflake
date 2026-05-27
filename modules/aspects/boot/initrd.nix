@@ -1,8 +1,13 @@
 {
-  den.aspects.boot = {
-    provides.initrd.nixos =
-      { pkgs, ... }:
-      {
+  den.aspects.boot.provides.initrd.nixos =
+    { pkgs, ... }:
+    {
+      boot = {
+        consoleLogLevel = 4;
+        tmp = {
+          cleanOnBoot = true;
+          useTmpfs = true;
+        };
         initrd = {
           checkJournalingFS = true;
           compressorArgs = [
@@ -53,5 +58,5 @@
           };
         };
       };
-  };
+    };
 }

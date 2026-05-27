@@ -1,5 +1,4 @@
 {
-  pkgs,
   system,
   ...
 }:
@@ -16,19 +15,14 @@ let
 in
 {
   boot = {
-    consoleLogLevel = 4;
     inherit supportedFilesystems;
     loader = {
-      grub.enable = false;
-      systemd-boot.enable = false;
+
     }
     // (
       if system == "x86_64-linux" then
         {
-          efi = {
-            efiSysMountPoint = "/boot/EFI";
-            canTouchEfiVariables = true;
-          };
+
         }
       else
         { }
@@ -38,7 +32,6 @@ in
       cleanOnBoot = true;
       useTmpfs = true;
     };
-
   }
   // (
     if system == "x86_64-linux" then
@@ -54,7 +47,7 @@ in
           inherit supportedFilesystems;
           services.lvm.enable = true;
         };
-        kernelModules = [
+      /*  kernelModules = [
           "tcp_bbr"
           "dm-thin-pool"
           "veth"
@@ -64,8 +57,7 @@ in
           "vhost_vsock"
           "iptable_mangle"
         ];
-
-      }
+        }*/
     else
       { }
   );

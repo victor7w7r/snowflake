@@ -2,6 +2,16 @@
   den.aspects.system.provides.security.nixos =
     { pkgs, ... }:
     {
+
+      environment.systemPackages = with pkgs; [
+        boxxy
+        firejail
+        hexyl
+        luksmeta
+        phraze
+        veracrypt
+      ];
+
       services = {
         fail2ban.enable = true;
         #opensnitch.enable = true;

@@ -18,6 +18,16 @@
   };
 
   den.aspects.gui.provides = lib.genAttrs hosts-attrs.peripheralgui (_: {
+
+    nixos =
+      { user, ... }:
+      {
+        environment.persistence."/nix/persist".users."${user}".directories = lib.mkAfter [
+          ".cache/zen"
+          ".config/zen"
+        ];
+      };
+
     homeManager =
       { pkgs, ... }:
       {
