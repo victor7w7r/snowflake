@@ -1,6 +1,5 @@
-{ lib, hosts-attrs, ... }:
 {
-  den.aspects.zed.provides = lib.genAttrs hosts-attrs.peripheralgui (_: {
+  den.aspects.zed = {
     nixos =
       { user, ... }:
       {
@@ -173,5 +172,5 @@
           };
         };
       };
-  });
+  };
 }
