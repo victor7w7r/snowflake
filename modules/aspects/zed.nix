@@ -65,6 +65,21 @@
               };
             };
 
+            context_servers = {
+              mcp-server-github = {
+                enabled = true;
+                remote = false;
+                settings.github_personal_access_token = null;
+              };
+            };
+
+            edit_predictions = {
+              mode = "eager";
+              provider = "copilot";
+            };
+
+            agent_servers."auggie".type = "registry";
+
             whitespace_map = {
               space = "•";
               tab = " ";
@@ -105,7 +120,6 @@
             show_whitespaces = "all";
 
             features.edit_prediction_provider = "copilot";
-            edit_predictions.mode = "subtle";
             autosave = "on_focus_change";
             cursor_blink = true;
 
@@ -123,7 +137,6 @@
               font_family = "JetBrainsMono Nerd Font";
               line_height = "comfortable";
               shell = "system";
-              toolbar.title = true;
             };
 
             title_bar.show_sign_in = false;
@@ -157,31 +170,6 @@
             };
 
             icon_theme = "Material Icon Theme";
-
-            /*
-              node = {
-                path = lib.getExe pkgs.nodejs;
-                npm_path = lib.getExe' pkgs.nodejs "npm";
-              };
-
-              "context_servers": {
-                "mcp-server-github": {
-                  "enabled": true,
-                  "settings": {
-                    "github_personal_access_token": ""
-                  }
-                }
-              },
-
-              "agent_servers": {
-                "Auggie CLI": {
-                  "type": "custom",
-                  "command": "auggie",
-                  "args": ["--acp"],
-                  "env": {}
-                }
-              }
-            */
           };
         };
       };

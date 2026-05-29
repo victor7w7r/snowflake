@@ -1,4 +1,9 @@
-{ inputs, lib, ... }:
+{
+  den,
+  inputs,
+  lib,
+  ...
+}:
 {
   imports = [
     (inputs.flake-file.flakeModules.dendritic or { })
@@ -10,7 +15,5 @@
     den.url = lib.mkDefault "github:denful/den";
   };
 
-  den.schema.user = {
-    config.classes = lib.mkDefault [ "homeManager" ];
-  };
+  _module.args.__findFile = den.lib.__findFile;
 }

@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.handheld.provides.services.nixos.services = {
+  handheld.services.nixos.services = {
     acpid.enable = true;
     asusd.enable = true;
     #auto-cpufreq.enable = true;

@@ -1,0 +1,8 @@
+- [dendritic-nix/modules/singletons/browser.nix at main · Serralq/dendritic-nix](https://github.com/Serralq/dendritic-nix/blob/main/modules/singletons/browser.nix)
+- [nix/modules/aspects/gui/default.nix at main · repparw/nix](https://github.com/repparw/nix/blob/main/modules/aspects/gui/default.nix)
+- [infra/modules/routes.nix at main · mariolopjr/infra](https://github.com/mariolopjr/infra/blob/main/modules/routes.nix)
+- [nix-config/modules/aspects/dev/dev.nix at main · amanako/nix-config](https://github.com/amanako/nix-config/blob/main/modules/aspects/dev/dev.nix)
+- [nix/modules/users/brauni.nix at main · herobrauni/nix](https://github.com/herobrauni/nix/blob/main/modules/users/brauni.nix)
+- [dotfiles/modules/hosts/a2700/disko.nix at master · klchen0112/dotfiles](https://github.com/klchen0112/dotfiles/blob/master/modules/hosts/a2700/disko.nix)
+- [nixicle/hosts/vm/default.nix at main · hmajid2301/nixicle](https://github.com/hmajid2301/nixicle/blob/main/hosts/vm/default.nix)
+- [dotfiles/modules/aspects/users/adelline/adelline.nix at main · OscarMarshall/dotfiles](https://github.com/OscarMarshall/dotfiles/blob/main/modules/aspects/users/adelline/adelline.nix)

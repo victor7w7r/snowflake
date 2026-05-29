@@ -1,19 +1,21 @@
+{ den, lib, ... }:
 {
+  #imports = [ (inputs.den.namespace "hosts-attrs" true) ];
+  perSystem =
+    { pkgs, ... }:
+    {
+      packages = den.lib.nh.denPackages { fromFlake = true; } pkgs;
+    };
+
+  /*
+    services.udev.packages = [ pkgs.yubikey-personalization ];
+    services.pcscd.enable = true;
+  */
+
   flake-file.inputs = {
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    darwin = {
-      url = "github:nix-darwin/nix-darwin";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    nixos-wsl = {
-      url = "github:nix-community/nixos-wsl";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-compat.follows = "";
     };
 
     disko = {
@@ -22,23 +24,32 @@
     };
   };
 
-  den.hosts = {
-    x86_64-linux = {
-      main.users.victor7w7r = { };
-      handheld.users.victor7w7r = { };
-      server.users.victor7w7r = { };
-      generic.users.victor7w7r = { };
-      live.users.snowflake = { };
-    };
+  den = {
+    schema.user.classes = lib.mkDefault [ "homeManager" ];
+    default = {
+      darwin.system.stateVersion = 6;
+      nixos.system.stateVersion = "25.05";
+      homeManager.home.stateVersion = "25.05";
+      includes = [
+        den.batteries.hostname
+        den.batteries.define-user
+        den.batteries.primary-user
+        den.batteries.hostname
+        den.batteries.inputs'
+        den.batteries.self'
+      ];
 
-    aarch64-linux = {
-      pizero.users.victor7w7r = { };
-      phone.users.victor7w7r = { };
-      superlab.users.victor7w7r = { };
-    };
-
-    x86_64-darwin.main = {
-      users.victor7w7r = { };
+      provides.to-hosts.nixos =
+        { inputs, pkgs, ... }:
+        {
+          imports = [ inputs.home-manager.nixosModules.home-manager ];
+          home-manager = {
+            backupCommand = "${pkgs.trash-cli}/bin/trash";
+            useGlobalPkgs = true;
+            useUserPackages = true;
+            backupFileExtension = "hm-backup";
+          };
+        };
     };
   };
 }

@@ -1,9 +1,13 @@
-{ den, lib, ... }:
+{ __findFile, ... }:
 {
-  den.aspects.superlab = {
-    includes = [ ];
+  den = {
+    hosts.aarch64-linux.superlab.users.victor7w7r = { };
 
-    nixos = {
+    aspects.superlab = {
+      includes = [ ];
+
+      nixos = {
+      };
     };
   };
 }

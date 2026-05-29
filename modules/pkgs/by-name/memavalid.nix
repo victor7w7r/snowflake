@@ -3,9 +3,7 @@
   lib,
   pkgs,
 }:
-
 with lib;
-
 let
   cfg = config.services.memavaild;
   confFile = pkgs.writeText "memavaild.conf" ''

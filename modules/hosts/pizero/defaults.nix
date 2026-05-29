@@ -1,9 +1,13 @@
-{ den, lib, ... }:
+{ __findFile, ... }:
 {
-  den.aspects.pizero = {
-    includes = [ ];
+  den = {
+    hosts.aarch64-linux.pizero.users.victor7w7r = { };
 
-    nixos = {
+    aspects.phone = {
+      includes = [ ];
+
+      nixos = {
+      };
     };
   };
 }

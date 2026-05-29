@@ -1,9 +1,13 @@
-{ den, lib, ... }:
+{ __findFile, ... }:
 {
-  den.aspects.phone = {
-    includes = [ ];
+  den = {
+    hosts.aarch64-linux.phone.users.victor7w7r = { };
 
-    nixos = {
+    aspects.phone = {
+      includes = [ ];
+
+      nixos = {
+      };
     };
   };
 }

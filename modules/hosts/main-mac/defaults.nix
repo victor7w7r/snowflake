@@ -1,9 +1,18 @@
-{ den, lib, ... }:
+{ __findFile, ... }:
 {
-  den.aspects.main-mac = {
-    includes = [ ];
+  flake-file.inputs.darwin = {
+    url = "github:nix-darwin/nix-darwin";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
 
-    nixos = {
+  den = {
+    hosts.x86_64-darwin.main-mac.users.victor7w7r = { };
+
+    aspects.main-mac = {
+      includes = [ ];
+
+      nixos = {
+      };
     };
   };
 }

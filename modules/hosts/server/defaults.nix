@@ -1,21 +1,25 @@
-{ den, lib, ... }:
+{ __findFile, ... }:
 {
-  den.aspects.server = {
-    includes = [ ];
+  den = {
+    hosts.x86_64-linux.server.users.victor7w7r = { };
 
-    nixos =
-      { pkgs, user, ... }:
-      {
+    aspects.server = {
+      includes = [ ];
 
-        environment.systemPackages = with pkgs; [
-          mdadm
-          intel-undervolt
-        ];
+      nixos =
+        { pkgs, user, ... }:
+        {
 
-        services = {
-          lvm.boot.thin.enable = true;
-          rustdesk.enable = true;
+          environment.systemPackages = with pkgs; [
+            mdadm
+            intel-undervolt
+          ];
+
+          services = {
+            lvm.boot.thin.enable = true;
+            rustdesk.enable = true;
+          };
         };
-      };
+    };
   };
 }

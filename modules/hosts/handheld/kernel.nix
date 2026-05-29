@@ -1,6 +1,5 @@
-{ lib, ... }:
 {
-  den.aspects.handheld.provides.kernel.nixos.services = {
+  handheld.kernel.nixos.services = {
 
   };
 }

@@ -1,9 +1,12 @@
-{ den, lib, ... }:
+{ __findFile, ... }:
 {
-  den.aspects.live = {
-    includes = [ ];
+  den = {
+    hosts.x86_64-linux.live.users.snowflake = { };
+    aspects.live = {
+      includes = [ ];
 
-    nixos = {
+      nixos = {
+      };
     };
   };
 }
