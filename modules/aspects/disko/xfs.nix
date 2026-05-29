@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.esp =
+  den.aspects.xfs =
     { config, ... }:
     {
       imports = [ { options.call = lib.mkOption { type = with lib.types; functionTo attrs; }; } ];

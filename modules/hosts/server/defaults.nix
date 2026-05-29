@@ -1,10 +1,13 @@
-{ __findFile, ... }:
+{ server, ... }:
 {
   den = {
     hosts.x86_64-linux.server.users.victor7w7r = { };
 
     aspects.server = {
-      includes = [ ];
+      includes = [
+        server.disks-logical
+        server.disks-physical
+      ];
 
       nixos =
         { pkgs, user, ... }:

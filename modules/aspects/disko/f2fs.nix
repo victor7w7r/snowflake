@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.swap =
+  den.aspects.f2fs =
     { config, ... }:
     {
       imports = [
