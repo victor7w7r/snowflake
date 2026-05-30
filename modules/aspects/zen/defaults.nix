@@ -1,10 +1,4 @@
-{
-  config,
-  lib,
-  inputs,
-  hosts-attrs,
-  ...
-}:
+{ den, lib, ... }:
 {
   flake-file.inputs = {
     zen-browser = {
@@ -17,7 +11,15 @@
     };
   };
 
-  den.aspects.gui.provides = lib.genAttrs hosts-attrs.peripheralgui (_: {
+  den.aspects.zen = {
+    includes = with den.aspects.zen._; [
+      bookmarks
+      extensions
+      mods
+      policies
+      search
+      settings
+    ];
 
     nixos =
       { user, ... }:
@@ -29,7 +31,12 @@
       };
 
     homeManager =
-      { pkgs, ... }:
+      {
+        config,
+        inputs,
+        pkgs,
+        ...
+      }:
       {
         imports = [ inputs.zen-browser.homeModules.beta ];
         home.file.".zen".source = config.lib.file.mkOutOfStoreSymlink "${config.xdg.configHome}/zen";
@@ -66,5 +73,5 @@
           };
         };
       };
-  });
+  };
 }

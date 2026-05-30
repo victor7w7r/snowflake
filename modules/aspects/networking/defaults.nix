@@ -1,6 +1,12 @@
-{ ... }:
+{ den, ... }:
 {
   den.aspects.networking = {
+    includes = with den.aspects.networking._; [
+      firewall
+      network-manager
+      ssh
+    ];
+
     nixos = {
       networking = {
         #hostName = "${host}";

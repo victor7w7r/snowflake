@@ -1,6 +1,5 @@
-{ lib, hosts-attrs, ... }:
 {
-  den.aspects.virtualisation.provides = lib.genAttrs hosts-attrs.softwaregui (t: {
+  den.aspects.waydroid = {
     nixos =
       { user, pkgs, ... }:
       {
@@ -16,6 +15,5 @@
           services.waydroid-mount.wantedBy = [ "multi-user.target" ];
         };
       };
-  });
-
+  };
 }

@@ -1,4 +1,3 @@
-{ lib, hosts-attrs, ... }:
 {
   den.aspects.base.provides.coreutils = {
     nixos =
@@ -53,6 +52,9 @@
           axel
           inxi
           home-manager
+          clolcat
+          fortune
+          mommy
         ];
         programs = {
           fd.enable = true;
@@ -60,16 +62,5 @@
           rclone.enable = true;
         };
       };
-
-    provides = lib.genAttrs hosts-attrs.efi (_: {
-      nixos =
-        { pkgs, ... }:
-        {
-          environment.systemPackages = with pkgs; [
-            efibooteditor
-            efibootmgr
-          ];
-        };
-    });
   };
 }

@@ -1,6 +1,5 @@
 { inputs, ... }:
 {
-
   flake-file.inputs = {
     batfetch = {
       url = "github:ashish-kus/batfetch";
@@ -13,8 +12,7 @@
     };
   };
 
-  den.aspects.base.provides.fetch = {
-
+  den.aspects.fetch = {
     homeManager.programs.fastfetch = {
       enable = true;
     };

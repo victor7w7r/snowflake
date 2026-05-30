@@ -1,11 +1,11 @@
-{ inputs, ... }:
+{ lib, ... }:
 {
   flake-file.inputs.claude-desktop = {
     url = "github:k3d3/claude-desktop-linux-flake";
     inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  den.aspects.gui.provides.main = {
+  den.aspects.ide = {
     nixos =
       { user, ... }:
       {

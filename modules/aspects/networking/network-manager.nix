@@ -2,7 +2,6 @@
 {
   den.aspects.networking.provides.network-manager = {
     nixos = {
-
       environment.persistence."/nix/persist".directories = lib.mkAfter [
         "/etc/NetworkManager/system-connections"
         "/var/lib/NetworkManager"

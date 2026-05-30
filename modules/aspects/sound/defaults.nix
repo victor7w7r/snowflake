@@ -1,6 +1,11 @@
-{ ... }:
+{ den, ... }:
 {
   den.aspects.sound = {
+    includes = with den.aspects.zen._; [
+      eq
+      pipewire
+    ];
+
     nixos =
       { pkgs, ... }:
       {

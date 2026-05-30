@@ -1,15 +1,23 @@
+{ den, ... }:
 {
   den.aspects.base = {
+    includes = with den.aspects.base._; [
+      coreutils
+      disk-management
+      filesystems
+      netmon
+      nettools
+      starship
+      sysmon
+    ];
+
     nixos =
       { pkgs, ... }:
       {
         environment = {
           enableAllTerminfo = true;
           pathsToLink = [ "/share/applications" ];
-          sessionVariables = {
-            LIBVIRT_DEFAULT_URI = [ "qemu:///system" ];
-            NIXOS_OZONE_WL = "1";
-          };
+          sessionVariables.NIXOS_OZONE_WL = "1";
         };
 
         programs = {

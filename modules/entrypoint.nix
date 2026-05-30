@@ -39,17 +39,27 @@
         den.batteries.self'
       ];
 
-      provides.to-hosts.nixos =
-        { inputs, pkgs, ... }:
-        {
-          imports = [ inputs.home-manager.nixosModules.home-manager ];
-          home-manager = {
-            backupCommand = "${pkgs.trash-cli}/bin/trash";
-            useGlobalPkgs = true;
-            useUserPackages = true;
-            backupFileExtension = "hm-backup";
+      provides.to-hosts = {
+        nixos =
+          { inputs, pkgs, ... }:
+          {
+            imports = [ inputs.home-manager.nixosModules.home-manager ];
+            home-manager = {
+              backupCommand = "${pkgs.trash-cli}/bin/trash";
+              useGlobalPkgs = true;
+              useUserPackages = true;
+              backupFileExtension = "hm-backup";
+            };
           };
-        };
+
+        homeManager =
+          { config, ... }:
+          {
+            home.file = {
+              "repositories/nixstrap".source = config.lib.file.mkOutOfStoreSymlink "/etc/nixos";
+            };
+          };
+      };
     };
   };
 }

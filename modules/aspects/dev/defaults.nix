@@ -1,5 +1,12 @@
+{ den, ... }:
 {
   den.aspects.dev = {
+    includes = with den.aspects.dev._; [
+      ccache
+      git
+      mise
+    ];
+
     nixos =
       { pkgs, ... }:
       {

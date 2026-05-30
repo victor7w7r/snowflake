@@ -1,21 +1,16 @@
 {
-  inputs,
-  lib,
-  hosts-attrs,
-  ...
-}:
-{
   flake-file.inputs.plasma-manager = {
     url = "github:nix-community/plasma-manager";
     inputs.nixpkgs.follows = "nixpkgs";
     inputs.home-manager.follows = "home-manager";
   };
 
-  den.aspects.plasma.provides = lib.genAttrs hosts-attrs.softwaregui (_: {
+  den.aspects.plasma = {
     nixos =
       { user, pkgs, ... }:
       {
         programs.kde-pim.enable = true;
+        xdg.portal.extraPortals = with pkgs; [ kdePackages.xdg-desktop-portal-kde ];
 
         environment.persistence."/nix/persist".users."${user}" = {
           directories = [
@@ -43,7 +38,7 @@
       };
 
     homeManager =
-      { pkgs, ... }:
+      { inputs, pkgs, ... }:
       {
         imports = [ inputs.plasma-manager.homeModules.plasma-manager ];
 
@@ -93,5 +88,5 @@
         (pkgs.callPackage ./custom/wallpaper-effects.nix { })
         ];
     */
-  });
+  };
 }

@@ -1,5 +1,5 @@
 {
-  den.aspects.base.provides.communication = {
+  den.aspects.communication = {
     nixos =
       { pkgs, ... }:
       {

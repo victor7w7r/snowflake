@@ -2,9 +2,9 @@
 {
   flake-file.inputs.nix-gaming.url = "github:fufexan/nix-gaming";
 
-  den.aspects.gui.provides = lib.genAttrs [ "handheld" ] (_: {
+  den.aspects.gaming = {
     nixos =
-      { user, pkgs, ... }:
+      { pkgs, ... }:
       {
         environment.persistence."/nix/persist".directories = lib.mkAfter [ ".steam" ];
 
@@ -52,5 +52,5 @@
             wineWowPackages.fonts
         */
       };
-  });
+  };
 }

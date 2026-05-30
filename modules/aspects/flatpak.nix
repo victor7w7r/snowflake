@@ -1,16 +1,8 @@
 {
-  inputs,
-  lib,
-  hosts-attrs,
-  ...
-}:
-{
-
   flake-file.inputs.nix-flatpak.url = "https://flakehub.com/f/gmodena/nix-flatpak/0.7.0";
-
-  den.aspects.gui.provides = lib.genAttrs hosts-attrs.softwaregui (_: {
+  den.aspects.flatpak = {
     nixos =
-      { user, ... }:
+      { inputs, user, ... }:
       {
         environment.persistence."/nix/persist".users."${user}".directories = [ ".config/flatpak" ];
         imports = [ inputs.nix-flatpak.nixosModules.nix-flatpak ];
@@ -46,5 +38,5 @@
       {
         home.packages = with pkgs; [ warehouse ];
       };
-  });
+  };
 }

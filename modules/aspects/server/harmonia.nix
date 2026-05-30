@@ -1,4 +1,3 @@
-{ ... }:
 {
   den.aspects.server.provides.harmonia.nixos = {
     services.harmonia.cache.enable = true;

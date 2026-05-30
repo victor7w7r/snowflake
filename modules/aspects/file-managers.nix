@@ -1,5 +1,5 @@
 {
-  den.aspects.base.provides.file-manager = {
+  den.aspects.file-managers = {
     nixos =
       { pkgs, ... }:
       {
@@ -15,16 +15,12 @@
         ];
       };
 
-    homeManager =
-      { ... }:
-      {
-        programs = {
-          broot.enable = true;
-          mc.enable = true;
-          nnn.enable = true;
-          vifm.enable = true;
-          xplr.enable = true;
-        };
-      };
+    homeManager.programs = {
+      broot.enable = true;
+      mc.enable = true;
+      nnn.enable = true;
+      vifm.enable = true;
+      xplr.enable = true;
+    };
   };
 }

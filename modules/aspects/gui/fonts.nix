@@ -1,6 +1,5 @@
-{ lib, hosts-attrs, ... }:
 {
-  den.aspects.gui.provides = lib.genAttrs hosts-attrs.graphic (_: {
+  den.aspects.gui.provides.fonts = {
     nixos.fonts = {
       fontDir.enable = true;
       enableDefaultPackages = true;
@@ -37,5 +36,5 @@
           open-sans
         ];
       };
-  });
+  };
 }

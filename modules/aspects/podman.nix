@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.virtualisation.provides = lib.genAttrs [ "main" "generic" "superlab" ] (t: {
+  den.aspects.podman = {
     nixos =
       { user, pkgs, ... }:
       {
@@ -50,6 +50,5 @@
         home.packages = with pkgs; [ distroshelf ];
         programs.lazydocker.enable = true;
       };
-  });
-
+  };
 }

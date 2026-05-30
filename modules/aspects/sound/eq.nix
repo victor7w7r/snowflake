@@ -1,6 +1,6 @@
-{ lib, hosts-attrs, ... }:
+{ lib, ... }:
 {
-  den.aspects.sound.provides = lib.genAttrs hosts-attrs.peripheralgui (_: {
+  den.aspects.sound.provides.eq = {
     nixos =
       { user, ... }:
       {
@@ -153,5 +153,5 @@
           EOG
         '';
     };
-  });
+  };
 }

@@ -1,6 +1,13 @@
-{ lib, ... }:
+{ den, lib, ... }:
 {
   den.aspects.tmux = {
+    includes = with den.aspects.tmux._; [
+      bindings
+      config
+      plugins
+      ui
+    ];
+
     nixos =
       { user, ... }:
       {

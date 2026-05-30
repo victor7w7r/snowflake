@@ -1,15 +1,19 @@
-{ lib, hosts-attrs, ... }:
+{ lib, ... }:
 {
-  den.aspects.virtualisation.provides =
-    lib.genAttrs hosts-attrs.peripheralgui (t: {
+  den.aspects = {
+    virtintel.nixos.virtualisation.kvmgt.enable = true;
+    libvirt = {
       nixos =
         { pkgs, ... }:
         {
-          environment.persistence."/nix/persist".directories = lib.mkAfter [
-            "/var/lib/libvirt"
-            "/var/lib/lxc"
-            "/var/lib/qemu"
-          ];
+          environment = {
+            sessionVariables.LIBVIRT_DEFAULT_URI = [ "qemu:///system" ];
+            persistence."/nix/persist".directories = lib.mkAfter [
+              "/var/lib/libvirt"
+              "/var/lib/lxc"
+              "/var/lib/qemu"
+            ];
+          };
 
           environment.systemPackages = with pkgs; [
             bridge-utils
@@ -51,8 +55,6 @@
         };
 
       homeManager.programs.looking-glass-client.enable = true;
-    })
-    // lib.genAttrs [ "main" ] (t: {
-      virtualisation.kvmgt.enable = true;
-    });
+    };
+  };
 }

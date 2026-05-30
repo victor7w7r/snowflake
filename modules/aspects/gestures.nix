@@ -1,7 +1,6 @@
 { inputs, ... }:
 {
   flake-file.inputs.gestures.url = "github:ferstar/gestures";
-
   den.aspects.gestures.homeManager =
     { pkgs, ... }:
     {

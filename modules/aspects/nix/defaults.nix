@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ den, ... }:
 {
   flake-file.inputs = {
     nix-alien.url = "https://flakehub.com/f/thiagokokada/nix-alien/0.1";
@@ -6,12 +6,12 @@
   };
 
   den.aspects.nix = {
+    includes = with den.aspects.nix._; [ settings ];
+
     nixos =
-      { pkgs, ... }:
+      { inputs, pkgs, ... }:
       {
-        imports = [
-          inputs.nix-search-tv.packages.x86_64-linux.default
-        ];
+        imports = [ inputs.nix-search-tv.packages.x86_64-linux.default ];
 
         environment.systemPackages = with pkgs; [
           alejandra

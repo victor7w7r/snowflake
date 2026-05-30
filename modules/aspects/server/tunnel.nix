@@ -1,6 +1,7 @@
-{ pkgs, lib, ... }:
+{ lib, ... }:
 {
   den.aspects.server.provides.tunnel.nixos =
+    { pkgs, ... }:
     let
       mkFunnel = name: publicport: localport: {
         systemd.services."funnel-${name}" = {

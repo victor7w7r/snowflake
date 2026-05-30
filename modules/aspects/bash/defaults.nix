@@ -1,6 +1,20 @@
-{ lib, ... }:
+{ den, lib, ... }:
 {
   den.aspects.bash = {
+    includes = with den.aspects.bash._; [
+      aliases
+      init
+      plugins
+      variables
+
+      bofh
+      kaomoji
+      misc
+      node
+      quotes
+      utils
+    ];
+
     nixos =
       { user, ... }:
       {

@@ -1,8 +1,16 @@
-{ lib, hosts-attrs, ... }:
+{ den, lib, ... }:
 {
-  den.aspects.gui.provides = lib.genAttrs hosts-attrs.softwaregui (_: {
+  den.aspects.gui = {
+    includes = with den.aspects.gui._; [
+      disk-management
+      fonts
+      gtk
+      libinput
+      xdg
+    ];
+
     nixos =
-      { user, pkgs, ... }:
+      { pkgs, user, ... }:
       {
         services = {
           gvfs.enable = true;
@@ -78,5 +86,5 @@
           #https://tahoma2d.org/
         ];
       };
-  });
+  };
 }

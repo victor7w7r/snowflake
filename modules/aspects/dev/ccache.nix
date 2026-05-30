@@ -1,4 +1,3 @@
-{ ... }:
 {
   den.aspects.dev.provides.ccache.nixos =
     { pkgs, ... }:

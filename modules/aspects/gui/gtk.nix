@@ -1,4 +1,3 @@
-{ ... }:
 {
   den.aspects.gui.provides.gtk.homeManager =
     { pkgs, ... }:
@@ -42,7 +41,6 @@
           })
           capitaine-cursors
           capitaine-cursors-themed
-
         ]
       );
       #programs.pywal.enable = true;

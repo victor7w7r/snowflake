@@ -1,6 +1,6 @@
 { ... }:
 {
-  den.aspects.img-processing.nixos =
+  den.aspects.img-process.nixos =
     { pkgs, ... }:
     {
       environment.systemPackages = with pkgs; [

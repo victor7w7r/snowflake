@@ -1,5 +1,22 @@
+{ den, ... }:
 {
   den.aspects.zsh = {
+    includes = with den.aspects.zsh._; [
+      abbr
+      aliases
+      init
+      options
+      plugins
+      variables
+
+      bofh
+      kaomoji
+      misc
+      node
+      quotes
+      utils
+    ];
+
     nixos =
       { user, ... }:
       {
@@ -14,6 +31,7 @@
           };
         };
       };
+
     homeManager.programs.zsh = {
       enable = true;
       autocd = true;

@@ -1,6 +1,6 @@
 { ... }:
 {
-  den.aspects.hardware.provides.bluetooth.nixos =
+  den.aspects.bluetooth.nixos =
     { pkgs, ... }:
     {
       environment = {
