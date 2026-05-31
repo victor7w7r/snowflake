@@ -1,6 +1,6 @@
-{ lib, hosts-attrs, ... }:
+{ hosts, lib, ... }:
 {
-  den.aspects.plasma.provides = {
+  den.aspects.plasma.provides.powerdevil = {
     powerdevil.homeManager.programs.plasma.powerdevil = {
       general.pausePlayersOnSuspend = true;
       batteryLevels = {
@@ -57,8 +57,8 @@
         whenLaptopLidClosed = "sleep";
       };
     };
-  }
-  // lib.genAttrs hosts-attrs.main (_: {
+  };
+  provides = lib.genAttrs hosts.main (_: {
     homeManager.programs.plasma.powerdevil.AC = {
       autoSuspend.idleTimeout = 10800;
       turnOffDisplay.idleTimeout = 3600;

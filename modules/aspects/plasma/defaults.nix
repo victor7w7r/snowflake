@@ -1,3 +1,4 @@
+{ den, ... }:
 {
   flake-file.inputs.plasma-manager = {
     url = "github:nix-community/plasma-manager";
@@ -6,6 +7,19 @@
   };
 
   den.aspects.plasma = {
+    includes = with den.aspects.plasma._; [
+      appearance
+      desktop
+      dolphin
+      entries
+      fonts
+      input
+      menu
+      mime
+      packages
+      panels
+    ];
+
     nixos =
       { user, pkgs, ... }:
       {
