@@ -24,6 +24,7 @@
       { config, ... }:
       {
         xdg = {
+          mimeApps.enable = true;
           configFile."mimeapps.list".force = true;
           userDirs = {
             enable = true;

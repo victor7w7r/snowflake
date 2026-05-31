@@ -3,7 +3,7 @@
   live.hardware.nixos.services = {
     hardware.bolt.enable = true;
     logrotate.enable = lib.mkDefault false;
-    getty.autologinUser = "nixstrap";
+    getty.autologinUser = "snowflake";
     openssh = {
       enable = true;
       settings.PermitRootLogin = "yes";

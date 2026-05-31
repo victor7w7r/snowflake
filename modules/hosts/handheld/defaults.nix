@@ -21,6 +21,9 @@
               ];
               users."${user}".directories = [ ".config/rog" ];
             };
+
+            boot.extraModprobeConfig = "options kvm-amd nested=1";
+
             systemPackages = with pkgs; [
               asusctl
               amdgpu_top

@@ -11,21 +11,6 @@
             update_ms = 500;
           };
         };
-        git = {
-          enable = true;
-          lfs.enable = true;
-          userName = "victor7w7r";
-          userEmail = "arkano036@gmail.com";
-          settings = {
-            core.pager = "${pkgs.delta}/bin/delta";
-            init.defaultBranch = "main";
-            credential.helper = "store";
-            mergetool.prompt = true;
-            rebase.autostash = true;
-            pull.rebase = true;
-            push.autoSetupRemote = true;
-          };
-        };
         fastfetch.enable = true;
         fzf = {
           enable = true;

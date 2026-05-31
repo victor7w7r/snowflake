@@ -3,7 +3,15 @@
     { pkgs, ... }:
     {
       boot = {
+        modprobeConfig.enable = true;
         consoleLogLevel = 4;
+        extraModprobeConfig = ''
+          blacklist iTCO_wdt
+          blacklist joydev
+          blacklist mousedev
+          blacklist mac_hid
+          blacklist intel_hid
+        '';
         tmp = {
           cleanOnBoot = true;
           useTmpfs = true;

@@ -1,6 +1,5 @@
 {
   den.aspects = {
-
     uefi.nixos =
       { pkgs, ... }:
       {

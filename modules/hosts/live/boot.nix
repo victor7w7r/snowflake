@@ -28,7 +28,6 @@
             "-19"
             "--ultra"
             "-T0"
-            "--progress"
             "--check"
           ];
         };

@@ -5,6 +5,7 @@
       coreutils
       disk-management
       filesystems
+      locale
       netmon
       nettools
       starship
@@ -12,12 +13,17 @@
     ];
 
     nixos =
-      { pkgs, ... }:
+      { pkgs, options, ... }:
       {
         environment = {
           enableAllTerminfo = true;
           pathsToLink = [ "/share/applications" ];
           sessionVariables.NIXOS_OZONE_WL = "1";
+        };
+
+        console = {
+          packages = options.console.packages.default ++ [ pkgs.terminus_font ];
+          keyMap = "us-acentos";
         };
 
         programs = {

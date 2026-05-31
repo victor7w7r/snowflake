@@ -1,14 +1,27 @@
-{ lib, ... }:
 {
-  live.minimal.nixos = {
-    isoImage.edition = lib.mkOverride 500 "minimal";
-    fonts.fontconfig.enable = lib.mkOverride 500 false;
+  lib,
+  live,
+  __findFile,
+  ...
+}:
+{
+  den = {
+    hosts.x86_64-linux.minimal-live.users.snowflake = { };
+    aspects.minimal-live = {
+      includes = [
+        live.common
+      ];
+      nixos = {
+        isoImage.edition = lib.mkOverride 500 "minimal";
+        fonts.fontconfig.enable = lib.mkOverride 500 false;
 
-    xdg = with lib; {
-      autostart.enable = mkDefault false;
-      icons.enable = mkDefault false;
-      mime.enable = mkDefault false;
-      sounds.enable = mkDefault false;
+        xdg = with lib; {
+          autostart.enable = mkDefault false;
+          icons.enable = mkDefault false;
+          mime.enable = mkDefault false;
+          sounds.enable = mkDefault false;
+        };
+      };
     };
   };
 }

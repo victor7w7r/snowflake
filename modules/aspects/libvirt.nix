@@ -1,11 +1,19 @@
 { lib, ... }:
 {
   den.aspects = {
-    virtintel.nixos.virtualisation.kvmgt.enable = true;
+    virtintel.nixos = {
+      virtualisation.kvmgt.enable = true;
+      boot.extraModprobeConfig = ''
+        options kvm-intel nested=1
+        options kvm_intel emulate_invalid_guest_state=0
+      '';
+    };
     libvirt = {
       nixos =
         { pkgs, ... }:
         {
+          boot.extraModprobeConfig = "options kvm ignore_msrs=1";
+
           environment = {
             sessionVariables.LIBVIRT_DEFAULT_URI = [ "qemu:///system" ];
             persistence."/nix/persist".directories = lib.mkAfter [

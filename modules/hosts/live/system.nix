@@ -24,11 +24,6 @@
         '';
       };
 
-      console = {
-        packages = options.console.packages.default ++ [ pkgs.terminus_font ];
-        keyMap = "us-acentos";
-      };
-
       time = {
         hardwareClockInLocalTime = false;
         timeZone = "America/Guayaquil";

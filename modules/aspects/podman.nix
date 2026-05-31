@@ -2,10 +2,11 @@
 {
   den.aspects.podman = {
     nixos =
-      { user, pkgs, ... }:
+      { pkgs, user, ... }:
       {
         #users.extraGroups.podman.members = [ username ];
         environment = {
+          persistence."/nix/persist".users."${user}".directories = lib.mkAfter [ ".local/share/containers" ];
           systemPackages = with pkgs; [
             arion
             ctop
@@ -19,10 +20,6 @@
             pods
             podman-tui
           ];
-          persistence."/nix/persist" = {
-            directories = lib.mkAfter [ "/var/lib/waydroid" ];
-            users."${user}".directories = lib.mkAfter [ ".local/share/containers" ];
-          };
         };
         virtualisation.podman = {
           enable = true;

@@ -1,15 +1,15 @@
 {
-  den.aspects.zed = {
-    nixos =
+  den.aspects = {
+    zed-persistence.nixos =
       { user, ... }:
       {
         environment.persistence."/nix/persist".users."${user}".directories = [
-          ".local/share/zed"
           ".config/zed"
+          ".local/share/zed"
         ];
       };
 
-    homeManager =
+    zed.homeManager =
       { pkgs, ... }:
       {
         programs.zed-editor = {
