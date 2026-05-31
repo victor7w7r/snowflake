@@ -1,5 +1,6 @@
-{
-  den.aspects.zsh.provides.kaomoji.homeManager.programs.zsh.siteFunctions.kaomoji = ''
+{ lib, ... }:
+let
+  kaomoji = ''
     case $((RANDOM % 45)) in
       0) printf "〜⁠(⁠꒪⁠꒳⁠꒪⁠)⁠〜" ;;
       1) printf "∑( ºロº) !!" ;;
@@ -49,4 +50,16 @@
       45) printf "(づ￣ ³￣)づ" ;;
     esac
   '';
+in
+{
+  den.aspects.shell.provides.kaomoji.homeManager.programs = {
+    zsh.siteFunctions.kaomoji = kaomoji;
+    bash.bashrcExtra = (
+      lib.mkOrder 600 ''
+        kaomoji() {
+          ${kaomoji}
+        }
+      ''
+    );
+  };
 }

@@ -5,8 +5,10 @@
       disk-management
       fonts
       gtk
+      kitty
       libinput
       xdg
+      zed
     ];
 
     nixos =

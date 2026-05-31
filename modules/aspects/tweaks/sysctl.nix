@@ -1,5 +1,5 @@
 {
-  den.aspects.system.provides.sysctl.nixos.boot.kernel.sysctl = {
+  den.aspects.tweaks.provides.sysctl.nixos.boot.kernel.sysctl = {
     "fs.file-max" = 9223372036854775807;
     "fs.aio-max-nr" = 19349474;
     "fs.aio-nr" = 0;

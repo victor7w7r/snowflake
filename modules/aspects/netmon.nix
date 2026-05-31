@@ -1,5 +1,5 @@
 {
-  den.aspects.base.provides.netmon.nixos =
+  den.aspects.netmon.nixos =
     { pkgs, ... }:
     {
       environment.systemPackages = with pkgs; [

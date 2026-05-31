@@ -22,8 +22,10 @@
         android-file-transfer
         android-tools
         gnirehtet
+        go-mtpfs
         qtscrcpy
         payload-dumper-go
+        simple-mtpfs
         spytrap-adb
         scrcpy
         universal-android-debloater

@@ -1,8 +1,7 @@
 {
-  den.aspects.system.provides.security.nixos =
+  den.aspects.base.provides.security.nixos =
     { pkgs, ... }:
     {
-
       environment.systemPackages = with pkgs; [
         boxxy
         firejail

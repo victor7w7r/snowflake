@@ -1,5 +1,5 @@
 {
-  den.aspects.zsh.provides.options.homeManager.programs.zsh.setOptions = [
+  den.aspects.shell.provides.options.homeManager.programs.zsh.setOptions = [
     "interactivecomments"
     "extended_glob"
     "COMPLETE_IN_WORD"

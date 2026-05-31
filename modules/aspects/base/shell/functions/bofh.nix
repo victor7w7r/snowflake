@@ -1,5 +1,6 @@
-{
-  den.aspects.zsh.provides.bofh.homeManager.programs.zsh.siteFunctions.bofh = ''
+{ lib, ... }:
+let
+  bofh = ''
     bofh_quotes=(
       "clock speed"
       "solar flares"
@@ -472,4 +473,16 @@
     echo "$bofh_string"
     unset bofh_quotes
   '';
+in
+{
+  den.aspects.shell.provides.bofh.homeManager.programs = {
+    zsh.siteFunctions.bofh = bofh;
+    bash.bashrcExtra = (
+      lib.mkOrder 550 ''
+        bofh() {
+          ${bofh}
+        }
+      ''
+    );
+  };
 }

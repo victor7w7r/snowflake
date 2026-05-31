@@ -53,6 +53,11 @@
       lazysql.enable = true;
       #meli.enable = true; BUILD
       mods.enable = true;
+      pyenv = {
+        enable = true;
+        enableZshIntegration = true;
+        enableBashIntegration = true;
+      };
       #visidata.enable = true;
     };
   };

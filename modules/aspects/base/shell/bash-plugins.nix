@@ -1,5 +1,5 @@
 {
-  den.aspects.bash.provides.plugins.homeManager =
+  den.aspects.shell.provides.bash-plugins.homeManager =
     { pkgs, ... }:
     {
       /*
