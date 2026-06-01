@@ -1,4 +1,4 @@
-{ pkgs, stdenvNoCC, ... }:
+{ pkgs, stdenvNoCC }:
 stdenvNoCC.mkDerivation {
   pname = "sunxi-firmware";
   version = "4050e02";

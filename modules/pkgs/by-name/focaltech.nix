@@ -1,5 +1,4 @@
 { pkgs, stdenv }:
-
 stdenv.mkDerivation rec {
   pname = "libfprint-focaltech";
   version = "1.94.9";

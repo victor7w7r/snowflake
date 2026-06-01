@@ -1,5 +1,4 @@
 { pkgs, stdenvNoCC }:
-
 stdenvNoCC.mkDerivation {
   pname = "kde-control-station";
   version = "latest";

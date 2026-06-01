@@ -1,5 +1,5 @@
 {
-  den.aspects.base.provides.security.nixos =
+  den.aspects.security.nixos =
     { pkgs, ... }:
     {
       environment.systemPackages = with pkgs; [

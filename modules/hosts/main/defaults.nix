@@ -1,7 +1,10 @@
 { main, ... }:
 {
   den = {
-    hosts.x86_64-linux.main.users.victor7w7r = { };
+    hosts.x86_64-linux.main = {
+      hostName = "v7w7r-macmini81";
+      users.victor7w7r = { };
+    };
 
     aspects.main = {
       includes = [

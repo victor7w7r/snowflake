@@ -5,7 +5,6 @@
       disk-management
       fonts
       gtk
-      kitty
       xdg
     ];
 

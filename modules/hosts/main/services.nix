@@ -1,6 +1,6 @@
 { ... }:
 {
-  den.aspects.main.provides.services.nixos =
+  main.services.nixos =
     { pkgs, ... }:
     {
       systemd.services = {

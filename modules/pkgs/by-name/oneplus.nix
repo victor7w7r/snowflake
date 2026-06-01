@@ -1,5 +1,4 @@
 { pkgs, stdenvNoCC }:
-
 stdenvNoCC.mkDerivation {
   name = "firmware-oneplus-sdm845";
 

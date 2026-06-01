@@ -1,9 +1,4 @@
-{
-  den,
-  inputs,
-  lib,
-  ...
-}:
+{ den, inputs, ... }:
 {
   imports = [
     (inputs.flake-file.flakeModules.dendritic or { })
@@ -11,8 +6,13 @@
   ];
 
   flake-file.inputs = {
-    flake-file.url = lib.mkDefault "github:vic/flake-file";
-    den.url = lib.mkDefault "github:denful/den";
+    den.url = "github:denful/den";
+    flake-file.url = "github:vic/flake-file";
+    disko.url = "github:nix-community/disko";
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   _module.args.__findFile = den.lib.__findFile;

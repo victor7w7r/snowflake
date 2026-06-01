@@ -6,13 +6,17 @@
 }:
 {
   den = {
-    hosts.x86_64-linux.minimal-live.users.snowflake = { };
+    hosts.x86_64-linux.minimal-live = {
+      hostName = "v7w7r-live";
+      users.snowflake = { };
+    };
     aspects.minimal-live = {
       includes = [
         live.common
         <base>
         <fetch>
         <initrd>
+        <security>
       ];
       nixos = {
         isoImage.edition = lib.mkOverride 500 "minimal";

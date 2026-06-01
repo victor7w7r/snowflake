@@ -21,7 +21,10 @@
         ...
       }:
       {
-        nixpkgs.overlays = [ inputs.emacs-overlay.overlay ];
+        nixpkgs.overlays = [
+          inputs.emacs-overlay.overlay
+          inputs.emacs-config.overlays.default
+        ];
         environment = {
           persistence."/nix/persist".users."${user}".directories = lib.mkAfter [
             ".local/share/emacs"

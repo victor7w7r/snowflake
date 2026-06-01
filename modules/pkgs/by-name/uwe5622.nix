@@ -1,4 +1,4 @@
-{ pkgs, stdenvNoCC, ... }:
+{ pkgs, stdenvNoCC }:
 stdenvNoCC.mkDerivation {
   pname = "uwe5622-firmware";
   version = "4050e02";

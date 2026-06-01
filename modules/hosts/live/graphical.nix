@@ -6,7 +6,10 @@
 }:
 {
   den = {
-    hosts.x86_64-linux.graphical-live.users.snowflake = { };
+    hosts.x86_64-linux.graphical-live = {
+      hostName = "v7w7r-live";
+      users.snowflake = { };
+    };
     aspects.graphical-live = {
       includes = [
         live.common
@@ -21,6 +24,7 @@
         <xfce>
         <uefi>
         <secureboot>
+        <security>
       ];
 
       nixos = {

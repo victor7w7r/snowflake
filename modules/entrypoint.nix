@@ -1,6 +1,5 @@
 { den, lib, ... }:
 {
-  #imports = [ (inputs.den.namespace "hosts-attrs" true) ];
   perSystem =
     { pkgs, ... }:
     {
@@ -12,20 +11,11 @@
     services.pcscd.enable = true;
   */
 
-  flake-file.inputs = {
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    disko = {
-      url = "github:nix-community/disko";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-  };
-
   den = {
-    schema.user.classes = lib.mkDefault [ "homeManager" ];
+    schema.user = {
+      includes = [ den.batteries.mutual-provider ];
+      classes = lib.mkDefault [ "homeManager" ];
+    };
     default = {
       darwin.system.stateVersion = 6;
       nixos.system.stateVersion = "25.05";

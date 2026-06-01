@@ -8,8 +8,6 @@
       ...
     }:
     {
-      system.primaryUser = user;
-      time.timeZone = "America/Guayaquil";
 
       networking = {
         computerName = host;
@@ -21,28 +19,6 @@
           allowSigned = true;
           allowSignedApp = true;
           enableStealthMode = false;
-        };
-      };
-
-      environment = {
-        variables.RLIMIT_NOFILE = "65536";
-        pathsToLink = [ "/Applications" ];
-        systemPath = [ "/usr/local/bin" ];
-        etc = {
-          home-manager.source = "${inputs.home-manager}";
-          nixpkgs.source = "${pkgs.path}";
-          stable.source = "${inputs.stable}";
-          "sudoers.d/timeout".text = ''
-            Defaults timestamp_timeout=30
-          '';
-          "gitconfig".text = ''
-            [filter "lfs"]
-              clean = git-lfs clean -- %f
-              smudge = git-lfs smudge -- %f
-              process = git-lfs filter-process
-              required = true
-          '';
-
         };
       };
 
@@ -76,11 +52,6 @@
         */
       };
 
-      users.users.${user} = {
-        name = "${user}";
-        home = "/Users/${user}";
-        shell = pkgs.zsh;
-      };
     };
 
 }

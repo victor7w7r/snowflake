@@ -1,7 +1,7 @@
 {
+  lib,
   pkgs,
   stdenvNoCC,
-  lib,
 }:
 let
   icon = pkgs.fetchurl {

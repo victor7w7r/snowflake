@@ -1,12 +1,16 @@
 { lib, handheld, ... }:
 {
   den = {
-    hosts.x86_64-linux.generic.handheld.victor7w7r = { };
+    hosts.x86_64-linux.handheld = {
+      hostName = "v7w7r-rc71l";
+      users.victor7w7r = { };
+    };
     aspects.handheld = {
       includes = [
-        handheld.kernel
         handheld.disks
         handheld.hardware
+        handheld.initrd
+        handheld.kernel
         handheld.services
       ];
 
@@ -23,6 +27,13 @@
             };
 
             boot.extraModprobeConfig = "options kvm-amd nested=1";
+
+            zramSwap = {
+              enable = true;
+              algorithm = "zstd";
+              memoryPercent = 60;
+              priority = 100;
+            };
 
             systemPackages = with pkgs; [
               asusctl

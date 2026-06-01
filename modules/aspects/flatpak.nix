@@ -1,15 +1,26 @@
 {
-  flake-file.inputs.nix-flatpak.url = "https://flakehub.com/f/gmodena/nix-flatpak/0.7.0";
+  flake-file.inputs.nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
   den.aspects.flatpak = {
     nixos =
-      { inputs, user, ... }:
+      { user, ... }:
       {
         environment.persistence."/nix/persist".users."${user}".directories = [ ".config/flatpak" ];
-        imports = [ inputs.nix-flatpak.nixosModules.nix-flatpak ];
+      };
 
+    homeManager =
+      { inputs, pkgs, ... }:
+      {
+        imports = [ inputs.nix-flatpak.homeManagerModules.nix-flatpak ];
         #https://github.com/MykolaSuprun/nixos-flakes-config/blob/c0b9e3356c8675cb50885a279b0978b99abdb705/nixos/modules/flatpak.nix
         services.flatpak = {
-          enable = false;
+          enable = true;
+          update = {
+            auto = {
+              enable = true;
+              onCalendar = "weekly";
+            };
+            onActivation = true;
+          };
           /*
             packages = [
               "io.github.DenysMb.Kontainer"
@@ -24,19 +35,11 @@
                 OptiImage
             ];
           */
-          /*
-            update.auto = {
-            enable = true;
-            onCalendar = "weekly";
-            };
-          */
         };
-      };
-
-    homeManager =
-      { pkgs, ... }:
-      {
-        home.packages = with pkgs; [ warehouse ];
+        home.packages = with pkgs; [
+          flatpak
+          warehouse
+        ];
       };
   };
 }

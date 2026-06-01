@@ -18,8 +18,33 @@
           programs = {
             git = {
               enable = true;
+              package = pkgs.gitFull;
+              ignores = [
+                "*~"
+                "*.swp"
+                ".DS_Store"
+                ".devenv"
+              ];
+              attributes = [ "*.pdf diff=pdf" ];
               lfs.enable = true;
               settings = {
+                alias = {
+                  unstash = "stash pop";
+                  s = "status";
+                  tags = "tag -l";
+                  t = "tag -s -m ''";
+                  commit-reuse-message = ''!git commit --edit --file "$(git rev-parse --git-dir)"/COMMIT_EDITMSG'';
+                  br = "branch";
+                  co = "checkout";
+                  st = "status";
+                  ls = "log --pretty=format:\"%C(yellow)%h%Cred%d\\\\ %Creset%s%Cblue\\\\ [%cn]\" --decorate";
+                  ll = "log --pretty=format:\"%C(yellow)%h%Cred%d\\\\ %Creset%s%Cblue\\\\ [%cn]\" --decorate --numstat";
+                  cm = "commit -m";
+                  ca = "commit -am";
+                  dc = "diff --cached";
+                  amend = "commit --amend -m";
+
+                };
                 core.pager = "${pkgs.delta}/bin/delta";
                 init.defaultBranch = "main";
                 user = {
@@ -42,13 +67,7 @@
                 rebase.autostash = true;
                 pull.rebase = true;
                 push.autoSetupRemote = true;
-                alias = {
-                  unstash = "stash pop";
-                  s = "status";
-                  tags = "tag -l";
-                  t = "tag -s -m ''";
-                  commit-reuse-message = ''!git commit --edit --file "$(git rev-parse --git-dir)"/COMMIT_EDITMSG'';
-                };
+
               };
             };
             difftastic = {

@@ -1,4 +1,4 @@
-{ pkgs, stdenvNoCC, ... }:
+{ pkgs, stdenvNoCC }:
 stdenvNoCC.mkDerivation {
   pname = "alsa-ucm-conf-enchilada";
   version = "unstable-2022-12-08";

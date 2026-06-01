@@ -7,7 +7,10 @@
   };
 
   den = {
-    hosts.x86_64-linux.wsl.users.victor7w7r = { };
+    hosts.x86_64-linux.wsl = {
+      hostName = "v7w7r-wsl";
+      users.victor7w7r = { };
+    };
 
     aspects.wsl = {
       includes = [ ];

@@ -1,12 +1,8 @@
-{
-  stdenv,
-  fetchurl,
-  ...
-}:
+{ pkgs, stdenv }:
 stdenv.mkDerivation {
   pname = "envfetch";
   version = "latest";
-  src = fetchurl {
+  src = pkgs.fetchurl {
     url = "https://github.com/ankddev/envfetch/releases/download/v2.1.2/envfetch-linux-amd64";
     sha256 = "sha256-LTw9eIaPHXWEZuMYUhwt3lxKoqHH3+i0A69oqcD5nVY=";
   };

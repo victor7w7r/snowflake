@@ -1,7 +1,10 @@
 { server, ... }:
 {
   den = {
-    hosts.x86_64-linux.server.users.victor7w7r = { };
+    hosts.x86_64-linux.server = {
+      hostName = "v7w7r-youyeetoox1";
+      users.victor7w7r = { };
+    };
 
     aspects.server = {
       includes = [
@@ -12,11 +15,17 @@
       nixos =
         { pkgs, user, ... }:
         {
-
           environment.systemPackages = with pkgs; [
             mdadm
             intel-undervolt
           ];
+
+          zramSwap = {
+            enable = true;
+            algorithm = "zstd";
+            memoryPercent = 100;
+            priority = 100;
+          };
 
           services = {
             lvm.boot.thin.enable = true;
