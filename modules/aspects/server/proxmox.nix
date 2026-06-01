@@ -11,10 +11,17 @@
         procps
       ];
 
-      services.proxmox-ve = {
-        enable = true;
-        ipAddress = "192.168.1.100";
-        bridges = [ "br0" ];
+      services = {
+        proxmox-ve = {
+          enable = true;
+          ipAddress = "192.168.1.100";
+          bridges = [ "br0" ];
+        };
+        xrdp = {
+          enable = true;
+          defaultWindowManager = "${pkgs.xfce4-session}/bin/startxfce4";
+          openFirewall = true;
+        };
       };
 
       systemd = {

@@ -13,6 +13,16 @@
           #https://codeberg.org/sylphenix/sff
           #(pkgs.callPackage ./custom/fman.nix { })
         ];
+
+        programs.yazi = {
+          enable = true;
+          /*
+            settings.manager = {
+            show_hidden = true;
+            show_symlink = true;
+            };
+          */
+        };
       };
 
     homeManager.programs = {

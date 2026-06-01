@@ -1,18 +1,35 @@
 { lib, ... }:
 {
   /*
-    packages = with pkgs; [
-    clolcat
-    fortune
-    ];
-
     home-manager = {
       backupCommand = "${pkgs.trash-cli}/bin/trash";
       useUserPackages = true;
       useGlobalPkgs = true;
     }
 
-    services.network-manager-applet.enable = true;
+    users.users = with lib; {
+      nixstrap = {
+        initialHashedPassword = mkForce "$6$zjvJDfGSC93t8SIW$AHhNB.vDDPMoiZEG3Mv6UYvgUY6eya2UY5E2XA1lF7mOg6nHXUaaBmJYAMMQhvQcA54HJSLdkJ/zdy8UKX3xL1";
+        isNormalUser = true;
+        shell = pkgs.zsh;
+        openssh.authorizedKeys.keys = [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINGTZ3iQqtjrClKVnqQ0w9Yn2sUoE9lAAW8ZYhR45nV5 arkano036@gmail.com"
+        ];
+        extraGroups = [
+          "input"
+          "networkmanager"
+          "power"
+          "tty"
+          "storage"
+          "video"
+          "wheel"
+        ];
+      };
+      root = {
+        initialHashedPassword = mkForce "$6$zjvJDfGSC93t8SIW$AHhNB.vDDPMoiZEG3Mv6UYvgUY6eya2UY5E2XA1lF7mOg6nHXUaaBmJYAMMQhvQcA54HJSLdkJ/zdy8UKX3xL1";
+        shell = pkgs.zsh;
+      };
+    };
   */
 
   live.common.nixos =
@@ -31,6 +48,36 @@
         "${modulesPath}/installer/cd-dvd/channel.nix"
       ];
 
+      environment = {
+        defaultPackages =
+          with pkgs;
+          lib.mkDefault [
+            mdadm
+            lm_sensors
+            lshw
+            nix-du
+            smartmontools
+          ];
+        variables.GC_INITIAL_HEAP_SIZE = "1M";
+        stub-ld.enable = false;
+        etc."systemd/pstore.conf".text = ''
+          [PStore]
+          Unlink=no
+        '';
+      };
+
+      system = {
+        extraDependencies =
+          with pkgs;
+          lib.mkForce [
+            stdenvNoCC
+            jq
+            busybox
+            makeInitrdNGTool
+          ];
+        stateVersion = "26.05";
+      };
+
       hardware.cpu = {
         amd.updateMicrocode = true;
         intel.updateMicrocode = true;
@@ -40,6 +87,16 @@
       swapDevices = lib.mkImageMediaOverride [ ];
       fileSystems = lib.mkImageMediaOverride config.lib.isoFileSystems;
 
+      services = {
+        getty.autologinUser = "snowflake";
+        openssh = {
+          enable = true;
+          settings.PermitRootLogin = "yes";
+        };
+        logrotate.enable = lib.mkDefault false;
+        timesyncd.enable = true;
+      };
+
       isoImage = {
         #configurationName = flavor;
         makeEfiBootable = true;
@@ -47,9 +104,7 @@
         squashfsCompression = "xz -Xbcj x86 -Xdict-size 100% -b 512K -limit 75 -percentage";
       };
 
-      networking = with lib; {
-        wireless.enable = mkImageMediaOverride true;
-      };
+      networking.wireless.enable = lib.mkImageMediaOverride true;
 
       documentation = with lib; {
         man.man-db.enable = mkDefault false;
@@ -60,15 +115,54 @@
         nixos.enable = mkDefault false;
       };
 
-      boot.postBootCommands = ''
-        for o in $(</proc/cmdline); do
-          case "$o" in
-            live.nixos.passwd=*)
-              set -- $(IFS==; echo $o)
-              echo "nixos:$2" | ${pkgs.shadow}/bin/chpasswd
-              ;;
-          esac
-        done
-      '';
+      virtualisation = {
+        vmware.guest.enable = true;
+        virtualbox.guest.enable = false;
+      };
+
+      boot = {
+        swraid = {
+          enable = true;
+          mdadmConf = "MAILADDR root";
+        };
+        postBootCommands = ''
+          for o in $(</proc/cmdline); do
+            case "$o" in
+              live.nixos.passwd=*)
+                set -- $(IFS==; echo $o)
+                echo "nixos:$2" | ${pkgs.shadow}/bin/chpasswd
+                ;;
+            esac
+          done
+        '';
+        kernel.sysctl."vm.overcommit_memory" = "1";
+        kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-lts-lto;
+        initrd = {
+          availableKernelModules = [
+            "dm-thin-pool"
+            "dm-snapshot"
+            "md_mod"
+            "raid456"
+            "bcache"
+          ];
+          services.lvm.enable = true;
+        };
+        kernelParams = [
+          "add_efi_memmap"
+          "vt.default_red=30,243,166,249,137,245,148,186,88,243,166,249,137,245,148,166"
+          "vt.default_grn=30,139,227,226,180,194,226,194,91,139,227,226,180,194,226,173"
+          "vt.default_blu=46,168,161,175,250,231,213,222,112,168,161,175,250,231,213,200"
+        ];
+        supportedFilesystems = lib.mkForce [
+          "btrfs"
+          "xfs"
+          "bcachefs"
+          "ext4"
+          "exfat"
+          "f2fs"
+          "ntfs"
+          "vfat"
+        ];
+      };
     };
 }

@@ -9,6 +9,7 @@
       ];
       #audioT2 = (pkgs.callPackage ./custom/t2-pipewire.nix { });
       nixos = {
+        services.hardware.bolt.enable = true;
       };
 
       homeManager =

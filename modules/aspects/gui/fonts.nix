@@ -1,12 +1,28 @@
 {
   den.aspects.gui.provides.fonts = {
     nixos.fonts = {
-      fontDir.enable = true;
       enableDefaultPackages = true;
+      fontDir.enable = true;
       fontconfig = {
         enable = true;
+        cache32Bit = true;
         useEmbeddedBitmaps = true;
         subpixel.rgba = "rgb";
+        defaultFonts = {
+          emoji = [ "Noto Color Emoji" ];
+          monospace = [
+            "UbuntuMono Nerd Font"
+            "Noto Color Emoji"
+          ];
+          sansSerif = [
+            "Ubuntu Nerd Font"
+            "Noto Color Emoji"
+          ];
+          serif = [
+            "Ubuntu Nerd Font"
+            "Noto Color Emoji"
+          ];
+        };
       };
     };
 
