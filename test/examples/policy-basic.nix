@@ -2,7 +2,7 @@
 {
   den.aspects.igloo = {
     policies.to-alice =
-      { host, user, ... }:
+      { user, ... }:
       lib.optional (user.name == "alice") (
         den.lib.policy.include {
           homeManager.programs.tmux.enable = user.name == "alice";
@@ -14,7 +14,7 @@
 
   den.aspects.alice = {
     policies.to-igloo =
-      { host, user, ... }:
+      { host, ... }:
       lib.optional (host.name == "igloo") (
         den.lib.policy.provide {
           class = "nixos";

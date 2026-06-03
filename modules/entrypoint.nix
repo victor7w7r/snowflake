@@ -18,8 +18,11 @@
     };
     default = {
       darwin.system.stateVersion = 6;
-      nixos.system.stateVersion = "25.05";
-      homeManager.home.stateVersion = "25.05";
+      nixos.system.stateVersion = "26.05";
+      homeManager = {
+        home.stateVersion = "26.05";
+        language.base = "es_ES.UTF-8";
+      };
       includes = [
         den.batteries.hostname
         den.batteries.define-user
@@ -31,9 +34,9 @@
 
       provides.to-hosts = {
         nixos =
-          { inputs, pkgs, ... }:
+          { inputs', pkgs, ... }:
           {
-            imports = [ inputs.home-manager.nixosModules.home-manager ];
+            imports = [ inputs'.home-manager.nixosModules.home-manager ];
             home-manager = {
               backupCommand = "${pkgs.trash-cli}/bin/trash";
               useGlobalPkgs = true;
@@ -45,9 +48,7 @@
         homeManager =
           { config, ... }:
           {
-            home.file = {
-              "repositories/nixstrap".source = config.lib.file.mkOutOfStoreSymlink "/etc/nixos";
-            };
+            home.file."repositories/nixstrap".source = config.lib.file.mkOutOfStoreSymlink "/etc/nixos";
           };
       };
     };

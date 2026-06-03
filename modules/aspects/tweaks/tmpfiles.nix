@@ -1,5 +1,5 @@
 {
-  den.aspects.system.provides.tmpfiles.nixos.tmpfiles.rules = [
+  den.aspects.tweaks.tmpfiles.nixos.tmpfiles.rules = [
     "R /srv - - - - -"
     "R /lost+found - - - - -"
     "d /mnt 0755 root root - -"

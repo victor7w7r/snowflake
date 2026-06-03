@@ -1,12 +1,6 @@
 { den, ... }:
 {
-  den.aspects.tweaks = {
-    includes = with den.aspects.tweaks._; [
-      sysctl
-      tmpfiles
-      udev
-    ];
-
+  den.aspects.tweaks.default = {
     nixos =
       { pkgs, ... }:
       {

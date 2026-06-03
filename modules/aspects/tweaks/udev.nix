@@ -1,5 +1,5 @@
 {
-  den.aspects.system.provides.udev.nixos =
+  den.aspects.tweaks.udev.nixos =
     { pkgs, ... }:
     {
       services.udev.extraRules = ''

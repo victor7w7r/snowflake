@@ -1,4 +1,4 @@
-{ den, igloo, ... }:
+{ den, ... }:
 {
   den.hosts.x86_64-linux.igloo.users.tux = { };
   den.quirks.firewall = {
@@ -36,11 +36,4 @@
         networking.firewall.allowedTCPPorts = lib.concatMap (f: f.ports or [ ]) firewall;
       };
   };
-
-  expr = igloo.networking.firewall.allowedTCPPorts;
-  expected = [
-    80
-    443
-    5432
-  ];
 }

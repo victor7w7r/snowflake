@@ -9,8 +9,6 @@
       })
     ];
 
-  den.default.includes = [ den.policies.exclude-pizero ];
-
   den.aspects.igloo =
     { isNotPizero, ... }:
     {
@@ -19,4 +17,10 @@
         boot.kernelParams = [ "some_param" ];
       };
     };
+
+  den.default.includes = [
+    den.policies.exclude-pizero
+    den.aspects.igloo
+  ];
+
 }

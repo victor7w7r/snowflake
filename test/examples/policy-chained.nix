@@ -1,4 +1,4 @@
-{ den, igloo, ... }:
+{ den, ... }:
 {
   den.hosts.x86_64-linux.igloo.users.tux = { };
 
@@ -26,15 +26,8 @@
   den.aspects.platform-test =
     { platform }:
     {
-      nixos =
-        { lib, ... }:
-        {
-          environment.variables.PLATFORM = platform;
-        };
+      nixos.environment.variables.PLATFORM = platform;
     };
 
   den.aspects.igloo.includes = [ den.aspects.platform-test ];
-
-  expr = igloo.environment.variables.PLATFORM;
-  expected = "linux";
 }

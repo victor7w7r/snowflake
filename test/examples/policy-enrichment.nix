@@ -26,12 +26,9 @@
 
   den.hosts.aarch64-darwin.apple = { };
 
-  den.aspects.apple = {
-    darwin =
-      { isDarwin, lib, ... }:
-      lib.optionalAttrs isDarwin {
-        system.defaults.dock.autohide = true;
-      };
-  };
-
+  den.aspects.apple.darwin =
+    { isDarwin, lib, ... }:
+    lib.optionalAttrs isDarwin {
+      system.defaults.dock.autohide = true;
+    };
 }
