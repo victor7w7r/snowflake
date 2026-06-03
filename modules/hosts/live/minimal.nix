@@ -1,4 +1,5 @@
 {
+  den,
   lib,
   live,
   __findFile,
@@ -17,6 +18,7 @@
         <fetch>
         <initrd>
         <security>
+        (den.batteries.tty-autologin "snowflake")
       ];
       nixos = {
         isoImage.edition = lib.mkOverride 500 "minimal";

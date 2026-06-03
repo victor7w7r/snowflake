@@ -1,5 +1,7 @@
-{ generic, ... }:
+{ inputs, generic, ... }:
 {
+  imports = [ (inputs.den.namespace "generic" false) ];
+
   den = {
     hosts.x86_64-linux.generic = {
       hostName = "v7w7r-generic";

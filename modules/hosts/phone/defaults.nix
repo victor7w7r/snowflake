@@ -1,9 +1,11 @@
-{ phone, __findFile, ... }:
+{ inputs, __findFile, ... }:
 {
   flake-file.inputs.mobile-nixos = {
     url = "github:mobile-nixos/mobile-nixos";
     flake = false;
   };
+
+  imports = [ (inputs.den.namespace "phone" false) ];
 
   den = {
     hosts.aarch64-linux.phone-enchilada = {

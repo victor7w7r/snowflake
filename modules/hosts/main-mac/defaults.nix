@@ -1,4 +1,4 @@
-{ __findFile, ... }:
+{ inputs, __findFile, ... }:
 {
   flake-file.inputs = {
     darwin = {
@@ -12,6 +12,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
+
+  imports = [ (inputs.den.namespace "main-mac" false) ];
+
   /*
     home-manager = {
     backupFileExtension = "backup";

@@ -1,5 +1,12 @@
-{ lib, handheld, ... }:
 {
+  inputs,
+  lib,
+  handheld,
+  ...
+}:
+{
+  imports = [ (inputs.den.namespace "handheld" false) ];
+
   den = {
     hosts.x86_64-linux.handheld = {
       hostName = "v7w7r-rc71l";

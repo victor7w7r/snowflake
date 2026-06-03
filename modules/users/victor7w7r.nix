@@ -1,6 +1,25 @@
-{ lib, ... }:
+{ den, lib, ... }:
 {
   den.aspects.victor7w7r = {
+    includes = [
+      den.batteries.primary-user
+      (den.batteries.user-shell "zsh")
+    ];
+
+    provides.to-hosts = {
+      nixos =
+        { inputs', pkgs, ... }:
+        {
+          imports = [ inputs'.home-manager.nixosModules.home-manager ];
+          home-manager = {
+            backupCommand = "${pkgs.trash-cli}/bin/trash";
+            useGlobalPkgs = true;
+            useUserPackages = true;
+            backupFileExtension = "hm-backup";
+          };
+        };
+    };
+
     user =
       { pkgs, ... }:
       {
@@ -56,11 +75,14 @@
       }
     */
 
-    homeManager = {
-      home = {
-        stateVersion = lib.mkDefault "25.05";
-        sessionPath = [ "$HOME/.local/bin" ];
+    homeManager =
+      { config, ... }:
+      {
+        home = {
+          stateVersion = lib.mkDefault "25.05";
+          sessionPath = [ "$HOME/.local/bin" ];
+          file."repositories/nixstrap".source = config.lib.file.mkOutOfStoreSymlink "/etc/nixos";
+        };
       };
-    };
   };
 }

@@ -1,5 +1,7 @@
-{ lib, ... }:
+{ inputs, lib, ... }:
 {
+  imports = [ (inputs.den.namespace "live" false) ];
+
   /*
     home-manager = {
       backupCommand = "${pkgs.trash-cli}/bin/trash";

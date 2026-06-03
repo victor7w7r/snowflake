@@ -1,5 +1,7 @@
-{ main, ... }:
+{ inputs, main, ... }:
 {
+  imports = [ (inputs.den.namespace "main" false) ];
+
   den = {
     hosts.x86_64-linux.main = {
       hostName = "v7w7r-macmini81";

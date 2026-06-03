@@ -1,5 +1,7 @@
-{ server, ... }:
+{ inputs, server, ... }:
 {
+  imports = [ (inputs.den.namespace "server" false) ];
+
   den = {
     hosts.x86_64-linux.server = {
       hostName = "v7w7r-youyeetoox1";

@@ -1,4 +1,5 @@
 {
+  den,
   lib,
   live,
   __findFile,
@@ -25,6 +26,7 @@
         <uefi>
         <secureboot>
         <security>
+        (den.batteries.tty-autologin "snowflake")
       ];
 
       nixos = {
