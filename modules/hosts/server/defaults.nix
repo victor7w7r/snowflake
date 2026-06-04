@@ -17,6 +17,9 @@
       nixos =
         { pkgs, user, ... }:
         {
+
+          boot.initrd.services.lvm.enable = true;
+
           environment.systemPackages = with pkgs; [
             mdadm
             intel-undervolt

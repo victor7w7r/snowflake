@@ -29,7 +29,7 @@
           bcache = {
             type = "disk";
             device = "/dev/bcache0";
-            content = den.aspects.bcachefs.call {
+            content = den.aspects.luks.call {
               entireDisk = true;
               allowDiscards = false;
               name = "cloud";

@@ -1,4 +1,4 @@
-{ den, ... }:
+{ den, lib, ... }:
 {
   den.policies.sysctl-to-boot =
     { host, ... }:
@@ -17,25 +17,38 @@
 
   den.aspects.tweaks.default = {
     nixos =
-      { pkgs, ... }:
       {
-        environment.systemPackages = with pkgs; [
-          fatrace
-          kmon
-          lazyjournal
-          lnav
-          pik
-          s-tui
-          systemctl-tui
-          sysz
-          watchexec
-          zps
-          #nvtopPackages.full
-          #(pkgs.callPackage ./custom/journalview.nix { })
-          #https://github.com/jasonwitty/socktop
-          #https://github.com/XhuyZ/lazysys
-          #pcp
-          #uv pip install tiptop
+        hasVisualKeyboard,
+        isServer,
+        isX86,
+        pkgs,
+        ...
+      }:
+      {
+        environment = lib.mkMerge [
+          (lib.mkIf isServer {
+            etc."intel-undervolt.conf".text = "power package 8 28 10 2.4";
+          })
+          {
+            systemPackages = with pkgs; [
+              fatrace
+              kmon
+              lazyjournal
+              lnav
+              pik
+              s-tui
+              systemctl-tui
+              sysz
+              watchexec
+              zps
+              #nvtopPackages.full
+              #(pkgs.callPackage ./custom/journalview.nix { })
+              #https://github.com/jasonwitty/socktop
+              #https://github.com/XhuyZ/lazysys
+              #pcp
+              #uv pip install tiptop
+            ];
+          }
         ];
 
         systemd = {
@@ -49,16 +62,46 @@
           };
         };
 
-        services.journald.extraConfig = ''
-          Storage=persistent
-          Compress=yes
-          MaxLevelStore=debug
-          SystemMaxUse=500M
-          RuntimeMaxUse=200M
-          ForwardToConsole=yes
-          MaxLevelConsole=debug
-          TTYPath=/dev/ttyS0
-        '';
+        services = {
+          locate.enable = true;
+          irqbalance.enable = hasVisualKeyboard;
+          scx.enable = isX86;
+          memavaild.enable = !hasVisualKeyboard;
+          nohang = lib.optionalAttrs (!hasVisualKeyboard) {
+            enable = true;
+            desktop = true;
+          };
+          /*
+            dbus = {
+              packages = with pkgs; [
+                nohang
+                uresourced
+              ];
+            };
+          */
+          uresourced.enable = hasVisualKeyboard;
+          ananicy = lib.optionalAttrs hasVisualKeyboard {
+            enable = true;
+            package = pkgs.ananicy-cpp;
+            rulesProvider = pkgs.ananicy-rules-cachyos;
+            extraRules = [
+              {
+                "name" = "gamescope";
+                "nice" = -20;
+              }
+            ];
+          };
+          journald.extraConfig = ''
+            Storage=persistent
+            Compress=yes
+            MaxLevelStore=debug
+            SystemMaxUse=500M
+            RuntimeMaxUse=200M
+            ForwardToConsole=yes
+            MaxLevelConsole=debug
+            TTYPath=/dev/ttyS0
+          '';
+        };
       };
 
   };

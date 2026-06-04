@@ -11,6 +11,10 @@
         veracrypt
       ];
 
+      /*
+        services.udev.packages = [ pkgs.yubikey-personalization ];
+        services.pcscd.enable = true;
+      */
       services = {
         fail2ban.enable = true;
         #opensnitch.enable = true;

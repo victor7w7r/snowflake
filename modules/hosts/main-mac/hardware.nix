@@ -5,7 +5,6 @@
       environment.defaultPackages = with pkgs; [
         cpufetch
         cyme
-        glances
         macchina
         m-cli
         onefetch

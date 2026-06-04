@@ -95,7 +95,6 @@
           enable = true;
           settings.PermitRootLogin = "yes";
         };
-        logrotate.enable = lib.mkDefault false;
         timesyncd.enable = true;
       };
 

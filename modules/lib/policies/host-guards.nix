@@ -11,7 +11,7 @@
         isMain = host.name == "main";
         isMainMac = host.name == "main-mac";
         isPhoneEnchilada = host.name == "phone-enchilada";
-        isPhoneFajita = host.name == "phone-enchilada";
+        isPhoneFajita = host.name == "phone-fajita";
 
         isPiZero = host.name == "pizero";
         isServer = host.name == "server";

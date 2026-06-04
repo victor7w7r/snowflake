@@ -55,6 +55,8 @@
             ];
           };
 
+          services.lact.enable = true;
+
           systemd.services.supergfxd.path = with pkgs; [
             kmod
             pciutils

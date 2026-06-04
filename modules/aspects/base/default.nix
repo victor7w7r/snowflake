@@ -3,9 +3,15 @@
   den.aspects.base.default = {
     nixos =
       {
+        hasVisualKeyboard,
         isEfi,
-        isTpm,
+        isGeneric,
+        isIntel,
+        isMain,
+        isServer,
+        isPiZero,
         isPersistent,
+        isTpm,
         pkgs,
         options,
         ...
@@ -73,7 +79,15 @@
           keyMap = "us-acentos";
         };
 
-        services.speechd.enable = false;
+        services = {
+          envfs.enable = true;
+          speechd.enable = false;
+          thermald.enable = isIntel;
+          logrotate.enable = isPersistent;
+          fwupd.enable = hasVisualKeyboard;
+          upower.enable = (!isMain && !isServer && !isGeneric && !isPiZero);
+          orca.enable = lib.mkForce false;
+        };
 
         programs = {
           #bash.blesh.enable = true;

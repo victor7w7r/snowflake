@@ -12,6 +12,10 @@
       }:
       lib.optional (isVisual && isPersistent) {
         environment.persistence."/nix/persist".users."${user}".directories = [ ".config/flatpak" ];
+        programs.appimage = {
+          enable = true;
+          binfmt = true;
+        };
       };
 
     homeManager =
