@@ -4,14 +4,16 @@
     nixos =
       { isX86, pkgs, ... }:
       {
-        nixpkgs.overlays = lib.mkIf isX86 [
+        nixpkgs.overlays = [
           (pkgs: prev: {
-            linux-firmware = prev.linux-firmware.overrideAttrs (o: {
+            linux-firmware = lib.optionalAttrs isX86 prev.linux-firmware.overrideAttrs (o: {
               postInstall = ''
                 rm -rf "$out"/lib/firmware/{netronome,qcom,mellanox,mrvl,ath11k,ath10k,libertas,nvidia,liquidio,cxgb4,ti-connectivity,qed}
                 find -L "$out" -type l -delete
               '';
             });
+
+            mbrola-voices = prev.mbrola-voices.override { languages = [ "*1" ]; };
           })
         ];
 

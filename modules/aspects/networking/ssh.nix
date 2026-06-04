@@ -8,8 +8,11 @@
           enable = true;
           settings = {
             AcceptEnv = null;
-            PermitRootLogin = lib.optionalAttrs (isPhone || isLive) "yes";
+            PermitRootLogin = if (isPhone || isLive) then "yes" else lib.mkDefault "prohibit-password";
             PasswordAuthentication = true;
+            MaxAuthTries = 3;
+            ClientAliveInterval = 300;
+            ClientAliveCountMax = 2;
           };
         };
       };

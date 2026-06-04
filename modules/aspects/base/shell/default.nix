@@ -23,6 +23,7 @@
         ];
 
         homeManager.programs = {
+          intelli-shell.enable = true;
           bash = {
             enable = true;
             enableCompletion = true;

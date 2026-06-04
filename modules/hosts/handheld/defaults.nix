@@ -6,6 +6,7 @@
 }:
 {
   imports = [ (inputs.den.namespace "handheld" false) ];
+  #nixos-hardware.nixosModules.asus-ally-rc71l
 
   den = {
     hosts.x86_64-linux.handheld = {

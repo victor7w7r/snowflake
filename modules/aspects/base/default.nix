@@ -33,6 +33,8 @@
             [
               atool
               busybox
+              btrfs-progs
+              btdu
               brush
               choose
               cod
@@ -56,6 +58,7 @@
               sig
               tmux
               tre-command
+              udiskie
               xz
               #(pkgs.callPackage ./custom/hf.nix { })
               #(pkgs.callPackage ./custom/loop.nix { })
@@ -81,12 +84,13 @@
 
         services = {
           envfs.enable = true;
-          speechd.enable = false;
+          fstrim.enable = true;
           thermald.enable = isIntel;
-          logrotate.enable = isPersistent;
           fwupd.enable = hasVisualKeyboard;
-          upower.enable = (!isMain && !isServer && !isGeneric && !isPiZero);
           orca.enable = lib.mkForce false;
+          logrotate.enable = isPersistent;
+          speechd.enable = false;
+          upower.enable = (!isMain && !isServer && !isGeneric && !isPiZero);
         };
 
         programs = {

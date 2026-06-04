@@ -2,6 +2,7 @@
   den.aspects.sound.pipewire.nixos =
     { pkgs, ... }:
     {
+      environment.systemPackages = with pkgs; [ qpwgraph ];
       services.pipewire = {
         enable = true;
         package = pkgs.pipewire;

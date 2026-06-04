@@ -1,8 +1,9 @@
 {
   den.aspects.sound.default = {
     nixos =
-      { pkgs, ... }:
+      { pkgs, user, ... }:
       {
+        users.groups.audio.members = [ user ];
         environment.systemPackages = with pkgs; [
           asak
           alsa-plugins
@@ -12,6 +13,9 @@
           kew
           musikcube
           playerctl
+          pavucontrol
+          pwvucontrol
+          helvum
           psst
           sof-firmware
           spotdl

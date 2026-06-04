@@ -5,6 +5,7 @@
       isPersistent,
       isPhone,
       isServer,
+      user,
       ...
     }:
     {
@@ -14,7 +15,7 @@
           "/var/lib/NetworkManager"
         ];
       };
-
+      users.groups.networkmanager.members = [ user ];
       systemd.services.NetworkManager-wait-online.enable = false;
       networking = {
         dhcpcd = {

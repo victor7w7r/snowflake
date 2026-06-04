@@ -1,17 +1,15 @@
-{ den, ... }:
 {
   flake-file.inputs = {
     nix-alien.url = "https://flakehub.com/f/thiagokokada/nix-alien/0.1";
     nix-search-tv.url = "github:3timeslazy/nix-search-tv";
   };
 
-  den.aspects.nix = {
-    includes = with den.aspects.nix._; [ settings ];
+  den.aspects.nix.default = {
 
     nixos =
-      { inputs, pkgs, ... }:
+      { inputs', pkgs, ... }:
       {
-        imports = [ inputs.nix-search-tv.packages.x86_64-linux.default ];
+        imports = [ inputs'.nix-search-tv.packages.x86_64-linux.default ];
 
         environment.systemPackages = with pkgs; [
           alejandra
@@ -44,12 +42,6 @@
     homeManager =
       { pkgs, ... }:
       {
-        programs.nh = {
-          enable = true;
-          clean.enable = true;
-          clean.extraArgs = "--keep 10 --keep-since 5d";
-        };
-
         home.packages = with pkgs; [ cachix ];
       };
   };

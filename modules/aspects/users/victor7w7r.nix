@@ -57,7 +57,6 @@
           "dialout"
           "libvirtd"
           "libvirt-qemu"
-          "networkmanager"
           "power"
           "qemu"
           "qemu-libvirtd"
@@ -66,7 +65,6 @@
           "storage"
           "tty"
           "users"
-          "video"
           "wheel"
         ];
       };

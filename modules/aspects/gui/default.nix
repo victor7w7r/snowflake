@@ -1,8 +1,9 @@
 { lib, ... }:
 {
   den.aspects.gui.default.nixos =
-    { pkgs, ... }:
+    { pkgs, user, ... }:
     {
+      users.groups.video.members = [ user ];
       services = {
         gvfs.enable = true;
         xserver.enable = lib.mkForce true;

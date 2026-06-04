@@ -26,6 +26,12 @@
           ]
           ++ lib.optionals isServer [ 8006 ];
         };
+
+        systemd.services.tailscaled = lib.optionalAttrs isPersistent {
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+        };
+
         services = lib.optionalAttrs isPersistent {
           #aria2.enable = true; NEEDS KEY
           #openvpn.package = true;
@@ -34,7 +40,10 @@
           tailscale = {
             enable = true;
             openFirewall = true;
+            useRoutingFeatures = "server";
             extraUpFlags = [
+              "--advertise-exit-node"
+              "--ssh"
               "--accept-dns=true"
               "--accept-routes"
             ];

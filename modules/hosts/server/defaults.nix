@@ -2,6 +2,11 @@
 {
   imports = [ (inputs.den.namespace "server" false) ];
 
+  /*
+    nixos-hardware.nixosModules.common-pc-ssd
+    nixos-hardware.nixosModules.common-cpu-intel
+  */
+
   den = {
     hosts.x86_64-linux.server = {
       hostName = "v7w7r-youyeetoox1";

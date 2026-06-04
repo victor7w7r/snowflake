@@ -43,6 +43,11 @@
         "L+ /nix/var/cache/ccache/ccache.conf - - - - ${ccacheConfigFile}"
       ];
 
+      nix.settings.extra-sandbox-paths = [
+        "/nix/var/cache/ccache"
+        "/nix/var/cache/sccache"
+      ];
+
       programs.ccache = {
         enable = true;
         cacheDir = "/nix/var/cache/ccache";
