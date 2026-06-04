@@ -1,9 +1,9 @@
 { lib, ... }:
 {
-  den.aspects.sound.provides.eq = {
+  den.aspects.sound.eq = {
     nixos =
-      { user, ... }:
-      {
+      { isPersistent, user, ... }:
+      lib.optional isPersistent {
         environment.persistence."/nix/persist".users."${user}".directories = [
           ".config/easyeffects/db"
         ];

@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.shell.provides.aliases.homeManager.programs =
+  den.aspects.base.shell.aliases.homeManager.programs =
     let
       shellAliases = {
         ssh = "TERM=xterm-256color command ssh";

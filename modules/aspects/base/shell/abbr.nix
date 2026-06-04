@@ -1,5 +1,5 @@
 {
-  den.aspects.shell.provides.abbr.homeManager.programs.zsh.zsh-abbr = {
+  den.aspects.base.shell.abbr.homeManager.programs.zsh.zsh-abbr = {
     enable = true;
     abbreviations = {
       c = "clear";

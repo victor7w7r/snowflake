@@ -52,7 +52,7 @@ let
   '';
 in
 {
-  den.aspects.shell.provides.kaomoji.homeManager.programs = {
+  den.aspects.base.shell.kaomoji.homeManager.programs = {
     zsh.siteFunctions.kaomoji = kaomoji;
     bash.bashrcExtra = (
       lib.mkOrder 600 ''

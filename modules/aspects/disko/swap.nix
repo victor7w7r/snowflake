@@ -1,18 +1,11 @@
-{ lib, ... }:
 {
-  den.aspects.swap =
-    { config, ... }:
+  disko.swap.call =
     {
-      imports = [ { options.call = lib.mkOption { type = with lib.types; functionTo attrs; }; } ];
-
-      call =
-        {
-          resumeDevice ? true,
-          discardPolicy ? "both", # pages, once
-        }:
-        {
-          type = "swap";
-          inherit resumeDevice discardPolicy;
-        };
+      resumeDevice ? true,
+      discardPolicy ? "both", # pages, once
+    }:
+    {
+      type = "swap";
+      inherit resumeDevice discardPolicy;
     };
 }

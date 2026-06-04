@@ -282,7 +282,7 @@ let
   '';
 in
 {
-  den.aspects.shell.provides.quotes.homeManager.programs = {
+  den.aspects.base.shell.quotes.homeManager.programs = {
     zsh.siteFunctions = {
       inherit
         lolquotes

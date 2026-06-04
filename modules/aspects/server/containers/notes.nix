@@ -1,7 +1,7 @@
 { lib, ... }:
 {
   den.aspects.server.provides.containers.nixos =
-    { inputs, ... }:
+    { inputs', ... }:
     {
       containers.notes = {
         autoStart = true;
@@ -35,7 +35,7 @@
           { config, pkgs, ... }:
           {
             system.stateVersion = "26.05";
-            imports = [ inputs.agenix.nixosModules.default ];
+            imports = [ inputs'.agenix.nixosModules.default ];
             age = {
               identityPaths = [ "/etc/ssh/id_ed25519" ];
               secrets = {

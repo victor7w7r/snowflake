@@ -1,5 +1,5 @@
 {
-  den.aspects.plasma.provides.input.homeManager.programs.plasma = {
+  den.aspects.plasma.input.homeManager.programs.plasma = {
     input = {
       keyboard = {
         layouts = [

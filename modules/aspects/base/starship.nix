@@ -1,5 +1,5 @@
 {
-  den.aspects.base.provides.starship.homeManager =
+  den.aspects.base.starship.homeManager =
     { user, ... }:
     let
       isRoot = user == "root";

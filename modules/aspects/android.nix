@@ -9,7 +9,6 @@
       services.udev.extraRules = ''
         SUBSYSTEM=="usb", ATTR{idVendor}=="${xiaomiVendor}", ATTR{idProduct}=="ff40", SYMLINK+="android_adb"
         SUBSYSTEM=="usb", ATTR{idVendor}=="${xiaomiVendor}", ATTR{idProduct}=="ff40", SYMLINK+="android_fastboot"
-
         SUBSYSTEM=="usb", ATTR{idVendor}=="${oneplusVendor}", ATTR{idProduct}=="d00d", SYMLINK+="android_adb"
         SUBSYSTEM=="usb", ATTR{idVendor}=="${oneplusVendor}", ATTR{idProduct}=="d00d", SYMLINK+="android_fastboot"
       '';

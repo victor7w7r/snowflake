@@ -1,9 +1,9 @@
 { lib, ... }:
 {
-  den.aspects.dev.provides.mise = {
+  den.aspects.dev.mise = {
     nixos =
-      { user, ... }:
-      {
+      { isPersistent, user, ... }:
+      lib.optional isPersistent {
         environment.persistence."/nix/persist".users."${user}".directories = lib.mkAfter [
           ".cache/mise"
           ".local/share/mise"

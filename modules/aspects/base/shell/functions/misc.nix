@@ -159,7 +159,7 @@ let
   */
 in
 {
-  den.aspects.shell.provides.utils.homeManager.programs = {
+  den.aspects.base.shell.utils.homeManager.programs = {
     zsh.siteFunctions = {
       inherit
         s

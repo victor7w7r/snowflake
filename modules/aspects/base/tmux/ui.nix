@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.tmux.provides.ui.homeManager.programs.tmux.extraConfig = lib.mkAfter ''
+  den.aspects.base.tmux.ui.homeManager.programs.tmux.extraConfig = lib.mkAfter ''
     set -g visual-bell off
     set -g visual-activity on
     set -g visual-silence on

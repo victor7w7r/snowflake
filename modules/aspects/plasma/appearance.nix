@@ -1,6 +1,6 @@
 {
-  den.aspects.plasma.provides.appearance.homeManager =
-    { self, ... }:
+  den.aspects.plasma.appearance.homeManager =
+    { self', ... }:
     {
       programs.plasma = {
         workspace = {
@@ -64,7 +64,7 @@
         };
       };
 
-      home.file.".face.icon".source = "${self}/avatar.png";
+      home.file.".face.icon".source = "${self'}/avatar.png";
 
       qt = {
         enable = true;

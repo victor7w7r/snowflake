@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.gui.provides.xdg = {
+  den.aspects.gui.xdg = {
     nixos =
       { pkgs, ... }:
       {

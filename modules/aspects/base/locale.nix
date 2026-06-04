@@ -1,5 +1,5 @@
 {
-  den.aspects.base.provides.locale.nixos = {
+  den.aspects.base.locale.nixos = {
     environment.variables = {
       LANG = "es_ES.UTF-8";
       LC_ALL = "es_ES.UTF-8";

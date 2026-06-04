@@ -23,63 +23,59 @@
     user =
       { pkgs, ... }:
       {
-        initialHashedPassword = "$6$rZhNhLxPNJx.lRBn$lXAcMr7CdFgjRcN4ZMlEai2QYWMoawm6pMKrd9oFHXgWks9KBkP3p7Afj/Djj1LnCDyXbLNT5IfVNjDEUzk1p0";
+        description = "victor7w7r";
+        linger = true;
+        #root.hashedPassword = "$y$j9T$ieUYJ2thSsvR1M37kWe651$yt0z7Ga3..johS8fyA1Y9GaoddW.jfE838xXiFhcus1";
+        hashedPassword = "$y$j9T$ieUYJ2thSsvR1M37kWe651$yt0z7Ga3..johS8fyA1Y9GaoddW.jfE838xXiFhcus1";
         shell = pkgs.zsh;
         openssh.authorizedKeys.keys = [
           "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINGTZ3iQqtjrClKVnqQ0w9Yn2sUoE9lAAW8ZYhR45nV5 arkano036@gmail.com"
         ];
+        /*
+          autoSubUidGidRange = false;
+          group = "users";
+          uid = 1000;
+          subUidRanges = [
+            {
+              startUid = 100000;
+              count = 65536;
+            }
+          ];
+          subGidRanges = [
+            {
+              startGid = 100000;
+              count = 65536;
+            }
+          ];
+        */
+        extraGroups = [
+          "audio"
+          "gamemode"
+          "input"
+          "kvm"
+          "adbusers"
+          "dialout"
+          "libvirtd"
+          "libvirt-qemu"
+          "networkmanager"
+          "power"
+          "qemu"
+          "qemu-libvirtd"
+          "plugdev"
+          "realtime"
+          "storage"
+          "tty"
+          "users"
+          "video"
+          "wheel"
+        ];
       };
-
-    /*
-      {
-        den.aspects.networking.provides.ssh = {
-          user = {
-            openssh.authorizedKeys.keys = [
-            ];
-          };
-            // (
-              if host == "v7w7r-fajita" then
-                {
-                  openssh = lib.mkForce {
-                    enable = true;
-                    settings = {
-                      AcceptEnv = null;
-                      PermitRootLogin = "yes";
-                      PasswordAuthentication = true;
-                    };
-                  };
-                }
-              else
-                {
-                  openssh = lib.mkForce {
-                    settings.AcceptEnv = null;
-                    enable = true;
-                  };
-                }
-            );
-
-          homeManager = _: {
-            programs.ssh = {
-              enable = true;
-              enableDefaultConfig = false;
-
-              matchBlocks = {
-                pi = {
-                  hostname = "192.168.0.4";
-                  user = "repparw";
-                };
-              };
-            };
-          };
-        };
-      }
-    */
 
     homeManager =
       { config, ... }:
       {
         home = {
-          stateVersion = lib.mkDefault "25.05";
+          stateVersion = lib.mkDefault "26.05";
           sessionPath = [ "$HOME/.local/bin" ];
           file."repositories/nixstrap".source = config.lib.file.mkOutOfStoreSymlink "/etc/nixos";
         };

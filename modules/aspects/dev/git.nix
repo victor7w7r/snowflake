@@ -1,64 +1,90 @@
 {
-  den.aspects.dev.provides.git = {
+  den.aspects.dev.git = {
     nixos =
-      { pkgs, ... }:
+      { isLive, pkgs, ... }:
       {
-        environment.systemPackages = with pkgs; [
-          #github-copilot-cli
-          #jan
-          #ollama-rocm
-          delta
-          gh
-          gh-dash
-          git
-          git-lfs
-          git-extras
-          hub
-          zsh-forgit
-        ];
+        environment.systemPackages =
+          with pkgs;
+          [
+            delta
+            git
+            git-lfs
+          ]
+          ++ lib.optionals (!isLive) [
+            #github-copilot-cli
+            #jan
+            #ollama-rocm
+            gh
+            gh-dash
+            git-extras
+            hub
+            zsh-forgit
+          ];
       };
 
     homeManager =
-      { pkgs, ... }:
+      { isLive, pkgs, ... }:
       {
-        home.packages = with pkgs; [
-          git-credential-manager
-          lazygit
-        ];
+        home.packages = with pkgs; [ lazygit ] ++ lib.optionals (!isLive) [ git-credential-manager ];
+        programs = {
+          git = {
+            enable = true;
+            package = pkgs.gitFull;
+            ignores = [
+              "*~"
+              "*.swp"
+              ".DS_Store"
+              ".devenv"
+            ];
+            attributes = [ "*.pdf diff=pdf" ];
+            lfs.enable = true;
+            settings = {
+              alias = {
+                unstash = "stash pop";
+                s = "status";
+                tags = "tag -l";
+                t = "tag -s -m ''";
+                commit-reuse-message = ''!git commit --edit --file "$(git rev-parse --git-dir)"/COMMIT_EDITMSG'';
+                br = "branch";
+                co = "checkout";
+                st = "status";
+                ls = "log --pretty=format:\"%C(yellow)%h%Cred%d\\\\ %Creset%s%Cblue\\\\ [%cn]\" --decorate";
+                ll = "log --pretty=format:\"%C(yellow)%h%Cred%d\\\\ %Creset%s%Cblue\\\\ [%cn]\" --decorate --numstat";
+                cm = "commit -m";
+                ca = "commit -am";
+                dc = "diff --cached";
+                amend = "commit --amend -m";
 
-        programs.git = {
-          enable = true;
-          lfs.enable = true;
-          settings = {
-            core.pager = "${pkgs.delta}/bin/delta";
-            init.defaultBranch = "main";
-            user = {
-              name = "victor7w7r";
-              email = "arkano036@gmail.com";
+              };
+              core.pager = "${pkgs.delta}/bin/delta";
+              init.defaultBranch = "main";
+              user = {
+                name = "victor7w7r";
+                email = "arkano036@gmail.com";
+              };
+              #credential.helper = "${pkgs.git.override { withLibsecret = true; }}/bin/git-credential-libsecret";
+              delta = {
+                hyperlinks = true;
+                keep-plus-minus-markers = true;
+                line-numbers = true;
+                navigate = true;
+                side-by-side = true;
+                syntax-theme = "TwoDark";
+                tabs = 4;
+              };
+              difftool.prompt = true;
+              merge.conflictstyle = "diff3";
+              mergetool.prompt = true;
+              rebase.autostash = true;
+              pull.rebase = true;
+              push.autoSetupRemote = true;
+
             };
-            #credential.helper = "${pkgs.git.override { withLibsecret = true; }}/bin/git-credential-libsecret";
-            delta = {
-              hyperlinks = true;
-              keep-plus-minus-markers = true;
-              line-numbers = true;
-              navigate = true;
-              side-by-side = true;
-              syntax-theme = "TwoDark";
-              tabs = 4;
-            };
-            difftool.prompt = true;
-            merge.conflictstyle = "diff3";
-            mergetool.prompt = true;
-            rebase.autostash = true;
-            pull.rebase = true;
-            push.autoSetupRemote = true;
-            alias = {
-              unstash = "stash pop";
-              s = "status";
-              tags = "tag -l";
-              t = "tag -s -m ''";
-              commit-reuse-message = ''!git commit --edit --file "$(git rev-parse --git-dir)"/COMMIT_EDITMSG'';
-            };
+          };
+          difftastic = {
+            enable = true;
+            git.enable = true;
+            options.background = "dark";
           };
         };
       };

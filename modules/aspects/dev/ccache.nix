@@ -1,5 +1,5 @@
 {
-  den.aspects.dev.provides.ccache.nixos =
+  den.aspects.dev.ccache.nixos =
     { pkgs, ... }:
     let
       ccacheConfigFile = pkgs.writeText "ccache.conf" ''

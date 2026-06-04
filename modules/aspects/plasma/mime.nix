@@ -1,5 +1,5 @@
 {
-  den.aspects.plasma.provides.mime.homeManager.xdg.mimeApps = {
+  den.aspects.plasma.mime.homeManager.xdg.mimeApps = {
     enable = true;
     defaultApplications = {
       "application/pdf" = [ "zen-beta.desktop" ];

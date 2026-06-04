@@ -1,5 +1,5 @@
 {
-  den.aspects.plasma.provides.dolphin.homeManager.programs.plasma.configFile = {
+  den.aspects.plasma.dolphin.homeManager.programs.plasma.configFile = {
     dolphinrc = {
       ContentDisplay.UsePermissionsFormat = "NumericFormat";
       ContextMenu = {

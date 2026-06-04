@@ -1,33 +1,35 @@
+{ lib, ... }:
 {
-  den.aspects = {
-    bluetooth-persist.nixos.environment.persistence."/nix/persist".directories = [
-      "/var/lib/bluetooth"
-    ];
-
-    bluetooth = {
-      nixos =
-        { pkgs, ... }:
+  den.aspects.bluetooth.nixos =
+    { isPersistent, pkgs, ... }:
+    {
+      environment = lib.mkMerge [
         {
-          environment.systemPackages = with pkgs; [
+          systemPackages = with pkgs; [
             bluetui
             bluetuith
           ];
+        }
+        (lib.mkIf isPersistent {
+          persistence."/nix/persist".directories = [
+            "/var/lib/bluetooth"
+          ];
+        })
+      ];
 
-          services.blueman.enable = true;
-          hardware.bluetooth = {
-            enable = true;
-            powerOnBoot = true;
-            settings = {
-              General = {
-                Enable = "Source,Sink,Media,Socket";
-                FastConnectable = "true";
-                JustWorksRepairing = "always";
-                MultiProfile = "multiple";
-                Experimental = true;
-              };
-            };
+      services.blueman.enable = true;
+      hardware.bluetooth = {
+        enable = true;
+        powerOnBoot = true;
+        settings = {
+          General = {
+            Enable = "Source,Sink,Media,Socket";
+            FastConnectable = "true";
+            JustWorksRepairing = "always";
+            MultiProfile = "multiple";
+            Experimental = true;
           };
         };
+      };
     };
-  };
 }

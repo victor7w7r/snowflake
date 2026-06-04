@@ -16,7 +16,6 @@
         myrescue
         safecopy
         scrounge-ntfs
-        sof-firmware
         stress
       ];
     };

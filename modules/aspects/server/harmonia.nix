@@ -1,12 +1,13 @@
 {
-  den.aspects.server.provides.harmonia.nixos = {
-    services.harmonia.cache.enable = true;
+  den.aspects.server.harmonia.nixos.services = {
+    harmonia.cache = {
+      enable = true;
+      signKeyPaths = [ "/var/lib/secrets/harmonia.secret" ];
+    };
     # nix-store --generate-binary-cache-key cache.v7w7r.local \
     #   /nix/persist/var/lib/secrets/harmonia.secret \
     #   /nix/persist/var/lib/secrets/harmonia.pub
-    services.harmonia.cache.signKeyPaths = [ "/var/lib/secrets/harmonia.secret" ];
-
-    services.nginx = {
+    nginx = {
       enable = true;
       recommendedTlsSettings = true;
       virtualHosts."cache.v7w7r.local" = {
@@ -24,4 +25,5 @@
       };
     };
   };
+
 }

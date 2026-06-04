@@ -1,9 +1,9 @@
 {
-  den.aspects.zen.provides.extensions.homeManager =
-    { inputs, ... }:
+  den.aspects.zen.extensions.homeManager =
+    { inputs', ... }:
     {
       programs.zen-browser = {
-        profiles.default.extensions.packages = with inputs.firefox-addons.packages."x86_64-linux"; [
+        profiles.default.extensions.packages = with inputs'.firefox-addons.packages."x86_64-linux"; [
           a11ycss
           annotations-restored
           blocktube

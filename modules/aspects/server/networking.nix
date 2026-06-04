@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.server.provides.networking.nixos = {
+  den.aspects.server.networking.nixos = {
     # wol -i 192.168.1.255 00:11:22:33:44:55
     # wol aa:bb:cc:dd:ee:ff
     services = {

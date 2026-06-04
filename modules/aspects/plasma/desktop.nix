@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.plasma.provides.desktop.homeManager.programs.plasma = {
+  den.aspects.plasma.desktop.homeManager.programs.plasma = {
     desktop.widgets = [
       {
         config = {

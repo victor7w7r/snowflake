@@ -1,5 +1,5 @@
 {
-  den.aspects.gui.provides.fonts = {
+  den.aspects.gui.fonts = {
     nixos.fonts = {
       enableDefaultPackages = true;
       fontDir.enable = true;
@@ -27,30 +27,34 @@
     };
 
     homePackages =
-      { pkgs, ... }:
+      { isLive, pkgs, ... }:
       {
         fonts.fontconfig.defaultFonts.monospace = [ "JetBrainsMono Nerd Font" ];
-        home.packages = with pkgs; [
-          corefonts
-          dejavu_fonts
-          font-awesome
-          liberation_ttf
-          libertine
-          libertinus
-          hack-font
-          noto-fonts-cjk-sans
-          nerd-fonts.code-new-roman
-          noto-fonts-color-emoji
-          nerd-fonts.dejavu-sans-mono
-          nerd-fonts.jetbrains-mono
-          nerd-fonts.liberation
-          nerd-fonts.noto
-          nerd-fonts.roboto-mono
-          nerd-fonts.symbols-only
-          nerd-fonts.ubuntu
-          #openmoji-color
-          open-sans
-        ];
+        home.packages =
+          with pkgs;
+          [
+            corefonts
+            dejavu_fonts
+            font-awesome
+            noto-fonts-color-emoji
+            nerd-fonts.dejavu-sans-mono
+            nerd-fonts.jetbrains-mono
+            nerd-fonts.noto
+            nerd-fonts.symbols-only
+            nerd-fonts.ubuntu
+            #openmoji-color
+            open-sans
+          ]
+          ++ lib.optionals (!isLive) [
+            hack-font
+            liberation_ttf
+            libertine
+            libertinus
+            noto-fonts-cjk-sans
+            nerd-fonts.code-new-roman
+            nerd-fonts.liberation
+            nerd-fonts.roboto-mono
+          ];
       };
   };
 }

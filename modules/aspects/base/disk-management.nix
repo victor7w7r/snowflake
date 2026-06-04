@@ -1,5 +1,5 @@
 {
-  den.aspects.base.provides.disk-management.nixos =
+  den.aspects.base.disk-management.nixos =
     { pkgs, ... }:
     {
       environment.systemPackages = with pkgs; [

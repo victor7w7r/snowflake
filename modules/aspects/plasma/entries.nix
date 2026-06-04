@@ -1,5 +1,5 @@
 {
-  den.aspects.plasma.provides.entries.homeManager.xdg.desktopEntries = {
+  den.aspects.plasma.entries.homeManager.xdg.desktopEntries = {
     "org.kde.dolphin" = {
       name = "Archivos";
       genericName = "Gestor de Archivos";

@@ -1,5 +1,5 @@
 {
-  den.aspects.sound.provides.pipewire.nixos =
+  den.aspects.sound.pipewire.nixos =
     { pkgs, ... }:
     {
       services.pipewire = {

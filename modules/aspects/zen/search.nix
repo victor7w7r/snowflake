@@ -1,8 +1,8 @@
 {
-  den.aspects.zen.provides.search.homeManager =
+  den.aspects.zen.search.homeManager =
     { pkgs, ... }:
     {
-      programs.zen-browser.profiles.default.search = {
+      zen-profile.search = {
         force = true;
         default = "google";
         privateDefault = "ddg";

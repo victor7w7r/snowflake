@@ -1,4 +1,3 @@
-{ lib, ... }:
 {
   den.aspects.xfce = {
     nixos =

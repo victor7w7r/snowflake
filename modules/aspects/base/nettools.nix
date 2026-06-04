@@ -1,5 +1,5 @@
 {
-  den.aspects.base.provides.nettools = {
+  den.aspects.base.nettools = {
     nixos =
       { pkgs, ... }:
       {

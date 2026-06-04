@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.shell.provides.init.homeManager.programs =
+  den.aspects.base.shell.init.homeManager.programs =
     { config, pkgs, ... }:
     let
       tmux-init = ''

@@ -1,5 +1,5 @@
 {
-  den.aspects.shell.provides.variables.homeManager.programs =
+  den.aspects.base.shell.variables.homeManager.programs =
     { config, ... }:
     let
       commonVars = {

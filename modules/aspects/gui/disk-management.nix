@@ -1,5 +1,5 @@
 {
-  den.aspects.gui.provides.disk-management.homeManager =
+  den.aspects.gui.disk-management.homeManager =
     { pkgs, ... }:
     {
       home.packages = with pkgs; [

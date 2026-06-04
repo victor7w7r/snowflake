@@ -475,7 +475,7 @@ let
   '';
 in
 {
-  den.aspects.shell.provides.bofh.homeManager.programs = {
+  den.aspects.base.shell.bofh.homeManager.programs = {
     zsh.siteFunctions.bofh = bofh;
     bash.bashrcExtra = (
       lib.mkOrder 550 ''

@@ -1,5 +1,5 @@
 {
-  den.aspects.plasma.provides.fonts.homeManager.programs.plasma.fonts = {
+  den.aspects.plasma.fonts.homeManager.programs.plasma.fonts = {
     general = {
       family = "Ubuntu";
       pointSize = 10;

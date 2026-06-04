@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.tmux.provides.bindings.homeManager.programs.tmux.extraConfig = lib.mkAfter ''
+  den.aspects.base.tmux.bindings.homeManager.programs.tmux.extraConfig = lib.mkAfter ''
     unbind C-b
     unbind r
     unbind '"'

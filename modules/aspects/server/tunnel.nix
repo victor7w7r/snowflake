@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.server.provides.tunnel.nixos =
+  den.aspects.server.tunnel.nixos =
     { pkgs, ... }:
     let
       mkFunnel = name: publicport: localport: {

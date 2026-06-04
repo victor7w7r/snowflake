@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.tmux.provides.config.homeManager.programs.tmux.extraConfig = lib.mkAfter ''
+  den.aspects.base.tmux.config.homeManager.programs.tmux.extraConfig = lib.mkAfter ''
     set -ga terminal-overrides ",xterm-256color:Tc,xterm-kitty:Tc,kmscon:Tc,vt100:Tc,vt102:Tc"
     set -g default-terminal "tmux-256color"
     set -q -g status-utf8 on
