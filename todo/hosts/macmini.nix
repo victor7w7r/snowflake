@@ -74,40 +74,20 @@ in
     };
   };
 
-  swapDevices = [
-    {
-      device = "/dev/mapper/swapcrypt";
-      discardPolicy = "both";
-      options = [ "nofail" ];
-    }
-  ];
-
-  powerManagement.cpuFreqGovernor = "schedutil";
-
   environment.systemPackages = with pkgs; [
     bolt
     tbtools
     thunderbolt
-    ydotool
     kdePackages.plasma-thunderbolt
   ];
 
-  programs.ydotool.enable = true;
-  services.udev.extraRules = ''
-    KERNEL=="uinput", MODE="0660", GROUP="input"
-  '';
+  services.hardware.bolt.enable = true;
   services.udev.packages = [ audio.audioUdev ];
-
-  systemd.tmpfiles.rules = [
-    "w /sys/block/bcache0/bcache/cache_mode - - - - writethrough"
-    "w /sys/block/bcache1/bcache/cache_mode - - - - writethrough"
-  ];
 
   boot = {
     extraModulePackages = [
       (pkgs.callPackage ./custom/apple-bce.nix { kernel = kernelBuild.kernel; })
     ];
-    supportedFilesystems = [ "bcachefs" ];
     resumeDevice = "/dev/mapper/swapcrypt";
     kernelParams = [
       "video=DP-3:1600x900@60"
@@ -143,7 +123,6 @@ in
         # "vfio_iommu_type1"
         # "vfi"
       ];
-      services.lvm.enable = true;
     };
   };
 }

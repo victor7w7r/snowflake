@@ -92,15 +92,6 @@ in
       "console=ttyS0,115200n8"
     ];
     initrd = {
-      supportedFilesystems = [
-        "btrfs"
-        "ext4"
-        "exfat"
-        "f2fs"
-        "ntfs"
-        "xfs"
-        "vfat"
-      ];
       network.enable = true;
       verbose = true;
       systemd = {

@@ -110,13 +110,13 @@
                 ostype Linux
                 options "init=$TOPLEVEL/init ${toString config.boot.kernelParams}"
                 submenuentry "Verbose" {
-                  add_options "boot.trace=1 debug udev.log_level=7 rd.systemd.show_status=true"
+                  add_options "boot.trace=1 systemd.log_level=debug systemd.log_target=console debug udev.log_level=7 rd.systemd.show_status=true"
                 }
                 submenuentry "Console Only" {
                   add_options "systemd.unit=multi-user.target"
                 }
                 submenuentry "Rescue" {
-                  add_options "systemd.unit=rescue.target"
+                  add_options "systemd.unit=rescue.target boot.shell_on_fail"
                 }
               }
             EOF

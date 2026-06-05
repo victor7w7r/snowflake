@@ -22,6 +22,7 @@
 
         consoleLogLevel = 4;
         modprobeConfig.enable = true;
+        kernelParams = [ "lsm=landlock,yama,integrity,apparmor,bpf" ];
         tmp = {
           cleanOnBoot = true;
           useTmpfs = true;

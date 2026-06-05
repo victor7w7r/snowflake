@@ -15,7 +15,18 @@
       ];
       #audioT2 = (pkgs.callPackage ./custom/t2-pipewire.nix { });
       nixos = {
-        services.hardware.bolt.enable = true;
+        swapDevices = [
+          {
+            device = "/dev/mapper/swapcrypt";
+            discardPolicy = "both";
+            options = [ "nofail" ];
+          }
+        ];
+
+        systemd.tmpfiles.rules = [
+          "w /sys/block/bcache0/bcache/cache_mode - - - - writethrough"
+          "w /sys/block/bcache1/bcache/cache_mode - - - - writethrough"
+        ];
       };
 
       homeManager =

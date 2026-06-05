@@ -97,7 +97,6 @@ in
         ARRAY /dev/md/raid0 metadata=1.2 spares=1 UUID=00a19bfc:a0b32154:4ed293e4:28565a8f
       '';
     };
-    supportedFilesystems = [ "bcachefs" ];
     initrd = {
       availableKernelModules = [ "i915" ];
       kernelModules = [

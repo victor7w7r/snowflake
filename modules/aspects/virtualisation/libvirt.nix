@@ -9,14 +9,16 @@
         ...
       }:
       lib.optional isVisual {
-        boot.extraModprobeConfig = ''
-          options kvm ignore_msrs=1
-          ${lib.optionalString isIntel ''
-            options kvm-intel nested=1
-            options kvm_intel emulate_invalid_guest_state=0
-          ''}
-        '';
-
+        boot = {
+          kernelParams = (lib.mkIf isIntel) [ "kvmfr.static_size_mb=128" ];
+          extraModprobeConfig = ''
+            options kvm ignore_msrs=1
+            ${lib.optionalString isIntel ''
+              options kvm-intel nested=1
+              options kvm_intel emulate_invalid_guest_state=0
+            ''}
+          '';
+        };
         environment = {
           sessionVariables.LIBVIRT_DEFAULT_URI = [ "qemu:///system" ];
           persistence."/nix/persist".directories = lib.mkAfter [

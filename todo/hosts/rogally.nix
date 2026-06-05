@@ -88,7 +88,6 @@ in
     #kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-lts-lto;
     kernelPackages = helpers.kernelModuleLLVMOverride (kernelBuild.packages);
     initrd = {
-      checkJournalingFS = lib.mkForce false;
       kernelModules = [
         "dm-snapshot"
         "kvm-amd"
