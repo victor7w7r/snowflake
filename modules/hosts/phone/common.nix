@@ -1,28 +1,38 @@
-{ lib, ... }:
 {
-  phone.mobile.nixos =
+  inputs,
+  lib,
+  ...
+}:
+{
+  flake-file.inputs.mobile-nixos = {
+    url = "github:mobile-nixos/mobile-nixos";
+    flake = false;
+  };
+
+  imports = [ (inputs.den.namespace "phone" false) ];
+
+  phone.common.nixos =
     {
       config,
-      inputs,
+      inputs',
       pkgs,
       ...
     }:
     {
-      #SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}+="-1, 0, 0; 0, -1, 0; 0, 0, -1"
-      mobile.quirks.audio.alsa-ucm-meld = true;
+      environment.systemPackages = [ (pkgs.callPackage ../custom/sdm845-alsa.nix { }) ];
       services.udev.extraRules = ''
         SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT}=="1", SUBSYSTEMS=="input", ATTRS{name}=="pmi8998_haptics", TAG+="uaccess", ENV{FEEDBACKD_TYPE}="vibra"
       '';
 
-      environment.systemPackages = [ (pkgs.callPackage ../custom/sdm845-alsa.nix { }) ];
       hardware.enableRedistributableFirmware = true;
 
+      # SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}+="-1, 0, 0; 0, -1, 0; 0, 0, -1"
       mobile.adbd.enable = true;
       mobile.device.identity.manufacturer = "OnePlus";
       mobile.device.firmware =
-        pkgs.callPackage "${inputs.mobile-nixos}/devices/oneplus-enchilada/firmware"
+        pkgs.callPackage "${inputs'.mobile-nixos}/devices/oneplus-enchilada/firmware"
           { };
-      mobile.quirks.qualcomm.sdm845-modem.enable = true;
+
       mobile.hardware = {
         soc = "qualcomm-sdm845";
         ram = 8192;
@@ -36,13 +46,16 @@
         kernel.modular = true;
         kernel.allowMissingModules = true;
         usb.enable = true;
-        kernel.package = (pkgs.callPackage ../../kernel/sdm845 { inherit kernelData; }).build;
+        #kernel.package = (pkgs.callPackage ../../kernel/sdm845 { inherit kernelData; }).build;
       };
       #stage-1.shell.enable
 
       mobile.boot.stage-1.kernel.modules = [
         "f2fs"
       ];
+
+      mobile.quirks.audio.alsa-ucm-meld = true;
+      mobile.quirks.qualcomm.sdm845-modem.enable = true;
 
       mobile.kernel.structuredConfig = [
         (

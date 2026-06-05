@@ -1,4 +1,9 @@
-{ inputs, __findFile, ... }:
+{
+  inputs,
+  settings,
+  __findFile,
+  ...
+}:
 {
   flake-file.inputs = {
     darwin = {
@@ -29,6 +34,11 @@
   */
 
   den = {
+    default.darwin = {
+      system.stateVersion = 6;
+      nix.settings = settings.lib.settings;
+    };
+
     hosts.x86_64-darwin.main-mac = {
       hostName = "v7w7r-macmini81";
       users.victor7w7r = { };

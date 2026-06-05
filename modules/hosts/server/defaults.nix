@@ -20,9 +20,8 @@
       ];
 
       nixos =
-        { pkgs, user, ... }:
+        { pkgs, ... }:
         {
-
           boot.initrd.services.lvm.enable = true;
 
           environment.systemPackages = with pkgs; [
@@ -41,6 +40,16 @@
             lvm.boot.thin.enable = true;
             rustdesk.enable = true;
           };
+
+          /*
+            swapDevices = [
+              {
+                device = "/dev/mapper/swapcrypt";
+                discardPolicy = "both";
+                options = [ "nofail" ];
+              }
+            ];
+          */
         };
 
       homeManager =
