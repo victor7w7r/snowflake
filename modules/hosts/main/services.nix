@@ -1,4 +1,3 @@
-{ ... }:
 {
   main.services.nixos =
     { pkgs, ... }:
@@ -36,7 +35,6 @@
             SystemCallArchitectures = "native";
           };
         };
-
         apple-bce-reload = {
           enable = true;
           description = "Disable and Re-Enable Apple BCE Module";

@@ -2,15 +2,33 @@
   main.initrd.nixos =
     { pkgs, ... }:
     {
-      initrd.systemd = {
-        storePaths = with pkgs; [
-          "${btrfs-progs}/bin/btrfs"
-          "${util-linux}/bin/mount"
-          "${util-linux}/bin/umount"
-          "${coreutils}/bin/sleep"
-          "${systemd}/bin/udevadm"
+      boot.initrd = {
+        kernelModules = [
+          "apple-bce"
+          "aes_ni"
+          "brcmfmac_wcc"
+          "brcmfmac"
+          "btrfs"
+          "cryptd"
+          "dm_crypt"
+          "dm_mod"
+          "bcache"
+          "uas"
+          "usb_storage"
+          "ahci"
+          "usbhid"
+          "sd_mod"
+          "uhci_hcd"
+          "ehci_hcd"
+          "xhci_pci"
+          "usbcore"
+          "zram"
+          # "vfio_virqfd"
+          # "vfio_pci"
+          # "vfio_iommu_type1"
+          # "vfi"
         ];
-        services.setup-storage-stack =
+        systemd.services.setup-storage =
           let
             partlabel = "/dev/disk/by-partlabel";
             idpart = "/dev/disk/by-id";

@@ -1,9 +1,21 @@
-
   /*
     overlays = [
      nix-cachyos-kernel.overlays.pinned
      (import "${inputs.mobile-nixos}/overlay/overlay.nix")
      ];
+
+     bootFiles = ''
+       mkdir -p boot
+       ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
+         -c ${config.system.build.toplevel} -d boot
+       tar -cv -C . boot | zstd -T$NIX_BUILD_CORES > $out/boot.tar.zst
+     '';
+     system.build.bootFiles =
+       pkgs.runCommand "boot-files" { nativeBuildInputs = with pkgs; [ zstd ]; }
+         ''
+           mkdir -p $out
+           ${bootFiles}
+         '';
 
      helpers = pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { };
 

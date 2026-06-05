@@ -35,7 +35,6 @@
           blacklist intel_hid
         '';
         initrd = {
-
           /*
             availableKernelModules = [
               "autofs"

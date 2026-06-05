@@ -19,8 +19,14 @@
         initrdBin = with pkgs; [ coreutils ];
         storePaths = with pkgs; [
           "${bashInteractive}/bin/bash"
+          mtdutils
           util-linux
           ncurses
+          "${btrfs-progs}/bin/btrfs"
+          "${util-linux}/bin/mount"
+          "${util-linux}/bin/umount"
+          "${coreutils}/bin/sleep"
+          "${systemd}/bin/udevadm"
         ];
         extraBin = with pkgs; {
           nix = "${nix}/bin/nix";
@@ -28,11 +34,13 @@
           curl = "${curl}/bin/curl";
           ping = "${iputils}/bin/ping";
           cryptsetup = "${cryptsetup}/bin/cryptsetup";
+          efibootmgr = "${pkgs.efibootmgr}/bin/efibootmgr";
           busybox = "${busybox-sandbox-shell}/bin/busybox";
           htop = "${htop}/bin/htop";
           yazi = "${yazi-unwrapped}/bin/yazi";
           find = "${findutils}/bin/find";
           fdisk = "${util-linux}/bin/fdisk";
+          lshw = "${pkgs.lshw}/bin/lshw";
           file = "${file}/bin/file";
           blkid = "${util-linux}/bin/blkid";
           lsblk = "${util-linux}/bin/lsblk";

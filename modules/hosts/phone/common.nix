@@ -1,8 +1,4 @@
-{
-  inputs,
-  lib,
-  ...
-}:
+{ inputs, lib, ... }:
 {
   flake-file.inputs.mobile-nixos = {
     url = "github:mobile-nixos/mobile-nixos";

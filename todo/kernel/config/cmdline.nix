@@ -7,13 +7,15 @@ let
   sec = "page_poison=1 oops=panic randomize_kstack_offset=on";
   vm = "iommu=pt pcie_acs_override=downstream,multifunction kvm.ignore_msrs=1 kvm.report_ignored_msrs=0";
   save = "rcutree.enable_rcu_lazy=1 rcupdate.rcu_expedited=1 threadirqs";
-  perf = "split_lock_detect=off tsc=reliable nowatchdog nmi_watchdog=0";
+  perf = "split_lock_detect=off tsc=reliable nowatchdog nmi_watchdog=0 zram.num_devices=2";
+  #"systemd.gpt_auto=0" "rootwait"
   rescue = "sysrq_always_enabled=0"; # udev.log_level=3 verbose=1
   sata =
     if host == "v7w7r-youyeetoox1" || host == "v7w7r-macmini81" then
       "libahci.ignore_sss=1 ahci.mobile_lpm_policy=2"
     else
       "";
+  mini = "video=DP-3:1600x900@60";
   amd =
     if host == "v7w7r-rc71l" then
       "mitigations=off nospectre_v1 nospectre_v2 spec_store_bypass_disable=off "
@@ -26,7 +28,8 @@ let
       + "intel_pstate=passive intel_iommu=on pcie_ports=compat"
     else
       "";
-  cmd = "${red} ${green} ${blue} ${opt} ${sec} ${vm} ${save} ${amd} ${perf} ${sata} ${rescue} ${intel}";
+
+  cmd = "${red} ${green} ${blue} ${opt} ${sec} ${vm} ${save} ${amd} ${perf} ${sata} ${rescue} ${intel} ${mini}";
 in
 [
   "-e CMDLINE_BOOL"
