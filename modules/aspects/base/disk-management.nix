@@ -12,6 +12,7 @@
         #https://github.com/ximion/btrfsd
         compsize
         dust
+        duf
         duff
         dua
         dysk

@@ -1,0 +1,145 @@
+{
+  kernel.config = rec {
+
+    all-vendor = net-vendor-enable // vendor;
+
+    net-vendor-enable = {
+      NET_VENDOR_AQUANTIA = "y";
+      NET_VENDOR_BROADCOM = "y";
+      NET_VENDOR_REALTEK = "y";
+      NET_VENDOR_MICROSOFT = "y";
+      WLAN_VENDOR_BROADCOM = "y";
+      WLAN_VENDOR_INTEL = "y";
+      WLAN_VENDOR_MEDIATEK = "y";
+      WLAN_VENDOR_REALTEK = "y";
+      WLAN_VENDOR_RALINK = "y";
+    };
+
+    vendor = {
+      CHROME_PLATFORMS = "n";
+      CPU_SUP_CENTAUR = "n";
+      CPU_SUP_ZHAOXIN = "n";
+      EZX_PCAP = "n";
+      MACINTOSH_DRIVERS = "n";
+      GOOGLE_FIRMWARE = "n";
+
+      GPIO_RC5T583 = "n";
+      GPIO_TPS6586X = "n";
+      GPIO_TPS65910 = "n";
+
+      MELLANOX_PLATFORM = "n";
+      MFD_88PM860X = "n";
+      MFD_AS3711 = "n";
+      MFD_AAT2870_CORE = "n";
+      MFD_DA9052_SPI = "n";
+      MFD_DA9052_I2C = "n";
+      MFD_DA9055 = "n";
+      MFD_MAX77843 = "n";
+      MFD_MAX8925 = "n";
+      MFD_MAX8997 = "n";
+      MFD_MAX8998 = "n";
+      MFD_LP8788 = "n";
+      MFD_RC5T583 = "n";
+      MFD_TPS65090 = "n";
+      MFD_TPS6586X = "n";
+      MFD_TPS65910 = "n";
+      MFD_TWL4030_AUDIO = "n";
+      MFD_WM8400 = "n";
+      MFD_WM831X = "n";
+      MFD_WM831X_I2C = "n";
+      MFD_WM831X_SPI = "n";
+      MFD_WM8350 = "n";
+      MFD_WM8350_I2C = "n";
+
+      NET_VENDOR_3COM = "n";
+      NET_VENDOR_ADAPTEC = "n";
+      NET_VENDOR_AGERE = "n";
+      NET_VENDOR_ALACRITECH = "n";
+      NET_VENDOR_ALTEON = "n";
+      NET_VENDOR_AMAZON = "n";
+      NET_VENDOR_ARC = "n";
+      NET_VENDOR_ASIX = "n";
+      NET_VENDOR_ATHEROS = "n";
+      NET_VENDOR_CADENCE = "n";
+      NET_VENDOR_CAVIUM = "n";
+      NET_VENDOR_CHELSIO = "n";
+      NET_VENDOR_CISCO = "n";
+      NET_VENDOR_CORTINA = "n";
+      NET_VENDOR_DAVICOM = "n";
+      NET_VENDOR_DEC = "n";
+      NET_VENDOR_DLINK = "n";
+      NET_VENDOR_EMULEX = "n";
+      NET_VENDOR_ENGLEDER = "n";
+      NET_VENDOR_EZCHIP = "n";
+      NET_VENDOR_FUNGIBLE = "n";
+      NET_VENDOR_GOOGLE = "n";
+      NET_VENDOR_HISILICON = "n";
+      NET_VENDOR_HUAWEI = "n";
+      NET_VENDOR_I825XX = "n";
+      NET_VENDOR_INTEL = "n";
+      NET_VENDOR_ADI = "n";
+      NET_VENDOR_LITEX = "n";
+      NET_VENDOR_MARVELL = "n";
+      NET_VENDOR_MELLANOX = "n";
+      NET_VENDOR_META = "n";
+      NET_VENDOR_MICREL = "n";
+      NET_VENDOR_MICROCHIP = "n";
+      NET_VENDOR_MICROSEMI = "n";
+      NET_VENDOR_MYRI = "n";
+      NET_VENDOR_NI = "n";
+      NET_VENDOR_NATSEMI = "n";
+      NET_VENDOR_NETERION = "n";
+      NET_VENDOR_NETRONOME = "n";
+      NET_VENDOR_8390 = "n";
+      NET_VENDOR_NVIDIA = "n";
+      NET_VENDOR_OKI = "n";
+      NET_VENDOR_PACKET_ENGINES = "n";
+      NET_VENDOR_PENSANDO = "n";
+      NET_VENDOR_QLOGIC = "n";
+      NET_VENDOR_BROCADE = "n";
+      NET_VENDOR_QUALCOMM = "n";
+      NET_VENDOR_RDC = "n";
+      NET_VENDOR_RENESAS = "n";
+      NET_VENDOR_ROCKER = "n";
+      NET_VENDOR_SAMSUNG = "n";
+      NET_VENDOR_SEEQ = "n";
+      NET_VENDOR_SILAN = "n";
+      NET_VENDOR_SIS = "n";
+      NET_VENDOR_SOLARFLARE = "n";
+      NET_VENDOR_SMSC = "n";
+      NET_VENDOR_SOCIONEXT = "n";
+      NET_VENDOR_STMICRO = "n";
+      NET_VENDOR_SUN = "n";
+      NET_VENDOR_SYNOPSYS = "n";
+      NET_VENDOR_TEHUTI = "n";
+      NET_VENDOR_TI = "n";
+      NET_VENDOR_VERTEXCOM = "n";
+      NET_VENDOR_VIA = "n";
+      NET_VENDOR_WANGXUN = "n";
+      NET_VENDOR_WIZNET = "n";
+      NET_VENDOR_XILINX = "n";
+
+      PMIC_ADP5520 = "n";
+      PMIC_DA903X = "n";
+      PMIC_DA9052 = "n";
+      RPMB = "n";
+      SURFACE_PLATFORMS = "n";
+      TWL4030_CORE = "n";
+      TWL6040_CORE = "n";
+
+      WLAN_VENDOR_ADMTEK = "n";
+      WLAN_VENDOR_ATH = "n";
+      WLAN_VENDOR_ATMEL = "n";
+      WLAN_VENDOR_INTERSIL = "n";
+      WLAN_VENDOR_MARVELL = "n";
+      WLAN_VENDOR_MICROCHIP = "n";
+      WLAN_VENDOR_PURELIFI = "n";
+      WLAN_VENDOR_RSI = "n";
+      WLAN_VENDOR_SILABS = "n";
+      WLAN_VENDOR_ST = "n";
+      WLAN_VENDOR_TI = "n";
+      WLAN_VENDOR_ZYDAS = "n";
+      WLAN_VENDOR_QUANTENNA = "n";
+    };
+  };
+}

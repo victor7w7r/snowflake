@@ -1,5 +1,5 @@
 {
-  main-mac.postexec.nixos =
+  main-mac.postexec.darwin =
     { user, ... }:
     {
       system.activationScripts.postActivation.text = ''

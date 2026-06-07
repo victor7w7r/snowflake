@@ -1,5 +1,5 @@
 {
-  main-mac.prefs.nixos.system = {
+  main-mac.prefs.darwin.system = {
     keyboard = {
       enableKeyMapping = true;
       remapCapsLockToEscape = true;

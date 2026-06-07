@@ -13,38 +13,7 @@ let
   config = (import ./config.nix);
   #modules = ./modules.db;
 
-  patchesRoute = "${fetch.armbian}/patch/kernel/archive/sunxi-6.18";
-  patchLines = lib.splitString "\n" (
-    builtins.readFile "${fetch.armbian}/patch/kernel/archive/sunxi-6.18/series.conf"
-  );
-  patchesList = lib.filter (line: line != "" && !(lib.hasPrefix "#" line || lib.hasPrefix "-" line)) (
-    map lib.strings.trim patchLines
-  );
-  selectedPatches = map (path: "${patchesRoute}/${path}") patchesList;
   isCross = stdenv.hostPlatform != stdenv.buildPlatform;
-  patches =
-    selectedPatches
-    /*
-      [
-        "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-warnings.patch"
-        "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-park-link-v6.1-post.patch"
-        "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-setting-mac-address-for-netdev.patch"
-        "${fetch.armbian}/patch/misc/wireless-uwe5622/wireless-uwe5622-Fix-compilation-with-6.7-kernel.patch"
-        "${fetch.armbian}/patch/misc/wireless-uwe5622/wireless-uwe5622-reduce-system-load.patch"
-        "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-spanning-writes.patch"
-        "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-fix-timer-api-changes-for-6.15-only-sunxi.patch"
-        "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.17.patch"
-        "${fetch.armbian}/patch/misc/wireless-uwe5622/uwe5622-v6.18.patch"
-      ]
-    */
-    ++ [
-      "${fetch.patches}/${majorMinor}/misc/0001-hardened.patch"
-      /*
-        "${fetch.patches}/${majorMinor}/misc/reflex-governor.patch"
-        "${fetch.patches}/${majorMinor}/misc/nap-governor.patch"
-      */
-    ];
-
 in
 
 pkgs.stdenv.mkDerivation {

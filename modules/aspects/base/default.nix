@@ -123,6 +123,8 @@
             config = {
               pager = "less -FR";
               theme = "Dracula";
+              "italic-text" = "always";
+              style = "numbers";
             };
           };
 

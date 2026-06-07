@@ -116,7 +116,7 @@
                   add_options "systemd.unit=multi-user.target"
                 }
                 submenuentry "Rescue" {
-                  add_options "systemd.unit=rescue.target boot.shell_on_fail"
+                  add_options "systemd.unit=rescue.target boot.shell_on_fail sysrq_always_enabled=0"
                 }
               }
             EOF

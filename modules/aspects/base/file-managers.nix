@@ -5,6 +5,9 @@
       { isLive, pkgs, ... }:
       lib.optional (!isLive) {
         environment.systemPackages = with pkgs; [
+          clifm
+          lf
+          joshuto
           superfile
           termscp
           tran

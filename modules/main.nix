@@ -1,9 +1,4 @@
-{
-  den,
-  lib,
-  settings,
-  ...
-}:
+{ den, settings, ... }:
 {
   _module.args.__findFile = den.lib.__findFile;
 
@@ -20,26 +15,16 @@
     ];
     nixos = {
       system.stateVersion = "26.05";
-      documentation.enable = lib.mkDefault false;
+      documentation = {
+        enable = false;
+        doc.enable = false;
+        info.enable = false;
+        man.enable = false;
+      };
+      nix.settings = settings.lib.flake-config // settings.lib.nix-config;
       nixpkgs.config.allowUnfree = true;
       programs.nix-ld.enable = true;
       #package = lib.mkDefault (pkgs.lix);
-
-      nix.settings = {
-        narinfo-cache-negative-ttl = 0;
-        max-substitution-jobs = 128;
-        keep-build-log = lib.mkDefault false;
-        http-connections = 128;
-        keep-derivations = lib.mkDefault false;
-        max-jobs = "auto";
-        cores = 0;
-
-        trusted-users = [
-          "root"
-          "@wheel"
-        ];
-      }
-      // settings.lib.settings;
     };
   };
 }
