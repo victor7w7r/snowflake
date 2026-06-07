@@ -1,6 +1,13 @@
-{ lib, ... }:
+{
+  inputs,
+  lib,
+  tmux,
+  ...
+}:
 {
   den.aspects.base.tmux.default = {
+    imports = [ (inputs.den.namespace "tmux" false) ];
+
     nixos =
       { isPersistent, user, ... }:
       lib.optional isPersistent {
@@ -23,17 +30,21 @@
           prefix = "C-a";
           sensibleOnTop = false;
           shell = "${pkgs.zsh}/bin/zsh";
-          extraConfig =
-            let
-              status = pkgs.callPackage ./shell/status.nix { };
-              foreground = pkgs.callPackage ./shell/foreground.nix { };
-              colors = pkgs.callPackage ./shell/colors.nix { };
-            in
-            ''
-              run ${status}
-              run -b ${foreground}
-              run -b ${colors}
-            '';
+          extraConfig = ''
+            run ${
+              pkgs.writeShellScript "status" tmux.shell.status {
+                git = pkgs.writeShellScript "git-ext" tmux.ext.git;
+                ssh = pkgs.writeShellScript "ssh-ext" tmux.ext.ssh;
+                colors = pkgs.writeShellScript "colors-ext" tmux.ext.colors;
+                network = pkgs.writeShellScript "network-ping" tmux.ext.network-ping;
+                ram = pkgs.writeShellScript "ram-ext" tmux.ext.ram-info;
+                cpu = pkgs.writeShellScript "cpu-ext" tmux.ext.cpu-info;
+                battery = pkgs.writeShellScript "battery-ext" tmux.ext.battery;
+              }
+            }
+            run -b ${pkgs.writeShellScript "foreground" tmux.shell.foreground}
+            run -b ${pkgs.writeShellScript "colors" tmux.shell.colors}
+          '';
         };
       };
   };

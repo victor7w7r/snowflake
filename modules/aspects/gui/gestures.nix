@@ -47,7 +47,7 @@
           };
           tablet-map = {
             Service = {
-              ExecStart = "${(pkgs.callPackage ./custom/tablet-map.nix { })}/bin/tablet_map";
+              #ExecStart = "${(pkgs.callPackage ./custom/tablet-map.nix { })}/bin/tablet_map";
               Restart = "no";
               StandardOutput = "journal";
               StandardError = "journal";

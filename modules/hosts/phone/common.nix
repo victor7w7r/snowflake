@@ -15,7 +15,9 @@
       ...
     }:
     {
-      environment.systemPackages = [ (pkgs.callPackage ../custom/sdm845-alsa.nix { }) ];
+      environment.systemPackages = [
+        # (pkgs.callPackage ../custom/sdm845-alsa.nix { })
+      ];
       services.udev.extraRules = ''
         SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT}=="1", SUBSYSTEMS=="input", ATTRS{name}=="pmi8998_haptics", TAG+="uaccess", ENV{FEEDBACKD_TYPE}="vibra"
       '';
@@ -25,9 +27,11 @@
       # SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}+="-1, 0, 0; 0, -1, 0; 0, 0, -1"
       mobile.adbd.enable = true;
       mobile.device.identity.manufacturer = "OnePlus";
-      mobile.device.firmware =
+      /*
+        mobile.device.firmware =
         pkgs.callPackage "${inputs'.mobile-nixos}/devices/oneplus-enchilada/firmware"
           { };
+      */
 
       mobile.hardware = {
         soc = "qualcomm-sdm845";
