@@ -24,13 +24,6 @@ let
       install -m755 ${src.openScript} $out/usr/share/open/open.sh
       ln -s ../share/open/open.sh $out/usr/bin/open
     '';
-
-    meta = {
-      description = "Use the open command to open a folder in a GUI window";
-      homepage = "https://github.com/witt-bit/pc-guide";
-      license = lib.licenses.asl20;
-      platforms = lib.platforms.all;
-    };
   };
 in
 {
