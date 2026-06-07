@@ -20,7 +20,7 @@
     };
 
   flake.overlays.default =
-    _: prev:
+    _final: prev:
     withSystem prev.stdenv.hostPlatform.system (
       { config, ... }:
       {
