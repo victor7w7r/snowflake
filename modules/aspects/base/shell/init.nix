@@ -160,40 +160,4 @@
     #  RPS1='$(mommy -c ''${HOME}/.config/tmux/mommy.conf -1 -s $?)'
     #fi
   */
-
-  homeManager.programs.zsh.initContent = lib.mkMerge [
-    (lib.mkOrder 1500 ''
-      commandexist() {
-        command -v "$1" &>/dev/null
-      }
-
-       if [[ "$OSTYPE" == "darwin"* ]]; then
-         if commandexist clolcat; then uname -v | clolcat; else uname -v | clolcat; fi
-       else
-         if commandexist clolcat; then
-          uname -m -n -o -v | clolcat
-         elif commandexist meow; then
-           uname -m -n -o -v | meow
-         else
-           uname -m -n -o -v
-         fi
-       fi
-
-       if commandexist clolcat; then
-         echo "Welcome to $(uname)!" | clolcat
-       elif commandexist meow; then
-         echo "Welcome to $(uname)!" | meow
-       else
-         echo "Welcome to $(uname)!"
-       fi
-
-       if commandexist cowsay && commandexist clolcat; then
-         random-quote | cowsay $(random-opts) --random | clolcat
-       elif commandexist cowsay && commandexist meow; then
-         random-quote | cowsay $(random-opts) --random | meow
-       elif commandexist cowsay; then
-         random-quote | cowsay $(random-opts) --random
-       fi
-    '')
-  ];
 }

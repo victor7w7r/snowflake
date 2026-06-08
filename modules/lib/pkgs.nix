@@ -23,7 +23,7 @@
         pkgsDirectory = ../../pkgs/by-name;
         pkgsNameSeparator = "-";
         overlays = [
-          inputs.deploy-rs.overlays.default
+          #inputs.deploy-rs.overlays.default
           (final: _prev: {
             master = import inputs.nixpkgs-master {
               inherit (final) config;

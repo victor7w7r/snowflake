@@ -48,22 +48,22 @@
             };
           };
       };
+
+    postscript.nixos =
+      { config, ... }:
+      {
+        boot.postBootCommands = ''
+          set -euo pipefail
+          set -x
+
+          REG_FILE="/nix/nix-path-registration"
+
+          ${config.nix.package.out}/bin/nix-store --load-db < "$REG_FILE"
+          touch /etc/NIXOS
+          ${config.nix.package.out}/bin/nix-env -p /nix/var/nix/profiles/system --set /run/current-system
+          rm -f "$REG_FILE"
+        '';
+      };
   };
-
-  postscript.nixos =
-    { config, ... }:
-    {
-      boot.postBootCommands = ''
-        set -euo pipefail
-        set -x
-
-        REG_FILE="/nix/nix-path-registration"
-
-        ${config.nix.package.out}/bin/nix-store --load-db < "$REG_FILE"
-        touch /etc/NIXOS
-        ${config.nix.package.out}/bin/nix-env -p /nix/var/nix/profiles/system --set /run/current-system
-        rm -f "$REG_FILE"
-      '';
-    };
 
 }

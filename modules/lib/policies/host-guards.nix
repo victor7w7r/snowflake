@@ -28,7 +28,7 @@
       isGraphicArm = isPhone || host.name == "superlab";
       isGraphic = isEfi || isGraphicArm;
       isLive = host.name == "minimal-live" || host.name == "graphical-live";
-      isPersistent = (!isLive && !host.class == "darwin");
+      isPersistent = (!isLive && host.class != "darwin");
     in
     [
       (den.lib.policy.resolve {

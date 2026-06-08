@@ -138,12 +138,13 @@
             autoStart = true;
           };
         };
+
+      homeManager =
+        { config, ... }:
+        {
+          home.file."games".source = config.lib.file.mkOutOfStoreSymlink "/run/media/games";
+        };
     };
 
-    homeManager =
-      { config, ... }:
-      {
-        home.file."games".source = config.lib.file.mkOutOfStoreSymlink "/run/media/games";
-      };
   };
 }

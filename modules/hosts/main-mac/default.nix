@@ -66,8 +66,6 @@
     # sudo -H nix --extra-experimental-features "nix-command flakes" run nix-darwin/master#darwin-rebuild -- switch --flake .#macmini
     aspects.main-mac = {
       includes = [
-        <kitty>
-        <starship>
       ];
     };
   };

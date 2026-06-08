@@ -17,7 +17,6 @@
         <base>
         <fetch>
         <initrd>
-        <security>
         (den.batteries.tty-autologin "snowflake")
       ];
       nixos = {

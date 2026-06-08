@@ -5,9 +5,9 @@
   ...
 }:
 {
-  den.aspects.base.tmux.default = {
-    imports = [ (inputs.den.namespace "tmux" false) ];
+  imports = [ (inputs.den.namespace "tmux" false) ];
 
+  den.aspects.base.tmux.default = {
     nixos =
       { isPersistent, user, ... }:
       lib.optional isPersistent {

@@ -83,26 +83,26 @@
           ];
         };
       };
-  };
 
-  homeManager = {
-    qt.enable = false;
-    xfconf.settings = {
-      xsettings = {
-        "Gtk/MonospaceFontName" = "UbuntuMono Nerd Font 11";
-        "Gtk/FontName" = "Ubuntu Nerd Font 10";
-        "Net/IconThemeName" = "Colloid-Purple-Catppuccin-Dark";
-        "Net/ThemeName" = "Layan-Dark";
-      };
-      xfwm4 = {
-        "general/theme" = "Layan-Dark";
-      };
-      xfce4-power-manager = {
-        "lid-action-on-ac" = 1;
-        "lock-screen-suspend-hibernate" = false;
-      };
-      xfce4-desktop = {
-        "desktop-icons/style" = 1;
+    homeManager = {
+      qt.enable = false;
+      xfconf.settings = {
+        xsettings = {
+          "Gtk/MonospaceFontName" = "UbuntuMono Nerd Font 11";
+          "Gtk/FontName" = "Ubuntu Nerd Font 10";
+          "Net/IconThemeName" = "Colloid-Purple-Catppuccin-Dark";
+          "Net/ThemeName" = "Layan-Dark";
+        };
+        xfwm4 = {
+          "general/theme" = "Layan-Dark";
+        };
+        xfce4-power-manager = {
+          "lid-action-on-ac" = 1;
+          "lock-screen-suspend-hibernate" = false;
+        };
+        xfce4-desktop = {
+          "desktop-icons/style" = 1;
+        };
       };
     };
   };

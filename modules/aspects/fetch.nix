@@ -48,9 +48,9 @@
           #https://github.com/hexisXz/hexfetch
         ];
       };
-  };
 
-  homeManager.programs.fastfetch = {
-    enable = true;
+    homeManager.programs.fastfetch = {
+      enable = true;
+    };
   };
 }
