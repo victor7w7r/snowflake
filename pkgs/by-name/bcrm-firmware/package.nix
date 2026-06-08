@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs }:
 (pkgs.stdenvNoCC.mkDerivation (final: {
   name = "brcm-firmware";
   src = ./custom/bcrm-firmware.tar;
@@ -9,4 +9,3 @@
     tar -xf ${final.src} -C $out/lib/firmware/brcm
   '';
 }))
-  s

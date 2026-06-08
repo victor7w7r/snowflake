@@ -1,8 +1,4 @@
-{
-  pkgs,
-  stdenvNoCC,
-  self,
-}:
+{ pkgs, stdenvNoCC }:
 stdenvNoCC.mkDerivation rec {
   pname = "AeroFetch";
   version = "HEAD";
