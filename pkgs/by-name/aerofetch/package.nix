@@ -1,16 +1,20 @@
-{ pkgs, stdenvNoCC }:
+{
+  fetchFromGitHub,
+  stdenvNoCC,
+  pkg-config,
+}:
 stdenvNoCC.mkDerivation rec {
-  pname = "AeroFetch";
+  pname = "aerofetch";
   version = "HEAD";
 
-  src = pkgs.fetchFromGitHub {
+  src = fetchFromGitHub {
     owner = "driizzyy";
     repo = pname;
     rev = version;
     sha256 = "sha256-QXNkKGSolReq6F0PnNfBHj2RbwC6+8qgNUD4rJZXWBU=";
   };
 
-  nativeBuildInputs = with pkgs; [ pkg-config ];
+  nativeBuildInputs = [ pkg-config ];
 
   installPhase = ''
     runHook preInstall

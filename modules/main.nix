@@ -1,10 +1,5 @@
 { lib, conf, ... }:
 {
-  flake-file.nixConfig = conf.lib.flake-config // {
-    lazy-trees = true;
-    submodules = true;
-  };
-
   den.default = {
     nixos = {
       system.stateVersion = "26.05";
