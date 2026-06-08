@@ -1,4 +1,9 @@
-{ inputs, __findFile, ... }:
+{
+  den,
+  inputs,
+  __findFile,
+  ...
+}:
 {
   #nix build -L ".#nixosConfigurations.opizero2w.config.system.build.toplevel"
   #nix build -L ".#nixosConfigurations.opizero2w.config.system.build.sdImage"
@@ -17,7 +22,9 @@
     };
 
     aspects.phone = {
-      includes = [ ];
+      includes = [
+        den.aspects.secrets
+      ];
 
       nixos = {
         /*

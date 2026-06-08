@@ -1,4 +1,9 @@
-{ inputs, withSystem, ... }:
+{
+  den,
+  inputs,
+  withSystem,
+  ...
+}:
 {
   flake-file.inputs = {
     pkgs-by-name-for-flake-parts.url = "github:drupol/pkgs-by-name-for-flake-parts";
@@ -10,11 +15,12 @@
   imports = [ inputs.pkgs-by-name-for-flake-parts.flakeModule ];
 
   perSystem =
-    { system, ... }:
+    { pkgs, system, ... }:
     {
+      packages = den.lib.nh.denPackages { fromFlake = true; } pkgs;
       _module.args.pkgs = import inputs.nixpkgs {
         inherit system;
-        pkgsDirectory = ./by-name;
+        pkgsDirectory = ../../pkgs/by-name;
         pkgsNameSeparator = "-";
         overlays = [
           inputs.deploy-rs.overlays.default

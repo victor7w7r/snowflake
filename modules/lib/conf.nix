@@ -1,8 +1,8 @@
 { inputs, ... }:
 {
-  imports = [ (inputs.den.namespace "settings" false) ];
+  imports = [ (inputs.den.namespace "conf" false) ];
 
-  settings.lib = {
+  conf.lib = {
     nix-config = {
       connect-timeout = 5;
       builders-use-substitutes = true;
@@ -82,5 +82,4 @@
       ];
     };
   };
-
 }

@@ -5,12 +5,10 @@
   };
 
   den.aspects.nix.default = {
-
     nixos =
       { inputs', pkgs, ... }:
       {
         imports = [ inputs'.nix-search-tv.packages.x86_64-linux.default ];
-
         environment.systemPackages = with pkgs; [
           alejandra
           cached-nix-shell
@@ -37,6 +35,12 @@
           optnix
           statix
         ];
+        documentation = {
+          enable = false;
+          doc.enable = false;
+          info.enable = false;
+          man.enable = false;
+        };
       };
 
     homeManager =
