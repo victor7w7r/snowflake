@@ -1,25 +1,29 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  bash,
+  imagemagick,
+  stdenvNoCC,
+  fetchFromGitHub,
+}:
+stdenvNoCC.mkDerivation rec {
   pname = "appimage-thumbnailer";
-  version = "1.0.0";
+  version = "main";
 
-  src = pkgs.fetchFromGitHub {
+  src = fetchFromGitHub {
     owner = "realmazharhussain";
-    repo = "appimage-thumbnailer";
-    rev = "HEAD";
+    repo = pname;
+    rev = version;
     sha256 = "sha256-Y7s9qdJIJbUqEP0/6qlTPOtE3efRqL1bx66MJIPgRN4=";
   };
 
-  buildInputs = with pkgs; [
+  buildInputs = [
     bash
     imagemagick
   ];
 
   installPhase = ''
-    mkdir -p $out/bin $out/profiles
-    export PREFIX=$out
-    export DESTDIR=""
-    chmod +x install.sh
-    ./install.sh
+    mkdir -p $out/bin $out/share/thumbnailers
+    mv AppImage-thumbnailer "$out/bin/"
+    mv AppImage-thumbnailer.thumbnailer "$out/share/thumbnailers/"
+    chmod +x $out/bin/AppImage-thumbnailer
   '';
 }

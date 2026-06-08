@@ -1,18 +1,33 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  lib,
+  rustPlatform,
+  fetchFromGitHub,
+  pkg-config,
+  perl,
+  openssl,
+}:
+rustPlatform.buildRustPackage rec {
   pname = "aim";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/mihaigalos/aim/releases/download/1.8.6/aim-1.8.6-x86_64-unknown-linux-gnu.tar.gz";
-    sha256 = "sha256-8b8T0NS071S6zH6HAqxzptvWbUnPkkUbkaMAIuYX7E8=";
+  src = fetchFromGitHub {
+    owner = "mihaigalos";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-p1mjAFKAzvdgQ1Ov8drxHNkYpPg9umf77QTaicCS6oA=";
   };
 
-  dontUnpack = true;
+  cargoHash = "sha256-MPZWb+O1SY/fqTRZZyM9n4ScnzLr0XFAU8a0plSO830=";
 
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/aim
-  '';
+  doCheck = false;
+
+  nativeBuildInputs = [
+    pkg-config
+    perl
+  ];
+
+  buildInputs = lib.singleton openssl;
+
+  #RUSTC_WRAPPER = "sccache";
+  #SCCACHE_DIR = "/nix/var/cache/sccache";
 }

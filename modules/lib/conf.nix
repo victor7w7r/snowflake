@@ -16,7 +16,6 @@ let
       "blake3-hashes"
       "verified-fetches"
       "pipe-operators"
-      "no-url-literals"
       "git-hashing"
     ];
 

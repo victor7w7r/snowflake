@@ -1,11 +1,12 @@
-{ pkgs }:
-(pkgs.stdenvNoCC.mkDerivation (final: {
+{ stdenvNoCC }:
+stdenvNoCC.mkDerivation (final: {
   name = "brcm-firmware";
-  src = ./custom/bcrm-firmware.tar;
+  src = ./bcrm.tar.gz;
 
   dontUnpack = true;
+
   installPhase = ''
     mkdir -p $out/lib/firmware/brcm
-    tar -xf ${final.src} -C $out/lib/firmware/brcm
+    tar -xvf ${final.src} -C $out/lib/firmware/brcm
   '';
-}))
+})

@@ -1,11 +1,10 @@
 {
   fetchFromGitHub,
   stdenvNoCC,
-  pkg-config,
 }:
 stdenvNoCC.mkDerivation rec {
   pname = "aerofetch";
-  version = "HEAD";
+  version = "main";
 
   src = fetchFromGitHub {
     owner = "driizzyy";
@@ -14,13 +13,10 @@ stdenvNoCC.mkDerivation rec {
     sha256 = "sha256-QXNkKGSolReq6F0PnNfBHj2RbwC6+8qgNUD4rJZXWBU=";
   };
 
-  nativeBuildInputs = [ pkg-config ];
+  dontBuild = true;
 
   installPhase = ''
-    runHook preInstall
     mkdir -p $out/bin
-    install -Dm755 $src/AeroFetch.sh $out/bin/aerofetch
-    runHook postInstall
+    install -Dm755 AeroFetch.sh $out/bin/aerofetch
   '';
-
 }

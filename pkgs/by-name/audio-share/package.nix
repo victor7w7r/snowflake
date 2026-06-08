@@ -14,7 +14,7 @@ stdenvNoCC.mkDerivation {
     mkdir -p $out/bin
     tar -xvf $src -C $out
     mv $out/audio-share-server-cmd/bin/as-cmd $out/bin/audio-share
+    rm -rf $out/audio-share-server-cmd/bin/as-cmd
     chmod +x $out/bin/audio-share
   '';
-
 }

@@ -17,7 +17,6 @@
       "blake3-hashes"
       "verified-fetches"
       "pipe-operators"
-      "no-url-literals"
       "git-hashing"
     ];
     extra-substituters = [ "https://cache.numtide.com" ];
