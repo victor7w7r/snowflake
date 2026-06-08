@@ -1,18 +1,19 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ buildGoModule, fetchFromGitHub }:
+buildGoModule rec {
   pname = "cemetery-escape";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/tom-on-the-internet/cemetery-escape/releases/download/0.0.7/cemetery-escape_0.0.7_linux_amd64.tar.gz";
-    sha256 = "sha256-V1xiv81ybdGTIuzA0alSiGMJWAJ7KK6/5ncPuiryNgA=";
+  src = fetchFromGitHub {
+    owner = "tom-on-the-internet";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-7oTeknoFxnMhs6RSswTxF+P7dgSTsJ9O8QG2ZjmgZNg=";
   };
 
-  dontUnpack = true;
+  vendorHash = "sha256-/yOpyvbt+H7AQLXn2gp+6JRaLTDR3hBznOq5L1DUUUQ=";
 
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/cemetery-escape
-  '';
+  ldflags = [
+    "-s"
+    "-w"
+  ];
 }

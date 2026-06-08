@@ -1,18 +1,26 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  lib,
+  rustPlatform,
+  fetchFromGitHub,
+  pkg-config,
+  openssl,
+}:
+rustPlatform.buildRustPackage rec {
   pname = "cargofetch";
-  version = "latest";
+  version = "HEAD";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/arjav0703/cargofetch/releases/download/v1.30/cargofetch";
-    sha256 = "sha256-VpWcfwDHvkIgxEQGgj3gTejneZlfxY48wAFwzBdPUdc=";
+  src = fetchFromGitHub {
+    owner = "arjav0703";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-zAnQWRqt3qVZx+uKlCteKan9p2NqNvDYgv5dFr5/30g=";
   };
 
-  dontUnpack = true;
+  cargoHash = "sha256-y+QcZHQf1tOq72MFJhLRf0ft5EyZZ+OXcG4g1TFkWfE=";
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp $src $out/bin/cargofetch
-    chmod +x $out/bin/cargofetch
-  '';
+  nativeBuildInputs = [
+    pkg-config
+  ];
+
+  buildInputs = lib.singleton openssl;
 }

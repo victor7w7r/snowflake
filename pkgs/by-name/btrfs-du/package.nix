@@ -1,9 +1,9 @@
-{ pkgs, stdenvNoCC }:
+{ fetchFromGitHub, stdenvNoCC }:
 stdenvNoCC.mkDerivation rec {
   pname = "btrfs-du";
-  version = "HEAD";
+  version = "master";
 
-  src = pkgs.fetchFromGitHub {
+  src = fetchFromGitHub {
     owner = "nachoparker";
     repo = pname;
     rev = version;

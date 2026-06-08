@@ -6,7 +6,7 @@ stdenvNoCC.mkDerivation {
   dontUnpack = true;
 
   installPhase = ''
-    mkdir -p $out/lib/firmware/brcm
-    tar -xvf $src -C $out/lib/firmware/brcm
+    mkdir -p $out/lib/firmware
+    tar -xvf $src -C $out/lib/firmware/
   '';
 }

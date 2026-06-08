@@ -1,21 +1,25 @@
-{ pkgs, stdenvNoCC }:
+{
+  fetchurl,
+  sqlite,
+  stdenvNoCC,
+}:
 stdenvNoCC.mkDerivation {
-  pname = "fman";
+  pname = "btrfs-data-recovery";
   version = "latest";
 
-  src1 = pkgs.fetchurl {
+  src1 = fetchurl {
     url = "https://github.com/davispuh/btrfs-data-recovery/releases/download/v1.0.0/btrfs-recovery-map";
     sha256 = "sha256-dRzKq1c/JMxX25CXIz5xzSszfXm5A24rovZ01b/kZUQ=";
   };
 
-  src2 = pkgs.fetchurl {
+  src2 = fetchurl {
     url = "https://github.com/davispuh/btrfs-data-recovery/releases/download/v1.0.0/btrfs-scanner";
     sha256 = "sha256-oV4StV9TPeGEToU9qtKIfyAx2UzTwWLpVutn/FLGMVE=";
   };
 
   dontUnpack = true;
 
-  buildInputs = with pkgs; [ sqlite ];
+  buildInputs = [ sqlite ];
 
   installPhase = ''
     mkdir -p $out/bin

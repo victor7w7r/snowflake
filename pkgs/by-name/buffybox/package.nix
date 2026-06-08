@@ -1,9 +1,20 @@
-{ pkgs, stdenv }:
+{
+  fetchFromGitLab,
+  inih,
+  libdrm,
+  libinput,
+  libxkbcommon,
+  meson,
+  ninja,
+  scdoc,
+  pkg-config,
+  stdenv,
+}:
 stdenv.mkDerivation (finalAttrs: {
   pname = "buffyboard";
   version = "3.3.0-unstable-2025-06-12";
 
-  src = pkgs.fetchFromGitLab {
+  src = fetchFromGitLab {
     domain = "gitlab.postmarketos.org";
     owner = "postmarketOS";
     repo = "buffybox";
@@ -12,16 +23,16 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-l9bIcn5UkpAI6Z6W4rjj20lEAhJn+5GPaiGOVEtENhA=";
   };
 
-  depsBuildBuild = with pkgs; [ pkg-config ];
+  depsBuildBuild = [ pkg-config ];
 
-  nativeBuildInputs = with pkgs; [
+  nativeBuildInputs = [
     meson
     ninja
     pkg-config
     scdoc
   ];
 
-  buildInputs = with pkgs; [
+  buildInputs = [
     inih
     libdrm
     libinput
