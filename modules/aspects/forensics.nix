@@ -4,8 +4,8 @@
     {
       environment.systemPackages = with pkgs; [
         #https://aur.archlinux.org/packages/r-linux
-        #(pkgs.callPackage ./custom/btrfs-du.nix { })
-        #(pkgs.callPackage ./custom/btrfs-data-recovery.nix { })
+        btrfs-data-recovery
+        btrfs-du
         cshatag
         ddrescue
         ddrutility

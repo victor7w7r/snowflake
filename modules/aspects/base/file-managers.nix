@@ -6,6 +6,7 @@
       lib.optional (!isLive) {
         environment.systemPackages = with pkgs; [
           clifm
+          fman
           lf
           joshuto
           superfile
@@ -15,7 +16,6 @@
           walk
           #tuifimanager
           #https://codeberg.org/sylphenix/sff
-          #(pkgs.callPackage ./custom/fman.nix { })
         ];
 
         programs.yazi = {

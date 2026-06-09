@@ -4,21 +4,21 @@
     { isLive, pkgs, ... }:
     lib.optional (!isLive) {
       environment.systemPackages = with pkgs; [
+        aim
         ariang
         axel
         doggo
         gping
+        goto
         hblocks
         lazyssh
         netscanner
         openresolv
-        #rquickshare
         rustscan
         slirp4netns
         sshs
         speedtest-cli
-        #(pkgs.callPackage ./custom/aim.nix { })
-        #(pkgs.callPackage ./custom/goto.nix { })
+        #rquickshare
         #https://github.com/akinoiro/ssh-list
       ];
     };

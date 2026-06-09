@@ -28,7 +28,7 @@
       lib.optional (isMain || isSuperlab) {
         home.packages = [
           inputs'.gestures.packages."x86_64-linux".gestures
-          #(pkgs.callPackage ./custom/tablet-map.nix { })
+          pkgs.tablet-map
         ];
 
         xdg.configFile."gestures.kdl".text =
@@ -47,7 +47,7 @@
           };
           tablet-map = {
             Service = {
-              #ExecStart = "${(pkgs.callPackage ./custom/tablet-map.nix { })}/bin/tablet_map";
+              ExecStart = "${pkgs.tablet-map}/bin/tablet_map";
               Restart = "no";
               StandardOutput = "journal";
               StandardError = "journal";

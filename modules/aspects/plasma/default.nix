@@ -58,16 +58,6 @@
           };
         };
 
-        /*
-          home.packages = [
-            appimage-thumbnailer
-            kf6-servicemenus-rootactions
-            jar-thumbnailer
-            kde-thumbnailer-apk
-            ffmpeg-audio-thumbnailer
-          ];
-        */
-
         services = {
           kdeconnect.enable = true;
           gpg-agent = {
@@ -79,24 +69,25 @@
           };
         };
 
-        home.packages = with pkgs; [ caffeine-ng ];
-      };
-
-    /*
-      home.packages = [
-        pkgs.application-title-bar
-        (pkgs.callPackage ./custom/kde-control-station.nix { })
-        (pkgs.callPackage ./custom/kmenu.nix { })
-        (pkgs.callPackage ./custom/kurve.nix { })
-        (pkgs.callPackage ./custom/kzones.nix { })
-        (pkgs.callPackage ./custom/layan.nix { })
-        (pkgs.callPackage ./custom/maxwell.nix { })
-        (pkgs.callPackage ./custom/panel-spacer-extended.nix { })
-        (pkgs.callPackage ./custom/plasma-drawer.nix { })
-        (pkgs.callPackage ./custom/sticky-window-snapping.nix { })
-        (pkgs.callPackage ./custom/virtual-desktops-only-on-primary.nix { })
-        (pkgs.callPackage ./custom/wallpaper-effects.nix { })
+        home.packages = with pkgs; [
+          application-title-bar
+          appimage-thumbnailer
+          ffmpeg-audio-thumbnailer
+          jar-thumbnailer
+          kde-control-station
+          kde-thumbnailer-apk
+          kf6-servicemenus-rootactions
+          kmenu
+          kurve
+          kzones
+          layan
+          maxwell
+          plasma-drawer
+          panel-spacer-extended
+          sticky-window-snapping
+          virtual-desktops-only-on-primary
+          wallpaper-effects
         ];
-    */
+      };
   };
 }

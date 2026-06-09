@@ -10,12 +10,16 @@
           alsa-utils
           alsa-firmware
           alsa-ucm-conf
+          audio-share
+          cliwrap
+          gspot
+          helvum
           kew
           musikcube
+          lyricstify
           playerctl
           pavucontrol
           pwvucontrol
-          helvum
           psst
           sof-firmware
           spotdl
@@ -30,10 +34,6 @@
           #https://github.com/trizen/clyrics
           #https://github.com/SathyaBhat/spotify-dl
           #https://github.com/foresterre/imagineer
-          #(pkgs.callPackage ./custom/audio-share.nix { })
-          #(pkgs.callPackage ./custom/cliwrap.nix { })
-          #(pkgs.callPackage ./custom/lyricstify.nix { })
-          #(pkgs.callPackage ./custom/gspot.nix { })
         ];
       };
 

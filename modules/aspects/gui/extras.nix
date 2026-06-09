@@ -41,6 +41,7 @@
           #(inputs.thorium.thorium-avx .overrideAttrs (oldAttrs: { }))
           rclone-browser
           fclones-gui
+          jdownloader
           lan-mouse
           legcord
           mailspring
@@ -57,10 +58,9 @@
           rnote
           sticky-notes
           vlc
+          ytdl
 
           #ayugram-desktop
-          #(pkgs.callPackage ./custom/jdownloader.nix { })
-          #(pkgs.callPackage ./custom/ytdl.nix { })
           #vlc-pause-click-plugin vlc-plugin-pipewire vlc-plugin vlc-plugins-all vlc-plugin-ytdl-git
           #https://github.com/Shabinder/SpotiFlyer
           #https://davidepucci.it/doc/spotitube/#installation
@@ -71,7 +71,7 @@
           #https://github.com/trmckay/fzf-open
           #https://github.com/undergroundwires/privacy.sexy
           #natron
-          #sonic-visualiser]
+          #sonic-visualiser
           # https://github.com/paulpacifico/shutter-encoder
           #https://github.com/tkmxqrdxddd/davinci-video-converter
           #https://tahoma2d.org/

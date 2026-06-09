@@ -32,6 +32,7 @@
           {
             systemPackages = with pkgs; [
               fatrace
+              journalview
               kmon
               lazyjournal
               lnav
@@ -42,7 +43,6 @@
               watchexec
               zps
               #nvtopPackages.full
-              #(pkgs.callPackage ./custom/journalview.nix { })
               #https://github.com/jasonwitty/socktop
               #https://github.com/XhuyZ/lazysys
               #pcp

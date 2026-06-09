@@ -31,7 +31,6 @@
       lib.optional isPersistent {
         services.pueue.enable = true;
         programs = {
-          #lsd.enable = true;
           tealdeer.enable = true;
           bottom.enable = true;
           navi.enable = true;

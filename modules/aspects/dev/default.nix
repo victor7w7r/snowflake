@@ -11,24 +11,21 @@
           fw
           jless
           just
+          jwt-ui
           ktlint
+          kyun
+          loc
+          mynav
           posting
           rainfrog
           shellcheck
           tracexec
+          ugm
+          updo
           xh
+          #elia-chat
           #dblab
           #gobang
-          /*
-            (pkgs.callPackage ./custom/elia-chat.nix { })
-            (pkgs.callPackage ./custom/gpterminator.nix { })
-            (pkgs.callPackage ./custom/jwt-ui.nix { })
-            (pkgs.callPackage ./custom/kyun.nix { })
-            (pkgs.callPackage ./custom/loc.nix { })
-            (pkgs.callPackage ./custom/mynav.nix { })
-            (pkgs.callPackage ./custom/ugm.nix { })
-            (pkgs.callPackage ./custom/updo.nix { })
-          */
         ];
 
         programs.direnv = {

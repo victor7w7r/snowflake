@@ -42,29 +42,29 @@
               f2fs-tools
               file
               fsarchiver
+              hf
               gnused
               gnutar
               killall
               lemmeknow
+              #loop
               lsof
               mtools
               ntfs2btrfs
               p7zip
+              #procmux
               progress
+              progressline
               pv
               rsyncy
               sshfs
               sd
               sig
+              texoxide
               tmux
               tre-command
               udiskie
               xz
-              #(pkgs.callPackage ./custom/hf.nix { })
-              #(pkgs.callPackage ./custom/loop.nix { })
-              #(pkgs.callPackage ./custom/procmux.nix { })
-              #(pkgs.callPackage ./custom/progressline.nix { })
-              #(pkgs.callPackage ./custom/texoxide.nix { })
             ]
             ++ lib.optionals isEfi [
               efibooteditor
