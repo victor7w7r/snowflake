@@ -1,6 +1,17 @@
 { lib, ... }:
 {
   den.aspects.hardware = {
+    os =
+      { pkgs, ... }:
+      {
+        environment.systemPackages = with pkgs; [
+          cpulimit
+          cyme
+          edid-generator
+          pciutils
+          usbutils
+        ];
+      };
     nixos =
       {
         isMain,
@@ -12,12 +23,9 @@
         environment.systemPackages =
           with pkgs;
           [
-            cpulimit
-            cyme
             dippi
             dmidecode
             edid-decode
-            edid-generator
             fanctl
             fan2go
             hwinfo
@@ -25,10 +33,8 @@
             iio-sensor-proxy
             lm_sensors
             lshw
-            pciutils
             read-edid
             rwedid
-            usbutils
           ]
           ++ lib.optionals (isMain || isHandheld) [
             bolt

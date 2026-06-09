@@ -13,30 +13,25 @@
   };
 
   den.aspects.emacs = {
-    nixos =
-      {
-        inputs',
-        isPersistent,
-        pkgs,
-        user,
-        ...
-      }:
+    os =
+      { inputs', pkgs, ... }:
       {
         nixpkgs.overlays = [
           inputs'.emacs-overlay.overlay
           inputs'.emacs-config.overlays.default
         ];
-        environment = lib.mkMerge [
-          (lib.mkIf isPersistent {
-            persistence."/nix/persist".users."${user}".directories = lib.mkAfter [
+        environment.systemPackages = with pkgs; [ emacs-nox ];
+      };
+
+    nixos =
+      { isPersistent, user, ... }:
+      {
+        environment.persistence."/nix/persist".users."${user}".directories =
+          lib.optionalAttrs isPersistent
+            [
               ".local/share/emacs"
               ".cache/doom"
             ];
-          })
-          {
-            systemPackages = with pkgs; [ emacs-nox ];
-          }
-        ];
       };
 
     homeManager =

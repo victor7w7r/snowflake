@@ -1,12 +1,11 @@
 { lib, ... }:
 {
   den.aspects.base.file-managers = {
-    nixos =
-      { isLive, pkgs, ... }:
-      lib.optional (!isLive) {
+    os =
+      { isPersistent, pkgs, ... }:
+      lib.optional isPersistent {
         environment.systemPackages = with pkgs; [
           clifm
-          fman
           lf
           joshuto
           superfile
@@ -14,10 +13,7 @@
           tran
           trash-cli
           walk
-          #tuifimanager
-          #https://codeberg.org/sylphenix/sff
         ];
-
         programs.yazi = {
           enable = true;
           /*
@@ -29,9 +25,19 @@
         };
       };
 
+    nixos =
+      { isPersistent, pkgs, ... }:
+      lib.optional isPersistent {
+        environment.systemPackages = with pkgs; [
+          fman
+          #tuifimanager
+          #https://codeberg.org/sylphenix/sff
+        ];
+      };
+
     homeManager =
-      { isLive, ... }:
-      lib.optional (!isLive) {
+      { isPersistent, ... }:
+      lib.optional isPersistent {
         programs = {
           broot.enable = true;
           mc.enable = true;

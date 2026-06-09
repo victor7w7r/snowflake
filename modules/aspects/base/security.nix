@@ -5,9 +5,7 @@
       environment.systemPackages = with pkgs; [
         boxxy
         firejail
-        hexyl
         luksmeta
-        phraze
         veracrypt
       ];
 

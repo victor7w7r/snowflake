@@ -1,13 +1,14 @@
+{ lib, ... }:
 {
   den.aspects.dev.default = {
-    nixos =
-      { pkgs, ... }:
-      {
+    os =
+      { isPersistent, pkgs, ... }:
+      lib.optional isPersistent {
         environment.systemPackages = with pkgs; [
           atac
-          httpie
           dos2unix
           curlie
+          httpie
           fw
           jless
           just
@@ -19,36 +20,41 @@
           posting
           rainfrog
           shellcheck
-          tracexec
           ugm
           updo
           xh
-          #elia-chat
-          #dblab
-          #gobang
         ];
-
         programs.direnv = {
           enable = false;
           enableZshIntegration = true;
           nix-direnv.enable = true;
         };
+        homeManager.programs = {
+          #aichat.enable = true;
+          #aider-chat.enable = true;
+          #meli.enable = true; BUILD
+          #visidata.enable = true;
+          gitui.enable = true;
+          jq.enable = true;
+          lazysql.enable = true;
+          mods.enable = true;
+          pyenv = {
+            enable = true;
+            enableZshIntegration = true;
+            enableBashIntegration = true;
+          };
+        };
       };
 
-    homeManager.programs = {
-      #aichat.enable = true;
-      #aider-chat.enable = true;
-      #meli.enable = true; BUILD
-      #visidata.enable = true;
-      gitui.enable = true;
-      jq.enable = true;
-      lazysql.enable = true;
-      mods.enable = true;
-      pyenv = {
-        enable = true;
-        enableZshIntegration = true;
-        enableBashIntegration = true;
+    nixos =
+      { isPersistent, pkgs, ... }:
+      lib.optional isPersistent {
+        environment.systemPackages = with pkgs; [
+          tracexec
+          #elia-chat
+          #dblab
+          #gobang
+        ];
       };
-    };
   };
 }

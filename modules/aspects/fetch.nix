@@ -12,29 +12,35 @@
   };
 
   den.aspects.fetch = {
-    nixos =
-      { inputs', pkgs, ... }:
+    os =
+      { pkgs, ... }:
       {
         environment.systemPackages = with pkgs; [
           aerofetch
           cargofetch
           countryfetch
           customfetch
-          cpufetch
           envfetch
           freshfetch
           macchina
-          microfetch
           nerdfetch
           octofetch
           onefetch
           pfetch-rs
-          ramfetch
           uwufetch
           treefetch
+        ];
+      };
+
+    nixos =
+      { inputs', pkgs, ... }:
+      {
+        environment.systemPackages = with pkgs; [
+          cpufetch
+          microfetch
+          ramfetch
           inputs'.batfetch.packages.${pkgs.system}.default
           #inputs.swiftfetch.packages.${pkgs.system}.swiftfetch
-
           #https://github.com/xdearboy/mfetch
           #https://gitlab.com/Maxb0tbeep/bestfetch
           #https://github.com/morr0ne/hwfetch

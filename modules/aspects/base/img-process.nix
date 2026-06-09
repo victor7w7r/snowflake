@@ -1,23 +1,36 @@
 { lib, ... }:
 {
-  den.aspects.base.img-process.nixos =
-    { isVisual, pkgs, ... }:
-    lib.optional isVisual {
-      environment.systemPackages = with pkgs; [
-        catimg
-        feh
-        imgcat
-        jfbview
-        lsix
-        mediainfo
-        timg
-        tuicam
-        asciinema-agg
-        dipc
-        jp2a
-        slides
-        ttygif
-        vhs
-      ];
-    };
+  den.aspects.base.img-process = {
+    os =
+      {
+        isVisual,
+        isMainMac,
+        pkgs,
+        ...
+      }:
+      lib.optional (isVisual || isMainMac) {
+        environment.systemPackages = with pkgs; [
+          asciinema-agg
+          catimg
+          dipc
+          feh
+          imgcat
+          jp2a
+          lsix
+          mediainfo
+          slides
+          timg
+          ttygif
+          vhs
+        ];
+      };
+    nixos =
+      { isVisual, pkgs, ... }:
+      lib.optional isVisual {
+        environment.systemPackages = with pkgs; [
+          jfbview
+          tuicam
+        ];
+      };
+  };
 }

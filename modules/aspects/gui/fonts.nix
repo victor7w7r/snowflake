@@ -27,7 +27,7 @@
     };
 
     homePackages =
-      { isLive, pkgs, ... }:
+      { isPersistent, pkgs, ... }:
       {
         fonts.fontconfig.defaultFonts.monospace = [ "JetBrainsMono Nerd Font" ];
         home.packages =
@@ -45,7 +45,7 @@
             #openmoji-color
             open-sans
           ]
-          ++ lib.optionals (!isLive) [
+          ++ lib.optionals (!isPersistent) [
             hack-font
             liberation_ttf
             libertine

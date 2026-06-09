@@ -3,7 +3,6 @@
   flake-file.inputs.gestures.url = "github:ferstar/gestures";
 
   den.aspects.gui.gestures = {
-
     nixos =
       {
         isMain,

@@ -1,7 +1,7 @@
 {
   den.aspects.dev.git = {
-    nixos =
-      { isLive, pkgs, ... }:
+    os =
+      { isPersistent, pkgs, ... }:
       {
         environment.systemPackages =
           with pkgs;
@@ -10,7 +10,7 @@
             git
             git-lfs
           ]
-          ++ lib.optionals (!isLive) [
+          ++ lib.optionals isPersistent [
             #github-copilot-cli
             #jan
             #ollama-rocm
@@ -23,9 +23,9 @@
       };
 
     homeManager =
-      { isLive, pkgs, ... }:
+      { isPersistent, pkgs, ... }:
       {
-        home.packages = with pkgs; [ lazygit ] ++ lib.optionals (!isLive) [ git-credential-manager ];
+        home.packages = with pkgs; [ lazygit ] ++ lib.optionals isPersistent [ git-credential-manager ];
         programs = {
           git = {
             enable = true;

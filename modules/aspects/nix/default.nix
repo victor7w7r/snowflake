@@ -5,28 +5,25 @@
   };
 
   den.aspects.nix.default = {
-    nixos =
-      { inputs', pkgs, ... }:
+    os =
+      { pkgs, ... }:
       {
-        imports = [ inputs'.nix-search-tv.packages.x86_64-linux.default ];
         environment.systemPackages = with pkgs; [
           alejandra
           cached-nix-shell
           comma
+          cachix
           deadnix
           lorri
-          fh
           manix
           namaka
           niv
-          #inputs.nix-alien.packages.${system}.nix-alien
           nix-diff
           nix-du
           nix-health
-          nix-init # !!!!!
+          nix-init
           nix-melt
           nix-output-monitor
-          nixpkgs-review
           nix-search-cli
           nix-tree
           nix-update
@@ -35,18 +32,15 @@
           optnix
           statix
         ];
-        documentation = {
-          enable = false;
-          doc.enable = false;
-          info.enable = false;
-          man.enable = false;
-        };
       };
 
-    homeManager =
-      { pkgs, ... }:
+    nixos =
+      { inputs', pkgs, ... }:
       {
-        home.packages = with pkgs; [ cachix ];
+        imports = [ inputs'.nix-search-tv.packages.x86_64-linux.default ];
+        environment.systemPackages = [
+          #inputs.nix-alien.packages.${system}.nix-alien
+        ];
       };
   };
 }

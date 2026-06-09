@@ -62,7 +62,7 @@ in
     submodules = true;
   };
 
-  conf.lib = {
+  conf = {
     inherit flake-config;
     nix-config = {
       connect-timeout = 5;

@@ -1,6 +1,7 @@
+{ lib, ... }:
 {
   den.aspects.dev.ccache.nixos =
-    { pkgs, ... }:
+    { isPersistent, pkgs, ... }:
     let
       ccacheConfigFile = pkgs.writeText "ccache.conf" ''
         compression = false
@@ -11,7 +12,7 @@
         compiler_check = content
       '';
     in
-    {
+    lib.optional isPersistent {
       nixpkgs.overlays = [
         (final: prev: {
           ccacheWrapper = final.ccacheWrapper.override {

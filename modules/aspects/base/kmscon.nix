@@ -3,12 +3,11 @@
   den.aspects.base.kmscon.nixos =
     {
       isServer,
-      isMainMac,
       isLive,
       pkgs,
       ...
     }:
-    lib.optional (!isLive && !isMainMac && !isServer) {
+    lib.optional (!isLive && !isServer) {
       services.kmscon = {
         enable = true;
         hwRender = false;

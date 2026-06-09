@@ -1,19 +1,27 @@
 {
   den.aspects.base.nettools = {
-    nixos =
+    os =
       { pkgs, ... }:
       {
         environment.systemPackages = with pkgs; [
           curlFull
-          ethtool
           inetutils
-          iptables
-          net-tools
           wget
-          wget2
           wol
         ];
       };
+
+    nixos =
+      { pkgs, ... }:
+      {
+        environment.systemPackages = with pkgs; [
+          ethtool
+          iptables
+          net-tools
+          wget2
+        ];
+      };
+
     homeManager =
       { pkgs, ... }:
       {

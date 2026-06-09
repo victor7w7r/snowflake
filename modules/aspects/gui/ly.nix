@@ -1,14 +1,14 @@
 { lib, ... }:
 {
-  den.aspects.ly.nixos =
+  den.aspects.gui.ly.nixos =
     {
       hasVisualKeyboard,
       isHandheld,
       pkgs,
       ...
     }:
-    {
-      security.pam.services.ly.kwallet = lib.optionalAttrs hasVisualKeyboard {
+    lib.optional hasVisualKeyboard {
+      security.pam.services.ly.kwallet = {
         enable = true;
         package = pkgs.kdePackages.kwallet-pam;
       };

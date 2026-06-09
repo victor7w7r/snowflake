@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  den.aspects.gui.zed = {
+  den.aspects.zed = {
     nixos =
       { isPersistent, user, ... }:
       lib.optional isPersistent {

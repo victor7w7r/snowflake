@@ -1,6 +1,47 @@
 { lib, ... }:
 {
   den.aspects.base.default = {
+    os =
+      { pkgs, ... }:
+      {
+        environment.systemPackages = with pkgs; [
+          atool
+          brush
+          choose
+          cod
+          file
+          hf
+          gnused
+          gnutar
+          lemmeknow
+          #loop
+          lsof
+          hexyl
+          mtools
+          p7zip
+          phraze
+          progress
+          pv
+          rsyncy
+          sshfs
+          sd
+          sig
+          texoxide
+          tmux
+          tre-command
+          udiskie
+          xz
+        ];
+
+        programs = {
+          #bash.blesh.enable = true;
+          less.enable = true;
+          pay-respects.enable = true;
+          skim.enable = true;
+          zsh.enable = true;
+        };
+      };
+
     nixos =
       {
         hasVisualKeyboard,
@@ -31,40 +72,16 @@
           systemPackages =
             with pkgs;
             [
-              atool
               busybox
               btrfs-progs
               btdu
-              brush
-              choose
-              cod
               exfatprogs
               f2fs-tools
-              file
               fsarchiver
-              hf
-              gnused
-              gnutar
               killall
-              lemmeknow
-              #loop
-              lsof
-              mtools
               ntfs2btrfs
-              p7zip
               #procmux
-              progress
               progressline
-              pv
-              rsyncy
-              sshfs
-              sd
-              sig
-              texoxide
-              tmux
-              tre-command
-              udiskie
-              xz
             ]
             ++ lib.optionals isEfi [
               efibooteditor
@@ -85,20 +102,12 @@
         services = {
           envfs.enable = true;
           fstrim.enable = true;
-          thermald.enable = isIntel;
           fwupd.enable = hasVisualKeyboard;
-          orca.enable = lib.mkForce false;
           logrotate.enable = isPersistent;
+          orca.enable = lib.mkForce false;
           speechd.enable = false;
+          thermald.enable = isIntel;
           upower.enable = (!isMain && !isServer && !isGeneric && !isPiZero);
-        };
-
-        programs = {
-          #bash.blesh.enable = true;
-          pay-respects.enable = true;
-          zsh.enable = true;
-          less.enable = true;
-          skim.enable = true;
         };
       };
 
@@ -136,6 +145,7 @@
               update_ms = 500;
             };
           };
+
           nano.enable = false;
           command-not-found.enable = lib.mkDefault false;
           fish.generateCompletions = lib.mkDefault false;
