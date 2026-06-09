@@ -79,7 +79,6 @@
               ];
             };
           */
-          uresourced.enable = hasVisualKeyboard;
           ananicy = lib.optionalAttrs hasVisualKeyboard {
             enable = true;
             package = pkgs.ananicy-cpp;

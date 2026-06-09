@@ -1,32 +1,18 @@
+{ lib, ... }:
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}:
-
-with lib;
-
-let
-  cfg = config.services.uresourced;
-  confFile = pkgs.writeText "uresourced.conf" ''
-    ${cfg.extraConfig}
-  '';
-
-in
-{
-  options.services.uresourced = {
-    enable = mkEnableOption (mdDoc "uresourced");
-
-    package = mkOption {
-      type = types.package;
-      default = pkg;
-      description = "Package (derivation) that provides the uresourced binary";
-    };
-
-    extraConfig = mkOption {
-      type = types.lines;
-      default = ''
+  den.aspects.tweaks.uresourced.nixos =
+    { hasVisualKeyboard, pkgs, ... }:
+    lib.optional hasVisualKeyboard {
+      users.users.uresourced = {
+        description = "uresourced service user";
+        isSystemUser = true;
+        group = "uresourced";
+      };
+      users.groups.uresourced = { };
+      environment.systemPackages = with pkgs; [ uresourced ];
+      systemd.packages = with pkgs; [ uresourced ];
+      systemd.services.uresourced.wantedBy = [ "multi-user.target" ];
+      environment.etc."uresourced.conf".source = ''
         [Global]
         # Protect at maximum 10% of available memory. user.slice system will get a
         # MemoryLow allocation of
@@ -74,23 +60,5 @@ in
         BoostCPUWeightInc=200
         BoostIOWeightInc=200
       '';
-      description = mdDoc ''
-        Extra configuration directives that should be added to
-        `uresourced.conf`
-      '';
     };
-  };
-
-  config = mkIf cfg.enable {
-    environment.systemPackages = [ cfg.package ];
-    users.users.uresourced = {
-      description = "uresourced service user";
-      isSystemUser = true;
-      group = "uresourced";
-    };
-    users.groups.uresourced = { };
-    systemd.packages = [ cfg.package ];
-    systemd.services.uresourced.wantedBy = [ "multi-user.target" ];
-    environment.etc."uresourced.conf".source = confFile;
-  };
 }
