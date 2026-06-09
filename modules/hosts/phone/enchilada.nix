@@ -1,4 +1,4 @@
-{ phone, ... }:
+{ den, phone, ... }:
 {
   den = {
     hosts.aarch64-linux.phone-enchilada = {
@@ -7,7 +7,32 @@
     };
 
     aspects.phone-enchilada = {
-      includes = [ phone.common ];
+      includes = with den.aspects; [
+        phone.common
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        gui._
+        initrd._
+        networking._
+        nix._
+        plasma._
+        sound._
+        tweaks._
+        users._
+        vim._
+        virtualisation._
+        zen._
+
+        bluetooth
+        btrfs
+        fetch
+        hardware
+        kitty
+        secrets
+        zed
+      ];
 
       nixos = {
         zramSwap = {

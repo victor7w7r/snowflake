@@ -1,4 +1,9 @@
-{ inputs, __findFile, ... }:
+{
+  den,
+  inputs,
+  __findFile,
+  ...
+}:
 {
   flake-file.inputs.nixos-wsl = {
     url = "github:nix-community/nixos-wsl";
@@ -16,7 +21,21 @@
     };
 
     aspects.wsl = {
-      includes = [ ];
+      includes = with den.aspects; [
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        networking._
+        nix._
+        tweaks._
+        users._
+        vim._
+
+        btrfs
+        fetch
+        secrets
+      ];
 
       nixos = {
       };

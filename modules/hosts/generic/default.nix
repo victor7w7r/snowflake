@@ -1,4 +1,9 @@
-{ inputs, generic, ... }:
+{
+  den,
+  inputs,
+  generic,
+  ...
+}:
 {
   imports = [ (inputs.den.namespace "generic" false) ];
 
@@ -8,8 +13,19 @@
       users.snowflake = { };
     };
     aspects.generic = {
-      includes = [
+      includes = with den.aspects; [
         generic.disks
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        initrd._
+        networking._
+        nix._
+        tweaks._
+        users._
+        vim._
+        fetch._
       ];
 
       /*

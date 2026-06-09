@@ -2,7 +2,6 @@
   den,
   lib,
   live,
-  __findFile,
   ...
 }:
 {
@@ -12,15 +11,27 @@
       users.snowflake = { };
     };
     aspects.graphical-live = {
-      includes = [
+      includes = with den.aspects; [
         live.common
-        <initrd>
-        <bluetooth>
-        <base>
-        <gui>
-        <fetch>
-        <xfce>
         (den.batteries.tty-autologin "snowflake")
+
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        gui._
+        initrd._
+        networking._
+        nix._
+        tweaks._
+        users._
+        vim._
+
+        bluetooth
+        btrfs
+        hardware
+        kitty
+        secrets
       ];
 
       nixos = {

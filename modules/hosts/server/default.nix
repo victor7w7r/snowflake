@@ -1,4 +1,9 @@
-{ inputs, server, ... }:
+{
+  den,
+  inputs,
+  server,
+  ...
+}:
 {
   imports = [ (inputs.den.namespace "server" false) ];
 
@@ -14,9 +19,30 @@
     };
 
     aspects.server = {
-      includes = [
+      includes = with den.aspects; [
         server.disks-logical
         server.disks-physical
+
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        initrd._
+        networking._
+        nix._
+        server._
+        tweaks._
+        users._
+        virtualisation._
+        vim._
+
+        btrfs
+        fetch
+        forensics
+        hardware
+        secrets
+        xfce
+        zed
       ];
 
       nixos =

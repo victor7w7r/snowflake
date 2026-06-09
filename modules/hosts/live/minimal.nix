@@ -2,7 +2,6 @@
   den,
   lib,
   live,
-  __findFile,
   ...
 }:
 {
@@ -12,12 +11,24 @@
       users.snowflake = { };
     };
     aspects.minimal-live = {
-      includes = [
+      includes = with den.aspects; [
         live.common
-        <base>
-        <fetch>
-        <initrd>
         (den.batteries.tty-autologin "snowflake")
+
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        initrd._
+        networking._
+        nix._
+        tweaks._
+        users._
+        vim._
+
+        btrfs
+        hardware
+        secrets
       ];
       nixos = {
         isoImage.edition = lib.mkOverride 500 "minimal";

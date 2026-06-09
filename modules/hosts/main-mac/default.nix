@@ -1,8 +1,6 @@
 {
+  den,
   inputs,
-  lib,
-  settings,
-  __findFile,
   ...
 }:
 {
@@ -65,7 +63,22 @@
 
     # sudo -H nix --extra-experimental-features "nix-command flakes" run nix-darwin/master#darwin-rebuild -- switch --flake .#macmini
     aspects.main-mac = {
-      includes = [
+      includes = with den.aspects; [
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        nix._
+        users._
+        vim._
+        zen._
+
+        android
+        fetch
+        forensics
+        hardware
+        kitty
+        zed
       ];
     };
   };

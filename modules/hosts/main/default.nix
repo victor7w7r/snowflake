@@ -1,4 +1,9 @@
-{ inputs, main, ... }:
+{
+  den,
+  inputs,
+  main,
+  ...
+}:
 {
   imports = [ (inputs.den.namespace "main" false) ];
   #nixos-hardware.nixosModules.apple-t2
@@ -10,8 +15,34 @@
     };
 
     aspects.main = {
-      includes = [
+      includes = with den.aspects; [
         main.disks
+
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        gui._
+        initrd._
+        networking._
+        nix._
+        plasma._
+        sound._
+        tweaks._
+        users._
+        vim._
+        virtualisation._
+        zen._
+
+        android
+        bluetooth
+        btrfs
+        fetch
+        forensics
+        hardware
+        kitty
+        secrets
+        zed
       ];
       #audioT2 = (pkgs.callPackage ./custom/t2-pipewire.nix { });
       nixos = {

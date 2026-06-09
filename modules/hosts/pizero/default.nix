@@ -1,7 +1,6 @@
 {
   den,
   inputs,
-  __findFile,
   ...
 }:
 {
@@ -22,8 +21,23 @@
     };
 
     aspects.phone = {
-      includes = [
-        den.aspects.secrets
+      includes = with den.aspects; [
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        initrd._
+        networking._
+        nix._
+        tweaks._
+        users._
+        virtualisation._
+        vim._
+
+        btrfs
+        fetch
+        hardware
+        secrets
       ];
 
       nixos = {

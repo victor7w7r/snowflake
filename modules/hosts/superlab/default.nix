@@ -1,4 +1,4 @@
-{ inputs, __findFile, ... }:
+{ den, inputs, ... }:
 {
   imports = [ (inputs.den.namespace "superlab" false) ];
 
@@ -9,7 +9,33 @@
     };
 
     aspects.superlab = {
-      includes = [ ];
+      includes = with den.aspects; [
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        gui._
+        initrd._
+        networking._
+        nix._
+        plasma._
+        sound._
+        tweaks._
+        users._
+        vim._
+        virtualisation._
+        zen._
+
+        android
+        bluetooth
+        btrfs
+        fetch
+        forensics
+        hardware
+        kitty
+        secrets
+        zed
+      ];
 
       nixos = {
       };

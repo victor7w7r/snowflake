@@ -6,7 +6,12 @@
 #mount -o $OPTS /dev/sde18 /mnt && rm -rf /mnt/* && tar --zstd -xvf store.tar.zst -C /mnt/
 
 #(import "${inputs.mobile-nixos}/modules/module-list.nix");
-{ lib, phone, ... }:
+{
+  den,
+  lib,
+  phone,
+  ...
+}:
 {
   den = {
     hosts.aarch64-linux.phone-fajita = {
@@ -14,9 +19,31 @@
       users.victor7w7r = { };
     };
     aspects.phone-fajita = {
-      includes = [
+      includes = with den.aspects; [
         phone.common
-        #tarball
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        gui._
+        initrd._
+        networking._
+        nix._
+        plasma._
+        sound._
+        tweaks._
+        users._
+        vim._
+        virtualisation._
+        zen._
+
+        bluetooth
+        btrfs
+        fetch
+        hardware
+        kitty
+        secrets
+        zed
       ];
 
       nixos =

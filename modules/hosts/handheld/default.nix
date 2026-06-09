@@ -1,4 +1,5 @@
 {
+  den,
   inputs,
   lib,
   handheld,
@@ -14,12 +15,38 @@
       users.victor7w7r = { };
     };
     aspects.handheld = {
-      includes = [
+      includes = with den.aspects; [
         handheld.disks
         handheld.hardware
         handheld.initrd
         handheld.kernel
         handheld.services
+
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        gui._
+        initrd._
+        networking._
+        nix._
+        plasma._
+        sound._
+        tweaks._
+        users._
+        vim._
+        virtualisation._
+        zen._
+
+        android
+        bluetooth
+        btrfs
+        fetch
+        gaming
+        hardware
+        kitty
+        secrets
+        zed
       ];
 
       nixos =
