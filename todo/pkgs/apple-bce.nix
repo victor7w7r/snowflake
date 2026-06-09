@@ -22,6 +22,7 @@ stdenvClang.mkDerivation rec {
     "pic"
     "format"
   ];
+
   nativeBuildInputs =
     with pkgs;
     kernel.moduleBuildDependencies

@@ -1,31 +1,9 @@
+{ lib, ... }:
 {
-  config,
-  lib,
-  pkgs,
-}:
-with lib;
-let
-  cfg = config.services.memavaild;
-  confFile = pkgs.writeText "memavaild.conf" ''
-    ${cfg.extraConfig}
-  '';
-  pkg = pkgs.stdenv.mkDerivation rec {
-
-  };
-in
-{
-  options.services.memavaild = {
-    enable = mkEnableOption (mdDoc "memavaild");
-
-    package = mkOption {
-      type = types.package;
-      default = pkg;
-      description = "Package (derivation) that provides the memavaild binary";
-    };
-
-    extraConfig = mkOption {
-      type = types.lines;
-      default = ''
+  den.aspects.tweaks.memavalid.nixos =
+    { hasVisualKeyboard, pkgs, ... }:
+    let
+      confFile = ''
         ## This is memavaild config file.
         ## Lines starting with $ contains required config keys and values.
         ## Lines starting with @ contain optional config keys that may be repeated.
@@ -76,24 +54,18 @@ in
         ## alias idle-run='systemd-run --slice=idle.slice --shell'  # on modern Distros
         ## alias idle-run='systemd-run --setenv=XPWD=$PWD --slice=idle.slice --uid=$UID --gid=$UID -t $SHELL'  # on Debian 9
       '';
-      description = mdDoc ''
-        Extra configuration directives that should be added to
-        `memavaild.conf`
-      '';
+    in
+    lib.optional hasVisualKeyboard {
+      users.users.memavaild = {
+        description = "memavaild service user";
+        isSystemUser = true;
+        group = "memavaild";
+      };
+      users.groups.memavaild = { };
+      environment.systemPackages = with pkgs; [ memavalid ];
+      systemd.packages = with pkgs; [ memavalid ];
+      systemd.services.memavaild.wantedBy = [ "multi-user.target" ];
+      systemd.services.memavaild.restartTriggers = [ confFile ];
+      environment.etc."memavaild.conf".source = confFile;
     };
-  };
-
-  config = mkIf cfg.enable {
-    environment.systemPackages = [ cfg.package ];
-    users.users.memavaild = {
-      description = "memavaild service user";
-      isSystemUser = true;
-      group = "memavaild";
-    };
-    users.groups.memavaild = { };
-    systemd.packages = [ cfg.package ];
-    systemd.services.memavaild.wantedBy = [ "multi-user.target" ];
-    systemd.services.memavaild.restartTriggers = [ confFile ];
-    environment.etc."memavaild.conf".source = confFile;
-  };
 }

@@ -10,6 +10,10 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs-unstable.url = "github:/nixos/nixpkgs/nixpkgs-unstable";
     nixpkgs-master.url = "github:NixOS/nixpkgs/master";
+    xrlinux = {
+      url = "github:wheaney/XRLinuxDriver";
+      flake = false;
+    };
   };
 
   imports = [

@@ -1,18 +1,33 @@
-{ pkgs }:
-pkgs.stdenv.mkDerivation {
+{
+  cmake,
+  curl,
+  git,
+  inputs,
+  json_c,
+  libusb1,
+  libevdev,
+  libffi,
+  openssl,
+  pkg-config,
+  python3,
+  stdenv,
+  system,
+  wayland,
+}:
+stdenv.mkDerivation {
   pname = "xrlinuxdriver";
   version = "2.1.5";
 
   src = inputs.xrlinux;
 
-  nativeBuildInputs = with pkgs; [
+  nativeBuildInputs = [
     cmake
     pkg-config
     (python3.withPackages (ps: with ps; [ pyyaml ]))
     git
   ];
 
-  buildInputs = with pkgs; [
+  buildInputs = [
     libusb1
     libevdev
     openssl

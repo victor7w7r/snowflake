@@ -92,6 +92,15 @@
         networking.wireless.enable = true;
         systemd.tmpfiles.rules = [ "L+ /lib/firmware - - - - /run/current-system/firmware" ];
 
+        /*
+          pkgs.buildUBoot {
+          defconfig = "orangepi_zero2w_defconfig";
+          extraMeta.platforms = [ "aarch64-linux" ];
+          BL31 = "${pkgs.armTrustedFirmwareAllwinnerH616}/bl31.bin";
+          filesToInstall = [ "u-boot-sunxi-with-spl.bin" ];
+          };
+        */
+
         boot = {
           kernelParams = [
             "earlycon"
