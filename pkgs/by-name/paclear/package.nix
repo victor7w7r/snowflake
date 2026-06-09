@@ -1,18 +1,19 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ buildGoModule, fetchFromGitHub }:
+buildGoModule rec {
   pname = "paclear";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/orangekame3/paclear/releases/download/v0.0.13/paclear_Linux_x86_64.tar.gz";
-    sha256 = "sha256-MILLv5GoqJXYc0vU5mSCBpLJFi+9YC+jZ1t/kkB1asM=";
+  src = fetchFromGitHub {
+    owner = "orangekame3";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-Q4uY5aEcQKKLxhBGzmLdOy/bLG0/hpFRkF10wA68Ic0=";
   };
 
-  dontUnpack = true;
+  vendorHash = "sha256-VE3nnUO3A/HkaoGXef+zuPT2VubWiDfiiSils0F0l74=";
 
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/paclear
-  '';
+  ldflags = [
+    "-s"
+    "-w"
+  ];
 }

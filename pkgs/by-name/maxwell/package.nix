@@ -1,12 +1,12 @@
 { pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+stdenvNoCC.mkDerivation rec {
   pname = "maxwell";
-  version = "1.0.0";
+  version = "main";
 
   src = pkgs.fetchFromGitHub {
     owner = "wilversings";
-    repo = "maxwell";
-    rev = "HEAD";
+    repo = pname;
+    rev = version;
     sha256 = "sha256-rDjfiZ7PEioh8xS2jWNRDIVhOWNiIm2ft6tNX5ZkeT4=";
   };
 

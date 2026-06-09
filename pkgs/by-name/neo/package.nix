@@ -1,18 +1,33 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  autoconf,
+  automake,
+  ncurses,
+  fetchFromGitHub,
+  pkg-config,
+  stdenv,
+}:
+stdenv.mkDerivation rec {
   pname = "neo";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/st3w/neo/releases/download/v0.6.1/neo-0.6.1.tar.gz";
-    sha256 = "sha256-pV5O1e/QpK8kjRYBinqq07YX7x06wF0pKiWKOKr0ank=";
+  src = fetchFromGitHub {
+    owner = "st3w";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-wqXCmm2CAp+xgNWMsK17lW9PdFqVPBh+N156qivDdC0=";
   };
 
-  dontUnpack = true;
+  buildInputs = [ ncurses ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/neo
+  nativeBuildInputs = [
+    pkg-config
+    autoconf
+    automake
+  ];
+
+  preConfigure = ''
+    ./autogen.sh
   '';
+
+  makeFlags = [ "PREFIX=$(out)" ];
 }

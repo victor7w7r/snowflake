@@ -1,18 +1,14 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ fetchFromGitHub, rustPlatform }:
+rustPlatform.buildRustPackage rec {
   pname = "kyun";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/lennart-finke/kyun/releases/download/v0.02/kyun";
-    sha256 = "sha256-saj7fm8vClf0hzxJL9npSus9D4vDwdCGrPrt6b2iXe0=";
+  src = fetchFromGitHub {
+    owner = "lennart-finke";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-8u7HWBL7wUI+Po1RY5FidAj1VEN+grEPIzqfgvSiZ6U=";
   };
 
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    cp $src $out/bin/kyun
-    chmod +x $out/bin/kyun
-  '';
+  cargoHash = "sha256-Mqv3iPdbC1UElVtQynBeEaZfNJaIr2sFs3IYCB/SQ/c=";
 }

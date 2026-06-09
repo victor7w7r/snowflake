@@ -1,21 +1,20 @@
-{ pkgs, rustPlatform }:
+{
+  pkg-config,
+  fetchFromGitHub,
+  rustPlatform,
+}:
 rustPlatform.buildRustPackage rec {
   pname = "hf";
-  version = "0.5.1";
+  version = "develop";
 
-  src = pkgs.fetchFromGitHub {
+  src = fetchFromGitHub {
     owner = "sorairolake";
     repo = pname;
-    rev = "v${version}";
-    sha256 = "sha256-NFBFZ4o5HG5iVFgkH2XOq7pc03vRXbScU2NFQwz3oiA=";
+    rev = version;
+    sha256 = "sha256-W7KCoJ/uMQKrh6r4K/Ln/9sfQKa/+Rxe6zz6Xa5ZPak=";
   };
 
-  nativeBuildInputs = with pkgs; [
-    pkg-config
-    sccache
-  ];
+  cargoHash = "sha256-8rKEQVlxeGkvF61dbFmugfPdee7HlWQMFY9IWwBH6xQ=";
 
-  RUSTC_WRAPPER = "sccache";
-  SCCACHE_DIR = "/nix/var/cache/sccache";
-  cargoLock.lockFile = "${src}/Cargo.lock";
+  nativeBuildInputs = [ pkg-config ];
 }

@@ -1,21 +1,19 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ buildGoModule, fetchFromGitHub }:
+buildGoModule rec {
   pname = "goto";
-  version = "latest";
+  version = "develop";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/grafviktor/goto/releases/download/v1.5.0/goto-v1.5.0.zip";
-    sha256 = "sha256-iBAgKYhu6v82+2DdINdVsAFWQRw6zQZWgA1FlzNKkwk=";
+  src = fetchFromGitHub {
+    owner = "grafviktor";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-Bw+GjwEWt0vZDJWb3WpO3fBDTZR2IVAhiYqsMSVLFbk=";
   };
 
-  nativeBuildInputs = with pkgs; [ unzip ];
-  dontUnpack = true;
+  vendorHash = "sha256-vED3QySeVRtk0ZeFSXpnQuCThsiNkVW6sNpJbrE8JV4=";
 
-  installPhase = ''
-    mkdir -p $out/bin
-    unzip $src -d $out/
-    mv $out/goto-v1.5.0/gg-lin $out/bin/
-    chmod +x $out/bin/gg-lin
-  '';
-
+  ldflags = [
+    "-s"
+    "-w"
+  ];
 }

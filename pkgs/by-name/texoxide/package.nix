@@ -1,18 +1,19 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  rustPlatform,
+  fetchFromGitHub,
+  pkg-config,
+}:
+rustPlatform.buildRustPackage rec {
   pname = "texoxide";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/arxari-archive/texoxide/releases/download/v1.0.2/texoxide-x86_64-unknown-linux-gnu";
-    sha256 = "sha256-lKFzMD3EzigCBQYwCiw+m+ayVz0R5ssQTeSIKB4Qnjw=";
+  src = fetchFromGitHub {
+    owner = "arxari-archive";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-wB/ojnWwLwsbPoRMEWqwCiUwsHeURWbONetUW8uRLQA=";
   };
+  cargoHash = "sha256-aM1wQbKZsYb644rDqg6cnFwcigT/xU4in+YzDLf2K5o=";
 
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    cp $src $out/bin/texoxide
-    chmod +x $out/bin/texoxide
-  '';
+  nativeBuildInputs = [ pkg-config ];
 }

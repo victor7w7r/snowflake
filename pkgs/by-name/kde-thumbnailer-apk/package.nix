@@ -1,28 +1,36 @@
 {
-  lib,
-  pkgs,
+  fetchFromGitHub,
+  pkg-config,
+  kdePackages,
+  libzip,
+  cmake,
   stdenv,
+  shared-mime-info,
 }:
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   pname = "kde-thumbnailer-apk";
-  version = "1.0.0";
+  version = "main";
 
-  src = pkgs.fetchFromGitLab {
+  src = fetchFromGitHub {
     owner = "z3ntu";
-    repo = "kde-thumbnailer-apk";
-    rev = "HEAD";
-    sha256 = lib.fakeSha256;
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-ANh9K6NLN261ByAays4Oh2CC7vnf/qLoLf9VlEENLv4=";
   };
 
-  nativeBuildInputs = with pkgs; [
+  nativeBuildInputs = [
     cmake
     pkg-config
+    kdePackages.extra-cmake-modules
+    shared-mime-info
   ];
 
-  buildInputs = with pkgs; [
+  buildInputs = [
     kdePackages.kio
     libzip
   ];
+
+  dontWrapQtApps = true;
 
   configurePhase = "cmake -B build -DCMAKE_INSTALL_PREFIX=$out -DCMAKE_INSTALL_LIBDIR=lib";
   buildPhase = "make -C build";

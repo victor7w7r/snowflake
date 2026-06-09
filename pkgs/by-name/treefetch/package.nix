@@ -1,18 +1,19 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  rustPlatform,
+  fetchFromGitHub,
+  pkg-config,
+}:
+rustPlatform.buildRustPackage rec {
   pname = "treefetch";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/angelofallars/treefetch/releases/download/v2.0.0/treefetch";
-    sha256 = "sha256-GoNbr6dezS8YpTw+DXPPdCpXkQavA8TEWeX4yHPuUYc=";
+  src = fetchFromGitHub {
+    owner = "angelofallars";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-FDiulTit492KwV46A3qwjHQwzpjVJvIXTfTrMufXd5k=";
   };
+  cargoHash = "sha256-cbJ3Xr9oxMTfEtjcqeFL8c76p8bMMf3lbcdGU3cGvRA=";
 
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    cp $src $out/bin/treefetch
-    chmod +x $out/bin/treefetch
-  '';
+  nativeBuildInputs = [ pkg-config ];
 }

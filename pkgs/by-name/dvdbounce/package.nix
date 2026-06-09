@@ -1,25 +1,54 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
-  pname = "dvdbounce";
+{
+  cmake,
+  pkg-config,
+  sfml_2,
+  cxxopts,
+  libx11,
+  libxext,
+  libxrender,
+  fetchFromGitHub,
+  stdenv,
+}:
+stdenv.mkDerivation rec {
+  pname = "master";
   version = "0.0.41";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/George-lewis/DVDBounce/releases/download/v1.31/Linux-Release-v1.31-x64.zip";
-    sha256 = "sha256-4WM1ABAFvsCt987uN2HsOdDLO5LS+pWG+0CzlRuGQb4=";
+  src = fetchFromGitHub {
+    owner = "George-lewis";
+    repo = "DVDBounce";
+    rev = pname;
+    sha256 = "sha256-S/0sc4Thj1gZGSOxl9bcY+VKcYGhEDi3HzPsBdhKatU=";
   };
 
-  buildInputs = with pkgs; [
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+  ];
+
+  buildInputs = [
+    sfml_2
+    cxxopts
     libx11
     libxext
     libxrender
   ];
 
-  nativeBuildInputs = with pkgs; [ unzip ];
-  dontUnpack = true;
+  postPatch = ''
+    sed -i '/conan/Id' CMakeLists.txt || true
+    sed -i '/Conan/Id' CMakeLists.txt || true
+
+    substituteInPlace src/config.cpp --replace "cxxopts::OptionException" "const std::exception&"
+
+    cat << 'EOF' >> CMakeLists.txt
+    find_package(SFML 2 REQUIRED COMPONENTS graphics window system)
+    find_package(cxxopts REQUIRED)
+    target_link_libraries(dvdbounce PRIVATE sfml-graphics sfml-window sfml-system cxxopts::cxxopts)
+    EOF
+  '';
 
   installPhase = ''
     mkdir -p $out/bin
-    unzip $src -d $out/bin/
-    chmod +x $out/bin/dvdbounce
+    cp dvdbounce $out/bin/ || cp bin/dvdbounce $out/bin/
+    cp -r ../resources $out/bin/
   '';
 }

@@ -1,18 +1,18 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ buildGoModule, fetchFromGitHub }:
+buildGoModule rec {
   pname = "gspot";
-  version = "latest";
+  version = "master";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/abs3ntdev/gspot/releases/download/v0.0.35/gspot_Linux_x86_64.tar.gz";
-    sha256 = "sha256-OZOeF5g/jVYLgd0ibnkzXBSTqhgeHuwUJIkTg5JoBUE=";
+  src = fetchFromGitHub {
+    owner = "abs3ntdev";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-/4P6x/zQz1voOavpWdT6f9JCZQpMlX/QTQUXhftYsus=";
   };
+  vendorHash = "sha256-HbPPGSL2qfGDYAoyoaPaFK4Urngtc87OWEuHPGtqqYU=";
 
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/gspot
-  '';
+  ldflags = [
+    "-s"
+    "-w"
+  ];
 }

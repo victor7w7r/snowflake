@@ -1,9 +1,9 @@
-{ pkgs, stdenvNoCC }:
+{ fetchFromGitHub, stdenvNoCC }:
 stdenvNoCC.mkDerivation {
   pname = "uwe5622-firmware";
   version = "4050e02";
 
-  src = pkgs.fetchFromGitHub {
+  src = fetchFromGitHub {
     owner = "armbian";
     repo = "firmware";
     rev = "4050e02da2dce2b74c97101f7964ecfb962f5aec";

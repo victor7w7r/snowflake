@@ -1,18 +1,19 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ buildGoModule, fetchFromGitHub }:
+buildGoModule rec {
   pname = "ugm";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/ariasmn/ugm/releases/download/v1.8.0/ugm_1.8.0_linux_amd64";
-    sha256 = "sha256-wAvgbRQubjtmxjI4Z6pNy2LDTJXvpSghFBWX/9tjXC4=";
+  src = fetchFromGitHub {
+    owner = "ariasmn";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-W4oHJAEppb17t1kxKxDF5fVZkqhOtvm7gCtlmSg7YFA=";
   };
 
-  dontUnpack = true;
+  vendorHash = "sha256-W9v52cxhXdNyW5RGk+SoA1u7Yid+63YYdd9YaGKEWDs=";
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp $src $out/bin/ugm
-    chmod +x $out/bin/ugm
-  '';
+  ldflags = [
+    "-s"
+    "-w"
+  ];
 }

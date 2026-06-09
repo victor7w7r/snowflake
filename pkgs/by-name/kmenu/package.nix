@@ -1,12 +1,12 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ fetchFromGitHub, stdenvNoCC }:
+stdenvNoCC.mkDerivation rec {
   pname = "kMenu";
   version = "1.0.0";
 
-  src = pkgs.fetchFromGitHub {
+  src = fetchFromGitHub {
     owner = "51n7";
-    repo = "kMenu";
-    rev = "HEAD";
+    repo = pname;
+    rev = version;
     sha256 = "sha256-Ium+RmV8zieSqHFZul4MdRZFKPUKmJVCoo2OoLCrwzk=";
   };
 

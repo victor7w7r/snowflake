@@ -1,20 +1,33 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  stdenvNoCC,
+  fetchurl,
+  unzip,
+}:
+let
+  url = "https://github.com/kattouf/ProgressLine/releases/download";
+in
+stdenvNoCC.mkDerivation rec {
   pname = "progressline";
-  version = "latest";
+  version = "0.2.4";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/kattouf/ProgressLine/releases/download/0.2.4/progressline-0.2.4-aarch64-unknown-linux-gnu.zip";
+  srcArm = fetchurl {
+    url = "${url}/${version}/progressline-0.2.4-aarch64-unknown-linux-gnu.zip";
     sha256 = "sha256-6aZuKn1LpsEhX23V9O2Y08zbZM2SckAh3R5uI+0isKE=";
   };
 
+  srcAmd = fetchurl {
+    url = "${url}/${version}/progressline-0.2.4-x86_64-unknown-linux-gnu.zip";
+    sha256 = "sha256-dr+U9v9WtZGrJGoQbRF29MIM5CvRO1+jjNTUJschGdM=";
+  };
+
+  nativeBuildInputs = [ unzip ];
   dontUnpack = true;
 
-  nativeBuildInputs = with pkgs; [ unzip ];
-
   installPhase = ''
-    mkdir -p $out/bin
-    unzip $src -d $out/bin/
+    mkdir -p $out/bin $out/temp
+    unzip ${if stdenvNoCC.hostPlatform.isAarch64 then "$srcArm" else "$srcAmd"} -d $out/temp
+    mv $out/temp/progressline $out/bin/
+    rm -rf $out/temp
     chmod +x $out/bin/progressline
   '';
 }

@@ -1,17 +1,16 @@
-{ pkgs, stdenv }:
-stdenv.mkDerivation {
+{ rustPlatform, fetchFromGitHub }:
+rustPlatform.buildRustPackage rec {
   pname = "envfetch";
-  version = "latest";
-  src = pkgs.fetchurl {
-    url = "https://github.com/ankddev/envfetch/releases/download/v2.1.2/envfetch-linux-amd64";
-    sha256 = "sha256-LTw9eIaPHXWEZuMYUhwt3lxKoqHH3+i0A69oqcD5nVY=";
+  version = "main";
+
+  src = fetchFromGitHub {
+    owner = "ankddev";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-NIlc/vxu8Y9bVMx2exosKZAVAcGbQAmOnjGxAHgNis0=";
   };
 
-  dontUnpack = true;
+  doCheck = false;
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp $src $out/bin/envfetch
-    chmod +x $out/bin/envfetch
-  '';
+  cargoHash = "sha256-FPhfhSacdFrWEJg97hyzAbTxKTVkKhIXy4TKOClVOvs=";
 }

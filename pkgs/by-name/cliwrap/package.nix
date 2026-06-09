@@ -1,7 +1,7 @@
 { pkgs, stdenvNoCC }:
 stdenvNoCC.mkDerivation rec {
   pname = "cliwrap";
-  version = "HEAD";
+  version = "main";
 
   src = pkgs.fetchFromGitHub {
     owner = "islemci";

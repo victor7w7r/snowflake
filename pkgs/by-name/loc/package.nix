@@ -1,18 +1,17 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  rustPlatform,
+  fetchFromGitHub,
+}:
+rustPlatform.buildRustPackage rec {
   pname = "loc";
-  version = "latest";
+  version = "master";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/cgag/loc/releases/download/v0.3.4/loc-v0.3.4-x86_64-unknown-linux-gnu.tar.gz";
-    sha256 = "sha256-GDQlhkDQbirJTsp3mJJ0j62gjFPmLAO6GaxssxvfBMM=";
+  src = fetchFromGitHub {
+    owner = "cgag";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-GYnXoiYAePf6paExmeDF3XDZ8mSF5hmmXkTvxSpOj+U=";
   };
 
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/loc
-  '';
+  cargoHash = "sha256-3ebajlV0ONO2ggMCtfwWLnOlGDi7dx1iL+FpyG8OSI0=";
 }

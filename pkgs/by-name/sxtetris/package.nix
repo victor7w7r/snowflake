@@ -1,18 +1,21 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  alsa-lib,
+  rustPlatform,
+  fetchFromGitHub,
+  pkg-config,
+}:
+rustPlatform.buildRustPackage rec {
   pname = "sxtetris";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/shixinhuang99/sxtetris/releases/download/1.4.0/sxtetris-1.4.0-x86_64-unknown-linux-gnu.tar.gz";
-    sha256 = "sha256-21KfKh/Lw6KP8NkjV6qn8rGQYMC9+4xwr2Azr+71EYk=";
+  src = fetchFromGitHub {
+    owner = "shixinhuang99";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-xLbC2o0wz9zBZwCuZVmztOlk+gfs+XReN5NeveHgi+4=";
   };
+  cargoHash = "sha256-Ntx1xWDP3U0A+0N5t92d7H+y6HiA32D54K1wbJucyoc=";
 
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/sxtetris
-  '';
+  buildInputs = [ alsa-lib ];
+  nativeBuildInputs = [ pkg-config ];
 }

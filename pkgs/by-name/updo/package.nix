@@ -1,18 +1,23 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ buildGoModule, fetchFromGitHub }:
+buildGoModule rec {
   pname = "updo";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/Owloops/updo/releases/download/v0.4.5/updo_Linux_x86_64";
-    sha256 = "sha256-1B+T9UBjh9Pad+b0xNbVGGo/6tkiNz+ngfA+7KfQN24=";
+  src = fetchFromGitHub {
+    owner = "Owloops";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-2+h7lptHqmFrbji045v5TjkFEmT4RxefFpBX/YzNTR8=";
   };
 
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    cp $src $out/bin/updo
-    chmod +x $out/bin/updo
-  '';
+  vendorHash = "sha256-I5Cu0cXNsPoVBgouE+hRn/s1x2IbRt+V6kHDcfiRIfA=";
+  subPackages = [
+    "cmd/aws"
+    "cmd/monitor"
+    "cmd/root"
+  ];
+  ldflags = [
+    "-s"
+    "-w"
+  ];
 }

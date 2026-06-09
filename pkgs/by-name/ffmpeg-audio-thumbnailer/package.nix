@@ -1,25 +1,25 @@
 {
-  lib,
-  pkgs,
+  fetchFromGitHub,
+  pkg-config,
   stdenv,
+  ffmpeg,
 }:
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   pname = "ffmpeg-audio-thumbnailer";
-  version = "1.0.0";
-  src = pkgs.fetchFromGitHub {
+  version = "main";
+
+  src = fetchFromGitHub {
     owner = "saltedcoffii";
-    repo = "ffmpeg-audio-thumbnailer";
-    rev = "HEAD";
-    sha256 = lib.fakeSha256;
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-mGhTcpmW0I/9amGep/0hXuoPkRsBaJIyNiFr6e9E0Is=";
   };
 
-  nativeBuildInputs = with pkgs; [
-    cmake
+  nativeBuildInputs = [
     pkg-config
   ];
 
-  buildInputs = with pkgs; [ kdePackages.ffmpeg ];
+  buildInputs = [ ffmpeg ];
 
-  buildPhase = "make";
-  installPhase = "export PREFIX=$out; make install";
+  makeFlags = [ "PREFIX=$(out)" ];
 }

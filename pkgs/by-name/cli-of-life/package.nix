@@ -1,8 +1,4 @@
-{
-  lib,
-  buildGoModule,
-  fetchFromGitHub,
-}:
+{ buildGoModule, fetchFromGitHub }:
 buildGoModule rec {
   pname = "cli-of-life";
   version = "main";
@@ -11,10 +7,10 @@ buildGoModule rec {
     owner = "gabe565";
     repo = pname;
     rev = version;
-    sha256 = lib.fakeSha256;
+    sha256 = "sha256-dHP2qil9LQmSVBXblDjE4y9lrwR9iXEewRzqTG8CFh0=";
   };
 
-  vendorHash = lib.fakeHash;
+  vendorHash = "sha256-ZueGOJ7UoeixttPP/eTzChBtCDeySQw70CdBHv5zYgo=";
 
   ldflags = [
     "-s"

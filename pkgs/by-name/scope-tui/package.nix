@@ -1,23 +1,31 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  alsa-lib,
+  rustPlatform,
+  fetchFromGitHub,
+  pkg-config,
+  libX11,
+  libXext,
+  libXrender,
+}:
+rustPlatform.buildRustPackage rec {
   pname = "scope-tui";
-  version = "latest";
+  version = "dev";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/alemidev/scope-tui/releases/download/v0.3.4/scope-tui-v0.3.4-linux-x64-gnu";
-    sha256 = "sha256-alW6Q7cxUPVqAkwcHEyuWjMsbqxsrhWxviU5fE3yITo=";
+  src = fetchFromGitHub {
+    owner = "alemidev";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-LR6PmyJQNgtuPXQVorsCNEX6dXU6MG1dD8F0dUd3h4M=";
   };
 
-  dontUnpack = true;
+  nativeBuildInputs = [ pkg-config ];
 
-  buildInputs = with pkgs.xorg; [
+  buildInputs = [
+    alsa-lib
     libX11
     libXext
     libXrender
   ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    install -Dm755 $src $out/bin/
-  '';
+  cargoHash = "sha256-3GbZnmjwddX+2/7UGO1CIQV3CT/HogSa/JusgDzy4Ow=";
 }

@@ -1,12 +1,12 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ fetchFromGitHub, stdenvNoCC }:
+stdenvNoCC.mkDerivation rec {
   pname = "sticky-window-snapping";
-  version = "HEAD";
+  version = "master";
 
-  src = pkgs.fetchFromGitHub {
+  src = fetchFromGitHub {
     owner = "Flupp";
-    repo = "sticky-window-snapping";
-    rev = "master";
+    repo = pname;
+    rev = version;
     sha256 = "sha256-5xkKNgwzItnpdqk2z/HiCtXNm/ZyjXflSJcT1dAn6nU=";
   };
 

@@ -1,12 +1,12 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ fetchFromGitHub, stdenvNoCC }:
+stdenvNoCC.mkDerivation rec {
   pname = "virtual-desktops-only-on-primary";
-  version = "v0.4.5";
+  version = "master";
 
-  src = pkgs.fetchFromGitHub {
+  src = fetchFromGitHub {
     owner = "Ubiquitine";
-    repo = "virtual-desktops-only-on-primary";
-    rev = "master";
+    repo = pname;
+    rev = version;
     sha256 = "sha256-zC096vsVCyDAEFpASU2gj0qRgWKYR1m9G6hPZL+61Wo=";
   };
 

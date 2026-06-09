@@ -1,19 +1,18 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
-  pname = "journalview";
-  version = "0.0.41";
+{
+  rustPlatform,
+  fetchFromGitHub,
+}:
+rustPlatform.buildRustPackage rec {
+  pname = "jwt-ui";
+  version = "latest";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/codervijo/journalview/releases/download/v0.0.41/journalview-latest-05.03.2025.zip";
-    sha256 = "sha256-D7X5KxFBlE/t0x1HVNheAldBiE0kvN+3mJP7GhEIl0A=";
+  src = fetchFromGitHub {
+    owner = "jwt-rs";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-XHR35n5MJ/AAAIj3YbC5SzOGbkHf+oAHezJXTp2R0+0=";
   };
 
-  nativeBuildInputs = with pkgs; [ unzip ];
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    unzip $src -d $out/bin/
-    chmod +x $out/bin/journalview
-  '';
+  cargoHash = "sha256-OxOfadX+z6KAAAj8e/QVvdSafjlelb2AyIIEpKONChg=
+";
 }

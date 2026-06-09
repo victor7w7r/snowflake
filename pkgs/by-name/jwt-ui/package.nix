@@ -1,18 +1,14 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ rustPlatform, fetchFromGitHub }:
+rustPlatform.buildRustPackage rec {
   pname = "jwt-ui";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/jwt-rs/jwt-ui/releases/download/v1.3.0/jwtui-linux.tar.gz";
-    sha256 = "sha256-5FZhWACUI8ZrgoA/vKeV2VTAB199vcuf9D6Cv3W2dEs=";
+  src = fetchFromGitHub {
+    owner = "jwt-rs";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-4jwKxsxIKpeelrruhFiu3o8QVxMp+CTNuSXK7XBiXFU=";
   };
 
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/jwtui
-  '';
+  cargoHash = "sha256-ywqXUp3X9Jf6O7OdWyyrUPaAJx+I3cvPQU+7nP2okpM=";
 }

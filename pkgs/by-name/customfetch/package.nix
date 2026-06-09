@@ -1,18 +1,30 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  stdenv,
+  fetchFromGitHub,
+  gettext,
+  pkg-config,
+}:
+stdenv.mkDerivation rec {
   pname = "customfetch";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/Toni500github/customfetch/releases/download/v2.0.0-beta1/customfetch-linux-v2.0.0-beta1.tar.gz";
-    sha256 = "sha256-1UtyOyIimQP3Yzhf1KtW3f9VNhDR7WB6SeLE8bb/HV8=";
+  src = fetchFromGitHub {
+    owner = "Toni500github";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-KZlrh+GWknAQ9RXBLO8hK+MeUrrT2ode9VO+ZohpOJA=";
   };
 
-  dontUnpack = true;
+  nativeBuildInputs = [
+    pkg-config
+    gettext
+  ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/customfetch
-  '';
+  prePatch = "patchShebangs scripts/";
+
+  makeFlags = [
+    "DEBUG=0"
+    "GUI_APP=0"
+    "PREFIX=$(out)"
+  ];
 }

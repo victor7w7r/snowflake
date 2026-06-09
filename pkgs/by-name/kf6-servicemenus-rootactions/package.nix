@@ -1,31 +1,36 @@
 {
-  lib,
-  pkgs,
+  kdePackages,
+  fetchurl,
+  pkg-config,
+  imagemagick,
+  perl,
+  cmake,
+  polkit,
   stdenv,
 }:
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   pname = "kf6-servicemenus-rootactions";
-  version = "1.0.0";
+  version = "1.2.0";
 
-  src = pkgs.fetchFromGitLab {
-    owner = "stefanwimmer128";
-    repo = "kf6-servicemenus-rootactions";
-    rev = "HEAD";
-    sha256 = lib.fakeSha256;
+  src = fetchurl {
+    url = "https://gitlab.com/stefanwimmer128/kf6-servicemenus-rootactions/-/releases/v${version}/downloads/kf6-servicemenus-rootactions-v${version}.tar.xz";
+    sha256 = "sha256-zhdIcjhc+axBO+sEYQ7rL1Hd2tMYCyCFKp0JqpMKRq8=";
   };
 
-  nativeBuildInputs = with pkgs; [
+  nativeBuildInputs = [
     cmake
     pkg-config
   ];
 
-  buildInputs = with pkgs; [
+  buildInputs = [
     kdePackages.dolphin
     kdePackages.kdialog
     imagemagick
     perl
     polkit
   ];
+
+  dontWrapQtApps = true;
 
   configurePhase = "./configure --prefix=$out";
   buildPhase = "make";

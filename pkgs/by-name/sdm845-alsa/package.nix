@@ -1,9 +1,9 @@
-{ pkgs, stdenvNoCC }:
+{ fetchFromGitLab, stdenvNoCC }:
 stdenvNoCC.mkDerivation {
   pname = "alsa-ucm-conf-enchilada";
   version = "unstable-2022-12-08";
 
-  src = pkgs.fetchFromGitLab {
+  src = fetchFromGitLab {
     owner = "sdm845-mainline";
     repo = "alsa-ucm-conf";
     rev = "aaa7889f7a6de640b4d78300e118457335ad16c0";

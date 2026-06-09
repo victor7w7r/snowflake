@@ -1,18 +1,19 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{ buildGoModule, fetchFromGitHub }:
+buildGoModule rec {
   pname = "clidle";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/ajeetdsouza/clidle/releases/download/v0.1.0/clidle_Linux_x86_64.tar.gz";
-    sha256 = "sha256-eM2kyGhnR1UsY9so4uTXrHLJN1uEtloRyzwixqaVU1E=";
+  src = fetchFromGitHub {
+    owner = "ajeetdsouza";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-KgIJM7yswNk+LgHxoUp6uRR8a2VD5p8Bq8uMgyJFcKE=";
   };
 
-  dontUnpack = true;
+  vendorHash = "sha256-vevil9MxPr3YcB7m1Jzvypioq6aOkWrQeFCC1fPeQKw=";
 
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/clidle
-  '';
+  ldflags = [
+    "-s"
+    "-w"
+  ];
 }

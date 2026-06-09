@@ -1,9 +1,13 @@
-{ pkgs, stdenvNoCC }:
+{
+  fetchFromGitHub,
+  nix-update-script,
+  stdenvNoCC,
+}:
 stdenvNoCC.mkDerivation rec {
   pname = "kde-wallpaper-effects-widget";
   version = "2.0.0";
 
-  src = pkgs.fetchFromGitHub {
+  src = fetchFromGitHub {
     owner = "luisbocanegra";
     repo = "plasma-wallpaper-effects";
     rev = "refs/tags/v${version}";
@@ -20,5 +24,5 @@ stdenvNoCC.mkDerivation rec {
     runHook postInstall
   '';
 
-  passthru.updateScript = pkgs.nix-update-script { };
+  passthru.updateScript = nix-update-script { };
 }

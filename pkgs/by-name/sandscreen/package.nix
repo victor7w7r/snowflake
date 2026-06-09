@@ -1,18 +1,30 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  cmake,
+  ncurses,
+  fetchFromGitHub,
+  pkg-config,
+  stdenv,
+}:
+stdenv.mkDerivation rec {
   pname = "sandscreen";
-  version = "latest";
+  version = "master";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/frostyarchtide/sandscreen/releases/download/v1.0.2/sandscreen";
-    sha256 = "sha256-aBj9ya1u3SnI0u0pxEkk+GYlyvbA8lVU1chxBaORLEs=";
+  src = fetchFromGitHub {
+    owner = "frostyarchtide";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-iEDVharT1C28Wm7JlSqRrISqBNJv7Y2soaaJX1oX+Ro=";
   };
 
-  dontUnpack = true;
+  buildInputs = [ ncurses ];
+
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+  ];
 
   installPhase = ''
     mkdir -p $out/bin
-    cp $src $out/bin/sandscreen
-    chmod +x $out/bin/sandscreen
+    cp ${pname} $out/bin/ || cp bin/${pname} $out/bin/ || cp ./* $out/bin/ 2>/dev/null || true
   '';
 }

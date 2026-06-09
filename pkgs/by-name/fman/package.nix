@@ -1,18 +1,22 @@
-{ pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+{
+  lib,
+  buildGoModule,
+  fetchFromGitHub,
+}:
+buildGoModule rec {
   pname = "fman";
-  version = "latest";
+  version = "main";
 
-  src = pkgs.fetchurl {
-    url = "https://github.com/nore-dev/fman/releases/download/v1.20.1/fman_1.20.1_linux_amd64.tar.gz";
-    sha256 = "sha256-Ww5sr1mloEHF3DAx8ae4ytdyDPByNbSnF/otqgzHBiY=";
+  src = fetchFromGitHub {
+    owner = "nore-dev";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-NgN94cJRmS0YziIGCeEzzw9p7lPNnpyiRyF+ZcMYCDc=";
   };
+  vendorHash = "sha256-ZfU6KvChsTWu6wGOb9/vq6Bk/AGheZiGNlxh5on3W7Q=";
 
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    tar -xvf $src -C $out/bin
-    chmod +x $out/bin/fman
-  '';
+  ldflags = [
+    "-s"
+    "-w"
+  ];
 }
