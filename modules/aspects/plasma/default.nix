@@ -58,6 +58,16 @@
           };
         };
 
+        /*
+          home.packages = [
+            appimage-thumbnailer
+            kf6-servicemenus-rootactions
+            jar-thumbnailer
+            kde-thumbnailer-apk
+            ffmpeg-audio-thumbnailer
+          ];
+        */
+
         services = {
           kdeconnect.enable = true;
           gpg-agent = {
