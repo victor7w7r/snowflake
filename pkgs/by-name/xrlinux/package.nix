@@ -1,30 +1,39 @@
 {
+  stdenv,
+  fetchgit,
   cmake,
-  curl,
-  git,
-  inputs,
-  json_c,
-  libusb1,
-  libevdev,
-  libffi,
-  openssl,
   pkg-config,
   python3,
-  stdenv,
-  system,
+  makeWrapper,
+  libusb1,
+  libevdev,
+  openssl,
+  json_c,
+  curl,
   wayland,
+  systemd,
+  autoPatchelfHook,
+  gcc-unwrapped,
 }:
-stdenv.mkDerivation {
-  pname = "xrlinuxdriver";
-  version = "2.1.5";
 
-  src = inputs.xrlinux;
+stdenv.mkDerivation rec {
+  pname = "xr-linux-driver";
+  version = "2.9.4";
+
+  src = fetchgit {
+    url = "https://github.com/wheaney/XRLinuxDriver.git";
+    rev = "v${version}";
+    fetchSubmodules = true;
+    deepClone = false;
+    hash = "sha256-fbaNdv6vjRphYYSzbOYqmRK6c24hv1gkTh3xlql0VEU=";
+  };
 
   nativeBuildInputs = [
     cmake
     pkg-config
-    (python3.withPackages (ps: with ps; [ pyyaml ]))
-    git
+    (python3.withPackages (ps: [ ps.pyyaml ]))
+    makeWrapper
+    autoPatchelfHook
   ];
 
   buildInputs = [
@@ -34,78 +43,83 @@ stdenv.mkDerivation {
     json_c
     curl
     wayland
-    libffi
+    systemd
+    gcc-unwrapped.lib
   ];
-
-  cmakeFlags = [
-    "-DCMAKE_BUILD_TYPE=Release"
-    "-DCMAKE_SKIP_BUILD_RPATH=OFF"
-    "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON"
-    "-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"
-    "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
-  ];
-
-  prePatch = ''
-    echo "# Default empty configuration" > custom_banner_config.yml
-    echo "banners: []" >> custom_banner_config.yml
-  '';
 
   postPatch = ''
     substituteInPlace CMakeLists.txt \
-      --replace-fail "execute_process(COMMAND git submodule update --init --recursive" "execute_process(COMMAND echo \"Skipping git submodule update\""
+      --replace-quiet "git submodule update --init --recursive" "true"
+    rm -rf modules/xrealInterfaceLibrary/interface_lib/modules/xreal_one_driver
 
-    # Disable the XREAL device as we can't build it without the submodules
-    echo "Removing xreal.c from SOURCES"
-    substituteInPlace CMakeLists.txt \
-      --replace-fail "    src/devices/xreal.c" ""
-
-    # Modify devices.c to remove references to xreal_driver
-    sed -i 's/&xreal_driver,/\/\* Disabled: \&xreal_driver, \*\//g' src/devices.c
-
-    # Remove references to the xrealAirLibrary
-    substituteInPlace CMakeLists.txt \
-      --replace-fail "add_subdirectory(modules/xrealInterfaceLibrary/interface_lib)" "# Disabled"
-
-    substituteInPlace CMakeLists.txt \
-      --replace-fail "xrealAirLibrary" ""
-
-    export UA_API_SECRET_INTENTIONALLY_EMPTY=1
+    cat > modules/xrealInterfaceLibrary/interface_lib/src/imu_protocol_xo_stub.c <<'EOF'
+    #include "imu_protocol.h"
+    static bool xo_open(struct device_imu_t* d, const struct imu_hid_info* i) { (void)d; (void)i; return false; }
+    static void xo_close(struct device_imu_t* d) { (void)d; }
+    static bool xo_start_stream(struct device_imu_t* d) { (void)d; return false; }
+    static bool xo_stop_stream(struct device_imu_t* d) { (void)d; return false; }
+    static bool xo_get_static_id(struct device_imu_t* d, uint32_t* o) { (void)d; (void)o; return false; }
+    static bool xo_load_cal(struct device_imu_t* d, uint32_t* l, char** o) { (void)d; (void)l; (void)o; return false; }
+    static int  xo_next_sample(struct device_imu_t* d, struct imu_sample* o, int t) { (void)d; (void)o; (void)t; return -1; }
+    const imu_protocol imu_protocol_xreal_one = {
+        .open = xo_open,
+        .close = xo_close,
+        .start_stream = xo_start_stream,
+        .stop_stream = xo_stop_stream,
+        .get_static_id = xo_get_static_id,
+        .load_calibration_json = xo_load_cal,
+        .next_sample = xo_next_sample,
+    };
+    EOF
+    substituteInPlace modules/xrealInterfaceLibrary/interface_lib/CMakeLists.txt \
+      --replace-fail \
+        "src/hid_ids.c" \
+        "src/hid_ids.c src/imu_protocol_xo_stub.c"
   '';
+
+  cmakeFlags = [
+    "-DCMAKE_EXE_LINKER_FLAGS=-Wl,--unresolved-symbols=ignore-in-shared-libs"
+    "-DCMAKE_SKIP_BUILD_RPATH=ON"
+  ];
+
+  hardeningDisable = [
+    "fortify"
+    "fortify3"
+  ];
 
   installPhase = ''
-    mkdir -p $out/bin
+    runHook preInstall
 
-    install -Dm755 xrDriver $out/bin/xrDriver
+    install -Dm755 xrDriver "$out/bin/xrDriver"
+    install -d "$out/lib"
 
-    mkdir -p $out/bin/bin/user
-    for script in ../bin/xr_driver_*; do
-      install -Dm755 $script $out/bin/
-    done
-    install -Dm755 ../bin/setup $out/bin/xr_driver_setup
-    install -Dm755 ../bin/user/install $out/bin/bin/user/
-    install -Dm755 ../bin/user/systemd_start $out/bin/bin/user/
+    cp -P modules/xrealInterfaceLibrary/interface_lib/modules/hidapi/src/linux/libhidapi-hidraw.so* "$out/lib/"
+    cp -P modules/xrealInterfaceLibrary/interface_lib/modules/hidapi/src/libusb/libhidapi-libusb.so* "$out/lib/"
 
-    for file in $out/bin/xr_driver_* $out/bin/bin/user/*; do
-      if [ -f "$file" ]; then
-        substituteInPlace $file \
-          --replace "realpath bin/" "$out/bin/bin/" \
-          --replace "../bin/" "$out/bin/bin/" \
-          --replace "./bin/" "$out/bin/bin/" || true
-      fi
-    done
+    cp -rP ../lib/x86_64/* "$out/lib/"
+    install -d "$out/lib/udev/rules.d"
+    cp ../udev/*.rules "$out/lib/udev/rules.d/"
+    install -d "$out/lib/systemd/user"
+    sed \
+      -e "s|{ld_library_path}|$out/lib:$out/lib/viture|g" \
+      -e "s|{bin_dir}|$out/bin|g" \
+      ../systemd/xr-driver.service \
+      > "$out/lib/systemd/user/xr-driver.service"
 
-    mkdir -p $out/lib/systemd/user
-    cp -r ../systemd/* $out/lib/systemd/user/
-    substituteInPlace $out/lib/systemd/user/xr-driver.service \
-      --replace "{ld_library_path}" "$out/lib" \
-      --replace "{bin_dir}" "$out/bin"
-
-    mkdir -p $out/lib/udev/rules.d
-    cp -r ../udev/* $out/lib/udev/rules.d/
-
-    mkdir -p $out/lib
-    cp -r ../lib/$(if [ "${system}" = "x86_64-linux" ]; then echo "x86_64"; else echo "aarch64"; fi)/*.so $out/lib/ || true
+    runHook postInstall
   '';
 
-  fixupPhase = "patchelf --set-rpath '$ORIGIN/../lib' $out/bin/xrDriver";
+  postFixup = ''
+    wrapProgram "$out/bin/xrDriver" \
+      --prefix LD_LIBRARY_PATH : "$out/lib:$out/lib/viture"
+  '';
+
+  dontAutoPatchelf = false;
+  autoPatchelfIgnoreMissingDeps = [
+    "libRayNeoXRMiniSDK.so"
+    "libGlassSDK.so"
+    "libcarina_vio.so"
+    "libglasses.so"
+    "libopencv_*.so*"
+  ];
 }
