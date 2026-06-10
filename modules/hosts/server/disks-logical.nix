@@ -1,4 +1,4 @@
-{ den, inputs, ... }:
+{ disko, inputs, ... }:
 {
   server.disks-logical.nixos =
     { ... }:
@@ -9,7 +9,7 @@
           size = "100%";
           lvm_type = "thin-pool";
         };
-        cloud = den.aspects.xfs.call {
+        cloud = disko.xfs.call {
           size = "3T";
           mountpoint = "/nix/persist/cloud";
           logdev = "/dev/mapper/cloudlogcrypt";
@@ -29,7 +29,7 @@
           bcache = {
             type = "disk";
             device = "/dev/bcache0";
-            content = den.aspects.luks.call {
+            content = disko.luks.call {
               entireDisk = true;
               allowDiscards = false;
               name = "cloud";

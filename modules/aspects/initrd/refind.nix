@@ -14,7 +14,7 @@
       pkgs,
       ...
     }:
-    lib.optional isEfi {
+    lib.optionalAttrs isEfi {
       boot.loader = {
         grub.enable = false;
         systemd-boot.enable = false;

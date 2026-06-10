@@ -1,26 +1,26 @@
-{ den, inputs, ... }:
+{ disko, inputs, ... }:
 {
   handheld.disks.nixos =
     let
       partitions = {
-        esp = den.aspects.esp.call { };
-        msr = den.aspects.win.msr { };
-        emergency = den.aspects.btrfs.emergency { priority = 3; };
-        recovery = den.aspects.win.recovery { };
-        win = den.aspects.win.call { };
-        swapcrypt = den.aspects.luks.call {
+        esp = disko.esp.call { };
+        msr = disko.win.msr { };
+        emergency = disko.btrfs.emergency { priority = 3; };
+        recovery = disko.win.recovery { };
+        win = disko.win.call { };
+        swapcrypt = disko.luks.call {
           name = "swapcrypt";
           size = "14G";
           group = "main";
-          content = den.aspects.swap.call { };
+          content = disko.swap.call { };
           priority = 6;
         };
-        system = den.aspects.bcachefs.partition {
+        system = disko.bcachefs.partition {
           name = "system";
           size = "110G";
           priority = 7;
         };
-        games = den.aspects.btrfs.shared {
+        games = disko.btrfs.shared {
           name = "games";
           mountContent = "games";
           mountSnap = "gamessnap";
@@ -39,7 +39,7 @@
           };
         };
         bcachefs_filesystems = {
-          broot = den.aspects.bcachefs.filesystem {
+          broot = disko.bcachefs.filesystem {
             uuid = "2564fcf6-551f-4358-b238-2fe638b1c159";
             #passwordFile = "/tmp/key.txt";
             subvolumes = {

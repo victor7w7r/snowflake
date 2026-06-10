@@ -13,7 +13,7 @@
         user,
         ...
       }:
-      lib.optional (isMain || isSuperlab) {
+      lib.optionalAttrs (isMain || isSuperlab) {
         environment.persistence."/nix/persist".users."${user}".directories = lib.mkAfter [
           ".config/bruno"
           ".config/Claude"
@@ -29,7 +29,7 @@
         pkgs,
         ...
       }:
-      lib.optional (isMain || isSuperlab) {
+      lib.optionalAttrs (isMain || isSuperlab) {
         home.packages = (
           with pkgs;
           [

@@ -3,17 +3,19 @@
   den.aspects.base.file-managers = {
     os =
       { isPersistent, pkgs, ... }:
-      lib.optional isPersistent {
-        environment.systemPackages = with pkgs; [
-          clifm
-          lf
-          joshuto
-          superfile
-          termscp
-          tran
-          trash-cli
-          walk
-        ];
+      {
+        environment.systemPackages =
+          with pkgs;
+          lib.optionals isPersistent [
+            clifm
+            lf
+            joshuto
+            superfile
+            termscp
+            tran
+            trash-cli
+            walk
+          ];
         programs.yazi = {
           enable = true;
           /*
@@ -27,17 +29,19 @@
 
     nixos =
       { isPersistent, pkgs, ... }:
-      lib.optional isPersistent {
-        environment.systemPackages = with pkgs; [
-          fman
-          #tuifimanager
-          #https://codeberg.org/sylphenix/sff
-        ];
+      {
+        environment.systemPackages =
+          with pkgs;
+          lib.optionals isPersistent [
+            fman
+            #tuifimanager
+            #https://codeberg.org/sylphenix/sff
+          ];
       };
 
     homeManager =
       { isPersistent, ... }:
-      lib.optional isPersistent {
+      lib.optionalAttrs isPersistent {
         programs = {
           broot.enable = true;
           mc.enable = true;

@@ -2,7 +2,7 @@
 {
   den.aspects.tweaks.uresourced.nixos =
     { hasVisualKeyboard, pkgs, ... }:
-    lib.optional hasVisualKeyboard {
+    lib.optionalAttrs hasVisualKeyboard {
       users.users.uresourced = {
         description = "uresourced service user";
         isSystemUser = true;

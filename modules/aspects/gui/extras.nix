@@ -8,7 +8,7 @@
         user,
         ...
       }:
-      lib.optional (isPersistent && !isServer) {
+      lib.optionalAttrs (isPersistent && !isServer) {
         environment.persistence."/nix/persist".users."${user}".directories = lib.mkAfter [
           ".config/legcord"
           ".config/onlyoffice"
@@ -27,7 +27,7 @@
         pkgs,
         ...
       }:
-      lib.optional (isPersistent && !isServer) {
+      lib.optionalAttrs (isPersistent && !isServer) {
         programs.onlyoffice.enable = true;
         home.packages = with pkgs; [
           cool-retro-term

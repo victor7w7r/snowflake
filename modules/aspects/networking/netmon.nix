@@ -8,7 +8,7 @@
         pkgs,
         ...
       }:
-      lib.optional (isPersistent || isMainMac) {
+      lib.optionalAttrs (isPersistent || isMainMac) {
         environment.systemPackages = with pkgs; [
           aim
           ariang
@@ -27,7 +27,7 @@
 
     nixos =
       { isPersistent, pkgs, ... }:
-      lib.optional isPersistent {
+      lib.optionalAttrs isPersistent {
         environment.systemPackages = with pkgs; [
           slirp4netns
           #rquickshare

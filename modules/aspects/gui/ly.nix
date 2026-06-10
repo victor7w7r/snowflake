@@ -7,7 +7,7 @@
       pkgs,
       ...
     }:
-    lib.optional hasVisualKeyboard {
+    lib.optionalAttrs hasVisualKeyboard {
       security.pam.services.ly.kwallet = {
         enable = true;
         package = pkgs.kdePackages.kwallet-pam;

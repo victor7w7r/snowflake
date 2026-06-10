@@ -55,7 +55,7 @@
         ## alias idle-run='systemd-run --setenv=XPWD=$PWD --slice=idle.slice --uid=$UID --gid=$UID -t $SHELL'  # on Debian 9
       '';
     in
-    lib.optional hasVisualKeyboard {
+    lib.optionalAttrs hasVisualKeyboard {
       users.users.memavaild = {
         description = "memavaild service user";
         isSystemUser = true;

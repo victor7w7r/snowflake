@@ -74,7 +74,7 @@
       };
     homeManager =
       { isPersistent, ... }:
-      lib.optional isPersistent {
+      lib.optionalAttrs isPersistent {
         programs.himalaya.enable = true;
         services.pbgopy.enable = true;
       };

@@ -2,24 +2,26 @@
 {
   den.aspects.base.extras = {
     nixos =
-      { pkgs, isPersistent, ... }:
-      lib.optional isPersistent {
-        environment.systemPackages = with pkgs; [
-          cheat
-          cmd-wrapped
-          emptty
-          modprobed-db
-          glow
-          inotify-tools
-          jump
-          #sampler
-          seadrive-fuse
-          seafile-shared
-          viddy
-          vtm
-          wtfutil
-        ];
-        programs.gnupg.agent = {
+      { isPersistent, pkgs, ... }:
+      {
+        environment.systemPackages =
+          with pkgs;
+          lib.optionals isPersistent [
+            cheat
+            cmd-wrapped
+            emptty
+            modprobed-db
+            glow
+            inotify-tools
+            jump
+            #sampler
+            seadrive-fuse
+            seafile-shared
+            viddy
+            vtm
+            wtfutil
+          ];
+        programs.gnupg.agent = lib.optionalAttrs isPersistent {
           enable = true;
           enableSSHSupport = true;
           pinentryPackage = pkgs.pinentry-tty;
@@ -28,7 +30,7 @@
 
     homeManager =
       { isPersistent, ... }:
-      lib.optional isPersistent {
+      lib.optionalAttrs isPersistent {
         services.pueue.enable = true;
         programs = {
           tealdeer.enable = true;

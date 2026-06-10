@@ -3,7 +3,7 @@
   den.aspects.dev.default = {
     os =
       { isPersistent, pkgs, ... }:
-      lib.optional isPersistent {
+      lib.optionalAttrs isPersistent {
         environment.systemPackages = with pkgs; [
           atac
           dos2unix
@@ -48,7 +48,7 @@
 
     nixos =
       { isPersistent, pkgs, ... }:
-      lib.optional isPersistent {
+      lib.optionalAttrs isPersistent {
         environment.systemPackages = with pkgs; [
           tracexec
           #elia-chat

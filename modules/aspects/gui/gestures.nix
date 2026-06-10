@@ -10,7 +10,7 @@
         pkgs,
         ...
       }:
-      lib.optional (isMain || isSuperlab) {
+      lib.optionalAttrs (isMain || isSuperlab) {
         environment.systemPackages = with pkgs; [ ydotool ];
         programs.ydotool.enable = true;
         services.udev.extraRules = ''KERNEL=="uinput", MODE="0660", GROUP="input"'';
@@ -24,7 +24,7 @@
         pkgs,
         ...
       }:
-      lib.optional (isMain || isSuperlab) {
+      lib.optionalAttrs (isMain || isSuperlab) {
         home.packages = [
           inputs'.gestures.packages."x86_64-linux".gestures
           pkgs.tablet-map

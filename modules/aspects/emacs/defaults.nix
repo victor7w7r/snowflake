@@ -26,12 +26,10 @@
     nixos =
       { isPersistent, user, ... }:
       {
-        environment.persistence."/nix/persist".users."${user}".directories =
-          lib.optionalAttrs isPersistent
-            [
-              ".local/share/emacs"
-              ".cache/doom"
-            ];
+        environment.persistence."/nix/persist".users."${user}".directories = lib.optionals isPersistent [
+          ".local/share/emacs"
+          ".cache/doom"
+        ];
       };
 
     homeManager =

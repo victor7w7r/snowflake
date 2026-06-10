@@ -10,7 +10,7 @@
         user,
         ...
       }:
-      lib.optional (isVisual && isPersistent) {
+      lib.optionalAttrs (isVisual && isPersistent) {
         environment.persistence."/nix/persist".users."${user}".directories = [ ".config/flatpak" ];
         programs.appimage = {
           enable = true;
@@ -25,7 +25,7 @@
         pkgs,
         ...
       }:
-      lib.optional (isVisual && isPersistent) {
+      lib.optionalAttrs (isVisual && isPersistent) {
         imports = [ inputs.nix-flatpak.homeManagerModules.nix-flatpak ];
         #https://github.com/MykolaSuprun/nixos-flakes-config/blob/c0b9e3356c8675cb50885a279b0978b99abdb705/nixos/modules/flatpak.nix
         services.flatpak = {

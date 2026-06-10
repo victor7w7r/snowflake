@@ -12,7 +12,7 @@
         compiler_check = content
       '';
     in
-    lib.optional isPersistent {
+    lib.optionalAttrs isPersistent {
       nixpkgs.overlays = [
         (final: prev: {
           ccacheWrapper = final.ccacheWrapper.override {

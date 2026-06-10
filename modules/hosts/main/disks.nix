@@ -1,4 +1,4 @@
-{ den, inputs, ... }:
+{ disko, inputs, ... }:
 {
   main.disks.nixos =
     let
@@ -6,73 +6,73 @@
       idpart = "/dev/disk/by-id";
 
       macpartitions = {
-        esp = den.aspects.esp.call { };
+        esp = disko.esp.call { };
         macos = {
           name = "macos";
           size = "110G";
           priority = 2;
         };
-        root = den.aspects.bcachefs.partition {
+        root = disko.bcachefs.partition {
           name = "broot.ssd1";
           size = "10G";
           priority = 3;
         };
-        shared = den.aspects.btrfs.shared { };
+        shared = disko.btrfs.shared { };
       };
 
       ssdpartitions = {
-        emergency = den.aspects.btrfs.emergency { priority = 1; };
-        msr = den.aspects.win.msr { };
-        recovery = den.aspects.win.recovery { priority = 3; };
-        win = den.aspects.win.call { priority = 4; };
-        swapcrypt = den.aspects.luks.call {
+        emergency = disko.btrfs.emergency { priority = 1; };
+        msr = disko.win.msr { };
+        recovery = disko.win.recovery { priority = 3; };
+        win = disko.win.call { priority = 4; };
+        swapcrypt = disko.luks.call {
           name = "swapcrypt";
           device = "${partlabel}/disk-ssd-swapcrypt";
           size = "64G";
-          content = den.aspects.swap.call { };
+          content = disko.swap.call { };
           priority = 5;
         };
-        persistlogcrypt = den.aspects.luks.call {
+        persistlogcrypt = disko.luks.call {
           name = "persistlogcrypt";
           device = "${partlabel}/disk-ssd-persistlogcrypt";
           size = "512M";
           priority = 6;
         };
-        storagelogcrypt = den.aspects.luks.call {
+        storagelogcrypt = disko.luks.call {
           name = "storagelogcrypt";
           device = "${partlabel}/disk-ssd-storagelogcrypt";
           size = "512M";
           priority = 7;
         };
-        persistcachecrypt = den.aspects.luks.call {
+        persistcachecrypt = disko.luks.call {
           name = "persistcachecrypt";
           device = "${partlabel}/disk-ssd-persistcachecrypt";
           size = "90G";
           priority = 8;
           postCreate = "make-bcache -C /dev/mapper/persistcachecrypt";
         };
-        storagecachecrypt = den.aspects.luks.call {
+        storagecachecrypt = disko.luks.call {
           name = "storagecachecrypt";
           device = "${partlabel}/disk-ssd-storagecachecrypt";
           size = "90G";
           priority = 9;
           postCreate = "make-bcache -C /dev/mapper/storagecachecrypt";
         };
-        system = den.aspects.bcachefs.partition {
+        system = disko.bcachefs.partition {
           filesystem = "bsystem";
           name = "bsystem.ssd1";
           priority = 10;
         };
       };
 
-      lvs0.persist = den.aspects.xfs.call {
+      lvs0.persist = disko.xfs.call {
         name = "persist";
         size = "85%";
         mountpoint = "/nix/persist";
         logdev = "/dev/mapper/persistlogcrypt";
       };
 
-      lvs1.storage = den.aspects.xfs.call {
+      lvs1.storage = disko.xfs.call {
         name = "storage";
         size = "85%";
         mountpoint = "/nix/storage";
@@ -126,7 +126,7 @@
           storage = {
             type = "disk";
             device = "${idpart}/ata-ST500LT012-1DG142_S3PMCMHT";
-            content = den.aspects.luks.call {
+            content = disko.luks.call {
               entireDisk = true;
               allowDiscards = false;
               name = "storage";
@@ -176,7 +176,7 @@
         };
 
         bcachefs_filesystems = {
-          bsystem = den.aspects.bcachefs.filesystem {
+          bsystem = disko.bcachefs.filesystem {
             uuid = "66684a8a-b6ef-45ac-9e24-9ee3a2b4b540";
             subvolumes = {
               "subvolumes/nix" = {
@@ -200,7 +200,7 @@
             };
           };
 
-          broot = den.aspects.bcachefs.filesystem {
+          broot = disko.bcachefs.filesystem {
             mountpoint = "/";
             subvolumes = { };
             uuid = "f9d26816-07f4-42cf-a9ae-f698ff56b172";

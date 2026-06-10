@@ -1,11 +1,11 @@
-{ den, inputs, ... }:
+{ disko, inputs, ... }:
 {
   generic.disks.nixos =
     let
       partitions = {
-        esp = den.aspects.esp.call { };
-        emergency = den.aspects.btrfs.emergency { isSolid = false; };
-        system = den.aspects.bcachefs.partition {
+        esp = disko.esp.call { };
+        emergency = disko.btrfs.emergency { isSolid = false; };
+        system = disko.bcachefs.partition {
           name = "system";
           size = "90G";
         };

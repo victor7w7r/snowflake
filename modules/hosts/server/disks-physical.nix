@@ -1,4 +1,4 @@
-{ den, inputs, ... }:
+{ disko, inputs, ... }:
 {
   server.disks-physical.nixos =
     { ... }:
@@ -7,14 +7,14 @@
       idpart = "/dev/disk/by-id";
 
       mmcpartitions = {
-        esp = den.aspects.esp.call { };
-        store = den.aspects.f2fs.call {
+        esp = disko.esp.call { };
+        store = disko.f2fs.call {
           name = "store";
           size = "150G";
           mountpoint = "/nix";
           priority = 2;
         };
-        shared = den.aspects.f2fs.call {
+        shared = disko.f2fs.call {
           name = "shared";
           size = "100%";
           mountpoint = "/run/media/shared";
@@ -23,33 +23,33 @@
       };
 
       nvmepartitions = {
-        emergency = den.aspects.btrfs.emergency { priority = 1; };
-        swapcrypt = den.aspects.luks.call {
+        emergency = disko.btrfs.emergency { priority = 1; };
+        swapcrypt = disko.luks.call {
           name = "swapcrypt";
           device = "${partlabel}/disk-ssd-swapcrypt";
           size = "16G";
-          content = den.aspects.swap.call { };
+          content = disko.swap.call { };
           priority = 2;
         };
-        cloudlogcrypt = den.aspects.luks.call {
+        cloudlogcrypt = disko.luks.call {
           name = "cloudlogcrypt";
           size = "1G";
           device = "${partlabel}/disk-nvme-cloudlogcrypt";
           priority = 3;
         };
-        cloudcachecrypt = den.aspects.luks.call {
+        cloudcachecrypt = disko.luks.call {
           name = "cloudcachecrypt";
           size = "180G";
           device = "${partlabel}/disk-nvme-cloudcachecrypt";
           priority = 4;
           postCreate = "sudo make-bcache -B /dev/md/raid0 -C /dev/mapper/cloudcachecrypt";
         };
-        persist = den.aspects.luks.call {
+        persist = disko.luks.call {
           name = "persist";
           size = "100%";
           device = "${partlabel}/disk-nvme-persist";
           priority = 5;
-          content = den.aspects.xfs.call {
+          content = disko.xfs.call {
             name = "persist";
             mountpoint = "/nix/persist";
             entireDisk = true;

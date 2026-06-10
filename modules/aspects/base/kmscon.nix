@@ -7,7 +7,7 @@
       pkgs,
       ...
     }:
-    lib.optional (!isLive && !isServer) {
+    lib.optionalAttrs (!isLive && !isServer) {
       services.kmscon = {
         enable = true;
         hwRender = false;

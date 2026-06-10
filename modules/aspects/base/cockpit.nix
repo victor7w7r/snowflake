@@ -7,8 +7,8 @@
       pkgs,
       ...
     }:
-    lib.optional (isPersistent || !isHandheld) {
-      cockpit = {
+    {
+      services.cockpit = lib.optionalAttrs (isPersistent || !isHandheld) {
         enable = true;
         plugins = with pkgs; [
           cockpit-files
