@@ -2,7 +2,7 @@
   den,
   inputs,
   generic,
-  initrd,
+  initrd-services,
   ...
 }:
 {
@@ -17,7 +17,8 @@
     aspects.generic = {
       includes = with den.aspects; [
         generic.disks
-        (initrd.lib.zram { })
+        (initrd-services.lib.zram { })
+
         base._
         base.tmux._
         base.shell._

@@ -24,12 +24,36 @@
         ];
       };
 
-      disko.devices.disk.main = {
-        type = "disk";
-        device = "/dev/vda";
-        content = {
-          type = "gpt";
-          inherit partitions;
+      disko.devices = {
+        disk.main = {
+          type = "disk";
+          device = "/dev/vda";
+          content = {
+            type = "gpt";
+            inherit partitions;
+          };
+        };
+        bcachefs_filesystems = {
+          broot = disko.bcachefs.filesystem {
+            subvolumes = {
+              "subvolumes/nix" = {
+                mountpoint = "/nix";
+                mountOptions = [
+                  "nodiratime"
+                  "noatime"
+                  "discard"
+                ];
+              };
+              "subvolumes/persist" = {
+                mountpoint = "/nix/persist";
+                mountOptions = [
+                  "nodiratime"
+                  "noatime"
+                  "discard"
+                ];
+              };
+            };
+          };
         };
       };
     };

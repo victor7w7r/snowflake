@@ -67,7 +67,6 @@
           passwordFile
           mountpoint
           subvolumes
-          uuid
           ;
         type = "bcachefs_filesystem";
         extraFormatArgs = [
@@ -77,6 +76,7 @@
           "--data_checksum=xxhash"
         ]
         ++ extraFormatArgs;
-      };
+      }
+      // (if uuid != null then { inherit uuid; } else { });
   };
 }

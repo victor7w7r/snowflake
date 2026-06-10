@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  initrd.lib.zram =
+  initrd-services.lib.zram =
     {
       mappers ? [ ],
       isPercent ? false,
