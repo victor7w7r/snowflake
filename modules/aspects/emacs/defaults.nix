@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ inputs, lib, ... }:
 {
   flake-file.inputs = {
     emacs-overlay = {
@@ -37,12 +37,11 @@
     homeManager =
       {
         config,
-        inputs',
         pkgs,
         ...
       }:
       {
-        imports = [ inputs'.nix-doom-emacs-unstraightened.homeModule ];
+        imports = [ inputs.nix-doom-emacs-unstraightened.homeModule ];
         programs.doom-emacs = {
           enable = false;
           emacs = pkgs.emacs-nox;

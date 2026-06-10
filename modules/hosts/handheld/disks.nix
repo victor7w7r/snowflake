@@ -1,7 +1,6 @@
-{ den, ... }:
+{ den, inputs, ... }:
 {
   handheld.disks.nixos =
-    { inputs', ... }:
     let
       partitions = {
         esp = den.aspects.esp.call { };
@@ -29,7 +28,7 @@
       };
     in
     {
-      imports = [ inputs'.disko.nixosModules.disko ];
+      imports = [ inputs.disko.nixosModules.disko ];
       disko.devices = {
         disk.main = {
           type = "disk";

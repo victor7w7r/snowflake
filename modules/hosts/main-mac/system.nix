@@ -1,8 +1,8 @@
+{ inputs, ... }:
 {
   main-mac.system.darwin =
     {
       host,
-      inputs',
       pkgs,
       user,
       ...
@@ -13,9 +13,9 @@
         pathsToLink = [ "/Applications" ];
         systemPath = [ "/usr/local/bin" ];
         etc = {
-          home-manager.source = "${inputs'.home-manager}";
+          home-manager.source = "${inputs.home-manager}";
           nixpkgs.source = "${pkgs.path}";
-          stable.source = "${inputs'.stable}";
+          stable.source = "${inputs.stable}";
           "sudoers.d/timeout".text = ''
             Defaults timestamp_timeout=30
           '';

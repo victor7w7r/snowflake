@@ -1,4 +1,9 @@
-{ den, lib, ... }:
+{
+  den,
+  inputs,
+  lib,
+  ...
+}:
 {
   den.aspects.victor7w7r = {
     includes = [
@@ -8,9 +13,9 @@
 
     provides.to-hosts = {
       nixos =
-        { inputs', pkgs, ... }:
+        { pkgs, ... }:
         {
-          imports = [ inputs'.home-manager.nixosModules.home-manager ];
+          imports = [ inputs.home-manager.nixosModules.home-manager ];
           home-manager = {
             backupCommand = "${pkgs.trash-cli}/bin/trash";
             useGlobalPkgs = true;

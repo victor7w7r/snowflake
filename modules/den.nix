@@ -17,12 +17,12 @@
     flake-file.url = "github:vic/flake-file";
   };
 
-  den.schema = {
-    user.classes = lib.mkDefault [ "homeManager" ];
-    host.includes = [
-      den.batteries.define-user
-      den.batteries.inputs'
-      den.batteries.self'
+  den = {
+    default.includes = with den.batteries; [
+      define-user
+      inputs'
+      self'
     ];
+    schema.user.classes = lib.mkDefault [ "homeManager" ];
   };
 }

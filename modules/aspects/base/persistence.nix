@@ -1,16 +1,11 @@
-{ lib, ... }:
+{ inputs, lib, ... }:
 {
   flake-file.inputs.impermanence.url = "github:nix-community/impermanence";
 
   den.aspects.base.persistence.nixos =
-    {
-      inputs',
-      isPersistent,
-      user,
-      ...
-    }:
+    { isPersistent, user, ... }:
     lib.optional isPersistent {
-      imports = [ inputs'.impermanence.nixosModules.impermanence ];
+      imports = [ inputs.impermanence.nixosModules.impermanence ];
       environment.persistence."/nix/persist" = {
         hideMounts = true;
         directories = [

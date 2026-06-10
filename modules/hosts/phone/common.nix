@@ -8,12 +8,7 @@
   imports = [ (inputs.den.namespace "phone" false) ];
 
   phone.common.nixos =
-    {
-      config,
-      inputs',
-      pkgs,
-      ...
-    }:
+    { config, pkgs, ... }:
     {
       environment.systemPackages = [
         # (pkgs.callPackage ../custom/sdm845-alsa.nix { })

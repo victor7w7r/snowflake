@@ -1,10 +1,11 @@
+{ inputs, ... }:
 {
   flake-file.inputs.proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
 
   den.aspects.server.default.nixos =
-    { inputs', pkgs, ... }:
+    { pkgs, ... }:
     {
-      imports = [ inputs'.proxmox-nixos.nixosModules.proxmox-ve ];
+      imports = [ inputs.proxmox-nixos.nixosModules.proxmox-ve ];
 
       environment.systemPackages = with pkgs; [
         iproute2

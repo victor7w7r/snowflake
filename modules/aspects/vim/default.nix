@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ inputs, lib, ... }:
 {
   flake-file.inputs.nixvim = {
     url = "github:nix-community/nixvim";
@@ -7,17 +7,15 @@
 
   den.aspects.vim = {
 
-    os =
-      { inputs', ... }:
-      {
-        imports = [ inputs'.nixvim.nixosModules.nixvim ];
+    os = {
+      imports = [ inputs.nixvim.nixosModules.nixvim ];
 
-        programs.nixvim = {
-          enable = true;
-          colorschemes.catppuccin.enable = true;
-          plugins.lualine.enable = true;
-        };
+      programs.nixvim = {
+        enable = true;
+        colorschemes.catppuccin.enable = true;
+        plugins.lualine.enable = true;
       };
+    };
 
     nixos =
       { isPersistent, user, ... }:

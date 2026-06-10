@@ -1,7 +1,6 @@
-{ den, ... }:
+{ den, inputs, ... }:
 {
   main.disks.nixos =
-    { inputs', ... }:
     let
       partlabel = "/dev/disk/by-partlabel";
       idpart = "/dev/disk/by-id";
@@ -81,7 +80,7 @@
       };
     in
     {
-      imports = [ inputs'.disko.nixosModules.disko ];
+      imports = [ inputs.disko.nixosModules.disko ];
       disko.devices = {
         disk = {
           main = {
