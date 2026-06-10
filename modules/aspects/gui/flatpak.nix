@@ -11,7 +11,7 @@
         ...
       }:
       lib.optionalAttrs (isVisual && isPersistent) {
-        environment.persistence."/nix/persist".users."${user}".directories = [ ".config/flatpak" ];
+        environment.persistence."/nix/persist".users."${user.name}".directories = [ ".config/flatpak" ];
         programs.appimage = {
           enable = true;
           binfmt = true;

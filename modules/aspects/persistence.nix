@@ -28,7 +28,7 @@
           "/etc/machine-id"
         ];
         users = {
-          "${user}".directories = [
+          "${user.name}".directories = [
             "Documentos"
             "Descargas"
             "Imágenes"

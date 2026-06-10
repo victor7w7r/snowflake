@@ -11,7 +11,9 @@
       lib.optional isVisual {
         #users.extraGroups.podman.members = [ username ];
         environment = {
-          persistence."/nix/persist".users."${user}".directories = lib.mkAfter [ ".local/share/containers" ];
+          persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
+            ".local/share/containers"
+          ];
           systemPackages = with pkgs; [
             arion
             ctop

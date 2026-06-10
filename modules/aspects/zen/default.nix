@@ -32,7 +32,7 @@
     nixos =
       { isPersistent, user, ... }:
       lib.optional isPersistent {
-        environment.persistence."/nix/persist".users."${user}".directories = lib.mkAfter [
+        environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
           ".cache/zen"
           ".config/zen"
         ];

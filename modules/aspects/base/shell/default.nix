@@ -9,7 +9,7 @@
             pathsToLink = [ "/share/zsh" ];
           }
           (lib.mkIf isPersistent {
-            persistence."/nix/persist".users."${user}" = {
+            persistence."/nix/persist".users."${user.name}" = {
               files = [
                 ".zsh_history"
                 ".bash_history"

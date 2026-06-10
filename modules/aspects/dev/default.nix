@@ -29,22 +29,23 @@
           enableZshIntegration = true;
           nix-direnv.enable = true;
         };
-        homeManager.programs = {
-          #aichat.enable = true;
-          #aider-chat.enable = true;
-          #meli.enable = true; BUILD
-          #visidata.enable = true;
-          gitui.enable = true;
-          jq.enable = true;
-          lazysql.enable = true;
-          mods.enable = true;
-          pyenv = {
-            enable = true;
-            enableZshIntegration = true;
-            enableBashIntegration = true;
-          };
-        };
       };
+
+    homeManager.programs = {
+      #aichat.enable = true;
+      #aider-chat.enable = true;
+      #meli.enable = true; BUILD
+      #visidata.enable = true;
+      gitui.enable = true;
+      jq.enable = true;
+      lazysql.enable = true;
+      mods.enable = true;
+      pyenv = {
+        enable = true;
+        enableZshIntegration = true;
+        enableBashIntegration = true;
+      };
+    };
 
     nixos =
       { isPersistent, pkgs, ... }:

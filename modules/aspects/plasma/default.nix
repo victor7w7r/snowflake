@@ -12,7 +12,7 @@
       {
         programs.kde-pim.enable = true;
 
-        environment.persistence."/nix/persist".users."${user}" = {
+        environment.persistence."/nix/persist".users."${user.name}" = {
           directories = [
             ".local/share/baloo"
             ".local/share/klipper"

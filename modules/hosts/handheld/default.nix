@@ -112,7 +112,7 @@
                 "/etc/asusd"
                 "/etc/hhd"
               ];
-              users."${user}".directories = [ ".config/rog" ];
+              users."${user.name}".directories = [ ".config/rog" ];
             };
             systemPackages = with pkgs; [
               asusctl

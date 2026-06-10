@@ -66,10 +66,8 @@
           locate.enable = true;
           irqbalance.enable = hasVisualKeyboard;
           scx.enable = isX86;
-          memavaild.enable = !hasVisualKeyboard;
           nohang = lib.optionalAttrs (!hasVisualKeyboard) {
             enable = true;
-            desktop = true;
           };
           /*
             dbus = {

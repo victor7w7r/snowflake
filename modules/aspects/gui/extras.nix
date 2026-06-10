@@ -9,7 +9,7 @@
         ...
       }:
       lib.optionalAttrs (isPersistent && !isServer) {
-        environment.persistence."/nix/persist".users."${user}".directories = lib.mkAfter [
+        environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
           ".config/legcord"
           ".config/onlyoffice"
           ".config/vlc"

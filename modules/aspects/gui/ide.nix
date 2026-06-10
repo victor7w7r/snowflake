@@ -14,7 +14,7 @@
         ...
       }:
       lib.optionalAttrs (isMain || isSuperlab) {
-        environment.persistence."/nix/persist".users."${user}".directories = lib.mkAfter [
+        environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
           ".config/bruno"
           ".config/Claude"
           ".config/JetBrains"

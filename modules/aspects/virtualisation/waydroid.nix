@@ -12,7 +12,7 @@
       environment = {
         persistence."/nix/persist" = {
           directories = lib.mkAfter [ "/var/lib/waydroid" ];
-          users."${user}".directories = [ ".local/share/waydroid" ];
+          users."${user.name}".directories = [ ".local/share/waydroid" ];
         };
         systemPackages = with pkgs; [ waydroid-helper ];
       };

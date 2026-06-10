@@ -1,28 +1,18 @@
 { lib, ... }:
 {
   den.aspects.base.kmscon.nixos =
-    {
-      isServer,
-      isLive,
-      pkgs,
-      ...
-    }:
+    { isServer, isLive, ... }:
     lib.optionalAttrs (!isLive && !isServer) {
       services.kmscon = {
         enable = true;
         hwRender = false;
-        fonts = [
-          {
-            package = pkgs.nerd-fonts.jetbrains-mono;
-            name = "JetBrainsMono Nerd Font Mono";
-          }
-        ];
-        extraConfig = ''
-          font-size=9
-          sb-size=10000
-          palette=custom
-          palette-background=30, 30, 46
-        '';
+        config = {
+          font-size = 9;
+          font-name = "JetBrainsMono Nerd Font Mono";
+          sb-size = 10000;
+          palette = "custom";
+          palette-background = "30, 30, 46";
+        };
       };
 
       systemd.services = {

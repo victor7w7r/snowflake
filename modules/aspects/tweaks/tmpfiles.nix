@@ -3,7 +3,7 @@
   den.aspects.tweaks.tmpfiles.nixos =
     { isIntel, isMain, ... }:
     {
-      tmpfiles.rules = [
+      systemd.tmpfiles.rules = [
         "R /srv - - - - -"
         "R /lost+found - - - - -"
         "d /mnt 0755 root root - -"

@@ -11,7 +11,7 @@
     nixos =
       { isPersistent, user, ... }:
       lib.optional isPersistent {
-        environment.persistence."/nix/persist".users."${user}".directories = lib.mkAfter [ ".tmux" ];
+        environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [ ".tmux" ];
       };
 
     homeManager =

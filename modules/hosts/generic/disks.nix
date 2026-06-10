@@ -13,6 +13,17 @@
     in
     {
       imports = [ inputs.disko.nixosModules.disko ];
+
+      fileSystems."/" = {
+        device = "/dev/zram1";
+        fsType = "ext4";
+        neededForBoot = true;
+        options = [
+          "noatime"
+          "x-systemd.device-timeout=0"
+        ];
+      };
+
       disko.devices.disk.main = {
         type = "disk";
         device = "/dev/vda";

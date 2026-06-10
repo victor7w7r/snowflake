@@ -12,19 +12,19 @@
             "2.south-america.pool.ntp.org"
             "3.south-america.pool.ntp.org"
           ];
-        };
-        firewall = {
-          enable = true;
-          allowPing = true;
-          checkReversePath = false;
-          logRefusedPackets = true;
-          logRefusedConnections = false;
-          logReversePathDrops = true;
-          allowedTCPPorts = [
-            22
-            9090
-          ]
-          ++ lib.optionals isServer [ 8006 ];
+          firewall = {
+            enable = true;
+            allowPing = true;
+            checkReversePath = false;
+            logRefusedPackets = true;
+            logRefusedConnections = false;
+            logReversePathDrops = true;
+            allowedTCPPorts = [
+              22
+              9090
+            ]
+            ++ lib.optionals isServer [ 8006 ];
+          };
         };
 
         systemd.services.tailscaled = lib.optionalAttrs isPersistent {
