@@ -11,7 +11,6 @@
         swapcrypt = disko.luks.call {
           name = "swapcrypt";
           size = "14G";
-          group = "main";
           content = disko.swap.call { };
           priority = 6;
         };
@@ -29,6 +28,17 @@
     in
     {
       imports = [ inputs.disko.nixosModules.disko ];
+
+      fileSystems."/" = {
+        device = "/dev/zram1";
+        fsType = "ext4";
+        neededForBoot = true;
+        options = [
+          "noatime"
+          "x-systemd.device-timeout=0"
+        ];
+      };
+
       disko.devices = {
         disk.main = {
           type = "disk";

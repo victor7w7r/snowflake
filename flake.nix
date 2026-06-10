@@ -110,6 +110,7 @@
       flake = false;
     };
     nix-alien.url = "https://flakehub.com/f/thiagokokada/nix-alien/0.1";
+    nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
     nix-doom-emacs-unstraightened = {
       url = "github:marienz/nix-doom-emacs-unstraightened";
       inputs.nixpkgs.follows = "";

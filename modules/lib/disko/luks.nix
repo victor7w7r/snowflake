@@ -2,7 +2,7 @@
   disko.luks.call =
     {
       name,
-      device,
+      device ? "",
       priority ? null,
       size ? "100%",
       content ? null,

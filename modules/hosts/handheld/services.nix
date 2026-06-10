@@ -1,39 +1,43 @@
 { lib, ... }:
 {
-  handheld.services.nixos.services = {
-    acpid.enable = true;
-    asusd.enable = true;
-    #auto-cpufreq.enable = true;
+  handheld.services.nixos =
+    { user, ... }:
+    {
+      services = {
+        acpid.enable = true;
+        asusd.enable = true;
+        #auto-cpufreq.enable = true;
 
-    tuned.enable = false;
-    inputplumber.enable = lib.mkForce false;
-    powerstation.enable = false;
+        tuned.enable = false;
+        inputplumber.enable = lib.mkForce false;
+        powerstation.enable = false;
 
-    btrfs.autoScrub = {
-      enable = true;
-      fileSystems = [ "/run/media/games" ];
-      interval = "weekly";
-    };
+        btrfs.autoScrub = {
+          enable = true;
+          fileSystems = [ "/run/media/games" ];
+          interval = "weekly";
+        };
 
-    handheld-daemon = {
-      enable = true;
-      #user = username;
-      ui.enable = true;
-      adjustor.enable = true;
-      adjustor.loadAcpiCallModule = true;
-    };
+        handheld-daemon = {
+          enable = true;
+          user = user.name;
+          ui.enable = true;
+          adjustor.enable = true;
+          adjustor.loadAcpiCallModule = true;
+        };
 
-    supergfxd = {
-      enable = true;
-      settings = {
-        vfio_enable = true;
-        vfio_save = false;
-        always_reboot = false;
-        no_logind = false;
-        logout_timeout_s = 20;
-        hotplug_type = "Asus";
+        supergfxd = {
+          enable = true;
+          settings = {
+            vfio_enable = true;
+            vfio_save = false;
+            always_reboot = false;
+            no_logind = false;
+            logout_timeout_s = 20;
+            hotplug_type = "Asus";
+          };
+        };
       };
     };
-  };
 
 }

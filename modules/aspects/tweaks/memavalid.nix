@@ -1,7 +1,7 @@
 { lib, ... }:
 {
   den.aspects.tweaks.memavalid.nixos =
-    { hasVisualKeyboard, pkgs, ... }:
+    { hasVisualKeyboard, self', ... }:
     let
       confFile = ''
         ## This is memavaild config file.
@@ -62,10 +62,10 @@
         group = "memavaild";
       };
       users.groups.memavaild = { };
-      environment.systemPackages = with pkgs; [ memavalid ];
-      systemd.packages = with pkgs; [ memavalid ];
+      environment.systemPackages = with self'.packages; [ memavalid ];
+      systemd.packages = with self'.packages; [ memavalid ];
       systemd.services.memavaild.wantedBy = [ "multi-user.target" ];
       systemd.services.memavaild.restartTriggers = [ confFile ];
-      environment.etc."memavaild.conf".source = confFile;
+      environment.etc."memavaild.conf".text = confFile;
     };
 }

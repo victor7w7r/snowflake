@@ -1,6 +1,6 @@
 {
   den.aspects.gui.xr.nixos =
-    { pkgs, self', ... }:
+    { self', ... }:
     {
       environment.systemPackages = with self'.packages; [
         breezy-desktop
@@ -15,8 +15,8 @@
         wantedBy = [ "default.target" ];
         serviceConfig = {
           Type = "simple";
-          ExecStartPre = "${pkgs.coreutils}/bin/install -Dm644 ${../../../../dotfiles/default/xr_driver/config.ini} %h/.config/xr_driver/config.ini";
-          ExecStart = "${pkgs.xrlinux}/bin/xrDriver";
+          #ExecStartPre = "${pkgs.coreutils}/bin/install -Dm644 ${../../../../dotfiles/default/xr_driver/config.ini} %h/.config/xr_driver/config.ini";
+          ExecStart = "${self'.packages.xrlinux}/bin/xrDriver";
           Restart = "always";
           RestartSec = 2;
         };

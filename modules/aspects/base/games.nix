@@ -43,7 +43,12 @@
       };
 
     nixos =
-      { pkgs, isPersistent, ... }:
+      {
+        isPersistent,
+        self',
+        pkgs,
+        ...
+      }:
       {
         environment.systemPackages =
           with pkgs;

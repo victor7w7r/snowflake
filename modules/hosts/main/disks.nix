@@ -1,4 +1,9 @@
-{ disko, inputs, ... }:
+{
+  disko,
+  lib,
+  inputs,
+  ...
+}:
 {
   main.disks.nixos =
     let
@@ -61,6 +66,7 @@
         system = disko.bcachefs.partition {
           filesystem = "bsystem";
           name = "bsystem.ssd1";
+          size = "100%";
           priority = 10;
         };
       };
@@ -81,6 +87,17 @@
     in
     {
       imports = [ inputs.disko.nixosModules.disko ];
+
+      fileSystems."/" = lib.mkDefault {
+        device = "/dev/zram1";
+        fsType = "ext4";
+        neededForBoot = true;
+        options = [
+          "noatime"
+          "x-systemd.device-timeout=0"
+        ];
+      };
+
       disko.devices = {
         disk = {
           main = {
@@ -104,7 +121,7 @@
           persist = {
             type = "disk";
             device = "${idpart}/ata-WDC_WD5000LPSX-75A6WT0_WX12A21JEEPK";
-            content = {
+            content = disko.luks.call {
               entireDisk = true;
               allowDiscards = false;
               name = "persist";

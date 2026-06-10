@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ inputs, lib, ... }:
 {
   flake-file.inputs.catppuccin-refind = {
     url = "github:catppuccin/refind";
@@ -8,7 +8,6 @@
   den.aspects.initrd.refind.nixos =
     {
       config,
-      inputs',
       isEfi,
       isTpm,
       pkgs,
@@ -54,7 +53,7 @@
               rm -rf ${efi}/refind/drivers_x64/hfs_x64.efi
               rm -rf ${efi}/refind/drivers_x64/iso9660_x64.efi ${efi}/refind/drivers_x64/reiserfs_x64.efi
               mkdir -p ${efi}/refind/themes
-              cp -r ${inputs'.catppuccin-refind} ${efi}/refind/themes/catppuccin
+              cp -r ${inputs.catppuccin-refind} ${efi}/refind/themes/catppuccin
 
               cp ${pkgs.memtest86-efi}/BOOTX64.efi ${efi}/refind/tools_x64/memtest86.efi
               cp ${pkgs.fwupd-efi}/libexec/fwupd/efi/fwupdx64.efi ${efi}/refind/tools_x64/fwupx64.efi

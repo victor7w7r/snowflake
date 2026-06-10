@@ -1,12 +1,12 @@
 {
   main.audio.nixos =
-    { pkgs, ... }:
+    { self', ... }:
     {
       nixpkgs.overlays = [
         (_: prev: {
           pipewire = prev.pipewire.overrideAttrs (oldAttrs: {
             postPatch = (oldAttrs.postPatch or "") + ''
-              cp -r ${pkgs.t2-audio.files}/files/{profile-sets,paths} spa/plugins/alsa/mixer/
+              cp -r ${self'.packages.t2-audio.files}/files/{profile-sets,paths} spa/plugins/alsa/mixer/
 
               cat > spa/plugins/alsa/mixer/profile-sets/apple-t2x1.conf << EOF
               [General]

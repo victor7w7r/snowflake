@@ -8,7 +8,7 @@
         user,
         ...
       }:
-      lib.optional isVisual {
+      lib.optionalAttrs isVisual {
         #users.extraGroups.podman.members = [ username ];
         environment = {
           persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
@@ -50,7 +50,7 @@
 
     homeManager =
       { isVisual, pkgs, ... }:
-      lib.optional isVisual {
+      lib.optionalAttrs isVisual {
         home.packages = with pkgs; [ distroshelf ];
         programs.lazydocker.enable = true;
       };

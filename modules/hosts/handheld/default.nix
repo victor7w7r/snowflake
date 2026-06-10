@@ -3,6 +3,7 @@
   inputs,
   lib,
   handheld,
+  initrd-services,
   ...
 }:
 {
@@ -19,8 +20,9 @@
         handheld.disks
         handheld.hardware
         handheld.initrd
-        handheld.kernel
+        #handheld.kernel
         handheld.services
+        (initrd-services.lib.zram { })
 
         base._
         base.tmux._

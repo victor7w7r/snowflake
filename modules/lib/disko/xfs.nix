@@ -71,6 +71,6 @@
         inherit size;
         content = bodyContent;
       }
-      // (if name != null then name else { })
+      // (if name != null then { inherit name; } else { })
       // (if extraSetupDisk != null then extraSetupDisk else { });
 }

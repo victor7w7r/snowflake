@@ -63,8 +63,8 @@ in
   };
 
   conf.lib = {
-    inherit flake-config;
-    nix-config = {
+    config.flake-config = flake-config;
+    config.nix-config = {
       connect-timeout = 5;
       builders-use-substitutes = true;
       download-buffer-size = 524288000;

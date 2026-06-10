@@ -8,7 +8,7 @@
         pkgs,
         ...
       }:
-      lib.optional isVisual {
+      lib.optionalAttrs isVisual {
         boot = {
           kernelParams = (lib.mkIf isIntel) [ "kvmfr.static_size_mb=128" ];
           extraModprobeConfig = ''
@@ -55,7 +55,7 @@
 
         virtualisation = {
           spiceUSBRedirection.enable = true;
-          kvmgt.enable = lib.optionalAttrs isIntel true;
+          kvmgt.enable = isIntel;
           libvirtd = {
             enable = true;
             qemu = {
@@ -70,7 +70,7 @@
 
     homeManager =
       { isHandheld, isMain, ... }:
-      lib.optional (isHandheld || isMain) {
+      lib.optionalAttrs (isHandheld || isMain) {
         programs.looking-glass-client.enable = true;
       };
   };

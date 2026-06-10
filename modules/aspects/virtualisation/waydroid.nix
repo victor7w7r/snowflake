@@ -7,7 +7,7 @@
       user,
       ...
     }:
-    lib.optional isGraphic {
+    lib.optionalAttrs isGraphic {
       virtualisation.waydroid.enable = true;
       environment = {
         persistence."/nix/persist" = {

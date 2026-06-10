@@ -26,7 +26,7 @@
           sshfs
           sd
           sig
-          texoxide
+          self'.packages.texoxide
           tmux
           tre-command
           udiskie

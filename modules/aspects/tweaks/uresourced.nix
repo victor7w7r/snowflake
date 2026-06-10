@@ -1,7 +1,7 @@
 { lib, ... }:
 {
   den.aspects.tweaks.uresourced.nixos =
-    { hasVisualKeyboard, pkgs, ... }:
+    { hasVisualKeyboard, self', ... }:
     lib.optionalAttrs hasVisualKeyboard {
       users.users.uresourced = {
         description = "uresourced service user";
@@ -9,10 +9,10 @@
         group = "uresourced";
       };
       users.groups.uresourced = { };
-      environment.systemPackages = with pkgs; [ uresourced ];
-      systemd.packages = with pkgs; [ uresourced ];
+      environment.systemPackages = with self'.packages; [ uresourced ];
+      systemd.packages = with self'.packages; [ uresourced ];
       systemd.services.uresourced.wantedBy = [ "multi-user.target" ];
-      environment.etc."uresourced.conf".source = ''
+      environment.etc."uresourced.conf".text = ''
         [Global]
         # Protect at maximum 10% of available memory. user.slice system will get a
         # MemoryLow allocation of

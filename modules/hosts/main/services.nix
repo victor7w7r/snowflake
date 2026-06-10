@@ -1,6 +1,6 @@
 {
   main.services.nixos =
-    { pkgs, ... }:
+    { pkgs, self', ... }:
     {
       systemd.services = {
         t2fanrd = {
@@ -9,7 +9,7 @@
           wantedBy = [ "multi-user.target" ];
           serviceConfig = {
             Type = "exec";
-            #ExecStart = "${(pkgs.callPackage ./custom/t2fanrd.nix { })}/bin/t2fanrd";
+            ExecStart = "${self'.packages.t2fanrd}/bin/t2fanrd";
             Restart = "always";
             PrivateTmp = true;
             ProtectSystem = true;

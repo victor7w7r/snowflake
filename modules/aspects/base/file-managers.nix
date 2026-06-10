@@ -28,15 +28,17 @@
       };
 
     nixos =
-      { isPersistent, pkgs, ... }:
       {
-        environment.systemPackages =
-          with pkgs;
-          lib.optionals isPersistent [
-            fman
-            #tuifimanager
-            #https://codeberg.org/sylphenix/sff
-          ];
+        isPersistent,
+        self',
+        ...
+      }:
+      {
+        environment.systemPackages = lib.optionals isPersistent [
+          self'.packages.fman
+          #tuifimanager
+          #https://codeberg.org/sylphenix/sff
+        ];
       };
 
     homeManager =

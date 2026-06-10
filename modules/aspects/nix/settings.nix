@@ -22,7 +22,8 @@
       os.nixpkgs.config.allowUnfree = true;
       nixos = {
         system.stateVersion = stateVersion;
-        nix.settings = conf.lib.flake-config // conf.lib.nix-config;
+        nix.settings = conf.lib.config.flake-config // conf.lib.config.nix-config;
+        nixpkgs.overlays = [ inputs.nix-cachyos-kernel.overlays.pinned ];
         programs.nix-ld.enable = true;
         documentation = {
           enable = false;
@@ -60,8 +61,8 @@
           flake-registry = "/etc/nix/flake-registry.json";
           sandbox = "relaxed";
         }
-        // conf.lib.flake-config
-        // conf.lib.nix-config;
+        // conf.lib.config.flake-config
+        // conf.lib.config.nix-config;
       };
     };
 }

@@ -4,9 +4,9 @@
 
   den.default.nixos =
     { isPersistent, user, ... }:
-    lib.optionalAttrs isPersistent {
+    {
       imports = [ inputs.impermanence.nixosModules.impermanence ];
-      environment.persistence."/nix/persist" = {
+      environment.persistence."/nix/persist" = lib.optionalAttrs isPersistent {
         hideMounts = true;
         directories = [
           "/etc/nixos"

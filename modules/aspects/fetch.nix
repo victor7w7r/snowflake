@@ -33,13 +33,18 @@
       };
 
     nixos =
-      { inputs', pkgs, ... }:
+      {
+        #inputs',
+        pkgs,
+        #host,
+        ...
+      }:
       {
         environment.systemPackages = with pkgs; [
           cpufetch
           microfetch
           ramfetch
-          inputs'.batfetch.packages.${pkgs.system}.default
+          #inputs'.batfetch.packages.${host.system}.default
           #inputs.swiftfetch.packages.${pkgs.system}.swiftfetch
           #https://github.com/xdearboy/mfetch
           #https://gitlab.com/Maxb0tbeep/bestfetch

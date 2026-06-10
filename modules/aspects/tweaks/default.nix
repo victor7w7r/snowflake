@@ -22,6 +22,7 @@
         isServer,
         isX86,
         pkgs,
+        self',
         ...
       }:
       {
@@ -32,7 +33,7 @@
           {
             systemPackages = with pkgs; [
               fatrace
-              journalview
+              self'.packages.journalview
               kmon
               lazyjournal
               lnav
