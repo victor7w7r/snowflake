@@ -5,6 +5,7 @@
   ...
 }:
 {
+  #nix build -L ".#nixosConfigurations.generic.config.system.build.toplevel"
   imports = [ (inputs.den.namespace "generic" false) ];
 
   den = {
@@ -23,9 +24,10 @@
         networking._
         nix._
         tweaks._
-        users._
         vim._
         fetch._
+
+        snowflake
       ];
 
       /*

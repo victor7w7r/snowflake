@@ -1,11 +1,11 @@
 { inputs, ... }:
 {
-  # nix run ".#vm"
+  #nix run ".#vmGeneric"
   perSystem =
     { config, pkgs, ... }:
     {
       packages = {
-        vmGemeric = pkgs.writeShellApplication {
+        vmGeneric = pkgs.writeShellApplication {
           name = "generic-vm";
           text =
             let
@@ -18,9 +18,9 @@
       };
 
       apps = {
-        vmGemeric = {
+        vmGeneric = {
           type = "app";
-          program = "${config.packages.vmAlpha}/bin/vm-generic";
+          program = "${config.packages.vmGeneric}/bin/vm-generic";
         };
       };
     };

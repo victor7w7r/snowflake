@@ -22,6 +22,8 @@
       includes = with den.aspects; [
         server.disks-logical
         server.disks-physical
+        server.initrd
+        server.systemd
 
         base._
         base.tmux._
@@ -32,7 +34,6 @@
         nix._
         server._
         tweaks._
-        users._
         virtualisation._
         vim._
 
@@ -42,6 +43,7 @@
         hardware
         secrets
         xfce
+        victor7w7r
         zed
       ];
 

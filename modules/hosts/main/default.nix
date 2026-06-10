@@ -16,7 +16,10 @@
 
     aspects.main = {
       includes = with den.aspects; [
+        main.audio
         main.disks
+        main.initrd
+        main.services
 
         base._
         base.tmux._
@@ -29,7 +32,6 @@
         plasma._
         sound._
         tweaks._
-        users._
         vim._
         virtualisation._
         zen._
@@ -42,6 +44,7 @@
         hardware
         kitty
         secrets
+        victor7w7r
         zed
       ];
       #audioT2 = (pkgs.callPackage ./custom/t2-pipewire.nix { });

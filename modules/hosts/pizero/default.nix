@@ -1,4 +1,5 @@
 {
+  pizero,
   den,
   inputs,
   ...
@@ -22,6 +23,8 @@
 
     aspects.phone = {
       includes = with den.aspects; [
+        pizero.passbolt
+
         base._
         base.tmux._
         base.shell._
@@ -30,7 +33,6 @@
         networking._
         nix._
         tweaks._
-        users._
         virtualisation._
         vim._
 
@@ -38,6 +40,7 @@
         fetch
         hardware
         secrets
+        victor7w7r
       ];
 
       nixos = {

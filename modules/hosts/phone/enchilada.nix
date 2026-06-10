@@ -20,7 +20,6 @@
         plasma._
         sound._
         tweaks._
-        users._
         vim._
         virtualisation._
         zen._
@@ -31,6 +30,7 @@
         hardware
         kitty
         secrets
+        victor7w7r
         zed
       ];
 

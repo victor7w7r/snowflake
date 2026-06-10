@@ -22,7 +22,6 @@
     host.includes = [
       den.batteries.define-user
       den.batteries.inputs'
-      den.batteries.os-class
       den.batteries.self'
     ];
   };

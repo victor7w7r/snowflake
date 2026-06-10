@@ -44,14 +44,8 @@
             };
           })
           (final: _prev: {
-            /*
-              inherit inputs;
-              misArgs = {
-                saludo = "hola desde el flake";
-                entorno = "desarrollo";
-                driverExtra = inputs.xrlinux; # Pasas el input que no es flake
-                };
-            */
+            inherit inputs;
+            kernel = { };
           })
         ];
         config = {

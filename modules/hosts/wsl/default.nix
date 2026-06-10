@@ -29,12 +29,12 @@
         networking._
         nix._
         tweaks._
-        users._
         vim._
 
         btrfs
         fetch
         secrets
+        victor7w7r
       ];
 
       nixos = {

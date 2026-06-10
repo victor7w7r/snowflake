@@ -23,12 +23,12 @@
         networking._
         nix._
         tweaks._
-        users._
         vim._
 
         btrfs
         hardware
         secrets
+        snowflake
       ];
       nixos = {
         isoImage.edition = lib.mkOverride 500 "minimal";

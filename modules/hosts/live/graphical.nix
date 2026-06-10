@@ -24,7 +24,6 @@
         networking._
         nix._
         tweaks._
-        users._
         vim._
 
         bluetooth
@@ -32,6 +31,7 @@
         hardware
         kitty
         secrets
+        snowflake
       ];
 
       nixos = {
