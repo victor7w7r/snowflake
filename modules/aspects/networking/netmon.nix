@@ -6,11 +6,12 @@
         isMainMac,
         isPersistent,
         pkgs,
+        self',
         ...
       }:
       lib.optionalAttrs (isPersistent || isMainMac) {
         environment.systemPackages = with pkgs; [
-          aim
+          self'.packages.aim
           ariang
           axel
           doggo

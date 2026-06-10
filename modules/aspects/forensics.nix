@@ -14,12 +14,12 @@
       };
 
     nixos =
-      { pkgs, ... }:
+      { pkgs, self', ... }:
       {
         environment.systemPackages = with pkgs; [
           #https://aur.archlinux.org/packages/r-linux
-          btrfs-data-recovery
-          btrfs-du
+          self'.packages.btrfs-data-recovery
+          self'.packages.btrfs-du
           cshatag
           ddrutility
           ext4magic

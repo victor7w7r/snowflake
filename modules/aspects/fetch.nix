@@ -13,14 +13,14 @@
 
   den.aspects.fetch = {
     os =
-      { pkgs, ... }:
+      { pkgs, self', ... }:
       {
         environment.systemPackages = with pkgs; [
-          aerofetch
-          cargofetch
+          self'.packages.aerofetch
+          self'.packages.cargofetch
           countryfetch
-          customfetch
-          envfetch
+          self'.packages.customfetch
+          self'.packages.envfetch
           freshfetch
           macchina
           nerdfetch
@@ -28,7 +28,7 @@
           onefetch
           pfetch-rs
           uwufetch
-          treefetch
+          self'.packages.treefetch
         ];
       };
 

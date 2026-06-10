@@ -21,13 +21,13 @@
         inputs',
         isMain,
         isSuperlab,
-        pkgs,
+        self',
         ...
       }:
       lib.optionalAttrs (isMain || isSuperlab) {
         home.packages = [
           inputs'.gestures.packages."x86_64-linux".gestures
-          pkgs.tablet-map
+          self'.packages.tablet-map
         ];
 
         xdg.configFile."gestures.kdl".text =
@@ -46,7 +46,7 @@
           };
           tablet-map = {
             Service = {
-              ExecStart = "${pkgs.tablet-map}/bin/tablet_map";
+              ExecStart = "${self'.packages.tablet-map}/bin/tablet_map";
               Restart = "no";
               StandardOutput = "journal";
               StandardError = "journal";

@@ -2,7 +2,7 @@
 {
   den.aspects.base.default = {
     os =
-      { pkgs, ... }:
+      { pkgs, self', ... }:
       {
         environment.systemPackages = with pkgs; [
           atool
@@ -10,7 +10,7 @@
           choose
           cod
           file
-          hf
+          self'.packages.hf
           gnused
           gnutar
           lemmeknow
@@ -55,6 +55,7 @@
         isTpm,
         pkgs,
         options,
+        self',
         ...
       }:
       {
@@ -81,7 +82,7 @@
               killall
               ntfs2btrfs
               #procmux
-              progressline
+              self'.packages.progressline
             ]
             ++ lib.optionals isEfi [
               efibooteditor

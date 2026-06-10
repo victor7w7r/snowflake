@@ -1,13 +1,13 @@
 {
   den.aspects.gui.xr.nixos =
-    { pkgs, ... }:
+    { pkgs, self', ... }:
     {
-      environment.systemPackages = with pkgs; [
+      environment.systemPackages = with self'.packages; [
         breezy-desktop
         xrlinux
       ];
 
-      services.udev.packages = with pkgs; [ xrlinux ];
+      services.udev.packages = with self'.packages; [ xrlinux ];
       boot.kernelModules = [ "uinput" ];
 
       systemd.user.services.xr-driver = {

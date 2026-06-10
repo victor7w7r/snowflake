@@ -1,7 +1,12 @@
 {
   den.aspects.sound.default = {
     nixos =
-      { pkgs, user, ... }:
+      {
+        pkgs,
+        user,
+        self',
+        ...
+      }:
       {
         users.groups.audio.members = [ user ];
         environment.systemPackages = with pkgs; [
@@ -10,13 +15,13 @@
           alsa-utils
           alsa-firmware
           alsa-ucm-conf
-          audio-share
-          cliwrap
-          gspot
-          helvum
+          self'.packages.audio-share
+          self'.packages.cliwrap
+          self'.packages.gspot
+          self'.packages.helvum
           kew
           musikcube
-          lyricstify
+          self'.packages.lyricstify
           playerctl
           pavucontrol
           pwvucontrol

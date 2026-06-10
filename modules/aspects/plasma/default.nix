@@ -39,7 +39,7 @@
       };
 
     homeManager =
-      { pkgs, ... }:
+      { pkgs, self', ... }:
       {
         imports = [ inputs.plasma-manager.homeModules.plasma-manager ];
 
@@ -72,22 +72,22 @@
 
         home.packages = with pkgs; [
           application-title-bar
-          appimage-thumbnailer
-          ffmpeg-audio-thumbnailer
-          jar-thumbnailer
-          kde-control-station
-          kde-thumbnailer-apk
-          kf6-servicemenus-rootactions
-          kmenu
+          self'.packages.appimage-thumbnailer
+          self'.packages.ffmpeg-audio-thumbnailer
+          self'.packages.jar-thumbnailer
+          self'.packages.kde-control-station
+          self'.packages.kde-thumbnailer-apk
+          self'.packages.kf6-servicemenus-rootactions
+          self'.packages.kmenu
           kurve
-          kzones
-          layan
-          maxwell
-          plasma-drawer
-          panel-spacer-extended
-          sticky-window-snapping
-          virtual-desktops-only-on-primary
-          wallpaper-effects
+          self'.packages.kzones
+          self'.packages.layan
+          self'.packages.maxwell
+          self'.packages.plasma-drawer
+          self'.packages.panel-spacer-extended
+          self'.packages.sticky-window-snapping
+          self'.packages.virtual-desktops-only-on-primary
+          self'.packages.wallpaper-effects
         ];
       };
   };

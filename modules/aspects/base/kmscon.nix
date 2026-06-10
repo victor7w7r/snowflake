@@ -5,11 +5,11 @@
     lib.optionalAttrs (!isLive && !isServer) {
       services.kmscon = {
         enable = true;
-        hwRender = false;
         config = {
           font-size = 9;
           font-name = "JetBrainsMono Nerd Font Mono";
           sb-size = 10000;
+          hwaccel = false;
           palette = "custom";
           palette-background = "30, 30, 46";
         };

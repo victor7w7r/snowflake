@@ -1,7 +1,12 @@
 {
   den.aspects.base.games = {
     os =
-      { pkgs, isPersistent, ... }:
+      {
+        pkgs,
+        isPersistent,
+        self',
+        ...
+      }:
       {
         environment.systemPackages =
           with pkgs;
@@ -19,17 +24,17 @@
           ++ lib.optionals isPersistent [
             aalib
             astroterm
-            cemetery-escape
+            self'.packages.cementery-escape
             chess-tui
-            cli-of-life
-            clidle
+            self'.packages.cli-of-life
+            self'.packages.clidle
             cfonts
-            go-life
+            self'.packages.go-life
             nbsdgames
             neo
-            paclear
-            sandscreen
-            sxtetris
+            self'.packages.paclear
+            self'.packages.sandscreen
+            self'.packages.sxtetris
             terminaltexteffects
             tmatrix
             toilet
@@ -43,7 +48,7 @@
         environment.systemPackages =
           with pkgs;
           lib.optionals isPersistent [
-            dvdbounce
+            self'.packages.dvdbounce
             scope-tui
 
             /*

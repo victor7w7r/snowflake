@@ -1,10 +1,10 @@
 {
   den.aspects.base.disk-management = {
     os =
-      { pkgs, ... }:
+      { pkgs, self', ... }:
       {
         environment.systemPackages = with pkgs; [
-          diskonaut
+          self'.packages.diskonaut
           dua
           duf
           duff

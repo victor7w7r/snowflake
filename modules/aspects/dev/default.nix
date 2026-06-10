@@ -2,7 +2,12 @@
 {
   den.aspects.dev.default = {
     os =
-      { isPersistent, pkgs, ... }:
+      {
+        isPersistent,
+        pkgs,
+        self',
+        ...
+      }:
       lib.optionalAttrs isPersistent {
         environment.systemPackages = with pkgs; [
           atac
@@ -12,16 +17,16 @@
           fw
           jless
           just
-          jwt-ui
+          self'.packages.jwt-ui
           ktlint
-          kyun
-          loc
-          mynav
+          self'.packages.kyun
+          self'.packages.loc
+          self'.packages.mynav
           posting
           rainfrog
           shellcheck
           ugm
-          updo
+          self'.packages.updo
           xh
         ];
         programs.direnv = {

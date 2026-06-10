@@ -25,6 +25,7 @@
         isPersistent,
         isServer,
         pkgs,
+        self',
         ...
       }:
       lib.optionalAttrs (isPersistent && !isServer) {
@@ -58,7 +59,7 @@
           rnote
           sticky-notes
           vlc
-          ytdl
+          self'.packages.ytdl
 
           #ayugram-desktop
           #vlc-pause-click-plugin vlc-plugin-pipewire vlc-plugin vlc-plugins-all vlc-plugin-ytdl-git
