@@ -1,12 +1,16 @@
-{ disko, inputs, ... }:
 {
-  generic.disks.nixos =
+  disko,
+  inputs,
+  lib,
+  ...
+}:
+{
+  pizero.disks.nixos =
     let
       diskpartitions.store = disko.xfs.call {
         name = "store";
         size = "100%";
         mountpoint = "/nix";
-        priority = 1;
       };
       sdpartitions = {
         boot = disko.esp.call { size = "96M"; };
@@ -21,72 +25,74 @@
     {
       imports = [ inputs.disko.nixosModules.disko ];
 
-      /*
-        fileSystems = {
-        "/" = {
-          device = "none";
-          fsType = "tmpfs";
-          options = [
-            "defaults"
-            "size=2G"
-            "mode=755"
-          ];
-        };
-        "/boot" = {
-          device = "/dev/disk/by-label/BOOT";
-          fsType = "vfat";
-          options = [
-            "nofail"
-            "noauto"
-          ];
-        };
-        "/nix" = {
-          device = "/dev/disk/by-label/store";
+      fileSystems = {
+        "/nix/persist".neededForBoot = true;
+        "/" = lib.mkDefault {
+          device = "/dev/zram1";
+          fsType = "ext4";
           neededForBoot = true;
-          fsType = "xfs";
           options = [
             "noatime"
-            "nodiratime"
-            "lazytime"
-            "logbufs=8"
-            "logbsize=256k"
+            "x-systemd.device-timeout=0"
           ];
         };
-        "/nix/persist" = f2fs {
-          label = "persist";
-          device = "/dev/disk/by-label/persist";
-          depends = [ "/nix" ];
-        };
-        };
-      */
-
-      fileSystems."/" = {
-        device = "/dev/zram1";
-        fsType = "ext4";
-        neededForBoot = true;
-        options = [
-          "noatime"
-          "x-systemd.device-timeout=0"
-        ];
       };
-
       disko.devices.disk = {
-        storedisk = {
+        store = {
           type = "disk";
           device = "/dev/sda";
           content = {
             type = "gpt";
-            inherit diskpartitions;
+            partitions = diskpartitions;
           };
-          sdcard = {
-            type = "disk";
-            device = "/dev/mmcblk0";
-            content = {
-              type = "dos";
-              inherit sdpartitions;
-            };
+        };
+        sdcard = {
+          type = "disk";
+          device = "/dev/mmcblk0";
+          content = {
+            type = "gpt";
+            partitions = sdpartitions;
           };
         };
       };
     };
 }
+
+/*
+  fileSystems = {
+  "/" = {
+    device = "none";
+    fsType = "tmpfs";
+    options = [
+      "defaults"
+      "size=2G"
+      "mode=755"
+    ];
+  };
+  "/boot" = {
+    device = "/dev/disk/by-label/BOOT";
+    fsType = "vfat";
+    options = [
+      "nofail"
+      "noauto"
+    ];
+  };
+  "/nix" = {
+    device = "/dev/disk/by-label/store";
+    neededForBoot = true;
+    fsType = "xfs";
+    options = [
+      "noatime"
+      "nodiratime"
+      "lazytime"
+      "logbufs=8"
+      "logbsize=256k"
+    ];
+  };
+    "/nix/persist" = f2fs {
+      label = "persist";
+      device = "/dev/disk/by-label/persist";
+      depends = [ "/nix" ];
+    };
+  };
+*/

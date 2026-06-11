@@ -18,6 +18,7 @@
         isIntel,
         isMain,
         isHandheld,
+        isX86,
         pkgs,
         ...
       }:
@@ -46,8 +47,10 @@
           ];
         hardware = lib.mkMerge [
           (lib.mkIf isGraphic {
-            enable = true;
-            enable32Bit = true;
+            graphics.enable = true;
+          })
+          (lib.mkIf (isGraphic && isX86) {
+            graphics.enable32Bit = true;
           })
           (lib.mkIf isIntel {
             cpu.intel.updateMicrocode = true;

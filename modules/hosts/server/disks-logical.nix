@@ -1,4 +1,9 @@
-{ disko, inputs, ... }:
+{
+  disko,
+  inputs,
+  lib,
+  ...
+}:
 {
   server.disks-logical.nixos =
     { ... }:
@@ -25,72 +30,18 @@
     {
       imports = [ inputs.disko.nixosModules.disko ];
 
-      /*
-        let
-          helpers = pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { };
-          kernelBuild = (pkgs.callPackage ../kernel) {
-            inherit
-              helpers
-              host
-              kernelData
-              inputs
-              ;
-          };
-          params = import ./lib/kernel-params.nix;
-          boot = (import ./lib/boot.nix) {
-            efiDisk = "emmc";
-            emergencyDisk = "nvme";
-          };
-          f2fs = import ./lib/f2fs.nix;
-          xfs = (import ./lib/xfs.nix);
-        in
-        fileSystems = {
-          inherit (boot) "/boot" "/boot/emergency";
-          "/" = {
-            device = "/dev/zram1";
-            fsType = "ext4";
-            neededForBoot = true;
-            options = [
-              "noatime"
-              "x-systemd.device-timeout=0"
-            ];
-          };
-
-          "/run/media/shared" = f2fs {
-            label = "shared";
-            neededForBoot = false;
-          };
-
-          "/nix" = f2fs {
-            label = "store";
-            depends = [ "/" ];
-          };
-
-          "/nix/persist" = xfs {
-            depends = [ "/nix" ];
-            device = "/dev/mapper/persist";
-            extraOptions = [
-              "x-systemd.device-timeout=300"
-              "x-systemd.mount-timeout=300"
-            ];
-          };
-
-          "/nix/persist/cloud" = xfs {
-            depends = [ "/nix/persist" ];
-            device = "/dev/vg0/cloud";
-            extraOptions = [
-              "largeio"
-              "swalloc"
-              "sunit=1024"
-              "swidth=4096"
-              "inode64"
-              "logdev=/dev/mapper/cloudlogcrypt"
-              "x-systemd.device-timeout=300"
-              "x-systemd.mount-timeout=300"
-            ];
-          };
+      fileSystems = {
+        "/nix/persist".neededForBoot = true;
+        "/" = lib.mkDefault {
+          device = "/dev/zram1";
+          fsType = "ext4";
+          neededForBoot = true;
+          options = [
+            "noatime"
+            "x-systemd.device-timeout=0"
+          ];
         };
-      */
+      };
 
       disko.devices = {
         disk = {
@@ -124,13 +75,73 @@
           type = "lvm_vg";
           inherit lvs;
         };
-
-        /*
-          nodev."/" = {
-          fsType = "tmpfs";
-          mountOptions = [ "size=2G" ];
-          };
-        */
       };
     };
 }
+
+/*
+  let
+    helpers = pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { };
+    kernelBuild = (pkgs.callPackage ../kernel) {
+      inherit
+        helpers
+        host
+        kernelData
+        inputs
+        ;
+    };
+    params = import ./lib/kernel-params.nix;
+    boot = (import ./lib/boot.nix) {
+      efiDisk = "emmc";
+      emergencyDisk = "nvme";
+    };
+    f2fs = import ./lib/f2fs.nix;
+    xfs = (import ./lib/xfs.nix);
+  in
+  fileSystems = {
+    inherit (boot) "/boot" "/boot/emergency";
+    "/" = {
+      device = "/dev/zram1";
+      fsType = "ext4";
+      neededForBoot = true;
+      options = [
+        "noatime"
+        "x-systemd.device-timeout=0"
+      ];
+    };
+
+    "/run/media/shared" = f2fs {
+      label = "shared";
+      neededForBoot = false;
+    };
+
+    "/nix" = f2fs {
+      label = "store";
+      depends = [ "/" ];
+    };
+
+    "/nix/persist" = xfs {
+      depends = [ "/nix" ];
+      device = "/dev/mapper/persist";
+      extraOptions = [
+        "x-systemd.device-timeout=300"
+        "x-systemd.mount-timeout=300"
+      ];
+    };
+
+    "/nix/persist/cloud" = xfs {
+      depends = [ "/nix/persist" ];
+      device = "/dev/vg0/cloud";
+      extraOptions = [
+        "largeio"
+        "swalloc"
+        "sunit=1024"
+        "swidth=4096"
+        "inode64"
+        "logdev=/dev/mapper/cloudlogcrypt"
+        "x-systemd.device-timeout=300"
+        "x-systemd.mount-timeout=300"
+      ];
+    };
+  };
+*/

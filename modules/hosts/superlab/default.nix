@@ -1,4 +1,10 @@
-{ den, inputs, ... }:
+{
+  den,
+  inputs,
+  initrd-services,
+  superlab,
+  ...
+}:
 {
   imports = [ (inputs.den.namespace "superlab" false) ];
 
@@ -10,6 +16,9 @@
 
     aspects.superlab = {
       includes = with den.aspects; [
+        (initrd-services.lib.zram { })
+        superlab.disks
+
         base._
         base.tmux._
         base.shell._
@@ -56,8 +65,6 @@
           memoryPercent = 20;
           priority = 100;
         };
-
-        hardware.rockchip.enable = true;
       };
     };
   };

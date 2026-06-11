@@ -1,7 +1,8 @@
 {
-  pizero,
   den,
   inputs,
+  initrd-services,
+  pizero,
   ...
 }:
 {
@@ -21,8 +22,10 @@
       users.victor7w7r = { };
     };
 
-    aspects.phone = {
+    aspects.pizero = {
       includes = with den.aspects; [
+        (initrd-services.lib.zram { })
+        pizero.disks
         pizero.passbolt
 
         base._
@@ -44,43 +47,8 @@
       ];
 
       nixos = {
-        /*
-          let
-            #uboot = import ./custom/sunxi-uboot.nix { inherit pkgs; };
-            f2fs = import ./lib/f2fs.nix;
-            kernel = (pkgs.callPackage ../kernel/sunxi) { inherit kernelData; };
-            #cp ${uboot}/u-boot-sunxi-with-spl.bin $out/
-          in
-          {
-            imports = [
-                (import ./soc {
-                inherit config pkgs host;
-                postBuildCommands = "dd if=${uboot}/u-boot-sunxi-with-spl.bin of=boot.img bs=1024 seek=8 conv=notrunc";
-                populateFirmwareCommands = ''
-                  mkdir -p firmware/boot
-                  ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
-                    -c ${config.system.build.toplevel} -d firmware/boot
-                '';
-                })
-
-              (import ./lib/tarball.nix {
-                inherit config pkgs;
-                additionalContent = bootFiles;
-              })
-            ];
-        */
         networking.wireless.enable = true;
         systemd.tmpfiles.rules = [ "L+ /lib/firmware - - - - /run/current-system/firmware" ];
-
-        /*
-          pkgs.buildUBoot {
-          defconfig = "orangepi_zero2w_defconfig";
-          extraMeta.platforms = [ "aarch64-linux" ];
-          BL31 = "${pkgs.armTrustedFirmwareAllwinnerH616}/bl31.bin";
-          filesToInstall = [ "u-boot-sunxi-with-spl.bin" ];
-          };
-        */
-
         boot = {
           kernelParams = [
             "earlycon"
@@ -116,3 +84,35 @@
     };
   };
 }
+/*
+  let
+    #uboot = import ./custom/sunxi-uboot.nix { inherit pkgs; };
+    f2fs = import ./lib/f2fs.nix;
+    kernel = (pkgs.callPackage ../kernel/sunxi) { inherit kernelData; };
+    #cp ${uboot}/u-boot-sunxi-with-spl.bin $out/
+  in
+  {
+    imports = [
+        (import ./soc {
+        inherit config pkgs host;
+        postBuildCommands = "dd if=${uboot}/u-boot-sunxi-with-spl.bin of=boot.img bs=1024 seek=8 conv=notrunc";
+        populateFirmwareCommands = ''
+          mkdir -p firmware/boot
+          ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
+            -c ${config.system.build.toplevel} -d firmware/boot
+        '';
+        })
+
+      (import ./lib/tarball.nix {
+        inherit config pkgs;
+        additionalContent = bootFiles;
+      })
+    ];
+
+      pkgs.buildUBoot {
+      defconfig = "orangepi_zero2w_defconfig";
+      extraMeta.platforms = [ "aarch64-linux" ];
+      BL31 = "${pkgs.armTrustedFirmwareAllwinnerH616}/bl31.bin";
+      filesToInstall = [ "u-boot-sunxi-with-spl.bin" ];
+      };
+*/

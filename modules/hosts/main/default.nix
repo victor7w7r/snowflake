@@ -46,71 +46,7 @@
         victor7w7r
         zed
       ];
-      #audioT2 = (pkgs.callPackage ./custom/t2-pipewire.nix { });
       nixos = {
-        /*
-          let
-            helpers = pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { };
-            kernelBuild = (pkgs.callPackage ../kernel) {
-              inherit
-                helpers
-                host
-                kernelData
-                inputs
-                ;
-            };
-            params = import ./lib/kernel-params.nix;
-            boot = (import ./lib/boot.nix) {
-              emergencyDisk = "ssd";
-            };
-            bcachefs = (import ./lib/bcachefs.nix);
-            xfs = (import ./lib/xfs.nix);
-            shared = (import ./lib/shared.nix) { };
-            audio = (pkgs.callPackage ./custom/apple-t2-better-audio.nix { });
-          in
-          {
-            fileSystems = {
-              inherit (boot) "/boot" "/boot/emergency";
-              inherit (shared) "/run/media/shared";
-
-              "/" = {
-                device = "/dev/zram1";
-                fsType = "ext4";
-                neededForBoot = true;
-                options = [
-                  "noatime"
-                  "x-systemd.device-timeout=0"
-                ];
-              };
-
-              "/nix" = bcachefs {
-                extraOptions = [
-                  "X-mount.subdir=subvolumes/nix"
-                  "x-systemd.device-timeout=300"
-                  "x-systemd.mount-timeout=300"
-                ];
-              };
-
-              "/nix/persist/etc" = bcachefs {
-                extraOptions = [
-                  "X-mount.subdir=subvolumes/etc"
-                  "x-systemd.device-timeout=300"
-                  "x-systemd.mount-timeout=300"
-                ];
-              };
-
-              "/nix/persist" = xfs {
-                depends = [ "/nix" ];
-                extraOptions = [ "logdev=/dev/mapper/persistlogcrypt" ];
-              };
-
-              "/nix/persist/storage" = xfs {
-                device = "/dev/vg1/storage";
-                depends = [ "/nix/persist" ];
-                extraOptions = [ "logdev=/dev/mapper/storagelogcrypt" ];
-              };
-              };
-        */
 
         boot = {
           /*
@@ -119,6 +55,7 @@
             ];
           */
           # kernelPackages = lib.mkForce (helpers.kernelModuleLLVMOverride (kernelBuild.packages));
+          #audioT2 = (pkgs.callPackage ./custom/t2-pipewire.nix { });
           resumeDevice = "/dev/mapper/swapcrypt";
         };
 

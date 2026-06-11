@@ -52,8 +52,8 @@
           enable = true;
           /*
             package = pkgs.fprintd.override {
-            libfprint = pkgs.callPackage ./custom/focaltech.nix { };
-            };
+              libfprint = pkgs.callPackage ./custom/focaltech.nix { };
+              };
           */
         };
       };

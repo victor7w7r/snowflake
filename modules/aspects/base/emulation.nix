@@ -13,11 +13,13 @@
         preferStaticEmulators = true;
         emulatedSystems = [
           "x86_64-windows"
-          "i686-windows"
           "wasm64-wasi"
           "wasm32-wasi"
         ]
-        ++ lib.optionals isX86 [ "aarch64-linux" ]
+        ++ lib.optionals isX86 [
+          "i686-windows"
+          "aarch64-linux"
+        ]
         ++ lib.optionals isArm [ "x86_64-linux" ];
         registrations = lib.mkMerge [
           (lib.mkIf isX86 {

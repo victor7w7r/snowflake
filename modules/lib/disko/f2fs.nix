@@ -1,3 +1,4 @@
+{ disko, ... }:
 {
   disko.f2fs = {
     call =
@@ -8,7 +9,7 @@
         mountpoint ? "/",
       }:
       let
-        args = (import ./f2fs-args.nix) { inherit name; };
+        args = disko.f2fs.args { inherit name; };
         mountOptions = args.mountOptions;
         extraArgs = args.extraArgs;
       in

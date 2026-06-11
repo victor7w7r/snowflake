@@ -3,7 +3,7 @@
     { pkgs, ... }:
     {
       environment.systemPackages = with pkgs; [
-        boxxy
+        #boxxy
         firejail
         luksmeta
         veracrypt

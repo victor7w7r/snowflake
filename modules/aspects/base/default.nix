@@ -108,7 +108,7 @@
           orca.enable = lib.mkForce false;
           speechd.enable = false;
           thermald.enable = isIntel;
-          upower.enable = (!isMain && !isServer && !isGeneric && !isPiZero);
+          upower.enable = lib.mkDefault (!isMain && !isServer && !isGeneric && !isPiZero);
         };
       };
 

@@ -8,8 +8,31 @@
   imports = [ (inputs.den.namespace "phone" false) ];
 
   phone.common.nixos =
-    { config, pkgs, ... }:
     {
+      config,
+      pkgs,
+      ...
+    }:
+    {
+      nixpkgs.overlays = [ (import "${inputs.mobile-nixos}/overlay/overlay.nix") ];
+      imports = [
+        inputs.disko.nixosModules.disko
+      ]
+      ++ (import "${inputs.mobile-nixos}/modules/module-list.nix");
+
+      fileSystems = {
+        "/nix/persist".neededForBoot = true;
+        "/" = lib.mkDefault {
+          device = "/dev/zram1";
+          fsType = "ext4";
+          neededForBoot = true;
+          options = [
+            "noatime"
+            "x-systemd.device-timeout=0"
+          ];
+        };
+      };
+
       environment.systemPackages = [
         # (pkgs.callPackage ../custom/sdm845-alsa.nix { })
       ];

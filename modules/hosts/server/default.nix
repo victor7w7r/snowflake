@@ -76,7 +76,7 @@
 
           services = {
             lvm.boot.thin.enable = true;
-            rustdesk.enable = true;
+            rustdesk-server.enable = true;
           };
 
           swapDevices = [
