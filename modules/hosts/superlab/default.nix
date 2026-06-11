@@ -38,6 +38,26 @@
       ];
 
       nixos = {
+        boot = {
+          kernelParams = [
+            "console=ttyS2,1500000n8"
+          ];
+          loader = {
+            grub.enable = false;
+            generic-extlinux-compatible.enable = true;
+          };
+          #pkgs.ubootRock5ModelB;
+          # kernelPackages = kernel.packages;
+        };
+
+        zramSwap = {
+          enable = true;
+          algorithm = "zstd";
+          memoryPercent = 20;
+          priority = 100;
+        };
+
+        hardware.rockchip.enable = true;
       };
     };
   };

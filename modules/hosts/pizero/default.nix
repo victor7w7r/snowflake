@@ -68,43 +68,6 @@
                 additionalContent = bootFiles;
               })
             ];
-
-            fileSystems = {
-              "/" = {
-                device = "none";
-                fsType = "tmpfs";
-                options = [
-                  "defaults"
-                  "size=2G"
-                  "mode=755"
-                ];
-              };
-              "/boot" = {
-                device = "/dev/disk/by-label/BOOT";
-                fsType = "vfat";
-                options = [
-                  "nofail"
-                  "noauto"
-                ];
-              };
-              "/nix" = {
-                device = "/dev/disk/by-label/store";
-                neededForBoot = true;
-                fsType = "xfs";
-                options = [
-                  "noatime"
-                  "nodiratime"
-                  "lazytime"
-                  "logbufs=8"
-                  "logbsize=256k"
-                ];
-              };
-              "/nix/persist" = f2fs {
-                label = "persist";
-                device = "/dev/disk/by-label/persist";
-                depends = [ "/nix" ];
-              };
-            };
         */
         networking.wireless.enable = true;
         systemd.tmpfiles.rules = [ "L+ /lib/firmware - - - - /run/current-system/firmware" ];

@@ -14,6 +14,8 @@
       };
     nixos =
       {
+        isGraphic,
+        isIntel,
         isMain,
         isHandheld,
         pkgs,
@@ -42,11 +44,20 @@
             thunderbolt
             kdePackages.plasma-thunderbolt
           ];
-        hardware = {
-          sensor.iio.enable = true;
-          ksm.enable = true;
-          #sensor.hddtemp.enable = true; SPECIFICATE IN HOSTS with .drives
-        };
+        hardware = lib.mkMerge [
+          (lib.mkIf isGraphic {
+            enable = true;
+            enable32Bit = true;
+          })
+          (lib.mkIf isIntel {
+            cpu.intel.updateMicrocode = true;
+          })
+          {
+            sensor.iio.enable = true;
+            ksm.enable = true;
+            #sensor.hddtemp.enable = true; SPECIFICATE IN HOSTS with .drives
+          }
+        ];
         services = {
           power-profiles-daemon.enable = true;
           smartd.enable = false;

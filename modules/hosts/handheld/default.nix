@@ -8,7 +8,6 @@
 }:
 {
   imports = [ (inputs.den.namespace "handheld" false) ];
-  #nixos-hardware.nixosModules.asus-ally-rc71l
 
   den = {
     hosts.x86_64-linux.handheld = {
@@ -54,60 +53,7 @@
       nixos =
         { pkgs, user, ... }:
         {
-          /*
-            let
-              params = import ./lib/kernel-params.nix;
-              boot = (import ./lib/boot.nix) { };
-              helpers = pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { };
-              kernelBuild = (pkgs.callPackage ../kernel) {
-                inherit
-                  helpers
-                  host
-                  kernelData
-                  inputs
-                  ;
-              };
-              bcachefs = (import ./lib/bcachefs.nix);
-              shared = (import ./lib/shared.nix) {
-                sharedDir = "/run/media/games";
-                partlabel = "games";
-              };
-            in
 
-            fileSystems = {
-              inherit (boot) "/boot" "/boot/emergency";
-              inherit (shared) "/run/media/games";
-
-              "/" = {
-                device = "/dev/zram1";
-                fsType = "ext4";
-                neededForBoot = true;
-                options = [
-                  "noatime"
-                  "x-systemd.device-timeout=0"
-                ];
-              };
-
-              "/nix" = bcachefs {
-                device = "/dev/disk/by-partlabel/disk-main-system";
-                extraOptions = [
-                  "X-mount.subdir=subvolumes/nix"
-                  "x-systemd.device-timeout=300"
-                  "x-systemd.mount-timeout=300"
-                ];
-              };
-
-              "/nix/persist" = bcachefs {
-                device = "/dev/disk/by-partlabel/disk-main-system";
-                extraOptions = [
-                  "X-mount.subdir=subvolumes/persist"
-                  "x-systemd.device-timeout=300"
-                  "x-systemd.mount-timeout=300"
-                ];
-                depends = [ "/nix" ];
-              };
-            };
-          */
           environment = {
             persistence."/nix/persist" = {
               directories = lib.mkAfter [
@@ -136,7 +82,6 @@
             resumeDevice = "/dev/mapper/swapcrypt";
             kernelParams = [
               "resume=/dev/mapper/swapcrypt"
-              "amd_pstate=passive"
             ];
             #kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-lts-lto;
             #kernelPackages = helpers.kernelModuleLLVMOverride (kernelBuild.packages);

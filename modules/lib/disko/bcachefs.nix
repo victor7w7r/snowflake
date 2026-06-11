@@ -74,6 +74,7 @@
           "--background_compression=zstd"
           "--metadata_checksum=xxhash"
           "--data_checksum=xxhash"
+          "--discard"
         ]
         ++ extraFormatArgs;
       }

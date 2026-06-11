@@ -6,7 +6,6 @@
 }:
 {
   imports = [ (inputs.den.namespace "main" false) ];
-  #nixos-hardware.nixosModules.apple-t2
 
   den = {
     hosts.x86_64-linux.main = {

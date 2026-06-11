@@ -1,9 +1,4 @@
   /*
-    overlays = [
-     nix-cachyos-kernel.overlays.pinned
-     (import "${inputs.mobile-nixos}/overlay/overlay.nix")
-     ];
-
      bootFiles = ''
        mkdir -p boot
        ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
@@ -16,8 +11,6 @@
            mkdir -p $out
            ${bootFiles}
          '';
-
-     helpers = pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { };
 
      packages = {
        "${systemarm}" = {
