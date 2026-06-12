@@ -5,18 +5,21 @@
   kernel.lib = {
     functors.app-config =
       configList:
-      lib.concatStringsSep "\n" (
-        lib.flatten (
-          map (
-            structConfig:
-            lib.mapAttrsToList (option: value: ''
+      lib.pipe configList [
+        (map (
+          structConfig:
+          let
+            pouch = lib.mapAttrsToList (option: value: ''
               echo "  CONFIG_${option}=${value}"
               sed -i "/^CONFIG_${option}=/d" .config
               echo "CONFIG_${option}=${value}" >> .config
-            '') (removeAttrs structConfig [ "__provider" ])
-          ) configList
-        )
-      );
+            '') (removeAttrs structConfig [ "__provider" ]);
+          in
+          pouch
+        ))
+        lib.flatten
+        (lib.concatStringsSep "\n")
+      ];
 
     version =
       { src, stdenv }:
