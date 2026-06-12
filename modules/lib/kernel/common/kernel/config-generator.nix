@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ inputs, lib, ... }:
 {
   kernel.lib.config-generator =
     {
@@ -10,13 +10,9 @@
       structConfig,
       config,
     }:
-    let
-      stdenv = pkgs.stdenv;
-    in
     pkgs.stdenvNoCC.mkDerivation {
       name = "linux-config";
       inherit src patches;
-
       nativeBuildInputs = with pkgs; [
         bison
         flex
@@ -33,13 +29,10 @@
       ];
 
       makeFlags =
-        lib.optionals isArm [ "ARCH=arm64" ] ++ lib.optionals stdenv.hostPlatform
-        != stdenv.buildPlatform [ "CROSS_COMPILE=${stdenv.cc.targetPrefix}" ];
-
-      installPhase = ''
-        mkdir -p $out
-        cp $buildRoot/.config $out/original.config
-      '';
+        (lib.optionals isArm [ "ARCH=arm64" ])
+        ++ (lib.optionals (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) [
+          "CROSS_COMPILE=${pkgs.stdenv.cc.targetPrefix}"
+        ]);
 
       #scripts/config ${lib.concatStringsSep " " config}
       buildPhase = ''
@@ -50,31 +43,22 @@
         make O=$buildRoot ARCH=${if isArm then "arm64" else "x86_64"} olddefconfig
         patchShebangs scripts/config
 
-        ${lib.concatStringsSep "\n" (
-          lib.mapAttrsToList (option: value: ''
-            echo "  CONFIG_${option}=${value}"
-            sed -i "/^CONFIG_${option}/d" .config
-            echo "CONFIG_${option}=${value}" >> .config
-          '') (builtins.trace structConfig structConfig)
-        )}
-
+        ${structConfig}
         make $makeFlags olddefconfig
       '';
-    };
-  /*
-    lib.optionalAttrs isClang {
+    }
+    // lib.optionalAttrs isClang {
       LLVM = "1";
-        stdenv = helpers.stdenvLLVM;
-          pkgs.ccacheStdenv.override {
-           stdenv = helpers.stdenvLLVM;
-           };
-
-           nativeBuildInputs =
-            [
-              llvm_20
-              clang_20
-              lld_20
-            ];
+      stdenv = (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { }).stdenvLLVM;
+      nativeBuildInputs = with pkgs; [
+        llvm_20
+        clang_20
+        lld_20
+      ];
     };
-  */
 }
+/*
+  pkgs.ccacheStdenv.override {
+  stdenv = helpers.stdenvLLVM;
+  };
+*/

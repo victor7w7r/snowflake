@@ -27,20 +27,17 @@
             ;
           config = "${sunxi.armbian}/config/kernel/linux-sunxi64-current.config";
           structConfig =
-            with kernel.config;
-            lib.mkMerge [
-              intel
-              blacklist.all
-              fs.overlayfs
-              fs.xfs
-              general
-              lowfreq
-              net
-              storage.zram
-              all-debug
-              all-vendor
-              (cmdline { })
-            ];
+            kernel.lib.config.intel
+            // kernel.lib.config.blacklist.all
+            // kernel.lib.config.fs.overlayfs
+            // kernel.lib.config.fs.xfs
+            // kernel.lib.config.general
+            // kernel.lib.config.lowfreq
+            // kernel.lib.config.net
+            // kernel.lib.config.storage.zram
+            // kernel.lib.config.all-debug
+            // kernel.lib.config.all-vendor
+            // (kernel.lib.config.cmdline { });
         };
 
         kernel-gen = kernel.lib.kernel-generator {

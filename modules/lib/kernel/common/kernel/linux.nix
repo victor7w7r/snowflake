@@ -10,7 +10,7 @@
         hash = source.linux.hash;
       };
 
-    config =
+    std.std-config =
       {
         pkgs,
         hardened ? false,

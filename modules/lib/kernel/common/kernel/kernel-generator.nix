@@ -38,8 +38,7 @@
           /*
             lib.optionalAttrs isClang {
               nativeBuildInputs = (attrs.nativeBuildInputs or [ ]) ++ [ pkgs.ccache ];
-              stdenv = pkgs.ccacheStdenv.override {
-              stdenv = helpers.stdenvLLVM;
+              stdenv = pkgs.ccacheStdenv.override { stdenv = helpers.stdenvLLVM; };
               kconfigToNix = pkgs.callPackage ./generated/generate.nix { inherit configure; };
               };
             }

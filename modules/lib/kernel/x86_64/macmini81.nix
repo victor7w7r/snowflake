@@ -27,23 +27,28 @@
             pkgs
             src
             ;
-          config = (kernel.lib.config { inherit pkgs; });
+          config = kernel.lib.std.std-config { inherit pkgs; };
           structConfig =
-            kernel.lib.config.intel
-            // kernel.lib.config.blacklist.all
-            // kernel.lib.config.fs.overlayfs
-            // kernel.lib.config.fs.xfs
-            // kernel.lib.config.general
-            // kernel.lib.config.highfreq
-            // kernel.lib.config.net
-            // kernel.lib.config.storage.zram
-            // kernel.lib.config.all-debug
-            // kernel.lib.config.all-vendor
-            // (kernel.lib.config.cmdline {
-              isIntel = true;
-              isSata = true;
-              extra = "video=DP-3:1600x900@60";
-            });
+            with kernel.lib.config;
+            (kernel.lib.functors.app-config [
+              intel
+              blacklist.all
+              fs.overlayfs
+              fs.xfs
+              general
+              highfreq
+              net
+              storage.zram
+              all-debug
+              all-vendor
+              (cmdline {
+                isIntel = true;
+                isSata = true;
+                extra = "video=DP-3:1600x900@60";
+              })
+            ])
+
+          ;
         };
 
         kernel-gen = kernel.lib.kernel-generator {

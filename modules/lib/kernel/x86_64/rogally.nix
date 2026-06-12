@@ -30,23 +30,20 @@
             pkgs
             src
             ;
-          config = (kernel.lib.config { inherit pkgs; });
+          config = kernel.lib.std-config { inherit pkgs; };
           structConfig =
-            with kernel.config;
-            lib.mkMerge [
-              amd
-              blacklist.all
-              fs.bcachefs
-              fs.overlayfs
-              fs.xfs
-              general
-              highfreq
-              net
-              zram
-              all-debug
-              all-vendor
-              (cmdline { isAmd = true; })
-            ];
+            kernel.lib.config.amd
+            // kernel.lib.config.blacklist.all
+            // kernel.lib.config.fs.bcachefs
+            // kernel.lib.config.fs.overlayfs
+            // kernel.lib.config.fs.xfs
+            // kernel.lib.config.general
+            // kernel.lib.config.highfreq
+            // kernel.lib.config.net
+            // kernel.lib.config.zram
+            // kernel.lib.config.all-debug
+            // kernel.lib.config.all-vendor
+            // (kernel.lib.config.cmdline { isAmd = true; });
         };
 
         kernel-gen = kernel.lib.kernel-generator {

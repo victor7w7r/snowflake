@@ -30,27 +30,24 @@
             pkgs
             src
             ;
-          config = (kernel.lib.config { inherit pkgs; });
+          config = kernel.lib.std-config { inherit pkgs; };
           structConfig =
-            with kernel.config;
-            lib.mkMerge [
-              intel
-              blacklist.all
-              fs.bcachefs
-              fs.overlayfs
-              fs.xfs
-              general
-              lowfreq
-              net
-              storage.all
-              all-debug
-              all-vendor
-              (cmdline {
-                isIntel = true;
-                isSata = true;
-                isSec = true;
-              })
-            ];
+            kernel.lib.config.intel
+            // kernel.lib.config.blacklist.all
+            // kernel.lib.config.fs.bcachefs
+            // kernel.lib.config.fs.overlayfs
+            // kernel.lib.config.fs.xfs
+            // kernel.lib.config.general
+            // kernel.lib.config.lowfreq
+            // kernel.lib.config.net
+            // kernel.lib.config.storage.all
+            // kernel.lib.config.all-debug
+            // kernel.lib.config.all-vendor
+            // (kernel.lib.config.cmdline {
+              isIntel = true;
+              isSata = true;
+              isSec = true;
+            });
         };
 
         kernel-gen = kernel.lib.kernel-generator {
