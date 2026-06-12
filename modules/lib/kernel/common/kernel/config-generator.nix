@@ -55,7 +55,7 @@
             echo "  CONFIG_${option}=${value}"
             sed -i "/^CONFIG_${option}/d" .config
             echo "CONFIG_${option}=${value}" >> .config
-          '') structConfig
+          '') (builtins.trace structConfig structConfig)
         )}
 
         make $makeFlags olddefconfig

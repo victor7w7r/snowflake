@@ -121,4 +121,19 @@
       BL31 = "${pkgs.armTrustedFirmwareAllwinnerH616}/bl31.bin";
       filesToInstall = [ "u-boot-sunxi-with-spl.bin" ];
       };
+
+      bootFiles = ''
+        mkdir -p boot
+        ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
+          -c ${config.system.build.toplevel} -d boot
+        tar -cv -C . boot | zstd -T$NIX_BUILD_CORES > $out/boot.tar.zst
+      '';
+      system.build.bootFiles =
+        pkgs.runCommand "boot-files" { nativeBuildInputs = with pkgs; [ zstd ]; }
+          ''
+            mkdir -p $out
+            ${bootFiles}
+          '';
+
+      };
 */

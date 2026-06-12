@@ -1,5 +1,5 @@
 {
-  kernel.config.intel = {
+  kernel.lib.config.intel = {
     CPU_SUP_INTEL = "y";
     DRM_I915 = "y";
     X86_INTEL_PSTATE = "y";

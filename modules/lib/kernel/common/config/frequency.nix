@@ -1,5 +1,5 @@
 {
-  kernel.config = rec {
+  kernel.lib.config = rec {
     commonfreq = {
       HZ_PERIODIC = "n";
       NO_HZ = "y";

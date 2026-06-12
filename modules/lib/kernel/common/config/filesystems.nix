@@ -1,5 +1,5 @@
 {
-  kernel.config.fs = {
+  kernel.lib.config.fs = {
     bcachefs = {
       BCACHEFS_FS = "y";
       BCACHEFS_QUOTA = "y";

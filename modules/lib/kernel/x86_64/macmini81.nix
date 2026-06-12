@@ -29,24 +29,21 @@
             ;
           config = (kernel.lib.config { inherit pkgs; });
           structConfig =
-            with kernel.config;
-            lib.mkMerge [
-              intel
-              blacklist.all
-              fs.overlayfs
-              fs.xfs
-              general
-              highfreq
-              net
-              storage.zram
-              all-debug
-              all-vendor
-              (cmdline {
-                isIntel = true;
-                isSata = true;
-                extra = "video=DP-3:1600x900@60";
-              })
-            ];
+            kernel.lib.config.intel
+            // kernel.lib.config.blacklist.all
+            // kernel.lib.config.fs.overlayfs
+            // kernel.lib.config.fs.xfs
+            // kernel.lib.config.general
+            // kernel.lib.config.highfreq
+            // kernel.lib.config.net
+            // kernel.lib.config.storage.zram
+            // kernel.lib.config.all-debug
+            // kernel.lib.config.all-vendor
+            // (kernel.lib.config.cmdline {
+              isIntel = true;
+              isSata = true;
+              extra = "video=DP-3:1600x900@60";
+            });
         };
 
         kernel-gen = kernel.lib.kernel-generator {

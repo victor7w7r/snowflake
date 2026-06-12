@@ -1,5 +1,5 @@
 {
-  kernel.config.net = {
+  kernel.lib.config.net = {
     BRIDGE = "y";
     BRIDGE_NETFILTER = "y";
     IP_NF_ARPTABLES = "m";

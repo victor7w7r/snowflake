@@ -1,5 +1,5 @@
 {
-  kernel.config.storage = rec {
+  kernel.lib.config.storage = rec {
 
     all = raid // zram;
 

@@ -1,5 +1,5 @@
 {
-  kernel.config.blacklist = rec {
+  kernel.lib.config.blacklist = rec {
     all = label // virt // x86;
 
     label = {

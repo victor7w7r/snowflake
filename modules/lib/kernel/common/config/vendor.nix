@@ -1,5 +1,5 @@
 {
-  kernel.config = rec {
+  kernel.lib.config = rec {
 
     all-vendor = net-vendor-enable // vendor;
 

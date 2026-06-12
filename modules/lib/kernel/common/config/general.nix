@@ -1,5 +1,5 @@
 {
-  kernel.config.general = {
+  kernel.lib.config.general = {
     GENERIC_CPU = "n";
     MZEN4 = "n";
     X86_NATIVE_CPU = "y";

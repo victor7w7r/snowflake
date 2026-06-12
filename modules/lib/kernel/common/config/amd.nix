@@ -1,5 +1,5 @@
 {
-  kernel.config.amd = {
+  kernel.lib.config.amd = {
     AMD_PRIVATE_COLOR = "y";
     ASUS_WMI = "y";
     ASUS_NB_WMI = "y";

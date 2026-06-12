@@ -1,7 +1,7 @@
 { lib, ... }:
 {
   # #"systemd.gpt_auto=0" "rootwait"
-  kernel.config.cmdline =
+  kernel.lib.config.cmdline =
     {
       extra ? "",
       isIntel ? false,
