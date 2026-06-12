@@ -6,7 +6,7 @@
   llvm_20,
   lld_20,
   fetchFromGitHub,
-  kernel,
+  main-kernel,
 }:
 (overrideCC stdenv llvmPackages_20.clang).mkDerivation rec {
   name = "apple-bce";
@@ -26,7 +26,7 @@
     "format"
   ];
 
-  nativeBuildInputs = kernel.moduleBuildDependencies ++ [
+  nativeBuildInputs = main-kernel.moduleBuildDependencies ++ [
     clang_20
     llvm_20
     lld_20
@@ -38,8 +38,8 @@
     "LD=ld.lld"
     "HOSTLD=ld.lld"
     "ARCH=x86_64"
-    "KERNELRELEASE=${kernel.modDirVersion}"
-    "KDIR=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
+    "KERNELRELEASE=${main-kernel.modDirVersion}"
+    "KDIR=${main-kernel.dev}/lib/modules/${main-kernel.modDirVersion}/build"
     "INSTALL_MOD_PATH=$(out)"
   ];
 }

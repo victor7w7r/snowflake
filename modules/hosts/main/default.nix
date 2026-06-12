@@ -1,6 +1,7 @@
 {
   den,
   inputs,
+  kernel,
   main,
   ...
 }:
@@ -19,6 +20,8 @@
         main.disks
         main.initrd
         main.services
+
+        kernel.macmini81
 
         base._
         base.tmux._
@@ -46,31 +49,33 @@
         victor7w7r
         zed
       ];
-      nixos = {
+      nixos =
+        { pkgs, ... }:
+        {
 
-        boot = {
-          /*
-            extraModulePackages = [
-            (pkgs.callPackage ./custom/apple-bce.nix { kernel = kernelBuild.kernel; })
-            ];
-          */
-          # kernelPackages = lib.mkForce (helpers.kernelModuleLLVMOverride (kernelBuild.packages));
-          #audioT2 = (pkgs.callPackage ./custom/t2-pipewire.nix { });
-          resumeDevice = "/dev/mapper/swapcrypt";
+          boot = {
+            /*
+              extraModulePackages = [
+              (pkgs.callPackage ./custom/apple-bce.nix { kernel = kernelBuild.kernel; })
+              ];
+            */
+            kernelPackages = pkgs.main-kernelPackages;
+            #audioT2 = (pkgs.callPackage ./custom/t2-pipewire.nix { });
+            resumeDevice = "/dev/mapper/swapcrypt";
+          };
+
+          swapDevices = [
+            {
+              device = "/dev/mapper/swapcrypt";
+              discardPolicy = "both";
+              options = [ "nofail" ];
+            }
+          ];
+          systemd.tmpfiles.rules = [
+            "w /sys/block/bcache0/bcache/cache_mode - - - - writethrough"
+            "w /sys/block/bcache1/bcache/cache_mode - - - - writethrough"
+          ];
         };
-
-        swapDevices = [
-          {
-            device = "/dev/mapper/swapcrypt";
-            discardPolicy = "both";
-            options = [ "nofail" ];
-          }
-        ];
-        systemd.tmpfiles.rules = [
-          "w /sys/block/bcache0/bcache/cache_mode - - - - writethrough"
-          "w /sys/block/bcache1/bcache/cache_mode - - - - writethrough"
-        ];
-      };
 
       homeManager =
         { config, ... }:

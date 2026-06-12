@@ -5,11 +5,9 @@
       let
         source = pkgs.lib.trivial.importJSON ./packages.json;
       in
-      {
-        linux = pkgs.fetchurl {
-          url = source.linux.url;
-          hash = source.linux.hash;
-        };
+      pkgs.fetchurl {
+        url = source.linux.url;
+        hash = source.linux.hash;
       };
 
     config =

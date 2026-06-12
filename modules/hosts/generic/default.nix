@@ -60,7 +60,7 @@
               "i915.enable_psr=0"
             ];
             # ++ params { };
-            kernelPackages = pkgs.linuxPackages_6_18;
+            kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-lts-lto;
             initrd = {
               luks.devices.syscrypt = {
                 device = "/dev/disk/by-partlabel/disk-main-systempv";

@@ -2,6 +2,7 @@
   den,
   inputs,
   initrd-services,
+  kernel,
   pizero,
   ...
 }:
@@ -28,6 +29,8 @@
         pizero.disks
         pizero.passbolt
 
+        kernel.sunxi
+
         base._
         base.tmux._
         base.shell._
@@ -46,41 +49,44 @@
         victor7w7r
       ];
 
-      nixos = {
-        networking.wireless.enable = true;
-        systemd.tmpfiles.rules = [ "L+ /lib/firmware - - - - /run/current-system/firmware" ];
-        boot = {
-          kernelParams = [
-            "earlycon"
-            "console=ttyS0,115200n8"
-          ];
-          initrd.kernelModules = [
-            "g_ether"
-            "sdhci"
-            "sdhci_pci"
-            "uas"
-            "sunxi_gmac"
-            "libcomposite"
-          ];
-          loader = {
-            grub.enable = false;
-            generic-extlinux-compatible.enable = true;
+      nixos =
+        { pkgs, ... }:
+        {
+          networking.wireless.enable = true;
+          systemd.tmpfiles.rules = [ "L+ /lib/firmware - - - - /run/current-system/firmware" ];
+          boot = {
+            kernelParams = [
+              "earlycon"
+              "console=ttyS0,115200n8"
+            ];
+            initrd.kernelModules = [
+              "g_ether"
+              "sdhci"
+              "sdhci_pci"
+              "uas"
+              "sunxi_gmac"
+              "libcomposite"
+            ];
+            kernelPackages = pkgs.pizero-kernelPackages;
+            loader = {
+              grub.enable = false;
+              generic-extlinux-compatible.enable = true;
+            };
+            # kernelPackages = kernel.packages;
           };
-          # kernelPackages = kernel.packages;
-        };
 
-        zramSwap = {
-          enable = true;
-          algorithm = "zstd";
-          memoryPercent = 100;
-          priority = 100;
-        };
+          zramSwap = {
+            enable = true;
+            algorithm = "zstd";
+            memoryPercent = 100;
+            priority = 100;
+          };
 
-        hardware.deviceTree = {
-          enable = true;
-          name = "allwinner/sun50i-h618-orangepi-zero2w.dtb";
+          hardware.deviceTree = {
+            enable = true;
+            name = "allwinner/sun50i-h618-orangepi-zero2w.dtb";
+          };
         };
-      };
     };
   };
 }

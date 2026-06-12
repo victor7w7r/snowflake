@@ -1,6 +1,7 @@
 {
   den,
   inputs,
+  kernel,
   server,
   ...
 }:
@@ -19,6 +20,8 @@
         server.disks-physical
         server.initrd
         server.systemd
+
+        kernel.youyeetoox1
 
         base._
         base.tmux._
@@ -52,7 +55,7 @@
             blacklistedKernelModules = [ "r8169" ];
             resumeDevice = "/dev/mapper/swapcrypt";
             kernelParams = [ "pcie_aspm=off" ];
-            #kernelPackages = helpers.kernelModuleLLVMOverride (kernelBuild.packages);
+            kernelPackages = pkgs.server-kernelPackages;
             swraid = {
               enable = true;
               mdadmConf = ''

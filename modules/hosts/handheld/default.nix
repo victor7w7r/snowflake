@@ -4,6 +4,7 @@
   lib,
   handheld,
   initrd-services,
+  kernel,
   ...
 }:
 {
@@ -19,9 +20,10 @@
         handheld.disks
         handheld.hardware
         handheld.initrd
-        #handheld.kernel
         handheld.services
         (initrd-services.lib.zram { })
+
+        kernel.rogally
 
         base._
         base.tmux._
@@ -53,7 +55,6 @@
       nixos =
         { pkgs, user, ... }:
         {
-
           environment = {
             persistence."/nix/persist" = {
               directories = lib.mkAfter [
@@ -80,11 +81,10 @@
           boot = {
             extraModprobeConfig = "options kvm-amd nested=1";
             resumeDevice = "/dev/mapper/swapcrypt";
+            kernelPackages = pkgs.handheld-kernelPackages;
             kernelParams = [
               "resume=/dev/mapper/swapcrypt"
             ];
-            #kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-lts-lto;
-            #kernelPackages = helpers.kernelModuleLLVMOverride (kernelBuild.packages);
           };
 
           zramSwap = {

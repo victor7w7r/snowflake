@@ -2,6 +2,7 @@
   den,
   inputs,
   withSystem,
+  kernel,
   ...
 }:
 {
@@ -24,29 +25,44 @@
 
   perSystem =
     { pkgs, system, ... }:
+    let
+      handheld = (kernel.rogally.result { inherit pkgs; });
+      main = (kernel.macmini81.result { inherit pkgs; });
+      server = (kernel.youyeetoox1.result { inherit pkgs; });
+      pizero = (kernel.sunxi.result { inherit pkgs; });
+      main-kernel = main.main-kernel;
+    in
     {
-      packages = den.lib.nh.denPackages { fromFlake = true; } pkgs;
+      packages = den.lib.nh.denPackages { fromFlake = true; } pkgs // {
+        inherit main-kernel;
+        main-config = main.main-config;
+        handheld-kernel = handheld.handheld-kernel;
+        handheld-config = handheld.handheld-config;
+        server-kernel = server.server-kernel;
+        server-config = server.server-config;
+        pizero-kernel = pizero.pizero-kernel;
+        pizero-config = pizero.pizero-config;
+      };
       pkgsDirectory = ../../pkgs/by-name;
       pkgsNameSeparator = "-";
       _module.args.pkgs = import inputs.nixpkgs {
         inherit system;
         overlays = [
           #inputs.deploy-rs.overlays.default
-          (final: _prev: {
+          (final: _: {
             master = import inputs.nixpkgs-master {
               inherit (final) config;
               inherit system;
             };
           })
-          (final: _prev: {
+          (final: _: {
             unstable = import inputs.nixpkgs-unstable {
               inherit (final) config;
               inherit system;
             };
           })
-          (final: _prev: {
-            inherit inputs;
-            kernel = { };
+          (final: _: {
+            inherit main-kernel;
           })
         ];
         config = {
@@ -55,14 +71,13 @@
         };
       };
     };
-  flake = {
-    overlays.default =
-      _final: prev:
-      withSystem prev.stdenv.hostPlatform.system (
-        { config, ... }:
-        {
-          local = config.packages;
-        }
-      );
-  };
+
+  flake.overlays.default =
+    _: prev:
+    withSystem prev.stdenv.hostPlatform.system (
+      { config, ... }:
+      {
+        local = config.packages;
+      }
+    );
 }

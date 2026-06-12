@@ -60,10 +60,10 @@
 
         make $makeFlags olddefconfig
       '';
-    }
-    // lib.optionalAttrs isClang {
+    };
+  /*
+    lib.optionalAttrs isClang {
       LLVM = "1";
-      /*
         stdenv = helpers.stdenvLLVM;
           pkgs.ccacheStdenv.override {
            stdenv = helpers.stdenvLLVM;
@@ -75,6 +75,6 @@
               clang_20
               lld_20
             ];
-      */
     };
+  */
 }

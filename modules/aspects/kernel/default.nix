@@ -3,9 +3,20 @@
   imports = [ (inputs.den.namespace "kernel" false) ];
 
   kernel.lib.version =
-    { src }:
+    { src, stdenv }:
+    let
+      unpack = stdenv.mkDerivation {
+        pname = "unpacked-kernel";
+        version = "1.0";
+        inherit src;
+        installPhase = ''
+          mkdir -p $out
+          cp -r . $out/
+        '';
+      };
+    in
     rec {
-      file = "${src}/Makefile";
+      file = "${unpack}/Makefile";
       version = toString (builtins.match ".+VERSION = ([0-9]+).+" (builtins.readFile file));
       patchlevel = toString (builtins.match ".+PATCHLEVEL = ([0-9]+).+" (builtins.readFile file));
       sublevel = toString (builtins.match ".+SUBLEVEL = ([0-9]+).+" (builtins.readFile file));
