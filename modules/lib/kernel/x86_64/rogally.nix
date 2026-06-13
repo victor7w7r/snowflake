@@ -1,4 +1,4 @@
-{ kernel, lib, ... }:
+{ kernel, ... }:
 {
   kernel.rogally = {
     nixos.nixpkgs.overlays = [ (_: prev: kernel.rogally.result { pkgs = prev; }) ];

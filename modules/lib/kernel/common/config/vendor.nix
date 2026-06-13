@@ -76,7 +76,6 @@
       NET_VENDOR_HISILICON = "n";
       NET_VENDOR_HUAWEI = "n";
       NET_VENDOR_I825XX = "n";
-      NET_VENDOR_INTEL = "n";
       NET_VENDOR_ADI = "n";
       NET_VENDOR_LITEX = "n";
       NET_VENDOR_MARVELL = "n";

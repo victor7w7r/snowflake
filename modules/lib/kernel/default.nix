@@ -10,9 +10,7 @@
           structConfig:
           let
             pouch = lib.mapAttrsToList (option: value: ''
-              echo "  CONFIG_${option}=${value}"
-              sed -i "/^CONFIG_${option}=/d" .config
-              echo "CONFIG_${option}=${value}" >> .config
+              echo "CONFIG_${option}=${value}" >> .gen_config
             '') (removeAttrs structConfig [ "__provider" ]);
           in
           pouch
@@ -25,12 +23,13 @@
       { src, stdenv }:
       let
         unpack = stdenv.mkDerivation {
-          pname = "unpacked-kernel";
+          pname = "calculate-version";
           version = "1.0";
           inherit src;
+          dontBuild = true;
           installPhase = ''
             mkdir -p $out
-            cp -r . $out/
+            cp -r Makefile $out/
           '';
         };
       in

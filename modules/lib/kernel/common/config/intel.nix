@@ -4,12 +4,12 @@
     DRM_I915 = "y";
     X86_INTEL_PSTATE = "y";
 
+    NET_VENDOR_INTEL = "y";
     BT_INTEL = "m";
     DRM_I915_GVT_KVMGT = "m";
     KVM_INTEL = "m";
     MFD_INTEL_LPSS = "m";
     MFD_INTEL_LPSS_PCI = "m";
-    NET_VENDOR_INTEL = "m";
 
     AMD_3D_VCACHE = "n";
     AMD_HFI = "n";

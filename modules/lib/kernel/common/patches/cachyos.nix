@@ -11,18 +11,9 @@
         postFetch = ''
           find "$out" -type d -empty -delete
             ${''
-              ${pkgs.patchutils}/bin/filterdiff -x "*/drivers/gpu/drm/amd/*" \
-              "$out/${majorMinor}/0007-hdmi.patch" > hdmi-filter.patch || true
-              cat hdmi-filter.patch > "$out/${majorMinor}/0007-hdmi.patch" || true
-
-              ${pkgs.patchutils}/bin/filterdiff -x "*/drivers/hid/Makefile" \
-              -x "*/drivers/input/joystick/xpad.c" \
-              "$out/${majorMinor}/misc/0001-handheld.patch" > handheld-filter.patch || true
-              cat handheld-filter.patch > "$out/${majorMinor}/misc/0001-handheld.patch" || true
-
-              ${pkgs.patchutils}/bin/filterdiff -x "*/security/selinux/selinuxfs.c" \
-              "$out/${majorMinor}/misc/0001-hardened.patch" > hardened-filter.patch || true
-              cat hardened-filter.patch > "$out/${majorMinor}/misc/0001-hardened.patch" || true
+              ${pkgs.patchutils}/bin/filterdiff -x "*/kernel/sched/fair.c" \
+              "$out/${majorMinor}/sched/0001-bore-cachy.patch" > bore-filter.patch || true
+              cat bore-filter.patch > "$out/${majorMinor}/sched/0001-bore-cachy.patch" || true
             ''}
         '';
       };

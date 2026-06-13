@@ -1,4 +1,4 @@
-{ kernel, lib, ... }:
+{ kernel, ... }:
 {
   kernel.macmini81 = {
     nixos.nixpkgs.overlays = [ (_: prev: kernel.macmini81.result { pkgs = prev; }) ];
@@ -46,9 +46,7 @@
                 isSata = true;
                 extra = "video=DP-3:1600x900@60";
               })
-            ])
-
-          ;
+            ]);
         };
 
         kernel-gen = kernel.lib.kernel-generator {

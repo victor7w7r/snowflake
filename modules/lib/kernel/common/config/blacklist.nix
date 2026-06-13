@@ -1,6 +1,12 @@
 {
   kernel.lib.config.blacklist = rec {
-    all = label // virt // x86;
+    all = common // label // virt // x86;
+
+    common = {
+      NFC = "n";
+      MOUSE_PS2 = "n";
+      PATA = "n";
+    };
 
     label = {
       AIX_PARTITION = "n";
