@@ -1,11 +1,47 @@
 {
   kernel.lib.config.blacklist = rec {
-    all = common // label // virt // x86;
+    all = common // fs // label // virt // x86;
 
     common = {
-      NFC = "n";
+      ATA_GENERIC = "n";
+      CAN = "n";
+      B43 = "n";
+      B43LEGACY = "n";
+      B44 = "n";
+      B53 = "n";
+      FIREWIRE = "n";
+      INFINIBAND = "n";
+      MOST = "n";
       MOUSE_PS2 = "n";
+      MULTIPLEXER = "n";
+      NFC = "n";
+      NTB = "n";
       PATA = "n";
+      PLIP = "n";
+      PPP = "n";
+      PATA_LEGACY = "n";
+      STM = "n";
+      SSB = "n";
+    };
+
+    fs = {
+      "9P_FS" = "n";
+      AFFS_FS = "n";
+      AFS_FS = "n";
+      BEFS_FS = "n";
+      CODA_FS = "n";
+      CRAMFS = "n";
+      EROFS_FS = "n";
+      GFS2_FS = "n";
+      HFS_FS = "n";
+      HFSPLUS_FS = "n";
+      JFS_FS = "n";
+      NTFS_FS = "n";
+      NILFS2_FS = "n";
+      ORANGEFS_FS = "n";
+      OCFS2_FS = "n";
+      ROMFS_FS = "n";
+      UFS_FS = "n";
     };
 
     label = {

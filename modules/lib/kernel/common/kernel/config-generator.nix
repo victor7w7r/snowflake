@@ -1,4 +1,9 @@
-{ inputs, lib, ... }:
+{
+  kernel,
+  inputs,
+  lib,
+  ...
+}:
 {
   kernel.lib.config-generator =
     {
@@ -12,7 +17,20 @@
     }:
     pkgs.stdenv.mkDerivation {
       name = "linux-config";
-      inherit src patches;
+      src = kernel.lib.patched-linux {
+        inherit
+          config
+          patches
+          pkgs
+          src
+          ;
+      };
+      LLVM = if isClang then "1" else null;
+      stdenv =
+        if isClang then
+          (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { }).stdenvLLVM
+        else
+          pkgs.stdenv;
 
       nativeBuildInputs =
         with pkgs;
@@ -20,9 +38,6 @@
           bison
           flex
           perl
-          #gmp
-          #libmpc
-          #mpfr
         ]
         ++ (lib.optionals isClang [
           llvm_20
@@ -36,27 +51,19 @@
           "CROSS_COMPILE=${pkgs.stdenv.cc.targetPrefix}"
         ]);
 
-      installPhase = ''
-        sed -i '/^[[:space:]]*#/d; /^[[:space:]]*$/d' .config
-        cp .config $out
+      preConfigure = ''
+        #cp ${config} .config
+        #Schmod +w .config
+        patchShebangs scripts/config
       '';
 
       buildPhase = ''
-        cp ${config} .config && chmod +w .config
-        patchShebangs scripts/config
-
         ${structConfig}
         scripts/kconfig/merge_config.sh -m .config .gen_config &> /dev/null
-
-        make $makeFlags savedefconfig
-        mv defconfig .config
-
         make $makeFlags olddefconfig
       '';
-    }
-    // lib.optionalAttrs isClang {
-      LLVM = "1";
-      stdenv = (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { }).stdenvLLVM;
+
+      installPhase = "cp .config $out";
     };
 }
 /*
