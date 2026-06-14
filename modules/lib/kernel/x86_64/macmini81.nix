@@ -34,8 +34,9 @@
               denial.dev.all
               denial.filesystems.all
               denial.general.all
+              denial.input.all
               denial.net
-              denail.sound
+              denial.sound
               denial.vendor
               denial.wmi
 
