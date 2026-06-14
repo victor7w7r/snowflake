@@ -11,36 +11,6 @@
         hash = source.linux.hash;
       };
 
-    patched-linux =
-      {
-        config,
-        patches,
-        pkgs,
-        src,
-      }:
-      pkgs.stdenv.mkDerivation {
-        inherit patches src;
-        version = "1.0";
-        name = "patched-linux-src";
-        nativeBuildInputs = with pkgs; [
-          rsync
-          perl
-        ];
-        dontConfigure = true;
-        dontBuild = true;
-
-        postPatch = ''
-          for dir in arch/*/configs; do
-            install -Dm644 "${kernel.lib.prune { inherit config pkgs; }}" "$dir/cachyos_defconfig"
-          done
-        '';
-
-        installPhase = ''
-          mkdir -p "$out"
-          rsync -avhP "./" "$out/"
-        '';
-      };
-
     std.std-config =
       {
         pkgs,

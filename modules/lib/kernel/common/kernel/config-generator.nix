@@ -1,6 +1,6 @@
 {
-  kernel,
   inputs,
+  kernel,
   lib,
   ...
 }:
@@ -17,14 +17,7 @@
     }:
     pkgs.stdenv.mkDerivation {
       name = "linux-config";
-      src = kernel.lib.patched-linux {
-        inherit
-          config
-          patches
-          pkgs
-          src
-          ;
-      };
+      inherit patches src;
       LLVM = if isClang then "1" else null;
       stdenv =
         if isClang then
@@ -52,8 +45,8 @@
         ]);
 
       preConfigure = ''
-        #cp ${config} .config
-        #Schmod +w .config
+        cp ${config} .config
+        chmod +w .config
         patchShebangs scripts/config
       '';
 
@@ -63,7 +56,10 @@
         make $makeFlags olddefconfig
       '';
 
-      installPhase = "cp .config $out";
+      installPhase = ''
+        ${kernel.lib.prune}
+        cp .config $out
+      '';
     };
 }
 /*
