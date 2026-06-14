@@ -5,11 +5,6 @@
     common = {
       ATA_GENERIC = "n";
       ATM = "n";
-      CAN = "n";
-      B43 = "n";
-      B43LEGACY = "n";
-      B44 = "n";
-      B53 = "n";
       FPGA = "n";
       FIREWIRE = "n";
       FUSION = "n";
@@ -17,15 +12,16 @@
       MOST = "n";
       MOUSE_PS2 = "n";
       MULTIPLEXER = "n";
-      NFC = "n";
+      NVME_TARGET = "n";
       NTB = "n";
-      PATA = "n";
+      PARPORT= "n";
       PLIP = "n";
-      PPP = "n";
-      PATA_LEGACY = "n";
+      PCCARD = "n";
+      PCMCIA = "n";
       RPMSG = "n";
       STM = "n";
       SSB = "n";
+      UIO = "n";
       W1 = "n";
     };
 
