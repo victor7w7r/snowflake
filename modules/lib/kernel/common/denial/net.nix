@@ -1,5 +1,6 @@
 {
   kernel.lib.denial.net = {
+    "6LOWPAN" = "n";
     B43 = "n";
     B43LEGACY = "n";
     B44 = "n";
