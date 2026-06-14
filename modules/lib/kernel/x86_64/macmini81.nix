@@ -34,6 +34,7 @@
               denial.dev.all
               denial.filesystems.all
               denial.general.all
+              denial.net
               denial.vendor
               denial.wmi
 
