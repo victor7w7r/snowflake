@@ -6,6 +6,7 @@
       ATA_GENERIC = "n";
       ATM = "n";
       FPGA = "n";
+      CXL_BUS = "n";
       FIREWIRE = "n";
       FUSION = "n";
       INFINIBAND = "n";
@@ -14,7 +15,7 @@
       MULTIPLEXER = "n";
       NVME_TARGET = "n";
       NTB = "n";
-      PARPORT= "n";
+      PARPORT = "n";
       PLIP = "n";
       PCCARD = "n";
       PCMCIA = "n";
