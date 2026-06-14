@@ -1,7 +1,6 @@
 {
-  kernel.lib.config = rec {
-
-    all-debug = debug // trace;
+  kernel.lib.denial.dev = rec {
+    all = debug // trace;
 
     debug = {
       ACPI_DEBUG = "n";

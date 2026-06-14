@@ -1,4 +1,3 @@
-{ kernel, ... }:
 {
   kernel.lib = {
     linux =

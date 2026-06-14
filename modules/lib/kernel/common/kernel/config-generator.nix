@@ -25,6 +25,9 @@
         else
           pkgs.stdenv;
 
+      dontFixup = true;
+      dontConfigure = true;
+
       nativeBuildInputs =
         with pkgs;
         [
@@ -44,20 +47,18 @@
           "CROSS_COMPILE=${pkgs.stdenv.cc.targetPrefix}"
         ]);
 
-      preConfigure = ''
+      buildPhase = ''
         cp ${config} .config
         chmod +w .config
         patchShebangs scripts/config
-      '';
 
-      buildPhase = ''
         ${structConfig}
         scripts/kconfig/merge_config.sh -m .config .gen_config &> /dev/null
         make $makeFlags olddefconfig
       '';
 
       installPhase = ''
-        ${kernel.lib.prune}
+        ${kernel.lib.prune.script}
         cp .config $out
       '';
     };

@@ -1,5 +1,5 @@
 {
-  kernel.lib.prune = ''
+  kernel.lib.prune.script = ''
     # sed -i '/^#/d' .config
     # sed -i '/^CONFIG_G*CC_/d' .config
     # sed -i '/^CONFIG_LD_/d' .config
@@ -12,7 +12,7 @@
     # sed -i '/^CONFIG_NET_/d' .config
     # sed -i '/^CONFIG_.*_FS=/d' .config
     # sed -i '/^CONFIG_MMC_/d' .config
-    # sed -i '/^CONFIG_MEMSTICK_/d' .config
+    sed -i '/^CONFIG_MEMSTICK_/d' .config
     # sed -i '/^CONFIG_SYSTEM/d' .config
     # sed -i '/^CONFIG_MEDIA_/d' .config
     # sed -i '/^CONFIG_SSB/d' .config

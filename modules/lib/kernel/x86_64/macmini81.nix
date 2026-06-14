@@ -29,19 +29,23 @@
             ;
           config = kernel.lib.std.std-config { inherit pkgs; };
           structConfig =
-            with kernel.lib.config;
-            (kernel.lib.functors.app-config [
-              intel
-              blacklist.all
-              fs.overlayfs
-              fs.xfs
-              general
-              highfreq
-              net
-              storage.zram
-              all-debug
-              all-vendor
-              (cmdline {
+            with kernel.lib;
+            (functors.app-config [
+              denial.dev.all
+              denial.filesystems.all
+              denial.general.all
+              denial.vendor
+              denial.wmi
+
+              config.intel
+              config.fs.overlayfs
+              config.fs.xfs
+              config.general
+              config.highfreq
+              config.net
+              config.storage.zram
+              config.all-vendor
+              (config.cmdline {
                 isIntel = true;
                 isSata = true;
                 extra = "video=DP-3:1600x900@60";
