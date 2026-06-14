@@ -36,8 +36,10 @@
               denial.general.all
               denial.input.all
               denial.net
+              denial.regulators
               denial.sound
               denial.vendor
+              denial.usb
               denial.wmi
 
               config.intel

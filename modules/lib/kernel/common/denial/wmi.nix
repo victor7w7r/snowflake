@@ -1,15 +1,15 @@
 {
   kernel.lib.denial.wmi = {
-    WMI_BMOF = "m";
-    HUAWEI_WMI = "m";
-    MXM_WMI = "m";
-    NVIDIA_WMI_EC_BACKLIGHT = "m";
-    XIAOMI_WMI = "m";
-    REDMI_WMI = "m";
-    GIGABYTE_WMI = "m";
-    ACERHDF = "m";
-    ACER_WIRELESS = "m";
-    ACER_WMI = "m";
+    WMI_BMOF = "n";
+    HUAWEI_WMI = "n";
+    MXM_WMI = "n";
+    NVIDIA_WMI_EC_BACKLIGHT = "n";
+    XIAOMI_WMI = "n";
+    REDMI_WMI = "n";
+    GIGABYTE_WMI = "n";
+    ACERHDF = "n";
+    ACER_WIRELESS = "n";
+    ACER_WMI = "n";
     ALIENWARE_WMI = "n";
     DELL_LAPTOP = "n";
     DELL_WMI = "n";
