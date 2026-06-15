@@ -1,6 +1,6 @@
 {
   kernel.lib.denial.net = rec {
-    all = dsa // hardware // tcp // sch // wifi;
+    all = dsa // hardware // tcp // sch // wifi // phy;
 
     hardware = {
       "6LOWPAN" = "n";
@@ -20,6 +20,71 @@
       RTW88 = "n";
       RTW89 = "n";
       WWAN = "n";
+    };
+
+    phy = {
+      SFP = "n";
+      AS21XXX_PHY = "n";
+      AIR_EN8811H_PHY = "n";
+      AMD_PHY = "n";
+      ADIN_PHY = "n";
+      ADIN1100_PHY = "n";
+      AQUANTIA_PHY = "n";
+      AX88796B_PHY = "n";
+      BROADCOM_PHY = "n";
+      BCM54140_PHY = "n";
+      BCM7XXX_PHY = "n";
+      BCM84881_PHY = "n";
+      BCM87XX_PHY = "n";
+      BCM_NET_PHYLIB = "n";
+      BCM_NET_PHYPTP = "n";
+      CICADA_PHY = "n";
+      CORTINA_PHY = "n";
+      DAVICOM_PHY = "n";
+      ICPLUS_PHY = "n";
+      LXT_PHY = "n";
+      INTEL_XWAY_PHY = "n";
+      LSI_ET1011C_PHY = "n";
+      MARVELL_PHY = "n";
+      MARVELL_10G_PHY = "n";
+      MARVELL_88Q2XXX_PHY = "n";
+      MARVELL_88X2222_PHY = "n";
+      MAXLINEAR_GPHY = "n";
+      MAXLINEAR_86110_PHY = "n";
+      MEDIATEK_GE_PHY = "n";
+      MTK_NET_PHYLIB = "n";
+      MICREL_PHY = "n";
+      MICROCHIP_T1S_PHY = "n";
+      MICROCHIP_PHY = "n";
+      MICROCHIP_T1_PHY = "n";
+      MICROCHIP_PHY_RDS_PTP = "n";
+      MICROSEMI_PHY = "n";
+      MOTORCOMM_PHY = "n";
+      NATIONAL_PHY = "n";
+      NXP_CBTX_PHY = "n";
+      NXP_C45_TJA11XX_PHY = "n";
+      NXP_TJA11XX_PHY = "n";
+      NCN26000_PHY = "n";
+      QCOM_NET_PHYLIB = "n";
+      AT803X_PHY = "n";
+      QCA83XX_PHY = "n";
+      QCA808X_PHY = "n";
+      QSEMI_PHY = "n";
+      REALTEK_PHY = "n";
+      REALTEK_PHY_HWMON = "n";
+      RENESAS_PHY = "n";
+      SMSC_PHY = "n";
+      STE10XP = "n";
+      TERANETICS_PHY = "n";
+      DP83822_PHY = "n";
+      DP83TC811_PHY = "n";
+      DP83848_PHY = "n";
+      DP83867_PHY = "n";
+      DP83869_PHY = "n";
+      DP83TD510_PHY = "n";
+      DP83TG720_PHY = "n";
+      VITESSE_PHY = "n";
+      XILINX_GMII2RGMII = "n";
     };
 
     dsa = {
@@ -77,6 +142,51 @@
       NET_SCH_HHF = "n";
       NET_SCH_PIE = "n";
       NET_SCH_FQ_PIE = "n";
+    };
+
+    eth = {
+      BNX2X = "n";
+      BNX2X_SRIOV = "n";
+      SYSTEMPORT = "n";
+      BNXT = "n";
+      BNXT_SRIOV = "n";
+      BNXT_FLOWER_OFFLOAD = "n";
+      BNXT_DCB = "n";
+      BNXT_HWMON = "n";
+      BNGE = "n";
+      DNET = "n";
+      NET_VENDOR_INTEL = "n";
+      LIBETH = "n";
+      LIBETH_XDP = "n";
+      LIBIE = "n";
+      LIBIE_ADMINQ = "n";
+      LIBIE_FWLOG = "n";
+      E100 = "n";
+      E1000 = "n";
+      E1000E = "n";
+      E1000E_HWTS = "n";
+      IGB = "n";
+      IGB_HWMON = "n";
+      IGB_DCA = "n";
+      IGBVF = "n";
+      IXGBE = "n";
+      IXGBE_HWMON = "n";
+      IXGBE_DCA = "n";
+      IXGBE_DCB = "n";
+      IXGBEVF = "n";
+      IXGBEVF_IPSEC = "n";
+      I40E = "n";
+      I40E_DCB = "n";
+      IAVF = "n";
+      I40EVF = "n";
+      ICE = "n";
+      ICE_HWMON = "n";
+      ICE_SWITCHDEV = "n";
+      ICE_HWTS = "n";
+      FM10K = "n";
+      IGC = "n";
+      IDPF = "n";
+      JME = "n";
     };
 
     tcp = {

@@ -1,6 +1,6 @@
 {
   kernel.lib.denial.usb = rec {
-    all = general // storage // net // serial;
+    all = general // storage // net // serial // typec;
 
     storage = {
       REALTEK_AUTOPM = "n";
@@ -169,6 +169,33 @@
       USB_SERIAL_UPD78F0730 = "n";
       USB_SERIAL_XR = "n";
       USB_SERIAL_DEBUG = "n";
+    };
+
+    typec = {
+      TYPEC_TCPM = "n";
+      TYPEC_TCPCI = "n";
+      TYPEC_RT1711H = "n";
+      TYPEC_TCPCI_MAXIM = "n";
+      TYPEC_FUSB302 = "n";
+      UCSI_CCG = "n";
+      UCSI_STM32G0 = "n";
+      TYPEC_TPS6598X = "n";
+      TYPEC_ANX7411 = "n";
+      TYPEC_RT1719 = "n";
+      TYPEC_HD3SS3220 = "n";
+      TYPEC_STUSB160X = "n";
+      TYPEC_WUSB3801 = "n";
+      TYPEC_MUX_FSA4480 = "n";
+      TYPEC_MUX_GPIO_SBU = "n";
+      TYPEC_MUX_PI3USB30532 = "n";
+      TYPEC_MUX_INTEL_PMC = "n";
+      TYPEC_MUX_IT5205 = "n";
+      TYPEC_MUX_NB7VPQ904M = "n";
+      TYPEC_MUX_PS883X = "n";
+      TYPEC_MUX_PTN36502 = "n";
+      TYPEC_MUX_TUSB1046 = "n";
+      TYPEC_MUX_WCD939X_USBSS = "n";
+      TYPEC_NVIDIA_ALTMODE = "n";
     };
   };
 }

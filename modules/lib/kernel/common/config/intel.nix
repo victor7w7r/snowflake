@@ -31,5 +31,18 @@
     X86_AMD_PLATFORM_DEVICE = "n";
     X86_AMD_PSTATE = "n";
     X86_MCE_AMD = "n";
+
+    AMD_HSMP = "n";
+    AMD_HSMP_ACPI = "n";
+    AMD_HSMP_PLAT = "n";
+    AMD_PMC = "n";
+    AMD_MP2_STB = "n";
+    AMD_ISP_PLATFORM = "n";
+    ASUS_LAPTOP = "n";
+    ASUS_WIRELESS = "n";
+    ASUS_ARMOURY = "n";
+    ASUS_WMI = "n";
+    ASUS_WMI_DEPRECATED_ATTRS = "n";
+    ASUS_NB_WMI = "n";
   };
 }

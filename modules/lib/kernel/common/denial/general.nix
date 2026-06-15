@@ -1,6 +1,6 @@
 {
   kernel.lib.denial.general = rec {
-    all = common // virt // x86;
+    all = common // virt // drivers // x86;
 
     common = {
       ATA_GENERIC = "n";
@@ -31,6 +31,30 @@
       VBOXGUEST = "n";
       KVM_XEN = "n";
       XEN = "n";
+    };
+
+    drivers = {
+      AD525X_DPOT = "n";
+      AD525X_DPOT_I2C = "n";
+      AD525X_DPOT_SPI = "n";
+      IBM_ASM = "n";
+      PHANTOM = "n";
+      TI_FPC202 = "n";
+      TIFM_CORE = "n";
+      TIFM_7XX1 = "n";
+      ICS932S401 = "n";
+      ENCLOSURE_SERVICES = "n";
+      HP_ILO = "n";
+      APDS9802ALS = "n";
+      ISL29003 = "n";
+      ISL29020 = "n";
+      HMC6352 = "n";
+      DS1682 = "n";
+      LATTICE_ECP3_CONFIG = "n";
+      DW_XDATA_PCIE = "n";
+      PCI_ENDPOINT_TEST = "n";
+      XILINX_SDFEC = "n";
+      MISC_RTSX = "n";
     };
 
     x86 = {

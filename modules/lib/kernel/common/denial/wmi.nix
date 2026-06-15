@@ -6,7 +6,9 @@
     ACPI_CMPC = "n";
     ACPI_QUICKSTART = "n";
     ACPI_TOSHIBA = "n";
+    ASUS_TF103C_DOCK = "n";
     ALIENWARE_WMI = "n";
+    ADV_SWBUTTON = "n";
     AMILO_RFKILL = "n";
     APPLE_GMUX = "n";
     BARCO_P50_GPIO = "n";

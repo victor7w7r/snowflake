@@ -50,9 +50,7 @@
     USB_F_UAC2 = "n";
     USB_GADGET = "n";
     USB_GADGETFS = "n";
-    USB_GADGET_STORAGE_NUM_BUFFERS = "n";
     USB_GADGET_TARGET = "n";
-    USB_GADGET_VBUS_DRAW = "n";
     USB_G_ACM_MS = "n";
     USB_G_DBGP = "n";
     USB_G_DBGP_SERIAL = "n";
@@ -72,5 +70,14 @@
     USB_ZERO = "n";
     U_SERIAL_CONSOLE = "n";
     USB_MAX3420_UDC = "n";
+
+    USB_DWC3 = "n";
+    USB_DWC3_ULPI = "n";
+    USB_DWC3_DUAL_ROLE = "n";
+    USB_DWC3_PCI = "n";
+    USB_DWC3_HAPS = "n";
+    USB_DWC2 = "n";
+    USB_DWC2_DUAL_ROLE = "n";
+    USB_DWC2_PCI = "n";
   };
 }

@@ -33,6 +33,7 @@
           denialConfig =
             with kernel.lib.denial;
             (kernel.lib.functors.app-config [
+              crypto.all
               dev.all
               filesystems.all
               fuel.all

@@ -1,6 +1,6 @@
 {
   kernel.lib.denial.serial = rec {
-    all = i2c // spi;
+    all = i2c // spi // serio;
 
     i2c = {
       I2C_MUX_GPIO = "n";
@@ -87,6 +87,21 @@
       SPI_SLAVE_SYSTEM_CONTROL = "n";
       SPI_OFFLOAD_TRIGGER_ADI_UTIL_SD = "n";
       SPI_OFFLOAD_TRIGGER_PWM = "n";
+    };
+    serio = {
+      SERIO_SERPORT = "n";
+      SERIO_CT82C710 = "n";
+      SERIO_PCIPS2 = "n";
+      SERIO_LIBPS2 = "n";
+      SERIO_RAW = "n";
+      SERIO_ALTERA_PS2 = "n";
+      SERIO_PS2MULT = "n";
+      SERIO_ARC_PS2 = "n";
+      SERIO_GPIO_PS2 = "n";
+      USERIO = "n";
+      GAMEPORT = "n";
+      GAMEPORT_EMU10K1 = "n";
+      GAMEPORT_FM801 = "n";
     };
   };
 }
