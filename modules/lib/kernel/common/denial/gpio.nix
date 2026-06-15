@@ -6,6 +6,7 @@
     GPIO_MAX730X = "n";
     GPIO_IDIO_16 = "n";
     GPIO_ALTERA = "n";
+    GPIO_AGGREGATOR = "n";
     GPIO_AMDPT = "n";
     GPIO_DWAPB = "n";
     GPIO_EXAR = "n";
@@ -68,7 +69,6 @@
     GPIO_VIPERBOARD = "n";
     GPIO_MPSSE = "n";
     GPIO_USBIO = "n";
-    GPIO_AGGREGATOR = "n";
     GPIO_LATCH = "n";
     GPIO_MOCKUP = "n";
     GPIO_VIRTIO = "n";
