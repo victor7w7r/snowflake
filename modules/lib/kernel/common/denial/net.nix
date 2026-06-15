@@ -1,6 +1,6 @@
 {
   kernel.lib.denial.net = rec {
-    all = hardware // tcp;
+    all = hardware // tcp // wifi;
 
     hardware = {
       "6LOWPAN" = "n";
@@ -35,6 +35,62 @@
       TCP_CONG_ILLINOIS = "n";
       TCP_CONG_DCTCP = "n";
       TCP_CONG_CDG = "n";
+    };
+
+    wifi = {
+      IPW2100 = "n";
+      IPW2100_MONITOR = "n";
+      IPW2200 = "n";
+      IPW2200_MONITOR = "n";
+      IPW2200_RADIOTAP = "n";
+      IPW2200_PROMISCUOUS = "n";
+      IPW2200_QOS = "n";
+      LIBIPW = "n";
+      IWLEGACY = "n";
+      IWL4965 = "n";
+      IWL3945 = "n";
+      IWLEGACY_DEBUG = "n";
+      IWLEGACY_DEBUGFS = "n";
+      IWLWIFI = "n";
+      IWLWIFI_LEDS = "n";
+      IWLDVM = "n";
+      IWLMVM = "n";
+      IWLMLD = "n";
+      IWLWIFI_OPMODE_MODULAR = "n";
+      IWLWIFI_DEBUG = "n";
+      IWLWIFI_DEBUGFS = "n";
+      IWLWIFI_DEVICE_TRACING = "n";
+      MT7601U = "n";
+      MT76_CORE = "n";
+      MT76_LEDS = "n";
+      MT76_USB = "n";
+      MT76_SDIO = "n";
+      MT76x02_LIB = "n";
+      MT76x02_USB = "n";
+      MT76_CONNAC_LIB = "n";
+      MT792x_LIB = "n";
+      MT792x_USB = "n";
+      MT76x0_COMMON = "n";
+      MT76x0U = "n";
+      MT76x0E = "n";
+      MT76x2_COMMON = "n";
+      MT76x2E = "n";
+      MT76x2U = "n";
+      MT7603E = "n";
+      MT7615_COMMON = "n";
+      MT7615E = "n";
+      MT7663_USB_SDIO_COMMON = "n";
+      MT7663U = "n";
+      MT7663S = "n";
+      MT7915E = "n";
+      MT7921_COMMON = "n";
+      MT7921E = "n";
+      MT7921S = "n";
+      MT7921U = "n";
+      MT7996E = "n";
+      MT7925_COMMON = "n";
+      MT7925E = "n";
+      MT7925U = "n";
     };
   };
 }
