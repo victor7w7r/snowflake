@@ -12,7 +12,7 @@
     # sed -i '/^CONFIG_NET_/d' .config
     # sed -i '/^CONFIG_.*_FS=/d' .config
     # sed -i '/^CONFIG_MMC_/d' .config
-    sed -i '/^CONFIG_MEMSTICK_/d' .config
+    # sed -i '/^CONFIG_MEMSTICK_/d' .config
     # sed -i '/^CONFIG_SYSTEM/d' .config
     # sed -i '/^CONFIG_MEDIA_/d' .config
     # sed -i '/^CONFIG_SSB/d' .config
@@ -36,7 +36,7 @@
     # sed -i '/^CONFIG_ATH/d' .config
     # AI: merge multiple empty lines into one
     # sed -i '/^$/N;/\n$/D' .config
-    sed -i '/CONFIG_PATA_/d' .config
+    #sed -i '/CONFIG_PATA_/d' .config
     # sed -i '/^CONFIG_HID_/d' .config
     sed -i '/^[[:space:]]*#/d; /^[[:space:]]*$/d' .config
   '';

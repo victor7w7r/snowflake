@@ -6,14 +6,14 @@
     EZX_PCAP = "n";
     FIREWIRE = "n";
     FUSION = "n";
+    GOOGLE_FIRMWARE = "n";
     INFINIBAND = "n";
     MACINTOSH_DRIVERS = "n";
-    GOOGLE_FIRMWARE = "n";
-
     MELLANOX_PLATFORM = "n";
-
     NET_VENDOR_3COM = "n";
+    NET_VENDOR_8390 = "n";
     NET_VENDOR_ADAPTEC = "n";
+    NET_VENDOR_ADI = "n";
     NET_VENDOR_AGERE = "n";
     NET_VENDOR_ALACRITECH = "n";
     NET_VENDOR_ALTEON = "n";
@@ -21,6 +21,7 @@
     NET_VENDOR_ARC = "n";
     NET_VENDOR_ASIX = "n";
     NET_VENDOR_ATHEROS = "n";
+    NET_VENDOR_BROCADE = "n";
     NET_VENDOR_CADENCE = "n";
     NET_VENDOR_CAVIUM = "n";
     NET_VENDOR_CHELSIO = "n";
@@ -37,7 +38,6 @@
     NET_VENDOR_HISILICON = "n";
     NET_VENDOR_HUAWEI = "n";
     NET_VENDOR_I825XX = "n";
-    NET_VENDOR_ADI = "n";
     NET_VENDOR_LITEX = "n";
     NET_VENDOR_MARVELL = "n";
     NET_VENDOR_MELLANOX = "n";
@@ -46,17 +46,15 @@
     NET_VENDOR_MICROCHIP = "n";
     NET_VENDOR_MICROSEMI = "n";
     NET_VENDOR_MYRI = "n";
-    NET_VENDOR_NI = "n";
     NET_VENDOR_NATSEMI = "n";
     NET_VENDOR_NETERION = "n";
     NET_VENDOR_NETRONOME = "n";
-    NET_VENDOR_8390 = "n";
+    NET_VENDOR_NI = "n";
     NET_VENDOR_NVIDIA = "n";
     NET_VENDOR_OKI = "n";
     NET_VENDOR_PACKET_ENGINES = "n";
     NET_VENDOR_PENSANDO = "n";
     NET_VENDOR_QLOGIC = "n";
-    NET_VENDOR_BROCADE = "n";
     NET_VENDOR_QUALCOMM = "n";
     NET_VENDOR_RDC = "n";
     NET_VENDOR_RENESAS = "n";
@@ -65,9 +63,9 @@
     NET_VENDOR_SEEQ = "n";
     NET_VENDOR_SILAN = "n";
     NET_VENDOR_SIS = "n";
-    NET_VENDOR_SOLARFLARE = "n";
     NET_VENDOR_SMSC = "n";
     NET_VENDOR_SOCIONEXT = "n";
+    NET_VENDOR_SOLARFLARE = "n";
     NET_VENDOR_STMICRO = "n";
     NET_VENDOR_SUN = "n";
     NET_VENDOR_SYNOPSYS = "n";
@@ -78,7 +76,6 @@
     NET_VENDOR_WANGXUN = "n";
     NET_VENDOR_WIZNET = "n";
     NET_VENDOR_XILINX = "n";
-
     PMIC_ADP5520 = "n";
     PMIC_DA903X = "n";
     PMIC_DA9052 = "n";
@@ -86,22 +83,21 @@
     SURFACE_PLATFORMS = "n";
     TWL4030_CORE = "n";
     TWL6040_CORE = "n";
-
     WLAN_VENDOR_ADMTEK = "n";
     WLAN_VENDOR_ATH = "n";
     WLAN_VENDOR_ATMEL = "n";
-    WLAN_VENDOR_INTERSIL = "n";
-    WLAN_VENDOR_MARVELL = "n";
     WLAN_VENDOR_BROADCOM = "n";
     WLAN_VENDOR_INTEL = "n";
+    WLAN_VENDOR_INTERSIL = "n";
+    WLAN_VENDOR_MARVELL = "n";
     WLAN_VENDOR_MICROCHIP = "n";
     WLAN_VENDOR_PURELIFI = "n";
+    WLAN_VENDOR_QUANTENNA = "n";
     WLAN_VENDOR_RALINK = "n";
     WLAN_VENDOR_RSI = "n";
     WLAN_VENDOR_SILABS = "n";
     WLAN_VENDOR_ST = "n";
     WLAN_VENDOR_TI = "n";
     WLAN_VENDOR_ZYDAS = "n";
-    WLAN_VENDOR_QUANTENNA = "n";
   };
 }

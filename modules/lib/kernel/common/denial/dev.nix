@@ -4,9 +4,9 @@
 
     debug = {
       ACPI_DEBUG = "n";
+      DEBUG_FS = "n";
       DEBUG_MISC = "n";
       DEBUG_PREEMPT = "n";
-      DEBUG_FS = "n";
       LATENCYTOP = "n";
       PM_ADVANCED_DEBUG = "n";
       PM_DEBUG = "n";
@@ -29,17 +29,17 @@
       FUNCTION_GRAPH_TRACER = "n";
       FUNCTION_TRACER = "n";
       GENERIC_TRACER = "n";
-      INTERCONNECT = "n";
+      HAMRADIO = "n";
+      HIST_TRIGGERS = "n";
+      HWLAT_TRACER = "n";
       IKCONFIG = "n";
       IKCONFIG_PROC = "n";
-      HIST_TRIGGERS = "n";
-      HAMRADIO = "n";
-      HWLAT_TRACER = "n";
-      KPROBE_EVENTS = "n";
+      INTERCONNECT = "n";
       KPROBES_ON_FTRACE = "n";
+      KPROBE_EVENTS = "n";
       MCTP = "n";
-      MPLS = "n";
       MMIOTRACE = "n";
+      MPLS = "n";
       MTD = "n";
       NET_SWITCHDEV = "n";
       NOP_TRACER = "n";
@@ -47,17 +47,17 @@
       SCHED_TRACER = "n";
       STACKTRACE = "n";
       STACKTRACE_BUILD_ID = "n";
-      STACK_TRACER = "n";
       STACKTRACE_SUPPORT = "n";
+      STACK_TRACER = "n";
       SYSCTL_EXCEPTION_TRACE = "n";
       TASKS_TRACE_RCU = "n";
-      TRACE_CLOCK = "n";
       TRACEFS_AUTOMOUNT_DEPRECATED = "n";
+      TRACER_MAX_TRACE = "n";
+      TRACER_SNAPSHOT = "n";
+      TRACE_CLOCK = "n";
       TRACE_GPU_MEM = "n";
       TRACE_IRQFLAGS_NMI_SUPPORT = "n";
       TRACE_IRQFLAGS_SUPPORT = "n";
-      TRACER_MAX_TRACE = "n";
-      TRACER_SNAPSHOT = "n";
       TRACING = "n";
       USER_STACKTRACE_SUPPORT = "n";
     };

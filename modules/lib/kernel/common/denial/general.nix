@@ -5,20 +5,22 @@
     common = {
       ATA_GENERIC = "n";
       ATM = "n";
-      FPGA = "n";
+      BCMA = "n";
       CXL_BUS = "n";
+      FPGA = "n";
       MOST = "n";
       MOUSE_PS2 = "n";
       MULTIPLEXER = "n";
-      NVME_TARGET = "n";
       NTB = "n";
+      NVME_TARGET = "n";
       PARPORT = "n";
-      PLIP = "n";
       PCCARD = "n";
       PCMCIA = "n";
+      PLIP = "n";
+      PPS = "n";
       RPMSG = "n";
-      STM = "n";
       SSB = "n";
+      STM = "n";
       UIO = "n";
       W1 = "n";
     };

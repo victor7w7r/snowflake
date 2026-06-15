@@ -12,6 +12,8 @@
       src,
       isClang ? false,
       isArm ? false,
+      denialConfig,
+      miscDenialConfig ? "",
       structConfig,
       config,
     }:
@@ -26,7 +28,6 @@
           pkgs.stdenv;
 
       dontFixup = true;
-      dontConfigure = true;
 
       nativeBuildInputs =
         with pkgs;
@@ -47,12 +48,14 @@
           "CROSS_COMPILE=${pkgs.stdenv.cc.targetPrefix}"
         ]);
 
-      buildPhase = ''
-        cp ${config} .config
-        chmod +w .config
-        patchShebangs scripts/config
+      configurePhase = ''
+        cp ${config} .config && chmod +w .config
+        ${miscDenialConfig}
+      '';
 
+      buildPhase = ''
         ${structConfig}
+        ${denialConfig}
         scripts/kconfig/merge_config.sh -m .config .gen_config &> /dev/null
         make $makeFlags olddefconfig
       '';

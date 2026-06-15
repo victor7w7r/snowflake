@@ -28,34 +28,39 @@
             src
             ;
           config = kernel.lib.std.std-config { inherit pkgs; };
-          structConfig =
-            with kernel.lib;
-            (functors.app-config [
-              denial.dev.all
-              denial.filesystems.all
-              denial.fuel.all
-              denial.general.all
-              denial.gpio
-              denial.hardware.all
-              denial.input.all
-              denial.mfd
-              denial.net.all
-              denial.sound
-              denial.storage.all
-              denial.usb
-              denial.vendor
-              denial.sensors.all
-              denial.wmi
 
-              config.intel
-              config.fs.overlayfs
-              config.fs.xfs
-              config.general
-              config.highfreq
-              config.net
-              config.storage.zram
-              config.all-vendor
-              (config.cmdline {
+          miscDenialConfig = with kernel.lib.denial; (kernel.lib.functors.app-config [ sensors.all ]);
+          denialConfig =
+            with kernel.lib.denial;
+            (kernel.lib.functors.app-config [
+              dev.all
+              filesystems.all
+              fuel.all
+              general.all
+              gpio
+              hardware.all
+              input.all
+              mfd
+              net.all
+              sound
+              serial.all
+              storage.all
+              usb.all
+              vendor
+              wmi
+            ]);
+
+          structConfig =
+            with kernel.lib.config;
+            (kernel.lib.functors.app-config [
+              intel
+              fs.overlayfs
+              fs.xfs
+              general
+              highfreq
+              net
+              storage.zram
+              (cmdline {
                 isIntel = true;
                 isSata = true;
                 extra = "video=DP-3:1600x900@60";
