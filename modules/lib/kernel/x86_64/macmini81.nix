@@ -35,11 +35,12 @@
               denial.filesystems.all
               denial.general.all
               denial.input.all
-              denial.net
+              denial.net.all
               denial.regulators
               denial.sound
-              denial.vendor
+              denial.scsi
               denial.usb
+              denial.vendor
               denial.wmi
 
               config.intel
