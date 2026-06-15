@@ -10,33 +10,7 @@
     MACINTOSH_DRIVERS = "n";
     GOOGLE_FIRMWARE = "n";
 
-    GPIO_RC5T583 = "n";
-    GPIO_TPS6586X = "n";
-    GPIO_TPS65910 = "n";
-
     MELLANOX_PLATFORM = "n";
-    MFD_88PM860X = "n";
-    MFD_AS3711 = "n";
-    MFD_AAT2870_CORE = "n";
-    MFD_DA9052_SPI = "n";
-    MFD_DA9052_I2C = "n";
-    MFD_DA9055 = "n";
-    MFD_MAX77843 = "n";
-    MFD_MAX8925 = "n";
-    MFD_MAX8997 = "n";
-    MFD_MAX8998 = "n";
-    MFD_LP8788 = "n";
-    MFD_RC5T583 = "n";
-    MFD_TPS65090 = "n";
-    MFD_TPS6586X = "n";
-    MFD_TPS65910 = "n";
-    MFD_TWL4030_AUDIO = "n";
-    MFD_WM8400 = "n";
-    MFD_WM831X = "n";
-    MFD_WM831X_I2C = "n";
-    MFD_WM831X_SPI = "n";
-    MFD_WM8350 = "n";
-    MFD_WM8350_I2C = "n";
 
     NET_VENDOR_3COM = "n";
     NET_VENDOR_ADAPTEC = "n";
@@ -118,8 +92,11 @@
     WLAN_VENDOR_ATMEL = "n";
     WLAN_VENDOR_INTERSIL = "n";
     WLAN_VENDOR_MARVELL = "n";
+    WLAN_VENDOR_BROADCOM = "n";
+    WLAN_VENDOR_INTEL = "n";
     WLAN_VENDOR_MICROCHIP = "n";
     WLAN_VENDOR_PURELIFI = "n";
+    WLAN_VENDOR_RALINK = "n";
     WLAN_VENDOR_RSI = "n";
     WLAN_VENDOR_SILABS = "n";
     WLAN_VENDOR_ST = "n";

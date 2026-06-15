@@ -27,6 +27,9 @@
     GPIO_WINBOND = "n";
     GPIO_WS16C48 = "n";
     GPIO_FXL6408 = "n";
+    GPIO_RC5T583 = "n";
+    GPIO_TPS6586X = "n";
+    GPIO_TPS65910 = "n";
     GPIO_DS4520 = "n";
     GPIO_MAX7300 = "n";
     GPIO_MAX732X = "n";

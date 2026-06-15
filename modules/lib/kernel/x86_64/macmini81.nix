@@ -36,6 +36,7 @@
               denial.fuel.all
               denial.general.all
               denial.gpio
+              denial.hardware.all
               denial.input.all
               denial.mfd
               denial.net.all
