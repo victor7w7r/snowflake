@@ -38,7 +38,7 @@
               denial.net.all
               denial.regulators
               denial.sound
-              denial.scsi
+              denial.storage.all
               denial.usb
               denial.vendor
               denial.wmi

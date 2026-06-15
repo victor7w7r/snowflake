@@ -1,19 +1,20 @@
 {
-  kernel.lib.denial.scsi = {
-    SCSI_CXGB3_ISCSI = "n";
-    SCSI_CXGB4_ISCSI = "n";
-    SCSI_BNX2_ISCSI = "n";
-    SCSI_BNX2X_FCOE = "n";
-    BE2ISCSI = "n";
-    BLK_DEV_3W_XXXX_RAID = "n";
-    SCSI_HPSA = "n";
-    SCSI_3W_9XXX = "n";
-    SCSI_3W_SAS = "n";
-    SCSI_ACARD = "n";
-    SCSI_AACRAID = "n";
-    SCSI_AIC7XXX = "n";
-    SCSI_AIC79XX = "n";
-    /*
+  kernel.lib.denial.storage = rec {
+    all = scsi;
+    scsi = {
+      SCSI_CXGB3_ISCSI = "n";
+      SCSI_CXGB4_ISCSI = "n";
+      SCSI_BNX2_ISCSI = "n";
+      SCSI_BNX2X_FCOE = "n";
+      BE2ISCSI = "n";
+      BLK_DEV_3W_XXXX_RAID = "n";
+      SCSI_HPSA = "n";
+      SCSI_3W_9XXX = "n";
+      SCSI_3W_SAS = "n";
+      SCSI_ACARD = "n";
+      SCSI_AACRAID = "n";
+      SCSI_AIC7XXX = "n";
+      SCSI_AIC79XX = "n";
       SCSI_AIC94XX = "n";
       SCSI_MVSAS = "n";
       SCSI_MVUMI = "n";
@@ -35,8 +36,6 @@
       SCSI_MYRB = "n";
       SCSI_MYRS = "n";
       VMWARE_PVSCSI = "n";
-      XEN_SCSI_FRONTEND = "n";
-      HYPERV_STORAGE = "n";
       LIBFC = "n";
       LIBFCOE = "n";
       FCOE = "n";
@@ -67,12 +66,11 @@
       SCSI_PM8001 = "n";
       SCSI_BFA_FC = "n";
       SCSI_CHELSIO_FCOE = "n";
-      SCSI_DH = "n";
-      SCSI_DH_RDAC = "n";
-      SCSI_DH_HP_SW = "n";
-      SCSI_DH_EMC = "n";
-      SCSI_DH_ALUA = "n";
       VHBA = "n";
-    */
+      /*
+        XEN_SCSI_FRONTEND = "n";
+        HYPERV_STORAGE = "n";
+      */
+    };
   };
 }
