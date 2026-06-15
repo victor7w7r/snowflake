@@ -41,6 +41,7 @@
               denial.storage.all
               denial.usb
               denial.vendor
+              denial.sensors
               denial.wmi
 
               config.intel
