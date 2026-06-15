@@ -7,9 +7,6 @@
       ATM = "n";
       FPGA = "n";
       CXL_BUS = "n";
-      FIREWIRE = "n";
-      FUSION = "n";
-      INFINIBAND = "n";
       MOST = "n";
       MOUSE_PS2 = "n";
       MULTIPLEXER = "n";
@@ -28,6 +25,7 @@
 
     virt = {
       HYPERVISOR_GUEST = "n";
+      VBOXGUEST = "n";
       KVM_XEN = "n";
       XEN = "n";
     };

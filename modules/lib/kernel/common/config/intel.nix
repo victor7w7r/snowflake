@@ -9,6 +9,7 @@
     DRM_I915_GVT_KVMGT = "m";
     KVM_INTEL = "m";
     MFD_INTEL_LPSS = "m";
+    MFD_INTEL_LPSS_ACPI = "m";
     MFD_INTEL_LPSS_PCI = "m";
 
     AMD_3D_VCACHE = "n";

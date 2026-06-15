@@ -97,5 +97,6 @@
     MFD_QNAP_MCU = "n";
     MFD_UPBOARD_FPGA = "n";
     MFD_MAX7360 = "n";
+    MFD_CORE = "n";
   };
 }

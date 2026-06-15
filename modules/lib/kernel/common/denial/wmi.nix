@@ -12,6 +12,7 @@
     ACER_WMI = "n";
     ALIENWARE_WMI = "n";
     DELL_LAPTOP = "n";
+    APPLE_GMUX = "n";
     DELL_WMI = "n";
     LENOVO_WMI_HOTKEY_UTILITIES = "n";
     LENOVO_WMI_CAMERA = "n";
@@ -50,6 +51,8 @@
     SERIAL_MULTI_INSTANTIATE = "n";
     INSPUR_PLATFORM_PROFILE = "n";
     DASHARO_ACPI = "n";
+    EEEPC_LAPTOP = "n";
+    EEEPC_WMI = "n";
     DELL_RBTN = "n";
     DELL_PC = "n";
     DELL_SMBIOS = "n";

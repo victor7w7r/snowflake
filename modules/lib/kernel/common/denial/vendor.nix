@@ -4,6 +4,9 @@
     CPU_SUP_CENTAUR = "n";
     CPU_SUP_ZHAOXIN = "n";
     EZX_PCAP = "n";
+    FIREWIRE = "n";
+    FUSION = "n";
+    INFINIBAND = "n";
     MACINTOSH_DRIVERS = "n";
     GOOGLE_FIRMWARE = "n";
 

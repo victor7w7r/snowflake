@@ -33,16 +33,17 @@
             (functors.app-config [
               denial.dev.all
               denial.filesystems.all
+              denial.fuel.all
               denial.general.all
               denial.gpio
               denial.input.all
+              denial.mfd
               denial.net.all
-              denial.regulators
               denial.sound
               denial.storage.all
               denial.usb
               denial.vendor
-              denial.sensors
+              denial.sensors.all
               denial.wmi
 
               config.intel
