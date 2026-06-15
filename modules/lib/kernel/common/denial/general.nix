@@ -7,6 +7,7 @@
       ATM = "n";
       BCMA = "n";
       CXL_BUS = "n";
+      EDAC = "n";
       FPGA = "n";
       MOST = "n";
       MOUSE_PS2 = "n";

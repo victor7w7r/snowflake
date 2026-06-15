@@ -59,6 +59,7 @@
               general
               highfreq
               net
+              not-phone
               storage.zram
               (cmdline {
                 isIntel = true;
