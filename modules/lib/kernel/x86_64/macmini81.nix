@@ -34,6 +34,7 @@
               denial.dev.all
               denial.filesystems.all
               denial.general.all
+              denial.gpio
               denial.input.all
               denial.net.all
               denial.regulators
