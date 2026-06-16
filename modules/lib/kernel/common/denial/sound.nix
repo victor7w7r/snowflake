@@ -1,6 +1,5 @@
 {
   kernel.lib.denial.sound = {
-
     SND_AC97_POWER_SAVE = "n";
     SND_AD1889 = "n";
     SND_ALI5451 = "n";

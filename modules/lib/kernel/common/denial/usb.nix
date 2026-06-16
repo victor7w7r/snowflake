@@ -18,6 +18,7 @@
       USB_STORAGE_SDDR55 = "n";
       USB_STORAGE_USBAT = "n";
     };
+
     net = {
       USB_ALI_M5632 = "n";
       USB_AN2720 = "n";

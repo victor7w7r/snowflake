@@ -3,7 +3,9 @@
     all =
       act
       // cls
+      // bridge
       // drivers
+      // dsa
       // eth
       // hardware
       // ipv6

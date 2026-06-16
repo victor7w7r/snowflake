@@ -41,7 +41,6 @@
       MMIOTRACE = "n";
       MPLS = "n";
       MTD = "n";
-      NET_SWITCHDEV = "n";
       NOP_TRACER = "n";
       PRINTK_TIME = "n";
       SCHED_TRACER = "n";

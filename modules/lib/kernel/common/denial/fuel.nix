@@ -1,6 +1,5 @@
 {
   kernel.lib.denial.fuel = rec {
-
     all = battery // regulators;
 
     battery = {
