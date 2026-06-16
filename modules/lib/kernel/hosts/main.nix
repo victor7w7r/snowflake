@@ -18,6 +18,7 @@
             fs.bcachefs
             freq.high
             general
+            not-arm
             not-phone
             vendor.not-amd
             (cmdline {

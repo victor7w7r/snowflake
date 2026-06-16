@@ -25,6 +25,7 @@
             fs.bcachefs
             freq.high
             general
+            not-arm
             not-phone
             not-raid
             vendor.not-intel

@@ -16,6 +16,7 @@
           {
             isArm ? true,
             isClang ? true,
+            disableDenial ? false,
             structConfig,
             config,
             patches,
@@ -27,6 +28,7 @@
               isClang
               structConfig
               config
+              disableDenial
               patches
               pkgs
               src

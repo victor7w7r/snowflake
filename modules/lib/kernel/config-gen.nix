@@ -9,6 +9,7 @@
     {
       isArm ? true,
       isClang ? true,
+      disableDenial ? false,
       structConfig,
       config,
       patches,
@@ -50,7 +51,7 @@
         let
           gen = (kernel.lib.injector pkgs).gen-config ''
             ${structConfig}
-            ${kernel.config.denial.all}
+            ${if disableDenial then "" else kernel.config.denial.all}
           '';
         in
         ''

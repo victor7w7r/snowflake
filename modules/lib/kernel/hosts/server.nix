@@ -24,6 +24,7 @@
           (kernel.lib.concat-config [
             freq.low
             general
+            not-arm
             not-phone
             vendor.not-amd
             (cmdline {
