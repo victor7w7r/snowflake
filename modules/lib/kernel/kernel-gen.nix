@@ -1,19 +1,24 @@
 { inputs, ... }:
 {
   kernel.lib.kernel-gen =
-    pkgs:
+    {
+      configfile,
+      patches,
+      pkgs,
+      src,
+      version,
+    }:
     let
       kernel =
         (pkgs.linuxManualConfig {
-          src = kernel.lib.params.src;
-          configfile = kernel.lib.params.configfile;
+          inherit src configfile;
           pname = "linux-v7w7r-${kernel.lib.params.localVer}";
-          modDirVersion = "${kernel.lib.params.version}-v7w7r-${kernel.lib.params.localVer}";
-          version = "${kernel.lib.params.version}-v7w7r-${kernel.lib.params.localVer}";
+          modDirVersion = "${version}-v7w7r-${kernel.lib.params.localVer}";
+          version = "${version}-v7w7r-${kernel.lib.params.localVer}";
           kernelPatches = map (file: {
             name = baseNameOf (toString file);
             patch = file;
-          }) kernel.lib.params.patches;
+          }) patches;
 
           extraMakeFlags = [
             "LOCALVERSION=v7w7r-${kernel.lib.params.localVer}"

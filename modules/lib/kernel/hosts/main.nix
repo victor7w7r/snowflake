@@ -1,66 +1,54 @@
-{ kernel, ... }:
+{ kernel, lib, ... }:
 {
-  kernel.hosts.main =
-    pkgs:
-    let
-      isClang = true;
-      src = (kernel.lib.linux { inherit pkgs; });
-      version = kernel.lib.utils.calc-version {
-        inherit src;
-        mkDerivation = pkgs.stdenvNoCC.mkDerivation;
-      };
-      tachyonPatches = (kernel.patches.tachyon { inherit pkgs; });
-      patches =
-        (kernel.patches.cachyos {
-          inherit pkgs;
-          majorMinor = version.majorMinor;
-        }).common
-        ++ tachyonPatches.common
-        ++ tachyonPatches.notGaming;
-
-      main-config = kernel.config.modules-gen {
-        inherit
-          isClang
-          patches
-          pkgs
-          src
-          ;
-        config = kernel.lib.kConfig { inherit pkgs; };
-        denialConfig = kernel.config.denial.all;
-        structConfig =
-          with kernel.config.modules;
-          (kernel.lib.utils.concat-config [
-            intel
-            fs.overlayfs
-            fs.xfs
-            general
-            highfreq
-            net
-            not-phone
-            storage.zram
-            (cmdline {
-              isIntel = true;
-              isSata = true;
-              extra = "video=DP-3:1600x900@60";
-            })
-          ]);
-      };
-
-      generated = kernel.lib.kernel-gen {
-        configfile = main-config;
+  kernel = {
+    lib.params = lib.mkMerge [
+      (kernel.lib.params or { })
+      {
+        isClang = true;
         localVer = "-native";
-        version = version.string;
-        inherit
-          isClang
-          patches
-          pkgs
-          src
-          ;
+      }
+    ];
+
+    hosts.main =
+      pkgs:
+      let
+        libs = kernel.lib.injector pkgs;
+        src = (kernel.linux.injector pkgs).cachyos;
+        version = libs.calc-version { inherit src; };
+        patches =
+          with (kernel.patches.injector pkgs);
+          (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming;
+        main-config = libs.config-gen {
+          inherit patches src;
+          config = (kernel.linux.injector pkgs).kConfig;
+          structConfig =
+            with kernel.config.modules;
+            (kernel.lib.concat-config [
+              intel
+              fs.overlayfs
+              fs.xfs
+              general
+              highfreq
+              net
+              not-phone
+              storage.zram
+              (cmdline {
+                isIntel = true;
+                isSata = true;
+                extra = "video=DP-3:1600x900@60";
+              })
+            ]);
+        };
+        generated = libs.kernel-gen {
+          inherit src patches;
+          version = version.string;
+          configfile = main-config;
+        };
+      in
+      {
+        inherit main-config;
+        main-kernelPackages = generated.packages;
+        main-kernel = generated.kernel;
       };
-    in
-    {
-      inherit main-config;
-      main-kernelPackages = generated.packages;
-      main-kernel = generated.kernel;
-    };
+  };
 }

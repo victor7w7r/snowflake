@@ -6,11 +6,16 @@
 }:
 {
   kernel.lib.config-gen =
-    pkgs:
+    {
+      structConfig,
+      config,
+      patches,
+      pkgs,
+      src,
+    }:
     pkgs.stdenv.mkDerivation {
       name = "linux-config-gen";
-      patches = kernel.lib.params.patches;
-      src = kernel.lib.params.src;
+      inherit patches src;
       LLVM = if kernel.lib.params.isClang then "1" else null;
       stdenv =
         if kernel.lib.params.isClang then
@@ -44,13 +49,13 @@
           gen = kernel.lib.utils.gen-config {
             inherit pkgs;
             configContent = ''
-              ${kernel.lib.params.structConfig}
+              ${structConfig}
               ${kernel.lib.denial.all}
             '';
           };
         in
         ''
-          cp ${kernel.lib.params.config} .config && chmod +w .config
+          cp ${config} .config && chmod +w .config
           cp ${gen} .gen_config
         '';
 

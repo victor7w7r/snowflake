@@ -1,4 +1,9 @@
-{ inputs, kernel, ... }:
+{
+  inputs,
+  kernel,
+  lib,
+  ...
+}:
 {
   imports = [ (inputs.den.namespace "kernel" true) ];
 
@@ -10,16 +15,49 @@
 
     lib = {
       injector = pkgs: {
-        config-gen = kernel.lib.config-gen pkgs;
-        kernel-gen = kernel.lib.kernel-gen pkgs;
-        gen-config = kernel.lib.gen-config pkgs;
-        calc-version = kernel.lib.calc-version pkgs;
+        gen-config = configContent: kernel.lib.gen-config pkgs configContent;
+        calc-version = src: kernel.lib.calc-version pkgs src;
+        config-gen =
+          {
+            structConfig,
+            config,
+            patches,
+            src,
+          }:
+          kernel.lib.config-gen {
+            inherit
+              structConfig
+              config
+              patches
+              pkgs
+              src
+              ;
+          };
+        kernel-gen =
+          {
+            configfile,
+            patches,
+            src,
+            version,
+          }:
+          kernel.lib.kernel-gen {
+            inherit
+              configfile
+              version
+              patches
+              pkgs
+              src
+              ;
+          };
       };
-      params = {
-        isClang = false;
-        isArm = false;
-        localVer = "";
-      };
+      params = lib.mkMerge [
+        {
+          isClang = false;
+          isArm = false;
+          localVer = "";
+          hardened = false;
+        }
+      ];
     };
   };
 }

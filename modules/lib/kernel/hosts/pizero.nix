@@ -1,61 +1,60 @@
-{ kernel, ... }:
+{ kernel, lib, ... }:
 {
-  kernel.host.pizero =
-    pkgs:
-    let
-      src = (kernel.lib.linux { inherit pkgs; });
-      version = kernel.lib.utils.calc-version {
-        inherit src;
-        mkDerivation = pkgs.stdenvNoCC.mkDerivation;
-      };
-      cachyosPatches = kernel.patches.cachyos {
-        inherit pkgs;
-        majorMinor = version.majorMinor;
-      };
-      sunxi = (kernel.patches.sunxi { inherit pkgs; });
-      tachyonPatches = (kernel.patches.tachyon { inherit pkgs; });
-      patches =
-        sunxi.patches ++ cachyosPatches.hardened ++ tachyonPatches.common ++ tachyonPatches.notGaming;
-
-      pizero-config = kernel.config.modules-gen {
-        inherit
-          pkgs
-          src
-          patches
-          ;
-        config = "${sunxi.armbian}/config/kernel/linux-sunxi64-current.config";
-        denialConfig = kernel.config.denial.all;
-        structConfig =
-          with kernel.config.modules;
-          (kernel.lib.utils.concat-config [
-            intel
-            blacklist.all
-            fs.overlayfs
-            fs.xfs
-            general
-            lowfreq
-            net
-            storage.zram
-            all-debug
-            all-vendor
-            (cmdline { })
-          ]);
-      };
-
-      generated = kernel.lib.kernel-gen {
+  kernel = {
+    lib.params = lib.mkMerge [
+      (kernel.lib.params or { })
+      {
+        hardened = true;
         localVer = "-sunxi-hardened";
-        configfile = pizero-config;
-        inherit
-          pkgs
-          src
-          patches
-          version
-          ;
+      }
+    ];
+
+    hosts.pizero =
+      pkgs:
+      let
+        libs = kernel.lib.injector pkgs;
+        src = (kernel.linux.injector pkgs).cachyos;
+        version = libs.calc-version { inherit src; };
+        patchesData = (kernel.patches.injector pkgs);
+        cachyosPatches = (patchesData.cachyos version.majorMinor);
+        tachyonPatches = patchesData.tachyon;
+
+        patches =
+          patchesData.sunxi.patches
+          ++ cachyosPatches.hardened
+          ++ tachyonPatches.common
+          ++ tachyonPatches.notGaming;
+
+        pizero-config = kernel.config.modules-gen {
+          inherit patches src;
+          config = "${patchesData.sunxi.armbian}/config/kernel/linux-sunxi64-current.config";
+          structConfig =
+            with kernel.config.modules;
+            (kernel.lib.concat-config [
+              intel
+              blacklist.all
+              fs.overlayfs
+              fs.xfs
+              general
+              lowfreq
+              net
+              storage.zram
+              all-debug
+              all-vendor
+              (cmdline { })
+            ]);
+        };
+
+        generated = libs.kernel-gen {
+          inherit src patches;
+          version = version.string;
+          configfile = pizero-config;
+        };
+      in
+      {
+        inherit pizero-config;
+        pizero-kernelPackages = generated.packages;
+        pizero-kernel = generated.kernel;
       };
-    in
-    {
-      inherit pizero-config;
-      pizero-kernelPackages = generated.packages;
-      pizero-kernel = generated.kernel;
-    };
+  };
 }

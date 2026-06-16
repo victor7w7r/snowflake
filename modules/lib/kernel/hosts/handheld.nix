@@ -1,68 +1,61 @@
-{ kernel, ... }:
+{ kernel, lib, ... }:
 {
-  kernel.hosts.handheld =
-    pkgs:
-    let
-      isClang = true;
-      src = (kernel.lib.linux { inherit pkgs; });
-      version = kernel.lib.utils.calc-version {
-        inherit src;
-        mkDerivation = pkgs.stdenvNoCC.mkDerivation;
-      };
-      cachyosPatches = kernel.patches.cachyos {
-        inherit pkgs;
-        majorMinor = version.majorMinor;
-      };
-      tachyonPatches = (kernel.patches.tachyon { inherit pkgs; });
-      patches =
-        cachyosPatches.common
-        ++ cachyosPatches.handheld
-        ++ tachyonPatches.common
-        ++ tachyonPatches.gaming
-        ++ (kernel.patches.asus { inherit pkgs; });
-
-      handheld-config = kernel.config.modules-gen {
-        inherit
-          isClang
-          patches
-          pkgs
-          src
-          ;
-        config = kernel.lib.std-config { inherit pkgs; };
-        denialConfig = kernel.config.denial.all;
-        structConfig =
-          with kernel.config.modules;
-          (kernel.lib.utils.concat-config [
-            amd
-            blacklist.all
-            fs.bcachefs
-            fs.overlayfs
-            fs.xfs
-            general
-            highfreq
-            net
-            zram
-            all-debug
-            all-vendor
-            (cmdline { isAmd = true; })
-          ]);
-      };
-
-      generated = kernel.lib.kernel-gen {
+  kernel = {
+    lib.params = lib.mkMerge [
+      (kernel.lib.params or { })
+      {
+        isClang = true;
         localVer = "-handheld-native";
-        configfile = handheld-config;
-        version = version.string;
-        inherit
-          pkgs
-          src
-          isClang
-          patches
-          ;
+      }
+    ];
+
+    hosts.handheld =
+      pkgs:
+      let
+        libs = kernel.lib.injector pkgs;
+        src = (kernel.linux.injector pkgs).cachyos;
+        version = libs.calc-version { inherit src; };
+        patchesData = (kernel.patches.injector pkgs);
+        cachyosPatches = (patchesData.cachyos version.majorMinor);
+        tachyonPatches = patchesData.tachyon;
+        patches =
+          cachyosPatches.common
+          ++ cachyosPatches.handheld
+          ++ tachyonPatches.common
+          ++ tachyonPatches.gaming
+          ++ patchesData.asus;
+
+        handheld-config = libs.config-gen {
+          inherit patches src;
+          config = (kernel.linux.injector pkgs).kConfig;
+          structConfig =
+            with kernel.config.modules;
+            (kernel.lib.concat-config [
+              amd
+              blacklist.all
+              fs.bcachefs
+              fs.overlayfs
+              fs.xfs
+              general
+              highfreq
+              net
+              zram
+              all-debug
+              all-vendor
+              (cmdline { isAmd = true; })
+            ]);
+        };
+
+        generated = libs.kernel-gen {
+          inherit src patches;
+          version = version.string;
+          configfile = handheld-config;
+        };
+      in
+      {
+        inherit handheld-config;
+        handheld-kernelPackages = generated.packages;
+        handheld-kernel = generated.kernel;
       };
-    in
-    {
-      inherit handheld-config;
-      handheld-kernelPackages = generated.packages;
-      handheld-kernel = generated.kernel;
-    };
+  };
 }

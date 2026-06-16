@@ -1,9 +1,8 @@
-{ kernel, ... }:
 {
   kernel.patches.cachyos =
-    pkgs:
+    pkgs: majorMinor:
     let
-      majorMinor = kernel.lib.params.majorMinor;
+      inherit majorMinor;
       patches = pkgs.stdenvNoCC.mkDerivation {
         pname = "patches-cachyos";
         version = "custom";
