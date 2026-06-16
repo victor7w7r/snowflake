@@ -65,7 +65,6 @@
     INTEL_TURBO_MAX_3 = "n";
     KVM_INTEL = "n";
     KVM_INTEL_TDX = "n";
-    NET_VENDOR_INTEL = "n";
     PERF_EVENTS_INTEL_RAPL = "n";
     PINCTRL_INTEL = "n";
     X86_INTEL_LPSS = "n";

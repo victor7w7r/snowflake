@@ -79,5 +79,31 @@
     USB_DWC2 = "n";
     USB_DWC2_DUAL_ROLE = "n";
     USB_DWC2_PCI = "n";
+
+    NFC = "n";
+    NFC_NXP_NCI = "n";
+    NFC_NXP_NCI_I2C = "n";
+
+    SOUNDWIRE_QCOM = "n";
+
+    GNSS = "n";
+    GNSS_SERIAL = "n";
+    GNSS_MTK_SERIAL = "n";
+    GNSS_SIRF_SERIAL = "n";
+    GNSS_UBX_SERIAL = "n";
+    GNSS_USB = "n";
+
+    QRTR = "n";
+    QRTR_SMD = "n";
+    QRTR_TUN = "n";
+    QRTR_MHI = "n";
+
+    SCSI_UFSHCD = "n";
+    SCSI_UFS_BSG = "n";
+    SCSI_UFS_CRYPTO = "n";
+    SCSI_UFS_HWMON = "n";
+    SCSI_UFSHCD_PCI = "n";
+    SCSI_UFSHCD_PLATFORM = "n";
+    SCSI_UFS_CDNS_PLATFORM = "n";
   };
 }

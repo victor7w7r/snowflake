@@ -74,7 +74,6 @@
     MEDIA_SUPPORT = "n";
     NET_SCH_BPF = "n";
     NUMA = "n";
-    QUOTA = "n";
     PROFILING = "n";
     PTP_1588_CLOCK = "n";
     REMOTEPROC = "n";
@@ -86,7 +85,6 @@
     SCSI_DH = "n";
     SECURITY_SELINUX = "n";
     SECURITY_TOMOYO = "n";
-    SERIAL_8250 = "n";
     SND_OSSEMUL = "n";
     STAGING = "n";
     STRICT_DEVMEM = "n";

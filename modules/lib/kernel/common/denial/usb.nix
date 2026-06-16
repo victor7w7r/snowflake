@@ -74,12 +74,17 @@
       USB_CYTHERM = "n";
       USB_DUMMY_HCD = "n";
       USB_EG20T = "n";
+      USB_EHCI_FSL = "n";
       USB_EHSET_TEST_FIXTURE = "n";
       USB_EMI26 = "n";
       USB_EMI62 = "n";
       USB_EZUSB_FX2 = "n";
       USB_F_MIDI = "n";
       USB_F_MIDI2 = "n";
+      USB_CATC = "n";
+      USB_KAWETH = "n";
+      USB_PEGASUS = "n";
+      USB_RTL8150 = "n";
       USB_GOKU = "n";
       USB_GPIO_VBUS = "n";
       USB_GR_UDC = "n";
@@ -108,6 +113,7 @@
       USB_NET2280 = "n";
       USB_OXU210HP_HCD = "n";
       USB_PHY = "n";
+      USB_PRINTER = "n";
       USB_PXA27X = "n";
       USB_R8A66597 = "n";
       USB_R8A66597_HCD = "n";
@@ -115,8 +121,11 @@
       USB_SISUSBVGA = "n";
       USB_SL811_HCD = "n";
       USB_TEST = "n";
+      USB_TMC = "n";
       USB_TRANCEVIBRATOR = "n";
+      USB_ULPI_BUS = "n";
       USB_USBIO = "n";
+      USB_XHCI_PCI_RENESAS = "n";
       USB_YUREX = "n";
     };
 

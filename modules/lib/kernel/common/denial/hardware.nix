@@ -1,6 +1,21 @@
 {
   kernel.lib.denial.hardware = rec {
-    all = backlight // ir // graphics // lcd // led // pins // rtc;
+    all = acpi // bt // backlight // ir // graphics // lcd // led // nfc // pins // rtc // thermal;
+
+    acpi = {
+      ACPI_APEI_EINJ = "n";
+      ACPI_APEI_ERST_DEBUG = "n";
+      ACPI_EC_DEBUGFS = "n";
+      ACPI_HOTPLUG_CPU = "n";
+      ACPI_HOTPLUG_IOAPIC = "n";
+      ACPI_HOTPLUG_MEMORY = "n";
+      ACPI_IPMI = "n";
+      ACPI_NFIT = "n";
+      ACPI_PROCESSOR_AGGREGATOR = "n";
+      ACPI_SBS = "n";
+      CHT_DC_TI_PMIC_OPREGION = "n";
+      TPS68470_PMIC_OPREGION = "n";
+    };
 
     backlight = {
       BACKLIGHT_ADP8860 = "n";
@@ -203,6 +218,46 @@
       LEDS_USER = "n";
     };
 
+    nfc = {
+      NFC_DIGITAL = "n";
+      NFC_FDP = "n";
+      NFC_FDP_I2C = "n";
+      NFC_HCI = "n";
+      NFC_MEI_PHY = "n";
+      NFC_MICROREAD = "n";
+      NFC_MICROREAD_I2C = "n";
+      NFC_MICROREAD_MEI = "n";
+      NFC_MRVL = "n";
+      NFC_MRVL_I2C = "n";
+      NFC_MRVL_SPI = "n";
+      NFC_MRVL_UART = "n";
+      NFC_MRVL_USB = "n";
+      NFC_NCI = "n";
+      NFC_NCI_SPI = "n";
+      NFC_NCI_UART = "n";
+      NFC_PN532_UART = "n";
+      NFC_PN533 = "n";
+      NFC_PN533_I2C = "n";
+      NFC_PN533_USB = "n";
+      NFC_PN544 = "n";
+      NFC_PN544_I2C = "n";
+      NFC_PN544_MEI = "n";
+      NFC_PORT100 = "n";
+      NFC_S3FWRN5 = "n";
+      NFC_S3FWRN5_I2C = "n";
+      NFC_S3FWRN82_UART = "n";
+      NFC_SHDLC = "n";
+      NFC_SIM = "n";
+      NFC_ST21NFCA = "n";
+      NFC_ST21NFCA_I2C = "n";
+      NFC_ST95HF = "n";
+      NFC_ST_NCI = "n";
+      NFC_ST_NCI_I2C = "n";
+      NFC_ST_NCI_SPI = "n";
+      NFC_TRF7970A = "n";
+      NFC_VIRTUAL_NCI = "n";
+    };
+
     pins = {
       PINCTRL_ALDERLAKE = "n";
       PINCTRL_AMDISP = "n";
@@ -298,6 +353,15 @@
       RTC_DRV_SD3078 = "n";
       RTC_DRV_STK17TA8 = "n";
       RTC_DRV_X1205 = "n";
+    };
+
+    thermal = {
+      INTEL_SOC_DTS_IOSF_CORE = "n";
+      INTEL_SOC_DTS_THERMAL = "n";
+      INT340X_THERMAL = "n";
+      ACPI_THERMAL_REL = "n";
+      INT3406_THERMAL = "n";
+      PROC_THERMAL_MMIO_RAPL = "n";
     };
   };
 }

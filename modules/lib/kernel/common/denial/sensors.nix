@@ -6,6 +6,10 @@
       I8K = "n";
       MAX31827 = "n";
       PMBUS = "n";
+      DPLL = "n";
+      ZL3073X = "n";
+      ZL3073X_I2C = "n";
+      ZL3073X_SPI = "n";
       SENSORS_ABITUGURU = "n";
       SENSORS_ABITUGURU3 = "n";
       SENSORS_ACBEL_FSG032 = "n";

@@ -3,7 +3,6 @@
     all = fs // label // nls;
 
     fs = {
-      "9P_FS" = "n";
       AFFS_FS = "n";
       AFS_FS = "n";
       BEFS_FS = "n";
@@ -14,7 +13,6 @@
       HFSPLUS_FS = "n";
       HFS_FS = "n";
       JFS_FS = "n";
-      NFS_FS = "n";
       MINIX_FS = "n";
       NILFS2_FS = "n";
       NTFS_FS = "n";
@@ -23,6 +21,7 @@
       ORANGEFS_FS = "n";
       ROMFS_FS = "n";
       UFS_FS = "n";
+      ZONEFS_FS = "n";
     };
 
     label = {

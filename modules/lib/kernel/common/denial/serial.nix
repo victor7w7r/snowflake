@@ -1,6 +1,36 @@
 {
   kernel.lib.denial.serial = rec {
-    all = i2c // spi // serio;
+    all = general // i2c // spi // serio;
+
+    general = {
+      SERIAL_MAX3100 = "n";
+      SERIAL_MAX310X = "n";
+      SERIAL_UARTLITE = "n";
+      SERIAL_JSM = "n";
+      SERIAL_SCCNXP = "n";
+      SERIAL_SC16IS7XX = "n";
+      SERIAL_SC16IS7XX_I2C = "n";
+      SERIAL_SC16IS7XX_SPI = "n";
+      SERIAL_ALTERA_JTAGUART = "n";
+      SERIAL_ALTERA_UART = "n";
+      SERIAL_ARC = "n";
+      SERIAL_RP2 = "n";
+      SERIAL_FSL_LPUART = "n";
+      SERIAL_FSL_LINFLEXUART = "n";
+      SERIAL_MEN_Z135 = "n";
+      SERIAL_SPRD = "n";
+      SERIAL_8250_FINTEK = "n";
+      SERIAL_8250_MEN_MCB = "n";
+      SERIAL_8250_NR_UARTS = "8";
+      SERIAL_8250_RUNTIME_UARTS = "4";
+      SERIAL_8250_MANY_PORTS = "n";
+      SERIAL_8250_PCI1XXXX = "n";
+      SERIAL_8250_RT288X = "n";
+      SERIAL_8250_LPSS = "n";
+      SERIAL_8250_MID = "n";
+      SERIAL_8250_PERICOM = "n";
+      SERIAL_8250_NI = "n";
+    };
 
     i2c = {
       I2C_MUX_GPIO = "n";

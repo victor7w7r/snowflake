@@ -29,21 +29,21 @@
             ;
           config = kernel.lib.std.std-config { inherit pkgs; };
 
-          miscDenialConfig = with kernel.lib.denial; (kernel.lib.functors.app-config [ sensors.all ]);
           denialConfig =
             with kernel.lib.denial;
             (kernel.lib.functors.app-config [
-              crypto.all
+              crypto
               dev.all
               filesystems.all
               fuel.all
               general.all
-              gpio
+              gpio.all
               hardware.all
               input.all
               mfd
               net.all
               sound
+              sensors.all
               serial.all
               storage.all
               usb.all

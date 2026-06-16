@@ -4,7 +4,6 @@
     DRM_I915 = "y";
     X86_INTEL_PSTATE = "y";
 
-    NET_VENDOR_INTEL = "y";
     BT_INTEL = "m";
     DRM_I915_GVT_KVMGT = "m";
     KVM_INTEL = "m";

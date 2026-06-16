@@ -13,7 +13,6 @@
       isClang ? false,
       isArm ? false,
       denialConfig,
-      miscDenialConfig ? "",
       structConfig,
       config,
     }:
@@ -48,14 +47,22 @@
           "CROSS_COMPILE=${pkgs.stdenv.cc.targetPrefix}"
         ]);
 
-      configurePhase = ''
-        cp ${config} .config && chmod +w .config
-        ${miscDenialConfig}
-        ${structConfig}
-      '';
+      configurePhase =
+        let
+          gen = kernel.lib.functors.gen-config {
+            inherit pkgs;
+            configContent = ''
+              ${structConfig}
+              ${denialConfig}
+            '';
+          };
+        in
+        ''
+          cp ${config} .config && chmod +w .config
+          cp ${gen} .gen_config
+        '';
 
       buildPhase = ''
-        ${denialConfig}
         scripts/kconfig/merge_config.sh -m .config .gen_config &> /dev/null
         make $makeFlags olddefconfig
       '';

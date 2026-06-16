@@ -38,6 +38,6 @@
     # sed -i '/^$/N;/\n$/D' .config
     #sed -i '/CONFIG_PATA_/d' .config
     # sed -i '/^CONFIG_HID_/d' .config
-    #sed -i '/^[[:space:]]*#/d; /^[[:space:]]*$/d' .config
+    sed -i '/^[[:space:]]*#/d; /^[[:space:]]*$/d' .config
   '';
 }

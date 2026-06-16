@@ -1,6 +1,57 @@
 {
   kernel.lib.denial.storage = rec {
-    all = scsi // sata;
+    all = general // mmc // raid // scsi // sata;
+
+    general = {
+      BLK_DEV_FD = "n";
+      BLK_DEV_PCIESSD_MTIP32XX = "n";
+      BLK_DEV_RBD = "n";
+      EDD = "n";
+      NVME_FABRICS = "n";
+      NVME_FC = "n";
+      NVME_TCP = "n";
+      MISC_ALCOR_PCI = "n";
+      MISC_RTSX_PCI = "n";
+      MISC_RTSX_USB = "n";
+      AF_KCM = "n";
+      AF_RXRPC = "n";
+      AF_RXRPC_IPV6 = "n";
+      AF_RXRPC_DEBUG = "n";
+      RXKAD = "n";
+      RXGK = "n";
+    };
+
+    mmc = {
+      MMC_TEST = "n";
+      MMC_VIA_SDMMC = "n";
+      MMC_TIFM_SD = "n";
+      MMC_WBSD = "n";
+      MMC_CB710 = "n";
+      MMC_VUB300 = "n";
+      MMC_USHC = "n";
+    };
+
+    raid = {
+      DM_CACHE = "n";
+      DM_CACHE_SMQ = "n";
+      DM_CLONE = "n";
+      DM_DELAY = "n";
+      DM_DUST = "n";
+      DM_EBS = "n";
+      DM_ERA = "n";
+      DM_FLAKEY = "n";
+      DM_LOG_USERSPACE = "n";
+      DM_LOG_WRITES = "n";
+      DM_MULTIPATH = "n";
+      DM_MULTIPATH_HST = "n";
+      DM_MULTIPATH_IOA = "n";
+      DM_MULTIPATH_QL = "n";
+      DM_MULTIPATH_ST = "n";
+      DM_SWITCH = "n";
+      DM_WRITECACHE = "n";
+      DM_ZONED = "n";
+    };
+
     scsi = {
       BE2ISCSI = "n";
       BLK_DEV_3W_XXXX_RAID = "n";
@@ -8,7 +59,12 @@
       FCOE_FNIC = "n";
       HYPERV_STORAGE = "n";
       LIBFC = "n";
+      CHR_DEV_ST = "n";
+      CHR_DEV_SG = "n";
       LIBFCOE = "n";
+      ISCSI_IBFT_FIND = "n";
+      ISCSI_IBFT = "n";
+      FW_CFG_SYSFS = "n";
       MEGARAID_LEGACY = "n";
       MEGARAID_MAILBOX = "n";
       MEGARAID_MM = "n";
@@ -80,6 +136,7 @@
       VMWARE_PVSCSI = "n";
       XEN_SCSI_FRONTEND = "n";
     };
+
     sata = {
       ATA_PIIX = "n";
       PATA_ACPI = "n";

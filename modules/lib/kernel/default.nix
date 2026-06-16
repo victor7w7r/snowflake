@@ -3,21 +3,35 @@
   imports = [ (inputs.den.namespace "kernel" false) ];
 
   kernel.lib = {
-    functors.app-config =
-      configList:
-      lib.pipe configList [
-        (map (
-          structConfig:
-          let
-            pouch = lib.mapAttrsToList (option: value: ''
-              echo "CONFIG_${option}=${value}" >> .gen_config
-            '') (removeAttrs structConfig [ "__provider" ]);
-          in
-          pouch
-        ))
-        lib.flatten
-        (lib.concatStringsSep "\n")
-      ];
+    functors = {
+      app-config =
+        configList:
+        lib.pipe configList [
+          (map (
+            structConfig:
+            lib.mapAttrsToList (option: value: "CONFIG_${option}=${value}") (
+              removeAttrs structConfig [ "__provider" ]
+            )
+          ))
+          lib.flatten
+          (lib.concatStringsSep "\n")
+        ];
+
+      gen-config =
+        { pkgs, configContent }:
+        pkgs.stdenv.mkDerivation {
+          pname = "gen-config";
+          version = "custom";
+
+          dontConfigure = true;
+          dontPatch = true;
+          dontFixup = true;
+          dontUnpack = true;
+
+          buildPhase = "cp ${pkgs.writeText "kernel-gen-config" configContent} .config";
+          installPhase = "cp .config $out";
+        };
+    };
 
     version =
       { src, stdenv }:
