@@ -1,6 +1,6 @@
 { kernel, ... }:
 {
-  kernel.host.server =
+  kernel.hosts.server =
     pkgs:
     let
       libs = kernel.lib.injector pkgs;
@@ -16,22 +16,16 @@
         ++ tachyonPatches.common
         ++ tachyonPatches.notGaming;
 
-      server-config = kernel.config.modules-gen {
+      server-config = libs.config-gen {
         inherit patches src;
         config = (kernel.linux.injector pkgs).kConfig true;
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
-            intel
-            blacklist.all
-            fs.bcachefs
-            fs.overlayfs
-            fs.xfs
+            freq.low
             general
-            lowfreq
-            storage.all
-            all-debug
-            all-vendor
+            not-phone
+            vendor.not-amd
             (cmdline {
               isIntel = true;
               isSata = true;

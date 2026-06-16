@@ -9,6 +9,7 @@
     DEFAULT_NET_SCH = "fq";
     DEFAULT_TCP_CONG = "bbr";
     GENERIC_CPU = "n";
+    KVM = "y";
     LTO_CLANG_THIN = "y";
     MQ_IOSCHED_ADIOS = "y";
     MZEN4 = "n";

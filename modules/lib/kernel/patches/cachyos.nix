@@ -33,6 +33,14 @@
           filterdiff -x "*/kernel/sched/fair.c" \
             "./${majorMinor}/sched/0001-bore-cachy.patch" > bore-filter.patch || true
           cat bore-filter.patch > "./${majorMinor}/sched/0001-bore-cachy.patch" || true
+
+          filterdiff -x "*/drivers/input/joystick/xpad.c" \
+            "./${majorMinor}/misc/0001-handheld.patch" > handheld-filter.patch || true
+          cat handheld-filter.patch > "./${majorMinor}/misc/0001-handheld.patch" || true
+
+            filterdiff -x "*/security/selinux/selinuxfs.c" \
+              "./${majorMinor}/misc/0001-hardened.patch" > hardened-filter.patch || true
+            cat hardened-filter.patch > "./${majorMinor}/misc/0001-hardened.patch" || true
         '';
         installPhase = "mkdir -p $out && cp -r . $out/";
       };

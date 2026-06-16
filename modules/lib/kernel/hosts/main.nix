@@ -15,13 +15,11 @@
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
-            intel
-            fs.overlayfs
-            fs.xfs
+            fs.bcachefs
+            freq.high
             general
-            highfreq
             not-phone
-            storage.zram
+            vendor.not-amd
             (cmdline {
               isIntel = true;
               isSata = true;

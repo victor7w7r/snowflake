@@ -22,16 +22,12 @@
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
-            amd
-            blacklist.all
             fs.bcachefs
-            fs.overlayfs
-            fs.xfs
+            freq.high
             general
-            highfreq
-            zram
-            all-debug
-            all-vendor
+            not-phone
+            not-raid
+            vendor.not-intel
             (cmdline { isAmd = true; })
           ]);
       };

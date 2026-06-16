@@ -10,7 +10,6 @@
     SND_AMD_ASOC_ACP70 = "n";
     SND_AMD_ASOC_REMBRANDT = "n";
     SND_AMD_ASOC_RENOIR = "n";
-    SND_AMD_SOUNDWIRE_ACPI = "n";
     SND_ASIHPI = "n";
     SND_ATIIXP = "n";
     SND_ATIIXP_MODEM = "n";
@@ -167,8 +166,6 @@
     SND_SOC_AMD_LEGACY_MACH = "n";
     SND_SOC_AMD_LEGACY_SDW_MACH = "n";
     SND_SOC_AMD_MACH_COMMON = "n";
-    SND_SOC_AMD_PS = "n";
-    SND_SOC_AMD_PS_MACH = "n";
     SND_SOC_AMD_RENOIR = "n";
     SND_SOC_AMD_RENOIR_MACH = "n";
     SND_SOC_AMD_RPL_ACP6x = "n";
@@ -195,10 +192,6 @@
     SND_SOC_CS35L34 = "n";
     SND_SOC_CS35L35 = "n";
     SND_SOC_CS35L36 = "n";
-    SND_SOC_CS35L41 = "n";
-    SND_SOC_CS35L41_I2C = "n";
-    SND_SOC_CS35L41_LIB = "n";
-    SND_SOC_CS35L41_SPI = "n";
     SND_SOC_CS35L45 = "n";
     SND_SOC_CS35L45_I2C = "n";
     SND_SOC_CS35L45_SPI = "n";

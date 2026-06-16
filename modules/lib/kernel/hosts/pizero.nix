@@ -16,7 +16,7 @@
         ++ tachyonPatches.common
         ++ tachyonPatches.notGaming;
 
-      pizero-config = kernel.config.modules-gen {
+      pizero-config = libs.config-gen {
         inherit patches src;
         isArm = true;
         isClang = false;
@@ -24,15 +24,12 @@
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
-            intel
-            blacklist.all
-            fs.overlayfs
-            fs.xfs
+            freq.low
             general
-            lowfreq
-            storage.zram
-            all-debug
-            all-vendor
+            not-phone
+            not-raid
+            vendor.not-amd
+            vendor.not-intel
             (cmdline { })
           ]);
       };

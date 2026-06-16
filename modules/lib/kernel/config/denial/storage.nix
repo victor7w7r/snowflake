@@ -132,7 +132,6 @@
       SCSI_SYM53C8XX_2 = "n";
       SCSI_SYM53C8XX_MMIO = "n";
       SCSI_WD719X = "n";
-      VHBA = "n";
       VMWARE_PVSCSI = "n";
       XEN_SCSI_FRONTEND = "n";
     };
