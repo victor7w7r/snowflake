@@ -29,7 +29,6 @@
             fs.xfs
             general
             lowfreq
-            net
             storage.all
             all-debug
             all-vendor

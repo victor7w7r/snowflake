@@ -30,7 +30,6 @@
             fs.xfs
             general
             lowfreq
-            net
             storage.zram
             all-debug
             all-vendor

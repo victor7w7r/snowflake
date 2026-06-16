@@ -20,7 +20,6 @@
             fs.xfs
             general
             highfreq
-            net
             not-phone
             storage.zram
             (cmdline {

@@ -1,64 +1,55 @@
 {
-  kernel.config.modules = rec {
-    commonfreq = {
+  kernel.config.modules.freq = rec {
+    common = {
       HZ_PERIODIC = "n";
       NO_HZ = "y";
       NO_HZ_COMMON = "y";
       PREEMPT_LAZY = "n";
     };
 
-    lowfreq = {
+    low = {
       HZ = "250";
-      NR_CPUS = "8";
-
+      HZ_1000 = "n";
+      HZ_250 = "y";
       INPUT_JOYSTICK = "n";
       INPUT_TABLET = "n";
       INPUT_TOUCHSCREEN = "n";
       INPUT_UINPUT = "n";
-
-      HZ_250 = "y";
-      NO_HZ_IDLE = "y";
-
-      PREEMPT_NONE = "y";
-      PREEMPT_NONE_BUILD = "y";
-
-      HZ_1000 = "n";
       NO_HZ_FULL = "n";
+      NO_HZ_IDLE = "y";
+      NR_CPUS = "8";
       NTSYNC = "n";
       PREEMPT = "n";
-      PREEMPT_DYNAMIC = "n";
       PREEMPTION = "n";
+      PREEMPT_DYNAMIC = "n";
+      PREEMPT_NONE = "y";
+      PREEMPT_NONE_BUILD = "y";
       PREEMPT_VOLUNTARY = "n";
-
       SND = "n";
     }
-    // commonfreq;
+    // common;
 
-    highfreq = {
-      HZ = "1000";
-      NR_CPUS = "32";
-
+    high = {
       ANDROID_BINDERFS = "y";
       ANDROID_BINDER_IPC = "y";
-      INPUT_UINPUT = "y";
-
+      CACHY = "y";
+      HZ = "1000";
       HZ_1000 = "y";
+      INPUT_UINPUT = "y";
       NO_HZ_FULL = "y";
       NO_HZ_FULL_NODEF = "y";
+      NO_HZ_IDLE = "n";
+      NR_CPUS = "32";
       NTSYNC = "y";
-
-      PREEMPT_BUILD = "y";
-      PREEMPTION = "y";
       PREEMPT = "y";
+      PREEMPTION = "y";
+      PREEMPT_BUILD = "y";
       PREEMPT_COUNT = "y";
       PREEMPT_DYNAMIC = "y";
-      CACHY = "y";
-      SCHED_BORE = "y";
-
-      NO_HZ_IDLE = "n";
       PREEMPT_NONE = "n";
       PREEMPT_VOLUNTARY = "n";
+      SCHED_BORE = "y";
     }
-    // commonfreq;
+    // common;
   };
 }

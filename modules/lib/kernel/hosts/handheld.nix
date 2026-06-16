@@ -29,7 +29,6 @@
             fs.xfs
             general
             highfreq
-            net
             zram
             all-debug
             all-vendor

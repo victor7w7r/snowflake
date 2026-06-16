@@ -1,6 +1,6 @@
 {
   kernel.config.denial.filesystems = rec {
-    all = fs // label // nls;
+    all = fs // label // nls // quota;
 
     fs = {
       AFFS_FS = "n";
@@ -29,6 +29,11 @@
       BSD_DISKLABEL = "n";
       LDM_PARTITION = "n";
       MAC_PARTITION = "n";
+    };
+
+    quota = {
+      XFS_QUOTA = "n";
+      TMPFS_QUOTA = "n";
     };
 
     nls = {
