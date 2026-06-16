@@ -26,14 +26,15 @@
           patchutils
         ];
 
-        configurePhase = ''find "$out" -type d -empty -delete'';
-
+        configurePhase = "cp -r $src/* ./";
         buildPhase = ''
+          find . -type d -empty -delete
+          chmod -R +w .
           filterdiff -x "*/kernel/sched/fair.c" \
-          "$out/${majorMinor}/sched/0001-bore-cachy.patch" > bore-filter.patch || true
-          cat bore-filter.patch > "$out/${majorMinor}/sched/0001-bore-cachy.patch" || true
+            "./${majorMinor}/sched/0001-bore-cachy.patch" > bore-filter.patch || true
+          cat bore-filter.patch > "./${majorMinor}/sched/0001-bore-cachy.patch" || true
         '';
-        installPhase = "mkdir -p $out && cp ./* $out/";
+        installPhase = "mkdir -p $out && cp -r . $out/";
       };
 
       bore = [ "${patches}/${majorMinor}/sched/0001-bore-cachy.patch" ];

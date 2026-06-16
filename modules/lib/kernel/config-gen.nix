@@ -16,9 +16,9 @@
     pkgs.stdenv.mkDerivation {
       name = "linux-config-gen";
       inherit patches src;
-      LLVM = if kernel.lib.params.isClang then "1" else null;
+      LLVM = if kernel.lib.params.values.isClang then "1" else null;
       stdenv =
-        if kernel.lib.params.isClang then
+        if kernel.lib.params.values.isClang then
           (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { }).stdenvLLVM
         else
           pkgs.stdenv;
@@ -32,27 +32,24 @@
           flex
           perl
         ]
-        ++ (lib.optionals isClang [
+        ++ (lib.optionals kernel.lib.params.values.isClang [
           llvm_20
           clang_20
           lld_20
         ]);
 
       makeFlags =
-        (lib.optionals kernel.lib.params.isArm [ "ARCH=arm64" ])
+        (lib.optionals kernel.lib.params.values.isArm [ "ARCH=arm64" ])
         ++ (lib.optionals (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) [
           "CROSS_COMPILE=${pkgs.stdenv.cc.targetPrefix}"
         ]);
 
       configurePhase =
         let
-          gen = kernel.lib.utils.gen-config {
-            inherit pkgs;
-            configContent = ''
-              ${structConfig}
-              ${kernel.lib.denial.all}
-            '';
-          };
+          gen = (kernel.lib.injector pkgs).gen-config ''
+            ${structConfig}
+            ${kernel.config.denial.all}
+          '';
         in
         ''
           cp ${config} .config && chmod +w .config

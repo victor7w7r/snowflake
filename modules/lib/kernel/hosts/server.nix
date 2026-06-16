@@ -1,21 +1,18 @@
-{ lib, kernel, ... }:
+{ kernel, ... }:
 {
   kernel = {
-    lib.params = lib.mkMerge [
-      (kernel.lib.params or { })
-      {
-        isClang = true;
-        hardened = true;
-        localVer = "-server-hardened-native";
-      }
-    ];
+    lib.params.values = {
+      isClang = true;
+      hardened = true;
+      localVer = "server-hardened-native";
+    };
 
     host.server =
       pkgs:
       let
         libs = kernel.lib.injector pkgs;
         src = (kernel.linux.injector pkgs).cachyos;
-        version = libs.calc-version { inherit src; };
+        version = libs.calc-version src;
         patchesData = (kernel.patches.injector pkgs);
         cachyosPatches = (patchesData.cachyos version.majorMinor);
         tachyonPatches = patchesData.tachyon;

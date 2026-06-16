@@ -1,9 +1,4 @@
-{
-  inputs,
-  kernel,
-  lib,
-  ...
-}:
+{ inputs, kernel, ... }:
 {
   imports = [ (inputs.den.namespace "kernel" true) ];
 
@@ -50,14 +45,12 @@
               ;
           };
       };
-      params = lib.mkMerge [
-        {
-          isClang = false;
-          isArm = false;
-          localVer = "";
-          hardened = false;
-        }
-      ];
+      params.values = {
+        isClang = false;
+        isArm = false;
+        localVer = "";
+        hardened = false;
+      };
     };
   };
 }

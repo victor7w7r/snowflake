@@ -1,20 +1,17 @@
-{ kernel, lib, ... }:
+{ kernel, ... }:
 {
   kernel = {
-    lib.params = lib.mkMerge [
-      (kernel.lib.params or { })
-      {
-        isClang = true;
-        localVer = "-native";
-      }
-    ];
+    lib.params.values = {
+      isClang = true;
+      localVer = "native";
+    };
 
     hosts.main =
       pkgs:
       let
         libs = kernel.lib.injector pkgs;
         src = (kernel.linux.injector pkgs).cachyos;
-        version = libs.calc-version { inherit src; };
+        version = libs.calc-version src;
         patches =
           with (kernel.patches.injector pkgs);
           (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming;

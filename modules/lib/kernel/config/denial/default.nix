@@ -2,7 +2,7 @@
 {
   kernel.config.denial.all =
     with kernel.config.denial;
-    (kernel.lib.utils.concat-config [
+    (kernel.lib.concat-config [
       crypto
       dev.all
       filesystems.all

@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ kernel, inputs, ... }:
 {
   kernel.lib.kernel-gen =
     {
@@ -9,19 +9,19 @@
       version,
     }:
     let
-      kernel =
+      kernel-result =
         (pkgs.linuxManualConfig {
           inherit src configfile;
-          pname = "linux-v7w7r-${kernel.lib.params.localVer}";
-          modDirVersion = "${version}-v7w7r-${kernel.lib.params.localVer}";
-          version = "${version}-v7w7r-${kernel.lib.params.localVer}";
+          pname = "linux-v7w7r-${kernel.lib.params.values.localVer}";
+          modDirVersion = "${version}-v7w7r-${kernel.lib.params.values.localVer}";
+          version = "${version}-v7w7r-${kernel.lib.params.values.localVer}";
           kernelPatches = map (file: {
             name = baseNameOf (toString file);
             patch = file;
           }) patches;
 
           extraMakeFlags = [
-            "LOCALVERSION=v7w7r-${kernel.lib.params.localVer}"
+            "LOCALVERSION=v7w7r-${kernel.lib.params.values.localVer}"
             "NIX_CC_WRAPPER_SUPPRESS_TARGET_WARNING=1"
             "NIX_ENFORCE_NO_NATIVE=0"
             #"KCFLAGS=-Wno-unknown-warning-option -Wno-ignored-optimization-argument"
@@ -49,11 +49,11 @@
         (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { }).kernelModuleLLVMOverride;
     in
     {
-      inherit kernel;
+      kernel = kernel-result;
       packages =
-        if kernel.lib.params.isClang then
-          llvm-override (pkgs.linuxPackagesFor kernel)
+        if kernel.lib.params.values.isClang then
+          llvm-override (pkgs.linuxPackagesFor kernel-result)
         else
-          pkgs.linuxPackagesFor kernel;
+          pkgs.linuxPackagesFor kernel-result;
     };
 }

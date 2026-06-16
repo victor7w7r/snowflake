@@ -30,14 +30,19 @@
       };
 
     calc-version =
-      { pkgs, src }:
+      pkgs: src:
       let
         unpack = pkgs.stdenvNoCC.mkDerivation {
           pname = "calc-version";
           version = "custom";
           inherit src;
-          dontBuild = true;
-          installPhase = "mkdir -p $out && cp -r Makefile $out/";
+
+          dontConfigure = true;
+          dontPatch = true;
+          dontFixup = true;
+
+          buildPhase = "mkdir -p $out";
+          installPhase = "cp -r Makefile $out/";
         };
       in
       rec {

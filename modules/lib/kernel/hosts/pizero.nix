@@ -1,20 +1,18 @@
-{ kernel, lib, ... }:
+{ kernel, ... }:
 {
   kernel = {
-    lib.params = lib.mkMerge [
-      (kernel.lib.params or { })
-      {
-        hardened = true;
-        localVer = "-sunxi-hardened";
-      }
-    ];
+    lib.params.values = {
+      hardened = true;
+      isArm = true;
+      localVer = "sunxi-hardened";
+    };
 
     hosts.pizero =
       pkgs:
       let
         libs = kernel.lib.injector pkgs;
         src = (kernel.linux.injector pkgs).cachyos;
-        version = libs.calc-version { inherit src; };
+        version = libs.calc-version src;
         patchesData = (kernel.patches.injector pkgs);
         cachyosPatches = (patchesData.cachyos version.majorMinor);
         tachyonPatches = patchesData.tachyon;

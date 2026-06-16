@@ -29,7 +29,7 @@
           };
 
         buildPhase = ''cp "$src/linux-cachyos-${
-          if kernel.lib.params.hardened then "hardened" else "lts"
+          if kernel.lib.params.values.hardened then "hardened" else "lts"
         }/config" ./config'';
         installPhase = "cp config $out";
       };
