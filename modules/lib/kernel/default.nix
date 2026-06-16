@@ -14,6 +14,8 @@
         calc-version = src: kernel.lib.calc-version pkgs src;
         config-gen =
           {
+            isArm ? true,
+            isClang ? true,
             structConfig,
             config,
             patches,
@@ -21,6 +23,8 @@
           }:
           kernel.lib.config-gen {
             inherit
+              isArm
+              isClang
               structConfig
               config
               patches
@@ -30,18 +34,22 @@
           };
         kernel-gen =
           {
+            localVer,
             configfile,
             patches,
+            isClang ? true,
             src,
             version,
           }:
           kernel.lib.kernel-gen {
             inherit
+              localVer
               configfile
-              version
               patches
               pkgs
+              isClang
               src
+              version
               ;
           };
       };

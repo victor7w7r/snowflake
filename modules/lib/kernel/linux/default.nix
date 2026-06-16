@@ -2,6 +2,6 @@
 {
   kernel.linux.injector = pkgs: {
     cachyos = kernel.linux.cachyos pkgs;
-    kConfig = kernel.linux.kConfig pkgs;
+    kConfig = hardened: kernel.linux.kConfig hardened pkgs;
   };
 }

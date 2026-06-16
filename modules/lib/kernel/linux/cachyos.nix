@@ -1,4 +1,3 @@
-{ kernel, ... }:
 {
   kernel.linux = {
     cachyos =
@@ -7,7 +6,7 @@
       pkgs.fetchurl { inherit url sha256; };
 
     kConfig =
-      pkgs:
+      hardened: pkgs:
       pkgs.stdenvNoCC.mkDerivation {
         pname = "gen-config";
         version = "custom";
@@ -28,9 +27,7 @@
               ;
           };
 
-        buildPhase = ''cp "$src/linux-cachyos-${
-          if kernel.lib.params.values.hardened then "hardened" else "lts"
-        }/config" ./config'';
+        buildPhase = ''cp "$src/linux-cachyos-${if hardened then "hardened" else "lts"}/config" ./config'';
         installPhase = "cp config $out";
       };
   };
