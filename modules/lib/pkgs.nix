@@ -26,10 +26,10 @@
   perSystem =
     { pkgs, system, ... }:
     let
-      handheld = (kernel.rogally.result { inherit pkgs; });
-      main = (kernel.macmini81.result { inherit pkgs; });
-      server = (kernel.youyeetoox1.result { inherit pkgs; });
-      pizero = (kernel.sunxi.result { inherit pkgs; });
+      handheld = (kernel.handheld.result { inherit pkgs; });
+      main = (kernel.main.result { inherit pkgs; });
+      server = (kernel.server.result { inherit pkgs; });
+      pizero = (kernel.pizero.result { inherit pkgs; });
       main-kernel = main.main-kernel;
     in
     {

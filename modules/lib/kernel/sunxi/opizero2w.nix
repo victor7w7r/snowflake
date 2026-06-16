@@ -6,9 +6,9 @@
       { pkgs }:
       let
         src = (kernel.lib.linux { inherit pkgs; });
-        version = kernel.lib.version {
+        version = kernel.lib.utils.calc-version {
           inherit src;
-          stdenv = pkgs.stdenvNoCC;
+          stdenv = pkgs.stdenvNoCC.mkDerivation;
         };
         cachyosPatches = kernel.patches.cachyos {
           inherit pkgs;
@@ -19,28 +19,32 @@
         patches =
           sunxi.patches ++ cachyosPatches.hardened ++ tachyonPatches.common ++ tachyonPatches.notGaming;
 
-        pizero-config = kernel.lib.config-generator {
+        pizero-config = kernel.lib.config-gen {
           inherit
             pkgs
             src
             patches
             ;
           config = "${sunxi.armbian}/config/kernel/linux-sunxi64-current.config";
+          denialConfig = kernel.lib.denial.all;
           structConfig =
-            kernel.lib.config.intel
-            // kernel.lib.config.blacklist.all
-            // kernel.lib.config.fs.overlayfs
-            // kernel.lib.config.fs.xfs
-            // kernel.lib.config.general
-            // kernel.lib.config.lowfreq
-            // kernel.lib.config.net
-            // kernel.lib.config.storage.zram
-            // kernel.lib.config.all-debug
-            // kernel.lib.config.all-vendor
-            // (kernel.lib.config.cmdline { });
+            with kernel.lib.config;
+            (kernel.lib.utils.concat-config [
+              intel
+              blacklist.all
+              fs.overlayfs
+              fs.xfs
+              general
+              lowfreq
+              net
+              storage.zram
+              all-debug
+              all-vendor
+              (cmdline { })
+            ]);
         };
 
-        kernel-gen = kernel.lib.kernel-generator {
+        generated = kernel.lib.kernel-gen {
           localVer = "-sunxi-hardened";
           configfile = pizero-config;
           inherit
@@ -53,8 +57,8 @@
       in
       {
         inherit pizero-config;
-        pizero-kernelPackages = kernel-gen.packages;
-        pizero-kernel = kernel-gen.kernel;
+        pizero-kernelPackages = generated.packages;
+        pizero-kernel = generated.kernel;
       };
   };
 }

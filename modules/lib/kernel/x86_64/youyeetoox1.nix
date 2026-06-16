@@ -1,15 +1,15 @@
 { kernel, ... }:
 {
-  kernel.youyeetoox1 = {
-    nixos.nixpkgs.overlays = [ (_: prev: kernel.youyeetoox1.result { pkgs = prev; }) ];
+  kernel.server = {
+    nixos.nixpkgs.overlays = [ (_: prev: kernel.server.result { pkgs = prev; }) ];
     result =
       { pkgs }:
       let
         isClang = true;
         src = (kernel.lib.linux { inherit pkgs; });
-        version = kernel.lib.version {
+        version = kernel.lib.utils.calc-version {
           inherit src;
-          stdenv = pkgs.stdenvNoCC;
+          stdenv = pkgs.stdenvNoCC.mkDerivation;
         };
         cachyosPatches = kernel.patches.cachyos {
           inherit pkgs;
@@ -23,34 +23,38 @@
           ++ tachyonPatches.common
           ++ tachyonPatches.notGaming;
 
-        server-config = kernel.lib.config-generator {
+        server-config = kernel.lib.config-gen {
           inherit
             isClang
             patches
             pkgs
             src
             ;
-          config = kernel.lib.std-config { inherit pkgs; };
+          config = kernel.lib.kConfig { inherit pkgs; };
+          denialConfig = kernel.lib.denial.all;
           structConfig =
-            kernel.lib.config.intel
-            // kernel.lib.config.blacklist.all
-            // kernel.lib.config.fs.bcachefs
-            // kernel.lib.config.fs.overlayfs
-            // kernel.lib.config.fs.xfs
-            // kernel.lib.config.general
-            // kernel.lib.config.lowfreq
-            // kernel.lib.config.net
-            // kernel.lib.config.storage.all
-            // kernel.lib.config.all-debug
-            // kernel.lib.config.all-vendor
-            // (kernel.lib.config.cmdline {
-              isIntel = true;
-              isSata = true;
-              isSec = true;
-            });
+            with kernel.lib.config;
+            (kernel.lib.utils.concat-config [
+              intel
+              blacklist.all
+              fs.bcachefs
+              fs.overlayfs
+              fs.xfs
+              general
+              lowfreq
+              net
+              storage.all
+              all-debug
+              all-vendor
+              (cmdline {
+                isIntel = true;
+                isSata = true;
+                isSec = true;
+              })
+            ]);
         };
 
-        kernel-gen = kernel.lib.kernel-generator {
+        generated = kernel.lib.kernel-gen {
           localVer = "-server-hardened-native";
           configfile = server-config;
           inherit
@@ -64,8 +68,8 @@
       in
       {
         inherit server-config;
-        server-kernelPackages = kernel-gen.packages;
-        server-kernel = kernel-gen.kernel;
+        server-kernelPackages = generated.packages;
+        server-kernel = generated.kernel;
       };
   };
 }

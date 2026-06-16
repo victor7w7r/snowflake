@@ -1,15 +1,15 @@
 { kernel, ... }:
 {
-  kernel.rogally = {
-    nixos.nixpkgs.overlays = [ (_: prev: kernel.rogally.result { pkgs = prev; }) ];
+  kernel.handheld = {
+    nixos.nixpkgs.overlays = [ (_: prev: kernel.handheld.result { pkgs = prev; }) ];
     result =
       { pkgs }:
       let
         isClang = true;
         src = (kernel.lib.linux { inherit pkgs; });
-        version = kernel.lib.version {
+        version = kernel.lib.utils.calc-version {
           inherit src;
-          stdenv = pkgs.stdenvNoCC;
+          stdenv = pkgs.stdenvNoCC.mkDerivation;
         };
         cachyosPatches = kernel.patches.cachyos {
           inherit pkgs;
@@ -23,7 +23,7 @@
           ++ tachyonPatches.gaming
           ++ (kernel.patches.asus { inherit pkgs; });
 
-        handheld-config = kernel.lib.config-generator {
+        handheld-config = kernel.lib.config-gen {
           inherit
             isClang
             patches
@@ -31,22 +31,26 @@
             src
             ;
           config = kernel.lib.std-config { inherit pkgs; };
+          denialConfig = kernel.lib.denial.all;
           structConfig =
-            kernel.lib.config.amd
-            // kernel.lib.config.blacklist.all
-            // kernel.lib.config.fs.bcachefs
-            // kernel.lib.config.fs.overlayfs
-            // kernel.lib.config.fs.xfs
-            // kernel.lib.config.general
-            // kernel.lib.config.highfreq
-            // kernel.lib.config.net
-            // kernel.lib.config.zram
-            // kernel.lib.config.all-debug
-            // kernel.lib.config.all-vendor
-            // (kernel.lib.config.cmdline { isAmd = true; });
+            with kernel.lib.config;
+            (kernel.lib.utils.concat-config [
+              amd
+              blacklist.all
+              fs.bcachefs
+              fs.overlayfs
+              fs.xfs
+              general
+              highfreq
+              net
+              zram
+              all-debug
+              all-vendor
+              (cmdline { isAmd = true; })
+            ]);
         };
 
-        kernel-gen = kernel.lib.kernel-generator {
+        generated = kernel.lib.kernel-gen {
           localVer = "-handheld-native";
           configfile = handheld-config;
           version = version.string;
@@ -60,8 +64,8 @@
       in
       {
         inherit handheld-config;
-        handheld-kernelPackages = kernel-gen.packages;
-        handheld-kernel = kernel-gen.kernel;
+        handheld-kernelPackages = generated.packages;
+        handheld-kernel = generated.kernel;
       };
   };
 }

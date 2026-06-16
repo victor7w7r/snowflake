@@ -1,15 +1,15 @@
 { kernel, ... }:
 {
-  kernel.macmini81 = {
-    nixos.nixpkgs.overlays = [ (_: prev: kernel.macmini81.result { pkgs = prev; }) ];
+  kernel.main = {
+    nixos.nixpkgs.overlays = [ (_: prev: kernel.main.result { pkgs = prev; }) ];
     result =
       { pkgs }:
       let
         isClang = true;
         src = (kernel.lib.linux { inherit pkgs; });
-        version = kernel.lib.version {
+        version = kernel.lib.utils.calc-version {
           inherit src;
-          stdenv = pkgs.stdenvNoCC;
+          stdenv = pkgs.stdenvNoCC.mkDerivation;
         };
         tachyonPatches = (kernel.patches.tachyon { inherit pkgs; });
         patches =
@@ -20,40 +20,18 @@
           ++ tachyonPatches.common
           ++ tachyonPatches.notGaming;
 
-        main-config = kernel.lib.config-generator {
+        main-config = kernel.lib.config-gen {
           inherit
             isClang
             patches
             pkgs
             src
             ;
-          config = kernel.lib.std.std-config { inherit pkgs; };
-
-          denialConfig =
-            with kernel.lib.denial;
-            (kernel.lib.functors.app-config [
-              crypto
-              dev.all
-              filesystems.all
-              fuel.all
-              general.all
-              gpio.all
-              hardware.all
-              input.all
-              mfd
-              net.all
-              sound
-              sensors.all
-              serial.all
-              storage.all
-              usb.all
-              vendor
-              wmi
-            ]);
-
+          config = kernel.lib.kConfig { inherit pkgs; };
+          denialConfig = kernel.lib.denial.all;
           structConfig =
             with kernel.lib.config;
-            (kernel.lib.functors.app-config [
+            (kernel.lib.utils.concat-config [
               intel
               fs.overlayfs
               fs.xfs
@@ -70,7 +48,7 @@
             ]);
         };
 
-        kernel-gen = kernel.lib.kernel-generator {
+        generated = kernel.lib.kernel-gen {
           configfile = main-config;
           localVer = "-native";
           version = version.string;
@@ -84,8 +62,8 @@
       in
       {
         inherit main-config;
-        main-kernelPackages = kernel-gen.packages;
-        main-kernel = kernel-gen.kernel;
+        main-kernelPackages = generated.packages;
+        main-kernel = generated.kernel;
       };
   };
 }

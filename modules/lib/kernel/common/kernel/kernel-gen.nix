@@ -1,6 +1,6 @@
 { inputs, ... }:
 {
-  kernel.lib.kernel-generator =
+  kernel.lib.kernel-gen =
     {
       pkgs,
       src,

@@ -5,7 +5,7 @@
   ...
 }:
 {
-  kernel.lib.config-generator =
+  kernel.lib.config-gen =
     {
       pkgs,
       patches ? [ ],
@@ -68,7 +68,7 @@
       '';
 
       installPhase = ''
-        ${kernel.lib.prune.script}
+        sed -i '/^[[:space:]]*#/d; /^[[:space:]]*$/d' .config
         cp .config $out
       '';
     };

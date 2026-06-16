@@ -2,32 +2,36 @@
   kernel.lib = {
     linux =
       { pkgs }:
-      let
-        source = pkgs.lib.trivial.importJSON ./packages.json;
-      in
-      pkgs.fetchurl {
-        url = source.linux.url;
-        hash = source.linux.hash;
-      };
+      with (pkgs.lib.trivial.importJSON ./packages.json).linux;
+      pkgs.fetchurl { inherit url hash; };
 
-    std.std-config =
+    kConfig =
       {
         pkgs,
         hardened ? false,
       }:
-      let
-        source = pkgs.lib.trivial.importJSON ./packages.json;
-      in
-      pkgs.fetchFromGitHub {
-        owner = source.config.user;
-        repo = source.config.repo;
-        rev = source.config.rev;
-        sha256 = if hardened then source.config.hashHardened else source.config.hash;
-        postFetch = ''
-          hold="$(mktemp -d)" && conf="$hold/conf"
-          cp "$out/linux-cachyos-${if hardened then "hardened" else "lts"}/config" "$conf"
-          rm -rfv "$out" && cp -v "$conf" "$out"
-        '';
+      pkgs.stdenvNoCC.mkDerivation {
+        pname = "gen-config";
+        version = "custom";
+
+        dontConfigure = true;
+        dontPatch = true;
+        dontFixup = true;
+        dontUnpack = true;
+
+        src =
+          with (pkgs.lib.trivial.importJSON ./packages.json).kConfig;
+          pkgs.fetchFromGitHub {
+            inherit
+              repo
+              rev
+              owner
+              sha256
+              ;
+          };
+
+        buildPhase = ''cp "$src/linux-cachyos-${if hardened then "hardened" else "lts"}/config" config'';
+        installPhase = "cp config $out";
       };
   };
 }
