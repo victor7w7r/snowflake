@@ -23,7 +23,7 @@
         handheld.services
         (initrd-services.lib.zram { })
 
-        kernel.rogally
+        kernel.handheld
 
         base._
         base.tmux._

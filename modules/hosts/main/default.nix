@@ -21,7 +21,7 @@
         main.initrd
         main.services
 
-        kernel.macmini81
+        kernel.main
 
         base._
         base.tmux._

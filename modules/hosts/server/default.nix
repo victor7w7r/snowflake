@@ -21,7 +21,7 @@
         server.initrd
         server.systemd
 
-        kernel.youyeetoox1
+        kernel.server
 
         base._
         base.tmux._

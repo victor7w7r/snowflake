@@ -1,6 +1,6 @@
-{ lib, ... }:
+{ kernel, lib, ... }:
 {
-  kernel.lib.utils = {
+  kernel.lib = {
     concat-config =
       configList:
       lib.pipe configList [
@@ -15,7 +15,7 @@
       ];
 
     gen-config =
-      { pkgs, configContent }:
+      pkgs:
       pkgs.stdenvNoCC.mkDerivation {
         pname = "gen-config";
         version = "custom";
@@ -25,17 +25,17 @@
         dontFixup = true;
         dontUnpack = true;
 
-        buildPhase = "cp ${pkgs.writeText "kernel-gen-config" configContent} .config";
+        buildPhase = "cp ${pkgs.writeText "kernel-gen-config" kernel.lib.params.configContent} .config";
         installPhase = "cp .config $out";
       };
 
     calc-version =
-      { src, mkDerivation }:
+      pkgs:
       let
-        unpack = mkDerivation {
+        unpack = pkgs.stdenvNoCC.mkDerivation {
           pname = "calc-version";
           version = "custom";
-          inherit src;
+          src = kernel.lib.params.src;
           dontBuild = true;
           installPhase = "mkdir -p $out && cp -r Makefile $out/";
         };

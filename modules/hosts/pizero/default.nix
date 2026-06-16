@@ -29,7 +29,7 @@
         pizero.disks
         pizero.passbolt
 
-        kernel.sunxi
+        kernel.pizero
 
         base._
         base.tmux._
