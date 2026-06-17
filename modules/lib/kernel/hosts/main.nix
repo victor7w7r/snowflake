@@ -8,7 +8,7 @@
       version = libs.calc-version src;
       patches =
         with (kernel.patches.injector pkgs);
-        (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming;
+        (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming ++ bunker.common;
       main-config = libs.config-gen {
         inherit patches src;
         config = (kernel.linux.injector pkgs).kConfig false;

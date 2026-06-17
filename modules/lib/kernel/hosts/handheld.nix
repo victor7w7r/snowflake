@@ -8,12 +8,14 @@
       version = libs.calc-version src;
       patchesData = (kernel.patches.injector pkgs);
       cachyosPatches = (patchesData.cachyos version.majorMinor);
+      bunkerPatches = patchesData.bunker;
       tachyonPatches = patchesData.tachyon;
       patches =
         cachyosPatches.common
         ++ cachyosPatches.handheld
         ++ tachyonPatches.common
         ++ tachyonPatches.gaming
+        ++ bunkerPatches.common
         ++ patchesData.asus;
 
       handheld-config = libs.config-gen {

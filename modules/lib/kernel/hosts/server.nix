@@ -9,12 +9,15 @@
       patchesData = (kernel.patches.injector pkgs);
       cachyosPatches = (patchesData.cachyos version.majorMinor);
       tachyonPatches = patchesData.tachyon;
+      bunkerPatches = patchesData.bunker;
       patches =
         cachyosPatches.optimization
         ++ cachyosPatches.hardened
         ++ cachyosPatches.governors
         ++ tachyonPatches.common
-        ++ tachyonPatches.notGaming;
+        ++ tachyonPatches.notGaming
+        ++ bunkerPatches.common
+        ++ bunkerPatches.hardened;
 
       server-config = libs.config-gen {
         inherit patches src;
