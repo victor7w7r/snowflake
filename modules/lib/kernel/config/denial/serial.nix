@@ -33,6 +33,7 @@
     };
 
     i2c = {
+      MUX_GPIO = "n";
       I2C_MUX_GPIO = "n";
       I2C_MUX_LTC4306 = "n";
       I2C_MUX_PCA9541 = "n";

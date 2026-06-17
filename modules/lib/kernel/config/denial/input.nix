@@ -31,6 +31,7 @@
       KEYBOARD_TCA8418 = "n";
       KEYBOARD_TM2_TOUCHKEY = "n";
       KEYBOARD_XTKBD = "n";
+
     };
 
     mouse = {
@@ -412,6 +413,7 @@
       TABLET_USB_HANWANG = "n";
       TABLET_USB_KBTAB = "n";
       TABLET_USB_PEGASUS = "n";
+
     };
   };
 }

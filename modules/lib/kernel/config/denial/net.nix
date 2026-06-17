@@ -301,6 +301,11 @@
       AIR_EN8811H_PHY = "n";
       AMD_PHY = "n";
       ADIN_PHY = "n";
+      PHY_CADENCE_SALVO = "n";
+      PHY_CADENCE_SIERRA = "n";
+      PHY_CADENCE_DPHY_RX = "n";
+      PHY_CADENCE_DPHY = "n";
+      PHY_CADENCE_TORRENT = "n";
       ADIN1100_PHY = "n";
       AQUANTIA_PHY = "n";
       AX88796B_PHY = "n";
@@ -358,6 +363,7 @@
       DP83TG720_PHY = "n";
       VITESSE_PHY = "n";
       XILINX_GMII2RGMII = "n";
+
     };
 
     sch = {
@@ -388,6 +394,7 @@
       NET_SCH_PLUG = "n";
       NET_SCH_ETS = "n";
       NET_SCH_DUALPI2 = "n";
+
     };
 
     sharing = {

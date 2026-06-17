@@ -1,0 +1,175 @@
+{
+  kernel.config.modules.sbc = {
+    not-arm = {
+      ARM64 = "n";
+      ARM64_WORKAROUND_CLEAN_CACHE = "n";
+      ARM64_WORKAROUND_SPECULATIVE_AT = "n";
+      ARM64_WORKAROUND_REPEAT_TLBI = "n";
+      ARM64_WORKAROUND_TSB_FLUSH_FAILURE = "n";
+      ARM64_WORKAROUND_SPECULATIVE_UNPRIV_LOAD = "n";
+      ARM64_4K_PAGES = "n";
+      ARM64_VA_BITS_52 = "n";
+      ARM64_PA_BITS_52 = "n";
+      ARM64_LPA2 = "n";
+      ARM64_SW_TTBR0_PAN = "n";
+      ARM64_TAGGED_ADDR_ABI = "n";
+      ARM64_HW_AFDBM = "n";
+      ARM64_PAN = "n";
+      ARM64_LSE_ATOMICS = "n";
+      ARM64_USE_LSE_ATOMICS = "n";
+      ARM64_RAS_EXTN = "n";
+      ARM64_CNP = "n";
+      ARM64_PTR_AUTH = "n";
+      ARM64_PTR_AUTH_KERNEL = "n";
+      ARM64_AMU_EXTN = "n";
+      ARM64_TLB_RANGE = "n";
+      ARM64_BTI = "n";
+      ARM64_BTI_KERNEL = "n";
+      ARM64_E0PD = "n";
+      ARM64_AS_HAS_MTE = "n";
+      ARM64_MTE = "n";
+      ARM64_EPAN = "n";
+      ARM64_POE = "n";
+      ARM64_HAFT = "n";
+      ARM64_GCS = "n";
+      ARM64_SVE = "n";
+      ARM64_SME = "n";
+      ARM64_CONTPTE = "n";
+      ARM_ARCH_TIMER = "n";
+      ARM_GIC = "n";
+      ARM_PMU = "n";
+      ARM_PMU_ACPI = "n";
+      ARM_PMUV3 = "n";
+      ARM_SDE_INTERFACE = "n";
+      MMC_MTK = "n";
+      REGMAP_SLIMBUS = "n";
+      USB_NET_DRIVERS = "n";
+      XZ_DEC_ARM = "n";
+      XZ_DEC_ARMTHUMB = "n";
+      XZ_DEC_ARM64 = "n";
+    };
+
+    not-serial = {
+      USB_SERIAL = "n";
+      USB_ACM = "n";
+    };
+
+    not-gpio = {
+      GPIOLIB_LEGACY = "n";
+      GPIOLIB = "n";
+      GPIOLIB_IRQCHIP = "n";
+      GPIO_CRYSTAL_COVE = "n";
+    };
+
+    not-phone = {
+      USB_AUDIO = "n";
+      USB_BDC_UDC = "n";
+      USB_CDC_COMPOSITE = "n";
+      USB_CDNS2_UDC = "n";
+      USB_CONFIGFS = "n";
+      USB_CONFIGFS_ACM = "n";
+      USB_CONFIGFS_ECM = "n";
+      USB_CONFIGFS_ECM_SUBSET = "n";
+      USB_CONFIGFS_EEM = "n";
+      USB_CONFIGFS_F_FS = "n";
+      USB_CONFIGFS_F_HID = "n";
+      USB_CONFIGFS_F_LB_SS = "n";
+      USB_CONFIGFS_F_PRINTER = "n";
+      USB_CONFIGFS_F_TCM = "n";
+      USB_CONFIGFS_F_UAC1 = "n";
+      USB_CONFIGFS_F_UAC1_LEGACY = "n";
+      USB_CONFIGFS_F_UAC2 = "n";
+      USB_CONFIGFS_MASS_STORAGE = "n";
+      USB_CONFIGFS_NCM = "n";
+      USB_CONFIGFS_OBEX = "n";
+      USB_CONFIGFS_PHONET = "n";
+      USB_CONFIGFS_RNDIS = "n";
+      USB_CONFIGFS_SERIAL = "n";
+      USB_ETH = "n";
+      USB_ETH_EEM = "n";
+      USB_ETH_RNDIS = "n";
+      USB_FUNCTIONFS = "n";
+      USB_FUNCTIONFS_ETH = "n";
+      USB_FUNCTIONFS_GENERIC = "n";
+      USB_FUNCTIONFS_RNDIS = "n";
+      USB_F_ACM = "n";
+      USB_F_ECM = "n";
+      USB_F_EEM = "n";
+      USB_F_FS = "n";
+      USB_F_HID = "n";
+      USB_F_MASS_STORAGE = "n";
+      USB_F_NCM = "n";
+      USB_F_OBEX = "n";
+      USB_F_PHONET = "n";
+      USB_F_PRINTER = "n";
+      USB_F_RNDIS = "n";
+      USB_F_SERIAL = "n";
+      USB_F_SS_LB = "n";
+      USB_F_SUBSET = "n";
+      USB_F_TCM = "n";
+      USB_F_UAC1 = "n";
+      USB_F_UAC1_LEGACY = "n";
+      USB_F_UAC2 = "n";
+      USB_GADGET = "n";
+      USB_GADGETFS = "n";
+      USB_GADGET_TARGET = "n";
+      USB_G_ACM_MS = "n";
+      USB_G_DBGP = "n";
+      USB_G_DBGP_SERIAL = "n";
+      USB_G_HID = "n";
+      USB_G_MULTI = "n";
+      USB_G_MULTI_CDC = "n";
+      USB_G_MULTI_RNDIS = "n";
+      USB_G_NCM = "n";
+      USB_G_SERIAL = "n";
+      USB_LIBCOMPOSITE = "n";
+      USB_MASS_STORAGE = "n";
+      USB_RAW_GADGET = "n";
+      USB_SNP_CORE = "n";
+      USB_U_AUDIO = "n";
+      USB_U_ETHER = "n";
+      USB_U_SERIAL = "n";
+      USB_ZERO = "n";
+      U_SERIAL_CONSOLE = "n";
+      USB_MAX3420_UDC = "n";
+      STAGING = "n";
+
+      BACKLIGHT_QCOM_WLED = "n";
+
+      USB_DWC3 = "n";
+      USB_DWC3_ULPI = "n";
+      USB_DWC3_DUAL_ROLE = "n";
+      USB_DWC3_PCI = "n";
+      USB_DWC3_HAPS = "n";
+      USB_DWC2 = "n";
+      USB_DWC2_DUAL_ROLE = "n";
+      USB_DWC2_PCI = "n";
+
+      NFC = "n";
+      NFC_NXP_NCI = "n";
+      NFC_NXP_NCI_I2C = "n";
+
+      SOUNDWIRE_QCOM = "n";
+
+      GNSS = "n";
+      GNSS_SERIAL = "n";
+      GNSS_MTK_SERIAL = "n";
+      GNSS_SIRF_SERIAL = "n";
+      GNSS_UBX_SERIAL = "n";
+      GNSS_USB = "n";
+
+      QRTR = "n";
+      QRTR_SMD = "n";
+      QRTR_TUN = "n";
+      QRTR_MHI = "n";
+
+      SCSI_UFSHCD = "n";
+      SCSI_UFS_BSG = "n";
+      SCSI_UFS_CRYPTO = "n";
+      SCSI_UFS_HWMON = "n";
+      SCSI_UFSHCD_PCI = "n";
+      SCSI_UFSHCD_PLATFORM = "n";
+      SCSI_UFS_CDNS_PLATFORM = "n";
+    };
+  };
+}

@@ -85,6 +85,7 @@
     MFD_SM501 = "n";
     MFD_SM501_GPIO = "n";
     MFD_SMPRO = "n";
+    MFD_SYSCON = "n";
     MFD_SY7636A = "n";
     MFD_TI_LMU = "n";
     MFD_TI_LP873X = "n";
@@ -120,5 +121,6 @@
     TPS6105X = "n";
     TPS65010 = "n";
     TPS6507X = "n";
+
   };
 }

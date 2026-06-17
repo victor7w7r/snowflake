@@ -94,6 +94,7 @@
       DRM_VIRTIO_GPU = "n";
       DRM_VIRTIO_GPU_KMS = "n";
       DRM_VKMS = "n";
+      DRM_VMWGFX = "n";
       FB_DMAMEM_HELPERS = "n";
       FB_DMAMEM_HELPERS_DEFERRED = "n";
       HL_HLDIO = "n";
@@ -105,6 +106,7 @@
       TINYDRM_MI0283QT = "n";
       TINYDRM_REPAPER = "n";
       TINYDRM_SHARP_MEMORY = "n";
+
     };
 
     ir = {

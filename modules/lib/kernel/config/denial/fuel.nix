@@ -56,6 +56,7 @@
     };
 
     regulators = {
+      REGULATOR = "n";
       REGULATOR_88PG86X = "n";
       REGULATOR_88PM800 = "n";
       REGULATOR_ACT8865 = "n";

@@ -5,6 +5,7 @@
     CPU_SUP_ZHAOXIN = "n";
     EZX_PCAP = "n";
     FIREWIRE = "n";
+    FIREWIRE_NOSY = "n";
     FUSION = "n";
     GOOGLE_FIRMWARE = "n";
     INFINIBAND = "n";
@@ -18,6 +19,9 @@
     NET_VENDOR_ALACRITECH = "n";
     NET_VENDOR_ALTEON = "n";
     NET_VENDOR_AMAZON = "n";
+    NET_VENDOR_AQUANTIA = "n";
+    NET_VENDOR_BROADCOM = "n";
+    NET_VENDOR_AMD = "n";
     NET_VENDOR_ARC = "n";
     NET_VENDOR_ASIX = "n";
     NET_VENDOR_ATHEROS = "n";
@@ -45,6 +49,7 @@
     NET_VENDOR_MICREL = "n";
     NET_VENDOR_MICROCHIP = "n";
     NET_VENDOR_MICROSEMI = "n";
+    NET_VENDOR_MICROSOFT = "n";
     NET_VENDOR_MYRI = "n";
     NET_VENDOR_NATSEMI = "n";
     NET_VENDOR_NETERION = "n";
@@ -94,6 +99,7 @@
     WLAN_VENDOR_PURELIFI = "n";
     WLAN_VENDOR_QUANTENNA = "n";
     WLAN_VENDOR_RALINK = "n";
+    WLAN_VENDOR_REALTEK = "n";
     WLAN_VENDOR_RSI = "n";
     WLAN_VENDOR_SILABS = "n";
     WLAN_VENDOR_ST = "n";

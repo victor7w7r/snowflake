@@ -128,6 +128,7 @@
       USB_USBIO = "n";
       USB_XHCI_PCI_RENESAS = "n";
       USB_YUREX = "n";
+
     };
 
     serial = {

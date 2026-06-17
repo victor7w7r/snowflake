@@ -122,6 +122,7 @@
       GPIO_WS16C48 = "n";
       GPIO_XILINX = "n";
       GPIO_XRA1403 = "n";
+
     };
   };
 }

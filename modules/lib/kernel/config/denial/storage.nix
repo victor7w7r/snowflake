@@ -6,6 +6,9 @@
       BLK_DEV_FD = "n";
       BLK_DEV_PCIESSD_MTIP32XX = "n";
       BLK_DEV_RBD = "n";
+      BLK_DEV_DRBD = "n";
+      BLK_DEV_NBD = "n";
+      BLK_DEV_UBLK = "n";
       EDD = "n";
       NVME_FABRICS = "n";
       NVME_FC = "n";
@@ -29,6 +32,12 @@
       MMC_CB710 = "n";
       MMC_VUB300 = "n";
       MMC_USHC = "n";
+      MMC_SDHCI_XENON = "n";
+      MMC_TOSHIBA_PCI = "n";
+      MMC_USDHI6ROL0 = "n";
+      MMC_SPI = "n";
+      MMC_ALCOR = "n";
+      MMC_SDHCI_F_SDH30 = "n";
     };
 
     raid = {
@@ -137,6 +146,9 @@
     };
 
     sata = {
+      AHCI_DWC = "n";
+      ATA_OVER_ETH = "n";
+
       ATA_PIIX = "n";
       PATA_ACPI = "n";
       PATA_ALI = "n";
@@ -181,6 +193,9 @@
       PATA_WINBOND = "n";
       SATA_DWC = "n";
       SATA_MV = "n";
+      SATA_INIC162X = "n";
+      SATA_ACARD_AHCI = "n";
+      SATA_SIL24 = "n";
       SATA_NV = "n";
       SATA_PROMISE = "n";
       SATA_QSTOR = "n";

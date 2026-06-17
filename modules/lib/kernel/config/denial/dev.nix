@@ -38,6 +38,7 @@
       KPROBES_ON_FTRACE = "n";
       KPROBE_EVENTS = "n";
       MCTP = "n";
+      RCU_TRACE = "n";
       MMIOTRACE = "n";
       MPLS = "n";
       MTD = "n";
