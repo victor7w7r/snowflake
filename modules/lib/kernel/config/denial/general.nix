@@ -123,6 +123,9 @@
       XILLYBUS_CLASS = "n";
       XILLYBUS_PCIE = "n";
       XILLYUSB = "n";
+      XZ_DEC_POWERPC = "n";
+      XZ_DEC_SPARC = "n";
+      XZ_DEC_RISCV = "n";
       ZRAM_BACKEND_842 = "n";
     };
 

@@ -2,12 +2,15 @@
   kernel.patches.tachyon =
     pkgs:
     let
-      patch = pkgs.lib.trivial.importJSON ./patches.json;
-      tachyon = pkgs.fetchgit {
-        url = patch.tachyon.url;
-        rev = patch.tachyon.rev;
-        sha256 = patch.tachyon.hash;
-      };
+      tachyon =
+        with (pkgs.lib.trivial.importJSON ./patches.json).tachyon;
+        pkgs.fetchgit {
+          inherit
+            url
+            rev
+            sha256
+            ;
+        };
     in
     {
       common = [
@@ -53,8 +56,8 @@
         "${tachyon}/patches/posted_msi.patch"
         "${tachyon}/patches/ratelimit-sched-yield.patch"
         #"${tachyon}/patches/revert-regression.patch"
-        #"${tachyon}/patches/scale.patch"
         "${tachyon}/patches/scale-net-alloc.patch"
+        "${tachyon}/patches/scale.patch"
         "${tachyon}/patches/slack.patch"
       ];
 
