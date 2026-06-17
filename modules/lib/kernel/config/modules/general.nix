@@ -1,6 +1,5 @@
 {
   kernel.config.modules = {
-
     general = {
       BLK_DEV_NVME = "y";
       CC_OPTIMIZE_FOR_PERFORMANCE_O3 = "y";
@@ -16,6 +15,11 @@
       KVM = "y";
       LTO_CLANG_THIN = "y";
       MQ_IOSCHED_ADIOS = "y";
+      NETFILTER_NETLINK = "y";
+      NETFILTER_NETLINK_ACCT = "y";
+      NETFILTER_NETLINK_LOG = "y";
+      NETFILTER_NETLINK_OSF = "y";
+      NETFILTER_NETLINK_QUEUE = "y";
       MZEN4 = "n";
       NET_SCH_FQ = "y";
       PCIE_BUS_PERFORMANCE = "y";

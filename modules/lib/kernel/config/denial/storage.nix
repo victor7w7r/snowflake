@@ -9,6 +9,7 @@
       BLK_DEV_DRBD = "n";
       BLK_DEV_NBD = "n";
       BLK_DEV_UBLK = "n";
+      BLK_DEV_RAM = "n";
       EDD = "n";
       NVME_FABRICS = "n";
       NVME_FC = "n";

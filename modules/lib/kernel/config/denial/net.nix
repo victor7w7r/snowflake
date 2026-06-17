@@ -122,6 +122,11 @@
       MDIO_BCM_UNIMAC = "n";
       MDIO_CAVIUM = "n";
       MDIO_THUNDER = "n";
+      MDIO_BITBANG = "n";
+      MDIO_GPIO = "n";
+      MDIO_MVUSB = "n";
+      MDIO_MSCC_MIIM = "n";
+      MDIO_REGMAP = "n";
       MOXA_INTELLIO = "n";
       MOXA_SMARTIO = "n";
       NETCONSOLE = "n";
