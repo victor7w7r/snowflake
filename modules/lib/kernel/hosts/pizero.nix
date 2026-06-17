@@ -26,7 +26,8 @@
           (kernel.lib.concat-config [
             freq.low
             general
-            not-phone
+            sbc.not-serial
+            sbc.not-phone
             not-raid
             vendor.not-amd
             vendor.not-intel

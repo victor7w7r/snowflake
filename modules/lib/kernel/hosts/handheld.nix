@@ -27,9 +27,11 @@
             fs.bcachefs
             freq.high
             general
-            not-arm
-            not-phone
             not-raid
+            sbc.not-arm
+            sbc.not-serial
+            sbc.not-gpio
+            sbc.not-phone
             vendor.not-intel
             (cmdline { isAmd = true; })
           ]);

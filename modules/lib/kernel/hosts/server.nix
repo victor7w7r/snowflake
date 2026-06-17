@@ -27,8 +27,10 @@
           (kernel.lib.concat-config [
             freq.low
             general
-            not-arm
-            not-phone
+            sbc.not-arm
+            sbc.not-gpio
+            sbc.not-phone
+            not-raid
             vendor.not-amd
             (cmdline {
               isIntel = true;
