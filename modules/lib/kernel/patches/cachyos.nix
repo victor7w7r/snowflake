@@ -28,42 +28,40 @@
         ];
 
         configurePhase = "cp -r $src/* ./";
-        buildPhase = ''
-          find . -type d -empty -delete
-          chmod -R +w .
-          filterdiff -x "*/kernel/sched/fair.c" \
-            "./${majorMinor}/sched/0001-bore-cachy.patch" > bore-filter.patch || true
-          cat bore-filter.patch > "./${majorMinor}/sched/0001-bore-cachy.patch" || true
-
-          filterdiff -x "*/drivers/input/joystick/xpad.c" \
-            "./${majorMinor}/misc/0001-handheld.patch" > handheld-filter.patch || true
-          cat handheld-filter.patch > "./${majorMinor}/misc/0001-handheld.patch" || true
-
-            filterdiff -x "*/security/selinux/selinuxfs.c" \
-              "./${majorMinor}/misc/0001-hardened.patch" > hardened-filter.patch || true
-            cat hardened-filter.patch > "./${majorMinor}/misc/0001-hardened.patch" || true
-        '';
+        buildPhase =
+          let
+            differ = route: routePatch: patch: ''
+              filterdiff -x "*/${route}" "./${majorMinor}/${routePatch}/${patch}.patch" > ${patch}-filter.patch || true
+              cat ${patch}-filter.patch > "./${majorMinor}/${routePatch}/${patch}.patch" || true
+            '';
+          in
+          ''
+            chmod -R +w . && find . -type d -empty -delete
+            ${differ "kernel/sched/fair.c" "sched" "0001-bore-cachy"}
+            ${differ "drivers/input/joystick/xpad.c" "misc" "0001-handheld"}
+            ${differ "security/selinux/selinuxfs.c" "misc" "0001-hardened"}
+          '';
         installPhase = "mkdir -p $out && cp -r . $out/";
       };
 
       bore = [ "${patches}/${majorMinor}/sched/0001-bore-cachy.patch" ];
-      optimization = [
-        "${patches}/${majorMinor}/misc/0001-clang-polly.patch"
-        "${patches}/${majorMinor}/misc/dkms-clang.patch"
-        "${patches}/${majorMinor}/misc/poc-selector.patch"
+      optimization = map (path: "${patches}/${majorMinor}/misc/${path}") [
+        "0001-clang-polly.patch"
+        "dkms-clang.patch"
+        "poc-selector.patch"
       ];
-      governors = [
-        "${patches}/${majorMinor}/misc/reflex-governor.patch"
-        "${patches}/${majorMinor}/misc/nap-governor.patch"
+      governors = map (path: "${patches}/${majorMinor}/misc/${path}") [
+        "reflex-governor.patch"
+        "nap-governor.patch"
       ];
     in
     {
       inherit bore optimization governors;
       common = bore ++ optimization ++ governors;
-      hardened = [ "${patches}/${majorMinor}/misc/0001-hardened.patch" ];
-      handheld = [
-        "${patches}/${majorMinor}/misc/0001-acpi-call.patch"
-        "${patches}/${majorMinor}/misc/0001-handheld.patch"
+      hardened = map (path: "${patches}/${majorMinor}/misc/${path}") [ "0001-hardened.patch" ];
+      handheld = map (path: "${patches}/${majorMinor}/misc/${path}") [
+        "0001-acpi-call.patch"
+        "0001-handheld.patch"
       ];
     };
 }
