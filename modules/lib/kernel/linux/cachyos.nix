@@ -8,14 +8,12 @@
     kConfig =
       hardened: pkgs:
       pkgs.stdenvNoCC.mkDerivation {
-        pname = "gen-config";
-        version = "custom";
-
-        dontConfigure = true;
-        dontPatch = true;
-        dontFixup = true;
-        dontUnpack = true;
-
+        name = "cachyos-kconfig";
+        phases = [
+          "unpackPhase"
+          "buildPhase"
+          "installPhase"
+        ];
         src =
           with (pkgs.lib.trivial.importJSON ./packages.json).kConfig;
           pkgs.fetchFromGitHub {

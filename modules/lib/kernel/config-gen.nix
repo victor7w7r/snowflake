@@ -49,7 +49,7 @@
 
       configurePhase =
         let
-          gen = (kernel.lib.injector pkgs).gen-config ''
+          gen = pkgs.writeText "kernel-gen-config" ''
             ${structConfig}
             ${if disableDenial then "" else kernel.config.denial.all}
           '';

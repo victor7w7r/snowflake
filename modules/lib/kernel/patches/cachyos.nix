@@ -4,8 +4,7 @@
     let
       inherit majorMinor;
       patches = pkgs.stdenvNoCC.mkDerivation {
-        pname = "patches-cachyos";
-        version = "custom";
+        name = "cachyos-patches";
         src =
           with (pkgs.lib.trivial.importJSON ./patches.json).cachyos;
           pkgs.fetchFromGitHub {
@@ -17,9 +16,11 @@
               ;
           };
 
-        dontPatch = true;
-        dontFixup = true;
-        dontUnpack = true;
+        phases = [
+          "unpackPhase"
+          "buildPhase"
+          "installPhase"
+        ];
 
         nativeBuildInputs = with pkgs; [
           findutils

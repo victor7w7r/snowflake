@@ -10,7 +10,6 @@
 
     lib = {
       injector = pkgs: {
-        gen-config = configContent: kernel.lib.gen-config pkgs configContent;
         calc-version = src: kernel.lib.calc-version pkgs src;
         config-gen =
           {
@@ -54,12 +53,6 @@
               version
               ;
           };
-      };
-      params.values = {
-        isClang = false;
-        isArm = false;
-        localVer = "";
-        hardened = false;
       };
     };
   };

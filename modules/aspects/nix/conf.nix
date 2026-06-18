@@ -23,7 +23,6 @@ let
       "https://nix-community.cachix.org"
       "https://cache.nixos.org"
       "https://cache.garnix.io"
-      "https://cache.numtide.com"
       "https://cache.saumon.network/proxmox-nixos"
       "https://nix-gaming.cachix.org"
       "https://attic.xuyh0120.win/lantian"
@@ -41,17 +40,13 @@ let
     trusted-substituters = [
       "https://cache.nixos.org"
       "https://nix-community.cachix.org"
-      "https://cache.numtide.com"
       "https://attic.xuyh0120.win/lantian"
       "https://install.determinate.systems"
     ];
 
-    extra-substituters = [ "https://cache.numtide.com" ];
+    extra-substituters = [ ];
 
-    extra-trusted-public-keys = [
-      "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
-      "cache.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
-    ];
+    extra-trusted-public-keys = [ ];
   };
 in
 {
