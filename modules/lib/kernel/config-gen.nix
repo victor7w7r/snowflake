@@ -65,7 +65,7 @@
       '';
 
       installPhase = ''
-        sed -i '/^[[:space:]]*#/d; /^[[:space:]]*$/d' .config
+        ${kernel.config.cleaner}
         cp .config $out
       '';
     };

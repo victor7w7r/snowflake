@@ -1,5 +1,5 @@
 {
-  kernel.config.modules.fs = {
+  kernel.config.modules.storage = {
     bcachefs = {
       BCACHEFS_FS = "y";
       BCACHEFS_QUOTA = "y";
@@ -8,6 +8,20 @@
       BCACHEFS_LOCK_TIME_STATS = "y";
       BCACHEFS_SIX_OPTIMISTIC_SPIN = "y";
       BCACHEFS_PATH_TRACEPOINTS = "y";
+    };
+
+    not-btrfs = {
+      BTRFS_FS = "n";
+      BTRFS_FS_POSIX_ACL = "n";
+    };
+
+    not-cdrom = {
+      CDROM = "n";
+      UDF_FS = "n";
+    };
+
+    f2fs = {
+      F2FS_FS = "y";
     };
 
     not-f2fs = {
@@ -27,9 +41,33 @@
       F2FS_UNFAIR_RWSEM = "n";
     };
 
-    not-cdrom = {
-      CDROM = "n";
-      UDF_FS = "n";
+    ntfs = {
+      NTFS3_FS = "m";
+      NTFS3_LZX_XPRESS = "y";
+      NTFS3_FS_POSIX_ACL = "y";
+    };
+
+    not-ntfs = {
+      NTFS3_FS = "n";
+      NTFS3_LZX_XPRESS = "n";
+      NTFS3_FS_POSIX_ACL = "n";
+    };
+
+    not-raid = {
+      MD = "n";
+      BLK_DEV_MD = "n";
+      MD_BITMAP = "n";
+      MD_BITMAP_FILE = "n";
+      MD_LINEAR = "n";
+      MD_LLBITMAP = "n";
+      MD_RAID0 = "n";
+      MD_RAID1 = "n";
+      MD_RAID10 = "n";
+      MD_RAID456 = "n";
+    };
+
+    xfs = {
+      XFS_FS = "y";
     };
 
     not-xfs = {

@@ -24,14 +24,18 @@
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
-            freq.low
-            general
-            sbc.not-serial
-            sbc.not-phone
-            not-raid
-            vendor.not-amd
-            vendor.not-intel
             (cmdline { })
+            default
+            freq.low
+            hardware.not-phone
+            net
+            storage.not-btrfs
+            storage.not-cdrom
+            storage.f2fs
+            storage.not-ntfs
+            storage.not-raid
+            storage.xfs
+            vendor.not-vendor
           ]);
       };
 

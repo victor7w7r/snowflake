@@ -1,38 +1,6 @@
 {
   kernel.config.denial.input = rec {
-    all = keyboard // mouse // joystick // hid // touchscreen // misc;
-
-    keyboard = {
-      KEYBOARD_ADC = "n";
-      KEYBOARD_ADP5588 = "n";
-      KEYBOARD_APPLESPI = "n";
-      KEYBOARD_CYPRESS_SF = "n";
-      KEYBOARD_DLINK_DIR685 = "n";
-      KEYBOARD_GPIO = "n";
-      KEYBOARD_GPIO_POLLED = "n";
-      KEYBOARD_IQS62X = "n";
-      KEYBOARD_LKKBD = "n";
-      KEYBOARD_LM8323 = "n";
-      KEYBOARD_LM8333 = "n";
-      KEYBOARD_MATRIX = "n";
-      KEYBOARD_MAX7359 = "n";
-      KEYBOARD_MAX7360 = "n";
-      KEYBOARD_MPR121 = "n";
-      KEYBOARD_MTK_PMIC = "n";
-      KEYBOARD_NEWTON = "n";
-      KEYBOARD_OPENCORES = "n";
-      KEYBOARD_PINEPHONE = "n";
-      KEYBOARD_QT1050 = "n";
-      KEYBOARD_QT1070 = "n";
-      KEYBOARD_QT2160 = "n";
-      KEYBOARD_SAMSUNG = "n";
-      KEYBOARD_STOWAWAY = "n";
-      KEYBOARD_SUNKBD = "n";
-      KEYBOARD_TCA8418 = "n";
-      KEYBOARD_TM2_TOUCHKEY = "n";
-      KEYBOARD_XTKBD = "n";
-
-    };
+    all = mouse // joystick // hid // touchscreen // misc;
 
     mouse = {
       INPUT_MOUSEDEV = "n";

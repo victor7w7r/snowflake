@@ -26,18 +26,20 @@
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
-            freq.low
-            general
-            sbc.not-gpio
-            sbc.not-phone
-            not-raid
-            vendor.not-amd
-            x86
             (cmdline {
               isIntel = true;
               isSata = true;
               isSec = true;
             })
+            default
+            freq.low
+            hardware.desktop
+            net
+            storage.f2fs
+            storage.ntfs
+            storage.not-cdrom
+            storage.xfs
+            vendor.intel
           ]);
       };
 

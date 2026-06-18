@@ -25,16 +25,16 @@
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
-            fs.bcachefs
-            freq.high
-            general
-            not-raid
-            sbc.not-serial
-            sbc.not-gpio
-            sbc.not-phone
-            vendor.not-intel
-            x86
             (cmdline { isAmd = true; })
+            default
+            freq.high
+            hardware.desktop-wserial
+            net
+            storage.bcachefs
+            storage.ntfs
+            storage.not-raid
+            storage.not-xfs
+            vendor.amd
           ]);
       };
 

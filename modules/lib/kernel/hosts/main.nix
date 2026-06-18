@@ -17,18 +17,20 @@
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
-            fs.bcachefs
-            freq.high
-            general
-            sbc.not-gpio
-            sbc.not-phone
-            not-raid
-            vendor.not-amd
             (cmdline {
               isIntel = true;
               isSata = true;
               extra = "video=DP-3:1600x900@60";
             })
+            default
+            freq.high
+            hardware.desktop
+            net
+            storage.bcachefs
+            storage.ntfs
+            storage.not-raid
+            storage.xfs
+            vendor.intel
           ]);
       };
       generated = libs.kernel-gen {

@@ -1,12 +1,21 @@
 {
-  kernel.config.modules.vendor = {
-    amd-mod = {
+  kernel.config.modules.vendor = rec {
+    intel = {
+      X86_INTEL_UMIP = "y";
+    }
+    // not-amd;
+
+    amd = {
       AMD_PRIVATE_COLOR = "y";
       BATTERY_ASUS_EC = "y";
       AMD_RAPL = "m";
       SENSORS_AMD_ENERGY = "m";
       SENSORS_K10TEMP = "m";
-    };
+    }
+    // not-intel;
+
+    not-vendor = not-amd // not-intel;
+
     not-amd = {
       AMD_3D_VCACHE = "n";
       AMD_HFI = "n";
@@ -52,6 +61,7 @@
       X86_AMD_PSTATE = "n";
       X86_MCE_AMD = "n";
     };
+
     not-intel = {
       CPU_SUP_INTEL = "n";
       DRM_I915 = "n";

@@ -1,12 +1,5 @@
 {
-  kernel.config.modules.freq = rec {
-    common = {
-      HZ_PERIODIC = "n";
-      NO_HZ = "y";
-      NO_HZ_COMMON = "y";
-      PREEMPT_LAZY = "n";
-    };
-
+  kernel.config.modules.freq = {
     low = {
       HZ = "250";
       HZ_1000 = "n";
@@ -26,8 +19,7 @@
       PREEMPT_NONE_BUILD = "y";
       PREEMPT_VOLUNTARY = "n";
       SND = "n";
-    }
-    // common;
+    };
 
     high = {
       ANDROID_BINDERFS = "y";
@@ -49,7 +41,6 @@
       PREEMPT_NONE = "n";
       PREEMPT_VOLUNTARY = "n";
       SCHED_BORE = "y";
-    }
-    // common;
+    };
   };
 }

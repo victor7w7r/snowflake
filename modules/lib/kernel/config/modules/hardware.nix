@@ -1,8 +1,11 @@
 {
-  kernel.config.modules.sbc = {
+  kernel.config.modules.hardware = rec {
+    desktop = not-gpio // not-phone // x86;
+    desktop-wserial = desktop // not-serial;
+
     not-serial = {
-      USB_SERIAL = "n";
       USB_ACM = "n";
+      USB_SERIAL = "n";
     };
 
     not-gpio = {
@@ -13,6 +16,29 @@
     };
 
     not-phone = {
+      BACKLIGHT_QCOM_WLED = "n";
+      GNSS = "n";
+      GNSS_MTK_SERIAL = "n";
+      GNSS_SERIAL = "n";
+      GNSS_SIRF_SERIAL = "n";
+      GNSS_UBX_SERIAL = "n";
+      GNSS_USB = "n";
+      NFC = "n";
+      NFC_NXP_NCI = "n";
+      NFC_NXP_NCI_I2C = "n";
+      QRTR = "n";
+      QRTR_MHI = "n";
+      QRTR_SMD = "n";
+      QRTR_TUN = "n";
+      SCSI_UFSHCD = "n";
+      SCSI_UFSHCD_PCI = "n";
+      SCSI_UFSHCD_PLATFORM = "n";
+      SCSI_UFS_BSG = "n";
+      SCSI_UFS_CDNS_PLATFORM = "n";
+      SCSI_UFS_CRYPTO = "n";
+      SCSI_UFS_HWMON = "n";
+      SOUNDWIRE_QCOM = "n";
+      STAGING = "n";
       USB_AUDIO = "n";
       USB_BDC_UDC = "n";
       USB_CDC_COMPOSITE = "n";
@@ -36,6 +62,14 @@
       USB_CONFIGFS_PHONET = "n";
       USB_CONFIGFS_RNDIS = "n";
       USB_CONFIGFS_SERIAL = "n";
+      USB_DWC2 = "n";
+      USB_DWC2_DUAL_ROLE = "n";
+      USB_DWC2_PCI = "n";
+      USB_DWC3 = "n";
+      USB_DWC3_DUAL_ROLE = "n";
+      USB_DWC3_HAPS = "n";
+      USB_DWC3_PCI = "n";
+      USB_DWC3_ULPI = "n";
       USB_ETH = "n";
       USB_ETH_EEM = "n";
       USB_ETH_RNDIS = "n";
@@ -75,6 +109,7 @@
       USB_G_SERIAL = "n";
       USB_LIBCOMPOSITE = "n";
       USB_MASS_STORAGE = "n";
+      USB_MAX3420_UDC = "n";
       USB_RAW_GADGET = "n";
       USB_SNP_CORE = "n";
       USB_U_AUDIO = "n";
@@ -82,45 +117,17 @@
       USB_U_SERIAL = "n";
       USB_ZERO = "n";
       U_SERIAL_CONSOLE = "n";
-      USB_MAX3420_UDC = "n";
-      STAGING = "n";
+    };
 
-      BACKLIGHT_QCOM_WLED = "n";
-
-      USB_DWC3 = "n";
-      USB_DWC3_ULPI = "n";
-      USB_DWC3_DUAL_ROLE = "n";
-      USB_DWC3_PCI = "n";
-      USB_DWC3_HAPS = "n";
-      USB_DWC2 = "n";
-      USB_DWC2_DUAL_ROLE = "n";
-      USB_DWC2_PCI = "n";
-
-      NFC = "n";
-      NFC_NXP_NCI = "n";
-      NFC_NXP_NCI_I2C = "n";
-
-      SOUNDWIRE_QCOM = "n";
-
-      GNSS = "n";
-      GNSS_SERIAL = "n";
-      GNSS_MTK_SERIAL = "n";
-      GNSS_SIRF_SERIAL = "n";
-      GNSS_UBX_SERIAL = "n";
-      GNSS_USB = "n";
-
-      QRTR = "n";
-      QRTR_SMD = "n";
-      QRTR_TUN = "n";
-      QRTR_MHI = "n";
-
-      SCSI_UFSHCD = "n";
-      SCSI_UFS_BSG = "n";
-      SCSI_UFS_CRYPTO = "n";
-      SCSI_UFS_HWMON = "n";
-      SCSI_UFSHCD_PCI = "n";
-      SCSI_UFSHCD_PLATFORM = "n";
-      SCSI_UFS_CDNS_PLATFORM = "n";
+    x86 = {
+      MMC_MTK = "n";
+      SPI = "n";
+      USB_NET_DRIVERS = "n";
+      XZ_DEC_ARM = "n";
+      XZ_DEC_ARMTHUMB = "n";
+      XZ_DEC_ARM64 = "n";
+      X86_NATIVE_CPU = "y";
+      X86_X32 = "y";
     };
   };
 }
