@@ -1,0 +1,99 @@
+{
+  kernel.config.denial.comm = rec {
+    all = bt // ir // nfc;
+
+    bt = {
+      BT_HIDP = "n";
+      BT_MTK = "n";
+      BT_HCIBTUSB = "n";
+      BT_HCIBTSDIO = "n";
+      BT_HCIUART = "n";
+      BT_HCIBCM203X = "n";
+      BT_HCIBCM4377 = "n";
+      BT_HCIBPA10X = "n";
+      BT_HCIBFUSB = "n";
+      BT_HCIVHCI = "n";
+      BT_MRVL = "n";
+      BT_MRVL_SDIO = "n";
+      BT_ATH3K = "n";
+      BT_MTKSDIO = "n";
+      BT_MTKUART = "n";
+      BT_VIRTIO = "n";
+      BT_NXPUART = "n";
+    };
+
+    ir = {
+      IR_ENE = "n";
+      IR_FINTEK = "n";
+      IR_IGORPLUGUSB = "n";
+      IR_IGUANA = "n";
+      IR_IMON = "n";
+      IR_IMON_DECODER = "n";
+      IR_IMON_RAW = "n";
+      IR_ITE_CIR = "n";
+      IR_JVC_DECODER = "n";
+      IR_MCEUSB = "n";
+      IR_MCE_KBD_DECODER = "n";
+      IR_NEC_DECODER = "n";
+      IR_NUVOTON = "n";
+      IR_RC5_DECODER = "n";
+      IR_RC6_DECODER = "n";
+      IR_RCMM_DECODER = "n";
+      IR_REDRAT3 = "n";
+      IR_SANYO_DECODER = "n";
+      IR_SERIAL = "n";
+      IR_SERIAL_TRANSMITTER = "n";
+      IR_SHARP_DECODER = "n";
+      IR_SONY_DECODER = "n";
+      IR_STREAMZAP = "n";
+      IR_TOY = "n";
+      IR_TTUSBIR = "n";
+      IR_WINBOND_CIR = "n";
+      IR_XMP_DECODER = "n";
+      RC_ATI_REMOTE = "n";
+      RC_LOOPBACK = "n";
+      RC_MAP = "n";
+      RC_XBOX_DVD = "n";
+    };
+
+    nfc = {
+      NFC_DIGITAL = "n";
+      NFC_FDP = "n";
+      NFC_FDP_I2C = "n";
+      NFC_HCI = "n";
+      NFC_MEI_PHY = "n";
+      NFC_MICROREAD = "n";
+      NFC_MICROREAD_I2C = "n";
+      NFC_MICROREAD_MEI = "n";
+      NFC_MRVL = "n";
+      NFC_MRVL_I2C = "n";
+      NFC_MRVL_SPI = "n";
+      NFC_MRVL_UART = "n";
+      NFC_MRVL_USB = "n";
+      NFC_NCI = "n";
+      NFC_NCI_SPI = "n";
+      NFC_NCI_UART = "n";
+      NFC_PN532_UART = "n";
+      NFC_PN533 = "n";
+      NFC_PN533_I2C = "n";
+      NFC_PN533_USB = "n";
+      NFC_PN544 = "n";
+      NFC_PN544_I2C = "n";
+      NFC_PN544_MEI = "n";
+      NFC_PORT100 = "n";
+      NFC_S3FWRN5 = "n";
+      NFC_S3FWRN5_I2C = "n";
+      NFC_S3FWRN82_UART = "n";
+      NFC_SHDLC = "n";
+      NFC_SIM = "n";
+      NFC_ST21NFCA = "n";
+      NFC_ST21NFCA_I2C = "n";
+      NFC_ST95HF = "n";
+      NFC_ST_NCI = "n";
+      NFC_ST_NCI_I2C = "n";
+      NFC_ST_NCI_SPI = "n";
+      NFC_TRF7970A = "n";
+      NFC_VIRTUAL_NCI = "n";
+    };
+  };
+}

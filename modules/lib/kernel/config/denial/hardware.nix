@@ -1,6 +1,6 @@
 {
   kernel.config.denial.hardware = rec {
-    all = acpi // bt // backlight // ir // graphics // lcd // led // nfc // pins // rtc // thermal;
+    all = acpi // battery // backlight // graphics // lcd // led // regulators // rtc // thermal;
 
     acpi = {
       ACPI_APEI_EINJ = "n";
@@ -38,24 +38,14 @@
       BACKLIGHT_SAHARA = "n";
     };
 
-    bt = {
-      BT_HIDP = "n";
-      BT_MTK = "n";
-      BT_HCIBTUSB = "n";
-      BT_HCIBTSDIO = "n";
-      BT_HCIUART = "n";
-      BT_HCIBCM203X = "n";
-      BT_HCIBCM4377 = "n";
-      BT_HCIBPA10X = "n";
-      BT_HCIBFUSB = "n";
-      BT_HCIVHCI = "n";
-      BT_MRVL = "n";
-      BT_MRVL_SDIO = "n";
-      BT_ATH3K = "n";
-      BT_MTKSDIO = "n";
-      BT_MTKUART = "n";
-      BT_VIRTIO = "n";
-      BT_NXPUART = "n";
+    battery = {
+      ADC_BATTERY_HELPER = "n";
+      FUEL_GAUGE_MM8013 = "n";
+      FUEL_GAUGE_STC3117 = "n";
+      GENERIC_ADC_BATTERY = "n";
+      IP5XXX_POWER = "n";
+      MANAGER_SBS = "n";
+      TEST_POWER = "n";
     };
 
     graphics = {
@@ -107,40 +97,6 @@
       TINYDRM_REPAPER = "n";
       TINYDRM_SHARP_MEMORY = "n";
 
-    };
-
-    ir = {
-      IR_ENE = "n";
-      IR_FINTEK = "n";
-      IR_IGORPLUGUSB = "n";
-      IR_IGUANA = "n";
-      IR_IMON = "n";
-      IR_IMON_DECODER = "n";
-      IR_IMON_RAW = "n";
-      IR_ITE_CIR = "n";
-      IR_JVC_DECODER = "n";
-      IR_MCEUSB = "n";
-      IR_MCE_KBD_DECODER = "n";
-      IR_NEC_DECODER = "n";
-      IR_NUVOTON = "n";
-      IR_RC5_DECODER = "n";
-      IR_RC6_DECODER = "n";
-      IR_RCMM_DECODER = "n";
-      IR_REDRAT3 = "n";
-      IR_SANYO_DECODER = "n";
-      IR_SERIAL = "n";
-      IR_SERIAL_TRANSMITTER = "n";
-      IR_SHARP_DECODER = "n";
-      IR_SONY_DECODER = "n";
-      IR_STREAMZAP = "n";
-      IR_TOY = "n";
-      IR_TTUSBIR = "n";
-      IR_WINBOND_CIR = "n";
-      IR_XMP_DECODER = "n";
-      RC_ATI_REMOTE = "n";
-      RC_LOOPBACK = "n";
-      RC_MAP = "n";
-      RC_XBOX_DVD = "n";
     };
 
     lcd = {
@@ -218,72 +174,6 @@
       LEDS_TRIGGER_TRANSIENT = "n";
       LEDS_TRIGGER_TTY = "n";
       LEDS_USER = "n";
-    };
-
-    nfc = {
-      NFC_DIGITAL = "n";
-      NFC_FDP = "n";
-      NFC_FDP_I2C = "n";
-      NFC_HCI = "n";
-      NFC_MEI_PHY = "n";
-      NFC_MICROREAD = "n";
-      NFC_MICROREAD_I2C = "n";
-      NFC_MICROREAD_MEI = "n";
-      NFC_MRVL = "n";
-      NFC_MRVL_I2C = "n";
-      NFC_MRVL_SPI = "n";
-      NFC_MRVL_UART = "n";
-      NFC_MRVL_USB = "n";
-      NFC_NCI = "n";
-      NFC_NCI_SPI = "n";
-      NFC_NCI_UART = "n";
-      NFC_PN532_UART = "n";
-      NFC_PN533 = "n";
-      NFC_PN533_I2C = "n";
-      NFC_PN533_USB = "n";
-      NFC_PN544 = "n";
-      NFC_PN544_I2C = "n";
-      NFC_PN544_MEI = "n";
-      NFC_PORT100 = "n";
-      NFC_S3FWRN5 = "n";
-      NFC_S3FWRN5_I2C = "n";
-      NFC_S3FWRN82_UART = "n";
-      NFC_SHDLC = "n";
-      NFC_SIM = "n";
-      NFC_ST21NFCA = "n";
-      NFC_ST21NFCA_I2C = "n";
-      NFC_ST95HF = "n";
-      NFC_ST_NCI = "n";
-      NFC_ST_NCI_I2C = "n";
-      NFC_ST_NCI_SPI = "n";
-      NFC_TRF7970A = "n";
-      NFC_VIRTUAL_NCI = "n";
-    };
-
-    pins = {
-      PINCTRL_ALDERLAKE = "n";
-      PINCTRL_AMDISP = "n";
-      PINCTRL_BROXTON = "n";
-      PINCTRL_CANNONLAKE = "n";
-      PINCTRL_CEDARFORK = "n";
-      PINCTRL_CY8C95X0 = "n";
-      PINCTRL_DENVERTON = "n";
-      PINCTRL_ELKHARTLAKE = "n";
-      PINCTRL_EMMITSBURG = "n";
-      PINCTRL_GEMINILAKE = "n";
-      PINCTRL_ICELAKE = "n";
-      PINCTRL_INTEL_PLATFORM = "n";
-      PINCTRL_JASPERLAKE = "n";
-      PINCTRL_LAKEFIELD = "n";
-      PINCTRL_LEWISBURG = "n";
-      PINCTRL_LYNXPOINT = "n";
-      PINCTRL_MCP23S08 = "n";
-      PINCTRL_MCP23S08_I2C = "n";
-      PINCTRL_MCP23S08_SPI = "n";
-      PINCTRL_METEORLAKE = "n";
-      PINCTRL_METEORPOINT = "n";
-      PINCTRL_SUNRISEPOINT = "n";
-      PINCTRL_TIGERLAKE = "n";
     };
 
     rtc = {
@@ -364,6 +254,107 @@
       ACPI_THERMAL_REL = "n";
       INT3406_THERMAL = "n";
       PROC_THERMAL_MMIO_RAPL = "n";
+    };
+
+    regulators = {
+      REGULATOR = "n";
+      REGULATOR_88PG86X = "n";
+      REGULATOR_88PM800 = "n";
+      REGULATOR_ACT8865 = "n";
+      REGULATOR_AD5398 = "n";
+      REGULATOR_ADP5055 = "n";
+      REGULATOR_ARIZONA_LDO1 = "n";
+      REGULATOR_ARIZONA_MICSUPP = "n";
+      REGULATOR_ATC260X = "n";
+      REGULATOR_AW37503 = "n";
+      REGULATOR_AXP20X = "n";
+      REGULATOR_BCM590XX = "n";
+      REGULATOR_BD9571MWV = "n";
+      REGULATOR_BQ257XX = "n";
+      REGULATOR_DA9062 = "n";
+      REGULATOR_DA9210 = "n";
+      REGULATOR_DA9211 = "n";
+      REGULATOR_FAN53555 = "n";
+      REGULATOR_FIXED_VOLTAGE = "n";
+      REGULATOR_GPIO = "n";
+      REGULATOR_ISL6271A = "n";
+      REGULATOR_ISL9305 = "n";
+      REGULATOR_LM363X = "n";
+      REGULATOR_LP3971 = "n";
+      REGULATOR_LP3972 = "n";
+      REGULATOR_LP872X = "n";
+      REGULATOR_LP8755 = "n";
+      REGULATOR_LTC3589 = "n";
+      REGULATOR_LTC3676 = "n";
+      REGULATOR_MAX14577 = "n";
+      REGULATOR_MAX1586 = "n";
+      REGULATOR_MAX20086 = "n";
+      REGULATOR_MAX20411 = "n";
+      REGULATOR_MAX77503 = "n";
+      REGULATOR_MAX77541 = "n";
+      REGULATOR_MAX77693 = "n";
+      REGULATOR_MAX77826 = "n";
+      REGULATOR_MAX77838 = "n";
+      REGULATOR_MAX77857 = "n";
+      REGULATOR_MAX8649 = "n";
+      REGULATOR_MAX8660 = "n";
+      REGULATOR_MAX8893 = "n";
+      REGULATOR_MAX8907 = "n";
+      REGULATOR_MAX8952 = "n";
+      REGULATOR_MC13783 = "n";
+      REGULATOR_MC13892 = "n";
+      REGULATOR_MC13XXX_CORE = "n";
+      REGULATOR_MP8859 = "n";
+      REGULATOR_MT6311 = "n";
+      REGULATOR_MT6323 = "n";
+      REGULATOR_MT6331 = "n";
+      REGULATOR_MT6332 = "n";
+      REGULATOR_MT6357 = "n";
+      REGULATOR_MT6358 = "n";
+      REGULATOR_MT6359 = "n";
+      REGULATOR_MT6360 = "n";
+      REGULATOR_MT6370 = "n";
+      REGULATOR_MT6397 = "n";
+      REGULATOR_PALMAS = "n";
+      REGULATOR_PCA9450 = "n";
+      REGULATOR_PF0900 = "n";
+      REGULATOR_PF9453 = "n";
+      REGULATOR_PV88060 = "n";
+      REGULATOR_PV88080 = "n";
+      REGULATOR_PV88090 = "n";
+      REGULATOR_PWM = "n";
+      REGULATOR_RAA215300 = "n";
+      REGULATOR_RT4801 = "n";
+      REGULATOR_RT4803 = "n";
+      REGULATOR_RT4831 = "n";
+      REGULATOR_RT5033 = "n";
+      REGULATOR_RT5120 = "n";
+      REGULATOR_RT5190A = "n";
+      REGULATOR_RT5739 = "n";
+      REGULATOR_RT5759 = "n";
+      REGULATOR_RT6160 = "n";
+      REGULATOR_RT6190 = "n";
+      REGULATOR_RT6245 = "n";
+      REGULATOR_RTMV20 = "n";
+      REGULATOR_RTQ2134 = "n";
+      REGULATOR_RTQ2208 = "n";
+      REGULATOR_RTQ6752 = "n";
+      REGULATOR_SKY81452 = "n";
+      REGULATOR_SLG51000 = "n";
+      REGULATOR_SY7636A = "n";
+      REGULATOR_TPS51632 = "n";
+      REGULATOR_TPS6105X = "n";
+      REGULATOR_TPS62360 = "n";
+      REGULATOR_TPS65023 = "n";
+      REGULATOR_TPS6507X = "n";
+      REGULATOR_TPS65086 = "n";
+      REGULATOR_TPS65132 = "n";
+      REGULATOR_TPS6524X = "n";
+      REGULATOR_TPS65912 = "n";
+      REGULATOR_TPS68470 = "n";
+      REGULATOR_USERSPACE_CONSUMER = "n";
+      REGULATOR_VIRTUAL_CONSUMER = "n";
+      REGULATOR_WM8994 = "n";
     };
   };
 }

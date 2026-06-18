@@ -1,7 +1,6 @@
 {
   kernel.config.denial.gpio = rec {
-
-    all = clk // extcon // general // controllers;
+    all = clk // controllers // extcon // general // pins;
 
     clk = {
       LMK04832 = "n";
@@ -14,6 +13,19 @@
       COMMON_CLK_CS2000_CP = "n";
       COMMON_CLK_PWM = "n";
       XILINX_VCU = "n";
+    };
+
+    controllers = {
+      NSM = "n";
+      C2PORT = "n";
+      CB710_CORE = "n";
+      ALTERA_STAPL = "n";
+      EEPROM_AT24 = "n";
+      EEPROM_MAX6875 = "n";
+      EEPROM_93CX6 = "n";
+      EEPROM_IDT_89HPESX = "n";
+      EEPROM_EE1004 = "n";
+      EEPROM_M24LR = "n";
     };
 
     extcon = {
@@ -29,19 +41,6 @@
       EXTCON_RT8973A = "n";
       EXTCON_SM5502 = "n";
       EXTCON_USBC_TUSB320 = "n";
-    };
-
-    controllers = {
-      NSM = "n";
-      C2PORT = "n";
-      CB710_CORE = "n";
-      ALTERA_STAPL = "n";
-      EEPROM_AT24 = "n";
-      EEPROM_MAX6875 = "n";
-      EEPROM_93CX6 = "n";
-      EEPROM_IDT_89HPESX = "n";
-      EEPROM_EE1004 = "n";
-      EEPROM_M24LR = "n";
     };
 
     general = {
@@ -122,7 +121,32 @@
       GPIO_WS16C48 = "n";
       GPIO_XILINX = "n";
       GPIO_XRA1403 = "n";
+    };
 
+    pins = {
+      PINCTRL_ALDERLAKE = "n";
+      PINCTRL_AMDISP = "n";
+      PINCTRL_BROXTON = "n";
+      PINCTRL_CANNONLAKE = "n";
+      PINCTRL_CEDARFORK = "n";
+      PINCTRL_CY8C95X0 = "n";
+      PINCTRL_DENVERTON = "n";
+      PINCTRL_ELKHARTLAKE = "n";
+      PINCTRL_EMMITSBURG = "n";
+      PINCTRL_GEMINILAKE = "n";
+      PINCTRL_ICELAKE = "n";
+      PINCTRL_INTEL_PLATFORM = "n";
+      PINCTRL_JASPERLAKE = "n";
+      PINCTRL_LAKEFIELD = "n";
+      PINCTRL_LEWISBURG = "n";
+      PINCTRL_LYNXPOINT = "n";
+      PINCTRL_MCP23S08 = "n";
+      PINCTRL_MCP23S08_I2C = "n";
+      PINCTRL_MCP23S08_SPI = "n";
+      PINCTRL_METEORLAKE = "n";
+      PINCTRL_METEORPOINT = "n";
+      PINCTRL_SUNRISEPOINT = "n";
+      PINCTRL_TIGERLAKE = "n";
     };
   };
 }

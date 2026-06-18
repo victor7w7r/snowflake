@@ -65,7 +65,6 @@
     not-intel = {
       CPU_SUP_INTEL = "n";
       DRM_I915 = "n";
-      DRM_I915_GVT_KVMGT = "n";
       HAVE_INTEL_TXT = "n";
       INTEL_GTT = "n";
       INTEL_HFI_THERMAL = "n";
@@ -73,10 +72,7 @@
       INTEL_IOMMU = "n";
       INTEL_LDMA = "n";
       INTEL_RAPL = "n";
-      INTEL_RAPL_CORE = "m";
       INTEL_SCU = "n";
-      INTEL_SCU_IPC = "n";
-      INTEL_SCU_PCI = "n";
       INTEL_SOC_PMIC = "n";
       INTEL_SOC_PMIC_CHTWC = "n";
       INTEL_TDX_GUEST = "n";

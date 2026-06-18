@@ -1,8 +1,7 @@
 {
   kernel.config.denial.net = rec {
     all =
-      act
-      // cls
+      cls
       // bridge
       // drivers
       // dsa
@@ -15,28 +14,6 @@
       // sharing
       // wifi
       // phy;
-
-    act = {
-      NET_ACT_BPF = "n";
-      NET_ACT_CONNMARK = "n";
-      NET_ACT_CSUM = "n";
-      NET_ACT_CT = "n";
-      NET_ACT_CTINFO = "n";
-      NET_ACT_GACT = "n";
-      NET_ACT_GATE = "n";
-      NET_ACT_IFE = "n";
-      NET_ACT_MIRRED = "n";
-      NET_ACT_MPLS = "n";
-      NET_ACT_NAT = "n";
-      NET_ACT_PEDIT = "n";
-      NET_ACT_POLICE = "n";
-      NET_ACT_SAMPLE = "n";
-      NET_ACT_SIMP = "n";
-      NET_ACT_SKBEDIT = "n";
-      NET_ACT_SKBMOD = "n";
-      NET_ACT_TUNNEL_KEY = "n";
-      NET_ACT_VLAN = "n";
-    };
 
     cls = {
       NET_CLS_BASIC = "n";
@@ -85,26 +62,6 @@
     bridge = {
       BRIDGE_MRP = "n";
       BRIDGE_CFM = "n";
-      BRIDGE_EBT_BROUTE = "n";
-      BRIDGE_EBT_T_FILTER = "n";
-      BRIDGE_EBT_T_NAT = "n";
-      BRIDGE_EBT_802_3 = "n";
-      BRIDGE_EBT_AMONG = "n";
-      BRIDGE_EBT_ARP = "n";
-      BRIDGE_EBT_IP = "n";
-      BRIDGE_EBT_IP6 = "n";
-      BRIDGE_EBT_LIMIT = "n";
-      BRIDGE_EBT_MARK = "n";
-      BRIDGE_EBT_PKTTYPE = "n";
-      BRIDGE_EBT_STP = "n";
-      BRIDGE_EBT_VLAN = "n";
-      BRIDGE_EBT_ARPREPLY = "n";
-      BRIDGE_EBT_DNAT = "n";
-      BRIDGE_EBT_MARK_T = "n";
-      BRIDGE_EBT_REDIRECT = "n";
-      BRIDGE_EBT_SNAT = "n";
-      BRIDGE_EBT_LOG = "n";
-      BRIDGE_EBT_NFLOG = "n";
     };
 
     drivers = {
@@ -166,33 +123,35 @@
 
     dsa = {
       NET_DSA = "n";
-      NET_DSA_BCM_SF2 = "n";
-      NET_DSA_LOOP = "n";
-      NET_DSA_MT7530 = "n";
-      NET_DSA_MT7530_MDIO = "n";
-      NET_DSA_MT7530_MMIO = "n";
-      NET_DSA_MV88E6060 = "n";
-      NET_DSA_MICROCHIP_KSZ_COMMON = "n";
-      NET_DSA_MICROCHIP_KSZ9477_I2C = "n";
-      NET_DSA_MICROCHIP_KSZ_SPI = "n";
-      NET_DSA_MICROCHIP_KSZ8863_SMI = "n";
-      NET_DSA_MV88E6XXX = "n";
-      NET_DSA_MV88E6XXX_LEDS = "n";
-      NET_DSA_AR9331 = "n";
-      NET_DSA_QCA8K = "n";
-      NET_DSA_QCA8K_LEDS_SUPPORT = "n";
-      NET_DSA_SJA1105 = "n";
-      NET_DSA_XRS700X = "n";
-      NET_DSA_XRS700X_I2C = "n";
-      NET_DSA_XRS700X_MDIO = "n";
-      NET_DSA_REALTEK = "n";
-      NET_DSA_KS8995 = "n";
-      NET_DSA_SMSC_LAN9303 = "n";
-      NET_DSA_SMSC_LAN9303_I2C = "n";
-      NET_DSA_SMSC_LAN9303_MDIO = "n";
-      NET_DSA_VITESSE_VSC73XX = "n";
-      NET_DSA_VITESSE_VSC73XX_SPI = "n";
-      NET_DSA_VITESSE_VSC73XX_PLATFORM = "n";
+      /*
+        NET_DSA_BCM_SF2 = "n";
+        NET_DSA_LOOP = "n";
+        NET_DSA_MT7530 = "n";
+        NET_DSA_MT7530_MDIO = "n";
+        NET_DSA_MT7530_MMIO = "n";
+        NET_DSA_MV88E6060 = "n";
+        NET_DSA_MICROCHIP_KSZ_COMMON = "n";
+        NET_DSA_MICROCHIP_KSZ9477_I2C = "n";
+        NET_DSA_MICROCHIP_KSZ_SPI = "n";
+        NET_DSA_MICROCHIP_KSZ8863_SMI = "n";
+        NET_DSA_MV88E6XXX = "n";
+        NET_DSA_MV88E6XXX_LEDS = "n";
+        NET_DSA_AR9331 = "n";
+        NET_DSA_QCA8K = "n";
+        NET_DSA_QCA8K_LEDS_SUPPORT = "n";
+        NET_DSA_SJA1105 = "n";
+        NET_DSA_XRS700X = "n";
+        NET_DSA_XRS700X_I2C = "n";
+        NET_DSA_XRS700X_MDIO = "n";
+        NET_DSA_REALTEK = "n";
+        NET_DSA_KS8995 = "n";
+        NET_DSA_SMSC_LAN9303 = "n";
+        NET_DSA_SMSC_LAN9303_I2C = "n";
+        NET_DSA_SMSC_LAN9303_MDIO = "n";
+        NET_DSA_VITESSE_VSC73XX = "n";
+        NET_DSA_VITESSE_VSC73XX_SPI = "n";
+        NET_DSA_VITESSE_VSC73XX_PLATFORM = "n";
+      */
     };
 
     eth = {
@@ -369,7 +328,6 @@
       DP83TG720_PHY = "n";
       VITESSE_PHY = "n";
       XILINX_GMII2RGMII = "n";
-
     };
 
     sch = {
@@ -400,7 +358,6 @@
       NET_SCH_PLUG = "n";
       NET_SCH_ETS = "n";
       NET_SCH_DUALPI2 = "n";
-
     };
 
     sharing = {

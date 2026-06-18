@@ -81,6 +81,7 @@
       I2C_SLAVE_EEPROM = "n";
       I2C_SLAVE_TESTUNIT = "n";
     };
+
     spi = {
       SPI_OFFLOAD = "n";
       SPI_ALTERA = "n";
@@ -119,6 +120,7 @@
       SPI_OFFLOAD_TRIGGER_ADI_UTIL_SD = "n";
       SPI_OFFLOAD_TRIGGER_PWM = "n";
     };
+
     serio = {
       SERIO_SERPORT = "n";
       SERIO_CT82C710 = "n";

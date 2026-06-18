@@ -65,7 +65,7 @@
       '';
 
       installPhase = ''
-        ${kernel.config.cleaner}
+        ${kernel.config.cleaner.cmd}
         cp .config $out
       '';
     };
