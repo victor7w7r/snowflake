@@ -129,6 +129,7 @@
       MDIO_REGMAP = "n";
       MOXA_INTELLIO = "n";
       MOXA_SMARTIO = "n";
+      IP_PIMSM_V2 = "n";
       NETCONSOLE = "n";
       NETDEVSIM = "n";
       NETPOLL = "n";

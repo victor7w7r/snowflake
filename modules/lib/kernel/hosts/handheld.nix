@@ -28,11 +28,11 @@
             freq.high
             general
             not-raid
-            sbc.not-arm
             sbc.not-serial
             sbc.not-gpio
             sbc.not-phone
             vendor.not-intel
+            x86
             (cmdline { isAmd = true; })
           ]);
       };

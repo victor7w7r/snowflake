@@ -8,7 +8,7 @@
       version = libs.calc-version src;
       patches =
         with (kernel.patches.injector pkgs);
-        (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming ++ bunker.common;
+        (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming;
       main-config = libs.config-gen {
         inherit patches src;
         config = (kernel.linux.injector pkgs).kConfig false;
@@ -18,11 +18,11 @@
             fs.bcachefs
             freq.high
             general
-            sbc.not-arm
             sbc.not-gpio
             sbc.not-phone
             not-raid
             vendor.not-amd
+            x86
             (cmdline {
               isIntel = true;
               isSata = true;

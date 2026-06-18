@@ -27,11 +27,11 @@
           (kernel.lib.concat-config [
             freq.low
             general
-            sbc.not-arm
             sbc.not-gpio
             sbc.not-phone
             not-raid
             vendor.not-amd
+            x86
             (cmdline {
               isIntel = true;
               isSata = true;
