@@ -2,12 +2,13 @@
 {
   kernel.lib = {
     concat-config =
+      with lib;
       configList:
-      lib.pipe configList [
+      pipe configList [
         (map (structConfig: removeAttrs structConfig [ "__provider" ]))
-        (lib.zipAttrsWith (_: builtins.head))
-        (lib.mapAttrsToList (option: value: "CONFIG_${option}=${value}"))
-        (lib.concatStringsSep "\n")
+        (zipAttrsWith (_: builtins.head))
+        (mapAttrsToList (option: value: "CONFIG_${option}=${value}"))
+        (concatStringsSep "\n")
       ];
 
     calc-version = pkgs: src: rec {

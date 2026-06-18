@@ -11,12 +11,23 @@
         (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming;
       main-config = libs.config-gen {
         inherit patches src;
-        disableDenial = true;
+        isArm = false;
         config = (kernel.linux.injector pkgs).kConfig false;
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
             fs.bcachefs
+            freq.high
+            general
+            sbc.not-gpio
+            sbc.not-phone
+            not-raid
+            vendor.not-amd
+            (cmdline {
+              isIntel = true;
+              isSata = true;
+              extra = "video=DP-3:1600x900@60";
+            })
           ]);
       };
       generated = libs.kernel-gen {

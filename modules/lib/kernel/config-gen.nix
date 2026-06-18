@@ -7,7 +7,7 @@
 {
   kernel.lib.config-gen =
     {
-      isArm ? true,
+      isArm ? false,
       isClang ? true,
       disableDenial ? false,
       structConfig,
@@ -16,10 +16,14 @@
       pkgs,
       src,
     }:
+    let
+      arch = "ARCH=${if isArm then "arm64" else "x86"}";
+    in
     pkgs.stdenv.mkDerivation {
       name = "linux-config-gen";
       inherit patches src;
       LLVM = if isClang then "1" else null;
+
       stdenv =
         if isClang then
           (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { }).stdenvLLVM
@@ -33,7 +37,6 @@
         [
           bison
           flex
-          perl
         ]
         ++ (lib.optionals isClang [
           llvm_20
@@ -42,7 +45,7 @@
         ]);
 
       makeFlags =
-        (lib.optionals isArm [ "ARCH=arm64" ])
+        lib.singleton arch
         ++ (lib.optionals (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) [
           "CROSS_COMPILE=${pkgs.stdenv.cc.targetPrefix}"
         ]);
@@ -60,8 +63,8 @@
         '';
 
       buildPhase = ''
-        scripts/kconfig/merge_config.sh -m .config .gen_config &> /dev/null
-        make $makeFlags olddefconfig
+        ${arch} scripts/kconfig/merge_config.sh -m .config .gen_config &> /dev/null
+        make ${arch} $makeFlags olddefconfig
       '';
 
       installPhase = ''

@@ -20,6 +20,7 @@
 
       handheld-config = libs.config-gen {
         inherit patches src;
+        isArm = false;
         config = (kernel.linux.injector pkgs).kConfig false;
         structConfig =
           with kernel.config.modules;

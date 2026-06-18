@@ -22,6 +22,7 @@
       server-config = libs.config-gen {
         inherit patches src;
         config = (kernel.linux.injector pkgs).kConfig true;
+        isArm = false;
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
