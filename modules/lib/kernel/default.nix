@@ -13,7 +13,7 @@
         calc-version = src: kernel.lib.calc-version pkgs src;
         config-gen =
           {
-            isArm ? true,
+            isArm ? false,
             isClang ? true,
             disableDenial ? false,
             structConfig,
