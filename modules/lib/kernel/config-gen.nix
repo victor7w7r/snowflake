@@ -55,7 +55,7 @@
         cp ${config} .config && chmod +w .config
         cp ${pkgs.writeText "kernel-gen-config" ''
           ${structConfig}
-          ${if disableDenial then "" else kernel.config.denial.all}
+          ${(lib.optionalString (!disableDenial) kernel.config.denial.all)}
         ''} .gen_config
       '';
 

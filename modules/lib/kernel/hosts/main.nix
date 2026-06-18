@@ -13,7 +13,6 @@
         inherit patches src;
         isArm = false;
         isClang = true;
-        disableDenial = true;
         config = (kernel.linux.injector pkgs).kConfig false;
         structConfig =
           with kernel.config.modules;
