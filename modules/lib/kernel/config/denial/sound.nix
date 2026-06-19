@@ -25,8 +25,8 @@
       SND_HDA_CODEC_CS420X = "n";
       SND_HDA_CODEC_CS421X = "n";
       SND_HDA_CODEC_CS8409 = "n";
-      SND_HDA_CODEC_REALTEK = "n";
       SND_HDA_CODEC_HDMI_NVIDIA_MCP = "n";
+      SND_HDA_CODEC_REALTEK = "n";
       SND_HDA_CODEC_REALTEK_LIB = "n";
       SND_HDA_CODEC_SENARYTECH = "n";
       SND_HDA_CODEC_SI3054 = "n";
@@ -116,6 +116,7 @@
       SND_MPU401 = "n";
       SND_MTPAV = "n";
       SND_NM256 = "n";
+      SND_OSSEMUL = "n";
       SND_OXYGEN = "n";
       SND_OXYGEN_LIB = "n";
       SND_PCMTEST = "n";

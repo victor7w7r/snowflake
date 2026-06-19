@@ -3,13 +3,11 @@
     all = general // misc;
 
     general = {
+      DPLL = "n";
       I8K = "n";
       MAX31827 = "n";
+      NTB = "n";
       PMBUS = "n";
-      DPLL = "n";
-      ZL3073X = "n";
-      ZL3073X_I2C = "n";
-      ZL3073X_SPI = "n";
       SENSORS_ABITUGURU = "n";
       SENSORS_ABITUGURU3 = "n";
       SENSORS_ACBEL_FSG032 = "n";
@@ -284,6 +282,9 @@
       SENSORS_XDPE152 = "n";
       SENSORS_XGENE = "n";
       SENSORS_ZL6100 = "n";
+      ZL3073X = "n";
+      ZL3073X_I2C = "n";
+      ZL3073X_SPI = "n";
     };
 
     misc = {

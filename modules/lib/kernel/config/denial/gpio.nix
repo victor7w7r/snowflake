@@ -3,29 +3,29 @@
     all = clk // controllers // extcon // general // pins;
 
     clk = {
-      LMK04832 = "n";
+      COMMON_CLK_CDCE706 = "n";
+      COMMON_CLK_CS2000_CP = "n";
       COMMON_CLK_MAX9485 = "n";
+      COMMON_CLK_PWM = "n";
       COMMON_CLK_SI5341 = "n";
       COMMON_CLK_SI5351 = "n";
       COMMON_CLK_SI544 = "n";
-      COMMON_CLK_CDCE706 = "n";
       COMMON_CLK_TPS68470 = "n";
-      COMMON_CLK_CS2000_CP = "n";
-      COMMON_CLK_PWM = "n";
+      LMK04832 = "n";
       XILINX_VCU = "n";
     };
 
     controllers = {
-      NSM = "n";
+      ALTERA_STAPL = "n";
       C2PORT = "n";
       CB710_CORE = "n";
-      ALTERA_STAPL = "n";
-      EEPROM_AT24 = "n";
-      EEPROM_MAX6875 = "n";
       EEPROM_93CX6 = "n";
-      EEPROM_IDT_89HPESX = "n";
+      EEPROM_AT24 = "n";
       EEPROM_EE1004 = "n";
+      EEPROM_IDT_89HPESX = "n";
       EEPROM_M24LR = "n";
+      EEPROM_MAX6875 = "n";
+      NSM = "n";
     };
 
     extcon = {
@@ -44,7 +44,6 @@
     };
 
     general = {
-      UIO = "n";
       GPIO_74X164 = "n";
       GPIO_AGGREGATOR = "n";
       GPIO_ALTERA = "n";
@@ -53,6 +52,7 @@
       GPIO_AMD_FCH = "n";
       GPIO_ARIZONA = "n";
       GPIO_BD9571MWV = "n";
+      GPIO_CDEV_V1 = "n";
       GPIO_CGBC = "n";
       GPIO_DLN2 = "n";
       GPIO_DS4520 = "n";
@@ -121,6 +121,7 @@
       GPIO_WS16C48 = "n";
       GPIO_XILINX = "n";
       GPIO_XRA1403 = "n";
+      UIO = "n";
     };
 
     pins = {

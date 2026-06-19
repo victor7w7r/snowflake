@@ -49,6 +49,7 @@
     };
 
     graphics = {
+      BTT = "n";
       DRM_ACCEL_HABANALABS = "n";
       DRM_ACCEL_IVPU = "n";
       DRM_ACCEL_QAIC = "n";
@@ -85,9 +86,17 @@
       DRM_VIRTIO_GPU_KMS = "n";
       DRM_VKMS = "n";
       DRM_VMWGFX = "n";
+      DRM_XE = "n";
+      FB_DEVICE = "n";
       FB_DMAMEM_HELPERS = "n";
       FB_DMAMEM_HELPERS_DEFERRED = "n";
       HL_HLDIO = "n";
+      ND_BTT = "n";
+      ND_CLAIM = "n";
+      ND_PFN = "n";
+      NVDIMM_DAX = "n";
+      NVDIMM_KEYS = "n";
+      NVDIMM_PFN = "n";
       TINYDRM_HX8357D = "n";
       TINYDRM_ILI9163 = "n";
       TINYDRM_ILI9225 = "n";
@@ -96,7 +105,6 @@
       TINYDRM_MI0283QT = "n";
       TINYDRM_REPAPER = "n";
       TINYDRM_SHARP_MEMORY = "n";
-
     };
 
     lcd = {
@@ -248,11 +256,11 @@
     };
 
     thermal = {
-      INTEL_SOC_DTS_IOSF_CORE = "n";
-      INTEL_SOC_DTS_THERMAL = "n";
-      INT340X_THERMAL = "n";
       ACPI_THERMAL_REL = "n";
       INT3406_THERMAL = "n";
+      INT340X_THERMAL = "n";
+      INTEL_SOC_DTS_IOSF_CORE = "n";
+      INTEL_SOC_DTS_THERMAL = "n";
       PROC_THERMAL_MMIO_RAPL = "n";
     };
 

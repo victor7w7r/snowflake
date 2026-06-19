@@ -18,6 +18,6 @@
       sound.all
       storage.all
       usb.all
-      vendor
+      vendor.all
     ]);
 }

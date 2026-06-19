@@ -1,5 +1,7 @@
 {
   kernel.config.modules.net = {
+    DEFAULT_CUBIC = "n";
+    DEFAULT_FQ_CODEL = "n";
     DEFAULT_BBR = "y";
     DEFAULT_HOSTNAME = "v7w7r";
     DEFAULT_NET_SCH = "fq";

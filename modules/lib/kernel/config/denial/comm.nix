@@ -3,23 +3,23 @@
     all = bt // ir // nfc;
 
     bt = {
-      BT_HIDP = "n";
-      BT_MTK = "n";
-      BT_HCIBTUSB = "n";
-      BT_HCIBTSDIO = "n";
-      BT_HCIUART = "n";
+      BT_ATH3K = "n";
       BT_HCIBCM203X = "n";
       BT_HCIBCM4377 = "n";
-      BT_HCIBPA10X = "n";
       BT_HCIBFUSB = "n";
+      BT_HCIBPA10X = "n";
+      BT_HCIBTSDIO = "n";
+      BT_HCIBTUSB = "n";
+      BT_HCIUART = "n";
       BT_HCIVHCI = "n";
+      BT_HIDP = "n";
       BT_MRVL = "n";
       BT_MRVL_SDIO = "n";
-      BT_ATH3K = "n";
+      BT_MTK = "n";
       BT_MTKSDIO = "n";
       BT_MTKUART = "n";
-      BT_VIRTIO = "n";
       BT_NXPUART = "n";
+      BT_VIRTIO = "n";
     };
 
     ir = {

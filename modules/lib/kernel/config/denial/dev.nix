@@ -7,12 +7,18 @@
       DEBUG_FS = "n";
       DEBUG_MISC = "n";
       DEBUG_PREEMPT = "n";
+      FUNCTION_ERROR_INJECTION = "n";
+      IO_STRICT_DEVMEM = "n";
+      KASAN = "n";
       LATENCYTOP = "n";
       PM_ADVANCED_DEBUG = "n";
       PM_DEBUG = "n";
       PM_SLEEP_DEBUG = "n";
+      RUNTIME_TESTING_MENU = "n";
       SCHED_DEBUG = "n";
       SLUB_DEBUG = "n";
+      STM = "n";
+      STRICT_DEVMEM = "n";
     };
 
     trace = {
@@ -24,6 +30,7 @@
       DYNAMIC_FTRACE_WITH_DIRECT_CALLS = "n";
       DYNAMIC_FTRACE_WITH_REGS = "n";
       EVENT_TRACING = "n";
+      FPGA = "n";
       FTRACE_MCOUNT_USE_OBJTOOL = "n";
       FTRACE_SYSCALLS = "n";
       FUNCTION_GRAPH_TRACER = "n";
@@ -38,12 +45,12 @@
       KPROBES_ON_FTRACE = "n";
       KPROBE_EVENTS = "n";
       MCTP = "n";
-      RCU_TRACE = "n";
       MMIOTRACE = "n";
       MPLS = "n";
       MTD = "n";
       NOP_TRACER = "n";
       PRINTK_TIME = "n";
+      RCU_TRACE = "n";
       SCHED_TRACER = "n";
       STACKTRACE = "n";
       STACKTRACE_BUILD_ID = "n";
