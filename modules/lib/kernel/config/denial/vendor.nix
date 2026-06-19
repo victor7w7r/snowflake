@@ -122,7 +122,6 @@
       NET_VENDOR_ALACRITECH = "n";
       NET_VENDOR_ALTEON = "n";
       NET_VENDOR_AMAZON = "n";
-      NET_VENDOR_AMD = "n";
       NET_VENDOR_AQUANTIA = "n";
       NET_VENDOR_ARC = "n";
       NET_VENDOR_ASIX = "n";

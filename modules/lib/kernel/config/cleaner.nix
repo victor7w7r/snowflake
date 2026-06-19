@@ -3,10 +3,23 @@
     sed -i '/^[[:space:]]*#/d; /^[[:space:]]*$/d' .config
     sed -i '/^CONFIG_BATTERY_/d' .config
     sed -i '/^CONFIG_CHARGER_/d' .config
+    sed -i '/^CONFIG_COMMON_CLK_/d' .config
     sed -i '/^CONFIG_DELL_/d' .config
+    sed -i -E '/CONFIG_EXTCON_/ { /CONFIG_EXTCON_GPIO|CONFIG_EXTCON_USB_GPIO/!d }' .config
+    sed -i -E '/CONFIG_HID_/ { /CONFIG_HID_SUPPORT|CONFIG_HID_BATTERY_STRENGTH|CONFIG_HID_GENERIC|CONFIG_HID_HAPTIC|CONFIG_HID_ASUS|CONFIG_HID_WACOM|CONFIG_HID_PID/!d }' .config
+    sed -i '/^CONFIG_RMI4_/d' .config
+    sed -i -E '/CONFIG_REGULATOR_/ { /CONFIG_REGULATOR_FIXED_VOLTAGE|CONFIG_REGULATOR_NETLINK_EVENTS/!d }' .config
+    sed -i -E '/CONFIG_LEDS_/ { /CONFIG_LEDS_CLASS|CONFIG_LEDS_TRIGGERS|CONFIG_LEDS_TRIGGER_DISK|CONFIG_LEDS_TRIGGER_CPU/!d }' .config
     sed -i '/^CONFIG_JOYSTICK_/d' .config
+    sed -i '/CONFIG_KEYBOARD_/ { /CONFIG_KEYBOARD_ATKBD/!d }' .config
     sed -i '/^CONFIG_MOUSE_/d' .config
     sed -i '/^CONFIG_TOUCHSCREEN_/d' .config
-    sed -i '/CONFIG_KEYBOARD_/ { /CONFIG_KEYBOARD_ATKBD/!d }' .config
+    sed -i '/^CONFIG_NLS_MAC_/d' .config
+    sed -i '/^CONFIG_EEPROM_/d' .config
+    sed -i '/CONFIG_RTC_DRV_/ { /CONFIG_RTC_DRV_CMOS/!d }' .config
+    sed -i '/CONFIG_BACKLIGHT_/ { /CONFIG_BACKLIGHT_CLASS_DEVICE/!d }' .config
+    sed -i '/CONFIG_NLS_CODEPAGE_/ { /CONFIG_NLS_CODEPAGE_437/!d }' .config
+    sed -i '/^CONFIG_NLS_ISO8859_/d' .config
+    sed -i '/CONFIG_NLS_ASCII=y/a CONFIG_NLS_ISO8859_1=m' .config
   '';
 }

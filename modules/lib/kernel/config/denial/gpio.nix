@@ -1,47 +1,6 @@
 {
   kernel.config.denial.gpio = rec {
-    all = clk // controllers // extcon // general // pins;
-
-    clk = {
-      COMMON_CLK_CDCE706 = "n";
-      COMMON_CLK_CS2000_CP = "n";
-      COMMON_CLK_MAX9485 = "n";
-      COMMON_CLK_PWM = "n";
-      COMMON_CLK_SI5341 = "n";
-      COMMON_CLK_SI5351 = "n";
-      COMMON_CLK_SI544 = "n";
-      COMMON_CLK_TPS68470 = "n";
-      LMK04832 = "n";
-      XILINX_VCU = "n";
-    };
-
-    controllers = {
-      ALTERA_STAPL = "n";
-      C2PORT = "n";
-      CB710_CORE = "n";
-      EEPROM_93CX6 = "n";
-      EEPROM_AT24 = "n";
-      EEPROM_EE1004 = "n";
-      EEPROM_IDT_89HPESX = "n";
-      EEPROM_M24LR = "n";
-      EEPROM_MAX6875 = "n";
-      NSM = "n";
-    };
-
-    extcon = {
-      EXTCON_ADC_JACK = "n";
-      EXTCON_FSA9480 = "n";
-      EXTCON_INTEL_INT3496 = "n";
-      EXTCON_INTEL_CHT_WC = "n";
-      EXTCON_INTEL_MRFLD = "n";
-      EXTCON_LC824206XA = "n";
-      EXTCON_MAX3355 = "n";
-      EXTCON_MAX14526 = "n";
-      EXTCON_PTN5150 = "n";
-      EXTCON_RT8973A = "n";
-      EXTCON_SM5502 = "n";
-      EXTCON_USBC_TUSB320 = "n";
-    };
+    all = general // pins;
 
     general = {
       GPIO_74X164 = "n";

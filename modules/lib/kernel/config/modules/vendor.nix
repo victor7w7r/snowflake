@@ -9,6 +9,7 @@
       AMD_PRIVATE_COLOR = "y";
       BATTERY_ASUS_EC = "y";
       AMD_RAPL = "m";
+      HID_ASUS_ALLY = "y";
       SENSORS_AMD_ENERGY = "m";
       SENSORS_K10TEMP = "m";
     }
@@ -43,6 +44,7 @@
       DRM_AMD_DC_FP = "n";
       DRM_AMD_DC_SI = "n";
       KVM_AMD = "n";
+      HID_ASUS = "n";
       NET_VENDOR_AMD = "n";
       PERF_EVENTS_AMD_BRS = "n";
       PINCTRL_AMD = "n";

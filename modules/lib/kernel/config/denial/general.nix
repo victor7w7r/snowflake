@@ -1,6 +1,6 @@
 {
   kernel.config.denial.general = rec {
-    all = common // misc // virt // x86;
+    all = acpi // common // misc // virt // x86;
 
     common = {
       ACCESSIBILITY = "n";
@@ -53,7 +53,12 @@
       TCG_INFINEON = "n";
       TCG_NSC = "n";
       TCG_TIS_I2C = "n";
+      TCG_TIS_I2C_ATMEL = "n";
+      TCG_TIS_I2C_CR50 = "n";
+      TCG_TIS_I2C_INFINEON = "n";
+      TCG_TIS_I2C_NUVOTON = "n";
       TCG_TIS_ST33ZP24 = "n";
+      TCG_TIS_ST33ZP24_I2C = "n";
       TELCLOCK = "n";
       W1 = "n";
       WATCHDOG = "n";
@@ -63,6 +68,21 @@
       XZ_DEC_RISCV = "n";
       XZ_DEC_SPARC = "n";
       ZRAM_BACKEND_842 = "n";
+    };
+
+    acpi = {
+      ACPI_APEI_EINJ = "n";
+      ACPI_APEI_ERST_DEBUG = "n";
+      ACPI_EC_DEBUGFS = "n";
+      ACPI_HOTPLUG_CPU = "n";
+      ACPI_HOTPLUG_IOAPIC = "n";
+      ACPI_HOTPLUG_MEMORY = "n";
+      ACPI_IPMI = "n";
+      ACPI_NFIT = "n";
+      ACPI_PROCESSOR_AGGREGATOR = "n";
+      ACPI_SBS = "n";
+      CHT_DC_TI_PMIC_OPREGION = "n";
+      TPS68470_PMIC_OPREGION = "n";
     };
 
     misc = {
@@ -117,7 +137,6 @@
       X86_POWERNOW_K8 = "n";
       X86_REROUTE_FOR_BROKEN_BOOT_IRQS = "n";
       X86_SGX = "n";
-      X86_SGX_KVM = "n";
       X86_SPEEDSTEP_LIB = "n";
       X86_VSYSCALL_EMULATION = "n";
     };
