@@ -1,6 +1,6 @@
 {
   kernel.config.denial.hardware = rec {
-    all = controllers // energy // graphics // mfd;
+    all = controllers // energy // graphics // input // mfd;
 
     controllers = {
       ALTERA_STAPL = "n";

@@ -1,12 +1,13 @@
 {
-  kernel.config.denial.general = rec {
-    all = acpi // common // misc // virt // x86;
+  kernel.config.denial.common = rec {
+    all = acpi // debug // general // virt // trace // x86;
 
-    common = {
+    general = {
       ACCESSIBILITY = "n";
       BCM_VK = "n";
       CPUMASK_OFFSTACK = "n";
       CXL_BUS = "n";
+      DLM = "n";
       EDAC = "n";
       GENWQE = "n";
       GP_PCI1XXXX = "n";
@@ -27,6 +28,10 @@
       MHI_BUS = "n";
       MOST = "n";
       MULTIPLEXER = "n";
+      NLS_KOI8_R = "n";
+      NLS_KOI8_U = "n";
+      NLS_UCS2_UTILS = "n";
+      NLS_UTF8 = "n";
       NUMA = "n";
       PCCARD = "n";
       PCI_MESON = "n";
@@ -85,32 +90,6 @@
       TPS68470_PMIC_OPREGION = "n";
     };
 
-    misc = {
-      AD525X_DPOT = "n";
-      APDS9802ALS = "n";
-      DS1682 = "n";
-      DW_XDATA_PCIE = "n";
-      ENCLOSURE_SERVICES = "n";
-      HMC6352 = "n";
-      HP_ILO = "n";
-      IBM_ASM = "n";
-      ICS932S401 = "n";
-      ISL29003 = "n";
-      ISL29020 = "n";
-      LATTICE_ECP3_CONFIG = "n";
-      MISC_RTSX = "n";
-      MUX_ADG792A = "n";
-      MUX_ADGS1408 = "n";
-      PCI_ENDPOINT_TEST = "n";
-      PHANTOM = "n";
-      REED_SOLOMON = "n";
-      SIOX = "n";
-      TIFM_7XX1 = "n";
-      TIFM_CORE = "n";
-      TI_FPC202 = "n";
-      XILINX_SDFEC = "n";
-    };
-
     virt = {
       ALIBABA_ENI_VDPA = "n";
       HYPERVISOR_GUEST = "n";
@@ -123,9 +102,11 @@
       UACCE = "n";
       VBOXGUEST = "n";
       VDPA = "n";
+      VMWARE_PVSCSI = "n";
       VMWARE_VMCI = "n";
       VP_VDPA = "n";
       XEN = "n";
+      XEN_SCSI_FRONTEND = "n";
     };
 
     x86 = {
@@ -139,6 +120,73 @@
       X86_SGX = "n";
       X86_SPEEDSTEP_LIB = "n";
       X86_VSYSCALL_EMULATION = "n";
+    };
+
+    debug = {
+      ACPI_DEBUG = "n";
+      DEBUG_FS = "n";
+      DEBUG_MISC = "n";
+      DEBUG_PREEMPT = "n";
+      FUNCTION_ERROR_INJECTION = "n";
+      IO_STRICT_DEVMEM = "n";
+      KASAN = "n";
+      LATENCYTOP = "n";
+      PM_ADVANCED_DEBUG = "n";
+      PM_DEBUG = "n";
+      PM_SLEEP_DEBUG = "n";
+      RUNTIME_TESTING_MENU = "n";
+      SCHED_DEBUG = "n";
+      SLUB_DEBUG = "n";
+      STM = "n";
+      STRICT_DEVMEM = "n";
+    };
+
+    trace = {
+      AGP = "n";
+      BLK_DEV_IO_TRACE = "n";
+      BOOTTIME_TRACING = "n";
+      DYNAMIC_FTRACE = "n";
+      DYNAMIC_FTRACE_WITH_ARGS = "n";
+      DYNAMIC_FTRACE_WITH_DIRECT_CALLS = "n";
+      DYNAMIC_FTRACE_WITH_REGS = "n";
+      EVENT_TRACING = "n";
+      FPGA = "n";
+      FTRACE_MCOUNT_USE_OBJTOOL = "n";
+      FTRACE_SYSCALLS = "n";
+      FUNCTION_GRAPH_TRACER = "n";
+      FUNCTION_TRACER = "n";
+      GENERIC_TRACER = "n";
+      HAMRADIO = "n";
+      HIST_TRIGGERS = "n";
+      HWLAT_TRACER = "n";
+      IKCONFIG = "n";
+      IKCONFIG_PROC = "n";
+      INTERCONNECT = "n";
+      KPROBES_ON_FTRACE = "n";
+      KPROBE_EVENTS = "n";
+      MCTP = "n";
+      MMIOTRACE = "n";
+      MPLS = "n";
+      MTD = "n";
+      NOP_TRACER = "n";
+      PRINTK_TIME = "n";
+      RCU_TRACE = "n";
+      SCHED_TRACER = "n";
+      STACKTRACE = "n";
+      STACKTRACE_BUILD_ID = "n";
+      STACKTRACE_SUPPORT = "n";
+      STACK_TRACER = "n";
+      SYSCTL_EXCEPTION_TRACE = "n";
+      TASKS_TRACE_RCU = "n";
+      TRACEFS_AUTOMOUNT_DEPRECATED = "n";
+      TRACER_MAX_TRACE = "n";
+      TRACER_SNAPSHOT = "n";
+      TRACE_CLOCK = "n";
+      TRACE_GPU_MEM = "n";
+      TRACE_IRQFLAGS_NMI_SUPPORT = "n";
+      TRACE_IRQFLAGS_SUPPORT = "n";
+      TRACING = "n";
+      USER_STACKTRACE_SUPPORT = "n";
     };
   };
 }

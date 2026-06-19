@@ -4,20 +4,15 @@
     with kernel.config.denial;
     (kernel.lib.concat-config [
       comm.all
+      common.all
       crypto
-      dev.all
-      filesystems.all
-      general.all
-      gpio.all
       hardware.all
-      input.all
-      mfd
+      misc
       net.all
-      sensors.all
+      net-hardware.all
       serial.all
       sound.all
       storage.all
-      usb.all
       vendor.all
     ]);
 }

@@ -1,20 +1,6 @@
 {
   kernel.config.denial.net = rec {
-    all =
-      act
-      // cls
-      // bridge
-      // drivers
-      // dsa
-      // eth
-      // hardware
-      // ipv6
-      // netfilter
-      // tcp
-      // sch
-      // sharing
-      // wifi
-      // phy;
+    all = act // cls // drivers // ipv6 // netfilter;
 
     act = {
       NET_ACT_BPF = "n";
@@ -50,6 +36,28 @@
     };
 
     netfilter = {
+      BRIDGE_CFM = "n";
+      BRIDGE_EBT_802_3 = "n";
+      BRIDGE_EBT_AMONG = "n";
+      BRIDGE_EBT_ARP = "n";
+      BRIDGE_EBT_ARPREPLY = "n";
+      BRIDGE_EBT_BROUTE = "n";
+      BRIDGE_EBT_DNAT = "n";
+      BRIDGE_EBT_IP = "n";
+      BRIDGE_EBT_IP6 = "n";
+      BRIDGE_EBT_LIMIT = "n";
+      BRIDGE_EBT_LOG = "n";
+      BRIDGE_EBT_MARK = "n";
+      BRIDGE_EBT_MARK_T = "n";
+      BRIDGE_EBT_NFLOG = "n";
+      BRIDGE_EBT_PKTTYPE = "n";
+      BRIDGE_EBT_REDIRECT = "n";
+      BRIDGE_EBT_SNAT = "n";
+      BRIDGE_EBT_STP = "n";
+      BRIDGE_EBT_T_FILTER = "n";
+      BRIDGE_EBT_T_NAT = "n";
+      BRIDGE_EBT_VLAN = "n";
+      BRIDGE_MRP = "n";
       NETFILTER_XT_MATCH_CLUSTER = "n";
       NETFILTER_XT_MATCH_DCCP = "n";
       NETFILTER_XT_MATCH_ESP = "n";
@@ -82,31 +90,6 @@
       NF_NAT_TFTP = "n";
     };
 
-    bridge = {
-      BRIDGE_CFM = "n";
-      BRIDGE_EBT_802_3 = "n";
-      BRIDGE_EBT_AMONG = "n";
-      BRIDGE_EBT_ARP = "n";
-      BRIDGE_EBT_ARPREPLY = "n";
-      BRIDGE_EBT_BROUTE = "n";
-      BRIDGE_EBT_DNAT = "n";
-      BRIDGE_EBT_IP = "n";
-      BRIDGE_EBT_IP6 = "n";
-      BRIDGE_EBT_LIMIT = "n";
-      BRIDGE_EBT_LOG = "n";
-      BRIDGE_EBT_MARK = "n";
-      BRIDGE_EBT_MARK_T = "n";
-      BRIDGE_EBT_NFLOG = "n";
-      BRIDGE_EBT_PKTTYPE = "n";
-      BRIDGE_EBT_REDIRECT = "n";
-      BRIDGE_EBT_SNAT = "n";
-      BRIDGE_EBT_STP = "n";
-      BRIDGE_EBT_T_FILTER = "n";
-      BRIDGE_EBT_T_NAT = "n";
-      BRIDGE_EBT_VLAN = "n";
-      BRIDGE_MRP = "n";
-    };
-
     drivers = {
       ATM = "n";
       BATMAN_ADV = "n";
@@ -117,6 +100,7 @@
       FUJITSU_ES = "n";
       GTP = "n";
       HSR = "n";
+      NET_DSA = "n";
       IPGRE = "n";
       IP_PIMSM_V2 = "n";
       IP_SET = "n";
@@ -166,76 +150,6 @@
       XFRM = "n";
     };
 
-    dsa = {
-      NET_DSA = "n";
-    };
-
-    eth = {
-      BNGE = "n";
-      BNX2X = "n";
-      BNX2X_SRIOV = "n";
-      BNXT = "n";
-      BNXT_DCB = "n";
-      BNXT_FLOWER_OFFLOAD = "n";
-      BNXT_HWMON = "n";
-      BNXT_SRIOV = "n";
-      DNET = "n";
-      E100 = "n";
-      E1000 = "n";
-      E1000E = "n";
-      E1000E_HWTS = "n";
-      FM10K = "n";
-      I40E = "n";
-      I40EVF = "n";
-      I40E_DCB = "n";
-      IAVF = "n";
-      ICE = "n";
-      ICE_HWMON = "n";
-      ICE_HWTS = "n";
-      ICE_SWITCHDEV = "n";
-      IDPF = "n";
-      IGB = "n";
-      IGBVF = "n";
-      IGB_DCA = "n";
-      IGB_HWMON = "n";
-      IGC = "n";
-      IXGBE = "n";
-      IXGBEVF = "n";
-      IXGBEVF_IPSEC = "n";
-      IXGBE_DCA = "n";
-      IXGBE_DCB = "n";
-      IXGBE_HWMON = "n";
-      JME = "n";
-      LIBETH = "n";
-      LIBETH_XDP = "n";
-      LIBIE = "n";
-      LIBIE_ADMINQ = "n";
-      LIBIE_FWLOG = "n";
-      NET_VENDOR_INTEL = "n";
-      SYSTEMPORT = "n";
-    };
-
-    hardware = {
-      "6LOWPAN" = "n";
-      B43 = "n";
-      B43LEGACY = "n";
-      B44 = "n";
-      B53 = "n";
-      BRCMFMAC = "n";
-      BRCMSMAC = "n";
-      BRCMUTIL = "n";
-      CAN = "n";
-      DSA = "n";
-      IEEE802154 = "n";
-      MAC802154 = "n";
-      MISDN = "n";
-      PLIP = "n";
-      PPP = "n";
-      RTW88 = "n";
-      RTW89 = "n";
-      WWAN = "n";
-    };
-
     ipv6 = {
       INET6_AH = "n";
       INET6_ESP = "n";
@@ -266,236 +180,6 @@
       NFT_DUP_IPV6 = "n";
       NFT_FIB_IPV6 = "n";
       NF_DUP_IPV6 = "n";
-    };
-
-    phy = {
-      "8139CP" = "n";
-      "8139TOO" = "n";
-      "8139TOO_8129" = "n";
-      "8139TOO_TUNE_TWISTER" = "n";
-      ADIN1100_PHY = "n";
-      ADIN_PHY = "n";
-      AIR_EN8811H_PHY = "n";
-      AMD_PHY = "n";
-      AQUANTIA_PHY = "n";
-      AS21XXX_PHY = "n";
-      AT803X_PHY = "n";
-      AX88796B_PHY = "n";
-      BCM54140_PHY = "n";
-      BCM7XXX_PHY = "n";
-      BCM84881_PHY = "n";
-      BCM87XX_PHY = "n";
-      BCM_NET_PHYLIB = "n";
-      BCM_NET_PHYPTP = "n";
-      BROADCOM_PHY = "n";
-      CICADA_PHY = "n";
-      CORTINA_PHY = "n";
-      DAVICOM_PHY = "n";
-      DEFXX = "n";
-      DP83822_PHY = "n";
-      DP83848_PHY = "n";
-      DP83867_PHY = "n";
-      DP83869_PHY = "n";
-      DP83TC811_PHY = "n";
-      DP83TD510_PHY = "n";
-      DP83TG720_PHY = "n";
-      FDDI = "n";
-      ICPLUS_PHY = "n";
-      INTEL_XWAY_PHY = "n";
-      LSI_ET1011C_PHY = "n";
-      LXT_PHY = "n";
-      MARVELL_10G_PHY = "n";
-      MARVELL_88Q2XXX_PHY = "n";
-      MARVELL_88X2222_PHY = "n";
-      MARVELL_PHY = "n";
-      MAXLINEAR_86110_PHY = "n";
-      MAXLINEAR_GPHY = "n";
-      MCB = "n";
-      MEDIATEK_GE_PHY = "n";
-      MICREL_PHY = "n";
-      MICROCHIP_PHY = "n";
-      MICROCHIP_PHY_RDS_PTP = "n";
-      MICROCHIP_T1S_PHY = "n";
-      MICROCHIP_T1_PHY = "n";
-      MICROSEMI_PHY = "n";
-      MOTORCOMM_PHY = "n";
-      MTK_NET_PHYLIB = "n";
-      NATIONAL_PHY = "n";
-      NCN26000_PHY = "n";
-      NXP_C45_TJA11XX_PHY = "n";
-      NXP_CBTX_PHY = "n";
-      NXP_TJA11XX_PHY = "n";
-      PHY_CADENCE_DPHY = "n";
-      PHY_CADENCE_DPHY_RX = "n";
-      PHY_CADENCE_SALVO = "n";
-      PHY_CADENCE_SIERRA = "n";
-      PHY_CADENCE_TORRENT = "n";
-      QCA808X_PHY = "n";
-      QCA83XX_PHY = "n";
-      QCOM_NET_PHYLIB = "n";
-      QSEMI_PHY = "n";
-      R8169 = "n";
-      REALTEK_PHY = "n";
-      REALTEK_PHY_HWMON = "n";
-      RENESAS_PHY = "n";
-      RTASE = "n";
-      SFP = "n";
-      SKFP = "n";
-      SMSC_PHY = "n";
-      STE10XP = "n";
-      TERANETICS_PHY = "n";
-      VITESSE_PHY = "n";
-      XILINX_GMII2RGMII = "n";
-    };
-
-    sch = {
-      NET_SCH_BPF = "n";
-      NET_SCH_CAKE = "n";
-      NET_SCH_CBS = "n";
-      NET_SCH_CHOKE = "n";
-      NET_SCH_CODEL = "n";
-      NET_SCH_DRR = "n";
-      NET_SCH_DUALPI2 = "n";
-      NET_SCH_ETF = "n";
-      NET_SCH_ETS = "n";
-      NET_SCH_FQ_PIE = "n";
-      NET_SCH_GRED = "n";
-      NET_SCH_HFSC = "n";
-      NET_SCH_HHF = "n";
-      NET_SCH_MQPRIO = "n";
-      NET_SCH_MQPRIO_LIB = "n";
-      NET_SCH_MULTIQ = "n";
-      NET_SCH_NETEM = "n";
-      NET_SCH_PIE = "n";
-      NET_SCH_PLUG = "n";
-      NET_SCH_PRIO = "n";
-      NET_SCH_QFQ = "n";
-      NET_SCH_RED = "n";
-      NET_SCH_SFB = "n";
-      NET_SCH_SFQ = "n";
-      NET_SCH_SKBPRIO = "n";
-      NET_SCH_TAPRIO = "n";
-      NET_SCH_TBF = "n";
-      NET_SCH_TEQL = "n";
-    };
-
-    sharing = {
-      CEPH_FS = "n";
-      CIFS = "n";
-      GRACE_PERIOD = "n";
-      LOCKD = "n";
-      LOCKD_V4 = "n";
-      NETFS_SUPPORT = "n";
-      NFSD = "n";
-      NFS_ACL_SUPPORT = "n";
-      NFS_COMMON = "n";
-      NFS_FS = "n";
-      SUNRPC = "n";
-    };
-
-    tcp = {
-      TCP_CONG_BIC = "n";
-      TCP_CONG_CDG = "n";
-      TCP_CONG_DCTCP = "n";
-      TCP_CONG_HSTCP = "n";
-      TCP_CONG_HTCP = "n";
-      TCP_CONG_HYBLA = "n";
-      TCP_CONG_ILLINOIS = "n";
-      TCP_CONG_LP = "n";
-      TCP_CONG_NV = "n";
-      TCP_CONG_SCALABLE = "n";
-      TCP_CONG_VEGAS = "n";
-      TCP_CONG_VENO = "n";
-      TCP_CONG_WESTWOOD = "n";
-      TCP_CONG_YEAH = "n";
-    };
-
-    wifi = {
-      IPW2100 = "n";
-      IPW2100_MONITOR = "n";
-      IPW2200 = "n";
-      IPW2200_MONITOR = "n";
-      IPW2200_PROMISCUOUS = "n";
-      IPW2200_QOS = "n";
-      IPW2200_RADIOTAP = "n";
-      IWL3945 = "n";
-      IWL4965 = "n";
-      IWLDVM = "n";
-      IWLEGACY = "n";
-      IWLEGACY_DEBUG = "n";
-      IWLEGACY_DEBUGFS = "n";
-      IWLMLD = "n";
-      IWLMVM = "n";
-      IWLWIFI = "n";
-      IWLWIFI_DEBUG = "n";
-      IWLWIFI_DEBUGFS = "n";
-      IWLWIFI_DEVICE_TRACING = "n";
-      IWLWIFI_LEDS = "n";
-      IWLWIFI_OPMODE_MODULAR = "n";
-      LIBIPW = "n";
-      MAC80211_HWSIM = "n";
-      MT7601U = "n";
-      MT7603E = "n";
-      MT7615E = "n";
-      MT7615_COMMON = "n";
-      MT7663S = "n";
-      MT7663U = "n";
-      MT7663_USB_SDIO_COMMON = "n";
-      MT76_CONNAC_LIB = "n";
-      MT76_CORE = "n";
-      MT76_LEDS = "n";
-      MT76_SDIO = "n";
-      MT76_USB = "n";
-      MT76x02_LIB = "n";
-      MT76x02_USB = "n";
-      MT76x0E = "n";
-      MT76x0U = "n";
-      MT76x0_COMMON = "n";
-      MT76x2E = "n";
-      MT76x2U = "n";
-      MT76x2_COMMON = "n";
-      MT7915E = "n";
-      MT7921E = "n";
-      MT7921S = "n";
-      MT7921U = "n";
-      MT7921_COMMON = "n";
-      MT7925E = "n";
-      MT7925U = "n";
-      MT7925_COMMON = "n";
-      MT792x_LIB = "n";
-      MT792x_USB = "n";
-      MT7996E = "n";
-      RT2400PCI = "n";
-      RT2500PCI = "n";
-      RT2500USB = "n";
-      RT2800PCI = "n";
-      RT2800USB = "n";
-      RT2800_LIB = "n";
-      RT2X00 = "n";
-      RT2X00_LIB = "n";
-      RT61PCI = "n";
-      RT73USB = "n";
-      RTL8180 = "n";
-      RTL8187 = "n";
-      RTL8187_LEDS = "n";
-      RTL8188EE = "n";
-      RTL8192CE = "n";
-      RTL8192CU = "n";
-      RTL8192C_COMMON = "n";
-      RTL8192DE = "n";
-      RTL8192DU = "n";
-      RTL8192D_COMMON = "n";
-      RTL8192EE = "n";
-      RTL8192SE = "n";
-      RTL8723AE = "n";
-      RTL8723BE = "n";
-      RTL8723_COMMON = "n";
-      RTL8821AE = "n";
-      RTL8XXXU = "n";
-      RTLBTCOEXIST = "n";
-      RTLWIFI = "n";
-      RTL_CARDS = "n";
-      VIRT_WIFI = "n";
     };
   };
 }

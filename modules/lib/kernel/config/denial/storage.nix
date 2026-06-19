@@ -1,12 +1,46 @@
 {
   kernel.config.denial.storage = rec {
-    all = general // mmc // raid // scsi // sata;
+    all = fs // label // general // mmc // raid // scsi // sata // sharing;
+
+    fs = {
+      AFFS_FS = "n";
+      AFS_FS = "n";
+      BEFS_FS = "n";
+      CODA_FS = "n";
+      CRAMFS = "n";
+      CUSE = "n";
+      EROFS_FS = "n";
+      GFS2_FS = "n";
+      HFSPLUS_FS = "n";
+      HFS_FS = "n";
+      JFS_FS = "n";
+      MINIX_FS = "n";
+      NILFS2_FS = "n";
+      NTFS_FS = "n";
+      OCFS2_FS = "n";
+      OMFS_FS = "n";
+      ORANGEFS_FS = "n";
+      ROMFS_FS = "n";
+      UFS_FS = "n";
+      ZONEFS_FS = "n";
+      QUOTA = "n";
+      TMPFS_QUOTA = "n";
+      XFS_QUOTA = "n";
+    };
+
+    label = {
+      AIX_PARTITION = "n";
+      BSD_DISKLABEL = "n";
+      KARMA_PARTITION = "n";
+      LDM_PARTITION = "n";
+      MAC_PARTITION = "n";
+      MINIX_SUBPARTITION = "n";
+      SOLARIS_X86_PARTITION = "n";
+    };
 
     general = {
       AF_KCM = "n";
       AF_RXRPC = "n";
-      AF_RXRPC_DEBUG = "n";
-      AF_RXRPC_IPV6 = "n";
       BLK_DEV_DRBD = "n";
       BLK_DEV_FD = "n";
       BLK_DEV_NBD = "n";
@@ -17,9 +51,6 @@
       BLK_DEV_UBLK = "n";
       EDD = "n";
       MEMSTICK = "n";
-      MISC_ALCOR_PCI = "n";
-      MISC_RTSX_PCI = "n";
-      MISC_RTSX_USB = "n";
       NVME_FABRICS = "n";
       NVME_FC = "n";
       NVME_TARGET = "n";
@@ -146,8 +177,6 @@
       SCSI_SYM53C8XX_2 = "n";
       SCSI_SYM53C8XX_MMIO = "n";
       SCSI_WD719X = "n";
-      VMWARE_PVSCSI = "n";
-      XEN_SCSI_FRONTEND = "n";
     };
 
     sata = {
@@ -155,47 +184,6 @@
       ATA_GENERIC = "n";
       ATA_OVER_ETH = "n";
       ATA_PIIX = "n";
-      PATA_ACPI = "n";
-      PATA_ALI = "n";
-      PATA_AMD = "n";
-      PATA_ARTOP = "n";
-      PATA_ATIIXP = "n";
-      PATA_ATP867X = "n";
-      PATA_CMD640_PCI = "n";
-      PATA_CMD64X = "n";
-      PATA_CYPRESS = "n";
-      PATA_EFAR = "n";
-      PATA_HPT366 = "n";
-      PATA_HPT37X = "n";
-      PATA_HPT3X2N = "n";
-      PATA_HPT3X3 = "n";
-      PATA_HPT3X3_DMA = "n";
-      PATA_IT8213 = "n";
-      PATA_IT821X = "n";
-      PATA_JMICRON = "n";
-      PATA_LEGACY = "n";
-      PATA_MARVELL = "n";
-      PATA_MPIIX = "n";
-      PATA_NETCELL = "n";
-      PATA_NINJA32 = "n";
-      PATA_NS87410 = "n";
-      PATA_NS87415 = "n";
-      PATA_OLDPIIX = "n";
-      PATA_OPTI = "n";
-      PATA_OPTIDMA = "n";
-      PATA_PDC2027X = "n";
-      PATA_PDC_OLD = "n";
-      PATA_RADISYS = "n";
-      PATA_RDC = "n";
-      PATA_RZ1000 = "n";
-      PATA_SCH = "n";
-      PATA_SERVERWORKS = "n";
-      PATA_SIL680 = "n";
-      PATA_SIS = "n";
-      PATA_TOSHIBA = "n";
-      PATA_TRIFLEX = "n";
-      PATA_VIA = "n";
-      PATA_WINBOND = "n";
       SATA_ACARD_AHCI = "n";
       SATA_DWC = "n";
       SATA_INIC162X = "n";
@@ -211,6 +199,20 @@
       SATA_ULI = "n";
       SATA_VIA = "n";
       SATA_VITESSE = "n";
+    };
+
+    sharing = {
+      CEPH_FS = "n";
+      CIFS = "n";
+      GRACE_PERIOD = "n";
+      LOCKD = "n";
+      LOCKD_V4 = "n";
+      NETFS_SUPPORT = "n";
+      NFSD = "n";
+      NFS_ACL_SUPPORT = "n";
+      NFS_COMMON = "n";
+      NFS_FS = "n";
+      SUNRPC = "n";
     };
   };
 }
