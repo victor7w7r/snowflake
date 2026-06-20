@@ -16,7 +16,7 @@
         ++ tachyonPatches.common
         ++ tachyonPatches.notGaming
         ++ bunkerPatches.common
-        ++ patchesData.armbian.rochchip-patches;
+        ++ patchesData.armbian.rockchip-patches;
 
       superlab-config = libs.config-gen {
         inherit patches src;
@@ -35,7 +35,7 @@
             storage.f2fs
             storage.ntfs
             storage.not-raid
-            torage.not-xfs
+            storage.not-xfs
             vendor.not-vendor
           ]);
       };
@@ -44,7 +44,7 @@
         inherit src patches;
         isClang = false;
         version = version.string;
-        localVer = "rk";
+        localVer = "rockchip";
         configfile = superlab-config;
       };
     in

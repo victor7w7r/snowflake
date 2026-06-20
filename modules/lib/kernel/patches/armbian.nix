@@ -13,24 +13,32 @@
             hash
             ;
         };
+      rockchip = pkgs.stdenvNoCC.mkDerivation {
+        name = "rockchip-patches";
+        src = source;
+        phases = [
+          "unpackPhase"
+          "buildPhase"
+          "installPhase"
+        ];
+        buildPhase = ''
+          find $src/patch/kernel/archive/rockchip64-6.18 -maxdepth 1 -name '*.patch' -printf '%f\n' | sort > series.conf
+          sed -i '/^rk3399-/d' series.conf
+        '';
+        installPhase = "cp series.conf $out";
+      };
     in
     {
       inherit source;
-      rockchip-parches =
+      rockchip-patches =
         with lib;
-        pipe pkgs.stdenvNoCC.mkDerivation
-          {
-            name = "rockchip-patches";
-            src = source;
-            buildPhase = "ls $src/patch/kernel/archive/rockchip64-6.18 | grep *.patch | tee series.conf";
-            installPhase = "cp series.conf $out";
-          }
-          [
-            builtins.readFile
-            (splitString "\n")
-            (map strings.trim)
-            (map (path: "${source}/patch/kernel/archive/rockchip64-6.18/${path}"))
-          ];
+        pipe rockchip [
+          builtins.readFile
+          (splitString "\n")
+          (map strings.trim)
+          (filter (line: line != "" && !(hasPrefix "#" line || hasPrefix "-" line)))
+          (map (path: "${source}/patch/kernel/archive/rockchip64-6.18/${path}"))
+        ];
       sunxi-patches =
         with lib;
         pipe "${source}/patch/kernel/archive/sunxi-6.18/series.conf" [

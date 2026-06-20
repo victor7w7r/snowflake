@@ -1,6 +1,7 @@
 {
   kernel.config.cleaner.cmd = ''
     sed -i '/^[[:space:]]*#/d; /^[[:space:]]*$/d' .config
+    sed -i -E 's/[[:space:]]+"\s*$/"/' .config
     sed -i '/^CONFIG_BATTERY_/d' .config
     sed -i '/^CONFIG_CHARGER_/d' .config
     sed -i '/^CONFIG_COMMON_CLK_/d' .config
