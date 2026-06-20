@@ -1,6 +1,14 @@
 {
   kernel.config.modules.vendor = rec {
     intel = {
+      CRC32C_INTEL = "y";
+      CRYPTO_AES_NI_INTEL = "y";
+      DRM_I915 = "y";
+      HW_RANDOM_INTEL = "y";
+      INTEL_WMI_THUNDERBOLT = "y";
+      PERF_EVENTS_INTEL_CSTATE = "y";
+      PERF_EVENTS_INTEL_RAPL = "y";
+      PERF_EVENTS_INTEL_UNCORE = "y";
       X86_INTEL_UMIP = "y";
     }
     // not-amd;
@@ -10,8 +18,11 @@
       BATTERY_ASUS_EC = "y";
       AMD_RAPL = "m";
       HID_ASUS_ALLY = "y";
+      HW_RANDOM_AMD = "y";
       SENSORS_AMD_ENERGY = "m";
       SENSORS_K10TEMP = "m";
+      PERF_EVENTS_AMD_POWER = "y";
+      PERF_EVENTS_AMD_UNCORE = "y";
     }
     // not-intel;
 
@@ -41,12 +52,23 @@
       ASUS_WMI_DEPRECATED_ATTRS = "n";
       CPU_SUP_AMD = "n";
       CPU_SUP_HYGON = "n";
+      DRM_AMDGPU = "n";
+      DRM_AMD_ACP = "n";
+      DRM_AMD_DC = "n";
       DRM_AMD_DC_FP = "n";
       DRM_AMD_DC_SI = "n";
-      KVM_AMD = "n";
+      DRM_AMD_ISP = "n";
+      DRM_AMD_SECURE_DISPLAY = "n";
+      DRM_RADEON = "n";
       HID_ASUS = "n";
+      HW_RANDOM_AMD = "n";
+      HSA_AMD = "n";
+      HSA_AMD_SVM = "n";
+      KVM_AMD = "n";
       NET_VENDOR_AMD = "n";
       PERF_EVENTS_AMD_BRS = "n";
+      PERF_EVENTS_AMD_POWER = "n";
+      PERF_EVENTS_AMD_UNCORE = "n";
       PINCTRL_AMD = "n";
       SND_AMD_SOUNDWIRE_ACPI = "n";
       SND_SOC_AMD_MACH = "n";
@@ -81,8 +103,12 @@
       INTEL_TDX_HOST = "n";
       INTEL_TURBO_MAX_3 = "n";
       KVM_INTEL = "n";
+      CRC32C_INTEL = "n";
+      CRYPTO_AES_NI_INTEL = "n";
       MFD_INTEL_LPSS = "n";
+      PERF_EVENTS_INTEL_CSTATE = "n";
       PERF_EVENTS_INTEL_RAPL = "n";
+      PERF_EVENTS_INTEL_UNCORE = "n";
       PINCTRL_INTEL = "n";
       X86_INTEL_LPSS = "n";
       X86_INTEL_MEMORY_PROTECTION_KEYS = "n";

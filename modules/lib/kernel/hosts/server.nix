@@ -34,6 +34,7 @@
             default
             freq.low
             hardware.desktop
+            hardware.serial
             net
             storage.f2fs
             storage.ntfs

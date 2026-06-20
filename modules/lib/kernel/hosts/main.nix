@@ -25,6 +25,7 @@
             default
             freq.high
             hardware.desktop
+            hardware.serial
             net
             storage.bcachefs
             storage.ntfs

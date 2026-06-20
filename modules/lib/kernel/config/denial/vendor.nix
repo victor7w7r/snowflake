@@ -60,7 +60,6 @@
       INTEL_VBTN = "n";
       INTEL_WMI = "n";
       INTEL_WMI_SBL_FW_UPDATE = "n";
-      INTEL_WMI_THUNDERBOLT = "n";
       LENOVO_WMI_CAMERA = "n";
       LENOVO_WMI_GAMEZONE = "n";
       LENOVO_WMI_HOTKEY_UTILITIES = "n";

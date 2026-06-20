@@ -19,6 +19,9 @@
       PREEMPT_NONE_BUILD = "y";
       PREEMPT_VOLUNTARY = "n";
       SND = "n";
+      SND_JACK = "n";
+      SND_OSSEMUL = "n";
+      SOUND = "n";
     };
 
     high = {

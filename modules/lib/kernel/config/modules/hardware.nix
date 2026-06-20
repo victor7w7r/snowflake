@@ -8,6 +8,10 @@
       USB_SERIAL = "n";
     };
 
+    serial = {
+      USB_ACM = "y";
+    };
+
     not-gpio = {
       GPIOLIB = "n";
     };
@@ -42,7 +46,9 @@
     };
 
     x86 = {
+      ACPI_TAD = "y";
       MMC_MTK = "n";
+      ACPI_WMI = "y";
       SPI = "n";
       STAGING = "n";
       USB_LIBCOMPOSITE = "n";
@@ -51,6 +57,7 @@
       XZ_DEC_ARMTHUMB = "n";
       XZ_DEC_ARM64 = "n";
       X86_NATIVE_CPU = "y";
+      X86_ACPI_CPUFREQ = "y";
       X86_X32 = "y";
     };
   };
