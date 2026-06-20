@@ -23,13 +23,12 @@
         ];
       };
     nixos =
-      { pkgs, ... }:
+      { pkgs, self', ... }:
       {
         environment.systemPackages = with pkgs; [
-          #https://aur.archlinux.org/packages/chkufsd-bin
+          self'.packages.chkufsd
           #https://github.com/benapetr/compress
           #https://github.com/gdelugre/ext4-crypt
-          #https://aur.archlinux.org/packages/ntfs3-dkms-git
           #https://aur.archlinux.org/packages/udefrag
           #https://github.com/ximion/btrfsd
           compsize
