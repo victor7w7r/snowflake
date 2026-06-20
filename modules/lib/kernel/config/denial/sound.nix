@@ -116,7 +116,6 @@
       SND_MPU401 = "n";
       SND_MTPAV = "n";
       SND_NM256 = "n";
-      SND_OSSEMUL = "n";
       SND_OXYGEN = "n";
       SND_OXYGEN_LIB = "n";
       SND_PCMTEST = "n";
