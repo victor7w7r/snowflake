@@ -21,9 +21,10 @@
     in
     pkgs.stdenvNoCC.mkDerivation {
       name = "linux-config-gen";
-      inherit patches src;
+      inherit src;
       LLVM = if isClang then "1" else null;
       RUST_LIB_SRC = "${pkgs.rustPlatform.rustLibSrc}";
+      PATCHES_FILE = pkgs.writeText "kernel-patches-list" (pkgs.lib.concatStringsSep "\n" patches);
       dontFixup = true;
 
       nativeBuildInputs =
@@ -50,6 +51,12 @@
       ++ (lib.optionals (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) [
         "CROSS_COMPILE=${pkgs.stdenv.cc.targetPrefix}"
       ]);
+
+      prePatch = ''
+        while IFS= read -r patch_path || [ -n "$patch_path" ]; do
+        if [ -n "$patch_path" ]; then patch -p1 < "$patch_path"; fi
+        done < "$PATCHES_FILE"
+      '';
 
       configurePhase = ''
         cp ${config} .config && chmod +w .config

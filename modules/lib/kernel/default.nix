@@ -7,6 +7,7 @@
     main.nixos.nixpkgs.overlays = [ (_: prev: kernel.hosts.main prev) ];
     server.nixos.nixpkgs.overlays = [ (_: prev: kernel.hosts.server prev) ];
     pizero.nixos.nixpkgs.overlays = [ (_: prev: kernel.hosts.pizero prev) ];
+    superlab.nixos.nixpkgs.overlays = [ (_: prev: kernel.hosts.superlab prev) ];
 
     lib = {
       injector = pkgs: {

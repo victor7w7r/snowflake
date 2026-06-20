@@ -1,6 +1,6 @@
 { kernel, ... }:
 {
-  kernel.hosts.pizero =
+  kernel.hosts.superlab =
     pkgs:
     let
       libs = kernel.lib.injector pkgs;
@@ -13,31 +13,29 @@
 
       patches =
         cachyosPatches.common
-        ++ cachyosPatches.hardened
         ++ tachyonPatches.common
         ++ tachyonPatches.notGaming
         ++ bunkerPatches.common
-        ++ bunkerPatches.hardened
-        ++ patchesData.armbian.sunxi-patches;
+        ++ patchesData.armbian.rochchip-patches;
 
-      pizero-config = libs.config-gen {
+      superlab-config = libs.config-gen {
         inherit patches src;
         isArm = true;
-        config = "${patchesData.armbian.source}/config/kernel/linux-sunxi64-current.config";
+        config = "${patchesData.armbian.source}/config/kernel/linux-rockchip64-current.config";
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
             (cmdline { })
             default
-            freq.low
+            freq.high
             hardware.not-phone
             net
-            storage.not-btrfs
+            storage.bcachefs
             storage.not-cdrom
             storage.f2fs
-            storage.not-ntfs
+            storage.ntfs
             storage.not-raid
-            storage.xfs
+            torage.not-xfs
             vendor.not-vendor
           ]);
       };
@@ -46,12 +44,12 @@
         inherit src patches;
         isClang = false;
         version = version.string;
-        localVer = "sunxi-hardened";
-        configfile = pizero-config;
+        localVer = "rk";
+        configfile = superlab-config;
       };
     in
     {
-      inherit pizero-config;
+      inherit superlab-config;
       pizero-kernelPackages = generated.packages;
       pizero-kernel = generated.kernel;
     };

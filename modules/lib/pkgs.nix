@@ -30,6 +30,7 @@
       main = (kernel.hosts.main pkgs);
       server = (kernel.hosts.server pkgs);
       pizero = (kernel.hosts.pizero pkgs);
+      superlab = (kernel.hosts.superlab pkgs);
       main-kernel = main.main-kernel;
     in
     {
@@ -42,6 +43,8 @@
         server-config = server.server-config;
         pizero-kernel = pizero.pizero-kernel;
         pizero-config = pizero.pizero-config;
+        superlab-config = superlab.superlab-config;
+        superlab-kernel = superlab.superlab-kernel;
       };
       pkgsDirectory = ../../pkgs/by-name;
       pkgsNameSeparator = "-";
