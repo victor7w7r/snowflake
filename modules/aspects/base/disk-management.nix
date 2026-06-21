@@ -27,7 +27,7 @@
       {
         environment.systemPackages = with pkgs; [
           self'.packages.chkufsd
-          #https://github.com/benapetr/compress
+          self'.packages.compress
           #https://github.com/gdelugre/ext4-crypt
           #https://aur.archlinux.org/packages/udefrag
           #https://github.com/ximion/btrfsd

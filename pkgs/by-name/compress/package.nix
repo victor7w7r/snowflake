@@ -11,15 +11,17 @@ stdenvNoCC.mkDerivation rec {
     owner = "benapetr";
     repo = pname;
     rev = version;
-    sha256 = "sha256-Yx1S8JMOUhFTX3kAAA3PqAw27qClkcUvtzrIuj5etZo=";
+    sha256 = "sha256-Q+oCgEXrnqY68f9p5N2ziqrqJAkIxh88wCYXfOZNfvE=";
   };
 
-  nativeBuildInputs = with python3.pkgs; [
-
+  nativeBuildInputs = [
+    (python3.withPackages (ps: [ ps.pyyaml ]))
   ];
 
   installPhase = ''
     mkdir -p $out/bin
     cp $src/src/compress $out/bin
+    chmod +x $out/bin/compress
+    patchShebangs $out/bin/compress
   '';
 }
