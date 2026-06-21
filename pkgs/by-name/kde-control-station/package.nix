@@ -4,23 +4,22 @@
   stdenvNoCC,
   nix-update-script,
 }:
-stdenvNoCC.mkDerivation rec {
+stdenvNoCC.mkDerivation(attrs: {
   pname = "kde-control-station";
   version = "plasma6";
 
   src = fetchFromGitHub {
-    owner = "EliverLara";
-    repo = pname;
-    rev = version;
+    owner = "EliverLarASpname";
+    rev = attrs.version;
     sha256 = "sha256-Hjjz3RefycImPgAuTUchr8Jikh4HlLf+fOPuh0aMP2M=";
   };
 
   propagatedUserEnvPkgs = with kdePackages; [
-    plasma-nm
+    kdeconnect-kde
     kdeplasma-addons
+    plasma-nm
     plasma-pa
     powerdevil
-    kdeconnect-kde
   ];
 
   dontWrapQtApps = true;
@@ -28,7 +27,6 @@ stdenvNoCC.mkDerivation rec {
   installPhase = ''
     mkdir -p $out/share/plasma/plasmoids/KdeControlStation
     cp -r package/* $out/share/plasma/plasmoids/KdeControlStation
-  '';
 
   passthru.updateScript = nix-update-script { };
 }

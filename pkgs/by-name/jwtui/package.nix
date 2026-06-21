@@ -1,4 +1,4 @@
-{ rustPlatform, fetchFromGitHub }:
+{ fetchFromGitHub, rustPlatform }:
 rustPlatform.buildRustPackage (attrs: {
   pname = "jwt-ui";
   version = "main";
