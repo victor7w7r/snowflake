@@ -1,27 +1,20 @@
-{
-  fetchFromGitHub,
-  stdenvNoCC,
-  bash,
-  unzip,
-  coreutils,
-  gnused,
-}:
-stdenvNoCC.mkDerivation rec {
+{ pkgs, stdenvNoCC }:
+stdenvNoCC.mkDerivation (attrs: {
   pname = "jar-thumbnailer";
   version = "main";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "realmazharhussain";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-UNPH8cmp3h8xrUxYlMqzsr5vj9wLO8dZe76emtDDWfI=";
   };
 
-  buildInputs = [
-    bash
-    unzip
+  buildInputs = with pkgs; [
     coreutils
+    bash
     gnused
+    unzip
   ];
 
   installPhase = ''
@@ -30,4 +23,4 @@ stdenvNoCC.mkDerivation rec {
     mv jar.thumbnailer "$out/share/thumbnailers/"
     chmod +x $out/bin/jar-thumbnailer
   '';
-}
+})

@@ -29,7 +29,7 @@ let
     ${pkgs.jre}/bin/java -jar ''${JDJAR} "''${@}"
   '';
 in
-stdenvNoCC.mkDerivation rec {
+stdenvNoCC.mkDerivation {
   pname = "jdownloader2";
   version = "2.0";
 
@@ -66,5 +66,4 @@ stdenvNoCC.mkDerivation rec {
 
     copyDesktopItems
   '';
-
 }

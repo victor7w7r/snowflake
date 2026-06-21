@@ -1,12 +1,12 @@
 { buildGoModule, fetchFromGitHub }:
-buildGoModule rec {
+buildGoModule (attrs: {
   pname = "cemetery-escape";
   version = "main";
 
   src = fetchFromGitHub {
     owner = "tom-on-the-internet";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-7oTeknoFxnMhs6RSswTxF+P7dgSTsJ9O8QG2ZjmgZNg=";
   };
 
@@ -16,4 +16,4 @@ buildGoModule rec {
     "-s"
     "-w"
   ];
-}
+})

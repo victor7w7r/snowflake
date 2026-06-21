@@ -1,20 +1,16 @@
-{
-  python3,
-  fetchFromGitHub,
-  stdenvNoCC,
-}:
-stdenvNoCC.mkDerivation rec {
+{ pkgs, stdenvNoCC }:
+stdenvNoCC.mkDerivation (attrs: {
   pname = "compress";
   version = "master";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "benapetr";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-Q+oCgEXrnqY68f9p5N2ziqrqJAkIxh88wCYXfOZNfvE=";
   };
 
-  nativeBuildInputs = [
+  nativeBuildInputs = with pkgs; [
     (python3.withPackages (ps: [ ps.pyyaml ]))
   ];
 
@@ -24,4 +20,4 @@ stdenvNoCC.mkDerivation rec {
     chmod +x $out/bin/compress
     patchShebangs $out/bin/compress
   '';
-}
+})

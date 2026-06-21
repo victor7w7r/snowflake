@@ -1,23 +1,20 @@
 {
+  main-kernel,
+  pkgs,
+  llvmPackages,
   overrideCC,
   stdenv,
-  llvmPackages_20,
-  clang_20,
-  llvm_20,
-  lld_20,
-  fetchFromGitHub,
-  main-kernel,
 }:
-(overrideCC stdenv llvmPackages_20.clang).mkDerivation rec {
+(overrideCC stdenv llvmPackages.clang).mkDerivation (attrs: {
   name = "apple-bce";
   gitCommit = "5dd96d6ca0dd88d4a500639ed3923e258a81eb3f";
-  version = "${gitCommit}";
+  version = "latest";
   LLVM = "1";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "deqrocks";
     repo = "apple-bce";
-    rev = gitCommit;
+    rev = attrs.gitCommit;
     sha256 = "sha256-GHc2EujgUzXttODVPmZUmBgetnBWJSaWPKVMNTdf89w=";
   };
 
@@ -26,11 +23,14 @@
     "format"
   ];
 
-  nativeBuildInputs = main-kernel.moduleBuildDependencies ++ [
-    clang_20
-    llvm_20
-    lld_20
-  ];
+  nativeBuildInputs =
+    with pkgs;
+    main-kernel.moduleBuildDependencies
+    ++ [
+      clang
+      llvm
+      lld
+    ];
 
   makeFlags = [
     "CC=clang"
@@ -42,4 +42,4 @@
     "KDIR=${main-kernel.dev}/lib/modules/${main-kernel.modDirVersion}/build"
     "INSTALL_MOD_PATH=$(out)"
   ];
-}
+})

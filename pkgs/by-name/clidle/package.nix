@@ -1,12 +1,12 @@
 { buildGoModule, fetchFromGitHub }:
-buildGoModule rec {
+buildGoModule (attrs: {
   pname = "clidle";
   version = "main";
 
   src = fetchFromGitHub {
     owner = "ajeetdsouza";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-KgIJM7yswNk+LgHxoUp6uRR8a2VD5p8Bq8uMgyJFcKE=";
   };
 
@@ -16,4 +16,4 @@ buildGoModule rec {
     "-s"
     "-w"
   ];
-}
+})

@@ -1,19 +1,21 @@
 { python3, fetchFromGitHub }:
-python3.pkgs.buildPythonApplication rec {
+python3.pkgs.buildPythonApplication (attrs: {
   pname = "elia";
   version = "main";
   pyproject = true;
 
   src = fetchFromGitHub {
     owner = "darrenburns";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-FCdY2mS80ZQFLPlcJyT0CGP4dyo766CJUg+10MGFPeU=";
   };
 
+  dontCheckRuntimeDeps = true;
+
   build-system = with python3.pkgs; [
-    setuptools
     hatchling
+    setuptools
   ];
 
   postPatch = ''
@@ -36,4 +38,4 @@ python3.pkgs.buildPythonApplication rec {
     tree-sitter
     xdg-base-dirs
   ];
-}
+})

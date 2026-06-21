@@ -1,5 +1,5 @@
 { pkgs, stdenv }:
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (attrs: {
   pname = "libfprint-focaltech";
   version = "1.94.9";
 
@@ -71,4 +71,4 @@ stdenv.mkDerivation rec {
 
       runHook postInstall
     '';
-}
+})

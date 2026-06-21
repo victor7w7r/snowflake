@@ -1,8 +1,4 @@
-{
-  pkgs,
-  stdenvNoCC,
-  unzip,
-}:
+{ pkgs, stdenvNoCC }:
 stdenvNoCC.mkDerivation {
   pname = "chkufsd";
   version = "latest";
@@ -12,7 +8,7 @@ stdenvNoCC.mkDerivation {
     sha256 = "sha256-lINfV2LeKf68voizc16v4XrbGZe2tIT2s5x6FEdqk2w=";
   };
 
-  nativeBuildInputs = [ unzip ];
+  nativeBuildInputs = with pkgs; [ unzip ];
   dontUnpack = true;
 
   installPhase = ''

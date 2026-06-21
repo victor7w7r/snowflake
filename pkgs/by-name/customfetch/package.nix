@@ -1,23 +1,19 @@
-{
-  stdenv,
-  fetchFromGitHub,
-  gettext,
-  pkg-config,
-}:
-stdenv.mkDerivation rec {
+{ pkgs, stdenv }:
+stdenv.mkDerivation (attrs: {
   pname = "customfetch";
   version = "main";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "Toni500github";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-KZlrh+GWknAQ9RXBLO8hK+MeUrrT2ode9VO+ZohpOJA=";
   };
 
-  nativeBuildInputs = [
-    pkg-config
+  nativeBuildInputs = with pkgs; [
     gettext
+    git
+    pkg-config
   ];
 
   prePatch = "patchShebangs scripts/";
@@ -27,4 +23,4 @@ stdenv.mkDerivation rec {
     "GUI_APP=0"
     "PREFIX=$(out)"
   ];
-}
+})

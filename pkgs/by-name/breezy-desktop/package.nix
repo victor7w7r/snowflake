@@ -1,15 +1,12 @@
-{
-  fetchFromGitHub,
-  stdenvNoCC,
-}:
-stdenvNoCC.mkDerivation rec {
+{ fetchFromGitHub, stdenvNoCC }:
+stdenvNoCC.mkDerivation (attrs: {
   pname = "breezy-desktop";
   version = "v2.9.12";
 
   src = fetchFromGitHub {
     owner = "wheaney";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     hash = "sha256-uAjA9YN82W8W951JRibFqC9nGZ4/8RU6hXPErrPsmTg=";
   };
 
@@ -79,4 +76,4 @@ stdenvNoCC.mkDerivation rec {
     EOF
     chmod +x $out/bin/breezy-desktop-kwin-uninstall
   '';
-}
+})

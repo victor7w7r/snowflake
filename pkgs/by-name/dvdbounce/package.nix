@@ -1,36 +1,23 @@
-{
-  cmake,
-  pkg-config,
-  sfml_2,
-  cxxopts,
-  libx11,
-  libxext,
-  libxrender,
-  fetchFromGitHub,
-  stdenv,
-}:
-stdenv.mkDerivation rec {
+{ pkgs, stdenv }:
+stdenv.mkDerivation (attrs: {
   pname = "dvdbounce";
   version = "master";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "George-lewis";
     repo = "DVDBounce";
-    rev = version;
+    rev = attrs.version;
     sha256 = "sha256-S/0sc4Thj1gZGSOxl9bcY+VKcYGhEDi3HzPsBdhKatU=";
   };
 
-  nativeBuildInputs = [
-    cmake
-    pkg-config
-  ];
+  nativeBuildInputs = with pkgs; [ cmake ];
 
-  buildInputs = [
-    sfml_2
+  buildInputs = with pkgs; [
     cxxopts
     libx11
     libxext
     libxrender
+    sfml_2
   ];
 
   postPatch = ''
@@ -51,4 +38,4 @@ stdenv.mkDerivation rec {
     cp dvdbounce $out/bin/ || cp bin/dvdbounce $out/bin/
     cp -r ../resources $out/bin/
   '';
-}
+})

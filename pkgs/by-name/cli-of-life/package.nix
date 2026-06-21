@@ -1,12 +1,12 @@
 { buildGoModule, fetchFromGitHub }:
-buildGoModule rec {
+buildGoModule (attrs: {
   pname = "cli-of-life";
   version = "main";
 
   src = fetchFromGitHub {
     owner = "gabe565";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-dHP2qil9LQmSVBXblDjE4y9lrwR9iXEewRzqTG8CFh0=";
   };
 
@@ -16,4 +16,4 @@ buildGoModule rec {
     "-s"
     "-w"
   ];
-}
+})

@@ -1,13 +1,13 @@
 { buildGoModule, fetchFromGitHub }:
-buildGoModule rec {
+buildGoModule (attrs: {
   pname = "goto";
   version = "develop";
 
   src = fetchFromGitHub {
     owner = "grafviktor";
-    repo = pname;
-    rev = version;
-    sha256 = "sha256-Bw+GjwEWt0vZDJWb3WpO3fBDTZR2IVAhiYqsMSVLFbk=";
+    repo = attrs.pname;
+    rev = attrs.version;
+    sha256 = "sha256-SG9WhTKlnROwLCa63c2TYm4rnhCpr0hEkl1jJNDqxWk=";
   };
 
   vendorHash = "sha256-vED3QySeVRtk0ZeFSXpnQuCThsiNkVW6sNpJbrE8JV4=";
@@ -16,4 +16,4 @@ buildGoModule rec {
     "-s"
     "-w"
   ];
-}
+})

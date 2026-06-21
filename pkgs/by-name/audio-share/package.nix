@@ -9,6 +9,11 @@ stdenvNoCC.mkDerivation {
   };
 
   dontUnpack = true;
+  nativeBuildInputs = with pkgs; [ autoPatchelfHook ];
+  buildInputs = with pkgs; [
+    pipewire
+    stdenv.cc.cc.lib
+  ];
 
   installPhase = ''
     mkdir -p $out/bin

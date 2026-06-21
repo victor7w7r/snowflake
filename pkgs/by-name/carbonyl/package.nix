@@ -1,8 +1,4 @@
-{
-  stdenvNoCC,
-  fetchurl,
-  unzip,
-}:
+{ pkgs, stdenvNoCC }:
 let
   url = "https://github.com/fathyb/carbonyl/releases/download/v0.0.3";
 in
@@ -10,20 +6,27 @@ stdenvNoCC.mkDerivation {
   pname = "carbonyl";
   version = "main";
 
-  srcAmd = fetchurl {
+  srcAmd = pkgs.fetchurl {
     url = "${url}/carbonyl.linux-amd64.zip";
     sha256 = "sha256-RqkC6im7Mvdz+07jQUI3BbkjRagQQiuN+T6upqHsetI=";
   };
 
-  srcArm = fetchurl {
+  srcArm = pkgs.fetchurl {
     url = "${url}/carbonyl.linux-arm64.zip";
     sha256 = "sha256-W3XJkTjNq+RUk14sYJlK3OC9RXHxbk7s/fhnxZoRl74=";
   };
 
-  nativeBuildInputs = [ unzip ];
-
+  nativeBuildInputs = with pkgs; [
+    autoPatchelfHook
+    unzip
+  ];
+  buildInputs = with pkgs; [
+    alsa-lib
+    expat
+    nss
+    stdenv.cc.cc.lib
+  ];
   dontUnpack = true;
-
   installPhase = ''
     mkdir -p $out/bin
     unzip ${if stdenvNoCC.hostPlatform.isAarch64 then "$srcArm" else "$srcAmd"} -d $out/

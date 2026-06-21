@@ -29,7 +29,7 @@
           self'.packages.chkufsd
           self'.packages.compress
           self'.packages.ext4-crypt
-          #https://github.com/ximion/btrfsd
+          self'.packages.ext4-btrfsd
           compsize
           httm
           gpart
