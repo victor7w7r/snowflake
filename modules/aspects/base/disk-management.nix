@@ -29,7 +29,6 @@
           self'.packages.chkufsd
           self'.packages.compress
           self'.packages.ext4-crypt
-          #https://aur.archlinux.org/packages/udefrag
           #https://github.com/ximion/btrfsd
           compsize
           httm

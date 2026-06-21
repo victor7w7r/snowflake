@@ -10,13 +10,13 @@
   stdenv,
 }:
 stdenv.mkDerivation rec {
-  pname = "master";
-  version = "0.0.41";
+  pname = "dvdbounce";
+  version = "master";
 
   src = fetchFromGitHub {
     owner = "George-lewis";
     repo = "DVDBounce";
-    rev = pname;
+    rev = version;
     sha256 = "sha256-S/0sc4Thj1gZGSOxl9bcY+VKcYGhEDi3HzPsBdhKatU=";
   };
 
