@@ -1,9 +1,9 @@
 {
   den.aspects.communication.nixos =
-    { pkgs, ... }:
+    { pkgs, self', ... }:
     {
       environment.systemPackages = with pkgs; [
-        carbonyl
+        self'.packages.carbonyl
         nchat
         reader
         stig

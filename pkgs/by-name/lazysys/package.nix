@@ -7,10 +7,10 @@ buildGoModule (attrs: {
     owner = "XhuyZ";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-Kah/xq8s45TsrvAAAfvuo05Bkbi/eSr5aG+kbRM4M6M=";
+    sha256 = "sha256-8n4m72ERDZQDPFMBMrAKWMYxFs9kGd71dZPB7OcIOq0=";
   };
 
-  vendorHash = "sha256-vED3QySeVRtk0ZeFAAAnQuCThsiNkVW6sNpJbrE8JV4=";
+  vendorHash = "sha256-17DJNut4otpI1DV42P1XvPe8Ny+E7ETsfyNXRkknS/A=";
 
   ldflags = [
     "-s"
