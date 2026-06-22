@@ -7,14 +7,15 @@ buildNpmPackage (attrs: {
     owner = "bokub";
     repo = attrs.pname;
     rev = attrs.version;
-    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    hash = "sha256-OhaFS3pOdYeVR2sGjhixeC1wNNicdoTllmaDeXMabN4=";
   };
 
-  npmDepsHash = "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=";
+  dontNpmBuild = true;
+
+  npmDepsHash = "sha256-7kIH6e4cbp6Uw1JJmHXhgS9IBW9LzkEBdKEEiRDOYvQ=";
 
   postInstall = ''
     mkdir -p $out/bin
-    ln -s $out/lib/node_modules/chalk-animation/cli.js $out/bin/chalk-animation
     chmod +x $out/bin/chalk-animation
   '';
 })

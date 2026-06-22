@@ -54,6 +54,7 @@
           with pkgs;
           lib.optionals isPersistent [
             self'.packages.bollywood
+            self'.packages.chalk-animation
             self'.packages.conway-screensaver
             self'.packages.dvdbounce
             self'.packages.dvdts
@@ -69,7 +70,6 @@
             clock-rs
             ticker
             /*
-               #https://github.com/bokub/chalk-animation
                #https://github.com/in3rsha/sha256-animation
                #https://github.com/tree-s/ncmatrix
                #https://github.com/poetaman/arttime
