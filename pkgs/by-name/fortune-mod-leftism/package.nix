@@ -7,7 +7,7 @@ stdenv.mkDerivation (attrs: {
     owner = "anakojm";
     repo = "leftist-quote";
     rev = attrs.version;
-    sha256 = "sha256-C7hDtAAAgMwkkZxjIPumcLAHyYMmFZ5D4urBgPTZmKA=";
+    sha256 = "sha256-tV1EidE3/iNu7AKa9MIHppGLG2cYOELfkUvCGmZnPoE=";
   };
 
   dontBuild = true;

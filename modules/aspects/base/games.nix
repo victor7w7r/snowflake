@@ -58,6 +58,13 @@
             self'.packages.conway-screensaver
             self'.packages.dvdbounce
             self'.packages.dvdts
+            self'.packages.fortune-anti-jokes
+            self'.packages.fortune-mod-anarchism
+            self'.packages.fortune-mod-billwurtz
+            self'.packages.fortune-mod-canada-nctr
+            self'.packages.fortune-mod-dhammapada
+            self'.packages.fortune-mod-g
+            self'.packages.fortune-mod-leftism
             self'.packages.gof-rs
             self'.packages.lifecycler
             self'.packages.ncmatrix
@@ -71,10 +78,24 @@
             clock-rs
             ticker
             /*
-              	fortune-mod-leftism-git fortune-mod-limericks \
-              	fortune-mod-matrix fortune-mod-mlp fortune-mod-portal-game \
-              	fortune-mod-protolol-git fortune-mod-question-answer-jokes fortune-mod-starwars \
-              	fortune-mod-sw fortune-mod-vimtips fortune-mod-yiddish fortune-mod-off
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-darkknight
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-archlinux
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-bofh-excuses
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-calvin
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-confucius
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-cybersuntzu
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-doctorwho-classic-series
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-doctorwho-new-series
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-es
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-futurama
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-helluva
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-husse
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-issa-haiku
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-matrix
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-limericks
+              	  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-question-answer-jokes
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-yiddish
+                 https://github.com/CrystalSplitter/ponysay-modern/blob/master/flake.nix
             */
           ];
       };
