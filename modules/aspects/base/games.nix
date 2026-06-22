@@ -55,17 +55,11 @@
           lib.optionals isPersistent [
             self'.packages.dvdbounce
             scope-tui
-
             /*
-               cointop
-               clock-rs
-               ticker
                #https://github.com/bartobri/no-more-secrets
                #https://github.com/roberte777/rbonsai
                #https://github.com/cxreiff/lifecycler
-               #https://github.com/roberte777/rbonsai
                #https://github.com/cdkw2/conway-screensaver
-               #https://github.com/forumplayer/dvdts
                #https://aur.archlinux.org/packages/termsaver-git
                #https://github.com/nthnd/tuime
                #https://github.com/Chleba/tui-slides
@@ -86,6 +80,9 @@
               	fortune-mod-matrix fortune-mod-mlp fortune-mod-portal-game \
               	fortune-mod-protolol-git fortune-mod-question-answer-jokes fortune-mod-starwars \
               	fortune-mod-sw fortune-mod-vimtips fortune-mod-yiddish fortune-mod-off
+               cointop
+               clock-rs
+               ticker
             */
           ];
       };

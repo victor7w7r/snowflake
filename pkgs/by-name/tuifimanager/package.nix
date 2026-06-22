@@ -1,5 +1,5 @@
-{ python3, fetchFromGitHub }:
-python3.pkgs.buildPythonApplication (attrs: {
+{ pkgs, fetchFromGitHub }:
+pkgs.python3.pkgs.buildPythonApplication (attrs: {
   pname = "TUIFIManager";
   version = "master";
   pyproject = true;
@@ -8,15 +8,17 @@ python3.pkgs.buildPythonApplication (attrs: {
     owner = "GiorgosXou";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-FCdY2mS80ZQFLPlcJyAAAGP4dyo766CJUg+10MGFPeU=";
+    sha256 = "sha256-tqXHEyhQB0064dJAQQPNSThfouEn9KLCbEFs1cFe+qM=";
   };
 
-  build-system = with python3.pkgs; [
-    hatchling
-    setuptools
+  propagatedBuildInputs = with pkgs.python3Packages; [
+    unicurses
+    send2trash
   ];
 
-  dependencies = with python3.pkgs; [
-    file-manager
+  build-system = with pkgs.python3.pkgs; [
+    hatchling
+    setuptools
+    setuptools-scm
   ];
 })
