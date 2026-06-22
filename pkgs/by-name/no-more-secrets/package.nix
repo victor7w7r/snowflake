@@ -17,9 +17,7 @@ stdenv.mkDerivation (attrs: {
     automake
   ];
 
-  makeFlags = [
-    "prefix=${placeholder "out"}"
-  ];
+  makeFlags = [ "prefix=${placeholder "out"}" ];
 
   buildFlags = [
     "nms-ncurses"

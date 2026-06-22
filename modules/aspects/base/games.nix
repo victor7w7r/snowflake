@@ -53,6 +53,7 @@
         environment.systemPackages =
           with pkgs;
           lib.optionals isPersistent [
+            self'.packages.conway-screensaver
             self'.packages.dvdbounce
             self'.packages.dvdts
             self'.packages.rbonsai
@@ -63,9 +64,7 @@
             clock-rs
             ticker
             /*
-                #https://github.com/cdkw2/conway-screensaver
                 #https://aur.archlinux.org/packages/termsaver-git
-                #https://github.com/nthnd/tuime
                 #https://github.com/Chleba/tui-slides
                 #https://github.com/tree-s/ncmatrix
                 #https://github.com/omagdy7/gof-rs
