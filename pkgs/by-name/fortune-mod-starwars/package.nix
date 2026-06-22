@@ -5,7 +5,7 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "http://www.splitbrain.org/_media/projects/fortunes/fortune-starwars.tgz";
-    sha256 = "sha256-LTUYLpSWvFgAA9ttJjbhjwTit4u/xupR0EkkhyhZgpo=";
+    sha256 = "sha256-zNuzV+v1R4JXFxaCYfVDUw/2E8IyIX1jrWZHXkYAbHg=";
   };
 
   nativeBuildInputs = with pkgs; [ fortune ];
