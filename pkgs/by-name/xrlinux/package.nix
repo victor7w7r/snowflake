@@ -1,34 +1,17 @@
-{
-  stdenv,
-  fetchgit,
-  cmake,
-  pkg-config,
-  python3,
-  makeWrapper,
-  libusb1,
-  libevdev,
-  openssl,
-  json_c,
-  curl,
-  wayland,
-  systemd,
-  autoPatchelfHook,
-  gcc-unwrapped,
-}:
-
-stdenv.mkDerivation rec {
+{ pkgs, stdenv }:
+stdenv.mkDerivation (attrs: {
   pname = "xr-linux-driver";
   version = "2.9.4";
 
-  src = fetchgit {
+  src = pkgs.fetchgit {
     url = "https://github.com/wheaney/XRLinuxDriver.git";
-    rev = "v${version}";
+    rev = "v${attrs.version}";
     fetchSubmodules = true;
     deepClone = false;
     hash = "sha256-fbaNdv6vjRphYYSzbOYqmRK6c24hv1gkTh3xlql0VEU=";
   };
 
-  nativeBuildInputs = [
+  nativeBuildInputs = with pkgs; [
     cmake
     pkg-config
     (python3.withPackages (ps: [ ps.pyyaml ]))
@@ -36,7 +19,7 @@ stdenv.mkDerivation rec {
     autoPatchelfHook
   ];
 
-  buildInputs = [
+  buildInputs = with pkgs; [
     libusb1
     libevdev
     openssl
@@ -88,8 +71,6 @@ stdenv.mkDerivation rec {
   ];
 
   installPhase = ''
-    runHook preInstall
-
     install -Dm755 xrDriver "$out/bin/xrDriver"
     install -d "$out/lib"
 
@@ -105,8 +86,6 @@ stdenv.mkDerivation rec {
       -e "s|{bin_dir}|$out/bin|g" \
       ../systemd/xr-driver.service \
       > "$out/lib/systemd/user/xr-driver.service"
-
-    runHook postInstall
   '';
 
   postFixup = ''
@@ -122,4 +101,4 @@ stdenv.mkDerivation rec {
     "libglasses.so"
     "libopencv_*.so*"
   ];
-}
+})

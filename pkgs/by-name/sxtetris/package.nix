@@ -1,21 +1,16 @@
-{
-  alsa-lib,
-  rustPlatform,
-  fetchFromGitHub,
-  pkg-config,
-}:
-rustPlatform.buildRustPackage rec {
+{ pkgs, rustPlatform }:
+rustPlatform.buildRustPackage (attrs: {
   pname = "sxtetris";
   version = "main";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "shixinhuang99";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-xLbC2o0wz9zBZwCuZVmztOlk+gfs+XReN5NeveHgi+4=";
   };
   cargoHash = "sha256-Ntx1xWDP3U0A+0N5t92d7H+y6HiA32D54K1wbJucyoc=";
 
-  buildInputs = [ alsa-lib ];
-  nativeBuildInputs = [ pkg-config ];
-}
+  buildInputs = with pkgs; [ alsa-lib ];
+  nativeBuildInputs = with pkgs; [ pkg-config ];
+})

@@ -1,16 +1,12 @@
-{
-  fetchFromGitHub,
-  gitUpdater,
-  stdenvNoCC,
-}:
-stdenvNoCC.mkDerivation rec {
+{ pkgs, stdenvNoCC }:
+stdenvNoCC.mkDerivation (attrs: {
   pname = "layan-kde";
   version = "2025-02-13";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "vinceliuice";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     hash = "sha256-Wh8tZcQEdTTlgtBf4ovapojHcpPBZDDkWOclmxZv9zA=";
   };
 
@@ -40,5 +36,5 @@ stdenvNoCC.mkDerivation rec {
     runHook postInstall
   '';
 
-  passthru.updateScript = gitUpdater { };
-}
+  passthru.updateScript = pkgs.gitUpdater { };
+})

@@ -1,14 +1,9 @@
-{
-  fetchurl,
-  kdePackages,
-  stdenvNoCC,
-  unzip,
-}:
+{ pkgs, stdenvNoCC }:
 stdenvNoCC.mkDerivation {
   pname = "plasma-drawer";
   version = "2.0.2";
 
-  src = fetchurl {
+  src = pkgs.fetchurl {
     url = "https://github.com/p-connor/plasma-drawer/releases/download/v2.0.2/plasma-drawer-2.0.2.plasmoid";
     sha256 = "sha256-yPIhR21MM/XHzisJJX6kjE/Vt3EaE5iIlIJliQjOoaE=";
   };
@@ -17,8 +12,8 @@ stdenvNoCC.mkDerivation {
     echo "Skipping unpackPhase"
   '';
 
-  nativeBuildInputs = [ unzip ];
-  propagatedUserEnvPkgs = with kdePackages; [ kconfig ];
+  nativeBuildInputs = with pkgs; [ unzip ];
+  propagatedUserEnvPkgs = with pkgs; [ kdePackages.kconfig ];
   dontWrapQtApps = true;
 
   installPhase = ''

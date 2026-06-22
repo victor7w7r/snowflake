@@ -1,20 +1,14 @@
-{
-  fetchFromGitHub,
-  pkg-config,
-  stdenvNoCC,
-}:
+{ pkgs, stdenvNoCC }:
 stdenvNoCC.mkDerivation rec {
   pname = "ytdl";
   version = "main";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "codewithmoss";
     repo = pname;
     rev = version;
     sha256 = "sha256-CXfULAr3f3SQSwHmaUPnpW/uwBmr6fwXCmDeiL944f8=";
   };
-
-  nativeBuildInputs = [ pkg-config ];
 
   installPhase = ''
     mkdir -p $out/bin

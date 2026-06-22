@@ -36,8 +36,7 @@
       {
         environment.systemPackages = lib.optionals isPersistent [
           self'.packages.fman
-          #tuifimanager
-          #https://codeberg.org/sylphenix/sff
+          self'.packages.tuifimanager
         ];
       };
 

@@ -26,10 +26,10 @@
       { pkgs, self', ... }:
       {
         environment.systemPackages = with pkgs; [
+          self'.packages.btrfsd
           self'.packages.chkufsd
           self'.packages.compress
           self'.packages.ext4-crypt
-          self'.packages.ext4-btrfsd
           compsize
           httm
           gpart

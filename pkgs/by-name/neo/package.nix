@@ -1,33 +1,22 @@
-{
-  autoconf,
-  automake,
-  ncurses,
-  fetchFromGitHub,
-  pkg-config,
-  stdenv,
-}:
-stdenv.mkDerivation rec {
+{ pkgs, stdenv }:
+stdenv.mkDerivation (attrs: {
   pname = "neo";
   version = "main";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "st3w";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-wqXCmm2CAp+xgNWMsK17lW9PdFqVPBh+N156qivDdC0=";
   };
 
-  buildInputs = [ ncurses ];
+  buildInputs = with pkgs; [ ncurses ];
 
-  nativeBuildInputs = [
-    pkg-config
+  nativeBuildInputs = with pkgs; [
     autoconf
     automake
   ];
 
-  preConfigure = ''
-    ./autogen.sh
-  '';
-
+  preConfigure = "./autogen.sh";
   makeFlags = [ "PREFIX=$(out)" ];
-}
+})

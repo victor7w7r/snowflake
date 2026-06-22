@@ -1,26 +1,22 @@
 { python3, fetchFromGitHub }:
 python3.pkgs.buildPythonApplication (attrs: {
-  pname = "procmux";
-  version = "main";
+  pname = "TUIFIManager";
+  version = "master";
   pyproject = true;
 
   src = fetchFromGitHub {
-    owner = "napisani";
+    owner = "GiorgosXou";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-Yx1S8JMOUhFTX3kB6Y3PqAw27qClkcUvtzrIuj5etZo=";
+    sha256 = "sha256-FCdY2mS80ZQFLPlcJyAAAGP4dyo766CJUg+10MGFPeU=";
   };
 
   build-system = with python3.pkgs; [
-    setuptools
     hatchling
+    setuptools
   ];
 
   dependencies = with python3.pkgs; [
-    hiyapyco
-    prompt-toolkit
-    #ptterm
-    #pyte
-    pytest
+    file-manager
   ];
 })

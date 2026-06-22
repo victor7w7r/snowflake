@@ -14,7 +14,7 @@
             glow
             inotify-tools
             jump
-            #sampler
+            sampler
             seadrive-fuse
             seafile-shared
             viddy

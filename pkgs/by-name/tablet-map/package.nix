@@ -1,23 +1,18 @@
-{
-  fetchFromGitHub,
-  pkg-config,
-  rustPlatform,
-}:
-rustPlatform.buildRustPackage rec {
+{ pkgs, rustPlatform }:
+rustPlatform.buildRustPackage (attrs: {
   pname = "tablet_map";
   version = "main";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "victor7w7r";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-kA+LCoffX7+xnvi3xEweeP8a9uXimYU7trwM6zDMBhw=";
   };
 
   cargoHash = "sha256-8aPasJIznPhBC4jrX+9rX81M9EyDjtmhaMd4NZKxQwc=";
 
   nativeBuildInputs = [
-    pkg-config
     #pkgs.sccache
   ];
 
@@ -29,5 +24,4 @@ rustPlatform.buildRustPackage rec {
 
   #RUSTC_WRAPPER = "sccache";
   #SCCACHE_DIR = "/nix/var/cache/sccache";
-
-}
+})

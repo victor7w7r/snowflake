@@ -1,14 +1,9 @@
-{
-  stdenv,
-  fetchFromGitHub,
-  gnused,
-}:
-
-stdenv.mkDerivation {
+{ pkgs, stdenvNoCC }:
+stdenvNoCC.mkDerivation {
   pname = "t2-audio";
   version = "master";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "kekrby";
     repo = "t2-better-audio";
     rev = "e46839a28963e2f7d364020518b9dac98236bcae";
@@ -18,7 +13,7 @@ stdenv.mkDerivation {
   dontBuild = true;
 
   postPatch = ''
-    substituteInPlace files/*.rules --replace "/usr/bin/sed" "${gnused}/bin/sed"
+    substituteInPlace files/*.rules --replace "/usr/bin/sed" "${pkgs.gnused}/bin/sed"
   '';
 
   installPhase = ''

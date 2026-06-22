@@ -1,30 +1,24 @@
-{
-  cmake,
-  ncurses,
-  fetchFromGitHub,
-  pkg-config,
-  stdenv,
-}:
-stdenv.mkDerivation rec {
+{ pkgs, stdenv }:
+stdenv.mkDerivation (attrs: {
   pname = "sandscreen";
   version = "master";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "frostyarchtide";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-iEDVharT1C28Wm7JlSqRrISqBNJv7Y2soaaJX1oX+Ro=";
   };
 
-  buildInputs = [ ncurses ];
+  buildInputs = with pkgs; [ ncurses ];
 
-  nativeBuildInputs = [
+  nativeBuildInputs = with pkgs; [
     cmake
     pkg-config
   ];
 
   installPhase = ''
     mkdir -p $out/bin
-    cp ${pname} $out/bin/ || cp bin/${pname} $out/bin/ || cp ./* $out/bin/ 2>/dev/null || true
+    cp ${attrs.pname} $out/bin/ || cp bin/${attrs.pname} $out/bin/ || cp ./* $out/bin/ 2>/dev/null || true
   '';
-}
+})

@@ -1,13 +1,15 @@
 { pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
+stdenvNoCC.mkDerivation (attrs: {
   name = "firmware-oneplus-sdm845";
 
   src = pkgs.fetchFromGitLab {
     owner = "sdm845-mainline";
-    repo = "firmware-oneplus-sdm845";
+    repo = attrs.name;
     rev = "176ca713448c5237a983fb1f158cf3a5c251d775";
     hash = "sha256-ZrBvYO+MY0tlamJngdwhCsI1qpA/2FXoyEys5FAYLj4=";
   };
+
+  dontStrip = true;
 
   installPhase = ''
     cp -a . "$out"
@@ -18,5 +20,4 @@ stdenvNoCC.mkDerivation {
     cd ..
     find "$out"/{usr,lib/firmware/postmarketos} | tac | xargs rmdir
   '';
-  dontStrip = true;
-}
+})

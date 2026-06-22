@@ -1,12 +1,12 @@
 { pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation rec {
+stdenvNoCC.mkDerivation (attrs: {
   pname = "maxwell";
   version = "main";
 
   src = pkgs.fetchFromGitHub {
     owner = "wilversings";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-rDjfiZ7PEioh8xS2jWNRDIVhOWNiIm2ft6tNX5ZkeT4=";
   };
 
@@ -14,4 +14,4 @@ stdenvNoCC.mkDerivation rec {
     mkdir -p $out/share/plasma/plasmoids/maxwell
     mv * $out/share/plasma/plasmoids/maxwell/
   '';
-}
+})

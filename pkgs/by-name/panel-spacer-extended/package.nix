@@ -1,21 +1,16 @@
-{
-  fetchFromGitHub,
-  glib,
-  stdenvNoCC,
-  nix-update-script,
-}:
-stdenvNoCC.mkDerivation rec {
+{ pkgs, stdenvNoCC }:
+stdenvNoCC.mkDerivation (attrs: {
   pname = "kde-panel-spacer-extended-widget";
   version = "1.12.0";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "luisbocanegra";
     repo = "plasma-panel-spacer-extended";
-    rev = "refs/tags/v${version}";
+    rev = "refs/tags/v${attrs.version}";
     hash = "sha256-Rr80bI+9xnrlj8JNTL+vGqOw9/98R0ub0pQfHQmEWNM=";
   };
 
-  propagatedUserEnvPkgs = [ glib ];
+  propagatedUserEnvPkgs = with pkgs; [ glib ];
 
   dontBuild = true;
   dontWrapQtApps = true;
@@ -25,5 +20,5 @@ stdenvNoCC.mkDerivation rec {
     cp -r $src/package/* $out/share/plasma/plasmoids/luisbocanegra.panelspacer.extended
   '';
 
-  passthru.updateScript = nix-update-script { };
-}
+  passthru.updateScript = pkgs.nix-update-script { };
+})

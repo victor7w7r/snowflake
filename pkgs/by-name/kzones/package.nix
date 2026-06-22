@@ -1,30 +1,25 @@
-{
-  fetchFromGitHub,
-  stdenvNoCC,
-  kdePackages,
-  zip,
-}:
-stdenvNoCC.mkDerivation rec {
+{ pkgs, stdenvNoCC }:
+stdenvNoCC.mkDerivation (attrs: {
   pname = "kzones";
   version = "main";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "gerritdevriese";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     hash = "sha256-xqTQiL+7T6p+Y86eC5InAk6waYoM82iFoLflkN6/dG8=";
   };
 
-  nativeBuildInputs = [
+  nativeBuildInputs = with pkgs; [
     kdePackages.kpackage
     zip
   ];
 
-  buildInputs = [ kdePackages.kwin ];
+  buildInputs = with pkgs; [ kdePackages.kwin ];
   dontWrapQtApps = true;
   buildFlags = [ "build" ];
 
   installPhase = ''
     kpackagetool6 --type=KWin/Script --install=kzones.kwinscript --packageroot=$out/share/kwin/scripts
   '';
-}
+})

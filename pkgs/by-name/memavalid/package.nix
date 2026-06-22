@@ -1,19 +1,16 @@
-{
-  fetchFromGitHub,
-  stdenvNoCC,
-  python3,
-}:
-stdenvNoCC.mkDerivation rec {
+{ pkgs, stdenvNoCC }:
+stdenvNoCC.mkDerivation (attrs: {
   pname = "memavaild";
   version = "v0.5-de0870e";
-  src = fetchFromGitHub {
+
+  src = pkgs.fetchFromGitHub {
     owner = "hakavlad";
-    repo = pname;
+    repo = attrs.pname;
     rev = "55352fe";
     sha256 = "sha256-qzEQ8iT4TlOeXv0ihyr7Z+oKfsGXIlkKOURkp9PoYFM=";
   };
 
-  propagatedBuildInputs = [ python3 ];
+  propagatedBuildInputs = with pkgs; [ python3 ];
 
   installPhase = ''
     runHook preInstall
@@ -22,4 +19,4 @@ stdenvNoCC.mkDerivation rec {
       --replace "ExecStart=" "ExecStart=$out"
     runHook postInstall
   '';
-}
+})

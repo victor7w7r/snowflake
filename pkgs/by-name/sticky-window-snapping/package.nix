@@ -1,12 +1,12 @@
 { fetchFromGitHub, stdenvNoCC }:
-stdenvNoCC.mkDerivation rec {
+stdenvNoCC.mkDerivation (attrs: {
   pname = "sticky-window-snapping";
   version = "master";
 
   src = fetchFromGitHub {
     owner = "Flupp";
-    repo = pname;
-    rev = version;
+    repo = attrs.pname;
+    rev = attrs.version;
     sha256 = "sha256-5xkKNgwzItnpdqk2z/HiCtXNm/ZyjXflSJcT1dAn6nU=";
   };
 
@@ -14,4 +14,4 @@ stdenvNoCC.mkDerivation rec {
     mkdir -p $out/share/kwin/scripts/sticky-window-snapping
     cp -r * $out/share/kwin/scripts/sticky-window-snapping/
   '';
-}
+})

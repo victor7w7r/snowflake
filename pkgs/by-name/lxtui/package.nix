@@ -1,22 +1,17 @@
-{
-  fetchFromGitHub,
-  openssl,
-  pkg-config,
-  rustPlatform,
-}:
-rustPlatform.buildRustPackage rec {
+{ pkgs, rustPlatform }:
+rustPlatform.buildRustPackage (attrs: {
   pname = "lxtui";
   version = "main";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "FoleyBridge-Solutions";
-    repo = pname;
+    repo = attrs.pname;
     rev = "main";
     sha256 = "sha256-szDsxkkJRYnQ73iemi/DjArO3Z5kIAEoLoPkToHoRtM=";
   };
 
-  buildInputs = [ openssl ];
-  nativeBuildInputs = [ pkg-config ];
+  buildInputs = with pkgs; [ openssl ];
+  nativeBuildInputs = with pkgs; [ pkg-config ];
 
   cargoHash = "sha256-Rs9NQRlDv0Vt4NQGYs0jvFnlnlJ+wvgwBA4n1ZZ++io=";
-}
+})

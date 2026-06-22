@@ -1,17 +1,12 @@
-{
-  fetchFromGitHub,
-  buildNpmPackage,
-  nodejs_22,
-}:
-
-buildNpmPackage rec {
+{ pkgs, buildNpmPackage }:
+buildNpmPackage (attrs: {
   pname = "lyricstify";
   version = "main";
 
-  src = fetchFromGitHub {
-    owner = pname;
-    repo = pname;
-    rev = version;
+  src = pkgs.fetchFromGitHub {
+    owner = attrs.pname;
+    repo = attrs.pname;
+    rev = attrs.version;
     hash = "sha256-jwCgL2DiHhgbGTk1HOJzIGOBW/P03rA9J3BMX2xNVW0=";
   };
 
@@ -24,7 +19,7 @@ buildNpmPackage rec {
 
   npmDepsHash = "sha256-+ZrlkuEasg6GjR0CUG/7neNOyp4tNKPHdMK/yrvA8B0=";
 
-  nodejs = nodejs_22;
+  nodejs = pkgs.nodejs_22;
 
   installPhase = ''
     mkdir -p $out/lib/node_modules/lyricstify
@@ -35,9 +30,9 @@ buildNpmPackage rec {
 
     cat << EOF > $out/bin/lyricstify
     #!/bin/sh
-    exec ${nodejs}/bin/node $out/lib/node_modules/lyricstify/dist/cli.js "\$@"
+    exec ${pkgs.nodejs}/bin/node $out/lib/node_modules/lyricstify/dist/cli.js "\$@"
     EOF
 
     chmod +x $out/bin/lyricstify
   '';
-}
+})

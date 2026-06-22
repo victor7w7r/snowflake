@@ -1,11 +1,11 @@
 { fetchFromGitLab, stdenvNoCC }:
-stdenvNoCC.mkDerivation {
-  pname = "alsa-ucm-conf-enchilada";
+stdenvNoCC.mkDerivation (attrs: {
+  pname = "alsa-ucm-conf";
   version = "unstable-2022-12-08";
 
   src = fetchFromGitLab {
     owner = "sdm845-mainline";
-    repo = "alsa-ucm-conf";
+    repo = attrs.pname;
     rev = "aaa7889f7a6de640b4d78300e118457335ad16c0";
     hash = "sha256-2P5ZTrI1vCJ99BcZVPlkH4sv1M6IfAlaXR6ZjAdy4HQ=";
   };
@@ -19,4 +19,4 @@ stdenvNoCC.mkDerivation {
   '';
 
   meta.priority = -10;
-}
+})
