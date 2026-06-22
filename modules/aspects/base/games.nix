@@ -71,8 +71,7 @@
             clock-rs
             ticker
             /*
-              	fortune-mod-g-git fortune-mod-helluva fortune-mod-husse \
-              	fortune-mod-issa-haiku fortune-mod-leftism-git fortune-mod-limericks \
+              	fortune-mod-leftism-git fortune-mod-limericks \
               	fortune-mod-matrix fortune-mod-mlp fortune-mod-portal-game \
               	fortune-mod-protolol-git fortune-mod-question-answer-jokes fortune-mod-starwars \
               	fortune-mod-sw fortune-mod-vimtips fortune-mod-yiddish fortune-mod-off
