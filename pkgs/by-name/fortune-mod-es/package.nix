@@ -1,21 +1,32 @@
 { pkgs, stdenv }:
 
-stdenv.mkDerivation (attrs: {
+stdenv.mkDerivation {
   pname = "fortunes-es";
   version = "1.36";
 
   src = pkgs.fetchurl {
     url = "http://ftp.es.debian.org/debian/pool/main/f/fortunes-es/fortunes-es_1.36+nmu1.tar.xz";
-    sha256 = "tu-hash-aqui";
+    sha256 = "sha256-Bmr2f2KVZmzPfe7KAVlBbc8/jb+CVVPKsT5GHjRYNFo=";
   };
 
-  nativeBuildInputs = with pkgs; [ fortune ];
+  nativeBuildInputs = with pkgs; [
+    fortune
+    recode
+  ];
 
   # dontBuild = true;
+  postPatch = ''
+    find . -name Makefile -exec sed -i 's|/usr/bin/strfile|strfile|g' {} +
+  '';
 
   installPhase = ''
     install -d "$out/share/fortune"
-    make COOKIEDIR="$out/share/fortune/" STRFILE="strfile" install-utf8
+
+    make prefix="$out" \
+      COOKIEDIR="$out/share/fortune" \
+      OCOOKIEDIR="$out/share/fortune/off" \
+      WCOOKIEDIR="$out/share/fortune/html" \
+      install-utf8
 
     cd "$out/share/fortune"
     rm -f *.u8 off/*.u8 2>/dev/null || true
@@ -26,4 +37,4 @@ stdenv.mkDerivation (attrs: {
     done
     shopt -u nullglob
   '';
-})
+}

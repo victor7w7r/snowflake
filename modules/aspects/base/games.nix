@@ -69,6 +69,7 @@
             self'.packages.fortune-mod-dhammapada
             self'.packages.fortune-mod-doctorwho-classic-series
             self'.packages.fortune-mod-doctorwho-new-series
+            self'.packages.fortune-mod-es
             self'.packages.fortune-mod-futurama
             self'.packages.fortune-mod-g
             self'.packages.fortune-mod-helluva
@@ -94,7 +95,6 @@
             ticker
             /*
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-bofh-excuses
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-es
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-matrix
                  https://github.com/CrystalSplitter/ponysay-modern/blob/master/flake.nix
             */
