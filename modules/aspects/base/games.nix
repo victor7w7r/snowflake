@@ -71,8 +71,6 @@
             clock-rs
             ticker
             /*
-                             	fortune-mod-confucius fortune-mod-cybersuntzu fortune-mod-doctorwho-classic-series \
-              	fortune-mod-doctorwho-new-series fortune-mod-es fortune-mod-futurama \
               	fortune-mod-g-git fortune-mod-helluva fortune-mod-husse \
               	fortune-mod-issa-haiku fortune-mod-leftism-git fortune-mod-limericks \
               	fortune-mod-matrix fortune-mod-mlp fortune-mod-portal-game \
