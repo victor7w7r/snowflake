@@ -5,7 +5,7 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "https://aur.archlinux.org/cgit/aur.git/plain/fortunes.txt?h=fortune-mod-matrix";
-    sha256 = "sha256-47DEQpj8HBSa+/TImW+5JCeuQAAAm5NMpJWZG3hSuFU=";
+    sha256 = "sha256-aYZb1kW5ulYbV1Chg3NNex7fD5l+0EOtrnOZMeC+i6M=";
   };
 
   dontUnpack = true;

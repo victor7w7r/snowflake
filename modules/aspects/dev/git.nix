@@ -11,9 +11,7 @@
             git-lfs
           ]
           ++ lib.optionals isPersistent [
-            #github-copilot-cli
-            #jan
-            #ollama-rocm
+            github-copilot-cli
             gh
             gh-dash
             git-extras

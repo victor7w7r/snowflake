@@ -1,4 +1,6 @@
 {
+  flake-file.inputs.ponysay.url = "github:CrystalSplitter/ponysay-modern";
+
   den.aspects.base.games = {
     os =
       {
@@ -45,6 +47,7 @@
     nixos =
       {
         isPersistent,
+        inputs',
         self',
         pkgs,
         ...
@@ -95,7 +98,7 @@
             cointop
             clock-rs
             ticker
-            # https://github.com/CrystalSplitter/ponysay-modern/blob/master/flake.nix
+            inputs'.ponysay.packages.${pkgs.stdenv.hostPlatform.system}.ponysay-modern-zsh
           ];
       };
   };
