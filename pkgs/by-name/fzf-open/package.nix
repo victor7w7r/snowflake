@@ -6,7 +6,7 @@ pkgs.writeShellApplication {
     fd
   ];
   text = ''
-    query=''${"1:-" ""}
+    query=''${1:-""}
     match=$(fd --color=always | fzf --query="$query" --no-multi --ansi)
     echo "Selected: $match"
 

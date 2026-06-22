@@ -65,20 +65,20 @@
             rnote
             sticky-notes
             vlc
+            self'.packages.fzf-open
             self'.packages.ytdl
             #https://github.com/Shabinder/SpotiFlyer
             #https://davidepucci.it/doc/spotitube/#installation
+            #https://github.com/debasish-patra-1987/linuxthemestore
+            #https://github.com/paulpacifico/shutter-encoder
+            #https://github.com/tkmxqrdxddd/davinci-video-converter
+            #https://tahoma2d.org/
             #davinci-resolve
             #lightworks
             #lunacy
-            #https://github.com/trmckay/fzf-open
             #natron
-            #https://github.com/debasish-patra-1987/linuxthemestore
             #sonic-visualiser
-            # https://github.com/paulpacifico/shutter-encoder
             #vlc-pause-click-plugin vlc-plugin-pipewire vlc-plugin vlc-plugins-all vlc-plugin-ytdl-git
-            #https://github.com/tkmxqrdxddd/davinci-video-converter
-            #https://tahoma2d.org/
           ]
           ++ (lib.optionals isX86 [
             inputs'.custom-packages.packages.${pkgs.stdenv.hostPlatform.system}.thorium-sse3
