@@ -5,7 +5,7 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "http://www.netmeister.org/misc.html";
-    sha256 = "sha256-NU0pMmRcbMuZ91GFRXJ/Y7LQNAAAJnCMPhL1MB5eW9E=";
+    sha256 = "sha256-crSulWD6ZIas9EmQygQdw0QHemwHEG7togYuVHoSDtA=";
   };
 
   dontUnpack = true;

@@ -90,15 +90,14 @@
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-darkknight
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-archlinux
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-bofh-excuses
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-cybersuntzu
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-doctorwho-classic-series
+                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-yiddish
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-doctorwho-new-series
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-es
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-helluva
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-husse
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-matrix
               	  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-question-answer-jokes
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-yiddish
                  https://github.com/CrystalSplitter/ponysay-modern/blob/master/flake.nix
             */
           ];
