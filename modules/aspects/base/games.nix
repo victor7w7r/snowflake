@@ -72,6 +72,7 @@
             self'.packages.fortune-mod-futurama
             self'.packages.fortune-mod-g
             self'.packages.fortune-mod-helluva
+            self'.packages.fortune-mod-husse
             self'.packages.fortune-mod-issa-haiku
             self'.packages.fortune-mod-leftism
             self'.packages.fortune-mod-limetricks
