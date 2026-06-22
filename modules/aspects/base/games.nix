@@ -93,10 +93,8 @@
             /*
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-bofh-excuses
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-es
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-helluva
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-husse
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-matrix
-              	  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-question-answer-jokes
                  https://github.com/CrystalSplitter/ponysay-modern/blob/master/flake.nix
             */
           ];

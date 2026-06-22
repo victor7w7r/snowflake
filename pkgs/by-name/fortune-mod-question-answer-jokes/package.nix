@@ -5,7 +5,7 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "https://billy.wolfe.casa/fortunes/question-answer-jokes";
-    sha256 = "sha256-NU0pMmRcbMuZ91GFRXJ/Y7LQNkAAAnCMPhL1MB5eW9E=";
+    sha256 = "sha256-r4wLfUpqqCMZf3775Txvb2PGIcQXSm/YVgMbklfSdBg=";
   };
 
   dontUnpack = true;
