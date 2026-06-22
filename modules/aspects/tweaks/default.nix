@@ -43,7 +43,6 @@
               sysz
               watchexec
               zps
-              #nvtopPackages.full
               #https://github.com/jasonwitty/socktop
               #https://github.com/XhuyZ/lazysys
               #pcp

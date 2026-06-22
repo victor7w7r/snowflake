@@ -27,12 +27,17 @@
       };
 
     nixos =
-      { isPersistent, pkgs, ... }:
+      {
+        isPersistent,
+        pkgs,
+        self',
+        ...
+      }:
       lib.optionalAttrs isPersistent {
         environment.systemPackages = with pkgs; [
           slirp4netns
           rquickshare
-          #https://github.com/akinoiro/ssh-list
+          self'.packages.ssh-list
         ];
       };
   };

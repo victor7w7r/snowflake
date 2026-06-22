@@ -7,8 +7,8 @@ rustPlatform.buildRustPackage (attrs: {
     owner = "akinoiro";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-4jwKxsxIKpeelrruhFiAAA8QVxMp+CTNuSXK7XBiXFU=";
+    sha256 = "sha256-AHfyWpcrkP/6pXP7MIpQ8Ze6IA8RuWe19OlkniWCnAc=";
   };
 
-  cargoHash = "sha256-ywqXUp3X9Jf6O7OdWyyrUPAAJx+I3cvPQU+7nP2okpM=";
+  cargoHash = "sha256-J4pBaZBqIbUYuMdwy6F5KNCfAZUWRvozvsPP2zl7aDc=";
 })

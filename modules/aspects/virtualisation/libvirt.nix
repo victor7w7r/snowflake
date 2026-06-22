@@ -34,8 +34,7 @@
           freerdp
           nemu
           netcat-openbsd
-          #qemu-user
-          #qemu-utils
+          qemu-utils
           usbkvm
           virt-manager
           virt-viewer
@@ -44,8 +43,6 @@
           win-spice
           yad
           x11_ssh_askpass
-          #cockpit-navigator
-          #cockpit-storaged
         ];
 
         programs = {
