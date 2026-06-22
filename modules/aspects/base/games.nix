@@ -59,13 +59,13 @@
             self'.packages.rbonsai
             self'.packages.no-more-secrets
             self'.packages.lifecycler
+            self'.packages.tuime
             scope-tui
             cointop
             clock-rs
             ticker
             /*
                 #https://aur.archlinux.org/packages/termsaver-git
-                #https://github.com/Chleba/tui-slides
                 #https://github.com/tree-s/ncmatrix
                 #https://github.com/omagdy7/gof-rs
                 #https://github.com/in3rsha/sha256-animation
