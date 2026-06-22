@@ -71,9 +71,7 @@
             clock-rs
             ticker
             /*
-                fortune-mod-billwurtz \
-              	fortune-mod-bofh-excuses fortune-mod-calvin fortune-mod-canada-nctr \
-              	fortune-mod-confucius fortune-mod-cybersuntzu fortune-mod-doctorwho-classic-series \
+                             	fortune-mod-confucius fortune-mod-cybersuntzu fortune-mod-doctorwho-classic-series \
               	fortune-mod-doctorwho-new-series fortune-mod-es fortune-mod-futurama \
               	fortune-mod-g-git fortune-mod-helluva fortune-mod-husse \
               	fortune-mod-issa-haiku fortune-mod-leftism-git fortune-mod-limericks \

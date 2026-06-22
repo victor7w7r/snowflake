@@ -1,19 +1,19 @@
 { pkgs, stdenv }:
 stdenv.mkDerivation (attrs: {
-  pname = "fortune-mod-billwurtz";
+  pname = "fortune-mod-canada-nctr";
   version = "master";
 
   src = pkgs.fetchFromGitHub {
-    owner = "Ev1lbl0w";
+    owner = "mikebirdgeneau";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-IoD7M+1CuaKB06Ku/ddwEiRcAIr5bYdfEu8xeFuPaNo=";
+    sha256 = "sha256-IoD7M+1CuaKB0AAA/ddwEiRcAIr5bYdfEu8xeFuPaNo=";
   };
 
   nativeBuildInputs = with pkgs; [ fortune ];
 
   installPhase = ''
     install -dm755 -- "$out/share/fortune"
-    install -m644 -- billwurtz billwurtz.dat "$out/share/fortune"
+    install -m644 -- nctr nctr.dat "$out/share/fortune"
   '';
 })
