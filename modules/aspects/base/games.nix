@@ -60,6 +60,7 @@
             self'.packages.lifecycler
             self'.packages.no-more-secrets
             self'.packages.rbonsai
+            self'.packages.termsaver
             self'.packages.tuime
             self'.packages.tui-slides
             scope-tui
@@ -67,13 +68,13 @@
             clock-rs
             ticker
             /*
-                #https://github.com/in3rsha/sha256-animation
-                #podman run -it docker.io/akiva/bollywood
-                #npm i -g chalk-animation
-                #https://github.com/poetaman/arttime
-                #https://github.com/tree-s/ncmatrix
-                #dra download -a -i maaslalani/pom
-                fortune-mod-anarchism fortune-mod-darkknight fortune-mod-dhammapada \
+               #podman run -it docker.io/akiva/bollywood
+               #npm i -g chalk-animation
+               #https://github.com/poetaman/arttime
+               #https://github.com/tree-s/ncmatrix
+               #https://github.com/in3rsha/sha256-animation
+               #dra download -a -i maaslalani/pom
+               fortune-mod-anarchism fortune-mod-darkknight fortune-mod-dhammapada \
               	fortune-mod-anti-jokes-git fortune-mod-archlinux fortune-mod-billwurtz \
               	fortune-mod-bofh-excuses fortune-mod-calvin fortune-mod-canada-nctr \
               	fortune-mod-confucius fortune-mod-cybersuntzu fortune-mod-doctorwho-classic-series \

@@ -8,8 +8,16 @@ python3.pkgs.buildPythonApplication (attrs: {
     owner = "brunobraga";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-FCdY2mS80ZQAAAlcJyT0CGP4dyo766CJUg+10MGFPeU=";
+    sha256 = "sha256-Q8reLENrR4BRHl1AxapotflL9mheLVp8fRn0v0hheQc=";
   };
+
+  nativeBuildInputs = with python3.pkgs; [
+    pdm-backend
+  ];
+
+  propagatedBuildInputs = with python3.pkgs; [
+    pip
+  ];
 
   build-system = with python3.pkgs; [
     hatchling
@@ -17,6 +25,7 @@ python3.pkgs.buildPythonApplication (attrs: {
   ];
 
   dependencies = with python3.pkgs; [
-
+    pillow
+    requests
   ];
 })
