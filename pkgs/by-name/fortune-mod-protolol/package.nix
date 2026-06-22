@@ -7,7 +7,7 @@ stdenv.mkDerivation (attrs: {
     owner = "virtualtam";
     repo = "fortune-protolol";
     rev = attrs.version;
-    sha256 = "sha256-uYyodVXJFA9ZKWAAALJoMYTuAK2qHBgnu6nRxWJKrdU=";
+    sha256 = "sha256-53IctpfVaeV/cJQE+hlY16AfCX1d7L6vVnD+GDhQVFQ=";
   };
 
   nativeBuildInputs = with pkgs; [ fortune ];
