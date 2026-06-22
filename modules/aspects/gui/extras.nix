@@ -72,8 +72,8 @@
             self'.packages.fzf-open
             self'.packages.linuxthemestore
             self'.packages.shutter-encoder
+            self'.packages.tahoma2d
             self'.packages.ytdl
-            #vlc-pause-click-plugin vlc-plugin-pipewire vlc-plugin vlc-plugins-all vlc-plugin-ytdl-git
           ]
           ++ (lib.optionals isX86 [
             inputs'.custom-packages.packages.${pkgs.stdenv.hostPlatform.system}.thorium-sse3
