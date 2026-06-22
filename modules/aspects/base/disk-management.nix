@@ -30,6 +30,7 @@
           self'.packages.chkufsd
           self'.packages.compress
           self'.packages.ext4-crypt
+          self'.packages.repair-usb-disc
           compsize
           httm
           gpart
