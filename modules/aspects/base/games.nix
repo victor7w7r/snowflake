@@ -55,6 +55,7 @@
           lib.optionals isPersistent [
             self'.packages.dvdbounce
             self'.packages.dvdts
+            self'.packages.rbonsai
             scope-tui
             /*
                #https://github.com/bartobri/no-more-secrets

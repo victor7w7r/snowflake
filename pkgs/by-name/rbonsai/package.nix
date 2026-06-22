@@ -7,11 +7,8 @@ rustPlatform.buildRustPackage (attrs: {
     owner = "roberte777";
     repo = attrs.pname;
     rev = "main";
-    sha256 = "sha256-szDsxkkJRYnQ73iemi/DjArOAAAkIAEoLoPkToHoRtM=";
+    sha256 = "sha256-69MArXaMZLchKURM0koLACKWhm3NO+ZVoZsiHt9PkjQ=";
   };
 
-  #buildInputs = with pkgs; [ openssl ];
-  #nativeBuildInputs = with pkgs; [ pkg-config ];
-
-  cargoHash = "sha256-Rs9NQRlDv0Vt4NQGYs0jvFnlnlJ+wvAABA4n1ZZ++io=";
+  cargoHash = "sha256-78vOnu5RZgIR71x8fXbWmoeRDzRgaZBQXJ6nugLNij0=";
 })
