@@ -87,7 +87,6 @@
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-doctorwho-classic-series
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-doctorwho-new-series
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-es
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-futurama
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-helluva
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-husse
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-issa-haiku
