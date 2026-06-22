@@ -1,5 +1,4 @@
 { pkgs, stdenv }:
-
 stdenv.mkDerivation (attrs: {
   pname = "davinci-video-converter";
   version = "main";
@@ -8,12 +7,17 @@ stdenv.mkDerivation (attrs: {
     owner = "tkmxqrdxddd";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-MkmW1RfhesgN34d4rQFAAAGJPBAyWi5RImGyBzZafNI=";
+    sha256 = "sha256-EDQi6KVCrzJcVfuDwBRf7wN2BqVAY2q4XB9Le6dy4CU=";
   };
 
-  # nativeBuildInputs = with pkgs; [pkg-config ];
-
-  buildInputs = with pkgs; [ ffmpeg ];
-
   makeFlags = [ "PREFIX=$(out)" ];
+
+  # nativeBuildInputs = with pkgs; [pkg-config ];
+  postPatch = ''
+    substituteInPlace Makefile \
+      --replace-fail "/usr/local/bin/" "''$out/bin/"
+  '';
+
+  preInstall = ''mkdir -p "$out/bin"'';
+  buildInputs = with pkgs; [ ffmpeg ];
 })

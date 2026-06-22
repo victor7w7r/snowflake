@@ -68,6 +68,7 @@
             sticky-notes
             tenacity
             vlc
+            self'.packages.davinci-video-converter
             self'.packages.fzf-open
             self'.packages.linuxthemestore
             self'.packages.shutter-encoder
