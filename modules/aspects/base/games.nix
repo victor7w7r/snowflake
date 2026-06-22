@@ -56,22 +56,24 @@
             self'.packages.conway-screensaver
             self'.packages.dvdbounce
             self'.packages.dvdts
-            self'.packages.rbonsai
-            self'.packages.no-more-secrets
+            self'.packages.gof-rs
             self'.packages.lifecycler
+            self'.packages.no-more-secrets
+            self'.packages.rbonsai
             self'.packages.tuime
+            self'.packages.tui-slides
             scope-tui
             cointop
             clock-rs
             ticker
             /*
                 #https://aur.archlinux.org/packages/termsaver-git
-                #https://github.com/tree-s/ncmatrix
                 #https://github.com/omagdy7/gof-rs
                 #https://github.com/in3rsha/sha256-animation
                 #podman run -it docker.io/akiva/bollywood
                 #npm i -g chalk-animation
                 #https://github.com/poetaman/arttime
+                #https://github.com/tree-s/ncmatrix
                 #dra download -a -i maaslalani/pom
                 fortune-mod-anarchism fortune-mod-darkknight fortune-mod-dhammapada \
               	fortune-mod-anti-jokes-git fortune-mod-archlinux fortune-mod-billwurtz \

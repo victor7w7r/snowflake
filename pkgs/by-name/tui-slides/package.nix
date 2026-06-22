@@ -7,8 +7,10 @@ rustPlatform.buildRustPackage (attrs: {
     owner = "Chleba";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-nQwKrQXm+NAdaAAAfLIfAuJJuQMh5niaelv1rzvApQo=";
+    sha256 = "sha256-w6JJKYABoJNhfLocbLe7CGZeJv9mzbnzQUD7x30e3SI=";
   };
 
-  cargoHash = "sha256-3jAA4x2ifvlFI7OcUye+pJ7wdPGcEo1z2PzcWR4xrkU=";
+  NIX_CFLAGS_COMPILE = [ "-Wno-error=incompatible-pointer-types" ];
+
+  cargoHash = "sha256-1kVGOyxIbQmZA2NGih6mN505RfKKEmDrlymAtsrcQLU=";
 })
