@@ -36,6 +36,7 @@
         home.packages =
           with pkgs;
           [
+            #(inputs.thorium.thorium-avx .overrideAttrs (oldAttrs: { }))
             cool-retro-term
             bleachbit
             czkawka-full
@@ -43,8 +44,7 @@
             chromium
             kopia-ui
             kid3-kde
-            #clamtk
-            #(inputs.thorium.thorium-avx .overrideAttrs (oldAttrs: { }))
+            clamtk
             rclone-browser
             fclones-gui
             jdownloader
@@ -52,6 +52,7 @@
             legcord
             mailspring
             media-downloader
+            mission-center
             mtr-gui
             music-discord-rpc
             seafile-client
@@ -65,20 +66,17 @@
             sticky-notes
             vlc
             self'.packages.ytdl
-
-            #ayugram-desktop
-            #vlc-pause-click-plugin vlc-plugin-pipewire vlc-plugin vlc-plugins-all vlc-plugin-ytdl-git
             #https://github.com/Shabinder/SpotiFlyer
             #https://davidepucci.it/doc/spotitube/#installation
             #davinci-resolve
             #lightworks
             #lunacy
-            #mission-center
             #https://github.com/trmckay/fzf-open
-            #https://github.com/undergroundwires/privacy.sexy
             #natron
+            #https://github.com/debasish-patra-1987/linuxthemestore
             #sonic-visualiser
             # https://github.com/paulpacifico/shutter-encoder
+            #vlc-pause-click-plugin vlc-plugin-pipewire vlc-plugin vlc-plugins-all vlc-plugin-ytdl-git
             #https://github.com/tkmxqrdxddd/davinci-video-converter
             #https://tahoma2d.org/
           ]

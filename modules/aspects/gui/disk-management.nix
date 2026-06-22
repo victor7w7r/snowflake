@@ -11,7 +11,7 @@
     ];
 
     homeManager =
-      { pkgs, ... }:
+      { pkgs, self', ... }:
       {
         home.packages = with pkgs; [
           btrfs-assistant
@@ -22,7 +22,7 @@
           testdisk-qt
           woeusb-ng
           ventoy-full-qt
-          #https://aur.archlinux.org/packages/repair-usb-disc-gtk4
+          self'.packages.repair-usb-disc-gtk4
         ];
       };
   };

@@ -47,11 +47,6 @@
         with pkgs;
         [
           layan-gtk-theme
-          #layan-kde
-          #gtk-engines
-          #https://github.com/debasish-patra-1987/linuxthemestore
-          #gtk-engine-murrine
-          #xdg-user-dirs-gtk
           (pkgs.colloid-icon-theme.override {
             schemeVariants = [ "catppuccin" ];
             colorVariants = [ "purple" ];
@@ -60,6 +55,5 @@
           capitaine-cursors-themed
         ]
       );
-      #programs.pywal.enable = true;
     };
 }

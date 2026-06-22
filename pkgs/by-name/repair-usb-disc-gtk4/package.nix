@@ -1,22 +1,25 @@
-{ pkgs, stdenv }:
+{
+  lib,
+  pkgs,
+  repair-usb-disc,
+  stdenv,
+}:
 stdenv.mkDerivation (attrs: {
   pname = "repair-usb-disc-gtk4";
   version = "latest";
 
   src = pkgs.fetchurl {
     url = "https://gitlab.com/linux-stuffs/linux-goodies/-/raw/master/repair-usb-disc-gtk4/distrib/repair-usb-disc-gtk4-0.1-0.tar.gz";
-    sha256 = "sha256-hSEmrF2iSCW4whZIXSmk0AAAG8S/j4MhTm7K2eeu+UU=";
+    sha256 = "sha256-nr68FzRf2Wksj0Bun6uCZ8Uj47H7uYECIwHptjFBLPg=";
   };
 
   nativeBuildInputs = with pkgs; [
     gobject-introspection
     wrapGAppsHook4
-    python3.pkgs.wrapPythonPrograms
   ];
 
   buildInputs = with pkgs; [
-    python3
-    python3.pkgs.pygobject3
+    (python3.withPackages (ps: [ ps.pygobject3 ]))
     gtk4
     util-linux
     ntfs3g
@@ -27,17 +30,15 @@ stdenv.mkDerivation (attrs: {
 
   makeFlags = [ "PREFIX=$(out)" ];
 
-  makeWrapperArgs = with pkgs; [
+  gappsWrapperArgs = with pkgs; [
     "--prefix"
     "PATH"
     ":"
-    "${stdenv.lib.makeBinPath [
+    "${lib.makeBinPath [
       util-linux
       ntfs3g
       exfatprogs
       dosfstools
     ]}"
   ];
-
-  postFixup = "wrapPythonPrograms";
 })
