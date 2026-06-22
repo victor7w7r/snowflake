@@ -31,7 +31,7 @@
       lib.optionalAttrs isPersistent {
         environment.systemPackages = with pkgs; [
           slirp4netns
-          #rquickshare
+          rquickshare
           #https://github.com/akinoiro/ssh-list
         ];
       };

@@ -71,7 +71,6 @@
             self'.packages.fzf-open
             self'.packages.ytdl
             self'.packages.shutter-encoder
-            #https://github.com/debasish-patra-1987/linuxthemestore
             #https://github.com/tkmxqrdxddd/davinci-video-converter
             #https://tahoma2d.org/
             #vlc-pause-click-plugin vlc-plugin-pipewire vlc-plugin vlc-plugins-all vlc-plugin-ytdl-git
