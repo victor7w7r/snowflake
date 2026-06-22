@@ -59,14 +59,16 @@
             self'.packages.dvdbounce
             self'.packages.dvdts
             self'.packages.fortune-anti-jokes
+            self'.packages.fortune-mod-archlinux
             self'.packages.fortune-mod-anarchism
             self'.packages.fortune-mod-billwurtz
             self'.packages.fortune-mod-canada-nctr
             self'.packages.fortune-mod-calvin
             self'.packages.fortune-mod-confucius
+            self'.packages.fortune-mod-darkknight
+            self'.packages.fortune-mod-dhammapada
             self'.packages.fortune-mod-doctorwho-classic-series
             self'.packages.fortune-mod-doctorwho-new-series
-            self'.packages.fortune-mod-dhammapada
             self'.packages.fortune-mod-futurama
             self'.packages.fortune-mod-g
             self'.packages.fortune-mod-issa-haiku
@@ -89,7 +91,6 @@
             clock-rs
             ticker
             /*
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-archlinux
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-bofh-excuses
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-es
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-helluva

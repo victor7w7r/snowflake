@@ -5,7 +5,7 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "https://aur.archlinux.org/cgit/aur.git/plain/darkknight?h=fortune-mod-darkknight";
-    sha256 = "sha256-ZFmLCNqb6nDfZKFUdKD5hOHiIyAAAemqIynh/VeRu5M=";
+    sha256 = "sha256-RBFckO8zaY03Yd0BgPnTcL2S0uPsY17TzncWV9rnur4=";
   };
 
   dontUnpack = true;
