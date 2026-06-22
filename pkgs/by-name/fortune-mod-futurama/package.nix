@@ -4,8 +4,8 @@ stdenv.mkDerivation (attrs: {
   version = "latest";
 
   src = pkgs.fetchurl {
-    url = "http://www.netmeister.org/apps/0.2-4.tar.gz";
-    sha256 = "sha256-zNuzV+v1R4JXFxaCAAADUw/AAAIyIX1jrWZHXkYAbHg=";
+    url = "http://www.netmeister.org/apps/fortune-mod-futurama-0.2.tar.gz";
+    sha256 = "sha256-/z0Pvz0IKPy8wCL9APnBZ85b9I26f2T0eDHL4vO3mkU=";
   };
 
   nativeBuildInputs = with pkgs; [ fortune ];

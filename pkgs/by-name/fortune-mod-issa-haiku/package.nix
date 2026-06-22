@@ -5,10 +5,11 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "http://www.tastyrabbit.net/issa-haiku.tar.gz";
-    sha256 = "sha256-zNuzV+v1R4JXFxaCYfVDUw/2E8IyIAAArWZHXkYAbHg=";
+    sha256 = "sha256-f7GqSE6FBpfrke4Pnv56fjy/eqvBAeBvDCBXekwmEnc=";
   };
 
   nativeBuildInputs = with pkgs; [ fortune ];
+  sourceRoot = ".";
 
   installPhase = ''
     install -dm755 -- "$out/share/fortune"

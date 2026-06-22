@@ -65,6 +65,7 @@
             self'.packages.fortune-mod-dhammapada
             self'.packages.fortune-mod-futurama
             self'.packages.fortune-mod-g
+            self'.packages.fortune-mod-issa-haiku
             self'.packages.fortune-mod-leftism
             self'.packages.fortune-mod-limetricks
             self'.packages.fortune-mod-portal-game
