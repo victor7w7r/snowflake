@@ -37,7 +37,7 @@
               "exit"
             ];
           };
-
+          #https://github.com/poetaman/arttime
           zsh = {
             enable = true;
             autocd = true;

@@ -60,6 +60,7 @@
             self'.packages.dvdts
             self'.packages.gof-rs
             self'.packages.lifecycler
+            self'.packages.ncmatrix
             self'.packages.no-more-secrets
             self'.packages.rbonsai
             self'.packages.termsaver
@@ -70,7 +71,6 @@
             clock-rs
             ticker
             /*
-               #https://github.com/poetaman/arttime
                fortune-mod-anarchism fortune-mod-darkknight fortune-mod-dhammapada \
               	fortune-mod-anti-jokes-git fortune-mod-archlinux fortune-mod-billwurtz \
               	fortune-mod-bofh-excuses fortune-mod-calvin fortune-mod-canada-nctr \
@@ -81,7 +81,6 @@
               	fortune-mod-matrix fortune-mod-mlp fortune-mod-portal-game \
               	fortune-mod-protolol-git fortune-mod-question-answer-jokes fortune-mod-starwars \
               	fortune-mod-sw fortune-mod-vimtips fortune-mod-yiddish fortune-mod-off
-               bollywood
             */
           ];
       };
