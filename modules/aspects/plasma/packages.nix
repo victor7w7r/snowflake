@@ -68,19 +68,19 @@
               libsForQt5.qt5.qtgraphicaleffects
               qtquick3d
               qtvirtualkeyboard
-              #heaptrack
+              heaptrack
               ffmpegthumbnailer
               graphviz
               icoextract
               icoutils
               kdiff3
               kdiskmark
-              #krita
+              krita
               krusader
               maliit-keyboard
               onboard
               qpwgraph
-              #okteta
+              okteta
               pinentry-qt
               systemdgenie
             ]

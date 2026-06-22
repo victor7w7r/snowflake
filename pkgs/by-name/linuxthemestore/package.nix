@@ -1,14 +1,24 @@
-{ fetchFromGitHub, rustPlatform }:
+{ pkgs, rustPlatform }:
 rustPlatform.buildRustPackage (attrs: {
   pname = "linuxthemestore";
   version = "main";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "debasish-patra-1987";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-4jwKxsxIKpeelrAAAFiu3o8QVxMp+CTNuSXK7XBiXFU=";
+    sha256 = "sha256-MkmW1RfhesgN34d4rQFypdGJPBAyWi5RImGyBzZafNI=";
   };
 
-  cargoHash = "sha256-ywqXUp3X9Jf6O7OdWyyrUPAAAx+I3cvPQU+7nP2okpM=";
+  nativeBuildInputs = with pkgs; [ pkg-config ];
+  buildInputs = with pkgs; [
+    gdk-pixbuf
+    glib
+    gtk4
+    libadwaita
+    openssl
+    pango
+  ];
+
+  cargoHash = "sha256-nmgxSe+Qs8hXjMd8ENItGkCFuPGzF/Opa33H/kyHcb0=";
 })

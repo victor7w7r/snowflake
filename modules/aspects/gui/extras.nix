@@ -69,10 +69,9 @@
             tenacity
             vlc
             self'.packages.fzf-open
-            self'.packages.ytdl
+            self'.packages.linuxthemestore
             self'.packages.shutter-encoder
-            #https://github.com/tkmxqrdxddd/davinci-video-converter
-            #https://tahoma2d.org/
+            self'.packages.ytdl
             #vlc-pause-click-plugin vlc-plugin-pipewire vlc-plugin vlc-plugins-all vlc-plugin-ytdl-git
           ]
           ++ (lib.optionals isX86 [
