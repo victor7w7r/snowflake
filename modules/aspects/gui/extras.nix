@@ -36,48 +36,44 @@
         home.packages =
           with pkgs;
           [
-            #(inputs.thorium.thorium-avx .overrideAttrs (oldAttrs: { }))
-            cool-retro-term
             bleachbit
-            czkawka-full
-            cpu-x
             chromium
+            clamtk
+            cool-retro-term
+            cpu-x
+            czkawka-full
+            davinci-resolve
+            fclones-gui
+            inkscape-with-extensions
+            jdownloader
             kopia-ui
             kid3-kde
-            clamtk
-            rclone-browser
-            fclones-gui
-            jdownloader
             lan-mouse
             legcord
+            lightworks
+            lunacy
             mailspring
             media-downloader
             mission-center
+            morphosis
             mtr-gui
             music-discord-rpc
-            seafile-client
-            media-downloader
-            spotify-qt
-            morphosis
-            tenacity
-            inkscape-with-extensions
+            natron
             pinta
+            rclone-browser
             rnote
+            seafile-client
+            sonic-visualiser
+            spotify-qt
             sticky-notes
+            tenacity
             vlc
             self'.packages.fzf-open
             self'.packages.ytdl
-            #https://github.com/Shabinder/SpotiFlyer
-            #https://davidepucci.it/doc/spotitube/#installation
+            self'.packages.shutter-encoder
             #https://github.com/debasish-patra-1987/linuxthemestore
-            #https://github.com/paulpacifico/shutter-encoder
             #https://github.com/tkmxqrdxddd/davinci-video-converter
             #https://tahoma2d.org/
-            #davinci-resolve
-            #lightworks
-            #lunacy
-            #natron
-            #sonic-visualiser
             #vlc-pause-click-plugin vlc-plugin-pipewire vlc-plugin vlc-plugins-all vlc-plugin-ytdl-git
           ]
           ++ (lib.optionals isX86 [
