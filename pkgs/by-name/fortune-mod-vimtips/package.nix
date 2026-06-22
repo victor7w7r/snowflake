@@ -5,7 +5,7 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "https://raw.githubusercontent.com/hobbestigrou/vimtips-fortune/master/fortunes/vimtips";
-    sha256 = "sha256-6lp1igOaDXqSj/sAAAxwlMPZ+FnpIc3rEUMFZv45hoI=";
+    sha256 = "sha256-NU0pMmRcbMuZ91GFRXJ/Y7LQNkN7JnCMPhL1MB5eW9E=";
   };
 
   dontUnpack = true;
@@ -13,7 +13,8 @@ stdenv.mkDerivation (attrs: {
   nativeBuildInputs = with pkgs; [ fortune ];
 
   installPhase = ''
-    strfile -r vimtips
+    cp $src vimtips
+    strfile vimtips
     install -dm755 -- "$out/share/fortune"
     install -m644 -- vimtips vimtips.dat "$out/share/fortune"
   '';

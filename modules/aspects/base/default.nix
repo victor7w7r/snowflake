@@ -119,7 +119,7 @@
           inxi
           home-manager
           clolcat
-          fortune
+          (fortune.override { withOffensive = true; })
           mommy
         ];
 
