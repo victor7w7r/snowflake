@@ -1,14 +1,16 @@
-{ fetchFromGitHub, rustPlatform }:
+{ pkgs, rustPlatform }:
 rustPlatform.buildRustPackage (attrs: {
   pname = "socktop";
-  version = "main";
+  version = "master";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "jasonwitty";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-AHfyWpcrkP/6pXPAAIpQ8Ze6IA8RuWe19OlkniWCnAc=";
+    sha256 = "sha256-Kah/xq8s45TsrvFq3fvuo05Bkbi/eSr5aG+kbRM4M6M=";
   };
 
-  cargoHash = "sha256-J4pBaZBqIbUYuAAwy6F5KNCfAZUWRvozvsPP2zl7aDc=";
+  cargoHash = "sha256-usaBZ5xIPYKU4Qca8fI8Bg+XcsDUQNiQDdoohXvtu6w=";
+  nativeBuildInputs = with pkgs; [ pkg-config ];
+  buildInputs = with pkgs; [ libdrm ];
 })

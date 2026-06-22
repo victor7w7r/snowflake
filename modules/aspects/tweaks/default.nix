@@ -33,7 +33,9 @@
           {
             systemPackages = with pkgs; [
               fatrace
+              self'.packages.lazysys
               self'.packages.journalview
+              self'.packages.socktop
               kmon
               lazyjournal
               lnav
@@ -43,10 +45,6 @@
               sysz
               watchexec
               zps
-              #https://github.com/jasonwitty/socktop
-              #https://github.com/XhuyZ/lazysys
-              #pcp
-              #uv pip install tiptop
             ];
           }
         ];
