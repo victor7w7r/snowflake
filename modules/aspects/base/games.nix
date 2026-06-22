@@ -53,6 +53,7 @@
         environment.systemPackages =
           with pkgs;
           lib.optionals isPersistent [
+            self'.packages.bollywood
             self'.packages.conway-screensaver
             self'.packages.dvdbounce
             self'.packages.dvdts
@@ -68,12 +69,10 @@
             clock-rs
             ticker
             /*
-               #podman run -it docker.io/akiva/bollywood
-               #npm i -g chalk-animation
-               #https://github.com/poetaman/arttime
-               #https://github.com/tree-s/ncmatrix
+               #https://github.com/bokub/chalk-animation
                #https://github.com/in3rsha/sha256-animation
-               #dra download -a -i maaslalani/pom
+               #https://github.com/tree-s/ncmatrix
+               #https://github.com/poetaman/arttime
                fortune-mod-anarchism fortune-mod-darkknight fortune-mod-dhammapada \
               	fortune-mod-anti-jokes-git fortune-mod-archlinux fortune-mod-billwurtz \
               	fortune-mod-bofh-excuses fortune-mod-calvin fortune-mod-canada-nctr \
@@ -84,6 +83,7 @@
               	fortune-mod-matrix fortune-mod-mlp fortune-mod-portal-game \
               	fortune-mod-protolol-git fortune-mod-question-answer-jokes fortune-mod-starwars \
               	fortune-mod-sw fortune-mod-vimtips fortune-mod-yiddish fortune-mod-off
+               bollywood
             */
           ];
       };
