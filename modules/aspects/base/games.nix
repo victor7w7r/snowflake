@@ -63,8 +63,14 @@
             self'.packages.fortune-mod-billwurtz
             self'.packages.fortune-mod-canada-nctr
             self'.packages.fortune-mod-dhammapada
+            self'.packages.fortune-mod-futurama
             self'.packages.fortune-mod-g
             self'.packages.fortune-mod-leftism
+            self'.packages.fortune-mod-limetricks
+            self'.packages.fortune-mod-portal-game
+            self'.packages.fortune-mod-protolol
+            self'.packages.fortune-mod-starwars
+            self'.packages.fortune-mod-vimtips
             self'.packages.gof-rs
             self'.packages.lifecycler
             self'.packages.ncmatrix
@@ -89,9 +95,7 @@
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-es
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-helluva
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-husse
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-issa-haiku
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-matrix
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-limericks
               	  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-question-answer-jokes
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-yiddish
                  https://github.com/CrystalSplitter/ponysay-modern/blob/master/flake.nix
