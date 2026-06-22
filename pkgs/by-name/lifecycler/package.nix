@@ -7,11 +7,14 @@ rustPlatform.buildRustPackage (attrs: {
     owner = "cxreiff";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-szDsxkkJRYnQ73iemi/DjArO3AAAAAEoLoPkToHoRtM=";
+    sha256 = "sha256-FvMBIUS7SFpvJQcDL29c50itaLOW0c3W5ktgCbELD+g=";
   };
 
-  #buildInputs = with pkgs; [ openssl ];
-  #nativeBuildInputs = with pkgs; [ pkg-config ];
+  nativeBuildInputs = with pkgs; [ pkg-config ];
+  buildInputs = with pkgs; [
+    alsa-lib
+    udev
+  ];
 
-  cargoHash = "sha256-Rs9NQRlDv0Vt4NQGYs0AAAnlnlJ+wvgwBA4n1ZZ++io=";
+  cargoHash = "sha256-jUcYyp+hMcdgWkdSf3DywSscGff9DpQ1Dt0pgEiP930=";
 })
