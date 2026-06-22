@@ -10,7 +10,9 @@ rustPlatform.buildRustPackage (attrs: {
     sha256 = "sha256-w6JJKYABoJNhfLocbLe7CGZeJv9mzbnzQUD7x30e3SI=";
   };
 
-  NIX_CFLAGS_COMPILE = [ "-Wno-error=incompatible-pointer-types" ];
+  env = {
+    NIX_CFLAGS_COMPILE = "-std=gnu89 -Wno-error=incompatible-pointer-types";
+  };
 
   cargoHash = "sha256-1kVGOyxIbQmZA2NGih6mN505RfKKEmDrlymAtsrcQLU=";
 })

@@ -67,8 +67,6 @@
             clock-rs
             ticker
             /*
-                #https://aur.archlinux.org/packages/termsaver-git
-                #https://github.com/omagdy7/gof-rs
                 #https://github.com/in3rsha/sha256-animation
                 #podman run -it docker.io/akiva/bollywood
                 #npm i -g chalk-animation
