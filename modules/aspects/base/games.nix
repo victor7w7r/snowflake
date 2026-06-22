@@ -54,10 +54,10 @@
           with pkgs;
           lib.optionals isPersistent [
             self'.packages.dvdbounce
+            self'.packages.dvdts
             scope-tui
             /*
                #https://github.com/bartobri/no-more-secrets
-               #https://github.com/roberte777/rbonsai
                #https://github.com/cxreiff/lifecycler
                #https://github.com/cdkw2/conway-screensaver
                #https://aur.archlinux.org/packages/termsaver-git
