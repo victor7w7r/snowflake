@@ -71,7 +71,7 @@
             clock-rs
             ticker
             /*
-               fortune-mod-anarchism fortune-mod-darkknight fortune-mod-dhammapada \
+               fortune-mod-dhammapada \
               	fortune-mod-anti-jokes-git fortune-mod-archlinux fortune-mod-billwurtz \
               	fortune-mod-bofh-excuses fortune-mod-calvin fortune-mod-canada-nctr \
               	fortune-mod-confucius fortune-mod-cybersuntzu fortune-mod-doctorwho-classic-series \
