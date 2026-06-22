@@ -14,5 +14,4 @@ stdenv.mkDerivation (attrs: {
     install -dm755 -- "$out/share/fortune"
     install -m644 -- anarchism anarchism.dat "$out/share/fortune"
   '';
-
 })
