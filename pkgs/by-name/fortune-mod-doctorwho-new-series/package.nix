@@ -5,7 +5,7 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "https://aur.archlinux.org/cgit/aur.git/plain/doctorwho-new-series?h=fortune-mod-doctorwho-new-series";
-    sha256 = "sha256-ennEKmjsgUAUDAM4L5/JAFbTCQwPaCrAAASR2F81HPA=";
+    sha256 = "sha256-ZFmLCNqb6nDfZKFUdKD5hOHiIyA6ZemqIynh/VeRu5M=";
   };
 
   dontUnpack = true;
