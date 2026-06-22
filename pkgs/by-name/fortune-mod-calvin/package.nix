@@ -15,7 +15,7 @@ stdenv.mkDerivation (attrs: {
   installPhase = ''
     cp $src calvin
     strfile calvin
-    install -dm755 -- "$out/share/fortune"
-    install -m644 -- calvin calvin.dat "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
+    install -m644 -- calvin calvin.dat "$out/share/games/fortunes"
   '';
 })

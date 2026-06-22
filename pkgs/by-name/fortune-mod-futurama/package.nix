@@ -12,7 +12,7 @@ stdenv.mkDerivation (attrs: {
 
   installPhase = ''
     strfile futurama futurama.dat
-    install -dm755 -- "$out/share/fortune"
-    install -m644 -- futurama futurama.dat "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
+    install -m644 -- futurama futurama.dat "$out/share/games/fortunes"
   '';
 })

@@ -61,6 +61,7 @@
             self'.packages.fortune-anti-jokes
             self'.packages.fortune-mod-archlinux
             self'.packages.fortune-mod-anarchism
+            self'.packages.fortune-mod-bofh-excuses
             self'.packages.fortune-mod-billwurtz
             self'.packages.fortune-mod-canada-nctr
             self'.packages.fortune-mod-calvin
@@ -77,6 +78,7 @@
             self'.packages.fortune-mod-issa-haiku
             self'.packages.fortune-mod-leftism
             self'.packages.fortune-mod-limetricks
+            self'.packages.fortune-mod-matrix
             self'.packages.fortune-mod-portal-game
             self'.packages.fortune-mod-protolol
             self'.packages.fortune-mod-starwars
@@ -93,11 +95,7 @@
             cointop
             clock-rs
             ticker
-            /*
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-bofh-excuses
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-matrix
-                 https://github.com/CrystalSplitter/ponysay-modern/blob/master/flake.nix
-            */
+            # https://github.com/CrystalSplitter/ponysay-modern/blob/master/flake.nix
           ];
       };
   };

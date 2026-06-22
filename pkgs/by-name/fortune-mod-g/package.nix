@@ -13,9 +13,9 @@ stdenv.mkDerivation (attrs: {
   nativeBuildInputs = with pkgs; [ fortune ];
 
   installPhase = ''
-    install -dm755 -- "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
     ${pkgs.bsdgames}/bin/caesar 13 < gsource > g
     strfile -x g g.dat
-    install -m644 -- g g.dat "$out/share/fortune"
+    install -m644 -- g g.dat "$out/share/games/fortunes"
   '';
 })

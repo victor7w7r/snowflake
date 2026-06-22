@@ -38,10 +38,10 @@ stdenv.mkDerivation (attrs: {
     strfile husse-moderating
     strfile husse-self
 
-    install -dm755 -- "$out/share/fortune"
-    install -m644 -- husse-funny husse-funny.dat "$out/share/fortune"
-    install -m644 -- husse-helping husse-helping.dat "$out/share/fortune"
-    install -m644 -- husse-moderating husse-moderating.dat "$out/share/fortune"
-    install -m644 -- husse-self husse-self.dat "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
+    install -m644 -- husse-funny husse-funny.dat "$out/share/games/fortunes"
+    install -m644 -- husse-helping husse-helping.dat "$out/share/games/fortunes"
+    install -m644 -- husse-moderating husse-moderating.dat "$out/share/games/fortunes"
+    install -m644 -- husse-self husse-self.dat "$out/share/games/fortunes"
   '';
 })

@@ -14,7 +14,7 @@ stdenv.mkDerivation (attrs: {
 
   installPhase = ''
     strfile -r anti-jokes
-    install -dm755 -- "$out/share/fortune"
-    install -m644 -- anti-jokes anti-jokes.dat "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
+    install -m644 -- anti-jokes anti-jokes.dat "$out/share/games/fortunes"
   '';
 })

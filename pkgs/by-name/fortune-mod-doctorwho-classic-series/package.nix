@@ -15,7 +15,7 @@ stdenv.mkDerivation (attrs: {
   installPhase = ''
     cp $src doctorwho-classic-series
     strfile doctorwho-classic-series
-    install -dm755 -- "$out/share/fortune"
-    install -m644 -- doctorwho-classic-series doctorwho-classic-series.dat "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
+    install -m644 -- doctorwho-classic-series doctorwho-classic-series.dat "$out/share/games/fortunes"
   '';
 })

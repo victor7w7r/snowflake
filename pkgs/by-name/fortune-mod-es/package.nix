@@ -20,15 +20,15 @@ stdenv.mkDerivation {
   '';
 
   installPhase = ''
-    install -d "$out/share/fortune"
+    install -d "$out/share/games/fortunes"
 
     make prefix="$out" \
-      COOKIEDIR="$out/share/fortune" \
-      OCOOKIEDIR="$out/share/fortune/off" \
-      WCOOKIEDIR="$out/share/fortune/html" \
+      COOKIEDIR="$out/share/games/fortunes" \
+      OCOOKIEDIR="$out/share/games/fortunes/off" \
+      WCOOKIEDIR="$out/share/games/fortunes/html" \
       install-utf8
 
-    cd "$out/share/fortune"
+    cd "$out/share/games/fortunes"
     rm -f *.u8 off/*.u8 2>/dev/null || true
 
     shopt -s nullglob

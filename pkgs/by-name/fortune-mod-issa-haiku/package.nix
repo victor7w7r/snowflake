@@ -12,7 +12,7 @@ stdenv.mkDerivation (attrs: {
   sourceRoot = ".";
 
   installPhase = ''
-    install -dm755 -- "$out/share/fortune"
-    install -m644 -- issa-haiku issa-haiku.dat "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
+    install -m644 -- issa-haiku issa-haiku.dat "$out/share/games/fortunes"
   '';
 })

@@ -45,11 +45,11 @@ stdenv.mkDerivation (attrs: {
     strfile millie
     strfile moxxie
 
-    install -dm755 -- "$out/share/fortune"
-    install -m644 -- beelzebub beelzebub.dat "$out/share/fortune"
-    install -m644 -- blitz blitz.dat "$out/share/fortune"
-    install -m644 -- loona loona.dat "$out/share/fortune"
-    install -m644 -- millie millie.dat "$out/share/fortune"
-    install -m644 -- moxxie moxxie.dat "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
+    install -m644 -- beelzebub beelzebub.dat "$out/share/games/fortunes"
+    install -m644 -- blitz blitz.dat "$out/share/games/fortunes"
+    install -m644 -- loona loona.dat "$out/share/games/fortunes"
+    install -m644 -- millie millie.dat "$out/share/games/fortunes"
+    install -m644 -- moxxie moxxie.dat "$out/share/games/fortunes"
   '';
 })

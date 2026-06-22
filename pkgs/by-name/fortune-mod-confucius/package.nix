@@ -15,7 +15,7 @@ stdenv.mkDerivation (attrs: {
   installPhase = ''
     cp $src confucius
     strfile confucius
-    install -dm755 -- "$out/share/fortune"
-    install -m644 -- confucius confucius.dat "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
+    install -m644 -- confucius confucius.dat "$out/share/games/fortunes"
   '';
 })

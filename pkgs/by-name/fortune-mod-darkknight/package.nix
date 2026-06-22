@@ -15,7 +15,7 @@ stdenv.mkDerivation (attrs: {
   installPhase = ''
     cp $src darkknight
     strfile darkknight
-    install -dm755 -- "$out/share/fortune"
-    install -m644 -- darkknight darkknight.dat "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
+    install -m644 -- darkknight darkknight.dat "$out/share/games/fortunes"
   '';
 })

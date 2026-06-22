@@ -5,7 +5,7 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "http://www.cs.wisc.edu/~ballard/bofh/bofh-excuses.raw";
-    sha256 = "sha256-crSulWD6AAas9EmQygQdw0QHemwHEG7togYuVHoSDtA=";
+    sha256 = "sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
   };
 
   dontUnpack = true;
@@ -14,10 +14,10 @@ stdenv.mkDerivation (attrs: {
 
   installPhase = ''
     cp $src bofh-excuses.raw
-    ${pkgs.awk}/bin/awk '{ printf "BOFH excuse #%d:\n\n%s\n%%\n", FNR, $0 }' \
+    ${pkgs.gawk}/bin/awk '{ printf "BOFH excuse #%d:\n\n%s\n%%\n", FNR, $0 }' \
       bofh-excuses.raw > bofh-excuses
     strfile bofh-excuses
-    install -dm755 -- "$out/share/fortune"
-    install -m644 -- bofh-excuses bofh-excuses.dat "$out/share/fortune"
+    install -dm755 -- "$out/share/games/fortunes"
+    install -m644 -- bofh-excuses bofh-excuses.dat "$out/share/games/fortunes"
   '';
 })
