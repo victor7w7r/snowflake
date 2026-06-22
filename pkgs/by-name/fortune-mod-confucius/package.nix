@@ -5,7 +5,7 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "https://billy.wolfe.casa/fortunes/confucius";
-    sha256 = "sha256-/z0Pvz0IKPy8wCL9APnBZ85b9IAAAAT0eDHL4vO3mkU=";
+    sha256 = "sha256-MX6wMBwu8X+9sqHWey3MrnehyDZdofK1/EsWuggzI90=";
   };
 
   dontUnpack = true;

@@ -62,6 +62,8 @@
             self'.packages.fortune-mod-anarchism
             self'.packages.fortune-mod-billwurtz
             self'.packages.fortune-mod-canada-nctr
+            self'.packages.fortune-mod-calvin
+            self'.packages.fortune-mod-confucius
             self'.packages.fortune-mod-dhammapada
             self'.packages.fortune-mod-futurama
             self'.packages.fortune-mod-g
@@ -88,8 +90,6 @@
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-darkknight
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-archlinux
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-bofh-excuses
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-calvin
-                 https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-confucius
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-cybersuntzu
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-doctorwho-classic-series
                  https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=fortune-mod-doctorwho-new-series
