@@ -70,8 +70,6 @@
             clock-rs
             ticker
             /*
-               #https://github.com/in3rsha/sha256-animation
-               #https://github.com/tree-s/ncmatrix
                #https://github.com/poetaman/arttime
                fortune-mod-anarchism fortune-mod-darkknight fortune-mod-dhammapada \
               	fortune-mod-anti-jokes-git fortune-mod-archlinux fortune-mod-billwurtz \

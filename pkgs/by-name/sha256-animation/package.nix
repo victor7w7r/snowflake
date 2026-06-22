@@ -4,10 +4,10 @@ stdenv.mkDerivation (attrs: {
   version = "master";
 
   src = pkgs.fetchFromGitHub {
-    owner = " in3rsha";
+    owner = "in3rsha";
     repo = attrs.pname;
     rev = attrs.version;
-    hash = "sha256-OhaFS3pOdYeVR2sGjhixeC1wNNicdoTllmaDeXMabN4=";
+    hash = "sha256-wF9aAvjtzVG/r7KgGzOtavPJYOXtUCa6i4d8QlVav7Q=";
   };
 
   buildInputs = with pkgs; [ ruby ];
