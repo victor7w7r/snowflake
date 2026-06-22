@@ -4,8 +4,8 @@ stdenv.mkDerivation (attrs: {
   version = "latest";
 
   src = pkgs.fetchurl {
-    url = "https://tvtropes.org/pmwiki/pmwiki.php/Quotes/DoctorWhoClassicSeriesDoctors";
-    sha256 = "sha256-NU0pMmRcbMuZ91GFRXJ/Y7LQNkN7JnCMAAL1MB5eW9E=";
+    url = "https://aur.archlinux.org/cgit/aur.git/plain/doctorwho-classic-series?h=fortune-mod-doctorwho-classic-series";
+    sha256 = "sha256-ennEKmjsgUAUDAM4L5/JAFbTCQwPaCr0WOSR2F81HPA=";
   };
 
   dontUnpack = true;
