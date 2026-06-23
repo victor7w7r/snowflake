@@ -49,6 +49,7 @@
           self'.packages.bestfetchrtfg
           self'.packages.hwfetch
           self'.packages.zeitfetch
+          self'.packages.osu-cli
           #inputs'.batfetch.packages.${host.system}.default
           #inputs.swiftfetch.packages.${pkgs.system}.swiftfetch
         ];

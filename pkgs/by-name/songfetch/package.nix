@@ -1,14 +1,14 @@
 { python3, fetchFromGitHub }:
 python3.pkgs.buildPythonApplication (attrs: {
-  pname = "osu-cli";
+  pname = "songfetch";
   version = "main";
   pyproject = true;
 
   src = fetchFromGitHub {
-    owner = "kartavkun";
+    owner = "ekrlstd";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-3v0SiOmBhtxTMLlGnWiDWWz9gRBf6YcCBqC47aELoRI=";
+    sha256 = "sha256-3v0SiOmBhtxTMLAAAWAAAWz9gRBf6YcCBqC47aELoRI=";
   };
 
   build-system = with python3.pkgs; [
