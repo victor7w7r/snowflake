@@ -37,6 +37,7 @@
         #inputs',
         pkgs,
         #host,
+        self',
         ...
       }:
       {
@@ -46,6 +47,7 @@
           ramfetch
           #inputs'.batfetch.packages.${host.system}.default
           #inputs.swiftfetch.packages.${pkgs.system}.swiftfetch
+          self'.packages.mfetch
           #https://github.com/xdearboy/mfetch
           #https://gitlab.com/Maxb0tbeep/bestfetch
           #https://github.com/morr0ne/hwfetch
