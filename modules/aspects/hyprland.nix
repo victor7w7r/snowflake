@@ -63,8 +63,6 @@
         wf-recorder
         glib
         rofi-file-browser
-        #https://github.com/icyleaf/hypr-input-switcher
-        #https://github.com/FShou/hypr-zoom
         #https://github.com/Torelli/hyprmixer
         #https://github.com/bitSheriff/dunst-timer
         #https://github.com/MADHUR/rofi-process-killer
