@@ -63,12 +63,11 @@
         wf-recorder
         glib
         rofi-file-browser
-        #https://github.com/Torelli/hyprmixer
-        #https://github.com/bitSheriff/dunst-timer
-        #https://github.com/MADHUR/rofi-process-killer
+        self'.packages.hypr-input-switcher
+        self'.packages.hypr-zoom
+        self'.packages.autoricer
         #https://github.com/viniarck/rofi-tmux
         #https://github.com/szaffarano/rofi-tools
-        #https://github.com/3rfaan/autoricer
         #https://github.com/davidborzek/spofi
         #https://github.com/zbaylin/rofi-wifi-menu
         #https://github.com/newmanls/rofi-themes-collection
@@ -76,6 +75,9 @@
         #https://github.com/CelDaemon/waybar-dunst
         #https://codeberg.org/erffy/zig-waybar-contrib
         #https://github.com/r00tman/corrupter
+        #https://github.com/Torelli/hyprmixer
+        #https://github.com/bitSheriff/dunst-timer
+        #https://github.com/MADHUR/rofi-process-killer
       ];
 
       systemd.user.targets.hyprland-session.Unit.Wants = [ "xdg-desktop-autostart.target" ];

@@ -4,13 +4,13 @@ buildGoModule (attrs: {
   version = "main";
 
   src = fetchFromGitHub {
-    owner = "icyleaf";
+    owner = "FShou";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-54CTCPmt8l/vex5Z3LnAAAzrOhaHWZG/jOZ5O2AkEwM=";
+    sha256 = "sha256-/5nC4iLcDJ+UODLpzuVitQTFdBZtz75ep73RSN37hHE=";
   };
 
-  vendorHash = "sha256-/YbDLiXRx6C/AAApOEvzFFuXTNroreAOa97FblGs0A8=";
+  vendorHash = "sha256-BCx2hKi6U/MPJlwAmnM4/stiolhYkakpe4EN3e5r6L4=";
 
   ldflags = [
     "-s"
