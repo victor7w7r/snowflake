@@ -20,7 +20,7 @@
       };
 
     nixos =
-      { pkgs, ... }:
+      { pkgs, self', ... }:
       let
         xiaomiVendor = "2717";
         oneplusVendor = "18d1";
@@ -39,16 +39,16 @@
           #https://github.com/JeffLIrion/adb_shell
           #https://github.com/AKotov-dev/adbmanager
           #https://github.com/Aldeshov/ADBFileExplorer
-          #https://codeberg.org/izzy/Adebar
-          #https://github.com/ASHWIN990/app-manager
-          #https://github.com/yan12125/logcat-color3
-          #https://github.com/mrrfv/open-android-backup
           #https://github.com/erev0s/apkInspector
-          #https://github.com/jb2170/better-adb-sync
           #https://github.com/vaibhavpandeyvpz/apkstudio
+          #https://github.com/ASHWIN990/app-manager
+          #https://codeberg.org/izzy/Adebar
+          #https://github.com/liriliri/aya
+          #https://github.com/jb2170/better-adb-sync
+          #https://github.com/mrrfv/open-android-backup
+          #https://github.com/yan12125/logcat-color3
           #https://github.com/lavafroth/droidrunco
           #https://github.com/Bluemangoo/scrcpy-wrapper
-          #https://github.com/liriliri/aya
         ];
       };
   };
