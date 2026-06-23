@@ -46,9 +46,7 @@
           microfetch
           ramfetch
           self'.packages.mfetch
-          #inputs'.batfetch.packages.${host.system}.default
-          #inputs.swiftfetch.packages.${pkgs.system}.swiftfetch
-          #https://gitlab.com/Maxb0tbeep/bestfetch
+          self'.packages.bestfetch
           #https://github.com/morr0ne/hwfetch
           #https://github.com/nidnogg/zeitfetch
           #https://github.com/kartavkun/osu-cli
@@ -58,6 +56,8 @@
           #https://github.com/mehedirm6244/sysfex
           #https://github.com/Dr-Noob/gpufetch
           #https://github.com/hexisXz/hexfetch
+          #inputs'.batfetch.packages.${host.system}.default
+          #inputs.swiftfetch.packages.${pkgs.system}.swiftfetch
         ];
       };
 
