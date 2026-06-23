@@ -42,8 +42,7 @@
           self'.packages.adebar
           self'.packages.aya
           self'.packages.better-adb-sync
-          #https://github.com/yan12125/logcat-color3
-          #https://github.com/lavafroth/droidrunco
+          self'.packages.logcat-color3
           #https://github.com/Bluemangoo/scrcpy-wrapper
           #https://github.com/Aldeshov/ADBFileExplorer
         ];
