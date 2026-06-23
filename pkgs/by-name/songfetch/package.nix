@@ -8,7 +8,7 @@ python3.pkgs.buildPythonApplication (attrs: {
     owner = "ekrlstd";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-3v0SiOmBhtxTMLAAAWAAAWz9gRBf6YcCBqC47aELoRI=";
+    sha256 = "sha256-1ZCCfZjTHtmv7ZdmsCZbKiYYo88Wh8wrTXOEhXHawUo=";
   };
 
   build-system = with python3.pkgs; [
@@ -17,8 +17,7 @@ python3.pkgs.buildPythonApplication (attrs: {
   ];
 
   dependencies = with python3.pkgs; [
-    ossapi
-    colorama
-    httpx
+    ascii-magic
+    pillow
   ];
 })

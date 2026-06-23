@@ -46,10 +46,12 @@
           microfetch
           ramfetch
           self'.packages.mfetch
-          self'.packages.bestfetchrtfg
+          self'.packages.bestfetch
           self'.packages.hwfetch
           self'.packages.zeitfetch
           self'.packages.osu-cli
+          self'.packages.songfetch
+          self'.packages.kat-oh
           #inputs'.batfetch.packages.${host.system}.default
           #inputs.swiftfetch.packages.${pkgs.system}.swiftfetch
         ];
