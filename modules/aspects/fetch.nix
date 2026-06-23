@@ -46,9 +46,9 @@
           microfetch
           ramfetch
           self'.packages.mfetch
-          self'.packages.bestfetch
-          #https://github.com/morr0ne/hwfetch
-          #https://github.com/nidnogg/zeitfetch
+          self'.packages.bestfetchrtfg
+          self'.packages.hwfetch
+          self'.packages.zeitfetch
           #https://github.com/kartavkun/osu-cli
           #https://github.com/ekrlstd/songfetch
           #https://github.com/mustard-parfait/Kat-OH
