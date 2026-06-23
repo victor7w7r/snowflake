@@ -38,6 +38,7 @@
           simple-mtpfs
           self'.packages.adb-shell
           self'.packages.apkinspector
+          self'.packages.appmanager
           #https://codeberg.org/izzy/Adebar
           #https://github.com/liriliri/aya
           #https://github.com/jb2170/better-adb-sync
