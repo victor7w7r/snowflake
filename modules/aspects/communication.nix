@@ -9,7 +9,6 @@
         nchat
         reader
         stig
-        #https://github.com/fetchcord/FetchCord
         #https://github.com/sparklost/endcord
         #https://github.com/anlar/tewi
       ];
