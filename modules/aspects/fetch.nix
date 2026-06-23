@@ -54,6 +54,7 @@
           self'.packages.mfetch
           self'.packages.osu-cli
           self'.packages.songfetch
+          self'.packages.sysfex
           self'.packages.zeitfetch
           #inputs'.batfetch.packages.${host.system}.default
           #inputs.swiftfetch.packages.${pkgs.system}.swiftfetch
