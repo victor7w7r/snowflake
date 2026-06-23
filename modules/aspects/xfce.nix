@@ -76,6 +76,7 @@
             xfdashboard
             thunar-shares-plugin
             self'.packages.xfce4-diskperf-plugin
+            self'.packages.xfce4-mount-plugin
             #thunar-custom-actions
             #gtkhash-thunar
           ];

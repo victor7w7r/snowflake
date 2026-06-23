@@ -8,7 +8,7 @@ stdenv.mkDerivation (attrs: {
     owner = "panel-plugins";
     repo = "xfce4-mount-plugin";
     rev = "refs/tags/${attrs.pname}-${attrs.version}";
-    sha256 = "sha256-Cf0IVWbVE0pPhOnUnAAAnXpM8UfXKgOoOaxKzZpMypk=";
+    sha256 = "sha256-9jgmrSanLs2EtnCOFaXu007O9n9VqmR+E1umGfJQ+T0=";
   };
 
   nativeBuildInputs = with pkgs; [
