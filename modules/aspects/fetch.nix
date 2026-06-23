@@ -47,9 +47,11 @@
           ramfetch
           self'.packages.bestfetch
           self'.packages.frenzch
-          self'.packages.mfetch
+          self'.packages.gpufetch
+          self'.packages.hexfetch
           self'.packages.hwfetch
           self'.packages.kat-oh
+          self'.packages.mfetch
           self'.packages.osu-cli
           self'.packages.songfetch
           self'.packages.zeitfetch
