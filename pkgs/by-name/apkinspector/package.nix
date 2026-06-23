@@ -8,29 +8,12 @@ python3.pkgs.buildPythonApplication (attrs: {
     owner = "erev0s";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-FCdY2mS80ZQFLPlcJyT0CGAAAyo766CJUg+10MGFPeU=";
+    sha256 = "sha256-6efXoiyjTEzadZ5aut4lFbjth03Uyw8REIYQYjvWS/c=";
   };
-
-  dontCheckRuntimeDeps = true;
 
   build-system = with python3.pkgs; [
     hatchling
     setuptools
-  ];
-
-  dependencies = with python3.pkgs; [
-    aiosqlite
-    click
-    click-default-group
-    humanize
-    google-generativeai
-    greenlet
-    litellm
-    networkx
-    pyperclip
-    sqlmodel
-    textual
-    tree-sitter
-    xdg-base-dirs
+    poetry-core
   ];
 })

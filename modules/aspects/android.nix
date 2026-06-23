@@ -37,6 +37,7 @@
           adbtuifm
           simple-mtpfs
           self'.packages.adb-shell
+          self'.packages.apkinspector
           #https://github.com/vaibhavpandeyvpz/apkstudio
           #https://github.com/ASHWIN990/app-manager
           #https://codeberg.org/izzy/Adebar
