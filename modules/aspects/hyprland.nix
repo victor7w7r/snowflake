@@ -7,16 +7,39 @@
       inputs.hyprland.follows = "hyprland";
     };
 
+    hyprfloat = {
+      url = "github:nevimmu/hyprfloat";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    hyprdvd = {
+      url = "github:nevimmu/hyprdvd";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     hyprpicker.url = "github:hyprwm/hyprpicker";
     pyprland.url = "github:hyprland-community/pyprland";
   };
 
   den.aspects.hyprland.homeManager =
-    { pkgs, ... }:
     {
+      inputs',
+      pkgs,
+      self',
+      ...
+    }:
+    {
+      imports = [
+        inputs'.hyprfloat.homeManagerModules.default
+        inputs'.hyprdvd.homeManagerModules.default
+      ];
+
       home.packages = with pkgs; [
+        #pyprland.packages."x86_64-linux".pyprland
         brightnessctl
         dmenu-rs
+        figlet
+        hyprdim
         hyprland-qtutils
         hyprlock
         hyprpicker
@@ -26,7 +49,6 @@
         hyprutils
         hyprviz
         grimblast
-        #pyprland.packages."x86_64-linux".pyprland
         rofi-bluetooth
         rofi-calc
         rofi-emoji
@@ -36,16 +58,26 @@
         swaybg
         swaylock-effects
         swaylock-fancy
-        waybar-lyric
+        waybar-lyric # waybar-cava enable
         wl-clip-persist
         wf-recorder
         glib
-        #hypr hypr-input-switcher-bin hypr-zoom hyprdim-full-git hyprdvd
-        #hyprfloat hyprmixer figlet-fonts dunst-timer rofi-connman rofi-greenclip
-        #rofi-process-killer eleviewr rofi-tmux rofi-todo rofi-tools-bin autoricer
-        #rustrland spofi-git rofi-wifi-menu rofi-themes-collection waybar-media-git
-        #rofi-file-browser-extended-patched waybar-cava waybar-update waybar-dunst
-        #zig-waybar-contrib swaylock-blur-fast-git swaylock-corrupter swaylock-fprintd
+        rofi-file-browser
+        #https://github.com/icyleaf/hypr-input-switcher
+        #https://github.com/FShou/hypr-zoom
+        #https://github.com/Torelli/hyprmixer
+        #https://github.com/bitSheriff/dunst-timer
+        #https://github.com/MADHUR/rofi-process-killer
+        #https://github.com/viniarck/rofi-tmux
+        #https://github.com/szaffarano/rofi-tools
+        #https://github.com/3rfaan/autoricer
+        #https://github.com/davidborzek/spofi
+        #https://github.com/zbaylin/rofi-wifi-menu
+        #https://github.com/newmanls/rofi-themes-collection
+        #https://github.com/yurihs/waybar-media
+        #https://github.com/CelDaemon/waybar-dunst
+        #https://codeberg.org/erffy/zig-waybar-contrib
+        #https://github.com/r00tman/corrupter
       ];
 
       systemd.user.targets.hyprland-session.Unit.Wants = [ "xdg-desktop-autostart.target" ];
