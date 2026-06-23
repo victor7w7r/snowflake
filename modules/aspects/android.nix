@@ -45,7 +45,6 @@
           self'.packages.logcat-color3
           self'.packages.zilch
           self'.packages.scrcpy-wrapper
-          #https://github.com/Aldeshov/ADBFileExplorer
         ];
       };
   };

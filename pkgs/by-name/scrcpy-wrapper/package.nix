@@ -1,14 +1,47 @@
-{ fetchFromGitHub, rustPlatform }:
+{ pkgs, rustPlatform }:
 rustPlatform.buildRustPackage (attrs: {
   pname = "scrcpy-wrapper";
   version = "master";
 
-  src = fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "Bluemangoo";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-JLprFZuOlbj36ai2vAAA6VSWYDD1Bn0CRe5dUcXd7yI=";
+    sha256 = "sha256-68Mrdh8OtVJbC2UP+TqjLajmubXRdrHcjszw5ZfWJA8=";
   };
 
-  cargoHash = "sha256-M3+66AsLgkfpg8sHvDDDWFLKSS9a8soSxjFMDe8ip1o=";
+  cargoHash = "sha256-o48iriH7rRsi3XM+dhnrs2HbRAKv82RtiEEG2DPSJjo=";
+
+  nativeBuildInputs = with pkgs; [
+    pkg-config
+    makeWrapper
+  ];
+
+  buildInputs = with pkgs; [
+    wayland
+    libxkbcommon
+    libGL
+    libX11
+    libXcursor
+    libXrandr
+    libXi
+  ];
+
+  postInstall = ''
+    wrapProgram $out/bin/${attrs.pname} \
+      --prefix LD_LIBRARY_PATH : "${
+        pkgs.lib.makeLibraryPath (
+          with pkgs;
+          [
+            wayland
+            libxkbcommon
+            libGL
+            libX11
+            libXcursor
+            libXrandr
+            libXi
+          ]
+        )
+      }"
+  '';
 })
