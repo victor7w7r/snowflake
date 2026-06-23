@@ -1,7 +1,7 @@
 {
   den.aspects.xfce = {
     nixos =
-      { pkgs, ... }:
+      { pkgs, self', ... }:
       {
         security.pam.services.gdm.enableGnomeKeyring = true;
 
@@ -75,8 +75,7 @@
             xfce4-xkb-plugin
             xfdashboard
             thunar-shares-plugin
-            #xfce4-mount-plugin
-            #xfce4-diskperf-plugin
+            self'.packages.xfce4-diskperf-plugin
             #thunar-custom-actions
             #gtkhash-thunar
           ];

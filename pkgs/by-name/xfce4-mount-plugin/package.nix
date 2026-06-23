@@ -1,14 +1,14 @@
 { pkgs, stdenv }:
-stdenv.mkDerivation {
-  pname = "xfce4-diskperf-plugin";
-  version = "2.8.0-r124-g6d2e0ee";
+stdenv.mkDerivation (attrs: {
+  pname = "xfce4-mount-plugin";
+  version = "1.2.0";
 
   src = pkgs.fetchFromGitLab {
     domain = "gitlab.xfce.org";
     owner = "panel-plugins";
-    repo = "xfce4-diskperf-plugin";
-    rev = "master";
-    sha256 = "sha256-V1JATQgfWvsNH0CAA6zHe0bjSiIJuqGVJ+7/UGvYVgM=";
+    repo = "xfce4-mount-plugin";
+    rev = "refs/tags/${attrs.pname}-${attrs.version}";
+    sha256 = "sha256-Cf0IVWbVE0pPhOnUnAAAnXpM8UfXKgOoOaxKzZpMypk=";
   };
 
   nativeBuildInputs = with pkgs; [
@@ -25,4 +25,4 @@ stdenv.mkDerivation {
     libxfce4util
     glib
   ];
-}
+})
