@@ -46,6 +46,7 @@
           microfetch
           ramfetch
           self'.packages.bestfetch
+          self'.packages.frenzch
           self'.packages.mfetch
           self'.packages.hwfetch
           self'.packages.kat-oh
