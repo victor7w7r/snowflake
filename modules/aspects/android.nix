@@ -39,8 +39,8 @@
           self'.packages.adb-shell
           self'.packages.apkinspector
           self'.packages.appmanager
-          #https://codeberg.org/izzy/Adebar
-          #https://github.com/liriliri/aya
+          self'.packages.adebar
+          self'.packages.aya
           #https://github.com/jb2170/better-adb-sync
           #https://github.com/mrrfv/open-android-backup
           #https://github.com/yan12125/logcat-color3
