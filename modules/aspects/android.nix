@@ -43,7 +43,8 @@
           self'.packages.aya
           self'.packages.better-adb-sync
           self'.packages.logcat-color3
-          #https://github.com/Bluemangoo/scrcpy-wrapper
+          self'.packages.zilch
+          self'.packages.scrcpy-wrapper
           #https://github.com/Aldeshov/ADBFileExplorer
         ];
       };
