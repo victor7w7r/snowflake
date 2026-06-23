@@ -10,7 +10,9 @@ rustPlatform.buildRustPackage (attrs: {
     sha256 = "sha256-6Alw4OFRdut0fwDsYrkMazbrL1l5VMds+XbhYxWHF28=";
   };
 
-  postPatch = ''
+  cargoLock.lockFile = ./Cargo.lock;
+
+  prePatch = ''
     cp ${./Cargo.lock} Cargo.lock
   '';
 
