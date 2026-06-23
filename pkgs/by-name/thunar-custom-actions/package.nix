@@ -3,7 +3,6 @@
   pkgs,
   stdenv,
 }:
-
 stdenv.mkDerivation rec {
   pname = "thunar-custom-actions";
   version = "0.0.22";
@@ -12,19 +11,29 @@ stdenv.mkDerivation rec {
     owner = "nobodyinperson";
     repo = pname;
     rev = "make-manpages-optional";
-    sha256 = "sha256-78o9TivzC2LAsB3h4254vYjAAAUnI+pE/FscGzKq7rE=";
+    sha256 = "sha256-RMmrx4fcYBLPIOtxUp3AIcF+S/4TV7gkcYvkEC2ixo0=";
   };
 
   m4UtilsSrc = pkgs.fetchFromGitLab {
     owner = "nobodyinperson";
     repo = "m4-utils";
     rev = "master";
-    sha256 = "sha256-yZ3n9XN15P86p5bOon7S47l69AAAB65ZpW5vP7sL9gE=";
+    sha256 = "sha256-CAQsfygc/lFZpv6J96ZcFcsjhWXplCVLQEpLZ47O0kQ=";
   };
 
   nativeBuildInputs = with pkgs; [
+    bc
     gettext
+    ghostscript
+    imagemagick
+    gnupg
     makeWrapper
+    perl
+    su
+    m4
+    pinentry-gtk2
+    xdg-utils
+    zenity
   ];
 
   buildInputs = [
@@ -55,7 +64,7 @@ stdenv.mkDerivation rec {
             imagemagick
             m4
             perl
-            pinentry
+            pinentry-gtk2
             util-linux
             xdg-utils
             zenity
