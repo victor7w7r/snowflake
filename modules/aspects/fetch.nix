@@ -49,13 +49,6 @@
           self'.packages.bestfetchrtfg
           self'.packages.hwfetch
           self'.packages.zeitfetch
-          #https://github.com/kartavkun/osu-cli
-          #https://github.com/ekrlstd/songfetch
-          #https://github.com/mustard-parfait/Kat-OH
-          #https://github.com/FrenzyExists/frenzch.sh
-          #https://github.com/mehedirm6244/sysfex
-          #https://github.com/Dr-Noob/gpufetch
-          #https://github.com/hexisXz/hexfetch
           #inputs'.batfetch.packages.${host.system}.default
           #inputs.swiftfetch.packages.${pkgs.system}.swiftfetch
         ];

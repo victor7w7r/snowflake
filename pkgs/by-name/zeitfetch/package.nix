@@ -4,11 +4,11 @@ rustPlatform.buildRustPackage (attrs: {
   version = "main";
 
   src = fetchFromGitHub {
-    owner = "rosymati";
+    owner = "nidnogg";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-NilZXb4NL1dz8ParAAAoFUNPleBmylHl54PbzSwjd5E=";
+    sha256 = "sha256-fmA6FPHYfSFvKCv+HjGISV8w/vVI8yCl4ZfwCUI3RS4=";
   };
 
-  cargoHash = "sha256-v2IbR1caH+7/XeBmvvWQAA7gV8YZMmGvA5RNoz+kXrI=";
+  cargoHash = "sha256-GM3hY3KY/G1B/ashmjusbnT1tqcP6CdyHyGnaXTskcw=";
 })
