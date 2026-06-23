@@ -8,13 +8,13 @@ stdenvNoCC.mkDerivation (attrs: {
     owner = "izzy";
     repo = "Adebar";
     rev = "master";
-    hash = "sha256-3sS11Aoal6JNU+uXvAAAALM40dsCqc/vb4o2ZYB2JgQ=";
+    hash = "sha256-UTBBiwF3RsgwDz6WIXQ+jWIMvMbeFdU9aOUcj7C8wEY=";
   };
 
   dontUnpack = true;
 
   installPhase = ''
     mkdir -p $out/bin
-    cp $src/* $out/bin/
+    cp -r $src/* $out/bin/
   '';
 })
