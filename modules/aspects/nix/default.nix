@@ -6,7 +6,7 @@
 
   den.aspects.nix.default = {
     os =
-      { pkgs, ... }:
+      { pkgs, self', ... }:
       {
         environment.systemPackages = with pkgs; [
           alejandra
@@ -31,6 +31,7 @@
           nvd
           optnix
           statix
+          self'.packages.pkgtop
         ];
       };
 
