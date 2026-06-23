@@ -45,13 +45,13 @@
           cpufetch
           microfetch
           ramfetch
-          self'.packages.mfetch
           self'.packages.bestfetch
+          self'.packages.mfetch
           self'.packages.hwfetch
-          self'.packages.zeitfetch
+          self'.packages.kat-oh
           self'.packages.osu-cli
           self'.packages.songfetch
-          self'.packages.kat-oh
+          self'.packages.zeitfetch
           #inputs'.batfetch.packages.${host.system}.default
           #inputs.swiftfetch.packages.${pkgs.system}.swiftfetch
         ];
