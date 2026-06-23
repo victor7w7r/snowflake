@@ -74,11 +74,10 @@
             xfce4-whiskermenu-plugin
             xfce4-xkb-plugin
             xfdashboard
-            #xfce4-diskperf-plugin
+            thunar-shares-plugin
             #xfce4-mount-plugin
-            #thunar-extended
+            #xfce4-diskperf-plugin
             #thunar-custom-actions
-            #thunar-shares-plugin
             #gtkhash-thunar
           ];
         };

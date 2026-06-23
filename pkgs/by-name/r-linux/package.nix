@@ -1,11 +1,15 @@
-{ pkgs, stdenv }:
+{
+  lib,
+  pkgs,
+  stdenv,
+}:
 stdenv.mkDerivation (attrs: {
   pname = "r-linux";
   version = "6.5.191754";
 
   src = pkgs.fetchurl {
     url = "https://www.r-studio.com/downloads/RLinux6_x64.deb";
-    sha256 = "sha256-dr+U9v9WtZGrJGoQbRF29MIM5CvAAA+jjNTUJschGdM=";
+    sha256 = "sha256-8QKdTLFFkJlMYFjhJGrTgxC6K6gbrbho8i/9AijxkkY=";
   };
 
   nativeBuildInputs = with pkgs; [
@@ -15,31 +19,36 @@ stdenv.mkDerivation (attrs: {
   ];
 
   buildInputs = with pkgs; [
-    xorg.libX11
-    xorg.libXext
+    libX11
+    libXext
     alsa-lib
     glib
     fontconfig
     freetype
+
+    libSM
+    libICE
+    libXrender
+    libkrb5
+    e2fsprogs
   ];
 
-  unpackCmd = "dpkg-deb -x $src .";
+  unpackCmd = "dpkg-deb --fsys-tarfile $src/usr | tar --no-same-permissions --no-same-owner -xvf -";
   dontBuild = true;
   installPhase = ''
         mkdir -p "$out/opt"
         mkdir -p "$out/bin"
         mkdir -p "$out/share/applications"
         mkdir -p "$out/share/pixmaps"
+        ls .
 
         cp -r usr/local/R-Linux "$out/opt/"
 
         head -n -12 "$out/opt/R-Linux/bin/rlinux" > "$out/opt/R-Linux/bin/rlinux.tmp"
 
         cat << 'EOF' >> "$out/opt/R-Linux/bin/rlinux.tmp"
-    # Lógica inyectada de elevación
     if [ "$EUID" -ne 0 ]; then
         echo "Este programa requiere privilegios de root."
-        # Aquí puedes llamar a pkexec o dejar que el usuario lo corra con sudo rlinux
     fi
     exec "$out/opt/R-Linux/bin/R-Linux" "$@"
     EOF
@@ -58,6 +67,6 @@ stdenv.mkDerivation (attrs: {
 
   postFixup = ''
     wrapProgram "$out/bin/rlinux" \
-      --prefix PATH : "${stdenv.lib.makeBinPath [ pkgs.xorg.xhost ]}"
+      --prefix PATH : "${lib.makeBinPath [ pkgs.xhost ]}"
   '';
 })
