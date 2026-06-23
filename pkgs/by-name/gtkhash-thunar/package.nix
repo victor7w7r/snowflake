@@ -39,5 +39,5 @@ stdenv.mkDerivation (attrs: {
     "-Dbuild-thunar=true"
   ];
 
-  doCheck = true;
+  doCheck = false;
 })

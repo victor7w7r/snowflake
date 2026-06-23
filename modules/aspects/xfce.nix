@@ -75,10 +75,10 @@
             xfce4-xkb-plugin
             xfdashboard
             thunar-shares-plugin
+            self'.packages.gtkhash-thunar
+            self'.packages.thunar-custom-actions
             self'.packages.xfce4-diskperf-plugin
             self'.packages.xfce4-mount-plugin
-            self'.packages.thunar-custom-actions
-            #gtkhash-thunar
           ];
         };
       };
