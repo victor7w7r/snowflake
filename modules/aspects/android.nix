@@ -36,10 +36,7 @@
         environment.systemPackages = with pkgs; [
           adbtuifm
           simple-mtpfs
-          #https://github.com/JeffLIrion/adb_shell
-          #https://github.com/AKotov-dev/adbmanager
-          #https://github.com/Aldeshov/ADBFileExplorer
-          #https://github.com/erev0s/apkInspector
+          self'.packages.adb-shell
           #https://github.com/vaibhavpandeyvpz/apkstudio
           #https://github.com/ASHWIN990/app-manager
           #https://codeberg.org/izzy/Adebar
@@ -49,6 +46,7 @@
           #https://github.com/yan12125/logcat-color3
           #https://github.com/lavafroth/droidrunco
           #https://github.com/Bluemangoo/scrcpy-wrapper
+          #https://github.com/Aldeshov/ADBFileExplorer
         ];
       };
   };
