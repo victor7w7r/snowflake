@@ -41,8 +41,7 @@
           self'.packages.appmanager
           self'.packages.adebar
           self'.packages.aya
-          #https://github.com/jb2170/better-adb-sync
-          #https://github.com/mrrfv/open-android-backup
+          self'.packages.better-adb-sync
           #https://github.com/yan12125/logcat-color3
           #https://github.com/lavafroth/droidrunco
           #https://github.com/Bluemangoo/scrcpy-wrapper

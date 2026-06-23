@@ -1,17 +1,14 @@
 { python3, fetchFromGitHub }:
 python3.pkgs.buildPythonApplication (attrs: {
-  pname = "better-adb-sync";
+  pname = "logcat-color3";
   version = "master";
-  pyproject = true;
 
   src = fetchFromGitHub {
-    owner = "jb2170";
+    owner = "yan12125";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-ghOpcnQEZiAEZOiVWhrHa66WgiyyYQZgTJEokJFKMRs=";
+    sha256 = "sha256-GYnXoiYAePfAAaExmeDF3XDZ8mSF5hmmXkTvxSpOj+U=";
   };
-
-  dontCheckRuntimeDeps = true;
 
   build-system = with python3.pkgs; [
     hatchling
