@@ -8,6 +8,12 @@ pkgs.python3.pkgs.buildPythonApplication (attrs: {
     owner = "viniarck";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-8Vqd3N87WyfvE2qt+CLaKAAA/rWGNAObaI8LOzV3yAk=";
+    sha256 = "sha256-TlQm6hQSvuBvaVq3jsPPxFAGbIE7di3H7VihgoStUBg=";
   };
+
+  propagatedBuildInputs = with pkgs.python3.pkgs; [
+    click
+    i3ipc
+    libtmux
+  ];
 })

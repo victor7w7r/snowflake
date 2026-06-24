@@ -17,12 +17,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    rofi-tools.url = "github:szaffarano/rofi-tools";
     hyprpicker.url = "github:hyprwm/hyprpicker";
     pyprland.url = "github:hyprland-community/pyprland";
   };
 
   den.aspects.hyprland.homeManager =
     {
+      host,
       inputs',
       pkgs,
       self',
@@ -36,6 +38,7 @@
 
       home.packages = with pkgs; [
         #pyprland.packages."x86_64-linux".pyprland
+        inputs'.rofi-tools.packages.${host.system}.default
         brightnessctl
         dmenu-rs
         figlet
@@ -63,12 +66,10 @@
         wf-recorder
         glib
         rofi-file-browser
+        self'.packages.autoricer
         self'.packages.hypr-input-switcher
         self'.packages.hypr-zoom
-        self'.packages.autoricer
-        #https://github.com/viniarck/rofi-tmux
-        #https://github.com/szaffarano/rofi-tools
-        #https://github.com/davidborzek/spofi
+        self'.packages.rofi-tmux
         #https://github.com/zbaylin/rofi-wifi-menu
         #https://github.com/newmanls/rofi-themes-collection
         #https://github.com/yurihs/waybar-media
