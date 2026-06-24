@@ -25,7 +25,7 @@ let
       "https://cache.garnix.io"
       "https://cache.saumon.network/proxmox-nixos"
       "https://nix-gaming.cachix.org"
-      "https://attic.xuyh0120.win/lantian"
+      #"https://attic.xuyh0120.win/lantian"
     ];
 
     trusted-public-keys = [
@@ -33,14 +33,14 @@ let
       "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
       "proxmox-nixos:D9RYSWpQQC/msZUWphOY2I5RLH5Dd6yQcaHIuug7dWM="
       "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
-      "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc="
+      #"lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc="
       "nix-gaming.cachix.org-1:nbjlureqMbRAxR1gJ/f3hxemL9svXaZF/Ees8vCUUs4="
     ];
 
     trusted-substituters = [
       "https://cache.nixos.org"
       "https://nix-community.cachix.org"
-      "https://attic.xuyh0120.win/lantian"
+      #"https://attic.xuyh0120.win/lantian"
       "https://install.determinate.systems"
     ];
 

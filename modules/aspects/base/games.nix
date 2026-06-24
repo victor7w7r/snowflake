@@ -1,3 +1,4 @@
+{ inputs, ... }:
 {
   flake-file.inputs.ponysay.url = "github:CrystalSplitter/ponysay-modern";
 
@@ -47,7 +48,6 @@
     nixos =
       {
         isPersistent,
-        inputs',
         self',
         pkgs,
         ...
@@ -98,7 +98,7 @@
             cointop
             clock-rs
             ticker
-            inputs'.ponysay.packages.${pkgs.stdenv.hostPlatform.system}.ponysay-modern-zsh
+            inputs.ponysay.packages.x86_64-linux.default
           ];
       };
   };

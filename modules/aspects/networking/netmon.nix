@@ -12,7 +12,7 @@
       lib.optionalAttrs (isPersistent || isMainMac) {
         environment.systemPackages = with pkgs; [
           self'.packages.aim
-          ariang
+          #ariang
           axel
           doggo
           gping

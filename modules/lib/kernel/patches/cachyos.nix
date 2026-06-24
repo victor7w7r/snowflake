@@ -37,21 +37,22 @@
           in
           ''
             chmod -R +w . && find . -type d -empty -delete
-            ${differ "kernel/sched/fair.c" "sched" "0001-bore-cachy"}
             ${differ "drivers/input/joystick/xpad.c" "misc" "0001-handheld"}
             ${differ "security/selinux/selinuxfs.c" "misc" "0001-hardened"}
           '';
         installPhase = "mkdir -p $out && cp -r . $out/";
       };
 
-      bore = [ "${patches}/${majorMinor}/sched/0001-bore-cachy.patch" ];
+      bore = [
+        #"${patches}/${majorMinor}/sched/0001-bore-cachy.patch"
+      ];
       optimization = map (path: "${patches}/${majorMinor}/misc/${path}") [
         "0001-clang-polly.patch"
         "dkms-clang.patch"
         "poc-selector.patch"
       ];
       governors = map (path: "${patches}/${majorMinor}/misc/${path}") [
-        "reflex-governor.patch"
+        #"reflex-governor.patch"
         "nap-governor.patch"
       ];
     in

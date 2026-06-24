@@ -22,7 +22,9 @@
       os.nixpkgs.config.allowUnfree = true;
       nixos = {
         system.stateVersion = stateVersion;
-        nix.settings = conf.lib.config.flake-config // conf.lib.config.nix-config;
+        nix.settings =
+          (removeAttrs conf.lib.config.flake-config [ "__provider" ])
+          // (removeAttrs conf.lib.config.nix-config [ "__provider" ]);
         nixpkgs.overlays = [ inputs.nix-cachyos-kernel.overlays.pinned ];
         programs.nix-ld.enable = true;
         documentation = {

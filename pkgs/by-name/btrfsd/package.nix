@@ -7,7 +7,7 @@ stdenv.mkDerivation (attrs: {
     owner = "ximion";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-EgNC8hwZxf5e2MTNP1ysT9++OsJ5aUO/U820j92DOs8=";
+    sha256 = "sha256-XdmmWrgNfZbmMZmuSlCoG8mPqTUe4XPWaFGM7koe/Uw=";
   };
 
   nativeBuildInputs = with pkgs; [

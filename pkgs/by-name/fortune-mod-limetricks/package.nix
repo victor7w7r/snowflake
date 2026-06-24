@@ -5,7 +5,7 @@ stdenv.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "https://billy.wolfe.casa/fortunes/limericks";
-    sha256 = "sha256-NU0pMmRcbMuZ91GFRXJ/Y7LQNkN7JnCMAAL1MB5eW9E=";
+    sha256 = "sha256-RPwzGd8EZ6t4z8I/rjnq+GtlSIMmMKnNj3yE9bJe5zc=";
   };
 
   dontUnpack = true;

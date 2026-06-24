@@ -50,7 +50,7 @@
     in
     {
       inherit superlab-config;
-      pizero-kernelPackages = generated.packages;
-      pizero-kernel = generated.kernel;
+      superlab-kernelPackages = generated.packages;
+      superlab-kernel = generated.kernel;
     };
 }
