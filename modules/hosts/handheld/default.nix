@@ -15,6 +15,7 @@
       hostName = "v7w7r-rc71l";
       users.victor7w7r = { };
     };
+
     aspects.handheld = {
       includes = with den.aspects; [
         handheld.disks
@@ -53,7 +54,7 @@
       ];
 
       nixos =
-        { pkgs, user, ... }:
+        { pkgs, ... }:
         {
           environment = {
             persistence."/nix/persist" = {
@@ -61,7 +62,7 @@
                 "/etc/asusd"
                 "/etc/hhd"
               ];
-              users."${user.name}".directories = [ ".config/rog" ];
+              #users."${user.name}".directories = [ ".config/rog" ];
             };
             systemPackages = with pkgs; [
               asusctl
@@ -119,6 +120,5 @@
           home.file."games".source = config.lib.file.mkOutOfStoreSymlink "/run/media/games";
         };
     };
-
   };
 }
