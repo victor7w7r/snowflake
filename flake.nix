@@ -19,18 +19,14 @@
       "pipe-operators"
       "git-hashing"
     ];
-    extra-substituters = [ "https://cache.numtide.com" ];
-    extra-trusted-public-keys = [
-      "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
-      "cache.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
-    ];
+    extra-substituters = [ ];
+    extra-trusted-public-keys = [ ];
     lazy-trees = true;
     submodules = true;
     substituters = [
       "https://nix-community.cachix.org"
       "https://cache.nixos.org"
       "https://cache.garnix.io"
-      "https://cache.numtide.com"
       "https://cache.saumon.network/proxmox-nixos"
       "https://nix-gaming.cachix.org"
       "https://attic.xuyh0120.win/lantian"
@@ -46,7 +42,6 @@
     trusted-substituters = [
       "https://cache.nixos.org"
       "https://nix-community.cachix.org"
-      "https://cache.numtide.com"
       "https://attic.xuyh0120.win/lantian"
       "https://install.determinate.systems"
     ];
@@ -92,6 +87,14 @@
     gestures.url = "github:ferstar/gestures";
     home-manager = {
       url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    hyprdvd = {
+      url = "github:nevimmu/hyprdvd";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    hyprfloat = {
+      url = "github:nevimmu/hyprfloat";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hyprland.url = "https://flakehub.com/f/hyprwm/Hyprland/0.53";
@@ -149,8 +152,10 @@
         nixpkgs.follows = "nixpkgs";
       };
     };
+    ponysay.url = "github:CrystalSplitter/ponysay-modern";
     proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
     pyprland.url = "github:hyprland-community/pyprland";
+    rofi-tools.url = "github:szaffarano/rofi-tools";
     swiftfetch = {
       url = "github:ly-sec/swiftfetch";
       inputs.nixpkgs.follows = "nixpkgs";
