@@ -12,8 +12,8 @@
     }:
     let
       helpers = (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { });
-      kernel-result =
-        (pkgs.linuxManualConfig {
+      kernel-result = (
+        pkgs.linuxManualConfig {
           inherit src configfile;
           pname = "linux-v7w7r-${localVer}";
           modDirVersion = "${version}-v7w7r-${localVer}";
@@ -25,6 +25,12 @@
             patch = file;
           }) patches;
 
+          features = {
+            ia32Emulation = true;
+            netfilterRPFilter = true;
+            efiBootStub = true;
+          };
+
           extraMakeFlags = [
             "LOCALVERSION=-v7w7r-${localVer}"
             "NIX_CC_WRAPPER_SUPPRESS_TARGET_WARNING=1"
@@ -33,14 +39,8 @@
             #"CC=ccache cc"
             #"HOSTCC=ccache cc"
           ];
-        }).overrideAttrs
-          (attrs: {
-            features = {
-              ia32Emulation = true;
-              netfilterRPFilter = true;
-              efiBootStub = true;
-            };
-          });
+        }
+      );
     in
     {
       kernel = kernel-result;
