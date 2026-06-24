@@ -7,7 +7,7 @@ stdenv.mkDerivation (attrs: {
     owner = "bitSheriff";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-carRNsgQFGUzl8EpLU5+M1xAAAaSQZgoHlC88W/CULk=";
+    sha256 = "sha256-2wGjbs8Ppgd3TRabDut13It+LjtWTwJM8vYlPfI9uMo=";
   };
 
   nativeBuildInputs = with pkgs; [ makeWrapper ];
