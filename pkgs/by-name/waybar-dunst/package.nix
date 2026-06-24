@@ -7,7 +7,7 @@ stdenv.mkDerivation (attrs: {
     owner = "CelDaemon";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-carRNsgQFGUzlAAALU5+M1xPU6aSQZgoHlC88W/CULk=";
+    sha256 = "sha256-7L/HNLY94qYriI6PeoDyyeq4H+NcyxGTR45Z8I03drs=";
   };
 
   nativeBuildInputs = with pkgs; [ makeWrapper ];
@@ -19,11 +19,12 @@ stdenv.mkDerivation (attrs: {
 
   installPhase = ''
     mkdir -p $out/bin
-    cp waybar-dunst.py $out/bin/waybar-dunst
+    cp waybar-dunst $out/bin/waybar-dunst
     chmod +x $out/bin/waybar-dunst
     wrapProgram $out/bin/waybar-dunst \
       --prefix PYTHONPATH : "${
         pkgs.python3.pkgs.makePythonPath [
+          pkgs.python3.pkgs.dbus-fast
           pkgs.python3.pkgs.pygobject3
         ]
       }" \

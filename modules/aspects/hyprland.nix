@@ -67,17 +67,13 @@
         glib
         rofi-file-browser
         self'.packages.autoricer
+        self'.packages.corrupter
         self'.packages.hypr-input-switcher
         self'.packages.hypr-zoom
         self'.packages.rofi-tmux
         self'.packages.spofi
+        self'.packages.waybar-dunst
         self'.packages.waybar-media
-        #https://github.com/CelDaemon/waybar-dunst
-        #https://codeberg.org/erffy/zig-waybar-contrib
-        #https://github.com/r00tman/corrupter
-        #https://github.com/Torelli/hyprmixer
-        #https://github.com/bitSheriff/dunst-timer
-        #https://github.com/MADHUR/rofi-process-killer
         #https://github.com/newmanls/rofi-themes-collection - userscript
       ];
 
