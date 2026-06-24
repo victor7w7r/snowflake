@@ -11,7 +11,6 @@
     experimental-features = [
       "nix-command"
       "flakes"
-      "ca-derivations"
       "fetch-closure"
       "parse-toml-timestamps"
       "blake3-hashes"
