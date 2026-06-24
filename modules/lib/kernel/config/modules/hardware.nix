@@ -1,0 +1,64 @@
+{
+  kernel.config.modules.hardware = rec {
+    desktop = not-gpio // not-phone // x86;
+    desktop-wserial = desktop // not-serial;
+
+    not-serial = {
+      USB_ACM = "n";
+      USB_SERIAL = "n";
+    };
+
+    serial = {
+      USB_ACM = "y";
+    };
+
+    not-gpio = {
+      GPIOLIB = "n";
+    };
+
+    not-phone = {
+      BACKLIGHT_QCOM_WLED = "n";
+      GNSS = "n";
+      NFC = "n";
+      QRTR = "n";
+      SCSI_UFSHCD = "n";
+      SOUNDWIRE_QCOM = "n";
+      USB_AUDIO = "n";
+      USB_BDC_UDC = "n";
+      USB_CDC_COMPOSITE = "n";
+      USB_CDNS2_UDC = "n";
+      USB_CONFIGFS = "n";
+      USB_DWC2 = "n";
+      USB_DWC3 = "n";
+      USB_ETH = "n";
+      USB_FUNCTIONFS = "n";
+      USB_GADGET = "n";
+      USB_GADGETFS = "n";
+      USB_MASS_STORAGE = "n";
+      USB_MAX3420_UDC = "n";
+      USB_RAW_GADGET = "n";
+      USB_SNP_CORE = "n";
+      USB_U_AUDIO = "n";
+      USB_U_ETHER = "n";
+      USB_U_SERIAL = "n";
+      USB_ZERO = "n";
+      U_SERIAL_CONSOLE = "n";
+    };
+
+    x86 = {
+      ACPI_TAD = "y";
+      MMC_MTK = "n";
+      ACPI_WMI = "y";
+      SPI = "n";
+      STAGING = "n";
+      USB_LIBCOMPOSITE = "n";
+      USB_NET_DRIVERS = "n";
+      XZ_DEC_ARM = "n";
+      XZ_DEC_ARMTHUMB = "n";
+      XZ_DEC_ARM64 = "n";
+      X86_NATIVE_CPU = "y";
+      X86_ACPI_CPUFREQ = "y";
+      X86_X32 = "y";
+    };
+  };
+}

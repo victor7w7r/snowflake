@@ -1,0 +1,120 @@
+{
+  kernel.config.modules.vendor = rec {
+    intel = {
+      CRC32C_INTEL = "y";
+      CRYPTO_AES_NI_INTEL = "y";
+      DRM_I915 = "y";
+      HW_RANDOM_INTEL = "y";
+      INTEL_WMI_THUNDERBOLT = "y";
+      PERF_EVENTS_INTEL_CSTATE = "y";
+      PERF_EVENTS_INTEL_RAPL = "y";
+      PERF_EVENTS_INTEL_UNCORE = "y";
+      X86_INTEL_UMIP = "y";
+    }
+    // not-amd;
+
+    amd = {
+      AMD_PRIVATE_COLOR = "y";
+      BATTERY_ASUS_EC = "y";
+      AMD_RAPL = "m";
+      HID_ASUS_ALLY = "y";
+      HW_RANDOM_AMD = "y";
+      SENSORS_AMD_ENERGY = "m";
+      SENSORS_K10TEMP = "m";
+      PERF_EVENTS_AMD_POWER = "y";
+      PERF_EVENTS_AMD_UNCORE = "y";
+    }
+    // not-intel;
+
+    not-vendor = not-amd // not-intel;
+
+    not-amd = {
+      AMD_3D_VCACHE = "n";
+      AMD_HFI = "n";
+      AMD_HSMP = "n";
+      AMD_HSMP_ACPI = "n";
+      AMD_HSMP_PLAT = "n";
+      AMD_IOMMU = "n";
+      AMD_ISP_PLATFORM = "n";
+      AMD_MEM_ENCRYPT = "n";
+      AMD_MP2_STB = "n";
+      AMD_NB = "n";
+      AMD_NODE = "n";
+      AMD_PMC = "n";
+      AMD_PMF = "n";
+      AMD_SECURE_AVIC = "n";
+      AMD_WBRF = "n";
+      ASUS_ARMOURY = "n";
+      ASUS_LAPTOP = "n";
+      ASUS_NB_WMI = "n";
+      ASUS_WIRELESS = "n";
+      ASUS_WMI = "n";
+      ASUS_WMI_DEPRECATED_ATTRS = "n";
+      CPU_SUP_AMD = "n";
+      CPU_SUP_HYGON = "n";
+      DRM_AMDGPU = "n";
+      DRM_AMD_ACP = "n";
+      DRM_AMD_DC = "n";
+      DRM_AMD_DC_FP = "n";
+      DRM_AMD_DC_SI = "n";
+      DRM_AMD_ISP = "n";
+      DRM_AMD_SECURE_DISPLAY = "n";
+      DRM_RADEON = "n";
+      HID_ASUS = "n";
+      HW_RANDOM_AMD = "n";
+      HSA_AMD = "n";
+      HSA_AMD_SVM = "n";
+      KVM_AMD = "n";
+      NET_VENDOR_AMD = "n";
+      PERF_EVENTS_AMD_BRS = "n";
+      PERF_EVENTS_AMD_POWER = "n";
+      PERF_EVENTS_AMD_UNCORE = "n";
+      PINCTRL_AMD = "n";
+      SND_AMD_SOUNDWIRE_ACPI = "n";
+      SND_SOC_AMD_MACH = "n";
+      SND_SOC_AMD_PS = "n";
+      SND_SOC_AMD_PS_MACH = "n";
+      SND_SOC_AMD_SOUNDWIRE = "n";
+      SND_SOC_CS35L41 = "n";
+      SND_SOC_SOF_AMD_TOPLEVEL = "n";
+      SOUNDWIRE_AMD = "n";
+      USB_PCI_AMD = "n";
+      V4L2_LOOPBACK = "n";
+      VHBA = "n";
+      X86_AMD_PLATFORM_DEVICE = "n";
+      X86_AMD_PSTATE = "n";
+      X86_MCE_AMD = "n";
+    };
+
+    not-intel = {
+      CPU_SUP_INTEL = "n";
+      DRM_I915 = "n";
+      HAVE_INTEL_TXT = "n";
+      INTEL_GTT = "n";
+      INTEL_HFI_THERMAL = "n";
+      INTEL_IDLE = "n";
+      INTEL_IOMMU = "n";
+      INTEL_LDMA = "n";
+      INTEL_RAPL = "n";
+      INTEL_SCU = "n";
+      INTEL_SOC_PMIC = "n";
+      INTEL_SOC_PMIC_CHTWC = "n";
+      INTEL_TDX_GUEST = "n";
+      INTEL_TDX_HOST = "n";
+      INTEL_TURBO_MAX_3 = "n";
+      KVM_INTEL = "n";
+      CRC32C_INTEL = "n";
+      CRYPTO_AES_NI_INTEL = "n";
+      MFD_INTEL_LPSS = "n";
+      PERF_EVENTS_INTEL_CSTATE = "n";
+      PERF_EVENTS_INTEL_RAPL = "n";
+      PERF_EVENTS_INTEL_UNCORE = "n";
+      PINCTRL_INTEL = "n";
+      X86_INTEL_LPSS = "n";
+      X86_INTEL_MEMORY_PROTECTION_KEYS = "n";
+      X86_INTEL_PSTATE = "n";
+      X86_INTEL_TSX_MODE_AUTO = "n";
+      X86_MCE_INTEL = "n";
+    };
+  };
+}

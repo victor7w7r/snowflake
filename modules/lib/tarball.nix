@@ -1,0 +1,69 @@
+{ inputs, ... }:
+{
+  imports = [ (inputs.den.namespace "tarball" false) ];
+
+  tarball.lib = {
+    call =
+      {
+        additionalContent ? "",
+        additionalBuildInputs ? [ ],
+      }:
+      {
+        nixos =
+          { config, pkgs, ... }:
+          {
+            system.build.tarball = pkgs.stdenvNoCC.mkDerivation {
+              name = "tarball";
+
+              nativeBuildInputs =
+                with pkgs;
+                [
+                  zstd
+                  rsyncy
+                ]
+                ++ additionalBuildInputs;
+
+              buildCommand =
+                let
+                  closureInfo = pkgs.buildPackages.closureInfo {
+                    rootPaths = [ config.system.build.toplevel ];
+                  };
+                in
+                ''
+                  mkdir -p $out
+
+                  ${if additionalContent != "" then additionalContent else ""}
+
+                  mkdir -p root/nix/store
+
+                  echo "Copying store files..."
+                  rsyncy -aHAxr --progress --files-from=${closureInfo}/store-paths / root/nix/
+
+                  cp ${closureInfo}/registration root/nix-path-registration
+
+                  mkdir -p root/nix/var/nix/daemon-socket
+                  echo "Compressing with $SIZE..."
+                  tar -cv -C root . | zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
+                '';
+            };
+          };
+      };
+
+    postscript.nixos =
+      { config, ... }:
+      {
+        boot.postBootCommands = ''
+          set -euo pipefail
+          set -x
+
+          REG_FILE="/nix/nix-path-registration"
+
+          ${config.nix.package.out}/bin/nix-store --load-db < "$REG_FILE"
+          touch /etc/NIXOS
+          ${config.nix.package.out}/bin/nix-env -p /nix/var/nix/profiles/system --set /run/current-system
+          rm -f "$REG_FILE"
+        '';
+      };
+  };
+
+}

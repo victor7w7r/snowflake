@@ -1,0 +1,24 @@
+{
+  kernel.patches.asus =
+    pkgs:
+    let
+      asus = pkgs.stdenvNoCC.mkDerivation {
+        name = "asus-patches";
+        src =
+          with (pkgs.lib.trivial.importJSON ./patches.json).asus;
+          pkgs.fetchgit { inherit url rev sha256; };
+        configurePhase = "cp -r $src/* ./";
+        buildPhase = ''chmod -R +w . && find . -type f ! -name "*.patch" -delete'';
+        installPhase = "mkdir -p $out && cp -r . $out/";
+      };
+    in
+    map (path: "${asus}/${path}") [
+      "0002-platform-x86-asus-armoury-add-keyboard-control-firmw.patch"
+      "0040-workaround_hardware_decoding_amdgpu.patch"
+      "0070-acpi-x86-s2idle-Add-ability-to-configure-wakeup-by-A.patch"
+      "0081-amdgpu-adjust_plane_init_off_by_one.patch"
+      "asus-patch-series.patch"
+      "PATCH-v5-00-11-Improvements-to-S5-power-consumption.patch"
+      "v2-0002-hid-asus-change-the-report_id-used-for-HID-LED-co.patch"
+    ];
+}

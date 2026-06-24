@@ -1,0 +1,37 @@
+{
+  kernel.config.modules.net = {
+    BRIDGE = "y";
+    CFG80211 = "y";
+    DEFAULT_BBR = "y";
+    DEFAULT_CUBIC = "n";
+    DEFAULT_FQ_CODEL = "n";
+    DEFAULT_HOSTNAME = "v7w7r";
+    DEFAULT_NET_SCH = "fq";
+    DEFAULT_TCP_CONG = "bbr";
+    INET_AH = "y";
+    INET_ESP = "y";
+    INET_ESPINTCP = "y";
+    INET_ESP_OFFLOAD = "y";
+    INET_IPCOMP = "y";
+    INET_RAW_DIAG = "y";
+    INET_UDP_DIAG = "y";
+    NETFILTER_XTABLES = "y";
+    NETFILTER_XT_TARGET_LOG = "y";
+    NETFILTER_XT_TARGET_MASQUERADE = "y";
+    NETFILTER_XT_MATCH_ADDRTYPE = "y";
+    NETFILTER_XT_MATCH_COMMENT = "y";
+    NETFILTER_XT_MATCH_CONNTRACK = "y";
+    NETFILTER_XT_MATCH_MULTIPORT = "y";
+    NETFILTER_XT_MATCH_PKTTYPE = "y";
+    NETFILTER_XT_MATCH_STATE = "y";
+    NET_FOU = "y";
+    NET_SCH_FQ = "y";
+    NET_IPGRE = "y";
+    NET_IPGRE_DEMUX = "y";
+    NF_CONNTRACK = "y";
+    TCP_CONG_BBR = "y";
+    TUN = "y";
+    TAP = "y";
+    UNIX_DIAG = "y";
+  };
+}
