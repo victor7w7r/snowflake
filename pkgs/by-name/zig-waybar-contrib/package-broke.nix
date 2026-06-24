@@ -1,5 +1,4 @@
 { pkgs, stdenv }:
-
 stdenv.mkDerivation (attrs: {
   pname = "zig-waybar-contrib";
   version = "0.17.x";
@@ -9,15 +8,27 @@ stdenv.mkDerivation (attrs: {
     owner = "erffy";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    sha256 = "sha256-RFfynyADrukAyr+QpdlMDLl7R1XQUmB6mlTBYeW8xso=";
   };
 
   nativeBuildInputs = with pkgs; [
-    zig_0_13.hook
+    zig_0_12.hook
   ];
 
-  zigBuildFlags = [ "-Doptimize=ReleaseSafe" ];
+  zigBuildFlags = [ "-Drelease-safe=true" ];
 
+  postPatch = ''
+    cat << 'EOF' > build.zig.zon
+    .{
+        .name = "zig-waybar-contrib",
+        .version = "1.0.0",
+        .paths = .{
+            "build.zig",
+            "src",
+        },
+    }
+    EOF
+  '';
   postInstall = ''
     mkdir -p $out/share/zig-waybar-contrib
     sed -i "s|{{EXECUTABLE_PATH}}|$out/bin|g" config.waybar.jsonc
