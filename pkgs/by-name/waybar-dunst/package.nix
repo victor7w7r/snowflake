@@ -1,33 +1,30 @@
 { pkgs, stdenv }:
 stdenv.mkDerivation (attrs: {
-  pname = "waybar-media";
-  version = "master";
+  pname = "waybar-dunst";
+  version = "main";
 
   src = pkgs.fetchFromGitHub {
-    owner = "yurihs";
+    owner = "CelDaemon";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-carRNsgQFGUzl8EpLU5+M1xPU6aSQZgoHlC88W/CULk=";
+    sha256 = "sha256-carRNsgQFGUzlAAALU5+M1xPU6aSQZgoHlC88W/CULk=";
   };
 
   nativeBuildInputs = with pkgs; [ makeWrapper ];
   buildInputs = with pkgs; [
     python3
-    gobject-introspection
   ];
 
   dontBuild = true;
 
   installPhase = ''
     mkdir -p $out/bin
-    cp waybar-media.py $out/bin/waybar-media
-    chmod +x $out/bin/waybar-media
-    wrapProgram $out/bin/waybar-media \
+    cp waybar-dunst.py $out/bin/waybar-dunst
+    chmod +x $out/bin/waybar-dunst
+    wrapProgram $out/bin/waybar-dunst \
       --prefix PYTHONPATH : "${
         pkgs.python3.pkgs.makePythonPath [
-          pkgs.python3.pkgs.psutil
           pkgs.python3.pkgs.pygobject3
-          pkgs.python3.pkgs.pydbus
         ]
       }" \
       --prefix PATH : "${pkgs.lib.makeBinPath [ pkgs.python3 ]}"

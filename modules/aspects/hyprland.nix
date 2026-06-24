@@ -71,7 +71,7 @@
         self'.packages.hypr-zoom
         self'.packages.rofi-tmux
         self'.packages.spofi
-        #https://github.com/yurihs/waybar-media
+        self'.packages.waybar-media
         #https://github.com/CelDaemon/waybar-dunst
         #https://codeberg.org/erffy/zig-waybar-contrib
         #https://github.com/r00tman/corrupter
