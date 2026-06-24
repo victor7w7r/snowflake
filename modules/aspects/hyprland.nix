@@ -68,6 +68,7 @@
         rofi-file-browser
         self'.packages.autoricer
         self'.packages.corrupter
+        self'.packages.dunst-timer
         self'.packages.hypr-input-switcher
         self'.packages.hypr-zoom
         self'.packages.rofi-tmux
