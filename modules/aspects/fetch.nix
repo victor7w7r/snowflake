@@ -47,7 +47,6 @@
           ramfetch
           self'.packages.bestfetch
           self'.packages.frenzch
-          self'.packages.gpufetch
           self'.packages.hexfetch
           self'.packages.hwfetch
           self'.packages.kat-oh

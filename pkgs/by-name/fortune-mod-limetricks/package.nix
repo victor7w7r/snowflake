@@ -1,6 +1,6 @@
 { pkgs, stdenv }:
 stdenv.mkDerivation (attrs: {
-  pname = "fortune-mod-limericks";
+  pname = "fortune-mod-limetricks";
   version = "latest";
 
   src = pkgs.fetchurl {

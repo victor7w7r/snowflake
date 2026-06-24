@@ -8,7 +8,7 @@
   den.aspects.victor7w7r = {
     includes = [
       den.batteries.primary-user
-      (den.batteries.user-shell "zsh")
+      #(den.batteries.user-shell "zsh")
     ];
 
     provides.to-hosts = {

@@ -17,7 +17,7 @@
           fw
           jless
           just
-          self'.packages.jwt-ui
+          self'.packages.jwtui
           ktlint
           self'.packages.kyun
           self'.packages.loc

@@ -38,7 +38,7 @@
           simple-mtpfs
           self'.packages.adb-shell
           self'.packages.apkinspector
-          self'.packages.appmanager
+          self'.packages.app-manager
           self'.packages.adebar
           self'.packages.aya
           self'.packages.better-adb-sync
