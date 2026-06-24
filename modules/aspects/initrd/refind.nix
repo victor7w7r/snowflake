@@ -34,8 +34,17 @@
           pkgs.writeScript "boot-loader" ''
             #!${pkgs.stdenv.shell}
 
-            export PATH=${pkgs.gnused}/bin:${pkgs.sbctl}/bin:${pkgs.coreutils}/bin:${pkgs.gawk}/bin:\
-              ${pkgs.util-linux}/bin:${pkgs.efibootmgr}/bin:${pkgs.gnugrep}/bin:$PATH
+            export PATH="${
+              pkgs.lib.makeBinPath [
+                pkgs.gnused
+                pkgs.sbctl
+                pkgs.coreutils
+                pkgs.gawk
+                pkgs.util-linux
+                pkgs.efibootmgr
+                pkgs.gnugrep
+              ]
+            }:$PATH"
 
             TOPLEVEL=$1
 
