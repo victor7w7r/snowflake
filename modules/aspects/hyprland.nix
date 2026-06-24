@@ -70,8 +70,7 @@
         self'.packages.hypr-input-switcher
         self'.packages.hypr-zoom
         self'.packages.rofi-tmux
-        #https://github.com/zbaylin/rofi-wifi-menu
-        #https://github.com/newmanls/rofi-themes-collection
+        self'.packages.spofi
         #https://github.com/yurihs/waybar-media
         #https://github.com/CelDaemon/waybar-dunst
         #https://codeberg.org/erffy/zig-waybar-contrib
@@ -79,6 +78,7 @@
         #https://github.com/Torelli/hyprmixer
         #https://github.com/bitSheriff/dunst-timer
         #https://github.com/MADHUR/rofi-process-killer
+        #https://github.com/newmanls/rofi-themes-collection - userscript
       ];
 
       systemd.user.targets.hyprland-session.Unit.Wants = [ "xdg-desktop-autostart.target" ];
