@@ -71,6 +71,7 @@
         self'.packages.dunst-timer
         self'.packages.hypr-input-switcher
         self'.packages.hypr-zoom
+        self'.packages.rofi-process-killer
         self'.packages.rofi-tmux
         self'.packages.spofi
         self'.packages.waybar-dunst

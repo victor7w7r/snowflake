@@ -7,7 +7,7 @@ stdenvNoCC.mkDerivation (attrs: {
     owner = "madhur";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-2wGjbs8Ppgd3TRaAAut13It+LjtWTwJM8vYlPfI9uMo=";
+    sha256 = "sha256-UjLU6s70YmaA6Ztt6d3KkOxVH/kkJfCYaNtRqNy+r4s=";
   };
 
   dontBuild = true;
