@@ -1,7 +1,7 @@
 { kernel, ... }:
 {
   kernel.hosts.server =
-    pkgs:
+    { pkgs, ... }:
     let
       libs = kernel.lib.injector pkgs;
       src = (kernel.linux.injector pkgs).cachyos;

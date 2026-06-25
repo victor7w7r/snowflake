@@ -29,8 +29,6 @@
         pizero.disks
         pizero.passbolt
 
-        kernel.pizero
-
         base._
         base.tmux._
         base.shell._
@@ -67,7 +65,7 @@
               "sunxi_gmac"
               "libcomposite"
             ];
-            kernelPackages = pkgs.pizero-kernelPackages;
+            kernelPackages = (kernel.hosts.pizero { inherit pkgs; }).packages;
             loader = {
               grub.enable = false;
               generic-extlinux-compatible.enable = true;

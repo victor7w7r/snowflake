@@ -24,8 +24,6 @@
         handheld.services
         (initrd-services.lib.zram { })
 
-        kernel.handheld
-
         base._
         base.tmux._
         base.shell._
@@ -80,17 +78,13 @@
           services.lact.enable = true;
           system.requiredKernelConfig = pkgs.lib.mkForce [ ];
 
-          boot =
-            let
-              helpers = (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { });
-            in
-            {
-              extraModprobeConfig = "options kvm-amd nested=1";
-              resumeDevice = "/dev/mapper/swapcrypt";
-              kernelPackages = builtins.trace pkgs.handheld-kernel pkgs.handheld-kernelPackages;
-              #helpers.kernelModuleLLVMOverride (pkgs.handheld-kernelPackages);
-              kernelParams = [ "resume=/dev/mapper/swapcrypt" ];
-            };
+          boot = {
+            extraModprobeConfig = "options kvm-amd nested=1";
+            resumeDevice = "/dev/mapper/swapcrypt";
+            kernelPackages = (kernel.hosts.handheld { inherit pkgs; }).packages;
+            #debugFile = builtins.toFile "debug-set.json" (builtins.toJSON miSetDepurado);
+            kernelParams = [ "resume=/dev/mapper/swapcrypt" ];
+          };
 
           zramSwap = {
             enable = true;

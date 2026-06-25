@@ -21,8 +21,6 @@
         main.initrd
         main.services
 
-        kernel.main
-
         base._
         base.tmux._
         base.shell._
@@ -59,7 +57,7 @@
               (pkgs.callPackage ./custom/apple-bce.nix { kernel = kernelBuild.kernel; })
               ];
             */
-            kernelPackages = pkgs.main-kernelPackages;
+            kernelPackages = (kernel.hosts.main { inherit pkgs; }).packages;
             #audioT2 = (pkgs.callPackage ./custom/t2-pipewire.nix { });
             resumeDevice = "/dev/mapper/swapcrypt";
           };

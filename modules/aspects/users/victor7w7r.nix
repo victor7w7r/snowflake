@@ -79,7 +79,7 @@
         home = {
           stateVersion = lib.mkDefault "26.05";
           sessionPath = [ "$HOME/.local/bin" ];
-          file."repositories/nixstrap".source = config.lib.file.mkOutOfStoreSymlink "/etc/nixos";
+          file."repositories/snowflake".source = config.lib.file.mkOutOfStoreSymlink "/etc/nixos";
         };
       };
   };

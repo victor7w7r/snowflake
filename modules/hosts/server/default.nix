@@ -1,8 +1,8 @@
 {
   den,
   inputs,
-  kernel,
   server,
+  kernel,
   ...
 }:
 {
@@ -20,8 +20,6 @@
         server.disks-physical
         server.initrd
         server.systemd
-
-        kernel.server
 
         base._
         base.tmux._
@@ -55,7 +53,7 @@
             blacklistedKernelModules = [ "r8169" ];
             resumeDevice = "/dev/mapper/swapcrypt";
             kernelParams = [ "pcie_aspm=off" ];
-            kernelPackages = pkgs.server-kernelPackages;
+            kernelPackages = (kernel.hosts.server { inherit pkgs; }).packages;
             swraid = {
               enable = true;
               mdadmConf = ''

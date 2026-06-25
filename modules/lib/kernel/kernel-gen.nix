@@ -48,7 +48,11 @@
     in
     {
       kernel = kernel-result;
-      packages = pkgs.linuxPackagesFor kernel-result;
+      packages =
+        if isClang then
+          helpers.kernelModuleLLVMOverride (pkgs.linuxPackagesFor kernel-result)
+        else
+          pkgs.linuxPackagesFor kernel-result;
     };
 }
 /*

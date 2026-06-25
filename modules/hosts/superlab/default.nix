@@ -3,6 +3,7 @@
   inputs,
   initrd-services,
   superlab,
+  kernel,
   ...
 }:
 {
@@ -46,26 +47,29 @@
         zed
       ];
 
-      nixos = {
-        boot = {
-          kernelParams = [
-            "console=ttyS2,1500000n8"
-          ];
-          loader = {
-            grub.enable = false;
-            generic-extlinux-compatible.enable = true;
+      nixos =
+        { pkgs, ... }:
+        {
+          boot = {
+            kernelParams = [
+              "console=ttyS2,1500000n8"
+            ];
+            loader = {
+              grub.enable = false;
+              generic-extlinux-compatible.enable = true;
+            };
+            kernelPackages = (kernel.hosts.superlab { inherit pkgs; }).packages;
+            #pkgs.ubootRock5ModelB;
+            # kernelPackages = kernel.packages;
           };
-          #pkgs.ubootRock5ModelB;
-          # kernelPackages = kernel.packages;
-        };
 
-        zramSwap = {
-          enable = true;
-          algorithm = "zstd";
-          memoryPercent = 20;
-          priority = 100;
+          zramSwap = {
+            enable = true;
+            algorithm = "zstd";
+            memoryPercent = 20;
+            priority = 100;
+          };
         };
-      };
     };
   };
 }

@@ -85,7 +85,7 @@
         intel.updateMicrocode = true;
       };
 
-      image.fileName = "nixstrap-${config.system.nixos.label}.iso";
+      image.fileName = "snowflake-${config.system.nixos.label}.iso";
       swapDevices = lib.mkImageMediaOverride [ ];
       fileSystems = lib.mkImageMediaOverride config.lib.isoFileSystems;
 

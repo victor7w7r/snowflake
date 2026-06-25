@@ -26,11 +26,11 @@
   perSystem =
     { pkgs, system, ... }:
     let
-      handheld = (kernel.hosts.handheld pkgs);
-      main = (kernel.hosts.main pkgs);
-      server = (kernel.hosts.server pkgs);
-      pizero = (kernel.hosts.pizero pkgs);
-      superlab = (kernel.hosts.superlab pkgs);
+      handheld = (kernel.hosts.handheld { inherit pkgs; });
+      main = (kernel.hosts.main { inherit pkgs; });
+      server = (kernel.hosts.server { inherit pkgs; });
+      pizero = (kernel.hosts.pizero { inherit pkgs; });
+      superlab = (kernel.hosts.superlab { inherit pkgs; });
       main-kernel = main.main-kernel;
     in
     {
