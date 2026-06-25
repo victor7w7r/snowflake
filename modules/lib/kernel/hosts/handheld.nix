@@ -25,6 +25,7 @@
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
+            essentials
             (cmdline { isAmd = true; })
             default
             freq.high
@@ -44,19 +45,10 @@
         version = version.string;
         configfile = handheld-config;
       };
-
-      parsedConfig = kernel.lib.parse-config handheld-config;
     in
     {
       inherit handheld-config;
-      handheld-kernelPackages = generated.packages // {
-        kernel = generated.packages.kernel // {
-          config = parsedConfig;
-        };
-      };
-
-      handheld-kernel = generated.kernel // {
-        config = parsedConfig;
-      };
+      handheld-kernelPackages = generated.packages;
+      handheld-kernel = generated.kernel;
     };
 }
