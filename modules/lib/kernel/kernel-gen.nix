@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ kernel, inputs, ... }:
 {
   kernel.lib.kernel-gen =
     {
@@ -15,12 +15,11 @@
       kernel-result = (
         pkgs.linuxManualConfig {
           inherit src configfile;
+          config = kernel.lib.parse-config configfile;
           pname = "linux-v7w7r-${localVer}";
           modDirVersion = "${version}-v7w7r-${localVer}";
           version = "${version}-v7w7r-${localVer}";
           stdenv = if isClang then helpers.stdenvLLVM else pkgs.stdenv;
-
-          checkConfig = false;
 
           kernelPatches = map (file: {
             name = baseNameOf (toString file);

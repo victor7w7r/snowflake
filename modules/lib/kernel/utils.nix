@@ -4,12 +4,32 @@
     concat-config =
       with lib;
       configList:
-      pipe configList [
-        (map (structConfig: removeAttrs structConfig [ "__provider" ]))
-        (zipAttrsWith (_: builtins.head))
-        (mapAttrsToList (option: value: "CONFIG_${option}=${value}"))
-        (concatStringsSep "\n")
-      ];
+      configList
+      |> map (structConfig: removeAttrs structConfig [ "__provider" ])
+      |> zipAttrsWith (_: builtins.head)
+      |> mapAttrsToList (option: value: "CONFIG_${option}=${value}")
+      |> concatStringsSep "\n";
+
+    parse-config =
+      with lib;
+      configDeriv:
+      configDeriv (builtins.readFile configDeriv)
+      |> splitString "\n"
+      |> filter (line: line != "" && !(hasPrefix "#" line))
+      |> map (
+        line:
+        let
+          parts = splitString "=" line;
+          rawName = head parts;
+          optionName = removePrefix "CONFIG_" rawName;
+          value = concatStringsSep "=" (tail parts);
+        in
+        {
+          name = optionName;
+          value = value;
+        }
+      )
+      |> listToAttrs;
 
     calc-version = pkgs: src: rec {
       file = pkgs.stdenvNoCC.mkDerivation {
