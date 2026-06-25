@@ -48,7 +48,13 @@
     in
     {
       inherit handheld-config;
-      handheld-kernelPackages = generated.packages;
-      handheld-kernel = generated.kernel;
+      handheld-kernelPackages = generated.packages // {
+        kernel = generated.packages.kernel // {
+          dev = generated.packages.kernel;
+        };
+      };
+      handheld-kernel = generated.kernel // {
+        dev = generated.kernel;
+      };
     };
 }
