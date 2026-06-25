@@ -57,14 +57,18 @@
             mkdir -p "$DEVELOPMENT_DIR"
             cp -a . "$DEVELOPMENT_DIR/"
 
-            if [ -f "$DEVELOPMENT_DIR/Makefile" ]; then
-              if grep -q "/build/" "$DEVELOPMENT_DIR/Makefile"; then
-                echo "Borrando Makefile wrapper obsoleto..."
-                rm -f "$DEVELOPMENT_DIR/Makefile"
-              fi
+            REAL_MAKEFILE=$(find "$DEVELOPMENT_DIR" -mindepth 2 -name "Makefile" | head -n 1)
+
+            if [ -n "$REAL_MAKEFILE" ]; then
+              REAL_SUBDIR=$(dirname "$REAL_MAKEFILE")
+              cp -af "$REAL_SUBDIR"/* "$DEVELOPMENT_DIR/" 2>/dev/null || true
             fi
 
-            echo "Preparando módulos de desarrollo..."
+            if [ -f "$DEVELOPMENT_DIR/Makefile" ] && grep -q "/build/" "$DEVELOPMENT_DIR/Makefile"; then
+              rm -f "$DEVELOPMENT_DIR/Makefile"
+              [ -f "$DEVELOPMENT_DIR/Makefile.main" ] && cp "$DEVELOPMENT_DIR/Makefile.main" "$DEVELOPMENT_DIR/Makefile"
+            fi
+
             make -C "$DEVELOPMENT_DIR" modules_prepare EXTRA_CFLAGS="-Wno-error" 2>/dev/null || true
 
             ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/build"
