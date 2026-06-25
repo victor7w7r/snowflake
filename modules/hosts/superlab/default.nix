@@ -58,7 +58,7 @@
               grub.enable = false;
               generic-extlinux-compatible.enable = true;
             };
-            kernelPackages = (kernel.hosts.superlab { inherit pkgs; }).packages;
+            kernelPackages = (kernel.hosts.superlab { inherit pkgs; }).superlab-kernelPackages;
             #pkgs.ubootRock5ModelB;
             # kernelPackages = kernel.packages;
           };

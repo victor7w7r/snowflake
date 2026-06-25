@@ -65,7 +65,7 @@
               "sunxi_gmac"
               "libcomposite"
             ];
-            kernelPackages = (kernel.hosts.pizero { inherit pkgs; }).packages;
+            kernelPackages = (kernel.hosts.pizero { inherit pkgs; }).pizero-kernelPackages;
             loader = {
               grub.enable = false;
               generic-extlinux-compatible.enable = true;
