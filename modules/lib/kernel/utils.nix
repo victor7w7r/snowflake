@@ -13,7 +13,7 @@
     parse-config =
       with lib;
       configDeriv:
-      configDeriv (builtins.readFile configDeriv)
+      (builtins.readFile configDeriv)
       |> splitString "\n"
       |> filter (line: line != "" && !(hasPrefix "#" line))
       |> map (
@@ -21,12 +21,10 @@
         let
           parts = splitString "=" line;
           rawName = head parts;
-          optionName = removePrefix "CONFIG_" rawName;
-          value = concatStringsSep "=" (tail parts);
         in
         {
-          name = optionName;
-          value = value;
+          name = removePrefix "CONFIG_" rawName;
+          value = concatStringsSep "=" (tail parts);
         }
       )
       |> listToAttrs;
