@@ -1,11 +1,10 @@
 { kernel, ... }:
 {
   kernel.hosts.handheld =
-    { pkgs, ... }:
+    pkgs:
     let
-      libs = kernel.lib.injector pkgs;
       src = (kernel.linux.injector pkgs).cachyos;
-      version = libs.calc-version src;
+      version = kernel.lib.calc-version pkgs src;
       patchesData = (kernel.patches.injector pkgs);
       cachyosPatches = (patchesData.cachyos version.majorMinor);
       bunkerPatches = patchesData.bunker;
@@ -18,9 +17,8 @@
         ++ bunkerPatches.common
         ++ patchesData.asus;
 
-      handheld-config = libs.config-gen {
-        inherit patches src;
-        isArm = false;
+      handheld-config = kernel.lib.config-gen {
+        inherit patches src pkgs;
         config = (kernel.linux.injector pkgs).kConfig false;
         structConfig =
           with kernel.config.modules;
@@ -38,8 +36,8 @@
           ]);
       };
 
-      generated = libs.kernel-gen {
-        inherit src patches;
+      generated = kernel.lib.kernel-gen {
+        inherit pkgs src patches;
         localVer = "handheld-native";
         isArm = false;
         version = version.string;
@@ -49,6 +47,13 @@
     {
       inherit handheld-config;
       handheld-kernelPackages = generated.packages;
+      /*
+        let
+          pkgsSet = generated.packages;
+          keys = builtins.attrNames pkgsSet.kernel;
+        in
+        builtins.trace ("Atributos encontrados: " + builtins.concatStringsSep ", " keys) pkgsSet;
+      */
       handheld-kernel = generated.kernel;
     };
 }

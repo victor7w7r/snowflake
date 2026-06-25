@@ -1,18 +1,16 @@
 { kernel, ... }:
 {
   kernel.hosts.main =
-    { pkgs, ... }:
+    pkgs:
     let
-      libs = kernel.lib.injector pkgs;
       src = (kernel.linux.injector pkgs).cachyos;
-      version = libs.calc-version src;
+      version = kernel.lib.calc-version pkgs src;
       patches =
         with (kernel.patches.injector pkgs);
         (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming ++ bunker.common;
-      main-config = libs.config-gen {
-        inherit patches src;
+      main-config = kernel.lib.config-gen {
+        inherit patches src pkgs;
         isArm = false;
-        isClang = true;
         config = (kernel.linux.injector pkgs).kConfig false;
         structConfig =
           with kernel.config.modules;
@@ -34,8 +32,8 @@
             vendor.intel
           ]);
       };
-      generated = libs.kernel-gen {
-        inherit src patches;
+      generated = kernel.lib.kernel-gen {
+        inherit pkgs src patches;
         localVer = "native";
         version = version.string;
         configfile = main-config;

@@ -1,16 +1,14 @@
 { kernel, ... }:
 {
   kernel.hosts.superlab =
-    { pkgs, ... }:
+    pkgs:
     let
-      libs = kernel.lib.injector pkgs;
       src = (kernel.linux.injector pkgs).cachyos;
-      version = libs.calc-version src;
+      version = kernel.lib.calc-version pkgs src;
       patchesData = (kernel.patches.injector pkgs);
       cachyosPatches = (patchesData.cachyos version.majorMinor);
       tachyonPatches = patchesData.tachyon;
       bunkerPatches = patchesData.bunker;
-
       patches =
         cachyosPatches.common
         ++ tachyonPatches.common
@@ -18,8 +16,8 @@
         ++ bunkerPatches.common
         ++ patchesData.armbian.rockchip-patches;
 
-      superlab-config = libs.config-gen {
-        inherit patches src;
+      superlab-config = kernel.lib.config-gen {
+        inherit patches src pkgs;
         isArm = true;
         config = "${patchesData.armbian.source}/config/kernel/linux-rockchip64-current.config";
         structConfig =
@@ -40,9 +38,8 @@
           ]);
       };
 
-      generated = libs.kernel-gen {
-        inherit src patches;
-        isClang = false;
+      generated = kernel.lib.kernel-gen {
+        inherit pkgs src patches;
         version = version.string;
         localVer = "rockchip";
         configfile = superlab-config;

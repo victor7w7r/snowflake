@@ -1,4 +1,4 @@
-{ lib, inputs, ... }:
+{ inputs, lib, ... }:
 {
   kernel.lib.kernel-gen =
     {
@@ -6,20 +6,19 @@
       configfile,
       patches,
       pkgs,
-      isClang ? true,
       isArm ? false,
       src,
       version,
     }:
     let
       helpers = (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { });
-      kernel-result =
-        (pkgs.linuxManualConfig {
+      base = (
+        pkgs.linuxManualConfig {
           inherit src configfile;
           allowImportFromDerivation = false;
           version = "${version}-v7w7r-${localVer}";
           modDirVersion = "${version}-v7w7r-${localVer}";
-          stdenv = if isClang then helpers.stdenvLLVM else pkgs.stdenv;
+          stdenv = helpers.stdenvLLVM;
 
           kernelPatches = map (file: {
             name = baseNameOf (toString file);
@@ -34,25 +33,28 @@
             #"CC=ccache cc"
             #"HOSTCC=ccache cc"
           ];
-        }).overrideAttrs
-          (attrs: {
-            passthru = attrs.passthru // {
-              configure = configfile;
-              features = lib.optionalAttrs (!isArm) {
-                ia32Emulation = true;
-                netfilterRPFilter = true;
-                efiBootStub = true;
-              };
+        }
+      );
+
+      kernel =
+        base.overrideAttrs (attrs: {
+          passthru = attrs.passthru // {
+            configure = configfile;
+            features = lib.optionalAttrs (!isArm) {
+              ia32Emulation = true;
+              netfilterRPFilter = true;
+              efiBootStub = true;
             };
-          });
+            dev = kernel;
+          };
+        })
+        // {
+          dev = kernel;
+        };
     in
     {
-      kernel = kernel-result;
-      packages =
-        if isClang then
-          helpers.kernelModuleLLVMOverride (pkgs.linuxPackagesFor kernel-result)
-        else
-          pkgs.linuxPackagesFor kernel-result;
+      inherit kernel;
+      packages = helpers.kernelModuleLLVMOverride (pkgs.linuxPackagesFor kernel);
     };
 }
 /*

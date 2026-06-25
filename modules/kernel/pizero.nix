@@ -1,11 +1,10 @@
 { kernel, ... }:
 {
   kernel.hosts.pizero =
-    { pkgs, ... }:
+    pkgs:
     let
-      libs = kernel.lib.injector pkgs;
       src = (kernel.linux.injector pkgs).cachyos;
-      version = libs.calc-version src;
+      version = kernel.lib.calc-version pkgs src;
       patchesData = (kernel.patches.injector pkgs);
       cachyosPatches = (patchesData.cachyos version.majorMinor);
       tachyonPatches = patchesData.tachyon;
@@ -20,8 +19,8 @@
         ++ bunkerPatches.hardened
         ++ patchesData.armbian.sunxi-patches;
 
-      pizero-config = libs.config-gen {
-        inherit patches src;
+      pizero-config = kernel.lib.config-gen {
+        inherit patches src pkgs;
         isArm = true;
         config = "${patchesData.armbian.source}/config/kernel/linux-sunxi64-current.config";
         structConfig =
@@ -42,11 +41,10 @@
           ]);
       };
 
-      generated = libs.kernel-gen {
-        inherit src patches;
-        isClang = false;
-        version = version.string;
+      generated = kernel.lib.kernel-gen {
+        inherit pkgs src patches;
         localVer = "sunxi-hardened";
+        version = version.string;
         configfile = pizero-config;
       };
     in

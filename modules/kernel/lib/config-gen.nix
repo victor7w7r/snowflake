@@ -8,7 +8,6 @@
   kernel.lib.config-gen =
     {
       isArm ? false,
-      isClang ? true,
       disableDenial ? false,
       structConfig,
       config,
@@ -22,26 +21,21 @@
     pkgs.stdenvNoCC.mkDerivation {
       name = "linux-config-gen";
       inherit src;
-      LLVM = if isClang then "1" else null;
+      LLVM = "1";
       RUST_LIB_SRC = "${pkgs.rustPlatform.rustLibSrc}";
       PATCHES_FILE = pkgs.writeText "kernel-patches-list" (pkgs.lib.concatStringsSep "\n" patches);
       dontFixup = true;
 
-      nativeBuildInputs =
-        with pkgs;
-        [
-          stdenv.cc
-          bison
-          flex
-          rustc
-          pahole
-        ]
-        ++ (lib.optionals isClang [
-          (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { }).stdenvLLVM
-          llvm
-          clang
-          lld
-        ]);
+      nativeBuildInputs = with pkgs; [
+        (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { }).stdenvLLVM
+        bison
+        clang
+        flex
+        llvm
+        lld
+        pahole
+        rustc
+      ];
 
       makeFlags = [
         arch

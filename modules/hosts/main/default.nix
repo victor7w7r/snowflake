@@ -57,7 +57,7 @@
               (pkgs.callPackage ./custom/apple-bce.nix { kernel = kernelBuild.kernel; })
               ];
             */
-            kernelPackages = (kernel.hosts.main { inherit pkgs; }).main-kernelPackages;
+            kernelPackages = (kernel.hosts.main pkgs).main-kernelPackages;
             #audioT2 = (pkgs.callPackage ./custom/t2-pipewire.nix { });
             resumeDevice = "/dev/mapper/swapcrypt";
           };

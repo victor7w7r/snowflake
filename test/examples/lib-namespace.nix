@@ -26,9 +26,7 @@
       nixos =
         { pkgs, ... }:
         {
-          environment.systemPackages =
-            with pkgs;
-            [ go-audit ] ++ (reuse.lib.functor { inherit pkgs; }).testeable;
+          environment.systemPackages = with pkgs; [ go-audit ] ++ (reuse.lib.functor pkgs).testeable;
         };
     };
 

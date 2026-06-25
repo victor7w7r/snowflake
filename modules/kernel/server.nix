@@ -1,11 +1,10 @@
 { kernel, ... }:
 {
   kernel.hosts.server =
-    { pkgs, ... }:
+    pkgs:
     let
-      libs = kernel.lib.injector pkgs;
       src = (kernel.linux.injector pkgs).cachyos;
-      version = libs.calc-version src;
+      version = kernel.lib.calc-version pkgs src;
       patchesData = (kernel.patches.injector pkgs);
       cachyosPatches = (patchesData.cachyos version.majorMinor);
       tachyonPatches = patchesData.tachyon;
@@ -19,8 +18,8 @@
         ++ bunkerPatches.common
         ++ bunkerPatches.hardened;
 
-      server-config = libs.config-gen {
-        inherit patches src;
+      server-config = kernel.lib.config-gen {
+        inherit patches src pkgs;
         config = (kernel.linux.injector pkgs).kConfig true;
         isArm = false;
         structConfig =
@@ -44,8 +43,8 @@
           ]);
       };
 
-      generated = libs.kernel-gen {
-        inherit src patches;
+      generated = kernel.lib.kernel-gen {
+        inherit pkgs src patches;
         localVer = "server-hardened-native";
         version = version.string;
         configfile = server-config;

@@ -76,12 +76,12 @@
           };
 
           services.lact.enable = true;
-          system.requiredKernelConfig = pkgs.lib.mkForce [ ];
+          #system.requiredKernelConfig = pkgs.lib.mkForce [ ];
 
           boot = {
             extraModprobeConfig = "options kvm-amd nested=1";
             resumeDevice = "/dev/mapper/swapcrypt";
-            kernelPackages = (kernel.hosts.handheld { inherit pkgs; }).handheld-kernelPackages;
+            kernelPackages = (kernel.hosts.handheld pkgs).handheld-kernelPackages;
             kernelParams = [ "resume=/dev/mapper/swapcrypt" ];
           };
 

@@ -53,7 +53,7 @@
             blacklistedKernelModules = [ "r8169" ];
             resumeDevice = "/dev/mapper/swapcrypt";
             kernelParams = [ "pcie_aspm=off" ];
-            kernelPackages = (kernel.hosts.server { inherit pkgs; }).server-kernelPackages;
+            kernelPackages = (kernel.hosts.server pkgs).server-kernelPackages;
             swraid = {
               enable = true;
               mdadmConf = ''
