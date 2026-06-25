@@ -15,7 +15,7 @@
       kernel-result = (
         pkgs.linuxManualConfig {
           inherit src configfile;
-          config = (kernel.lib.parse-config configfile);
+          structuredConfig = (kernel.lib.parse-config configfile);
           pname = "linux-v7w7r-${localVer}";
           modDirVersion = "${version}-v7w7r-${localVer}";
           version = "${version}-v7w7r-${localVer}";
