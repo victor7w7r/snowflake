@@ -5,7 +5,6 @@
       isIntel,
       isLive,
       hasVisualKeyboard,
-      pkgs,
       ...
     }:
     {
@@ -28,38 +27,6 @@
           cleanOnBoot = true;
           useTmpfs = true;
         };
-        kernelPatches = [
-          {
-            name = "nixos-systemd-structured-required";
-            patch = null;
-            structuredExtraConfig = with pkgs.lib.kernel; {
-              DEVTMPFS = yes;
-              DEVTMPFS_MOUNT = yes;
-              CGROUPS = yes;
-              INOTIFY_USER = yes;
-              SIGNALFD = yes;
-              TIMERFD = yes;
-              EPOLL = yes;
-              SYSFS = yes;
-              PROC_FS = yes;
-              FHANDLE = yes;
-              BINFMT_ELF = yes;
-              BLK_DEV_INITRD = yes;
-              NET = yes;
-              UNIX = yes;
-              SWAP = yes;
-              TMPFS = yes;
-              TMPFS_POSIX_ACL = yes;
-              TMPFS_XATTR = yes;
-              SECCOMP = yes;
-              CRYPTO_USER_API_HASH = yes;
-              CRYPTO_HMAC = yes;
-              CRYPTO_SHA256 = yes;
-              AUTOFS_FS = yes;
-              ZRAM = yes;
-            };
-          }
-        ];
         extraModprobeConfig = ''
           blacklist iTCO_wdt
           blacklist joydev
