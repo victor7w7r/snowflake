@@ -50,6 +50,7 @@
       handheld-kernelPackages = generated.packages // {
         kernel = generated.packages.kernel // {
           dev = generated.packages.kernel;
+          modDirVersion = version.string;
         };
       };
       handheld-kernel = generated.kernel // {
