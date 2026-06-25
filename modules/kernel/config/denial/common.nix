@@ -125,6 +125,8 @@
     debug = {
       ACPI_DEBUG = "n";
       DEBUG_FS = "n";
+      DEBUG_INFO = "n";
+      DEBUG_INFO_BTF = "n";
       DEBUG_MISC = "n";
       DEBUG_PREEMPT = "n";
       FUNCTION_ERROR_INJECTION = "n";
