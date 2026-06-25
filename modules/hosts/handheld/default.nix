@@ -78,7 +78,6 @@
           };
 
           services.lact.enable = true;
-
           system.requiredKernelConfig = pkgs.lib.mkForce [ ];
 
           boot = {
