@@ -58,6 +58,7 @@
             cpu.intel.updateMicrocode = true;
           })
           {
+            graphics.enable32Bit = lib.mkForce false;
             sensor.iio.enable = true;
             ksm.enable = true;
             #sensor.hddtemp.enable = true; SPECIFICATE IN HOSTS with .drives
