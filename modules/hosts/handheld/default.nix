@@ -87,9 +87,7 @@
             {
               extraModprobeConfig = "options kvm-amd nested=1";
               resumeDevice = "/dev/mapper/swapcrypt";
-              kernelPackages = helpers.kernelModuleLLVMOverride (
-                lib.debug.traceValSeqFn pkgs.handheld-kernelPackages
-              );
+              kernelPackages = helpers.kernelModuleLLVMOverride (pkgs.handheld-kernelPackages);
               kernelParams = [ "resume=/dev/mapper/swapcrypt" ];
             };
 

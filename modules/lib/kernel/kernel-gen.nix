@@ -48,7 +48,7 @@
           });
     in
     {
-      kernel = kernel-result;
+      kernel = (lib.debug.traceValSeqFn kernel-result);
       packages = pkgs.linuxPackagesFor kernel-result;
     };
 }
