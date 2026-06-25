@@ -87,32 +87,38 @@
               {
                 name = "nixos-systemd-structured-required";
                 patch = null;
-                structuredExtraConfig = with pkgs.lib.kernel; {
-                  DEVTMPFS = yes;
-                  DEVTMPFS_MOUNT = yes;
-                  CGROUPS = yes;
-                  INOTIFY_USER = yes;
-                  SIGNALFD = yes;
-                  TIMERFD = yes;
-                  EPOLL = yes;
-                  SYSFS = yes;
-                  PROC_FS = yes;
-                  FHANDLE = yes;
-                  BINFMT_ELF = yes;
-                  BLK_DEV_INITRD = yes;
-                  NET = yes;
-                  UNIX = yes;
-                  SWAP = yes;
-                  TMPFS = yes;
-                  TMPFS_POSIX_ACL = yes;
-                  TMPFS_XATTR = yes;
-                  SECCOMP = yes;
-                  CRYPTO_USER_API_HASH = yes;
-                  CRYPTO_HMAC = yes;
-                  CRYPTO_SHA256 = yes;
-                  AUTOFS_FS = yes;
-                  ZRAM = yes;
-                };
+                extraConfig = ''
+                  DEVTMPFS y
+                  DEVTMPFS_MOUNT y
+                  CGROUPS y
+                  INOTIFY_USER y
+                  SIGNALFD y
+                  TIMERFD y
+                  EPOLL y
+                  SYSFS y
+                  PROC_FS y
+                  FHANDLE y
+                  BINFMT_ELF y
+                  BLK_DEV_INITRD y
+
+                  NET y
+                  UNIX y
+                  SWAP y
+
+                  TMPFS y
+                  TMPFS_POSIX_ACL y
+                  TMPFS_XATTR y
+
+                  SECCOMP y
+                  CRYPTO_USER_API_HASH y
+                  CRYPTO_HMAC y
+                  CRYPTO_SHA256 y
+
+                  # Varios requeridos por el validador de NixOS
+                  DMIID y
+                  AUTOFS_FS y
+                  ZRAM y
+                '';
               }
             ];
             kernelParams = [
