@@ -85,11 +85,11 @@
             location = "top";
             alignment = "center";
             lengthMode = "fill";
-            floating = true;
-            height = 32;
+            floating = false;
+            height = 24;
             hiding = "none";
             screen = "all";
-            opacity = "adaptive";
+            opacity = "translucent";
             widgets = [
               {
                 name = "org.51n7.kMenu";
