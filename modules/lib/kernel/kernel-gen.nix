@@ -16,10 +16,9 @@
       kernel-result =
         (pkgs.linuxManualConfig {
           inherit src configfile;
-          pname = "linux-v7w7r-${localVer}";
           allowImportFromDerivation = false;
-          modDirVersion = "${version}-v7w7r-${localVer}";
           version = "${version}-v7w7r-${localVer}";
+          modDirVersion = "${version}-v7w7r-${localVer}";
           stdenv = if isClang then helpers.stdenvLLVM else pkgs.stdenv;
 
           kernelPatches = map (file: {
@@ -39,7 +38,7 @@
           (attrs: {
             passthru = attrs.passthru // {
               configure = configfile;
-              features = lib.optionalAttrs isArm {
+              features = lib.optionalAttrs (!isArm) {
                 ia32Emulation = true;
                 netfilterRPFilter = true;
                 efiBootStub = true;
@@ -48,7 +47,7 @@
           });
     in
     {
-      kernel = (lib.debug.traceValSeqFn kernel-result);
+      kernel = kernel-result;
       packages = pkgs.linuxPackagesFor kernel-result;
     };
 }
