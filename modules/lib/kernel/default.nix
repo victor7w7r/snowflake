@@ -5,15 +5,14 @@
   kernel = {
     handheld.nixos.nixpkgs.overlays = [
       (final: _: kernel.hosts.handheld final)
-      (final: _: kernel.hosts.test.attrTest final)
+      (_: prev: kernel.hosts.test.attrTest prev)
     ];
     hosts.test.attrTest =
-      final:
-      final.writeShellApplication {
+      pkgs:
+      pkgs.writeShellApplication {
         name = "hola-test";
         text = ''
           echo "¡La configuración de overlays está andando, ctm!"
-          echo "Kernel actual: $(uname -r)"
         '';
       };
 
