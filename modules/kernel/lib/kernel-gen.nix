@@ -55,21 +55,16 @@
 
             DEVELOPMENT_DIR="$out/share/linux-kernel"
             mkdir -p "$DEVELOPMENT_DIR"
-            cp -a . "$DEVELOPMENT_DIR/"
 
-            REAL_MAKEFILE=$(find "$DEVELOPMENT_DIR" -mindepth 2 -name "Makefile" | head -n 1)
+            cp -rT . "$DEVELOPMENT_DIR" 2>/dev/null || true
 
-            if [ -n "$REAL_MAKEFILE" ]; then
-              REAL_SUBDIR=$(dirname "$REAL_MAKEFILE")
-              cp -af "$REAL_SUBDIR"/* "$DEVELOPMENT_DIR/" 2>/dev/null || true
+            if [ -f "$DEVELOPMENT_DIR/Makefile" ]; then
+              sed -i "s|/build/cachyos-[^/]*|$DEVELOPMENT_DIR|g" "$DEVELOPMENT_DIR/Makefile" 2>/dev/null || true
             fi
 
-            if [ -f "$DEVELOPMENT_DIR/Makefile" ] && grep -q "/build/" "$DEVELOPMENT_DIR/Makefile"; then
-              rm -f "$DEVELOPMENT_DIR/Makefile"
-              [ -f "$DEVELOPMENT_DIR/Makefile.main" ] && cp "$DEVELOPMENT_DIR/Makefile.main" "$DEVELOPMENT_DIR/Makefile"
+            if [ -f "$DEVELOPMENT_DIR/Kbuild" ] || [ -f "$DEVELOPMENT_DIR/Makefile" ]; then
+              make -C "$DEVELOPMENT_DIR" modules_prepare EXTRA_CFLAGS="-Wno-error" 2>/dev/null || true
             fi
-
-            make -C "$DEVELOPMENT_DIR" modules_prepare EXTRA_CFLAGS="-Wno-error" 2>/dev/null || true
 
             ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/build"
             ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/source"
