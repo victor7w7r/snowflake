@@ -12,14 +12,15 @@
     pizero.nixos.nixpkgs.overlays = [ (final: _: kernel.hosts.pizero final) ];
     superlab.nixos.nixpkgs.overlays = [ (final: _: kernel.hosts.superlab final) ];
 
-      hosts.test.attrTest = final: final.writeShellApplication {
+    hosts.test.attrTest =
+      final:
+      final.writeShellApplication {
         name = "hola-test";
         text = ''
           echo "¡La configuración de overlays está andando, ctm!"
           echo "Kernel actual: $(uname -r)"
         '';
       };
-    };
 
     lib = {
       injector = pkgs: {
