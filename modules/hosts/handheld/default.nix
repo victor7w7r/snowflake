@@ -87,6 +87,14 @@
             kernelParams = [ "resume=/dev/mapper/swapcrypt" ];
           };
 
+          nixpkgs.overlays = [
+            (final: prev: {
+              bcachefs-tools = prev.bcachefs-tools.overrideAttrs (old: {
+                kernel = final.handheld-kernel;
+              });
+            })
+          ];
+
           zramSwap = {
             enable = true;
             algorithm = "zstd";

@@ -25,7 +25,6 @@
         structConfig =
           with kernel.config.modules;
           (kernel.lib.concat-config [
-            essentials
             (cmdline { isAmd = true; })
             default
             freq.high
@@ -48,13 +47,7 @@
     in
     {
       inherit handheld-config;
-      handheld-kernelPackages = generated.packages // {
-        kernel = generated.packages.kernel // {
-          dev = generated.packages.kernel;
-        };
-      };
-      handheld-kernel = generated.kernel // {
-        dev = generated.kernel;
-      };
+      handheld-kernelPackages = generated.packages;
+      handheld-kernel = generated.kernel;
     };
 }
