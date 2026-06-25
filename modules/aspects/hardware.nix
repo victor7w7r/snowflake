@@ -49,16 +49,13 @@
           (lib.mkIf isGraphic {
             graphics.enable = true;
           })
-          /*
-            (lib.mkIf (isGraphic && isX86) {
+          (lib.mkIf (isGraphic && isX86) {
             graphics.enable32Bit = true;
-            })
-          */
+          })
           (lib.mkIf isIntel {
             cpu.intel.updateMicrocode = true;
           })
           {
-            graphics.enable32Bit = lib.mkForce false;
             sensor.iio.enable = true;
             ksm.enable = true;
             #sensor.hddtemp.enable = true; SPECIFICATE IN HOSTS with .drives
