@@ -40,6 +40,7 @@
             configfile,
             patches,
             isClang ? true,
+            isArm ? false,
             src,
             version,
           }:
@@ -49,6 +50,7 @@
               configfile
               patches
               pkgs
+              isArm
               isClang
               src
               version

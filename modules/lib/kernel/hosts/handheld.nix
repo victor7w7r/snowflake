@@ -41,20 +41,14 @@
       generated = libs.kernel-gen {
         inherit src patches;
         localVer = "handheld-native";
+        isArm = false;
         version = version.string;
         configfile = handheld-config;
       };
     in
     {
       inherit handheld-config;
-      handheld-kernelPackages = generated.packages // {
-        kernel = generated.packages.kernel // {
-          dev = generated.packages.kernel;
-          modDirVersion = version.string;
-        };
-      };
-      handheld-kernel = generated.kernel // {
-        dev = generated.kernel;
-      };
+      handheld-kernelPackages = generated.packages;
+      handheld-kernel = generated.kernel;
     };
 }
