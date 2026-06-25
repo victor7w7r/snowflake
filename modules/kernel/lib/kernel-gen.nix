@@ -55,6 +55,9 @@
             DEVELOPMENT_DIR="$out/share/linux-kernel"
             mkdir -p "$DEVELOPMENT_DIR"
             cp -a . "$DEVELOPMENT_DIR/"
+            if [ -f "$DEVELOPMENT_DIR/Makefile" ]; then
+              find "$DEVELOPMENT_DIR" -type f \( -name "Makefile*" -o -name "*.mk" -o -name "config*" \) -exec sed -i "s|/build/cachyos-[^/]*|$DEVELOPMENT_DIR|g" {} + 2>/dev/null || true
+            fi
             ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/build"
             ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/source"
           '';
