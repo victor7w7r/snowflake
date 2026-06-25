@@ -47,28 +47,7 @@
             };
             dev = kernel;
           };
-          postInstall = (attrs.postInstall or "") + ''
-            TARGET_MOD_DIR="$out/lib/modules/${version}-v7w7r-${localVer}"
-            mkdir -p "$TARGET_MOD_DIR"
-            rm -rf "$TARGET_MOD_DIR/build"
-            rm -rf "$TARGET_MOD_DIR/source"
-
-            DEVELOPMENT_DIR="$out/share/linux-kernel"
-            mkdir -p "$DEVELOPMENT_DIR"
-
-            cp -rT . "$DEVELOPMENT_DIR" 2>/dev/null || true
-
-            if [ -f "$DEVELOPMENT_DIR/Makefile" ]; then
-              sed -i "s|/build/cachyos-[^/]*|$DEVELOPMENT_DIR|g" "$DEVELOPMENT_DIR/Makefile" 2>/dev/null || true
-            fi
-
-            if [ -f "$DEVELOPMENT_DIR/Kbuild" ] || [ -f "$DEVELOPMENT_DIR/Makefile" ]; then
-              make -C "$DEVELOPMENT_DIR" modules_prepare EXTRA_CFLAGS="-Wno-error" 2>/dev/null || true
-            fi
-
-            ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/build"
-            ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/source"
-          '';
+          postInstall = (attrs.postInstall or "");
         })
         // {
           dev = kernel;
