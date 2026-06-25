@@ -5,7 +5,7 @@
   kernel = {
     handheld.nixos.nixpkgs.overlays = [
       (final: _: kernel.hosts.handheld final)
-      (final: _: builtins.trace (kernel.hosts.test.attrTest final) (kernel.hosts.test.attrTest final))
+      (final: _: kernel.hosts.test.attrTest final)
     ];
     hosts.test.attrTest =
       final:
