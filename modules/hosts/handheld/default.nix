@@ -88,14 +88,6 @@
             ];
           };
 
-          assertions = lib.mkVMOverride (
-            builtins.filter (
-              status:
-              !(lib.strings.hasInfix "CONFIG_" status.message)
-              && !(lib.strings.hasInfix "32-bit emulation" status.message)
-            ) config.assertions
-          );
-
           zramSwap = {
             enable = true;
             algorithm = "zstd";

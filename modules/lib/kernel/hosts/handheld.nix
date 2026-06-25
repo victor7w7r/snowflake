@@ -44,10 +44,19 @@
         version = version.string;
         configfile = handheld-config;
       };
+
+      parsedConfig = kernel.lib.parse-config handheld-config;
     in
     {
       inherit handheld-config;
-      handheld-kernelPackages = generated.packages;
-      handheld-kernel = generated.kernel;
+      handheld-kernelPackages = generated.packages // {
+        kernel = generated.packages.kernel // {
+          config = parsedConfig;
+        };
+      };
+
+      handheld-kernel = generated.kernel // {
+        config = parsedConfig;
+      };
     };
 }
