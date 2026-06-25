@@ -15,7 +15,6 @@
       kernel-result = (
         pkgs.linuxManualConfig {
           inherit src configfile;
-          structuredConfig = (kernel.lib.parse-config configfile);
           pname = "linux-v7w7r-${localVer}";
           modDirVersion = "${version}-v7w7r-${localVer}";
           version = "${version}-v7w7r-${localVer}";
@@ -44,7 +43,9 @@
       );
     in
     {
-      kernel = kernel-result;
+      kernel = kernel-result // {
+        config = (kernel.lib.parse-config configfile);
+      };
       packages =
         if isClang then
           helpers.kernelModuleLLVMOverride (pkgs.linuxPackagesFor kernel-result)
