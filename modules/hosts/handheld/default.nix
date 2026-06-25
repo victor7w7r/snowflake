@@ -54,7 +54,7 @@
       ];
 
       nixos =
-        { config, pkgs, ... }:
+        { pkgs, ... }:
         {
           environment = {
             persistence."/nix/persist" = {
@@ -79,13 +79,13 @@
 
           services.lact.enable = true;
 
+          system.requiredKernelConfig = pkgs.lib.mkForce [ ];
+
           boot = {
             extraModprobeConfig = "options kvm-amd nested=1";
             resumeDevice = "/dev/mapper/swapcrypt";
             kernelPackages = pkgs.handheld-kernelPackages;
-            kernelParams = [
-              "resume=/dev/mapper/swapcrypt"
-            ];
+            kernelParams = [ "resume=/dev/mapper/swapcrypt" ];
           };
 
           zramSwap = {
