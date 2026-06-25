@@ -43,9 +43,8 @@
       );
     in
     {
-      kernel = kernel-result // {
-        config = (kernel.lib.parse-config configfile);
-      };
+      kernel = kernel-result;
+      #config = (kernel.lib.parse-config configfile);
       packages =
         if isClang then
           helpers.kernelModuleLLVMOverride (pkgs.linuxPackagesFor kernel-result)
