@@ -49,13 +49,17 @@
           };
           postInstall = (attrs.postInstall or "") + ''
             TARGET_MOD_DIR="$out/lib/modules/${version}-v7w7r-${localVer}"
-            mkdir -p "$TARGET_MOD_DIR"
             rm -rf "$TARGET_MOD_DIR/build"
             rm -rf "$TARGET_MOD_DIR/source"
-            mkdir -p "$TARGET_MOD_DIR/build"
-            cp -a $out/System.map "$TARGET_MOD_DIR/build/" 2>/dev/null || true
-            [ -f .config ] && cp .config "$TARGET_MOD_DIR/build/"
-            ln -sfn $out "$TARGET_MOD_DIR/source"
+            if [ -d "$dev" ]; then
+              DEVELOPMENT_DIR="$dev"
+            else
+              DEVELOPMENT_DIR="$out/share/linux-kernel"
+              mkdir -p "$DEVELOPMENT_DIR"
+              cp -a . "$DEVELOPMENT_DIR/"
+            fi
+            ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/build"
+            ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/source"
           '';
         })
         // {
