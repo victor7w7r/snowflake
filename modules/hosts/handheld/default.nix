@@ -82,7 +82,6 @@
           boot = {
             extraModprobeConfig = "options kvm-amd nested=1";
             resumeDevice = "/dev/mapper/swapcrypt";
-            checkKernelConfig = false;
             kernelPackages = pkgs.handheld-kernelPackages;
             kernelParams = [
               "resume=/dev/mapper/swapcrypt"
