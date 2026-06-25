@@ -80,20 +80,16 @@
           services.lact.enable = true;
           system.requiredKernelConfig = pkgs.lib.mkForce [ ];
 
-          boot = {
-            extraModprobeConfig = "options kvm-amd nested=1";
-            resumeDevice = "/dev/mapper/swapcrypt";
-            kernelPackages = pkgs.handheld-kernelPackages;
-            kernelParams = [ "resume=/dev/mapper/swapcrypt" ];
-          };
-
-          nixpkgs.overlays = [
-            (final: prev: {
-              bcachefs-tools = prev.bcachefs-tools.overrideAttrs (old: {
-                kernel = final.handheld-kernel;
-              });
-            })
-          ];
+          boot =
+            let
+              helpers = (pkgs.callPackage "${inputs.nix-cachyos-kernel.outPath}/helpers.nix" { });
+            in
+            {
+              extraModprobeConfig = "options kvm-amd nested=1";
+              resumeDevice = "/dev/mapper/swapcrypt";
+              kernelPackages = helpers.kernelModuleLLVMOverride (pkgs.handheld-kernelPackages);
+              kernelParams = [ "resume=/dev/mapper/swapcrypt" ];
+            };
 
           zramSwap = {
             enable = true;

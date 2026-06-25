@@ -17,6 +17,7 @@
         (pkgs.linuxManualConfig {
           inherit src configfile;
           pname = "linux-v7w7r-${localVer}";
+          allowImportFromDerivation = false;
           modDirVersion = "${version}-v7w7r-${localVer}";
           version = "${version}-v7w7r-${localVer}";
           stdenv = if isClang then helpers.stdenvLLVM else pkgs.stdenv;
@@ -48,11 +49,7 @@
     in
     {
       kernel = kernel-result;
-      packages =
-        if isClang then
-          helpers.kernelModuleLLVMOverride (pkgs.linuxPackagesFor kernel-result)
-        else
-          pkgs.linuxPackagesFor kernel-result;
+      packages = pkgs.linuxPackagesFor kernel-result;
     };
 }
 /*
