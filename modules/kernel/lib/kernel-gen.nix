@@ -52,10 +52,21 @@
             mkdir -p "$TARGET_MOD_DIR"
             rm -rf "$TARGET_MOD_DIR/build"
             rm -rf "$TARGET_MOD_DIR/source"
+
             DEVELOPMENT_DIR="$out/share/linux-kernel"
             mkdir -p "$DEVELOPMENT_DIR"
             cp -a . "$DEVELOPMENT_DIR/"
+
+            if [ -f "$DEVELOPMENT_DIR/Makefile" ]; then
+              if grep -q "/build/" "$DEVELOPMENT_DIR/Makefile"; then
+                echo "Borrando Makefile wrapper obsoleto..."
+                rm -f "$DEVELOPMENT_DIR/Makefile"
+              fi
+            fi
+
+            echo "Preparando módulos de desarrollo..."
             make -C "$DEVELOPMENT_DIR" modules_prepare EXTRA_CFLAGS="-Wno-error" 2>/dev/null || true
+
             ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/build"
             ln -s "$DEVELOPMENT_DIR" "$TARGET_MOD_DIR/source"
           '';
