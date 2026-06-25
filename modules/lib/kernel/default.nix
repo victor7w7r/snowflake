@@ -5,9 +5,9 @@
   kernel = {
     handheld.nixos.nixpkgs.overlays = [
       (final: _: kernel.hosts.handheld final)
-      (_: prev: kernel.hosts.test.attrTest prev)
+      (_: prev: kernel.hosts.attrTest prev)
     ];
-    hosts.test.attrTest =
+    hosts.attrTest =
       pkgs:
       pkgs.writeShellApplication {
         name = "hola-test";
