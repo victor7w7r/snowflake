@@ -49,9 +49,10 @@
           };
           postInstall = (attrs.postInstall or "") + ''
             TARGET_MOD_DIR="$out/lib/modules/${version}-v7w7r-${localVer}"
-            mkdir -p "$TARGET_MOD_DIR"
             rm -f "$TARGET_MOD_DIR/build"
-            ln -s "$out/vmlinux" "$TARGET_MOD_DIR/build" 2>/dev/null || ln -s "$out" "$TARGET_MOD_DIR/build"
+            rm -f "$TARGET_MOD_DIR/source"
+            ln -s "$out" "$TARGET_MOD_DIR/build"
+            ln -s "$out" "$TARGET_MOD_DIR/source"
           '';
         })
         // {
