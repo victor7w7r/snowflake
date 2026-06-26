@@ -17,6 +17,9 @@
       AMD_PRIVATE_COLOR = "y";
       BATTERY_ASUS_EC = "y";
       AMD_RAPL = "m";
+      HID = "y";
+      USB_HID = "y";
+      LEDS_CLASS_MULTICOLOR = "y";
       HID_ASUS_ALLY = "y";
       HW_RANDOM_AMD = "y";
       SENSORS_AMD_ENERGY = "m";

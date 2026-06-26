@@ -12,6 +12,15 @@
       |> mapAttrsToList (option: value: "CONFIG_${option}=${value}")
       |> concatStringsSep "\n";
 
+    concat-config-str =
+      with lib;
+      config:
+      config
+      |> map (attrs: removeAttrs attrs [ "__provider" ])
+      |> zipAttrsWith (_: builtins.head)
+      |> mapAttrsToList (option: value: "${option} ${value}")
+      |> concatStringsSep "\n";
+
     parse-config =
       with lib;
       config:

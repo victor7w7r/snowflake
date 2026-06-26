@@ -18,40 +18,38 @@
         ++ bunkerPatches.common
         ++ bunkerPatches.hardened;
 
-      server-config = kernel.lib.config-gen {
-        inherit patches src pkgs;
-        config = (kernel.linux.injector pkgs).kConfig true;
-        isArm = false;
-        structConfig =
-          with kernel.config.modules;
-          (kernel.lib.concat-config [
-            (cmdline {
-              isIntel = true;
-              isSata = true;
-              isSec = true;
-            })
-            default
-            freq.low
-            hardware.desktop
-            hardware.serial
-            net
-            storage.f2fs
-            storage.ntfs
-            storage.not-cdrom
-            storage.xfs
-            vendor.intel
-          ]);
-      };
+      config = with kernel.config.modules; [
+        (cmdline {
+          isIntel = true;
+          isSata = true;
+          isSec = true;
+        })
+        default
+        freq.low
+        hardware.desktop
+        hardware.serial
+        net
+        storage.f2fs
+        storage.ntfs
+        storage.not-cdrom
+        storage.xfs
+        vendor.intel
+      ];
 
       generated = kernel.lib.kernel-gen {
         inherit pkgs src patches;
         localVer = "server-hardened-native";
         version = version.string;
-        configfile = server-config;
+        extraConfig = (kernel.lib.concat-config-str (config ++ kernel.config.denial.all));
       };
     in
     {
-      inherit server-config;
+      server-config = kernel.lib.config-gen {
+        inherit patches src pkgs;
+        config = (kernel.linux.injector pkgs).kConfig true;
+        isArm = false;
+        structConfig = (kernel.lib.concat-config config);
+      };
       server-kernelPackages = generated.packages;
       server-kernel = generated.kernel;
     };

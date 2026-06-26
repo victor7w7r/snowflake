@@ -20,6 +20,9 @@
       BACKLIGHT_QCOM_WLED = "n";
       GNSS = "n";
       NFC = "n";
+      ATH11K = "n";
+      ATH11K_PCI = "n";
+      ATH12K = "n";
       QRTR = "n";
       SCSI_UFSHCD = "n";
       SOUNDWIRE_QCOM = "n";
