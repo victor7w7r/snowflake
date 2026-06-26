@@ -36,22 +36,23 @@
         }
       );
 
-      kernel =
-        base.overrideAttrs (attrs: {
-          passthru = attrs.passthru // {
-            configure = configfile;
-            features = lib.optionalAttrs (!isArm) {
-              ia32Emulation = true;
-              netfilterRPFilter = true;
-              efiBootStub = true;
-            };
-            dev = kernel;
+      kernel = base.overrideAttrs (attrs: {
+        outputs = [
+          "out"
+          "dev"
+        ];
+        passthru = attrs.passthru // {
+          configure = configfile;
+          features = lib.optionalAttrs (!isArm) {
+            ia32Emulation = true;
+            netfilterRPFilter = true;
+            efiBootStub = true;
           };
-          postInstall = (attrs.postInstall or "");
-        })
-        // {
-          dev = kernel;
         };
+        postInstall = (attrs.postInstall or "") + ''
+          mkdir -p $dev
+        '';
+      });
     in
     {
       inherit kernel;
