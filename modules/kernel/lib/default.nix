@@ -5,41 +5,14 @@
   kernel.lib = {
     concat-config =
       with lib;
-      config:
+      config: isString:
       config
       |> map (structConfig: removeAttrs structConfig [ "__provider" ])
       |> zipAttrsWith (_: builtins.head)
-      |> mapAttrsToList (option: value: "CONFIG_${option}=${value}")
-      |> concatStringsSep "\n";
-
-    concat-config-str =
-      with lib;
-      config:
-      config
-      |> map (attrs: removeAttrs attrs [ "__provider" ])
-      |> zipAttrsWith (_: builtins.head)
-      |> mapAttrsToList (option: value: "${option} ${value}")
-      |> concatStringsSep "\n";
-
-    parse-config =
-      with lib;
-      config:
-      config
-      |> builtins.readFile
-      |> splitString "\n"
-      |> filter (line: line != "" && !(hasPrefix "#" line))
-      |> map (
-        line:
-        let
-          parts = splitString "=" line;
-          rawName = head parts;
-        in
-        {
-          name = removePrefix "CONFIG_" rawName;
-          value = concatStringsSep "=" (tail parts);
-        }
+      |> mapAttrsToList (
+        option: value: if isString then "${option} ${value}" else "CONFIG_${option}=${value}"
       )
-      |> listToAttrs;
+      |> concatStringsSep "\n";
 
     calc-version = pkgs: src: rec {
       file = pkgs.stdenvNoCC.mkDerivation {
@@ -65,5 +38,4 @@
       }";
     };
   };
-
 }

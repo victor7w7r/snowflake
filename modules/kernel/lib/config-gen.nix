@@ -48,7 +48,7 @@
 
       prePatch = ''
         while IFS= read -r patch_path || [ -n "$patch_path" ]; do
-        if [ -n "$patch_path" ]; echo "Applying: $(basename "$patch_path")"; then patch -p1 < "$patch_path"; fi
+          if [ -n "$patch_path" ]; echo "Applying: $(basename "$patch_path")"; then patch -p1 < "$patch_path"; fi
         done < "$PATCHES_FILE"
       '';
 
