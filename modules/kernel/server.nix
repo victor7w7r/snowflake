@@ -5,8 +5,8 @@
     let
       src = (kernel.linux.injector pkgs).cachyos;
       version = kernel.lib.calc-version pkgs src;
-      patchesData = (kernel.patches.injector pkgs);
-      cachyosPatches = (patchesData.cachyos version.majorMinor);
+      patchesData = kernel.patches.injector pkgs;
+      cachyosPatches = patchesData.cachyos version.majorMinor;
       tachyonPatches = patchesData.tachyon;
       bunkerPatches = patchesData.bunker;
       patches =
@@ -41,7 +41,7 @@
         localVer = "server-hardened-native";
         version = version.string;
         config = (kernel.linux.injector pkgs).kConfig false;
-        extraConfig = config ++ kernel.config.denial.all;
+        extraConfig = config;
       };
     in
     {

@@ -5,8 +5,8 @@
     let
       src = (kernel.linux.injector pkgs).cachyos;
       version = kernel.lib.calc-version pkgs src;
-      patchesData = (kernel.patches.injector pkgs);
-      cachyosPatches = (patchesData.cachyos version.majorMinor);
+      patchesData = kernel.patches.injector pkgs;
+      cachyosPatches = patchesData.cachyos version.majorMinor;
       tachyonPatches = patchesData.tachyon;
       bunkerPatches = patchesData.bunker;
       patches =
@@ -37,7 +37,7 @@
         inherit pkgs src patches;
         localVer = "sunxi-hardened";
         config = "${patchesData.armbian.source}/config/kernel/linux-sunxi64-current.config";
-        extraConfig = config ++ kernel.config.denial.all;
+        extraConfig = config;
       };
     in
     {

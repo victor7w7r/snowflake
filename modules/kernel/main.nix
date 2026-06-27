@@ -6,7 +6,7 @@
       src = (kernel.linux.injector pkgs).cachyos;
       version = kernel.lib.calc-version pkgs src;
       patches =
-        with (kernel.patches.injector pkgs);
+        with kernel.patches.injector pkgs;
         (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming ++ bunker.common;
 
       config = with kernel.config.modules; [
@@ -32,7 +32,7 @@
         localVer = "native";
         config = (kernel.linux.injector pkgs).kConfig false;
         version = version.string;
-        extraConfig = config ++ kernel.config.denial.all;
+        extraConfig = config;
       };
     in
     {

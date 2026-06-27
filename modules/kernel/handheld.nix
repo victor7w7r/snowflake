@@ -5,8 +5,8 @@
     let
       src = (kernel.linux.injector pkgs).cachyos;
       version = kernel.lib.calc-version pkgs src;
-      patchesData = (kernel.patches.injector pkgs);
-      cachyosPatches = (patchesData.cachyos version.majorMinor);
+      patchesData = kernel.patches.injector pkgs;
+      cachyosPatches = patchesData.cachyos version.majorMinor;
       bunkerPatches = patchesData.bunker;
       tachyonPatches = patchesData.tachyon;
       patches =

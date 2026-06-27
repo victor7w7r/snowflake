@@ -5,8 +5,8 @@
     let
       src = (kernel.linux.injector pkgs).cachyos;
       version = kernel.lib.calc-version pkgs src;
-      patchesData = (kernel.patches.injector pkgs);
-      cachyosPatches = (patchesData.cachyos version.majorMinor);
+      patchesData = kernel.patches.injector pkgs;
+      cachyosPatches = patchesData.cachyos version.majorMinor;
       tachyonPatches = patchesData.tachyon;
       bunkerPatches = patchesData.bunker;
       patches =
@@ -36,7 +36,7 @@
         version = version.string;
         config = "${patchesData.armbian.source}/config/kernel/linux-rockchip64-current.config";
         localVer = "rockchip";
-        extraConfig = (kernel.lib.concat-config-str (config ++ kernel.config.denial.all) true);
+        extraConfig = config;
       };
     in
     {
@@ -44,7 +44,7 @@
         inherit patches src pkgs;
         isArm = true;
         config = "${patchesData.armbian.source}/config/kernel/linux-rockchip64-current.config";
-        structConfig = (kernel.lib.concat-config config false);
+        structConfig = config;
       };
       superlab-kernelPackages = generated.packages;
       superlab-kernel = generated.kernel;
