@@ -15,17 +15,17 @@
 
     amd = {
       AMD_PRIVATE_COLOR = "y";
-      BATTERY_ASUS_EC = "y";
       AMD_RAPL = "m";
+      BATTERY_ASUS_EC = "y";
       HID = "y";
-      USB_HID = "y";
+      HID_ASUS_ALLY = "m";
       LEDS_CLASS_MULTICOLOR = "y";
-      HID_ASUS_ALLY = "y";
       HW_RANDOM_AMD = "y";
-      SENSORS_AMD_ENERGY = "m";
-      SENSORS_K10TEMP = "m";
       PERF_EVENTS_AMD_POWER = "y";
       PERF_EVENTS_AMD_UNCORE = "y";
+      SENSORS_AMD_ENERGY = "m";
+      SENSORS_K10TEMP = "m";
+      USB_HID = "y";
     }
     // not-intel;
 

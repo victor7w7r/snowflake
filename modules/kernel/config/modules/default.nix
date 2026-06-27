@@ -17,6 +17,7 @@
     HW_RANDOM_TPM = "y";
     HZ_PERIODIC = "n";
     I2C_CHARDEV = "y";
+    IOMMUFD = "y";
     KVM = "y";
     LEGACY_VSYSCALL_NONE = "y";
     LTO_CLANG_FULL = "n";

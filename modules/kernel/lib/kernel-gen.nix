@@ -27,8 +27,9 @@
         };
         version = "${version}-v7w7r-${localVer}";
         modDirVersion = "${version}-v7w7r-${localVer}";
-        defconfig = "x86_64_defconfig";
         stdenv = helpers.stdenvLLVM;
+        ignoreConfigErrors = true;
+
         kernelPatches = map (file: {
           name = baseNameOf (toString file);
           patch = file;
