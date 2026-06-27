@@ -27,27 +27,22 @@
         '';
         installPhase = "cp series.conf $out";
       };
+      patcher =
+        with lib;
+        source: isRockchip:
+        source
+        |> builtins.readFile
+        |> splitString "\n"
+        |> map strings.trim
+        |> filter (line: line != "" && !(hasPrefix "#" line || hasPrefix "-" line))
+        |> map (
+          path: "${source}/patch/kernel/archive/${if isRockchip then "rockchip64" else "sunxi"}/-6.18${path}"
+        );
     in
     {
       inherit source;
-      rockchip-patches =
-        with lib;
-        pipe rockchip [
-          builtins.readFile
-          (splitString "\n")
-          (map strings.trim)
-          (filter (line: line != "" && !(hasPrefix "#" line || hasPrefix "-" line)))
-          (map (path: "${source}/patch/kernel/archive/rockchip64-6.18/${path}"))
-        ];
-      sunxi-patches =
-        with lib;
-        pipe "${source}/patch/kernel/archive/sunxi-6.18/series.conf" [
-          builtins.readFile
-          (splitString "\n")
-          (map strings.trim)
-          (filter (line: line != "" && !(hasPrefix "#" line || hasPrefix "-" line)))
-          (map (path: "${source}/patch/kernel/archive/sunxi-6.18/${path}"))
-        ];
+      rockchip-patches = patcher rockchip true;
+      sunxi-patches = patcher "${source}/patch/kernel/archive/sunxi-6.18/series.conf" false;
     };
   /*
     [

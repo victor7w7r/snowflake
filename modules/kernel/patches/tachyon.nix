@@ -1,12 +1,10 @@
 {
   kernel.patches.tachyon =
     pkgs:
-    let
-      tachyon =
-        with (pkgs.lib.trivial.importJSON ./patches.json).tachyon;
-        pkgs.fetchgit { inherit url rev sha256; };
-    in
-    {
+    (
+      with (pkgs.lib.trivial.importJSON ./patches.json).tachyon; pkgs.fetchgit { inherit url rev sha256; }
+    )
+    |> (tachyon: {
       common = map (path: "${tachyon}/patches/${path}") [
         #"0001-add-umonitor-umwait-C0.x-C-states.patch"
         #"0001-mm-memcontrol-add-some-branch-hints-based-on-gcov-an.patch"
@@ -69,5 +67,5 @@
       notGaming = map (path: "${tachyon}/patches/${path}") [
         "0128-itmt_epb-use-epb-to-scale-itmt.patch"
       ];
-    };
+    });
 }

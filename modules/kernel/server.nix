@@ -40,7 +40,7 @@
         inherit pkgs src patches;
         localVer = "server-hardened-native";
         version = version.string;
-        extraConfig = (kernel.lib.concat-config-str (config ++ kernel.config.denial.all));
+        extraConfig = config ++ kernel.config.denial.all;
       };
     in
     {
@@ -48,7 +48,7 @@
         inherit patches src pkgs;
         config = (kernel.linux.injector pkgs).kConfig true;
         isArm = false;
-        structConfig = (kernel.lib.concat-config config);
+        extraConfig = config;
       };
       server-kernelPackages = generated.packages;
       server-kernel = generated.kernel;

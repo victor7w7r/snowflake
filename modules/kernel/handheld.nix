@@ -35,14 +35,14 @@
         localVer = "handheld-native";
         isArm = false;
         version = version.string;
-        extraConfig = (kernel.lib.concat-config-str (config ++ kernel.config.denial.all));
+        extraConfig = config ++ kernel.config.denial.all;
       };
     in
     {
       handheld-config = kernel.lib.config-gen {
         inherit patches src pkgs;
         config = (kernel.linux.injector pkgs).kConfig false;
-        structConfig = (kernel.lib.concat-config config);
+        extraConfig = config;
       };
       handheld-kernelPackages = generated.packages;
       handheld-kernel = generated.kernel;

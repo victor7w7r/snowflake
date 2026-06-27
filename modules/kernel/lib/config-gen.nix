@@ -8,8 +8,7 @@
   kernel.lib.config-gen =
     {
       isArm ? false,
-      disableDenial ? false,
-      structConfig,
+      extraConfig,
       config,
       patches,
       pkgs,
@@ -22,7 +21,7 @@
       name = "linux-config-gen";
       inherit src;
       LLVM = "1";
-      RUST_LIB_SRC = "${pkgs.rustPlatform.rustLibSrc}";
+      RUST_LIB_SRC = pkgs.rustPlatform.rustLibSrc;
       PATCHES_FILE = pkgs.writeText "kernel-patches-list" (pkgs.lib.concatStringsSep "\n" patches);
       dontFixup = true;
 
@@ -55,8 +54,8 @@
       configurePhase = ''
         cp ${config} .config && chmod +w .config
         cp ${pkgs.writeText "kernel-gen-config" ''
-          ${structConfig}
-          ${(lib.optionalString (!disableDenial) (kernel.lib.concat-config kernel.config.denial.all))}
+          ${kernel.lib.concat-config { config = extraConfig; }}
+          ${kernel.lib.concat-config { config = kernel.config.denial.all; }}
         ''} .gen_config
       '';
 

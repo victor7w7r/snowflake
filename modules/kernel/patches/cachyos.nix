@@ -2,7 +2,6 @@
   kernel.patches.cachyos =
     pkgs: majorMinor:
     let
-      inherit majorMinor;
       patches = pkgs.stdenvNoCC.mkDerivation {
         name = "cachyos-patches";
         src =
@@ -42,7 +41,6 @@
           '';
         installPhase = "mkdir -p $out && cp -r . $out/";
       };
-
       bore = [
         #"${patches}/${majorMinor}/sched/0001-bore-cachy.patch"
       ];

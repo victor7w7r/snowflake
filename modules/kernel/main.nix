@@ -31,7 +31,7 @@
         inherit pkgs src patches;
         localVer = "native";
         version = version.string;
-        extraConfig = (kernel.lib.concat-config-str (config ++ kernel.config.denial.all));
+        extraConfig = config ++ kernel.config.denial.all;
       };
     in
     {
@@ -39,7 +39,7 @@
         inherit patches src pkgs;
         isArm = false;
         config = (kernel.linux.injector pkgs).kConfig false;
-        structConfig = (kernel.lib.concat-config config);
+        extraConfig = config;
       };
       main-kernelPackages = generated.packages;
       main-kernel = generated.kernel;

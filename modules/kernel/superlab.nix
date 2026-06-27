@@ -35,7 +35,7 @@
         inherit pkgs src patches;
         version = version.string;
         localVer = "rockchip";
-        extraConfig = (kernel.lib.concat-config-str (config ++ kernel.config.denial.all));
+        extraConfig = (kernel.lib.concat-config-str (config ++ kernel.config.denial.all) true);
       };
     in
     {
@@ -43,7 +43,7 @@
         inherit patches src pkgs;
         isArm = true;
         config = "${patchesData.armbian.source}/config/kernel/linux-rockchip64-current.config";
-        structConfig = (kernel.lib.concat-config config);
+        structConfig = (kernel.lib.concat-config config false);
       };
       superlab-kernelPackages = generated.packages;
       superlab-kernel = generated.kernel;

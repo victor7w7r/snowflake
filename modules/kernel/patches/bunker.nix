@@ -1,19 +1,18 @@
 {
   kernel.patches.bunker =
     pkgs:
-    let
-      bunker =
-        with (pkgs.lib.trivial.importJSON ./patches.json).bunker;
-        pkgs.fetchFromGitHub {
-          inherit
-            repo
-            rev
-            owner
-            sha256
-            ;
-        };
-    in
-    {
+    (
+      with (pkgs.lib.trivial.importJSON ./patches.json).bunker;
+      pkgs.fetchFromGitHub {
+        inherit
+          repo
+          rev
+          owner
+          sha256
+          ;
+      }
+    )
+    |> (bunker: {
       common = map (path: "${bunker}/patches/6.18/${path}") [
         "bunker/0006-enable-kstack_erase-by-default.patch"
         "bunker/0008-disable-proc_kcore-by-default.patch"
@@ -65,6 +64,5 @@
         "0001-add-sysctl-to-allow-disabling-unprivileged-CLONE_NEW.patch"
         "0002-security-add-config-for-default-of-unprivileged_user.patch"
       ];
-    };
-
+    });
 }

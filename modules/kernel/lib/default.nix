@@ -1,11 +1,14 @@
 { inputs, lib, ... }:
+with lib;
 {
   imports = [ (inputs.den.namespace "kernel" true) ];
 
   kernel.lib = {
     concat-config =
-      with lib;
-      config: isString:
+      {
+        config,
+        isString ? false,
+      }:
       config
       |> map (structConfig: removeAttrs structConfig [ "__provider" ])
       |> zipAttrsWith (_: builtins.head)
