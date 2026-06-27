@@ -36,7 +36,7 @@
       generated = kernel.lib.kernel-gen {
         inherit pkgs src patches;
         localVer = "sunxi-hardened";
-        version = version.string;
+        config = "${patchesData.armbian.source}/config/kernel/linux-sunxi64-current.config";
         extraConfig = config ++ kernel.config.denial.all;
       };
     in

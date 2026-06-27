@@ -149,7 +149,6 @@
       SCSI_IPR = "n";
       SCSI_IPS = "n";
       SCSI_ISCI = "n";
-      SCSI_ISCSI_ATTRS = "n";
       SCSI_LPFC = "n";
       SCSI_MPI3MR = "n";
       SCSI_MPT2SAS = "n";

@@ -30,6 +30,7 @@
       generated = kernel.lib.kernel-gen {
         inherit pkgs src patches;
         localVer = "native";
+        config = (kernel.linux.injector pkgs).kConfig false;
         version = version.string;
         extraConfig = config ++ kernel.config.denial.all;
       };

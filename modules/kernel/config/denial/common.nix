@@ -31,7 +31,6 @@
       NLS_KOI8_R = "n";
       NLS_KOI8_U = "n";
       NLS_UCS2_UTILS = "n";
-      NLS_UTF8 = "n";
       NUMA = "n";
       PCCARD = "n";
       PCI_MESON = "n";
@@ -103,6 +102,7 @@
       VBOXGUEST = "n";
       VDPA = "n";
       VMWARE_PVSCSI = "n";
+      VIRTIO_NET = "n";
       VMWARE_VMCI = "n";
       VP_VDPA = "n";
       XEN = "n";
@@ -113,6 +113,7 @@
       X86_AMD_FREQ_SENSITIVITY = "n";
       X86_EXTENDED_PLATFORM = "n";
       X86_IOPL_IOPERM = "n";
+      X86_PMEM_LEGACY = "n";
       X86_MPPARSE = "n";
       X86_P4_CLOCKMOD = "n";
       X86_POWERNOW_K8 = "n";

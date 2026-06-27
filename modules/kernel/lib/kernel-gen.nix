@@ -8,6 +8,7 @@
   kernel.lib.kernel-gen =
     {
       localVer,
+      config,
       extraConfig,
       patches,
       pkgs,
@@ -21,7 +22,7 @@
         pname = "linux-v7w7r-${localVer}";
         inherit src;
         extraConfig = kernel.lib.concat-config {
-          config = extraConfig;
+          config = extraConfig ++ kernel.config.denial.all ++ (kernel.config.denial.dynamic config);
           isString = true;
         };
         version = "${version}-v7w7r-${localVer}";

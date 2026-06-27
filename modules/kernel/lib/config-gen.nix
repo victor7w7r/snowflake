@@ -53,10 +53,13 @@
 
       configurePhase = ''
         cp ${config} .config && chmod +w .config
-        cp ${pkgs.writeText "kernel-gen-config" ''
-          ${kernel.lib.concat-config { config = extraConfig; }}
-          ${kernel.lib.concat-config { config = kernel.config.denial.all; }}
-        ''} .gen_config
+        cp ${
+          pkgs.writeText "kernel-gen-config" (
+            kernel.lib.concat-config {
+              config = extraConfig ++ kernel.config.denial.all ++ (kernel.config.denial.dynamic config);
+            }
+          )
+        } .gen_config
       '';
 
       buildPhase = ''

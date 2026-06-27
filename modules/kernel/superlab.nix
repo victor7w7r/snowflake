@@ -34,6 +34,7 @@
       generated = kernel.lib.kernel-gen {
         inherit pkgs src patches;
         version = version.string;
+        config = "${patchesData.armbian.source}/config/kernel/linux-rockchip64-current.config";
         localVer = "rockchip";
         extraConfig = (kernel.lib.concat-config-str (config ++ kernel.config.denial.all) true);
       };

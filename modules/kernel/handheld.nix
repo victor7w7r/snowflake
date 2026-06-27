@@ -33,9 +33,9 @@
       generated = kernel.lib.kernel-gen {
         inherit patches src pkgs;
         localVer = "handheld-native";
-        isArm = false;
+        config = (kernel.linux.injector pkgs).kConfig false;
         version = version.string;
-        extraConfig = config ++ kernel.config.denial.all;
+        extraConfig = config;
       };
     in
     {

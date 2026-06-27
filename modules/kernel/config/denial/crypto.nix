@@ -25,9 +25,6 @@
     CRYPTO_CAST6 = "n";
     CRYPTO_CAST6_AVX_X86_64 = "n";
     CRYPTO_CAST_COMMON = "n";
-    CRYPTO_CCM = "n";
-    CRYPTO_CHACHA20 = "n";
-    CRYPTO_CHACHA20POLY1305 = "n";
     CRYPTO_CRC32 = "n";
     CRYPTO_DES = "n";
     CRYPTO_DES3_EDE_X86_64 = "n";

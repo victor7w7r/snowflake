@@ -40,6 +40,7 @@
         inherit pkgs src patches;
         localVer = "server-hardened-native";
         version = version.string;
+        config = (kernel.linux.injector pkgs).kConfig false;
         extraConfig = config ++ kernel.config.denial.all;
       };
     in
