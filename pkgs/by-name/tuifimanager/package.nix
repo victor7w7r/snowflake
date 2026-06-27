@@ -8,7 +8,7 @@ pkgs.python3.pkgs.buildPythonApplication (attrs: {
     owner = "GiorgosXou";
     repo = attrs.pname;
     rev = attrs.version;
-    sha256 = "sha256-doKDB+UU9dxPGHWhM8LYIrn+OHkpKmD+lnCvqbN60Yc=";
+    sha256 = "sha256-31/8X0bTw3P/PkI66UB3Pt6xa2oFwBQ1OSeY4rGyAvo=";
   };
 
   propagatedBuildInputs = with pkgs.python3Packages; [
