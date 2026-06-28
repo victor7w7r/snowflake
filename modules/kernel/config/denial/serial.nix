@@ -35,6 +35,7 @@
     };
 
     i2c = {
+      I3C = "n";
       I2C_ALGOPCA = "n";
       I2C_ALI1535 = "n";
       I2C_ALI1563 = "n";

@@ -1,6 +1,6 @@
 {
   kernel.config.denial.hardware = rec {
-    all = controllers // energy // graphics // input // mfd;
+    all = controllers // energy // fb // graphics // input // mfd;
 
     controllers = {
       ALTERA_STAPL = "n";
@@ -69,9 +69,6 @@
       DRM_VKMS = "n";
       DRM_VMWGFX = "n";
       DRM_XE = "n";
-      FB_DEVICE = "n";
-      FB_DMAMEM_HELPERS = "n";
-      FB_DMAMEM_HELPERS_DEFERRED = "n";
       HL_HLDIO = "n";
       ND_BTT = "n";
       ND_CLAIM = "n";
@@ -80,6 +77,55 @@
       NVDIMM_DAX = "n";
       NVDIMM_KEYS = "n";
       NVDIMM_PFN = "n";
+    };
+
+    fb = {
+      FB_3DFX = "n";
+      FB_ARC = "n";
+      FB_ARK = "n";
+      FB_ATY = "n";
+      FB_ATY128 = "n";
+      FB_CARMINE = "n";
+      FB_CIRRUS = "n";
+      FB_CYBER2000 = "n";
+      FB_CYBER2000_DDC = "n";
+      FB_DEVICE = "n";
+      FB_DMAMEM_HELPERS = "n";
+      FB_DMAMEM_HELPERS_DEFERRED = "n";
+      FB_HECUBA = "n";
+      FB_HGA = "n";
+      FB_I740 = "n";
+      FB_IBM_GXT4500 = "n";
+      FB_KYRO = "n";
+      FB_MATROX = "n";
+      FB_MB862XX = "n";
+      FB_MB862XX_I2C = "n";
+      FB_MB862XX_PCI_GDC = "n";
+      FB_METRONOME = "n";
+      FB_N411 = "n";
+      FB_NEOMAGIC = "n";
+      FB_NVIDIA = "n";
+      FB_NVIDIA_BACKLIGHT = "n";
+      FB_OPENCORES = "n";
+      FB_PM2 = "n";
+      FB_PM3 = "n";
+      FB_RADEON = "n";
+      FB_RIVA = "n";
+      FB_S1D13XXX = "n";
+      FB_S3 = "n";
+      FB_SAVAGE = "n";
+      FB_SIS = "n";
+      FB_SM712 = "n";
+      FB_SMSCUFX = "n";
+      FB_SSD1307 = "n";
+      FB_SVGALIB = "n";
+      FB_TRIDENT = "n";
+      FB_UVESA = "n";
+      FB_VGA16 = "n";
+      FB_VIA = "n";
+      FB_VIRTUAL = "n";
+      FB_VOODOO1 = "n";
+      FB_VT8623 = "n";
     };
 
     input = {

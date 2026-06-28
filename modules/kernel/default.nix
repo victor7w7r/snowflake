@@ -58,7 +58,7 @@
       packages = base |> pkgs.linuxPackagesFor |> helpers.kernelModuleLLVMOverride;
       config = pkgs.stdenvNoCC.mkDerivation {
         name = "filtered-config";
-        src = kernel.configfile;
+        src = base.configfile;
         phases = [ "installPhase" ];
         installPhase = ''
           cp $src .config

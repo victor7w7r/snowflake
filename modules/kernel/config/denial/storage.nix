@@ -3,16 +3,22 @@
     all = fs // label // general // mmc // raid // scsi // sata // sharing;
 
     fs = {
+      ADFS_FS = "n";
       AFFS_FS = "n";
       AFS_FS = "n";
+      BFS_FS = "n";
       BEFS_FS = "n";
       CODA_FS = "n";
       CRAMFS = "n";
       CUSE = "n";
+      EFS_FS = "n";
       EROFS_FS = "n";
+      EXT2_FS = "n";
       GFS2_FS = "n";
       HFSPLUS_FS = "n";
       HFS_FS = "n";
+      HPFS_FS = "n";
+      JBD2 = "n";
       JFS_FS = "n";
       MINIX_FS = "n";
       NILFS2_FS = "n";
@@ -20,12 +26,15 @@
       OCFS2_FS = "n";
       OMFS_FS = "n";
       ORANGEFS_FS = "n";
-      ROMFS_FS = "n";
-      UFS_FS = "n";
-      ZONEFS_FS = "n";
+      QNX4FS_FS = "n";
+      QNX6FS_FS = "n";
       QUOTA = "n";
+      ROMFS_FS = "n";
       TMPFS_QUOTA = "n";
+      UFS_FS = "n";
+      VXFS_FS = "n";
       XFS_QUOTA = "n";
+      ZONEFS_FS = "n";
     };
 
     label = {

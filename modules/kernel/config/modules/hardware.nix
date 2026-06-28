@@ -17,12 +17,13 @@
     };
 
     not-phone = {
-      BACKLIGHT_QCOM_WLED = "n";
-      GNSS = "n";
-      NFC = "n";
       ATH11K = "n";
       ATH11K_PCI = "n";
       ATH12K = "n";
+      BACKLIGHT_QCOM_WLED = "n";
+      GNSS = "n";
+      NFC = "n";
+      N_GSM = "n";
       QRTR = "n";
       SCSI_UFSHCD = "n";
       SOUNDWIRE_QCOM = "n";
@@ -50,8 +51,9 @@
 
     x86 = {
       ACPI_TAD = "y";
-      MMC_MTK = "n";
       ACPI_WMI = "y";
+      MMC_MTK = "n";
+      OF = "n";
       SPI = "n";
       STAGING = "n";
       USB_LIBCOMPOSITE = "n";

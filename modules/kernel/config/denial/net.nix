@@ -91,20 +91,22 @@
     };
 
     drivers = {
+      ARCNET = "n";
       ATM = "n";
       BATMAN_ADV = "n";
       BCMA = "n";
       BONDIN = "n";
+      CAIF = "n";
       DIBS = "n";
       EQUALIZER = "n";
       FUJITSU_ES = "n";
       GTP = "n";
       HSR = "n";
-      NET_DSA = "n";
       IPGRE = "n";
       IP_PIMSM_V2 = "n";
       IP_SET = "n";
       IP_VS = "n";
+      LAPB = "n";
       MACSEC = "n";
       MDIO_BCM_UNIMAC = "n";
       MDIO_BITBANG = "n";
@@ -121,6 +123,7 @@
       NETLINK_DIAG = "n";
       NETPOLL = "n";
       NET_9P = "n";
+      NET_DSA = "n";
       NET_EMATCH = "n";
       NET_FAILOVER = "n";
       NET_KEY = "n";
@@ -140,6 +143,7 @@
       PSE_REGULATOR = "n";
       PSE_SI3474 = "n";
       PSE_TPS23881 = "n";
+      RAPIDIO = "n";
       SLHCI = "n";
       SLIPI = "n";
       SLIP_COMPRESSEDI = "n";
@@ -147,6 +151,8 @@
       SLIP_SMARTI = "n";
       VLAN_8021Q = "n";
       VMXNET3 = "n";
+      WAN = "n";
+      X25 = "n";
       XFRM = "n";
     };
 

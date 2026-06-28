@@ -8,6 +8,7 @@
     DEFAULT_HOSTNAME = "v7w7r";
     DEFAULT_NET_SCH = "fq";
     DEFAULT_TCP_CONG = "bbr";
+    IP_NF_NAT = "y";
     INET_AH = "y";
     INET_ESP = "y";
     INET_ESPINTCP = "y";

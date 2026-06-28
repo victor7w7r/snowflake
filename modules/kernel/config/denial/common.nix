@@ -7,12 +7,16 @@
       BCM_VK = "n";
       CPUMASK_OFFSTACK = "n";
       CXL_BUS = "n";
+      COMEDI = "n";
       DLM = "n";
       EDAC = "n";
+      FSI = "n";
       GENWQE = "n";
       GP_PCI1XXXX = "n";
+      GREYBUS = "n";
+      HSI = "n";
       HOTPLUG_CPU = "n";
-      HOTPLUG_PCI_CPCI = "n";
+      HOTPLUG_PCI = "n";
       INTEL_IDXD = "n";
       INTEL_IOATDMA = "n";
       INTEL_MEI_GSC_PROXY = "n";
@@ -105,8 +109,6 @@
       VIRTIO_NET = "n";
       VMWARE_VMCI = "n";
       VP_VDPA = "n";
-      XEN = "n";
-      XEN_SCSI_FRONTEND = "n";
     };
 
     x86 = {
@@ -120,11 +122,14 @@
       X86_REROUTE_FOR_BROKEN_BOOT_IRQS = "n";
       X86_SGX = "n";
       X86_SPEEDSTEP_LIB = "n";
+      X86_SPEEDSTEP_CENTRINO = "n";
       X86_VSYSCALL_EMULATION = "n";
+      X86_VERBOSE_BOOTUP = "n";
     };
 
     debug = {
       ACPI_DEBUG = "n";
+      DEBUG_ENTRY = "n";
       DEBUG_FS = "n";
       DEBUG_INFO = "n";
       DEBUG_INFO_BTF = "n";
@@ -137,11 +142,13 @@
       PM_ADVANCED_DEBUG = "n";
       PM_DEBUG = "n";
       PM_SLEEP_DEBUG = "n";
+      PUNIT_ATOM_DEBUG = "n";
       RUNTIME_TESTING_MENU = "n";
       SCHED_DEBUG = "n";
       SLUB_DEBUG = "n";
       STM = "n";
       STRICT_DEVMEM = "n";
+      X86_DEBUG_FPU = "n";
     };
 
     trace = {
