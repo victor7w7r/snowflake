@@ -17,7 +17,7 @@
           initrd.enable = true;
         };
         cpu.amd.updateMicrocode = true;
-        #xone.enable = true;
+        xone.enable = true;
       };
 
       systemd.services.battery-charge-threshold = {

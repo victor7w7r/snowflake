@@ -51,7 +51,6 @@
         bcachefs_filesystems = {
           broot = disko.bcachefs.filesystem {
             uuid = "2564fcf6-551f-4358-b238-2fe638b1c159";
-            #passwordFile = "/tmp/key.txt";
             subvolumes = {
               "subvolumes/nix" = {
                 mountpoint = "/nix";
