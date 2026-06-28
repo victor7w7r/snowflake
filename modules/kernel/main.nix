@@ -5,11 +5,16 @@
     let
       src = (kernel.linux.injector pkgs).cachyos;
       version = kernel.lib.calc-version pkgs src;
+    in
+    (kernel.lib.v7w7r {
+      inherit pkgs src;
+      localVer = "native";
+      config = (kernel.linux.injector pkgs).kConfig false;
+      version = version.string;
       patches =
         with kernel.patches.injector pkgs;
         (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming ++ bunker.common;
-
-      config = with kernel.config.modules; [
+      extraConfig = with kernel.config.modules; [
         (cmdline {
           isIntel = true;
           isSata = true;
@@ -26,23 +31,10 @@
         storage.xfs
         vendor.intel
       ];
-
-      generated = kernel.lib.kernel-gen {
-        inherit pkgs src patches;
-        localVer = "native";
-        config = (kernel.linux.injector pkgs).kConfig false;
-        version = version.string;
-        extraConfig = config;
-      };
-    in
-    {
-      main-config = kernel.lib.config-gen {
-        inherit patches src pkgs;
-        isArm = false;
-        config = (kernel.linux.injector pkgs).kConfig false;
-        extraConfig = config;
-      };
+    })
+    |> (generated: {
       main-kernelPackages = generated.packages;
       main-kernel = generated.kernel;
-    };
+      main-config = generated.config;
+    });
 }

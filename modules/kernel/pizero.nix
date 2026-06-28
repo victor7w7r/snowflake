@@ -9,6 +9,11 @@
       cachyosPatches = patchesData.cachyos version.majorMinor;
       tachyonPatches = patchesData.tachyon;
       bunkerPatches = patchesData.bunker;
+    in
+    (kernel.lib.v7w7r {
+      inherit pkgs src;
+      localVer = "sunxi-hardened";
+      config = "${patchesData.armbian.source}/config/kernel/linux-sunxi64-current.config";
       patches =
         cachyosPatches.common
         ++ cachyosPatches.hardened
@@ -17,8 +22,7 @@
         ++ bunkerPatches.common
         ++ bunkerPatches.hardened
         ++ patchesData.armbian.sunxi-patches;
-
-      config = with kernel.config.modules; [
+      extraConfig = with kernel.config.modules; [
         (cmdline { })
         default
         freq.low
@@ -32,22 +36,10 @@
         storage.xfs
         vendor.not-vendor
       ];
-
-      generated = kernel.lib.kernel-gen {
-        inherit pkgs src patches;
-        localVer = "sunxi-hardened";
-        config = "${patchesData.armbian.source}/config/kernel/linux-sunxi64-current.config";
-        extraConfig = config;
-      };
-    in
-    {
-      pizero-config = kernel.lib.config-gen {
-        inherit patches src pkgs;
-        isArm = true;
-        config = "${patchesData.armbian.source}/config/kernel/linux-sunxi64-current.config";
-        extraConfig = config;
-      };
+    })
+    |> (generated: {
       pizero-kernelPackages = generated.packages;
       pizero-kernel = generated.kernel;
-    };
+      pizero-config = generated.config;
+    });
 }

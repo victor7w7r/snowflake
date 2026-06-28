@@ -9,14 +9,19 @@
       cachyosPatches = patchesData.cachyos version.majorMinor;
       tachyonPatches = patchesData.tachyon;
       bunkerPatches = patchesData.bunker;
+    in
+    (kernel.lib.v7w7r {
+      inherit pkgs src;
+      version = version.string;
+      config = "${patchesData.armbian.source}/config/kernel/linux-rockchip64-current.config";
+      localVer = "rockchip";
       patches =
         cachyosPatches.common
         ++ tachyonPatches.common
         ++ tachyonPatches.notGaming
         ++ bunkerPatches.common
         ++ patchesData.armbian.rockchip-patches;
-
-      config = with kernel.config.modules; [
+      extraConfig = with kernel.config.modules; [
         (cmdline { })
         default
         freq.high
@@ -30,23 +35,10 @@
         storage.not-xfs
         vendor.not-vendor
       ];
-
-      generated = kernel.lib.kernel-gen {
-        inherit pkgs src patches;
-        version = version.string;
-        config = "${patchesData.armbian.source}/config/kernel/linux-rockchip64-current.config";
-        localVer = "rockchip";
-        extraConfig = config;
-      };
-    in
-    {
-      superlab-config = kernel.lib.config-gen {
-        inherit patches src pkgs;
-        isArm = true;
-        config = "${patchesData.armbian.source}/config/kernel/linux-rockchip64-current.config";
-        structConfig = config;
-      };
+    })
+    |> (generated: {
+      superlab-config = generated.config;
       superlab-kernelPackages = generated.packages;
       superlab-kernel = generated.kernel;
-    };
+    });
 }

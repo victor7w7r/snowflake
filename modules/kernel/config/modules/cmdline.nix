@@ -28,11 +28,11 @@
       CMDLINE_BOOL = "y";
       CMDLINE_OVERRIDE = "n";
       CMDLINE =
-        "\"${red} ${green} ${blue} ${save} ${perf} ${opt} ${kvm} "
+        "${red} ${green} ${blue} ${save} ${perf} ${opt} ${kvm} "
         + "${lib.optionalString isIntel intel} "
         + "${lib.optionalString isAmd amd} "
         + "${lib.optionalString isSata sata} "
         + "${lib.optionalString isSec sec} "
-        + "${extra}\"";
+        + "${extra}";
     };
 }

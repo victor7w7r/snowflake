@@ -9,6 +9,12 @@
       cachyosPatches = patchesData.cachyos version.majorMinor;
       tachyonPatches = patchesData.tachyon;
       bunkerPatches = patchesData.bunker;
+    in
+    (kernel.lib.v7w7r {
+      inherit pkgs src;
+      localVer = "server-hardened-native";
+      version = version.string;
+      config = (kernel.linux.injector pkgs).kConfig false;
       patches =
         cachyosPatches.optimization
         ++ cachyosPatches.hardened
@@ -17,8 +23,7 @@
         ++ tachyonPatches.notGaming
         ++ bunkerPatches.common
         ++ bunkerPatches.hardened;
-
-      config = with kernel.config.modules; [
+      extraConfig = with kernel.config.modules; [
         (cmdline {
           isIntel = true;
           isSata = true;
@@ -35,23 +40,10 @@
         storage.xfs
         vendor.intel
       ];
-
-      generated = kernel.lib.kernel-gen {
-        inherit pkgs src patches;
-        localVer = "server-hardened-native";
-        version = version.string;
-        config = (kernel.linux.injector pkgs).kConfig false;
-        extraConfig = config;
-      };
-    in
-    {
-      server-config = kernel.lib.config-gen {
-        inherit patches src pkgs;
-        config = (kernel.linux.injector pkgs).kConfig true;
-        isArm = false;
-        extraConfig = config;
-      };
+    })
+    |> (generated: {
+      server-config = generated.config;
       server-kernelPackages = generated.packages;
       server-kernel = generated.kernel;
-    };
+    });
 }

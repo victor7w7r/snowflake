@@ -9,6 +9,12 @@
       cachyosPatches = patchesData.cachyos version.majorMinor;
       bunkerPatches = patchesData.bunker;
       tachyonPatches = patchesData.tachyon;
+    in
+    (kernel.lib.v7w7r {
+      inherit src pkgs;
+      localVer = "handheld-native";
+      config = (kernel.linux.injector pkgs).kConfig false;
+      version = version.string;
       patches =
         cachyosPatches.common
         ++ cachyosPatches.handheld
@@ -16,8 +22,7 @@
         ++ tachyonPatches.gaming
         ++ bunkerPatches.common
         ++ patchesData.asus;
-
-      config = with kernel.config.modules; [
+      extraConfig = with kernel.config.modules; [
         (cmdline { isAmd = true; })
         default
         freq.high
@@ -29,22 +34,10 @@
         storage.not-xfs
         vendor.amd
       ];
-
-      generated = kernel.lib.kernel-gen {
-        inherit patches src pkgs;
-        localVer = "handheld-native";
-        config = (kernel.linux.injector pkgs).kConfig false;
-        version = version.string;
-        extraConfig = config;
-      };
-    in
-    {
-      handheld-config = kernel.lib.config-gen {
-        inherit patches src pkgs;
-        config = (kernel.linux.injector pkgs).kConfig false;
-        extraConfig = config;
-      };
+    })
+    |> (generated: {
       handheld-kernelPackages = generated.packages;
       handheld-kernel = generated.kernel;
-    };
+      handheld-config = generated.config;
+    });
 }

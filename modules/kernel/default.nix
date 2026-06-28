@@ -5,7 +5,9 @@
   ...
 }:
 {
-  kernel.lib.kernel-gen =
+  imports = [ (inputs.den.namespace "kernel" true) ];
+
+  kernel.lib.v7w7r =
     {
       localVer,
       config,
@@ -54,6 +56,17 @@
     {
       kernel = base;
       packages = base |> pkgs.linuxPackagesFor |> helpers.kernelModuleLLVMOverride;
+      config = pkgs.stdenvNoCC.mkDerivation {
+        name = "filtered-config";
+        src = kernel.configfile;
+        phases = [ "installPhase" ];
+        installPhase = ''
+          cp $src .config
+          sed -i '/^[[:space:]]*#/d; /^[[:space:]]*$/d' .config
+          sed -i -E 's/[[:space:]]+"\s*$/"/' .config
+          mv .config $out
+        '';
+      };
     };
 }
 /*
