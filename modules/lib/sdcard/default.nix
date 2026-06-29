@@ -13,6 +13,7 @@
       storeLabel ? "store",
     }:
     {
+      includes = [ (sdcard.lib.postscript isHDD) ];
 
       nixos =
         {
@@ -39,24 +40,21 @@
             ];
 
             buildCommand =
-              let
-                closureInfo = pkgs.buildPackages.closureInfo {
-                  rootPaths = [ config.system.build.toplevel ];
-                };
-              in
-              ''
+              with sdcard.lib;
+              (pkgs.buildPackages.closureInfo { rootPaths = [ config.system.build.toplevel ]; })
+              |> (closureInfo: ''
                 mkdir -p $out
 
-                ${(sdcard.lib.persist { inherit persistSize persistLabel; })}
-                ${(sdcard.lib.boot { inherit bootSize persistSize populateFirmwareCommands; })}
+                ${(persist persistSize persistLabel)}
+                ${(boot bootSize persistSize populateFirmwareCommands)}
                 dd conv=notrunc if=./persist.img of=boot.img seek=$START count=$SECTORS
 
                 echo "Copying uboot and compressing boot image..."
                 ${postBuildCommands}
                 zstd -T$NIX_BUILD_CORES --rm boot.img && cp -a ./boot.img.zst $out/
 
-                ${(sdcard.lib.store { inherit storeLabel isHDD closureInfo; })}
-              '';
+                ${(store closureInfo isHDD storeLabel)}
+              '');
           };
         };
     };

@@ -25,6 +25,7 @@
         storage.bcachefs
         storage.not-raid
         storage.xfs
+        vendor.intel
       ];
     })
     |> (generated: {

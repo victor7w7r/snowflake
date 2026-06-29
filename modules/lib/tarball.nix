@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ inputs, tarball, ... }:
 {
   imports = [ (inputs.den.namespace "tarball" false) ];
 
@@ -9,6 +9,9 @@
         additionalBuildInputs ? [ ],
       }:
       {
+
+        includes = [ tarball.lib.postscript ];
+
         nixos =
           { config, pkgs, ... }:
           {
@@ -24,12 +27,8 @@
                 ++ additionalBuildInputs;
 
               buildCommand =
-                let
-                  closureInfo = pkgs.buildPackages.closureInfo {
-                    rootPaths = [ config.system.build.toplevel ];
-                  };
-                in
-                ''
+                (pkgs.buildPackages.closureInfo { rootPaths = [ config.system.build.toplevel ]; })
+                |> (closureInfo: ''
                   mkdir -p $out
 
                   ${if additionalContent != "" then additionalContent else ""}
@@ -44,7 +43,7 @@
                   mkdir -p root/nix/var/nix/daemon-socket
                   echo "Compressing with $SIZE..."
                   tar -cv -C root . | zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
-                '';
+                '');
             };
           };
       };

@@ -1,5 +1,6 @@
+{ disko, ... }:
 {
-  disko.btrfs = rec {
+  disko.btrfs = {
     emergency =
       {
         size ? "3G",
@@ -8,7 +9,7 @@
         isSolid ? true,
         priority ? 2,
       }:
-      call {
+      disko.btrfs.call {
         inherit
           name
           size
@@ -32,7 +33,7 @@
         mountContent ? "shared",
         mountSnap ? "sharedsnaps",
       }:
-      call {
+      disko.btrfs.call {
         inherit
           name
           size
@@ -64,40 +65,20 @@
         isRoot ? false,
         isLzo ? false,
       }:
-      let
-        mountOptions = [
+      (
+        [
           "lazytime"
           "noatime"
           "discard=async"
-          "compress=zstd:1"
+          "compress=${if isLzo then "lzo" else "zstd:1"}"
         ]
         ++ extraOptions
-        ++ (if isLzo then [ "compress=lzo" ] else [ "compress=zstd:1" ]);
-
-        subvolumes =
-          if isRoot then
-            {
-              "@" = {
-                mountpoint = "/";
-                inherit mountOptions;
-              };
-              "@nix" = {
-                mountpoint = "/nix";
-                mountOptions = mountOptions ++ [ "noacl" ];
-              };
-              "@persist" = {
-                mountpoint = "/nix/persist";
-                inherit mountOptions;
-              };
-            }
-          else
-            volumes;
-      in
-      {
+      )
+      |> (mountOptions: {
         inherit name size priority;
         type = "8300";
         content = {
-          inherit mountpoint subvolumes;
+          inherit mountpoint;
           mountOptions = singleOptions;
           type = "btrfs";
           extraArgs = [
@@ -105,7 +86,25 @@
             "-L"
             "${name}"
           ];
+          subvolumes =
+            if isRoot then
+              {
+                "@" = {
+                  mountpoint = "/";
+                  inherit mountOptions;
+                };
+                "@nix" = {
+                  mountpoint = "/nix";
+                  mountOptions = mountOptions ++ [ "noacl" ];
+                };
+                "@persist" = {
+                  mountpoint = "/nix/persist";
+                  inherit mountOptions;
+                };
+              }
+            else
+              volumes;
         };
-      };
+      });
   };
 }

@@ -23,6 +23,5 @@
           program = "${config.packages.vmGeneric}/bin/generic-vm";
         };
       };
-
     };
 }
