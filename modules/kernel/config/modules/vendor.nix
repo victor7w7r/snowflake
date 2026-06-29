@@ -53,6 +53,8 @@
       ASUS_WIRELESS = "n";
       ASUS_WMI = "n";
       ASUS_WMI_DEPRECATED_ATTRS = "n";
+      BT_MTK = "n";
+      BT_MTKSDIO = "n";
       CPU_SUP_AMD = "n";
       CPU_SUP_HYGON = "n";
       DRM_AMDGPU = "n";
@@ -64,10 +66,14 @@
       DRM_AMD_SECURE_DISPLAY = "n";
       DRM_RADEON = "n";
       HID_ASUS = "n";
-      HW_RANDOM_AMD = "n";
       HSA_AMD = "n";
       HSA_AMD_SVM = "n";
+      HW_RANDOM_AMD = "n";
       KVM_AMD = "n";
+      MT7921E = "n";
+      MT7921S = "n";
+      MT7921U = "n";
+      MT7921_COMMON = "n";
       NET_VENDOR_AMD = "n";
       PERF_EVENTS_AMD_BRS = "n";
       PERF_EVENTS_AMD_POWER = "n";

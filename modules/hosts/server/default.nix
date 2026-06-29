@@ -9,10 +9,7 @@
   imports = [ (inputs.den.namespace "server" false) ];
 
   den = {
-    hosts.x86_64-linux.server = {
-      hostName = "v7w7r-youyeetoox1";
-      users.victor7w7r = { };
-    };
+    hosts.x86_64-linux.server.users.victor7w7r = { };
 
     aspects.server = {
       includes = with den.aspects; [
@@ -46,7 +43,7 @@
       nixos =
         { config, pkgs, ... }:
         {
-
+          networking.hostName = "v7w7r-youyeetoox1";
           boot = {
             initrd.services.lvm.enable = true;
             extraModulePackages = [ config.boot.kernelPackages.r8168 ];

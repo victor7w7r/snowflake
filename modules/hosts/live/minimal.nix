@@ -6,10 +6,8 @@
 }:
 {
   den = {
-    hosts.x86_64-linux.minimal-live = {
-      hostName = "v7w7r-live";
-      users.snowflake = { };
-    };
+    hosts.x86_64-linux.minimal-live.users.snowflake = { };
+
     aspects.minimal-live = {
       includes = with den.aspects; [
         live.common
@@ -31,6 +29,7 @@
         snowflake
       ];
       nixos = {
+        networking.hostName = "v7w7r-live";
         isoImage.edition = lib.mkOverride 500 "minimal";
         fonts.fontconfig.enable = lib.mkOverride 500 false;
         system.nixos.variant_id = lib.mkDefault "minimal";

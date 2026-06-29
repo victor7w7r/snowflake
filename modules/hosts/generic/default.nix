@@ -10,10 +10,7 @@
   imports = [ (inputs.den.namespace "generic" false) ];
 
   den = {
-    hosts.x86_64-linux.generic = {
-      hostName = "v7w7r-generic";
-      users.snowflake = { };
-    };
+    hosts.x86_64-linux.generic.users.snowflake = { };
     aspects.generic = {
       includes = with den.aspects; [
         generic.disks
@@ -52,6 +49,7 @@
       nixos =
         { pkgs, modulesPath, ... }:
         {
+          networking.hostName = "v7w7r-generic";
           imports = [ "${modulesPath}/profiles/qemu-guest.nix" ];
           boot = {
             kernelParams = [

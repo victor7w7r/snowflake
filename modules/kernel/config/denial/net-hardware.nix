@@ -160,10 +160,6 @@
       MT76x2U = "n";
       MT76x2_COMMON = "n";
       MT7915E = "n";
-      MT7921E = "n";
-      MT7921S = "n";
-      MT7921U = "n";
-      MT7921_COMMON = "n";
       MT7925E = "n";
       MT7925U = "n";
       MT7925_COMMON = "n";

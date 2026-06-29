@@ -1,11 +1,7 @@
 { den, phone, ... }:
 {
   den = {
-    hosts.aarch64-linux.phone-enchilada = {
-      hostName = "v7w7r-enchilada";
-      users.victor7w7r = { };
-    };
-
+    hosts.aarch64-linux.phone-enchilada.users.victor7w7r = { };
     aspects.phone-enchilada = {
       includes = with den.aspects; [
         phone.common
@@ -35,6 +31,7 @@
       ];
 
       nixos = {
+        networking.hostName = "v7w7r-enchilada";
         zramSwap = {
           enable = true;
           algorithm = "zstd";

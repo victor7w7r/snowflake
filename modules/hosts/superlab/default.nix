@@ -10,10 +10,7 @@
   imports = [ (inputs.den.namespace "superlab" false) ];
 
   den = {
-    hosts.aarch64-linux.superlab = {
-      hostName = "v7w7r-radxarock5b";
-      users.victor7w7r = { };
-    };
+    hosts.aarch64-linux.superlab.users.victor7w7r = { };
 
     aspects.superlab = {
       includes = with den.aspects; [
@@ -50,6 +47,7 @@
       nixos =
         { pkgs, ... }:
         {
+          networking.hostName = "v7w7r-radxarock5b";
           boot = {
             kernelParams = [
               "console=ttyS2,1500000n8"

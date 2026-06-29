@@ -6,10 +6,7 @@
 }:
 {
   den = {
-    hosts.x86_64-linux.graphical-live = {
-      hostName = "v7w7r-live";
-      users.snowflake = { };
-    };
+    hosts.x86_64-linux.graphical-live.users.snowflake = { };
     aspects.graphical-live = {
       includes = with den.aspects; [
         live.common
@@ -36,6 +33,7 @@
       ];
 
       nixos = {
+        networking.hostName = "v7w7r-live";
         system.nixos.variant_id = lib.mkDefault "graphical";
         isoImage.edition = "xfce";
         powerManagement.enable = true;

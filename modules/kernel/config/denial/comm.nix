@@ -14,8 +14,6 @@
       BT_HCIVHCI = "n";
       BT_HIDP = "n";
       BT_MRVL = "n";
-      BT_MTK = "n";
-      BT_MTKSDIO = "n";
       BT_NXPUART = "n";
       BT_VIRTIO = "n";
     };

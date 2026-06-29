@@ -6,29 +6,25 @@
 }:
 {
   den.aspects.victor7w7r = {
-    includes = [
-      den.batteries.primary-user
-      #(den.batteries.user-shell "zsh")
-    ];
+    includes = [ den.batteries.primary-user ];
 
-    provides.to-hosts = {
-      nixos =
-        { pkgs, ... }:
-        {
-          imports = [ inputs.home-manager.nixosModules.home-manager ];
-          home-manager = {
-            backupCommand = "${pkgs.trash-cli}/bin/trash";
-            useGlobalPkgs = true;
-            useUserPackages = true;
-            backupFileExtension = "hm-backup";
-          };
+    nixos =
+      { pkgs, ... }:
+      {
+        imports = [ inputs.home-manager.nixosModules.home-manager ];
+        home-manager = {
+          backupCommand = "${pkgs.trash-cli}/bin/trash";
+          useGlobalPkgs = true;
+          useUserPackages = true;
+          backupFileExtension = "hm-backup";
         };
-    };
+      };
 
     user =
       { pkgs, ... }:
       {
         description = "victor7w7r";
+        shell = pkgs.zsh;
         linger = true;
         #root.hashedPassword = "$y$j9T$ieUYJ2thSsvR1M37kWe651$yt0z7Ga3..johS8fyA1Y9GaoddW.jfE838xXiFhcus1";
         hashedPassword = "$y$j9T$ieUYJ2thSsvR1M37kWe651$yt0z7Ga3..johS8fyA1Y9GaoddW.jfE838xXiFhcus1";

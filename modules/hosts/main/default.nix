@@ -9,10 +9,7 @@
   imports = [ (inputs.den.namespace "main" false) ];
 
   den = {
-    hosts.x86_64-linux.main = {
-      hostName = "v7w7r-macmini81";
-      users.victor7w7r = { };
-    };
+    hosts.x86_64-linux.main.users.victor7w7r = { };
 
     aspects.main = {
       includes = with den.aspects; [
@@ -50,7 +47,7 @@
       nixos =
         { pkgs, ... }:
         {
-
+          networking.hostName = "v7w7r-macmini81";
           boot = {
             /*
               extraModulePackages = [

@@ -11,10 +11,7 @@
   imports = [ (inputs.den.namespace "handheld" false) ];
 
   den = {
-    hosts.x86_64-linux.handheld = {
-      hostName = "v7w7r-rc71l";
-      users.victor7w7r = { };
-    };
+    hosts.x86_64-linux.handheld.users.victor7w7r = { };
 
     aspects.handheld = {
       includes = with den.aspects; [
@@ -54,6 +51,7 @@
       nixos =
         { pkgs, ... }:
         {
+          networking.hostName = "v7w7r-rc71l";
           environment = {
             persistence."/nix/persist" = {
               directories = lib.mkAfter [

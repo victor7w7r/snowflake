@@ -14,10 +14,7 @@
 }:
 {
   den = {
-    hosts.aarch64-linux.phone-fajita = {
-      hostName = "v7w7r-fajita";
-      users.victor7w7r = { };
-    };
+    hosts.aarch64-linux.phone-fajita.users.victor7w7r = { };
     aspects.phone-fajita = {
       includes = with den.aspects; [
         phone.common
@@ -49,6 +46,7 @@
       nixos =
         { pkgs, ... }:
         {
+          networking.hostName = "v7w7r-fajita";
           nixpkgs.overlays = [
             (final: prev: {
               libinput = prev.libinput.overrideAttrs (oldAttrs: {

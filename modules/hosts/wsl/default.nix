@@ -1,7 +1,6 @@
 {
   den,
   inputs,
-  __findFile,
   ...
 }:
 {
@@ -16,7 +15,6 @@
   den = {
     hosts.x86_64-linux.wsl = {
       wsl.enable = true;
-      hostName = "v7w7r-wsl";
       users.victor7w7r = { };
     };
 
@@ -38,6 +36,7 @@
       ];
 
       nixos = {
+        networking.hostName = "v7w7r-wsl";
       };
     };
   };
