@@ -1,8 +1,12 @@
-{ kernel, ... }:
+{ kernel, lib, ... }:
 {
   kernel.config.denial.dynamic =
     with kernel.lib;
-    config: [
+    {
+      config,
+      isArm ? false,
+    }:
+    [
       (dynamic-denial {
         inherit config;
         attr = "BATTERY";
@@ -48,10 +52,6 @@
       (dynamic-denial {
         inherit config;
         attr = "PATA";
-      })
-      (dynamic-denial {
-        inherit config;
-        attr = "RMI4";
       })
       (dynamic-denial {
         inherit config;
@@ -165,6 +165,12 @@
           "EMPEG"
           "FTDI_SIO"
         ];
+      })
+    ]
+    ++ lib.optionals isArm [
+      (dynamic-denial {
+        inherit config;
+        attr = "RMI4";
       })
     ];
 }

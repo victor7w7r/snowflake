@@ -14,13 +14,13 @@
       inherit pkgs src;
       localVer = "sunxi-hardened";
       config = "${patchesData.armbian.source}/config/kernel/linux-sunxi64-current.config";
+      version = version.string;
       patches =
         cachyosPatches.common
         ++ cachyosPatches.hardened
         ++ tachyonPatches.common
         ++ tachyonPatches.notGaming
         ++ bunkerPatches.common
-        ++ bunkerPatches.hardened
         ++ patchesData.armbian.sunxi-patches;
       extraConfig = with kernel.config.modules; [
         (cmdline { })

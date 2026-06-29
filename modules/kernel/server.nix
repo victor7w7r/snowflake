@@ -21,8 +21,7 @@
         ++ cachyosPatches.governors
         ++ tachyonPatches.common
         ++ tachyonPatches.notGaming
-        ++ bunkerPatches.common
-        ++ bunkerPatches.hardened;
+        ++ bunkerPatches.common;
       extraConfig = with kernel.config.modules; [
         (cmdline {
           isIntel = true;

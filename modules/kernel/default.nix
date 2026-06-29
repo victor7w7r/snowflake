@@ -24,7 +24,8 @@
         pname = "linux-v7w7r-${localVer}";
         inherit src;
         extraConfig = kernel.lib.concat-config {
-          config = extraConfig ++ kernel.config.denial.all ++ (kernel.config.denial.dynamic config);
+          config =
+            extraConfig ++ kernel.config.denial.all ++ (kernel.config.denial.dynamic { inherit config isArm; });
           isString = true;
         };
         version = "${version}-v7w7r-${localVer}";

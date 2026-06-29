@@ -29,20 +29,18 @@
       };
       patcher =
         with lib;
-        source: isRockchip:
+        isRockchip:
         source
         |> builtins.readFile
         |> splitString "\n"
         |> map strings.trim
         |> filter (line: line != "" && !(hasPrefix "#" line || hasPrefix "-" line))
-        |> map (
-          path: "${source}/patch/kernel/archive/${if isRockchip then "rockchip64" else "sunxi"}/-6.18${path}"
-        );
+        |> map (path: if isRockchip then rockchip else "${source}/patch/kernel/archive/sunxi-6.18/${path}");
     in
     {
       inherit source;
-      rockchip-patches = patcher rockchip true;
-      sunxi-patches = patcher "${source}/patch/kernel/archive/sunxi-6.18/series.conf" false;
+      rockchip-patches = patcher true;
+      sunxi-patches = patcher false;
     };
   /*
     [

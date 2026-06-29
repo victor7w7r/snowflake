@@ -257,7 +257,6 @@
       USB_EHSET_TEST_FIXTURE = "n";
       USB_EMI26 = "n";
       USB_EMI62 = "n";
-      USB_EZUSB_FX2 = "n";
       USB_F_MIDI = "n";
       USB_F_MIDI2 = "n";
       USB_GOKU = "n";

@@ -1,6 +1,7 @@
 {
   kernel.config.modules.freq = {
     low = {
+      APPLE_BCE = "n";
       HZ = "250";
       HZ_1000 = "n";
       HZ_250 = "y";

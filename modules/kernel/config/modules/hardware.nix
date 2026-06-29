@@ -58,6 +58,7 @@
       STAGING = "n";
       USB_LIBCOMPOSITE = "n";
       USB_NET_DRIVERS = "n";
+      USB_EZUSB_FX2 = "n";
       XZ_DEC_ARM = "n";
       XZ_DEC_ARMTHUMB = "n";
       XZ_DEC_ARM64 = "n";
