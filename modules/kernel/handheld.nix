@@ -27,6 +27,7 @@
         default
         freq.high
         hardware.desktop-wserial
+        hardware.native
         net
         storage.bcachefs
         storage.ntfs

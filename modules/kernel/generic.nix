@@ -1,6 +1,6 @@
 { kernel, ... }:
 {
-  kernel.hosts.main =
+  kernel.hosts.generic =
     pkgs:
     let
       src = (kernel.linux.injector pkgs).cachyos;
@@ -8,34 +8,28 @@
     in
     (kernel.lib.v7w7r {
       inherit pkgs src;
-      localVer = "native";
+      localVer = "v2";
       config = (kernel.linux.injector pkgs).kConfig false;
       version = version.string;
       patches =
         with kernel.patches.injector pkgs;
         (cachyos version.majorMinor).common ++ tachyon.common ++ tachyon.notGaming ++ bunker.common;
       extraConfig = with kernel.config.modules; [
-        (cmdline {
-          isIntel = true;
-          isSata = true;
-          extra = "video=DP-3:1600x900@60";
-        })
+        (cmdline { })
         default
         freq.high
         hardware.desktop
-        hardware.native
+        hardware.generic
         hardware.serial
         net
         storage.bcachefs
-        storage.ntfs
         storage.not-raid
         storage.xfs
-        vendor.intel
       ];
     })
     |> (generated: {
-      main-kernelPackages = generated.packages;
-      main-kernel = generated.kernel;
-      main-config = generated.config;
+      generic-kernelPackages = generated.packages;
+      generic-kernel = generated.kernel;
+      generic-config = generated.config;
     });
 }

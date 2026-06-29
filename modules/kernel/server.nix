@@ -32,6 +32,7 @@
         freq.low
         hardware.desktop
         hardware.serial
+        hardware.native
         net
         storage.f2fs
         storage.ntfs

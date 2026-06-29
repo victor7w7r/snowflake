@@ -2,7 +2,7 @@
   den,
   inputs,
   generic,
-  initrd-services,
+  kernel,
   ...
 }:
 {
@@ -14,7 +14,6 @@
     aspects.generic = {
       includes = with den.aspects; [
         generic.disks
-        (initrd-services.lib.zram { })
 
         base._
         base.tmux._
@@ -50,6 +49,8 @@
         { pkgs, modulesPath, ... }:
         {
           networking.hostName = "v7w7r-generic";
+          virtualisation.useEFIBoot = true;
+          kernelPackages = (kernel.hosts.generic pkgs).generic-kernelPackages;
           imports = [ "${modulesPath}/profiles/qemu-guest.nix" ];
           boot = {
             kernelParams = [
@@ -58,12 +59,7 @@
               "i915.enable_psr=0"
             ];
             # ++ params { };
-            kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-lts-lto;
             initrd = {
-              luks.devices.syscrypt = {
-                device = "/dev/disk/by-partlabel/disk-main-systempv";
-                preLVM = true;
-              };
               availableKernelModules = [
                 "ahci"
                 "xhci_pci"

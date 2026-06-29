@@ -20,8 +20,9 @@
       apps = {
         vmGeneric = {
           type = "app";
-          program = "${config.packages.vmGeneric}/bin/vm-generic";
+          program = "${config.packages.vmGeneric}/bin/generic-vm";
         };
       };
+
     };
 }

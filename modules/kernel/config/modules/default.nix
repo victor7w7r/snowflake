@@ -13,7 +13,6 @@
     ENCRYPTED_KEYS = "y";
     EXPERT = "y";
     FSCACHE = "y";
-    GENERIC_CPU = "n";
     HW_RANDOM_TPM = "y";
     HZ_PERIODIC = "n";
     I2C_CHARDEV = "y";

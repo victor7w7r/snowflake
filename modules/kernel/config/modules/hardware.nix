@@ -12,6 +12,18 @@
       USB_ACM = "y";
     };
 
+    generic = {
+      GENERIC_CPU = "y";
+      MZEN4 = "n";
+      X86_NATIVE_CPU = "n";
+      X86_64_VERSION = "2";
+    };
+
+    native = {
+      GENERIC_CPU = "n";
+      X86_NATIVE_CPU = "y";
+    };
+
     not-gpio = {
       GPIOLIB = "n";
     };
@@ -62,7 +74,6 @@
       XZ_DEC_ARM = "n";
       XZ_DEC_ARMTHUMB = "n";
       XZ_DEC_ARM64 = "n";
-      X86_NATIVE_CPU = "y";
       X86_ACPI_CPUFREQ = "y";
       X86_X32 = "y";
     };
