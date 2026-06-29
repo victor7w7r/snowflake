@@ -77,14 +77,14 @@
               | grep -i "EFI" | grep -i "vfat" | head -n1)
             DISK=$(echo "$EFI_INFO" | awk '{print $3}')
 
-            echo "Setup EFI Entries..."
-            efibootmgr | grep -i "rEFind" | awk '{print $1}' \
-              | sed 's/Boot//' | sed 's/\*//' \
-              | while read entry; do efibootmgr -b "$entry" -B &> /dev/null; done
+            #echo "Setup EFI Entries..."
+            #efibootmgr | grep -i "rEFind" | awk '{print $1}' \
+            #  | sed 's/Boot//' | sed 's/\*//' \
+            #  | while read entry; do efibootmgr -b "$entry" -B &> /dev/null; done
 
-            efibootmgr --create --disk /dev/$DISK --part 1 \
-              --loader /EFI/refind/refind_x64.efi --label "rEFInd" \
-              --unicode &> /dev/null
+            #efibootmgr --create --disk /dev/$DISK --part 1 \
+            #  --loader /EFI/refind/refind_x64.efi --label "rEFInd" \
+            #  --unicode &> /dev/null
 
             [[ -f ${efi}/vmlinuz ]] && rm ${efi}/vmlinuz
             [[ -f ${efi}/initrd ]] && rm ${efi}/initrd

@@ -19,11 +19,13 @@
           size = "110G";
           priority = 7;
         };
-        games = disko.btrfs.shared {
-          name = "games";
-          mountContent = "games";
-          mountSnap = "gamessnap";
-        };
+        /*
+          games = disko.btrfs.shared {
+            name = "games";
+            mountContent = "games";
+            mountSnap = "gamessnap";
+          };
+        */
       };
     in
     {
