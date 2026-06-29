@@ -41,6 +41,7 @@
         singleOptions = [
           "lazytime"
           "noatime"
+          "nofail"
           "compress-force=lzo"
         ]
         ++ (if isSolid then [ "discard=async" ] else [ "autodefrag" ]);
