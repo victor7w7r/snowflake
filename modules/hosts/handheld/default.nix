@@ -39,6 +39,7 @@
         android
         bluetooth
         btrfs
+        communication
         fetch
         gaming
         hardware

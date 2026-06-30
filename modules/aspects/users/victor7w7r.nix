@@ -48,25 +48,30 @@
             }
           ];
         */
+
         extraGroups = [
           "audio"
-          "gamemode"
-          "input"
-          "kvm"
-          "adbusers"
-          "dialout"
-          "libvirtd"
-          "libvirt-qemu"
-          "power"
-          "qemu"
-          "qemu-libvirtd"
-          "plugdev"
-          "realtime"
-          "storage"
-          "tty"
-          "users"
-          "wheel"
+          /*
+            "gamemode"
+            "input"
+            "kvm"
+            "adbusers"
+            "dialout"
+            "libvirtd"
+            "libvirt-qemu"
+            "power"
+            "qemu"
+            "qemu-libvirtd"
+            "plugdev"
+            "realtime"
+            "storage"
+            "tty"
+            "users"
+            "wheel"
+          */
+          "video"
         ];
+
       };
 
     homeManager =

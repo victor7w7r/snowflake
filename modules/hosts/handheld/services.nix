@@ -1,9 +1,9 @@
 { lib, ... }:
 {
-  handheld.services.nixos =
+  handheld.services =
     { user, ... }:
     {
-      services = {
+      nixos.services = {
         acpid.enable = true;
         asusd.enable = true;
         #auto-cpufreq.enable = true;
@@ -39,5 +39,4 @@
         };
       };
     };
-
 }

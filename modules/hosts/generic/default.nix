@@ -19,13 +19,14 @@
         base.tmux._
         base.shell._
         dev._
+        gui._
         initrd._
         networking._
-        nix._
         tweaks._
+        nix._
         vim._
-        fetch._
 
+        fetch
         snowflake
       ];
 
@@ -49,9 +50,8 @@
         { pkgs, modulesPath, ... }:
         {
           networking.hostName = "v7w7r-generic";
-          virtualisation.vmVariant = {
-            virtualisation.useEFIBoot = true;
-          };
+          virtualisation.vmVariant.virtualisation.useEFIBoot = true;
+
           imports = [ "${modulesPath}/profiles/qemu-guest.nix" ];
           boot = {
             kernelParams = [

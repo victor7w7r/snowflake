@@ -1,14 +1,8 @@
 {
   den.aspects.sound.default = {
     nixos =
+      { pkgs, self', ... }:
       {
-        pkgs,
-        user,
-        self',
-        ...
-      }:
-      {
-        users.groups.audio.members = [ user ];
         environment.systemPackages = with pkgs; [
           asak
           alsa-plugins

@@ -106,7 +106,6 @@
       VBOXGUEST = "n";
       VDPA = "n";
       VMWARE_PVSCSI = "n";
-      VIRTIO_NET = "n";
       VMWARE_VMCI = "n";
       VP_VDPA = "n";
     };

@@ -5,7 +5,6 @@
       isPersistent,
       isPhone,
       isServer,
-      user,
       ...
     }:
     {
@@ -15,7 +14,6 @@
           "/var/lib/NetworkManager"
         ];
       };
-      users.groups.networkmanager.members = [ user ];
       systemd.services.NetworkManager-wait-online.enable = false;
       networking = {
         dhcpcd = {
@@ -31,12 +29,12 @@
             "8.8.4.4"
           ];
           dhcp = "dhcpcd";
+          unmanaged = lib.optionals isPhone [
+            "rndis0"
+            "usb0"
+          ];
         };
         modemmanager.enable = lib.mkForce isPhone;
-        unmanaged = lib.optionalAttrs isPhone [
-          "rndis0"
-          "usb0"
-        ];
         nameservers = [
           "8.8.8.8"
           "8.8.4.4"

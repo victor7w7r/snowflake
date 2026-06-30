@@ -4,6 +4,7 @@
     {
       isIntel,
       isLive,
+      isGeneric,
       hasVisualKeyboard,
       ...
     }:
@@ -18,7 +19,7 @@
           "vfat"
         ]
         ++ lib.optionals isIntel [ "xfs" ]
-        ++ lib.optionals (isLive || hasVisualKeyboard) [ "bcachefs" ];
+        ++ lib.optionals (isLive || hasVisualKeyboard || isGeneric) [ "bcachefs" ];
 
         consoleLogLevel = 4;
         modprobeConfig.enable = true;

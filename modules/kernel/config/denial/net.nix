@@ -122,10 +122,8 @@
       NETDEVSIM = "n";
       NETLINK_DIAG = "n";
       NETPOLL = "n";
-      NET_9P = "n";
       NET_DSA = "n";
       NET_EMATCH = "n";
-      NET_FAILOVER = "n";
       NET_KEY = "n";
       NET_NSH = "n";
       NET_SWITCHDEV = "n";

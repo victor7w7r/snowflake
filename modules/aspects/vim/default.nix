@@ -5,24 +5,25 @@
     inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  den.aspects.vim = {
+  den.aspects.vim =
+    { user, ... }:
+    {
+      os = {
+        imports = [ inputs.nixvim.nixosModules.nixvim ];
 
-    os = {
-      imports = [ inputs.nixvim.nixosModules.nixvim ];
-
-      programs.nixvim = {
-        enable = true;
-        colorschemes.catppuccin.enable = true;
-        plugins.lualine.enable = true;
+        programs.nixvim = {
+          enable = true;
+          colorschemes.catppuccin.enable = true;
+          plugins.lualine.enable = true;
+        };
       };
+
+      nixos =
+        { isPersistent, ... }:
+        lib.optional isPersistent {
+          environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
+            ".cache/nvim"
+          ];
+        };
     };
-
-    nixos =
-      { isPersistent, user, ... }:
-      lib.optional isPersistent {
-        environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
-          ".cache/nvim"
-        ];
-      };
-  };
 }

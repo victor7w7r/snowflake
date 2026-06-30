@@ -67,6 +67,7 @@
       DRM_RADEON = "n";
       HID_ASUS = "n";
       HID_ASUS_ALLY = "n";
+      HID_HAPTIC = "n";
       HSA_AMD = "n";
       HSA_AMD_SVM = "n";
       HW_RANDOM_AMD = "n";

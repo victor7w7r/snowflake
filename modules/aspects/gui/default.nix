@@ -1,13 +1,12 @@
 { lib, ... }:
 {
   den.aspects.gui.default.nixos =
-    { pkgs, user, ... }:
+    { pkgs, ... }:
     {
-      users.groups.video.members = [ user ];
       services = {
         gvfs.enable = true;
         xserver.enable = lib.mkForce true;
-        displayManager.libinput = {
+        libinput = {
           enable = true;
           mouse.accelProfile = "flat";
           touchpad = {

@@ -79,7 +79,6 @@
       I2C_USBIO = "n";
       I2C_VIA = "n";
       I2C_VIAPRO = "n";
-      I2C_VIRTIO = "n";
       I2C_XILINX = "n";
       I2C_ZHAOXIN = "n";
       MUX_GPIO = "n";

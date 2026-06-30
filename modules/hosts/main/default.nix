@@ -36,6 +36,7 @@
         android
         bluetooth
         btrfs
+        communication
         fetch
         forensics
         hardware

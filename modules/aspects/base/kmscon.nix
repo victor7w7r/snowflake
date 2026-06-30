@@ -1,8 +1,13 @@
 { lib, ... }:
 {
   den.aspects.base.kmscon.nixos =
-    { isServer, isLive, ... }:
-    lib.optionalAttrs (!isLive && !isServer) {
+    {
+      isServer,
+      isLive,
+      isGeneric,
+      ...
+    }:
+    lib.optionalAttrs (!isLive && !isServer && !isGeneric) {
       services.kmscon = {
         enable = true;
         config = {
