@@ -24,6 +24,7 @@
             })
           ];
         };
+
       homeManager.programs = {
         intelli-shell.enable = true;
         bash = {
@@ -41,7 +42,6 @@
         };
         #https://github.com/poetaman/arttime
         zsh = {
-          enable = true;
           autocd = true;
           enableCompletion = true;
           autosuggestion.enable = true;

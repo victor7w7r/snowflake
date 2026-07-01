@@ -8,12 +8,10 @@
         vmGeneric = pkgs.writeShellApplication {
           name = "generic-vm";
           text =
-            let
-              host = inputs.self.nixosConfigurations.generic.config;
-            in
-            ''
+            inputs.self.nixosConfigurations.generic.config
+            |> (host: ''
               ${host.system.build.vm}/bin/run-${host.networking.hostName}-vm "$@"
-            '';
+            '');
         };
       };
 

@@ -22,11 +22,13 @@
         gui._
         initrd._
         networking._
-        tweaks._
         nix._
+        plasma._
+        tweaks._
         vim._
 
         fetch
+        persistence
         snowflake
       ];
 

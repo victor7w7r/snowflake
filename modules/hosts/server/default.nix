@@ -36,9 +36,10 @@
           fetch
           forensics
           hardware
+          persistence
           secrets
-          xfce
           victor7w7r
+          xfce
           zed
         ];
 

@@ -62,6 +62,7 @@
 
     homeManager.programs.fastfetch = {
       enable = true;
+      sex =
     };
   };
 }

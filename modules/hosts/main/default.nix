@@ -9,7 +9,9 @@
   imports = [ (inputs.den.namespace "main" false) ];
 
   den = {
-    hosts.x86_64-linux.main.users.victor7w7r = { };
+    hosts.x86_64-linux.main.users.victor7w7r = {
+      classes = [ "homeManager" ];
+    };
 
     aspects.main = {
       includes = with den.aspects; [
@@ -41,6 +43,7 @@
         forensics
         hardware
         kitty
+        persistence
         secrets
         victor7w7r
         zed

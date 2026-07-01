@@ -38,7 +38,6 @@
           less.enable = true;
           pay-respects.enable = true;
           skim.enable = true;
-          zsh.enable = true;
         };
       };
 

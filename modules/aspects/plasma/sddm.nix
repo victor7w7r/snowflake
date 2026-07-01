@@ -8,7 +8,7 @@
       ...
     }:
     lib.mkMerge [
-      (lib.mkIf (isGeneric || isPhone) {
+      (lib.mkIf isPhone {
         environment.systemPackages = with pkgs; [
           (sddm-astronaut.override {
             themeConfig = {

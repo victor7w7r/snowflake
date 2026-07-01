@@ -31,6 +31,7 @@
 
         btrfs
         fetch
+        persistence
         secrets
         victor7w7r
       ];

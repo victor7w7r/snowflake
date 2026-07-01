@@ -1,5 +1,12 @@
 {
   den.aspects.base.nettools = {
+    homeManager =
+      { pkgs, ... }:
+      {
+        test = "da";
+        home.packages = with pkgs; [ axel ];
+      };
+
     os =
       { pkgs, ... }:
       {
@@ -20,12 +27,6 @@
           net-tools
           wget2
         ];
-      };
-
-    homeManager =
-      { pkgs, ... }:
-      {
-        home.packages = with pkgs; [ axel ];
       };
   };
 }

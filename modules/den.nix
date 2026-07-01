@@ -4,6 +4,9 @@
   inputs,
   ...
 }:
+let
+  __findFile = den.lib.take.unused __findFile den.lib.__findFile;
+in
 {
   _module.args.__findFile = den.lib.__findFile;
 
@@ -18,11 +21,16 @@
   };
 
   den = {
-    default.includes = with den.batteries; [
-      define-user
-      inputs'
-      self'
+    default.includes = [
+      den.batteries.inputs'
+      den.batteries.self'
+      <den/define-user>
+      <den/define-user>
+      <den/primary-user>
+      <den/mutual-provider>
+      (<den/user-shell> "zsh")
     ];
     schema.user.classes = lib.mkDefault [ "homeManager" ];
   };
+
 }

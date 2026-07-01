@@ -26,12 +26,12 @@
   perSystem =
     { pkgs, system, ... }:
     let
-      handheld = (kernel.hosts.handheld pkgs);
-      main = (kernel.hosts.main pkgs);
-      server = (kernel.hosts.server pkgs);
-      pizero = (kernel.hosts.pizero pkgs);
-      superlab = (kernel.hosts.superlab pkgs);
-      generic = (kernel.hosts.generic pkgs);
+      handheld = kernel.hosts.handheld pkgs;
+      main = kernel.hosts.main pkgs;
+      server = kernel.hosts.server pkgs;
+      pizero = kernel.hosts.pizero pkgs;
+      superlab = kernel.hosts.superlab pkgs;
+      generic = kernel.hosts.generic pkgs;
       main-kernel = main.main-kernel;
     in
     {
@@ -60,14 +60,10 @@
               inherit (final) config;
               inherit system;
             };
-          })
-          (final: _: {
             unstable = import inputs.nixpkgs-unstable {
               inherit (final) config;
               inherit system;
             };
-          })
-          (final: _: {
             inherit main-kernel;
           })
         ];

@@ -4,10 +4,11 @@
     {
       hasVisualKeyboard,
       isHandheld,
+      isGeneric,
       pkgs,
       ...
     }:
-    lib.optionalAttrs hasVisualKeyboard {
+    lib.optionalAttrs (hasVisualKeyboard || isGeneric) {
       security.pam.services.ly.kwallet = {
         enable = true;
         package = pkgs.kdePackages.kwallet-pam;
