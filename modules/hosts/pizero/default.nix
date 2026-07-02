@@ -40,7 +40,6 @@
         btrfs
         fetch
         hardware
-        persistence
         secrets
         victor7w7r
       ];

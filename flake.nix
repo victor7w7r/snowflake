@@ -79,7 +79,6 @@
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
     };
-    flakehub.url = "https://flakehub.com/f/DeterminateSystems/fh/*.tar.gz";
     gestures.url = "github:ferstar/gestures";
     home-manager = {
       url = "github:nix-community/home-manager";

@@ -36,7 +36,6 @@
           fetch
           forensics
           hardware
-          persistence
           secrets
           victor7w7r
           xfce

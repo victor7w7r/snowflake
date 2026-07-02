@@ -25,7 +25,6 @@
 
         btrfs
         hardware
-        persistence
         secrets
         snowflake
       ];

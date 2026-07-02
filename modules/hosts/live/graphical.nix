@@ -28,7 +28,6 @@
         btrfs
         hardware
         kitty
-        persistence
         secrets
         snowflake
         xfce

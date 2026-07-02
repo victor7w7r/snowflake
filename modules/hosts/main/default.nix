@@ -43,7 +43,6 @@
         forensics
         hardware
         kitty
-        persistence
         secrets
         victor7w7r
         zed
