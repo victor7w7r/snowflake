@@ -60,9 +60,8 @@
         ];
       };
 
-    homeManager.programs.fastfetch = {
+    provides.to-users.homeManager.programs.fastfetch = {
       enable = true;
-      sex = "data";
     };
   };
 }
