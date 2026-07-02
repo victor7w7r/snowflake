@@ -12,7 +12,7 @@
           ];
         };
 
-      homeManager =
+      provides.to-users.homeManager =
         { pkgs, ... }:
         {
           programs.zed-editor = {

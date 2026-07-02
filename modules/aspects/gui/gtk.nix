@@ -1,5 +1,5 @@
 {
-  den.aspects.gui.gtk.homeManager =
+  den.aspects.gui.gtk.provides.to-users.homeManager =
     { pkgs, ... }:
     {
       gtk = {

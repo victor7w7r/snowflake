@@ -42,7 +42,7 @@
         };
       };
 
-    homeManager = {
+    provides.to-users.homeManager = {
       services.pueue.enable = true;
       programs = {
         #lsd.enable = true;

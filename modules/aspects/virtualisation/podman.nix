@@ -45,7 +45,7 @@
           };
         };
 
-      homeManager =
+      provides.to-users.homeManager =
         { isVisual, pkgs, ... }:
         lib.optionalAttrs isVisual {
           home.packages = with pkgs; [ distroshelf ];

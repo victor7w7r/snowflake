@@ -20,7 +20,7 @@
       '';
     };
 
-    homeManager =
+    provides.to-users.homeManager =
       { isMain, isHandheld, ... }:
       {
         programs.plasma.panels = [

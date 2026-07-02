@@ -68,7 +68,7 @@
         };
       };
 
-      homeManager = {
+      provides.to-users.homeManager = {
         services.network-manager-applet.enable = true;
         xfconf.settings.xfce4-panel = {
           "panels" = [ 1 ];

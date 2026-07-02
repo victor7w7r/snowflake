@@ -36,7 +36,7 @@
               ];
         };
 
-      homeManager =
+      provides.to-users.homeManager =
         {
           config,
           pkgs,

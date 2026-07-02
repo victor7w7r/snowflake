@@ -11,7 +11,7 @@
           ];
         };
 
-      homeManager = {
+      provides.to-users.homeManager = {
         services.easyeffects.enable = true;
         home.activation.createEqFiles =
           let

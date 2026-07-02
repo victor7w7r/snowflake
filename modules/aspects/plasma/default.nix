@@ -40,7 +40,7 @@
           xdg.portal.extraPortals = with pkgs; [ kdePackages.xdg-desktop-portal-kde ];
         };
 
-      homeManager =
+      provides.to-users.homeManager =
         { pkgs, self', ... }:
         {
           imports = [ inputs.plasma-manager.homeModules.plasma-manager ];

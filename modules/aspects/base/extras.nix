@@ -28,7 +28,7 @@
         };
       };
 
-    homeManager =
+    provides.to-users.homeManager =
       { isPersistent, ... }:
       lib.optionalAttrs isPersistent {
         services.pueue.enable = true;

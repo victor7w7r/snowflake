@@ -20,7 +20,7 @@
           ];
       };
 
-    homeManager =
+    provides.to-users.homeManager =
       { isPersistent, pkgs, ... }:
       {
         home.packages = with pkgs; [ lazygit ] ++ lib.optionals isPersistent [ git-credential-manager ];

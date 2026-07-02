@@ -19,7 +19,7 @@
           ];
         };
 
-      homeManager =
+      provides.to-users.homeManager =
         {
           isMain,
           isSuperlab,

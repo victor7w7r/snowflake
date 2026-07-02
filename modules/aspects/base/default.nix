@@ -111,7 +111,7 @@
         };
       };
 
-    homeManager =
+    provides.to-users.homeManager =
       { pkgs, ... }:
       {
         home.packages = with pkgs; [

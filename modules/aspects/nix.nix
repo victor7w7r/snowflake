@@ -49,7 +49,7 @@
         ];
       };
 
-    homeManager = {
+    provides.to-users.homeManager = {
       imports = [ inputs.nix-index-database.homeModules.nix-index ];
 
       programs = {

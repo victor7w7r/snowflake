@@ -75,7 +75,7 @@
           ];
         };
 
-      homeManager =
+      provides.to-users.homeManager =
         { config, ... }:
         {
           home.file = {

@@ -65,7 +65,7 @@
         };
       };
 
-    homeManager =
+    provides.to-users.homeManager =
       { isHandheld, isMain, ... }:
       lib.optionalAttrs (isHandheld || isMain) {
         programs.looking-glass-client.enable = true;

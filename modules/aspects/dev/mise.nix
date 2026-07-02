@@ -14,7 +14,7 @@
           ];
         };
 
-      homeManager =
+      provides.to-users.homeManager =
         { isPersistent, ... }:
         lib.optional isPersistent {
           programs.mise = {

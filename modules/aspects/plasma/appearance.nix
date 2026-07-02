@@ -1,5 +1,5 @@
 {
-  den.aspects.plasma.appearance.homeManager =
+  den.aspects.plasma.appearance.provides.to-users.homeManager =
     { self', ... }:
     {
       programs.plasma = {

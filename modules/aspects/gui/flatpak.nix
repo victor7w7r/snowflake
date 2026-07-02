@@ -15,7 +15,7 @@
           };
         };
 
-      homeManager =
+      provides.to-users.homeManager =
         {
           isVisual,
           isPersistent,

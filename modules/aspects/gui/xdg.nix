@@ -21,7 +21,7 @@
         };
       };
 
-    homeManager =
+    provides.to-users.homeManager =
       { config, ... }:
       {
         xdg = {

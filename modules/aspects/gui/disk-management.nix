@@ -10,7 +10,7 @@
       ])
     ];
 
-    homeManager =
+    provides.to-users.homeManager =
       { pkgs, self', ... }:
       {
         home.packages = with pkgs; [

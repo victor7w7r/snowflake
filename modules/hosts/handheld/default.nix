@@ -112,7 +112,7 @@
             };
           };
 
-        homeManager =
+        provides.to-users.homeManager =
           { config, ... }:
           {
             home.file."games".source = config.lib.file.mkOutOfStoreSymlink "/run/media/games";

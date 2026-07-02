@@ -83,7 +83,7 @@
         };
       };
 
-    homeManager = {
+    provides.to-users.homeManager = {
       qt.enable = false;
       xfconf.settings = {
         xsettings = {

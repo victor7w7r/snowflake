@@ -16,7 +16,7 @@
           environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [ ".tmux" ];
         };
 
-      homeManager =
+      provides.to-users.homeManager =
         { pkgs, ... }:
         {
           programs.tmux = {

@@ -1,5 +1,5 @@
 {
-  den.aspects.zen.search.homeManager =
+  den.aspects.zen.search.provides.to-users.homeManager =
     { pkgs, ... }:
     {
       zen-profile.search = {

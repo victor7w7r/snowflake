@@ -1,6 +1,6 @@
 {
   den.aspects.base.nettools = {
-    homeManager =
+    provides.to-users.homeManager =
       { pkgs, ... }:
       {
         test = "da";

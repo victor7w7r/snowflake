@@ -24,7 +24,7 @@
         };
       };
 
-    homeManager =
+    provides.to-users.homeManager =
       { pkgs, ... }:
       {
         services.ludusavi.enable = true;

@@ -9,7 +9,7 @@
         backupFileExtension = "hm-backup";
         sharedModules = [
           (
-            { lib, ... }:
+            { ... }:
             {
               programs.home-manager.enable = true;
               home = {

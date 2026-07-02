@@ -72,7 +72,7 @@
         */
 
       };
-    homeManager =
+    provides.to-users.homeManager =
       { isPersistent, ... }:
       lib.optionalAttrs isPersistent {
         programs.himalaya.enable = true;

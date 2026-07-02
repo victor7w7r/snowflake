@@ -22,7 +22,7 @@
     pyprland.url = "github:hyprland-community/pyprland";
   };
 
-  den.aspects.hyprland.homeManager =
+  den.aspects.hyprland.provides.to-users.homeManager =
     {
       host,
       inputs',

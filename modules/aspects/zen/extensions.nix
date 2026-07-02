@@ -1,5 +1,5 @@
 {
-  den.aspects.zen.extensions.homeManager =
+  den.aspects.zen.extensions.provides.to-users.homeManager =
     { inputs', ... }:
     {
       programs.zen-browser = {

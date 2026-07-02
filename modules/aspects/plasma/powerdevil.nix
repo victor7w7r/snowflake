@@ -1,6 +1,6 @@
 {
   den.aspects.plasma.powerdevil = {
-    homeManager =
+    provides.to-users.homeManager =
       { isMain, ... }:
       {
         programs.plasma.powerdevil = {

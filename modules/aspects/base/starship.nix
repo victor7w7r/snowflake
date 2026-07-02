@@ -2,7 +2,7 @@
   den.aspects.base.starship =
     { user, ... }:
     {
-      homeManager =
+      provides.to-users.homeManager =
         let
           isRoot = user == "root";
           symbol = if isRoot then "#" else "\\$";

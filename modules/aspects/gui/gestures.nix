@@ -16,7 +16,7 @@
         services.udev.extraRules = ''KERNEL=="uinput", MODE="0660", GROUP="input"'';
       };
 
-    homeManager =
+    provides.to-users.homeManager =
       {
         inputs',
         isMain,
