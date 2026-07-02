@@ -1,5 +1,5 @@
 {
-  tmux.ext.ssh = ''
+  tmux.ext.string.ssh = ''
     show_ssh_session_port=$1
 
     parse_ssh_port() {

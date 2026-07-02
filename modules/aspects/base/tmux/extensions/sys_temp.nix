@@ -1,5 +1,5 @@
 {
-  tmux.ext.sys = ''
+  tmux.ext.string.sys = ''
     get_temp() {
       if grep -q "Raspberry" /proc/device-tree/model 2>/dev/null; then
         echo "$(vcgencmd measure_temp | sed 's/temp=//')"

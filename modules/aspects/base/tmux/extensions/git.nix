@@ -1,5 +1,5 @@
 {
-  tmux.ext.git = ''
+  tmux.ext.string.git = ''
     getChanges() {
       declare -i added=0
       declare -i modified=0

@@ -16,7 +16,7 @@
 
       provides.to-users.homeManager =
         { isPersistent, ... }:
-        lib.optional isPersistent {
+        lib.optionalAttrs isPersistent {
           programs.mise = {
             enable = true;
             enableZshIntegration = true;

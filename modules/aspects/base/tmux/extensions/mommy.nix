@@ -1,5 +1,5 @@
 {
-  tmux.ext.mommy = ''
+  tmux.ext.string.mommy = ''
     commandexist() {
       command -v "$1" &>/dev/null
     }

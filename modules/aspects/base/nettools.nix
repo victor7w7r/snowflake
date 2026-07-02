@@ -3,7 +3,6 @@
     provides.to-users.homeManager =
       { pkgs, ... }:
       {
-        test = "da";
         home.packages = with pkgs; [ axel ];
       };
 

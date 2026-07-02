@@ -12,7 +12,7 @@
         sidebar
         tmux-fzf
         {
-          plugin = tmuxPlugins.fzf-tmux-url;
+          plugin = pkgs.tmuxPlugins.fzf-tmux-url;
           extraConfig = ''
             set -g @fzf-url-bind 'u'
             TMUX_FZF_LAUNCH_KEY="C-k"
@@ -20,14 +20,14 @@
           '';
         }
         {
-          plugin = tmuxPlugins.better-mouse-mode;
+          plugin = pkgs.tmuxPlugins.better-mouse-mode;
           extraConfig = ''
             set -g @emulate-scroll-for-no-mouse-alternate-buffer "on"
             set -g @scroll-down-exit-copy-mode "off"
           '';
         }
         {
-          plugin = tmuxPlugins.tmux-floax;
+          plugin = pkgs.tmuxPlugins.tmux-floax;
           extraConfig = ''
             set -g @floax-bind 'L'
             set -g @floax-border-color 'purple'
@@ -70,25 +70,25 @@
           '';
         }
         {
-          plugin = tmuxPlugins.tmux-sessionx;
+          plugin = pkgs.tmuxPlugins.tmux-sessionx;
           extraConfig = ''
             set -g @fzf-url-bind 'u'
             TMUX_FZF_LAUNCH_KEY="C-k"
             set -g @fzf-url-history-limit '2000'
           '';
         }
-        (tmuxPlugins.mkTmuxPlugin {
+        (pkgs.tmuxPlugins.mkTmuxPlugin {
           pluginName = "named-snapshot";
           rtpFilePath = "named-snapshot.tmux";
           version = "872fede";
-          src = fetchFromGitHub {
+          src = pkgs.fetchFromGitHub {
             owner = "spywhere";
             repo = "tmux-named-snapshot";
             rev = "872fedef62c1b732a56ca643f2354346912e06c3";
             hash = "sha256-EW1X+ZVl+hIIqAsj+bv6dkjQtNiBEhUYOQK/8bFEpV8=";
           };
         })
-        (tmuxPlugins.mkTmuxPlugin {
+        (pkgs.tmuxPlugins.mkTmuxPlugin {
           pluginName = "cowboy";
           version = "75702b6d";
           src = pkgs.fetchFromGitHub {
@@ -98,7 +98,7 @@
             sha256 = "sha256-KJNsdDLqT2Uzc25U4GLSB2O1SA/PThmDj9Aej5XjmJs=";
           };
         })
-        (tmuxPlugins.mkTmuxPlugin rec {
+        (pkgs.tmuxPlugins.mkTmuxPlugin rec {
           pluginName = "tmux-notify";
           version = "1.6.0";
           src = pkgs.fetchFromGitHub {
@@ -109,7 +109,7 @@
           };
           rtpFilePath = "tnotify.tmux";
           postInstall = ''
-            find $target -type f -exec sed -i 's|notify-send |${libnotify}/bin/notify-send |g' {} +
+            find $target -type f -exec sed -i 's|notify-send |${pkgs.libnotify}/bin/notify-send |g' {} +
           '';
         })
         (pkgs.tmuxPlugins.mkTmuxPlugin {

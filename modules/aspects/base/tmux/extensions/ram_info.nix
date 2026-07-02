@@ -1,5 +1,5 @@
 {
-  tmux.ext.ram-ping = ''
+  tmux.ext.string.ram-ping = ''
     get_ratio() {
       case $(uname -s) in
       Linux)

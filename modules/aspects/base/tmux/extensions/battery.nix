@@ -1,5 +1,5 @@
 {
-  tmux.ext.battery = ''
+  tmux.ext.string.battery = ''
     linux_acpi() {
       arg=$1
       BAT=$(ls -d /sys/class/power_supply/*)

@@ -11,7 +11,7 @@
       battery,
     }:
     ''
-      ${tmux.shell.palette}
+      ${tmux.shell.string.palette}
 
       right_status() {
         local color="$1"

@@ -23,7 +23,7 @@
         {
           isPersistent,
           isServer,
-          inputs',
+          isX86,
           pkgs,
           self',
           ...
@@ -42,7 +42,6 @@
               davinci-resolve
               fclones-gui
               inkscape-with-extensions
-              jdownloader
               kopia-ui
               kid3-kde
               lan-mouse
@@ -55,7 +54,7 @@
               morphosis
               mtr-gui
               music-discord-rpc
-              natron
+              #natron
               pinta
               rclone-browser
               rnote
@@ -67,13 +66,14 @@
               vlc
               self'.packages.davinci-video-converter
               self'.packages.fzf-open
+              self'.packages.jdownloader
               self'.packages.linuxthemestore
               self'.packages.shutter-encoder
               self'.packages.tahoma2d
               self'.packages.ytdl
             ]
             ++ (lib.optionals isX86 [
-              inputs'.custom-packages.packages.${pkgs.stdenv.hostPlatform.system}.thorium-sse3
+              #inputs'.custom-packages.packages.${pkgs.stdenv.hostPlatform.system}.thorium-sse3
             ]);
         };
     };

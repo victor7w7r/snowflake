@@ -1,5 +1,5 @@
 {
-  tmux.shell.palette = ''
+  tmux.shell.string.palette = ''
     colors_cake=("#0E6995" "#9F596F" "#868ec0" "#4d5bab" "#568d97" "#856DA3" "#9587A6")
     colors_secondary=("#781212" "#9F4902" "#A36E17" "#2e7d32" "#1565c0" "#461264" "#5d4037")
     colors_alt=("#568d97" "#4d5bab" "#568d97" "#4d5bab" "#568d97" "#4d5bab" "#568d97")

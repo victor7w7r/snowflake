@@ -34,18 +34,20 @@
             shell = "${pkgs.zsh}/bin/zsh";
             extraConfig = ''
               run ${
-                pkgs.writeShellScript "status" tmux.shell.status {
-                  git = pkgs.writeShellScript "git-ext" tmux.ext.git;
-                  ssh = pkgs.writeShellScript "ssh-ext" tmux.ext.ssh;
-                  colors = pkgs.writeShellScript "colors-ext" tmux.ext.colors;
-                  network = pkgs.writeShellScript "network-ping" tmux.ext.network-ping;
-                  ram = pkgs.writeShellScript "ram-ext" tmux.ext.ram-info;
-                  cpu = pkgs.writeShellScript "cpu-ext" tmux.ext.cpu-info;
-                  battery = pkgs.writeShellScript "battery-ext" tmux.ext.battery;
-                }
+                pkgs.writeShellScript "status" (
+                  tmux.shell.status {
+                    git = pkgs.writeShellScript "git-ext" tmux.ext.string.git;
+                    ssh = pkgs.writeShellScript "ssh-ext" tmux.ext.string.ssh;
+                    colors = pkgs.writeShellScript "colors-ext" tmux.ext.string.colors;
+                    network = pkgs.writeShellScript "network-ping" tmux.ext.string.network-ping;
+                    ram = pkgs.writeShellScript "ram-ext" tmux.ext.string.ram-ping;
+                    cpu = pkgs.writeShellScript "cpu-ext" tmux.ext.string.cpu-info;
+                    battery = pkgs.writeShellScript "battery-ext" tmux.ext.string.battery;
+                  }
+                )
               }
-              run -b ${pkgs.writeShellScript "foreground" tmux.shell.foreground}
-              run -b ${pkgs.writeShellScript "colors" tmux.shell.colors}
+              run -b ${pkgs.writeShellScript "foreground" tmux.shell.string.foreground}
+              run -b ${pkgs.writeShellScript "colors" tmux.shell.string.colors}
             '';
           };
         };

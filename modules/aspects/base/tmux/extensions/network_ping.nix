@@ -1,5 +1,5 @@
 {
-  tmux.ext.network-ping = ''
+  tmux.ext.string.network-ping = ''
     ping_function() {
       case $(uname -s) in
       Linux | Darwin)

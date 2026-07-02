@@ -1,7 +1,7 @@
 { tmux, ... }:
 {
-  tmux.shell.colors = ''
-    ${tmux.shell.palette}
+  tmux.shell.string.colors = ''
+    ${tmux.shell.string.palette}
 
     if [ -d /dev/shm ]; then CACHE_FILE="/dev/shm/colors.exectmux"; else CACHE_FILE="/tmp/colors.exectmux"; fi
 

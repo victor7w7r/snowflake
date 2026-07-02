@@ -1,5 +1,5 @@
 {
-  tmux.ext.cpu-info = ''
+  tmux.ext.string.cpu-info = ''
     normalize_percent_len() {
       max_len=5
       percent_len=''${#1}

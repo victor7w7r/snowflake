@@ -1,5 +1,5 @@
 {
-  tmux.ext.colors = ''
+  tmux.ext.string.colors = ''
     if [ -d /dev/shm ]; then
       CACHE_FILE="/dev/shm/colors.exectmux"
     else

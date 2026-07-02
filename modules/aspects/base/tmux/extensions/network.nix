@@ -1,5 +1,5 @@
 {
-  tmux.ext.network = ''
+  tmux.ext.string.network = ''
     get_ssid() {
       case $(uname -s) in
       Linux)

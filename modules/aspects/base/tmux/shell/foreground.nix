@@ -1,7 +1,7 @@
 { tmux, ... }:
 {
-  tmux.shell.foreground = ''
-    ${tmux.shell.palette}
+  tmux.shell.string.foreground = ''
+    ${tmux.shell.string.palette}
     KAOMOJI=""
     ACTUALPROCESS=""
     ACTUALCOLOR=""
