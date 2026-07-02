@@ -25,7 +25,7 @@
         base.shell._
         dev._
         networking._
-        nix._
+        nix
         tweaks._
         vim._
 

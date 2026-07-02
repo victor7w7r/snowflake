@@ -26,7 +26,7 @@
           dev._
           initrd._
           networking._
-          nix._
+          nix
           server._
           tweaks._
           virtualisation._

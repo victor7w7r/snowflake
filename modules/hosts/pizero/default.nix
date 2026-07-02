@@ -32,7 +32,7 @@
         dev._
         initrd._
         networking._
-        nix._
+        nix
         tweaks._
         virtualisation._
         vim._

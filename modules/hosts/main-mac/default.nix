@@ -75,7 +75,7 @@
         base.tmux._
         base.shell._
         dev._
-        nix._
+        nix
         vim._
         zen._
 

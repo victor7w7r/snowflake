@@ -1,10 +1,15 @@
+{ inputs, ... }:
 {
   flake-file.inputs = {
     nix-alien.url = "https://flakehub.com/f/thiagokokada/nix-alien/0.1";
     nix-search-tv.url = "github:3timeslazy/nix-search-tv";
+    nix-index-database = {
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-community/nix-index-database";
+    };
   };
 
-  den.aspects.nix.default = {
+  den.aspects.nix = {
     os =
       { pkgs, self', ... }:
       {
@@ -43,5 +48,17 @@
           #inputs.nix-alien.packages.${system}.nix-alien
         ];
       };
+
+    homeManager = {
+      imports = [ inputs.nix-index-database.homeModules.nix-index ];
+
+      programs = {
+        nix-index-database.comma.enable = true;
+        nix-index = {
+          enable = true;
+          enableZshIntegration = true;
+        };
+      };
+    };
   };
 }

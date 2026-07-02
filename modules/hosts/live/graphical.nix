@@ -20,7 +20,7 @@
         gui._
         initrd._
         networking._
-        nix._
+        nix
         tweaks._
         vim._
 

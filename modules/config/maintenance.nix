@@ -1,6 +1,6 @@
 { inputs, lib, ... }:
 {
-  den.aspects.nix.maintenance.nixos = {
+  den.default.nixos = {
     nix = {
       gc = {
         automatic = true;

@@ -32,5 +32,4 @@ in
     ];
     schema.user.classes = lib.mkDefault [ "homeManager" ];
   };
-
 }

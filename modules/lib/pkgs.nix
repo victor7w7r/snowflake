@@ -18,10 +18,7 @@
     };
   };
 
-  imports = [
-    inputs.pkgs-by-name-for-flake-parts.flakeModule
-    inputs.flake-file.flakeModules.default
-  ];
+  imports = [ inputs.pkgs-by-name-for-flake-parts.flakeModule ];
 
   perSystem =
     { pkgs, system, ... }:

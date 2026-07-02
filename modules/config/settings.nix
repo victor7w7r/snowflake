@@ -5,14 +5,6 @@
   ...
 }:
 {
-  flake-file.inputs = {
-    determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
-    flakehub.url = "https://flakehub.com/f/DeterminateSystems/fh/*.tar.gz";
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-  };
 
   den.default = {
     os = {
@@ -52,10 +44,10 @@
     nixos =
       { pkgs, ... }:
       let
-        stateVersion = "26.11";
+
       in
       {
-        system.stateVersion = stateVersion;
+        system.stateVersion = conf.lib.config.stateVersion;
         nix.settings =
           (removeAttrs conf.lib.config.flake-config [ "__provider" ])
           // (removeAttrs conf.lib.config.nix-config [ "__provider" ]);
@@ -75,7 +67,7 @@
               { ... }:
               {
                 systemd.user.startServices = "sd-switch";
-                home.stateVersion = stateVersion;
+                home.stateVersion = conf.lib.config.stateVersion;
               }
             )
           ];

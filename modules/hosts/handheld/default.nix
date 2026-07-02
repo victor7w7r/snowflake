@@ -30,7 +30,7 @@
           gui._
           initrd._
           networking._
-          nix._
+          nix
           plasma._
           sound._
           tweaks._
