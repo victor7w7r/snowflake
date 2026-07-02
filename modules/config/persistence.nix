@@ -2,7 +2,7 @@
 {
   flake-file.inputs.impermanence.url = "github:nix-community/impermanence";
 
-  den.aspects.persistence =
+  den.default =
     { user, ... }:
     {
       nixos =

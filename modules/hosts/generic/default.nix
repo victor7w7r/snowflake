@@ -13,24 +13,21 @@
     hosts.x86_64-linux.generic.users.snowflake = { };
     aspects.generic = {
       includes = with den.aspects; [
-        # generic.disks
+        generic.disks
 
-        /*
-          base._
-          base.tmux._
-          base.shell._
-          dev._
-          gui._
-          initrd._
-          networking._
-          nix
-          plasma._
-          vim._
-        */
+        base._
+        base.tmux._
+        base.shell._
+        dev._
+        gui._
+        initrd._
+        networking._
+        nix
+        plasma._
+        vim._
 
         tweaks._
         fetch
-        persistence
         snowflake
       ];
 

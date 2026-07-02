@@ -1,22 +1,6 @@
 { conf, inputs, ... }:
-let
-in
 {
-  flake-file.inputs = {
-    determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
-    flakehub.url = "https://flakehub.com/f/DeterminateSystems/fh/*.tar.gz";
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-  };
-
   imports = [ (inputs.den.namespace "conf" false) ];
-
-  flake-file.nixConfig = (removeAttrs conf.lib.config.flake-config [ "__provider" ]) // {
-    lazy-trees = true;
-    submodules = true;
-  };
 
   conf.lib.config = {
     stateVersion = "26.11";
@@ -90,4 +74,10 @@ in
       ];
     };
   };
+
+  flake-file.nixConfig = (removeAttrs conf.lib.config.flake-config [ "__provider" ]) // {
+    lazy-trees = true;
+    submodules = true;
+  };
+
 }

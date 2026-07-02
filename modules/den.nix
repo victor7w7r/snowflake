@@ -1,12 +1,4 @@
-{
-  den,
-  lib,
-  inputs,
-  ...
-}:
-let
-  __findFile = den.lib.take.unused __findFile den.lib.__findFile;
-in
+{ den, inputs, ... }:
 {
   _module.args.__findFile = den.lib.__findFile;
 
@@ -18,10 +10,18 @@ in
   flake-file.inputs = {
     den.url = "github:denful/den";
     flake-file.url = "github:vic/flake-file";
+    determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  den = {
-    default.includes = [
+  den.default.includes =
+    let
+      __findFile = den.lib.take.unused __findFile den.lib.__findFile;
+    in
+    [
       den.batteries.inputs'
       den.batteries.self'
       <den/define-user>
@@ -30,6 +30,4 @@ in
       <den/mutual-provider>
       (<den/user-shell> "zsh")
     ];
-    schema.user.classes = lib.mkDefault [ "homeManager" ];
-  };
 }

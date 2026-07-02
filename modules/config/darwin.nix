@@ -1,3 +1,0 @@
-{
-  den.default.darwin = { };
-}
