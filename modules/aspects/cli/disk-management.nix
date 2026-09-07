@@ -38,7 +38,7 @@
             compsize
             httm
             gpart
-            partclone
+            #partclone
             parted
             tparted
             wipefreespace
