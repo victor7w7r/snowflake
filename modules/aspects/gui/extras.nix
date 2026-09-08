@@ -74,7 +74,6 @@
               linuxthemestore
               #shutter-encoder
               tahoma2d
-              xpipe
               watchyourlan
               ytdl
             ]
@@ -82,6 +81,7 @@
               cpu-x
               lightworks
               inputs'.custom-packages.packages.thorium-sse3
+              xpipe
             ]);
         };
     };
