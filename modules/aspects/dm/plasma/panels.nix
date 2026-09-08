@@ -1,25 +1,29 @@
 { self, ... }:
 {
   den.aspects.plasma.panels = {
-    nixos.systemd.services.random-icon = {
-      unitConfig.DefaultDependencies = "no";
-      serviceConfig.Type = "oneshot";
-      requires = [ "home-victor7w7r-.ssh.mount" ];
-      after = [ "home-victor7w7r-.ssh.mount" ];
-      wantedBy = [ "multi-user.target" ];
-      script = ''
-        TARGET_DIR="/nix/persist/etc"
-        FILE_NAME="logo.svg"
-        [[ -f "$TARGET_DIR/$FILE_NAME" ]] && rm "$TARGET_DIR/$FILE_NAME"
-        case $((RANDOM % 5)) in
-          0) cp ${self}/assets/images/logo-1.svg "$TARGET_DIR/$FILE_NAME" ;;
-          1) cp ${self}/assets/images/logo-2.svg "$TARGET_DIR/$FILE_NAME" ;;
-          2) cp ${self}/assets/images/logo-3.svg "$TARGET_DIR/$FILE_NAME" ;;
-          3) cp ${self}/assets/images/logo-4.svg "$TARGET_DIR/$FILE_NAME" ;;
-          4) cp ${self}/assets/images/logo-5.svg "$TARGET_DIR/$FILE_NAME" ;;
-        esac
-      '';
-    };
+    nixos =
+      { isPhone, lib, ... }:
+      lib.optionalAttrs (!isPhone) {
+        systemd.services.random-icon = {
+          unitConfig.DefaultDependencies = "no";
+          serviceConfig.Type = "oneshot";
+          requires = [ "home-victor7w7r-.ssh.mount" ];
+          after = [ "home-victor7w7r-.ssh.mount" ];
+          wantedBy = [ "multi-user.target" ];
+          script = ''
+            TARGET_DIR="/nix/persist/etc"
+            FILE_NAME="logo.svg"
+            [[ -f "$TARGET_DIR/$FILE_NAME" ]] && rm "$TARGET_DIR/$FILE_NAME"
+            case $((RANDOM % 5)) in
+              0) cp ${self}/assets/images/logo-1.svg "$TARGET_DIR/$FILE_NAME" ;;
+              1) cp ${self}/assets/images/logo-2.svg "$TARGET_DIR/$FILE_NAME" ;;
+              2) cp ${self}/assets/images/logo-3.svg "$TARGET_DIR/$FILE_NAME" ;;
+              3) cp ${self}/assets/images/logo-4.svg "$TARGET_DIR/$FILE_NAME" ;;
+              4) cp ${self}/assets/images/logo-5.svg "$TARGET_DIR/$FILE_NAME" ;;
+            esac
+          '';
+        };
+      };
 
     provides.to-users.homeManager =
       {
@@ -29,7 +33,7 @@
         ...
       }:
       {
-        programs.plasma.panels = [
+        programs.plasma.panels = lib.optionals (!isPhone) [
           {
             #https://github.com/DocBrown101/org.kde.plasma.nixos.channelstatus
             location = "bottom";
