@@ -618,6 +618,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-search-tv.url = "github:3timeslazy/nix-search-tv";
+    nix-zed-extensions.url = "github:SwornSystems/nix-zed-extensions";
     nixos-wsl = {
       url = "github:nix-community/nixos-wsl";
       inputs = {

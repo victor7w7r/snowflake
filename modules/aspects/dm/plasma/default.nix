@@ -10,7 +10,7 @@
     { user, ... }:
     {
       nixos =
-        { pkgs, lib, ... }:
+        { lib, pkgs, self', ... }:
         {
           programs.kde-pim.enable = true;
 
@@ -32,9 +32,16 @@
             package = pkgs.kdePackages.kwallet-pam;
           };
 
-          services.desktopManager.plasma6 = {
-            enable = true;
-            enableQt5Integration = true;
+          services = {
+            fprintd = {
+            	package = pkgs.fprintd.override { libfprint = self'.packages.libfprint-cs9711; };
+            	enable = true;
+            };
+            udev.packages = [ self'.packages.libfprint-cs9711 ];
+            desktopManager.plasma6 = {
+              enable = true;
+              enableQt5Integration = true;
+            };
           };
 
           xdg.portal = {

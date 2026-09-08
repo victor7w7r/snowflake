@@ -1,16 +1,42 @@
-{
+{ inputs, ... }: {
+  flake-file.inputs.nix-zed-extensions.url = "github:SwornSystems/nix-zed-extensions";
+
   den.aspects.dev.zed =
     { user, ... }:
     {
-      nixos.environment.persistence."/nix/persist".users."${user.name}".directories = [
-        ".local/share/zed"
-        ".vscode"
-      ];
+      nixos = {
+        nixpkgs.overlays = [ inputs.nix-zed-extensions.overlays.default ];
+        environment.persistence."/nix/persist".users."${user.name}".directories = [
+          ".local/share/zed"
+          ".vscode"
+        ];
+      };
 
       provides.to-users.homeManager =
         { lib, pkgs, ... }:
         {
+          imports = [ inputs.nix-zed-extensions.homeManagerModules.default ];
+
           programs.vscode.enable = true;
+
+          programs.zed-editor-extensions = {
+            enable = true;
+            packages = [
+              (pkgs.buildZedRustExtension {
+                name = "zed-mcp-server-github";
+                version = "latest";
+
+                src = pkgs.fetchFromGitHub {
+                  owner = "tastybamboo";
+                  rev = "6fec4f9f923644ee63e471ec31b37ce2593d476c";
+                  repo = "zed-mcp-server-github";
+                  hash = "sha256-qM+vMVPtUmIxlopJQ+OV5I3JM1eGdbMzvv9MmkCeJ1w=";
+                };
+
+                cargoHash = "sha256-Q4ow55BazZEsW9ohgYu2kYPpPPeGsfW7BLJA4F7E8Zs=";
+              })
+            ];
+          };
 
           programs.zed-editor = {
             enable = true;
@@ -50,7 +76,6 @@
               markdown-snippets = true;
               markdownlint = true;
               material-icon-theme = true;
-              mcp-server-github = true;
               nix = true;
               npm-package-json-checker = true;
               oxc = true;
@@ -146,9 +171,8 @@
 
             context_servers = {
               mcp-server-github = {
-                enabled = true;
-                remote = false;
-                settings.github_personal_access_token = null;
+                source = "extension";
+                settings.use_wrapper_script = true;
               };
             };
 
