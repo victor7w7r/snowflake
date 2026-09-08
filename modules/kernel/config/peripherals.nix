@@ -830,7 +830,6 @@
         USB_DWC3_GOOGLE = no;
         USB_DWC3_HAPS = no;
         USB_EG20T = no;
-        USB_ETH = no;
         USB_GADGETFS = no;
         USB_GADGET_XILINX = no;
         USB_GOKU = no;
