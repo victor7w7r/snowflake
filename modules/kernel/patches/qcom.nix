@@ -28,6 +28,7 @@
             item:
             !builtins.elem item.name [
             	"0107-arm64-dts-qcom-Introduce-support-for-Xiaomi-Mi-Mix-3"
+             	"0148-dt-bindings-arm-qcom-Add-Xiaomi-Poco-F1-Tianma-varia"
             ]
           )
           |> map (item: "${patches}/${item.name}.patch")
