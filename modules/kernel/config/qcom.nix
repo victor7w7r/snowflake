@@ -8,10 +8,10 @@
     lib.mkMerge [
       {
         ATH10K = setupDenial isDenied module;
+        ATH10K_DEBUG = setupDenial isDenied yes;
         ATH10K_PCI = setupDenial isDenied module;
         ATH10K_SDIO = setupDenial isDenied module;
         ATH10K_SNOC = setupDenial isDenied module;
-        ATH10K_DEBUG = setupDenial isDenied yes;
         BACKLIGHT_QCOM_WLED = setupDenial isDenied yes;
         BATTERY_BQ27XXX = setupDenial isDenied yes;
         BLK_DEV_RAM = setupDenial isDenied module;
@@ -21,38 +21,51 @@
         CRYPTO_USER_API_AEAD = setupDenial isDenied yes;
         DEFAULT_WESTWOOD = setupDenial isDenied yes;
         DRM_GUD = setupDenial isDenied module;
+        DRM_MSM_HDMI = setupDenial isDenied module;
         DRM_PANEL_SAMSUNG_S6E3FC2X01 = setupDenial isDenied yes;
         DRM_PANEL_SAMSUNG_SOFEF00 = setupDenial isDenied yes;
         FW_LOADER_COMPRESS = setupDenial isDenied yes;
         FW_LOADER_COMPRESS_ZSTD = setupDenial isDenied yes;
         HID_RMI = setupDenial isDenied yes;
-        INPUT_JOYDEV = setupDenial isDenied module;
         IIO_ST_LSM6DSX = setupDenial isDenied module;
         IIO_ST_MAGN_3AXIS = setupDenial isDenied module;
+        INPUT_JOYDEV = setupDenial isDenied module;
         NETLINK_DIAG = setupDenial isDenied module;
         NET_SCH_MULTIQ = setupDenial isDenied module;
         NET_SCH_PRIO = setupDenial isDenied module;
+        QCOM_FASTRPC = setupDenial isDenied yes;
+        QCOM_INLINE_CRYPTO_ENGINE = setupDenial isDenied yes;
         QCOM_IPA = setupDenial isDenied module;
         QCOM_L3_PMU = setupDenial isDenied yes;
+        QCOM_PD_MAPPER = setupDenial isDenied module;
+        QCOM_STATS = setupDenial isDenied module;
+        QCOM_Q6V5_MSS = setupDenial isDenied module;
+        QCOM_Q6V5_PAS = setupDenial isDenied module;
         QCOM_SPMI_ADC5 = setupDenial isDenied yes;
         QCOM_SPMI_VADC = setupDenial isDenied yes;
-        QCOM_FASTRPC = setupDenial isDenied yes;
-        QCOM_Q6V5_PAS = setupDenial isDenied module;
-        QCOM_Q6V5_MSS = setupDenial isDenied module;
         QCOM_SYSMON = setupDenial isDenied module;
         QUOTA = lib.mkForce (setupDenial isDenied yes);
         REGULATOR_QCOM_LABIBB = setupDenial isDenied yes;
         REMOTEPROC = setupDenial isDenied yes;
         RMI4_F55 = setupDenial isDenied yes;
+        RMNET = setupDenial isDenied module;
         RPMSG_CHAR = setupDenial isDenied yes;
         RPMSG_QCOM_GLINK_SMEM = setupDenial isDenied yes;
+        TYPEC_QCOM_PMIC = setupDenial isDenied module;
+        TYPEC_MUX_FSA4480 = setupDenial isDenied module;
+        USB_ETH = setupDenial isDenied module;
+        USB_ETH_RNDIS = setupDenial isDenied yes;
+        USB_G_NCM = setupDenial isDenied module;
+        USB_MASS_STORAGE = setupDenial isDenied module;
         SLIMBUS = setupDenial isDenied yes;
-        USB_CONFIGFS = setupDenial isDenied yes;
         TCP_CONG_BIC = lib.mkForce (setupDenial isDenied module);
         TCP_CONG_HTCP = lib.mkForce (setupDenial isDenied module);
         TCP_CONG_WESTWOOD = lib.mkForce (setupDenial isDenied yes);
-        USB_G_SERIAL = setupDenial isDenied module;
+        USB_CONFIGFS = setupDenial isDenied yes;
         USB_F_NCM = setupDenial isDenied yes;
+        USB_G_SERIAL = setupDenial isDenied module;
+        VIDEO_QCOM_CAMSS = setupDenial isDenied module;
+        VIDEO_QCOM_VENUS = setupDenial isDenied module;
         WLAN_VENDOR_ATH = setupDenial isDenied yes;
       }
       (lib.optionalAttrs (!isDenied) {
@@ -68,6 +81,8 @@
         MODULE_DECOMPRESS = yes;
         NLS_ASCII = yes;
         PACKET_DIAG = yes;
+        PWM = yes;
+        PWM_QTI_LPG = module;
         REGULATOR_QCOM_REFGEN = yes;
         REMOTEPROC_CDEV = yes;
         SCSI_UFSHCD = yes;
@@ -228,7 +243,6 @@
         INTERCONNECT_QCOM_SM8750 = no;
         INTERCONNECT_QCOM_SMD_RPM = no;
         INTERCONNECT_QCOM_X1E80100 = no;
-        QCOM_PD_MAPPER = no;
         IPQ_APSS_5424 = no;
         IPQ_APSS_6018 = no;
         IPQ_APSS_PLL = no;

@@ -23,6 +23,9 @@
       F2FS_UNFAIR_RWSEM = yes;
       NTFS3_64BIT_CLUSTER = yes;
       ZRAM = lib.mkForce yes;
+      ZRAM_BACKEND_ZSTD = yes;
+      ZRAM_DEF_COMP_ZSTD = yes;
+      ZRAM_DEF_COMP = freeform "zstd";
     };
 
     denied = lib.mkMerge [

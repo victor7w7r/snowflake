@@ -33,6 +33,7 @@
         CRYPTO_SM3 = setupDenial isDenied yes;
         CRYPTO_AES_ARM64_CE = setupDenial isDenied yes;
         DRM_ACCEL = setupDenial isDenied yes;
+        GPIO_GENERIC = setupDenial isDenied yes;
         GPIO_GENERIC_PLATFORM = setupDenial isDenied module;
         GPIO_REGMAP = setupDenial isDenied yes;
         HAVE_SETUP_PER_CPU_AREA = setupDenial isDenied yes;
