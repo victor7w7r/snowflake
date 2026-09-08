@@ -85,7 +85,6 @@
       DM_CRYPT = lib.mkForce yes;
       ENCRYPTED_KEYS = lib.mkForce yes;
       TRUSTED_KEYS = lib.mkForce yes;
-
       PHY_ROCKCHIP_NANENG_COMBO_PHY = yes;
       UHID = yes;
       USB_HID = lib.mkForce yes;
@@ -95,7 +94,6 @@
       COMMON_CLK_SCPI = yes;
       CXD2880_SPI_DRV = no;
       DRM_ACCEL_ROCKET = module;
-      DVB_CORE = no;
       GNSS = no;
       GPIO_BY_PINCTRL = yes;
       I2C_SI470X = no;
@@ -296,6 +294,7 @@
       CPU_SUP_ZHAOXIN = no;
       DRM_AMDGPU = no;
       DRM_RADEON = no;
+      DVB_CORE = no;
       FSI = no;
       FSL_EDMA = no;
       FSL_QDMA = no;
@@ -314,6 +313,7 @@
       HYPERV = lib.mkForce no;
       IFCVF = no;
       INFTL = no;
+      MEDIA_TUNER = no;
       MT7921_COMMON = no;
       MTD_ABSENT = no;
       MTD_AFS_PARTS = no;
