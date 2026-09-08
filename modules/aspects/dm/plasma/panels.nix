@@ -30,6 +30,7 @@
         lib,
         isMain,
         isHandheld,
+        isPhone,
         ...
       }:
       {
