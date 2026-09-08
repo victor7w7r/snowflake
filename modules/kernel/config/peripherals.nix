@@ -838,7 +838,6 @@
         USB_G_DBGP = no;
         USB_G_HID = no;
         USB_G_MULTI = no;
-        USB_G_NCM = no;
         USB_G_PRINTER = no;
         USB_G_WEBCAM = no;
         USB_M66592 = no;
