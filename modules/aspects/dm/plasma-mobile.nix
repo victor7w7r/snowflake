@@ -1,9 +1,13 @@
-{
+{ den, ... }: {
   den.aspects.plasma-mobile = {
+
+    includes = with den.aspects; [
+      plasma.sddm
+    ];
+
     nixos =
       { pkgs, ... }:
       {
-        services.displayManager.sddm.enable = true;
         services.xserver.enable = true;
 
         environment.systemPackages = with pkgs.kdePackages; [

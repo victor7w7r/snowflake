@@ -46,7 +46,7 @@
       #libvirt
       plasma-mobile
       #plasma._
-      #remote
+      remote
       root
       tools
       victor7w7r
@@ -176,7 +176,8 @@
               '';
             };
           services = {
-            ModemManager.serviceConfig.ExecStart = lib.mkIf config.networking.modemmanager.enable [
+            ModemManager.serviceConfig.ExecStart = lib.mkForce [
+              ""
               "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"
             ];
             iio-sensor-proxy.serviceConfig.TimeoutStopSec = 3;
