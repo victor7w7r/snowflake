@@ -171,6 +171,7 @@
         CLK_X1P42100_GPUCC = no;
         COMMON_CLK_ROCKCHIP = no;
         DEFAULT_BBR = lib.mkForce no;
+        DRM_PANEL_LG_SW49410_LH609QH1 = no;
         DRM_MSM_DSI_14NM_PHY = no;
         DRM_MSM_DSI_20NM_PHY = no;
         DRM_MSM_DSI_28NM_8960_PHY = no;
