@@ -33,7 +33,10 @@
         ++ cachyos.latest.std
         ++ (tachyon.common { source = inputs.tachyon-patches-latest; })
         ++ (tachyon.latest { })
-        ++ (bunker.common { isLts = false; })
-        ++ (bunker.latest { });
+        ++ (bunker.common {
+          isLts = false;
+          isEol = true;
+        })
+        ++ (bunker.latest { isEol = true; });
     });
 }

@@ -14,12 +14,20 @@
     common =
       {
         isLts ? true,
+        isEol ? false,
       }:
       map
         (
           patch:
           "${inputs.bunker-patches}/patches/${
-            lib.versions.majorMinor (if isLts then kernel-versions.lts else kernel-versions.latest)
+            lib.versions.majorMinor (
+              if isLts then
+                kernel-versions.lts
+              else if isEol then
+                kernel-versions.eol
+              else
+                kernel-versions.latest
+            )
           }/${patch}.patch"
         )
         [
@@ -61,11 +69,18 @@
         ];
 
     latest =
-      { }:
+      {
+        isEol ? false,
+      }:
       map
         (
           patch:
-          "${inputs.bunker-patches}/patches/${lib.versions.majorMinor kernel-versions.latest}/${patch}.patch"
+          "${inputs.bunker-patches}/patches/${
+            if isEol then
+              lib.versions.majorMinor kernel-versions.eol
+            else
+              lib.versions.majorMinor kernel-versions.latest
+          }/${patch}.patch"
         )
         [
           #"clear/0006-init-reduce-default-timer-slack-to-50ns"
