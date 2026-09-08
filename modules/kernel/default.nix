@@ -9,6 +9,7 @@
   _module.args = {
     kernel-versions = {
       latest = "7.2.3";
+      eol = "7.1.8";
       lts = "6.18.48";
     };
 
@@ -36,6 +37,11 @@
     linux-latest = {
       url = "github:CachyOS/linux/cachyos-${kernel-versions.latest}-2";
       flake = false;
+    };
+
+    linux-eol = {
+	    url = "github:CachyOS/linux/cachyos-${kernel-versions.eol}-1";
+	    flake = false;
     };
 
     linux-lts = {

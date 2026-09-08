@@ -27,7 +27,7 @@
           |> builtins.filter (
             item:
             !builtins.elem item.name [
-              "0001-arm64-dts-qcom-sdm845-xiaomi-beryllium-Enable-ath10k"
+             /* "0001-arm64-dts-qcom-sdm845-xiaomi-beryllium-Enable-ath10k"
               "0027-arm64-dts-qcom-sdm670-google-sargo-Enable-fuel-gauge"
               "0079-arm64-dts-qcom-sdm845-shift-axolotl-Introduce-camera"
               "0088-arm64-dts-qcom-sdm845-shift-axolotl-Enable-NFC"
@@ -60,7 +60,7 @@
               "0186-arm64-dts-qcom-sdm845-lg-common-Change-ipa-gsi-loade"
               "0187-arm64-dts-qcom-sdm845-lg-judyln-judyp-Reference-memo"
               "0188-arm64-dts-qcom-sdm845-lg-Enable-qcom-snoc-host-cap-s"
-              "0194-sdm845.config-further-cleanup-and-some-moved-into-mi"
+              "0194-sdm845.config-further-cleanup-and-some-moved-into-mi"*/
             ]
           )
           |> map (item: "${patches}/${item.name}.patch")

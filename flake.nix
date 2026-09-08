@@ -505,6 +505,10 @@
       url = "github:CachyOS/linux-cachyos";
       flake = false;
     };
+    linux-eol = {
+      url = "github:CachyOS/linux/cachyos-7.1.8-1";
+      flake = false;
+    };
     linux-latest = {
       url = "github:CachyOS/linux/cachyos-7.2.3-2";
       flake = false;

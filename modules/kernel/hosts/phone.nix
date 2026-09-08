@@ -17,7 +17,7 @@
       defconfig = "phone_defconfig";
       src = kernel.lib.kernel-cleaner {
         inherit pkgs;
-        src = inputs.linux-latest;
+        src = inputs.linux-eol;
         arch = "arm64";
         defconfig = "phone_defconfig";
         class = "qcom";
