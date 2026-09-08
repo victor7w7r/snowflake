@@ -13,8 +13,7 @@
           services.displayManager.sddm.enable = isHandheld || isPhone;
           environment = {
             etc."xdg/kwinrc".source = (pkgs.formats.ini { }).generate "kwinrc" {
-              Wayland."InputMethod[$e]" =
-                "/run/current-system/sw/share/applications/com.github.maliit.keyboard.desktop";
+            Wayland."InputMethod[$e]" = "${pkgs.maliit-keyboard}/share/applications/com.github.maliit.keyboard.desktop";
               Wayland.VirtualKeyboardEnabled = "true";
               "org.kde.kdecoration2".NoPlugin = "true";
             };
@@ -48,11 +47,6 @@
                 KDE.LookAndFeelPackage = "org.kde.plasma.phone";
               };
 
-              "xdg/kwinrc".source = (pkgs.formats.ini { }).generate "kwinrc" {
-                Wayland."InputMethod[$e]" = "${pkgs.maliit-keyboard}/share/applications/com.github.maliit.keyboard.desktop";
-                Wayland.VirtualKeyboardEnabled = "true";
-                "org.kde.kdecoration2".NoPlugin = "true";
-              };
             };
           };
 
