@@ -45,7 +45,7 @@
       #kitty
       #libvirt
       plasma-mobile
-      #plasma._
+      plasma._
       remote
       root
       tools

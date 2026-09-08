@@ -13,7 +13,8 @@
           services.displayManager.sddm.enable = isHandheld || isPhone;
           environment = {
             etc."xdg/kwinrc".source = (pkgs.formats.ini { }).generate "kwinrc" {
-            Wayland."InputMethod[$e]" = "${pkgs.maliit-keyboard}/share/applications/com.github.maliit.keyboard.desktop";
+              Wayland."InputMethod[$e]" =
+                "${pkgs.maliit-keyboard}/share/applications/com.github.maliit.keyboard.desktop";
               Wayland.VirtualKeyboardEnabled = "true";
               "org.kde.kdecoration2".NoPlugin = "true";
             };
@@ -67,38 +68,36 @@
           };
         })
         (lib.mkIf isHandheld {
-          services.displayManager = {
-            sddm = {
-              package = lib.mkForce pkgs.kdePackages.sddm;
-              #theme = "sddm-astronaut-theme";
-              wayland.enable = true;
-              enableHidpi = true;
-              extraPackages = [ pkgs.maliit-keyboard ];
-              settings = {
-                General = {
-                  #GreeterEnvironment = "QT_WAYLAND_SHELL_INTEGRATION=layer-shell";
-                  InputMethod = "qtvirtualkeyboard";
+          services.displayManager.sddm = {
+            package = lib.mkForce pkgs.kdePackages.sddm;
+            #theme = "sddm-astronaut-theme";
+            wayland.enable = true;
+            enableHidpi = true;
+            extraPackages = [ pkgs.maliit-keyboard ];
+            settings = {
+              General = {
+                #GreeterEnvironment = "QT_WAYLAND_SHELL_INTEGRATION=layer-shell";
+                InputMethod = "qtvirtualkeyboard";
+              };
+              /*
+                Theme = {
+                  theme = "sddm-astronaut-theme";
+                  ThemeDir = "/run/current-system/sw/share/sddm/themes";
+                  FacesDir = "/var/lib/AccountsService/icons";
+                  Font = "Ubuntu Nerd Font";
+                  EnableAvatars = true;
+                  DisableAvatarsThreshold = 7;
                 };
-                /*
-                  Theme = {
-                    theme = "sddm-astronaut-theme";
-                    ThemeDir = "/run/current-system/sw/share/sddm/themes";
-                    FacesDir = "/var/lib/AccountsService/icons";
-                    Font = "Ubuntu Nerd Font";
-                    EnableAvatars = true;
-                    DisableAvatarsThreshold = 7;
-                  };
-                */
-                Wayland = {
-                  CompositorCommand = "${pkgs.kdePackages.kwin}/bin/kwin_wayland --no-lockscreen --inputmethod ${pkgs.maliit-keyboard}/bin/maliit-keyboard";
-                  Session = "plasma";
-                };
-                Users = {
-                  #DefaultPath = "/run/current-system/sw/bin";
-                  RememberLastSession = true;
-                  RememberLastUser = true;
-                  ReuseSession = false;
-                };
+              */
+              Wayland = {
+                CompositorCommand = "${pkgs.kdePackages.kwin}/bin/kwin_wayland --no-lockscreen --inputmethod ${pkgs.maliit-keyboard}/bin/maliit-keyboard";
+                Session = "plasma";
+              };
+              Users = {
+                #DefaultPath = "/run/current-system/sw/bin";
+                RememberLastSession = true;
+                RememberLastUser = true;
+                ReuseSession = false;
               };
             };
           };
