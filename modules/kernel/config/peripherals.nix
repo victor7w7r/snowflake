@@ -841,7 +841,6 @@
         USB_G_PRINTER = no;
         USB_G_WEBCAM = no;
         USB_M66592 = no;
-        USB_MASS_STORAGE = no;
         USB_MAX3420_UDC = no;
         USB_NET2280 = no;
         USB_ONBOARD_DEV_USB5744 = no;
