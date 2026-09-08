@@ -560,7 +560,6 @@
         APPLE_MFI_FASTCHARGE = no;
         TYPEC_ANX7411 = no;
         TYPEC_HD3SS3220 = no;
-        TYPEC_MUX_FSA4480 = no;
         TYPEC_MUX_GPIO_SBU = no;
         TYPEC_MUX_IT5205 = no;
         TYPEC_MUX_NB7VPQ904M = no;
