@@ -61,7 +61,7 @@
               pkgs.krita
               pkgs.krusader
               pkgs.kurve
-              pkgs.maliit-keyboard
+              pkgs.maliit-framework
               pkgs.maliit-keyboard
               pkgs.okteta
               pkgs.onboard

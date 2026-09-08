@@ -5,9 +5,7 @@
       {
         programs.dconf.enable = true;
 
-        environment.systemPackages = [
-          pkgs.dconf-editor
-        ];
+        environment.systemPackages = [ pkgs.dconf-editor ];
       };
 
     provides.to-users.homeManager =

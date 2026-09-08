@@ -10,7 +10,12 @@
     { user, ... }:
     {
       nixos =
-        { lib, pkgs, self', ... }:
+        {
+          lib,
+          pkgs,
+          self',
+          ...
+        }:
         {
           programs.kde-pim.enable = true;
 
@@ -27,15 +32,21 @@
             ];
           };
 
-          security.pam.services."victor7w7r".kwallet = {
-            enable = true;
-            package = pkgs.kdePackages.kwallet-pam;
+          security.pam.services = {
+            victor7w7r.kwallet = {
+              enable = true;
+              package = pkgs.kdePackages.kwallet-pam;
+            };
+            sddm.kwallet = {
+              enable = true;
+              package = pkgs.kdePackages.kwallet-pam;
+            };
           };
 
           services = {
             fprintd = {
-            	package = pkgs.fprintd.override { libfprint = self'.packages.libfprint-cs9711; };
-            	enable = true;
+              package = pkgs.fprintd.override { libfprint = self'.packages.libfprint-cs9711; };
+              enable = true;
             };
             udev.packages = [ self'.packages.libfprint-cs9711 ];
             desktopManager.plasma6 = {
@@ -47,12 +58,10 @@
           xdg.portal = {
             enable = true;
             config = lib.mkForce {
-              common = {
-                default = [
-                  "kde"
-                  "*"
-                ];
-              };
+              common.default = [
+                "kde"
+                "*"
+              ];
             };
           };
         };
