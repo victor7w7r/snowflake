@@ -73,7 +73,7 @@
               typescript-snippets = true;
               unocss = true;
               vue = true;
-              wc-language-server = true;
+              #wc-language-server = true;
               xml = true;
             };
 
@@ -102,12 +102,7 @@
               coloring = "indent_aware";
               background_coloring = "indent_aware";
             };
-            language_servers = [
-              "!eslint"
-              "!vtsls"
-              "!typescript-language-server"
-              "..."
-            ];
+
             inlay_hints.enabled = false;
             jsx_tag_auto_close.enabled = true;
             linked_edits = true;
@@ -249,14 +244,14 @@
                 };
               };
               oxlint.initialization_options.settings = {
-                configPath = "./oxlint.config.ts";
+                configPath = null;
                 disableNestedConfig = false;
                 fixKind = "safe_fix";
                 run = "onType";
                 unusedDisableDirectives = "deny";
               };
               oxfmt.initialization_options.settings = {
-                "fmt.configPath" = "./oxfmt.config.ts";
+                "fmt.configPath" = null;
                 run = "onSave";
               };
             };
@@ -264,6 +259,7 @@
             languages =
               {
                 langs = [
+                  "!eslint"
                   "!vtsls"
                   "!typescript-language-server"
                   "tsgo"
@@ -281,14 +277,16 @@
                   language_servers = [
                     "astro-language-server"
                     "unocss-language-server"
-                  ];
+                  ]
+                  ++ options.langs;
                 };
                 CSS = {
                   formatOptions = options.formatOptions;
                   language_servers = [
                     "vscode-css-language-server"
                     "emmet-language-server"
-                  ];
+                  ]
+                  ++ options.langs;
                 };
                 Dart.format_on_save = "on";
                 XML.format_on_save = "on";
@@ -298,7 +296,7 @@
                     "vscode-css-language-server"
                     "emmet-language-server"
                     "unocss-language-server"
-                  ];
+                  ] ++ options.langs;
                 };
                 JavaScript = {
                   language_servers = options.langs;

@@ -18,20 +18,21 @@
       defconfig = "rockchip_defconfig";
       src = kernel.lib.kernel-cleaner {
         inherit pkgs;
-        src = inputs.linux-latest;
+        src = inputs.linux-lts;
         arch = "arm64";
         defconfig = "rockchip_defconfig";
         class = "rockchip";
         dtbMake = ''dtb-\$(CONFIG_ARCH_ROCKCHIP) += rk3588-rock-5b.dtb'';
-        config = "${inputs.armbian}/config/kernel/linux-rockchip64-edge.config";
+        config = "${inputs.armbian}/config/kernel/linux-rockchip64-current.config";
       };
       patches =
         with kernel.patches.injector pkgs;
         rockchip
-        ++ cachyos.latest.std
-        ++ (tachyon.common { source = inputs.tachyon-patches-latest; })
-        ++ (tachyon.latest { })
-        ++ (bunker.common { isLts = false; })
-        ++ (bunker.latest { });
+        ++ (cachyos.lts { })
+        ++ (tachyon.common { source = inputs.tachyon-patches-lts; })
+        ++ (tachyon.lts { })
+        ++ (bunker.common { })
+        ++ (bunker.lts { })
+        ++ [ "${self}/modules/kernel/patches/files/rk3588-domain.patch" ];
     });
 }

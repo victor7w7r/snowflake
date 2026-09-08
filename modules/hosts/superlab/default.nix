@@ -4,7 +4,6 @@
   kernel,
   hosts,
   tarball,
-  sdcard,
   ...
 }:
 {
@@ -34,11 +33,13 @@
     aspects = {
       superlab-sdimage.includes = with den.aspects; [
         superlab.common
-        (sdcard.lib.call {
+        /*
+          (sdcard.lib.call {
           nextPartSize = "65536";
           isHDD = false;
           isEntireDisk = true;
-        })
+          })
+        */
       ];
       superlab-tarball.includes = with den.aspects; [
         superlab.common
@@ -53,7 +54,7 @@
               memoryPercent = 100;
             })
             (hosts.lib.static-network "enP4p65s0" "12")
-            superlab.disks
+            superlab._
 
             audio._
             cli._
