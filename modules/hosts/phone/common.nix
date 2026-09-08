@@ -44,7 +44,6 @@
       games
       #kitty
       #libvirt
-      plasma-mobile
       plasma._
       remote
       root
