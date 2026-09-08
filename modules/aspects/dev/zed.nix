@@ -244,14 +244,14 @@
                 };
               };
               oxlint.initialization_options.settings = {
-                configPath = null;
+                configPath = "./.oxlintrc.json";
                 disableNestedConfig = false;
                 fixKind = "safe_fix";
                 run = "onType";
                 unusedDisableDirectives = "deny";
               };
               oxfmt.initialization_options.settings = {
-                "fmt.configPath" = null;
+                "fmt.configPath" = "./.oxfmtrc.json";
                 run = "onSave";
               };
             };
@@ -259,55 +259,64 @@
             languages =
               {
                 langs = [
+                  "tsgo"
+                  "oxlint"
+                  "oxfmt"
                   "!eslint"
                   "!vtsls"
                   "!typescript-language-server"
-                  "tsgo"
                   "..."
                 ];
                 formatOptions = {
                   format_on_save = "on";
                   prettier.allowed = false;
-                  formatter = [ { language_server.name = "oxfmt"; } ];
+                  formatter.external = {
+                    command = "./node_modules/.bin/oxfmt";
+                    arguments = [
+                      "--stdin-filepath"
+                      "{buffer_path}"
+                    ];
+                  };
                 };
               }
               |> (options: {
                 Astro = {
-                  formatOptions = options.formatOptions;
                   language_servers = [
                     "astro-language-server"
                     "unocss-language-server"
                   ]
                   ++ options.langs;
-                };
+                }
+                // options.formatOptions;
                 CSS = {
-                  formatOptions = options.formatOptions;
                   language_servers = [
                     "vscode-css-language-server"
                     "emmet-language-server"
                   ]
                   ++ options.langs;
-                };
+                }
+                // options.formatOptions;
                 Dart.format_on_save = "on";
                 XML.format_on_save = "on";
                 HTML = {
-                  formatOptions = options.formatOptions;
                   language_servers = [
                     "vscode-css-language-server"
                     "emmet-language-server"
                     "unocss-language-server"
-                  ] ++ options.langs;
-                };
+                  ]
+                  ++ options.langs;
+                }
+                // options.formatOptions;
                 JavaScript = {
                   language_servers = options.langs;
-                  formatOptions = options.formatOptions;
-                };
+                }
+                // options.formatOptions;
                 JSON = {
                   language_servers = options.langs;
-                  formatOptions = options.formatOptions;
-                };
-                Markdown.formatOptions = options.formatOptions;
-                MDX.formatOptions = options.formatOptions;
+                }
+                // options.formatOptions;
+                Markdown = options.formatOptions;
+                MDX = options.formatOptions;
                 Nix = {
                   format_on_save = "on";
                   language_servers = [
@@ -315,18 +324,20 @@
                     "!nil"
                   ];
                 };
-                SCSS.formatOptions = options.formatOptions;
-                Svelte.formatOptions = options.formatOptions;
+                SCSS = options.formatOptions;
+                Svelte = options.formatOptions;
                 TypeScript = {
                   language_servers = options.langs;
-                  formatOptions = options.formatOptions;
-                };
+                }
+                // options.formatOptions;
                 TSX = {
                   language_servers = options.langs;
-                  formatOptions = options.formatOptions;
-                };
-                "Vue.js".formatOptions = options.formatOptions;
-                YAML.formatOptions = options.formatOptions;
+
+                }
+                // options.formatOptions;
+
+                "Vue.js" = options.formatOptions;
+                YAML = options.formatOptions;
               });
           };
         };

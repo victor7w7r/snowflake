@@ -26,16 +26,14 @@
         options = (btrfs.mountOptions { }) ++ [ "subvol=@etc" ];
       };
     };
-    /*
-      boot.resumeDevice = "/dev/mapper/swapcrypt";
-      swapDevices = [
-        {
-          device = "/dev/mapper/swapcrypt";
-          discardPolicy = "both";
-          options = [ "nofail" ];
-        }
-      ];
-    */
+    boot.resumeDevice = "/dev/mapper/swapcrypt";
+    swapDevices = [
+      {
+        device = "/dev/mapper/swapcrypt";
+        discardPolicy = "both";
+        options = [ "nofail" ];
+      }
+    ];
     disko.devices.disk = with disko; {
       root = disk.root { };
       main = disk.gpt {
