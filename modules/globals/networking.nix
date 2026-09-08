@@ -40,7 +40,7 @@
             wait = "background";
           };
           nftables = {
-            enable = true;
+            enable = (!isPhone);
             ruleset = ''
               table ip custom_nat {
                 chain postrouting {

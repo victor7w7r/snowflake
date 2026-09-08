@@ -9,7 +9,7 @@
         bluetooth.enable = true;
       };
       buffyboard = {
-        enable = true;
+        enable = false;
         settings.input.touchscreen = true;
       };
       logind.settings = {
