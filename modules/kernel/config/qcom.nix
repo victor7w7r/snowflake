@@ -192,8 +192,6 @@
         DRM_MSM_DSI_28NM_8960_PHY = no;
         DRM_MSM_DSI_28NM_PHY = no;
         DRM_MSM_DSI_7NM_PHY = no;
-        DRM_MSM_HDMI = no;
-        DRM_MSM_HDMI_HDCP = no;
         DRM_MSM_MDP4 = no;
         DRM_MSM_MDP5 = no;
         DRM_SIMPLEDRM = no;
