@@ -1,10 +1,5 @@
 { den, ... }: {
   den.aspects.plasma-mobile = {
-
-    includes = with den.aspects; [
-      plasma.sddm
-    ];
-
     nixos =
       { pkgs, ... }:
       {
