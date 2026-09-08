@@ -6,7 +6,6 @@
         services.displayManager.sddm.enable = true;
         services.xserver.enable = true;
 
-        environment.etc.
         environment.systemPackages = with pkgs.kdePackages; [
           plasma-mobile
           plasma-nano
