@@ -1,4 +1,9 @@
-{ inputs, kernel, ... }:
+{
+  inputs,
+  kernel,
+  self,
+  ...
+}:
 {
   perSystem =
     { pkgs, ... }:
