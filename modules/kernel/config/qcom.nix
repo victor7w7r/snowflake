@@ -21,7 +21,6 @@
         CRYPTO_USER_API_AEAD = setupDenial isDenied yes;
         DEFAULT_WESTWOOD = setupDenial isDenied yes;
         DRM_GUD = setupDenial isDenied module;
-        DRM_MSM_HDMI = setupDenial isDenied module;
         DRM_PANEL_SAMSUNG_S6E3FC2X01 = setupDenial isDenied yes;
         DRM_PANEL_SAMSUNG_SOFEF00 = setupDenial isDenied yes;
         FW_LOADER_COMPRESS = setupDenial isDenied yes;
