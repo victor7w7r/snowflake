@@ -53,6 +53,7 @@
           "0098-stalled-arm64-dts-qcom-sdm845-xiaomi-beryllium-Add-q.patch"
           "0100-power-supply-pmi8998-charger-improvements-and-smb5-s.patch"
           "0106-xiaomi-perseus-support.patch"
+          "0107-arm64-dts-qcom-Introduce-support-for-Xiaomi-Mi-Mix-3.patch"
           "0108-EDITME-cover-title-for-rpmsg-qcom-glink.patch"
           "0110-Add-framebuffer-on-Xiaomi-Poco-F1-and-disable-the-MD.patch"
           "0114-Input-support-for-STM-FTS5.patch"
