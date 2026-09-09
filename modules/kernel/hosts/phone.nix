@@ -12,7 +12,6 @@
         arch
         system
         ;
-      extraConfig = "${inputs.linux-sdm845}/arch/arm64/configs/sdm845.config";
       structuredExtraConfig = kernel.config.default.phone;
       localVer = "sdm845";
       defconfig = "phone_defconfig";
