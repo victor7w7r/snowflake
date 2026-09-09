@@ -66,6 +66,7 @@
           "0126-EDITME-cover-title-for-judyln-touchscreen.patch"
           "0132-arm64-dts-qcom-sdm845-lg-fix-sdcard-pinctrl-nodes.patch"
           "0133-EDITME-cover-title-for-lg-judyln-leftover.patch"
+          "0134-arm64-dts-qcom-sdm845-lg-common-Enable-NFC.patch"
           "0135-EDITME-cover-title-for-synaptics-rmi4-fnsplit.patch"
           "0137-Input-synaptics-rmi4-add-quirks-for-third-party-touc.patch"
           "0144-EDITME-cover-title-for-oneplus-ts-quirk.patch"
