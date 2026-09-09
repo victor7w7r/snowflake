@@ -1,7 +1,7 @@
 { inputs, self, ... }:
 {
   kernel.patches = {
-    qcom = { }: "${self}/modules/kernel/patches/sdm845/sdm845-combined.patch";
+    qcom = { }: [ "${self}/modules/kernel/patches/sdm845/sdm845-combined.patch" ];
     /*
       "${self}/modules/kernel/patches/sdm845"
       |> builtins.readDir
