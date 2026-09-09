@@ -92,6 +92,7 @@
           "0192-soc-qcom-Add-modemsmem-for-Google-phones.patch"
           "0193-arm64-dts-qcom-sdm845-google-Add-modemsmem.patch"
           "0194-EDITME-cover-title-for-ea8074.patch"
+          "0197-latest-hot-fixes-separator.patch"
         ]
       )
       |> map (filename: "${self}/modules/kernel/patches/sdm845/${filename}");
