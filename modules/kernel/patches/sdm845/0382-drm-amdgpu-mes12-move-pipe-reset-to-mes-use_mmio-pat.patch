@@ -1,0 +1,458 @@
+From 27c128973c78ee54825351a4e06d49951c67e11e Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Mon, 1 Jun 2026 18:16:05 +0800
+Subject: [PATCH 00382/15333] drm/amdgpu/mes12: move pipe reset to mes use_mmio
+ patch
+
+This makes the code flows cleaner and it's only supported on
+the use_mmio path.
+
+v2: fix typo
+v3: fix typo
+v4: directly clear ACTIVE and DEQUEUE_REQUEST (Shaoyun Liu)
+
+Reviewed-by: Jesse Zhang <jesse.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c | 182 +----------------------
+ drivers/gpu/drm/amd/amdgpu/mes_v12_0.c | 196 ++++++++++++++++++++++++-
+ 2 files changed, 196 insertions(+), 182 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c
+index 8d68d40808f4..7ae30d589537 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c
+@@ -5240,69 +5240,6 @@ static void gfx_v12_ip_dump(struct amdgpu_ip_block *ip_block)
+ 	amdgpu_gfx_off_ctrl(adev, true);
+ }
+ 
+-static bool gfx_v12_pipe_reset_support(struct amdgpu_device *adev)
+-{
+-	/* Disable the pipe reset until the CPFW fully support it.*/
+-	dev_warn_once(adev->dev, "The CPFW hasn't support pipe reset yet.\n");
+-	return false;
+-}
+-
+-static int gfx_v12_reset_gfx_pipe(struct amdgpu_ring *ring)
+-{
+-	struct amdgpu_device *adev = ring->adev;
+-	uint32_t reset_pipe = 0, clean_pipe = 0;
+-	int r;
+-
+-	if (!gfx_v12_pipe_reset_support(adev))
+-		return -EOPNOTSUPP;
+-
+-	gfx_v12_0_set_safe_mode(adev, 0);
+-	mutex_lock(&adev->srbm_mutex);
+-	soc24_grbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
+-
+-	switch (ring->pipe) {
+-	case 0:
+-		reset_pipe = REG_SET_FIELD(reset_pipe, CP_ME_CNTL,
+-					   PFP_PIPE0_RESET, 1);
+-		reset_pipe = REG_SET_FIELD(reset_pipe, CP_ME_CNTL,
+-					   ME_PIPE0_RESET, 1);
+-		clean_pipe = REG_SET_FIELD(clean_pipe, CP_ME_CNTL,
+-					   PFP_PIPE0_RESET, 0);
+-		clean_pipe = REG_SET_FIELD(clean_pipe, CP_ME_CNTL,
+-					   ME_PIPE0_RESET, 0);
+-		break;
+-	case 1:
+-		reset_pipe = REG_SET_FIELD(reset_pipe, CP_ME_CNTL,
+-					   PFP_PIPE1_RESET, 1);
+-		reset_pipe = REG_SET_FIELD(reset_pipe, CP_ME_CNTL,
+-					   ME_PIPE1_RESET, 1);
+-		clean_pipe = REG_SET_FIELD(clean_pipe, CP_ME_CNTL,
+-					   PFP_PIPE1_RESET, 0);
+-		clean_pipe = REG_SET_FIELD(clean_pipe, CP_ME_CNTL,
+-					   ME_PIPE1_RESET, 0);
+-		break;
+-	default:
+-		break;
+-	}
+-
+-	WREG32_SOC15(GC, 0, regCP_ME_CNTL, reset_pipe);
+-	WREG32_SOC15(GC, 0, regCP_ME_CNTL, clean_pipe);
+-
+-	r = (RREG32(SOC15_REG_OFFSET(GC, 0, regCP_GFX_RS64_INSTR_PNTR1)) << 2) -
+-					RS64_FW_UC_START_ADDR_LO;
+-	soc24_grbm_select(adev, 0, 0, 0, 0);
+-	mutex_unlock(&adev->srbm_mutex);
+-	gfx_v12_0_unset_safe_mode(adev, 0);
+-
+-	dev_info(adev->dev, "The ring %s pipe reset: %s\n", ring->name,
+-			r == 0 ? "successfully" : "failed");
+-	/* Sometimes the ME start pc counter can't cache correctly, so the
+-	 * PC check only as a reference and pipe reset result rely on the
+-	 * later ring test.
+-	 */
+-	return 0;
+-}
+-
+ static int gfx_v12_0_reset_kgq(struct amdgpu_ring *ring,
+ 			       unsigned int vmid,
+ 			       struct amdgpu_fence *timedout_fence)
+@@ -5314,12 +5251,8 @@ static int gfx_v12_0_reset_kgq(struct amdgpu_ring *ring,
+ 	amdgpu_ring_reset_helper_begin(ring, timedout_fence);
+ 
+ 	r = amdgpu_mes_reset_legacy_queue(ring->adev, ring, vmid, use_mmio, 0);
+-	if (r) {
+-		dev_warn(adev->dev, "reset via MES failed and try pipe reset %d\n", r);
+-		r = gfx_v12_reset_gfx_pipe(ring);
+-		if (r)
+-			return r;
+-	}
++	if (r)
++		return r;
+ 
+ 	if (use_mmio) {
+ 		r = gfx_v12_0_kgq_init_queue(ring, true);
+@@ -5338,109 +5271,6 @@ static int gfx_v12_0_reset_kgq(struct amdgpu_ring *ring,
+ 	return amdgpu_ring_reset_helper_end(ring, timedout_fence);
+ }
+ 
+-/*
+- * With MEC pipe reset asserted, clear CP_HQD_ACTIVE / CP_HQD_DEQUEUE_REQUEST for
+- * every queue on (me, pipe). HQDs must be torn down while pipe reset stays
+- * asserted; only then clear the pipe reset bit.
+- * Caller must hold adev->srbm_mutex.
+- */
+-static void gfx_v12_0_clear_hqds_on_mec_pipe(struct amdgpu_device *adev, u32 me,
+-					     u32 pipe)
+-{
+-	unsigned int q;
+-
+-	for (q = 0; q < adev->gfx.mec.num_queue_per_pipe; q++) {
+-		soc24_grbm_select(adev, me, pipe, q, 0);
+-		/* Start from a clean HQD dequeue state before forcing HQD inactive. */
+-		WREG32_SOC15(GC, 0, regCP_HQD_ACTIVE, 0);
+-		WREG32_SOC15(GC, 0, regCP_HQD_DEQUEUE_REQUEST, 0);
+-	}
+-}
+-
+-static int gfx_v12_0_reset_compute_pipe(struct amdgpu_device *adev,
+-					   u32 me, u32 pipe, u32 queue)
+-{
+-	uint32_t reset_val, clean_val;
+-	int r = 0;
+-
+-	if (!gfx_v12_pipe_reset_support(adev))
+-		return -EOPNOTSUPP;
+-
+-	gfx_v12_0_set_safe_mode(adev, 0);
+-	mutex_lock(&adev->srbm_mutex);
+-	soc24_grbm_select(adev, me, pipe, queue, 0);
+-	if (adev->gfx.rs64_enable) {
+-		reset_val = RREG32_SOC15(GC, 0, regCP_MEC_RS64_CNTL);
+-		clean_val = reset_val;
+-
+-		switch (pipe) {
+-		case 0:
+-			reset_val = REG_SET_FIELD(reset_val, CP_MEC_RS64_CNTL,
+-						  MEC_PIPE0_RESET, 1);
+-			clean_val = REG_SET_FIELD(clean_val, CP_MEC_RS64_CNTL,
+-						  MEC_PIPE0_RESET, 0);
+-			break;
+-		case 1:
+-			reset_val = REG_SET_FIELD(reset_val, CP_MEC_RS64_CNTL,
+-						  MEC_PIPE1_RESET, 1);
+-			clean_val = REG_SET_FIELD(clean_val, CP_MEC_RS64_CNTL,
+-						  MEC_PIPE1_RESET, 0);
+-			break;
+-		case 2:
+-			reset_val = REG_SET_FIELD(reset_val, CP_MEC_RS64_CNTL,
+-						  MEC_PIPE2_RESET, 1);
+-			clean_val = REG_SET_FIELD(clean_val, CP_MEC_RS64_CNTL,
+-						  MEC_PIPE2_RESET, 0);
+-			break;
+-		case 3:
+-			reset_val = REG_SET_FIELD(reset_val, CP_MEC_RS64_CNTL,
+-						  MEC_PIPE3_RESET, 1);
+-			clean_val = REG_SET_FIELD(clean_val, CP_MEC_RS64_CNTL,
+-						  MEC_PIPE3_RESET, 0);
+-			break;
+-		default:
+-			break;
+-		}
+-		WREG32_SOC15(GC, 0, regCP_MEC_RS64_CNTL, reset_val);
+-		gfx_v12_0_clear_hqds_on_mec_pipe(adev, me, pipe);
+-		WREG32_SOC15(GC, 0, regCP_MEC_RS64_CNTL, clean_val);
+-		r = (RREG32_SOC15(GC, 0, regCP_MEC_RS64_INSTR_PNTR) << 2) -
+-				RS64_FW_UC_START_ADDR_LO;
+-	} else {
+-		reset_val = RREG32_SOC15(GC, 0, regCP_MEC_CNTL);
+-		clean_val = reset_val;
+-
+-		switch (pipe) {
+-		case 0:
+-			reset_val = REG_SET_FIELD(reset_val, CP_MEC_CNTL,
+-						  MEC_ME1_PIPE0_RESET, 1);
+-			clean_val = REG_SET_FIELD(clean_val, CP_MEC_CNTL,
+-						  MEC_ME1_PIPE0_RESET, 0);
+-			break;
+-		case 1:
+-			reset_val = REG_SET_FIELD(reset_val, CP_MEC_CNTL,
+-						  MEC_ME1_PIPE1_RESET, 1);
+-			clean_val = REG_SET_FIELD(clean_val, CP_MEC_CNTL,
+-						  MEC_ME1_PIPE1_RESET, 0);
+-			break;
+-		default:
+-			break;
+-		}
+-
+-		WREG32_SOC15(GC, 0, regCP_MEC_CNTL, reset_val);
+-		gfx_v12_0_clear_hqds_on_mec_pipe(adev, me, pipe);
+-		WREG32_SOC15(GC, 0, regCP_MEC_CNTL, clean_val);
+-	}
+-
+-	soc24_grbm_select(adev, 0, 0, 0, 0);
+-	mutex_unlock(&adev->srbm_mutex);
+-	gfx_v12_0_unset_safe_mode(adev, 0);
+-
+-	dev_dbg(adev->dev, "MEC pipe me%u pipe%u queue%u resets to MEC FW start PC: %s\n",
+-		me, pipe, queue, r == 0 ? "successfully" : "failed");
+-	return 0;
+-}
+-
+ static int gfx_v12_0_reset_kcq(struct amdgpu_ring *ring,
+ 			       unsigned int vmid,
+ 			       struct amdgpu_fence *timedout_fence)
+@@ -5452,12 +5282,8 @@ static int gfx_v12_0_reset_kcq(struct amdgpu_ring *ring,
+ 	amdgpu_ring_reset_helper_begin(ring, timedout_fence);
+ 
+ 	r = amdgpu_mes_reset_legacy_queue(ring->adev, ring, vmid, use_mmio, 0);
+-	if (r) {
+-		dev_warn(adev->dev, "fail(%d) to reset kcq  and try pipe reset\n", r);
+-		r = gfx_v12_0_reset_compute_pipe(adev, ring->me, ring->pipe, ring->queue);
+-		if (r)
+-			return r;
+-	}
++	if (r)
++		return r;
+ 
+ 	if (use_mmio) {
+ 		r = gfx_v12_0_kcq_init_queue(ring, true);
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v12_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v12_0.c
+index 3d4728b74274..95dd0106e43c 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_v12_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_v12_0.c
+@@ -413,6 +413,174 @@ int gfx_v12_0_request_gfx_index_mutex(struct amdgpu_device *adev,
+ 	return 0;
+ }
+ 
++static bool mes_v12_0_pipe_reset_support(struct amdgpu_device *adev)
++{
++	/* Disable the pipe reset until the CPFW fully support it.*/
++	dev_warn_once(adev->dev, "The CPFW hasn't support pipe reset yet.\n");
++	return false;
++}
++
++static int mes_v12_0_reset_gfx_pipe_mmio(struct amdgpu_device *adev,
++					 u32 me, u32 pipe, u32 queue)
++{
++	uint32_t reset_pipe = 0, clean_pipe = 0;
++	int r;
++
++	if (!mes_v12_0_pipe_reset_support(adev))
++		return -EOPNOTSUPP;
++
++	amdgpu_gfx_rlc_enter_safe_mode(adev, 0);
++	mutex_lock(&adev->srbm_mutex);
++	soc24_grbm_select(adev, me, pipe, queue, 0);
++
++	switch (pipe) {
++	case 0:
++		reset_pipe = REG_SET_FIELD(reset_pipe, CP_ME_CNTL,
++					   PFP_PIPE0_RESET, 1);
++		reset_pipe = REG_SET_FIELD(reset_pipe, CP_ME_CNTL,
++					   ME_PIPE0_RESET, 1);
++		clean_pipe = REG_SET_FIELD(clean_pipe, CP_ME_CNTL,
++					   PFP_PIPE0_RESET, 0);
++		clean_pipe = REG_SET_FIELD(clean_pipe, CP_ME_CNTL,
++					   ME_PIPE0_RESET, 0);
++		break;
++	case 1:
++		reset_pipe = REG_SET_FIELD(reset_pipe, CP_ME_CNTL,
++					   PFP_PIPE1_RESET, 1);
++		reset_pipe = REG_SET_FIELD(reset_pipe, CP_ME_CNTL,
++					   ME_PIPE1_RESET, 1);
++		clean_pipe = REG_SET_FIELD(clean_pipe, CP_ME_CNTL,
++					   PFP_PIPE1_RESET, 0);
++		clean_pipe = REG_SET_FIELD(clean_pipe, CP_ME_CNTL,
++					   ME_PIPE1_RESET, 0);
++		break;
++	default:
++		break;
++	}
++
++	WREG32_SOC15(GC, 0, regCP_ME_CNTL, reset_pipe);
++	WREG32_SOC15(GC, 0, regCP_ME_CNTL, clean_pipe);
++
++	r = (RREG32(SOC15_REG_OFFSET(GC, 0, regCP_GFX_RS64_INSTR_PNTR1)) << 2) -
++					RS64_FW_UC_START_ADDR_LO;
++	soc24_grbm_select(adev, 0, 0, 0, 0);
++	mutex_unlock(&adev->srbm_mutex);
++	amdgpu_gfx_rlc_exit_safe_mode(adev, 0);
++
++	dev_info(adev->dev, "The gfx pipe reset: %s\n",
++			r == 0 ? "successfully" : "failed");
++	/* Sometimes the ME start pc counter can't cache correctly, so the
++	 * PC check only as a reference and pipe reset result rely on the
++	 * later ring test.
++	 */
++	return 0;
++}
++
++/*
++ * With MEC pipe reset asserted, clear CP_HQD_ACTIVE / CP_HQD_DEQUEUE_REQUEST for
++ * every queue on (me, pipe). HQDs must be torn down while pipe reset stays
++ * asserted; only then clear the pipe reset bit.
++ * Caller must hold adev->srbm_mutex.
++ */
++static void mes_v12_0_clear_hqds_on_mec_pipe(struct amdgpu_device *adev, u32 me,
++					     u32 pipe)
++{
++	unsigned int q;
++
++	for (q = 0; q < adev->gfx.mec.num_queue_per_pipe; q++) {
++		soc24_grbm_select(adev, me, pipe, q, 0);
++		/* Start from a clean HQD dequeue state before forcing HQD inactive. */
++		WREG32_SOC15(GC, 0, regCP_HQD_ACTIVE, 0);
++		WREG32_SOC15(GC, 0, regCP_HQD_DEQUEUE_REQUEST, 0);
++	}
++}
++
++static int mes_v12_0_reset_compute_pipe_mmio(struct amdgpu_device *adev,
++					     u32 me, u32 pipe, u32 queue)
++{
++	uint32_t reset_val, clean_val;
++	int r = 0;
++
++	if (!mes_v12_0_pipe_reset_support(adev))
++		return -EOPNOTSUPP;
++
++	amdgpu_gfx_rlc_enter_safe_mode(adev, 0);
++	mutex_lock(&adev->srbm_mutex);
++	soc24_grbm_select(adev, me, pipe, queue, 0);
++	if (adev->gfx.rs64_enable) {
++		reset_val = RREG32_SOC15(GC, 0, regCP_MEC_RS64_CNTL);
++		clean_val = reset_val;
++
++		switch (pipe) {
++		case 0:
++			reset_val = REG_SET_FIELD(reset_val, CP_MEC_RS64_CNTL,
++						  MEC_PIPE0_RESET, 1);
++			clean_val = REG_SET_FIELD(clean_val, CP_MEC_RS64_CNTL,
++						  MEC_PIPE0_RESET, 0);
++			break;
++		case 1:
++			reset_val = REG_SET_FIELD(reset_val, CP_MEC_RS64_CNTL,
++						  MEC_PIPE1_RESET, 1);
++			clean_val = REG_SET_FIELD(clean_val, CP_MEC_RS64_CNTL,
++						  MEC_PIPE1_RESET, 0);
++			break;
++		case 2:
++			reset_val = REG_SET_FIELD(reset_val, CP_MEC_RS64_CNTL,
++						  MEC_PIPE2_RESET, 1);
++			clean_val = REG_SET_FIELD(clean_val, CP_MEC_RS64_CNTL,
++						  MEC_PIPE2_RESET, 0);
++			break;
++		case 3:
++			reset_val = REG_SET_FIELD(reset_val, CP_MEC_RS64_CNTL,
++						  MEC_PIPE3_RESET, 1);
++			clean_val = REG_SET_FIELD(clean_val, CP_MEC_RS64_CNTL,
++						  MEC_PIPE3_RESET, 0);
++			break;
++		default:
++			break;
++		}
++		WREG32_SOC15(GC, 0, regCP_MEC_RS64_CNTL, reset_val);
++		mes_v12_0_clear_hqds_on_mec_pipe(adev, me, pipe);
++		soc24_grbm_select(adev, me, pipe, queue, 0);
++		WREG32_SOC15(GC, 0, regCP_MEC_RS64_CNTL, clean_val);
++		r = (RREG32_SOC15(GC, 0, regCP_MEC_RS64_INSTR_PNTR) << 2) -
++				RS64_FW_UC_START_ADDR_LO;
++	} else {
++		reset_val = RREG32_SOC15(GC, 0, regCP_MEC_CNTL);
++		clean_val = reset_val;
++
++		switch (pipe) {
++		case 0:
++			reset_val = REG_SET_FIELD(reset_val, CP_MEC_CNTL,
++						  MEC_ME1_PIPE0_RESET, 1);
++			clean_val = REG_SET_FIELD(clean_val, CP_MEC_CNTL,
++						  MEC_ME1_PIPE0_RESET, 0);
++			break;
++		case 1:
++			reset_val = REG_SET_FIELD(reset_val, CP_MEC_CNTL,
++						  MEC_ME1_PIPE1_RESET, 1);
++			clean_val = REG_SET_FIELD(clean_val, CP_MEC_CNTL,
++						  MEC_ME1_PIPE1_RESET, 0);
++			break;
++		default:
++			break;
++		}
++
++		WREG32_SOC15(GC, 0, regCP_MEC_CNTL, reset_val);
++		mes_v12_0_clear_hqds_on_mec_pipe(adev, me, pipe);
++		soc24_grbm_select(adev, me, pipe, queue, 0);
++		WREG32_SOC15(GC, 0, regCP_MEC_CNTL, clean_val);
++	}
++
++	soc24_grbm_select(adev, 0, 0, 0, 0);
++	mutex_unlock(&adev->srbm_mutex);
++	amdgpu_gfx_rlc_exit_safe_mode(adev, 0);
++
++	dev_dbg(adev->dev, "MEC pipe me%u pipe%u queue%u resets to MEC FW start PC: %s\n",
++		me, pipe, queue, r == 0 ? "successfully" : "failed");
++	return 0;
++}
++
+ static int mes_v12_0_reset_queue_mmio(struct amdgpu_mes *mes, uint32_t queue_type,
+ 				      uint32_t me_id, uint32_t pipe_id,
+ 				      uint32_t queue_id, uint32_t vmid)
+@@ -507,6 +675,20 @@ static int mes_v12_0_reset_queue_mmio(struct amdgpu_mes *mes, uint32_t queue_typ
+ 	return r;
+ }
+ 
++static int mes_v12_0_reset_pipe_mmio(struct amdgpu_mes *mes, uint32_t queue_type,
++				     uint32_t me_id, uint32_t pipe_id,
++				     uint32_t queue_id, uint32_t vmid)
++{
++	struct amdgpu_device *adev = mes->adev;
++
++	if (queue_type == AMDGPU_RING_TYPE_GFX)
++		return mes_v12_0_reset_gfx_pipe_mmio(adev, me_id, pipe_id, queue_id);
++	else if (queue_type == AMDGPU_RING_TYPE_COMPUTE)
++		return mes_v12_0_reset_compute_pipe_mmio(adev, me_id, pipe_id, queue_id);
++	else
++		return -EOPNOTSUPP;
++}
++
+ static int mes_v12_0_map_legacy_queue(struct amdgpu_mes *mes,
+ 				      struct mes_map_legacy_queue_input *input)
+ {
+@@ -896,10 +1078,16 @@ static int mes_v12_0_reset_hw_queue(struct amdgpu_mes *mes,
+ 	union MESAPI__RESET mes_reset_queue_pkt;
+ 	int pipe;
+ 
+-	if (input->use_mmio)
+-		return mes_v12_0_reset_queue_mmio(mes, input->queue_type,
+-						  input->me_id, input->pipe_id,
+-						  input->queue_id, input->vmid);
++	if (input->use_mmio) {
++		int r = mes_v12_0_reset_queue_mmio(mes, input->queue_type,
++						   input->me_id, input->pipe_id,
++						   input->queue_id, input->vmid);
++		if (r)
++			return mes_v12_0_reset_pipe_mmio(mes, input->queue_type,
++							 input->me_id, input->pipe_id,
++							 input->queue_id, input->vmid);
++		return 0;
++	}
+ 
+ 	memset(&mes_reset_queue_pkt, 0, sizeof(mes_reset_queue_pkt));
+ 
+-- 
+2.55.0
+

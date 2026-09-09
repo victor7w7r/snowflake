@@ -1,0 +1,121 @@
+From 81ab2321c1467959767cde8bd23a582d203263ab Mon Sep 17 00:00:00 2001
+From: Damien Le Moal <dlemoal@kernel.org>
+Date: Sat, 20 Jun 2026 18:26:44 +0900
+Subject: [PATCH 02552/15333] ata: libata-scsi: support the all command format
+ for reporting supported commands
+
+Add support to ata_scsi_report_supported_opcodes() for the all command
+format indicated with a reporting option of 0. The function
+ata_scsi_report_all_supported_opcodes() is introduced to implement this
+support. This function operates by testing all commands of the
+ata_supported_cmds array and testing them using
+ata_scsi_cmd_is_supported(), filling rbuf as it loops through all the
+commands that libata can emulate or translate.
+
+With this change, sg_opcodes /dev/sdX is able to list all commands
+supported by libata and a device. An example below is shown for a SATA
+disk also supporting CDL:
+
+  # sg_opcodes /dev/sda
+    ATA       WDC  WUH722626AL  WZ41
+    Peripheral device type: disk
+
+  Opcode  Service    CDB  RWCDLP,  Name
+  (hex)   action(h)  size   CDLP
+  -----------------------------------------------
+   00                  6    0,0    Test Unit Ready
+   01                  6    0,0    Rezero Unit
+   03                  6    0,0    Request Sense
+   08                  6    0,0    Read(6)
+   0a                  6    0,0    Write(6)
+   0b                  6    0,0    Seek(6)
+   12                  6    0,0    Inquiry
+   15                  6    0,0    Mode select(6)
+   1a                  6    0,0    Mode sense(6)
+   1b                  6    0,0    Start stop unit
+   1d                  6    0,0    Send diagnostic
+   25                 10    0,0    Read capacity(10)
+   28                 10    0,0    Read(10)
+   2a                 10    0,0    Write(10)
+   2b                 10    0,0    Seek(10)
+   2f                 10    0,0    Verify(10)
+   35                 10    0,0    Synchronize cache(10)
+   55                 10    0,0    Mode select(10)
+   5a                 10    0,0    Mode sense(10)
+   7f     1ff0        32    0,0    ATA pass-through(32)
+   85                 16    0,0    ATA pass-through(16)
+   88                 16    1,1    Read(16)
+   8a                 16    1,2    Write(16)
+   8f                 16    0,0    Verify(16)
+   91                 16    0,0    Synchronize cache(16)
+   9e       10        16    0,0    Read capacity(16)
+   a0                 12    0,0    Report luns
+   a1                 12    0,0    ATA pass-through(12)
+   a3        c        12    0,0    Report supported operation codes
+
+Signed-off-by: Damien Le Moal <dlemoal@kernel.org>
+Reviewed-by: Hannes Reinecke <hare@kernel.org>
+---
+ drivers/ata/libata-scsi.c | 39 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+
+diff --git a/drivers/ata/libata-scsi.c b/drivers/ata/libata-scsi.c
+index 265236b0493d..e48915a9f81b 100644
+--- a/drivers/ata/libata-scsi.c
++++ b/drivers/ata/libata-scsi.c
+@@ -3761,6 +3761,42 @@ static bool ata_scsi_cmd_is_supported(struct ata_device *dev, u8 op, u16 sa,
+ 	return true;
+ }
+ 
++static unsigned int
++ata_scsi_report_all_supported_opcodes(struct ata_device *dev, u8 *rbuf)
++{
++	struct ata_scsi_cmd_support sup;
++	const struct ata_scsi_cmd *cmd;
++	unsigned int len = 4;
++	u8 *buf = &rbuf[len];
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(ata_supported_cmds); i++) {
++		if (len > ATA_SCSI_RBUF_SIZE - 8)
++			break;
++
++		cmd = &ata_supported_cmds[i];
++
++		/* All command format */
++		if (!ata_scsi_cmd_is_supported(dev, cmd->op, cmd->sa, &sup))
++			continue;
++
++		buf[0] = cmd->op;
++		put_unaligned_be16(cmd->sa, &buf[2]);
++		buf[5] = (sup.rwcdlp << 6) | (sup.cdlp << 2);
++		if (cmd->sa_valid)
++			buf[5] |= 0x01;
++		put_unaligned_be16(cmd->cdb_len, &buf[6]);
++
++		/* CTDP == 0 */
++		len += 8;
++		buf += 8;
++	}
++
++	put_unaligned_be32(len - 4, &rbuf[0]);
++
++	return len;
++}
++
+ static unsigned int ata_scsi_report_supported_opcodes(struct ata_device *dev,
+ 						      struct scsi_cmnd *cmd,
+ 						      u8 *rbuf)
+@@ -3770,6 +3806,9 @@ static unsigned int ata_scsi_report_supported_opcodes(struct ata_device *dev,
+ 	u16 sa = 0;
+ 
+ 	switch (cdb[2]) {
++	case 0:
++		/* All command format */
++		return ata_scsi_report_all_supported_opcodes(dev, rbuf);
+ 	case 1:
+ 		/* One command format with command support data, ignore sa. */
+ 		if (ata_scsi_supported_cmd_use_sa(cdb[3])) {
+-- 
+2.55.0
+

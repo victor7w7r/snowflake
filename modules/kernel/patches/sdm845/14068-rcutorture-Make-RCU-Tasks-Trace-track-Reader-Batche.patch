@@ -1,0 +1,67 @@
+From 86fa5387b473c160c26b781dff55014c4e1b3db0 Mon Sep 17 00:00:00 2001
+From: "Paul E. McKenney" <paulmck@kernel.org>
+Date: Wed, 8 Jul 2026 17:34:07 -0700
+Subject: [PATCH 14068/15333] rcutorture: Make RCU Tasks Trace track Reader
+ Batches
+
+This commit adds the ->get_sp_seq and ->gp_diff fields to the
+tasks_tracing_ops structure so that RCU Tasks Trace rcutorture runs will
+track Reader Batch.
+
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ include/linux/rcupdate_trace.h | 3 +++
+ kernel/rcu/rcutorture.c        | 3 ++-
+ kernel/rcu/tasks.h             | 6 ++++++
+ 3 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/rcupdate_trace.h b/include/linux/rcupdate_trace.h
+index cee89e51e45c..f2c4173bf14f 100644
+--- a/include/linux/rcupdate_trace.h
++++ b/include/linux/rcupdate_trace.h
+@@ -198,10 +198,13 @@ static inline void rcu_tasks_trace_expedite_current(void)
+ 	srcu_expedite_current(&rcu_tasks_trace_srcu_struct);
+ }
+ 
++unsigned long rcu_tasks_trace_batches_completed(void);
++
+ // Placeholders to enable stepwise transition.
+ void __init rcu_tasks_trace_suppress_unused(void);
+ 
+ #else
++static inline unsigned long rcu_tasks_trace_batches_completed(void) { return 0; }
+ /*
+  * The BPF JIT forms these addresses even when it doesn't call these
+  * functions, so provide definitions that result in runtime errors.
+diff --git a/kernel/rcu/rcutorture.c b/kernel/rcu/rcutorture.c
+index c8118c38812a..8514fef3ec10 100644
+--- a/kernel/rcu/rcutorture.c
++++ b/kernel/rcu/rcutorture.c
+@@ -1252,7 +1252,8 @@ static struct rcu_torture_ops tasks_tracing_ops = {
+ 	.read_delay	= srcu_read_delay,  /* just reuse srcu's version. */
+ 	.readunlock	= tasks_tracing_torture_read_unlock,
+ 	.readlock_held	= rcu_read_lock_trace_held,
+-	.get_gp_seq	= rcu_no_completed,
++	.get_gp_seq	= rcu_tasks_trace_batches_completed,
++	.gp_diff	= rcu_seq_diff,
+ 	.deferred_free	= rcu_tasks_tracing_torture_deferred_free,
+ 	.sync		= synchronize_rcu_tasks_trace,
+ 	.exp_sync	= synchronize_rcu_tasks_trace,
+diff --git a/kernel/rcu/tasks.h b/kernel/rcu/tasks.h
+index f4da5fad70f5..496acac8796f 100644
+--- a/kernel/rcu/tasks.h
++++ b/kernel/rcu/tasks.h
+@@ -1606,4 +1606,10 @@ static inline void rcu_tasks_bootup_oddness(void) {}
+ DEFINE_SRCU_FAST(rcu_tasks_trace_srcu_struct);
+ EXPORT_SYMBOL_GPL(rcu_tasks_trace_srcu_struct);
+ 
++unsigned long rcu_tasks_trace_batches_completed(void)
++{
++	return srcu_batches_completed(&rcu_tasks_trace_srcu_struct);
++}
++EXPORT_SYMBOL_GPL(rcu_tasks_trace_batches_completed);
++
+ #endif /* #else #ifdef CONFIG_TASKS_TRACE_RCU */
+-- 
+2.55.0
+

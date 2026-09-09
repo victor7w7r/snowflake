@@ -1,0 +1,60 @@
+From 083362373ef4a301a333080bf601484071c79ea9 Mon Sep 17 00:00:00 2001
+From: Oliver Neukum <oneukum@suse.com>
+Date: Thu, 9 Jul 2026 15:21:23 +0200
+Subject: [PATCH 04888/15333] media: stk1160: cleanup error handling in probe
+
+Do not replicate cleanup code.
+
+Signed-off-by: Oliver Neukum <oneukum@suse.com>
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+---
+ drivers/media/usb/stk1160/stk1160-core.c | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/media/usb/stk1160/stk1160-core.c b/drivers/media/usb/stk1160/stk1160-core.c
+index f9462a9ca761..5058cada0d0a 100644
+--- a/drivers/media/usb/stk1160/stk1160-core.c
++++ b/drivers/media/usb/stk1160/stk1160-core.c
+@@ -263,7 +263,7 @@ static int stk1160_scan_usb(struct usb_interface *intf, struct usb_device *udev,
+ static int stk1160_probe(struct usb_interface *interface,
+ 		const struct usb_device_id *id)
+ {
+-	int rc = 0;
++	int rc;
+ 
+ 	unsigned int *alt_max_pkt_size;	/* array of wMaxPacketSize */
+ 	struct usb_device *udev;
+@@ -290,15 +290,13 @@ static int stk1160_probe(struct usb_interface *interface,
+ 	 * Also, check if device speed is fast enough.
+ 	 */
+ 	rc = stk1160_scan_usb(interface, udev, alt_max_pkt_size);
+-	if (rc < 0) {
+-		kfree(alt_max_pkt_size);
+-		return rc;
+-	}
++	if (rc < 0)
++		goto free_array;
+ 
+ 	dev = kzalloc_obj(struct stk1160);
+ 	if (dev == NULL) {
+-		kfree(alt_max_pkt_size);
+-		return -ENOMEM;
++		rc = -ENOMEM;
++		goto free_array;
+ 	}
+ 
+ 	dev->alt_max_pkt_size = alt_max_pkt_size;
+@@ -379,8 +377,9 @@ static int stk1160_probe(struct usb_interface *interface,
+ free_ctrl:
+ 	v4l2_ctrl_handler_free(&dev->ctrl_handler);
+ free_err:
+-	kfree(alt_max_pkt_size);
+ 	kfree(dev);
++free_array:
++	kfree(alt_max_pkt_size);
+ 
+ 	return rc;
+ }
+-- 
+2.55.0
+

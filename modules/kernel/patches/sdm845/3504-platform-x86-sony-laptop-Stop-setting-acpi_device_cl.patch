@@ -1,0 +1,58 @@
+From 38e88f19fd8bdb06bf4eb1a274b8d34853157495 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Fri, 3 Jul 2026 13:32:31 +0200
+Subject: [PATCH 03504/15333] platform/x86: sony-laptop: Stop setting
+ acpi_device_class()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since acpi_device_class() set by the driver is only used for generating
+ACPI netlink events and the "sony/hotkey" string literal may as well be
+used directly for this purpose, make the driver do so and stop setting
+acpi_device_class() in it.
+
+No intentional functional impact.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/9664323.CDJkKcVGEf@rafael.j.wysocki
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/x86/sony-laptop.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/drivers/platform/x86/sony-laptop.c b/drivers/platform/x86/sony-laptop.c
+index 67370967df6f..0bf4d3054e37 100644
+--- a/drivers/platform/x86/sony-laptop.c
++++ b/drivers/platform/x86/sony-laptop.c
+@@ -1264,7 +1264,7 @@ static void sony_nc_notify(acpi_handle ah, u32 event, void *data)
+ 		ev_type = HOTKEY;
+ 		sony_laptop_report_input_event(real_ev);
+ 	}
+-	acpi_bus_generate_netlink_event(sony_nc_acpi_device->pnp.device_class,
++	acpi_bus_generate_netlink_event("sony/hotkey",
+ 			dev_name(&sony_nc_acpi_device->dev), ev_type, real_ev);
+ }
+ 
+@@ -3157,8 +3157,6 @@ static int sony_nc_probe(struct platform_device *pdev)
+ 		return -ENODEV;
+ 
+ 	sony_nc_acpi_device = device;
+-	strscpy(acpi_device_class(device), "sony/hotkey");
+-
+ 	sony_nc_acpi_handle = device->handle;
+ 
+ 	/* read device status */
+@@ -4523,7 +4521,6 @@ static int sony_pic_probe(struct platform_device *pdev)
+ 		return -ENODEV;
+ 
+ 	spic_dev.acpi_dev = device;
+-	strscpy(acpi_device_class(device), "sony/hotkey");
+ 	sony_pic_detect_device_type(&spic_dev);
+ 	mutex_init(&spic_dev.lock);
+ 
+-- 
+2.55.0
+

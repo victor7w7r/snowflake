@@ -1,0 +1,65 @@
+From 6b8ff068542a62c0fd58a7134282d48dd8a729c9 Mon Sep 17 00:00:00 2001
+From: Jeremy Linton <jeremy.linton@arm.com>
+Date: Thu, 9 Jul 2026 17:13:43 -0500
+Subject: [PATCH 05225/15333] cpupower: Build and call CPPC information on
+ non-AMD processors
+
+Now that we have a generic CPPC printout, call it on !AMD
+processors. If it fails to detect CPPC, or the registers don't look
+reasonable then it will exit without printing anything.
+
+Link: https://lore.kernel.org/r/20260709221344.1919794-3-jeremy.linton@arm.com
+Signed-off-by: Jeremy Linton <jeremy.linton@arm.com>
+Signed-off-by: Shuah Khan <skhan@linuxfoundation.org>
+---
+ tools/power/cpupower/Makefile                | 2 +-
+ tools/power/cpupower/utils/cpufreq-info.c    | 3 ++-
+ tools/power/cpupower/utils/helpers/helpers.h | 2 ++
+ 3 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/tools/power/cpupower/Makefile b/tools/power/cpupower/Makefile
+index 969716dfe8de..cd8b7315fe74 100644
+--- a/tools/power/cpupower/Makefile
++++ b/tools/power/cpupower/Makefile
+@@ -131,7 +131,7 @@ override CFLAGS += -DVERSION=\"$(VERSION)\" -DPACKAGE=\"$(PACKAGE)\" \
+ 
+ UTIL_OBJS =  utils/helpers/amd.o utils/helpers/msr.o \
+ 	utils/helpers/sysfs.o utils/helpers/misc.o utils/helpers/cpuid.o \
+-	utils/helpers/pci.o utils/helpers/bitmask.o \
++	utils/helpers/pci.o utils/helpers/bitmask.o utils/helpers/cppc.o \
+ 	utils/idle_monitor/nhm_idle.o utils/idle_monitor/snb_idle.o \
+ 	utils/idle_monitor/hsw_ext_idle.o \
+ 	utils/idle_monitor/amd_fam14h_idle.o utils/idle_monitor/cpuidle_sysfs.o \
+diff --git a/tools/power/cpupower/utils/cpufreq-info.c b/tools/power/cpupower/utils/cpufreq-info.c
+index 5a242b491a9d..105f06e690cc 100644
+--- a/tools/power/cpupower/utils/cpufreq-info.c
++++ b/tools/power/cpupower/utils/cpufreq-info.c
+@@ -477,12 +477,13 @@ static int get_latency(unsigned int cpu, unsigned int human)
+ }
+ 
+ /* --performance / -c */
+-
+ static int get_perf_cap(unsigned int cpu)
+ {
+ 	if (cpupower_cpu_info.vendor == X86_VENDOR_AMD &&
+ 	    cpupower_cpu_info.caps & CPUPOWER_CAP_AMD_PSTATE)
+ 		amd_pstate_show_perf_and_freq(cpu, no_rounding);
++	else
++		cppc_show_perf_and_freq(cpu, no_rounding);
+ 
+ 	return 0;
+ }
+diff --git a/tools/power/cpupower/utils/helpers/helpers.h b/tools/power/cpupower/utils/helpers/helpers.h
+index a3ad80b9c2c2..9c5126b63966 100644
+--- a/tools/power/cpupower/utils/helpers/helpers.h
++++ b/tools/power/cpupower/utils/helpers/helpers.h
+@@ -221,4 +221,6 @@ void print_online_cpus(void);
+ void print_offline_cpus(void);
+ void print_speed(unsigned long speed, int no_rounding);
+ 
++void cppc_show_perf_and_freq(unsigned int cpu, int no_rounding);
++
+ #endif /* __CPUPOWERUTILS_HELPERS__ */
+-- 
+2.55.0
+

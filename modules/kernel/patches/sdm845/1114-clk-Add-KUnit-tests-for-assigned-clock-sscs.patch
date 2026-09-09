@@ -1,0 +1,711 @@
+From 7d98de6ffdab5bf65854f2464be362f33a606238 Mon Sep 17 00:00:00 2001
+From: Peng Fan <peng.fan@nxp.com>
+Date: Fri, 12 Jun 2026 16:46:26 +0800
+Subject: [PATCH 01114/15333] clk: Add KUnit tests for assigned-clock-sscs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add KUnit test coverage for the assigned-clock-sscs DT property that
+configures spread spectrum on clocks before they are used.
+
+Extend the existing test infrastructure to support spread spectrum:
+- Add struct clk_spread_spectrum field to clk_dummy_context and a
+  clk_dummy_set_spread_spectrum callback
+- Wire set_spread_spectrum into all dummy clock ops
+- Extend clk_assigned_rates_register_clk and test parameter struct
+  to propagate initial SSCS values
+
+Add a new separate test suite clk_assigned_sscs with three categories:
+
+  1. clk_assigned_sscs_assigns_one — verifies that a single
+     assigned-clock-sscs entry correctly configures spread spectrum
+     on one clock, testing both provider and consumer paths
+
+  2. clk_assigned_sscs_assigns_multiple — verifies that multiple
+     assigned-clock-sscs entries configure spread spectrum on two
+     clocks, testing both provider and consumer paths
+
+  3. clk_assigned_sscs_skips — verifies that malformed DT properties
+     are correctly skipped without error: missing assigned-clocks,
+     zero-valued SSCS, and null phandles, tested for both provider
+     and consumer scenarios
+
+New DT overlays are added for all test scenarios:
+  - kunit_clk_assigned_sscs_one{,consumer} — single valid entry
+  - kunit_clk_assigned_sscs_multiple{,consumer} — two valid entries
+  - kunit_clk_assigned_sscs_without{,consumer} — missing assigned-clocks
+  - kunit_clk_assigned_sscs_zero{,consumer} — all-zero SSCS values
+  - kunit_clk_assigned_sscs_null{,consumer} — null phandle
+
+Co-developed-by: Brian Masney <bmasney@redhat.com>
+Signed-off-by: Peng Fan <peng.fan@nxp.com>
+Signed-off-by: Brian Masney <bmasney@redhat.com>
+---
+ drivers/clk/Makefile                          |  10 +
+ drivers/clk/clk_test.c                        | 203 +++++++++++++++++-
+ drivers/clk/kunit_clk_assigned_rates.h        |  10 +
+ ...kunit_clk_assigned_rates_u64_multiple.dtso |   6 +
+ ..._assigned_rates_u64_multiple_consumer.dtso |   6 +
+ .../clk/kunit_clk_assigned_rates_u64_one.dtso |   3 +
+ ...t_clk_assigned_rates_u64_one_consumer.dtso |   3 +
+ .../clk/kunit_clk_assigned_sscs_multiple.dtso |  20 ++
+ ...t_clk_assigned_sscs_multiple_consumer.dtso |  24 +++
+ drivers/clk/kunit_clk_assigned_sscs_null.dtso |  16 ++
+ ...kunit_clk_assigned_sscs_null_consumer.dtso |  20 ++
+ drivers/clk/kunit_clk_assigned_sscs_one.dtso  |  16 ++
+ .../kunit_clk_assigned_sscs_one_consumer.dtso |  20 ++
+ .../clk/kunit_clk_assigned_sscs_without.dtso  |  15 ++
+ ...it_clk_assigned_sscs_without_consumer.dtso |  19 ++
+ drivers/clk/kunit_clk_assigned_sscs_zero.dtso |  12 ++
+ ...kunit_clk_assigned_sscs_zero_consumer.dtso |  16 ++
+ 17 files changed, 416 insertions(+), 3 deletions(-)
+ create mode 100644 drivers/clk/kunit_clk_assigned_sscs_multiple.dtso
+ create mode 100644 drivers/clk/kunit_clk_assigned_sscs_multiple_consumer.dtso
+ create mode 100644 drivers/clk/kunit_clk_assigned_sscs_null.dtso
+ create mode 100644 drivers/clk/kunit_clk_assigned_sscs_null_consumer.dtso
+ create mode 100644 drivers/clk/kunit_clk_assigned_sscs_one.dtso
+ create mode 100644 drivers/clk/kunit_clk_assigned_sscs_one_consumer.dtso
+ create mode 100644 drivers/clk/kunit_clk_assigned_sscs_without.dtso
+ create mode 100644 drivers/clk/kunit_clk_assigned_sscs_without_consumer.dtso
+ create mode 100644 drivers/clk/kunit_clk_assigned_sscs_zero.dtso
+ create mode 100644 drivers/clk/kunit_clk_assigned_sscs_zero_consumer.dtso
+
+diff --git a/drivers/clk/Makefile b/drivers/clk/Makefile
+index cc108a75a900..6a726331b6c9 100644
+--- a/drivers/clk/Makefile
++++ b/drivers/clk/Makefile
+@@ -18,6 +18,16 @@ clk-test-y			:= clk_test.o \
+ 				   kunit_clk_assigned_rates_without_consumer.dtbo.o \
+ 				   kunit_clk_assigned_rates_zero.dtbo.o \
+ 				   kunit_clk_assigned_rates_zero_consumer.dtbo.o \
++				   kunit_clk_assigned_sscs_one.dtbo.o \
++				   kunit_clk_assigned_sscs_one_consumer.dtbo.o \
++				   kunit_clk_assigned_sscs_multiple.dtbo.o \
++				   kunit_clk_assigned_sscs_multiple_consumer.dtbo.o \
++				   kunit_clk_assigned_sscs_null.dtbo.o \
++				   kunit_clk_assigned_sscs_null_consumer.dtbo.o \
++				   kunit_clk_assigned_sscs_without.dtbo.o \
++				   kunit_clk_assigned_sscs_without_consumer.dtbo.o \
++				   kunit_clk_assigned_sscs_zero.dtbo.o \
++				   kunit_clk_assigned_sscs_zero_consumer.dtbo.o \
+ 				   kunit_clk_hw_get_dev_of_node.dtbo.o \
+ 				   kunit_clk_parent_data_test.dtbo.o
+ obj-$(CONFIG_COMMON_CLK)	+= clk-divider.o
+diff --git a/drivers/clk/clk_test.c b/drivers/clk/clk_test.c
+index b1961daac5e2..824adc95e0b2 100644
+--- a/drivers/clk/clk_test.c
++++ b/drivers/clk/clk_test.c
+@@ -28,6 +28,7 @@ static const struct clk_ops empty_clk_ops = { };
+ struct clk_dummy_context {
+ 	struct clk_hw hw;
+ 	unsigned long rate;
++	struct clk_spread_spectrum sscs;
+ };
+ 
+ static unsigned long clk_dummy_recalc_rate(struct clk_hw *hw,
+@@ -83,6 +84,17 @@ static int clk_dummy_set_rate(struct clk_hw *hw,
+ 	return 0;
+ }
+ 
++static int clk_dummy_set_spread_spectrum(struct clk_hw *hw,
++					 const struct clk_spread_spectrum *ss_conf)
++{
++	struct clk_dummy_context *ctx =
++		container_of(hw, struct clk_dummy_context, hw);
++
++	ctx->sscs = *ss_conf;
++
++	return 0;
++}
++
+ static int clk_dummy_single_set_parent(struct clk_hw *hw, u8 index)
+ {
+ 	if (index >= clk_hw_get_num_parents(hw))
+@@ -100,18 +112,21 @@ static const struct clk_ops clk_dummy_rate_ops = {
+ 	.recalc_rate = clk_dummy_recalc_rate,
+ 	.determine_rate = clk_dummy_determine_rate,
+ 	.set_rate = clk_dummy_set_rate,
++	.set_spread_spectrum = clk_dummy_set_spread_spectrum,
+ };
+ 
+ static const struct clk_ops clk_dummy_maximize_rate_ops = {
+ 	.recalc_rate = clk_dummy_recalc_rate,
+ 	.determine_rate = clk_dummy_maximize_rate,
+ 	.set_rate = clk_dummy_set_rate,
++	.set_spread_spectrum = clk_dummy_set_spread_spectrum,
+ };
+ 
+ static const struct clk_ops clk_dummy_minimize_rate_ops = {
+ 	.recalc_rate = clk_dummy_recalc_rate,
+ 	.determine_rate = clk_dummy_minimize_rate,
+ 	.set_rate = clk_dummy_set_rate,
++	.set_spread_spectrum = clk_dummy_set_spread_spectrum,
+ };
+ 
+ static const struct clk_ops clk_dummy_single_parent_ops = {
+@@ -3097,6 +3112,7 @@ struct clk_assigned_rates_context {
+  * @overlay_end: Pointer to end of DT overlay to apply for test
+  * @rate0: Initial rate of first clk
+  * @rate1: Initial rate of second clk
++ * @sscs: Initial spread spectrum settings
+  * @consumer_test: true if a consumer is being tested
+  */
+ struct clk_assigned_rates_test_param {
+@@ -3105,6 +3121,7 @@ struct clk_assigned_rates_test_param {
+ 	u8 *overlay_end;
+ 	unsigned long rate0;
+ 	unsigned long rate1;
++	struct clk_spread_spectrum sscs;
+ 	bool consumer_test;
+ };
+ 
+@@ -3116,7 +3133,7 @@ static void
+ clk_assigned_rates_register_clk(struct kunit *test,
+ 				struct clk_dummy_context *ctx,
+ 				struct device_node *np, const char *name,
+-				unsigned long rate)
++				unsigned long rate, const struct clk_spread_spectrum *sscs)
+ {
+ 	struct clk_init_data init = { };
+ 
+@@ -3124,6 +3141,7 @@ clk_assigned_rates_register_clk(struct kunit *test,
+ 	init.ops = &clk_dummy_rate_ops;
+ 	ctx->hw.init = &init;
+ 	ctx->rate = rate;
++	ctx->sscs = *sscs;
+ 
+ 	KUNIT_ASSERT_EQ(test, 0, of_clk_hw_register_kunit(test, np, &ctx->hw));
+ 	KUNIT_ASSERT_EQ(test, ctx->rate, rate);
+@@ -3167,14 +3185,16 @@ static int clk_assigned_rates_test_init(struct kunit *test)
+ 	KUNIT_ASSERT_LT(test, clk_cells, 2);
+ 
+ 	clk_assigned_rates_register_clk(test, &ctx->clk0, np,
+-					"test_assigned_rate0", test_param->rate0);
++					"test_assigned_rate0", test_param->rate0,
++					&test_param->sscs);
+ 	if (clk_cells == 0) {
+ 		KUNIT_ASSERT_EQ(test, 0,
+ 				of_clk_add_hw_provider_kunit(test, np, of_clk_hw_simple_get,
+ 							     &ctx->clk0.hw));
+ 	} else if (clk_cells == 1) {
+ 		clk_assigned_rates_register_clk(test, &ctx->clk1, np,
+-						"test_assigned_rate1", test_param->rate1);
++						"test_assigned_rate1", test_param->rate1,
++						&test_param->sscs);
+ 
+ 		KUNIT_ASSERT_NOT_ERR_OR_NULL(test,
+ 			data = kunit_kzalloc(test, struct_size(data, hws, 2), GFP_KERNEL));
+@@ -3403,6 +3423,182 @@ static struct kunit_suite clk_assigned_rates_suite = {
+ 	.init = clk_assigned_rates_test_init,
+ };
+ 
++OF_OVERLAY_DECLARE(kunit_clk_assigned_sscs_one);
++OF_OVERLAY_DECLARE(kunit_clk_assigned_sscs_one_consumer);
++OF_OVERLAY_DECLARE(kunit_clk_assigned_sscs_multiple);
++OF_OVERLAY_DECLARE(kunit_clk_assigned_sscs_multiple_consumer);
++OF_OVERLAY_DECLARE(kunit_clk_assigned_sscs_without);
++OF_OVERLAY_DECLARE(kunit_clk_assigned_sscs_without_consumer);
++OF_OVERLAY_DECLARE(kunit_clk_assigned_sscs_zero);
++OF_OVERLAY_DECLARE(kunit_clk_assigned_sscs_zero_consumer);
++OF_OVERLAY_DECLARE(kunit_clk_assigned_sscs_null);
++OF_OVERLAY_DECLARE(kunit_clk_assigned_sscs_null_consumer);
++
++static void clk_assigned_sscs_assigns_one(struct kunit *test)
++{
++	struct clk_assigned_rates_context *ctx = test->priv;
++
++	KUNIT_EXPECT_EQ(test, ctx->clk0.sscs.modfreq_hz, ASSIGNED_SSCS_0_MODFREQ);
++	KUNIT_EXPECT_EQ(test, ctx->clk0.sscs.spread_bp, ASSIGNED_SSCS_0_SPREAD);
++	KUNIT_EXPECT_EQ(test, ctx->clk0.sscs.method, ASSIGNED_SSCS_0_METHOD);
++}
++
++/* Test cases that assign sscs for one clk */
++static const struct clk_assigned_rates_test_param clk_assigned_sscs_assigns_one_test_params[] = {
++	{
++		/*
++		 * Test that a single cell assigned-clock-sscs property
++		 * assigns the sscs when the property is in the provider.
++		 */
++		.desc = "provider assigns",
++		TEST_PARAM_OVERLAY(kunit_clk_assigned_sscs_one),
++	},
++	{
++		/*
++		 * Test that a single cell assigned-clock-sscs property
++		 * assigns the sscs when the property is in the consumer.
++		 */
++		.desc = "consumer assigns",
++		TEST_PARAM_OVERLAY(kunit_clk_assigned_sscs_one_consumer),
++		.consumer_test = true,
++	},
++};
++KUNIT_ARRAY_PARAM_DESC(clk_assigned_sscs_assigns_one,
++		       clk_assigned_sscs_assigns_one_test_params, desc)
++
++static void clk_assigned_sscs_assigns_multiple(struct kunit *test)
++{
++	struct clk_assigned_rates_context *ctx = test->priv;
++
++	KUNIT_EXPECT_EQ(test, ctx->clk0.sscs.modfreq_hz, ASSIGNED_SSCS_0_MODFREQ);
++	KUNIT_EXPECT_EQ(test, ctx->clk0.sscs.spread_bp, ASSIGNED_SSCS_0_SPREAD);
++	KUNIT_EXPECT_EQ(test, ctx->clk0.sscs.method, ASSIGNED_SSCS_0_METHOD);
++	KUNIT_EXPECT_EQ(test, ctx->clk1.sscs.modfreq_hz, ASSIGNED_SSCS_1_MODFREQ);
++	KUNIT_EXPECT_EQ(test, ctx->clk1.sscs.spread_bp, ASSIGNED_SSCS_1_SPREAD);
++	KUNIT_EXPECT_EQ(test, ctx->clk1.sscs.method, ASSIGNED_SSCS_1_METHOD);
++}
++
++/* Test cases that assign sscs for multiple clks */
++static const
++struct clk_assigned_rates_test_param clk_assigned_sscs_assigns_multiple_test_params[] = {
++	{
++		/*
++		 * Test that a multiple cell assigned-clock-sscs property
++		 * assigns the sscs when the property is in the provider.
++		 */
++		.desc = "provider assigns",
++		TEST_PARAM_OVERLAY(kunit_clk_assigned_sscs_multiple),
++	},
++	{
++		/*
++		 * Test that a multiple cell assigned-clock-sscs property
++		 * assigns the sscs when the property is in the consumer.
++		 */
++		.desc = "consumer assigns",
++		TEST_PARAM_OVERLAY(kunit_clk_assigned_sscs_multiple_consumer),
++		.consumer_test = true,
++	},
++};
++KUNIT_ARRAY_PARAM_DESC(clk_assigned_sscs_assigns_multiple,
++		       clk_assigned_sscs_assigns_multiple_test_params,
++		       desc)
++
++static void clk_assigned_sscs_skips(struct kunit *test)
++{
++	struct clk_assigned_rates_context *ctx = test->priv;
++	const struct clk_assigned_rates_test_param *test_param = test->param_value;
++
++	KUNIT_EXPECT_NE(test, ctx->clk0.sscs.modfreq_hz, ASSIGNED_SSCS_0_MODFREQ);
++	KUNIT_EXPECT_NE(test, ctx->clk0.sscs.spread_bp, ASSIGNED_SSCS_0_SPREAD);
++	KUNIT_EXPECT_NE(test, ctx->clk0.sscs.method, ASSIGNED_SSCS_0_METHOD);
++	KUNIT_EXPECT_EQ(test, ctx->clk0.sscs.modfreq_hz, test_param->sscs.modfreq_hz);
++	KUNIT_EXPECT_EQ(test, ctx->clk0.sscs.spread_bp, test_param->sscs.spread_bp);
++	KUNIT_EXPECT_EQ(test, ctx->clk0.sscs.method, test_param->sscs.method);
++}
++
++/* Test cases that skip changing the sscs due to malformed DT */
++static const struct clk_assigned_rates_test_param clk_assigned_sscs_skips_test_params[] = {
++	{
++		/*
++		 * Test that an assigned-clock-sscs property without an assigned-clocks
++		 * property fails when the property is in the provider.
++		 */
++		.desc = "provider missing assigned-clocks",
++		TEST_PARAM_OVERLAY(kunit_clk_assigned_sscs_without),
++		.sscs = {50000, 60000, 3},
++	},
++	{
++		/*
++		 * Test that an assigned-clock-sscs property without an assigned-clocks
++		 * property fails when the property is in the consumer.
++		 */
++		.desc = "consumer missing assigned-clocks",
++		TEST_PARAM_OVERLAY(kunit_clk_assigned_sscs_without_consumer),
++		.sscs = {50000, 60000, 3},
++		.consumer_test = true,
++	},
++	{
++		/*
++		 * Test that an assigned-clock-sscs property of zero doesn't
++		 * set sscs when the property is in the provider.
++		 */
++		.desc = "provider assigned-clock-sscs of zero",
++		TEST_PARAM_OVERLAY(kunit_clk_assigned_sscs_zero),
++		.sscs = {50000, 60000, 3},
++	},
++	{
++		/*
++		 * Test that an assigned-clock-sscs property of zero doesn't
++		 * set sscs when the property is in the consumer.
++		 */
++		.desc = "consumer assigned-clock-sscs of zero",
++		TEST_PARAM_OVERLAY(kunit_clk_assigned_sscs_zero_consumer),
++		.sscs = {50000, 60000, 3},
++		.consumer_test = true,
++	},
++	{
++		/*
++		 * Test that an assigned-clocks property with a null phandle
++		 * doesn't set sscs when the property is in the provider.
++		 */
++		.desc = "provider assigned-clocks null phandle",
++		TEST_PARAM_OVERLAY(kunit_clk_assigned_sscs_null),
++		.sscs = {50000, 60000, 3},
++	},
++	{
++		/*
++		 * Test that an assigned-clocks property with a null phandle
++		 * doesn't set sscs when the property is in the consumer.
++		 */
++		.desc = "consumer assigned-clocks null phandle",
++		TEST_PARAM_OVERLAY(kunit_clk_assigned_sscs_null_consumer),
++		.sscs = {50000, 60000, 3},
++		.consumer_test = true,
++	},
++};
++KUNIT_ARRAY_PARAM_DESC(clk_assigned_sscs_skips,
++		       clk_assigned_sscs_skips_test_params,
++		       desc)
++
++static struct kunit_case clk_assigned_sscs_test_cases[] = {
++	KUNIT_CASE_PARAM(clk_assigned_sscs_assigns_one,
++			 clk_assigned_sscs_assigns_one_gen_params),
++	KUNIT_CASE_PARAM(clk_assigned_sscs_assigns_multiple,
++			 clk_assigned_sscs_assigns_multiple_gen_params),
++	KUNIT_CASE_PARAM(clk_assigned_sscs_skips,
++			 clk_assigned_sscs_skips_gen_params),
++	{}
++};
++
++/*
++ * Test suite for assigned-clock-sscs DT property.
++ */
++static struct kunit_suite clk_assigned_sscs_suite = {
++	.name = "clk_assigned_sscs",
++	.test_cases = clk_assigned_sscs_test_cases,
++	.init = clk_assigned_rates_test_init,
++};
++
+ static const struct clk_init_data clk_hw_get_dev_of_node_init_data = {
+ 	.name = "clk_hw_get_dev_of_node",
+ 	.ops = &empty_clk_ops,
+@@ -3544,6 +3740,7 @@ static struct kunit_suite clk_hw_get_dev_of_node_test_suite = {
+ 
+ kunit_test_suites(
+ 	&clk_assigned_rates_suite,
++	&clk_assigned_sscs_suite,
+ 	&clk_hw_get_dev_of_node_test_suite,
+ 	&clk_leaf_mux_set_rate_parent_test_suite,
+ 	&clk_test_suite,
+diff --git a/drivers/clk/kunit_clk_assigned_rates.h b/drivers/clk/kunit_clk_assigned_rates.h
+index df2d84dcaa93..d7ae5ec2d25b 100644
+--- a/drivers/clk/kunit_clk_assigned_rates.h
++++ b/drivers/clk/kunit_clk_assigned_rates.h
+@@ -1,8 +1,18 @@
+ /* SPDX-License-Identifier: GPL-2.0 */
++
++#include <dt-bindings/clock/clock.h>
++
+ #ifndef _KUNIT_CLK_ASSIGNED_RATES_H
+ #define _KUNIT_CLK_ASSIGNED_RATES_H
+ 
+ #define ASSIGNED_RATES_0_RATE		1600000
+ #define ASSIGNED_RATES_1_RATE		9700000
+ 
++#define ASSIGNED_SSCS_0_MODFREQ		10000
++#define ASSIGNED_SSCS_0_SPREAD		30000
++#define ASSIGNED_SSCS_0_METHOD		CLK_SSC_CENTER_SPREAD
++#define ASSIGNED_SSCS_1_MODFREQ		20000
++#define ASSIGNED_SSCS_1_SPREAD		40000
++#define ASSIGNED_SSCS_1_METHOD		CLK_SSC_UP_SPREAD
++
+ #endif
+diff --git a/drivers/clk/kunit_clk_assigned_rates_u64_multiple.dtso b/drivers/clk/kunit_clk_assigned_rates_u64_multiple.dtso
+index 389b4e2eb7f7..3a717dab2d00 100644
+--- a/drivers/clk/kunit_clk_assigned_rates_u64_multiple.dtso
++++ b/drivers/clk/kunit_clk_assigned_rates_u64_multiple.dtso
+@@ -12,5 +12,11 @@ clk: kunit-clock {
+ 				  <&clk 1>;
+ 		assigned-clock-rates-u64 = /bits/ 64 <ASSIGNED_RATES_0_RATE>,
+ 					   /bits/ 64 <ASSIGNED_RATES_1_RATE>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>,
++				      <ASSIGNED_SSCS_1_MODFREQ
++				       ASSIGNED_SSCS_1_SPREAD
++				       ASSIGNED_SSCS_1_METHOD>;
+ 	};
+ };
+diff --git a/drivers/clk/kunit_clk_assigned_rates_u64_multiple_consumer.dtso b/drivers/clk/kunit_clk_assigned_rates_u64_multiple_consumer.dtso
+index 3e117fd59b7d..cbee7cbad068 100644
+--- a/drivers/clk/kunit_clk_assigned_rates_u64_multiple_consumer.dtso
++++ b/drivers/clk/kunit_clk_assigned_rates_u64_multiple_consumer.dtso
+@@ -16,5 +16,11 @@ kunit-clock-consumer {
+ 				  <&clk 1>;
+ 		assigned-clock-rates-u64 = /bits/ 64 <ASSIGNED_RATES_0_RATE>,
+ 					   /bits/ 64 <ASSIGNED_RATES_1_RATE>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>,
++				      <ASSIGNED_SSCS_1_MODFREQ
++				       ASSIGNED_SSCS_1_SPREAD
++				       ASSIGNED_SSCS_1_METHOD>;
+ 	};
+ };
+diff --git a/drivers/clk/kunit_clk_assigned_rates_u64_one.dtso b/drivers/clk/kunit_clk_assigned_rates_u64_one.dtso
+index 87041264e8f5..9b04d6927f08 100644
+--- a/drivers/clk/kunit_clk_assigned_rates_u64_one.dtso
++++ b/drivers/clk/kunit_clk_assigned_rates_u64_one.dtso
+@@ -10,5 +10,8 @@ clk: kunit-clock {
+ 		#clock-cells = <0>;
+ 		assigned-clocks = <&clk>;
+ 		assigned-clock-rates-u64 = /bits/ 64 <ASSIGNED_RATES_0_RATE>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>;
+ 	};
+ };
+diff --git a/drivers/clk/kunit_clk_assigned_rates_u64_one_consumer.dtso b/drivers/clk/kunit_clk_assigned_rates_u64_one_consumer.dtso
+index 3259c003aec0..4784d40520f4 100644
+--- a/drivers/clk/kunit_clk_assigned_rates_u64_one_consumer.dtso
++++ b/drivers/clk/kunit_clk_assigned_rates_u64_one_consumer.dtso
+@@ -14,5 +14,8 @@ kunit-clock-consumer {
+ 		compatible = "test,clk-consumer";
+ 		assigned-clocks = <&clk>;
+ 		assigned-clock-rates-u64 = /bits/ 64 <ASSIGNED_RATES_0_RATE>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>;
+ 	};
+ };
+diff --git a/drivers/clk/kunit_clk_assigned_sscs_multiple.dtso b/drivers/clk/kunit_clk_assigned_sscs_multiple.dtso
+new file mode 100644
+index 000000000000..e3472f95987c
+--- /dev/null
++++ b/drivers/clk/kunit_clk_assigned_sscs_multiple.dtso
+@@ -0,0 +1,20 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++/plugin/;
++
++#include "kunit_clk_assigned_rates.h"
++
++&{/} {
++	clk: kunit-clock {
++		compatible = "test,clk-assigned-rates";
++		#clock-cells = <1>;
++		assigned-clocks = <&clk 0>,
++				  <&clk 1>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>,
++				      <ASSIGNED_SSCS_1_MODFREQ
++				       ASSIGNED_SSCS_1_SPREAD
++				       ASSIGNED_SSCS_1_METHOD>;
++	};
++};
+diff --git a/drivers/clk/kunit_clk_assigned_sscs_multiple_consumer.dtso b/drivers/clk/kunit_clk_assigned_sscs_multiple_consumer.dtso
+new file mode 100644
+index 000000000000..6e8971bd272a
+--- /dev/null
++++ b/drivers/clk/kunit_clk_assigned_sscs_multiple_consumer.dtso
+@@ -0,0 +1,24 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++/plugin/;
++
++#include "kunit_clk_assigned_rates.h"
++
++&{/} {
++	clk: kunit-clock {
++		compatible = "test,clk-assigned-rates";
++		#clock-cells = <1>;
++	};
++
++	kunit-clock-consumer {
++		compatible = "test,clk-consumer";
++		assigned-clocks = <&clk 0>,
++				  <&clk 1>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>,
++				      <ASSIGNED_SSCS_1_MODFREQ
++				       ASSIGNED_SSCS_1_SPREAD
++				       ASSIGNED_SSCS_1_METHOD>;
++	};
++};
+diff --git a/drivers/clk/kunit_clk_assigned_sscs_null.dtso b/drivers/clk/kunit_clk_assigned_sscs_null.dtso
+new file mode 100644
+index 000000000000..43b2068c845d
+--- /dev/null
++++ b/drivers/clk/kunit_clk_assigned_sscs_null.dtso
+@@ -0,0 +1,16 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++/plugin/;
++
++#include "kunit_clk_assigned_rates.h"
++
++&{/} {
++	clk: kunit-clock {
++		compatible = "test,clk-assigned-rates";
++		#clock-cells = <0>;
++		assigned-clocks = <0>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>;
++	};
++};
+diff --git a/drivers/clk/kunit_clk_assigned_sscs_null_consumer.dtso b/drivers/clk/kunit_clk_assigned_sscs_null_consumer.dtso
+new file mode 100644
+index 000000000000..bda008f5aaa3
+--- /dev/null
++++ b/drivers/clk/kunit_clk_assigned_sscs_null_consumer.dtso
+@@ -0,0 +1,20 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++/plugin/;
++
++#include "kunit_clk_assigned_rates.h"
++
++&{/} {
++	clk: kunit-clock {
++		compatible = "test,clk-assigned-rates";
++		#clock-cells = <0>;
++	};
++
++	kunit-clock-consumer {
++		compatible = "test,clk-consumer";
++		assigned-clocks = <0>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>;
++	};
++};
+diff --git a/drivers/clk/kunit_clk_assigned_sscs_one.dtso b/drivers/clk/kunit_clk_assigned_sscs_one.dtso
+new file mode 100644
+index 000000000000..91f585b5d8c9
+--- /dev/null
++++ b/drivers/clk/kunit_clk_assigned_sscs_one.dtso
+@@ -0,0 +1,16 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++/plugin/;
++
++#include "kunit_clk_assigned_rates.h"
++
++&{/} {
++	clk: kunit-clock {
++		compatible = "test,clk-assigned-rates";
++		#clock-cells = <0>;
++		assigned-clocks = <&clk>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>;
++	};
++};
+diff --git a/drivers/clk/kunit_clk_assigned_sscs_one_consumer.dtso b/drivers/clk/kunit_clk_assigned_sscs_one_consumer.dtso
+new file mode 100644
+index 000000000000..0bc8a03c2041
+--- /dev/null
++++ b/drivers/clk/kunit_clk_assigned_sscs_one_consumer.dtso
+@@ -0,0 +1,20 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++/plugin/;
++
++#include "kunit_clk_assigned_rates.h"
++
++&{/} {
++	clk: kunit-clock {
++		compatible = "test,clk-assigned-rates";
++		#clock-cells = <0>;
++	};
++
++	kunit-clock-consumer {
++		compatible = "test,clk-consumer";
++		assigned-clocks = <&clk>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>;
++	};
++};
+diff --git a/drivers/clk/kunit_clk_assigned_sscs_without.dtso b/drivers/clk/kunit_clk_assigned_sscs_without.dtso
+new file mode 100644
+index 000000000000..08660846b55c
+--- /dev/null
++++ b/drivers/clk/kunit_clk_assigned_sscs_without.dtso
+@@ -0,0 +1,15 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++/plugin/;
++
++#include "kunit_clk_assigned_rates.h"
++
++&{/} {
++	clk: kunit-clock {
++		compatible = "test,clk-assigned-rates";
++		#clock-cells = <0>;
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>;
++	};
++};
+diff --git a/drivers/clk/kunit_clk_assigned_sscs_without_consumer.dtso b/drivers/clk/kunit_clk_assigned_sscs_without_consumer.dtso
+new file mode 100644
+index 000000000000..e1c089c6f0c0
+--- /dev/null
++++ b/drivers/clk/kunit_clk_assigned_sscs_without_consumer.dtso
+@@ -0,0 +1,19 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++/plugin/;
++
++#include "kunit_clk_assigned_rates.h"
++
++&{/} {
++	clk: kunit-clock {
++		compatible = "test,clk-assigned-rates";
++		#clock-cells = <0>;
++	};
++
++	kunit-clock-consumer {
++		compatible = "test,clk-consumer";
++		assigned-clock-sscs = <ASSIGNED_SSCS_0_MODFREQ
++				       ASSIGNED_SSCS_0_SPREAD
++				       ASSIGNED_SSCS_0_METHOD>;
++	};
++};
+diff --git a/drivers/clk/kunit_clk_assigned_sscs_zero.dtso b/drivers/clk/kunit_clk_assigned_sscs_zero.dtso
+new file mode 100644
+index 000000000000..f39f4e754e53
+--- /dev/null
++++ b/drivers/clk/kunit_clk_assigned_sscs_zero.dtso
+@@ -0,0 +1,12 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++/plugin/;
++
++&{/} {
++	clk: kunit-clock {
++		compatible = "test,clk-assigned-rates";
++		#clock-cells = <0>;
++		assigned-clocks = <&clk>;
++		assigned-clock-sscs = <0 0 0>;
++	};
++};
+diff --git a/drivers/clk/kunit_clk_assigned_sscs_zero_consumer.dtso b/drivers/clk/kunit_clk_assigned_sscs_zero_consumer.dtso
+new file mode 100644
+index 000000000000..d6bd7dfada7e
+--- /dev/null
++++ b/drivers/clk/kunit_clk_assigned_sscs_zero_consumer.dtso
+@@ -0,0 +1,16 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++/plugin/;
++
++&{/} {
++	clk: kunit-clock {
++		compatible = "test,clk-assigned-rates";
++		#clock-cells = <0>;
++	};
++
++	kunit-clock-consumer {
++		compatible = "test,clk-consumer";
++		assigned-clocks = <&clk>;
++		assigned-clock-sscs = <0 0 0>;
++	};
++};
+-- 
+2.55.0
+

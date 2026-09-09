@@ -1,0 +1,124 @@
+From a894f6f403320c65b26816be00d9b694e606cae1 Mon Sep 17 00:00:00 2001
+From: Wake Liu <wakel@google.com>
+Date: Tue, 26 May 2026 01:06:35 +0000
+Subject: [PATCH 02527/15333] selftests/futex: Correct validation logic in
+ waitv
+
+In futex_waitv negative tests (invalid_flag, unaligned_address, etc.), test
+results are evaluated as:
+
+	if (res == EINVAL)
+
+Since sys_futex_waitv returns -1 on error and sets errno, direct positive
+comparisons against res are always false, causing tests to silently pass
+regardless of real errors.
+
+Correct these validations to assert EXPECT_EQ(res, -1) and compare errno
+directly against expected constants.
+
+[ tglx: Fixup coding style ]
+
+Signed-off-by: Wake Liu <wakel@google.com>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/20260526010635.23980-3-wakel@google.com
+---
+ .../selftests/futex/functional/futex_waitv.c  | 55 ++++++++++---------
+ 1 file changed, 30 insertions(+), 25 deletions(-)
+
+diff --git a/tools/testing/selftests/futex/functional/futex_waitv.c b/tools/testing/selftests/futex/functional/futex_waitv.c
+index 87645b63b0c6..4858d5faeecf 100644
+--- a/tools/testing/selftests/futex/functional/futex_waitv.c
++++ b/tools/testing/selftests/futex/functional/futex_waitv.c
+@@ -134,11 +134,12 @@ TEST(invalid_flag)
+ 	to.tv_sec++;
+ 
+ 	res = futex_waitv(waitv, NR_FUTEXES, 0, &to, CLOCK_MONOTONIC);
+-	if (res == EINVAL) {
+-		EXPECT_TRUE(0) {
+-			TH_LOG("futex_waitv private returned: %d %s",
+-			      res ? errno : res, res ? strerror(errno) : "");
+-		}
++
++	EXPECT_EQ(res, -1)
++		TH_LOG("futex_waitv returned unexpected result: %d", res);
++	if (res == -1) {
++		EXPECT_EQ(errno, EINVAL)
++			TH_LOG("futex_waitv returned unexpected errno: %d", errno);
+ 	}
+ }
+ 
+@@ -160,11 +161,12 @@ TEST(unaligned_address)
+ 	to.tv_sec++;
+ 
+ 	res = futex_waitv(waitv, NR_FUTEXES, 0, &to, CLOCK_MONOTONIC);
+-	if (res == EINVAL) {
+-		EXPECT_TRUE(0) {
+-			TH_LOG("futex_wake private returned: %d %s",
+-			       res ? errno : res, res ? strerror(errno) : "");
+-		}
++
++	EXPECT_EQ(res, -1)
++		TH_LOG("futex_waitv returned unexpected result: %d", res);
++	if (res == -1) {
++		EXPECT_EQ(errno, EINVAL)
++			TH_LOG("futex_waitv returned unexpected errno: %d", errno);
+ 	}
+ }
+ 
+@@ -185,11 +187,12 @@ TEST(null_address)
+ 	to.tv_sec++;
+ 
+ 	res = futex_waitv(waitv, NR_FUTEXES, 0, &to, CLOCK_MONOTONIC);
+-	if (res == EINVAL) {
+-		EXPECT_TRUE(0) {
+-			TH_LOG("futex_waitv private returned: %d %s",
+-			       res ? errno : res, res ? strerror(errno) : "");
+-		}
++
++	EXPECT_EQ(res, -1)
++		TH_LOG("futex_waitv returned unexpected result: %d", res);
++	if (res == -1) {
++		EXPECT_EQ(errno, EINVAL)
++			TH_LOG("futex_waitv returned unexpected errno: %d", errno);
+ 	}
+ 
+ 	/* Testing a NULL address for *waiters */
+@@ -199,11 +202,12 @@ TEST(null_address)
+ 	to.tv_sec++;
+ 
+ 	res = futex_waitv(NULL, NR_FUTEXES, 0, &to, CLOCK_MONOTONIC);
+-	if (res == EINVAL) {
+-		EXPECT_TRUE(0) {
+-			TH_LOG("futex_waitv private returned: %d %s",
+-			       res ? errno : res, res ? strerror(errno) : "");
+-		}
++
++	EXPECT_EQ(res, -1)
++		TH_LOG("futex_waitv returned unexpected result: %d", res);
++	if (res == -1) {
++		EXPECT_EQ(errno, EINVAL)
++			TH_LOG("futex_waitv returned unexpected errno: %d", errno);
+ 	}
+ }
+ 
+@@ -222,11 +226,12 @@ TEST(invalid_clockid)
+ 	to.tv_sec++;
+ 
+ 	res = futex_waitv(NULL, NR_FUTEXES, 0, &to, CLOCK_TAI);
+-	if (res == EINVAL) {
+-		EXPECT_TRUE(0) {
+-			TH_LOG("futex_waitv private returned: %d %s",
+-				      res ? errno : res, res ? strerror(errno) : "");
+-		}
++
++	EXPECT_EQ(res, -1)
++		TH_LOG("futex_waitv returned unexpected result: %d", res);
++	if (res == -1) {
++		EXPECT_EQ(errno, EINVAL)
++			TH_LOG("futex_waitv returned unexpected errno: %d", errno);
+ 	}
+ }
+ 
+-- 
+2.55.0
+

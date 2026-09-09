@@ -1,0 +1,50 @@
+From f31cb77bb1d141eab71d4aae96f5fa51efcd3ca0 Mon Sep 17 00:00:00 2001
+From: Dave Stevenson <dave.stevenson@raspberrypi.com>
+Date: Wed, 15 Jul 2026 12:43:29 +0100
+Subject: [PATCH 04864/15333] media: imx355: Define the exposure offset, and
+ use that define
+
+The difference between frame length and max exposure time in
+lines is 10. That had been used as a bare value in calculations.
+
+Move it to a define, and use that define.
+
+Signed-off-by: Dave Stevenson <dave.stevenson@raspberrypi.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/i2c/imx355.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/i2c/imx355.c b/drivers/media/i2c/imx355.c
+index fa8a6851b44e..cc27a193cd81 100644
+--- a/drivers/media/i2c/imx355.c
++++ b/drivers/media/i2c/imx355.c
+@@ -51,6 +51,7 @@
+ #define IMX355_EXPOSURE_MIN		1
+ #define IMX355_EXPOSURE_STEP		1
+ #define IMX355_EXPOSURE_DEFAULT		0x0282
++#define IMX355_EXPOSURE_OFFSET		10
+ 
+ /* Analog gain control */
+ #define IMX355_REG_ANALOG_GAIN		CCI_REG16(0x0204)
+@@ -635,7 +636,7 @@ static int imx355_set_ctrl(struct v4l2_ctrl *ctrl)
+ 	switch (ctrl->id) {
+ 	case V4L2_CID_VBLANK:
+ 		/* Update max exposure while meeting expected vblanking */
+-		max = imx355->cur_mode->height + ctrl->val - 10;
++		max = imx355->cur_mode->height + ctrl->val - IMX355_EXPOSURE_OFFSET;
+ 		__v4l2_ctrl_modify_range(imx355->exposure,
+ 					 imx355->exposure->minimum,
+ 					 max, imx355->exposure->step, max);
+@@ -1130,7 +1131,7 @@ static int imx355_init_controls(struct imx355 *imx355)
+ 		imx355->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+ 
+ 	/* fll >= exposure time + adjust parameter (default value is 10) */
+-	exposure_max = mode->fll_def - 10;
++	exposure_max = mode->fll_def - IMX355_EXPOSURE_OFFSET;
+ 	imx355->exposure = v4l2_ctrl_new_std(ctrl_hdlr, &imx355_ctrl_ops,
+ 					     V4L2_CID_EXPOSURE,
+ 					     IMX355_EXPOSURE_MIN, exposure_max,
+-- 
+2.55.0
+

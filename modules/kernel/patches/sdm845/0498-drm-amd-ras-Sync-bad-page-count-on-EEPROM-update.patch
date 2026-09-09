@@ -1,0 +1,37 @@
+From 0cfc1e9fafcd0b974ed4b35a6090d2ee772881df Mon Sep 17 00:00:00 2001
+From: Xiang Liu <xiang.liu@amd.com>
+Date: Fri, 12 Jun 2026 15:02:12 +0800
+Subject: [PATCH 00498/15333] drm/amd/ras: Sync bad page count on EEPROM update
+
+The rascore EEPROM runtime append path updates the saved bad page
+count in memory and EEPROM. Keep the SMU bad page count in sync when
+the EEPROM header is updated so firmware sees the latest count from
+the runtime threshold path.
+
+Notify UPDATE_BAD_PAGE_NUM after computing the rascore UMC bad page
+count.
+
+Signed-off-by: Xiang Liu <xiang.liu@amd.com>
+Reviewed-by: Tao Zhou <tao.zhou1@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/ras/rascore/ras_eeprom.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras_eeprom.c b/drivers/gpu/drm/amd/ras/rascore/ras_eeprom.c
+index 3a0ea036c9be..62d1a319c08c 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras_eeprom.c
++++ b/drivers/gpu/drm/amd/ras/rascore/ras_eeprom.c
+@@ -746,6 +746,9 @@ static int ras_eeprom_update_header(struct ras_eeprom_control *control)
+ 	int res;
+ 
+ 	bad_page_count = ras_umc_get_badpage_count(ras_core);
++	ras_core_event_notify(ras_core, RAS_EVENT_ID__UPDATE_BAD_PAGE_NUM,
++			      &bad_page_count);
++
+ 	/* Modify the header if it exceeds.
+ 	 */
+ 	if (threshold_config != 0 &&
+-- 
+2.55.0
+

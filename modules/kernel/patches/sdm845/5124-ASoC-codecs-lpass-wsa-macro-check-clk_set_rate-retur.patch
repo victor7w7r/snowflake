@@ -1,0 +1,42 @@
+From 6173e18dd47cce430506c2f642e0b8d8db51ff1e Mon Sep 17 00:00:00 2001
+From: Ajay Kumar Nandam <ajay.nandam@oss.qualcomm.com>
+Date: Wed, 15 Jul 2026 17:25:13 +0530
+Subject: [PATCH 05124/15333] ASoC: codecs: lpass-wsa-macro: check
+ clk_set_rate() return value
+
+clk_set_rate() returns 0 on success or a negative errno on failure but
+the WSA macro probe function is ignoring it. Check the return value and
+bail out of probe on failure.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Ajay Kumar Nandam <ajay.nandam@oss.qualcomm.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/20260715-xo-sd-codec-wsa-va-clk-set-rate-v2-1-16ca64c2b929@oss.qualcomm.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/lpass-wsa-macro.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/codecs/lpass-wsa-macro.c b/sound/soc/codecs/lpass-wsa-macro.c
+index f511816aa4a0..fc9e0a37c042 100644
+--- a/sound/soc/codecs/lpass-wsa-macro.c
++++ b/sound/soc/codecs/lpass-wsa-macro.c
+@@ -2773,8 +2773,13 @@ static int wsa_macro_probe(struct platform_device *pdev)
+ 	wsa->dev = dev;
+ 
+ 	/* set MCLK and NPL rates */
+-	clk_set_rate(wsa->mclk, WSA_MACRO_MCLK_FREQ);
+-	clk_set_rate(wsa->npl, WSA_MACRO_MCLK_FREQ);
++	ret = clk_set_rate(wsa->mclk, WSA_MACRO_MCLK_FREQ);
++	if (ret)
++		return ret;
++
++	ret = clk_set_rate(wsa->npl, WSA_MACRO_MCLK_FREQ);
++	if (ret)
++		return ret;
+ 
+ 	ret = devm_pm_clk_create(dev);
+ 	if (ret)
+-- 
+2.55.0
+

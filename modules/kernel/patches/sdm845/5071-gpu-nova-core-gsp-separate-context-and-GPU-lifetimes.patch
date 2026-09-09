@@ -1,0 +1,193 @@
+From 320608e5bc887b03a67c26396bc698f556906db0 Mon Sep 17 00:00:00 2001
+From: Alexandre Courbot <acourbot@nvidia.com>
+Date: Thu, 9 Jul 2026 15:53:05 +0900
+Subject: [PATCH 05071/15333] gpu: nova-core: gsp: separate context and GPU
+ lifetimes in GspBootContext
+
+`Falcon` instances retain references tied to the lifetime of the bound
+GPU. `GspBootContext` currently uses that same lifetime for its own
+borrows of the `Falcon` instances and other references.
+
+But these lifetimes are independent: the references captured by a
+`Falcon` remain valid for the GPU lifetime, while the context only
+borrows the `Falcon` for the duration of a boot or unload operation.
+This distinction is hidden for shared references by covariance, but
+cannot be ignored anymore if the context carries mutable references to
+GPU subdevices, as will happen for the `Fsp` and the `Falcon`s.
+
+Thus, give `GspBootContext` separate lifetimes for its subdevice borrows
+and the GPU resources captured by those subdevices, and update its users
+accordingly.
+
+Reviewed-by: Eliot Courtney <ecourtney@nvidia.com>
+Link: https://patch.msgid.link/20260709-nova-bootcontext-v6-12-520cbf8b9b50@nvidia.com
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/gsp.rs           | 19 ++++++++++++-------
+ drivers/gpu/nova-core/gsp/boot.rs      |  4 ++--
+ drivers/gpu/nova-core/gsp/hal.rs       |  6 +++---
+ drivers/gpu/nova-core/gsp/hal/gh100.rs |  4 ++--
+ drivers/gpu/nova-core/gsp/hal/tu102.rs | 11 ++++++++---
+ drivers/gpu/nova-core/gsp/sequencer.rs |  2 +-
+ 6 files changed, 28 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/gsp.rs b/drivers/gpu/nova-core/gsp.rs
+index c3537e071933..f4262d5eaf18 100644
+--- a/drivers/gpu/nova-core/gsp.rs
++++ b/drivers/gpu/nova-core/gsp.rs
+@@ -56,16 +56,21 @@
+ pub(crate) const GSP_PAGE_SIZE: usize = 1 << GSP_PAGE_SHIFT;
+ 
+ /// Common context for the GSP boot process.
+-pub(crate) struct GspBootContext<'a> {
+-    pub(crate) pdev: &'a pci::Device<device::Bound>,
+-    pub(crate) bar: Bar0<'a>,
++///
++/// It carries two distinct lifetimes:
++///
++/// - `'gpu` is the lifetime of the bound GPU device, as captured by the GPU subdevices.
++/// - `'ctx` is a shorter lifetime during which this context borrows those subdevices.
++pub(crate) struct GspBootContext<'ctx, 'gpu> {
++    pub(crate) pdev: &'gpu pci::Device<device::Bound>,
++    pub(crate) bar: Bar0<'gpu>,
+     pub(crate) chipset: Chipset,
+-    pub(crate) gsp_falcon: &'a Falcon<'a, GspFalcon>,
+-    pub(crate) sec2_falcon: &'a Falcon<'a, Sec2Falcon>,
++    pub(crate) gsp_falcon: &'ctx Falcon<'gpu, GspFalcon>,
++    pub(crate) sec2_falcon: &'ctx Falcon<'gpu, Sec2Falcon>,
+ }
+ 
+-impl<'a> GspBootContext<'a> {
+-    pub(crate) fn dev(&self) -> &'a device::Device<device::Bound> {
++impl<'ctx, 'gpu> GspBootContext<'ctx, 'gpu> {
++    pub(crate) fn dev(&self) -> &'gpu device::Device<device::Bound> {
+         self.pdev.as_ref()
+     }
+ }
+diff --git a/drivers/gpu/nova-core/gsp/boot.rs b/drivers/gpu/nova-core/gsp/boot.rs
+index 17e589dbd483..6b7d00205000 100644
+--- a/drivers/gpu/nova-core/gsp/boot.rs
++++ b/drivers/gpu/nova-core/gsp/boot.rs
+@@ -39,7 +39,7 @@ impl super::Gsp {
+     /// [`Self::unload`]) returned.
+     pub(crate) fn boot(
+         self: Pin<&mut Self>,
+-        mut ctx: super::GspBootContext<'_>,
++        mut ctx: super::GspBootContext<'_, '_>,
+     ) -> Result<Option<super::UnloadBundle>> {
+         let pdev = ctx.pdev;
+         let bar = ctx.bar;
+@@ -125,7 +125,7 @@ fn shutdown_gsp(
+     /// This stops all activity on the GSP.
+     pub(crate) fn unload(
+         &self,
+-        mut ctx: super::GspBootContext<'_>,
++        mut ctx: super::GspBootContext<'_, '_>,
+         unload_bundle: Option<super::UnloadBundle>,
+     ) -> Result {
+         let dev = ctx.dev();
+diff --git a/drivers/gpu/nova-core/gsp/hal.rs b/drivers/gpu/nova-core/gsp/hal.rs
+index 7ebdeafc1432..34b4bb82a999 100644
+--- a/drivers/gpu/nova-core/gsp/hal.rs
++++ b/drivers/gpu/nova-core/gsp/hal.rs
+@@ -31,7 +31,7 @@
+ /// required for unloading is prepared at load time, and stored here until it needs to be run.
+ pub(super) trait UnloadBundle: Send {
+     /// Performs the steps required to properly reset the GSP after it has been stopped.
+-    fn run(&self, ctx: &mut GspBootContext<'_>) -> Result;
++    fn run(&self, ctx: &mut GspBootContext<'_, '_>) -> Result;
+ }
+ 
+ /// Trait implemented by GSP HALs.
+@@ -43,7 +43,7 @@ pub(super) trait GspHal: Send {
+     fn boot(
+         &self,
+         gsp: &Gsp,
+-        ctx: &mut GspBootContext<'_>,
++        ctx: &mut GspBootContext<'_, '_>,
+         fb_layout: &FbLayout,
+         wpr_meta: &Coherent<GspFwWprMeta>,
+     ) -> Result<Option<crate::gsp::UnloadBundle>>;
+@@ -55,7 +55,7 @@ fn boot(
+     fn post_boot(
+         &self,
+         _gsp: &Gsp,
+-        _ctx: &mut GspBootContext<'_>,
++        _ctx: &mut GspBootContext<'_, '_>,
+         _gsp_fw: &GspFirmware,
+     ) -> Result {
+         Ok(())
+diff --git a/drivers/gpu/nova-core/gsp/hal/gh100.rs b/drivers/gpu/nova-core/gsp/hal/gh100.rs
+index 067bb01903e5..d134ad052308 100644
+--- a/drivers/gpu/nova-core/gsp/hal/gh100.rs
++++ b/drivers/gpu/nova-core/gsp/hal/gh100.rs
+@@ -115,7 +115,7 @@ fn wait_for_gsp_lockdown_release(
+ struct FspUnloadBundle;
+ 
+ impl UnloadBundle for FspUnloadBundle {
+-    fn run(&self, ctx: &mut GspBootContext<'_>) -> Result {
++    fn run(&self, ctx: &mut GspBootContext<'_, '_>) -> Result {
+         // GSP falcon does most of the work of resetting, so just wait for it to finish.
+         read_poll_timeout(
+             || Ok(ctx.gsp_falcon.is_riscv_active()),
+@@ -138,7 +138,7 @@ impl GspHal for Gh100 {
+     fn boot(
+         &self,
+         gsp: &Gsp,
+-        ctx: &mut GspBootContext<'_>,
++        ctx: &mut GspBootContext<'_, '_>,
+         fb_layout: &FbLayout,
+         wpr_meta: &Coherent<GspFwWprMeta>,
+     ) -> Result<Option<crate::gsp::UnloadBundle>> {
+diff --git a/drivers/gpu/nova-core/gsp/hal/tu102.rs b/drivers/gpu/nova-core/gsp/hal/tu102.rs
+index 4e2f48c27368..29bb17171f56 100644
+--- a/drivers/gpu/nova-core/gsp/hal/tu102.rs
++++ b/drivers/gpu/nova-core/gsp/hal/tu102.rs
+@@ -78,7 +78,7 @@ struct Sec2UnloadBundle {
+ }
+ 
+ impl UnloadBundle for Sec2UnloadBundle {
+-    fn run(&self, ctx: &mut GspBootContext<'_>) -> Result {
++    fn run(&self, ctx: &mut GspBootContext<'_, '_>) -> Result {
+         let dev = ctx.dev();
+         let bar = ctx.bar;
+ 
+@@ -258,7 +258,7 @@ impl GspHal for Tu102 {
+     fn boot(
+         &self,
+         gsp: &Gsp,
+-        ctx: &mut GspBootContext<'_>,
++        ctx: &mut GspBootContext<'_, '_>,
+         fb_layout: &FbLayout,
+         wpr_meta: &Coherent<GspFwWprMeta>,
+     ) -> Result<Option<crate::gsp::UnloadBundle>> {
+@@ -314,7 +314,12 @@ fn boot(
+         Ok(unload_guard.dismiss())
+     }
+ 
+-    fn post_boot(&self, gsp: &Gsp, ctx: &mut GspBootContext<'_>, gsp_fw: &GspFirmware) -> Result {
++    fn post_boot(
++        &self,
++        gsp: &Gsp,
++        ctx: &mut GspBootContext<'_, '_>,
++        gsp_fw: &GspFirmware,
++    ) -> Result {
+         GspSequencer::run(
+             &gsp.cmdq,
+             ctx,
+diff --git a/drivers/gpu/nova-core/gsp/sequencer.rs b/drivers/gpu/nova-core/gsp/sequencer.rs
+index ddce32cc4e30..422a74f9ecbd 100644
+--- a/drivers/gpu/nova-core/gsp/sequencer.rs
++++ b/drivers/gpu/nova-core/gsp/sequencer.rs
+@@ -335,7 +335,7 @@ fn next(&mut self) -> Option<Self::Item> {
+ impl<'a> GspSequencer<'a> {
+     pub(crate) fn run(
+         cmdq: &Cmdq,
+-        ctx: &'a GspBootContext<'_>,
++        ctx: &'a GspBootContext<'_, '_>,
+         libos_dma_handle: u64,
+         bootloader_app_version: u32,
+     ) -> Result {
+-- 
+2.55.0
+

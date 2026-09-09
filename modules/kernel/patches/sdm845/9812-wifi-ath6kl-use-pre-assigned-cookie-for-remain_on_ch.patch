@@ -1,0 +1,174 @@
+From 5c4b13cb50cae52afb34d043b8599ff767135017 Mon Sep 17 00:00:00 2001
+From: Arend van Spriel <arend.vanspriel@broadcom.com>
+Date: Fri, 31 Jul 2026 14:34:59 +0200
+Subject: [PATCH 09812/15333] wifi: ath6kl: use pre-assigned cookie for
+ remain_on_channel and mgmt_tx
+
+Stop generating cookies in ath6kl_remain_on_channel() and
+ath6kl_mgmt_tx(). cfg80211 now pre-assigns the cookie before calling
+into the driver.
+
+For remain_on_channel, store the pre-assigned cookie in
+vif->last_roc_id. Widen last_roc_id and last_cancel_roc_id from u32
+to u64 to hold the full 64-bit cookie value.
+
+For mgmt_tx, store the pre-assigned cookie in wmi->last_mgmt_tx_cookie
+so the firmware TX status event handler can pass the correct cookie to
+cfg80211_mgmt_tx_status(). Thread the cookie through the powersave
+queue (ath6kl_mgmt_buff) so it is available when the frame is
+eventually dequeued and sent.
+
+Assisted-by: Claude:claude-sonnet-4-6
+Signed-off-by: Arend van Spriel <arend.vanspriel@broadcom.com>
+Link: https://patch.msgid.link/20260731123509.1975281-4-arend.vanspriel@broadcom.com
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ drivers/net/wireless/ath/ath6kl/cfg80211.c | 18 ++++++------------
+ drivers/net/wireless/ath/ath6kl/core.h     |  5 +++--
+ drivers/net/wireless/ath/ath6kl/main.c     |  1 +
+ drivers/net/wireless/ath/ath6kl/txrx.c     |  1 +
+ drivers/net/wireless/ath/ath6kl/wmi.c      |  2 +-
+ drivers/net/wireless/ath/ath6kl/wmi.h      |  1 +
+ 6 files changed, 13 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath6kl/cfg80211.c b/drivers/net/wireless/ath/ath6kl/cfg80211.c
+index ecde91159b54..e9d6e6a53d7d 100644
+--- a/drivers/net/wireless/ath/ath6kl/cfg80211.c
++++ b/drivers/net/wireless/ath/ath6kl/cfg80211.c
+@@ -3038,16 +3038,10 @@ static int ath6kl_remain_on_channel(struct wiphy *wiphy,
+ {
+ 	struct ath6kl_vif *vif = ath6kl_vif_from_wdev(wdev);
+ 	struct ath6kl *ar = ath6kl_priv(vif->ndev);
+-	u32 id;
+ 
+ 	/* TODO: if already pending or ongoing remain-on-channel,
+ 	 * return -EBUSY */
+-	id = ++vif->last_roc_id;
+-	if (id == 0) {
+-		/* Do not use 0 as the cookie value */
+-		id = ++vif->last_roc_id;
+-	}
+-	*cookie = id;
++	vif->last_roc_id = *cookie;
+ 
+ 	return ath6kl_wmi_remain_on_chnl_cmd(ar->wmi, vif->fw_vif_idx,
+ 					     chan->center_freq, duration);
+@@ -3106,6 +3100,7 @@ static int ath6kl_send_go_probe_resp(struct ath6kl_vif *vif,
+ 
+ static bool ath6kl_mgmt_powersave_ap(struct ath6kl_vif *vif,
+ 				     u32 id,
++				     u64 cookie,
+ 				     u32 freq,
+ 				     u32 wait,
+ 				     const u8 *buf,
+@@ -3138,6 +3133,7 @@ static bool ath6kl_mgmt_powersave_ap(struct ath6kl_vif *vif,
+ 
+ 			INIT_LIST_HEAD(&mgmt_buf->list);
+ 			mgmt_buf->id = id;
++			mgmt_buf->cookie = cookie;
+ 			mgmt_buf->freq = freq;
+ 			mgmt_buf->wait = wait;
+ 			mgmt_buf->len = len;
+@@ -3222,7 +3218,6 @@ static int ath6kl_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
+ 		 * Send Probe Response frame in GO mode using a separate WMI
+ 		 * command to allow the target to fill in the generic IEs.
+ 		 */
+-		*cookie = 0; /* TX status not supported */
+ 		return ath6kl_send_go_probe_resp(vif, buf, len, freq);
+ 	}
+ 
+@@ -3235,16 +3230,15 @@ static int ath6kl_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
+ 		id = vif->send_action_id++;
+ 	}
+ 
+-	*cookie = id;
+-
+ 	/* AP mode Power saving processing */
+ 	if (vif->nw_type == AP_NETWORK) {
+-		queued = ath6kl_mgmt_powersave_ap(vif, id, freq, wait, buf, len,
+-						  &more_data, no_cck);
++		queued = ath6kl_mgmt_powersave_ap(vif, id, *cookie, freq, wait,
++						  buf, len, &more_data, no_cck);
+ 		if (queued)
+ 			return 0;
+ 	}
+ 
++	ar->wmi->last_mgmt_tx_cookie = *cookie;
+ 	return ath6kl_wmi_send_mgmt_cmd(ar->wmi, vif->fw_vif_idx, id, freq,
+ 					wait, buf, len, no_cck);
+ }
+diff --git a/drivers/net/wireless/ath/ath6kl/core.h b/drivers/net/wireless/ath/ath6kl/core.h
+index 77e052336eb5..a0b236eeeab5 100644
+--- a/drivers/net/wireless/ath/ath6kl/core.h
++++ b/drivers/net/wireless/ath/ath6kl/core.h
+@@ -404,6 +404,7 @@ struct ath6kl_mgmt_buff {
+ 	u32 freq;
+ 	u32 wait;
+ 	u32 id;
++	u64 cookie;
+ 	bool no_cck;
+ 	size_t len;
+ 	u8 buf[];
+@@ -631,8 +632,8 @@ struct ath6kl_vif {
+ 	struct cfg80211_scan_request *scan_req;
+ 	enum sme_state sme_state;
+ 	int reconnect_flag;
+-	u32 last_roc_id;
+-	u32 last_cancel_roc_id;
++	u64 last_roc_id;
++	u64 last_cancel_roc_id;
+ 	u32 send_action_id;
+ 	bool probe_req_report;
+ 	u16 assoc_bss_beacon_int;
+diff --git a/drivers/net/wireless/ath/ath6kl/main.c b/drivers/net/wireless/ath/ath6kl/main.c
+index 8afc6589fc51..9c023d7ce305 100644
+--- a/drivers/net/wireless/ath/ath6kl/main.c
++++ b/drivers/net/wireless/ath/ath6kl/main.c
+@@ -898,6 +898,7 @@ void ath6kl_pspoll_event(struct ath6kl_vif *vif, u8 aid)
+ 		spin_unlock_bh(&conn->psq_lock);
+ 
+ 		conn->sta_flags |= STA_PS_POLLED;
++		ar->wmi->last_mgmt_tx_cookie = mgmt_buf->cookie;
+ 		ath6kl_wmi_send_mgmt_cmd(ar->wmi, vif->fw_vif_idx,
+ 					 mgmt_buf->id, mgmt_buf->freq,
+ 					 mgmt_buf->wait, mgmt_buf->buf,
+diff --git a/drivers/net/wireless/ath/ath6kl/txrx.c b/drivers/net/wireless/ath/ath6kl/txrx.c
+index d81825413906..609d458ca6c5 100644
+--- a/drivers/net/wireless/ath/ath6kl/txrx.c
++++ b/drivers/net/wireless/ath/ath6kl/txrx.c
+@@ -1469,6 +1469,7 @@ void ath6kl_rx(struct htc_target *target, struct htc_packet *packet)
+ 					spin_unlock_bh(&conn->psq_lock);
+ 					idx = vif->fw_vif_idx;
+ 
++					ar->wmi->last_mgmt_tx_cookie = mgmt->cookie;
+ 					ath6kl_wmi_send_mgmt_cmd(ar->wmi,
+ 								 idx,
+ 								 mgmt->id,
+diff --git a/drivers/net/wireless/ath/ath6kl/wmi.c b/drivers/net/wireless/ath/ath6kl/wmi.c
+index 6c29f0bcec9f..2140fddba8ba 100644
+--- a/drivers/net/wireless/ath/ath6kl/wmi.c
++++ b/drivers/net/wireless/ath/ath6kl/wmi.c
+@@ -596,7 +596,7 @@ static int ath6kl_wmi_tx_status_event_rx(struct wmi *wmi, u8 *datap, int len,
+ 	ath6kl_dbg(ATH6KL_DBG_WMI, "tx_status: id=%x ack_status=%u\n",
+ 		   id, ev->ack_status);
+ 	if (wmi->last_mgmt_tx_frame) {
+-		cfg80211_mgmt_tx_status(&vif->wdev, id,
++		cfg80211_mgmt_tx_status(&vif->wdev, wmi->last_mgmt_tx_cookie,
+ 					wmi->last_mgmt_tx_frame,
+ 					wmi->last_mgmt_tx_frame_len,
+ 					!!ev->ack_status, GFP_ATOMIC);
+diff --git a/drivers/net/wireless/ath/ath6kl/wmi.h b/drivers/net/wireless/ath/ath6kl/wmi.h
+index 8fbece3fdad9..89ce2abbb1cd 100644
+--- a/drivers/net/wireless/ath/ath6kl/wmi.h
++++ b/drivers/net/wireless/ath/ath6kl/wmi.h
+@@ -125,6 +125,7 @@ struct wmi {
+ 
+ 	u8 *last_mgmt_tx_frame;
+ 	size_t last_mgmt_tx_frame_len;
++	u64 last_mgmt_tx_cookie;
+ 	u8 saved_pwr_mode;
+ };
+ 
+-- 
+2.55.0
+

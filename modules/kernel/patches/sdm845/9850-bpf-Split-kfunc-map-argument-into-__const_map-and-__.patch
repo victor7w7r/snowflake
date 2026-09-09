@@ -1,0 +1,245 @@
+From c82b998777b7102f3617a46201805b7e7b899524 Mon Sep 17 00:00:00 2001
+From: Amery Hung <ameryhung@gmail.com>
+Date: Sat, 1 Aug 2026 00:46:18 -0700
+Subject: [PATCH 09850/15333] bpf: Split kfunc map argument into __const_map
+ and __map
+
+Kfuncs used a single '__map' suffix (KF_ARG_PTR_TO_MAP) for two different
+things: a verifier-known map matched by map_uid against a bound
+timer/wq/task_work object (bpf_wq_init, bpf_task_work_schedule*), and an
+opaque 'struct bpf_map *' used only at runtime (bpf_arena_*), which may be a
+map fd or a PTR_TO_BTF_ID struct bpf_map (e.g. a bpf_map iterator's ctx->map).
+
+That combined path only accepted the btf map form due to type confusion. The
+'if (!reg->map_ptr)' check reads reg->map_ptr, which aliases reg->btf in the
+bpf_reg_state union. A PTR_TO_BTF_ID register always has a non-NULL reg->btf,
+so the guard silently passed and validation fell through to
+process_kf_arg_ptr_to_btf_id(). It also recorded PTR_TO_BTF_ID info in
+meta->map, which would be meaningless.
+
+Split the annotation to avoid such type confusion and to align with
+helper:
+
+- '__const_map' -> KF_ARG_CONST_MAP_PTR: verifier-known map, handled by
+  process_map_ptr_arg() like helper ARG_CONST_MAP_PTR.
+
+- '__map' -> KF_ARG_PTR_TO_BTF_ID: opaque struct bpf_map, validated by
+  process_kf_arg_ptr_to_btf_id(). A map fd still matches via
+  reg2btf_ids[CONST_PTR_TO_MAP], so bpf_arena_alloc_pages(&map) keeps
+  working.
+
+Signed-off-by: Amery Hung <ameryhung@gmail.com>
+Reviewed-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://lore.kernel.org/bpf/20260801074633.1595644-4-ameryhung@gmail.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ Documentation/bpf/kfuncs.rst | 30 +++++++++++++++++++++++-
+ kernel/bpf/helpers.c         | 16 ++++++-------
+ kernel/bpf/verifier.c        | 45 +++++++++++++++++++++---------------
+ 3 files changed, 64 insertions(+), 27 deletions(-)
+
+diff --git a/Documentation/bpf/kfuncs.rst b/Documentation/bpf/kfuncs.rst
+index c801a330aece..cbde86d082cc 100644
+--- a/Documentation/bpf/kfuncs.rst
++++ b/Documentation/bpf/kfuncs.rst
+@@ -250,6 +250,34 @@ Or::
+                 ...
+         }
+ 
++2.3.7 __const_map and __map Annotations
++---------------------------------------
++
++These annotations are used for ``struct bpf_map *`` arguments and distinguish a
++verifier-known map from an opaque one.
++
++``__const_map`` indicates a map must be known at the verification time, i.e. a
++concrete map fd the BPF program references directly.
++
++An example is given below::
++
++        __bpf_kfunc int bpf_wq_init(struct bpf_wq *wq, void *p__const_map,
++                                    unsigned int flags)
++        {
++                ...
++        }
++
++``__map`` indicates an opaque ``struct bpf_map *`` that may be resolved
++at run time. The argument may take either a map fd or a ``PTR_TO_BTF_ID``
++``struct bpf_map`` pointer.
++
++An example is given below::
++
++        __bpf_kfunc void *bpf_arena_alloc_pages(void *p__map, ...)
++        {
++                ...
++        }
++
+ .. _BPF_kfunc_nodef:
+ 
+ 2.4 Using an existing kernel function
+@@ -411,7 +439,7 @@ Example declaration:
+ .. code-block:: c
+ 
+ 	__bpf_kfunc int bpf_task_work_schedule_signal(struct task_struct *task, struct bpf_task_work *tw,
+-						      void *map__map, bpf_task_work_callback_t callback,
++						      void *map__const_map, bpf_task_work_callback_t callback,
+ 						      struct bpf_prog_aux *aux) { ... }
+ 
+ Example usage in BPF program:
+diff --git a/kernel/bpf/helpers.c b/kernel/bpf/helpers.c
+index 88b38db47de9..e472535bce85 100644
+--- a/kernel/bpf/helpers.c
++++ b/kernel/bpf/helpers.c
+@@ -3404,10 +3404,10 @@ __bpf_kfunc void bpf_throw(u64 cookie)
+ 	WARN(1, "A call to BPF exception callback should never return\n");
+ }
+ 
+-__bpf_kfunc int bpf_wq_init(struct bpf_wq *wq, void *p__map, unsigned int flags)
++__bpf_kfunc int bpf_wq_init(struct bpf_wq *wq, void *p__const_map, unsigned int flags)
+ {
+ 	struct bpf_async_kern *async = (struct bpf_async_kern *)wq;
+-	struct bpf_map *map = p__map;
++	struct bpf_map *map = p__const_map;
+ 
+ 	BUILD_BUG_ON(sizeof(struct bpf_async_kern) > sizeof(struct bpf_wq));
+ 	BUILD_BUG_ON(__alignof__(struct bpf_async_kern) != __alignof__(struct bpf_wq));
+@@ -4643,17 +4643,17 @@ static int bpf_task_work_schedule(struct task_struct *task, struct bpf_task_work
+  * mode
+  * @task: Task struct for which callback should be scheduled
+  * @tw: Pointer to struct bpf_task_work in BPF map value for internal bookkeeping
+- * @map__map: bpf_map that embeds struct bpf_task_work in the values
++ * @map__const_map: bpf_map that embeds struct bpf_task_work in the values
+  * @callback: pointer to BPF subprogram to call
+  * @aux: pointer to bpf_prog_aux of the caller BPF program, implicitly set by the verifier
+  *
+  * Return: 0 if task work has been scheduled successfully, negative error code otherwise
+  */
+ __bpf_kfunc int bpf_task_work_schedule_signal(struct task_struct *task, struct bpf_task_work *tw,
+-					      void *map__map, bpf_task_work_callback_t callback,
++					      void *map__const_map, bpf_task_work_callback_t callback,
+ 					      struct bpf_prog_aux *aux)
+ {
+-	return bpf_task_work_schedule(task, tw, map__map, callback, aux, TWA_SIGNAL);
++	return bpf_task_work_schedule(task, tw, map__const_map, callback, aux, TWA_SIGNAL);
+ }
+ 
+ /**
+@@ -4661,17 +4661,17 @@ __bpf_kfunc int bpf_task_work_schedule_signal(struct task_struct *task, struct b
+  * mode
+  * @task: Task struct for which callback should be scheduled
+  * @tw: Pointer to struct bpf_task_work in BPF map value for internal bookkeeping
+- * @map__map: bpf_map that embeds struct bpf_task_work in the values
++ * @map__const_map: bpf_map that embeds struct bpf_task_work in the values
+  * @callback: pointer to BPF subprogram to call
+  * @aux: pointer to bpf_prog_aux of the caller BPF program, implicitly set by the verifier
+  *
+  * Return: 0 if task work has been scheduled successfully, negative error code otherwise
+  */
+ __bpf_kfunc int bpf_task_work_schedule_resume(struct task_struct *task, struct bpf_task_work *tw,
+-					      void *map__map, bpf_task_work_callback_t callback,
++					      void *map__const_map, bpf_task_work_callback_t callback,
+ 					      struct bpf_prog_aux *aux)
+ {
+-	return bpf_task_work_schedule(task, tw, map__map, callback, aux, TWA_RESUME);
++	return bpf_task_work_schedule(task, tw, map__const_map, callback, aux, TWA_RESUME);
+ }
+ 
+ static int make_file_dynptr(struct file *file, u32 flags, bool may_sleep,
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 4a5b54219210..4f39e439973c 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -10818,6 +10818,11 @@ static bool is_kfunc_arg_map(const struct btf *btf, const struct btf_param *arg)
+ 	return btf_param_match_suffix(btf, arg, "__map");
+ }
+ 
++static bool is_kfunc_arg_const_map(const struct btf *btf, const struct btf_param *arg)
++{
++	return btf_param_match_suffix(btf, arg, "__const_map");
++}
++
+ static bool is_kfunc_arg_alloc_obj(const struct btf *btf, const struct btf_param *arg)
+ {
+ 	return btf_param_match_suffix(btf, arg, "__alloc");
+@@ -11064,7 +11069,7 @@ enum kfunc_ptr_arg_type {
+ 	KF_ARG_PTR_TO_RB_NODE,
+ 	KF_ARG_PTR_TO_NULL,
+ 	KF_ARG_PTR_TO_CONST_STR,
+-	KF_ARG_PTR_TO_MAP,
++	KF_ARG_CONST_MAP_PTR,
+ 	KF_ARG_PTR_TO_TIMER,
+ 	KF_ARG_PTR_TO_WORKQUEUE,
+ 	KF_ARG_PTR_TO_IRQ_FLAG,
+@@ -11383,8 +11388,11 @@ get_kfunc_ptr_arg_type(struct bpf_verifier_env *env, struct bpf_func_state *call
+ 	if (is_kfunc_arg_const_str(meta->btf, &args[arg]))
+ 		return KF_ARG_PTR_TO_CONST_STR;
+ 
++	if (is_kfunc_arg_const_map(meta->btf, &args[arg]))
++		return KF_ARG_CONST_MAP_PTR;
++
+ 	if (is_kfunc_arg_map(meta->btf, &args[arg]))
+-		return KF_ARG_PTR_TO_MAP;
++		return KF_ARG_PTR_TO_BTF_ID;
+ 
+ 	if (is_kfunc_arg_wq(meta->btf, &args[arg]))
+ 		return KF_ARG_PTR_TO_WORKQUEUE;
+@@ -12132,19 +12140,15 @@ static int check_kfunc_args(struct bpf_verifier_env *env, struct bpf_call_arg_me
+ 		if (kf_arg_type < 0)
+ 			return kf_arg_type;
+ 
++		if (is_kfunc_arg_map(btf, &args[i])) {
++			ref_id = *reg2btf_ids[CONST_PTR_TO_MAP];
++			ref_t = btf_type_by_id(btf_vmlinux, ref_id);
++			ref_tname = btf_name_by_offset(btf, ref_t->name_off);
++		}
++
+ 		switch (kf_arg_type) {
+ 		case KF_ARG_PTR_TO_NULL:
+ 			continue;
+-		case KF_ARG_PTR_TO_MAP:
+-			if (!reg->map_ptr) {
+-				verbose(env, "pointer in %s isn't map pointer\n",
+-					reg_arg_name(env, argno));
+-				return -EINVAL;
+-			}
+-			ret = process_map_ptr_arg(env, reg, argno, meta);
+-			if (ret < 0)
+-				return ret;
+-			fallthrough;
+ 		case KF_ARG_PTR_TO_ALLOC_BTF_ID:
+ 		case KF_ARG_PTR_TO_BTF_ID:
+ 			if (!is_trusted_reg(env, reg)) {
+@@ -12160,6 +12164,7 @@ static int check_kfunc_args(struct bpf_verifier_env *env, struct bpf_call_arg_me
+ 				}
+ 			}
+ 			fallthrough;
++		case KF_ARG_CONST_MAP_PTR:
+ 		case KF_ARG_PTR_TO_ITER:
+ 		case KF_ARG_PTR_TO_LIST_HEAD:
+ 		case KF_ARG_PTR_TO_LIST_NODE:
+@@ -12366,12 +12371,16 @@ static int check_kfunc_args(struct bpf_verifier_env *env, struct bpf_call_arg_me
+ 			if (ret < 0)
+ 				return ret;
+ 			break;
+-		case KF_ARG_PTR_TO_MAP:
+-			/* If argument has '__map' suffix expect 'struct bpf_map *' */
+-			ref_id = *reg2btf_ids[CONST_PTR_TO_MAP];
+-			ref_t = btf_type_by_id(btf_vmlinux, ref_id);
+-			ref_tname = btf_name_by_offset(btf, ref_t->name_off);
+-			fallthrough;
++		case KF_ARG_CONST_MAP_PTR:
++			if (base_type(reg->type) != CONST_PTR_TO_MAP) {
++				verbose(env, "pointer in %s isn't map pointer\n",
++					reg_arg_name(env, argno));
++				return -EINVAL;
++			}
++			ret = process_map_ptr_arg(env, reg, argno, meta);
++			if (ret < 0)
++				return ret;
++			break;
+ 		case KF_ARG_PTR_TO_BTF_ID:
+ 			/* Only base_type is checked, further checks are done here */
+ 			if ((base_type(reg->type) != PTR_TO_BTF_ID ||
+-- 
+2.55.0
+

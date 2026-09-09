@@ -1,0 +1,93 @@
+From 647277240b3623808c583d3d38e74d47180f60de Mon Sep 17 00:00:00 2001
+From: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Date: Thu, 18 Jun 2026 14:36:40 +0530
+Subject: [PATCH 02604/15333] spi: qcom-geni: Use geni_se_resources_init() for
+ resource initialization
+
+Replace resources initialization such as clocks, ICC path and OPP with the
+common geni_se_resources_init() function to avoid code duplication across
+all drivers.
+
+The geni_se_resources_init() function handles all these resources
+internally, reducing code duplication and ensuring consistent resource
+management across GENI SE drivers.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Tested-by: Mattijs Korpershoek <mkorpershoek@kernel.org>
+Link: https://patch.msgid.link/20260618-enable-spi-on-sa8255p-v4-2-f5b5067e7e1e@oss.qualcomm.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-geni-qcom.c | 26 +-------------------------
+ 1 file changed, 1 insertion(+), 25 deletions(-)
+
+diff --git a/drivers/spi/spi-geni-qcom.c b/drivers/spi/spi-geni-qcom.c
+index 26e723cfea61..09feb6577efc 100644
+--- a/drivers/spi/spi-geni-qcom.c
++++ b/drivers/spi/spi-geni-qcom.c
+@@ -1045,7 +1045,6 @@ static int spi_geni_probe(struct platform_device *pdev)
+ 	struct spi_controller *spi;
+ 	struct spi_geni_master *mas;
+ 	void __iomem *base;
+-	struct clk *clk;
+ 	struct device *dev = &pdev->dev;
+ 
+ 	irq = platform_get_irq(pdev, 0);
+@@ -1060,10 +1059,6 @@ static int spi_geni_probe(struct platform_device *pdev)
+ 	if (IS_ERR(base))
+ 		return PTR_ERR(base);
+ 
+-	clk = devm_clk_get(dev, "se");
+-	if (IS_ERR(clk))
+-		return PTR_ERR(clk);
+-
+ 	if (device_property_read_bool(dev, "spi-slave"))
+ 		spi = devm_spi_alloc_target(dev, sizeof(*mas));
+ 	else
+@@ -1079,17 +1074,10 @@ static int spi_geni_probe(struct platform_device *pdev)
+ 	mas->se.dev = dev;
+ 	mas->se.wrapper = dev_get_drvdata(dev->parent);
+ 	mas->se.base = base;
+-	mas->se.clk = clk;
+ 
+-	ret = devm_pm_opp_set_clkname(&pdev->dev, "se");
++	ret = geni_se_resources_init(&mas->se);
+ 	if (ret)
+ 		return ret;
+-	/* OPP table is optional */
+-	ret = devm_pm_opp_of_add_table(&pdev->dev);
+-	if (ret && ret != -ENODEV) {
+-		dev_err(&pdev->dev, "invalid OPP table in device tree\n");
+-		return ret;
+-	}
+ 
+ 	spi->bus_num = -1;
+ 	spi->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LOOP | SPI_CS_HIGH;
+@@ -1115,24 +1103,12 @@ static int spi_geni_probe(struct platform_device *pdev)
+ 	if (spi->target)
+ 		spi->target_abort = spi_geni_target_abort;
+ 
+-	ret = geni_icc_get(&mas->se, NULL);
+-	if (ret)
+-		return ret;
+-
+ 	pm_runtime_use_autosuspend(&pdev->dev);
+ 	pm_runtime_set_autosuspend_delay(&pdev->dev, 250);
+ 	ret = devm_pm_runtime_enable(dev);
+ 	if (ret)
+ 		return ret;
+ 
+-	/* Set the bus quota to a reasonable value for register access */
+-	mas->se.icc_paths[GENI_TO_CORE].avg_bw = Bps_to_icc(CORE_2X_50_MHZ);
+-	mas->se.icc_paths[CPU_TO_GENI].avg_bw = GENI_DEFAULT_BW;
+-
+-	ret = geni_icc_set_bw(&mas->se);
+-	if (ret)
+-		return ret;
+-
+ 	ret = spi_geni_init(mas);
+ 	if (ret)
+ 		return ret;
+-- 
+2.55.0
+

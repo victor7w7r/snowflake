@@ -1,0 +1,202 @@
+From 857071efc362d4641673c1fbf7e8a2d7a2408e75 Mon Sep 17 00:00:00 2001
+From: Emil Tsalapatis <emil@etsalapatis.com>
+Date: Mon, 6 Jul 2026 14:17:26 -0400
+Subject: [PATCH 02949/15333] selftests/bpf: libarena: Fix can-loop zero
+ variable definition
+
+BPF can_loop based loops require the index variable to stay imprecise.
+This means we must initialize them from a currently imprecise variable
+instead of directly assigning 0 to them, like so:
+
+static volatile u32 zero = 0;
+
+for (i = zero; i < NUM_LOOPS; i++) {
+	/* loop body */
+}
+
+The libarena implementation of this technique is currently faulty. For
+the technique to work, the variable must not be in a map. This includes
+the .rodata DATASEC map used for const variables. However, libarena
+still defines the zero variable as constant.
+
+Modify the zero variable definition into a volatile variable. This
+change adds a complication caused by the compiler optimizing array
+derefences from
+
+for (i = zero; i < NUM_LOOPS; i++) {
+	val = *(ptr + i);
+}
+
+into
+
+for (i = zero; i < NUM_LOOPS; i++) {
+	val = *ptr++;
+}
+
+and causing verification failures. Use the barrier_var() clobber macro
+to prevent this optimization from taking place. Using barrier_var() is
+the only way to break the optimization, as annotating the index as
+volatile does not suffice.
+
+After that, remove the bpf_for() invocations introduced in libarena for
+parallel spmc testing.
+
+Reported-by: Eduard Zingerman <eddyz87@gmail.com>
+Signed-off-by: Emil Tsalapatis <emil@etsalapatis.com>
+Acked-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://lore.kernel.org/bpf/20260706181730.21731-3-emil@etsalapatis.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ .../selftests/bpf/libarena/include/libarena/common.h     | 2 +-
+ .../bpf/libarena/selftests/test_asan_buddy.bpf.c         | 8 ++++++--
+ .../selftests/bpf/libarena/selftests/test_buddy.bpf.c    | 8 ++++++--
+ .../bpf/libarena/selftests/test_parallel_spmc.bpf.c      | 9 ++++-----
+ tools/testing/selftests/bpf/libarena/src/common.bpf.c    | 3 +--
+ 5 files changed, 18 insertions(+), 12 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/libarena/include/libarena/common.h b/tools/testing/selftests/bpf/libarena/include/libarena/common.h
+index a3eb1641ac36..931ace9a49e2 100644
+--- a/tools/testing/selftests/bpf/libarena/include/libarena/common.h
++++ b/tools/testing/selftests/bpf/libarena/include/libarena/common.h
+@@ -43,7 +43,7 @@ struct {
+  * imprecise. To force the variable to be imprecise, initialize it with
+  * the opaque volatile variable 0 instead of the constant 0.
+  */
+-extern const volatile u32 zero;
++volatile u32 zero __weak;
+ extern volatile u64 asan_violated;
+ 
+ int arena_fls(__u64 word);
+diff --git a/tools/testing/selftests/bpf/libarena/selftests/test_asan_buddy.bpf.c b/tools/testing/selftests/bpf/libarena/selftests/test_asan_buddy.bpf.c
+index 256d62a03ce7..3266a28f53d7 100644
+--- a/tools/testing/selftests/bpf/libarena/selftests/test_asan_buddy.bpf.c
++++ b/tools/testing/selftests/bpf/libarena/selftests/test_asan_buddy.bpf.c
+@@ -154,7 +154,8 @@ __weak int asan_test_buddy_oob(void)
+ 	size_t sizes[] = {
+ 		7, 8, 17, 18, 64, 256, 317, 512, 1024,
+ 	};
+-	int ret, i;
++	int ret;
++	u32 i;
+ 
+ 	ret = buddy_init(&buddy);
+ 	if (ret) {
+@@ -163,6 +164,7 @@ __weak int asan_test_buddy_oob(void)
+ 	}
+ 
+ 	for (i = zero; i < sizeof(sizes) / sizeof(sizes[0]) && can_loop; i++) {
++		barrier_var(i);
+ 		ret = asan_test_buddy_oob_single(sizes[i]);
+ 		if (ret) {
+ 			arena_stdout("%s:%d Failed for size %lu", __func__,
+@@ -190,7 +192,8 @@ __stderr("Call trace:\n"
+ __weak int asan_test_buddy_uaf(void)
+ {
+ 	size_t sizes[] = { 16, 32, 64, 128, 256, 512, 1024, 16384 };
+-	int ret, i;
++	int ret;
++	u32 i;
+ 
+ 	ret = buddy_init(&buddy);
+ 	if (ret) {
+@@ -199,6 +202,7 @@ __weak int asan_test_buddy_uaf(void)
+ 	}
+ 
+ 	for (i = zero; i < sizeof(sizes) / sizeof(sizes[0]) && can_loop; i++) {
++		barrier_var(i);
+ 		ret = asan_test_buddy_uaf_single(sizes[i]);
+ 		if (ret) {
+ 			arena_stdout("%s:%d Failed for size %lu", __func__,
+diff --git a/tools/testing/selftests/bpf/libarena/selftests/test_buddy.bpf.c b/tools/testing/selftests/bpf/libarena/selftests/test_buddy.bpf.c
+index b45a306816c0..5628f0987012 100644
+--- a/tools/testing/selftests/bpf/libarena/selftests/test_buddy.bpf.c
++++ b/tools/testing/selftests/bpf/libarena/selftests/test_buddy.bpf.c
+@@ -171,7 +171,8 @@ __weak int test_buddy_alloc_multiple(void)
+ SEC("syscall")
+ __weak int test_buddy_alignment(void)
+ {
+-	int ret, i;
++	int ret;
++	u32 i;
+ 
+ 	ret = buddy_init(&buddy);
+ 	if (ret)
+@@ -179,6 +180,7 @@ __weak int test_buddy_alignment(void)
+ 
+ 	/* Allocate various sizes and check alignment */
+ 	for (i = zero; i < 17 && can_loop; i++) {
++		barrier_var(i);
+ 		ptrs[i] = buddy_alloc(&buddy, alignment_sizes[i]);
+ 		if (!ptrs[i]) {
+ 			arena_stdout("alignment test: alloc failed for size %lu",
+@@ -198,8 +200,10 @@ __weak int test_buddy_alignment(void)
+ 	}
+ 
+ 	/* Free all allocations */
+-	for (i = zero; i < 17 && can_loop; i++)
++	for (i = zero; i < 17 && can_loop; i++) {
++		barrier_var(i);
+ 		buddy_free(&buddy, ptrs[i]);
++	}
+ 
+ 	buddy_destroy(&buddy);
+ 
+diff --git a/tools/testing/selftests/bpf/libarena/selftests/test_parallel_spmc.bpf.c b/tools/testing/selftests/bpf/libarena/selftests/test_parallel_spmc.bpf.c
+index f08f2a92e194..5fa96eb74095 100644
+--- a/tools/testing/selftests/bpf/libarena/selftests/test_parallel_spmc.bpf.c
++++ b/tools/testing/selftests/bpf/libarena/selftests/test_parallel_spmc.bpf.c
+@@ -155,7 +155,7 @@ int spmc_quiesce_on_owner(u64 epoch)
+ {
+ 	u64 i;
+ 
+-	bpf_for(i, 0, TEST_SPMC_SYNC_SPINS) {
++	for (i = zero; i < TEST_SPMC_SYNC_SPINS && can_loop; i++) {
+ 		if (test_abort)
+ 			return -EINTR;
+ 		if (smp_load_acquire(&owner_epoch) >= epoch)
+@@ -175,8 +175,7 @@ int spmc_quiesce_on_stealer(u64 epoch)
+ 	int err = -ETIMEDOUT;
+ 
+ 	target = STEALER_EPOCH(epoch);
+-	bpf_for(i, 0, TEST_SPMC_SYNC_SPINS) {
+-
++	for (i = zero; i < TEST_SPMC_SYNC_SPINS && can_loop; i++) {
+ 		if (test_abort) {
+ 			err = -EINTR;
+ 			break;
+@@ -391,7 +390,7 @@ int spmc_wait_for_stealers_to_start(u64 target)
+ {
+ 	u64 i;
+ 
+-	bpf_for(i, 0, TEST_SPMC_SYNC_SPINS) {
++	for (i = zero; i < TEST_SPMC_SYNC_SPINS && can_loop; i++) {
+ 		if (test_abort)
+ 			return -EINTR;
+ 		if (READ_ONCE(stealers_started) >= target)
+@@ -537,7 +536,7 @@ static int spmc_wait_for_round_steals(u64 target)
+ 
+ 	arena_subprog_init();
+ 
+-	bpf_for(i, 0, TEST_SPMC_SYNC_SPINS) {
++	for (i = zero; i < TEST_SPMC_SYNC_SPINS && can_loop; i++) {
+ 		if (test_abort)
+ 			return -EINTR;
+ 		if (round_steals >= target)
+diff --git a/tools/testing/selftests/bpf/libarena/src/common.bpf.c b/tools/testing/selftests/bpf/libarena/src/common.bpf.c
+index 50be57213dfb..1b4bb19b3c52 100644
+--- a/tools/testing/selftests/bpf/libarena/src/common.bpf.c
++++ b/tools/testing/selftests/bpf/libarena/src/common.bpf.c
+@@ -4,9 +4,8 @@
+ #include <libarena/asan.h>
+ #include <libarena/buddy.h>
+ 
+-const volatile u32 zero = 0;
+-
+ struct buddy __arena buddy;
++volatile u32 zero = 0;
+ 
+ int arena_fls(__u64 word)
+ {
+-- 
+2.55.0
+

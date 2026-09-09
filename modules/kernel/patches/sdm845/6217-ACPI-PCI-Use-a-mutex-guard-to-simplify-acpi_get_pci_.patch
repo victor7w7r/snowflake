@@ -1,0 +1,66 @@
+From 5d42a19dac27dc23b827b1a0ba88e76aa89be011 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Thu, 16 Jul 2026 16:04:43 +0200
+Subject: [PATCH 06217/15333] ACPI: PCI: Use a mutex guard to simplify
+ acpi_get_pci_dev()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use a mutex guard in acpi_get_pci_dev() for the physical_node_lock
+locking and drop local variable pci_dev that becomes redundant after
+that change.
+
+No intentional functional impact.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Link: https://patch.msgid.link/3056272.e9J7NaK4W3@rafael.j.wysocki
+---
+ drivers/acpi/pci_root.c | 11 ++++-------
+ 1 file changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/acpi/pci_root.c b/drivers/acpi/pci_root.c
+index 408ba12362a7..85202f2f5394 100644
+--- a/drivers/acpi/pci_root.c
++++ b/drivers/acpi/pci_root.c
+@@ -8,6 +8,7 @@
+ 
+ #define pr_fmt(fmt) "ACPI: " fmt
+ 
++#include <linux/cleanup.h>
+ #include <linux/kernel.h>
+ #include <linux/module.h>
+ #include <linux/init.h>
+@@ -307,24 +308,20 @@ struct pci_dev *acpi_get_pci_dev(acpi_handle handle)
+ {
+ 	struct acpi_device *adev = acpi_fetch_acpi_dev(handle);
+ 	struct acpi_device_physical_node *pn;
+-	struct pci_dev *pci_dev = NULL;
+ 
+ 	if (!adev)
+ 		return NULL;
+ 
+-	mutex_lock(&adev->physical_node_lock);
++	guard(mutex)(&adev->physical_node_lock);
+ 
+ 	list_for_each_entry(pn, &adev->physical_node_list, node) {
+ 		if (dev_is_pci(pn->dev)) {
+ 			get_device(pn->dev);
+-			pci_dev = to_pci_dev(pn->dev);
+-			break;
++			return to_pci_dev(pn->dev);
+ 		}
+ 	}
+ 
+-	mutex_unlock(&adev->physical_node_lock);
+-
+-	return pci_dev;
++	return NULL;
+ }
+ EXPORT_SYMBOL_GPL(acpi_get_pci_dev);
+ 
+-- 
+2.55.0
+

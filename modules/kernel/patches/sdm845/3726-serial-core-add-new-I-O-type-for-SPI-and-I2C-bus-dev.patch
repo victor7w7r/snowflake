@@ -1,0 +1,88 @@
+From 44b374622a3f93f2f9ce0a782f3fedb7cd758b6b Mon Sep 17 00:00:00 2001
+From: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Date: Thu, 21 May 2026 14:16:53 -0400
+Subject: [PATCH 03726/15333] serial: core: add new I/O type for SPI and I2C
+ bus devices
+
+I2C/SPI serial drivers don't use the following struct uart_port variables:
+    port->membase
+    port->mapbase
+    port->iobase
+
+However, they are forced to set membase to a non-zero value so that
+uart_configure_port() will succeed because of the following check:
+
+    /* If there isn't a port here, don't do anything further. */
+    if (!port->iobase && !port->mapbase && !port->membase)
+        return;
+
+Add a new I/O type for SPI and I2C bus devices to remove the need to
+implement the kind of above-mentioned ambiguous workarounds to make them
+work. Now that UART report functions are using uart_iotype_*() functions,
+no more irrelevant I/O information are being printed for UPIO_BUS iotypes.
+
+Signed-off-by: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Link: https://patch.msgid.link/20260521-tty-upio-v3-7-bf74567994a0@dimonoff.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/serial_core.c | 11 ++++++-----
+ include/linux/serial_core.h      |  1 +
+ include/uapi/linux/serial.h      |  1 +
+ 3 files changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/tty/serial/serial_core.c b/drivers/tty/serial/serial_core.c
+index 9b16480b374a..06d7f44643d6 100644
+--- a/drivers/tty/serial/serial_core.c
++++ b/drivers/tty/serial/serial_core.c
+@@ -2542,11 +2542,10 @@ uart_configure_port(struct uart_driver *drv, struct uart_state *state,
+ {
+ 	unsigned int flags;
+ 
+-	/*
+-	 * If there isn't a port here, don't do anything further.
+-	 */
+-	if (!port->iobase && !port->mapbase && !port->membase)
+-		return;
++	/* If there isn't a port here, don't do anything further. */
++	if (uart_iotype_mmio(port->iotype) || uart_iotype_io(port->iotype))
++		if (!port->iobase && !port->mapbase && !port->membase)
++			return;
+ 
+ 	/*
+ 	 * Now do the auto configuration stuff.  Note that config_port
+@@ -3249,6 +3248,8 @@ bool uart_match_port(const struct uart_port *port1,
+ 		return hub6_match_port(port1, port2);
+ 	else if (uart_iotype_mmio(port1->iotype))
+ 		return port1->mapbase == port2->mapbase;
++	else if (port1->iotype == UPIO_BUS)
++		return true;
+ 	else
+ 		return false;
+ }
+diff --git a/include/linux/serial_core.h b/include/linux/serial_core.h
+index 66b1459d53fc..c4cc4f66af4b 100644
+--- a/include/linux/serial_core.h
++++ b/include/linux/serial_core.h
+@@ -437,6 +437,7 @@ enum uart_iotype {
+ 	UPIO_TSI	= SERIAL_IO_TSI,	/* Tsi108/109 type IO */
+ 	UPIO_MEM32BE	= SERIAL_IO_MEM32BE,	/* 32b big endian */
+ 	UPIO_MEM16	= SERIAL_IO_MEM16,	/* 16b little endian */
++	UPIO_BUS	= SERIAL_IO_BUS,	/* Serial bus I/O access (ex: SPI, I2C) */
+ };
+ 
+ struct uart_port {
+diff --git a/include/uapi/linux/serial.h b/include/uapi/linux/serial.h
+index de9b4733607e..e6f61538fc28 100644
+--- a/include/uapi/linux/serial.h
++++ b/include/uapi/linux/serial.h
+@@ -72,6 +72,7 @@ struct serial_struct {
+ #define SERIAL_IO_TSI	  5
+ #define SERIAL_IO_MEM32BE 6
+ #define SERIAL_IO_MEM16	7
++#define SERIAL_IO_BUS	8
+ 
+ #define UART_CLEAR_FIFO		0x01
+ #define UART_USE_FIFO		0x02
+-- 
+2.55.0
+

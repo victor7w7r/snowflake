@@ -1,0 +1,62 @@
+From b765b508bdd5501386ceae6f96a70ddd45675f9e Mon Sep 17 00:00:00 2001
+From: Loic Poulain <loic.poulain@oss.qualcomm.com>
+Date: Mon, 27 Jul 2026 16:54:33 +0200
+Subject: [PATCH 11348/15333] dt-bindings: leds: nxp,pca963x: Fix reg maximum
+ for pca9635
+
+The pca9635 supports 16 LED channels, unlike the pca9634 which only
+supports 8. The allOf conditional grouped both chips under a single
+else branch capping reg at a maximum of 7.
+
+Give pca9634 its own if/then block and set maximum: 15 unconditionally
+in the top-level led@ node, making it the default for pca9635 and any
+future compatible. Also tighten the node name regex from [0-9a-f]+ to
+[0-9a-f] to match the single-digit hardware limit.
+
+Acked-by: Conor Dooley <conor.dooley@microchip.com>
+Signed-off-by: Loic Poulain <loic.poulain@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260727-monza-leds-v8-1-6e7e93d44dba@oss.qualcomm.com
+Signed-off-by: Lee Jones <lee@kernel.org>
+---
+ .../devicetree/bindings/leds/nxp,pca963x.yaml        | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/leds/nxp,pca963x.yaml b/Documentation/devicetree/bindings/leds/nxp,pca963x.yaml
+index 938d0e48fe51..4fda602912f7 100644
+--- a/Documentation/devicetree/bindings/leds/nxp,pca963x.yaml
++++ b/Documentation/devicetree/bindings/leds/nxp,pca963x.yaml
+@@ -62,14 +62,14 @@ properties:
+       open-drain, newer chips to totem pole).
+ 
+ patternProperties:
+-  "^led@[0-9a-f]+$":
++  "^led@[0-9a-f]$":
+     type: object
+     $ref: common.yaml#
+     unevaluatedProperties: false
+ 
+     properties:
+       reg:
+-        minimum: 0
++        maximum: 15
+ 
+     required:
+       - reg
+@@ -88,7 +88,13 @@ allOf:
+           properties:
+             reg:
+               maximum: 3
+-    else:
++  - if:
++      properties:
++        compatible:
++          contains:
++            enum:
++              - nxp,pca9634
++    then:
+       patternProperties:
+         "^led@[0-9a-f]+$":
+           properties:
+-- 
+2.55.0
+

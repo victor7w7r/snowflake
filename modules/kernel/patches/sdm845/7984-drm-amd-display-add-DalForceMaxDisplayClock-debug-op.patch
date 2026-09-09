@@ -1,0 +1,39 @@
+From a985e937c215fa24172f387eaa13a05843633330 Mon Sep 17 00:00:00 2001
+From: Justin Chen <Justin.Chen5@amd.com>
+Date: Tue, 12 May 2026 17:05:06 -0400
+Subject: [PATCH 07984/15333] drm/amd/display: add DalForceMaxDisplayClock
+ debug option to DML2
+
+[Why & How]
+need to apply the debug option check for max displayclk.
+
+Reviewed-by: Charlene Liu <charlene.liu@amd.com>
+Reviewed-by: Dillon Varone <dillon.varone@amd.com>
+Signed-off-by: Justin Chen <Justin.Chen5@amd.com>
+Signed-off-by: Matthew Stewart <matthew.stewart2@amd.com>
+Signed-off-by: Fangzhi Zuo <jerry.zuo@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/dc/dml2_0/dml21/dml21_wrapper_fpu.c  | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/dml21_wrapper_fpu.c b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/dml21_wrapper_fpu.c
+index 4e3d54c92e32..aba7dd65c539 100644
+--- a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/dml21_wrapper_fpu.c
++++ b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/dml21_wrapper_fpu.c
+@@ -155,6 +155,11 @@ static void dml21_calculate_rq_and_dlg_params(const struct dc *dc, struct dc_sta
+ 		context->bw_ctx.bw.dcn.clk.max_supported_dppclk_khz = in_ctx->v21.dml_init.soc_bb.clk_table.dppclk.clk_values_khz[0];
+ 	}
+ 
++	if (dc->config.forced_clocks || dc->debug.max_disp_clk) {
++		context->bw_ctx.bw.dcn.clk.bw_dispclk_khz = context->bw_ctx.bw.dcn.clk.max_supported_dispclk_khz;
++		context->bw_ctx.bw.dcn.clk.bw_dppclk_khz = context->bw_ctx.bw.dcn.clk.max_supported_dppclk_khz;
++	}
++
+ 	/* get global mall allocation */
+ 	if (dc->res_pool->funcs->calculate_mall_ways_from_bytes) {
+ 		context->bw_ctx.bw.dcn.clk.num_ways = dc->res_pool->funcs->calculate_mall_ways_from_bytes(dc, context->bw_ctx.bw.dcn.mall_subvp_size_bytes);
+-- 
+2.55.0
+

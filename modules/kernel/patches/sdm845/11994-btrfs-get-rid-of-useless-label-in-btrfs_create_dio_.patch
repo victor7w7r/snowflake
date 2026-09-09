@@ -1,0 +1,42 @@
+From a503aa0610177b0c0098546b68a7ecad69c6448b Mon Sep 17 00:00:00 2001
+From: Filipe Manana <fdmanana@suse.com>
+Date: Mon, 6 Jul 2026 12:41:33 +0100
+Subject: [PATCH 11994/15333] btrfs: get rid of useless label in
+ btrfs_create_dio_extent()
+
+There's no point in having a label where under it we do nothing but return
+a variable. So remove it and directly return where we used to goto.
+
+Reviewed-by: Johannes Thumshirn <johannes.thumshirn@wdc.com>
+Reviewed-by: Qu Wenruo <wqu@suse.com>
+Signed-off-by: Filipe Manana <fdmanana@suse.com>
+Reviewed-by: David Sterba <dsterba@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/direct-io.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/fs/btrfs/direct-io.c b/fs/btrfs/direct-io.c
+index 27d227f5bdc0..ed1779ccb4de 100644
+--- a/fs/btrfs/direct-io.c
++++ b/fs/btrfs/direct-io.c
+@@ -150,7 +150,7 @@ static struct extent_map *btrfs_create_dio_extent(struct btrfs_inode *inode,
+ 	if (type != BTRFS_ORDERED_NOCOW) {
+ 		em = btrfs_create_io_em(inode, start, file_extent, type);
+ 		if (IS_ERR(em))
+-			goto out;
++			return em;
+ 	}
+ 
+ 	ordered = btrfs_alloc_ordered_extent(inode, start, file_extent,
+@@ -167,7 +167,6 @@ static struct extent_map *btrfs_create_dio_extent(struct btrfs_inode *inode,
+ 		ASSERT(!dio_data->ordered);
+ 		dio_data->ordered = ordered;
+ 	}
+- out:
+ 
+ 	return em;
+ }
+-- 
+2.55.0
+

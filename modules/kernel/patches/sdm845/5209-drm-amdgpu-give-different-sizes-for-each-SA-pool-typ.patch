@@ -1,0 +1,63 @@
+From 16dda956266f9171491bd647b06b802ae945a726 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Christian=20K=C3=B6nig?= <christian.koenig@amd.com>
+Date: Wed, 6 May 2026 14:10:27 +0200
+Subject: [PATCH 05209/15333] drm/amdgpu: give different sizes for each SA pool
+ type
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The IMMEDIATE (page fault) and DIRECT (reset) pool should be used only
+very rarely and by a single thread.
+
+Saves roughly 1.25MiB of memory and GART space for each amdgpu device.
+
+Signed-off-by: Christian König <christian.koenig@amd.com>
+Reviewed-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c   | 7 ++++++-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h | 2 --
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c
+index 63f62c670df5..430665933635 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c
+@@ -351,6 +351,11 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned int num_ibs,
+  */
+ int amdgpu_ib_pool_init(struct amdgpu_device *adev)
+ {
++	const int sizes[AMDGPU_IB_POOL_MAX] = {
++		[AMDGPU_IB_POOL_DELAYED] = SZ_1M,
++		[AMDGPU_IB_POOL_IMMEDIATE] = SZ_128K,
++		[AMDGPU_IB_POOL_DIRECT] = SZ_512K
++	};
+ 	int r, i;
+ 
+ 	if (adev->ib_pool_ready)
+@@ -358,7 +363,7 @@ int amdgpu_ib_pool_init(struct amdgpu_device *adev)
+ 
+ 	for (i = 0; i < AMDGPU_IB_POOL_MAX; i++) {
+ 		r = amdgpu_sa_bo_manager_init(adev, &adev->ib_pools[i],
+-					      AMDGPU_IB_POOL_SIZE, 256,
++					      sizes[i], 256,
+ 					      AMDGPU_GEM_DOMAIN_GTT);
+ 		if (r)
+ 			goto error;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h
+index 9d3934b4f106..b11e9f244b53 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h
+@@ -68,8 +68,6 @@ enum amdgpu_ring_priority_level {
+ 
+ #define to_amdgpu_ring(s) container_of((s), struct amdgpu_ring, sched)
+ 
+-#define AMDGPU_IB_POOL_SIZE	(1024 * 1024)
+-
+ enum amdgpu_ring_type {
+ 	AMDGPU_RING_TYPE_GFX		= AMDGPU_HW_IP_GFX,
+ 	AMDGPU_RING_TYPE_COMPUTE	= AMDGPU_HW_IP_COMPUTE,
+-- 
+2.55.0
+

@@ -1,0 +1,52 @@
+From faeaddd353fe8e2299dff417e2018cba0edbf03b Mon Sep 17 00:00:00 2001
+From: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Date: Thu, 25 Jun 2026 22:19:51 -0700
+Subject: [PATCH 11934/15333] Bluetooth: hci_sync: Introduce __hci_reset_sync()
+ for device drivers
+
+Several vendor drivers have a requirement to send a synchronous raw HCI
+reset with HCI_INIT_TIMEOUT.
+
+Add a dedicated __hci_reset_sync() for them to use.
+
+Signed-off-by: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ include/net/bluetooth/hci_sync.h | 1 +
+ net/bluetooth/hci_sync.c         | 8 ++++++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/include/net/bluetooth/hci_sync.h b/include/net/bluetooth/hci_sync.h
+index 818e62d9fe9e..0756d6fe77d4 100644
+--- a/include/net/bluetooth/hci_sync.h
++++ b/include/net/bluetooth/hci_sync.h
+@@ -59,6 +59,7 @@ int __hci_cmd_sync_status(struct hci_dev *hdev, u16 opcode, u32 plen,
+ int __hci_cmd_sync_status_sk(struct hci_dev *hdev, u16 opcode, u32 plen,
+ 			     const void *param, u8 event, u32 timeout,
+ 			     struct sock *sk);
++int __hci_reset_sync(struct hci_dev *hdev);
+ int hci_cmd_sync_status(struct hci_dev *hdev, u16 opcode, u32 plen,
+ 			const void *param, u32 timeout);
+ 
+diff --git a/net/bluetooth/hci_sync.c b/net/bluetooth/hci_sync.c
+index 3660120b26a6..00857fc3235b 100644
+--- a/net/bluetooth/hci_sync.c
++++ b/net/bluetooth/hci_sync.c
+@@ -3766,6 +3766,14 @@ int hci_reset_sync(struct hci_dev *hdev)
+ 	return 0;
+ }
+ 
++/* Send a raw HCI reset for use by vendor drivers */
++int __hci_reset_sync(struct hci_dev *hdev)
++{
++	return __hci_cmd_sync_status(hdev, HCI_OP_RESET, 0, NULL,
++				     HCI_INIT_TIMEOUT);
++}
++EXPORT_SYMBOL(__hci_reset_sync);
++
+ static int hci_init0_sync(struct hci_dev *hdev)
+ {
+ 	int err;
+-- 
+2.55.0
+

@@ -1,0 +1,268 @@
+From 3d078657cf8c8b270136423eee2732842a688693 Mon Sep 17 00:00:00 2001
+From: Carlos Jones Jr <carlosjr.jones@analog.com>
+Date: Wed, 22 Jul 2026 09:29:31 +0800
+Subject: [PATCH 12895/15333] hwmon: (pmbus/max34440): Add support for MAX34452
+
+Add support for Maxim MAX34452 PMBus 16-Channel V/I Monitor and
+12-Channel Sequencer/Marginer. The device is similar to MAX34451
+and shares the same configuration function.
+
+The MAX34452 supports:
+- 16 configurable voltage/current monitoring channels
+- 5 temperature sensors (pages 16-20)
+- Dynamic channel configuration via MFR_CHANNEL_CONFIG
+- IOUT average monitoring
+
+Signed-off-by: Carlos Jones Jr <carlosjr.jones@analog.com>
+Co-Developed by: Alexis Czezar Torreno <alexisczezar.torreno@analog.com>
+Signed-off-by: Alexis Czezar Torreno <alexisczezar.torreno@analog.com>
+Link: https://lore.kernel.org/r/20260722-max34451_fixes-v2-3-bbddb18ec1d6@analog.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ Documentation/hwmon/max34440.rst | 26 +++++++----
+ drivers/hwmon/pmbus/Kconfig      |  5 ++-
+ drivers/hwmon/pmbus/max34440.c   | 75 ++++++++++++++++++++++++--------
+ 3 files changed, 78 insertions(+), 28 deletions(-)
+
+diff --git a/Documentation/hwmon/max34440.rst b/Documentation/hwmon/max34440.rst
+index e7421f4dbf38..866f22b88e9b 100644
+--- a/Documentation/hwmon/max34440.rst
++++ b/Documentation/hwmon/max34440.rst
+@@ -65,6 +65,16 @@ Supported chips:
+ 
+     Datasheet: https://www.analog.com/media/en/technical-documentation/data-sheets/max34451.pdf
+ 
++  * Maxim MAX34452
++
++    PMBus 16-Channel V/I Monitor and 12-Channel Sequencer/Marginer
++
++    Prefixes: 'max34452'
++
++    Addresses scanned: -
++
++    Datasheet: -
++
+   * Maxim MAX34460
+ 
+     PMBus 12-Channel Voltage Monitor & Sequencer
+@@ -94,11 +104,11 @@ Description
+ This driver supports multiple devices: hardware monitoring for Maxim MAX34440
+ PMBus 6-Channel Power-Supply Manager, MAX34441 PMBus 5-Channel Power-Supply
+ Manager and Intelligent Fan Controller, and MAX34446 PMBus Power-Supply Data
+-Logger; PMBus Voltage Monitor and Sequencers for MAX34451, MAX34460, and
+-MAX34461; PMBus DC/DC Power Module ADPM12160, ADPM12200, and ADPM12250. The
+-MAX34451 supports monitoring voltage or current of 12 channels based on GIN
+-pins. The MAX34460 supports 12 voltage channels, and the MAX34461 supports 16
+-voltage channels. The ADPM12160, ADPM12200, and ADPM12250 also monitors both
++Logger; PMBus Voltage Monitor and Sequencers for MAX34451, MAX34452, MAX34460,
++and MAX34461; PMBus DC/DC Power Module ADPM12160, ADPM12200, and ADPM12250. The
++MAX34451 and MAX34452 support monitoring voltage or current of 16 channels based
++on GIN pins. The MAX34460 supports 12 voltage channels, and the MAX34461 supports
++16 voltage channels. The ADPM12160, ADPM12200, and ADPM12250 also monitor both
+ input and output of voltage and current.
+ 
+ The driver is a client driver to the core PMBus driver. Please see
+@@ -171,7 +181,7 @@ curr[1-6]_crit		Critical maximum current. From IOUT_OC_FAULT_LIMIT
+ 			register.
+ curr[1-6]_max_alarm	Current high alarm. From IOUT_OC_WARNING status.
+ curr[1-6]_crit_alarm	Current critical high alarm. From IOUT_OC_FAULT status.
+-curr[1-4]_average	Historical average current (MAX34446/34451 only).
++curr[1-4]_average	Historical average current (MAX34446/34451/34452 only).
+ curr[1-6]_highest	Historical maximum current.
+ curr[1-6]_reset_history	Write any value to reset history.
+ ======================= ========================================================
+@@ -223,7 +233,7 @@ temp[1-8]_reset_history	Write any value to reset history.
+ 
+ .. note::
+ 
+-   - MAX34451 supports attribute groups in[1-16] (or curr[1-16] based on
+-     input pins) and temp[1-5].
++   - MAX34451 and MAX34452 support attribute groups in[1-16] (or curr[1-16]
++     based on input pins) and temp[1-5].
+    - MAX34460 supports attribute groups in[1-12] and temp[1-5].
+    - MAX34461 supports attribute groups in[1-16] and temp[1-5].
+diff --git a/drivers/hwmon/pmbus/Kconfig b/drivers/hwmon/pmbus/Kconfig
+index ca312be58ed5..9b4bfdd00310 100644
+--- a/drivers/hwmon/pmbus/Kconfig
++++ b/drivers/hwmon/pmbus/Kconfig
+@@ -434,8 +434,9 @@ config SENSORS_MAX34440
+ 	tristate "Maxim MAX34440 and compatibles"
+ 	help
+ 	  If you say yes here you get hardware monitoring support for Maxim
+-	  MAX34440, MAX34441, MAX34446, MAX34451, MAX34460, and MAX34461.
+-	  Other compatible are ADPM12160, and ADPM12200.
++	  MAX34440, MAX34441, MAX34446, MAX34451, MAX34452, MAX34460, and
++	  MAX34461. Other compatible devices are ADPM12160, ADPM12200, and
++	  ADPM12250.
+ 
+ 	  This driver can also be built as a module. If so, the module will
+ 	  be called max34440.
+diff --git a/drivers/hwmon/pmbus/max34440.c b/drivers/hwmon/pmbus/max34440.c
+index 81514727565f..866d25ae8971 100644
+--- a/drivers/hwmon/pmbus/max34440.c
++++ b/drivers/hwmon/pmbus/max34440.c
+@@ -23,6 +23,7 @@ enum chips {
+ 	max34441,
+ 	max34446,
+ 	max34451,
++	max34452,
+ 	max34460,
+ 	max34461,
+ };
+@@ -106,16 +107,21 @@ static int max34440_read_word_data(struct i2c_client *client, int page,
+ 	case PMBUS_UT_FAULT_LIMIT:
+ 	case PMBUS_MFR_MAX_TEMP_1:
+ 		/*
+-		 * MAX34451/ADPM family do not support VIN/IIN limit registers,
+-		 * manufacturer-specific min/max registers, or undercurrent/
+-		 * undertemperature fault limits. Accessing these triggers CML
+-		 * error and asserts ALERT.
++		 * MAX34451/MAX34452/ADPM family do not support VIN/IIN limit
++		 * registers, manufacturer-specific min/max registers, or
++		 * undercurrent/undertemperature fault limits. Accessing these
++		 * triggers CML error and asserts ALERT.
+ 		 */
+-		if (data->id == max34451 || data->id == adpm12160 ||
+-		    data->id == adpm12200 || data->id == adpm12250)
++		if (data->id == max34451 || data->id == max34452 ||
++		    data->id == adpm12160 || data->id == adpm12200 ||
++		    data->id == adpm12250)
+ 			return -ENXIO;
+ 		ret = -ENODATA;
+ 		break;
++	case PMBUS_VOUT_OV_WARN_LIMIT:
++		if (data->id == max34452)
++			return -ENXIO;
++		return -ENODATA;
+ 	case PMBUS_VIRT_READ_VOUT_MIN:
+ 		ret = pmbus_read_word_data(client, page, phase,
+ 					   MAX34440_MFR_VOUT_MIN);
+@@ -126,8 +132,8 @@ static int max34440_read_word_data(struct i2c_client *client, int page,
+ 		break;
+ 	case PMBUS_VIRT_READ_IOUT_AVG:
+ 		if (data->id != max34446 && data->id != max34451 &&
+-		    data->id != adpm12160 && data->id != adpm12200 &&
+-		    data->id != adpm12250)
++		    data->id != max34452 && data->id != adpm12160 &&
++		    data->id != adpm12200 && data->id != adpm12250)
+ 			return -ENXIO;
+ 		ret = pmbus_read_word_data(client, page, phase,
+ 					   MAX34446_MFR_IOUT_AVG);
+@@ -192,6 +198,10 @@ static int max34440_write_word_data(struct i2c_client *client, int page,
+ 		ret = pmbus_write_word_data(client, page, data->iout_oc_warn_limit,
+ 					    word);
+ 		break;
++	case PMBUS_VOUT_OV_WARN_LIMIT:
++		if (data->id == max34452)
++			return -ENXIO;
++		return -ENODATA;
+ 	case PMBUS_VIRT_RESET_POUT_HISTORY:
+ 		ret = pmbus_write_word_data(client, page,
+ 					    MAX34446_MFR_POUT_PEAK, 0);
+@@ -212,8 +222,8 @@ static int max34440_write_word_data(struct i2c_client *client, int page,
+ 		ret = pmbus_write_word_data(client, page,
+ 					    MAX34440_MFR_IOUT_PEAK, 0);
+ 		if (!ret && (data->id == max34446 || data->id == max34451 ||
+-			     data->id == adpm12160 || data->id == adpm12200 ||
+-			     data->id == adpm12250))
++			     data->id == max34452 || data->id == adpm12160 ||
++			     data->id == adpm12200 || data->id == adpm12250))
+ 			ret = pmbus_write_word_data(client, page,
+ 					MAX34446_MFR_IOUT_AVG, 0);
+ 
+@@ -281,12 +291,13 @@ static int max34451_read_byte_data(struct i2c_client *client, int page, int reg)
+ 	case PMBUS_STATUS_BYTE:
+ 	case PMBUS_STATUS_OTHER:
+ 		/*
+-		 * MAX34451/ADPM family do not support STATUS_BYTE or
++		 * MAX34451/MAX34452/ADPM family do not support STATUS_BYTE or
+ 		 * STATUS_OTHER registers. Accessing them triggers CML
+ 		 * error and asserts ALERT.
+ 		 */
+-		if (data->id == max34451 || data->id == adpm12160 ||
+-		    data->id == adpm12200 || data->id == adpm12250)
++		if (data->id == max34451 || data->id == max34452 ||
++		    data->id == adpm12160 || data->id == adpm12200 ||
++		    data->id == adpm12250)
+ 			return -ENXIO;
+ 		return -ENODATA;
+ 	default:
+@@ -304,12 +315,13 @@ static int max34451_write_byte_data(struct i2c_client *client, int page,
+ 	case PMBUS_STATUS_BYTE:
+ 	case PMBUS_STATUS_OTHER:
+ 		/*
+-		 * MAX34451/ADPM family do not support STATUS_BYTE or
++		 * MAX34451/MAX34452/ADPM family do not support STATUS_BYTE or
+ 		 * STATUS_OTHER registers. Writing to them triggers CML
+ 		 * error and asserts ALERT.
+ 		 */
+-		if (data->id == max34451 || data->id == adpm12160 ||
+-		    data->id == adpm12200 || data->id == adpm12250)
++		if (data->id == max34451 || data->id == max34452 ||
++		    data->id == adpm12160 || data->id == adpm12200 ||
++		    data->id == adpm12250)
+ 			return -ENXIO;
+ 		return -ENODATA;
+ 	default:
+@@ -340,7 +352,7 @@ static int max34451_set_supported_funcs(struct i2c_client *client,
+ 	if (rv < 0)
+ 		return rv;
+ 
+-	if (rv >= MAX34451ETNA6_MFR_REV) {
++	if (data->id == max34451 && rv >= MAX34451ETNA6_MFR_REV) {
+ 		max34451_na6 = true;
+ 		data->info.format[PSC_VOLTAGE_IN] = direct;
+ 		data->info.format[PSC_CURRENT_IN] = direct;
+@@ -678,6 +690,32 @@ static struct pmbus_driver_info max34440_info[] = {
+ 		.write_word_data = max34440_write_word_data,
+ 		.page_change_delay = MAX34440_PAGE_CHANGE_DELAY,
+ 	},
++	[max34452] = {
++		.pages = 21,
++		.format[PSC_VOLTAGE_OUT] = direct,
++		.format[PSC_TEMPERATURE] = direct,
++		.format[PSC_CURRENT_OUT] = direct,
++		.m[PSC_VOLTAGE_OUT] = 1,
++		.b[PSC_VOLTAGE_OUT] = 0,
++		.R[PSC_VOLTAGE_OUT] = 3,
++		.m[PSC_CURRENT_OUT] = 1,
++		.b[PSC_CURRENT_OUT] = 0,
++		.R[PSC_CURRENT_OUT] = 2,
++		.m[PSC_TEMPERATURE] = 1,
++		.b[PSC_TEMPERATURE] = 0,
++		.R[PSC_TEMPERATURE] = 2,
++		/* func 0-15 is set dynamically before probing */
++		.func[16] = PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP,
++		.func[17] = PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP,
++		.func[18] = PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP,
++		.func[19] = PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP,
++		.func[20] = PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP,
++		.read_byte_data = max34451_read_byte_data,
++		.read_word_data = max34440_read_word_data,
++		.write_byte_data = max34451_write_byte_data,
++		.write_word_data = max34440_write_word_data,
++		.page_change_delay = MAX34440_PAGE_CHANGE_DELAY,
++	},
+ 	[max34460] = {
+ 		.pages = 18,
+ 		.format[PSC_VOLTAGE_OUT] = direct,
+@@ -761,7 +799,7 @@ static int max34440_probe(struct i2c_client *client)
+ 	data->iout_oc_fault_limit = MAX34440_IOUT_OC_FAULT_LIMIT;
+ 	data->iout_oc_warn_limit = MAX34440_IOUT_OC_WARN_LIMIT;
+ 
+-	if (data->id == max34451) {
++	if (data->id == max34451 || data->id == max34452) {
+ 		rv = max34451_set_supported_funcs(client, data);
+ 		if (rv)
+ 			return rv;
+@@ -782,6 +820,7 @@ static const struct i2c_device_id max34440_id[] = {
+ 	{ .name = "max34441", .driver_data = max34441 },
+ 	{ .name = "max34446", .driver_data = max34446 },
+ 	{ .name = "max34451", .driver_data = max34451 },
++	{ .name = "max34452", .driver_data = max34452 },
+ 	{ .name = "max34460", .driver_data = max34460 },
+ 	{ .name = "max34461", .driver_data = max34461 },
+ 	{ }
+-- 
+2.55.0
+

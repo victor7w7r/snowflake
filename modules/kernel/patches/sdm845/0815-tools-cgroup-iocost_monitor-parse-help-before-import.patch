@@ -1,0 +1,51 @@
+From a2ba161d17836d6c81aca32a35e75c913207142b Mon Sep 17 00:00:00 2001
+From: Yousef Alhouseen <alhouseenyousef@gmail.com>
+Date: Wed, 24 Jun 2026 14:36:52 +0200
+Subject: [PATCH 00815/15333] tools/cgroup: iocost_monitor: parse help before
+ importing drgn
+
+iocost_monitor.py imports drgn before argparse can handle "-h" or report
+argument errors. That makes basic usage help fail on systems where drgn is
+not installed.
+
+Parse arguments before importing drgn so the help and argument-error paths
+work without the runtime debugging dependency. Normal execution still
+imports drgn before reading kernel state.
+
+Signed-off-by: Yousef Alhouseen <alhouseenyousef@gmail.com>
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ tools/cgroup/iocost_monitor.py | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/tools/cgroup/iocost_monitor.py b/tools/cgroup/iocost_monitor.py
+index 933c750b319b..bdd78ba271b0 100644
+--- a/tools/cgroup/iocost_monitor.py
++++ b/tools/cgroup/iocost_monitor.py
+@@ -15,11 +15,6 @@ import time
+ import json
+ import math
+ 
+-import drgn
+-from drgn import container_of
+-from drgn.helpers.linux.list import list_for_each_entry,list_empty
+-from drgn.helpers.linux.radixtree import radix_tree_for_each,radix_tree_lookup
+-
+ import argparse
+ parser = argparse.ArgumentParser(description=desc,
+                                  formatter_class=argparse.RawTextHelpFormatter)
+@@ -34,6 +29,11 @@ parser.add_argument('--json', action='store_true',
+                     help='Output in json')
+ args = parser.parse_args()
+ 
++import drgn
++from drgn import container_of
++from drgn.helpers.linux.list import list_for_each_entry,list_empty
++from drgn.helpers.linux.radixtree import radix_tree_for_each,radix_tree_lookup
++
+ def err(s):
+     print(s, file=sys.stderr, flush=True)
+     sys.exit(1)
+-- 
+2.55.0
+

@@ -1,0 +1,43 @@
+From c3a280ff728a9039c72cd64ad0b32bc3a28c25b2 Mon Sep 17 00:00:00 2001
+From: Yohei Kojima <yk@y-koj.net>
+Date: Thu, 11 Jun 2026 22:50:16 +0900
+Subject: [PATCH 05753/15333] debugfs: warn if file creation failed due to
+ uninitialized debugfs
+
+Improve debugfs_start_creating() to warn if it was used before debugfs
+initialization. It silently returned ERR_PTR(-ENOENT) before, but it is
+hard to find the cause of failure especially if it was called by
+debugfs_create_dir(), because the document of the function says:
+
+> NOTE: it's expected that most callers should _ignore_ the errors returned
+> by this function. Other debugfs functions handle the fact that the "dentry"
+> passed to them could be an error and they don't crash in that case.
+> Drivers should generally work fine even if debugfs fails to init anyway.
+
+Signed-off-by: Yohei Kojima <yk@y-koj.net>
+Link: https://patch.msgid.link/6d1dc775f7d5e754d734907514534054f682bac5.1781171918.git.yk@y-koj.net
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ fs/debugfs/inode.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/fs/debugfs/inode.c b/fs/debugfs/inode.c
+index 4598142355b9..e054e62919ec 100644
+--- a/fs/debugfs/inode.c
++++ b/fs/debugfs/inode.c
+@@ -368,8 +368,11 @@ static struct dentry *debugfs_start_creating(const char *name,
+ 	if (!debugfs_enabled)
+ 		return ERR_PTR(-EPERM);
+ 
+-	if (!debugfs_initialized())
++	if (!debugfs_initialized()) {
++		pr_err("Unable to create file '%s', debugfs is not initialized yet\n",
++		       name);
+ 		return ERR_PTR(-ENOENT);
++	}
+ 
+ 	pr_debug("creating file '%s'\n", name);
+ 
+-- 
+2.55.0
+

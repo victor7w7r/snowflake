@@ -1,0 +1,67 @@
+From 22087efb7846230b7c7456b3a7630deb3325aa8b Mon Sep 17 00:00:00 2001
+From: Robin Chen <robin.chen@amd.com>
+Date: Sun, 31 May 2026 16:55:26 +0800
+Subject: [PATCH 00474/15333] drm/amd/display: Add PSR Active VTotal Control
+ capability
+
+[WHY]
+The PSRSU-RC capability should be populated in DC during edp detection.
+
+Reviewed-by: Aric Cyr <aric.cyr@amd.com>
+Signed-off-by: Robin Chen <robin.chen@amd.com>
+Signed-off-by: Chenyu Chen <chen-yu.chen@amd.com>
+Tested-by: Daniel Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/display/dc/dc_dp_types.h                | 1 +
+ .../drm/amd/display/dc/link/protocols/link_dp_capability.c  | 6 +++++-
+ drivers/gpu/drm/amd/display/include/ddc_service_types.h     | 1 +
+ 3 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/dc_dp_types.h b/drivers/gpu/drm/amd/display/dc/dc_dp_types.h
+index fbef0dc743ff..d0ba9ad67a3e 100644
+--- a/drivers/gpu/drm/amd/display/dc/dc_dp_types.h
++++ b/drivers/gpu/drm/amd/display/dc/dc_dp_types.h
+@@ -1146,6 +1146,7 @@ struct edp_psr_info {
+ 	union edp_psr_dpcd_caps psr_dpcd_caps;
+ 	uint8_t psr2_su_y_granularity_cap;
+ 	uint8_t force_psrsu_cap;
++	uint8_t psr_active_vtotal_control_cap;
+ };
+ 
+ struct replay_info {
+diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
+index 47abb4066709..d47aefecfc2d 100644
+--- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
++++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
+@@ -2242,10 +2242,14 @@ void detect_edp_sink_caps(struct dc_link *link)
+ 	/*
+ 	 * ALPM is only valid for eDP v1.4 or higher.
+ 	 */
+-	if (link->dpcd_caps.dpcd_rev.raw >= DP_EDP_14)
++	if (link->dpcd_caps.dpcd_rev.raw >= DP_EDP_14) {
+ 		core_link_read_dpcd(link, DP_RECEIVER_ALPM_CAP,
+ 			&link->dpcd_caps.alpm_caps.raw,
+ 			sizeof(link->dpcd_caps.alpm_caps.raw));
++		core_link_read_dpcd(link, DP_SINK_PSR_ACTIVE_VTOTAL_CONTROL_CAP,
++			&link->dpcd_caps.psr_info.psr_active_vtotal_control_cap,
++			sizeof(link->dpcd_caps.psr_info.psr_active_vtotal_control_cap));
++	}
+ 
+ 	/*
+ 	 * Read REPLAY info
+diff --git a/drivers/gpu/drm/amd/display/include/ddc_service_types.h b/drivers/gpu/drm/amd/display/include/ddc_service_types.h
+index 53210e3aa0e0..827e9bd7c5cf 100644
+--- a/drivers/gpu/drm/amd/display/include/ddc_service_types.h
++++ b/drivers/gpu/drm/amd/display/include/ddc_service_types.h
+@@ -45,6 +45,7 @@
+ #define DP_DEVICE_ID_BA4159 0xBA4159
+ #define DP_FORCE_PSRSU_CAPABILITY 0x40F
+ 
++#define DP_SINK_PSR_ACTIVE_VTOTAL_CONTROL_CAP	0x370
+ #define DP_SINK_PSR_ACTIVE_VTOTAL		0x373
+ #define DP_SINK_PSR_ACTIVE_VTOTAL_CONTROL_MODE	0x375
+ #define DP_SOURCE_PSR_ACTIVE_VTOTAL		0x376
+-- 
+2.55.0
+

@@ -1,0 +1,57 @@
+From bde4905c102f19151228c86f82a7fcf50f11b160 Mon Sep 17 00:00:00 2001
+From: Arnd Bergmann <arnd@arndb.de>
+Date: Mon, 21 Jul 2025 21:56:49 +0200
+Subject: [PATCH 06963/15333] Input: soc_button_array - select
+ CONFIG_GPIOLIB_LEGACY
+
+This driver converts information from ACPI in x86 based tablets and
+laptops into platform_data for the gpio_keys driver, using the obsolete
+gpio number based interfaces.
+
+This should really be converted to some other method, but since the
+conversion is nontrivial, have this one select GPIOLIB_LEGACY for the
+time being.
+
+This enables turning GPIOLIB_LEGACY off by default on most kernel
+builds. Since the driver is only used on x86 portables, add a CONFIG_X86
+dependency, which means non-x86 allmodconfig builds usuallly build
+without the legacy gpio support.
+
+Link: https://lore.kernel.org/all/ah-1z9LhVG0wtfBw@google.com/
+Acked-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Acked-by: Dmitry Torokhov <dmitry.torokhov@gmail.com> # for input
+Signed-off-by: Arnd Bergmann <arnd@arndb.de>
+---
+ drivers/input/misc/Kconfig            | 3 +++
+ drivers/input/misc/soc_button_array.c | 1 -
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/input/misc/Kconfig b/drivers/input/misc/Kconfig
+index 1f6c57dba030..9c66e3a67127 100644
+--- a/drivers/input/misc/Kconfig
++++ b/drivers/input/misc/Kconfig
+@@ -892,6 +892,9 @@ config INPUT_IDEAPAD_SLIDEBAR
+ config INPUT_SOC_BUTTON_ARRAY
+ 	tristate "Windows-compatible SoC Button Array"
+ 	depends on KEYBOARD_GPIO && ACPI
++	depends on X86
++	depends on GPIOLIB
++	select GPIOLIB_LEGACY
+ 	help
+ 	  Say Y here if you have a SoC-based tablet that originally runs
+ 	  Windows 8 or a Microsoft Surface Book 2, Pro 5, Laptop 1 or later.
+diff --git a/drivers/input/misc/soc_button_array.c b/drivers/input/misc/soc_button_array.c
+index b8cad415c62c..a6c984205123 100644
+--- a/drivers/input/misc/soc_button_array.c
++++ b/drivers/input/misc/soc_button_array.c
+@@ -15,7 +15,6 @@
+ #include <linux/dmi.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/gpio_keys.h>
+-#include <linux/gpio.h>
+ #include <linux/platform_device.h>
+ 
+ static bool use_low_level_irq;
+-- 
+2.55.0
+

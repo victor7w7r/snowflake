@@ -1,0 +1,50 @@
+From fe34dc1fa082243f087d8d0aea287b2c04d813b6 Mon Sep 17 00:00:00 2001
+From: Jiri Pirko <jiri@nvidia.com>
+Date: Wed, 1 Jul 2026 14:40:13 +0200
+Subject: [PATCH 06723/15333] RDMA/uverbs: Add SRQ buffer UMEM attribute
+
+Apply the per-attribute UMEM model to the SRQ create method. Add an
+optional UMEM attribute that backs the SRQ WQE buffer, so userspace can
+supply it as either a VA or a dma-buf through a single descriptor,
+consistent with the CQ and QP create methods.
+
+mlx5 is the only driver that pins an SRQ WQE buffer via umem; it maps a
+single ucmd->buf_addr region through this attribute. No other driver
+implements a user SRQ buffer, so none of them use the attribute.
+
+Signed-off-by: Jiri Pirko <jiri@nvidia.com>
+Link: https://patch.msgid.link/20260701124015.64350-2-jiri@resnulli.us
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/core/uverbs_std_types_srq.c | 2 ++
+ include/uapi/rdma/ib_user_ioctl_cmds.h         | 1 +
+ 2 files changed, 3 insertions(+)
+
+diff --git a/drivers/infiniband/core/uverbs_std_types_srq.c b/drivers/infiniband/core/uverbs_std_types_srq.c
+index e5513f828bdc..0421bdd225df 100644
+--- a/drivers/infiniband/core/uverbs_std_types_srq.c
++++ b/drivers/infiniband/core/uverbs_std_types_srq.c
+@@ -192,6 +192,8 @@ DECLARE_UVERBS_NAMED_METHOD(
+ 	UVERBS_ATTR_PTR_OUT(UVERBS_ATTR_CREATE_SRQ_RESP_SRQ_NUM,
+ 			   UVERBS_ATTR_TYPE(u32),
+ 			   UA_OPTIONAL),
++	UVERBS_ATTR_UMEM(UVERBS_ATTR_CREATE_SRQ_BUF_UMEM,
++			 UA_OPTIONAL),
+ 	UVERBS_ATTR_UHW());
+ 
+ static int UVERBS_HANDLER(UVERBS_METHOD_SRQ_DESTROY)(
+diff --git a/include/uapi/rdma/ib_user_ioctl_cmds.h b/include/uapi/rdma/ib_user_ioctl_cmds.h
+index 6a3d59d03f54..816b3107464f 100644
+--- a/include/uapi/rdma/ib_user_ioctl_cmds.h
++++ b/include/uapi/rdma/ib_user_ioctl_cmds.h
+@@ -204,6 +204,7 @@ enum uverbs_attrs_create_srq_cmd_attr_ids {
+ 	UVERBS_ATTR_CREATE_SRQ_RESP_MAX_WR,
+ 	UVERBS_ATTR_CREATE_SRQ_RESP_MAX_SGE,
+ 	UVERBS_ATTR_CREATE_SRQ_RESP_SRQ_NUM,
++	UVERBS_ATTR_CREATE_SRQ_BUF_UMEM,
+ };
+ 
+ enum uverbs_attrs_destroy_srq_cmd_attr_ids {
+-- 
+2.55.0
+

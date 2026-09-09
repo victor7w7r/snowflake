@@ -1,0 +1,75 @@
+From 192c6220e14d5b7924f116680bdf073179cde025 Mon Sep 17 00:00:00 2001
+From: Jerome Brunet <jbrunet@baylibre.com>
+Date: Mon, 6 Jul 2026 11:32:12 +0200
+Subject: [PATCH 02631/15333] clk: sunxi-ng: sun6i-rtc: clean up DT usage
+
+With sun6i-rtc compatible devices, the "ext-osc32k" clock input
+is optional for the devices that support this input (r329 and onward).
+
+Probably preparing for older SoC support, the driver does something funny
+when parsing DT. It check if "ext-osc32k" is present in the clock-names and
+if it is not, it uses the first clock as "ext-osc32k". This clock will
+actually be the rtc bus clock so what the driver does is wrong.
+
+At the moment, the driver does not support the older SoCs that would have
+an external 32k clock provided on index #0 so just remove this quirk.
+
+Reviewed-by: Chen-Yu Tsai <wens@kernel.org>
+Signed-off-by: Jerome Brunet <jbrunet@baylibre.com>
+Link: https://patch.msgid.link/20260706-a733-rtc-v4-4-f330728db3d3@baylibre.com
+Signed-off-by: Chen-Yu Tsai <wens@kernel.org>
+---
+ drivers/clk/sunxi-ng/ccu-sun6i-rtc.c | 23 +++--------------------
+ 1 file changed, 3 insertions(+), 20 deletions(-)
+
+diff --git a/drivers/clk/sunxi-ng/ccu-sun6i-rtc.c b/drivers/clk/sunxi-ng/ccu-sun6i-rtc.c
+index f6bfeba009e8..0f528bfaed00 100644
+--- a/drivers/clk/sunxi-ng/ccu-sun6i-rtc.c
++++ b/drivers/clk/sunxi-ng/ccu-sun6i-rtc.c
+@@ -191,10 +191,8 @@ static struct ccu_common iosc_32k_clk = {
+ 					 CLK_GET_RATE_NOCACHE),
+ };
+ 
+-static const struct clk_hw *ext_osc32k[] = { NULL }; /* updated during probe */
+-
+-static SUNXI_CCU_GATE_HWS(ext_osc32k_gate_clk, "ext-osc32k-gate",
+-			  ext_osc32k, 0x0, BIT(4), 0);
++static SUNXI_CCU_GATE_FW(ext_osc32k_gate_clk, "ext-osc32k-gate",
++			  "ext-osc32k", 0x0, BIT(4), 0);
+ 
+ static const struct clk_hw *osc32k_parents[] = {
+ 	&iosc_32k_clk.hw,
+@@ -352,7 +350,6 @@ MODULE_DEVICE_TABLE(of, sun6i_rtc_ccu_match);
+ int sun6i_rtc_ccu_probe(struct device *dev, void __iomem *reg)
+ {
+ 	const struct sun6i_rtc_match_data *data;
+-	struct clk *ext_osc32k_clk = NULL;
+ 	const struct of_device_id *match;
+ 
+ 	/* This driver is only used for newer variants of the hardware. */
+@@ -363,21 +360,7 @@ int sun6i_rtc_ccu_probe(struct device *dev, void __iomem *reg)
+ 	data = match->data;
+ 	have_iosc_calibration = data->have_iosc_calibration;
+ 
+-	if (data->have_ext_osc32k) {
+-		const char *fw_name;
+-
+-		/* ext-osc32k was the only input clock in the old binding. */
+-		fw_name = of_property_present(dev->of_node, "clock-names")
+-			? "ext-osc32k" : NULL;
+-		ext_osc32k_clk = devm_clk_get_optional(dev, fw_name);
+-		if (IS_ERR(ext_osc32k_clk))
+-			return PTR_ERR(ext_osc32k_clk);
+-	}
+-
+-	if (ext_osc32k_clk) {
+-		/* Link ext-osc32k-gate to its parent. */
+-		*ext_osc32k = __clk_get_hw(ext_osc32k_clk);
+-	} else {
++	if (!data->have_ext_osc32k) {
+ 		/* ext-osc32k-gate is an orphan, so do not register it. */
+ 		sun6i_rtc_ccu_hw_clks.hws[CLK_EXT_OSC32K_GATE] = NULL;
+ 		osc32k_init_data.num_parents = 1;
+-- 
+2.55.0
+

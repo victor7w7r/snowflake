@@ -1,0 +1,52 @@
+From dfa2f2378fb18c1917e097d710b55ae16442c3e3 Mon Sep 17 00:00:00 2001
+From: Ankit Khushwaha <ankitkhushwaha.linux@gmail.com>
+Date: Mon, 20 Apr 2026 23:05:44 +0530
+Subject: [PATCH 02525/15333] selftests/futex: Remove static keyword from
+ 'head'
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+'head' is defined as 'static struct robust_list_head' that stores the
+local variable of 'struct lock_struct a' raising the Wdangling-pointer
+warning.
+
+robust_list.c: In function ‘child_circular_list’:
+robust_list.c:522:24: warning: storing the address of local variable
+‘a’ in ‘head.list.next’ [-Wdangling-pointer=]
+
+  522 |         head.list.next = &a.list;
+      |         ~~~~~~~~~~~~~~~^~~~~~~~~
+robust_list.c:513:28: note: ‘a’ declared here
+  513 |         struct lock_struct a, b, c;
+      |                            ^
+robust_list.c:512:40: note: ‘head’ declared here
+  512 |         static struct robust_list_head head;
+      |                                        ^~~~
+
+Since 'head' doesn't need static storge duration, removing the static
+keyword of it to fix this.
+
+Signed-off-by: Ankit Khushwaha <ankitkhushwaha.linux@gmail.com>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/20260420173544.55288-1-ankitkhushwaha.linux@gmail.com
+---
+ tools/testing/selftests/futex/functional/robust_list.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/futex/functional/robust_list.c b/tools/testing/selftests/futex/functional/robust_list.c
+index b3fab60181d5..12feec1e108f 100644
+--- a/tools/testing/selftests/futex/functional/robust_list.c
++++ b/tools/testing/selftests/futex/functional/robust_list.c
+@@ -522,7 +522,7 @@ TEST(test_robust_list_multiple_elements)
+ 
+ static int child_circular_list(void *arg)
+ {
+-	static struct robust_list_head head;
++	struct robust_list_head head;
+ 	struct lock_struct a, b, c;
+ 	int ret;
+ 
+-- 
+2.55.0
+

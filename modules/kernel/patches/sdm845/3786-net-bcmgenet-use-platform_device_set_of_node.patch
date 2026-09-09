@@ -1,0 +1,35 @@
+From fa20a8968c03650deec369245fcac535ac1d7839 Mon Sep 17 00:00:00 2001
+From: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Date: Mon, 6 Jul 2026 14:44:22 +0200
+Subject: [PATCH 03786/15333] net: bcmgenet: use platform_device_set_of_node()
+
+Ahead of reworking the reference counting logic for platform devices,
+encapsulate the assignment of the OF node for dynamically allocated
+platform devices with the provided helper.
+
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260706-pdev-fwnode-ref-v3-10-1ff028e33779@oss.qualcomm.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/net/ethernet/broadcom/genet/bcmmii.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/broadcom/genet/bcmmii.c b/drivers/net/ethernet/broadcom/genet/bcmmii.c
+index a4e0d5a68268..0f0dbabfaabb 100644
+--- a/drivers/net/ethernet/broadcom/genet/bcmmii.c
++++ b/drivers/net/ethernet/broadcom/genet/bcmmii.c
+@@ -490,8 +490,9 @@ static int bcmgenet_mii_register(struct bcmgenet_priv *priv)
+ 	/* Retain this platform_device pointer for later cleanup */
+ 	priv->mii_pdev = ppdev;
+ 	ppdev->dev.parent = &pdev->dev;
++
+ 	if (dn)
+-		ppdev->dev.of_node = bcmgenet_mii_of_find_mdio(priv);
++		platform_device_set_of_node(ppdev, bcmgenet_mii_of_find_mdio(priv));
+ 	else
+ 		ppd.phy_mask = ~0;
+ 
+-- 
+2.55.0
+

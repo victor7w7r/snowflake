@@ -1,0 +1,53 @@
+From defbb6534ff3a3b91607a842afc72edc1000d447 Mon Sep 17 00:00:00 2001
+From: Dragos Tatulea <dtatulea@nvidia.com>
+Date: Thu, 23 Jul 2026 10:28:29 +0300
+Subject: [PATCH 07563/15333] net/mlx5e: SHAMPO, Remove dead CWR handling in
+ GRO header update
+
+mlx5e_shampo_update_ipv{4,6}_tcp_hdr() runs only from the
+gro_count > 1 path in mlx5e_shampo_flush_skb(). HW-GRO flushes the
+current session on a CWR packet and delivers it as a single-segment
+skb via napi_gro_receive(), so the aggregated (gro_count > 1) skb
+never carries a CWR-set TCP header.
+
+This patch drops the unreachable branch. Discussion context:
+https://lore.kernel.org/all/8b610e49-ff64-497e-8712-588b2228df02@nvidia.com/
+
+Suggested-by: Paolo Abeni <pabeni@redhat.com>
+Signed-off-by: Dragos Tatulea <dtatulea@nvidia.com>
+Cc: Chia-Yu Chang <chia-yu.chang@nokia-bell-labs.com>
+Reviewed-by: Cosmin Ratiu <cratiu@nvidia.com>
+Signed-off-by: Tariq Toukan <tariqt@nvidia.com>
+Link: https://patch.msgid.link/20260723072829.1864366-1-tariqt@nvidia.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_rx.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c b/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
+index 04af54b704d8..fb7110b1b683 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_rx.c
+@@ -1178,9 +1178,6 @@ static void mlx5e_shampo_update_ipv4_tcp_hdr(struct mlx5e_rq *rq, struct iphdr *
+ 
+ 	skb->csum_start = (unsigned char *)tcp - skb->head;
+ 	skb->csum_offset = offsetof(struct tcphdr, check);
+-
+-	if (tcp->cwr)
+-		skb_shinfo(skb)->gso_type |= SKB_GSO_TCP_ECN;
+ }
+ 
+ static void mlx5e_shampo_update_ipv6_tcp_hdr(struct mlx5e_rq *rq, struct ipv6hdr *ipv6,
+@@ -1199,9 +1196,6 @@ static void mlx5e_shampo_update_ipv6_tcp_hdr(struct mlx5e_rq *rq, struct ipv6hdr
+ 	skb_shinfo(skb)->gso_type |= SKB_GSO_TCPV6;
+ 	skb->csum_start = (unsigned char *)tcp - skb->head;
+ 	skb->csum_offset = offsetof(struct tcphdr, check);
+-
+-	if (tcp->cwr)
+-		skb_shinfo(skb)->gso_type |= SKB_GSO_TCP_ECN;
+ }
+ 
+ static void mlx5e_shampo_update_hdr(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe, bool match)
+-- 
+2.55.0
+

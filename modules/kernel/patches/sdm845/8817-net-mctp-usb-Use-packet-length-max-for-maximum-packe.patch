@@ -1,0 +1,50 @@
+From 05b1a3a5eeaa64a5d412688e682a3b13acd99e8b Mon Sep 17 00:00:00 2001
+From: Jeremy Kerr <jk@codeconstruct.com.au>
+Date: Fri, 24 Jul 2026 13:15:23 +0800
+Subject: [PATCH 08817/15333] net: mctp: usb: Use packet-length max for maximum
+ packet-size check
+
+The max packet size is smaller than the max transfer size, as we only
+have a u8 length field in the transport header.
+
+Add a define for the maximum representable length, and use that for our
+check. Use this for the MTU maximum calculation too.
+
+Signed-off-by: Jeremy Kerr <jk@codeconstruct.com.au>
+Link: https://patch.msgid.link/20260724-dev-mctp-usb-1-1-v5-2-e66bbba0dbdc@codeconstruct.com.au
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/mctp/mctp-usb.c  | 2 +-
+ include/linux/usb/mctp-usb.h | 3 ++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/mctp/mctp-usb.c b/drivers/net/mctp/mctp-usb.c
+index 545eff06322c..c6e36b63e87a 100644
+--- a/drivers/net/mctp/mctp-usb.c
++++ b/drivers/net/mctp/mctp-usb.c
+@@ -76,7 +76,7 @@ static netdev_tx_t mctp_usb_start_xmit(struct sk_buff *skb,
+ 
+ 	plen = skb->len;
+ 
+-	if (plen + sizeof(*hdr) > MCTP_USB_1_0_XFER_SIZE)
++	if (plen + sizeof(*hdr) > MCTP_USB_1_0_PKTLEN_MAX)
+ 		goto err_drop;
+ 
+ 	rc = skb_cow_head(skb, sizeof(*hdr));
+diff --git a/include/linux/usb/mctp-usb.h b/include/linux/usb/mctp-usb.h
+index 47e2e3931d63..2bece8afd1c7 100644
+--- a/include/linux/usb/mctp-usb.h
++++ b/include/linux/usb/mctp-usb.h
+@@ -25,7 +25,8 @@ struct mctp_usb_hdr {
+ #define MCTP_USB_1_0_XFER_SIZE	512
+ #define MCTP_USB_BTU		68
+ #define MCTP_USB_MTU_MIN	MCTP_USB_BTU
+-#define MCTP_USB_1_0_MTU_MAX	(U8_MAX - sizeof(struct mctp_usb_hdr))
++#define MCTP_USB_1_0_PKTLEN_MAX	U8_MAX
++#define MCTP_USB_1_0_MTU_MAX	(MCTP_USB_1_0_PKTLEN_MAX - sizeof(struct mctp_usb_hdr))
+ #define MCTP_USB_DMTF_ID	0x1ab4
+ 
+ #endif /*  __LINUX_USB_MCTP_USB_H */
+-- 
+2.55.0
+

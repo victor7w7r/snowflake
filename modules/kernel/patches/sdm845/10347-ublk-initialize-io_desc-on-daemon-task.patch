@@ -1,0 +1,53 @@
+From 735409f58b3da45094f2dfd7c18fb9e1937431f1 Mon Sep 17 00:00:00 2001
+From: Caleb Sander Mateos <csander@purestorage.com>
+Date: Mon, 3 Aug 2026 15:14:36 -0600
+Subject: [PATCH 10347/15333] ublk: initialize io_desc on daemon task
+
+ublk_setup_iod() is currently called to populate struct ublksrv_io_desc
+on the thread submitting I/O to a ublk device. However, only the ublk
+server threads read the io_descs. This basically guarantees a cache miss
+on both threads for each ublk I/O. There's really no need to initialize
+the io_descs on the submitting thread. Move the ublk_setup_iod() call to
+ublk_dispatch_req() (for non-UBLK_F_BATCH_IO) and
+__ublk_batch_prep_dispatch() (for UBLK_F_BATCH_IO), which runs on the
+ublk server daemon thread before dispatching the I/O to userspace.
+
+Signed-off-by: Caleb Sander Mateos <csander@purestorage.com>
+Reviewed-by: Ming Lei <tom.leiming@gmail.com>
+Link: https://patch.msgid.link/20260803211441.2538144-5-csander@purestorage.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ drivers/block/ublk_drv.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/block/ublk_drv.c b/drivers/block/ublk_drv.c
+index 98be9a527a69..369757f5af08 100644
+--- a/drivers/block/ublk_drv.c
++++ b/drivers/block/ublk_drv.c
+@@ -1800,6 +1800,7 @@ static void ublk_dispatch_req(struct ublk_queue *ubq, struct request *req)
+ 	u16 tag = req->tag;
+ 	struct ublk_io *io = &ubq->ios[tag];
+ 
++	ublk_setup_iod(ubq, req);
+ 	pr_devel("%s: complete: qid %d tag %d io_flags %x addr %llx\n",
+ 			__func__, ubq->q_id, req->tag, io->flags,
+ 			ublk_get_iod(ubq, req->tag)->addr);
+@@ -1853,6 +1854,7 @@ static bool __ublk_batch_prep_dispatch(struct ublk_queue *ubq,
+ 	enum auto_buf_reg_res res = AUTO_BUF_REG_FALLBACK;
+ 	struct io_uring_cmd *cmd = data->cmd;
+ 
++	ublk_setup_iod(ubq, req);
+ 	if (!ublk_start_io(ubq, req, io))
+ 		return false;
+ 
+@@ -2189,7 +2191,6 @@ static blk_status_t ublk_prep_req(struct ublk_queue *ubq, struct request *rq,
+ 	if (unlikely(!ublk_validate_req(ubq, rq)))
+ 		return BLK_STS_IOERR;
+ 
+-	ublk_setup_iod(ubq, rq);
+ 	blk_mq_start_request(rq);
+ 	return BLK_STS_OK;
+ }
+-- 
+2.55.0
+

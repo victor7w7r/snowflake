@@ -1,0 +1,40 @@
+From 937cd823bb2c950a935dbd32313586911caae2f2 Mon Sep 17 00:00:00 2001
+From: Vu Nguyen Anh Khoa <khoavna.tin.2225@gmail.com>
+Date: Sun, 21 Jun 2026 15:57:43 +0700
+Subject: [PATCH 05552/15333] misc: nsm: do not unlock mutex before locking it
+
+nsm_dev_ioctl() jumps to the common out label when the initial
+copy_from_user() fails. That failure path runs before
+mutex_lock(&nsm->lock), but the out label unconditionally calls
+mutex_unlock(&nsm->lock).
+
+Return -EFAULT directly for the pre-lock copy_from_user() failure so
+only paths that acquired the mutex release it.
+
+Signed-off-by: Vu Nguyen Anh Khoa <khoavna.tin.2225@gmail.com>
+Reviewed-by: Alexander Graf <graf@amazon.com>
+Reviewed-by: Arnd Bergmann <arnd@arndb.de>
+Link: https://patch.msgid.link/20260621085743.76329-2-khoavna.tin.2225@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/misc/nsm.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/misc/nsm.c b/drivers/misc/nsm.c
+index ef7b32742340..e39ff00714f7 100644
+--- a/drivers/misc/nsm.c
++++ b/drivers/misc/nsm.c
+@@ -365,9 +365,8 @@ static long nsm_dev_ioctl(struct file *file, unsigned int cmd,
+ 		return -EINVAL;
+ 
+ 	/* Copy user argument struct to kernel argument struct */
+-	r = -EFAULT;
+ 	if (copy_from_user(&raw, argp, _IOC_SIZE(cmd)))
+-		goto out;
++		return -EFAULT;
+ 
+ 	mutex_lock(&nsm->lock);
+ 
+-- 
+2.55.0
+

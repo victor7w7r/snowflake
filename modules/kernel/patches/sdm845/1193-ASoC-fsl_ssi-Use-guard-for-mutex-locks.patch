@@ -1,0 +1,73 @@
+From 4d748e7082ec11764863bd184f6d58cd43584f54 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Mon, 15 Jun 2026 16:38:19 +0700
+Subject: [PATCH 01193/15333] ASoC: fsl_ssi: Use guard() for mutex locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260615093824.115751-7-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/fsl/fsl_ssi.c | 13 ++++---------
+ 1 file changed, 4 insertions(+), 9 deletions(-)
+
+diff --git a/sound/soc/fsl/fsl_ssi.c b/sound/soc/fsl/fsl_ssi.c
+index b2e1da1781ae..dc022976c982 100644
+--- a/sound/soc/fsl/fsl_ssi.c
++++ b/sound/soc/fsl/fsl_ssi.c
+@@ -1218,13 +1218,13 @@ static void fsl_ssi_ac97_write(struct snd_ac97 *ac97, unsigned short reg,
+ 	if (reg > 0x7f)
+ 		return;
+ 
+-	mutex_lock(&fsl_ac97_data->ac97_reg_lock);
++	guard(mutex)(&fsl_ac97_data->ac97_reg_lock);
+ 
+ 	ret = clk_prepare_enable(fsl_ac97_data->clk);
+ 	if (ret) {
+ 		pr_err("ac97 write clk_prepare_enable failed: %d\n",
+ 			ret);
+-		goto ret_unlock;
++		return;
+ 	}
+ 
+ 	lreg = reg <<  12;
+@@ -1238,9 +1238,6 @@ static void fsl_ssi_ac97_write(struct snd_ac97 *ac97, unsigned short reg,
+ 	udelay(100);
+ 
+ 	clk_disable_unprepare(fsl_ac97_data->clk);
+-
+-ret_unlock:
+-	mutex_unlock(&fsl_ac97_data->ac97_reg_lock);
+ }
+ 
+ static unsigned short fsl_ssi_ac97_read(struct snd_ac97 *ac97,
+@@ -1252,12 +1249,12 @@ static unsigned short fsl_ssi_ac97_read(struct snd_ac97 *ac97,
+ 	unsigned int lreg;
+ 	int ret;
+ 
+-	mutex_lock(&fsl_ac97_data->ac97_reg_lock);
++	guard(mutex)(&fsl_ac97_data->ac97_reg_lock);
+ 
+ 	ret = clk_prepare_enable(fsl_ac97_data->clk);
+ 	if (ret) {
+ 		pr_err("ac97 read clk_prepare_enable failed: %d\n", ret);
+-		goto ret_unlock;
++		return val;
+ 	}
+ 
+ 	lreg = (reg & 0x7f) <<  12;
+@@ -1272,8 +1269,6 @@ static unsigned short fsl_ssi_ac97_read(struct snd_ac97 *ac97,
+ 
+ 	clk_disable_unprepare(fsl_ac97_data->clk);
+ 
+-ret_unlock:
+-	mutex_unlock(&fsl_ac97_data->ac97_reg_lock);
+ 	return val;
+ }
+ 
+-- 
+2.55.0
+

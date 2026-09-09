@@ -1,0 +1,112 @@
+From b48466e4be18822d58a62ae619ffb062220ad572 Mon Sep 17 00:00:00 2001
+From: Ville Saarinen <wiza@saarinenkoti.fi>
+Date: Sun, 9 Aug 2026 10:15:09 +0000
+Subject: [PATCH 13358/15333] ASoC: amd: acp70: add HP OmniBook X Flip 14
+ SoundWire machine
+
+Describe the SoundWire topology of the HP OmniBook X Flip 14-kc0xxx
+(board 8EA1): two TAS2783 smart amplifiers aggregated on link 0 (unique
+IDs 0xC and 0x9, group_position 0 and 1, name prefixes tas2783-1 and
+tas2783-2) driving the left and right internal speakers, and an RT712-VB
+on link 1 providing the headset jack on AIF1 and the internal DMIC array
+on AIF3. The RT712 amplifier path (AIF2) is left unused because the
+speakers are driven by the external TAS2783 pair, so the existing
+jack_dmic_endpoints array describes it exactly.
+
+The entry is gated on snd_soc_acpi_amd_sdca_is_device_rt712_vb() so it
+does not capture a board carrying a different link 1 codec.
+
+Developed with AI assistance. The assistant derived the link topology
+from the enumerated peripherals and drafted the table entry. The order
+of the two amplifier entries, which is what assigns the physical sides,
+was corrected after a listening test by the submitter.
+
+All hardware measurements quoted above were run by the submitter on the
+affected machine. The submitter has reviewed the change, understands it
+and takes responsibility for it.
+
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Ville Saarinen <wiza@saarinenkoti.fi>
+Link: https://patch.msgid.link/20260809101439.4798-3-wiza@saarinenkoti.fi
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/amd/acp/amd-acp70-acpi-match.c | 56 ++++++++++++++++++++++++
+ 1 file changed, 56 insertions(+)
+
+diff --git a/sound/soc/amd/acp/amd-acp70-acpi-match.c b/sound/soc/amd/acp/amd-acp70-acpi-match.c
+index ccd01152c87d..815e088b437d 100644
+--- a/sound/soc/amd/acp/amd-acp70-acpi-match.c
++++ b/sound/soc/amd/acp/amd-acp70-acpi-match.c
+@@ -659,6 +659,56 @@ static const struct snd_soc_acpi_link_adr acp70_rt721_l1u0_tas2783x2_l1u8b[] = {
+ 	{}
+ };
+ 
++static const struct snd_soc_acpi_adr_device rt712_vb_l1u0_adr[] = {
++	{
++		.adr = 0x000130025D071201ull,
++		/*
++		 * On this platform speakers are provided by two TAS2783 amps,
++		 * so the AIF2 amp path is left unused: jack + DMIC only.
++		 */
++		.num_endpoints = ARRAY_SIZE(jack_dmic_endpoints),
++		.endpoints = jack_dmic_endpoints,
++		.name_prefix = "rt712"
++	}
++};
++
++/*
++ * Unique ID 0xC drives the left speaker and 0x9 the right one. The order of the
++ * entries matters as much as the endpoints: asoc_sdw_parse_sdw_endpoints()
++ * appends them to the dailink in array order and sdw_compute_slave_ports()
++ * hands out payload block offsets in that same order, so the first entry is the
++ * one that receives channel 0.
++ */
++static const struct snd_soc_acpi_adr_device tas2783x2_l0u9c_adr[] = {
++	{
++		.adr = 0x00003C0102000001ull,
++		.num_endpoints = 1,
++		.endpoints = &spk_l_endpoint,
++		.name_prefix = "tas2783-1",
++	},
++	{
++		.adr = 0x0000390102000001ull,
++		.num_endpoints = 1,
++		.endpoints = &spk_r_endpoint,
++		.name_prefix = "tas2783-2",
++	},
++};
++
++/* HP OmniBook X Flip 14-kc0xxx (board 8EA1) */
++static const struct snd_soc_acpi_link_adr acp70_tas2783x2_l0u9c_rt712_vb_l1u0[] = {
++	{
++		.mask = BIT(0),
++		.num_adr = ARRAY_SIZE(tas2783x2_l0u9c_adr),
++		.adr_d = tas2783x2_l0u9c_adr,
++	},
++	{
++		.mask = BIT(1),
++		.num_adr = ARRAY_SIZE(rt712_vb_l1u0_adr),
++		.adr_d = rt712_vb_l1u0_adr,
++	},
++	{}
++};
++
+ static const struct snd_soc_acpi_endpoint rt721_endpoints[] = {
+ 	{ /* Jack Playback/Capture Endpoint (AIF1) */
+ 		.num = 0,
+@@ -704,6 +754,12 @@ struct snd_soc_acpi_mach snd_soc_acpi_amd_acp70_sdw_machines[] = {
+ 		.links = acp70_tas2783_2,
+ 		.drv_name = "amd_sdw",
+ 	},
++	{
++		.link_mask = BIT(0) | BIT(1),
++		.links = acp70_tas2783x2_l0u9c_rt712_vb_l1u0,
++		.machine_check = snd_soc_acpi_amd_sdca_is_device_rt712_vb,
++		.drv_name = "amd_sdw",
++	},
+ 	{
+ 		.link_mask = BIT(0) | BIT(1),
+ 		.links = acp70_rt1320_l0_rt722_l1,
+-- 
+2.55.0
+

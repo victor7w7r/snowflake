@@ -1,0 +1,51 @@
+From 810a273919df09b345cdee74869c030aadbaa891 Mon Sep 17 00:00:00 2001
+From: "Mike Rapoport (Microsoft)" <rppt@kernel.org>
+Date: Thu, 16 Jul 2026 10:51:35 +0300
+Subject: [PATCH 06488/15333] bpf: dispatcher: Allocate
+ bpf_dispatcher->rw_image with vzalloc()
+
+bpf_dispatcher->rw_image is a temporary writable buffer that
+arch_prepare_bpf_dispatcher() fills and then copies into
+bpf_dispatcher->image using bpf_arch_text_copy().
+
+The rel32 offsets emitted by emit_bpf_dispatcher() are calculated against
+->image, so ->rw_image does not need to live in the module address range.
+
+Allocate ->rw_image with vzalloc() to avoid permissions dance when
+EXECMEM_BPF will be backed by ROX caches.
+
+Using vzalloc() rather than vmalloc() ensures that the memory that
+bpf_dispatcher_update() unconditionally copies into the executable buffer
+is zeroed, which is not ideal but still better than random memory returned
+by the existing bpf_jit_alloc_exec() or plain vmalloc().
+
+Switching from bpf_jit_alloc_exec() to vzalloc() also saves a bit of
+space in the more scarce module address space.
+
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Acked-by: Song Liu <song@kernel.org>
+Link: https://lore.kernel.org/bpf/20260716-execmem-x86-rox-bpf-v0-v3-1-4e76158c01c5@kernel.org
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ kernel/bpf/dispatcher.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/bpf/dispatcher.c b/kernel/bpf/dispatcher.c
+index ea2d60dc1fee..79f0c222c583 100644
+--- a/kernel/bpf/dispatcher.c
++++ b/kernel/bpf/dispatcher.c
+@@ -148,7 +148,10 @@ void bpf_dispatcher_change_prog(struct bpf_dispatcher *d, struct bpf_prog *from,
+ 		d->image = bpf_prog_pack_alloc(PAGE_SIZE, bpf_jit_fill_hole_with_zero, false);
+ 		if (!d->image)
+ 			goto out;
+-		d->rw_image = bpf_jit_alloc_exec(PAGE_SIZE);
++		/* d->rw_image doesn't need to be in module memory range, so we
++		 * can use vzalloc.
++		 */
++		d->rw_image = vzalloc(PAGE_SIZE);
+ 		if (!d->rw_image) {
+ 			bpf_prog_pack_free(d->image, PAGE_SIZE);
+ 			d->image = NULL;
+-- 
+2.55.0
+

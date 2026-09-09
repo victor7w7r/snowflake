@@ -1,0 +1,50 @@
+From d8e40355d9a3fe58b3e0c87e5d19a6ffd3710f65 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 15:59:37 +0200
+Subject: [PATCH 12791/15333] ASoC: aw88395: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-6-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/aw88395/aw88395.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/sound/soc/codecs/aw88395/aw88395.c b/sound/soc/codecs/aw88395/aw88395.c
+index e9ff2c79ac15..2f4108624d13 100644
+--- a/sound/soc/codecs/aw88395/aw88395.c
++++ b/sound/soc/codecs/aw88395/aw88395.c
+@@ -457,7 +457,7 @@ static void aw88395_hw_reset(struct aw88395 *aw88395)
+ 
+ static int aw88395_request_firmware_file(struct aw88395 *aw88395)
+ {
+-	const struct firmware *cont = NULL;
++	const struct firmware *cont __free(firmware) = NULL;
+ 	struct aw_container *aw_cfg;
+ 	int ret;
+ 
+@@ -473,13 +473,11 @@ static int aw88395_request_firmware_file(struct aw88395 *aw88395)
+ 			AW88395_ACF_FILE, cont ? cont->size : 0);
+ 
+ 	aw_cfg = devm_kzalloc(aw88395->aw_pa->dev, struct_size(aw_cfg, data, cont->size), GFP_KERNEL);
+-	if (!aw_cfg) {
+-		release_firmware(cont);
++	if (!aw_cfg)
+ 		return -ENOMEM;
+-	}
++
+ 	aw_cfg->len = (int)cont->size;
+ 	memcpy(aw_cfg->data, cont->data, cont->size);
+-	release_firmware(cont);
+ 
+ 	aw88395->aw_cfg = aw_cfg;
+ 
+-- 
+2.55.0
+

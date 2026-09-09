@@ -1,0 +1,77 @@
+From 1ee93ee2e085e13de2af55b431d4673ab2cdeecb Mon Sep 17 00:00:00 2001
+From: Faizal Rahim <faizal.abdul.rahim@linux.intel.com>
+Date: Fri, 8 May 2026 05:47:03 +0800
+Subject: [PATCH 02003/15333] igc: remove unused autoneg_failed field
+
+autoneg_failed in struct igc_mac_info is never set in the igc driver.
+Remove the field and the dead code checking it in
+igc_config_fc_after_link_up().
+
+The field originates from the e1000/e1000e fiber/serdes forced-link
+path, where MAC-level autoneg timeout sets it to signal the flow-control
+code to force pause. igc supports only copper, so it never needs to set
+this field.
+
+Reviewed-by: Looi Hong Aun <hong.aun.looi@intel.com>
+Reviewed-by: Aleksandr Loktionov <aleksandr.loktionov@intel.com>
+Signed-off-by: Faizal Rahim <faizal.abdul.rahim@linux.intel.com>
+Signed-off-by: Khai Wen Tan <khai.wen.tan@linux.intel.com>
+Reviewed-by: Dima Ruinskiy <dima.ruinskiy@intel.com>
+Reviewed-by: Piotr Kwapulinski <piotr.kwapulinski@intel.com>
+Reviewed-by: Simon Horman <horms@kernel.org>
+Tested-by: Moriya Kadosh <moriyax.kadosh@intel.com>
+Signed-off-by: Tony Nguyen <anthony.l.nguyen@intel.com>
+---
+ drivers/net/ethernet/intel/igc/igc_hw.h  |  1 -
+ drivers/net/ethernet/intel/igc/igc_mac.c | 16 +---------------
+ 2 files changed, 1 insertion(+), 16 deletions(-)
+
+diff --git a/drivers/net/ethernet/intel/igc/igc_hw.h b/drivers/net/ethernet/intel/igc/igc_hw.h
+index be8a49a86d09..86ab8f566f44 100644
+--- a/drivers/net/ethernet/intel/igc/igc_hw.h
++++ b/drivers/net/ethernet/intel/igc/igc_hw.h
+@@ -92,7 +92,6 @@ struct igc_mac_info {
+ 	bool asf_firmware_present;
+ 	bool arc_subsystem_valid;
+ 
+-	bool autoneg_failed;
+ 	bool get_link_status;
+ };
+ 
+diff --git a/drivers/net/ethernet/intel/igc/igc_mac.c b/drivers/net/ethernet/intel/igc/igc_mac.c
+index 7ac6637f8db7..142beb9ae557 100644
+--- a/drivers/net/ethernet/intel/igc/igc_mac.c
++++ b/drivers/net/ethernet/intel/igc/igc_mac.c
+@@ -438,28 +438,14 @@ void igc_config_collision_dist(struct igc_hw *hw)
+  * Checks the status of auto-negotiation after link up to ensure that the
+  * speed and duplex were not forced.  If the link needed to be forced, then
+  * flow control needs to be forced also.  If auto-negotiation is enabled
+- * and did not fail, then we configure flow control based on our link
+- * partner.
++ * then we configure flow control based on our link partner.
+  */
+ s32 igc_config_fc_after_link_up(struct igc_hw *hw)
+ {
+ 	u16 mii_status_reg, mii_nway_adv_reg, mii_nway_lp_ability_reg;
+-	struct igc_mac_info *mac = &hw->mac;
+ 	u16 speed, duplex;
+ 	s32 ret_val = 0;
+ 
+-	/* Check for the case where we have fiber media and auto-neg failed
+-	 * so we had to force link.  In this case, we need to force the
+-	 * configuration of the MAC to match the "fc" parameter.
+-	 */
+-	if (mac->autoneg_failed)
+-		ret_val = igc_force_mac_fc(hw);
+-
+-	if (ret_val) {
+-		hw_dbg("Error forcing flow control settings\n");
+-		goto out;
+-	}
+-
+ 	/* In auto-neg, we need to check and see if Auto-Neg has completed,
+ 	 * and if so, how the PHY and link partner has flow control
+ 	 * configured.
+-- 
+2.55.0
+

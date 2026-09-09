@@ -1,0 +1,98 @@
+From 39114474232476503f95bd21837a8b8b63d26810 Mon Sep 17 00:00:00 2001
+From: Miquel Raynal <miquel.raynal@bootlin.com>
+Date: Mon, 10 Aug 2026 17:10:42 +0200
+Subject: [PATCH 13000/15333] spi: spi-mem: Flag DQS capability
+
+DQS is a typical SPI memory signal used to help with reading the data on
+the bus at high speeds (especially in DTR mode) by avoiding clock
+skews. The chip generates a clock signal synchronized with its data
+output fronts, also called data strobe.
+
+SPI NOR and SPI NAND cores must set this flag in order to indicate to
+other layers that DQS is available.
+
+Create a getter and a setter to reach this capability.
+
+Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
+Link: https://patch.msgid.link/20260810-winbond-nand-next-phy-tuning-v3-1-a97c3a61e675@bootlin.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-mem.c       | 32 ++++++++++++++++++++++++++++++++
+ include/linux/spi/spi-mem.h |  4 ++++
+ 2 files changed, 36 insertions(+)
+
+diff --git a/drivers/spi/spi-mem.c b/drivers/spi/spi-mem.c
+index a88b9f038356..5f973ebfb8b6 100644
+--- a/drivers/spi/spi-mem.c
++++ b/drivers/spi/spi-mem.c
+@@ -541,6 +541,38 @@ const char *spi_mem_get_name(struct spi_mem *mem)
+ }
+ EXPORT_SYMBOL_GPL(spi_mem_get_name);
+ 
++/**
++ * spi_mem_set_dqs() - Mark DQS as being available
++ * @mem: the SPI memory
++ *
++ * When reading at high frequencies (> 100MHz), especially when DTR is enabled,
++ * transfer speed is limited due to clock skews. In particular, the controller
++ * does not know the board propagation delay nor the memory chip internal delay
++ * (clock in to data out) and thus cannot optimize its sampling points.
++ * Mitigating this limitation is possible with the addition of a data strobe
++ * signal, commonly named DQS.
++ *
++ * Set the DQS boolean if the feature is available and configured at the chip
++ * level. Controllers may query this value.
++ */
++void spi_mem_set_dqs(struct spi_mem *mem)
++{
++	mem->dqs = true;
++}
++EXPORT_SYMBOL_GPL(spi_mem_set_dqs);
++
++/**
++ * spi_mem_has_dqs() - Query whether the DQS is available or not
++ * @mem: the SPI memory
++ *
++ * Return: a boolean indicating whether the DQS signal is available or not.
++ */
++bool spi_mem_has_dqs(struct spi_mem *mem)
++{
++	return mem->dqs;
++}
++EXPORT_SYMBOL_GPL(spi_mem_has_dqs);
++
+ /**
+  * spi_mem_adjust_op_size() - Adjust the data size of a SPI mem operation to
+  *			      match controller limitations
+diff --git a/include/linux/spi/spi-mem.h b/include/linux/spi/spi-mem.h
+index f660bb2e9f85..0cce6b57242a 100644
+--- a/include/linux/spi/spi-mem.h
++++ b/include/linux/spi/spi-mem.h
+@@ -275,6 +275,7 @@ struct spi_mem_dirmap_desc {
+  * @spi: the underlying SPI device
+  * @drvpriv: spi_mem_driver private data
+  * @name: name of the SPI memory device
++ * @dqs: extra data trobe pin available for high frequency read operations
+  *
+  * Extra information that describe the SPI memory device and may be needed by
+  * the controller to properly handle this device should be placed here.
+@@ -286,6 +287,7 @@ struct spi_mem {
+ 	struct spi_device *spi;
+ 	void *drvpriv;
+ 	const char *name;
++	bool dqs;
+ };
+ 
+ /**
+@@ -461,6 +463,8 @@ bool spi_mem_default_supports_op(struct spi_mem *mem,
+ }
+ #endif /* CONFIG_SPI_MEM */
+ 
++void spi_mem_set_dqs(struct spi_mem *mem);
++bool spi_mem_has_dqs(struct spi_mem *mem);
+ int spi_mem_adjust_op_size(struct spi_mem *mem, struct spi_mem_op *op);
+ void spi_mem_adjust_op_freq(struct spi_mem *mem, struct spi_mem_op *op);
+ u64 spi_mem_calc_op_duration(struct spi_mem *mem, struct spi_mem_op *op);
+-- 
+2.55.0
+

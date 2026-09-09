@@ -1,0 +1,38 @@
+From 785095112f4198de49760552374f364043c8dbdf Mon Sep 17 00:00:00 2001
+From: Gabriele Monaco <gmonaco@redhat.com>
+Date: Mon, 3 Aug 2026 17:06:22 +0200
+Subject: [PATCH 10566/15333] rv: Fix 32-bit build of nomiss KUnit test
+
+Commit 8da2a8838365 ("rv: Add KUnit tests for some DA/HA monitors")
+introduced a division of a 64-bit value by 1000 in the nomiss KUnit
+test. This does not compile on 32-bit systems, as standard division of
+64-bit values leads to an undefined reference to __udivdi3.
+
+Fix the build on 32-bit systems by using div_u64().
+
+Fixes: 8da2a8838365 ("rv: Add KUnit tests for some DA/HA monitors")
+Reported-by: kernel test robot <lkp@intel.com>
+Closes: https://lore.kernel.org/oe-kbuild-all/202608020311.hYjqOG5k-lkp@intel.com
+Reviewed-by: Nam Cao <namcao@linutronix.de>
+Link: https://lore.kernel.org/r/20260803150622.322806-1-gmonaco@redhat.com
+Signed-off-by: Gabriele Monaco <gmonaco@redhat.com>
+---
+ kernel/trace/rv/monitors/nomiss/nomiss_kunit.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/trace/rv/monitors/nomiss/nomiss_kunit.c b/kernel/trace/rv/monitors/nomiss/nomiss_kunit.c
+index 1f64249dfcce..763129e2a990 100644
+--- a/kernel/trace/rv/monitors/nomiss/nomiss_kunit.c
++++ b/kernel/trace/rv/monitors/nomiss/nomiss_kunit.c
+@@ -28,7 +28,7 @@ static void rv_test_nomiss(struct kunit *test)
+ 	udelay(10);
+ 	rv_nomiss_ops.handle_sched_switch(NULL, 0, target, other, TASK_RUNNING);
+ 	RV_KUNIT_EXPECT_REACTION_HERE(test, ctx) {
+-		udelay(15 + *rv_nomiss_ops.deadline_thresh / 1000);
++		udelay(15 + div_u64(*rv_nomiss_ops.deadline_thresh, 1000));
+ 		rv_nomiss_ops.handle_sched_switch(NULL, 0, other, target, TASK_RUNNING);
+ 	}
+ }
+-- 
+2.55.0
+

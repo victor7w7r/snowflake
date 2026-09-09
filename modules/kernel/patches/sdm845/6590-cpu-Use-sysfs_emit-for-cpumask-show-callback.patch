@@ -1,0 +1,31 @@
+From 32dfaab71f28574490d2ad37674f1784c1f18b6e Mon Sep 17 00:00:00 2001
+From: Yury Norov <ynorov@nvidia.com>
+Date: Thu, 2 Jul 2026 11:47:17 -0400
+Subject: [PATCH 06590/15333] cpu: Use sysfs_emit() for cpumask show callback
+
+show_cpus_attr() is a sysfs show callback. Use sysfs_emit() and
+cpumask_pr_args() to emit the mask.
+
+This prepares for removing cpumap_print_to_pagebuf().
+
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ drivers/base/cpu.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/base/cpu.c b/drivers/base/cpu.c
+index 19d288a3c80c..69e52fed4241 100644
+--- a/drivers/base/cpu.c
++++ b/drivers/base/cpu.c
+@@ -218,7 +218,7 @@ static ssize_t show_cpus_attr(struct device *dev,
+ {
+ 	struct cpu_attr *ca = container_of(attr, struct cpu_attr, attr);
+ 
+-	return cpumap_print_to_pagebuf(true, buf, ca->map);
++	return sysfs_emit(buf, "%*pbl\n", cpumask_pr_args(ca->map));
+ }
+ 
+ #define _CPU_ATTR(name, map) \
+-- 
+2.55.0
+

@@ -1,0 +1,154 @@
+From 83cd3989ba0971693461088d35142ad52d862135 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 21 Jul 2026 16:14:00 +0200
+Subject: [PATCH 09962/15333] binfmt_misc: add the 'L' loader substitution flag
+
+Add the first activation of the PT_INTERP substitution machinery. A
+static entry registered with the new 'L' flag no longer runs the
+registered interpreter with the binary as payload. It stashes the
+interpreter as bprm->loader and declines the match with -ENOEXEC. The
+format search continues in the same round. binfmt_elf claims the binary
+as a fully native exec and substitutes the stashed file for the binary's
+PT_INTERP.
+
+'L' rejects every classic-dispatch flag at registration. 'T', 'P' and
+'O' have nothing to act on (no argv splice, no execfd) and 'C' is
+subsumed (credentials derive from the binary natively). 'F' composes and
+is valuable: with it the substitute is pre-opened at registration time
+and immune to mount namespace changes. Without it the substitute is
+opened at exec time in the exec'ing task's context, so 'L' joins 'C' in
+the requirement that the interpreter be named by an absolute path. As
+with 'C', only trusted interpreters should be registered. The
+substituted loader runs with credentials derived from the binary.
+
+Like the other flag characters 'L' cannot be used as the field
+delimiter. The flag scan would run off the registration buffer.
+
+The interpreter open is shared with the classic path via the
+entry_open_interpreter() helper. An open error fails the exec. Map
+-ENOEXEC to -EACCES to avoid letting the binary run with its own
+PT_INTERP.
+
+Link: https://patch.msgid.link/20260721-work-bpf-binfmt_misc-ptinterp-v2-18-e57866e4ae0f@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ Documentation/admin-guide/binfmt-misc.rst | 15 ++++++++---
+ fs/binfmt_misc.c                          | 33 +++++++++++++++++++++--
+ 2 files changed, 42 insertions(+), 6 deletions(-)
+
+diff --git a/Documentation/admin-guide/binfmt-misc.rst b/Documentation/admin-guide/binfmt-misc.rst
+index d46130be0891..22aefab2c21e 100644
+--- a/Documentation/admin-guide/binfmt-misc.rst
++++ b/Documentation/admin-guide/binfmt-misc.rst
+@@ -100,6 +100,13 @@ Here is what the fields mean:
+             ``AT_FLAGS_TRANSPARENT_INTERP`` contract. Combining ``T``
+             with ``P`` is rejected: transparency preserves the whole
+             argument vector, argv[0] included.
++      ``L`` - loader substitution
++            Do not run the interpreter on the binary at all: load the
++            binary itself as a fully native exec and substitute the
++            interpreter for the loader named in the binary's
++            ``PT_INTERP``. See the "Loader substitution" section
++            below. ``L`` rejects ``T``, ``P``, ``O`` and ``C``;
++            ``F`` composes.
+ 
+ 
+ There are some restrictions:
+@@ -108,10 +115,10 @@ There are some restrictions:
+  - the magic must reside in the first 128 bytes of the file, i.e.
+    offset+size(magic) has to be less than 128
+  - the interpreter string may not exceed 127 characters
+- - an interpreter used with ``C`` but without ``F`` has to be named by an
+-   absolute path. It is opened when the binary is executed, so a relative
+-   one would be resolved against the working directory of whoever runs
+-   the binary
++ - an interpreter used with ``C`` or ``L`` but without ``F`` has to be
++   named by an absolute path. It is opened when the binary is executed, so
++   a relative one would be resolved against the working directory of
++   whoever runs the binary
+ 
+ 
+ To use binfmt_misc you have to mount it first. You can mount it with
+diff --git a/fs/binfmt_misc.c b/fs/binfmt_misc.c
+index 98f9208e8188..33835aebc8eb 100644
+--- a/fs/binfmt_misc.c
++++ b/fs/binfmt_misc.c
+@@ -51,6 +51,7 @@ enum binfmt_misc_entry_flags {
+ 	MISC_FMT_CREDENTIALS	= (1U << 29),
+ 	MISC_FMT_OPEN_FILE	= (1U << 28),
+ 	MISC_FMT_TRANSPARENT	= (1U << 27),
++	MISC_FMT_LOADER		= (1U << 26),
+ };
+ 
+ /**
+@@ -73,6 +74,7 @@ static const struct binfmt_misc_flag misc_flags[] = {
+ 	{ 'C', MISC_FMT_CREDENTIALS,	MISC_FMT_OPEN_BINARY,	"credentials from the binary"	},
+ 	{ 'F', MISC_FMT_OPEN_FILE,	0,			"open interpreter file now"	},
+ 	{ 'T', MISC_FMT_TRANSPARENT,	MISC_FMT_OPEN_BINARY,	"transparent"			},
++	{ 'L', MISC_FMT_LOADER,		0,			"loader substitution"		},
+ };
+ 
+ /* Look up a flag character, NULL if @c is not one. */
+@@ -458,6 +460,9 @@ static int load_misc_binary(struct linux_binprm *bprm)
+ 	unsigned long flags;
+ 	int retval;
+ 
++	/* Only binfmt_misc stages one and exec_binprm() clears it per round. */
++	WARN_ON_ONCE(bprm->loader);
++
+ 	misc = current_binfmt_misc();
+ 	if (!READ_ONCE(misc->enabled))
+ 		return -ENOEXEC;
+@@ -473,9 +478,27 @@ static int load_misc_binary(struct linux_binprm *bprm)
+ 	flags = entry_invocation_flags(fmt, bprm);
+ 
+ 	/* No argv is built for a staged argument to land in. */
+-	if ((flags & MISC_FMT_TRANSPARENT) && bprm->bpf_interp_arg)
++	if ((flags & (MISC_FMT_LOADER | MISC_FMT_TRANSPARENT)) &&
++	    bprm->bpf_interp_arg)
+ 		return -EINVAL;
+ 
++	/*
++	 * Stash the interpreter for binfmt_elf to consume in place of the
++	 * binary's PT_INTERP and decline the match, so the search continues
++	 * to the real format in the same round.
++	 */
++	if (flags & MISC_FMT_LOADER) {
++		interp_file = entry_open_interpreter(fmt, interpreter);
++		if (IS_ERR(interp_file)) {
++			retval = PTR_ERR(interp_file);
++			/* Declining here would run the binary's own PT_INTERP. */
++			return retval == -ENOEXEC ? -EACCES : retval;
++		}
++
++		bprm->loader = interp_file;
++		return -ENOEXEC;
++	}
++
+ 	if (!(flags & MISC_FMT_TRANSPARENT)) {
+ 		retval = build_interp_argv(bprm, interpreter, flags);
+ 		if (retval)
+@@ -772,13 +795,19 @@ static struct binfmt_misc_entry *create_entry(const char __user *buffer,
+ 	    (e->flags & MISC_FMT_PRESERVE_ARGV0))
+ 		return ERR_PTR(-EINVAL);
+ 
++	/* A native exec splices no argv, passes no execfd and needs no creds. */
++	if ((e->flags & MISC_FMT_LOADER) &&
++	    (e->flags & (MISC_FMT_TRANSPARENT | MISC_FMT_PRESERVE_ARGV0 |
++			 MISC_FMT_CREDENTIALS | MISC_FMT_OPEN_BINARY)))
++		return ERR_PTR(-EINVAL);
++
+ 	if (*p == '\n')
+ 		p++;
+ 	if (p != buf + count)
+ 		return ERR_PTR(-EINVAL);
+ 
+ 	/* Non-F opens the interp at exec against the caller's cwd; require absolute. */
+-	if ((e->flags & MISC_FMT_CREDENTIALS) &&
++	if ((e->flags & (MISC_FMT_LOADER | MISC_FMT_CREDENTIALS)) &&
+ 	    !(e->flags & MISC_FMT_OPEN_FILE) &&
+ 	    e->interpreter[0] != '/')
+ 		return ERR_PTR(-EINVAL);
+-- 
+2.55.0
+

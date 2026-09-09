@@ -1,0 +1,168 @@
+From 352c6732ffb2c5a45a10096bfef13c343484c22f Mon Sep 17 00:00:00 2001
+From: Yuyang Huang <sigefriedhyy@gmail.com>
+Date: Sat, 8 Aug 2026 09:56:34 +0900
+Subject: [PATCH 13664/15333] ipv6: propagate the route deletion reason to
+ fib6_del_route()
+
+Pass the deletion reason from ip6_del_rt_reason() down through
+__ip6_del_rt(), fib6_del() and into fib6_del_route(). All existing
+callers pass RT_DEL_REASON_UNSPEC.
+
+fib6_del_route() ignores the reason until the notification path learns
+to report it.
+
+Signed-off-by: Yuyang Huang <sigefriedhyy@gmail.com>
+Reviewed-by: Ido Schimmel <idosch@nvidia.com>
+Link: https://patch.msgid.link/20260808005642.26901-3-sigefriedhyy@gmail.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ include/net/ip6_fib.h |  3 ++-
+ net/ipv6/ip6_fib.c    | 12 +++++++-----
+ net/ipv6/route.c      | 19 +++++++++++--------
+ 3 files changed, 20 insertions(+), 14 deletions(-)
+
+diff --git a/include/net/ip6_fib.h b/include/net/ip6_fib.h
+index 9cd27e1b9b69..0ba5d3c56543 100644
+--- a/include/net/ip6_fib.h
++++ b/include/net/ip6_fib.h
+@@ -468,7 +468,8 @@ void fib6_clean_all_skip_notify(struct net *net,
+ 
+ int fib6_add(struct fib6_node *root, struct fib6_info *rt,
+ 	     struct nl_info *info, struct netlink_ext_ack *extack);
+-int fib6_del(struct fib6_info *rt, struct nl_info *info);
++int fib6_del(struct fib6_info *rt, struct nl_info *info,
++	     enum rt_del_reason del_reason);
+ 
+ static inline
+ void rt6_get_prefsrc(const struct rt6_info *rt, struct in6_addr *addr)
+diff --git a/net/ipv6/ip6_fib.c b/net/ipv6/ip6_fib.c
+index e9fc692d4f3b..1f6f6f33ded1 100644
+--- a/net/ipv6/ip6_fib.c
++++ b/net/ipv6/ip6_fib.c
+@@ -1967,7 +1967,8 @@ static struct fib6_node *fib6_repair_tree(struct net *net,
+ }
+ 
+ static void fib6_del_route(struct fib6_table *table, struct fib6_node *fn,
+-			   struct fib6_info __rcu **rtp, struct nl_info *info)
++			   struct fib6_info __rcu **rtp, struct nl_info *info,
++			   enum rt_del_reason del_reason)
+ {
+ 	struct fib6_info *leaf, *replace_rt = NULL;
+ 	struct fib6_walker *w;
+@@ -2062,7 +2063,8 @@ static void fib6_del_route(struct fib6_table *table, struct fib6_node *fn,
+ }
+ 
+ /* Need to own table->tb6_lock */
+-int fib6_del(struct fib6_info *rt, struct nl_info *info)
++int fib6_del(struct fib6_info *rt, struct nl_info *info,
++	     enum rt_del_reason del_reason)
+ {
+ 	struct net *net = info->nl_net;
+ 	struct fib6_info __rcu **rtp;
+@@ -2091,7 +2093,7 @@ int fib6_del(struct fib6_info *rt, struct nl_info *info)
+ 		if (rt == cur) {
+ 			if (fib6_requires_src(cur))
+ 				fib6_routes_require_src_dec(info->nl_net);
+-			fib6_del_route(table, fn, rtp, info);
++			fib6_del_route(table, fn, rtp, info, del_reason);
+ 			return 0;
+ 		}
+ 		rtp_next = &cur->fib6_next;
+@@ -2253,7 +2255,7 @@ static int fib6_clean_node(struct fib6_walker *w)
+ 		res = c->func(rt, c->arg);
+ 		if (res == -1) {
+ 			w->leaf = rt;
+-			res = fib6_del(rt, &info);
++			res = fib6_del(rt, &info, RT_DEL_REASON_UNSPEC);
+ 			if (res) {
+ #if RT6_DEBUG >= 2
+ 				pr_debug("%s: del failed: rt=%p@%p err=%d\n",
+@@ -2401,7 +2403,7 @@ static void fib6_gc_table(struct net *net,
+ 
+ 	hlist_for_each_entry_safe(rt, n, &tb6->tb6_gc_hlist, gc_link)
+ 		if (fib6_age(rt, gc_args) == -1)
+-			fib6_del(rt, &info);
++			fib6_del(rt, &info, RT_DEL_REASON_UNSPEC);
+ }
+ 
+ static void fib6_gc_all(struct net *net, struct fib6_gc_args *gc_args)
+diff --git a/net/ipv6/route.c b/net/ipv6/route.c
+index 9898578cb418..26cdf141666c 100644
+--- a/net/ipv6/route.c
++++ b/net/ipv6/route.c
+@@ -3973,7 +3973,8 @@ int ip6_route_add(struct fib6_config *cfg, gfp_t gfp_flags,
+ 	return err;
+ }
+ 
+-static int __ip6_del_rt(struct fib6_info *rt, struct nl_info *info)
++static int __ip6_del_rt(struct fib6_info *rt, struct nl_info *info,
++			enum rt_del_reason del_reason)
+ {
+ 	struct net *net = info->nl_net;
+ 	struct fib6_table *table;
+@@ -3986,7 +3987,7 @@ static int __ip6_del_rt(struct fib6_info *rt, struct nl_info *info)
+ 
+ 	table = rt->fib6_table;
+ 	spin_lock_bh(&table->tb6_lock);
+-	err = fib6_del(rt, info);
++	err = fib6_del(rt, info, del_reason);
+ 	spin_unlock_bh(&table->tb6_lock);
+ 
+ out:
+@@ -4001,7 +4002,7 @@ int ip6_del_rt(struct net *net, struct fib6_info *rt, bool skip_notify)
+ 		.skip_notify = skip_notify
+ 	};
+ 
+-	return __ip6_del_rt(rt, &info);
++	return __ip6_del_rt(rt, &info, RT_DEL_REASON_UNSPEC);
+ }
+ 
+ int ip6_del_rt_reason(struct net *net, struct fib6_info *rt,
+@@ -4009,7 +4010,7 @@ int ip6_del_rt_reason(struct net *net, struct fib6_info *rt,
+ {
+ 	struct nl_info info = { .nl_net = net };
+ 
+-	return __ip6_del_rt(rt, &info);
++	return __ip6_del_rt(rt, &info, del_reason);
+ }
+ 
+ static int __ip6_del_rt_siblings(struct fib6_info *rt, struct fib6_config *cfg)
+@@ -4072,13 +4073,13 @@ static int __ip6_del_rt_siblings(struct fib6_info *rt, struct fib6_config *cfg)
+ 		list_for_each_entry_safe(sibling, next_sibling,
+ 					 &rt->fib6_siblings,
+ 					 fib6_siblings) {
+-			err = fib6_del(sibling, info);
++			err = fib6_del(sibling, info, RT_DEL_REASON_UNSPEC);
+ 			if (err)
+ 				goto out_unlock;
+ 		}
+ 	}
+ 
+-	err = fib6_del(rt, info);
++	err = fib6_del(rt, info, RT_DEL_REASON_UNSPEC);
+ out_unlock:
+ 	spin_unlock_bh(&table->tb6_lock);
+ out_put:
+@@ -4204,7 +4205,8 @@ static int ip6_route_del(struct fib6_config *cfg,
+ 				if (!fib6_info_hold_safe(rt))
+ 					continue;
+ 
+-				err =  __ip6_del_rt(rt, &cfg->fc_nlinfo);
++				err = __ip6_del_rt(rt, &cfg->fc_nlinfo,
++						   RT_DEL_REASON_UNSPEC);
+ 				break;
+ 			}
+ 			if (cfg->fc_nh_id)
+@@ -4223,7 +4225,8 @@ static int ip6_route_del(struct fib6_config *cfg,
+ 
+ 			/* if gateway was specified only delete the one hop */
+ 			if (cfg->fc_flags & RTF_GATEWAY)
+-				err = __ip6_del_rt(rt, &cfg->fc_nlinfo);
++				err = __ip6_del_rt(rt, &cfg->fc_nlinfo,
++						   RT_DEL_REASON_UNSPEC);
+ 			else
+ 				err = __ip6_del_rt_siblings(rt, cfg);
+ 			break;
+-- 
+2.55.0
+

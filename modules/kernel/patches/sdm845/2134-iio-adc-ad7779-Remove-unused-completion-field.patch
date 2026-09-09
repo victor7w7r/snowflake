@@ -1,0 +1,41 @@
+From 0790de31298adfb8f7c69235e3839c8a5f285dd7 Mon Sep 17 00:00:00 2001
+From: Moksh Panicker <mokshpanicker.7@gmail.com>
+Date: Thu, 2 Jul 2026 11:46:48 +0000
+Subject: [PATCH 02134/15333] iio: adc: ad7779: Remove unused completion field
+
+struct ad7779_state contains a completion field that is initialized
+in ad7779_setup_without_backend() but never waited on or signaled
+anywhere in the driver. Remove the dead code.
+
+Suggested-by: Joshua Crofts <joshua.crofts1@gmail.com>
+Signed-off-by: Moksh Panicker <mokshpanicker.7@gmail.com>
+Reviewed-by: Joshua Crofts <joshua.crofts1@gmail.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/adc/ad7779.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/drivers/iio/adc/ad7779.c b/drivers/iio/adc/ad7779.c
+index 695cc79e78da..5e2e1c31748b 100644
+--- a/drivers/iio/adc/ad7779.c
++++ b/drivers/iio/adc/ad7779.c
+@@ -143,7 +143,6 @@ struct ad7779_state {
+ 	const struct ad7779_chip_info *chip_info;
+ 	struct clk *mclk;
+ 	struct iio_trigger *trig;
+-	struct completion completion;
+ 	unsigned int sampling_freq;
+ 	enum ad7779_filter filter_enabled;
+ 	struct iio_backend *back;
+@@ -852,8 +851,6 @@ static int ad7779_setup_without_backend(struct ad7779_state *st, struct iio_dev
+ 
+ 	indio_dev->trig = iio_trigger_get(st->trig);
+ 
+-	init_completion(&st->completion);
+-
+ 	ret = devm_iio_triggered_buffer_setup(dev, indio_dev,
+ 					      &iio_pollfunc_store_time,
+ 					      &ad7779_trigger_handler,
+-- 
+2.55.0
+

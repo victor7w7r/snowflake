@@ -1,0 +1,453 @@
+From a295be8d6210ab6a6ec9710b5b146cba34f36c6f Mon Sep 17 00:00:00 2001
+From: Valerio Setti <vsetti@baylibre.com>
+Date: Wed, 10 Jun 2026 23:29:25 +0200
+Subject: [PATCH 01208/15333] ASoC: meson: gx: add gx-formatter and
+ gx-interface
+
+These files are the basic block which allow to shape I2S in GX devices
+the same as the AXG ones: the DAI backend only controls the interface
+(i.e. clocks and pins) whereas a formatter takes care of properly
+formatting the data.
+
+gx-formatter and gx-interface are strongly inspired to axg-tdm-formatter
+and axg-tdm, respectively. The long term plan is to join the two platforms
+to use the same formatter solution.
+
+There is only a minor addition here compared to what has been done for
+AXG and it's "gx_formatter_create()" which is required in order to let
+already existing AIU code to make use of this formatter without making any
+devicetree change.
+
+Signed-off-by: Valerio Setti <vsetti@baylibre.com>
+Reviewed-by: Jerome Brunet <jbrunet@baylibre.com>
+Link: https://patch.msgid.link/20260610-reshape-aiu-as-axg-v2-1-cac3663a8b51@baylibre.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/meson/Makefile       |   1 +
+ sound/soc/meson/gx-formatter.c | 282 +++++++++++++++++++++++++++++++++
+ sound/soc/meson/gx-formatter.h |  56 +++++++
+ sound/soc/meson/gx-interface.h |  48 ++++++
+ 4 files changed, 387 insertions(+)
+ create mode 100644 sound/soc/meson/gx-formatter.c
+ create mode 100644 sound/soc/meson/gx-formatter.h
+ create mode 100644 sound/soc/meson/gx-interface.h
+
+diff --git a/sound/soc/meson/Makefile b/sound/soc/meson/Makefile
+index 24078e4396b0..146ec81526ba 100644
+--- a/sound/soc/meson/Makefile
++++ b/sound/soc/meson/Makefile
+@@ -4,6 +4,7 @@ snd-soc-meson-aiu-y := aiu.o
+ snd-soc-meson-aiu-y += aiu-acodec-ctrl.o
+ snd-soc-meson-aiu-y += aiu-codec-ctrl.o
+ snd-soc-meson-aiu-y += aiu-encoder-i2s.o
++snd-soc-meson-aiu-y += gx-formatter.o
+ snd-soc-meson-aiu-y += aiu-encoder-spdif.o
+ snd-soc-meson-aiu-y += aiu-fifo.o
+ snd-soc-meson-aiu-y += aiu-fifo-i2s.o
+diff --git a/sound/soc/meson/gx-formatter.c b/sound/soc/meson/gx-formatter.c
+new file mode 100644
+index 000000000000..311e63affb23
+--- /dev/null
++++ b/sound/soc/meson/gx-formatter.c
+@@ -0,0 +1,282 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++//
++// Copyright (c) 2026 BayLibre, SAS.
++// Author: Valerio Setti <vsetti@baylibre.com>
++
++#include <linux/module.h>
++#include <linux/of_platform.h>
++#include <linux/regmap.h>
++#include <sound/soc.h>
++
++#include "gx-formatter.h"
++
++struct gx_formatter {
++	struct list_head list;
++	struct gx_stream *stream;
++	const struct gx_formatter_driver *drv;
++	bool enabled;
++	struct regmap *map;
++};
++
++static int gx_formatter_enable(struct gx_formatter *formatter)
++{
++	int ret;
++
++	/* Do nothing if the formatter is already enabled */
++	if (formatter->enabled)
++		return 0;
++
++	/* Setup the stream parameter in the formatter */
++	if (formatter->drv->ops->prepare) {
++		ret = formatter->drv->ops->prepare(formatter->map,
++					   formatter->drv->quirks,
++					   formatter->stream);
++		if (ret)
++			return ret;
++	}
++
++	/* Finally, actually enable the formatter */
++	if (formatter->drv->ops->enable)
++		formatter->drv->ops->enable(formatter->map);
++
++	formatter->enabled = true;
++
++	return 0;
++}
++
++static void gx_formatter_disable(struct gx_formatter *formatter)
++{
++	/* Do nothing if the formatter is already disabled */
++	if (!formatter->enabled)
++		return;
++
++	if (formatter->drv->ops->disable)
++		formatter->drv->ops->disable(formatter->map);
++
++	formatter->enabled = false;
++}
++
++static int gx_formatter_attach(struct gx_formatter *formatter)
++{
++	struct gx_stream *ts = formatter->stream;
++	int ret = 0;
++
++	mutex_lock(&ts->lock);
++
++	/* Catch up if the stream is already running when we attach */
++	if (ts->ready) {
++		ret = gx_formatter_enable(formatter);
++		if (ret) {
++			pr_err("failed to enable formatter\n");
++			goto out;
++		}
++	}
++
++	list_add_tail(&formatter->list, &ts->formatter_list);
++out:
++	mutex_unlock(&ts->lock);
++	return ret;
++}
++
++static void gx_formatter_detach(struct gx_formatter *formatter)
++{
++	struct gx_stream *ts = formatter->stream;
++
++	if (!ts)
++		return;
++
++	mutex_lock(&ts->lock);
++	list_del(&formatter->list);
++	mutex_unlock(&ts->lock);
++
++	gx_formatter_disable(formatter);
++}
++
++static int gx_formatter_power_up(struct gx_formatter *formatter,
++				      struct snd_soc_dapm_widget *w)
++{
++	struct gx_stream *ts = formatter->drv->ops->get_stream(w);
++	int ret;
++
++	/*
++	 * If we don't get a stream at this stage, it would mean that the
++	 * widget is powering up but is not attached to any backend DAI.
++	 * It should not happen, ever !
++	 */
++	if (WARN_ON(!ts))
++		return -ENODEV;
++
++	formatter->stream = ts;
++	INIT_LIST_HEAD(&formatter->list);
++	ret = gx_formatter_attach(formatter);
++	if (ret)
++		return ret;
++
++	return 0;
++}
++
++static void gx_formatter_power_down(struct gx_formatter *formatter)
++{
++	gx_formatter_detach(formatter);
++	formatter->stream = NULL;
++}
++
++int gx_formatter_event(struct snd_soc_dapm_widget *w,
++		       struct snd_kcontrol *control,
++		       int event)
++{
++	struct snd_soc_component *c;
++	struct gx_formatter *formatter;
++	int ret = 0;
++
++	c = snd_soc_dapm_to_component(w->dapm);
++
++	if (w->priv)
++		formatter = w->priv;
++	else
++		formatter = snd_soc_component_get_drvdata(c);
++
++	switch (event) {
++	case SND_SOC_DAPM_PRE_PMU:
++		ret = gx_formatter_power_up(formatter, w);
++		break;
++
++	case SND_SOC_DAPM_PRE_PMD:
++		gx_formatter_power_down(formatter);
++		break;
++
++	default:
++		dev_err(c->dev, "Unexpected event %d\n", event);
++		return -EINVAL;
++	}
++
++	return ret;
++}
++EXPORT_SYMBOL_GPL(gx_formatter_event);
++
++int gx_formatter_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	const struct gx_formatter_driver *drv;
++	struct gx_formatter *formatter;
++	void __iomem *regs;
++
++	drv = of_device_get_match_data(dev);
++	if (!drv) {
++		dev_err(dev, "failed to match device\n");
++		return -ENODEV;
++	}
++
++	formatter = devm_kzalloc(dev, sizeof(*formatter), GFP_KERNEL);
++	if (!formatter)
++		return -ENOMEM;
++	platform_set_drvdata(pdev, formatter);
++	formatter->drv = drv;
++
++	regs = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(regs))
++		return PTR_ERR(regs);
++
++	formatter->map = devm_regmap_init_mmio(dev, regs, drv->regmap_cfg);
++	if (IS_ERR(formatter->map)) {
++		dev_err(dev, "failed to init regmap: %ld\n",
++			PTR_ERR(formatter->map));
++		return PTR_ERR(formatter->map);
++	}
++
++	return devm_snd_soc_register_component(dev, drv->component_drv,
++					       NULL, 0);
++}
++EXPORT_SYMBOL_GPL(gx_formatter_probe);
++
++int gx_formatter_create(struct device *dev,
++			struct snd_soc_dapm_widget *w,
++			const struct gx_formatter_driver *drv,
++			struct regmap *regmap)
++{
++	struct gx_formatter *formatter;
++
++	formatter = devm_kzalloc(dev, sizeof(*formatter), GFP_KERNEL);
++	if (!formatter)
++		return -ENOMEM;
++
++	formatter->drv = drv;
++	formatter->map = regmap;
++
++	w->priv = formatter;
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(gx_formatter_create);
++
++int gx_stream_start(struct gx_stream *ts)
++{
++	struct gx_formatter *formatter;
++	int ret = 0;
++
++	mutex_lock(&ts->lock);
++
++	/* Start all the formatters attached to the stream */
++	list_for_each_entry(formatter, &ts->formatter_list, list) {
++		ret = gx_formatter_enable(formatter);
++		if (ret) {
++			pr_err("failed to enable formatter\n");
++			goto out;
++		}
++	}
++
++	ts->ready = true;
++
++out:
++	mutex_unlock(&ts->lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(gx_stream_start);
++
++void gx_stream_stop(struct gx_stream *ts)
++{
++	struct gx_formatter *formatter;
++
++	mutex_lock(&ts->lock);
++	ts->ready = false;
++
++	/* Stop all the formatters attached to the stream */
++	list_for_each_entry(formatter, &ts->formatter_list, list) {
++		gx_formatter_disable(formatter);
++	}
++
++	mutex_unlock(&ts->lock);
++}
++EXPORT_SYMBOL_GPL(gx_stream_stop);
++
++struct gx_stream *gx_stream_alloc(struct gx_iface *iface)
++{
++	struct gx_stream *ts;
++
++	ts = kzalloc(sizeof(*ts), GFP_KERNEL);
++	if (ts) {
++		INIT_LIST_HEAD(&ts->formatter_list);
++		mutex_init(&ts->lock);
++		ts->iface = iface;
++	}
++
++	return ts;
++}
++EXPORT_SYMBOL_GPL(gx_stream_alloc);
++
++void gx_stream_free(struct gx_stream *ts)
++{
++	/*
++	 * If the list is not empty, it would mean that one of the formatter
++	 * widget is still powered and attached to the interface while we
++	 * are removing the TDM DAI. It should not be possible
++	 */
++	WARN_ON(!list_empty(&ts->formatter_list));
++	mutex_destroy(&ts->lock);
++	kfree(ts);
++}
++EXPORT_SYMBOL_GPL(gx_stream_free);
++
++MODULE_DESCRIPTION("Amlogic GX formatter driver");
++MODULE_AUTHOR("Valerio Setti <vsetti@baylibre.com>");
++MODULE_LICENSE("GPL");
+diff --git a/sound/soc/meson/gx-formatter.h b/sound/soc/meson/gx-formatter.h
+new file mode 100644
+index 000000000000..b90b1814d79b
+--- /dev/null
++++ b/sound/soc/meson/gx-formatter.h
+@@ -0,0 +1,56 @@
++/* SPDX-License-Identifier: (GPL-2.0 OR MIT) */
++/*
++ * Copyright (c) 2026 Baylibre SAS.
++ * Author: Valerio Setti <vsetti@baylibre.com>
++ */
++
++#ifndef _MESON_GX_FORMATTER_H
++#define _MESON_GX_FORMATTER_H
++
++#include "gx-interface.h"
++
++struct platform_device;
++struct regmap;
++struct snd_soc_dapm_widget;
++struct snd_kcontrol;
++
++struct gx_formatter_hw {
++	unsigned int skew_offset;
++};
++
++struct gx_formatter_ops {
++	struct gx_stream *(*get_stream)(struct snd_soc_dapm_widget *w);
++	void (*enable)(struct regmap *map);
++	void (*disable)(struct regmap *map);
++	int (*prepare)(struct regmap *map,
++		       const struct gx_formatter_hw *quirks,
++		       struct gx_stream *ts);
++};
++
++struct gx_formatter_driver {
++	const struct snd_soc_component_driver *component_drv;
++	const struct regmap_config *regmap_cfg;
++	const struct gx_formatter_ops *ops;
++	const struct gx_formatter_hw *quirks;
++};
++
++int gx_formatter_event(struct snd_soc_dapm_widget *w,
++		       struct snd_kcontrol *control,
++		       int event);
++int gx_formatter_probe(struct platform_device *pdev);
++
++int gx_formatter_create(struct device *dev,
++			struct snd_soc_dapm_widget *w,
++			const struct gx_formatter_driver *drv,
++			struct regmap *regmap);
++
++/*
++ * Formatter data is already freed when the associated device is removed,
++ * so we just need to remove the pointer from the widget.
++ */
++static inline void gx_formatter_free(struct snd_soc_dapm_widget *w)
++{
++	w->priv = NULL;
++}
++
++#endif /* _MESON_GX_FORMATTER_H */
+diff --git a/sound/soc/meson/gx-interface.h b/sound/soc/meson/gx-interface.h
+new file mode 100644
+index 000000000000..65c46dcce32a
+--- /dev/null
++++ b/sound/soc/meson/gx-interface.h
+@@ -0,0 +1,48 @@
++/* SPDX-License-Identifier: (GPL-2.0 OR MIT) */
++/*
++ * Copyright (c) 2026 Baylibre SAS.
++ * Author: Valerio Setti <vsetti@baylibre.com>
++ */
++
++#ifndef _MESON_GX_INTERFACE_H
++#define _MESON_GX_INTERFACE_H
++
++#include <linux/clk.h>
++#include <linux/regmap.h>
++#include <sound/pcm.h>
++#include <sound/soc.h>
++#include <sound/soc-dai.h>
++
++struct gx_iface {
++	struct clk *mclk;
++	unsigned long mclk_rate;
++
++	/* format is common to all the DAIs of the iface */
++	unsigned int fmt;
++
++	/* For component wide symmetry */
++	int rate;
++
++	/* Only for GX platform */
++	int bs_quirk;
++};
++
++struct gx_stream {
++	struct gx_iface *iface;
++	struct list_head formatter_list;
++	struct mutex lock;
++	unsigned int channels;
++	unsigned int width;
++	unsigned int physical_width;
++	bool ready;
++
++	/* For continuous clock tracking */
++	bool clk_enabled;
++};
++
++struct gx_stream *gx_stream_alloc(struct gx_iface *iface);
++void gx_stream_free(struct gx_stream *ts);
++int gx_stream_start(struct gx_stream *ts);
++void gx_stream_stop(struct gx_stream *ts);
++
++#endif /* _MESON_GX_INTERFACE_H */
+-- 
+2.55.0
+

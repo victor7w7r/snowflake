@@ -1,0 +1,83 @@
+From ef6f394039973716dc61fb82fc51243fb467caa9 Mon Sep 17 00:00:00 2001
+From: John Johansen <john.johansen@canonical.com>
+Date: Thu, 23 Jul 2026 15:41:38 -0700
+Subject: [PATCH 13104/15333] apparmor: make table entry count last enum for
+ static tables
+
+Instead of keeping an external define for the various tables indexed
+by an enum, make the size the last entry of the enum so the table
+size will get updated correctly with changes to the enum.
+
+Reviewed-by: Georgia Garcia <georgia.garcia@canonical.com>
+Signed-off-by: John Johansen <john.johansen@canonical.com>
+---
+ security/apparmor/include/audit.h  | 4 ++--
+ security/apparmor/include/policy.h | 2 +-
+ security/apparmor/lsm.c            | 4 ++--
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/security/apparmor/include/audit.h b/security/apparmor/include/audit.h
+index aa00b34404f9..75ae2cc96d16 100644
+--- a/security/apparmor/include/audit.h
++++ b/security/apparmor/include/audit.h
+@@ -21,13 +21,13 @@
+ #include "label.h"
+ 
+ extern const char *const audit_mode_names[];
+-#define AUDIT_MAX_INDEX 5
+ enum audit_mode {
+ 	AUDIT_NORMAL,		/* follow normal auditing of accesses */
+ 	AUDIT_QUIET_DENIED,	/* quiet all denied access messages */
+ 	AUDIT_QUIET,		/* quiet all messages */
+ 	AUDIT_NOQUIET,		/* do not quiet audit messages */
+-	AUDIT_ALL		/* audit all accesses */
++	AUDIT_ALL,		/* audit all accesses */
++	AUDIT_MODE_NAMES_COUNT	/* Must be last entry */
+ };
+ 
+ enum audit_type {
+diff --git a/security/apparmor/include/policy.h b/security/apparmor/include/policy.h
+index f530436e2b9d..eae9db08fb93 100644
+--- a/security/apparmor/include/policy.h
++++ b/security/apparmor/include/policy.h
+@@ -36,7 +36,6 @@ extern int unprivileged_userns_apparmor_policy;
+ extern int aa_unprivileged_unconfined_restricted;
+ 
+ extern const char *const aa_profile_mode_names[];
+-#define APPARMOR_MODE_NAMES_MAX_INDEX 4
+ 
+ #define PROFILE_MODE(_profile, _mode)		\
+ 	((aa_g_profile_mode == (_mode)) ||	\
+@@ -75,6 +74,7 @@ enum profile_mode {
+ 	APPARMOR_KILL,		/* kill task on access violation */
+ 	APPARMOR_UNCONFINED,	/* profile set to unconfined */
+ 	APPARMOR_USER,		/* modified complain mode to userspace */
++	PROFILE_MODE_NAMES_COUNT	/* Must be last entry */
+ };
+ 
+ 
+diff --git a/security/apparmor/lsm.c b/security/apparmor/lsm.c
+index 9c5dcaf2fec3..5e21dd78d608 100644
+--- a/security/apparmor/lsm.c
++++ b/security/apparmor/lsm.c
+@@ -2190,7 +2190,7 @@ static int param_set_audit(const char *val, const struct kernel_param *kp)
+ 	if (apparmor_initialized && !aa_current_policy_admin_capable(NULL))
+ 		return -EPERM;
+ 
+-	i = match_string(audit_mode_names, AUDIT_MAX_INDEX, val);
++	i = match_string(audit_mode_names, AUDIT_MODE_NAMES_COUNT, val);
+ 	if (i < 0)
+ 		return -EINVAL;
+ 
+@@ -2218,7 +2218,7 @@ static int param_set_mode(const char *val, const struct kernel_param *kp)
+ 	if (apparmor_initialized && !aa_current_policy_admin_capable(NULL))
+ 		return -EPERM;
+ 
+-	i = match_string(aa_profile_mode_names, APPARMOR_MODE_NAMES_MAX_INDEX,
++	i = match_string(aa_profile_mode_names, PROFILE_MODE_NAMES_COUNT,
+ 			 val);
+ 	if (i < 0)
+ 		return -EINVAL;
+-- 
+2.55.0
+

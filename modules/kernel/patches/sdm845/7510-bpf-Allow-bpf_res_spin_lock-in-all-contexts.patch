@@ -1,0 +1,41 @@
+From 59b9731addc7633a39d3a042ed968864f7b3aaf5 Mon Sep 17 00:00:00 2001
+From: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Date: Sun, 19 Jul 2026 13:35:49 +0200
+Subject: [PATCH 07510/15333] bpf: Allow bpf_res_spin_lock() in all contexts
+
+There is no particular reason to keep bpf_res_spin_lock() disabled in
+tracing programs, since it is safe against reentrancy and deadlocks.
+Remove the restriction for tracing programs covered by the predicate
+is_tracing_prog_type().
+
+This is a prerequisite before the definition of is_tracing_prog_type()
+is updated to include raw_tp, fentry, fexit, and fmod_ret. Existing
+tracing programs will be updated to use bpf_res_spin_lock() instead when
+it is available.
+
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Reviewed-by: Emil Tsalapatis <emil@etsalapatis.com>
+Acked-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://lore.kernel.org/bpf/20260719113551.1294284-2-memxor@gmail.com
+---
+ kernel/bpf/verifier.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 641c3c62c1ec..e6f35f4e715b 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -17816,7 +17816,9 @@ static int check_map_prog_compatibility(struct bpf_verifier_env *env,
+ 			verbose(env, "socket filter progs cannot use bpf_spin_lock yet\n");
+ 			return -EINVAL;
+ 		}
++	}
+ 
++	if (btf_record_has_field(map->record, BPF_SPIN_LOCK)) {
+ 		if (is_tracing_prog_type(prog_type)) {
+ 			verbose(env, "tracing progs cannot use bpf_spin_lock yet\n");
+ 			return -EINVAL;
+-- 
+2.55.0
+

@@ -1,0 +1,44 @@
+From a50587bbf30b04c1c643ecff1efd27acf6b933ec Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Mon, 27 Jul 2026 17:15:57 +0200
+Subject: [PATCH 07365/15333] fat: Propagate inode buffer write errors from
+ fat_sync_inode_metadata()
+
+fat_sync_inode_metadata() ignores the result of writing the buffer
+containing the inode's directory entry. Before commit 525da4f40a7c
+("fat: Fix missed inode writeback during fsync(2)") a write error was
+propagated to fsync(2) via __fat_write_inode() -> sync_dirty_buffer(),
+now fsync(2) reports success even though the inode's directory entry
+could not be written. Check buffer_write_io_error() after
+sync_dirty_buffer() like the other ->sync_inode_metadata
+implementations do.
+
+Fixes: 525da4f40a7c ("fat: Fix missed inode writeback during fsync(2)")
+Reported-by: Sashiko <sashiko-bot@kernel.org>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/fat/inode.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/fs/fat/inode.c b/fs/fat/inode.c
+index e3bb7b4713f2..ef1f826179cd 100644
+--- a/fs/fat/inode.c
++++ b/fs/fat/inode.c
+@@ -646,8 +646,13 @@ static int fat_sync_inode_metadata(struct inode *inode,
+ 	 * Buffer present? We leave buffer_dirty check for sync_dirty_buffer()
+ 	 * for proper synchronization with ongoing IO.
+ 	 */
+-	if (bh && buffer_uptodate(bh))
++	if (bh && buffer_uptodate(bh)) {
+ 		sync_dirty_buffer(bh);
++		if (buffer_write_io_error(bh)) {
++			brelse(bh);
++			return -EIO;
++		}
++	}
+ 	brelse(bh);
+ 	return mmb_sync(&MSDOS_I(inode)->i_metadata_bhs);
+ }
+-- 
+2.55.0
+

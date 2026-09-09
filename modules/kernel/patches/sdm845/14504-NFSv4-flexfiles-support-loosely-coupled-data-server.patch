@@ -1,0 +1,208 @@
+From 92a885576fbcd145cf3cdfa73d33ca79d7ef81a4 Mon Sep 17 00:00:00 2001
+From: Jeuk Kim <jeuk20.kim@gmail.com>
+Date: Wed, 8 Jul 2026 16:44:33 +0900
+Subject: [PATCH 14504/15333] NFSv4/flexfiles: support loosely coupled data
+ servers
+
+A flexfiles storage device is tightly coupled to the MDS only when the
+decoded ds_versions[0].tightly_coupled flag is set (RFC 8435, sections
+2.3 and 4.1). The client currently ignores that flag and treats every
+data server as tightly coupled, which breaks I/O to loosely coupled DSes.
+
+Two things force that assumption on an NFSv4.1+ DS:
+
+  1) nfs4_set_ds_client() always sets NFS_CS_PNFS on the new client, so
+     EXCHANGE_ID is sent with EXCHGID4_FLAG_USE_PNFS_DS.
+
+  2) nfs4_init_ds_session() then calls is_ds_client() and returns -ENODEV
+     if the reply does not carry EXCHGID4_FLAG_USE_PNFS_DS.
+
+A loosely coupled DS is just a normal NFS server and does not act in the
+pNFS DS role, so the client must not require it to advertise that role.
+
+Thread the ds_versions[0].tightly_coupled flag from the flexfiles driver
+down to the DS connect path. When it is false, skip both the NFS_CS_PNFS
+flag and the is_ds_client() check. The file layout driver always passes
+true because NFSv4.1 file layout data servers use the pNFS DS role.
+
+Signed-off-by: Jeuk Kim <jeuk20.kim@samsung.com>
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ fs/nfs/filelayout/filelayoutdev.c         |  2 +-
+ fs/nfs/flexfilelayout/flexfilelayoutdev.c |  3 ++-
+ fs/nfs/internal.h                         |  3 ++-
+ fs/nfs/nfs4client.c                       |  5 +++--
+ fs/nfs/nfs4session.c                      |  5 +++--
+ fs/nfs/nfs4session.h                      |  3 ++-
+ fs/nfs/pnfs.h                             |  3 ++-
+ fs/nfs/pnfs_nfs.c                         | 14 +++++++++-----
+ 8 files changed, 24 insertions(+), 14 deletions(-)
+
+diff --git a/fs/nfs/filelayout/filelayoutdev.c b/fs/nfs/filelayout/filelayoutdev.c
+index 7226989ee4d5..d06d303fdcc3 100644
+--- a/fs/nfs/filelayout/filelayoutdev.c
++++ b/fs/nfs/filelayout/filelayoutdev.c
+@@ -280,7 +280,7 @@ nfs4_fl_prepare_ds(struct pnfs_layout_segment *lseg, u32 ds_idx)
+ 
+ 	status = nfs4_pnfs_ds_connect(s, ds, devid, dataserver_timeo,
+ 			     dataserver_retrans, 4,
+-			     s->nfs_client->cl_minorversion);
++			     s->nfs_client->cl_minorversion, true);
+ 	if (status) {
+ 		nfs4_mark_deviceid_unavailable(devid);
+ 		ret = NULL;
+diff --git a/fs/nfs/flexfilelayout/flexfilelayoutdev.c b/fs/nfs/flexfilelayout/flexfilelayoutdev.c
+index 1109462a9699..8be5c730e101 100644
+--- a/fs/nfs/flexfilelayout/flexfilelayoutdev.c
++++ b/fs/nfs/flexfilelayout/flexfilelayoutdev.c
+@@ -399,7 +399,8 @@ nfs4_ff_layout_prepare_ds(struct pnfs_layout_segment *lseg,
+ 	status = nfs4_pnfs_ds_connect(s, ds, &mirror->dss[dss_id].mirror_ds->id_node,
+ 			     dataserver_timeo, dataserver_retrans,
+ 			     mirror->dss[dss_id].mirror_ds->ds_versions[0].version,
+-			     mirror->dss[dss_id].mirror_ds->ds_versions[0].minor_version);
++			     mirror->dss[dss_id].mirror_ds->ds_versions[0].minor_version,
++			     mirror->dss[dss_id].mirror_ds->ds_versions[0].tightly_coupled);
+ 
+ 	/* connect success, check rsize/wsize limit */
+ 	if (!status) {
+diff --git a/fs/nfs/internal.h b/fs/nfs/internal.h
+index 9ddf0192a0b9..8656ea6af887 100644
+--- a/fs/nfs/internal.h
++++ b/fs/nfs/internal.h
+@@ -251,7 +251,8 @@ extern struct nfs_client *nfs4_set_ds_client(struct nfs_server *mds_srv,
+ 					     int ds_addrlen, int ds_proto,
+ 					     unsigned int ds_timeo,
+ 					     unsigned int ds_retrans,
+-					     u32 minor_version);
++					     u32 minor_version,
++					     bool tightly_coupled);
+ extern struct rpc_clnt *nfs4_find_or_create_ds_client(struct nfs_client *,
+ 						struct inode *);
+ extern void nfs4_session_limit_rwsize(struct nfs_server *server);
+diff --git a/fs/nfs/nfs4client.c b/fs/nfs/nfs4client.c
+index aff019d2842d..d06bfe317890 100644
+--- a/fs/nfs/nfs4client.c
++++ b/fs/nfs/nfs4client.c
+@@ -792,7 +792,7 @@ static int nfs4_set_client(struct nfs_server *server,
+ struct nfs_client *nfs4_set_ds_client(struct nfs_server *mds_srv,
+ 		const struct sockaddr_storage *ds_addr, int ds_addrlen,
+ 		int ds_proto, unsigned int ds_timeo, unsigned int ds_retrans,
+-		u32 minor_version)
++		u32 minor_version, bool tightly_coupled)
+ {
+ 	struct rpc_timeout ds_timeout;
+ 	struct nfs_client *mds_clp = mds_srv->nfs_client;
+@@ -839,7 +839,8 @@ struct nfs_client *nfs4_set_ds_client(struct nfs_server *mds_srv,
+ 	if (test_bit(NFS_CS_NETUNREACH_FATAL, &mds_clp->cl_flags))
+ 		__set_bit(NFS_CS_NETUNREACH_FATAL, &cl_init.init_flags);
+ 
+-	__set_bit(NFS_CS_PNFS, &cl_init.init_flags);
++	if (tightly_coupled)
++		__set_bit(NFS_CS_PNFS, &cl_init.init_flags);
+ 	cl_init.max_connect = NFS_MAX_TRANSPORTS;
+ 	/*
+ 	 * Set an authflavor equual to the MDS value. Use the MDS nfs_client
+diff --git a/fs/nfs/nfs4session.c b/fs/nfs/nfs4session.c
+index 993f0db7cf5e..175390e5b93f 100644
+--- a/fs/nfs/nfs4session.c
++++ b/fs/nfs/nfs4session.c
+@@ -626,7 +626,8 @@ int nfs4_init_session(struct nfs_client *clp)
+ 	return nfs41_check_session_ready(clp);
+ }
+ 
+-int nfs4_init_ds_session(struct nfs_client *clp, unsigned long lease_time)
++int nfs4_init_ds_session(struct nfs_client *clp, unsigned long lease_time,
++			 bool tightly_coupled)
+ {
+ 	struct nfs4_session *session = clp->cl_session;
+ 	int ret;
+@@ -652,7 +653,7 @@ int nfs4_init_ds_session(struct nfs_client *clp, unsigned long lease_time)
+ 	if (ret)
+ 		return ret;
+ 	/* Test for the DS role */
+-	if (!is_ds_client(clp))
++	if (tightly_coupled && !is_ds_client(clp))
+ 		return -ENODEV;
+ 	return 0;
+ }
+diff --git a/fs/nfs/nfs4session.h b/fs/nfs/nfs4session.h
+index d2569f599977..ee2f4baf16a1 100644
+--- a/fs/nfs/nfs4session.h
++++ b/fs/nfs/nfs4session.h
+@@ -122,7 +122,8 @@ extern int nfs4_setup_session_slot_tables(struct nfs4_session *ses);
+ extern struct nfs4_session *nfs4_alloc_session(struct nfs_client *clp);
+ extern void nfs4_destroy_session(struct nfs4_session *session);
+ extern int nfs4_init_session(struct nfs_client *clp);
+-extern int nfs4_init_ds_session(struct nfs_client *, unsigned long);
++extern int nfs4_init_ds_session(struct nfs_client *clp, unsigned long lease_time,
++				bool tightly_coupled);
+ 
+ /*
+  * Determine if sessions are in use.
+diff --git a/fs/nfs/pnfs.h b/fs/nfs/pnfs.h
+index 673c2b244978..bab81f769636 100644
+--- a/fs/nfs/pnfs.h
++++ b/fs/nfs/pnfs.h
+@@ -421,7 +421,8 @@ struct nfs4_pnfs_ds *nfs4_pnfs_ds_add(const struct net *net,
+ void nfs4_pnfs_v3_ds_connect_unload(void);
+ int nfs4_pnfs_ds_connect(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds,
+ 			  struct nfs4_deviceid_node *devid, unsigned int timeo,
+-			  unsigned int retrans, u32 version, u32 minor_version);
++			  unsigned int retrans, u32 version, u32 minor_version,
++			  bool tightly_coupled);
+ struct nfs4_pnfs_ds_addr *nfs4_decode_mp_ds_addr(struct net *net,
+ 						 struct xdr_stream *xdr,
+ 						 gfp_t gfp_flags);
+diff --git a/fs/nfs/pnfs_nfs.c b/fs/nfs/pnfs_nfs.c
+index 648c95b78eea..b539e1a44d26 100644
+--- a/fs/nfs/pnfs_nfs.c
++++ b/fs/nfs/pnfs_nfs.c
+@@ -881,7 +881,8 @@ static int _nfs4_pnfs_v4_ds_connect(struct nfs_server *mds_srv,
+ 				 struct nfs4_pnfs_ds *ds,
+ 				 unsigned int timeo,
+ 				 unsigned int retrans,
+-				 u32 minor_version)
++				 u32 minor_version,
++				 bool tightly_coupled)
+ {
+ 	struct nfs_client *clp = ERR_PTR(-EIO);
+ 	struct nfs_client *mds_clp = mds_srv->nfs_client;
+@@ -971,12 +972,14 @@ static int _nfs4_pnfs_v4_ds_connect(struct nfs_server *mds_srv,
+ 
+ 			clp = nfs4_set_ds_client(mds_srv, &da->da_addr,
+ 						 da->da_addrlen, ds_proto,
+-						 timeo, retrans, minor_version);
++						 timeo, retrans, minor_version,
++						 tightly_coupled);
+ 			if (IS_ERR(clp))
+ 				continue;
+ 
+ 			status = nfs4_init_ds_session(clp,
+-					mds_srv->nfs_client->cl_lease_time);
++					mds_srv->nfs_client->cl_lease_time,
++					tightly_coupled);
+ 			if (status) {
+ 				nfs_put_client(clp);
+ 				clp = ERR_PTR(-EIO);
+@@ -1004,7 +1007,8 @@ static int _nfs4_pnfs_v4_ds_connect(struct nfs_server *mds_srv,
+  */
+ int nfs4_pnfs_ds_connect(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds,
+ 			  struct nfs4_deviceid_node *devid, unsigned int timeo,
+-			  unsigned int retrans, u32 version, u32 minor_version)
++			  unsigned int retrans, u32 version, u32 minor_version,
++			  bool tightly_coupled)
+ {
+ 	int err;
+ 
+@@ -1027,7 +1031,7 @@ int nfs4_pnfs_ds_connect(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds,
+ 		break;
+ 	case 4:
+ 		err = _nfs4_pnfs_v4_ds_connect(mds_srv, ds, timeo, retrans,
+-					       minor_version);
++					       minor_version, tightly_coupled);
+ 		break;
+ 	default:
+ 		dprintk("%s: unsupported DS version %d\n", __func__, version);
+-- 
+2.55.0
+

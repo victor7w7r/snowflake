@@ -1,0 +1,49 @@
+From 226791fa6dbb1e1c6d4c8ac4d10b6c73f0dc32e1 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Wed, 15 Jul 2026 12:11:15 +0700
+Subject: [PATCH 04717/15333] ASoC: tegra: tegra210: Use
+ devm_clk_get_optional() for sync_input clock
+
+The existing comment states that the sync_input clock is only needed
+when another I/O is configured to use the current I2S instance as its
+input clock, and the current code does not treat its absence as an
+error.
+Use devm_clk_get_optional() to match the existing behaviour while still
+reporting real failures via dev_err_probe(). Update the comment to
+describe the optional nature of the clock rather than the previous error
+handling.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Thierry Reding <treding@nvidia.com>
+Link: https://patch.msgid.link/20260715051115.17385-5-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/tegra/tegra210_i2s.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/sound/soc/tegra/tegra210_i2s.c b/sound/soc/tegra/tegra210_i2s.c
+index ff8c72fc38c5..e7e26e917291 100644
+--- a/sound/soc/tegra/tegra210_i2s.c
++++ b/sound/soc/tegra/tegra210_i2s.c
+@@ -1078,13 +1078,13 @@ static int tegra210_i2s_probe(struct platform_device *pdev)
+ 				     "can't retrieve I2S bit clock\n");
+ 
+ 	/*
+-	 * Not an error, as this clock is needed only when some other I/O
+-	 * requires input clock from current I2S instance, which is
+-	 * configurable from DT.
++	 * This clock is optional and is only needed when another I/O uses
++	 * the current I2S instance as its input clock, as configured in DT.
+ 	 */
+-	i2s->clk_sync_input = devm_clk_get(dev, "sync_input");
++	i2s->clk_sync_input = devm_clk_get_optional(dev, "sync_input");
+ 	if (IS_ERR(i2s->clk_sync_input))
+-		dev_dbg(dev, "can't retrieve I2S sync input clock\n");
++		return dev_err_probe(dev, PTR_ERR(i2s->clk_sync_input),
++				     "can't retrieve I2S sync input clock\n");
+ 
+ 	regs = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(regs))
+-- 
+2.55.0
+

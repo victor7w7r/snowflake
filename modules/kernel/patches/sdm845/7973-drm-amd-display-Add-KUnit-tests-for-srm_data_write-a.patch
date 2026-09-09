@@ -1,0 +1,223 @@
+From eb5e911dff1862c462f2ca1e0ba3ebdd8bb0e605 Mon Sep 17 00:00:00 2001
+From: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Date: Tue, 14 Jul 2026 11:50:12 -0400
+Subject: [PATCH 07973/15333] drm/amd/display: Add KUnit tests for
+ srm_data_write and srm_data_read
+
+Expose srm_data_write() and srm_data_read() for KUnit and add tests
+covering the sysfs SRM write/read paths:
+
+- write stages the buffer into srm_temp and returns count; with the TA
+  uninitialized psp_set_srm() fails so the committed SRM is unchanged
+- read returns -EINVAL when psp_get_srm() returns NULL (TA uninitialized)
+- read returns 0 for an empty SRM using the SR-IOV VF bypass so
+  psp_hdcp_invoke() is a no-op and psp_get_srm() returns a non-NULL buffer
+
+Reviewed-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Fangzhi Zuo <jerry.zuo@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../amd/display/amdgpu_dm/amdgpu_dm_hdcp.c    |   6 +-
+ .../amd/display/amdgpu_dm/amdgpu_dm_hdcp.h    |   9 ++
+ .../amdgpu_dm/tests/amdgpu_dm_hdcp_test.c     | 117 ++++++++++++++++++
+ 3 files changed, 130 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.c
+index 560bfa43dc8a..9ea0a120af6f 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.c
+@@ -743,7 +743,7 @@ EXPORT_IF_KUNIT(update_config);
+  *	-if we try to "1. SET" a newer version and PSP rejects it. That means the format is
+  *	incorrect/corrupted and we should correct our SRM by getting it from PSP
+  */
+-static ssize_t srm_data_write(struct file *filp, struct kobject *kobj,
++STATIC_IFN_KUNIT ssize_t srm_data_write(struct file *filp, struct kobject *kobj,
+ 			      const struct bin_attribute *bin_attr, char *buffer,
+ 			      loff_t pos, size_t count)
+ {
+@@ -766,8 +766,9 @@ static ssize_t srm_data_write(struct file *filp, struct kobject *kobj,
+ 
+ 	return count;
+ }
++EXPORT_IF_KUNIT(srm_data_write);
+ 
+-static ssize_t srm_data_read(struct file *filp, struct kobject *kobj,
++STATIC_IFN_KUNIT ssize_t srm_data_read(struct file *filp, struct kobject *kobj,
+ 			     const struct bin_attribute *bin_attr, char *buffer,
+ 			     loff_t pos, size_t count)
+ {
+@@ -803,6 +804,7 @@ static ssize_t srm_data_read(struct file *filp, struct kobject *kobj,
+ 	link_lock(work, false);
+ 	return ret;
+ }
++EXPORT_IF_KUNIT(srm_data_read);
+ 
+ /* From the hdcp spec (5.Renewability) SRM needs to be stored in a non-volatile memory.
+  *
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.h
+index 30c1e7b1af1a..e700d019f971 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.h
+@@ -45,6 +45,9 @@ struct mod_hdcp_display;
+ struct cp_psp;
+ struct amdgpu_device;
+ struct psp_context;
++struct file;
++struct kobject;
++struct bin_attribute;
+ 
+ struct hdcp_workqueue {
+ 	struct work_struct cpirq_work;
+@@ -125,6 +128,12 @@ uint8_t *psp_get_srm(struct psp_context *psp, uint32_t *srm_version, uint32_t *s
+ int psp_set_srm(struct psp_context *psp, u8 *srm, uint32_t srm_size, uint32_t *srm_version);
+ bool enable_assr(void *handle, struct dc_link *link);
+ void update_config(void *handle, struct cp_psp_stream_config *config);
++ssize_t srm_data_write(struct file *filp, struct kobject *kobj,
++		       const struct bin_attribute *bin_attr, char *buffer,
++		       loff_t pos, size_t count);
++ssize_t srm_data_read(struct file *filp, struct kobject *kobj,
++		      const struct bin_attribute *bin_attr, char *buffer,
++		      loff_t pos, size_t count);
+ #endif
+ 
+ #endif /* AMDGPU_DM_AMDGPU_DM_HDCP_H_ */
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_hdcp_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_hdcp_test.c
+index d95babb73711..a8bca05f47a3 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_hdcp_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_hdcp_test.c
+@@ -1348,6 +1348,119 @@ static void dm_test_psp_set_srm_uninitialized_returns_einval(struct kunit *test)
+ 
+ /* End of tests for psp_get_srm() and psp_set_srm() */
+ 
++/* Tests for srm_data_write() and srm_data_read() */
++
++/**
++ * dm_test_srm_data_write_uninitialized_ta_keeps_srm - write with TA not initialized
++ * @test: KUnit test context
++ *
++ * srm_data_write() always copies the incoming buffer into work->srm_temp and
++ * returns the byte count. When the HDCP TA is not initialized, psp_set_srm()
++ * fails, so the committed SRM (work->srm / work->srm_size) must stay untouched.
++ */
++static void dm_test_srm_data_write_uninitialized_ta_keeps_srm(struct kunit *test)
++{
++	struct hdcp_workqueue *work;
++	struct psp_context *psp;
++	u8 buf[4] = {0xAA, 0xBB, 0xCC, 0xDD};
++	ssize_t ret;
++
++	work = kunit_kzalloc(test, sizeof(*work), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, work);
++	psp = kunit_kzalloc(test, sizeof(*psp), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, psp);
++
++	work->max_link = 1;
++	mutex_init(&work->mutex);
++	/* kzalloc leaves hdcp_context.context.initialized == false */
++	work->hdcp.config.psp.handle = psp;
++	work->srm_temp = kunit_kzalloc(test, PSP_HDCP_SRM_FIRST_GEN_MAX_SIZE, GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, work->srm_temp);
++	work->srm = kunit_kzalloc(test, PSP_HDCP_SRM_FIRST_GEN_MAX_SIZE, GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, work->srm);
++
++	ret = srm_data_write(NULL, NULL, &work->attr, buf, 0, sizeof(buf));
++
++	KUNIT_EXPECT_EQ(test, ret, (ssize_t)sizeof(buf));
++	/* Incoming data is always staged into srm_temp. */
++	KUNIT_EXPECT_MEMEQ(test, work->srm_temp, buf, sizeof(buf));
++	/* psp_set_srm() failed, so the committed SRM must be unchanged. */
++	KUNIT_EXPECT_EQ(test, work->srm_size, 0u);
++}
++
++/**
++ * dm_test_srm_data_read_uninitialized_ta_returns_einval - read with TA not initialized
++ * @test: KUnit test context
++ *
++ * When the HDCP TA is not initialized, psp_get_srm() returns NULL, so
++ * srm_data_read() must take the error path and return -EINVAL.
++ */
++static void dm_test_srm_data_read_uninitialized_ta_returns_einval(struct kunit *test)
++{
++	struct hdcp_workqueue *work;
++	struct psp_context *psp;
++	u8 buf[4];
++	ssize_t ret;
++
++	work = kunit_kzalloc(test, sizeof(*work), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, work);
++	psp = kunit_kzalloc(test, sizeof(*psp), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, psp);
++
++	work->max_link = 1;
++	mutex_init(&work->mutex);
++	/* kzalloc leaves hdcp_context.context.initialized == false */
++	work->hdcp.config.psp.handle = psp;
++
++	ret = srm_data_read(NULL, NULL, &work->attr, buf, 0, sizeof(buf));
++
++	KUNIT_EXPECT_EQ(test, ret, (ssize_t)-EINVAL);
++}
++
++/**
++ * dm_test_srm_data_read_empty_srm_returns_zero - read of an empty SRM
++ * @test: KUnit test context
++ *
++ * With an initialized TA and the SR-IOV VF bypass, psp_hdcp_invoke() is a
++ * no-op and the zeroed shared buffer yields a SUCCESS status with srm_size 0.
++ * psp_get_srm() then returns a non-NULL (empty) buffer, so srm_data_read()
++ * takes the "nothing left to copy" path and returns 0.
++ */
++static void dm_test_srm_data_read_empty_srm_returns_zero(struct kunit *test)
++{
++	struct amdgpu_device *adev = dm_kunit_alloc_adev(test);
++	struct ta_hdcp_shared_memory *hdcp_cmd;
++	struct hdcp_workqueue *work;
++	struct psp_context *psp;
++	u8 buf[4];
++	ssize_t ret;
++
++	KUNIT_ASSERT_NOT_NULL(test, adev);
++
++	work = kunit_kzalloc(test, sizeof(*work), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, work);
++	psp = kunit_kzalloc(test, sizeof(*psp), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, psp);
++	hdcp_cmd = kunit_kzalloc(test, sizeof(*hdcp_cmd), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, hdcp_cmd);
++
++	work->max_link = 1;
++	mutex_init(&work->mutex);
++	psp->adev = adev;
++	psp->hdcp_context.context.initialized = true;
++	psp->hdcp_context.context.mem_context.shared_buf = (uint8_t *)hdcp_cmd;
++	work->hdcp.config.psp.handle = psp;
++
++	/* SR-IOV VF makes psp_hdcp_invoke() return early without firmware. */
++	adev->virt.caps |= AMDGPU_SRIOV_CAPS_IS_VF;
++
++	ret = srm_data_read(NULL, NULL, &work->attr, buf, 0, sizeof(buf));
++
++	KUNIT_EXPECT_EQ(test, ret, 0);
++}
++
++/* End of tests for srm_data_write() and srm_data_read() */
++
+ /*
+  * Tests for hdcp_update_display() / hdcp_remove_display() /
+  * hdcp_reset_display().
+@@ -1877,6 +1990,10 @@ static struct kunit_case dm_hdcp_test_cases[] = {
+ 	/* psp_get_srm() / psp_set_srm() */
+ 	KUNIT_CASE(dm_test_psp_get_srm_uninitialized_returns_null),
+ 	KUNIT_CASE(dm_test_psp_set_srm_uninitialized_returns_einval),
++	/* srm_data_write() / srm_data_read() */
++	KUNIT_CASE(dm_test_srm_data_write_uninitialized_ta_keeps_srm),
++	KUNIT_CASE(dm_test_srm_data_read_uninitialized_ta_returns_einval),
++	KUNIT_CASE(dm_test_srm_data_read_empty_srm_returns_zero),
+ 	/* hdcp_update_display() / hdcp_remove_display() / hdcp_reset_display() */
+ 	KUNIT_CASE(dm_test_hdcp_update_display_enable_registers_connector),
+ 	KUNIT_CASE(dm_test_hdcp_update_display_disable_sets_status_off),
+-- 
+2.55.0
+

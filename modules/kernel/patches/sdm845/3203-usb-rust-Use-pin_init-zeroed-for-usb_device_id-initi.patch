@@ -1,0 +1,126 @@
+From 14618b21ea9d83956d69027cac80936f03c10034 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Nicol=C3=A1s=20Antinori?= <nico.antinori.7@gmail.com>
+Date: Thu, 25 Jun 2026 19:49:22 -0300
+Subject: [PATCH 03203/15333] usb: rust: Use pin_init::zeroed for usb_device_id
+ initialization
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+All types in `bindings` implement `Zeroable` if they can. This enables
+using `pin_init::zeroed()` for `usb_device_id` initialization instead
+of relying on `..unsafe { MaybeUninit::zeroed().assume_init() }`.
+
+This change improves readability and removes unnecessary unsafe blocks.
+
+Link: https://github.com/Rust-for-Linux/linux/issues/1189
+Suggested-by: Benno Lossin <lossin@kernel.org>
+Signed-off-by: Nicolás Antinori <nico.antinori.7@gmail.com>
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Link: https://patch.msgid.link/20260625224927.404258-1-nico.antinori.7@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ rust/kernel/usb.rs | 31 ++++++++++---------------------
+ 1 file changed, 10 insertions(+), 21 deletions(-)
+
+diff --git a/rust/kernel/usb.rs b/rust/kernel/usb.rs
+index 7aff0c82d0af..bbf85366d2c9 100644
+--- a/rust/kernel/usb.rs
++++ b/rust/kernel/usb.rs
+@@ -24,11 +24,8 @@
+ };
+ use core::{
+     marker::PhantomData,
+-    mem::{
+-        offset_of,
+-        MaybeUninit, //
+-    },
+-    ptr::NonNull,
++    mem::offset_of,
++    ptr::NonNull, //
+ };
+ 
+ /// An adapter for the registration of USB drivers.
+@@ -130,8 +127,7 @@ pub const fn from_id(vendor: u16, product: u16) -> Self {
+             match_flags: bindings::USB_DEVICE_ID_MATCH_DEVICE as u16,
+             idVendor: vendor,
+             idProduct: product,
+-            // SAFETY: It is safe to use all zeroes for the other fields of `usb_device_id`.
+-            ..unsafe { MaybeUninit::zeroed().assume_init() }
++            ..pin_init::zeroed()
+         })
+     }
+ 
+@@ -143,8 +139,7 @@ pub const fn from_device_ver(vendor: u16, product: u16, bcd_lo: u16, bcd_hi: u16
+             idProduct: product,
+             bcdDevice_lo: bcd_lo,
+             bcdDevice_hi: bcd_hi,
+-            // SAFETY: It is safe to use all zeroes for the other fields of `usb_device_id`.
+-            ..unsafe { MaybeUninit::zeroed().assume_init() }
++            ..pin_init::zeroed()
+         })
+     }
+ 
+@@ -155,8 +150,7 @@ pub const fn from_device_info(class: u8, subclass: u8, protocol: u8) -> Self {
+             bDeviceClass: class,
+             bDeviceSubClass: subclass,
+             bDeviceProtocol: protocol,
+-            // SAFETY: It is safe to use all zeroes for the other fields of `usb_device_id`.
+-            ..unsafe { MaybeUninit::zeroed().assume_init() }
++            ..pin_init::zeroed()
+         })
+     }
+ 
+@@ -167,8 +161,7 @@ pub const fn from_interface_info(class: u8, subclass: u8, protocol: u8) -> Self
+             bInterfaceClass: class,
+             bInterfaceSubClass: subclass,
+             bInterfaceProtocol: protocol,
+-            // SAFETY: It is safe to use all zeroes for the other fields of `usb_device_id`.
+-            ..unsafe { MaybeUninit::zeroed().assume_init() }
++            ..pin_init::zeroed()
+         })
+     }
+ 
+@@ -180,8 +173,7 @@ pub const fn from_device_interface_class(vendor: u16, product: u16, class: u8) -
+             idVendor: vendor,
+             idProduct: product,
+             bInterfaceClass: class,
+-            // SAFETY: It is safe to use all zeroes for the other fields of `usb_device_id`.
+-            ..unsafe { MaybeUninit::zeroed().assume_init() }
++            ..pin_init::zeroed()
+         })
+     }
+ 
+@@ -193,8 +185,7 @@ pub const fn from_device_interface_protocol(vendor: u16, product: u16, protocol:
+             idVendor: vendor,
+             idProduct: product,
+             bInterfaceProtocol: protocol,
+-            // SAFETY: It is safe to use all zeroes for the other fields of `usb_device_id`.
+-            ..unsafe { MaybeUninit::zeroed().assume_init() }
++            ..pin_init::zeroed()
+         })
+     }
+ 
+@@ -206,8 +197,7 @@ pub const fn from_device_interface_number(vendor: u16, product: u16, number: u8)
+             idVendor: vendor,
+             idProduct: product,
+             bInterfaceNumber: number,
+-            // SAFETY: It is safe to use all zeroes for the other fields of `usb_device_id`.
+-            ..unsafe { MaybeUninit::zeroed().assume_init() }
++            ..pin_init::zeroed()
+         })
+     }
+ 
+@@ -227,8 +217,7 @@ pub const fn from_device_and_interface_info(
+             bInterfaceClass: class,
+             bInterfaceSubClass: subclass,
+             bInterfaceProtocol: protocol,
+-            // SAFETY: It is safe to use all zeroes for the other fields of `usb_device_id`.
+-            ..unsafe { MaybeUninit::zeroed().assume_init() }
++            ..pin_init::zeroed()
+         })
+     }
+ }
+-- 
+2.55.0
+

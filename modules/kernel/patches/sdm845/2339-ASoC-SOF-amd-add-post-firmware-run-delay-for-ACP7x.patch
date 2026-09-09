@@ -1,0 +1,82 @@
+From 7a81f54a0483edc6cbdb2fb066ccf2dc3e258ac7 Mon Sep 17 00:00:00 2001
+From: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Date: Wed, 1 Jul 2026 15:25:11 +0530
+Subject: [PATCH 02339/15333] ASoC: SOF: amd: add post-firmware-run delay for
+ ACP7x
+
+Add sof_acp7x_post_fw_run_delay() to introduce a small delay after
+firmware boot completion on resume to avoid DSP entering an
+unrecoverable state.
+
+Register it as post_fw_run callback only when the ACPI property
+acp-sof-post_fw_run_delay is set, following the same pattern used
+by the Vangogh platform.
+
+Signed-off-by: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Link: https://patch.msgid.link/20260701095759.1012929-11-Vijendar.Mukunda@amd.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/amd/acp7x.c | 28 ++++++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+diff --git a/sound/soc/sof/amd/acp7x.c b/sound/soc/sof/amd/acp7x.c
+index 3366e1b638af..c1b9c623bc39 100644
+--- a/sound/soc/sof/amd/acp7x.c
++++ b/sound/soc/sof/amd/acp7x.c
+@@ -11,6 +11,7 @@
+  * Hardware interface for Audio DSP on ACP7.B/7.F platforms
+  */
+ 
++#include <linux/acpi.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
+ #include <linux/pci.h>
+@@ -127,11 +128,29 @@ static struct snd_soc_dai_driver acp7x_sof_dai[] = {
+ 	},
+ };
+ 
++static int sof_acp7x_post_fw_run_delay(struct snd_sof_dev *sdev)
++{
++	/*
++	 * Resuming from suspend in some cases may cause the DSP firmware
++	 * to enter an unrecoverable faulty state. Delaying a bit any host
++	 * to DSP transmission right after firmware boot completion seems
++	 * to resolve the issue.
++	 */
++	if (!sdev->first_boot)
++		usleep_range(100, 150);
++
++	return 0;
++}
++
+ struct snd_sof_dsp_ops sof_acp7x_ops;
+ EXPORT_SYMBOL_NS(sof_acp7x_ops, "SND_SOC_SOF_AMD_COMMON");
+ 
+ int sof_acp7x_ops_init(struct snd_sof_dev *sdev)
+ {
++	struct acpi_device *adev = ACPI_COMPANION(&to_pci_dev(sdev->dev)->dev);
++	const union acpi_object *obj;
++	int acp_sof_post_fw_run_delay = 0;
++
+ 	/* common defaults */
+ 	memcpy(&sof_acp7x_ops, &sof_acp_common_ops, sizeof(struct snd_sof_dsp_ops));
+ 
+@@ -140,5 +159,14 @@ int sof_acp7x_ops_init(struct snd_sof_dev *sdev)
+ 	sof_acp7x_ops.probe = amd_sof_acp7x_probe;
+ 	sof_acp7x_ops.remove = amd_sof_acp7x_remove;
+ 
++	if (adev) {
++		if (!acpi_dev_get_property(adev, "acp-sof-post_fw_run_delay",
++					   ACPI_TYPE_INTEGER, &obj))
++			acp_sof_post_fw_run_delay = obj->integer.value;
++	}
++
++	if (acp_sof_post_fw_run_delay)
++		sof_acp7x_ops.post_fw_run = sof_acp7x_post_fw_run_delay;
++
+ 	return 0;
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,67 @@
+From 566ef35261dd8f3686c02b12ed383f7e6466a6de Mon Sep 17 00:00:00 2001
+From: Jani Nikula <jani.nikula@intel.com>
+Date: Tue, 2 Jun 2026 13:09:06 +0300
+Subject: [PATCH 00727/15333] drm/i915/panic: remove the extra layer from panic
+ hooks
+
+The extra layer in the panic hooks is useless. Remove it.
+
+Cc: Jocelyn Falempe <jfalempe@redhat.com>
+Reviewed-by: Jocelyn Falempe <jfalempe@redhat.com>
+Link: https://patch.msgid.link/69a776c2951b3d1f81d8eb3870cbc7fda4d1c6e0.1780394867.git.jani.nikula@intel.com
+Signed-off-by: Jani Nikula <jani.nikula@intel.com>
+---
+ drivers/gpu/drm/i915/gem/i915_gem_panic.c | 30 ++++++-----------------
+ 1 file changed, 7 insertions(+), 23 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/gem/i915_gem_panic.c b/drivers/gpu/drm/i915/gem/i915_gem_panic.c
+index 14ea45dcdd8f..bb26a0ece176 100644
+--- a/drivers/gpu/drm/i915/gem/i915_gem_panic.c
++++ b/drivers/gpu/drm/i915/gem/i915_gem_panic.c
+@@ -98,9 +98,11 @@ static struct intel_panic *i915_gem_object_alloc_panic(void)
+  * Use current vaddr if it exists, or setup a list of pages.
+  * pfn is not supported yet.
+  */
+-static int i915_gem_object_panic_setup(struct intel_panic *panic, struct drm_scanout_buffer *sb,
+-				       struct drm_gem_object *_obj, bool panic_tiling)
++static int i915_gem_object_panic_setup(struct intel_panic *panic, struct drm_scanout_buffer *sb)
+ {
++	struct intel_framebuffer *fb = sb->private;
++	struct drm_gem_object *_obj = intel_fb_bo(&fb->base);
++	bool panic_tiling = fb->panic_tiling;
+ 	enum i915_map_type has_type;
+ 	struct drm_i915_gem_object *obj = to_intel_bo(_obj);
+ 	void *ptr;
+@@ -135,26 +137,8 @@ static void i915_gem_object_panic_finish(struct intel_panic *panic)
+ 	panic->pages = NULL;
+ }
+ 
+-static struct intel_panic *intel_panic_alloc(void)
+-{
+-	return i915_gem_object_alloc_panic();
+-}
+-
+-static int intel_panic_setup(struct intel_panic *panic, struct drm_scanout_buffer *sb)
+-{
+-	struct intel_framebuffer *fb = sb->private;
+-	struct drm_gem_object *obj = intel_fb_bo(&fb->base);
+-
+-	return i915_gem_object_panic_setup(panic, sb, obj, fb->panic_tiling);
+-}
+-
+-static void intel_panic_finish(struct intel_panic *panic)
+-{
+-	return i915_gem_object_panic_finish(panic);
+-}
+-
+ const struct intel_display_panic_interface i915_display_panic_interface = {
+-	.alloc = intel_panic_alloc,
+-	.setup = intel_panic_setup,
+-	.finish = intel_panic_finish,
++	.alloc = i915_gem_object_alloc_panic,
++	.setup = i915_gem_object_panic_setup,
++	.finish = i915_gem_object_panic_finish,
+ };
+-- 
+2.55.0
+

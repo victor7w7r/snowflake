@@ -1,0 +1,101 @@
+From 9e4cb21f2940230efc09f90c8335b5cbb3e26c41 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Wed, 29 Jul 2026 20:40:08 +0200
+Subject: [PATCH 09557/15333] cpufreq: intel_pstate: Adjust policy->cur in
+ active mode to policy
+
+Since arch_freq_get_on_cpu() on x86 falls back to cpufreq_quick_get(),
+which effectively causes policy->cur to be returned when intel_pstate
+is used, adjust intel_pstate_set_policy() to set policy->cur to reflect
+the P-state that is actually going to be requested in the "performance"
+policy case instead of setting it to policy->min (which is confusing
+because it causes scaling_cur_freq to show the minimum frequency while
+the CPU is likely running at the maximum one).
+
+For this purpose, rearrange intel_pstate_set_policy() to handle the HWP
+case separately, to avoid calling intel_pstate_set_pstate() pointlessly
+with HWP enabled, and use the observation that with HWP enabled in the
+active mode, the utilization update hook is only needed when HWP boost
+is used and the policy is not "performance".
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Reviewed-by: Doug Smythies <dsmythies@telus.net>
+Tested-by: Doug Smythies <dsmythies@telus.net>
+Acked-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Link: https://patch.msgid.link/5144014.31r3eYUQgx@rafael.j.wysocki
+---
+ drivers/cpufreq/intel_pstate.c | 39 +++++++++++++++++++++-------------
+ 1 file changed, 24 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index 2cbf810db66e..7ce5981cbae5 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -2870,6 +2870,7 @@ static void intel_pstate_set_pstate(struct cpudata *cpu, int pstate)
+ 
+ static int intel_pstate_set_policy(struct cpufreq_policy *policy)
+ {
++	unsigned int freq = policy->min;
+ 	struct cpudata *cpu;
+ 
+ 	if (!policy->cpuinfo.max_freq)
+@@ -2885,7 +2886,23 @@ static int intel_pstate_set_policy(struct cpufreq_policy *policy)
+ 
+ 	intel_pstate_update_perf_limits(cpu, policy->min, policy->max);
+ 
+-	if (cpu->policy == CPUFREQ_POLICY_PERFORMANCE) {
++	if (hwp_active) {
++		/*
++		 * The active mode only requires an update util hook if HWP
++		 * boost is used and the policy is not "performance".
++		 */
++		if (hwp_boost && cpu->policy != CPUFREQ_POLICY_PERFORMANCE) {
++			intel_pstate_set_update_util_hook(policy->cpu);
++		} else {
++			intel_pstate_clear_update_util_hook(policy->cpu);
++			if (cpu->policy == CPUFREQ_POLICY_PERFORMANCE) {
++				freq = cpu->max_perf_ratio * cpu->pstate.scaling;
++				if (cpu->pstate.scaling != cpu->pstate.perf_ctl_scaling)
++					freq = rounddown(freq, cpu->pstate.perf_ctl_scaling);
++			}
++		}
++		intel_pstate_hwp_set(policy->cpu);
++	} else if (cpu->policy == CPUFREQ_POLICY_PERFORMANCE) {
+ 		int pstate = max(cpu->pstate.min_pstate, cpu->max_perf_ratio);
+ 
+ 		/*
+@@ -2894,25 +2911,17 @@ static int intel_pstate_set_policy(struct cpufreq_policy *policy)
+ 		 */
+ 		intel_pstate_clear_update_util_hook(policy->cpu);
+ 		intel_pstate_set_pstate(cpu, pstate);
++		freq = pstate * cpu->pstate.scaling;
+ 	} else {
+ 		intel_pstate_set_update_util_hook(policy->cpu);
+ 	}
+-
+-	if (hwp_active) {
+-		/*
+-		 * When hwp_boost was active before and dynamically it
+-		 * was turned off, in that case we need to clear the
+-		 * update util hook.
+-		 */
+-		if (!hwp_boost)
+-			intel_pstate_clear_update_util_hook(policy->cpu);
+-		intel_pstate_hwp_set(policy->cpu);
+-	}
+ 	/*
+-	 * policy->cur is never updated with the intel_pstate driver, but it
+-	 * is used as a stale frequency value. So, keep it within limits.
++	 * policy->cur is never updated in the intel_pstate driver, but it is
++	 * used as a stale frequency value, so set it to reflect the actual
++	 * requested P-state in the "performance" policy case and to the min
++	 * otherwise.
+ 	 */
+-	policy->cur = policy->min;
++	policy->cur = freq;
+ 
+ 	mutex_unlock(&intel_pstate_limits_lock);
+ 
+-- 
+2.55.0
+

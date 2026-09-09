@@ -1,0 +1,34 @@
+From c982f96e868469a9ebdc5c3b2146f999b9b6f993 Mon Sep 17 00:00:00 2001
+From: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Date: Mon, 20 Jul 2026 15:34:07 -0400
+Subject: [PATCH 08596/15333] serial: sh-sci: remove check for zero baud rate
+ from uart_get_baud_rate()
+
+The minimum baud rate supported by this driver is 0, so even for the B0
+case, uart_get_baud_rate() will return 9600, not zero. This check is no
+longer necessary since commit 16ae2a877bf4 ("serial: Fix crash if the
+minimum rate of the device is > 9600 baud") so remove it.
+
+Signed-off-by: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Link: https://patch.msgid.link/20260720193411.3517484-1-hugo@hugovil.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/sh-sci.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/drivers/tty/serial/sh-sci.c b/drivers/tty/serial/sh-sci.c
+index 787e7cdc5e9c..92193eb26abf 100644
+--- a/drivers/tty/serial/sh-sci.c
++++ b/drivers/tty/serial/sh-sci.c
+@@ -2719,8 +2719,6 @@ static void sci_set_termios(struct uart_port *port, struct ktermios *termios,
+ 		max_freq = max(max_freq, s->clk_rates[i]);
+ 
+ 	baud = uart_get_baud_rate(port, termios, old, 0, max_freq / min_sr(s));
+-	if (!baud)
+-		goto done;
+ 
+ 	/*
+ 	 * There can be multiple sources for the sampling clock.  Find the one
+-- 
+2.55.0
+

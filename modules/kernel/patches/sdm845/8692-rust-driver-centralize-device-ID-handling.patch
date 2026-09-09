@@ -1,0 +1,213 @@
+From 1d92f2e8b8810556d631cd5dffb536a66ff55553 Mon Sep 17 00:00:00 2001
+From: Gary Guo <gary@garyguo.net>
+Date: Mon, 29 Jun 2026 13:39:40 +0100
+Subject: [PATCH 08692/15333] rust: driver: centralize device ID handling
+
+Move the `IdArray` creation from individual buses to be handled by shared
+code in `device_id.rs`.
+
+Signed-off-by: Gary Guo <gary@garyguo.net>
+Reviewed-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://patch.msgid.link/20260629-id_info-v2-6-56fccbe9c5ef@garyguo.net
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/kernel/acpi.rs      | 10 ++--------
+ rust/kernel/auxiliary.rs | 10 ++--------
+ rust/kernel/device_id.rs | 31 ++++++++++++++++++++++++++++++-
+ rust/kernel/i2c.rs       | 10 ++--------
+ rust/kernel/net/phy.rs   | 10 ++++------
+ rust/kernel/of.rs        | 10 ++--------
+ rust/kernel/pci.rs       | 10 ++--------
+ rust/kernel/usb.rs       | 10 ++--------
+ 8 files changed, 46 insertions(+), 55 deletions(-)
+
+diff --git a/rust/kernel/acpi.rs b/rust/kernel/acpi.rs
+index 9b8efa623130..315f2f2af446 100644
+--- a/rust/kernel/acpi.rs
++++ b/rust/kernel/acpi.rs
+@@ -53,13 +53,7 @@ pub const fn new(id: &'static CStr) -> Self {
+ /// Create an ACPI `IdTable` with an "alias" for modpost.
+ #[macro_export]
+ macro_rules! acpi_device_table {
+-    ($table_name:ident, $module_table_name:ident, $id_info_type: ty, $table_data: expr) => {
+-        const $table_name: $crate::device_id::IdArray<
+-            $crate::acpi::DeviceId,
+-            $id_info_type,
+-            { $table_data.len() },
+-        > = $crate::device_id::IdArray::new($table_data);
+-
+-        $crate::module_device_table!("acpi", $module_table_name, $table_name);
++    ($($tt:tt)*) => {
++        $crate::module_device_table!("acpi", $crate::acpi::DeviceId, $($tt)*);
+     };
+ }
+diff --git a/rust/kernel/auxiliary.rs b/rust/kernel/auxiliary.rs
+index 19a488700bb9..a5e93f18e0fc 100644
+--- a/rust/kernel/auxiliary.rs
++++ b/rust/kernel/auxiliary.rs
+@@ -182,14 +182,8 @@ fn index(&self) -> usize {
+ /// Create a auxiliary `IdTable` with its alias for modpost.
+ #[macro_export]
+ macro_rules! auxiliary_device_table {
+-    ($table_name:ident, $module_table_name:ident, $id_info_type: ty, $table_data: expr) => {
+-        const $table_name: $crate::device_id::IdArray<
+-            $crate::auxiliary::DeviceId,
+-            $id_info_type,
+-            { $table_data.len() },
+-        > = $crate::device_id::IdArray::new($table_data);
+-
+-        $crate::module_device_table!("auxiliary", $module_table_name, $table_name);
++    ($($tt:tt)*) => {
++        $crate::module_device_table!("auxiliary", $crate::auxiliary::DeviceId, $($tt)*);
+     };
+ }
+ 
+diff --git a/rust/kernel/device_id.rs b/rust/kernel/device_id.rs
+index eeef3f5e7b63..0239f89d5f69 100644
+--- a/rust/kernel/device_id.rs
++++ b/rust/kernel/device_id.rs
+@@ -175,7 +175,36 @@ fn info(&self, index: usize) -> &U {
+ /// Create device table alias for modpost.
+ #[macro_export]
+ macro_rules! module_device_table {
+-    ($table_type: literal, $module_table_name:ident, $table_name:ident) => {
++    (
++        $table_type: literal, $device_id_ty: ty,
++        $table_name: ident, $module_table_name: ident, $id_info_type: ty,
++        [$(($id: expr, $info:expr $(,)?)),* $(,)?]
++    ) => {
++        const $table_name: $crate::device_id::IdArray<
++            $device_id_ty,
++            $id_info_type,
++            { <[$device_id_ty]>::len(&[$($id,)*]) },
++        > = $crate::device_id::IdArray::new([$(($id, $info),)*]);
++
++        $crate::module_device_table!($table_type, $module_table_name, $table_name);
++    };
++
++    // Case for no ID info.
++    (
++        $table_type: literal, $device_id_ty: ty,
++        $table_name: ident, $module_table_name: ident, @none,
++        [$($id: expr),* $(,)?]
++    ) => {
++        const $table_name: $crate::device_id::IdArray<
++            $device_id_ty,
++            (),
++            { <[$device_id_ty]>::len(&[$($id,)*]) },
++        > = $crate::device_id::IdArray::new_without_index([$($id),*]);
++
++        $crate::module_device_table!($table_type, $module_table_name, $table_name);
++    };
++
++    ($table_type: literal, $module_table_name: ident, $table_name:ident) => {
+         #[rustfmt::skip]
+         #[export_name =
+             concat!("__mod_device_table__", line!(),
+diff --git a/rust/kernel/i2c.rs b/rust/kernel/i2c.rs
+index 624b971ca8b0..a1f968fd873d 100644
+--- a/rust/kernel/i2c.rs
++++ b/rust/kernel/i2c.rs
+@@ -77,14 +77,8 @@ fn index(&self) -> usize {
+ /// Create a I2C `IdTable` with its alias for modpost.
+ #[macro_export]
+ macro_rules! i2c_device_table {
+-    ($table_name:ident, $module_table_name:ident, $id_info_type: ty, $table_data: expr) => {
+-        const $table_name: $crate::device_id::IdArray<
+-            $crate::i2c::DeviceId,
+-            $id_info_type,
+-            { $table_data.len() },
+-        > = $crate::device_id::IdArray::new($table_data);
+-
+-        $crate::module_device_table!("i2c", $module_table_name, $table_name);
++    ($($tt:tt)*) => {
++        $crate::module_device_table!("i2c", $crate::i2c::DeviceId, $($tt)*);
+     };
+ }
+ 
+diff --git a/rust/kernel/net/phy.rs b/rust/kernel/net/phy.rs
+index 2868e3a9e02c..e25c61c6d8bb 100644
+--- a/rust/kernel/net/phy.rs
++++ b/rust/kernel/net/phy.rs
+@@ -865,12 +865,10 @@ macro_rules! module_phy_driver {
+     };
+ 
+     (@device_table [$($dev:expr),+]) => {
+-        const N: usize = $crate::module_phy_driver!(@count_devices $($dev),+);
+-
+-        const TABLE: $crate::device_id::IdArray<$crate::net::phy::DeviceId, (), N> =
+-            $crate::device_id::IdArray::new_without_index([ $($dev),+, ]);
+-
+-        $crate::module_device_table!("mdio", phydev, TABLE);
++        $crate::module_device_table!(
++            "mdio", $crate::net::phy::DeviceId,
++            phydev, TABLE, @none, [$($dev),+]
++        );
+     };
+ 
+     (drivers: [$($driver:ident),+ $(,)?], device_table: [$($dev:expr),+ $(,)?], $($f:tt)*) => {
+diff --git a/rust/kernel/of.rs b/rust/kernel/of.rs
+index 58b20c367f99..35aa6d36d309 100644
+--- a/rust/kernel/of.rs
++++ b/rust/kernel/of.rs
+@@ -53,13 +53,7 @@ pub const fn new(compatible: &'static CStr) -> Self {
+ /// Create an OF `IdTable` with an "alias" for modpost.
+ #[macro_export]
+ macro_rules! of_device_table {
+-    ($table_name:ident, $module_table_name:ident, $id_info_type: ty, $table_data: expr) => {
+-        const $table_name: $crate::device_id::IdArray<
+-            $crate::of::DeviceId,
+-            $id_info_type,
+-            { $table_data.len() },
+-        > = $crate::device_id::IdArray::new($table_data);
+-
+-        $crate::module_device_table!("of", $module_table_name, $table_name);
++    ($($tt:tt)*) => {
++        $crate::module_device_table!("of", $crate::of::DeviceId, $($tt)*);
+     };
+ }
+diff --git a/rust/kernel/pci.rs b/rust/kernel/pci.rs
+index 8f11711bf342..5cc4052991e7 100644
+--- a/rust/kernel/pci.rs
++++ b/rust/kernel/pci.rs
+@@ -245,14 +245,8 @@ fn index(&self) -> usize {
+ /// Create a PCI `IdTable` with its alias for modpost.
+ #[macro_export]
+ macro_rules! pci_device_table {
+-    ($table_name:ident, $module_table_name:ident, $id_info_type: ty, $table_data: expr) => {
+-        const $table_name: $crate::device_id::IdArray<
+-            $crate::pci::DeviceId,
+-            $id_info_type,
+-            { $table_data.len() },
+-        > = $crate::device_id::IdArray::new($table_data);
+-
+-        $crate::module_device_table!("pci", $module_table_name, $table_name);
++    ($($tt:tt)*) => {
++        $crate::module_device_table!("pci", $crate::pci::DeviceId, $($tt)*);
+     };
+ }
+ 
+diff --git a/rust/kernel/usb.rs b/rust/kernel/usb.rs
+index 6750a49e466b..3797f4a79b79 100644
+--- a/rust/kernel/usb.rs
++++ b/rust/kernel/usb.rs
+@@ -254,14 +254,8 @@ fn index(&self) -> usize {
+ /// Create a USB `IdTable` with its alias for modpost.
+ #[macro_export]
+ macro_rules! usb_device_table {
+-    ($table_name:ident, $module_table_name:ident, $id_info_type: ty, $table_data: expr) => {
+-        const $table_name: $crate::device_id::IdArray<
+-            $crate::usb::DeviceId,
+-            $id_info_type,
+-            { $table_data.len() },
+-        > = $crate::device_id::IdArray::new($table_data);
+-
+-        $crate::module_device_table!("usb", $module_table_name, $table_name);
++    ($($tt:tt)*) => {
++        $crate::module_device_table!("usb", $crate::usb::DeviceId, $($tt)*);
+     };
+ }
+ 
+-- 
+2.55.0
+

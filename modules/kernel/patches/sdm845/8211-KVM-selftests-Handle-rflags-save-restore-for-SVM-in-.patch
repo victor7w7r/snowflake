@@ -1,0 +1,74 @@
+From 9547309406d506a1dc2f36918ddf4173451ff257 Mon Sep 17 00:00:00 2001
+From: Yosry Ahmed <yosry@kernel.org>
+Date: Tue, 28 Jul 2026 17:42:23 +0000
+Subject: [PATCH 08211/15333] KVM: selftests: Handle rflags save/restore for
+ SVM in guest_regs
+
+Instead of handling rflags separately, add it to guest_regs. No
+functional change intended.
+
+Assisted-by: Gemini:Gemini-Next
+Signed-off-by: Yosry Ahmed <yosry@kernel.org>
+Link: https://patch.msgid.link/20260728174232.2423257-5-yosry@kernel.org
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ tools/testing/selftests/kvm/include/x86/processor.h | 4 +++-
+ tools/testing/selftests/kvm/lib/x86/svm.c           | 6 ++----
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/tools/testing/selftests/kvm/include/x86/processor.h b/tools/testing/selftests/kvm/include/x86/processor.h
+index 922e607f38f1..3344547a3ae4 100644
+--- a/tools/testing/selftests/kvm/include/x86/processor.h
++++ b/tools/testing/selftests/kvm/include/x86/processor.h
+@@ -413,6 +413,7 @@ struct guest_regs {
+ 	u64 r13;
+ 	u64 r14;
+ 	u64 r15;
++	u64 rflags;
+ };
+ 
+ extern struct guest_regs guest_regs;
+@@ -436,7 +437,8 @@ extern struct guest_regs guest_regs;
+ 	GUEST_REG_OFFSET(r12),	\
+ 	GUEST_REG_OFFSET(r13),	\
+ 	GUEST_REG_OFFSET(r14),	\
+-	GUEST_REG_OFFSET(r15)
++	GUEST_REG_OFFSET(r15),	\
++	GUEST_REG_OFFSET(rflags)
+ 
+ #define GUEST_REG(name) "guest_regs + %c[off_" #name "]"
+ 
+diff --git a/tools/testing/selftests/kvm/lib/x86/svm.c b/tools/testing/selftests/kvm/lib/x86/svm.c
+index 7db38faded89..b05be50f075d 100644
+--- a/tools/testing/selftests/kvm/lib/x86/svm.c
++++ b/tools/testing/selftests/kvm/lib/x86/svm.c
+@@ -13,8 +13,6 @@
+ 
+ #define SEV_DEV_PATH "/dev/sev"
+ 
+-u64 rflags;
+-
+ /* Allocate memory regions for nested SVM tests.
+  *
+  * Input Args:
+@@ -161,7 +159,7 @@ void run_guest(struct vmcb *vmcb, u64 vmcb_gpa)
+ {
+ 	asm volatile (
+ 		"vmload %[vmcb_gpa]\n\t"
+-		"mov rflags, %%r15\n\t"
++		"mov " GUEST_REG(rflags) ", %%r15\n\t"
+ 		"mov %%r15, %[vmcb_rflags]\n\t"
+ 		"mov " GUEST_REG(rax) ", %%r15\n\t"
+ 		"mov %%r15, %[vmcb_rax]\n\t"
+@@ -169,7 +167,7 @@ void run_guest(struct vmcb *vmcb, u64 vmcb_gpa)
+ 		"vmrun %[vmcb_gpa]\n\t"
+ 		SVM_SWITCH_GPRS_ASM
+ 		"mov %[vmcb_rflags], %%r15\n\t"
+-		"mov %%r15, rflags\n\t"
++		"mov %%r15, " GUEST_REG(rflags) "\n\t"
+ 		"mov %[vmcb_rax], %%r15\n\t"	// rax
+ 		"mov %%r15, " GUEST_REG(rax) "\n\t"
+ 		"vmsave %[vmcb_gpa]\n\t"
+-- 
+2.55.0
+

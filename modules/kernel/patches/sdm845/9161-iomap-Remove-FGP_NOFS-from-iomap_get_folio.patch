@@ -1,0 +1,55 @@
+From e08fd6119126689a50003b3a07ed139461ccdfb5 Mon Sep 17 00:00:00 2001
+From: "Matthew Wilcox (Oracle)" <willy@infradead.org>
+Date: Wed, 24 Jun 2026 18:42:26 +0100
+Subject: [PATCH 09161/15333] iomap: Remove FGP_NOFS from iomap_get_folio()
+
+FGP_NOFS is legacy; filesystems should be using memalloc_nofs_save/restore
+instead.  We have it here in iomap because it was buried in
+grab_cache_page_write_begin() and we didn't want to change this behaviour
+as part of the folio transition.
+
+I have tested this with XFS and see no issues.  Other filesystems (cc'd)
+may need to make adjustments.  Please test with lockdep enabled.
+
+Cc: Darrick J. Wong <djwong@kernel.org>
+Cc: Jens Axboe <axboe@kernel.dk>
+Cc: Namjae Jeon <linkinjeon@kernel.org>
+Cc: Sungjong Seo <sj1557.seo@samsung.com>
+Cc: Yuezhang Mo <yuezhang.mo@sony.com>
+Cc: Miklos Szeredi <miklos@szeredi.hu>
+Cc: Andreas Gruenbacher <agruenba@redhat.com>
+Cc: Hyunchul Lee <hyc.lee@gmail.com>
+Cc: Konstantin Komarov <almaz.alexandrovich@paragon-software.com>
+Cc: Carlos Maiolino <cem@kernel.org>
+Cc: Damien Le Moal <dlemoal@kernel.org>
+Cc: Naohiro Aota <naohiro.aota@wdc.com>
+Cc: Johannes Thumshirn <jth@kernel.org>
+Cc: linux-xfs@vger.kernel.org
+Cc: linux-fsdevel@vger.kernel.org
+Cc: linux-block@vger.kernel.org
+Cc: fuse-devel@lists.linux.dev
+Cc: gfs2@lists.linux.dev
+Cc: ntfs3@lists.linux.dev
+Signed-off-by: Matthew Wilcox (Oracle) <willy@infradead.org>
+Link: https://patch.msgid.link/20260624174228.2015893-1-willy@infradead.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/iomap/buffered-io.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/iomap/buffered-io.c b/fs/iomap/buffered-io.c
+index 8d4806dc46d4..27bc2455a98d 100644
+--- a/fs/iomap/buffered-io.c
++++ b/fs/iomap/buffered-io.c
+@@ -768,7 +768,7 @@ EXPORT_SYMBOL_GPL(iomap_is_partially_uptodate);
+  */
+ struct folio *iomap_get_folio(struct iomap_iter *iter, loff_t pos, size_t len)
+ {
+-	fgf_t fgp = FGP_WRITEBEGIN | FGP_NOFS;
++	fgf_t fgp = FGP_WRITEBEGIN;
+ 
+ 	if (iter->flags & IOMAP_NOWAIT)
+ 		fgp |= FGP_NOWAIT;
+-- 
+2.55.0
+

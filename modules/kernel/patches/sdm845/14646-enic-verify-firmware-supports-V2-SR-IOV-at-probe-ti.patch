@@ -1,0 +1,88 @@
+From a16975e2231b4caa5f90551b5fda68b56144b885 Mon Sep 17 00:00:00 2001
+From: Satish Kharat <satishkh@cisco.com>
+Date: Wed, 12 Aug 2026 05:48:01 -0700
+Subject: [PATCH 14646/15333] enic: verify firmware supports V2 SR-IOV at probe
+ time
+
+During PF probe, query the firmware get-supported-feature interface
+to verify that the running firmware supports V2 SR-IOV. Firmware
+version 5.3(4.72) and later report VIC_FEATURE_SRIOV via
+CMD_GET_SUPP_FEATURE_VER. If the firmware does not support the
+feature, set vf_type to ENIC_VF_TYPE_NONE and log a warning so the
+admin knows a firmware upgrade is needed.
+
+The V2 admin-channel and MBOX bring-up added later in this series is
+gated on ENIC_VF_TYPE_V2, so this downgrade keeps those paths from
+running on firmware that does not support V2 SR-IOV.
+
+VIC_FEATURE_SRIOV is assigned the explicit value 4 to match the
+firmware ABI.  Slot 3 (firmware's VIC_FEATURE_PTP) is reserved with
+a comment rather than a placeholder enum entry, since PTP is not
+used by the upstream driver.
+
+Suggested-by: Breno Leitao <leitao@debian.org>
+Signed-off-by: Satish Kharat <satishkh@cisco.com>
+Reviewed-by: Breno Leitao <leitao@debian.org>
+Link: https://patch.msgid.link/20260812-enic-sriov-v2-admin-channel-v2-v13-1-b3809e448aba@cisco.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/cisco/enic/enic_main.c   | 21 ++++++++++++++++++-
+ drivers/net/ethernet/cisco/enic/vnic_devcmd.h |  2 ++
+ 2 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/cisco/enic/enic_main.c b/drivers/net/ethernet/cisco/enic/enic_main.c
+index d98f7e7ccab9..b56e5c75ade3 100644
+--- a/drivers/net/ethernet/cisco/enic/enic_main.c
++++ b/drivers/net/ethernet/cisco/enic/enic_main.c
+@@ -2641,8 +2641,10 @@ static void enic_iounmap(struct enic *enic)
+ static void enic_sriov_detect_vf_type(struct enic *enic)
+ {
+ 	struct pci_dev *pdev = enic->pdev;
+-	int pos;
++	u64 supported_versions, a1 = 0;
+ 	u16 vf_dev_id;
++	int pos;
++	int err;
+ 
+ 	if (enic_is_sriov_vf(enic) || enic_is_dynamic(enic))
+ 		return;
+@@ -2669,6 +2671,23 @@ static void enic_sriov_detect_vf_type(struct enic *enic)
+ 		enic->vf_type = ENIC_VF_TYPE_NONE;
+ 		break;
+ 	}
++
++	if (enic->vf_type != ENIC_VF_TYPE_V2)
++		return;
++
++	/* A successful command means firmware recognizes
++	 * VIC_FEATURE_SRIOV; supported_versions is available
++	 * for sub-feature versioning in the future.
++	 */
++	err = vnic_dev_get_supported_feature_ver(enic->vdev,
++						 VIC_FEATURE_SRIOV,
++						 &supported_versions,
++						 &a1);
++	if (err) {
++		dev_warn(&pdev->dev,
++			 "SR-IOV V2 not supported by current firmware. Upgrade to VIC FW 5.3(4.72) or higher.\n");
++		enic->vf_type = ENIC_VF_TYPE_NONE;
++	}
+ }
+ #endif
+ 
+diff --git a/drivers/net/ethernet/cisco/enic/vnic_devcmd.h b/drivers/net/ethernet/cisco/enic/vnic_devcmd.h
+index 605ef17f967e..3b6efa743dba 100644
+--- a/drivers/net/ethernet/cisco/enic/vnic_devcmd.h
++++ b/drivers/net/ethernet/cisco/enic/vnic_devcmd.h
+@@ -734,6 +734,8 @@ enum vic_feature_t {
+ 	VIC_FEATURE_VXLAN,
+ 	VIC_FEATURE_RDMA,
+ 	VIC_FEATURE_VXLAN_PATCH,
++	/* slot 3 reserved for firmware VIC_FEATURE_PTP */
++	VIC_FEATURE_SRIOV	= 4,
+ 	VIC_FEATURE_MAX,
+ };
+ 
+-- 
+2.55.0
+

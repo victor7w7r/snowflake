@@ -1,0 +1,38 @@
+From 8dd595bca51a4c1f775cfcca8c10753c58b7a969 Mon Sep 17 00:00:00 2001
+From: Hector Martin <marcan@marcan.st>
+Date: Sat, 11 Jul 2026 11:11:25 +1000
+Subject: [PATCH 04182/15333] ASoC: apple: mca: Add delay after configuring
+ clock
+
+Right after the early FE setup, ADMAC gets told to start the DMA. This
+can end up in a weird "slip" state with the channels transposed. Waiting
+a bit fixes this; presumably this allows the clock to stabilize.
+
+Signed-off-by: Hector Martin <marcan@marcan.st>
+Signed-off-by: James Calligeros <jcalligeros99@gmail.com>
+Link: https://patch.msgid.link/20260711-apple-audio-redux-v4-7-2994d87c2f24@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/apple/mca.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/sound/soc/apple/mca.c b/sound/soc/apple/mca.c
+index 322dd8771111..afb3754a8883 100644
+--- a/sound/soc/apple/mca.c
++++ b/sound/soc/apple/mca.c
+@@ -225,6 +225,12 @@ static void mca_fe_early_trigger(struct snd_pcm_substream *substream, int cmd,
+ 			   FIELD_PREP(SERDES_CONF_SYNC_SEL, 0));
+ 		mca_modify(cl, serdes_conf, SERDES_CONF_SYNC_SEL,
+ 			   FIELD_PREP(SERDES_CONF_SYNC_SEL, cl->no + 1));
++		/*
++		 * ADMAC gets started right after this. This delay seems
++		 * to be needed for that to be reliable, e.g. ensure the
++		 * clock is stable?
++		 */
++		udelay(100);
+ 		break;
+ 	default:
+ 		break;
+-- 
+2.55.0
+

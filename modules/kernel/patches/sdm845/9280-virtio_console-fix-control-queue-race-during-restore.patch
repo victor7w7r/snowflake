@@ -1,0 +1,63 @@
+From 952261953cf79820aa4350679882db0d4f71f493 Mon Sep 17 00:00:00 2001
+From: Sungho Bae <baver.bae@lge.com>
+Date: Thu, 4 Jun 2026 03:37:56 +0900
+Subject: [PATCH 09280/15333] virtio_console: fix control queue race during
+ restore
+
+In virtcons_restore(), after virtio_device_ready() sets DRIVER_OK, the
+device becomes active. If the control receive queue (c_ivq) is populated
+immediately, the host can instantly deliver pending control messages
+(e.g., VIRTIO_CONSOLE_PORT_REMOVE).
+
+This triggers the control_work_handler(), which can modify the
+portdev->ports list concurrently with the unprotected list_for_each_entry
+loop in virtcons_restore(), leading to list corruption or Use-After-Free.
+
+Fix this by deferring the population of the control receive queue
+(fill_queue for c_ivq) until after the list iteration is complete. This
+ensures the host cannot inject control messages during the vulnerable
+window.
+
+Signed-off-by: Sungho Bae <baver.bae@lge.com>
+Link: https://patch.msgid.link/20260603183757.21587-4-baver.bae@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/char/virtio_console.c | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/char/virtio_console.c b/drivers/char/virtio_console.c
+index 217ca6129fc0..a95e4ac87c71 100644
+--- a/drivers/char/virtio_console.c
++++ b/drivers/char/virtio_console.c
+@@ -2187,9 +2187,6 @@ static int virtcons_restore(struct virtio_device *vdev)
+ 
+ 	virtio_device_ready(portdev->vdev);
+ 
+-	if (use_multiport(portdev))
+-		fill_queue(portdev->c_ivq, &portdev->c_ivq_lock);
+-
+ 	list_for_each_entry(port, &portdev->ports, list) {
+ 		port->in_vq = portdev->in_vqs[port->id];
+ 		port->out_vq = portdev->out_vqs[port->id];
+@@ -2206,6 +2203,18 @@ static int virtcons_restore(struct virtio_device *vdev)
+ 		if (port->guest_connected)
+ 			send_control_msg(port, VIRTIO_CONSOLE_PORT_OPEN, 1);
+ 	}
++
++	/*
++	 * Populate the control receive queue only after the list iteration
++	 * is complete. If we fill this queue before iterating, the host could
++	 * immediately deliver a VIRTIO_CONSOLE_PORT_REMOVE message.
++	 * This would trigger the control workqueue, which modifies the
++	 * portdev->ports list concurrently with the unprotected loop above,
++	 * leading to a Use-After-Free and list corruption.
++	 */
++	if (use_multiport(portdev))
++		fill_queue(portdev->c_ivq, &portdev->c_ivq_lock);
++
+ 	return 0;
+ }
+ #endif
+-- 
+2.55.0
+

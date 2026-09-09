@@ -1,0 +1,87 @@
+From d71376622c459f57e5dd86c7d5bb505b664faa37 Mon Sep 17 00:00:00 2001
+From: Richard Zhu <hongxing.zhu@nxp.com>
+Date: Thu, 18 Jun 2026 17:20:58 +0800
+Subject: [PATCH 01533/15333] dt-bindings: PCI: imx6q-pcie: Add i.MX95 optional
+ intr/aer/pme interrupts
+
+The i.MX95 PCIe controller introduces three additional dedicated hardware
+interrupt lines for specific events:
+
+  - intr: general controller events
+  - aer: Advanced Error Reporting events
+  - pme: Power Management Events
+
+These interrupts are optional on i.MX95. PCIe basic functionality
+(enumeration, configuration, and data transfer) works correctly without
+them, as the controller can operate using only the existing MSI interrupt.
+
+Earlier i.MX PCIe variants (imx6q, imx6sx, imx6qp, imx7d, imx8mm, imx8mp,
+imx8mq, imx8q) do not have these three dedicated interrupt lines.
+
+Update the binding to allow up to 5 interrupts for i.MX95, while
+restricting earlier variants to a maximum of 2 interrupts using
+conditional constraints (if/then schema). This ensures the schema
+accurately reflects the hardware capabilities of each SoC variant.
+
+Signed-off-by: Richard Zhu <hongxing.zhu@nxp.com>
+Signed-off-by: Manivannan Sadhasivam <mani@kernel.org>
+Signed-off-by: Bjorn Helgaas <bhelgaas@google.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Reviewed-by: Rob Herring (Arm) <robh@kernel.org>
+Link: https://patch.msgid.link/20260618092100.3669556-2-hongxing.zhu@oss.nxp.com
+---
+ .../bindings/pci/fsl,imx6q-pcie.yaml          | 25 +++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/pci/fsl,imx6q-pcie.yaml b/Documentation/devicetree/bindings/pci/fsl,imx6q-pcie.yaml
+index e8b8131f5f23..4f56e8e4f100 100644
+--- a/Documentation/devicetree/bindings/pci/fsl,imx6q-pcie.yaml
++++ b/Documentation/devicetree/bindings/pci/fsl,imx6q-pcie.yaml
+@@ -58,12 +58,18 @@ properties:
+     items:
+       - description: builtin MSI controller.
+       - description: builtin DMA controller.
++      - description: PCIe event interrupt.
++      - description: builtin AER SPI standalone interrupt line.
++      - description: builtin PME SPI standalone interrupt line.
+ 
+   interrupt-names:
+     minItems: 1
+     items:
+       - const: msi
+       - const: dma
++      - const: intr
++      - const: aer
++      - const: pme
+ 
+   reset-gpio:
+     deprecated: true
+@@ -249,6 +255,25 @@ allOf:
+             - const: ref
+             - const: extref  # Optional
+ 
++  - if:
++      properties:
++        compatible:
++          enum:
++            - fsl,imx6q-pcie
++            - fsl,imx6sx-pcie
++            - fsl,imx6qp-pcie
++            - fsl,imx7d-pcie
++            - fsl,imx8mm-pcie
++            - fsl,imx8mp-pcie
++            - fsl,imx8mq-pcie
++            - fsl,imx8q-pcie
++    then:
++      properties:
++        interrupts:
++          maxItems: 2
++        interrupt-names:
++          maxItems: 2
++
+ unevaluatedProperties: false
+ 
+ examples:
+-- 
+2.55.0
+

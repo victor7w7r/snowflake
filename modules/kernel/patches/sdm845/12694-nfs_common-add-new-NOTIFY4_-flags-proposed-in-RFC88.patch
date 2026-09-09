@@ -1,0 +1,97 @@
+From 4abf918faccd15f71b3f6ba64ed682c594953ac6 Mon Sep 17 00:00:00 2001
+From: Jeff Layton <jlayton@kernel.org>
+Date: Tue, 16 Jun 2026 07:58:46 -0400
+Subject: [PATCH 12694/15333] nfs_common: add new NOTIFY4_* flags proposed in
+ RFC8881bis
+
+RFC8881bis adds some new flags to GET_DIR_DELEGATION that later patches
+will consume. In particular, Linux nfsd can't easily provide info about
+directory cookies and ordering. The new flags allow it to omit that
+information.
+
+There is some risk here -- RFC8881bis is still a working group document,
+and has been for years. The changes to directory delegations have been
+stable for the last year or so however, so the hope is that those parts
+won't change (much).
+
+Signed-off-by: Jeff Layton <jlayton@kernel.org>
+Link: https://patch.msgid.link/20260616-dir-deleg-v7-3-6cbc7eac0ade@kernel.org
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ Documentation/sunrpc/xdr/nfs4_1.x    | 14 +++++++++++++-
+ fs/nfsd/nfs4xdr_gen.c                | 11 +++++++++++
+ include/linux/sunrpc/xdrgen/nfs4_1.h | 11 +++++++++++
+ 3 files changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/sunrpc/xdr/nfs4_1.x b/Documentation/sunrpc/xdr/nfs4_1.x
+index 72d439b71735..4c3842e23859 100644
+--- a/Documentation/sunrpc/xdr/nfs4_1.x
++++ b/Documentation/sunrpc/xdr/nfs4_1.x
+@@ -413,7 +413,19 @@ enum notify_type4 {
+         NOTIFY4_REMOVE_ENTRY = 2,
+         NOTIFY4_ADD_ENTRY = 3,
+         NOTIFY4_RENAME_ENTRY = 4,
+-        NOTIFY4_CHANGE_COOKIE_VERIFIER = 5
++        NOTIFY4_CHANGE_COOKIE_VERIFIER = 5,
++        /* Proposed in RFC8881bis */
++        NOTIFY4_GFLAG_EXTEND = 6,
++        NOTIFY4_AUFLAG_VALID = 7,
++        NOTIFY4_AUFLAG_USER = 8,
++        NOTIFY4_AUFLAG_GROUP = 9,
++        NOTIFY4_AUFLAG_OTHER = 10,
++        NOTIFY4_CHANGE_AUTH = 11,
++        NOTIFY4_CFLAG_ORDER = 12,
++        NOTIFY4_AUFLAG_GANOW = 13,
++        NOTIFY4_AUFLAG_GALATER = 14,
++        NOTIFY4_CHANGE_GA = 15,
++        NOTIFY4_CHANGE_AMASK = 16
+ };
+ 
+ /* Changed entry information.  */
+diff --git a/fs/nfsd/nfs4xdr_gen.c b/fs/nfsd/nfs4xdr_gen.c
+index 3a9c82418223..61346d9e6833 100644
+--- a/fs/nfsd/nfs4xdr_gen.c
++++ b/fs/nfsd/nfs4xdr_gen.c
+@@ -589,6 +589,17 @@ xdrgen_decode_notify_type4(struct xdr_stream *xdr, notify_type4 *ptr)
+ 	case NOTIFY4_ADD_ENTRY:
+ 	case NOTIFY4_RENAME_ENTRY:
+ 	case NOTIFY4_CHANGE_COOKIE_VERIFIER:
++	case NOTIFY4_GFLAG_EXTEND:
++	case NOTIFY4_AUFLAG_VALID:
++	case NOTIFY4_AUFLAG_USER:
++	case NOTIFY4_AUFLAG_GROUP:
++	case NOTIFY4_AUFLAG_OTHER:
++	case NOTIFY4_CHANGE_AUTH:
++	case NOTIFY4_CFLAG_ORDER:
++	case NOTIFY4_AUFLAG_GANOW:
++	case NOTIFY4_AUFLAG_GALATER:
++	case NOTIFY4_CHANGE_GA:
++	case NOTIFY4_CHANGE_AMASK:
+ 		break;
+ 	default:
+ 		return false;
+diff --git a/include/linux/sunrpc/xdrgen/nfs4_1.h b/include/linux/sunrpc/xdrgen/nfs4_1.h
+index bce993132bc0..356c3da9f4e0 100644
+--- a/include/linux/sunrpc/xdrgen/nfs4_1.h
++++ b/include/linux/sunrpc/xdrgen/nfs4_1.h
+@@ -376,6 +376,17 @@ enum notify_type4 {
+ 	NOTIFY4_ADD_ENTRY = 3,
+ 	NOTIFY4_RENAME_ENTRY = 4,
+ 	NOTIFY4_CHANGE_COOKIE_VERIFIER = 5,
++	NOTIFY4_GFLAG_EXTEND = 6,
++	NOTIFY4_AUFLAG_VALID = 7,
++	NOTIFY4_AUFLAG_USER = 8,
++	NOTIFY4_AUFLAG_GROUP = 9,
++	NOTIFY4_AUFLAG_OTHER = 10,
++	NOTIFY4_CHANGE_AUTH = 11,
++	NOTIFY4_CFLAG_ORDER = 12,
++	NOTIFY4_AUFLAG_GANOW = 13,
++	NOTIFY4_AUFLAG_GALATER = 14,
++	NOTIFY4_CHANGE_GA = 15,
++	NOTIFY4_CHANGE_AMASK = 16,
+ };
+ 
+ typedef enum notify_type4 notify_type4;
+-- 
+2.55.0
+

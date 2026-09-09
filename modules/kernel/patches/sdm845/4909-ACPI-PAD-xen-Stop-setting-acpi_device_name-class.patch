@@ -1,0 +1,49 @@
+From d215a3b2fe63bac012f76cfb5aabc919d77a2bf9 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Mon, 6 Jul 2026 14:42:20 +0200
+Subject: [PATCH 04909/15333] ACPI: PAD: xen: Stop setting
+ acpi_device_name/class()
+
+The driver sets acpi_device_name() and acpi_device_class() which are
+never read afterward, so make it stop doing that and drop the symbols
+defined specifically for this purpose.
+
+No intentional functional impact.
+
+This will facilitate the removal of device_name and device_class from
+struct acpi_device_pnp in the future.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Acked-by: Juergen Gross <jgross@suse.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/2384190.iZASKD2KPV@rafael.j.wysocki
+---
+ drivers/xen/xen-acpi-pad.c | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/drivers/xen/xen-acpi-pad.c b/drivers/xen/xen-acpi-pad.c
+index 5b98e0e93807..2fa9c7d3581f 100644
+--- a/drivers/xen/xen-acpi-pad.c
++++ b/drivers/xen/xen-acpi-pad.c
+@@ -17,8 +17,6 @@
+ #include <xen/xen-ops.h>
+ #include <asm/xen/hypercall.h>
+ 
+-#define ACPI_PROCESSOR_AGGREGATOR_CLASS	"acpi_pad"
+-#define ACPI_PROCESSOR_AGGREGATOR_DEVICE_NAME "Processor Aggregator"
+ #define ACPI_PROCESSOR_AGGREGATOR_NOTIFY 0x80
+ static DEFINE_MUTEX(xen_cpu_lock);
+ 
+@@ -117,9 +115,6 @@ static int acpi_pad_probe(struct platform_device *pdev)
+ 	if (!device)
+ 		return -ENODEV;
+ 
+-	strcpy(acpi_device_name(device), ACPI_PROCESSOR_AGGREGATOR_DEVICE_NAME);
+-	strcpy(acpi_device_class(device), ACPI_PROCESSOR_AGGREGATOR_CLASS);
+-
+ 	status = acpi_install_notify_handler(device->handle,
+ 		ACPI_DEVICE_NOTIFY, acpi_pad_notify, device);
+ 	if (ACPI_FAILURE(status))
+-- 
+2.55.0
+

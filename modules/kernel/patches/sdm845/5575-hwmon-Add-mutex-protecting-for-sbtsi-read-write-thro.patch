@@ -1,0 +1,45 @@
+From 47f6311f8f523ed3671611e12f94e0cbb193861b Mon Sep 17 00:00:00 2001
+From: Prathima <Prathima.Lk@amd.com>
+Date: Fri, 10 Jul 2026 16:46:41 +0530
+Subject: [PATCH 05575/15333] hwmon: Add mutex protecting for sbtsi read/write
+ through hwmon
+
+Add a mutex and take it around SBTSI read/write paths so that only
+one transaction runs at a time. The lock is held only for the
+duration of the bus transfer and associated driver bookkeeping, not
+across blocking work unrelated to SBTSI.
+
+This is a concurrency hardening fix.
+
+Reviewed-by: Akshay Gupta <Akshay.Gupta@amd.com>
+Signed-off-by: Prathima <Prathima.Lk@amd.com>
+Acked-by: Guenter Roeck <linux@roeck-us.net>
+Link: https://patch.msgid.link/20260710111642.850022-8-Akshay.Gupta@amd.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/hwmon/sbtsi_temp.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/hwmon/sbtsi_temp.c b/drivers/hwmon/sbtsi_temp.c
+index d7ae986d824c..11c8108d69b2 100644
+--- a/drivers/hwmon/sbtsi_temp.c
++++ b/drivers/hwmon/sbtsi_temp.c
+@@ -70,6 +70,7 @@ static int sbtsi_temp_read(struct sbtsi_data *data, u8 reg1, u8 reg2,
+ {
+ 	int ret;
+ 
++	guard(sbtsi)(data);
+ 	ret = sbtsi_xfer(data, reg1, val1, true);
+ 	if (!ret)
+ 		ret = sbtsi_xfer(data, reg2, val2, true);
+@@ -84,6 +85,7 @@ static int sbtsi_temp_write(struct sbtsi_data *data, u8 reg_int, u8 reg_dec,
+ {
+ 	int ret;
+ 
++	guard(sbtsi)(data);
+ 	ret = sbtsi_xfer(data, reg_int, &val_int, false);
+ 	if (!ret)
+ 		ret = sbtsi_xfer(data, reg_dec, &val_dec, false);
+-- 
+2.55.0
+

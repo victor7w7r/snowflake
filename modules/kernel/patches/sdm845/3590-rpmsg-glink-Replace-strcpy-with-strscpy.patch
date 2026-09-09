@@ -1,0 +1,36 @@
+From ad6d7795388dbfc8a4c8980b49ad43648b1d6efe Mon Sep 17 00:00:00 2001
+From: Sudeepgoud Patil <quic_sudeepgo@quicinc.com>
+Date: Thu, 11 Dec 2025 14:18:34 +0530
+Subject: [PATCH 03590/15333] rpmsg: glink: Replace strcpy() with strscpy()
+
+Replace strcpy() with the safer strscpy() to address unsafe API
+usage warnings[1] from static analysis tools, as strcpy() performs
+no bounds checking on the destination buffer.
+
+[1] https://www.kernel.org/doc/html/latest/process/deprecated.html#strcpy
+
+Signed-off-by: Sudeepgoud Patil <quic_sudeepgo@quicinc.com>
+Signed-off-by: Vishnu Santhosh <vishnu.santhosh@oss.qualcomm.com>
+Reviewed-by: Chris Lew <christopher.lew@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20251211-rpmsg-glink-strcpy-replace-v1-1-be06308e5724@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ drivers/rpmsg/qcom_glink_native.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/rpmsg/qcom_glink_native.c b/drivers/rpmsg/qcom_glink_native.c
+index d9d4468e4cbd..022b4bcb40d6 100644
+--- a/drivers/rpmsg/qcom_glink_native.c
++++ b/drivers/rpmsg/qcom_glink_native.c
+@@ -501,7 +501,7 @@ static int qcom_glink_send_open_req(struct qcom_glink *glink,
+ 	req->cmd = cpu_to_le16(GLINK_CMD_OPEN);
+ 	req->param1 = cpu_to_le16(channel->lcid);
+ 	req->param2 = cpu_to_le32(name_len);
+-	strcpy(req->data, channel->name);
++	strscpy(req->data, channel->name, GLINK_NAME_SIZE);
+ 
+ 	trace_qcom_glink_cmd_open_tx(glink->label, channel->name,
+ 				     channel->lcid, channel->rcid);
+-- 
+2.55.0
+

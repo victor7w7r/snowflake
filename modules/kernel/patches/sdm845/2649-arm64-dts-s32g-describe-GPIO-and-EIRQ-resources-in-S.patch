@@ -1,0 +1,102 @@
+From 5e7e00f811fb1808352a22d18e20aa8026c6d73c Mon Sep 17 00:00:00 2001
+From: Khristine Andreea Barbulescu <khristineandreea.barbulescu@oss.nxp.com>
+Date: Tue, 30 Jun 2026 14:54:03 +0200
+Subject: [PATCH 02649/15333] arm64: dts: s32g: describe GPIO and EIRQ
+ resources in SIUL2 pinctrl node
+
+Update the SIUL2 pinctrl node to describe the additional register
+ranges and DT properties used by the updated SIUL2 driver.
+
+Besides the MSCR and IMCR ranges used for pinmux and pin
+configuration, the SIUL2 block also provides PGPDO and
+PGPDI registers for GPIO output and input operations,
+as well as an EIRQ register window for external interrupt configuration.
+
+The driver supports both legacy pinctrl-only DTs and
+extended DTs with GPIO and IRQ.
+
+Reflect these resources in the SIUL2 pinctrl node by adding:
+  - the PGPDO and PGPDI register ranges
+  - the EIRQ register range
+  - gpio-controller, #gpio-cells and gpio-ranges
+  - interrupt-controller, #interrupt-cells and interrupts
+
+Keep the hardware description aligned with the updated SIUL2
+driver, where pinctrl, GPIO data access and the EIRQ register
+block are described under the same device node.
+
+Signed-off-by: Khristine Andreea Barbulescu <khristineandreea.barbulescu@oss.nxp.com>
+Reviewed-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+---
+ arch/arm64/boot/dts/freescale/s32g2.dtsi | 21 ++++++++++++++++++++-
+ arch/arm64/boot/dts/freescale/s32g3.dtsi | 21 ++++++++++++++++++++-
+ 2 files changed, 40 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/freescale/s32g2.dtsi b/arch/arm64/boot/dts/freescale/s32g2.dtsi
+index 809019ea0e29..8dc0c5d9f368 100644
+--- a/arch/arm64/boot/dts/freescale/s32g2.dtsi
++++ b/arch/arm64/boot/dts/freescale/s32g2.dtsi
+@@ -135,7 +135,26 @@ pinctrl: pinctrl@4009c240 {
+ 				/* IMCR119-IMCR397 registers on siul2_1 */
+ 			      <0x44010c1c 0x45c>,
+ 				/* IMCR430-IMCR495 registers on siul2_1 */
+-			      <0x440110f8 0x108>;
++			      <0x440110f8 0x108>,
++				/* PGPDO registers on siul2_0 */
++			      <0x4009d700 0x10>,
++				/* PGPDI registers on siul2_0 */
++			      <0x4009d740 0x10>,
++				/* PGPDO registers on siul2_1 */
++			      <0x44011700 0x18>,
++				/* PGPDI registers on siul2_1 */
++			      <0x44011740 0x18>,
++				/* EIRQ window: DISR0..IFEER0 */
++			      <0x44010010 0x34>;
++
++			gpio-controller;
++			#gpio-cells = <2>;
++			gpio-ranges = <&pinctrl 0 0 102>,
++					<&pinctrl 112 112 79>;
++
++			interrupt-controller;
++			#interrupt-cells = <2>;
++			interrupts = <GIC_SPI 210 IRQ_TYPE_LEVEL_HIGH>;
+ 
+ 			jtag_pins: jtag-pins {
+ 				jtag-grp0 {
+diff --git a/arch/arm64/boot/dts/freescale/s32g3.dtsi b/arch/arm64/boot/dts/freescale/s32g3.dtsi
+index 22e80fc03f9c..129d6ad8e5c6 100644
+--- a/arch/arm64/boot/dts/freescale/s32g3.dtsi
++++ b/arch/arm64/boot/dts/freescale/s32g3.dtsi
+@@ -193,7 +193,26 @@ pinctrl: pinctrl@4009c240 {
+ 				/* IMCR119-IMCR397 registers on siul2_1 */
+ 			      <0x44010c1c 0x45c>,
+ 				/* IMCR430-IMCR495 registers on siul2_1 */
+-			      <0x440110f8 0x108>;
++			      <0x440110f8 0x108>,
++				/* PGPDO registers on siul2_0 */
++			      <0x4009d700 0x10>,
++				/* PGPDI registers on siul2_0 */
++			      <0x4009d740 0x10>,
++				/* PGPDO registers on siul2_1 */
++			      <0x44011700 0x18>,
++				/* PGPDI registers on siul2_1 */
++			      <0x44011740 0x18>,
++				/* EIRQ window: DISR0..IFEER0 */
++			      <0x44010010 0x34>;
++
++			gpio-controller;
++			#gpio-cells = <2>;
++			gpio-ranges = <&pinctrl 0 0 102>,
++					<&pinctrl 112 112 79>;
++
++			interrupt-controller;
++			#interrupt-cells = <2>;
++			interrupts = <GIC_SPI 210 IRQ_TYPE_LEVEL_HIGH>;
+ 
+ 			jtag_pins: jtag-pins {
+ 				jtag-grp0 {
+-- 
+2.55.0
+

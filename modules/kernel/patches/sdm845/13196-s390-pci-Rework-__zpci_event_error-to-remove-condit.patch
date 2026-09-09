@@ -1,0 +1,93 @@
+From cc459ed00ae1b50b5eeb78b96347585e19fe4711 Mon Sep 17 00:00:00 2001
+From: Heiko Carstens <hca@linux.ibm.com>
+Date: Wed, 5 Aug 2026 15:36:25 +0200
+Subject: [PATCH 13196/15333] s390/pci: Rework __zpci_event_error() to remove
+ conditional locking
+
+Clang's compiler based static context analysis does not work with
+locks that are conditionally taken like in __zpci_event_error():
+
+arch/s390/pci/pci_event.c:320:2: warning: mutex 'get_zdev_by_fid(ccdf->fid).state_lock'
+ is not held on every path through here [-Wthread-safety-analysis]
+
+Given that code which takes locks conditionally can be considered
+suboptimal rework __zpci_event_error() to get rid of this.
+
+Reviewed-by: Niklas Schnelle <schnelle@linux.ibm.com>
+Signed-off-by: Heiko Carstens <hca@linux.ibm.com>
+Signed-off-by: Vasily Gorbik <gor@linux.ibm.com>
+---
+ arch/s390/pci/pci_event.c | 41 ++++++++++++++++++++++-----------------
+ 1 file changed, 23 insertions(+), 18 deletions(-)
+
+diff --git a/arch/s390/pci/pci_event.c b/arch/s390/pci/pci_event.c
+index 839bd91c056e..bead4ed5d4ab 100644
+--- a/arch/s390/pci/pci_event.c
++++ b/arch/s390/pci/pci_event.c
+@@ -288,6 +288,12 @@ static void zpci_event_io_failure(struct pci_dev *pdev, pci_channel_state_t es)
+ 	pci_dev_unlock(pdev);
+ }
+ 
++static void __zpci_event_print_error(struct pci_dev *pdev, struct zpci_ccdf_err *ccdf)
++{
++	pr_err("%s: Event 0x%x reports an error for PCI function 0x%x\n",
++	       pdev ? pci_name(pdev) : "n/a", ccdf->pec, ccdf->fid);
++}
++
+ static void __zpci_event_error(struct zpci_ccdf_err *ccdf)
+ {
+ 	struct zpci_dev *zdev = get_zdev_by_fid(ccdf->fid);
+@@ -301,24 +307,24 @@ static void __zpci_event_error(struct zpci_ccdf_err *ccdf)
+ 	zpci_err("error CCDF:\n");
+ 	zpci_err_hex(ccdf, sizeof(*ccdf));
+ 
+-	if (zdev) {
+-		mutex_lock(&zdev->state_lock);
+-		rc = clp_refresh_fh(zdev->fid, &fh);
+-		if (rc)
+-			goto no_pdev;
+-		if (!fh || ccdf->fh != fh) {
+-			/* Ignore events with stale handles */
+-			zpci_dbg(3, "err fid:%x, fh:%x (stale %x)\n",
+-				 ccdf->fid, fh, ccdf->fh);
+-			goto no_pdev;
+-		}
+-		zpci_update_fh(zdev, ccdf->fh);
+-		if (zdev->zbus->bus)
+-			pdev = pci_get_slot(zdev->zbus->bus, zdev->devfn);
++	if (!zdev)
++		return __zpci_event_print_error(NULL, ccdf);
++
++	mutex_lock(&zdev->state_lock);
++	rc = clp_refresh_fh(zdev->fid, &fh);
++	if (rc)
++		goto no_pdev;
++	if (!fh || ccdf->fh != fh) {
++		/* Ignore events with stale handles */
++		zpci_dbg(3, "err fid:%x, fh:%x (stale %x)\n",
++			 ccdf->fid, fh, ccdf->fh);
++		goto no_pdev;
+ 	}
++	zpci_update_fh(zdev, ccdf->fh);
++	if (zdev->zbus->bus)
++		pdev = pci_get_slot(zdev->zbus->bus, zdev->devfn);
+ 
+-	pr_err("%s: Event 0x%x reports an error for PCI function 0x%x\n",
+-	       pdev ? pci_name(pdev) : "n/a", ccdf->pec, ccdf->fid);
++	__zpci_event_print_error(pdev, ccdf);
+ 
+ 	if (!pdev)
+ 		goto no_pdev;
+@@ -340,8 +346,7 @@ static void __zpci_event_error(struct zpci_ccdf_err *ccdf)
+ 	}
+ 	pci_dev_put(pdev);
+ no_pdev:
+-	if (zdev)
+-		mutex_unlock(&zdev->state_lock);
++	mutex_unlock(&zdev->state_lock);
+ 	zpci_zdev_put(zdev);
+ }
+ 
+-- 
+2.55.0
+

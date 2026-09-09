@@ -1,0 +1,53 @@
+From a9b2c446e36f60e540ec29f756bbb5a1de37811a Mon Sep 17 00:00:00 2001
+From: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Date: Mon, 15 Jun 2026 19:46:52 +0530
+Subject: [PATCH 03707/15333] serial: qcom-geni: trace: Drop redundant len
+ field from geni_serial_data
+
+The dynamic array stored in the ring buffer already carries its own
+length in the array metadata. There is no need to also store it as a
+separate scalar field in the entry struct.
+
+Drop __field(unsigned int, len) and the corresponding __entry->len
+assignment, and use __get_dynamic_array_len(data) in the TP_printk for
+both the len=%u format argument and the __print_hex() size argument.
+This saves 4 bytes per event on the ring buffer.
+
+Signed-off-by: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Suggested-by: Steven Rostedt <rostedt@goodmis.org>
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260615-add-tracepoints-for-qcom-geni-serial-v5-1-2efa4c97e0e2@oss.qualcomm.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ include/trace/events/qcom_geni_serial.h | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/include/trace/events/qcom_geni_serial.h b/include/trace/events/qcom_geni_serial.h
+index 417ec01f9fc8..e1aa551d525e 100644
+--- a/include/trace/events/qcom_geni_serial.h
++++ b/include/trace/events/qcom_geni_serial.h
+@@ -97,18 +97,17 @@ DECLARE_EVENT_CLASS(geni_serial_data,
+ 		    TP_ARGS(dev, buf, len),
+ 
+ 		    TP_STRUCT__entry(__string(name, dev_name(dev))
+-				     __field(unsigned int, len)
+ 				     __dynamic_array(u8, data, len)
+ 		    ),
+ 
+ 		    TP_fast_assign(__assign_str(name);
+-				   __entry->len = len;
+ 				   memcpy(__get_dynamic_array(data), buf, len);
+ 		    ),
+ 
+ 		    TP_printk("%s: len=%u data=%s",
+-			      __get_str(name), __entry->len,
+-			      __print_hex(__get_dynamic_array(data), __entry->len))
++			      __get_str(name), __get_dynamic_array_len(data),
++			      __print_hex(__get_dynamic_array(data),
++					  __get_dynamic_array_len(data)))
+ );
+ 
+ DEFINE_EVENT(geni_serial_data, geni_serial_tx_data,
+-- 
+2.55.0
+

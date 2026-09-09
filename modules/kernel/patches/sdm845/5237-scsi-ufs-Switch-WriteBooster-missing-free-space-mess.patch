@@ -1,0 +1,45 @@
+From c6cee609f614b790a72cb34d6d28b3635c874ddf Mon Sep 17 00:00:00 2001
+From: Neil Armstrong <neil.armstrong@linaro.org>
+Date: Thu, 18 Jun 2026 09:52:09 +0200
+Subject: [PATCH 05237/15333] scsi: ufs: Switch WriteBooster missing free space
+ message as warn_once
+
+Once the UFS WriteBooster fails to allocate memory, the situation will
+stay until fstrim or equivalent is ran.
+
+Mark is as a warning since it impacts the performance but only print it
+once for the lifetime of the kernel since it's not fatal.
+
+Otherwise it will be printed each time the device is resumed:
+
+[   31.666880] ufshcd-qcom 1d84000.ufshc: dCurWBBuf: 0 WB disabled until free-space is available
+[   52.655594] ufshcd-qcom 1d84000.ufshc: dCurWBBuf: 0 WB disabled until free-space is available
+[   62.890469] ufshcd-qcom 1d84000.ufshc: dCurWBBuf: 0 WB disabled until free-space is available
+...
+
+Signed-off-by: Neil Armstrong <neil.armstrong@linaro.org>
+Reviewed-by: Bart Van Assche <bvanassche@acm.org>
+Link: https://patch.msgid.link/20260618-topic-ufs-wb-empty-warn-v1-1-ec744a153e0e@linaro.org
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+---
+ drivers/ufs/core/ufshcd.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/ufs/core/ufshcd.c b/drivers/ufs/core/ufshcd.c
+index 9b696e48a9d1..1a5a851d43b2 100644
+--- a/drivers/ufs/core/ufshcd.c
++++ b/drivers/ufs/core/ufshcd.c
+@@ -6418,8 +6418,8 @@ static bool ufshcd_wb_curr_buff_threshold_check(struct ufs_hba *hba,
+ 	}
+ 
+ 	if (!cur_buf) {
+-		dev_info(hba->dev, "dCurWBBuf: %d WB disabled until free-space is available\n",
+-			 cur_buf);
++		dev_warn_once(hba->dev, "dCurWBBuf: %d WB disabled until free-space is available\n",
++			      cur_buf);
+ 		return false;
+ 	}
+ 	/* Let it continue to flush when available buffer exceeds threshold */
+-- 
+2.55.0
+

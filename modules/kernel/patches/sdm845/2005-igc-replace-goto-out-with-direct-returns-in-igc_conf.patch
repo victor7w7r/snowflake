@@ -1,0 +1,87 @@
+From fa7315482f582839342d7be534b7cc423a9d7996 Mon Sep 17 00:00:00 2001
+From: Faizal Rahim <faizal.abdul.rahim@linux.intel.com>
+Date: Fri, 8 May 2026 05:47:05 +0800
+Subject: [PATCH 02005/15333] igc: replace goto out with direct returns in
+ igc_config_fc_after_link_up()
+
+The out: label only returns ret_val with no cleanup. The kernel coding
+style guide states: "If there is no cleanup needed then just return
+directly." (Documentation/process/coding-style.rst, section 7).
+
+This improves readability ahead of a subsequent patch that introduces a
+new goto label in this function.
+
+No functional change.
+
+Reviewed-by: Looi Hong Aun <hong.aun.looi@intel.com>
+Signed-off-by: Faizal Rahim <faizal.abdul.rahim@linux.intel.com>
+Signed-off-by: Khai Wen Tan <khai.wen.tan@linux.intel.com>
+Reviewed-by: Dima Ruinskiy <dima.ruinskiy@intel.com>
+Reviewed-by: Simon Horman <horms@kernel.org>
+Tested-by: Moriya Kadosh <moriyax.kadosh@intel.com>
+Signed-off-by: Tony Nguyen <anthony.l.nguyen@intel.com>
+---
+ drivers/net/ethernet/intel/igc/igc_mac.c | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/net/ethernet/intel/igc/igc_mac.c b/drivers/net/ethernet/intel/igc/igc_mac.c
+index 142beb9ae557..0a3d3f357505 100644
+--- a/drivers/net/ethernet/intel/igc/igc_mac.c
++++ b/drivers/net/ethernet/intel/igc/igc_mac.c
+@@ -458,15 +458,15 @@ s32 igc_config_fc_after_link_up(struct igc_hw *hw)
+ 	ret_val = hw->phy.ops.read_reg(hw, PHY_STATUS,
+ 				       &mii_status_reg);
+ 	if (ret_val)
+-		goto out;
++		return ret_val;
+ 	ret_val = hw->phy.ops.read_reg(hw, PHY_STATUS,
+ 				       &mii_status_reg);
+ 	if (ret_val)
+-		goto out;
++		return ret_val;
+ 
+ 	if (!(mii_status_reg & MII_SR_AUTONEG_COMPLETE)) {
+ 		hw_dbg("Copper PHY and Auto Neg has not completed.\n");
+-		goto out;
++		return ret_val;
+ 	}
+ 
+ 	/* The AutoNeg process has completed, so we now need to
+@@ -478,11 +478,11 @@ s32 igc_config_fc_after_link_up(struct igc_hw *hw)
+ 	ret_val = hw->phy.ops.read_reg(hw, PHY_AUTONEG_ADV,
+ 				       &mii_nway_adv_reg);
+ 	if (ret_val)
+-		goto out;
++		return ret_val;
+ 	ret_val = hw->phy.ops.read_reg(hw, PHY_LP_ABILITY,
+ 				       &mii_nway_lp_ability_reg);
+ 	if (ret_val)
+-		goto out;
++		return ret_val;
+ 	/* Two bits in the Auto Negotiation Advertisement Register
+ 	 * (Address 4) and two bits in the Auto Negotiation Base
+ 	 * Page Ability Register (Address 5) determine flow control
+@@ -598,7 +598,7 @@ s32 igc_config_fc_after_link_up(struct igc_hw *hw)
+ 	ret_val = hw->mac.ops.get_speed_and_duplex(hw, &speed, &duplex);
+ 	if (ret_val) {
+ 		hw_dbg("Error getting link speed and duplex\n");
+-		goto out;
++		return ret_val;
+ 	}
+ 
+ 	if (duplex == HALF_DUPLEX)
+@@ -610,10 +610,9 @@ s32 igc_config_fc_after_link_up(struct igc_hw *hw)
+ 	ret_val = igc_force_mac_fc(hw);
+ 	if (ret_val) {
+ 		hw_dbg("Error forcing flow control settings\n");
+-		goto out;
++		return ret_val;
+ 	}
+ 
+-out:
+ 	return ret_val;
+ }
+ 
+-- 
+2.55.0
+

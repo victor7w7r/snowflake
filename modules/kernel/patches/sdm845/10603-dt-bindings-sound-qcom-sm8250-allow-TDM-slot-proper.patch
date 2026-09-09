@@ -1,0 +1,73 @@
+From 269b23d5135a050a1706c9e91e95251bf9bf963b Mon Sep 17 00:00:00 2001
+From: Prasad Kumpatla <prasad.kumpatla@oss.qualcomm.com>
+Date: Tue, 4 Aug 2026 12:33:05 +0530
+Subject: [PATCH 10603/15333] dt-bindings: sound: qcom,sm8250: allow TDM slot
+ properties
+
+Allow standard dai-tdm-slot-* properties in the CPU and codec child
+nodes of a DAI link.
+
+The QCOM machine driver parses these child nodes to configure TDM slots
+on the active CPU and codec DAIs.  The properties are already defined by
+the common tdm-slot binding, but qcom,sm8250.yaml currently rejects them
+because the CPU and codec child nodes set additionalProperties: false.
+
+Permit dai-tdm-slot-num, dai-tdm-slot-width and dai-tdm-slot-[rt]x-mask
+there so boards using TDM backends can describe the slot layout without
+schema warnings.
+
+Reviewed-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Signed-off-by: Prasad Kumpatla <prasad.kumpatla@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260804070307.117119-6-prasad.kumpatla@oss.qualcomm.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ .../bindings/sound/qcom,sm8250.yaml           | 26 +++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml b/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml
+index c1bd19299763..3e7216d61a5e 100644
+--- a/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml
++++ b/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml
+@@ -95,6 +95,19 @@ patternProperties:
+           sound-dai:
+             maxItems: 1
+ 
++          dai-tdm-slot-num:
++            $ref: /schemas/types.yaml#/definitions/uint32
++            description: Number of slots in use
++
++          dai-tdm-slot-width:
++            $ref: /schemas/types.yaml#/definitions/uint32
++            description: Width, in bits, of each slot
++
++        patternProperties:
++          '^dai-tdm-slot-[rt]x-mask$':
++            $ref: /schemas/types.yaml#/definitions/uint32-array
++            description: Slot mask for active TDM slots
++
+       platform:
+         description: Holds subnode which indicates platform dai.
+         type: object
+@@ -114,6 +127,19 @@ patternProperties:
+             minItems: 1
+             maxItems: 8
+ 
++          dai-tdm-slot-num:
++            $ref: /schemas/types.yaml#/definitions/uint32
++            description: Number of slots in use
++
++          dai-tdm-slot-width:
++            $ref: /schemas/types.yaml#/definitions/uint32
++            description: Width, in bits, of each slot
++
++        patternProperties:
++          '^dai-tdm-slot-[rt]x-mask$':
++            $ref: /schemas/types.yaml#/definitions/uint32-array
++            description: Slot mask for active TDM slots
++
+     required:
+       - link-name
+       - cpu
+-- 
+2.55.0
+

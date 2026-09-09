@@ -1,0 +1,60 @@
+From 376a3960e5efe85ff765abfb5b5b7e4655ad6aed Mon Sep 17 00:00:00 2001
+From: Karan Tilak Kumar <kartilak@cisco.com>
+Date: Mon, 10 Aug 2026 04:06:27 -0700
+Subject: [PATCH 13072/15333] scsi: fnic: Fix built-in NVMe/FC build
+
+The fnic NVMe/FC code is guarded with IS_ENABLED(CONFIG_NVME_FC).  That
+also evaluates true when NVME_FC is built as a module.
+
+When fnic is built into vmlinux and NVME_FC=m, fnic_nvme.o still
+references the NVMe/FC transport helpers even though those helpers are
+not reachable from built-in code. The final vmlinux link then fails with
+undefined nvme_fc_* symbols.
+
+Use IS_REACHABLE(CONFIG_NVME_FC) for the fnic NVMe/FC implementation and
+prototypes so built-in fnic uses the disabled stubs unless the NVMe/FC
+transport is reachable.
+
+Reported-by: kernel test robot <lkp@intel.com>
+Closes: https://lore.kernel.org/oe-kbuild-all/202608092246.XZe7Hlrt-lkp@intel.com/
+Reviewed-by: Sesidhar Baddela <sebaddel@cisco.com>
+Reviewed-by: Arulprabhu Ponnusamy <arulponn@cisco.com>
+Reviewed-by: Gian Carlo Boffa <gcboffa@cisco.com>
+Reviewed-by: Arun Easi <aeasi@cisco.com>
+Signed-off-by: Karan Tilak Kumar <kartilak@cisco.com>
+Link: https://patch.msgid.link/20260810110627.4521-1-kartilak@cisco.com
+Signed-off-by: Martin K. Petersen (Oracle) <mkp@kernel.org>
+---
+ drivers/scsi/fnic/fnic_nvme.c | 2 +-
+ drivers/scsi/fnic/fnic_nvme.h | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/scsi/fnic/fnic_nvme.c b/drivers/scsi/fnic/fnic_nvme.c
+index 8794360f2adf..b237948dcafd 100644
+--- a/drivers/scsi/fnic/fnic_nvme.c
++++ b/drivers/scsi/fnic/fnic_nvme.c
+@@ -22,7 +22,7 @@
+ #include "fnic_trace.h"
+ #include "fdls_fc.h"
+ 
+-#if IS_ENABLED(CONFIG_NVME_FC)
++#if IS_REACHABLE(CONFIG_NVME_FC)
+ 
+ static bool nvfnic_ls_req_cleanup(struct fnic_iport_s *iport,
+ 				  struct nvmefc_ls_req *lsreq,
+diff --git a/drivers/scsi/fnic/fnic_nvme.h b/drivers/scsi/fnic/fnic_nvme.h
+index 5e897908337c..c05908b68e36 100644
+--- a/drivers/scsi/fnic/fnic_nvme.h
++++ b/drivers/scsi/fnic/fnic_nvme.h
+@@ -61,7 +61,7 @@ struct nvfnic_ls_req {
+ 	unsigned int flags;
+ };
+ 
+-#if IS_ENABLED(CONFIG_NVME_FC)
++#if IS_REACHABLE(CONFIG_NVME_FC)
+ int nvfnic_nvme_io_done_handler(void *arg);
+ struct fnic_io_req *nvfnic_find_io_req_by_tag(struct fnic *fnic, uint16_t tag);
+ void nvfnic_reset_fcpio_tag_pool(struct fnic_iport_s *iport);
+-- 
+2.55.0
+

@@ -1,0 +1,51 @@
+From b37678cfe51c21f291caa290d1f0e26c74c65060 Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Tue, 30 Jun 2026 21:27:08 -0700
+Subject: [PATCH 07252/15333] fs/resctrl: Add last_cmd_status support for
+ writes to max_threshold_occupancy
+
+info/last_cmd_status is intended to contain more information if a write to
+any resctrl file fails. Writes to max_threshold_occupancy did not receive
+last_cmd_status support during initial last_cmd_status enabling. Add it now.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Tested-by: Babu Moger <babu.moger@amd.com>
+Link: https://patch.msgid.link/dfc60cf5324e15612db075b0987bd89c490fbad5.1782857711.git.reinette.chatre@intel.com
+---
+ fs/resctrl/rdtgroup.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/fs/resctrl/rdtgroup.c b/fs/resctrl/rdtgroup.c
+index 3020f4428b4e..72347d11f0da 100644
+--- a/fs/resctrl/rdtgroup.c
++++ b/fs/resctrl/rdtgroup.c
+@@ -1299,14 +1299,20 @@ static ssize_t max_threshold_occ_write(struct kernfs_open_file *of,
+ 	unsigned int bytes;
+ 	int ret;
+ 
+-	ret = kstrtouint(buf, 0, &bytes);
+-	if (ret)
+-		return ret;
+-
+ 	if (!info_kn_lock(of->kn))
+ 		return -ENOENT;
+ 
++	rdt_last_cmd_clear();
++
++	ret = kstrtouint(buf, 0, &bytes);
++	if (ret) {
++		rdt_last_cmd_puts("max_threshold_occupancy: Invalid input\n");
++		goto out_unlock;
++	}
++
+ 	if (bytes > resctrl_rmid_realloc_limit) {
++		rdt_last_cmd_printf("max_threshold_occupancy: Exceeds limit (before adjustment) of %u bytes\n",
++				    resctrl_rmid_realloc_limit);
+ 		ret = -EINVAL;
+ 		goto out_unlock;
+ 	}
+-- 
+2.55.0
+

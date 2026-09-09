@@ -1,0 +1,41 @@
+From a6604d9fb21699385b8b5a720c06fa5df04998f5 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 31 Jul 2026 17:15:38 +0700
+Subject: [PATCH 10155/15333] ASoC: spacemit: Drop redundant error messages
+
+The called functions already log failures where appropriate. Return the
+original error directly and avoid duplicate error messages.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Troy Mitchell <troy.mitchell@linux.spacemit.com>
+Link: https://patch.msgid.link/20260731101539.36290-1-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/spacemit/k1_i2s.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/spacemit/k1_i2s.c b/sound/soc/spacemit/k1_i2s.c
+index 2751485ac0b0..2d5ea1fd5d49 100644
+--- a/sound/soc/spacemit/k1_i2s.c
++++ b/sound/soc/spacemit/k1_i2s.c
+@@ -478,7 +478,7 @@ static int spacemit_i2s_probe(struct platform_device *pdev)
+ 
+ 	i2s->base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
+ 	if (IS_ERR(i2s->base))
+-		return dev_err_probe(i2s->dev, PTR_ERR(i2s->base), "failed to map registers\n");
++		return PTR_ERR(i2s->base);
+ 
+ 	i2s->reset = devm_reset_control_get_exclusive(&pdev->dev, NULL);
+ 	if (IS_ERR(i2s->reset))
+@@ -495,7 +495,7 @@ static int spacemit_i2s_probe(struct platform_device *pdev)
+ 					      &spacemit_i2s_component,
+ 					      dai, 1);
+ 	if (ret)
+-		return dev_err_probe(i2s->dev, ret, "failed to register component");
++		return ret;
+ 
+ 	return devm_snd_dmaengine_pcm_register(&pdev->dev, &spacemit_dmaengine_pcm_config, 0);
+ }
+-- 
+2.55.0
+

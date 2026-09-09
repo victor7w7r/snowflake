@@ -1,0 +1,96 @@
+From 1e0bd438b87659396bab4e795a3948a2ac58047c Mon Sep 17 00:00:00 2001
+From: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Date: Thu, 16 Jul 2026 14:31:37 +0200
+Subject: [PATCH 05849/15333] platform/surface: gpe: use
+ platform_device_register_full()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Creating a software node for a given set of properties and adding it to
+a platform device can be achieved with a single call to
+platform_device_register_full(). There's nothing in this driver that
+suggests using the more fine-grained interfaces was intentional so
+switch to using the high-level helper.
+
+Acked-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260716-swnode-remove-on-dev-unreg-v8-2-5c2b8cc38c28@oss.qualcomm.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/platform/surface/surface_gpe.c | 39 ++++++++------------------
+ 1 file changed, 11 insertions(+), 28 deletions(-)
+
+diff --git a/drivers/platform/surface/surface_gpe.c b/drivers/platform/surface/surface_gpe.c
+index 40896a8544b0..4ca7ad76f3b9 100644
+--- a/drivers/platform/surface/surface_gpe.c
++++ b/drivers/platform/surface/surface_gpe.c
+@@ -290,9 +290,9 @@ static struct platform_device *surface_gpe_device;
+ 
+ static int __init surface_gpe_init(void)
+ {
++	struct platform_device_info pdevinfo;
+ 	const struct dmi_system_id *match;
+ 	struct platform_device *pdev;
+-	struct fwnode_handle *fwnode;
+ 	int status;
+ 
+ 	match = dmi_first_match(dmi_lid_device_table);
+@@ -305,44 +305,27 @@ static int __init surface_gpe_init(void)
+ 	if (status)
+ 		return status;
+ 
+-	fwnode = fwnode_create_software_node(match->driver_data, NULL);
+-	if (IS_ERR(fwnode)) {
+-		status = PTR_ERR(fwnode);
+-		goto err_node;
+-	}
+-
+-	pdev = platform_device_alloc("surface_gpe", PLATFORM_DEVID_NONE);
+-	if (!pdev) {
+-		status = -ENOMEM;
+-		goto err_alloc;
++	pdevinfo = (struct platform_device_info){
++		.name = "surface_gpe",
++		.id = PLATFORM_DEVID_NONE,
++		.properties = match->driver_data,
++	};
++
++	pdev = platform_device_register_full(&pdevinfo);
++	if (IS_ERR(pdev)) {
++		platform_driver_unregister(&surface_gpe_driver);
++		return PTR_ERR(pdev);
+ 	}
+ 
+-	platform_device_set_fwnode(pdev, fwnode);
+-
+-	status = platform_device_add(pdev);
+-	if (status)
+-		goto err_add;
+-
+ 	surface_gpe_device = pdev;
+ 	return 0;
+-
+-err_add:
+-	platform_device_put(pdev);
+-err_alloc:
+-	fwnode_remove_software_node(fwnode);
+-err_node:
+-	platform_driver_unregister(&surface_gpe_driver);
+-	return status;
+ }
+ module_init(surface_gpe_init);
+ 
+ static void __exit surface_gpe_exit(void)
+ {
+-	struct fwnode_handle *fwnode = surface_gpe_device->dev.fwnode;
+-
+ 	platform_device_unregister(surface_gpe_device);
+ 	platform_driver_unregister(&surface_gpe_driver);
+-	fwnode_remove_software_node(fwnode);
+ }
+ module_exit(surface_gpe_exit);
+ 
+-- 
+2.55.0
+

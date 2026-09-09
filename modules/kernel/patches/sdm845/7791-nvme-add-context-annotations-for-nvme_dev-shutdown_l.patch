@@ -1,0 +1,36 @@
+From 4258bf237e7f26cbbd44c9dada11b87cda18041c Mon Sep 17 00:00:00 2001
+From: Nilay Shroff <nilay@linux.ibm.com>
+Date: Mon, 13 Jul 2026 17:24:10 +0530
+Subject: [PATCH 07791/15333] nvme: add context annotations for
+ nvme_dev::shutdown_lock
+
+nvme_setup_io_queues_trylock() conditionally acquires dev->shutdown_lock
+using mutex_trylock(). The function returns 0 when the lock is
+successfully acquired and a negative error code otherwise.
+
+Annotate the function with __cond_acquires(0, &dev->shutdown_lock) so
+that Clang's lock context analysis can track the lock state based on
+the return value and verify correct lock usage at call sites.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Nilay Shroff <nilay@linux.ibm.com>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/pci.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/nvme/host/pci.c b/drivers/nvme/host/pci.c
+index 8438c904ec49..8c6d169f2c38 100644
+--- a/drivers/nvme/host/pci.c
++++ b/drivers/nvme/host/pci.c
+@@ -2199,6 +2199,7 @@ static void nvme_init_queue(struct nvme_queue *nvmeq, u16 qid)
+  * Try getting shutdown_lock while setting up IO queues.
+  */
+ static int nvme_setup_io_queues_trylock(struct nvme_dev *dev)
++	__cond_acquires(0, &dev->shutdown_lock)
+ {
+ 	/*
+ 	 * Give up if the lock is being held by nvme_dev_disable.
+-- 
+2.55.0
+

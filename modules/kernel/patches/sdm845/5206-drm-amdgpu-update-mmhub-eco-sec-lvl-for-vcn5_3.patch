@@ -1,0 +1,170 @@
+From 4c8b8472f85a730a6853ab68474f210143f42b5a Mon Sep 17 00:00:00 2001
+From: Suresh Guttula <suresh.guttula@amd.com>
+Date: Tue, 14 Jul 2026 20:20:39 +0530
+Subject: [PATCH 05206/15333] drm/amdgpu : update mmhub eco sec lvl for vcn5_3
+
+This patch requests PSP to set the sec lvl for
+vcn and jpeg.
+
+Signed-off-by: Suresh Guttula <suresh.guttula@amd.com>
+Reviewed-by: McRae Geoffrey<Geoffrey.McRae@amd.com>
+Acked-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c  | 27 ++++++++++++++++++++++++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_psp.h  |  1 +
+ drivers/gpu/drm/amd/amdgpu/jpeg_v5_3_0.c | 24 +++++++++++++++++++++
+ drivers/gpu/drm/amd/amdgpu/psp_gfx_if.h  |  1 +
+ drivers/gpu/drm/amd/amdgpu/vcn_v5_0_0.c  | 26 +++++++++++++++++++++++
+ 5 files changed, 79 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
+index e0c0d7872e45..ca80b6194cac 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
+@@ -1222,6 +1222,33 @@ int psp_memory_partition(struct psp_context *psp, int mode)
+ 	return ret;
+ }
+ 
++int psp_set_mmhub_eco_sec_level(struct amdgpu_device *adev)
++{
++	int ret;
++	struct psp_context *psp = &adev->psp;
++	struct psp_gfx_cmd_resp *cmd = acquire_psp_cmd_buf(psp);
++
++	cmd->cmd_id = GFX_CMD_ID_SET_MMHUB_ECO_SEC_LEVEL;
++
++	ret = psp_cmd_submit_buf(psp, NULL, cmd, psp->fence_buf_mc_addr);
++	if (ret) {
++		dev_err(psp->adev->dev,
++			"PSP request failed to set mmuhub eco sec level with ret=%d\n", ret);
++		release_psp_cmd_buf(psp);
++		return ret;
++	}
++
++	if (cmd->resp.status) {
++		dev_err(psp->adev->dev,
++			"MMHUB ECO SEC LEVEL command 0x%x failed, PSP response status: 0x%X\n",
++				cmd->cmd_id, cmd->resp.status);
++		ret = -EIO;
++	}
++	release_psp_cmd_buf(psp);
++
++	return ret;
++}
++
+ static int psp_ptl_fmt_verify(struct psp_context *psp, enum amdgpu_ptl_fmt fmt,
+ 						 uint32_t *ptl_fmt)
+ {
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.h
+index 2d838b1b2b11..3d7744d60fac 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.h
+@@ -656,5 +656,6 @@ int amdgpu_psp_reg_program_no_ring(struct psp_context *psp, uint32_t val,
+ void amdgpu_psp_debugfs_init(struct amdgpu_device *adev);
+ int amdgpu_psp_get_fw_type(struct amdgpu_firmware_info *ucode,
+ 			   enum psp_gfx_fw_type *type);
++int psp_set_mmhub_eco_sec_level(struct amdgpu_device *adev);
+ 
+ #endif
+diff --git a/drivers/gpu/drm/amd/amdgpu/jpeg_v5_3_0.c b/drivers/gpu/drm/amd/amdgpu/jpeg_v5_3_0.c
+index 66d4c487eee5..68152b2ce015 100644
+--- a/drivers/gpu/drm/amd/amdgpu/jpeg_v5_3_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/jpeg_v5_3_0.c
+@@ -399,6 +399,25 @@ static void jpeg_v5_3_0_stop_dpg_mode(struct amdgpu_device *adev, int inst_idx)
+ 	WREG32_SOC15(JPEG, inst_idx, regUVD_JPEG_POWER_STATUS, reg_data);
+ }
+ 
++/**
++ * jpeg_v5_3_0_set_mmhub_eco_sec_level - set jpeg sec lvl reg
++ *
++ * @adev: amdgpu_device pointer
++ *
++ * request psp to set secure lvl
++ */
++static int jpeg_v5_3_0_set_mmhub_eco_sec_level(struct amdgpu_device *adev)
++{
++	int r = 0;
++
++	if (adev->firmware.load_type == AMDGPU_FW_LOAD_PSP) {
++		/* Request to PSP to program JPEG secure lvl */
++		r = psp_set_mmhub_eco_sec_level(adev);
++	}
++
++	return r;
++}
++
+ /**
+  * jpeg_v5_3_0_start - start JPEG block
+  *
+@@ -424,6 +443,11 @@ static int jpeg_v5_3_0_start(struct amdgpu_device *adev)
+ 	if (r)
+ 		return r;
+ 
++	/* program JPEG secure lvl register */
++	r = jpeg_v5_3_0_set_mmhub_eco_sec_level(adev);
++	if (r)
++		return r;
++
+ 	/* JPEG disable CGC */
+ 	jpeg_v5_3_0_disable_clock_gating(adev);
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/psp_gfx_if.h b/drivers/gpu/drm/amd/amdgpu/psp_gfx_if.h
+index ac34bac3c839..ad618b78685f 100644
+--- a/drivers/gpu/drm/amd/amdgpu/psp_gfx_if.h
++++ b/drivers/gpu/drm/amd/amdgpu/psp_gfx_if.h
+@@ -110,6 +110,7 @@ enum psp_gfx_cmd_id
+     GFX_CMD_ID_PERF_HW            = 0x0000004C,   /* performance monitor */
+     GFX_CMD_ID_FB_FW_RESERV_ADDR  = 0x00000050,  /* Query FW reservation addr */
+     GFX_CMD_ID_FB_FW_RESERV_EXT_ADDR = 0x00000051,  /* Query FW reservation extended addr */
++    GFX_CMD_ID_SET_MMHUB_ECO_SEC_LEVEL = 0x0000005D,  /* Set MMHUB ECO sec lvls on VCN block */
+ };
+ 
+ /* PSP boot config sub-commands */
+diff --git a/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_0.c b/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_0.c
+index 45580e9c4e0c..886e2c2074a9 100644
+--- a/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_0.c
+@@ -795,6 +795,27 @@ static int vcn_v5_0_0_start_dpg_mode(struct amdgpu_vcn_inst *vinst,
+ 	return 0;
+ }
+ 
++/**
++ * vcn_v5_0_0_set_mmhub_eco_sec_level - set vcn sec lvl reg
++ *
++ * @adev: amdgpu_device pointer
++ *
++ * request psp to set sec lvl
++ */
++static int vcn_v5_0_0_set_mmhub_eco_sec_level(struct amdgpu_device *adev)
++{
++	int r = 0;
++
++	if (amdgpu_ip_version(adev, VCN_HWIP, 0) == IP_VERSION(5, 3, 0)) {
++		if (adev->firmware.load_type == AMDGPU_FW_LOAD_PSP) {
++			/* Request to PSP to program VCN secure lvl */
++			r = psp_set_mmhub_eco_sec_level(adev);
++		}
++	}
++
++	return r;
++}
++
+ /**
+  * vcn_v5_0_0_start - VCN start
+  *
+@@ -819,6 +840,11 @@ static int vcn_v5_0_0_start(struct amdgpu_vcn_inst *vinst)
+ 
+ 	fw_shared = adev->vcn.inst[i].fw_shared.cpu_addr;
+ 
++	/* program VCN secure lvl register */
++	r = vcn_v5_0_0_set_mmhub_eco_sec_level(adev);
++	if (r)
++		return r;
++
+ 	if (adev->pg_flags & AMD_PG_SUPPORT_VCN_DPG)
+ 		return vcn_v5_0_0_start_dpg_mode(vinst, adev->vcn.inst[i].indirect_sram);
+ 
+-- 
+2.55.0
+

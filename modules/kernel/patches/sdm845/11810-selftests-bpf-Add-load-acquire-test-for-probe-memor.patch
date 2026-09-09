@@ -1,0 +1,88 @@
+From 2b1f9f69ae25cb46d0a84ff14398596eb2bfce44 Mon Sep 17 00:00:00 2001
+From: Daniel Borkmann <daniel@iogearbox.net>
+Date: Thu, 6 Aug 2026 22:10:47 +0200
+Subject: [PATCH 11810/15333] selftests/bpf: Add load-acquire test for
+ probe-memory pointer types
+
+Add a verifier test that a BPF_LOAD_ACQ from a rdonly_untrusted_mem pointer
+(PTR_TO_MEM | MEM_RDONLY | PTR_UNTRUSTED, obtained via bpf_rdonly_cast())
+is rejected. Such a source requires BPF_PROBE_MEM fault protection which
+is not applied to atomic loads; without the verifier fix the load is accepted
+and would crash the kernel on a fault.
+
+  # LDLIBS=-static PKG_CONFIG='pkg-config --static' ./vmtest.sh -- ./test_progs -t verifier_load_acquire
+  [...]
+  #621/1   verifier_load_acquire/load-acquire, 8-bit:OK
+  #621/2   verifier_load_acquire/load-acquire, 8-bit @unpriv:OK
+  #621/3   verifier_load_acquire/load-acquire, 16-bit:OK
+  #621/4   verifier_load_acquire/load-acquire, 16-bit @unpriv:OK
+  #621/5   verifier_load_acquire/load-acquire, 32-bit:OK
+  #621/6   verifier_load_acquire/load-acquire, 32-bit @unpriv:OK
+  #621/7   verifier_load_acquire/load-acquire, 64-bit:OK
+  #621/8   verifier_load_acquire/load-acquire, 64-bit @unpriv:OK
+  [...]
+  #621/19  verifier_load_acquire/load-acquire from rdonly_untrusted_mem pointer:OK
+  #621/20  verifier_load_acquire/load-acquire with invalid register R15:OK
+  #621/21  verifier_load_acquire/load-acquire with invalid register R15 @unpriv:OK
+  #621/22  verifier_load_acquire/load-acquire from pkt pointer:OK
+  #621/23  verifier_load_acquire/load-acquire from flow_keys pointer:OK
+  #621/24  verifier_load_acquire/load-acquire from sock pointer:OK
+  #621     verifier_load_acquire:OK
+  Summary: 1/24 PASSED, 0 SKIPPED, 0 FAILED
+
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Link: https://lore.kernel.org/bpf/20260806201047.333389-6-daniel@iogearbox.net
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ .../bpf/progs/verifier_load_acquire.c         | 28 +++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/progs/verifier_load_acquire.c b/tools/testing/selftests/bpf/progs/verifier_load_acquire.c
+index ae1dab1b0cbb..d17026d7480d 100644
+--- a/tools/testing/selftests/bpf/progs/verifier_load_acquire.c
++++ b/tools/testing/selftests/bpf/progs/verifier_load_acquire.c
+@@ -3,6 +3,7 @@
+ 
+ #include <linux/bpf.h>
+ #include <bpf/bpf_helpers.h>
++#include <bpf/bpf_core_read.h>
+ #include "../../../include/linux/filter.h"
+ #include "bpf_misc.h"
+ 
+@@ -221,6 +222,33 @@ __naked void load_acquire_from_sock_pointer(void)
+ 	: __clobber_all);
+ }
+ 
++SEC("socket")
++__description("load-acquire from rdonly_untrusted_mem pointer")
++__failure __msg("BPF_ATOMIC loads from R{{[0-9]+}} rdonly_untrusted_mem is not allowed")
++int load_acquire_from_rdonly_untrusted_mem(void *ctx)
++{
++	__u64 val = 0;
++	void *p;
++
++	/*
++	 * bpf_rdonly_cast(x, 0) yields PTR_TO_MEM | MEM_RDONLY | PTR_UNTRUSTED.
++	 * A regular BPF_LDX from it is rewritten to BPF_PROBE_MEM, but a
++	 * load-acquire is not, so it must be rejected, otherwise the JIT emits
++	 * a plain load with no exception table entry and a fault would crash
++	 * the kernel.
++	 */
++	p = bpf_rdonly_cast(&val, 0);
++	asm volatile (
++	"r1 = %[p];"
++	".8byte %[load_acquire_insn];" // r0 = load_acquire((u64 *)(r1 + 0));
++	:
++	: [p] "r" (p),
++	  __imm_insn(load_acquire_insn,
++		     BPF_ATOMIC_OP(BPF_DW, BPF_LOAD_ACQ, BPF_REG_0, BPF_REG_1, 0))
++	: "r0", "r1");
++	return 0;
++}
++
+ SEC("socket")
+ __description("load-acquire with invalid register R15")
+ __failure __failure_unpriv __msg("R15 is invalid")
+-- 
+2.55.0
+

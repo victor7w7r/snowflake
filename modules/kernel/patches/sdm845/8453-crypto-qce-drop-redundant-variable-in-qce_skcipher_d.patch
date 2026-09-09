@@ -1,0 +1,42 @@
+From 567fa6076cd1038171f5827a7a5d19d718cd0baf Mon Sep 17 00:00:00 2001
+From: Thorsten Blum <thorsten.blum@linux.dev>
+Date: Tue, 21 Jul 2026 01:27:17 +0200
+Subject: [PATCH 08453/15333] crypto: qce - drop redundant variable in
+ qce_skcipher_done
+
+Remove the local ret variable and return the result directly.
+
+Signed-off-by: Thorsten Blum <thorsten.blum@linux.dev>
+Reviewed-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ drivers/crypto/qce/skcipher.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/crypto/qce/skcipher.c b/drivers/crypto/qce/skcipher.c
+index ff4ee9541f7c..4931b064f10e 100644
+--- a/drivers/crypto/qce/skcipher.c
++++ b/drivers/crypto/qce/skcipher.c
+@@ -216,7 +216,6 @@ static int qce_skcipher_crypt(struct skcipher_request *req, int encrypt)
+ 	struct qce_alg_template *tmpl = to_cipher_tmpl(tfm);
+ 	unsigned int blocksize = crypto_skcipher_blocksize(tfm);
+ 	int keylen;
+-	int ret;
+ 
+ 	rctx->flags = tmpl->alg_flags;
+ 	rctx->flags |= encrypt ? QCE_ENCRYPT : QCE_DECRYPT;
+@@ -254,9 +253,8 @@ static int qce_skcipher_crypt(struct skcipher_request *req, int encrypt)
+ 					      req->base.data);
+ 		skcipher_request_set_crypt(&rctx->fallback_req, req->src,
+ 					   req->dst, req->cryptlen, req->iv);
+-		ret = encrypt ? crypto_skcipher_encrypt(&rctx->fallback_req) :
+-				crypto_skcipher_decrypt(&rctx->fallback_req);
+-		return ret;
++		return encrypt ? crypto_skcipher_encrypt(&rctx->fallback_req) :
++				 crypto_skcipher_decrypt(&rctx->fallback_req);
+ 	}
+ 
+ 	return tmpl->qce->async_req_enqueue(tmpl->qce, &req->base);
+-- 
+2.55.0
+

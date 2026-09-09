@@ -1,0 +1,99 @@
+From 3b56ebafecc43367b811361459c09c9ef9bfc167 Mon Sep 17 00:00:00 2001
+From: Yeoreum Yun <yeoreum.yun@arm.com>
+Date: Wed, 22 Jul 2026 16:30:28 +0100
+Subject: [PATCH 11232/15333] arm64: pgtable: convert pte_present() from macro
+ to static inline
+
+pte_present() is used as the basis for both pmd_present() and pud_present().
+It is currently implemented as a macro composed of pte_val() and
+pte_present_invalid().
+
+When pte_present() or its higher-level variants are used directly with
+ptep_get() or pXdp_get(), for example:
+
+  pte_present(ptep_get(pte));
+  pmd_present(pmdp_get(pmd));
+  pud_present(pudp_get(pud));
+
+the macro expansion causes the compiler to evaluate the argument twice,
+resulting in redundant loads. For example, pte_present() expands to:
+
+  !pte_val(READ_ONCE(*pte) || pte_present_invalid(READ_ONCE(*pte))
+
+A typical example is pud_free_pmd_page(), where the expansion of
+pmd_present() generates:
+    ...
+    /* pmd_present() (x20 = pmdp) */
+    1b88: f9400288     ldr	x8, [x20]        // read pmdp.
+    1b8c: f9000fa8     str	x8, [x29, #0x18]
+    1b90: 3707fec8     tbnz	w8, #0x0, 0x1b68 <pud_free_pmd_page+0xd0>
+    1b94: f9400288     ldr	x8, [x20]        // redundant read of pmdp.
+    1b98: 8a170109     and	x9, x8, x23
+    1b9c: f9000fa8     str	x8, [x29, #0x18]
+    1ba0: f120013f     cmp	x9, #0x800
+    1ba4: 54fffe20     b.eq	0x1b68 <pud_free_pmd_page+0xd0>
+    1ba8: 17fffff4     b	0x1b78 <pud_free_pmd_page+0xe0>
+    ...
+
+Convert pte_present() to static inline function so that prevent the
+generation of redundant code and move pte_valid() and
+pte_present_invalid() further up so the inline function can use them.
+
+After this change, the generated code becomes:
+    ...
+    /* pmd_present() (x20 = pmdp) */
+    1a30: f9400288     ldr	x8, [x20]
+    1a34: 8a170109     and	x9, x8, x23
+    1a38: f9000fa8     str	x8, [x29, #0x18]
+    1a3c: f120013f     cmp	x9, #0x800
+    1a40: 54fffe80     b.eq	0x1a10 <pud_free_pmd_page+0xd0>
+    1a44: 3607fee8     tbz	w8, #0x0, 0x1a20 <pud_free_pmd_page+0xe0>
+    1a48: 17fffff2     b	0x1a10 <pud_free_pmd_page+0xd0>
+    ...
+
+This eliminates the redundant load and also reduces code size at
+call sites using this pattern. For example, pud_free_pmd_page() shrinks
+from 7,500 bytes to 7,148 bytes, a reduction of approximately 4.7%.
+
+Signed-off-by: Yeoreum Yun <yeoreum.yun@arm.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/include/asm/pgtable.h | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/arch/arm64/include/asm/pgtable.h b/arch/arm64/include/asm/pgtable.h
+index 27689c62bd25..25001694ae8e 100644
+--- a/arch/arm64/include/asm/pgtable.h
++++ b/arch/arm64/include/asm/pgtable.h
+@@ -140,10 +140,17 @@ static inline pteval_t __phys_to_pte_val(phys_addr_t phys)
+ #define pte_none(pte)		(!pte_val(pte))
+ #define pte_page(pte)		(pfn_to_page(pte_pfn(pte)))
+ 
++#define pte_valid(pte)		(!!(pte_val(pte) & PTE_VALID))
++#define pte_present_invalid(pte) \
++	((pte_val(pte) & (PTE_VALID | PTE_PRESENT_INVALID)) == PTE_PRESENT_INVALID)
++
+ /*
+  * The following only work if pte_present(). Undefined behaviour otherwise.
+  */
+-#define pte_present(pte)	(pte_valid(pte) || pte_present_invalid(pte))
++static __always_inline bool pte_present(pte_t pte)
++{
++	return pte_valid(pte) || pte_present_invalid(pte);
++}
+ #define pte_young(pte)		(!!(pte_val(pte) & PTE_AF))
+ #define pte_special(pte)	(!!(pte_val(pte) & PTE_SPECIAL))
+ #define pte_write(pte)		(!!(pte_val(pte) & PTE_WRITE))
+@@ -168,9 +175,6 @@ static inline pteval_t __phys_to_pte_val(phys_addr_t phys)
+ #define pte_sw_dirty(pte)	(!!(pte_val(pte) & PTE_DIRTY))
+ #define pte_dirty(pte)		(pte_sw_dirty(pte) || pte_hw_dirty(pte))
+ 
+-#define pte_valid(pte)		(!!(pte_val(pte) & PTE_VALID))
+-#define pte_present_invalid(pte) \
+-	((pte_val(pte) & (PTE_VALID | PTE_PRESENT_INVALID)) == PTE_PRESENT_INVALID)
+ /*
+  * Execute-only user mappings do not have the PTE_USER bit set. All valid
+  * kernel mappings have the PTE_UXN bit set.
+-- 
+2.55.0
+

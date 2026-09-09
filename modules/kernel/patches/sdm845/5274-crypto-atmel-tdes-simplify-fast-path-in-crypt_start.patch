@@ -1,0 +1,57 @@
+From 3edc28c9ade06410a7f435331f40b3e71b19abb4 Mon Sep 17 00:00:00 2001
+From: Thorsten Blum <thorsten.blum@linux.dev>
+Date: Mon, 6 Jul 2026 17:04:05 +0200
+Subject: [PATCH 05274/15333] crypto: atmel-tdes - simplify fast path in
+ crypt_start
+
+Fold all fast path conditions into a single boolean expression and drop
+any redundant checks.
+
+Signed-off-by: Thorsten Blum <thorsten.blum@linux.dev>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ drivers/crypto/atmel-tdes.c | 24 +++++++++---------------
+ 1 file changed, 9 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/crypto/atmel-tdes.c b/drivers/crypto/atmel-tdes.c
+index d380f6741a2c..d9cc4f657481 100644
+--- a/drivers/crypto/atmel-tdes.c
++++ b/drivers/crypto/atmel-tdes.c
+@@ -451,25 +451,19 @@ static int atmel_tdes_crypt_dma(struct atmel_tdes_dev *dd,
+ 
+ static int atmel_tdes_crypt_start(struct atmel_tdes_dev *dd)
+ {
+-	int err, fast = 0, in, out;
++	bool fast;
++	int err;
+ 	size_t count;
+ 	dma_addr_t addr_in, addr_out;
+ 
+-	if ((!dd->in_offset) && (!dd->out_offset)) {
+-		/* check for alignment */
+-		in = IS_ALIGNED((u32)dd->in_sg->offset, sizeof(u32)) &&
+-			IS_ALIGNED(dd->in_sg->length, dd->ctx->block_size);
+-		out = IS_ALIGNED((u32)dd->out_sg->offset, sizeof(u32)) &&
+-			IS_ALIGNED(dd->out_sg->length, dd->ctx->block_size);
+-		fast = in && out;
+-
+-		if (dd->in_sg->length != dd->out_sg->length)
+-			fast = 0;
+-	}
+-
++	fast = !dd->in_offset && !dd->out_offset &&
++		dd->in_sg->length == dd->out_sg->length &&
++		IS_ALIGNED(dd->in_sg->offset, sizeof(u32)) &&
++		IS_ALIGNED(dd->out_sg->offset, sizeof(u32)) &&
++		IS_ALIGNED(dd->in_sg->length, dd->ctx->block_size);
+ 
+-	if (fast)  {
+-		count = min_t(size_t, dd->total, dd->in_sg->length);
++	if (fast) {
++		count = min(dd->total, dd->in_sg->length);
+ 
+ 		err = dma_map_sg(dd->dev, dd->in_sg, 1, DMA_TO_DEVICE);
+ 		if (!err) {
+-- 
+2.55.0
+

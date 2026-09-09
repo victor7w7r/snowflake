@@ -1,0 +1,57 @@
+From 08bc14983723e8afb808fe832b9a1a80e6b7bac1 Mon Sep 17 00:00:00 2001
+From: Xu Yang <xu.yang_2@nxp.com>
+Date: Tue, 21 Jul 2026 18:54:47 +0800
+Subject: [PATCH 06341/15333] of: kobj: export of_node_ktype for use by modules
+
+of_node_init() is a static inline that references of_node_ktype when
+CONFIG_OF_KOBJ=y. Any module that calls of_node_init() will therefore
+have an unresolved reference to of_node_ktype at load time, because
+the symbol is defined in drivers/of/kobj.c but was never exported.
+
+This causes a modpost build error when CONFIG_OF_KOBJ=y and
+CONFIG_DRIVER_PE_KUNIT_TEST=m:
+
+  ERROR: modpost: "of_node_ktype"
+  [drivers/base/test/property-entry-test.ko] undefined!
+
+Add EXPORT_SYMBOL_IF_KUNIT(of_node_ktype) so that modules such as the
+KUnit property-entry test can call of_node_init() without hitting this
+linker error.
+
+Reported-by: kernel test robot <lkp@intel.com>
+Closes: https://lore.kernel.org/oe-kbuild-all/202607181651.RnUuV8n6-lkp@intel.com/
+Signed-off-by: Xu Yang <xu.yang_2@nxp.com>
+Acked-by: Rob Herring (Arm) <robh@kernel.org>
+Acked-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://lore.kernel.org/oe-kbuild-all/202607181651.RnUuV8n6-lkp@intel.com/
+Link: https://patch.msgid.link/20260721105448.2109894-2-xu.yang_2@oss.nxp.com
+[ Add empty line before the kunit include. - Danilo ]
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/of/kobj.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/of/kobj.c b/drivers/of/kobj.c
+index 1bb61a2c3399..9f17305f112b 100644
+--- a/drivers/of/kobj.c
++++ b/drivers/of/kobj.c
+@@ -2,6 +2,8 @@
+ #include <linux/of.h>
+ #include <linux/slab.h>
+ 
++#include <kunit/visibility.h>
++
+ #include "of_private.h"
+ 
+ /* true when node is initialized */
+@@ -27,6 +29,7 @@ static void of_node_release(struct kobject *kobj)
+ const struct kobj_type of_node_ktype = {
+ 	.release = of_node_release,
+ };
++EXPORT_SYMBOL_IF_KUNIT(of_node_ktype);
+ 
+ static ssize_t of_node_property_read(struct file *filp, struct kobject *kobj,
+ 				const struct bin_attribute *bin_attr, char *buf,
+-- 
+2.55.0
+

@@ -1,0 +1,53 @@
+From 336af689d58f245d9e12c2ddec1531e455080c68 Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Wed, 24 Jun 2026 22:35:58 +0800
+Subject: [PATCH 10128/15333] HID: amd_sfh: return an error when response wait
+ times out
+
+amdtp_wait_for_response() waits for request_done before completing a
+report request. wait_event_interruptible_timeout() returns 0 when the
+wait expires, but the current code treats only negative values as errors
+and returns success on timeout.
+
+Return -ETIMEDOUT when the response wait expires while preserving the
+existing success path when the response has already been observed.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Acked-by: Basavaraj Natikar <Basavaraj.Natikar@amd.com>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ drivers/hid/amd-sfh-hid/amd_sfh_hid.c | 15 ++++++++-------
+ 1 file changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/hid/amd-sfh-hid/amd_sfh_hid.c b/drivers/hid/amd-sfh-hid/amd_sfh_hid.c
+index b04f675d49b0..8f88f965fbd5 100644
+--- a/drivers/hid/amd-sfh-hid/amd_sfh_hid.c
++++ b/drivers/hid/amd-sfh-hid/amd_sfh_hid.c
+@@ -87,16 +87,17 @@ static int amdtp_wait_for_response(struct hid_device *hid)
+ 			break;
+ 	}
+ 
+-	if (!cli_data->request_done[i])
++	if (!cli_data->request_done[i]) {
+ 		ret = wait_event_interruptible_timeout(hid_data->hid_wait,
+ 						       cli_data->request_done[i],
+ 						       msecs_to_jiffies(AMD_SFH_RESPONSE_TIMEOUT));
+-	if (ret == -ERESTARTSYS)
+-		return -ERESTARTSYS;
+-	else if (ret < 0)
+-		return -ETIMEDOUT;
+-	else
+-		return 0;
++		if (ret == -ERESTARTSYS)
++			return -ERESTARTSYS;
++		if (ret <= 0)
++			return -ETIMEDOUT;
++	}
++
++	return 0;
+ }
+ 
+ void amdtp_hid_wakeup(struct hid_device *hid)
+-- 
+2.55.0
+

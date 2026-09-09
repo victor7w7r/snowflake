@@ -1,0 +1,112 @@
+From dfaf57ef99cf8901e4a5fc2e89629be44f922f80 Mon Sep 17 00:00:00 2001
+From: Takashi Kozu <takkozu@amazon.com>
+Date: Tue, 3 Feb 2026 21:54:11 +0900
+Subject: [PATCH 01999/15333] igb: prepare for RSS key get/set support
+
+Store the RSS key inside struct igb_adapter and introduce the
+igb_write_rss_key() helper function. This allows the driver to program
+the E1000 registers using a persistent RSS key, instead of using a
+stack-local buffer in igb_setup_mrqc().
+
+Reviewed-by: Simon Horman <horms@kernel.org>
+Reviewed-by: Piotr Kwapulinski <piotr.kwapulinski@intel.com>
+Reviewed-by: Aleksandr Loktionov <aleksandr.loktionov@intel.com>
+Signed-off-by: Takashi Kozu <takkozu@amazon.com>
+Tested-by: Rinitha S <sx.rinitha@intel.com> (A Contingent worker at Intel)
+Signed-off-by: Tony Nguyen <anthony.l.nguyen@intel.com>
+---
+ drivers/net/ethernet/intel/igb/igb.h         |  3 +++
+ drivers/net/ethernet/intel/igb/igb_ethtool.c | 21 ++++++++++++++++++++
+ drivers/net/ethernet/intel/igb/igb_main.c    |  8 ++++----
+ 3 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/ethernet/intel/igb/igb.h b/drivers/net/ethernet/intel/igb/igb.h
+index 0fff1df81b7b..8c9b02058cec 100644
+--- a/drivers/net/ethernet/intel/igb/igb.h
++++ b/drivers/net/ethernet/intel/igb/igb.h
+@@ -495,6 +495,7 @@ struct hwmon_buff {
+ #define IGB_N_PEROUT	2
+ #define IGB_N_SDP	4
+ #define IGB_RETA_SIZE	128
++#define IGB_RSS_KEY_SIZE	40
+ 
+ enum igb_filter_match_flags {
+ 	IGB_FILTER_FLAG_ETHER_TYPE = 0x1,
+@@ -655,6 +656,7 @@ struct igb_adapter {
+ 	struct i2c_client *i2c_client;
+ 	u32 rss_indir_tbl_init;
+ 	u8 rss_indir_tbl[IGB_RETA_SIZE];
++	u8 rss_key[IGB_RSS_KEY_SIZE];
+ 
+ 	unsigned long link_check_timeout;
+ 	int copper_tries;
+@@ -735,6 +737,7 @@ void igb_down(struct igb_adapter *);
+ void igb_reinit_locked(struct igb_adapter *);
+ void igb_reset(struct igb_adapter *);
+ int igb_reinit_queues(struct igb_adapter *);
++void igb_write_rss_key(struct igb_adapter *adapter);
+ void igb_write_rss_indir_tbl(struct igb_adapter *);
+ int igb_set_spd_dplx(struct igb_adapter *, u32, u8);
+ int igb_setup_tx_resources(struct igb_ring *);
+diff --git a/drivers/net/ethernet/intel/igb/igb_ethtool.c b/drivers/net/ethernet/intel/igb/igb_ethtool.c
+index f7938c1da835..9a105e59f432 100644
+--- a/drivers/net/ethernet/intel/igb/igb_ethtool.c
++++ b/drivers/net/ethernet/intel/igb/igb_ethtool.c
+@@ -3019,6 +3019,27 @@ static int igb_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
+ 	return ret;
+ }
+ 
++/**
++ * igb_write_rss_key - Program the RSS key into device registers
++ * @adapter: board private structure
++ *
++ * Write the RSS key stored in adapter->rss_key to the E1000 hardware registers.
++ * Each 32-bit chunk of the key is read using get_unaligned_le32() and written
++ * to the appropriate register.
++ */
++void igb_write_rss_key(struct igb_adapter *adapter)
++{
++	struct e1000_hw *hw = &adapter->hw;
++
++	ASSERT_RTNL();
++
++	for (int i = 0; i < IGB_RSS_KEY_SIZE / 4; i++) {
++		u32 val = get_unaligned_le32(&adapter->rss_key[i * 4]);
++
++		wr32(E1000_RSSRK(i), val);
++	}
++}
++
+ static int igb_get_eee(struct net_device *netdev, struct ethtool_keee *edata)
+ {
+ 	struct igb_adapter *adapter = netdev_priv(netdev);
+diff --git a/drivers/net/ethernet/intel/igb/igb_main.c b/drivers/net/ethernet/intel/igb/igb_main.c
+index a1e89a375744..b7d36dd0b8e4 100644
+--- a/drivers/net/ethernet/intel/igb/igb_main.c
++++ b/drivers/net/ethernet/intel/igb/igb_main.c
+@@ -4048,6 +4048,9 @@ static int igb_sw_init(struct igb_adapter *adapter)
+ 
+ 	pci_read_config_word(pdev, PCI_COMMAND, &hw->bus.pci_cmd_word);
+ 
++	/* init RSS key */
++	netdev_rss_key_fill(adapter->rss_key, sizeof(adapter->rss_key));
++
+ 	/* set default ring sizes */
+ 	adapter->tx_ring_count = IGB_DEFAULT_TXD;
+ 	adapter->rx_ring_count = IGB_DEFAULT_RXD;
+@@ -4522,11 +4525,8 @@ static void igb_setup_mrqc(struct igb_adapter *adapter)
+ 	struct e1000_hw *hw = &adapter->hw;
+ 	u32 mrqc, rxcsum;
+ 	u32 j, num_rx_queues;
+-	u32 rss_key[10];
+ 
+-	netdev_rss_key_fill(rss_key, sizeof(rss_key));
+-	for (j = 0; j < 10; j++)
+-		wr32(E1000_RSSRK(j), rss_key[j]);
++	igb_write_rss_key(adapter);
+ 
+ 	num_rx_queues = adapter->rss_queues;
+ 
+-- 
+2.55.0
+

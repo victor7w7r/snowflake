@@ -1,0 +1,106 @@
+From 2c0759a6d1a331288d2d507778e176886195a17f Mon Sep 17 00:00:00 2001
+From: Chuck Lever <cel@kernel.org>
+Date: Sun, 12 Jul 2026 16:45:51 -0400
+Subject: [PATCH 12759/15333] NFSD: Move struct readdir_cd
+
+struct readdir_cd is part of the VFS readdir API, but it lives in
+nfsd.h, the subsystem's catch-all header, rather than alongside that
+API. That forces vfs.h to include nfsd.h solely to declare readdir_cd
+for its nfsd_readdir() prototype, a layering inversion since vfs.h is
+the lower-level shim.
+
+Relocate readdir_cd to vfs.h, just below the nfsd_filldir_t callback
+typedef. vfs.h then defines the struct itself and no longer includes
+nfsd.h. The xdr headers that embed readdir_cd by value include vfs.h
+to obtain the definition. This prepares the ground for dropping nfsd.h
+from more files.
+
+Link: https://patch.msgid.link/20260712204554.125308-7-cel@kernel.org
+Reviewed-by: Jeff Layton <jlayton@kernel.org>
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ fs/nfsd/nfsd.h | 4 ----
+ fs/nfsd/vfs.h  | 5 ++++-
+ fs/nfsd/xdr.h  | 1 +
+ fs/nfsd/xdr3.h | 1 +
+ fs/nfsd/xdr4.h | 2 +-
+ 5 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/fs/nfsd/nfsd.h b/fs/nfsd/nfsd.h
+index b35e9a9a112d..0503ee0e1bbe 100644
+--- a/fs/nfsd/nfsd.h
++++ b/fs/nfsd/nfsd.h
+@@ -47,10 +47,6 @@ enum {
+ 	NFSSVC_MAXBLKSIZE       = RPCSVC_MAXPAYLOAD,
+ };
+ 
+-struct readdir_cd {
+-	__be32			err;	/* 0, nfserr, or nfserr_eof */
+-};
+-
+ /* Maximum number of operations per session compound */
+ #define NFSD_MAX_OPS_PER_COMPOUND	200
+ 
+diff --git a/fs/nfsd/vfs.h b/fs/nfsd/vfs.h
+index e09ea04a51b9..4af2ff9e9dfe 100644
+--- a/fs/nfsd/vfs.h
++++ b/fs/nfsd/vfs.h
+@@ -9,7 +9,6 @@
+ #include <linux/fs.h>
+ #include <linux/posix_acl.h>
+ #include "nfsfh.h"
+-#include "nfsd.h"
+ 
+ /*
+  * Flags for nfsd_permission
+@@ -45,6 +44,10 @@ struct nfsd_file;
+  */
+ typedef int (*nfsd_filldir_t)(void *, const char *, int, loff_t, u64, unsigned);
+ 
++struct readdir_cd {
++	__be32			err;	/* nfs_ok, nfserr, or nfserr_eof */
++};
++
+ /* nfsd/vfs.c */
+ struct nfsd_attrs {
+ 	struct iattr		*na_iattr;	/* input */
+diff --git a/fs/nfsd/xdr.h b/fs/nfsd/xdr.h
+index 852f71580bd0..df540c940cef 100644
+--- a/fs/nfsd/xdr.h
++++ b/fs/nfsd/xdr.h
+@@ -7,6 +7,7 @@
+ #include <linux/vfs.h>
+ #include "nfsd.h"
+ #include "nfsfh.h"
++#include "vfs.h"
+ 
+ struct nfsd_fhandle {
+ 	struct svc_fh		fh;
+diff --git a/fs/nfsd/xdr3.h b/fs/nfsd/xdr3.h
+index a7c9714b0b0e..344203874b4c 100644
+--- a/fs/nfsd/xdr3.h
++++ b/fs/nfsd/xdr3.h
+@@ -9,6 +9,7 @@
+ #define _LINUX_NFSD_XDR3_H
+ 
+ #include "xdr.h"
++#include "vfs.h"
+ 
+ struct nfsd3_sattrargs {
+ 	struct svc_fh		fh;
+diff --git a/fs/nfsd/xdr4.h b/fs/nfsd/xdr4.h
+index 67491e2843fb..c7eda5bc833b 100644
+--- a/fs/nfsd/xdr4.h
++++ b/fs/nfsd/xdr4.h
+@@ -38,7 +38,7 @@
+ #define _LINUX_NFSD_XDR4_H
+ 
+ #include "state.h"
+-#include "nfsd.h"
++#include "vfs.h"
+ 
+ #define NFSD4_MAX_TAGLEN	128
+ #define XDR_LEN(n)                     (((n) + 3) & ~3)
+-- 
+2.55.0
+

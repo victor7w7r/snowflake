@@ -1,0 +1,43 @@
+From 39eace59ac826465fae0788d0a6b304ec94f9944 Mon Sep 17 00:00:00 2001
+From: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Date: Wed, 1 Jul 2026 12:58:51 +0200
+Subject: [PATCH 02990/15333] dt-bindings: rockchip: grf: Narrow allowed reboot
+ modes
+
+syscon-reboot-mode schema allows arbitrary "mode-.* properties but only
+a subset actually makes sense and is valid.  Provide negative look-ahead
+pattern to disallow any modes not supported by the device, which
+tightens the binding.
+
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Acked-by: Rob Herring (Arm) <robh@kernel.org>
+Link: https://patch.msgid.link/20260701105849.197086-4-krzysztof.kozlowski@oss.qualcomm.com
+Signed-off-by: Heiko Stuebner <heiko@sntech.de>
+---
+ Documentation/devicetree/bindings/soc/rockchip/grf.yaml | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/soc/rockchip/grf.yaml b/Documentation/devicetree/bindings/soc/rockchip/grf.yaml
+index 2cc43742b8e3..7bcb4e2f47ec 100644
+--- a/Documentation/devicetree/bindings/soc/rockchip/grf.yaml
++++ b/Documentation/devicetree/bindings/soc/rockchip/grf.yaml
+@@ -239,11 +239,14 @@ allOf:
+       properties:
+         reboot-mode:
+           type: object
+-
+           $ref: /schemas/power/reset/syscon-reboot-mode.yaml#
+-
+           unevaluatedProperties: false
+ 
++          patternProperties:
++            # Negative look-ahead to disallow unsupported modes. The '$' has to be
++            # part of lookahead group to work, instead of trailing outside of ().
++            "^mode-(?!(bootloader$|fastboot$|loader$|normal$|recovery$))": false
++
+   - if:
+       properties:
+         compatible:
+-- 
+2.55.0
+

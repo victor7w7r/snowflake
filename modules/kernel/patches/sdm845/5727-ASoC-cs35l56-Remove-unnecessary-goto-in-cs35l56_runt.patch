@@ -1,0 +1,45 @@
+From c462b2e14589780c2aba13156c117d90b2381157 Mon Sep 17 00:00:00 2001
+From: Richard Fitzgerald <rf@opensource.cirrus.com>
+Date: Fri, 17 Jul 2026 10:26:55 +0100
+Subject: [PATCH 05727/15333] ASoC: cs35l56: Remove unnecessary goto in
+ cs35l56_runtime_resume_common()
+
+The 'goto out_sync' in cs35l56_runtime_resume_common() is unnecessary
+because it only skips a single if-statement and function call. It can
+be replaced by inverting the conditional and merging it with the next
+if-statement.
+
+This was a legacy of an early version of the function, where more code
+was skipped by the goto.
+
+Signed-off-by: Richard Fitzgerald <rf@opensource.cirrus.com>
+Link: https://patch.msgid.link/20260717092655.1730484-1-rf@opensource.cirrus.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/cs35l56-shared.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/sound/soc/codecs/cs35l56-shared.c b/sound/soc/codecs/cs35l56-shared.c
+index f20bcdfd35af..b40bd3a8d27b 100644
+--- a/sound/soc/codecs/cs35l56-shared.c
++++ b/sound/soc/codecs/cs35l56-shared.c
+@@ -811,14 +811,10 @@ int cs35l56_runtime_resume_common(struct cs35l56_base *cs35l56_base, bool is_sou
+ 	if (!cs35l56_base->init_done)
+ 		return 0;
+ 
+-	if (!cs35l56_base->can_hibernate)
+-		goto out_sync;
+-
+-	/* Must be done before releasing cache-only */
+-	if (!is_soundwire)
++	/* Hibernate wake must be done before releasing cache-only */
++	if (cs35l56_base->can_hibernate && !is_soundwire)
+ 		cs35l56_issue_wake_event(cs35l56_base);
+ 
+-out_sync:
+ 	ret = cs35l56_wait_for_firmware_boot(cs35l56_base);
+ 	if (ret) {
+ 		dev_err(cs35l56_base->dev, "Hibernate wake failed: %d\n", ret);
+-- 
+2.55.0
+

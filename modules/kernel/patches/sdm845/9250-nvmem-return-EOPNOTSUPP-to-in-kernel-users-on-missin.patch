@@ -1,0 +1,106 @@
+From 06b360155d1281931fc6a3363dc6323a7858c1f0 Mon Sep 17 00:00:00 2001
+From: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Date: Wed, 29 Jul 2026 10:46:35 +0100
+Subject: [PATCH 09250/15333] nvmem: return -EOPNOTSUPP to in-kernel users on
+ missing callbacks
+
+__nvmem_reg_read/write() currently return -EINVAL if the relevant
+callback is not present. User-space helpers again check the presence
+of the callbacks to see if they should return -EPERM.
+
+Ahead of adding SRCU synchronization: change the error code returned to
+in-kernel users to -EOPNOTSUPP which is more indicative of the actual
+reason for the failure.
+
+Remove the checks from the sysfs attribute callbacks as these are not
+visible without the required callbacks.
+
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Tested-by: Loic Poulain <loic.poulain@oss.qualcomm.com>
+Signed-off-by: Srinivas Kandagatla <srini@kernel.org>
+Link: https://patch.msgid.link/20260729094647.111468-3-srini@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/nvmem/core.c | 37 +++++++++++++++++++------------------
+ 1 file changed, 19 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/nvmem/core.c b/drivers/nvmem/core.c
+index 6bcb90760bee..40a00f650261 100644
+--- a/drivers/nvmem/core.c
++++ b/drivers/nvmem/core.c
+@@ -55,10 +55,10 @@ static BLOCKING_NOTIFIER_HEAD(nvmem_notifier);
+ static int __nvmem_reg_read(struct nvmem_device *nvmem, unsigned int offset,
+ 			    void *val, size_t bytes)
+ {
+-	if (nvmem->reg_read)
+-		return nvmem->reg_read(nvmem->priv, offset, val, bytes);
++	if (!nvmem->reg_read)
++		return -EOPNOTSUPP;
+ 
+-	return -EINVAL;
++	return nvmem->reg_read(nvmem->priv, offset, val, bytes);
+ }
+ 
+ static int __nvmem_reg_write(struct nvmem_device *nvmem, unsigned int offset,
+@@ -66,14 +66,14 @@ static int __nvmem_reg_write(struct nvmem_device *nvmem, unsigned int offset,
+ {
+ 	int ret;
+ 
+-	if (nvmem->reg_write) {
+-		gpiod_set_value_cansleep(nvmem->wp_gpio, 0);
+-		ret = nvmem->reg_write(nvmem->priv, offset, val, bytes);
+-		gpiod_set_value_cansleep(nvmem->wp_gpio, 1);
+-		return ret;
+-	}
++	if (!nvmem->reg_write)
++		return -EOPNOTSUPP;
++
++	gpiod_set_value_cansleep(nvmem->wp_gpio, 0);
++	ret = nvmem->reg_write(nvmem->priv, offset, val, bytes);
++	gpiod_set_value_cansleep(nvmem->wp_gpio, 1);
+ 
+-	return -EINVAL;
++	return ret;
+ }
+ 
+ static int nvmem_access_with_keepouts(struct nvmem_device *nvmem,
+@@ -231,13 +231,12 @@ static ssize_t bin_attr_nvmem_read(struct file *filp, struct kobject *kobj,
+ 
+ 	count = round_down(count, nvmem->word_size);
+ 
+-	if (!nvmem->reg_read)
+-		return -EPERM;
+-
+ 	rc = nvmem_reg_read(nvmem, pos, buf, count);
+-
+-	if (rc)
++	if (rc) {
++		if (rc == -EOPNOTSUPP)
++			return -EPERM;
+ 		return rc;
++	}
+ 
+ 	return count;
+ }
+@@ -264,13 +263,15 @@ static ssize_t bin_attr_nvmem_write(struct file *filp, struct kobject *kobj,
+ 
+ 	count = round_down(count, nvmem->word_size);
+ 
+-	if (!nvmem->reg_write || nvmem->read_only)
++	if (nvmem->read_only)
+ 		return -EPERM;
+ 
+ 	rc = nvmem_reg_write(nvmem, pos, buf, count);
+-
+-	if (rc)
++	if (rc) {
++		if (rc == -EOPNOTSUPP)
++			return -EPERM;
+ 		return rc;
++	}
+ 
+ 	return count;
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,111 @@
+From 86f9536c2d8f4496f1e45cb0a70ca1b3a7d89106 Mon Sep 17 00:00:00 2001
+From: Nilay Shroff <nilay@linux.ibm.com>
+Date: Mon, 13 Jul 2026 17:24:06 +0530
+Subject: [PATCH 07787/15333] nvme: add context annotations for
+ nvme_ns_head::srcu
+
+Add Clang lock context annotations for helpers that operate under
+head->srcu read-side protection.
+
+The path selection helpers invoked by nvme_find_path() access SRCU-
+protected data through srcu_dereference() or list APIs which iterate
+through rcu protected list and therefore require the caller to hold
+head->srcu. Annotate these helpers and nvme_find_path() with
+__must_hold_shared(&head->srcu) so that Clang's lock context analysis
+can verify the SRCU locking requirements across the call chain.
+
+Also update nvme_ns_head_ctrl_ioctl() to use __releases_shared()
+to match the shared SRCU read-side lock acquired through
+srcu_read_lock().
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Nilay Shroff <nilay@linux.ibm.com>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/ioctl.c     | 2 +-
+ drivers/nvme/host/multipath.c | 6 ++++++
+ drivers/nvme/host/nvme.h      | 3 ++-
+ 3 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/nvme/host/ioctl.c b/drivers/nvme/host/ioctl.c
+index d5a8f375953b..bae52bd5bdd2 100644
+--- a/drivers/nvme/host/ioctl.c
++++ b/drivers/nvme/host/ioctl.c
+@@ -692,7 +692,7 @@ int nvme_ns_chr_uring_cmd_iopoll(struct io_uring_cmd *ioucmd,
+ static int nvme_ns_head_ctrl_ioctl(struct nvme_ns *ns, unsigned int cmd,
+ 		void __user *argp, struct nvme_ns_head *head, int srcu_idx,
+ 		bool open_for_write)
+-	__releases(&head->srcu)
++	__releases_shared(&head->srcu)
+ {
+ 	struct nvme_ctrl *ctrl = ns->ctrl;
+ 	int ret;
+diff --git a/drivers/nvme/host/multipath.c b/drivers/nvme/host/multipath.c
+index c850a4bf7380..b9bb9777da96 100644
+--- a/drivers/nvme/host/multipath.c
++++ b/drivers/nvme/host/multipath.c
+@@ -325,6 +325,7 @@ static bool nvme_path_is_disabled(struct nvme_ns *ns)
+ }
+ 
+ static struct nvme_ns *__nvme_find_path(struct nvme_ns_head *head, int node)
++	__must_hold_shared(&head->srcu)
+ {
+ 	int found_distance = INT_MAX, fallback_distance = INT_MAX, distance;
+ 	struct nvme_ns *found = NULL, *fallback = NULL, *ns;
+@@ -367,6 +368,7 @@ static struct nvme_ns *__nvme_find_path(struct nvme_ns_head *head, int node)
+ 
+ static struct nvme_ns *nvme_next_ns(struct nvme_ns_head *head,
+ 		struct nvme_ns *ns)
++	__must_hold_shared(&head->srcu)
+ {
+ 	ns = list_next_or_null_rcu(&head->list, &ns->siblings, struct nvme_ns,
+ 			siblings);
+@@ -376,6 +378,7 @@ static struct nvme_ns *nvme_next_ns(struct nvme_ns_head *head,
+ }
+ 
+ static struct nvme_ns *nvme_round_robin_path(struct nvme_ns_head *head)
++	__must_hold_shared(&head->srcu)
+ {
+ 	struct nvme_ns *ns, *found = NULL;
+ 	int node = numa_node_id();
+@@ -424,6 +427,7 @@ static struct nvme_ns *nvme_round_robin_path(struct nvme_ns_head *head)
+ }
+ 
+ static struct nvme_ns *nvme_queue_depth_path(struct nvme_ns_head *head)
++	__must_hold_shared(&head->srcu)
+ {
+ 	struct nvme_ns *best_opt = NULL, *best_nonopt = NULL, *ns;
+ 	unsigned int min_depth_opt = UINT_MAX, min_depth_nonopt = UINT_MAX;
+@@ -467,6 +471,7 @@ static inline bool nvme_path_is_optimized(struct nvme_ns *ns)
+ }
+ 
+ static struct nvme_ns *nvme_numa_path(struct nvme_ns_head *head)
++	__must_hold_shared(&head->srcu)
+ {
+ 	int node = numa_node_id();
+ 	struct nvme_ns *ns;
+@@ -492,6 +497,7 @@ inline struct nvme_ns *nvme_find_path(struct nvme_ns_head *head)
+ }
+ 
+ static bool nvme_available_path(struct nvme_ns_head *head)
++	__must_hold_shared(&head->srcu)
+ {
+ 	struct nvme_ns *ns;
+ 
+diff --git a/drivers/nvme/host/nvme.h b/drivers/nvme/host/nvme.h
+index 26859aea3e2d..ec9dea4d7fb9 100644
+--- a/drivers/nvme/host/nvme.h
++++ b/drivers/nvme/host/nvme.h
+@@ -1033,7 +1033,8 @@ extern const struct attribute_group *nvme_dev_attr_groups[];
+ extern const struct block_device_operations nvme_bdev_ops;
+ 
+ void nvme_delete_ctrl_sync(struct nvme_ctrl *ctrl);
+-struct nvme_ns *nvme_find_path(struct nvme_ns_head *head);
++struct nvme_ns *nvme_find_path(struct nvme_ns_head *head)
++	__must_hold_shared(&head->srcu);
+ #ifdef CONFIG_NVME_MULTIPATH
+ static inline bool nvme_ctrl_use_ana(struct nvme_ctrl *ctrl)
+ {
+-- 
+2.55.0
+

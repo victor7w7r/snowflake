@@ -1,0 +1,91 @@
+From efbde6f9f449da3306f5b5d32f08829954ffb44d Mon Sep 17 00:00:00 2001
+From: Tal Zussman <tz2294@columbia.edu>
+Date: Thu, 30 Jul 2026 02:57:53 -0400
+Subject: [PATCH 09497/15333] iomap: use BIO_COMPLETE_IN_TASK for dropbehind
+ writeback
+
+Set BIO_COMPLETE_IN_TASK on iomap writeback bios when a dropbehind folio
+is added. This ensures that bi_end_io runs in task context, where
+folio_end_dropbehind() can safely invalidate folios.
+
+With the bio layer now handling task-context deferral generically,
+IOMAP_IOEND_DONTCACHE is no longer needed, as XFS no longer needs to
+route DONTCACHE ioends through its completion workqueue. Remove the flag
+and its NOMERGE entry.
+
+Without the NOMERGE, regular I/Os that get merged with a dropbehind
+folio will also have their completion deferred to task context.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Tal Zussman <tz2294@columbia.edu>
+Link: https://patch.msgid.link/20260730-blk-dontcache-v7-3-3e8e6850068d@columbia.edu
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ fs/iomap/ioend.c      | 5 +++--
+ fs/xfs/xfs_aops.c     | 4 ----
+ include/linux/iomap.h | 5 +----
+ 3 files changed, 4 insertions(+), 10 deletions(-)
+
+diff --git a/fs/iomap/ioend.c b/fs/iomap/ioend.c
+index 30468d51b5ad..1ae8a8fb8503 100644
+--- a/fs/iomap/ioend.c
++++ b/fs/iomap/ioend.c
+@@ -238,8 +238,6 @@ ssize_t iomap_add_to_ioend(struct iomap_writepage_ctx *wpc, struct folio *folio,
+ 
+ 	if (wpc->iomap.flags & IOMAP_F_SHARED)
+ 		ioend_flags |= IOMAP_IOEND_SHARED;
+-	if (folio_test_dropbehind(folio))
+-		ioend_flags |= IOMAP_IOEND_DONTCACHE;
+ 	if (pos == wpc->iomap.offset && (wpc->iomap.flags & IOMAP_F_BOUNDARY))
+ 		ioend_flags |= IOMAP_IOEND_BOUNDARY;
+ 
+@@ -256,6 +254,9 @@ ssize_t iomap_add_to_ioend(struct iomap_writepage_ctx *wpc, struct folio *folio,
+ 	if (!bio_add_folio(&ioend->io_bio, folio, map_len, poff))
+ 		goto new_ioend;
+ 
++	if (folio_test_dropbehind(folio))
++		bio_set_flag(&ioend->io_bio, BIO_COMPLETE_IN_TASK);
++
+ 	/*
+ 	 * Clamp io_offset and io_size to the incore EOF so that ondisk
+ 	 * file size updates in the ioend completion are byte-accurate.
+diff --git a/fs/xfs/xfs_aops.c b/fs/xfs/xfs_aops.c
+index 51293b6f331f..cd8de8c82d78 100644
+--- a/fs/xfs/xfs_aops.c
++++ b/fs/xfs/xfs_aops.c
+@@ -522,10 +522,6 @@ xfs_ioend_needs_wq_completion(
+ 	if (ioend->io_flags & (IOMAP_IOEND_UNWRITTEN | IOMAP_IOEND_SHARED))
+ 		return true;
+ 
+-	/* Page cache invalidation cannot be done in irq context. */
+-	if (ioend->io_flags & IOMAP_IOEND_DONTCACHE)
+-		return true;
+-
+ 	return false;
+ }
+ 
+diff --git a/include/linux/iomap.h b/include/linux/iomap.h
+index 56b43d594e6e..68af4935a107 100644
+--- a/include/linux/iomap.h
++++ b/include/linux/iomap.h
+@@ -404,16 +404,13 @@ sector_t iomap_bmap(struct address_space *mapping, sector_t bno,
+ #define IOMAP_IOEND_BOUNDARY		(1U << 2)
+ /* is direct I/O */
+ #define IOMAP_IOEND_DIRECT		(1U << 3)
+-/* is DONTCACHE I/O */
+-#define IOMAP_IOEND_DONTCACHE		(1U << 4)
+ 
+ /*
+  * Flags that if set on either ioend prevent the merge of two ioends.
+  * (IOMAP_IOEND_BOUNDARY also prevents merges, but only one-way)
+  */
+ #define IOMAP_IOEND_NOMERGE_FLAGS \
+-	(IOMAP_IOEND_SHARED | IOMAP_IOEND_UNWRITTEN | IOMAP_IOEND_DIRECT | \
+-	 IOMAP_IOEND_DONTCACHE)
++	(IOMAP_IOEND_SHARED | IOMAP_IOEND_UNWRITTEN | IOMAP_IOEND_DIRECT)
+ 
+ /*
+  * Structure for writeback I/O completions.
+-- 
+2.55.0
+

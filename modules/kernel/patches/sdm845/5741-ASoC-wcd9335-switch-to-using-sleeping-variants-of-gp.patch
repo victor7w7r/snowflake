@@ -1,0 +1,36 @@
+From 50b2e4bfb4d4b7eee61a53a1524898b3f0512956 Mon Sep 17 00:00:00 2001
+From: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Date: Fri, 17 Jul 2026 21:28:55 -0700
+Subject: [PATCH 05741/15333] ASoC: wcd9335: switch to using sleeping variants
+ of gpiod API
+
+The driver does not use gpiod API calls in an atomic context. Switch
+to gpiod_set_value_cansleep() calls to allow using the driver with GPIO
+controllers that might need process context to operate.
+
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Link: https://patch.msgid.link/alsAsTcQrpnnR46d@google.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/wcd9335.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/codecs/wcd9335.c b/sound/soc/codecs/wcd9335.c
+index e3ca5ca6de3d..40de279a9750 100644
+--- a/sound/soc/codecs/wcd9335.c
++++ b/sound/soc/codecs/wcd9335.c
+@@ -5010,9 +5010,9 @@ static int wcd9335_power_on_reset(struct wcd9335_codec *wcd)
+ 	 */
+ 	usleep_range(600, 650);
+ 
+-	gpiod_set_value(wcd->reset_gpio, 1);
++	gpiod_set_value_cansleep(wcd->reset_gpio, 1);
+ 	msleep(20);
+-	gpiod_set_value(wcd->reset_gpio, 0);
++	gpiod_set_value_cansleep(wcd->reset_gpio, 0);
+ 	msleep(20);
+ 
+ 	return 0;
+-- 
+2.55.0
+

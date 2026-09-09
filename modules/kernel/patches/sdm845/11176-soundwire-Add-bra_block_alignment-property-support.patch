@@ -1,0 +1,67 @@
+From c0840f8be5d59071096b8e6b42693a0d912b7cba Mon Sep 17 00:00:00 2001
+From: Richard Fitzgerald <rf@opensource.cirrus.com>
+Date: Tue, 28 Jul 2026 20:46:36 +0800
+Subject: [PATCH 11176/15333] soundwire: Add bra_block_alignment property
+ support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a property to struct sdw_slave_prop equivalent to the Disco
+property "mipi-sdw-bra-mode-block-alignment".
+
+The SoundWire Disco specification defines this as:
+
+"The data payload size for this BRA Mode shall be an integer
+multiple of the value of this Property."
+
+Signed-off-by: Richard Fitzgerald <rf@opensource.cirrus.com>
+Co-developed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Signed-off-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Reviewed-by: Péter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Reviewed-by: Pierre-Louis Bossart <pierre-louis.bossart@linux.dev>
+Link: https://patch.msgid.link/20260728124639.1484973-3-yung-chuan.liao@linux.intel.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/soundwire/mipi_disco.c | 3 +++
+ include/linux/soundwire/sdw.h  | 3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/drivers/soundwire/mipi_disco.c b/drivers/soundwire/mipi_disco.c
+index c69b78cd0b62..b122bd1e7321 100644
+--- a/drivers/soundwire/mipi_disco.c
++++ b/drivers/soundwire/mipi_disco.c
+@@ -471,6 +471,9 @@ int sdw_slave_read_prop(struct sdw_slave *slave)
+ 	device_property_read_u32(dev, "mipi-sdw-sdca-interrupt-register-list",
+ 				 &prop->sdca_interrupt_register_list);
+ 
++	device_property_read_u32(dev, "mipi-sdw-bra-mode-block-alignment",
++				 &prop->bra_block_alignment);
++
+ 	prop->commit_register_supported = mipi_device_property_read_bool(dev,
+ 			"mipi-sdw-commit-register-supported");
+ 
+diff --git a/include/linux/soundwire/sdw.h b/include/linux/soundwire/sdw.h
+index b484784e2690..7e27e8bdb64a 100644
+--- a/include/linux/soundwire/sdw.h
++++ b/include/linux/soundwire/sdw.h
+@@ -365,6 +365,8 @@ struct sdw_dpn_prop {
+  * @commit_register_supported: is PCP_Commit register supported
+  * @scp_int1_mask: SCP_INT1_MASK desired settings
+  * @lane_maps: Lane mapping for the slave, only valid if lane_control_support is set
++ * @bra_block_alignment: If non-zero the length of data in a BRA frame must be
++ *			 a multiple of this number of bytes.
+  * @clock_reg_supported: the Peripheral implements the clock base and scale
+  * registers introduced with the SoundWire 1.2 specification. SDCA devices
+  * do not need to set this boolean property as the registers are required.
+@@ -395,6 +397,7 @@ struct sdw_slave_prop {
+ 	u8 commit_register_supported;
+ 	u8 scp_int1_mask;
+ 	u8 lane_maps[SDW_MAX_LANES];
++	u32 bra_block_alignment;
+ 	bool clock_reg_supported;
+ 	bool use_domain_irq;
+ };
+-- 
+2.55.0
+

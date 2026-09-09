@@ -1,0 +1,94 @@
+From ebe59e66b72f52debdab7c48613c4f4cf7ce0920 Mon Sep 17 00:00:00 2001
+From: Hungyu Lin <dennylin0707@gmail.com>
+Date: Thu, 16 Jul 2026 04:46:13 +0000
+Subject: [PATCH 05441/15333] staging: sm750fb: remove unused set_all_eng_off
+ field
+
+The set_all_eng_off field is only initialized to 0 and is never set by
+any caller.
+
+Remove the unused field together with the dead cleanup path guarded by
+it.
+
+No functional change intended.
+
+Signed-off-by: Hungyu Lin <dennylin0707@gmail.com>
+Link: https://patch.msgid.link/20260716044613.2659-1-dennylin0707@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/sm750fb/ddk750_chip.c | 27 ---------------------------
+ drivers/staging/sm750fb/ddk750_chip.h |  7 -------
+ drivers/staging/sm750fb/sm750.c       |  1 -
+ 3 files changed, 35 deletions(-)
+
+diff --git a/drivers/staging/sm750fb/ddk750_chip.c b/drivers/staging/sm750fb/ddk750_chip.c
+index 0bb56bbec43f..aa78d0bc1d87 100644
+--- a/drivers/staging/sm750fb/ddk750_chip.c
++++ b/drivers/staging/sm750fb/ddk750_chip.c
+@@ -263,33 +263,6 @@ int ddk750_init_hw(struct initchip_param *p_init_param)
+ 		poke32(MISC_CTRL, reg);
+ 	}
+ 
+-	if (p_init_param->set_all_eng_off == 1) {
+-		sm750_enable_2d_engine(0);
+-
+-		/* Disable Overlay, if a former application left it on */
+-		reg = peek32(VIDEO_DISPLAY_CTRL);
+-		reg &= ~DISPLAY_CTRL_PLANE;
+-		poke32(VIDEO_DISPLAY_CTRL, reg);
+-
+-		/* Disable video alpha, if a former application left it on */
+-		reg = peek32(VIDEO_ALPHA_DISPLAY_CTRL);
+-		reg &= ~DISPLAY_CTRL_PLANE;
+-		poke32(VIDEO_ALPHA_DISPLAY_CTRL, reg);
+-
+-		/* Disable alpha plane, if a former application left it on */
+-		reg = peek32(ALPHA_DISPLAY_CTRL);
+-		reg &= ~DISPLAY_CTRL_PLANE;
+-		poke32(ALPHA_DISPLAY_CTRL, reg);
+-
+-		/* Disable DMA Channel, if a former application left it on */
+-		reg = peek32(DMA_ABORT_INTERRUPT);
+-		reg |= DMA_ABORT_INTERRUPT_ABORT_1;
+-		poke32(DMA_ABORT_INTERRUPT, reg);
+-
+-		/* Disable DMA Power, if a former application left it on */
+-		sm750_enable_dma(0);
+-	}
+-
+ 	/* We can add more initialization as needed. */
+ 
+ 	return 0;
+diff --git a/drivers/staging/sm750fb/ddk750_chip.h b/drivers/staging/sm750fb/ddk750_chip.h
+index ee2e9d90f7dd..2a13debc179f 100644
+--- a/drivers/staging/sm750fb/ddk750_chip.h
++++ b/drivers/staging/sm750fb/ddk750_chip.h
+@@ -76,13 +76,6 @@ struct initchip_param {
+ 	 */
+ 	unsigned short master_clock;
+ 
+-	/*
+-	 * 0 = leave all engine state untouched.
+-	 * 1 = make sure they are off: 2D, Overlay,
+-	 * video alpha, alpha, hardware cursors
+-	 */
+-	unsigned short set_all_eng_off;
+-
+ 	/*
+ 	 * 0 = Do not reset the memory controller
+ 	 * 1 = Reset the memory controller
+diff --git a/drivers/staging/sm750fb/sm750.c b/drivers/staging/sm750fb/sm750.c
+index a2f244878f85..039e2033f84e 100644
+--- a/drivers/staging/sm750fb/sm750.c
++++ b/drivers/staging/sm750fb/sm750.c
+@@ -837,7 +837,6 @@ static void sm750fb_setup(struct sm750_dev *sm750_dev, char *src)
+ 	sm750_dev->init_parm.mem_clock = 0;
+ 	sm750_dev->init_parm.master_clock = 0;
+ 	sm750_dev->init_parm.power_mode = 0;
+-	sm750_dev->init_parm.set_all_eng_off = 0;
+ 	sm750_dev->init_parm.reset_memory = 1;
+ 
+ 	/* defaultly turn g_hwcursor on for both view */
+-- 
+2.55.0
+

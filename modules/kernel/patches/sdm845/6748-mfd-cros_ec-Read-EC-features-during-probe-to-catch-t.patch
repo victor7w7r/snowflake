@@ -1,0 +1,70 @@
+From 5855464dff6a2171847463775c7cdac92742e0f9 Mon Sep 17 00:00:00 2001
+From: Andrei Kuchynski <akuchynski@chromium.org>
+Date: Mon, 8 Jun 2026 21:15:18 +0000
+Subject: [PATCH 06748/15333] mfd: cros_ec: Read EC features during probe to
+ catch transfer error
+
+cros_ec_check_features() does not return an error if the underlying
+EC_CMD_GET_FEATURES command fails. Consequently, when the Fingerprint
+device fails to respond, the probe function ignores the failure and falls
+back to installing it as 'cros_ec' device instead of 'cros_fp'.
+This leads to a sysfs duplicate filename collision later when the real
+'cros_ec' device attempts to register:
+
+  cros-ec-spi spi5.0: EC failed to respond in time
+  cros-ec-dev.19.auto: cannot get EC features: -110
+  sysfs : cannot create duplicate filename '/class/chromeos/cros_ec'
+        : sysfs_do_create_link_sd+0x94/0xdc
+        : ec_device_probe+0x150/0x4f0
+
+Fix this by explicitly calling the newly introduced cros_ec_read_features()
+function. If the transfer fails, abort the broken device initialization.
+Move the initialization of class_dev before this call to prevent a missing
+release() callback warning on the error path.
+
+Signed-off-by: Andrei Kuchynski <akuchynski@chromium.org>
+Link: https://patch.msgid.link/20260608211518.2214740-3-akuchynski@chromium.org
+Signed-off-by: Lee Jones <lee@kernel.org>
+---
+ drivers/mfd/cros_ec_dev.c | 18 +++++++++++-------
+ 1 file changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/mfd/cros_ec_dev.c b/drivers/mfd/cros_ec_dev.c
+index 11ee1146cf71..4add37f30414 100644
+--- a/drivers/mfd/cros_ec_dev.c
++++ b/drivers/mfd/cros_ec_dev.c
+@@ -198,6 +198,17 @@ static int ec_device_probe(struct platform_device *pdev)
+ 	ec->features.flags[1] = -1U; /* Not cached yet */
+ 	device_initialize(&ec->class_dev);
+ 
++	/*
++	 * Add the class device
++	 */
++	ec->class_dev.class = &cros_class;
++	ec->class_dev.parent = dev;
++	ec->class_dev.release = cros_ec_class_release;
++
++	retval = cros_ec_read_features(ec);
++	if (retval < 0)
++		goto failed;
++
+ 	for (i = 0; i < ARRAY_SIZE(cros_mcu_devices); i++) {
+ 		/*
+ 		 * Check whether this is actually a dedicated MCU rather
+@@ -215,13 +226,6 @@ static int ec_device_probe(struct platform_device *pdev)
+ 		}
+ 	}
+ 
+-	/*
+-	 * Add the class device
+-	 */
+-	ec->class_dev.class = &cros_class;
+-	ec->class_dev.parent = dev;
+-	ec->class_dev.release = cros_ec_class_release;
+-
+ 	retval = dev_set_name(&ec->class_dev, "%s", ec_platform->ec_name);
+ 	if (retval) {
+ 		dev_err(dev, "dev_set_name failed => %d\n", retval);
+-- 
+2.55.0
+

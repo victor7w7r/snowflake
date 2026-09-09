@@ -1,0 +1,147 @@
+From 6442bfb211cbc22cd83cd8c339e6d1835e9605a1 Mon Sep 17 00:00:00 2001
+From: "Pratyush Yadav (Google)" <pratyush@kernel.org>
+Date: Sat, 1 Aug 2026 10:48:21 +0200
+Subject: [PATCH 10479/15333] kho: add kho_radix_init_tree()
+
+Move the initialization logic of the radix tree into
+kho_radix_init_tree() instead of having users open-code it. Makes the
+boundaries cleaner and reduces code duplication when a new user of the
+radix tree will be added in a future commit.
+
+Signed-off-by: Pratyush Yadav (Google) <pratyush@kernel.org>
+Link: https://patch.msgid.link/20260801084833.1897543-13-pratyush@kernel.org
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+---
+ include/linux/kho_radix_tree.h     |  7 ++++
+ kernel/liveupdate/kexec_handover.c | 62 +++++++++++++++++++++---------
+ 2 files changed, 51 insertions(+), 18 deletions(-)
+
+diff --git a/include/linux/kho_radix_tree.h b/include/linux/kho_radix_tree.h
+index b7532aff35d8..fcd69639721b 100644
+--- a/include/linux/kho_radix_tree.h
++++ b/include/linux/kho_radix_tree.h
+@@ -58,6 +58,7 @@ int kho_radix_add_key(struct kho_radix_tree *tree, unsigned long key);
+ void kho_radix_del_key(struct kho_radix_tree *tree, unsigned long key);
+ int kho_radix_walk_tree(struct kho_radix_tree *tree,
+ 			const struct kho_radix_walk_cb *cb, void *data);
++int kho_radix_init_tree(struct kho_radix_tree *tree, struct kho_radix_node *root);
+ void kho_radix_destroy_tree(struct kho_radix_tree *tree);
+ 
+ #else  /* #ifdef CONFIG_KEXEC_HANDOVER */
+@@ -76,6 +77,12 @@ static inline int kho_radix_walk_tree(struct kho_radix_tree *tree,
+ 	return -EOPNOTSUPP;
+ }
+ 
++static inline int kho_radix_init_tree(struct kho_radix_tree *tree,
++				      struct kho_radix_node *root)
++{
++	return 0;
++}
++
+ static inline void kho_radix_destroy_tree(struct kho_radix_tree *tree) { }
+ 
+ #endif /* #ifdef CONFIG_KEXEC_HANDOVER */
+diff --git a/kernel/liveupdate/kexec_handover.c b/kernel/liveupdate/kexec_handover.c
+index 6b9bc575814b..9c2c2b777ef6 100644
+--- a/kernel/liveupdate/kexec_handover.c
++++ b/kernel/liveupdate/kexec_handover.c
+@@ -320,6 +320,30 @@ static void __kho_radix_destroy_tree(struct kho_radix_node *root,
+ 	kho_radix_free_node(root);
+ }
+ 
++/**
++ * kho_radix_init_tree - initialize the radix tree.
++ * @tree:   the tree to initialize.
++ * @root:   root table of the radix tree.
++ *
++ * Initialize the radix tree with the given root node. If root is %NULL, an
++ * empty root table is allocated. If root is not %NULL, it is the caller's
++ * responsibility to make sure the root is valid and in the correct format.
++ *
++ * Return: 0 on success, -errno on failure.
++ */
++int kho_radix_init_tree(struct kho_radix_tree *tree, struct kho_radix_node *root)
++{
++	if (!root)
++		root = kho_radix_alloc_node();
++	if (!root)
++		return -ENOMEM;
++
++	tree->root = root;
++	mutex_init(&tree->lock);
++	return 0;
++}
++EXPORT_SYMBOL_GPL(kho_radix_init_tree);
++
+ /**
+  * kho_radix_destroy_tree - Destroy the radix tree
+  * @tree: The radix tree to destroy
+@@ -1505,18 +1529,23 @@ static void __init kho_mem_retrieve(void)
+ 	if (WARN_ON(!mem_map))
+ 		return;
+ 
+-	kho_in.radix_tree.root = mem_map;
+-	mutex_init(&kho_in.radix_tree.lock);
++	err = kho_radix_init_tree(&kho_in.radix_tree, mem_map);
++	if (err)
++		goto err;
+ 
+ 	err = kho_radix_walk_tree(&kho_in.radix_tree, &cb, NULL);
+-	if (err) {
+-		/*
+-		 * Failed to initialize preserved memory. Clear FDT and radix
+-		 * so KHO users don't treat it as a KHO boot.
+-		 */
+-		kho_in.fdt_phys = 0;
+-		kho_in.radix_tree.root = NULL;
+-	}
++	if (err)
++		goto err;
++
++	return;
++
++err:
++	/*
++	 * Failed to initialize preserved memory. Clear FDT and radix so KHO
++	 * users don't treat it as a KHO boot.
++	 */
++	kho_in.fdt_phys = 0;
++	kho_in.radix_tree.root = NULL;
+ }
+ 
+ static __init int kho_out_fdt_setup(void)
+@@ -1642,16 +1671,14 @@ static __init int kho_init(void)
+ 	if (!kho_enable)
+ 		return 0;
+ 
+-	tree->root = kzalloc(PAGE_SIZE, GFP_KERNEL);
+-	if (!tree->root) {
+-		err = -ENOMEM;
++	err = kho_radix_init_tree(tree, NULL);
++	if (err)
+ 		goto err_free_scratch;
+-	}
+ 
+ 	kho_out.fdt = kho_alloc_preserve(PAGE_SIZE);
+ 	if (IS_ERR(kho_out.fdt)) {
+ 		err = PTR_ERR(kho_out.fdt);
+-		goto err_free_kho_radix_tree_root;
++		goto err_free_kho_radix_tree;
+ 	}
+ 
+ 	err = kho_debugfs_init();
+@@ -1702,9 +1729,8 @@ static __init int kho_init(void)
+ 
+ err_free_fdt:
+ 	kho_unpreserve_free(kho_out.fdt);
+-err_free_kho_radix_tree_root:
+-	kfree(tree->root);
+-	tree->root = NULL;
++err_free_kho_radix_tree:
++	kho_radix_destroy_tree(tree);
+ err_free_scratch:
+ 	kho_out.fdt = NULL;
+ 	for (int i = 0; i < kho_scratch_cnt; i++) {
+-- 
+2.55.0
+

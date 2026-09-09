@@ -1,0 +1,81 @@
+From 21d055109b2352542ac293872ca9113b42b6c55e Mon Sep 17 00:00:00 2001
+From: "Christophe Leroy (CS GROUP)" <chleroy@kernel.org>
+Date: Mon, 27 Jul 2026 10:45:37 +0200
+Subject: [PATCH 08237/15333] powerpc: Move CONFIG_QE_GPIO to SoC
+
+Commit 7aa1aa6ecec2 ("QE: Move QE from arch/powerpc to drivers/soc")
+moved QE into drivers/soc including gpio.c but left CONFIG_QE_GPIO
+in powerpc's Kconfig.
+
+Move it to SoC as well as it is the only place it is used:
+
+  drivers/soc/fsl/qe/Makefile:obj-$(CONFIG_QE_GPIO)       += gpio.o qe_ports_ic.o
+  include/soc/fsl/qe/qe.h:#ifdef CONFIG_QE_GPIO
+  include/soc/fsl/qe/qe.h:#endif /* CONFIG_QE_GPIO */
+
+There is also a dependency in USB subsystem for CONFIG_USB_FHCI_HCD:
+
+  drivers/usb/host/Kconfig:	depends on QE_GPIO && QUICC_ENGINE
+
+Because that USB driver selects CONFIG_FSL_GTM which is specific to
+powerpc, it has to depend on CONFIG_PPC.
+
+Acked-by: Madhavan Srinivasan <maddy@linux.ibm.com>
+Link: https://lore.kernel.org/r/9a7131d15a94e2017877e628f0e97f9aa2e0aae9.1785140877.git.chleroy@kernel.org
+Signed-off-by: Christophe Leroy (CS GROUP) <chleroy@kernel.org>
+---
+ arch/powerpc/platforms/Kconfig | 8 --------
+ drivers/soc/fsl/qe/Kconfig     | 8 ++++++++
+ drivers/usb/host/Kconfig       | 1 +
+ 3 files changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/arch/powerpc/platforms/Kconfig b/arch/powerpc/platforms/Kconfig
+index c4e61843d9d9..2f797ac6f1b3 100644
+--- a/arch/powerpc/platforms/Kconfig
++++ b/arch/powerpc/platforms/Kconfig
+@@ -228,14 +228,6 @@ config TAU_AVERAGE
+ 
+ 	  If in doubt, say N here.
+ 
+-config QE_GPIO
+-	bool "QE GPIO support"
+-	depends on QUICC_ENGINE
+-	select GPIOLIB
+-	help
+-	  Say Y here if you're going to use hardware that connects to the
+-	  QE GPIOs.
+-
+ config CPM2
+ 	bool "Enable support for the CPM2 (Communications Processor Module)"
+ 	depends on (FSL_SOC_BOOKE && PPC32) || PPC_82xx
+diff --git a/drivers/soc/fsl/qe/Kconfig b/drivers/soc/fsl/qe/Kconfig
+index eb03f42ab978..b35a8fd30ebf 100644
+--- a/drivers/soc/fsl/qe/Kconfig
++++ b/drivers/soc/fsl/qe/Kconfig
+@@ -67,3 +67,11 @@ config QE_USB
+ 	default y if USB_FSL_QE
+ 	help
+ 	  QE USB Controller support
++
++config QE_GPIO
++	bool "QE GPIO support"
++	depends on QUICC_ENGINE
++	select GPIOLIB
++	help
++	  Say Y here if you're going to use hardware that connects to the
++	  QE GPIOs.
+diff --git a/drivers/usb/host/Kconfig b/drivers/usb/host/Kconfig
+index b3b1ec696bf5..10cff12a3f31 100644
+--- a/drivers/usb/host/Kconfig
++++ b/drivers/usb/host/Kconfig
+@@ -611,6 +611,7 @@ config USB_UHCI_ASPEED
+ config USB_FHCI_HCD
+ 	tristate "Freescale QE USB Host Controller support"
+ 	depends on QE_GPIO && QUICC_ENGINE
++	depends on PPC
+ 	select FSL_GTM
+ 	select QE_USB
+ 	help
+-- 
+2.55.0
+

@@ -1,0 +1,110 @@
+From 3cf67bbc5e5323b3af968bb289cdff33f6180535 Mon Sep 17 00:00:00 2001
+From: Jagadeesh Pagadala <jpagadal@qti.qualcomm.com>
+Date: Thu, 2 Jul 2026 19:39:02 +0530
+Subject: [PATCH 05269/15333] dma/swiotlb: introduce Kconfig option for
+ compile-time default pool size
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The SWIOTLB bounce buffer pool size is hardcoded at 64 MB via
+IO_TLB_DEFAULT_SIZE with no compile-time knob to adjust it. On
+memory-constrained embedded or mobile platforms equipped with a
+hardware IOMMU (e.g., ARM SMMU) covering most DMA-capable devices,
+reserving 64 MB at boot is unnecessarily wasteful — the SWIOTLB is
+only exercised for devices that bypass the IOMMU or have restricted
+DMA address ranges.
+
+Introduce CONFIG_SWIOTLB_DEFAULT_SIZE_MB, an integer Kconfig option
+(range 1–64 MB, default 64) that allows platforms to set a smaller
+compile-time default. IO_TLB_DEFAULT_SIZE is updated to derive from
+this value when CONFIG_SWIOTLB is enabled, preserving the existing
+64 MB default when the option is not configured.
+
+The runtime "swiotlb=<nslabs>" kernel parameter override remains
+fully supported and takes precedence over the compile-time default.
+
+Signed-off-by: Jagadeesh Pagadala <jpagadal@qti.qualcomm.com>
+Signed-off-by: Bibek Kumar Patro <bibek.patro@oss.qualcomm.com>
+Reviewed-by: Michael Kelley <mhklinux@outlook.com>
+Link: https://lore.kernel.org/r/20260702-swiotlb-v2-1-9205f3ba5408@oss.qualcomm.com
+Signed-off-by: Marek Szyprowski <m.szyprowski@samsung.com>
+---
+ Documentation/core-api/swiotlb.rst |  7 +++++--
+ include/linux/swiotlb.h            |  8 ++++++--
+ kernel/dma/Kconfig                 | 22 ++++++++++++++++++++++
+ 3 files changed, 33 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/core-api/swiotlb.rst b/Documentation/core-api/swiotlb.rst
+index 9e0fe027dd3b..71b4e4c27eb5 100644
+--- a/Documentation/core-api/swiotlb.rst
++++ b/Documentation/core-api/swiotlb.rst
+@@ -140,8 +140,11 @@ Data structures concepts
+ ------------------------
+ Memory used for swiotlb bounce buffers is allocated from overall system memory
+ as one or more "pools". The default pool is allocated during system boot with a
+-default size of 64 MiB. The default pool size may be modified with the
+-"swiotlb=" kernel boot line parameter. The default size may also be adjusted
++default size of 64 MiB, which can be changed at compile time via
++CONFIG_SWIOTLB_DEFAULT_SIZE_MB. The default pool size may also be
++modified at runtime with the "swiotlb=" kernel boot line parameter,
++which takes precedence over the compile-time default. The default size
++may also be adjusted
+ due to other conditions, such as running in a CoCo VM, as described above. If
+ CONFIG_SWIOTLB_DYNAMIC is enabled, additional pools may be allocated later in
+ the life of the system. Each pool must be a contiguous range of physical
+diff --git a/include/linux/swiotlb.h b/include/linux/swiotlb.h
+index 3dae0f592063..1665a9ce8f94 100644
+--- a/include/linux/swiotlb.h
++++ b/include/linux/swiotlb.h
+@@ -32,8 +32,12 @@ struct scatterlist;
+ #define IO_TLB_SHIFT 11
+ #define IO_TLB_SIZE (1 << IO_TLB_SHIFT)
+ 
+-/* default to 64MB */
+-#define IO_TLB_DEFAULT_SIZE (64UL<<20)
++/* compile-time default; overridable via CONFIG_SWIOTLB_DEFAULT_SIZE_MB */
++#ifdef CONFIG_SWIOTLB
++#define IO_TLB_DEFAULT_SIZE ((unsigned long)CONFIG_SWIOTLB_DEFAULT_SIZE_MB << 20)
++#else
++#define IO_TLB_DEFAULT_SIZE (64UL << 20)
++#endif
+ 
+ unsigned long swiotlb_size_or_default(void);
+ void __init swiotlb_init_remap(bool addressing_limit, unsigned int flags,
+diff --git a/kernel/dma/Kconfig b/kernel/dma/Kconfig
+index 0a4ba21a57a7..3830a63ae032 100644
+--- a/kernel/dma/Kconfig
++++ b/kernel/dma/Kconfig
+@@ -86,6 +86,28 @@ config SWIOTLB
+ 	bool
+ 	select NEED_DMA_MAP_STATE
+ 
++config SWIOTLB_DEFAULT_SIZE_MB
++	int "Default SWIOTLB bounce buffer size in MB"
++	depends on SWIOTLB
++	range 1 64
++	default 64
++	help
++	  Sets the default size of the software IO TLB (SWIOTLB) bounce buffer
++	  pool allocated at boot time. The default is 64 MB.
++
++	  On memory-constrained embedded or mobile platforms (e.g., those with
++	  a hardware IOMMU such as ARM SMMU covering most DMA-capable devices),
++	  a smaller value such as 4 or 8 MB may be sufficient. The SWIOTLB is
++	  then only needed for devices that bypass the IOMMU or have restricted
++	  DMA address ranges.
++
++	  The minimum allowed value is 1 MB. This compile-time default can be
++	  overridden at runtime using the "swiotlb=<nslabs>" kernel command line
++	  parameter. Refer to Documentation/admin-guide/kernel-parameters.txt
++	  for details.
++
++	  If unsure, leave at the default value of 64.
++
+ config SWIOTLB_DYNAMIC
+ 	bool "Dynamic allocation of DMA bounce buffers"
+ 	default n
+-- 
+2.55.0
+

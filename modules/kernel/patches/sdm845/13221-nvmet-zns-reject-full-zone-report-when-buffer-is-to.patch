@@ -1,0 +1,53 @@
+From 86985da12699360a2b20748c5a492ddd92db8c47 Mon Sep 17 00:00:00 2001
+From: Xixin Liu <liuxixin@kylinos.cn>
+Date: Mon, 13 Jul 2026 18:00:00 +0800
+Subject: [PATCH 13221/15333] nvmet: zns: reject full zone report when buffer
+ is too small
+
+Zone Management Receive uses the Partial Report (PR) bit in dword 13.  On a
+partial report (PR bit set), the host accepts an incomplete listing and
+Number of Zones must not exceed the zone descriptors copied to the host
+buffer.  On a full report (PR bit clear), Number of Zones is the total
+number of matching zones and every descriptor must fit in the buffer (ZNS
+Command Set Specification Rev 1.2, section 3.4.2).
+
+nvmet_bdev_zone_zmgmt_recv_work() already caps Number of Zones for partial
+reports, but on a full report it may still succeed when the buffer only
+holds part of the matching descriptors.  Reject the command in that case.
+
+Signed-off-by: Xixin Liu <liuxixin@kylinos.cn>
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/target/zns.c | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/nvme/target/zns.c b/drivers/nvme/target/zns.c
+index a13befd5f3ad..23a17c02abee 100644
+--- a/drivers/nvme/target/zns.c
++++ b/drivers/nvme/target/zns.c
+@@ -295,11 +295,18 @@ static void nvmet_bdev_zone_zmgmt_recv_work(struct work_struct *w)
+ 	}
+ 
+ 	/*
+-	 * When partial bit is set nr_zones must indicate the number of zone
+-	 * descriptors actually transferred.
++	 * Partial report (PR bit set): the host accepts an incomplete listing,
++	 * so cap Number of Zones to the descriptors that fit in the buffer.
++	 * Full report (PR bit clear): Number of Zones is the match count; fail
++	 * if the buffer cannot hold every matching zone descriptor.
+ 	 */
+-	if (req->cmd->zmr.pr)
++	if (req->cmd->zmr.pr) {
+ 		rz_data.nr_zones = min(rz_data.nr_zones, rz_data.out_nr_zones);
++	} else if (rz_data.nr_zones > rz_data.out_nr_zones) {
++		req->error_loc = offsetof(struct nvme_zone_mgmt_recv_cmd, numd);
++		status = NVME_SC_INVALID_FIELD | NVME_STATUS_DNR;
++		goto out;
++	}
+ 
+ 	nr_zones = cpu_to_le64(rz_data.nr_zones);
+ 	status = nvmet_copy_to_sgl(req, 0, &nr_zones, sizeof(nr_zones));
+-- 
+2.55.0
+

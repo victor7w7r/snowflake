@@ -1,0 +1,80 @@
+From 4efd6a43a92fc690693454b36d5e68c58d5ccbcb Mon Sep 17 00:00:00 2001
+From: Jan Kara <jack@suse.cz>
+Date: Mon, 27 Jul 2026 12:49:25 +0200
+Subject: [PATCH 07345/15333] ext2: Drop __ext2_write_inode()
+
+Fold special helper __ext2_write_inode() into ext2_write_inode() and
+just learn the single caller of __ext2_write_inode() to pass proper wbc
+instead. No functional changes.
+
+Signed-off-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260727104923.3828017-27-jack@suse.cz
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/ext2/inode.c | 18 ++++++++----------
+ 1 file changed, 8 insertions(+), 10 deletions(-)
+
+diff --git a/fs/ext2/inode.c b/fs/ext2/inode.c
+index 269b1c9fba5f..4dbe52e42d82 100644
+--- a/fs/ext2/inode.c
++++ b/fs/ext2/inode.c
+@@ -39,8 +39,6 @@
+ #include "acl.h"
+ #include "xattr.h"
+ 
+-static int __ext2_write_inode(struct inode *inode, int do_sync);
+-
+ /*
+  * Test whether an inode is a fast symlink.
+  */
+@@ -83,11 +81,16 @@ void ext2_evict_inode(struct inode * inode)
+ 	truncate_inode_pages_final(&inode->i_data);
+ 
+ 	if (want_delete) {
++		struct writeback_control wbc = {
++			.sync_mode = inode_needs_sync(inode) ? WB_SYNC_ALL :
++							       WB_SYNC_NONE,
++		};
++
+ 		sb_start_intwrite(inode->i_sb);
+ 		/* set dtime */
+ 		EXT2_I(inode)->i_dtime	= ktime_get_real_seconds();
+ 		mark_inode_dirty(inode);
+-		__ext2_write_inode(inode, inode_needs_sync(inode));
++		ext2_write_inode(inode, &wbc);
+ 		/* truncate to 0 */
+ 		inode->i_size = 0;
+ 		if (inode->i_blocks)
+@@ -1466,7 +1469,7 @@ struct inode *ext2_iget (struct super_block *sb, unsigned long ino)
+ 	return ERR_PTR(ret);
+ }
+ 
+-static int __ext2_write_inode(struct inode *inode, int do_sync)
++int ext2_write_inode(struct inode *inode, struct writeback_control *wbc)
+ {
+ 	struct ext2_inode_info *ei = EXT2_I(inode);
+ 	struct super_block *sb = inode->i_sb;
+@@ -1557,7 +1560,7 @@ static int __ext2_write_inode(struct inode *inode, int do_sync)
+ 	} else for (n = 0; n < EXT2_N_BLOCKS; n++)
+ 		raw_inode->i_block[n] = ei->i_data[n];
+ 	mark_buffer_dirty(bh);
+-	if (do_sync) {
++	if (wbc->sync_mode == WB_SYNC_ALL) {
+ 		sync_dirty_buffer(bh);
+ 		if (buffer_req(bh) && !buffer_uptodate(bh)) {
+ 			printk ("IO error syncing ext2 inode [%s:%08lx]\n",
+@@ -1570,11 +1573,6 @@ static int __ext2_write_inode(struct inode *inode, int do_sync)
+ 	return err;
+ }
+ 
+-int ext2_write_inode(struct inode *inode, struct writeback_control *wbc)
+-{
+-	return __ext2_write_inode(inode, wbc->sync_mode == WB_SYNC_ALL);
+-}
+-
+ int ext2_getattr(struct mnt_idmap *idmap, const struct path *path,
+ 		 struct kstat *stat, u32 request_mask, unsigned int query_flags)
+ {
+-- 
+2.55.0
+

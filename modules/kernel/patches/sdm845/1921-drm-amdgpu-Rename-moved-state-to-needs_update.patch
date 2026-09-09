@@ -1,0 +1,266 @@
+From 1f7a795fb9f8186bd81ca9c4a80f75482db53c9e Mon Sep 17 00:00:00 2001
+From: Natalie Vock <natalie.vock@gmx.de>
+Date: Fri, 29 May 2026 17:30:51 +0200
+Subject: [PATCH 01921/15333] drm/amdgpu: Rename moved state to needs_update
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This state can be reached via other means than physical moves, like PRT
+bindings. Make the name match the actual purpose of the state.
+
+Signed-off-by: Natalie Vock <natalie.vock@gmx.de>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c |  2 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c | 53 +++++++++++++-------------
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h |  9 +++--
+ 3 files changed, 33 insertions(+), 31 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
+index 4ad8f1c31e55..d777375e5350 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
+@@ -1315,7 +1315,7 @@ static int amdgpu_cs_submit(struct amdgpu_cs_parser *p,
+ 		e->range = NULL;
+ 	}
+ 
+-	if (r || !list_empty(&vm->individual.moved)) {
++	if (r || !list_empty(&vm->individual.needs_update)) {
+ 		r = -EAGAIN;
+ 		mutex_unlock(&p->adev->notifier_lock);
+ 		return r;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
+index 3f3369d427a1..f317f888b59f 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
+@@ -142,7 +142,7 @@ static void amdgpu_vm_assert_locked(struct amdgpu_vm *vm)
+ static void amdgpu_vm_bo_status_init(struct amdgpu_vm_bo_status *lists)
+ {
+ 	INIT_LIST_HEAD(&lists->evicted);
+-	INIT_LIST_HEAD(&lists->moved);
++	INIT_LIST_HEAD(&lists->needs_update);
+ 	INIT_LIST_HEAD(&lists->idle);
+ }
+ 
+@@ -211,14 +211,14 @@ static void amdgpu_vm_bo_evicted(struct amdgpu_vm_bo_base *vm_bo)
+ 	amdgpu_vm_bo_unlock_lists(vm_bo);
+ }
+ /**
+- * amdgpu_vm_bo_moved - vm_bo is moved
++ * amdgpu_vm_bo_needs_update - vm_bo needs pagetable update
+  *
+- * @vm_bo: vm_bo which is moved
++ * @vm_bo: vm_bo which is out of date
+  *
+- * State for vm_bo objects meaning the underlying BO was moved but the new
+- * location not yet reflected in the page tables.
++ * State for vm_bo objects meaning the underlying BO had mapping changes (move, PRT bind/unbind)
++ * but the new location is not yet reflected in the page tables.
+  */
+-static void amdgpu_vm_bo_moved(struct amdgpu_vm_bo_base *vm_bo)
++static void amdgpu_vm_bo_needs_update(struct amdgpu_vm_bo_base *vm_bo)
+ {
+ 	struct amdgpu_vm_bo_status *lists;
+ 	struct amdgpu_bo *bo = vm_bo->bo;
+@@ -232,7 +232,7 @@ static void amdgpu_vm_bo_moved(struct amdgpu_vm_bo_base *vm_bo)
+ 		vm_bo->moved = false;
+ 		list_move(&vm_bo->vm_status, &lists->idle);
+ 	} else {
+-		list_move(&vm_bo->vm_status, &lists->moved);
++		list_move(&vm_bo->vm_status, &lists->needs_update);
+ 	}
+ 	amdgpu_vm_bo_unlock_lists(vm_bo);
+ }
+@@ -273,14 +273,14 @@ static void amdgpu_vm_bo_reset_state_machine(struct amdgpu_vm *vm)
+ 	 */
+ 	amdgpu_vm_assert_locked(vm);
+ 	list_for_each_entry_safe(vm_bo, tmp, &vm->kernel.idle, vm_status)
+-		amdgpu_vm_bo_moved(vm_bo);
++		amdgpu_vm_bo_needs_update(vm_bo);
+ 	list_for_each_entry_safe(vm_bo, tmp, &vm->always_valid.idle, vm_status)
+-		amdgpu_vm_bo_moved(vm_bo);
++		amdgpu_vm_bo_needs_update(vm_bo);
+ 
+ 	spin_lock(&vm->individual_lock);
+ 	list_for_each_entry_safe(vm_bo, tmp, &vm->individual.idle, vm_status) {
+ 		vm_bo->moved = true;
+-		list_move(&vm_bo->vm_status, &vm->individual.moved);
++		list_move(&vm_bo->vm_status, &vm->individual.needs_update);
+ 	}
+ 	spin_unlock(&vm->individual_lock);
+ }
+@@ -435,7 +435,7 @@ void amdgpu_vm_bo_base_init(struct amdgpu_vm_bo_base *base,
+ 	 */
+ 	if (bo->preferred_domains &
+ 	    amdgpu_mem_type_to_domain(bo->tbo.resource->mem_type))
+-		amdgpu_vm_bo_moved(base);
++		amdgpu_vm_bo_needs_update(base);
+ 	else
+ 		amdgpu_vm_bo_evicted(base);
+ }
+@@ -608,7 +608,7 @@ int amdgpu_vm_validate(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 
+ 		vm->update_funcs->map_table(to_amdgpu_bo_vm(bo_base->bo));
+ 		bo_base->moved = true;
+-		amdgpu_vm_bo_moved(bo_base);
++		amdgpu_vm_bo_needs_update(bo_base);
+ 	}
+ 
+ 	/*
+@@ -626,7 +626,7 @@ int amdgpu_vm_validate(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 			return r;
+ 
+ 		bo_base->moved = true;
+-		amdgpu_vm_bo_moved(bo_base);
++		amdgpu_vm_bo_needs_update(bo_base);
+ 	}
+ 
+ 	if (!ticket)
+@@ -647,7 +647,7 @@ int amdgpu_vm_validate(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 			return r;
+ 
+ 		bo_base->moved = true;
+-		amdgpu_vm_bo_moved(bo_base);
++		amdgpu_vm_bo_needs_update(bo_base);
+ 
+ 		/* It's a bit inefficient to always jump back to the start, but
+ 		 * we would need to re-structure the KFD for properly fixing
+@@ -981,7 +981,7 @@ int amdgpu_vm_update_pdes(struct amdgpu_device *adev,
+ 
+ 	amdgpu_vm_assert_locked(vm);
+ 
+-	if (list_empty(&vm->kernel.moved))
++	if (list_empty(&vm->kernel.needs_update))
+ 		return 0;
+ 
+ 	if (!drm_dev_enter(adev_to_drm(adev), &idx))
+@@ -997,7 +997,7 @@ int amdgpu_vm_update_pdes(struct amdgpu_device *adev,
+ 	if (r)
+ 		goto error;
+ 
+-	list_for_each_entry(entry, &vm->kernel.moved, vm_status) {
++	list_for_each_entry(entry, &vm->kernel.needs_update, vm_status) {
+ 		/* vm_flush_needed after updating moved PDEs */
+ 		flush_tlb_needed |= entry->moved;
+ 
+@@ -1013,7 +1013,8 @@ int amdgpu_vm_update_pdes(struct amdgpu_device *adev,
+ 	if (flush_tlb_needed)
+ 		atomic64_inc(&vm->tlb_seq);
+ 
+-	list_for_each_entry_safe(entry, tmp, &vm->kernel.moved, vm_status)
++	list_for_each_entry_safe(entry, tmp, &vm->kernel.needs_update,
++				 vm_status)
+ 		amdgpu_vm_bo_idle(entry);
+ 
+ error:
+@@ -1617,7 +1618,7 @@ int amdgpu_vm_handle_moved(struct amdgpu_device *adev,
+ 	bool clear, unlock;
+ 	int r;
+ 
+-	list_for_each_entry_safe(bo_va, tmp, &vm->always_valid.moved,
++	list_for_each_entry_safe(bo_va, tmp, &vm->always_valid.needs_update,
+ 				 base.vm_status) {
+ 		/* Per VM BOs never need to bo cleared in the page tables */
+ 		r = amdgpu_vm_bo_update(adev, bo_va, false);
+@@ -1626,8 +1627,8 @@ int amdgpu_vm_handle_moved(struct amdgpu_device *adev,
+ 	}
+ 
+ 	spin_lock(&vm->individual_lock);
+-	while (!list_empty(&vm->individual.moved)) {
+-		bo_va = list_first_entry(&vm->individual.moved,
++	while (!list_empty(&vm->individual.needs_update)) {
++		bo_va = list_first_entry(&vm->individual.needs_update,
+ 					 typeof(*bo_va), base.vm_status);
+ 		bo = bo_va->base.bo;
+ 		resv = bo->tbo.base.resv;
+@@ -1788,7 +1789,7 @@ static void amdgpu_vm_bo_insert_map(struct amdgpu_device *adev,
+ 		amdgpu_vm_prt_get(adev);
+ 
+ 	if (amdgpu_vm_is_bo_always_valid(vm, bo) && !bo_va->base.moved)
+-		amdgpu_vm_bo_moved(&bo_va->base);
++		amdgpu_vm_bo_needs_update(&bo_va->base);
+ 
+ 	trace_amdgpu_vm_bo_map(bo_va, mapping);
+ }
+@@ -2097,7 +2098,7 @@ int amdgpu_vm_bo_clear_mappings(struct amdgpu_device *adev,
+ 
+ 		if (amdgpu_vm_is_bo_always_valid(vm, bo) &&
+ 		    !before->bo_va->base.moved)
+-			amdgpu_vm_bo_moved(&before->bo_va->base);
++			amdgpu_vm_bo_needs_update(&before->bo_va->base);
+ 	} else {
+ 		kfree(before);
+ 	}
+@@ -2112,7 +2113,7 @@ int amdgpu_vm_bo_clear_mappings(struct amdgpu_device *adev,
+ 
+ 		if (amdgpu_vm_is_bo_always_valid(vm, bo) &&
+ 		    !after->bo_va->base.moved)
+-			amdgpu_vm_bo_moved(&after->bo_va->base);
++			amdgpu_vm_bo_needs_update(&after->bo_va->base);
+ 	} else {
+ 		kfree(after);
+ 	}
+@@ -2287,7 +2288,7 @@ void amdgpu_vm_bo_invalidate(struct amdgpu_bo *bo, bool evicted)
+ 		if (bo_base->moved)
+ 			continue;
+ 		bo_base->moved = true;
+-		amdgpu_vm_bo_moved(bo_base);
++		amdgpu_vm_bo_needs_update(bo_base);
+ 	}
+ }
+ 
+@@ -3101,7 +3102,7 @@ static void amdgpu_debugfs_vm_bo_status_info(struct seq_file *m,
+ 
+ 	id = 0;
+ 	seq_puts(m, "\tMoved BOs:\n");
+-	list_for_each_entry(base, &lists->moved, vm_status) {
++	list_for_each_entry(base, &lists->needs_update, vm_status) {
+ 		if (!base->bo)
+ 			continue;
+ 
+@@ -3110,7 +3111,7 @@ static void amdgpu_debugfs_vm_bo_status_info(struct seq_file *m,
+ 
+ 	id = 0;
+ 	seq_puts(m, "\tIdle BOs:\n");
+-	list_for_each_entry(base, &lists->moved, vm_status) {
++	list_for_each_entry(base, &lists->needs_update, vm_status) {
+ 		if (!base->bo)
+ 			continue;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
+index b32f51a78cd8..5822836fa4a3 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
+@@ -212,7 +212,8 @@ struct amdgpu_vm_bo_base {
+ 	 * protected by vm BO being reserved */
+ 	bool				shared;
+ 
+-	/* protected by the BO being reserved */
++	/* if the BO was moved and all mappings are invalid
++	 * protected by the BO being reserved */
+ 	bool				moved;
+ };
+ 
+@@ -220,14 +221,14 @@ struct amdgpu_vm_bo_base {
+  * The following status lists contain amdgpu_vm_bo_base objects for
+  * either PD/PTs, per VM BOs or BOs with individual resv object.
+  *
+- * The state transits are: evicted -> moved -> idle
++ * The state transits are: evicted -> needs_update -> idle
+  */
+ struct amdgpu_vm_bo_status {
+ 	/* BOs evicted which need to move into place again */
+ 	struct list_head		evicted;
+ 
+-	/* BOs which moved but new location hasn't been updated in the PDs/PTs */
+-	struct list_head		moved;
++	/* BOs whose mappings changed but PDs/PTs haven't been updated */
++	struct list_head		needs_update;
+ 
+ 	/* BOs done with the state machine and need no further action */
+ 	struct list_head		idle;
+-- 
+2.55.0
+

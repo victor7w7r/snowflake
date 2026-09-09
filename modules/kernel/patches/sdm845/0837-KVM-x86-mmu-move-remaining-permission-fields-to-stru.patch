@@ -1,0 +1,300 @@
+From 7c70bf8f9333d9056ea347f7d3e9d3605fb00741 Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Sun, 5 Apr 2026 08:45:01 +0200
+Subject: [PATCH 00837/15333] KVM: x86/mmu: move remaining permission fields to
+ struct kvm_pagewalk
+
+As promised, this removes the remaining instances of
+container_of(w, struct kvm_mmu, w), meaning that struct
+kvm_pagewalk's definition is pretty much complete.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/kvm_host.h | 28 +++++++--------
+ arch/x86/kvm/mmu.h              | 13 +++----
+ arch/x86/kvm/mmu/mmu.c          | 62 ++++++++++++++++-----------------
+ 3 files changed, 50 insertions(+), 53 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 93b7e528d3c6..bf1151c91372 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -527,17 +527,6 @@ struct kvm_pagewalk {
+ 			    struct x86_exception *exception);
+ 	union kvm_cpu_role cpu_role;
+ 	struct rsvd_bits_validate guest_rsvd_check;
+-};
+-
+-struct kvm_mmu {
+-	struct kvm_pagewalk w;
+-
+-	int (*page_fault)(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault);
+-	int (*sync_spte)(struct kvm_vcpu *vcpu,
+-			 struct kvm_mmu_page *sp, int i);
+-	struct kvm_mmu_root_info root;
+-	hpa_t mirror_root_hpa;
+-	union kvm_mmu_page_role root_role;
+ 
+ 	/*
+ 	* The pkru_mask indicates if protection key checks are needed.  It
+@@ -547,14 +536,25 @@ struct kvm_mmu {
+ 	*/
+ 	u32 pkru_mask;
+ 
+-	struct kvm_mmu_root_info prev_roots[KVM_MMU_NUM_PREV_ROOTS];
+-
+ 	/*
+ 	 * Bitmap; bit set = permission fault
+-	 * Byte index: page fault error code [4:1]
++	 * Array index: page fault error code [4:1]
+ 	 * Bit index: pte permissions in ACC_* format
+ 	 */
+ 	u16 permissions[16];
++};
++
++struct kvm_mmu {
++	struct kvm_pagewalk w;
++
++	int (*page_fault)(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault);
++	int (*sync_spte)(struct kvm_vcpu *vcpu,
++			 struct kvm_mmu_page *sp, int i);
++	struct kvm_mmu_root_info root;
++	hpa_t mirror_root_hpa;
++	union kvm_mmu_page_role root_role;
++
++	struct kvm_mmu_root_info prev_roots[KVM_MMU_NUM_PREV_ROOTS];
+ 
+ 	u64 *pae_root;
+ 	u64 *pml4_root;
+diff --git a/arch/x86/kvm/mmu.h b/arch/x86/kvm/mmu.h
+index 9384e626934b..c404ed9dcff2 100644
+--- a/arch/x86/kvm/mmu.h
++++ b/arch/x86/kvm/mmu.h
+@@ -163,7 +163,7 @@ bool kvm_can_do_async_pf(struct kvm_vcpu *vcpu);
+ int kvm_handle_page_fault(struct kvm_vcpu *vcpu, u64 error_code,
+ 				u64 fault_address, char *insn, int insn_len);
+ void __kvm_mmu_refresh_passthrough_bits(struct kvm_vcpu *vcpu,
+-					struct kvm_mmu *mmu);
++					struct kvm_pagewalk *pw);
+ 
+ int kvm_mmu_load(struct kvm_vcpu *vcpu);
+ void kvm_mmu_unload(struct kvm_vcpu *vcpu);
+@@ -260,8 +260,7 @@ static inline void kvm_mmu_refresh_passthrough_bits(struct kvm_vcpu *vcpu,
+ 	if (!tdp_enabled || w == &vcpu->arch.guest_mmu.w)
+ 		return;
+ 
+-	__kvm_mmu_refresh_passthrough_bits(vcpu,
+-					   container_of(w, struct kvm_mmu, w));
++	__kvm_mmu_refresh_passthrough_bits(vcpu, w);
+ }
+ 
+ /*
+@@ -276,8 +275,6 @@ static inline u8 permission_fault(struct kvm_vcpu *vcpu, struct kvm_pagewalk *w,
+ 				  unsigned pte_access, unsigned pte_pkey,
+ 				  u64 access)
+ {
+-	struct kvm_mmu *mmu = container_of(w, struct kvm_mmu, w);
+-
+ 	/* strip nested paging fault error codes */
+ 	unsigned int pfec = access;
+ 	unsigned long rflags = kvm_x86_call(get_rflags)(vcpu);
+@@ -302,10 +299,10 @@ static inline u8 permission_fault(struct kvm_vcpu *vcpu, struct kvm_pagewalk *w,
+ 
+ 	kvm_mmu_refresh_passthrough_bits(vcpu, w);
+ 
+-	fault = (mmu->permissions[index] >> pte_access) & 1;
++	fault = (w->permissions[index] >> pte_access) & 1;
+ 
+ 	WARN_ON_ONCE(pfec & (PFERR_PK_MASK | PFERR_SS_MASK | PFERR_RSVD_MASK));
+-	if (unlikely(mmu->pkru_mask)) {
++	if (unlikely(w->pkru_mask)) {
+ 		u32 pkru_bits, offset;
+ 
+ 		/*
+@@ -319,7 +316,7 @@ static inline u8 permission_fault(struct kvm_vcpu *vcpu, struct kvm_pagewalk *w,
+ 		/* clear present bit, replace PFEC.RSVD with ACC_USER_MASK. */
+ 		offset = (pfec & ~1) | ((pte_access & PT_USER_MASK) ? PFERR_RSVD_MASK : 0);
+ 
+-		pkru_bits &= mmu->pkru_mask >> offset;
++		pkru_bits &= w->pkru_mask >> offset;
+ 		errcode |= -pkru_bits & PFERR_PK_MASK;
+ 		fault |= (pkru_bits != 0);
+ 	}
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 1258f94d8d78..29f2948bd38d 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -5474,13 +5474,13 @@ static void __reset_rsvds_bits_mask(struct rsvd_bits_validate *rsvd_check,
+ }
+ 
+ static void reset_guest_rsvds_bits_mask(struct kvm_vcpu *vcpu,
+-					struct kvm_mmu *context)
++					struct kvm_pagewalk *w)
+ {
+-	__reset_rsvds_bits_mask(&context->w.guest_rsvd_check,
++	__reset_rsvds_bits_mask(&w->guest_rsvd_check,
+ 				vcpu->arch.reserved_gpa_bits,
+-				context->w.cpu_role.base.level, is_efer_nx(&context->w),
++				w->cpu_role.base.level, is_efer_nx(w),
+ 				guest_cpu_cap_has(vcpu, X86_FEATURE_GBPAGES),
+-				is_cr4_pse(&context->w),
++				is_cr4_pse(w),
+ 				guest_cpuid_is_amd_compatible(vcpu));
+ }
+ 
+@@ -5655,17 +5655,17 @@ reset_ept_shadow_zero_bits_mask(struct kvm_mmu *context, bool execonly)
+ 	 (14 & (access) ? 1 << 14 : 0) | \
+ 	 (15 & (access) ? 1 << 15 : 0))
+ 
+-static void update_permission_bitmask(struct kvm_mmu *mmu, bool tdp, bool ept)
++static void update_permission_bitmask(struct kvm_pagewalk *pw, bool tdp, bool ept)
+ {
+ 	unsigned index;
+ 
+ 	const u16 w = ACC_BITS_MASK(ACC_WRITE_MASK);
+ 	const u16 r = ACC_BITS_MASK(ACC_READ_MASK);
+ 
+-	bool cr4_smep = is_cr4_smep(&mmu->w);
+-	bool cr4_smap = is_cr4_smap(&mmu->w);
+-	bool cr0_wp = is_cr0_wp(&mmu->w);
+-	bool efer_nx = is_efer_nx(&mmu->w);
++	bool cr4_smep = is_cr4_smep(pw);
++	bool cr4_smap = is_cr4_smap(pw);
++	bool cr0_wp = is_cr0_wp(pw);
++	bool efer_nx = is_efer_nx(pw);
+ 
+ 	/*
+ 	 * In hardware, page fault error codes are generated (as the name
+@@ -5679,7 +5679,7 @@ static void update_permission_bitmask(struct kvm_mmu *mmu, bool tdp, bool ept)
+ 	 * permission_fault() to indicate accesses that are *not* subject to
+ 	 * SMAP restrictions.
+ 	 */
+-	for (index = 0; index < ARRAY_SIZE(mmu->permissions); ++index) {
++	for (index = 0; index < ARRAY_SIZE(pw->permissions); ++index) {
+ 		unsigned pfec = index << 1;
+ 
+ 		/*
+@@ -5753,7 +5753,7 @@ static void update_permission_bitmask(struct kvm_mmu *mmu, bool tdp, bool ept)
+ 				smapf = (pfec & (PFERR_RSVD_MASK|PFERR_FETCH_MASK)) ? 0 : kf;
+ 		}
+ 
+-		mmu->permissions[index] = ff | uf | wf | rf | smapf;
++		pw->permissions[index] = ff | uf | wf | rf | smapf;
+ 	}
+ }
+ 
+@@ -5781,19 +5781,19 @@ static void update_permission_bitmask(struct kvm_mmu *mmu, bool tdp, bool ept)
+ * away both AD and WD.  For all reads or if the last condition holds, WD
+ * only will be masked away.
+ */
+-static void update_pkru_bitmask(struct kvm_mmu *mmu)
++static void update_pkru_bitmask(struct kvm_pagewalk *w)
+ {
+ 	unsigned bit;
+ 	bool wp;
+ 
+-	mmu->pkru_mask = 0;
++	w->pkru_mask = 0;
+ 
+-	if (!is_cr4_pke(&mmu->w))
++	if (!is_cr4_pke(w))
+ 		return;
+ 
+-	wp = is_cr0_wp(&mmu->w);
++	wp = is_cr0_wp(w);
+ 
+-	for (bit = 0; bit < ARRAY_SIZE(mmu->permissions); ++bit) {
++	for (bit = 0; bit < ARRAY_SIZE(w->permissions); ++bit) {
+ 		unsigned pfec, pkey_bits;
+ 		bool check_pkey, check_write, ff, uf, wf, pte_user;
+ 
+@@ -5821,19 +5821,19 @@ static void update_pkru_bitmask(struct kvm_mmu *mmu)
+ 		/* PKRU.WD stops write access. */
+ 		pkey_bits |= (!!check_write) << 1;
+ 
+-		mmu->pkru_mask |= (pkey_bits & 3) << pfec;
++		w->pkru_mask |= (pkey_bits & 3) << pfec;
+ 	}
+ }
+ 
+ static void reset_guest_paging_metadata(struct kvm_vcpu *vcpu,
+-					struct kvm_mmu *mmu)
++					struct kvm_pagewalk *w)
+ {
+-	if (!is_cr0_pg(&mmu->w))
++	if (!is_cr0_pg(w))
+ 		return;
+ 
+-	reset_guest_rsvds_bits_mask(vcpu, mmu);
+-	update_permission_bitmask(mmu, mmu == &vcpu->arch.guest_mmu, false);
+-	update_pkru_bitmask(mmu);
++	reset_guest_rsvds_bits_mask(vcpu, w);
++	update_permission_bitmask(w, w == &vcpu->arch.guest_mmu.w, false);
++	update_pkru_bitmask(w);
+ }
+ 
+ static void paging64_init_context(struct kvm_mmu *context)
+@@ -5892,18 +5892,18 @@ static union kvm_cpu_role kvm_calc_cpu_role(struct kvm_vcpu *vcpu,
+ }
+ 
+ void __kvm_mmu_refresh_passthrough_bits(struct kvm_vcpu *vcpu,
+-					struct kvm_mmu *mmu)
++					struct kvm_pagewalk *w)
+ {
+ 	const bool cr0_wp = kvm_is_cr0_bit_set(vcpu, X86_CR0_WP);
+ 
+ 	BUILD_BUG_ON((KVM_MMU_CR0_ROLE_BITS & KVM_POSSIBLE_CR0_GUEST_BITS) != X86_CR0_WP);
+ 	BUILD_BUG_ON((KVM_MMU_CR4_ROLE_BITS & KVM_POSSIBLE_CR4_GUEST_BITS));
+ 
+-	if (is_cr0_wp(&mmu->w) == cr0_wp)
++	if (is_cr0_wp(w) == cr0_wp)
+ 		return;
+ 
+-	mmu->w.cpu_role.base.cr0_wp = cr0_wp;
+-	reset_guest_paging_metadata(vcpu, mmu);
++	w->cpu_role.base.cr0_wp = cr0_wp;
++	reset_guest_paging_metadata(vcpu, w);
+ }
+ 
+ static inline int kvm_mmu_get_tdp_level(struct kvm_vcpu *vcpu)
+@@ -5981,7 +5981,7 @@ static void init_kvm_tdp_mmu(struct kvm_vcpu *vcpu,
+ 	else
+ 		context->w.gva_to_gpa = paging32_gva_to_gpa;
+ 
+-	reset_guest_paging_metadata(vcpu, context);
++	reset_guest_paging_metadata(vcpu, &context->w);
+ 	reset_tdp_shadow_zero_bits_mask(context);
+ }
+ 
+@@ -6003,7 +6003,7 @@ static void shadow_mmu_init_context(struct kvm_vcpu *vcpu, struct kvm_mmu *conte
+ 	else
+ 		paging32_init_context(context);
+ 
+-	reset_guest_paging_metadata(vcpu, context);
++	reset_guest_paging_metadata(vcpu, &context->w);
+ 	reset_shadow_zero_bits_mask(vcpu, context);
+ }
+ 
+@@ -6104,8 +6104,8 @@ void kvm_init_shadow_ept_mmu(struct kvm_vcpu *vcpu, bool execonly,
+ 		context->w.gva_to_gpa = ept_gva_to_gpa;
+ 		context->sync_spte = ept_sync_spte;
+ 
+-		update_permission_bitmask(context, true, true);
+-		context->pkru_mask = 0;
++		update_permission_bitmask(&context->w, true, true);
++		context->w.pkru_mask = 0;
+ 		reset_rsvds_bits_mask_ept(vcpu, context, execonly, huge_page_level);
+ 		reset_ept_shadow_zero_bits_mask(context, execonly);
+ 	}
+@@ -6162,7 +6162,7 @@ static void init_kvm_nested_mmu(struct kvm_vcpu *vcpu,
+ 	else
+ 		g_context->w.gva_to_gpa = paging32_gva_to_gpa;
+ 
+-	reset_guest_paging_metadata(vcpu, g_context);
++	reset_guest_paging_metadata(vcpu, &g_context->w);
+ }
+ 
+ void kvm_init_mmu(struct kvm_vcpu *vcpu)
+-- 
+2.55.0
+

@@ -1,0 +1,96 @@
+From 1235933df87e4fae54fdaf83fb6beeca6c23b713 Mon Sep 17 00:00:00 2001
+From: Geert Uytterhoeven <geert@linux-m68k.org>
+Date: Wed, 1 Jul 2026 12:11:36 +0200
+Subject: [PATCH 05388/15333] MIPS: TXX9: Remove tx4938_spi_init() and
+ txx9_spi_init()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The last user of tx4938_spi_init() was removed in commit
+21d638ef9483d8cf ("MIPS: TXX9: Remove rbtx4938 board support").
+
+Signed-off-by: Geert Uytterhoeven <geert@linux-m68k.org>
+Reviewed-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Reviewed-by: Philippe Mathieu-Daudé <philmd@oss.qualcomm.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/include/asm/txx9/generic.h  |  1 -
+ arch/mips/include/asm/txx9/tx4938.h   |  1 -
+ arch/mips/txx9/generic/setup.c        | 17 -----------------
+ arch/mips/txx9/generic/setup_tx4938.c |  6 ------
+ 4 files changed, 25 deletions(-)
+
+diff --git a/arch/mips/include/asm/txx9/generic.h b/arch/mips/include/asm/txx9/generic.h
+index 9a2c47bf3c40..3813ab9ccf71 100644
+--- a/arch/mips/include/asm/txx9/generic.h
++++ b/arch/mips/include/asm/txx9/generic.h
+@@ -45,7 +45,6 @@ extern int (*txx9_irq_dispatch)(int pending);
+ const char *prom_getenv(const char *name);
+ void txx9_wdt_init(unsigned long base);
+ void txx9_wdt_now(unsigned long base);
+-void txx9_spi_init(int busid, unsigned long base, int irq);
+ void txx9_ethaddr_init(unsigned int id, unsigned char *ethaddr);
+ void txx9_sio_init(unsigned long baseaddr, int irq,
+ 		   unsigned int line, unsigned int sclk, int nocts);
+diff --git a/arch/mips/include/asm/txx9/tx4938.h b/arch/mips/include/asm/txx9/tx4938.h
+index 6ca767ee6467..765f7d6a44d3 100644
+--- a/arch/mips/include/asm/txx9/tx4938.h
++++ b/arch/mips/include/asm/txx9/tx4938.h
+@@ -281,7 +281,6 @@ void tx4938_wdt_init(void);
+ void tx4938_setup(void);
+ void tx4938_time_init(unsigned int tmrnr);
+ void tx4938_sio_init(unsigned int sclk, unsigned int cts_mask);
+-void tx4938_spi_init(int busid);
+ void tx4938_ethaddr_init(unsigned char *addr0, unsigned char *addr1);
+ int tx4938_report_pciclk(void);
+ void tx4938_report_pci1clk(void);
+diff --git a/arch/mips/txx9/generic/setup.c b/arch/mips/txx9/generic/setup.c
+index 6c5025806914..97102d3327d2 100644
+--- a/arch/mips/txx9/generic/setup.c
++++ b/arch/mips/txx9/generic/setup.c
+@@ -341,23 +341,6 @@ void txx9_wdt_now(unsigned long base)
+ 		     &tmrptr->tcr);
+ }
+ 
+-/* SPI support */
+-void __init txx9_spi_init(int busid, unsigned long base, int irq)
+-{
+-	struct resource res[] = {
+-		{
+-			.start	= base,
+-			.end	= base + 0x20 - 1,
+-			.flags	= IORESOURCE_MEM,
+-		}, {
+-			.start	= irq,
+-			.flags	= IORESOURCE_IRQ,
+-		},
+-	};
+-	platform_device_register_simple("spi_txx9", busid,
+-					res, ARRAY_SIZE(res));
+-}
+-
+ void __init txx9_ethaddr_init(unsigned int id, unsigned char *ethaddr)
+ {
+ 	struct platform_device *pdev =
+diff --git a/arch/mips/txx9/generic/setup_tx4938.c b/arch/mips/txx9/generic/setup_tx4938.c
+index ba646548c5f6..bfd6540f8f6a 100644
+--- a/arch/mips/txx9/generic/setup_tx4938.c
++++ b/arch/mips/txx9/generic/setup_tx4938.c
+@@ -301,12 +301,6 @@ void __init tx4938_sio_init(unsigned int sclk, unsigned int cts_mask)
+ 	}
+ }
+ 
+-void __init tx4938_spi_init(int busid)
+-{
+-	txx9_spi_init(busid, TX4938_SPI_REG & 0xfffffffffULL,
+-		      TXX9_IRQ_BASE + TX4938_IR_SPI);
+-}
+-
+ void __init tx4938_ethaddr_init(unsigned char *addr0, unsigned char *addr1)
+ {
+ 	u64 pcfg = __raw_readq(&tx4938_ccfgptr->pcfg);
+-- 
+2.55.0
+

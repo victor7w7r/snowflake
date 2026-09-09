@@ -1,0 +1,95 @@
+From 9ba8e75d2ee850294be33afc6aeba6ecdb95a6c6 Mon Sep 17 00:00:00 2001
+From: Ce Sun <cesun102@amd.com>
+Date: Fri, 24 Jul 2026 12:03:30 +0800
+Subject: [PATCH 07992/15333] drm/amd/ras: add device lost check to early exit
+ psp cmd wait loop
+
+Add device lost status check in PSP fence wait loop to exit
+polling early when GPU device lost
+
+Signed-off-by: Ce Sun <cesun102@amd.com>
+Reviewed-by: Lijo Lazar <lijo.lazar@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_sys.c |  3 +++
+ drivers/gpu/drm/amd/ras/rascore/ras.h            |  2 ++
+ drivers/gpu/drm/amd/ras/rascore/ras_core.c       | 14 ++++++++++++++
+ drivers/gpu/drm/amd/ras/rascore/ras_psp.c        |  3 +++
+ 4 files changed, 22 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_sys.c b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_sys.c
+index e4444798bc73..0b36b689fcfc 100644
+--- a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_sys.c
++++ b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_sys.c
+@@ -171,6 +171,9 @@ static int amdgpu_ras_sys_check_gpu_status(struct ras_core_context *ras_core,
+ 	if (amdgpu_in_reset(adev) || amdgpu_ras_in_recovery(adev))
+ 		gpu_status |= RAS_GPU_STATUS__IN_RESET;
+ 
++	if (amdgpu_device_bus_status_check(adev))
++		gpu_status |= RAS_GPU_STATUS__DEVICE_LOST;
++
+ 	if (amdgpu_sriov_vf(adev))
+ 		gpu_status |= RAS_GPU_STATUS__IS_VF;
+ 
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras.h b/drivers/gpu/drm/amd/ras/rascore/ras.h
+index d0018f87172e..8c3d603ba801 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras.h
++++ b/drivers/gpu/drm/amd/ras/rascore/ras.h
+@@ -137,6 +137,7 @@ enum ras_gpu_status {
+ 	RAS_GPU_STATUS__IN_RESET = 0x2,
+ 	RAS_GPU_STATUS__IS_RMA = 0x4,
+ 	RAS_GPU_STATUS__IS_VF = 0x8,
++	RAS_GPU_STATUS__DEVICE_LOST = 0x10,
+ };
+ 
+ enum ras_fw_eeprom_cmd {
+@@ -374,6 +375,7 @@ int ras_core_query_block_ecc_data(struct ras_core_context *ras_core,
+ bool ras_core_gpu_in_reset(struct ras_core_context *ras_core);
+ bool ras_core_gpu_is_rma(struct ras_core_context *ras_core);
+ bool ras_core_gpu_is_vf(struct ras_core_context *ras_core);
++bool ras_core_gpu_device_lost(struct ras_core_context *ras_core);
+ bool ras_core_handle_nbio_irq(struct ras_core_context *ras_core, void *data);
+ int ras_core_handle_fatal_error(struct ras_core_context *ras_core);
+ 
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras_core.c b/drivers/gpu/drm/amd/ras/rascore/ras_core.c
+index f8a027b60b38..75e8216fae8a 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras_core.c
++++ b/drivers/gpu/drm/amd/ras/rascore/ras_core.c
+@@ -147,6 +147,20 @@ bool ras_core_gpu_is_vf(struct ras_core_context *ras_core)
+ 	return (status & RAS_GPU_STATUS__IS_VF) ? true : false;
+ }
+ 
++bool ras_core_gpu_device_lost(struct ras_core_context *ras_core)
++{
++	uint32_t status = 0;
++
++	if (!ras_core)
++		return false;
++
++	if (ras_core->sys_fn &&
++		ras_core->sys_fn->check_gpu_status)
++		ras_core->sys_fn->check_gpu_status(ras_core, &status);
++
++	return (status & RAS_GPU_STATUS__DEVICE_LOST) ? true : false;
++}
++
+ bool ras_core_gpu_is_rma(struct ras_core_context *ras_core)
+ {
+ 	if (!ras_core)
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras_psp.c b/drivers/gpu/drm/amd/ras/rascore/ras_psp.c
+index 358f602b167d..35264c119bbb 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras_psp.c
++++ b/drivers/gpu/drm/amd/ras/rascore/ras_psp.c
+@@ -294,6 +294,9 @@ static int send_psp_cmd(struct ras_core_context *ras_core,
+ 		   psp_ctx->in_fence_value) {
+ 		if (--timeout == 0)
+ 			break;
++
++		if (ras_core_gpu_device_lost(ras_core))
++			break;
+ 		/*
+ 		 * Shouldn't wait for timeout when err_event_athub occurs,
+ 		 * because gpu reset thread triggered and lock resource should
+-- 
+2.55.0
+

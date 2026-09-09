@@ -1,0 +1,370 @@
+From f6c33c4479a7e4d6bfc0e0e533a86376866f7360 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Sat, 8 Aug 2026 02:39:25 +0200
+Subject: [PATCH 12339/15333] bpf: Support __arena and __arena__nullable on
+ struct_ops arguments
+
+A struct_ops callback cannot receive an arena pointer directly, so
+passing one takes two steps. The pointer arrives as a bare u64 that the
+callback casts, and because the two sides address the arena through
+different bases it also has to be rebased by hand on the way in.
+
+Add the __arena and __arena__nullable stub argument suffixes to make this
+convenient. The callback declares the parameter as an arena pointer,
+receives it as a PTR_TO_ARENA register, and dereferences it directly,
+while the kernel caller just passes the natural kernel arena address
+(kaddr). The trampoline converts the value while saving the arguments
+into the BPF ctx, ctx[slot] = (u32)(kaddr - kern_vm_start), so the
+program never sees a kernel address and nothing rewrites the ctx after
+the fact. The converted value keeps the upper 32 bits clear as the JITs
+require of arena pointer registers and behaves like any cast_kern'ed
+arena pointer, so cast_user recovers the full user-visible address.
+
+__arena converts unconditionally and the kernel caller must not pass
+NULL. __arena__nullable preserves NULL, tested on the full 64-bit kernel
+pointer, and surfaces to the verifier as PTR_TO_ARENA (but not as a
+PTR_TO_ARENA | PTR_MAYBE_NULL). The reason is that PTR_TO_ARENA in the
+program's type state already encompasses NULL-ness, so it is not
+meaningful to force a NULL check for the program.
+
+The composite suffix intentionally ends in __nullable. Classify
+__arena__nullable before the generic suffix so scalar arena pointees do
+not take the generic nullable BTF pointer path.
+
+This patch adds the generic side. prepare_arg_info() records arena and
+nullable argument flags in the struct_ops function model, and
+bpf_tramp_arena_base() returns the arena base for a single-program
+struct_ops indirect trampoline. Only that trampoline converts: its
+program's arena is fixed at generation time. Generic trampolines can mix
+programs with different arenas and reject arena context arguments
+defensively, which is unreachable today as only struct_ops programs
+carry them. Architectures that do not implement the conversion are
+gated out at verification time with bpf_jit_supports_arena_args().
+
+Co-developed-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Acked-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://patch.msgid.link/20260808003938.3486067-6-memxor@gmail.com
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ Documentation/bpf/kfuncs.rst | 10 +++++++
+ include/linux/bpf.h          |  9 ++++++
+ include/linux/bpf_verifier.h | 10 +++++++
+ kernel/bpf/bpf_struct_ops.c  | 56 +++++++++++++++++++++++++++---------
+ kernel/bpf/btf.c             | 10 +++++--
+ kernel/bpf/trampoline.c      | 37 ++++++++++++++++++++++++
+ kernel/bpf/verifier.c        | 23 +++++++++++----
+ 7 files changed, 133 insertions(+), 22 deletions(-)
+
+diff --git a/Documentation/bpf/kfuncs.rst b/Documentation/bpf/kfuncs.rst
+index 9c205d8b5fff..1004eb0bec61 100644
+--- a/Documentation/bpf/kfuncs.rst
++++ b/Documentation/bpf/kfuncs.rst
+@@ -305,6 +305,16 @@ arena argument support (currently x86-64); verification fails otherwise. The
+ program can pass any value without compromising the kernel. A value that does
+ not point into the arena is a program bug.
+ 
++The suffixes have the same meaning on the arguments of struct_ops stub
++functions, with the conversion running in the opposite direction. The
++kernel caller passes the kernel arena address and the trampoline converts
++it while saving the arguments, so the callback receives an arena pointer
++it can dereference directly. With ``__arena`` the kernel caller must not
++pass NULL. With ``__arena__nullable`` a NULL kernel pointer arrives as NULL.
++However, there is no obligation to prove to the verifier that such a pointer is
++non-NULL before use, in-line with existing semantics of arena pointers used in
++a program (or obtained from any other source).
++
+ .. _BPF_kfunc_nodef:
+ 
+ 2.4 Using an existing kernel function
+diff --git a/include/linux/bpf.h b/include/linux/bpf.h
+index ba1b9d8ac348..b4a10c9878cf 100644
+--- a/include/linux/bpf.h
++++ b/include/linux/bpf.h
+@@ -1274,6 +1274,15 @@ struct bpf_tramp_nodes {
+ 	int nr_nodes;
+ };
+ 
++/*
++ * The arena base against which a struct_ops trampoline converts the
++ * arguments marked with BTF_FMODEL_ARENA_ARG while saving them into the BPF
++ * ctx, ctx[arg] = (u32)(kaddr - kern_vm_start). Zero when the trampoline
++ * converts nothing.
++ */
++u64 bpf_tramp_arena_base(const struct btf_func_model *m,
++			 struct bpf_tramp_nodes *tnodes, u32 flags);
++
+ struct bpf_tramp_run_ctx;
+ 
+ /* Different use cases for BPF trampoline:
+diff --git a/include/linux/bpf_verifier.h b/include/linux/bpf_verifier.h
+index 1ccf82d7ff8d..93f7c2075eea 100644
+--- a/include/linux/bpf_verifier.h
++++ b/include/linux/bpf_verifier.h
+@@ -1297,6 +1297,16 @@ static inline u32 type_flag(u32 type)
+ 	return type & ~BPF_BASE_TYPE_MASK;
+ }
+ 
++static inline bool bpf_prog_has_arena_ctx_arg(const struct bpf_prog *prog)
++{
++	int i;
++
++	for (i = 0; i < prog->aux->ctx_arg_info_size; i++)
++		if (base_type(prog->aux->ctx_arg_info[i].reg_type) == PTR_TO_ARENA)
++			return true;
++	return false;
++}
++
+ static inline enum bpf_prog_type resolve_prog_type(const struct bpf_prog *prog)
+ {
+ 	return (prog->type == BPF_PROG_TYPE_EXT && prog->aux->saved_dst_prog_type) ?
+diff --git a/kernel/bpf/bpf_struct_ops.c b/kernel/bpf/bpf_struct_ops.c
+index 4e7a48c02be5..d7c3030bc63b 100644
+--- a/kernel/bpf/bpf_struct_ops.c
++++ b/kernel/bpf/bpf_struct_ops.c
+@@ -147,6 +147,8 @@ void bpf_struct_ops_image_free(void *image)
+ 
+ #define MAYBE_NULL_SUFFIX "__nullable"
+ #define REFCOUNTED_SUFFIX "__ref"
++#define ARENA_SUFFIX "__arena"
++#define ARENA_MAYBE_NULL_SUFFIX "__arena__nullable"
+ 
+ /* Prepare argument info for every nullable argument of a member of a
+  * struct_ops type.
+@@ -159,7 +161,7 @@ void bpf_struct_ops_image_free(void *image)
+  * to provide an array of struct bpf_ctx_arg_aux, which in turn provides
+  * the information that used by the verifier to check the arguments of the
+  * BPF struct_ops program assigned to the member. Here, we only care about
+- * the arguments that are marked as __nullable.
++ * the arguments that are marked as __nullable, __ref or __arena.
+  *
+  * The array of struct bpf_ctx_arg_aux is eventually assigned to
+  * prog->aux->ctx_arg_info of BPF struct_ops programs and passed to the
+@@ -172,10 +174,12 @@ static int prepare_arg_info(struct btf *btf,
+ 			    const char *st_ops_name,
+ 			    const char *member_name,
+ 			    const struct btf_type *func_proto, void *stub_func_addr,
++			    struct btf_func_model *model,
+ 			    struct bpf_struct_ops_arg_info *arg_info)
+ {
+ 	const struct btf_type *stub_func_proto, *pointed_type;
+-	bool is_nullable = false, is_refcounted = false;
++	bool is_nullable = false, is_refcounted = false, is_arena = false;
++	bool is_arena_nullable = false;
+ 	const struct btf_param *stub_args, *args;
+ 	struct bpf_ctx_arg_aux *info, *info_buf;
+ 	u32 nargs, arg_no, info_cnt = 0;
+@@ -225,27 +229,39 @@ static int prepare_arg_info(struct btf *btf,
+ 	/* Prepare info for every nullable argument */
+ 	info = info_buf;
+ 	for (arg_no = 0; arg_no < nargs; arg_no++) {
+-		/* Skip arguments that is not suffixed with
+-		 * "__nullable or __ref".
++		bool ptr_to_arena, ptr_to_struct;
++
++		/*
++		 * Skip arguments that are not suffixed with "__arena__nullable",
++		 * "__arena", "__nullable", or "__ref".
+ 		 */
+-		is_nullable = btf_param_match_suffix(btf, &stub_args[arg_no],
+-						     MAYBE_NULL_SUFFIX);
++		is_arena_nullable = btf_param_match_suffix(btf, &stub_args[arg_no],
++							   ARENA_MAYBE_NULL_SUFFIX);
++		is_arena = btf_param_match_suffix(btf, &stub_args[arg_no], ARENA_SUFFIX);
++		is_nullable = !is_arena_nullable &&
++			      btf_param_match_suffix(btf, &stub_args[arg_no], MAYBE_NULL_SUFFIX);
+ 		is_refcounted = btf_param_match_suffix(btf, &stub_args[arg_no],
+ 						       REFCOUNTED_SUFFIX);
+ 
+-		if (is_nullable)
++		if (is_arena_nullable)
++			suffix = ARENA_MAYBE_NULL_SUFFIX;
++		else if (is_arena)
++			suffix = ARENA_SUFFIX;
++		else if (is_nullable)
+ 			suffix = MAYBE_NULL_SUFFIX;
+ 		else if (is_refcounted)
+ 			suffix = REFCOUNTED_SUFFIX;
+ 		else
+ 			continue;
+ 
+-		/* Should be a pointer to struct */
+-		pointed_type = btf_type_resolve_ptr(btf,
+-						    args[arg_no].type,
+-						    &arg_btf_id);
+-		if (!pointed_type ||
+-		    !btf_type_is_struct(pointed_type)) {
++		/*
++		 * Should be a pointer to struct, or any pointer for __arena or
++		 * __arena__nullable.
++		 */
++		pointed_type = btf_type_resolve_ptr(btf, args[arg_no].type, &arg_btf_id);
++		ptr_to_arena = pointed_type && (is_arena || is_arena_nullable);
++		ptr_to_struct = pointed_type && btf_type_is_struct(pointed_type);
++		if (!ptr_to_arena && !ptr_to_struct) {
+ 			pr_warn("stub function %s has %s tagging to an unsupported type\n",
+ 				stub_fname, suffix);
+ 			goto err_out;
+@@ -268,7 +284,18 @@ static int prepare_arg_info(struct btf *btf,
+ 		info->btf_id = arg_btf_id;
+ 		info->btf = btf;
+ 		info->offset = offset;
+-		if (is_nullable) {
++		if (is_arena || is_arena_nullable) {
++			/*
++			 * Both types get PTR_TO_ARENA. In verifier state,
++			 * PTR_TO_ARENA encompasses potential NULL values, but
++			 * we do not force the program to check it, or maintain
++			 * precision around it, since it has no safety implication.
++			 */
++			info->reg_type = PTR_TO_ARENA;
++			model->arg_flags[arg_no] |= BTF_FMODEL_ARENA_ARG;
++			if (is_arena_nullable)
++				model->arg_flags[arg_no] |= BTF_FMODEL_NULLABLE_ARG;
++		} else if (is_nullable) {
+ 			info->reg_type = PTR_TRUSTED | PTR_TO_BTF_ID | PTR_MAYBE_NULL;
+ 		} else if (is_refcounted) {
+ 			info->reg_type = PTR_TRUSTED | PTR_TO_BTF_ID;
+@@ -460,6 +487,7 @@ int bpf_struct_ops_desc_init(struct bpf_struct_ops_desc *st_ops_desc,
+ 		stub_func_addr = *(void **)(st_ops->cfi_stubs + moff);
+ 		err = prepare_arg_info(btf, st_ops->name, mname,
+ 				       func_proto, stub_func_addr,
++				       &st_ops->func_models[i],
+ 				       arg_info + i);
+ 		if (err)
+ 			goto errout;
+diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
+index 4ff6148ae8e8..6606187ed4f4 100644
+--- a/kernel/bpf/btf.c
++++ b/kernel/bpf/btf.c
+@@ -6963,15 +6963,19 @@ bool btf_ctx_access(int off, int size, enum bpf_access_type type,
+ 		return false;
+ 	}
+ 
+-	/* check for PTR_TO_RDONLY_BUF_OR_NULL or PTR_TO_RDWR_BUF_OR_NULL */
++	/*
++	 * Check for PTR_TO_RDONLY_BUF_OR_NULL, PTR_TO_RDWR_BUF_OR_NULL or
++	 * PTR_TO_ARENA (both nullable and non-nullable cases).
++	 */
+ 	for (i = 0; i < prog->aux->ctx_arg_info_size; i++) {
+ 		const struct bpf_ctx_arg_aux *ctx_arg_info = &prog->aux->ctx_arg_info[i];
+ 		u32 type, flag;
+ 
+ 		type = base_type(ctx_arg_info->reg_type);
+ 		flag = type_flag(ctx_arg_info->reg_type);
+-		if (ctx_arg_info->offset == off && type == PTR_TO_BUF &&
+-		    (flag & PTR_MAYBE_NULL)) {
++		if (ctx_arg_info->offset == off &&
++		    (type == PTR_TO_ARENA ||
++		     (type == PTR_TO_BUF && (flag & PTR_MAYBE_NULL)))) {
+ 			info->reg_type = ctx_arg_info->reg_type;
+ 			return true;
+ 		}
+diff --git a/kernel/bpf/trampoline.c b/kernel/bpf/trampoline.c
+index ed7999ad6c66..e07af35ed040 100644
+--- a/kernel/bpf/trampoline.c
++++ b/kernel/bpf/trampoline.c
+@@ -529,6 +529,36 @@ bpf_trampoline_get_progs(const struct bpf_trampoline *tr, int *total, bool *ip_a
+ 	return tnodes;
+ }
+ 
++/*
++ * The arena base against which save_args() converts the arguments marked
++ * with BTF_FMODEL_ARENA_ARG. Only the struct_ops indirect trampoline
++ * converts: it dispatches to a single prog whose arena is known at
++ * generation time. Return 0 when there is nothing to convert.
++ */
++u64 bpf_tramp_arena_base(const struct btf_func_model *m,
++			 struct bpf_tramp_nodes *tnodes, u32 flags)
++{
++	const struct bpf_prog *prog;
++	int i;
++
++	if (!(flags & BPF_TRAMP_F_INDIRECT) ||
++	    tnodes[BPF_TRAMP_FENTRY].nr_nodes != 1)
++		return 0;
++
++	for (i = 0; i < m->nr_args; i++)
++		if (m->arg_flags[i] & BTF_FMODEL_ARENA_ARG)
++			break;
++	if (i == m->nr_args)
++		return 0;
++
++	/* Verification rejects an arena argument without an arena. */
++	prog = tnodes[BPF_TRAMP_FENTRY].nodes[0]->link->prog;
++	if (WARN_ON_ONCE(!prog->aux->arena))
++		return 0;
++
++	return bpf_arena_get_kern_vm_start(prog->aux->arena);
++}
++
+ static void bpf_tramp_image_free(struct bpf_tramp_image *im)
+ {
+ 	bpf_image_ksym_del(&im->ksym);
+@@ -920,6 +950,13 @@ static int __bpf_trampoline_link_prog(struct bpf_tramp_node *node,
+ 	int cnt = 0, i;
+ 
+ 	kind = bpf_attach_type_to_tramp(node->link->prog);
++	/*
++	 * Arena ctx args are converted only by struct_ops indirect
++	 * trampolines. They must never be attached to a generic trampoline.
++	 */
++	if (WARN_ON_ONCE(bpf_prog_has_arena_ctx_arg(node->link->prog)))
++		return -ENOTSUPP;
++
+ 	if (tr->extension_prog)
+ 		/* cannot attach fentry/fexit if extension prog is attached.
+ 		 * cannot overwrite extension prog either.
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index a1b71ac39b3b..7d527f7c899e 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -18685,6 +18685,7 @@ static int check_struct_ops_btf_id(struct bpf_verifier_env *env)
+ {
+ 	const struct btf_type *t, *func_proto;
+ 	const struct bpf_struct_ops_desc *st_ops_desc;
++	const struct bpf_struct_ops_arg_info *arg_info;
+ 	const struct bpf_struct_ops *st_ops;
+ 	const struct btf_member *member;
+ 	struct bpf_prog *prog = env->prog;
+@@ -18763,10 +18764,23 @@ static int check_struct_ops_btf_id(struct bpf_verifier_env *env)
+ 		return -EACCES;
+ 	}
+ 
+-	for (i = 0; i < st_ops_desc->arg_info[member_idx].cnt; i++) {
+-		if (st_ops_desc->arg_info[member_idx].info[i].refcounted) {
++	arg_info = &st_ops_desc->arg_info[member_idx];
++	for (i = 0; i < arg_info->cnt; i++) {
++		const struct bpf_ctx_arg_aux *info = &arg_info->info[i];
++
++		if (info->refcounted)
+ 			has_refcounted_arg = true;
+-			break;
++		if (base_type(info->reg_type) == PTR_TO_ARENA) {
++			if (!bpf_jit_supports_arena_args()) {
++				verbose(env, "JIT does not support arena arguments\n");
++				return -ENOTSUPP;
++			}
++			if (!prog->aux->arena) {
++				verbose(env,
++					"arena argument of %s requires a program with an associated arena\n",
++					mname);
++				return -EINVAL;
++			}
+ 		}
+ 	}
+ 
+@@ -18787,8 +18801,7 @@ static int check_struct_ops_btf_id(struct bpf_verifier_env *env)
+ 	prog->aux->attach_func_name = mname;
+ 	env->ops = st_ops->verifier_ops;
+ 
+-	return bpf_prog_ctx_arg_info_init(prog, st_ops_desc->arg_info[member_idx].info,
+-					  st_ops_desc->arg_info[member_idx].cnt);
++	return bpf_prog_ctx_arg_info_init(prog, arg_info->info, arg_info->cnt);
+ }
+ #define SECURITY_PREFIX "security_"
+ 
+-- 
+2.55.0
+

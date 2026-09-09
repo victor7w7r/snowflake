@@ -1,0 +1,43 @@
+From 2b8fb9308e74c4ce0eadd5d978b083ec28ba5fef Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Tue, 19 May 2026 16:06:13 -0400
+Subject: [PATCH 00396/15333] drm/amdgpu/gfx11: unmap the queue via MES on
+ reset for MMIO path
+
+To keep MES in sync.
+
+Reviewed-by: Jesse Zhang <jesse.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
+index cecac4b97e6a..2594fadb26ac 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
+@@ -6829,6 +6829,10 @@ static int gfx_v11_0_reset_kgq(struct amdgpu_ring *ring,
+ 		return r;
+ 
+ 	if (use_mmio) {
++		r = amdgpu_mes_unmap_legacy_queue(adev, ring,
++						  RESET_QUEUES, 0, 0, 0);
++		if (r)
++			return r;
+ 		amdgpu_gfx_mqd_reset_restore(ring);
+ 
+ 		r = amdgpu_mes_map_legacy_queue(adev, ring, 0);
+@@ -6856,6 +6860,10 @@ static int gfx_v11_0_reset_kcq(struct amdgpu_ring *ring,
+ 		return r;
+ 
+ 	if (use_mmio) {
++		r = amdgpu_mes_unmap_legacy_queue(adev, ring,
++						  RESET_QUEUES, 0, 0, 0);
++		if (r)
++			return r;
+ 		amdgpu_gfx_mqd_reset_restore(ring);
+ 
+ 		r = amdgpu_mes_map_legacy_queue(adev, ring, 0);
+-- 
+2.55.0
+

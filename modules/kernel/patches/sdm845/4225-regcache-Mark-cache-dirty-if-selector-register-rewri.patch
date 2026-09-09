@@ -1,0 +1,35 @@
+From a7d168db6bb7a5be2616a4828f491e412fe57a6d Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Mon, 13 Jul 2026 12:03:12 +0700
+Subject: [PATCH 04225/15333] regcache: Mark cache dirty if selector register
+ rewrite fails
+
+After a successful cache synchronization, regcache_sync() clears
+cache_dirty. If rewriting a selector register later fails, the cache
+and hardware become inconsistent while the cache still appears clean.
+
+Update cache_dirty to reflect the cache and hardware state when
+selector register rewriting fails.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260713050312.38729-3-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/base/regmap/regcache.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/base/regmap/regcache.c b/drivers/base/regmap/regcache.c
+index 040fd60c0d59..96cdae25b9c4 100644
+--- a/drivers/base/regmap/regcache.c
++++ b/drivers/base/regmap/regcache.c
+@@ -465,6 +465,7 @@ int regcache_sync(struct regmap *map)
+ 
+ 		selector_ret = _regmap_write(map, this->selector_reg, i);
+ 		if (selector_ret != 0) {
++			map->cache_dirty = true;
+ 			dev_err(map->dev, "Failed to write %x = %x: %d\n",
+ 				this->selector_reg, i, selector_ret);
+ 			break;
+-- 
+2.55.0
+

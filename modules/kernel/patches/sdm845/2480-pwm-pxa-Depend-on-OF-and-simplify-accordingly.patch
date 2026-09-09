@@ -1,0 +1,82 @@
+From 7945aa98486f0ed3f7f53592f159039d443bd686 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig=20=28The=20Capable=20Hub=29?=
+ <u.kleine-koenig@baylibre.com>
+Date: Sun, 5 Jul 2026 10:39:08 +0200
+Subject: [PATCH 02480/15333] pwm: pxa: Depend on OF and simplify accordingly
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The SoCs that this driver actually works on all imply OF already. (ARM
+selects USE_OF unless some archs are enabled that cannot be selected
+together with ARCH_PXA or ARCH_MMP, ARM64 and RISCV select OF.)
+
+With OF known to be enabled a few conditionals in the driver can be
+simplified.
+
+Signed-off-by: Uwe Kleine-König (The Capable Hub) <u.kleine-koenig@baylibre.com>
+Link: https://patch.msgid.link/20260705083910.3502207-2-u.kleine-koenig@baylibre.com
+Signed-off-by: Uwe Kleine-König <ukleinek@kernel.org>
+---
+ drivers/pwm/Kconfig   |  2 +-
+ drivers/pwm/pwm-pxa.c | 10 ++--------
+ 2 files changed, 3 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/pwm/Kconfig b/drivers/pwm/Kconfig
+index e8886a9b64d9..729776086879 100644
+--- a/drivers/pwm/Kconfig
++++ b/drivers/pwm/Kconfig
+@@ -569,7 +569,7 @@ config PWM_PCA9685
+ config PWM_PXA
+ 	tristate "PXA PWM support"
+ 	depends on ARCH_PXA || ARCH_MMP || ARCH_SPACEMIT || COMPILE_TEST
+-	depends on HAS_IOMEM
++	depends on HAS_IOMEM && OF
+ 	help
+ 	  Generic PWM framework driver for PXA.
+ 
+diff --git a/drivers/pwm/pwm-pxa.c b/drivers/pwm/pwm-pxa.c
+index b844bb2dd92e..157735d0d054 100644
+--- a/drivers/pwm/pwm-pxa.c
++++ b/drivers/pwm/pwm-pxa.c
+@@ -137,7 +137,6 @@ static const struct pwm_ops pxa_pwm_ops = {
+ 	.apply = pxa_pwm_apply,
+ };
+ 
+-#ifdef CONFIG_OF
+ /*
+  * Device tree users must create one device instance for each PWM channel.
+  * Hence we dispense with the HAS_SECONDARY_PWM and "tell" the original driver
+@@ -152,9 +151,6 @@ static const struct of_device_id pwm_of_match[] = {
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, pwm_of_match);
+-#else
+-#define pwm_of_match NULL
+-#endif
+ 
+ static int pwm_probe(struct platform_device *pdev)
+ {
+@@ -166,7 +162,7 @@ static int pwm_probe(struct platform_device *pdev)
+ 	struct reset_control *rst;
+ 	int ret = 0;
+ 
+-	if (IS_ENABLED(CONFIG_OF) && id == NULL)
++	if (id == NULL)
+ 		id = of_device_get_match_data(dev);
+ 
+ 	if (id == NULL)
+@@ -192,9 +188,7 @@ static int pwm_probe(struct platform_device *pdev)
+ 		return PTR_ERR(rst);
+ 
+ 	chip->ops = &pxa_pwm_ops;
+-
+-	if (IS_ENABLED(CONFIG_OF))
+-		chip->of_xlate = of_pwm_single_xlate;
++	chip->of_xlate = of_pwm_single_xlate;
+ 
+ 	pc->mmio_base = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(pc->mmio_base))
+-- 
+2.55.0
+

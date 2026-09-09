@@ -1,0 +1,43 @@
+From 79ef8d384fdfbf837ffe9c07125c88fc39fa58c9 Mon Sep 17 00:00:00 2001
+From: Heiko Carstens <hca@linux.ibm.com>
+Date: Mon, 20 Jul 2026 10:58:29 +0200
+Subject: [PATCH 08369/15333] s390/mm: Use lock_mm_and_find_vma() in
+ do_secure_storage_access()
+
+do_secure_storage_access() uses find_vma() without verifying that the
+faulting address is within the returned vma. Add this missing check by
+converting to lock_mm_and_find_vma().
+
+This is not a critical fix, since the worst that could happen is a
+WARN_ON_ONCE() in folio_walk_start().
+
+Reported-by: sashiko-bot <sashiko-bot@kernel.org>
+Closes: https://lore.kernel.org/all/20260717093904.E4A421F00A3E@smtp.kernel.org/
+Link: https://lore.kernel.org/all/20260717093904.E4A421F00A3E@smtp.kernel.org/
+Signed-off-by: Heiko Carstens <hca@linux.ibm.com>
+Reviewed-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+Signed-off-by: Vasily Gorbik <gor@linux.ibm.com>
+---
+ arch/s390/mm/fault.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/arch/s390/mm/fault.c b/arch/s390/mm/fault.c
+index 2839d7a64401..f150d97cac2e 100644
+--- a/arch/s390/mm/fault.c
++++ b/arch/s390/mm/fault.c
+@@ -455,10 +455,9 @@ void do_secure_storage_access(struct pt_regs *regs)
+ 	} else {
+ 		if (faulthandler_disabled() || !mm)
+ 			return handle_fault_error_nolock(regs, 0);
+-		mmap_read_lock(mm);
+-		vma = find_vma(mm, addr);
++		vma = lock_mm_and_find_vma(mm, addr, regs);
+ 		if (!vma)
+-			return handle_fault_error(regs, SEGV_MAPERR);
++			return handle_fault_error_nolock(regs, SEGV_MAPERR);
+ 		folio = folio_walk_start(&fw, vma, addr, 0);
+ 		if (!folio) {
+ 			mmap_read_unlock(mm);
+-- 
+2.55.0
+

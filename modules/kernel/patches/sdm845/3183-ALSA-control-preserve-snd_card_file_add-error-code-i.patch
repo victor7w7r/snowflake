@@ -1,0 +1,45 @@
+From ae1f30f4bdaac9aca75e95785db542a3f087a965 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Wed, 8 Jul 2026 09:35:40 +0700
+Subject: [PATCH 03183/15333] ALSA: control: preserve snd_card_file_add() error
+ code in snd_ctl_open()
+
+snd_ctl_open() unconditionally overwrites the return value of
+snd_card_file_add() with -ENODEV on failure, discarding the actual
+error code.
+
+Fix this by directly returning the original error code returned by
+snd_card_file_add() (e.g. -ENOMEM or -ENODEV). This behavior is
+consistent with the error handling used in other functions such as
+snd_mixer_oss_open(), snd_hwdep_open(), snd_pcm_oss_open(), and others.
+
+There is no functional change other than the returned error code in this
+failure path.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260708023540.6962-1-phucduc.bui@gmail.com
+---
+ sound/core/control.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/sound/core/control.c b/sound/core/control.c
+index 0ca9fff56e51..73d7ba0f509f 100644
+--- a/sound/core/control.c
++++ b/sound/core/control.c
+@@ -63,10 +63,8 @@ static int snd_ctl_open(struct inode *inode, struct file *file)
+ 		goto __error1;
+ 	}
+ 	err = snd_card_file_add(card, file);
+-	if (err < 0) {
+-		err = -ENODEV;
++	if (err < 0)
+ 		goto __error1;
+-	}
+ 	if (!try_module_get(card->module)) {
+ 		err = -ENODEV;
+ 		goto __error2;
+-- 
+2.55.0
+

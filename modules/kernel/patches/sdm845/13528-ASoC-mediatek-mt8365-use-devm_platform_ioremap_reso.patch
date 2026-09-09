@@ -1,0 +1,51 @@
+From 3d7fb01b36aa85b2fc912b51305fbe011d1c3290 Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Mon, 10 Aug 2026 21:24:24 -0700
+Subject: [PATCH 13528/15333] ASoC: mediatek: mt8365: use
+ devm_platform_ioremap_resource helpers
+
+Simplify the probe function by using devm_platform_ioremap_resource()
+for the base address and devm_platform_get_and_ioremap_resource() for
+the SRAM, dropping the manual platform_get_resource() calls.
+
+Assisted-by: opencode:deepseek-v4-flash-free
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Link: https://patch.msgid.link/20260811042424.66882-1-rosenp@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/mediatek/mt8365/mt8365-afe-pcm.c | 16 ++++++----------
+ 1 file changed, 6 insertions(+), 10 deletions(-)
+
+diff --git a/sound/soc/mediatek/mt8365/mt8365-afe-pcm.c b/sound/soc/mediatek/mt8365/mt8365-afe-pcm.c
+index 5966ca18c7c9..e9497246f37c 100644
+--- a/sound/soc/mediatek/mt8365/mt8365-afe-pcm.c
++++ b/sound/soc/mediatek/mt8365/mt8365-afe-pcm.c
+@@ -2120,19 +2120,15 @@ static int mt8365_afe_pcm_dev_probe(struct platform_device *pdev)
+ 	spin_lock_init(&afe_priv->afe_ctrl_lock);
+ 	mutex_init(&afe_priv->afe_clk_mutex);
+ 
+-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+-	afe->base_addr = devm_ioremap_resource(&pdev->dev, res);
++	afe->base_addr = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(afe->base_addr))
+ 		return PTR_ERR(afe->base_addr);
+ 
+-	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+-	if (res) {
+-		afe_priv->afe_sram_vir_addr =
+-			devm_ioremap_resource(&pdev->dev, res);
+-		if (!IS_ERR(afe_priv->afe_sram_vir_addr)) {
+-			afe_priv->afe_sram_phy_addr = res->start;
+-			afe_priv->afe_sram_size = resource_size(res);
+-		}
++	afe_priv->afe_sram_vir_addr =
++		devm_platform_get_and_ioremap_resource(pdev, 1, &res);
++	if (!IS_ERR(afe_priv->afe_sram_vir_addr)) {
++		afe_priv->afe_sram_phy_addr = res->start;
++		afe_priv->afe_sram_size = resource_size(res);
+ 	}
+ 
+ 	/* initial audio related clock */
+-- 
+2.55.0
+

@@ -1,0 +1,59 @@
+From 60781269e26c786de2bb93fb1e697a5c32ccee48 Mon Sep 17 00:00:00 2001
+From: Shivaji Kant <shivajikant@google.com>
+Date: Sat, 1 Aug 2026 05:13:00 +0000
+Subject: [PATCH 09890/15333] selftests/bpf: Add IP_TRANSPARENT and
+ IPV6_TRANSPARENT to setget_sockopt
+
+Add test coverage for IP_TRANSPARENT and IPV6_TRANSPARENT socket options
+in the setget_sockopt BPF selftest to verify bpf_setsockopt() and
+bpf_getsockopt() helpers.
+
+Signed-off-by: Shivaji Kant <shivajikant@google.com>
+Tested-by: Anubhav Singh <anubhavsinggh@google.com>
+Reviewed-by: Kuniyuki Iwashima <kuniyu@google.com>
+Link: https://lore.kernel.org/bpf/20260801051307.478469-2-shivajikant@google.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ tools/testing/selftests/bpf/progs/bpf_tracing_net.h | 2 ++
+ tools/testing/selftests/bpf/progs/setget_sockopt.c  | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/progs/bpf_tracing_net.h b/tools/testing/selftests/bpf/progs/bpf_tracing_net.h
+index c4b438854565..593b38f90417 100644
+--- a/tools/testing/selftests/bpf/progs/bpf_tracing_net.h
++++ b/tools/testing/selftests/bpf/progs/bpf_tracing_net.h
+@@ -31,10 +31,12 @@
+ #define __SO_ACCEPTCON		(1 << 16)
+ 
+ #define IP_TOS			1
++#define IP_TRANSPARENT		19
+ 
+ #define SOL_IPV6		41
+ #define IPV6_TCLASS		67
+ #define IPV6_AUTOFLOWLABEL	70
++#define IPV6_TRANSPARENT	75
+ 
+ #define TC_ACT_UNSPEC		(-1)
+ #define TC_ACT_OK		0
+diff --git a/tools/testing/selftests/bpf/progs/setget_sockopt.c b/tools/testing/selftests/bpf/progs/setget_sockopt.c
+index 636a7cd8e2fa..d96e99b67aeb 100644
+--- a/tools/testing/selftests/bpf/progs/setget_sockopt.c
++++ b/tools/testing/selftests/bpf/progs/setget_sockopt.c
+@@ -69,12 +69,14 @@ static const struct sockopt_test sol_tcp_tests[] = {
+ 
+ static const struct sockopt_test sol_ip_tests[] = {
+ 	{ .opt = IP_TOS, .new = 0xe1, .expected = 0xe1, .tcp_expected = 0xe0, },
++	{ .opt = IP_TRANSPARENT, .flip = 1, },
+ 	{ .opt = 0, },
+ };
+ 
+ static const struct sockopt_test sol_ipv6_tests[] = {
+ 	{ .opt = IPV6_TCLASS, .new = 0xe1, .expected = 0xe1, .tcp_expected = 0xe0, },
+ 	{ .opt = IPV6_AUTOFLOWLABEL, .flip = 1, },
++	{ .opt = IPV6_TRANSPARENT, .flip = 1, },
+ 	{ .opt = 0, },
+ };
+ 
+-- 
+2.55.0
+

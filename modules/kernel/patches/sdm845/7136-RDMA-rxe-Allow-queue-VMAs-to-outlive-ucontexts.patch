@@ -1,0 +1,81 @@
+From 22fe73aef39f274417f262aee3bc6c907e5f75ae Mon Sep 17 00:00:00 2001
+From: Jiri Pirko <jiri@nvidia.com>
+Date: Thu, 16 Jul 2026 15:23:13 +0200
+Subject: [PATCH 07136/15333] RDMA/rxe: Allow queue VMAs to outlive ucontexts
+
+Prepare queue mappings for asynchronous ucontext disassociation during
+device disable. Rely on the VMA page references to preserve mapped
+memory until the final unmap.
+
+Signed-off-by: Jiri Pirko <jiri@nvidia.com>
+Link: https://patch.msgid.link/20260716132316.1495242-13-jiri@resnulli.us
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/sw/rxe/rxe_mmap.c | 35 ++--------------------------
+ 1 file changed, 2 insertions(+), 33 deletions(-)
+
+diff --git a/drivers/infiniband/sw/rxe/rxe_mmap.c b/drivers/infiniband/sw/rxe/rxe_mmap.c
+index 7f723a2f3700..a4ead89ccbd3 100644
+--- a/drivers/infiniband/sw/rxe/rxe_mmap.c
++++ b/drivers/infiniband/sw/rxe/rxe_mmap.c
+@@ -11,7 +11,6 @@
+ 
+ #include "rxe.h"
+ #include "rxe_loc.h"
+-#include "rxe_queue.h"
+ 
+ void rxe_mmap_release(struct kref *ref)
+ {
+@@ -30,29 +29,6 @@ void rxe_mmap_release(struct kref *ref)
+ 	kfree(ip);
+ }
+ 
+-/*
+- * open and close keep track of how many times the memory region is mapped,
+- * to avoid releasing it.
+- */
+-static void rxe_vma_open(struct vm_area_struct *vma)
+-{
+-	struct rxe_mmap_info *ip = vma->vm_private_data;
+-
+-	kref_get(&ip->ref);
+-}
+-
+-static void rxe_vma_close(struct vm_area_struct *vma)
+-{
+-	struct rxe_mmap_info *ip = vma->vm_private_data;
+-
+-	kref_put(&ip->ref, rxe_mmap_release);
+-}
+-
+-static const struct vm_operations_struct rxe_vm_ops = {
+-	.open = rxe_vma_open,
+-	.close = rxe_vma_close,
+-};
+-
+ /**
+  * rxe_mmap - create a new mmap region
+  * @context: the IB user context of the process making the mmap() call
+@@ -106,17 +82,10 @@ int rxe_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
+ 	list_del_init(&ip->pending_mmaps);
+ 	spin_unlock_bh(&rxe->pending_lock);
+ 
+-	vma->vm_ops = &rxe_vm_ops;
+-	vma->vm_private_data = ip;
+-
+ 	ret = remap_vmalloc_range(vma, ip->obj, 0);
+-	if (ret) {
+-		vma->vm_private_data = NULL;
+-		vma->vm_ops = NULL;
+-		kref_put(&ip->ref, rxe_mmap_release);
++	kref_put(&ip->ref, rxe_mmap_release);
++	if (ret)
+ 		rxe_dbg_dev(rxe, "err %d from remap_vmalloc_range\n", ret);
+-		goto done;
+-	}
+ 
+ done:
+ 	return ret;
+-- 
+2.55.0
+

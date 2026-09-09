@@ -1,0 +1,36 @@
+From 1f3c3fa76ddbc2eb92b60c5d4db24d7f702a7811 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 7 Aug 2026 15:16:52 +0700
+Subject: [PATCH 12970/15333] watchdog: aspeed: Propagate errors from optional
+ IRQ lookup
+
+platform_get_irq_optional() returns a positive IRQ number on success or
+a negative error code on failure. For an optional IRQ, -ENXIO indicates
+that no IRQ is available, while other errors should be propagated.
+
+Propagate errors such as -EPROBE_DEFER and -EINVAL instead of continuing
+probe without the IRQ.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://lore.kernel.org/r/20260807081652.38692-4-phucduc.bui@gmail.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/watchdog/aspeed_wdt.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/watchdog/aspeed_wdt.c b/drivers/watchdog/aspeed_wdt.c
+index c9e79851504c..48454ac86074 100644
+--- a/drivers/watchdog/aspeed_wdt.c
++++ b/drivers/watchdog/aspeed_wdt.c
+@@ -429,6 +429,8 @@ static int aspeed_wdt_probe(struct platform_device *pdev)
+ 	if (wdt->cfg->irq_mask) {
+ 		int irq = platform_get_irq_optional(pdev, 0);
+ 
++		if (irq < 0 && irq != -ENXIO)
++			return irq;
+ 		if (irq > 0) {
+ 			ret = devm_request_irq(dev, irq, aspeed_wdt_irq,
+ 					       IRQF_SHARED, dev_name(dev),
+-- 
+2.55.0
+

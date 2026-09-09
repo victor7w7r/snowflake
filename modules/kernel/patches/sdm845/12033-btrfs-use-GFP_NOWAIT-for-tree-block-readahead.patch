@@ -1,0 +1,37 @@
+From 536e94a4c347d26aaac0bb1a2ef879d0743ac234 Mon Sep 17 00:00:00 2001
+From: Boris Burkov <boris@bur.io>
+Date: Tue, 21 Jul 2026 15:42:15 -0700
+Subject: [PATCH 12033/15333] btrfs: use GFP_NOWAIT for tree block readahead
+
+extent_buffer readahead should not be able to painfully stall a
+search_slot and hog tree locks by getting stuck in direct reclaim.
+
+If the allocation fails, that is fine, we simply fail to do the
+readahead in that case.
+
+Reviewed-by: Jeff Layton <jlayton@kernel.org>
+Reviewed-by: Filipe Manana <fdmanana@suse.com>
+Signed-off-by: Boris Burkov <boris@bur.io>
+Reviewed-by: David Sterba <dsterba@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/extent_io.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/fs/btrfs/extent_io.c b/fs/btrfs/extent_io.c
+index ee8b062a3b64..fa9f45cd7652 100644
+--- a/fs/btrfs/extent_io.c
++++ b/fs/btrfs/extent_io.c
+@@ -5056,7 +5056,8 @@ void btrfs_readahead_tree_block(struct btrfs_fs_info *fs_info,
+ 		.level = level,
+ 		.transid = gen
+ 	};
+-	struct btrfs_eb_prealloc pa = { 0 };
++	/* Readahead is best effort so prefer to fail rather than block in reclaim. */
++	struct btrfs_eb_prealloc pa = { .supports_nowait = true };
+ 	struct extent_buffer *eb;
+ 	int ret;
+ 
+-- 
+2.55.0
+

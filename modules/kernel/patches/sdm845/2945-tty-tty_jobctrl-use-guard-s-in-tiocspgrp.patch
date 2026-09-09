@@ -1,0 +1,66 @@
+From 7a52545d37eb805eb1f3c7e03ff336b12c12f5af Mon Sep 17 00:00:00 2001
+From: John de la Garza <john@jjdev.com>
+Date: Tue, 30 Jun 2026 20:27:17 -0700
+Subject: [PATCH 02945/15333] tty: tty_jobctrl: use guard()s in tiocspgrp()
+
+Convert the manual spin_lock_irq()/rcu_read_lock() nesting in tiocspgrp()
+to scoped guard()s. This drops the out_unlock and out_unlock_ctrl labels
+and lets the error paths return directly.
+
+No functional change intended.
+
+Signed-off-by: John de la Garza <john@jjdev.com>
+Reviewed-by: Jiri Slaby <jirislaby@kernel.org>
+Link: https://patch.msgid.link/20260701030139.3189030-1-john@jjdev.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/tty_jobctrl.c | 26 ++++++++++----------------
+ 1 file changed, 10 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/tty/tty_jobctrl.c b/drivers/tty/tty_jobctrl.c
+index ef8741c3e662..583e2412a47b 100644
+--- a/drivers/tty/tty_jobctrl.c
++++ b/drivers/tty/tty_jobctrl.c
+@@ -506,29 +506,23 @@ static int tiocspgrp(struct tty_struct *tty, struct tty_struct *real_tty, pid_t
+ 	if (pgrp_nr < 0)
+ 		return -EINVAL;
+ 
+-	spin_lock_irq(&real_tty->ctrl.lock);
++	guard(spinlock_irq)(&real_tty->ctrl.lock);
+ 	if (!current->signal->tty ||
+ 	    (current->signal->tty != real_tty) ||
+-	    (real_tty->ctrl.session != task_session(current))) {
+-		retval = -ENOTTY;
+-		goto out_unlock_ctrl;
+-	}
+-	rcu_read_lock();
++	    (real_tty->ctrl.session != task_session(current)))
++		return -ENOTTY;
++
++	guard(rcu)();
+ 	pgrp = find_vpid(pgrp_nr);
+-	retval = -ESRCH;
+ 	if (!pgrp)
+-		goto out_unlock;
+-	retval = -EPERM;
++		return -ESRCH;
+ 	if (session_of_pgrp(pgrp) != task_session(current))
+-		goto out_unlock;
+-	retval = 0;
++		return -EPERM;
++
+ 	put_pid(real_tty->ctrl.pgrp);
+ 	real_tty->ctrl.pgrp = get_pid(pgrp);
+-out_unlock:
+-	rcu_read_unlock();
+-out_unlock_ctrl:
+-	spin_unlock_irq(&real_tty->ctrl.lock);
+-	return retval;
++
++	return 0;
+ }
+ 
+ /**
+-- 
+2.55.0
+

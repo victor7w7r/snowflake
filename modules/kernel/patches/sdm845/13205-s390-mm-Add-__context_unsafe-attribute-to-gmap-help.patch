@@ -1,0 +1,67 @@
+From fa25991cbf7576d65c6603387df26e9cf38f785c Mon Sep 17 00:00:00 2001
+From: Heiko Carstens <hca@linux.ibm.com>
+Date: Mon, 3 Aug 2026 19:21:43 +0200
+Subject: [PATCH 13205/15333] s390/mm: Add __context_unsafe() attribute to gmap
+ helper functions
+
+Disable context analysis for various gmap helper functions to get rid
+of a few warnings:
+
+arch/s390/mm/gmap_helpers.c:80:1: warning: spinlock 'ptl' is not held on every path through here
+arch/s390/mm/gmap_helpers.c:116:2: warning: releasing spinlock 'ptl' that was not held
+arch/s390/mm/gmap_helpers.c:186:2: warning: releasing spinlock 'ptl' that was not held
+
+Use __context_unsafe() to give a short comment why for function context
+analysis is disabled.
+
+try_get_locked_pte() is disabled since it may return a nonull value
+regardless if it returns with a lock held or not.
+
+This cannot be reflected with the context analysis attributes. It is
+however possible to workaround this e.g. by adding a another `contended`
+function parameter, however this would lead to the next problem:
+pte_unmap_unlock() is a macro and therefore doesn't come with the
+required context analysis attribute to address this.
+
+For that reason also disable context analysis for
+gmap_helper_zap_one_page() and gmap_helper_try_set_pte_unused()
+until this has been addressed.
+
+Acked-by: Claudio Imbrenda <imbrenda@linux.ibm.com>
+Signed-off-by: Heiko Carstens <hca@linux.ibm.com>
+Signed-off-by: Vasily Gorbik <gor@linux.ibm.com>
+---
+ arch/s390/mm/gmap_helpers.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/s390/mm/gmap_helpers.c b/arch/s390/mm/gmap_helpers.c
+index d564cdefb90f..59416aca6ecb 100644
+--- a/arch/s390/mm/gmap_helpers.c
++++ b/arch/s390/mm/gmap_helpers.c
+@@ -40,6 +40,7 @@
+  *   and locked.
+  */
+ pte_t *try_get_locked_pte(struct mm_struct *mm, unsigned long vmaddr, spinlock_t **ptl)
++__context_unsafe(/* Returns nonnull if lock taken or not taken */)
+ {
+ 	pmd_t *pmdp, pmd, pmdval;
+ 	pud_t *pudp, pud;
+@@ -90,6 +91,7 @@ EXPORT_SYMBOL_GPL(try_get_locked_pte);
+  * Context: needs to be called while holding the mmap lock.
+  */
+ void gmap_helper_zap_one_page(struct mm_struct *mm, unsigned long vmaddr)
++__context_unsafe(/* pte_unmap_unlock() not instrumented */)
+ {
+ 	struct vm_area_struct *vma;
+ 	spinlock_t *ptl;	/* Lock for the host (userspace) page table */
+@@ -161,6 +163,7 @@ EXPORT_SYMBOL_GPL(gmap_helper_discard);
+  *          disabled.
+  */
+ void gmap_helper_try_set_pte_unused(struct mm_struct *mm, unsigned long vmaddr)
++__context_unsafe(/* pte_unmap_unlock() not instrumented */)
+ {
+ 	spinlock_t *ptl;	/* Lock for the host (userspace) page table */
+ 	pte_t *ptep;
+-- 
+2.55.0
+

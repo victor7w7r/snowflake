@@ -1,0 +1,105 @@
+From ba0f097418c7d58cbcfaaab5ddb46e2b9576974c Mon Sep 17 00:00:00 2001
+From: Benjamin Coddington <ben.coddington@hammerspace.com>
+Date: Thu, 25 Jun 2026 08:05:48 -0400
+Subject: [PATCH 14489/15333] pNFS: report clora_changed in the
+ cb_layoutrecall_file tracepoint
+
+A CB_LAYOUTRECALL carries the clora_changed flag (RFC 8881, Section
+20.3.3), which tells the client whether the server is changing the
+layout (and therefore whether the client should flush modified data to
+the storage devices before returning, or stop writing to them and go
+through the metadata server). The client decodes this into
+cbl_layoutchanged, but it is otherwise invisible.
+
+Give nfs4_cb_layoutrecall_file its own event definition and report
+clora_changed, so the intent of a recall can be observed in a trace.
+
+Signed-off-by: Benjamin Coddington <bcodding@hammerspace.com>
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ fs/nfs/callback_proc.c |  2 +-
+ fs/nfs/nfs4trace.h     | 55 +++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 55 insertions(+), 2 deletions(-)
+
+diff --git a/fs/nfs/callback_proc.c b/fs/nfs/callback_proc.c
+index 10f2354ba304..f5cf76d36367 100644
+--- a/fs/nfs/callback_proc.c
++++ b/fs/nfs/callback_proc.c
+@@ -317,7 +317,7 @@ static u32 initiate_file_draining(struct nfs_client *clp,
+ 	nfs_iput_and_deactive(ino);
+ out_noput:
+ 	trace_nfs4_cb_layoutrecall_file(clp, &args->cbl_fh, ino,
+-			&args->cbl_stateid, -rv);
++			&args->cbl_stateid, args->cbl_layoutchanged, -rv);
+ 	return rv;
+ }
+ 
+diff --git a/fs/nfs/nfs4trace.h b/fs/nfs/nfs4trace.h
+index 1ed677810d9d..e679507eccb6 100644
+--- a/fs/nfs/nfs4trace.h
++++ b/fs/nfs/nfs4trace.h
+@@ -1515,7 +1515,60 @@ DECLARE_EVENT_CLASS(nfs4_inode_stateid_callback_event,
+ 			), \
+ 			TP_ARGS(clp, fhandle, inode, stateid, error))
+ DEFINE_NFS4_INODE_STATEID_CALLBACK_EVENT(nfs4_cb_recall);
+-DEFINE_NFS4_INODE_STATEID_CALLBACK_EVENT(nfs4_cb_layoutrecall_file);
++
++TRACE_EVENT(nfs4_cb_layoutrecall_file,
++		TP_PROTO(
++			const struct nfs_client *clp,
++			const struct nfs_fh *fhandle,
++			const struct inode *inode,
++			const nfs4_stateid *stateid,
++			unsigned int changed,
++			int error
++		),
++
++		TP_ARGS(clp, fhandle, inode, stateid, changed, error),
++
++		TP_STRUCT__entry(
++			__field(unsigned long, error)
++			__field(dev_t, dev)
++			__field(u32, fhandle)
++			__field(u64, fileid)
++			__string(dstaddr, clp ? clp->cl_hostname : "unknown")
++			__field(int, stateid_seq)
++			__field(u32, stateid_hash)
++			__field(unsigned int, changed)
++		),
++
++		TP_fast_assign(
++			__entry->error = error < 0 ? -error : 0;
++			__entry->fhandle = nfs_fhandle_hash(fhandle);
++			if (!IS_ERR_OR_NULL(inode)) {
++				__entry->fileid = inode->i_ino;
++				__entry->dev = inode->i_sb->s_dev;
++			} else {
++				__entry->fileid = 0;
++				__entry->dev = 0;
++			}
++			__assign_str(dstaddr);
++			__entry->stateid_seq =
++				be32_to_cpu(stateid->seqid);
++			__entry->stateid_hash =
++				nfs_stateid_hash(stateid);
++			__entry->changed = changed;
++		),
++
++		TP_printk(
++			"error=%ld (%s) fileid=%02x:%02x:%llu fhandle=0x%08x "
++			"stateid=%d:0x%08x dstaddr=%s clora_changed=%u",
++			-__entry->error,
++			show_nfs4_status(__entry->error),
++			MAJOR(__entry->dev), MINOR(__entry->dev),
++			(unsigned long long)__entry->fileid,
++			__entry->fhandle,
++			__entry->stateid_seq, __entry->stateid_hash,
++			__get_str(dstaddr), __entry->changed
++		)
++);
+ 
+ #define show_stateid_type(type) \
+ 	__print_symbolic(type, \
+-- 
+2.55.0
+

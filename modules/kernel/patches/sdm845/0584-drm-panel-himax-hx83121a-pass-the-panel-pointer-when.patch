@@ -1,0 +1,71 @@
+From ae8dbbe8955d7470dd41e101b852fd1a70f62930 Mon Sep 17 00:00:00 2001
+From: Icenowy Zheng <zhengxingda@iscas.ac.cn>
+Date: Tue, 9 Jun 2026 00:26:21 +0800
+Subject: [PATCH 00584/15333] drm/panel: himax-hx83121a: pass the panel pointer
+ when creating BL
+
+As backlight powering on/off support will be added, more fields of the
+panel context will be accessed in the backlight update function.
+
+Pass the whole panel struct instead of the DSI device when creating the
+backlight device.
+
+Signed-off-by: Icenowy Zheng <zhengxingda@iscas.ac.cn>
+Reviewed-by: Neil Armstrong <neil.armstrong@linaro.org>
+Signed-off-by: Neil Armstrong <neil.armstrong@linaro.org>
+Link: https://patch.msgid.link/20260608162622.403713-2-zhengxingda@iscas.ac.cn
+---
+ drivers/gpu/drm/panel/panel-himax-hx83121a.c | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-himax-hx83121a.c b/drivers/gpu/drm/panel/panel-himax-hx83121a.c
+index bed79aa06f46..1a7e0125bced 100644
+--- a/drivers/gpu/drm/panel/panel-himax-hx83121a.c
++++ b/drivers/gpu/drm/panel/panel-himax-hx83121a.c
+@@ -193,10 +193,11 @@ static const struct drm_panel_funcs himax_panel_funcs = {
+ 
+ static int himax_bl_update_status(struct backlight_device *bl)
+ {
+-	struct mipi_dsi_device *dsi = bl_get_data(bl);
++	struct himax *ctx = bl_get_data(bl);
+ 	u16 brightness = backlight_get_brightness(bl);
+ 	/* TODO: brightness to raw map table */
+-	return mipi_dsi_dcs_set_display_brightness_large(dsi, brightness);
++	return mipi_dsi_dcs_set_display_brightness_large(to_primary_dsi(ctx),
++							 brightness);
+ }
+ 
+ static const struct backlight_ops himax_bl_ops = {
+@@ -205,9 +206,9 @@ static const struct backlight_ops himax_bl_ops = {
+ };
+ 
+ static struct backlight_device *
+-himax_create_backlight(struct mipi_dsi_device *dsi)
++himax_create_backlight(struct himax *ctx)
+ {
+-	struct device *dev = &dsi->dev;
++	struct device *dev = &to_primary_dsi(ctx)->dev;
+ 	const struct backlight_properties props = {
+ 		.type = BACKLIGHT_RAW,
+ 		.brightness = 512,
+@@ -215,7 +216,7 @@ himax_create_backlight(struct mipi_dsi_device *dsi)
+ 		.scale = BACKLIGHT_SCALE_NON_LINEAR,
+ 	};
+ 
+-	return devm_backlight_device_register(dev, dev_name(dev), dev, dsi,
++	return devm_backlight_device_register(dev, dev_name(dev), dev, ctx,
+ 					      &himax_bl_ops, &props);
+ }
+ 
+@@ -646,7 +647,7 @@ static int himax_probe(struct mipi_dsi_device *dsi)
+ 	ctx->panel.prepare_prev_first = true;
+ 
+ 	if (desc->has_dcs_backlight) {
+-		ctx->backlight = himax_create_backlight(to_primary_dsi(ctx));
++		ctx->backlight = himax_create_backlight(ctx);
+ 		if (IS_ERR(ctx->backlight))
+ 			return dev_err_probe(dev, PTR_ERR(ctx->backlight),
+ 					     "Failed to create backlight\n");
+-- 
+2.55.0
+

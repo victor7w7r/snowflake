@@ -1,0 +1,131 @@
+From 5994844195e9a2ead1d1f5ba65b653debb9f1e35 Mon Sep 17 00:00:00 2001
+From: Chinmaya Kajagar <chinmayk@linux.ibm.com>
+Date: Tue, 28 Jul 2026 06:48:55 +0200
+Subject: [PATCH 08042/15333] scsi: zfcp: Enhance fsf status read buffer
+ tracing
+
+SRB trace records are logged through hba trace event zfcp_dbf_hba_fsf_uss.
+Presently, this trace event has few missing fields in fsf status read
+buffer trace records. To fully trace incoming fsf status read buffer (SRB),
+the remaining fields are needed to be added to zfcp_dbf_hba_uss structure.
+
+Append all the remaining SRB fields to the existing unsolicited status
+trace records.
+
+Extend driver to get 3 bytes source id s_id value from fsf status read
+buffer's existing reserved field res3.
+
+To display this change, we also change the external tool `zfcpdbf` in the
+s390-tools package.
+
+zfcpdbf tool trace example for HBA area after changes:
+
+Timestamp      : 2025-08-22-05:52:04:171750
+Area           : HBA
+Subarea        : 00
+Level          : 2
+Exception      : -
+CPU ID         : 0003
+Caller         : 0x0000021e278c07c8
+Record ID      : 2
+Tag            : fssrh_4
+Description    : fssrh_4 HBA, FSF unsolicited status
+Request ID     : 0x0000000000004bfc
+Request status : 0x00000000
+FSF cmnd       : 0x00006305
+FSF sequence no: 0x00000000
+SRB stat type  : 0x00000002
+SRB stat sub   : 0x00000000
+SRB D_ID       : 0x00fffffd
+SRB LUN        : 0x0000000000000000
+SRB q-design.  : 0x0000000000000000
+SRB length     : 0x0000004c
+SRB res1       : 00000000
+SRB res2       : 00
+SRB class      : 0x00000000
+SRB res3       : 00
+SRB S_ID       : 0x0033c048
+SRB res4       : 00000000 00000000 00000000 00000000
+                 00000000
+SRB pay length : 12
+Payload time   : 2025-08-22-05:52:04:171743
+SRB info       : 6104000c 0033c024 0033c02e
+
+Reviewed-by: Benjamin Block <bblock@linux.ibm.com>
+Signed-off-by: Chinmaya Kajagar <chinmayk@linux.ibm.com>
+Link: https://patch.msgid.link/20260728044857.2532646-2-niharp@linux.ibm.com
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+---
+ drivers/s390/scsi/zfcp_dbf.c |  7 +++++++
+ drivers/s390/scsi/zfcp_dbf.h | 14 ++++++++++++++
+ drivers/s390/scsi/zfcp_fsf.h |  4 +++-
+ 3 files changed, 24 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/s390/scsi/zfcp_dbf.c b/drivers/s390/scsi/zfcp_dbf.c
+index 71f625926ae1..89b859176b8b 100644
+--- a/drivers/s390/scsi/zfcp_dbf.c
++++ b/drivers/s390/scsi/zfcp_dbf.c
+@@ -220,6 +220,13 @@ void zfcp_dbf_hba_fsf_uss(char *tag, struct zfcp_fsf_req *req)
+ 	rec->u.uss.lun = srb->fcp_lun;
+ 	memcpy(&rec->u.uss.queue_designator, &srb->queue_designator,
+ 	       sizeof(rec->u.uss.queue_designator));
++	rec->u.uss.length = srb->length;
++	rec->u.uss.res1 = srb->res1;
++	rec->u.uss.res2 = srb->res2;
++	rec->u.uss.class = srb->class;
++	rec->u.uss.res3 = srb->res3;
++	rec->u.uss.s_id = ntoh24(srb->s_id);
++	memcpy(&rec->u.uss.res4, &srb->res4, sizeof(rec->u.uss.res4));
+ 
+ 	/* status read buffer payload length */
+ 	rec->pl_len = (!srb->length) ? 0 : srb->length -
+diff --git a/drivers/s390/scsi/zfcp_dbf.h b/drivers/s390/scsi/zfcp_dbf.h
+index 4d1435c573bc..44ebad8c761c 100644
+--- a/drivers/s390/scsi/zfcp_dbf.h
++++ b/drivers/s390/scsi/zfcp_dbf.h
+@@ -149,6 +149,13 @@ struct zfcp_dbf_hba_res {
+  * @d_id: destination ID
+  * @lun: logical unit number
+  * @queue_designator: queue designator
++ * @length: buffer length
++ * @res1: reserved field 1
++ * @res2: reserved field 2
++ * @class: class of service
++ * @res3: reserved field 3
++ * @s_id: source ID
++ * @res4: reserved field 4
+  */
+ struct zfcp_dbf_hba_uss {
+ 	u32 status_type;
+@@ -156,6 +163,13 @@ struct zfcp_dbf_hba_uss {
+ 	u32 d_id;
+ 	u64 lun;
+ 	u64 queue_designator;
++	u32 length;
++	u32 res1;
++	u8 res2;
++	u32 class;
++	u8 res3;
++	u32 s_id;
++	u8 res4[20];
+ } __packed;
+ 
+ /**
+diff --git a/drivers/s390/scsi/zfcp_fsf.h b/drivers/s390/scsi/zfcp_fsf.h
+index 5e6b601af980..4b92e85ec71d 100644
+--- a/drivers/s390/scsi/zfcp_fsf.h
++++ b/drivers/s390/scsi/zfcp_fsf.h
+@@ -246,7 +246,9 @@ struct fsf_status_read_buffer {
+ 	u8 d_id[3];
+ 	u32 class;
+ 	u64 fcp_lun;
+-	u8  res3[24];
++	u8 res3;
++	u8 s_id[3];
++	u8 res4[20];
+ 	union {
+ 		u8  data[FSF_STATUS_READ_PAYLOAD_SIZE];
+ 		u32 word[FSF_STATUS_READ_PAYLOAD_SIZE/sizeof(u32)];
+-- 
+2.55.0
+

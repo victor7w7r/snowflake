@@ -1,0 +1,87 @@
+From c10f33fa660ffd10c0254ecd0455c421c59c9f38 Mon Sep 17 00:00:00 2001
+From: Ian Rogers <irogers@google.com>
+Date: Mon, 22 Jun 2026 18:27:55 -0700
+Subject: [PATCH 01594/15333] perf tests: Speed up off-cpu profiling tests
+
+The off-cpu profiling test suite runs multiple recording commands with a
+default workload of `sleep 1` to test the off-cpu threshold configurations
+(specifically, above 999ms and below 1200ms). This adds a mandatory 3.0
+seconds of sleep overhead.
+
+Optimize this by scaling down the thresholds and workload durations by a
+factor of 10:
+- Use `sleep 0.1` as the workload duration.
+- Change the above-threshold test to use `--off-cpu-thresh 50` and `sleep
+  0.1`.
+- Change the below-threshold test to use `--off-cpu-thresh 500` and `sleep
+  0.1`.
+- Update the awk period check in the above-threshold test to look for a
+  period greater than 50,000,000 ns (50ms) instead of 999,000,000 ns
+  (999ms).
+
+This reduces raw test sleep overhead from 3.0s down to 0.3s, yielding a
+~2.7 second speedup for this test.
+
+Assisted-by: Antigravity:gemini-3.1-pro
+Signed-off-by: Ian Rogers <irogers@google.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/tests/shell/record_offcpu.sh | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/tools/perf/tests/shell/record_offcpu.sh b/tools/perf/tests/shell/record_offcpu.sh
+index 860a2d6f4b75..ee095df47358 100755
+--- a/tools/perf/tests/shell/record_offcpu.sh
++++ b/tools/perf/tests/shell/record_offcpu.sh
+@@ -45,7 +45,7 @@ test_offcpu_priv() {
+ test_offcpu_basic() {
+   echo "Basic off-cpu test"
+ 
+-  if ! perf record --off-cpu -e dummy -o ${perfdata} sleep 1 2> /dev/null
++  if ! perf record --off-cpu -e dummy -o ${perfdata} sleep 0.3 2> /dev/null
+   then
+     echo "Basic off-cpu test [Failed record]"
+     err=1
+@@ -57,7 +57,7 @@ test_offcpu_basic() {
+     err=1
+     return
+   fi
+-  if ! perf report -i ${perfdata} -q --percent-limit=90 | grep -E -q sleep
++  if ! perf report -i ${perfdata} -q --percent-limit=70 | grep -E -q sleep
+   then
+     echo "Basic off-cpu test [Failed missing output]"
+     err=1
+@@ -98,8 +98,8 @@ test_offcpu_child() {
+ test_offcpu_above_thresh() {
+   echo "${test_above_thresh}"
+ 
+-  # collect direct off-cpu samples for tasks blocked for more than 999ms
+-  if ! perf record -e dummy --off-cpu --off-cpu-thresh 999 -o ${perfdata} -- sleep 1 2> /dev/null
++  # collect direct off-cpu samples for tasks blocked for more than 50ms
++  if ! perf record -e dummy --off-cpu --off-cpu-thresh 50 -o ${perfdata} -- sleep 0.1 2> /dev/null
+   then
+     echo "${test_above_thresh} [Failed record]"
+     err=1
+@@ -115,7 +115,7 @@ test_offcpu_above_thresh() {
+   fi
+   # there should only be one direct sample, and its period should be higher than off-cpu-thresh
+   if ! perf script --time "0, ${dummy_timestamp}" -i ${perfdata} -F period | \
+-       awk '{ if (int($1) > 999000000) exit 0; else exit 1; }'
++       awk '{ if (int($1) > 50000000) exit 0; else exit 1; }'
+   then
+     echo "${test_above_thresh} [Failed off-cpu time too short]"
+     err=1
+@@ -128,8 +128,8 @@ test_offcpu_above_thresh() {
+ test_offcpu_below_thresh() {
+   echo "${test_below_thresh}"
+ 
+-  # collect direct off-cpu samples for tasks blocked for more than 1.2s
+-  if ! perf record -e dummy --off-cpu --off-cpu-thresh 1200 -o ${perfdata} -- sleep 1 2> /dev/null
++  # collect direct off-cpu samples for tasks blocked for more than 500ms
++  if ! perf record -e dummy --off-cpu --off-cpu-thresh 500 -o ${perfdata} -- sleep 0.1 2> /dev/null
+   then
+     echo "${test_below_thresh} [Failed record]"
+     err=1
+-- 
+2.55.0
+

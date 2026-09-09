@@ -1,0 +1,79 @@
+From 3e8ca6691e9d6695e36cafa84217bb8b955face1 Mon Sep 17 00:00:00 2001
+From: Juergen Gross <jgross@suse.com>
+Date: Mon, 29 Jun 2026 08:04:54 +0200
+Subject: [PATCH 02058/15333] EDAC: Stop using 32-bit MSR interfaces
+
+The 32-bit MSR interfaces rdmsr_safe() and wrmsr_safe() are planned to
+be removed. Use the related 64-bit variants instead.
+
+Signed-off-by: Juergen Gross <jgross@suse.com>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Reviewed-by: Qiuxu Zhuo <qiuxu.zhuo@intel.com>
+Cc: Jason Baron <jbaron@akamai.com>
+Cc: Tony Luck <tony.luck@intel.com>
+Cc: Yazen Ghannam <yazen.ghannam@amd.com>
+Cc: linux-edac@vger.kernel.org
+Link: https://patch.msgid.link/20260629060526.3638272-4-jgross@suse.com
+---
+ drivers/edac/ie31200_edac.c | 10 +++++-----
+ drivers/edac/mce_amd.c      |  8 ++++----
+ 2 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/edac/ie31200_edac.c b/drivers/edac/ie31200_edac.c
+index e3bd6436669b..94ab80197c2e 100644
+--- a/drivers/edac/ie31200_edac.c
++++ b/drivers/edac/ie31200_edac.c
+@@ -261,11 +261,11 @@ static void ie31200_clear_error_info(struct mem_ctl_info *mci)
+ 	 * the ECC error log registers in all memory controllers.
+ 	 */
+ 	if (cfg->msr_clear_eccerrlog_offset) {
+-		if (wrmsr_safe(cfg->msr_clear_eccerrlog_offset,
+-			       cfg->reg_eccerrlog_ce_mask |
+-			       cfg->reg_eccerrlog_ce_ovfl_mask |
+-			       cfg->reg_eccerrlog_ue_mask |
+-			       cfg->reg_eccerrlog_ue_ovfl_mask, 0) < 0)
++		if (wrmsrq_safe(cfg->msr_clear_eccerrlog_offset,
++			        cfg->reg_eccerrlog_ce_mask |
++			        cfg->reg_eccerrlog_ce_ovfl_mask |
++			        cfg->reg_eccerrlog_ue_mask |
++			        cfg->reg_eccerrlog_ue_ovfl_mask) < 0)
+ 			ie31200_printk(KERN_ERR, "Failed to wrmsr.\n");
+ 
+ 		return;
+diff --git a/drivers/edac/mce_amd.c b/drivers/edac/mce_amd.c
+index bd252cb3c38e..7aee57a25b68 100644
+--- a/drivers/edac/mce_amd.c
++++ b/drivers/edac/mce_amd.c
+@@ -806,7 +806,7 @@ amd_decode_mce(struct notifier_block *nb, unsigned long val, void *data)
+ 	struct mce *m = (struct mce *)data;
+ 	struct mce_hw_err *err = to_mce_hw_err(m);
+ 	unsigned int fam = x86_family(m->cpuid);
+-	u32 mca_config_lo = 0, dummy;
++	u64 mca_config = 0;
+ 	int ecc;
+ 
+ 	if (m->kflags & MCE_HANDLED_CEC)
+@@ -826,9 +826,9 @@ amd_decode_mce(struct notifier_block *nb, unsigned long val, void *data)
+ 		((m->status & MCI_STATUS_PCC)	? "PCC"	  : "-"));
+ 
+ 	if (boot_cpu_has(X86_FEATURE_SMCA)) {
+-		rdmsr_safe(MSR_AMD64_SMCA_MCx_CONFIG(m->bank), &mca_config_lo, &dummy);
++		rdmsrq_safe(MSR_AMD64_SMCA_MCx_CONFIG(m->bank), &mca_config);
+ 
+-		if (mca_config_lo & MCI_CONFIG_MCAX)
++		if (mca_config & MCI_CONFIG_MCAX)
+ 			pr_cont("|%s", ((m->status & MCI_STATUS_TCC) ? "TCC" : "-"));
+ 
+ 		pr_cont("|%s", ((m->status & MCI_STATUS_SYNDV) ? "SyndV" : "-"));
+@@ -863,7 +863,7 @@ amd_decode_mce(struct notifier_block *nb, unsigned long val, void *data)
+ 
+ 		if (m->status & MCI_STATUS_SYNDV) {
+ 			pr_cont(", Syndrome: 0x%016llx\n", m->synd);
+-			if (mca_config_lo & MCI_CONFIG_FRUTEXT) {
++			if (mca_config & MCI_CONFIG_FRUTEXT) {
+ 				char frutext[17];
+ 
+ 				frutext[16] = '\0';
+-- 
+2.55.0
+

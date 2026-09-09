@@ -1,0 +1,99 @@
+From 7db324fbee6c5fe19ea99c8183d2e1cb6102f109 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Fri, 17 Jul 2026 18:05:31 +0800
+Subject: [PATCH 05519/15333] misc: Remove redundant dev_err()/dev_err_probe()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() and devm_request_threaded_irq()
+automatically log detailed error messages on failure. Remove the
+now-redundant driver-specific dev_err() and dev_err_probe() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://patch.msgid.link/20260717100533.601899-3-panchuang@vivo.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/misc/hi6421v600-irq.c | 5 +----
+ drivers/misc/mrvl_cn10k_dpi.c | 4 +---
+ drivers/misc/tps6594-esm.c    | 2 +-
+ drivers/misc/tps6594-pfsm.c   | 2 +-
+ drivers/misc/xilinx_sdfec.c   | 4 +---
+ 5 files changed, 5 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/misc/hi6421v600-irq.c b/drivers/misc/hi6421v600-irq.c
+index 5ba40222eb12..5f65ca91b342 100644
+--- a/drivers/misc/hi6421v600-irq.c
++++ b/drivers/misc/hi6421v600-irq.c
+@@ -274,11 +274,8 @@ static int hi6421v600_irq_probe(struct platform_device *pdev)
+ 					NULL,
+ 					IRQF_TRIGGER_LOW | IRQF_SHARED | IRQF_NO_SUSPEND,
+ 					"pmic", priv);
+-	if (ret < 0) {
+-		dev_err(dev, "Failed to start IRQ handling thread: error %d\n",
+-			ret);
++	if (ret < 0)
+ 		return ret;
+-	}
+ 
+ 	return 0;
+ }
+diff --git a/drivers/misc/mrvl_cn10k_dpi.c b/drivers/misc/mrvl_cn10k_dpi.c
+index 7d5433121ff6..d26c53af05eb 100644
+--- a/drivers/misc/mrvl_cn10k_dpi.c
++++ b/drivers/misc/mrvl_cn10k_dpi.c
+@@ -470,10 +470,8 @@ static int dpi_irq_init(struct dpipf *dpi)
+ 
+ 	ret = devm_request_irq(dev, pci_irq_vector(pdev, DPI_MBOX_PF_VF_INT_IDX),
+ 			       dpi_mbox_intr_handler, 0, "dpi-mbox", dpi);
+-	if (ret) {
+-		dev_err(dev, "DPI: request_irq failed for mbox; err=%d\n", ret);
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	dpi_reg_write(dpi, DPI_MBOX_VF_PF_INT_ENA_W1S, GENMASK_ULL(31, 0));
+ 
+diff --git a/drivers/misc/tps6594-esm.c b/drivers/misc/tps6594-esm.c
+index 2fbd3fbdf713..50e121669c6d 100644
+--- a/drivers/misc/tps6594-esm.c
++++ b/drivers/misc/tps6594-esm.c
+@@ -62,7 +62,7 @@ static int tps6594_esm_probe(struct platform_device *pdev)
+ 						tps6594_esm_isr, IRQF_ONESHOT,
+ 						pdev->resource[i].name, pdev);
+ 		if (ret)
+-			return dev_err_probe(dev, ret, "Failed to request irq\n");
++			return ret;
+ 	}
+ 
+ 	ret = regmap_set_bits(tps->regmap, TPS6594_REG_ESM_SOC_MODE_CFG,
+diff --git a/drivers/misc/tps6594-pfsm.c b/drivers/misc/tps6594-pfsm.c
+index 44fa81d6cec2..c3a0d6367f2c 100644
+--- a/drivers/misc/tps6594-pfsm.c
++++ b/drivers/misc/tps6594-pfsm.c
+@@ -308,7 +308,7 @@ static int tps6594_pfsm_probe(struct platform_device *pdev)
+ 						tps6594_pfsm_isr, IRQF_ONESHOT,
+ 						pdev->resource[i].name, pdev);
+ 		if (ret)
+-			return dev_err_probe(dev, ret, "Failed to request irq\n");
++			return ret;
+ 	}
+ 
+ 	platform_set_drvdata(pdev, pfsm);
+diff --git a/drivers/misc/xilinx_sdfec.c b/drivers/misc/xilinx_sdfec.c
+index 3135ba3a58ee..fe7bea3b14bf 100644
+--- a/drivers/misc/xilinx_sdfec.c
++++ b/drivers/misc/xilinx_sdfec.c
+@@ -1390,10 +1390,8 @@ static int xsdfec_probe(struct platform_device *pdev)
+ 		err = devm_request_threaded_irq(dev, xsdfec->irq, NULL,
+ 						xsdfec_irq_thread, IRQF_ONESHOT,
+ 						"xilinx-sdfec16", xsdfec);
+-		if (err < 0) {
+-			dev_err(dev, "unable to request IRQ%d", xsdfec->irq);
++		if (err < 0)
+ 			goto err_xsdfec_dev;
+-		}
+ 	}
+ 
+ 	err = ida_alloc(&dev_nrs, GFP_KERNEL);
+-- 
+2.55.0
+

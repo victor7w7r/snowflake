@@ -1,0 +1,210 @@
+From 2dd8c526a272433e0aaefc9db08296f742f2629c Mon Sep 17 00:00:00 2001
+From: Salih Erim <salih.erim@amd.com>
+Date: Wed, 24 Jun 2026 15:37:20 +0100
+Subject: [PATCH 02117/15333] iio: adc: versal-sysmon: add I2C driver
+
+Add an I2C transport driver for the Versal SysMon block. The SysMon
+provides an I2C slave interface that allows an external master to
+read voltage and temperature measurements through the same register
+map used by the MMIO path.
+
+The I2C command frame is an 8-byte structure containing a 4-byte data
+payload, a 2-byte register offset, and a 1-byte instruction field.
+Read operations send the frame with a read instruction, then receive
+a 4-byte response containing the register value.
+
+Events are not supported on the I2C path because there is no
+interrupt line and the I2C regmap backend cannot be called from
+atomic context.
+
+Co-developed-by: Conall O'Griofa <conall.ogriofa@amd.com>
+Signed-off-by: Conall O'Griofa <conall.ogriofa@amd.com>
+Signed-off-by: Salih Erim <salih.erim@amd.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@intel.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/adc/Kconfig             |  13 +++
+ drivers/iio/adc/Makefile            |   1 +
+ drivers/iio/adc/versal-sysmon-i2c.c | 134 ++++++++++++++++++++++++++++
+ 3 files changed, 148 insertions(+)
+ create mode 100644 drivers/iio/adc/versal-sysmon-i2c.c
+
+diff --git a/drivers/iio/adc/Kconfig b/drivers/iio/adc/Kconfig
+index d1d776a7a9ba..d1b198cb8a80 100644
+--- a/drivers/iio/adc/Kconfig
++++ b/drivers/iio/adc/Kconfig
+@@ -1993,6 +1993,19 @@ config VERSAL_SYSMON
+ 	  To compile this driver as a module, choose M here: the module
+ 	  will be called versal-sysmon.
+ 
++config VERSAL_SYSMON_I2C
++	tristate "AMD Versal SysMon I2C driver"
++	depends on I2C
++	select VERSAL_SYSMON_CORE
++	help
++	  Say yes here to have support for the AMD/Xilinx Versal System
++	  Monitor (SysMon) via I2C interface. This driver enables voltage
++	  and temperature monitoring when the Versal chip has SysMon
++	  configured with I2C access.
++
++	  To compile this driver as a module, choose M here: the module
++	  will be called versal-sysmon-i2c.
++
+ config VF610_ADC
+ 	tristate "Freescale vf610 ADC driver"
+ 	depends on HAS_IOMEM
+diff --git a/drivers/iio/adc/Makefile b/drivers/iio/adc/Makefile
+index 667f7e18506e..0f90b75577ff 100644
+--- a/drivers/iio/adc/Makefile
++++ b/drivers/iio/adc/Makefile
+@@ -171,6 +171,7 @@ obj-$(CONFIG_TWL4030_MADC) += twl4030-madc.o
+ obj-$(CONFIG_TWL6030_GPADC) += twl6030-gpadc.o
+ obj-$(CONFIG_VERSAL_SYSMON_CORE) += versal-sysmon-core.o
+ obj-$(CONFIG_VERSAL_SYSMON) += versal-sysmon.o
++obj-$(CONFIG_VERSAL_SYSMON_I2C) += versal-sysmon-i2c.o
+ obj-$(CONFIG_VF610_ADC) += vf610_adc.o
+ obj-$(CONFIG_VIPERBOARD_ADC) += viperboard_adc.o
+ obj-$(CONFIG_XILINX_AMS) += xilinx-ams.o
+diff --git a/drivers/iio/adc/versal-sysmon-i2c.c b/drivers/iio/adc/versal-sysmon-i2c.c
+new file mode 100644
+index 000000000000..e9a7629159ab
+--- /dev/null
++++ b/drivers/iio/adc/versal-sysmon-i2c.c
+@@ -0,0 +1,134 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * AMD Versal SysMon I2C driver
++ *
++ * Copyright (C) 2023 - 2026, Advanced Micro Devices, Inc.
++ */
++
++#include <linux/bits.h>
++#include <linux/err.h>
++#include <linux/i2c.h>
++#include <linux/mod_devicetable.h>
++#include <linux/module.h>
++#include <linux/regmap.h>
++#include <linux/types.h>
++#include <linux/unaligned.h>
++
++#include "versal-sysmon.h"
++
++#define SYSMON_I2C_INSTR_READ	BIT(2)
++#define SYSMON_I2C_INSTR_WRITE	BIT(3)
++
++/*
++ * I2C command frame layout (8 bytes):
++ *   [0..3] data payload (little-endian u32)
++ *   [4..5] register offset >> 2 (little-endian u16)
++ *   [6]    instruction (read/write)
++ *   [7]    reserved
++ */
++#define SYSMON_I2C_DATA_OFS	0
++#define SYSMON_I2C_REG_OFS	4
++#define SYSMON_I2C_INSTR_OFS	6
++
++static int sysmon_i2c_reg_read(void *context, unsigned int reg,
++			       unsigned int *val)
++{
++	struct i2c_client *client = context;
++	u8 write_buf[8] = { };
++	u8 read_buf[4];
++	int ret;
++
++	put_unaligned_le16(reg >> 2, &write_buf[SYSMON_I2C_REG_OFS]);
++	write_buf[SYSMON_I2C_INSTR_OFS] = SYSMON_I2C_INSTR_READ;
++
++	ret = i2c_master_send(client, write_buf, sizeof(write_buf));
++	if (ret < 0)
++		return ret;
++	if (ret != sizeof(write_buf))
++		return -EIO;
++
++	ret = i2c_master_recv(client, read_buf, sizeof(read_buf));
++	if (ret < 0)
++		return ret;
++	if (ret != sizeof(read_buf))
++		return -EIO;
++
++	*val = get_unaligned_le32(read_buf);
++
++	return 0;
++}
++
++static int sysmon_i2c_reg_write(void *context, unsigned int reg,
++				unsigned int val)
++{
++	struct i2c_client *client = context;
++	u8 write_buf[8] = { };
++	int ret;
++
++	put_unaligned_le32(val, &write_buf[SYSMON_I2C_DATA_OFS]);
++	put_unaligned_le16(reg >> 2, &write_buf[SYSMON_I2C_REG_OFS]);
++	write_buf[SYSMON_I2C_INSTR_OFS] = SYSMON_I2C_INSTR_WRITE;
++
++	ret = i2c_master_send(client, write_buf, sizeof(write_buf));
++	if (ret < 0)
++		return ret;
++	if (ret != sizeof(write_buf))
++		return -EIO;
++
++	return 0;
++}
++
++/*
++ * Almost all registers are volatile (live ADC readings, interrupt
++ * status). The rest are not accessed often enough to benefit from
++ * caching.
++ */
++static const struct regmap_config sysmon_i2c_regmap_config = {
++	.reg_bits = 32,
++	.val_bits = 32,
++	.reg_stride = SYSMON_REG_STRIDE,
++	.max_register = SYSMON_MAX_REG,
++	.reg_read = sysmon_i2c_reg_read,
++	.reg_write = sysmon_i2c_reg_write,
++};
++
++static int sysmon_i2c_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct regmap *regmap;
++
++	regmap = devm_regmap_init(dev, NULL, client, &sysmon_i2c_regmap_config);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++
++	/* I2C has no IRQ connection; events are not supported */
++	return devm_versal_sysmon_core_probe(dev, regmap);
++}
++
++static const struct of_device_id sysmon_i2c_of_match_table[] = {
++	{ .compatible = "xlnx,versal-sysmon" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, sysmon_i2c_of_match_table);
++
++static const struct i2c_device_id sysmon_i2c_id_table[] = {
++	{ .name = "versal-sysmon" },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, sysmon_i2c_id_table);
++
++static struct i2c_driver sysmon_i2c_driver = {
++	.probe = sysmon_i2c_probe,
++	.driver = {
++		.name = "versal-sysmon-i2c",
++		.of_match_table = sysmon_i2c_of_match_table,
++	},
++	.id_table = sysmon_i2c_id_table,
++};
++module_i2c_driver(sysmon_i2c_driver);
++
++MODULE_LICENSE("GPL");
++MODULE_DESCRIPTION("AMD Versal SysMon I2C Driver");
++MODULE_IMPORT_NS("VERSAL_SYSMON");
++MODULE_AUTHOR("Conall O'Griofa <conall.ogriofa@amd.com>");
++MODULE_AUTHOR("Salih Erim <salih.erim@amd.com>");
+-- 
+2.55.0
+

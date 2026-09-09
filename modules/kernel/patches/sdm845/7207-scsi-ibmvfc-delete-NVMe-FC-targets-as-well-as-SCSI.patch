@@ -1,0 +1,94 @@
+From e0fca728a89f14c2edd3e9f5343d0f019d8f50dd Mon Sep 17 00:00:00 2001
+From: Tyrel Datwyler <tyreld@linux.ibm.com>
+Date: Wed, 22 Jul 2026 17:01:37 -0700
+Subject: [PATCH 07207/15333] scsi: ibmvfc: delete NVMe/FC targets as well as
+ SCSI
+
+Extend target deletion paths to process NVMe targets as well as SCSI
+targets.
+
+Update link-down, and host reinitialization flows to walk both the SCSI
+and NVMe target lists when marking targets for deletion. This ensures
+that protocol-specific target state stays consistent across adapter
+resets and fabric events.
+
+Rename ibmvfc_relogin to ibmvfc_scsi_relogin as it acts on a scsi
+command.
+
+Signed-off-by: Tyrel Datwyler <tyreld@linux.ibm.com>
+Link: https://patch.msgid.link/20260723000149.969416-22-tyreld@linux.ibm.com
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+---
+ drivers/scsi/ibmvscsi/ibmvfc-core.c | 28 ++++++++++++++++++++++++++--
+ 1 file changed, 26 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/scsi/ibmvscsi/ibmvfc-core.c b/drivers/scsi/ibmvscsi/ibmvfc-core.c
+index 92c286cfc69c..1185d72a8a73 100644
+--- a/drivers/scsi/ibmvscsi/ibmvfc-core.c
++++ b/drivers/scsi/ibmvscsi/ibmvfc-core.c
+@@ -714,6 +714,8 @@ static void ibmvfc_link_down(struct ibmvfc_host *vhost,
+ 	scsi_block_requests(vhost->host);
+ 	list_for_each_entry(tgt, &vhost->scsi_scrqs.targets, queue)
+ 		ibmvfc_del_tgt(tgt);
++	list_for_each_entry(tgt, &vhost->nvme_scrqs.targets, queue)
++		ibmvfc_del_tgt(tgt);
+ 	ibmvfc_set_host_state(vhost, state);
+ 	ibmvfc_set_host_action(vhost, IBMVFC_HOST_ACTION_TGT_DEL);
+ 	vhost->events_to_log |= IBMVFC_AE_LINKDOWN;
+@@ -751,6 +753,12 @@ static void ibmvfc_init_host(struct ibmvfc_host *vhost)
+ 			else
+ 				ibmvfc_del_tgt(tgt);
+ 		}
++		list_for_each_entry(tgt, &vhost->nvme_scrqs.targets, queue) {
++			if (vhost->client_migrated)
++				tgt->need_login = 1;
++			else
++				ibmvfc_del_tgt(tgt);
++		}
+ 
+ 		scsi_block_requests(vhost->host);
+ 		ibmvfc_set_host_action(vhost, IBMVFC_HOST_ACTION_INIT);
+@@ -1870,7 +1878,7 @@ static void ibmvfc_log_error(struct ibmvfc_event *evt)
+  * @sdev:	scsi device struct
+  *
+  **/
+-static void ibmvfc_relogin(struct scsi_device *sdev)
++static void ibmvfc_scsi_relogin(struct scsi_device *sdev)
+ {
+ 	struct ibmvfc_host *vhost = shost_priv(sdev->host);
+ 	struct fc_rport *rport = starget_to_rport(scsi_target(sdev));
+@@ -1922,7 +1930,7 @@ static void ibmvfc_scsi_done(struct ibmvfc_event *evt)
+ 				memcpy(cmnd->sense_buffer, rsp->data.sense + rsp_len, sense_len);
+ 			if ((be16_to_cpu(vfc_cmd->status) & IBMVFC_VIOS_FAILURE) &&
+ 			    (be16_to_cpu(vfc_cmd->error) == IBMVFC_PLOGI_REQUIRED))
+-				ibmvfc_relogin(cmnd->device);
++				ibmvfc_scsi_relogin(cmnd->device);
+ 
+ 			if (!cmnd->result && (!scsi_get_resid(cmnd) || (rsp->flags & FCP_RESID_OVER)))
+ 				cmnd->result = (DID_ERROR << 16);
+@@ -3306,6 +3314,22 @@ static void ibmvfc_handle_async(struct ibmvfc_async_crq *crq,
+ 				ibmvfc_reinit_host(vhost);
+ 			}
+ 		}
++		list_for_each_entry(tgt, &vhost->nvme_scrqs.targets, queue) {
++			if (!crq->scsi_id && !crq->wwpn && !crq->node_name)
++				break;
++			if (crq->scsi_id && cpu_to_be64(tgt->scsi_id) != crq->scsi_id)
++				continue;
++			if (crq->wwpn && cpu_to_be64(tgt->ids.port_name) != crq->wwpn)
++				continue;
++			if (crq->node_name && cpu_to_be64(tgt->ids.node_name) != crq->node_name)
++				continue;
++			if (tgt->need_login && be64_to_cpu(crq->event) == IBMVFC_AE_ELS_LOGO)
++				tgt->logo_rcvd = 1;
++			if (!tgt->need_login || be64_to_cpu(crq->event) == IBMVFC_AE_ELS_PLOGI) {
++				ibmvfc_del_tgt(tgt);
++				ibmvfc_reinit_host(vhost);
++			}
++		}
+ 		break;
+ 	case IBMVFC_AE_LINK_DOWN:
+ 	case IBMVFC_AE_ADAPTER_FAILED:
+-- 
+2.55.0
+

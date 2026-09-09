@@ -1,0 +1,43 @@
+From 6d0795b507fb1db2e6aefe533d949db3a4abf4c6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Nicol=C3=A1s=20Antinori?= <nico.antinori.7@gmail.com>
+Date: Thu, 23 Jul 2026 19:19:46 +0100
+Subject: [PATCH 07290/15333] rust: pin-init: mark `pin_init::zeroed` and
+ `Zeroable::zeroed` as `#[inline]`
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The `pin_init::zeroed` function is a trivial wrapper around
+`unsafe { core::mem::zeroed() }`, whereas `Zeroable::zeroed` is a trivial
+wrapper around `pin_init::zeroed`. Mark them both as `#[inline]` to avoid
+generating unnecessary symbols for them.
+
+Signed-off-by: Nicolás Antinori <nico.antinori.7@gmail.com>
+Signed-off-by: Gary Guo <gary@garyguo.net>
+---
+ rust/pin-init/src/lib.rs | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/rust/pin-init/src/lib.rs b/rust/pin-init/src/lib.rs
+index 1f5005c110cd..f4ccb0e87200 100644
+--- a/rust/pin-init/src/lib.rs
++++ b/rust/pin-init/src/lib.rs
+@@ -1557,6 +1557,7 @@ fn init_zeroed() -> impl Init<Self>
+     /// assert_eq!(point.x, 0);
+     /// assert_eq!(point.y, 0);
+     /// ```
++    #[inline]
+     fn zeroed() -> Self
+     where
+         Self: Sized,
+@@ -1603,6 +1604,7 @@ pub fn init_zeroed<T: Zeroable>() -> impl Init<T> {
+ /// assert_eq!(point.x, 0);
+ /// assert_eq!(point.y, 0);
+ /// ```
++#[inline]
+ pub const fn zeroed<T: Zeroable>() -> T {
+     // SAFETY:By the type invariants of `Zeroable`, all zeroes is a valid bit pattern for `T`.
+     unsafe { core::mem::zeroed() }
+-- 
+2.55.0
+

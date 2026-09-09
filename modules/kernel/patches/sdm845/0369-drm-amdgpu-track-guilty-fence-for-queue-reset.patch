@@ -1,0 +1,54 @@
+From ce3f23a780851f848ae63b89f6ad51d86dfe33b5 Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Fri, 15 May 2026 10:16:51 -0400
+Subject: [PATCH 00369/15333] drm/amdgpu: track guilty fence for queue reset
+
+If we've already seen a fence, don't backup the
+ring contents since presumably either the previous reset
+was not successful or there was something wrong with the
+data.
+
+Reviewed-by: Jesse Zhang <jesse.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c | 11 +++++++++++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h  |  1 +
+ 2 files changed, 12 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
+index 6a43c8494fa8..a7a6db0bc694 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
+@@ -803,6 +803,17 @@ void amdgpu_ring_backup_unprocessed_commands(struct amdgpu_ring *ring,
+ 	seq = ring->fence_drv.sync_seq & ring->fence_drv.num_fences_mask;
+ 	ring->ring_backup_entries_to_copy = 0;
+ 
++	/* if we've already seen this fence, return early.
++	 * ring->ring_backup_entries_to_copy is set to 0 so
++	 * the reemit helper will return early as well to
++	 * avoid getting stuck in a reemit loop.
++	 */
++	if (ring->guilty_fence == guilty_fence) {
++		ring->guilty_fence = NULL;
++		return;
++	}
++	ring->guilty_fence = guilty_fence;
++
+ 	do {
+ 		last_seq++;
+ 		last_seq &= ring->fence_drv.num_fences_mask;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h
+index 8f28b3bd7010..9276a3bb69de 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h
+@@ -314,6 +314,7 @@ struct amdgpu_ring {
+ 	uint32_t		*ring_backup;
+ 	unsigned int		ring_backup_entries_to_copy;
+ 	bool			reemit;
++	struct amdgpu_fence	*guilty_fence;
+ 	unsigned		rptr_offs;
+ 	u64			rptr_gpu_addr;
+ 	u32			*rptr_cpu_addr;
+-- 
+2.55.0
+

@@ -1,0 +1,77 @@
+From 6bc3deb600ee8c234204c6f4ea703ee04a11de2f Mon Sep 17 00:00:00 2001
+From: Hiroshi Nishida <nishidafmly@gmail.com>
+Date: Fri, 10 Jul 2026 06:23:29 -0700
+Subject: [PATCH 08670/15333] md: widen badblock sectors param from int to
+ sector_t
+
+The badblocks core API -- badblocks_set(), badblocks_clear() and
+badblocks_check() -- and the is_badblock() helper all take the range
+length as sector_t.  The md wrappers rdev_set_badblocks(),
+rdev_clear_badblocks() and rdev_has_badblock(), however, declared the
+same length as int, narrowing sector_t to int and back again in the
+middle of an otherwise 64-bit clean path.
+
+Change the sectors parameter to sector_t in these three wrappers so it
+matches the core API and is_badblock().  No functional change: current
+callers pass per-I/O or per-resync-chunk lengths well within int range.
+This just removes a gratuitous truncation point and keeps the type
+consistent end to end.
+
+Signed-off-by: Hiroshi Nishida <nishidafmly@gmail.com>
+Link: https://patch.msgid.link/20260710132329.7273-3-nishidafmly@gmail.com
+Signed-off-by: Yu Kuai <yukuai@fygo.io>
+---
+ drivers/md/md.c | 4 ++--
+ drivers/md/md.h | 6 +++---
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/md/md.c b/drivers/md/md.c
+index dc848a24f592..c6b9b4705c94 100644
+--- a/drivers/md/md.c
++++ b/drivers/md/md.c
+@@ -10563,7 +10563,7 @@ EXPORT_SYMBOL(md_finish_reshape);
+ /* Bad block management */
+ 
+ /* Returns true on success, false on failure */
+-bool rdev_set_badblocks(struct md_rdev *rdev, sector_t s, int sectors,
++bool rdev_set_badblocks(struct md_rdev *rdev, sector_t s, sector_t sectors,
+ 			int is_new)
+ {
+ 	struct mddev *mddev = rdev->mddev;
+@@ -10603,7 +10603,7 @@ bool rdev_set_badblocks(struct md_rdev *rdev, sector_t s, int sectors,
+ }
+ EXPORT_SYMBOL_GPL(rdev_set_badblocks);
+ 
+-void rdev_clear_badblocks(struct md_rdev *rdev, sector_t s, int sectors,
++void rdev_clear_badblocks(struct md_rdev *rdev, sector_t s, sector_t sectors,
+ 			  int is_new)
+ {
+ 	if (is_new)
+diff --git a/drivers/md/md.h b/drivers/md/md.h
+index d8daf0f75cbb..1b47af09c4e2 100644
+--- a/drivers/md/md.h
++++ b/drivers/md/md.h
+@@ -311,7 +311,7 @@ static inline int is_badblock(struct md_rdev *rdev, sector_t s, sector_t sectors
+ }
+ 
+ static inline int rdev_has_badblock(struct md_rdev *rdev, sector_t s,
+-				    int sectors)
++				    sector_t sectors)
+ {
+ 	sector_t first_bad;
+ 	sector_t bad_sectors;
+@@ -319,9 +319,9 @@ static inline int rdev_has_badblock(struct md_rdev *rdev, sector_t s,
+ 	return is_badblock(rdev, s, sectors, &first_bad, &bad_sectors);
+ }
+ 
+-extern bool rdev_set_badblocks(struct md_rdev *rdev, sector_t s, int sectors,
++extern bool rdev_set_badblocks(struct md_rdev *rdev, sector_t s, sector_t sectors,
+ 			       int is_new);
+-extern void rdev_clear_badblocks(struct md_rdev *rdev, sector_t s, int sectors,
++extern void rdev_clear_badblocks(struct md_rdev *rdev, sector_t s, sector_t sectors,
+ 				 int is_new);
+ struct md_cluster_info;
+ struct md_cluster_operations;
+-- 
+2.55.0
+

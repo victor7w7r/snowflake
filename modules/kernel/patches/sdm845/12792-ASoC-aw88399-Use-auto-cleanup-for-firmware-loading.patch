@@ -1,0 +1,48 @@
+From 1767b85125e2e3f8dc9623bc89015402fffcd341 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 15:59:38 +0200
+Subject: [PATCH 12792/15333] ASoC: aw88399: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-7-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/aw88399-lib.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/sound/soc/codecs/aw88399-lib.c b/sound/soc/codecs/aw88399-lib.c
+index 5c7982891def..809c2faa0c0c 100644
+--- a/sound/soc/codecs/aw88399-lib.c
++++ b/sound/soc/codecs/aw88399-lib.c
+@@ -1282,7 +1282,7 @@ static int aw88399_dev_init(struct aw88399 *aw88399, struct aw_container *aw_cfg
+ 
+ int aw88399_request_firmware_file(struct aw88399 *aw88399)
+ {
+-	const struct firmware *cont = NULL;
++	const struct firmware *cont __free(firmware) = NULL;
+ 	int ret;
+ 
+ 	aw88399->aw_pa->fw_status = AW88399_DEV_FW_FAILED;
+@@ -1298,13 +1298,11 @@ int aw88399_request_firmware_file(struct aw88399 *aw88399)
+ 
+ 	aw88399->aw_cfg = devm_kzalloc(aw88399->aw_pa->dev,
+ 			struct_size(aw88399->aw_cfg, data, cont->size), GFP_KERNEL);
+-	if (!aw88399->aw_cfg) {
+-		release_firmware(cont);
++	if (!aw88399->aw_cfg)
+ 		return -ENOMEM;
+-	}
++
+ 	aw88399->aw_cfg->len = (int)cont->size;
+ 	memcpy(aw88399->aw_cfg->data, cont->data, cont->size);
+-	release_firmware(cont);
+ 
+ 	ret = aw88395_dev_load_acf_check(aw88399->aw_pa, aw88399->aw_cfg);
+ 	if (ret) {
+-- 
+2.55.0
+

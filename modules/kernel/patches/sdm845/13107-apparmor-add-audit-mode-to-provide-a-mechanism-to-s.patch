@@ -1,0 +1,123 @@
+From 97dd3f51bf0cb111a2c1cdef7ecca48e31223cb7 Mon Sep 17 00:00:00 2001
+From: John Johansen <john.johansen@canonical.com>
+Date: Sun, 3 Aug 2025 20:35:10 -0700
+Subject: [PATCH 13107/15333] apparmor: add audit mode to provide a mechanism
+ to silence complain messages
+
+Complain messages can be very noisy and fill the logs quickly. Allow
+complain (allow) messages to be silenced separate from denied
+messages.
+
+Signed-off-by: John Johansen <john.johansen@canonical.com>
+---
+ security/apparmor/audit.c         |  1 +
+ security/apparmor/file.c          | 11 +++++++++--
+ security/apparmor/include/audit.h |  1 +
+ security/apparmor/lib.c           | 19 +++++++++++--------
+ 4 files changed, 22 insertions(+), 10 deletions(-)
+
+diff --git a/security/apparmor/audit.c b/security/apparmor/audit.c
+index c32828f55bcc..97d8151b5ff6 100644
+--- a/security/apparmor/audit.c
++++ b/security/apparmor/audit.c
+@@ -20,6 +20,7 @@
+ const char *const audit_mode_names[] = {
+ 	"normal",
+ 	"quiet_denied",
++	"quiet.allowed",
+ 	"quiet",
+ 	"noquiet",
+ 	"all"
+diff --git a/security/apparmor/file.c b/security/apparmor/file.c
+index d5264af92f07..3e74b613db32 100644
+--- a/security/apparmor/file.c
++++ b/security/apparmor/file.c
+@@ -98,6 +98,8 @@ int aa_audit_file(const struct cred *subj_cred,
+ 		  const char *target, struct aa_label *tlabel,
+ 		  kuid_t ouid, const char *info, int error)
+ {
++	u32 quiet = perms->quiet;
++	u32 complain = perms->complain;
+ 	int type = AUDIT_APPARMOR_AUTO;
+ 	DEFINE_AUDIT_DATA(ad, LSM_AUDIT_DATA_TASK, AA_CLASS_FILE, op);
+ 
+@@ -112,6 +114,8 @@ int aa_audit_file(const struct cred *subj_cred,
+ 	ad.error = error;
+ 	ad.common.u.tsk = NULL;
+ 
++	if (COMPLAIN_MODE(profile))
++		complain |= ~(perms->allow | perms->deny);
+ 	if (likely(!ad.error)) {
+ 		u32 mask = perms->audit;
+ 
+@@ -132,11 +136,14 @@ int aa_audit_file(const struct cred *subj_cred,
+ 		if (ad.request & perms->kill)
+ 			type = AUDIT_APPARMOR_KILL;
+ 
++		if (AUDIT_MODE(profile) == AUDIT_QUIET_ALLOWED)
++			quiet |= complain | perms->allow;
++
+ 		/* quiet known rejects, assumes quiet and kill do not overlap */
+-		if ((ad.request & perms->quiet) &&
++		if ((ad.request & quiet) &&
+ 		    AUDIT_MODE(profile) != AUDIT_NOQUIET &&
+ 		    AUDIT_MODE(profile) != AUDIT_ALL)
+-			ad.request &= ~perms->quiet;
++			ad.request &= ~quiet;
+ 
+ 		if (!ad.request)
+ 			return ad.error;
+diff --git a/security/apparmor/include/audit.h b/security/apparmor/include/audit.h
+index 75ae2cc96d16..da95b5569d68 100644
+--- a/security/apparmor/include/audit.h
++++ b/security/apparmor/include/audit.h
+@@ -24,6 +24,7 @@ extern const char *const audit_mode_names[];
+ enum audit_mode {
+ 	AUDIT_NORMAL,		/* follow normal auditing of accesses */
+ 	AUDIT_QUIET_DENIED,	/* quiet all denied access messages */
++	AUDIT_QUIET_ALLOWED,	/* quiet all allowed access messages */
+ 	AUDIT_QUIET,		/* quiet all messages */
+ 	AUDIT_NOQUIET,		/* do not quiet audit messages */
+ 	AUDIT_ALL,		/* audit all accesses */
+diff --git a/security/apparmor/lib.c b/security/apparmor/lib.c
+index 39f824c65d88..0c5c51c326fa 100644
+--- a/security/apparmor/lib.c
++++ b/security/apparmor/lib.c
+@@ -363,6 +363,13 @@ void aa_audit_perm_mask(struct audit_buffer *ab, u32 mask, const char *chrs,
+  */
+ void aa_apply_modes_to_perms(struct aa_profile *profile, struct aa_perms *perms)
+ {
++	if (KILL_MODE(profile))
++		perms->kill = ~perms->allow;
++	else if (COMPLAIN_MODE(profile))
++		perms->complain |= ~(perms->allow | perms->deny);
++	else if (USER_MODE(profile))
++		perms->prompt |= ~(perms->allow | perms->deny);
++
+ 	switch (AUDIT_MODE(profile)) {
+ 	case AUDIT_ALL:
+ 		perms->audit = ALL_PERMS_MASK;
+@@ -374,16 +381,12 @@ void aa_apply_modes_to_perms(struct aa_profile *profile, struct aa_perms *perms)
+ 		perms->audit = 0;
+ 		fallthrough;
+ 	case AUDIT_QUIET_DENIED:
+-		perms->quiet = ALL_PERMS_MASK;
++		perms->quiet |= ~perms->allow;
++		break;
++	case AUDIT_QUIET_ALLOWED:
++		perms->quiet |= perms->complain | perms->allow;
+ 		break;
+ 	}
+-
+-	if (KILL_MODE(profile))
+-		perms->kill = ALL_PERMS_MASK;
+-	else if (COMPLAIN_MODE(profile))
+-		perms->complain = ALL_PERMS_MASK;
+-	else if (USER_MODE(profile))
+-		perms->prompt = ALL_PERMS_MASK;
+ }
+ 
+ void aa_profile_match_label(struct aa_profile *profile,
+-- 
+2.55.0
+

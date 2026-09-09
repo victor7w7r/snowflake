@@ -1,0 +1,44 @@
+From 8c11cfc8c103846cb0886b1bed910f9cd5921e5a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig=20=28The=20Capable=20Hub=29?=
+ <u.kleine-koenig@baylibre.com>
+Date: Wed, 1 Jul 2026 19:05:19 +0200
+Subject: [PATCH 06007/15333] drm/hyperv: Unregister pci driver in error path
+ before module unload
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The pci driver must not kept registered if the module is unloaded after
+vmbus_driver_register() fails. So check the return value of
+vmbus_driver_register() and unregister the pci driver on failure.
+
+Fixes: 76c56a5affeb ("drm/hyperv: Add DRM driver for hyperv synthetic video device")
+Signed-off-by: Uwe Kleine-König (The Capable Hub) <u.kleine-koenig@baylibre.com>
+Reviewed-by: Thomas Zimmermann <tzimmermann@suse.de>
+Reviewed-by: Michael Kelley <mhklinux@outlook.com>
+Signed-off-by: Hamza Mahfooz <hamzamahfooz@linux.microsoft.com>
+Link: https://patch.msgid.link/4b7dbf00ce4ff664b7d5dd74b2f39d8d87c1ade9.1782925276.git.u.kleine-koenig@baylibre.com
+---
+ drivers/gpu/drm/hyperv/hyperv_drm_drv.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/hyperv/hyperv_drm_drv.c b/drivers/gpu/drm/hyperv/hyperv_drm_drv.c
+index 20f35c48c0b8..2e75fb793495 100644
+--- a/drivers/gpu/drm/hyperv/hyperv_drm_drv.c
++++ b/drivers/gpu/drm/hyperv/hyperv_drm_drv.c
+@@ -249,7 +249,11 @@ static int __init hv_drm_init(void)
+ 	if (ret != 0)
+ 		return ret;
+ 
+-	return vmbus_driver_register(&hv_drm_hv_driver);
++	ret = vmbus_driver_register(&hv_drm_hv_driver);
++	if (ret)
++		pci_unregister_driver(&hv_drm_pci_driver);
++
++	return ret;
+ }
+ 
+ static void __exit hv_drm_exit(void)
+-- 
+2.55.0
+

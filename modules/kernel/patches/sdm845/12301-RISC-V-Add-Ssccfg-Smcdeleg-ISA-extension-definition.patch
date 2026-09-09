@@ -1,0 +1,92 @@
+From ebdec8d2c156b8e662cb350ce05b0f92275f6ffd Mon Sep 17 00:00:00 2001
+From: Atish Patra <atishp@rivosinc.com>
+Date: Fri, 7 Aug 2026 19:24:32 -0600
+Subject: [PATCH 12301/15333] RISC-V: Add Ssccfg/Smcdeleg ISA extension
+ definition and parsing
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Smcdeleg extension allows the M-mode to delegate selected counters
+to S-mode so that it can access those counters and correpsonding
+hpmevent CSRs without M-mode.
+
+Ssccfg (‘Ss’ for Privileged architecture and Supervisor-level
+extension, ‘ccfg’ for Counter Configuration) provides access to
+delegated counters and new supervisor-level state.
+
+This patch just enables these definitions and enable parsing.
+
+Signed-off-by: Atish Patra <atishp@rivosinc.com>
+Reviewed-by: Charlie Jenkins <thecharlesjenkins@gmail.com>
+Link: https://patch.msgid.link/20260807-counter_delegation-v9-9-58658104e487@meta.com
+Signed-off-by: Paul Walmsley <pjw@kernel.org>
+---
+ arch/riscv/include/asm/hwcap.h |  2 ++
+ arch/riscv/kernel/cpufeature.c | 24 ++++++++++++++++++++++++
+ 2 files changed, 26 insertions(+)
+
+diff --git a/arch/riscv/include/asm/hwcap.h b/arch/riscv/include/asm/hwcap.h
+index 51ad55b9677a..089353b250b0 100644
+--- a/arch/riscv/include/asm/hwcap.h
++++ b/arch/riscv/include/asm/hwcap.h
+@@ -115,6 +115,8 @@
+ #define RISCV_ISA_EXT_SSCSRIND		106
+ #define RISCV_ISA_EXT_SMCSRIND		107
+ #define RISCV_ISA_EXT_SMCNTRPMF		108
++#define RISCV_ISA_EXT_SSCCFG		109
++#define RISCV_ISA_EXT_SMCDELEG		110
+ 
+ #define RISCV_ISA_EXT_XLINUXENVCFG	127
+ 
+diff --git a/arch/riscv/kernel/cpufeature.c b/arch/riscv/kernel/cpufeature.c
+index 1452521d740a..1fe647e03515 100644
+--- a/arch/riscv/kernel/cpufeature.c
++++ b/arch/riscv/kernel/cpufeature.c
+@@ -330,6 +330,27 @@ static const unsigned int riscv_a_exts[] = {
+ 	RISCV_ISA_EXT_ZKNE,	\
+ 	RISCV_ISA_EXT_ZKNH
+ 
++static int riscv_ext_smcdeleg_validate(const struct riscv_isa_ext_data *data,
++				       const unsigned long *isa_bitmap)
++{
++	if (__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_SSCSRIND) &&
++	    __riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_ZIHPM) &&
++	    __riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_ZICNTR))
++		return 0;
++
++	return -EPROBE_DEFER;
++}
++
++static int riscv_ext_ssccfg_validate(const struct riscv_isa_ext_data *data,
++				     const unsigned long *isa_bitmap)
++{
++	if (!riscv_ext_smcdeleg_validate(data, isa_bitmap) &&
++	    __riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_SMCDELEG))
++		return 0;
++
++	return -EPROBE_DEFER;
++}
++
+ static const unsigned int riscv_zk_bundled_exts[] = {
+ 	RISCV_ISA_EXT_ZKN,
+ 	RISCV_ISA_EXT_ZKR,
+@@ -576,12 +597,15 @@ const struct riscv_isa_ext_data riscv_isa_ext[] = {
+ 	__RISCV_ISA_EXT_BUNDLE_VALIDATE(zvksg, riscv_zvksg_bundled_exts, riscv_ext_vector_crypto_validate),
+ 	__RISCV_ISA_EXT_DATA_VALIDATE(zvkt, RISCV_ISA_EXT_ZVKT, riscv_ext_vector_crypto_validate),
+ 	__RISCV_ISA_EXT_DATA(smaia, RISCV_ISA_EXT_SMAIA),
++	__RISCV_ISA_EXT_DATA_VALIDATE(smcdeleg, RISCV_ISA_EXT_SMCDELEG,
++				      riscv_ext_smcdeleg_validate),
+ 	__RISCV_ISA_EXT_DATA(smcntrpmf, RISCV_ISA_EXT_SMCNTRPMF),
+ 	__RISCV_ISA_EXT_DATA(smcsrind, RISCV_ISA_EXT_SMCSRIND),
+ 	__RISCV_ISA_EXT_DATA(smmpm, RISCV_ISA_EXT_SMMPM),
+ 	__RISCV_ISA_EXT_SUPERSET(smnpm, RISCV_ISA_EXT_SMNPM, riscv_xlinuxenvcfg_exts),
+ 	__RISCV_ISA_EXT_DATA(smstateen, RISCV_ISA_EXT_SMSTATEEN),
+ 	__RISCV_ISA_EXT_DATA(ssaia, RISCV_ISA_EXT_SSAIA),
++	__RISCV_ISA_EXT_DATA_VALIDATE(ssccfg, RISCV_ISA_EXT_SSCCFG, riscv_ext_ssccfg_validate),
+ 	__RISCV_ISA_EXT_DATA(sscofpmf, RISCV_ISA_EXT_SSCOFPMF),
+ 	__RISCV_ISA_EXT_DATA(sscsrind, RISCV_ISA_EXT_SSCSRIND),
+ 	__RISCV_ISA_EXT_SUPERSET(ssnpm, RISCV_ISA_EXT_SSNPM, riscv_xlinuxenvcfg_exts),
+-- 
+2.55.0
+

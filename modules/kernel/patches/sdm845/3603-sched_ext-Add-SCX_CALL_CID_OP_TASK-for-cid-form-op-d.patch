@@ -1,0 +1,120 @@
+From 8da6d37d1dda3842249c7ea2b84daf88d52da557 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Thu, 9 Jul 2026 12:06:10 -1000
+Subject: [PATCH 03603/15333] sched_ext: Add SCX_CALL_CID_OP_TASK() for
+ cid-form op dispatch
+
+The cid-form ops overlay their cpu-form siblings at the same struct slot.
+Ops whose signature matches the sibling are invoked through the cpu-form
+call sites unchanged, but set_cmask() takes an arena cmask address rather
+than a cpumask, so scx_call_op_set_cpumask() calls ops_cid.set_cmask()
+directly and hand-rolled the kf_tasks[] and locked_rq bracket that
+SCX_CALL_OP_TASK() provides. The hand-rolled bracket reset locked_rq to
+NULL on exit instead of restoring the saved value, so a nested call would
+clobber the outer op's locked-rq tracking.
+
+Parameterize the dispatch macros by the ops-table member and add
+SCX_CALL_CID_OP_TASK(), which routes through sch->ops_cid. Convert
+scx_call_op_set_cpumask() to it and drop the hand-rolled bracket. The only
+behavioral change is that locked_rq is now saved and restored like every
+other op call site.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/ext.c      | 14 +++-----------
+ kernel/sched/ext/internal.h | 23 ++++++++++++++++++++---
+ 2 files changed, 23 insertions(+), 14 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 032f4f908796..806e8ae1cf33 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -422,11 +422,6 @@ static inline void scx_call_op_set_cpumask(struct scx_sched *sch, struct rq *rq,
+ 					   struct task_struct *task,
+ 					   const struct cpumask *cpumask)
+ {
+-	WARN_ON_ONCE(current->scx.kf_tasks[0]);
+-	current->scx.kf_tasks[0] = task;
+-	if (rq)
+-		update_locked_rq(rq);
+-
+ 	if (scx_is_cid_type()) {
+ 		struct scx_cmask *kern_va = *this_cpu_ptr(sch->set_cmask_scratch);
+ 		/*
+@@ -435,14 +430,11 @@ static inline void scx_call_op_set_cpumask(struct scx_sched *sch, struct rq *rq,
+ 		 * the sole user of the scratch area.
+ 		 */
+ 		scx_cpumask_to_cmask(cpumask, kern_va);
+-		sch->ops_cid.set_cmask(task, scx_kaddr_to_arena(sch, kern_va));
++		SCX_CALL_CID_OP_TASK(sch, set_cmask, rq, task,
++				     scx_kaddr_to_arena(sch, kern_va));
+ 	} else {
+-		sch->ops.set_cpumask(task, cpumask);
++		SCX_CALL_OP_TASK(sch, set_cpumask, rq, task, cpumask);
+ 	}
+-
+-	if (rq)
+-		update_locked_rq(NULL);
+-	current->scx.kf_tasks[0] = NULL;
+ }
+ 
+ enum scx_dsq_iter_flags {
+diff --git a/kernel/sched/ext/internal.h b/kernel/sched/ext/internal.h
+index f9fe7c6ebc4b..5ca44ad88786 100644
+--- a/kernel/sched/ext/internal.h
++++ b/kernel/sched/ext/internal.h
+@@ -1751,8 +1751,11 @@ static inline void update_locked_rq(struct rq *rq)
+ /*
+  * SCX ops can recurse via scx_bpf_sub_dispatch() - the inner call must not
+  * clobber the outer's scx_locked_rq_state. Save it on entry, restore on exit.
++ *
++ * @ops is the ops table to dispatch through: ops for the cpu form, ops_cid
++ * for the cid form.
+  */
+-#define SCX_CALL_OP(sch, op, locked_rq, args...)				\
++#define __SCX_CALL_OP(sch, ops, op, locked_rq, args...)				\
+ do {										\
+ 	struct rq *__prev_locked_rq;						\
+ 										\
+@@ -1765,6 +1768,9 @@ do {										\
+ 		update_locked_rq(__prev_locked_rq);				\
+ } while (0)
+ 
++#define SCX_CALL_OP(sch, op, locked_rq, args...)				\
++	__SCX_CALL_OP(sch, ops, op, locked_rq, ##args)
++
+ #define SCX_CALL_OP_RET(sch, op, locked_rq, args...)				\
+ ({										\
+ 	struct rq *__prev_locked_rq;						\
+@@ -1796,14 +1802,25 @@ do {										\
+  * WARN_ON_ONCE() in each macro catches a re-entry of any of the three variants
+  * while a previous one is still in progress.
+  */
+-#define SCX_CALL_OP_TASK(sch, op, locked_rq, task, args...)			\
++#define __SCX_CALL_OP_TASK(sch, ops, op, locked_rq, task, args...)		\
+ do {										\
+ 	WARN_ON_ONCE(current->scx.kf_tasks[0]);					\
+ 	current->scx.kf_tasks[0] = task;					\
+-	SCX_CALL_OP((sch), op, locked_rq, task, ##args);			\
++	__SCX_CALL_OP((sch), ops, op, locked_rq, task, ##args);			\
+ 	current->scx.kf_tasks[0] = NULL;					\
+ } while (0)
+ 
++#define SCX_CALL_OP_TASK(sch, op, locked_rq, task, args...)			\
++	__SCX_CALL_OP_TASK(sch, ops, op, locked_rq, task, ##args)
++
++/*
++ * Dispatch a task op through the cid-form ops_cid table. Only set_cmask() needs
++ * this: it takes an arena cmask address instead of a cpumask, so it cannot be
++ * invoked via its cpu-form set_cpumask() slot.
++ */
++#define SCX_CALL_CID_OP_TASK(sch, op, locked_rq, task, args...)			\
++	__SCX_CALL_OP_TASK(sch, ops_cid, op, locked_rq, task, ##args)
++
+ #define SCX_CALL_OP_TASK_RET(sch, op, locked_rq, task, args...)			\
+ ({										\
+ 	__typeof__((sch)->ops.op(task, ##args)) __ret;				\
+-- 
+2.55.0
+

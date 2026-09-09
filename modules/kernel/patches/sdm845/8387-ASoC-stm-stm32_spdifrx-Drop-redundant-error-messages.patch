@@ -1,0 +1,45 @@
+From 94495c842711b43ec82f2c1259d1a74a9b3378bb Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Mon, 20 Jul 2026 14:40:43 +0700
+Subject: [PATCH 08387/15333] ASoC: stm: stm32_spdifrx: Drop redundant error
+ messages
+
+Both devm_request_irq() and snd_dmaengine_pcm_register() already log
+failures internally. Drop the redundant error messages and return the
+original errors directly.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260720074044.87528-5-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/stm/stm32_spdifrx.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/sound/soc/stm/stm32_spdifrx.c b/sound/soc/stm/stm32_spdifrx.c
+index 2f83ca989e68..e0fef47a227e 100644
+--- a/sound/soc/stm/stm32_spdifrx.c
++++ b/sound/soc/stm/stm32_spdifrx.c
+@@ -970,10 +970,8 @@ static int stm32_spdifrx_probe(struct platform_device *pdev)
+ 
+ 	ret = devm_request_irq(&pdev->dev, spdifrx->irq, stm32_spdifrx_isr, 0,
+ 			       dev_name(&pdev->dev), spdifrx);
+-	if (ret) {
+-		dev_err(&pdev->dev, "IRQ request returned %d\n", ret);
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	rst = devm_reset_control_get_optional_exclusive(&pdev->dev, NULL);
+ 	if (IS_ERR(rst))
+@@ -987,7 +985,7 @@ static int stm32_spdifrx_probe(struct platform_device *pdev)
+ 	pcm_config = &stm32_spdifrx_pcm_config;
+ 	ret = snd_dmaengine_pcm_register(&pdev->dev, pcm_config, 0);
+ 	if (ret)
+-		return dev_err_probe(&pdev->dev, ret, "PCM DMA register error\n");
++		return ret;
+ 
+ 	ret = snd_soc_register_component(&pdev->dev,
+ 					 &stm32_spdifrx_component,
+-- 
+2.55.0
+

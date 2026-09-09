@@ -1,0 +1,157 @@
+From 7462d18889bf5d1e5b2269da5e3ef694b1c5ca59 Mon Sep 17 00:00:00 2001
+From: Abhijit Gangurde <abhijit.gangurde@amd.com>
+Date: Wed, 10 Jun 2026 21:12:14 +0530
+Subject: [PATCH 06388/15333] RDMA/ionic: map PHC state into user space
+
+Enable user space applications to access the PHC state page when
+firmware RDMA completion timestamp is supported.
+
+This mapping allows user space to convert RDMA completion timestamps
+to system wall time without kernel transitions, minimizing latency
+overhead. Applications can directly read the PHC state through mmap,
+enabling efficient timestamp correlation for precision timing
+applications.
+
+Co-developed-by: Allen Hubbe <allen.hubbe@amd.com>
+Signed-off-by: Allen Hubbe <allen.hubbe@amd.com>
+Signed-off-by: Abhijit Gangurde <abhijit.gangurde@amd.com>
+Link: https://patch.msgid.link/20260610154216.712374-4-abhijit.gangurde@amd.com
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ .../infiniband/hw/ionic/ionic_controlpath.c   | 34 +++++++++++++++++++
+ drivers/infiniband/hw/ionic/ionic_ibdev.h     |  2 ++
+ drivers/infiniband/hw/ionic/ionic_lif_cfg.c   |  2 ++
+ drivers/infiniband/hw/ionic/ionic_lif_cfg.h   |  1 +
+ include/uapi/rdma/ionic-abi.h                 |  1 +
+ 5 files changed, 40 insertions(+)
+
+diff --git a/drivers/infiniband/hw/ionic/ionic_controlpath.c b/drivers/infiniband/hw/ionic/ionic_controlpath.c
+index 42b02ee643ad..a70ef59a8064 100644
+--- a/drivers/infiniband/hw/ionic/ionic_controlpath.c
++++ b/drivers/infiniband/hw/ionic/ionic_controlpath.c
+@@ -391,6 +391,16 @@ int ionic_alloc_ucontext(struct ib_ucontext *ibctx, struct ib_udata *udata)
+ 		goto err_mmap_dbell;
+ 	}
+ 
++	if (dev->lif_cfg.phc_state) {
++		ctx->mmap_phc = ionic_mmap_entry_insert(ctx, PAGE_SIZE, 0,
++							IONIC_MMAP_PHC,
++							&resp.phc_offset);
++		if (!ctx->mmap_phc) {
++			rc = -ENOMEM;
++			goto err_mmap_phc;
++		}
++	}
++
+ 	resp.page_shift = PAGE_SHIFT;
+ 
+ 	resp.dbell_offset = db_phys & ~PAGE_MASK;
+@@ -421,6 +431,8 @@ int ionic_alloc_ucontext(struct ib_ucontext *ibctx, struct ib_udata *udata)
+ 	return 0;
+ 
+ err_resp:
++	rdma_user_mmap_entry_remove(ctx->mmap_phc);
++err_mmap_phc:
+ 	rdma_user_mmap_entry_remove(ctx->mmap_dbell);
+ err_mmap_dbell:
+ 	ionic_put_dbid(dev, ctx->dbid);
+@@ -433,10 +445,26 @@ void ionic_dealloc_ucontext(struct ib_ucontext *ibctx)
+ 	struct ionic_ibdev *dev = to_ionic_ibdev(ibctx->device);
+ 	struct ionic_ctx *ctx = to_ionic_ctx(ibctx);
+ 
++	rdma_user_mmap_entry_remove(ctx->mmap_phc);
+ 	rdma_user_mmap_entry_remove(ctx->mmap_dbell);
+ 	ionic_put_dbid(dev, ctx->dbid);
+ }
+ 
++static int ionic_mmap_phc_state(struct ionic_ibdev *dev,
++				struct vm_area_struct *vma)
++{
++	if (!(vma->vm_flags & VM_SHARED))
++		return -EINVAL;
++
++	if (vma->vm_flags & (VM_WRITE | VM_EXEC))
++		return -EPERM;
++
++	vm_flags_clear(vma, VM_MAYWRITE);
++
++	return vm_insert_page(vma, vma->vm_start,
++			      virt_to_page(dev->lif_cfg.phc_state));
++}
++
+ int ionic_mmap(struct ib_ucontext *ibctx, struct vm_area_struct *vma)
+ {
+ 	struct ionic_ibdev *dev = to_ionic_ibdev(ibctx->device);
+@@ -455,6 +483,12 @@ int ionic_mmap(struct ib_ucontext *ibctx, struct vm_area_struct *vma)
+ 	ionic_entry = container_of(rdma_entry, struct ionic_mmap_entry,
+ 				   rdma_entry);
+ 
++	if (ionic_entry->mmap_flags & IONIC_MMAP_PHC) {
++		rc = ionic_mmap_phc_state(dev, vma);
++		rdma_user_mmap_entry_put(rdma_entry);
++		return rc;
++	}
++
+ 	ibdev_dbg(&dev->ibdev, "writecombine? %d\n",
+ 		  ionic_entry->mmap_flags & IONIC_MMAP_WC);
+ 	if (ionic_entry->mmap_flags & IONIC_MMAP_WC)
+diff --git a/drivers/infiniband/hw/ionic/ionic_ibdev.h b/drivers/infiniband/hw/ionic/ionic_ibdev.h
+index 53dab2d54844..d7adaa161e6f 100644
+--- a/drivers/infiniband/hw/ionic/ionic_ibdev.h
++++ b/drivers/infiniband/hw/ionic/ionic_ibdev.h
+@@ -71,6 +71,7 @@ enum ionic_admin_flags {
+ 
+ enum ionic_mmap_flag {
+ 	IONIC_MMAP_WC = BIT(0),
++	IONIC_MMAP_PHC = BIT(1),
+ };
+ 
+ struct ionic_mmap_entry {
+@@ -172,6 +173,7 @@ struct ionic_ctx {
+ 	struct ib_ucontext	ibctx;
+ 	u32			dbid;
+ 	struct rdma_user_mmap_entry	*mmap_dbell;
++	struct rdma_user_mmap_entry	*mmap_phc;
+ };
+ 
+ struct ionic_tbl_buf {
+diff --git a/drivers/infiniband/hw/ionic/ionic_lif_cfg.c b/drivers/infiniband/hw/ionic/ionic_lif_cfg.c
+index f3cd281c3a2f..f827dce59973 100644
+--- a/drivers/infiniband/hw/ionic/ionic_lif_cfg.c
++++ b/drivers/infiniband/hw/ionic/ionic_lif_cfg.c
+@@ -40,6 +40,8 @@ void ionic_fill_lif_cfg(struct ionic_lif *lif, struct ionic_lif_cfg *cfg)
+ 	cfg->dbid_count = le32_to_cpu(lif->ionic->ident.dev.ndbpgs_per_lif);
+ 	cfg->dbpage = lif->kern_dbpage;
+ 	cfg->intr_ctrl = lif->ionic->idev.intr_ctrl;
++	if (lif->phc)
++		cfg->phc_state = lif->phc->state_page;
+ 
+ 	cfg->db_phys = lif->ionic->bars[IONIC_PCI_BAR_DBELL].bus_addr;
+ 
+diff --git a/drivers/infiniband/hw/ionic/ionic_lif_cfg.h b/drivers/infiniband/hw/ionic/ionic_lif_cfg.h
+index 20853429f623..2b29e646c193 100644
+--- a/drivers/infiniband/hw/ionic/ionic_lif_cfg.h
++++ b/drivers/infiniband/hw/ionic/ionic_lif_cfg.h
+@@ -23,6 +23,7 @@ struct ionic_lif_cfg {
+ 	u64 __iomem *dbpage;
+ 	struct ionic_intr __iomem *intr_ctrl;
+ 	phys_addr_t db_phys;
++	void *phc_state;
+ 
+ 	u64 page_size_supported;
+ 	u32 npts_per_lif;
+diff --git a/include/uapi/rdma/ionic-abi.h b/include/uapi/rdma/ionic-abi.h
+index 7b589d3e9728..2c70ac149c4f 100644
+--- a/include/uapi/rdma/ionic-abi.h
++++ b/include/uapi/rdma/ionic-abi.h
+@@ -48,6 +48,7 @@ struct ionic_ctx_resp {
+ 	__u8 expdb_qtypes;
+ 
+ 	__u8 rsvd2[3];
++	__aligned_u64 phc_offset;
+ };
+ 
+ struct ionic_qdesc {
+-- 
+2.55.0
+

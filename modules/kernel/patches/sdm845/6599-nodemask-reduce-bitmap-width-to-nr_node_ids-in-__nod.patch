@@ -1,0 +1,101 @@
+From c4f392a35c4f39ebb2c83979361b01521bc9a82e Mon Sep 17 00:00:00 2001
+From: Li RongQing <lirongqing@baidu.com>
+Date: Mon, 13 Jul 2026 15:51:04 +0800
+Subject: [PATCH 06599/15333] nodemask: reduce bitmap width to nr_node_ids in
+ __nodemask_pr_numnodes()
+
+__nodemask_pr_numnodes() currently returns MAX_NUMNODES as the field
+width for '%*pb[l]' nodemask printing. MAX_NUMNODES is a compile-time
+upper bound and can be much larger than the runtime node id range,
+resulting in excessive zero padding in bitmap-form output.
+
+For example, /proc/<pid>/status prints Mems_allowed with '%*pb' using
+the nodemask_pr_args() helper. On systems built with MAX_NUMNODES=1024
+but booted with a much smaller possible-node range, this produces:
+
+  Mems_allowed: 00000000,00000000,...,00000003
+
+Switch to nr_node_ids, matching the behavior of cpumask_pr_args() which
+uses nr_cpu_ids. This reduces the output width from MAX_NUMNODES bits
+to the runtime node id range:
+
+  Mems_allowed: 3
+
+Visible impact on in-tree users:
+- Bitmap format ('%*pb') users:
+  * /proc/<pid>/status Mems_allowed (format changes as shown above)
+
+- List format ('%*pbl') users, output is unchanged, as list formatter
+  only prints set bit ranges:
+  * /sys/devices/system/node/{possible,online,has_normal_memory, ...}
+  * NVMe multipath sysfs numa_nodes
+  * memory tier sysfs nodelist
+  * cpuset cgroup mems and effective_mems files
+  * /proc/<pid>/status Mems_allowed_list
+  * mempolicy strings in /proc/<pid>/numa_maps
+  * SLUB debugfs output
+  * Kernel log messages printing nodemasks
+
+Move nr_node_ids and nr_online_nodes declarations earlier in the file
+to allow __nodemask_pr_numnodes() to use nr_node_ids.
+
+Cc: Yury Norov <yury.norov@gmail.com>
+Cc: Rasmus Villemoes <linux@rasmusvillemoes.dk>
+Cc: Andrew Morton <akpm@linux-foundation.org>
+Cc: linux-mm@kvack.org
+Signed-off-by: Li RongQing <lirongqing@baidu.com>
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ include/linux/nodemask.h | 15 +++++++++------
+ 1 file changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/include/linux/nodemask.h b/include/linux/nodemask.h
+index b842aa525546..607373bd83ee 100644
+--- a/include/linux/nodemask.h
++++ b/include/linux/nodemask.h
+@@ -95,6 +95,14 @@
+ 
+ extern nodemask_t _unused_nodemask_arg_;
+ 
++#if MAX_NUMNODES > 1
++extern unsigned int nr_node_ids;
++extern unsigned int nr_online_nodes;
++#else
++#define nr_node_ids		1U
++#define nr_online_nodes		1U
++#endif
++
+ /**
+  * nodemask_pr_args - printf args to output a nodemask
+  * @maskp: nodemask to be printed
+@@ -105,7 +113,7 @@ extern nodemask_t _unused_nodemask_arg_;
+ 				__nodemask_pr_bits(maskp)
+ static __always_inline unsigned int __nodemask_pr_numnodes(const nodemask_t *m)
+ {
+-	return m ? MAX_NUMNODES : 0;
++	return m ? nr_node_ids : 0;
+ }
+ static __always_inline const unsigned long *__nodemask_pr_bits(const nodemask_t *m)
+ {
+@@ -438,9 +446,6 @@ static __always_inline unsigned int next_memory_node(int nid)
+ 	return next_node(nid, node_states[N_MEMORY]);
+ }
+ 
+-extern unsigned int nr_node_ids;
+-extern unsigned int nr_online_nodes;
+-
+ static __always_inline void node_set_online(int nid)
+ {
+ 	node_set_state(nid, N_ONLINE);
+@@ -480,8 +485,6 @@ static __always_inline int num_node_state(enum node_states state)
+ #define first_memory_node	0
+ #define next_online_node(nid)	(MAX_NUMNODES)
+ #define next_memory_node(nid)	(MAX_NUMNODES)
+-#define nr_node_ids		1U
+-#define nr_online_nodes		1U
+ 
+ #define node_set_online(node)	   node_set_state((node), N_ONLINE)
+ #define node_set_offline(node)	   node_clear_state((node), N_ONLINE)
+-- 
+2.55.0
+

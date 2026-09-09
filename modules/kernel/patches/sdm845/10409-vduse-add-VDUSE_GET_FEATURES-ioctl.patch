@@ -1,0 +1,61 @@
+From a503a9174044b4ace6863db5262079c50c341efd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Eugenio=20P=C3=A9rez?= <eperezma@redhat.com>
+Date: Tue, 7 Jul 2026 14:25:00 +0200
+Subject: [PATCH 10409/15333] vduse: add VDUSE_GET_FEATURES ioctl
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add an ioctl to allow VDUSE instances to query the available features
+supported by the kernel module.
+
+Signed-off-by: Eugenio Pérez <eperezma@redhat.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Message-ID: <20260707122502.239022-3-eperezma@redhat.com>
+---
+ drivers/vdpa/vdpa_user/vduse_dev.c | 7 +++++++
+ include/uapi/linux/vduse.h         | 3 +++
+ 2 files changed, 10 insertions(+)
+
+diff --git a/drivers/vdpa/vdpa_user/vduse_dev.c b/drivers/vdpa/vdpa_user/vduse_dev.c
+index 861a8093daa0..f3f24cc59eb0 100644
+--- a/drivers/vdpa/vdpa_user/vduse_dev.c
++++ b/drivers/vdpa/vdpa_user/vduse_dev.c
+@@ -51,6 +51,9 @@
+ 
+ #define IRQ_UNBOUND -1
+ 
++/* Supported VDUSE features */
++static const uint64_t vduse_features;
++
+ /*
+  * VDUSE instance have not asked the vduse API version, so assume 0.
+  *
+@@ -2342,6 +2345,10 @@ static long vduse_ioctl(struct file *file, unsigned int cmd,
+ 		ret = vduse_destroy_dev(name);
+ 		break;
+ 	}
++	case VDUSE_GET_FEATURES:
++		ret = put_user(vduse_features, (u64 __user *)argp);
++		break;
++
+ 	default:
+ 		ret = -EINVAL;
+ 		break;
+diff --git a/include/uapi/linux/vduse.h b/include/uapi/linux/vduse.h
+index 361eea511c21..89aa3b448c0a 100644
+--- a/include/uapi/linux/vduse.h
++++ b/include/uapi/linux/vduse.h
+@@ -63,6 +63,9 @@ struct vduse_dev_config {
+  */
+ #define VDUSE_DESTROY_DEV	_IOW(VDUSE_BASE, 0x03, char[VDUSE_NAME_MAX])
+ 
++/* Get the VDUSE supported features */
++#define VDUSE_GET_FEATURES	_IOR(VDUSE_BASE, 0x04, __u64)
++
+ /* The ioctls for VDUSE device (/dev/vduse/$NAME) */
+ 
+ /**
+-- 
+2.55.0
+

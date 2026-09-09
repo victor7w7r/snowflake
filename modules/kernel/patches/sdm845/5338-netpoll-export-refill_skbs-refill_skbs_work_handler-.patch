@@ -1,0 +1,98 @@
+From ede59d06c28f62135857b93663860029429f6907 Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Fri, 10 Jul 2026 04:38:54 -0700
+Subject: [PATCH 05338/15333] netpoll: export refill_skbs(),
+ refill_skbs_work_handler(), skb_pool_flush()
+
+These three helpers manage the per-netpoll fallback skb pool. They
+are file-static today because all of their callers live in
+net/core/netpoll.c. Subsequent patches relocate the pool's owner
+from struct netpoll to the only consumer that actually uses it
+(netconsole), and that work needs netconsole to drive the helpers
+directly while the function bodies still live here.
+
+Drop static, add prototypes in <linux/netpoll.h>, and
+EXPORT_SYMBOL_GPL() each. No behaviour change.
+
+The exports are transitional. Each helper is moved into
+drivers/net/netconsole.c later in this series, and at that point
+its EXPORT_SYMBOL_GPL() and prototype are dropped. By the end of
+the series no symbol introduced here remains exported.
+
+The goal of this patch is to make the subsequente patches easy to
+review.
+
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Link: https://patch.msgid.link/20260710-netconsole_move_more-v3-2-6f63f76b28bc@debian.org
+Reviewed-by: Simon Horman <horms@kernel.org>
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ include/linux/netpoll.h | 3 +++
+ net/core/netpoll.c      | 9 ++++++---
+ 2 files changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/include/linux/netpoll.h b/include/linux/netpoll.h
+index 88f7daa8560e..a7b96e179220 100644
+--- a/include/linux/netpoll.h
++++ b/include/linux/netpoll.h
+@@ -90,6 +90,9 @@ void netpoll_cleanup(struct netpoll *np);
+ void do_netpoll_cleanup(struct netpoll *np);
+ netdev_tx_t netpoll_send_skb(struct netpoll *np, struct sk_buff *skb);
+ void netpoll_zap_completion_queue(void);
++void refill_skbs(struct netpoll *np);
++void refill_skbs_work_handler(struct work_struct *work);
++void skb_pool_flush(struct netpoll *np);
+ 
+ #ifdef CONFIG_NETPOLL
+ static inline void *netpoll_poll_lock(struct napi_struct *napi)
+diff --git a/net/core/netpoll.c b/net/core/netpoll.c
+index aed415d3cd74..e062d88d10a3 100644
+--- a/net/core/netpoll.c
++++ b/net/core/netpoll.c
+@@ -213,7 +213,7 @@ void netpoll_poll_enable(struct net_device *dev)
+ 		up(&ni->dev_lock);
+ }
+ 
+-static void refill_skbs(struct netpoll *np)
++void refill_skbs(struct netpoll *np)
+ {
+ 	struct sk_buff_head *skb_pool;
+ 	struct sk_buff *skb;
+@@ -228,6 +228,7 @@ static void refill_skbs(struct netpoll *np)
+ 		skb_queue_tail(skb_pool, skb);
+ 	}
+ }
++EXPORT_SYMBOL_GPL(refill_skbs);
+ 
+ void netpoll_zap_completion_queue(void)
+ {
+@@ -351,7 +352,7 @@ netdev_tx_t netpoll_send_skb(struct netpoll *np, struct sk_buff *skb)
+ }
+ EXPORT_SYMBOL(netpoll_send_skb);
+ 
+-static void skb_pool_flush(struct netpoll *np)
++void skb_pool_flush(struct netpoll *np)
+ {
+ 	struct sk_buff_head *skb_pool;
+ 
+@@ -359,14 +360,16 @@ static void skb_pool_flush(struct netpoll *np)
+ 	skb_pool = &np->skb_pool;
+ 	skb_queue_purge_reason(skb_pool, SKB_CONSUMED);
+ }
++EXPORT_SYMBOL_GPL(skb_pool_flush);
+ 
+-static void refill_skbs_work_handler(struct work_struct *work)
++void refill_skbs_work_handler(struct work_struct *work)
+ {
+ 	struct netpoll *np =
+ 		container_of(work, struct netpoll, refill_wq);
+ 
+ 	refill_skbs(np);
+ }
++EXPORT_SYMBOL_GPL(refill_skbs_work_handler);
+ 
+ int __netpoll_setup(struct netpoll *np, struct net_device *ndev)
+ {
+-- 
+2.55.0
+

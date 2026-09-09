@@ -1,0 +1,105 @@
+From 6a8292d379d640ad2cfba9caa9c74da5390b498f Mon Sep 17 00:00:00 2001
+From: ChenXiaoSong <chenxiaosong@kylinos.cn>
+Date: Wed, 5 Aug 2026 05:11:11 +0000
+Subject: [PATCH 14423/15333] smb/server: deny overwriting targets with
+ non-POSIX opens
+
+Reproducer:
+
+  1. server: systemctl start ksmbd
+  2. client: mount without `posix` option
+     mount -t cifs //${server_ip}/export /mnt
+  3. client: touch /mnt/file1 /mnt/file2
+  4. client: C program: int fd = open("/mnt/file2", O_RDONLY);
+  5. client: C program: rename("/mnt/file1", "/mnt/file2");
+  6. client: C program: struct stat stbuf; fstat(fd, &stbuf);
+                        stbuf.st_nlink is 1, should be 0
+
+This patch fixes xfstests generic/035 when mounted without `posix` option.
+
+Suggested-by: Namjae Jeon <linkinjeon@kernel.org>
+Signed-off-by: ChenXiaoSong <chenxiaosong@kylinos.cn>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/vfs.c       | 13 +++++++++++++
+ fs/smb/server/vfs_cache.c | 27 +++++++++++++++++++++++++++
+ fs/smb/server/vfs_cache.h |  1 +
+ 3 files changed, 41 insertions(+)
+
+diff --git a/fs/smb/server/vfs.c b/fs/smb/server/vfs.c
+index 4c3cf376a756..286536f75144 100644
+--- a/fs/smb/server/vfs.c
++++ b/fs/smb/server/vfs.c
+@@ -723,6 +723,19 @@ int ksmbd_vfs_rename(struct ksmbd_work *work, struct ksmbd_file *old_fp,
+ 		goto out3;
+ 	}
+ 
++	/*
++	 * See MS-FSA 2.1.5.15.12.
++	 * An overwrite rename must fail with STATUS_ACCESS_DENIED if the
++	 * existing target still has a non-POSIX open.
++	 */
++	if (!(flags & (RENAME_NOREPLACE | RENAME_EXCHANGE)) &&
++	    d_inode(rd.new_dentry) &&
++	    d_inode(rd.new_dentry) != d_inode(old_child) &&
++	    ksmbd_has_other_nonposix_open(rd.new_dentry)) {
++		err = -EACCES;
++		goto out3;
++	}
++
+ 	err = ksmbd_vfs_check_rename_share(work, old_path);
+ 	if (err)
+ 		goto out3;
+diff --git a/fs/smb/server/vfs_cache.c b/fs/smb/server/vfs_cache.c
+index 028bc1b0f652..90348a409162 100644
+--- a/fs/smb/server/vfs_cache.c
++++ b/fs/smb/server/vfs_cache.c
+@@ -1137,6 +1137,33 @@ struct ksmbd_file *ksmbd_lookup_fd_inode(struct dentry *dentry)
+ 	return NULL;
+ }
+ 
++bool ksmbd_has_other_nonposix_open(struct dentry *dentry)
++{
++	struct ksmbd_file *fp;
++	struct inode *inode = d_inode(dentry);
++	unsigned int id;
++	bool ret = false;
++
++	if (!inode)
++		return false;
++
++	read_lock(&global_ft.lock);
++	idr_for_each_entry(global_ft.idr, fp, id) {
++		if (READ_ONCE(fp->f_state) != FP_INITED)
++			continue;
++		if (inode != file_inode(fp->filp))
++			continue;
++		if (fp->is_posix_ctxt)
++			continue;
++
++		ret = true;
++		break;
++	}
++	read_unlock(&global_ft.lock);
++
++	return ret;
++}
++
+ bool ksmbd_has_nonposix_open_child(struct ksmbd_file *old_fp)
+ {
+ 	struct dentry *dentry = old_fp->filp->f_path.dentry;
+diff --git a/fs/smb/server/vfs_cache.h b/fs/smb/server/vfs_cache.h
+index 9dca617bc429..5cac022b540b 100644
+--- a/fs/smb/server/vfs_cache.h
++++ b/fs/smb/server/vfs_cache.h
+@@ -212,6 +212,7 @@ bool ksmbd_has_stream_without_delete_share(struct ksmbd_file *fp);
+ int ksmbd_close_fd_app_instance_id(char *app_instance_id);
+ struct ksmbd_file *ksmbd_lookup_fd_cguid(char *cguid);
+ struct ksmbd_file *ksmbd_lookup_fd_inode(struct dentry *dentry);
++bool ksmbd_has_other_nonposix_open(struct dentry *dentry);
+ bool ksmbd_has_nonposix_open_child(struct ksmbd_file *old_fp);
+ unsigned int ksmbd_open_durable_fd(struct ksmbd_file *fp);
+ struct ksmbd_file *ksmbd_open_fd(struct ksmbd_work *work, struct file *filp);
+-- 
+2.55.0
+

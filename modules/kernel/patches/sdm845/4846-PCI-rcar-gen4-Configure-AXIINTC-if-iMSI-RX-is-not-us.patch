@@ -1,0 +1,240 @@
+From 8d6af27c0a73a49ff80555a37de3bca8f04c7849 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marek.vasut+renesas@mailbox.org>
+Date: Tue, 7 Jul 2026 22:35:40 +0200
+Subject: [PATCH 04846/15333] PCI: rcar-gen4: Configure AXIINTC if iMSI-RX is
+ not used
+
+When MSI is enabled but the DWC built-in iMSI-RX is not used, MSI must
+be handled via the GIC ITS. Configure all controller MSI registers
+accordingly.
+
+Set or clear the MSICAP0 MSIE bit and the PCIEINTSTS0EN MSI_CTRL_INT
+bit based on the MSI enable state. Set both bits when MSI is enabled.
+Clear both bits when MSI is disabled.
+
+When MSI is disabled, or when MSI is enabled together with iMSI-RX,
+clear AXIINTCADDR and AXIINTCCONT to disable any pass through of MSI
+TLPs onto the AXI bus and further into the GIC ITS translation
+registers.
+
+When MSI is enabled and iMSI-RX is not used, program AXIINTCADDR with
+the target address of the GIC ITS translation register, and program
+AXIINTCCONT to enable MSI TLP pass through onto the AXI bus and into
+the GIC ITS. This configuration allows the GIC ITS to handle MSI
+instead of the integrated iMSI-RX.
+
+The driver includes linux/irqchip/arm-gic-v3.h which pulls in headers
+which are available only on ARM and ARM64, on other architectures the
+headers are not present and the driver fails to build. This driver is
+used only on ARM64 hardware, so isolate its build only to ARM64 to avoid
+build failures on other architectures.
+
+Co-developed-by: Yoshihiro Shimoda <yoshihiro.shimoda.uh@renesas.com>
+Signed-off-by: Yoshihiro Shimoda <yoshihiro.shimoda.uh@renesas.com>
+Signed-off-by: Marek Vasut <marek.vasut+renesas@mailbox.org>
+[mani: commit log and squashed the Kconfig fix:
+       https://patch.msgid.link/20260714131957.38067-1-marek.vasut+renesas@mailbox.org]
+Signed-off-by: Manivannan Sadhasivam <mani@kernel.org>
+Signed-off-by: Bjorn Helgaas <bhelgaas@google.com>
+Link: https://patch.msgid.link/20260707203743.88299-3-marek.vasut+renesas@mailbox.org
+---
+ drivers/pci/controller/dwc/Kconfig          |   4 +-
+ drivers/pci/controller/dwc/pcie-rcar-gen4.c | 118 +++++++++++++++++++-
+ 2 files changed, 115 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/pci/controller/dwc/Kconfig b/drivers/pci/controller/dwc/Kconfig
+index aa0b784c85b4..0d4bf8d4cf56 100644
+--- a/drivers/pci/controller/dwc/Kconfig
++++ b/drivers/pci/controller/dwc/Kconfig
+@@ -344,7 +344,7 @@ config PCIE_RCAR_GEN4
+ 
+ config PCIE_RCAR_GEN4_HOST
+ 	tristate "Renesas R-Car Gen4 PCIe controller (host mode)"
+-	depends on ARCH_RENESAS || COMPILE_TEST
++	depends on ARM64 && (ARCH_RENESAS || COMPILE_TEST)
+ 	depends on PCI_MSI
+ 	select PCIE_DW_HOST
+ 	select PCIE_RCAR_GEN4
+@@ -355,7 +355,7 @@ config PCIE_RCAR_GEN4_HOST
+ 
+ config PCIE_RCAR_GEN4_EP
+ 	tristate "Renesas R-Car Gen4 PCIe controller (endpoint mode)"
+-	depends on ARCH_RENESAS || COMPILE_TEST
++	depends on ARM64 && (ARCH_RENESAS || COMPILE_TEST)
+ 	depends on PCI_ENDPOINT
+ 	select PCIE_DW_EP
+ 	select PCIE_RCAR_GEN4
+diff --git a/drivers/pci/controller/dwc/pcie-rcar-gen4.c b/drivers/pci/controller/dwc/pcie-rcar-gen4.c
+index 8b03c42f8c84..5f7211b91ee5 100644
+--- a/drivers/pci/controller/dwc/pcie-rcar-gen4.c
++++ b/drivers/pci/controller/dwc/pcie-rcar-gen4.c
+@@ -13,8 +13,11 @@
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+ #include <linux/iopoll.h>
++#include <linux/irqchip/arm-gic-v3.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_irq.h>
+ #include <linux/pci.h>
+ #include <linux/platform_device.h>
+ #include <linux/pm_runtime.h>
+@@ -31,6 +34,10 @@
+ #define DEVICE_TYPE_RC		BIT(4)
+ #define BIFUR_MOD_SET_ON	BIT(0)
+ 
++/* MSI Capability */
++#define MSICAP0			0x0050
++#define MSICAP0_MSIE		BIT(16)
++
+ /* PCIe Interrupt Status 0 */
+ #define PCIEINTSTS0		0x0084
+ 
+@@ -55,6 +62,14 @@
+ #define APP_HOLD_PHY_RST	BIT(16)
+ #define APP_LTSSM_ENABLE	BIT(0)
+ 
++/* INTC address */
++#define AXIINTCADDR		0x0a00
++
++/* INTC control & mask */
++#define AXIINTCCONT		0x0a04
++#define INTC_EN			BIT(31)
++#define INTC_MASK		GENMASK(11, 3)
++
+ /* PCIe Power Management Control */
+ #define PCIEPWRMNGCTRL		0x0070
+ #define APP_CLK_REQ_N		BIT(11)
+@@ -305,13 +320,103 @@ static struct rcar_gen4_pcie *rcar_gen4_pcie_alloc(struct platform_device *pdev)
+ 	return rcar;
+ }
+ 
++static int rcar_gen4_pcie_host_msi_addr(struct dw_pcie_rp *pp, u32 *msi_addr)
++{
++	struct dw_pcie *dw = to_dw_pcie_from_pp(pp);
++	struct device_node *msi_node = NULL;
++	struct device *dev = dw->dev;
++	struct resource res;
++	u64 addr;
++	int ret;
++
++	/*
++	 * Either the "msi-parent" or the "msi-map" phandle needs to exist
++	 * to obtain the MSI node.
++	 */
++	of_msi_xlate(dev, &msi_node, 0);
++	if (!msi_node)
++		return -ENODEV;
++
++	/* Check if "msi-parent" or the "msi-map" points to ARM GICv3 ITS. */
++	if (!of_device_is_compatible(msi_node, "arm,gic-v3-its"))
++		return dev_err_probe(dev, -ENODEV, "Compatible MSI controller not found\n");
++
++	/* Derive GITS_TRANSLATER address from GICv3 */
++	ret = of_address_to_resource(msi_node, 0, &res);
++	if (ret < 0)
++		return dev_err_probe(dev, ret, "MSI controller resources not obtained\n");
++
++	addr = res.start + GITS_TRANSLATER;
++	if (addr >= SZ_4G)
++		return dev_err_probe(dev, -EINVAL, "MSI controller address above 32bit range\n");
++
++	*msi_addr = addr;
++	return 0;
++}
++
++static int rcar_gen4_pcie_host_msi_init(struct dw_pcie_rp *pp)
++{
++	struct dw_pcie *dw = to_dw_pcie_from_pp(pp);
++	struct rcar_gen4_pcie *rcar = to_rcar_gen4_pcie(dw);
++	u32 val;
++	int ret;
++
++	/* Make sure MSICAP0 MSIE is configured. */
++	val = dw_pcie_readl_dbi(dw, MSICAP0);
++	if (pci_msi_enabled())
++		val |= MSICAP0_MSIE;
++	else
++		val &= ~MSICAP0_MSIE;
++	dw_pcie_writel_dbi(dw, MSICAP0, val);
++
++	if (!pci_msi_enabled() || pp->use_imsi_rx) {
++		/* Clear AXIINTC mapping. */
++		writel(0, rcar->base + AXIINTCADDR);
++		writel(0, rcar->base + AXIINTCCONT);
++	} else {
++		ret = rcar_gen4_pcie_host_msi_addr(pp, &val);
++		if (ret)
++			goto err;
++
++		/* Point AXIINTC to GIC ITS and enable. */
++		writel(val, rcar->base + AXIINTCADDR);
++		writel(INTC_EN | INTC_MASK, rcar->base + AXIINTCCONT);
++	}
++
++	/* Configure MSI interrupt signal */
++	val = readl(rcar->base + PCIEINTSTS0EN);
++	if (pci_msi_enabled())
++		val |= MSI_CTRL_INT;
++	else
++		val &= ~MSI_CTRL_INT;
++	writel(val, rcar->base + PCIEINTSTS0EN);
++
++	return 0;
++
++err:
++	/* Deconfigure MSICAP0 MSIE. */
++	val = dw_pcie_readl_dbi(dw, MSICAP0);
++	val &= ~MSICAP0_MSIE;
++	dw_pcie_writel_dbi(dw, MSICAP0, val);
++
++	/* Clear AXIINTC mapping. */
++	writel(0, rcar->base + AXIINTCADDR);
++	writel(0, rcar->base + AXIINTCCONT);
++
++	/* Deconfigure MSI interrupt signal */
++	val = readl(rcar->base + PCIEINTSTS0EN);
++	val &= ~MSI_CTRL_INT;
++	writel(val, rcar->base + PCIEINTSTS0EN);
++
++	return ret;
++}
++
+ /* Host mode */
+ static int rcar_gen4_pcie_host_init(struct dw_pcie_rp *pp)
+ {
+ 	struct dw_pcie *dw = to_dw_pcie_from_pp(pp);
+ 	struct rcar_gen4_pcie *rcar = to_rcar_gen4_pcie(dw);
+ 	int ret;
+-	u32 val;
+ 
+ 	gpiod_set_value_cansleep(dw->pe_rst, 1);
+ 
+@@ -328,16 +433,19 @@ static int rcar_gen4_pcie_host_init(struct dw_pcie_rp *pp)
+ 	dw_pcie_writel_dbi2(dw, PCI_BASE_ADDRESS_0, 0x0);
+ 	dw_pcie_writel_dbi2(dw, PCI_BASE_ADDRESS_1, 0x0);
+ 
+-	/* Enable MSI interrupt signal */
+-	val = readl(rcar->base + PCIEINTSTS0EN);
+-	val |= MSI_CTRL_INT;
+-	writel(val, rcar->base + PCIEINTSTS0EN);
++	ret = rcar_gen4_pcie_host_msi_init(pp);
++	if (ret)
++		goto err;
+ 
+ 	msleep(PCIE_T_PVPERL_MS);	/* pe_rst requires 100msec delay */
+ 
+ 	gpiod_set_value_cansleep(dw->pe_rst, 0);
+ 
+ 	return 0;
++
++err:
++	rcar_gen4_pcie_common_deinit(rcar);
++	return ret;
+ }
+ 
+ static void rcar_gen4_pcie_host_deinit(struct dw_pcie_rp *pp)
+-- 
+2.55.0
+

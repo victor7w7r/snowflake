@@ -1,0 +1,107 @@
+From 1c351103ce64b0b8eb4d1c1b9a2706e28c3486ae Mon Sep 17 00:00:00 2001
+From: Paul Louvel <paul.louvel@bootlin.com>
+Date: Wed, 8 Jul 2026 12:15:23 +0200
+Subject: [PATCH 11715/15333] soc: fsl: qe: Add support of IRQs in QE GPIO
+
+Some QE GPIO pins have an associated interrupt line in the QE PIC to
+signal state changes on the pin.
+
+Because the GPIO controller does not perform any interrupt handling
+itself, a nexus node (interrupt-map) is used to map each GPIO line
+supporting IRQ to the parent QE PIC interrupt domain.
+
+Add the to_irq() method in the corresponding GPIO controller driver,
+that uses the nexus node to perform the translation.
+
+Signed-off-by: Paul Louvel <paul.louvel@bootlin.com>
+Reviewed-by: Christophe Leroy (CS GROUP) <chleroy@kernel.org>
+Link: https://lore.kernel.org/r/20260708-qe-pic-gpios-v2-10-1972044cfbd1@bootlin.com
+[chleroy: Added dependency on !SPARC to fix build on sparc reported by 0-day kernel robot]
+Signed-off-by: Christophe Leroy (CS GROUP) <chleroy@kernel.org>
+---
+ drivers/soc/fsl/qe/Kconfig |  1 +
+ drivers/soc/fsl/qe/gpio.c  | 28 +++++++++++++++++++++++++++-
+ 2 files changed, 28 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/soc/fsl/qe/Kconfig b/drivers/soc/fsl/qe/Kconfig
+index 87cd1662e168..9e2350551bb1 100644
+--- a/drivers/soc/fsl/qe/Kconfig
++++ b/drivers/soc/fsl/qe/Kconfig
+@@ -71,6 +71,7 @@ config QE_USB
+ config QE_GPIO
+ 	bool "QE GPIO support"
+ 	depends on QUICC_ENGINE
++	depends on !SPARC # Should be OF_IRQ but it leads to circ. dependency
+ 	select GENERIC_IRQ_CHIP
+ 	select GPIOLIB
+ 	help
+diff --git a/drivers/soc/fsl/qe/gpio.c b/drivers/soc/fsl/qe/gpio.c
+index 6d8f4d549fe2..5cd59cfbf22f 100644
+--- a/drivers/soc/fsl/qe/gpio.c
++++ b/drivers/soc/fsl/qe/gpio.c
+@@ -16,6 +16,7 @@
+ #include <linux/gpio/driver.h>
+ #include <linux/slab.h>
+ #include <linux/export.h>
++#include <linux/of_irq.h>
+ #include <linux/platform_device.h>
+ 
+ #include <soc/fsl/qe/qe.h>
+@@ -23,6 +24,7 @@
+ #define PIN_MASK(gpio) (1UL << (QE_PIO_PINS - 1 - (gpio)))
+ 
+ struct qe_gpio_chip {
++	struct device_node *np;
+ 	struct gpio_chip gc;
+ 	void __iomem *regs;
+ 	spinlock_t lock;
+@@ -159,6 +161,29 @@ static int qe_gpio_get_direction(struct gpio_chip *gc, unsigned int gpio)
+ 		return GPIO_LINE_DIRECTION_IN;
+ }
+ 
++static int qe_gpio_to_irq(struct gpio_chip *gc, unsigned int gpio)
++{
++	struct qe_gpio_chip *qe_gc = gpiochip_get_data(gc);
++	struct of_phandle_args oirq;
++	struct irq_domain *domain;
++	int ret;
++
++	oirq.np = qe_gc->np;
++	oirq.args_count = 2;
++	oirq.args[0] = gpio;
++	oirq.args[1] = 0;
++
++	ret = of_irq_parse_raw(NULL, &oirq);
++	if (ret)
++		return ret;
++
++	domain = irq_find_host(oirq.np);
++	if (!domain)
++		return -EPROBE_DEFER;
++
++	return irq_create_of_mapping(&oirq);
++}
++
+ struct qe_pin {
+ 	/*
+ 	 * The qe_gpio_chip name is unfortunate, we should change that to
+@@ -323,7 +348,7 @@ static int qe_gpio_probe(struct platform_device *ofdev)
+ 	qe_gc = devm_kzalloc(dev, sizeof(*qe_gc), GFP_KERNEL);
+ 	if (!qe_gc)
+ 		return -ENOMEM;
+-
++	qe_gc->np = np;
+ 	spin_lock_init(&qe_gc->lock);
+ 
+ 	gc = &qe_gc->gc;
+@@ -336,6 +361,7 @@ static int qe_gpio_probe(struct platform_device *ofdev)
+ 	gc->get = qe_gpio_get;
+ 	gc->set = qe_gpio_set;
+ 	gc->set_multiple = qe_gpio_set_multiple;
++	gc->to_irq = qe_gpio_to_irq;
+ 	gc->parent = dev;
+ 	gc->owner = THIS_MODULE;
+ 
+-- 
+2.55.0
+

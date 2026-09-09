@@ -1,0 +1,77 @@
+From 1c5bc60f957d853ec7183d79419360979dddd421 Mon Sep 17 00:00:00 2001
+From: Puranjay Mohan <puranjay@kernel.org>
+Date: Thu, 13 Aug 2026 12:03:52 -0700
+Subject: [PATCH 13891/15333] selftests/bpf: Add arm64 JIT-sequence tests for
+ __arena kfunc arguments
+
+Pin the arm64 counterparts of the x86-64 rebase sequences: the single
+extended-register add for an unconditional argument, the nullable
+truncate-test-and-skip variant, and all five argument registers in one
+call. The nullable cases use a local label so the branch is pinned to
+the instruction right after the add, and the label line does not spell
+out the call because arm64 emits either a direct bl or a materialize-
+and-blr pair depending on the distance to the kfunc.
+
+Note that on arm64 an unconditional argument is one instruction with
+nothing to anchor it against, so arena_arg_jit_rebase alone cannot tell
+the two forms apart; it only requires that nothing is emitted between
+the rebase and the call. The args5 test is what pins the distinction,
+since its four consecutive adds leave no room for a nullable
+truncate-and-branch pair between them.
+
+Signed-off-by: Puranjay Mohan <puranjay@kernel.org>
+Acked-by: Xu Kuohai <xukuohai@huawei.com>
+Link: https://lore.kernel.org/bpf/20260813190356.335181-6-puranjay@kernel.org
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ .../selftests/bpf/progs/arena_kfunc_jit.c     | 20 +++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/progs/arena_kfunc_jit.c b/tools/testing/selftests/bpf/progs/arena_kfunc_jit.c
+index c9b918662616..b5a01cbc33a7 100644
+--- a/tools/testing/selftests/bpf/progs/arena_kfunc_jit.c
++++ b/tools/testing/selftests/bpf/progs/arena_kfunc_jit.c
+@@ -32,6 +32,10 @@ __jited("	movl	%edi, %edi")
+ __jited("	addq	%r12, %rdi")
+ __jited("...")
+ __jited("	callq	{{.*}}")
++__arch_arm64
++__jited("...")
++__jited("	add	x0, x28, w0, uxtw")
++__jited("	{{(bl|mov)	.*}}")
+ __success
+ int arena_arg_jit_rebase(void *ctx)
+ {
+@@ -48,6 +52,12 @@ __jited("	testl	%edi, %edi")
+ __jited("	je	L0")
+ __jited("	addq	%r12, %rdi")
+ __jited("L0:	callq	{{.*}}")
++__arch_arm64
++__jited("...")
++__jited("	mov	w0, w0")
++__jited("	cbz	w0, L0")
++__jited("	add	x0, x28, w0, uxtw")
++__jited("L0:	{{.*}}")
+ __success
+ int arena_arg_jit_nullable(void *ctx)
+ {
+@@ -72,6 +82,16 @@ __jited("	testl	%r8d, %r8d")
+ __jited("	je	L0")
+ __jited("	addq	%r12, %r8")
+ __jited("L0:	callq	{{.*}}")
++__arch_arm64
++__jited("...")
++__jited("	add	x0, x28, w0, uxtw")
++__jited("	add	x1, x28, w1, uxtw")
++__jited("	add	x2, x28, w2, uxtw")
++__jited("	add	x3, x28, w3, uxtw")
++__jited("	mov	w4, w4")
++__jited("	cbz	w4, L0")
++__jited("	add	x4, x28, w4, uxtw")
++__jited("L0:	{{.*}}")
+ __success
+ int arena_arg_jit_args5(void *ctx)
+ {
+-- 
+2.55.0
+

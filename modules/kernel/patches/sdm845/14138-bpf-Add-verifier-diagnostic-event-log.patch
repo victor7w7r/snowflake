@@ -1,0 +1,253 @@
+From daf8248701b621d8df7ea134793dbb750d4887c0 Mon Sep 17 00:00:00 2001
+From: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Date: Sat, 15 Aug 2026 08:45:58 +0200
+Subject: [PATCH 14138/15333] bpf: Add verifier diagnostic event log
+
+Add an environment-owned diagnostic history for verifier reports. Event
+payloads keep the user-facing branch history shape, while storage lives
+in bpf_verifier_env and follows the active verifier path.
+
+Grow the event array geometrically up to a 64 MiB limit. Once storage
+reaches the limit, or an allocation fails, overwrite the oldest event so
+diagnostics retain the newest useful suffix without adding per-event
+metadata.
+
+Represent saved positions as absolute logical sequence numbers. A restore
+truncates to a retained position. If its prefix has already been evicted,
+clear the abandoned suffix and preserve the missing-history position. This
+keeps marks stable across rotation without increasing their size.
+
+Add the branch event renderer and branch recording.
+
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Link: https://patch.msgid.link/20260815064612.378577-4-memxor@gmail.com
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ kernel/bpf/diagnostics.c | 130 +++++++++++++++++++++++++++++++++++++++
+ kernel/bpf/diagnostics.h |   3 +
+ kernel/bpf/verifier.c    |  21 +++++++
+ 3 files changed, 154 insertions(+)
+
+diff --git a/kernel/bpf/diagnostics.c b/kernel/bpf/diagnostics.c
+index 815aa7938b50..8f21b46adeca 100644
+--- a/kernel/bpf/diagnostics.c
++++ b/kernel/bpf/diagnostics.c
+@@ -22,8 +22,24 @@
+ #define BPF_DIAG_TAB_WIDTH 8
+ #define BPF_DIAG_FMT_CHUNK_SIZE (PAGE_SIZE - sizeof(struct diag_fmt_chunk))
+ #define BPF_DIAG_FMT_BUF_SIZE 256
++#define BPF_DIAG_EVENT_LOG_MAX_SIZE (64U << 20)
+ #define DISASM_LINE_LEN 160
+ 
++enum bpf_diag_history_kind {
++	BPF_DIAG_HISTORY_BRANCH,
++};
++
++struct bpf_diag_history_event {
++	u32 insn_idx : 24;
++	u32 kind : 8;
++	u8 in_lineage : 1;
++	union {
++		struct {
++			bool cond_true;
++		} branch;
++	};
++};
++
+ struct disasm_line {
+ 	char text[DISASM_LINE_LEN];
+ 	int idx;
+@@ -46,12 +62,23 @@ struct diag_fmt_mark {
+ 	size_t len;
+ };
+ 
++struct bpf_diag_log {
++	struct bpf_diag_history_event *events;
++	/* Sequence number of the oldest retained event on the active path. */
++	u64 first_seq;
++	u32 cnt;
++	u32 cap;
++	u32 head;
++	bool growth_failed;
++};
++
+ struct bpf_diag_scratch {
+ 	struct bpf_linfo_source source_lines[BPF_DIAG_CONTEXT_CNT];
+ 	struct disasm_line disasm_lines[BPF_DIAG_CONTEXT_CNT];
+ };
+ 
+ struct bpf_diag {
++	struct bpf_diag_log log;
+ 	struct bpf_diag_scratch scratch;
+ 	struct list_head fmt_chunks;
+ };
+@@ -191,6 +218,7 @@ void bpf_diag_free(struct bpf_verifier_env *env)
+ 		return;
+ 
+ 	diag_fmt_restore(env, (struct diag_fmt_mark){});
++	kvfree(diag->log.events);
+ 	kfree(diag);
+ 	env->diag = NULL;
+ }
+@@ -207,6 +235,95 @@ static void diag_write(struct bpf_verifier_env *env, const char *fmt, ...)
+ 	va_end(args);
+ }
+ 
++static u64 log_end(const struct bpf_diag_log *log)
++{
++	return log->first_seq + log->cnt;
++}
++
++static u32 log_pos(const struct bpf_diag_log *log, u32 idx)
++{
++	u32 pos = log->head + idx;
++
++	return pos < log->cap ? pos : pos - log->cap;
++}
++
++u64 bpf_diag_event_log_save(struct bpf_verifier_env *env)
++{
++	struct bpf_diag *diag = env->diag;
++
++	return diag ? log_end(&diag->log) : 0;
++}
++
++void bpf_diag_event_log_restore(struct bpf_verifier_env *env, u64 log_pos)
++{
++	struct bpf_diag *diag = env->diag;
++	struct bpf_diag_log *log;
++	u64 end_seq;
++
++	if (!diag)
++		return;
++
++	log = &diag->log;
++	end_seq = log_end(log);
++	if (WARN_ON_ONCE(log_pos > end_seq))
++		log_pos = end_seq;
++
++	/*
++	 * A deep abandoned path may have rotated away the shared prefix. In
++	 * that case, restart with an empty retained suffix and remember that
++	 * every event before the restored mark is unavailable.
++	 */
++	if (log_pos <= log->first_seq) {
++		log->first_seq = log_pos;
++		log->head = 0;
++		log->cnt = 0;
++		return;
++	}
++
++	log->cnt = log_pos - log->first_seq;
++}
++
++static void diag_append_history(struct bpf_verifier_env *env,
++				const struct bpf_diag_history_event *event)
++{
++	struct bpf_diag_history_event *events;
++	struct bpf_diag *diag = env->diag;
++	struct bpf_diag_log *log;
++	u32 cap, max_events;
++
++	if (!diag)
++		return;
++	log = &diag->log;
++
++	if (log->cnt < log->cap) {
++		log->events[log_pos(log, log->cnt++)] = *event;
++		return;
++	}
++
++	max_events = BPF_DIAG_EVENT_LOG_MAX_SIZE / sizeof(*events);
++	if (log->growth_failed || log->cap == max_events)
++		goto rotate;
++
++	cap = min(log->cap ? log->cap * 2 : 64, max_events);
++	events = kvrealloc(log->events, array_size(cap, sizeof(*events)), GFP_KERNEL_ACCOUNT);
++	if (!events) {
++		log->growth_failed = true;
++		goto rotate;
++	}
++	log->events = events;
++	log->cap = cap;
++	log->events[log->cnt++] = *event;
++	return;
++
++rotate:
++	if (log->cap) {
++		log->events[log->head++] = *event;
++		if (log->head == log->cap)
++			log->head = 0;
++	}
++	log->first_seq++;
++}
++
+ static void diag_print_wrapped_prefixed(struct bpf_verifier_env *env, const char *first_prefix,
+ 					const char *next_prefix, const char *text)
+ {
+@@ -535,3 +652,16 @@ static void bpf_diag_source(struct bpf_verifier_env *env, u32 insn_idx, const ch
+ out_restore:
+ 	diag_fmt_restore(env, mark);
+ }
++
++void bpf_diag_record_branch(struct bpf_verifier_env *env, u32 insn_idx, bool cond_true)
++{
++	struct bpf_diag_history_event event = {
++		.insn_idx = insn_idx,
++		.kind = BPF_DIAG_HISTORY_BRANCH,
++		.branch = {
++			.cond_true = cond_true,
++		},
++	};
++
++	diag_append_history(env, &event);
++}
+diff --git a/kernel/bpf/diagnostics.h b/kernel/bpf/diagnostics.h
+index ba268b589ac9..6eda2fd65ee1 100644
+--- a/kernel/bpf/diagnostics.h
++++ b/kernel/bpf/diagnostics.h
+@@ -16,6 +16,9 @@ char *bpf_diag_fmt_buf(struct bpf_verifier_env *env, size_t size);
+ const char *bpf_diag_vfmt(struct bpf_verifier_env *env, const char *fmt, va_list args)
+ 	__printf(2, 0);
+ const char *bpf_diag_fmt(struct bpf_verifier_env *env, const char *fmt, ...) __printf(2, 3);
++u64 bpf_diag_event_log_save(struct bpf_verifier_env *env);
++void bpf_diag_event_log_restore(struct bpf_verifier_env *env, u64 log_pos);
+ void bpf_diag_free(struct bpf_verifier_env *env);
++void bpf_diag_record_branch(struct bpf_verifier_env *env, u32 insn_idx, bool cond_true);
+ 
+ #endif /* __BPF_DIAGNOSTICS_H */
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 2f330230f8d5..60dcb87a2417 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -17439,6 +17439,27 @@ static int do_check(struct bpf_verifier_env *env)
+ 
+ 		state->last_insn_idx = env->prev_insn_idx;
+ 		state->insn_idx = env->insn_idx;
++		/*
++		 * Record the incoming edge so active and queued paths use the same
++		 * branch-recording path. A zero-offset conditional has identical
++		 * successors, so its outcome cannot be reconstructed from the edge.
++		 */
++		if (!state->speculative && prev_insn_idx >= 0 && prev_insn_idx < insn_cnt) {
++			struct bpf_insn *prev_insn = &insns[prev_insn_idx];
++			int fallthrough_idx = prev_insn_idx + 1;
++			int branch_idx = prev_insn_idx + bpf_jmp_offset(prev_insn) + 1;
++			u8 class = BPF_CLASS(prev_insn->code);
++			u8 opcode = BPF_OP(prev_insn->code);
++
++			if ((class == BPF_JMP || class == BPF_JMP32) &&
++			    opcode != BPF_JA && opcode != BPF_CALL && opcode != BPF_EXIT &&
++			    opcode <= BPF_JCOND && branch_idx != fallthrough_idx) {
++				if (env->insn_idx == branch_idx)
++					bpf_diag_record_branch(env, prev_insn_idx, true);
++				else if (env->insn_idx == fallthrough_idx)
++					bpf_diag_record_branch(env, prev_insn_idx, false);
++			}
++		}
+ 
+ 		if (bpf_is_prune_point(env, env->insn_idx)) {
+ 			err = bpf_is_state_visited(env, env->insn_idx);
+-- 
+2.55.0
+

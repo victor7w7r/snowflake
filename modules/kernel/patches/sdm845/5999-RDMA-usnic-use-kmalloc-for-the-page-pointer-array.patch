@@ -1,0 +1,44 @@
+From ed3760b376384248b2977f67e0f803bad1657f8e Mon Sep 17 00:00:00 2001
+From: Leon Romanovsky <leonro@nvidia.com>
+Date: Thu, 16 Jul 2026 05:03:31 -0400
+Subject: [PATCH 05999/15333] RDMA/usnic: use kmalloc() for the page pointer
+ array
+
+usnic_uiom_get_pages() uses a page-sized array of struct page pointers
+as temporary storage for pin_user_pages(). Nothing requires the array to
+come directly from the page allocator.
+
+Use kmalloc() for the array and kfree() after the pinning loop.
+
+Link: https://patch.msgid.link/20260715-get_pages-to-kmalloc-v1-3-b0b7fce288be@nvidia.com
+Acked-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Signed-off-by: Leon Romanovsky <leonro@nvidia.com>
+---
+ drivers/infiniband/hw/usnic/usnic_uiom.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/infiniband/hw/usnic/usnic_uiom.c b/drivers/infiniband/hw/usnic/usnic_uiom.c
+index 691c64a73516..201c35039a74 100644
+--- a/drivers/infiniband/hw/usnic/usnic_uiom.c
++++ b/drivers/infiniband/hw/usnic/usnic_uiom.c
+@@ -114,7 +114,7 @@ static int usnic_uiom_get_pages(unsigned long addr, size_t size, int writable,
+ 
+ 	INIT_LIST_HEAD(chunk_list);
+ 
+-	page_list = (struct page **) __get_free_page(GFP_KERNEL);
++	page_list = kmalloc(PAGE_SIZE, GFP_KERNEL);
+ 	if (!page_list)
+ 		return -ENOMEM;
+ 
+@@ -182,7 +182,7 @@ static int usnic_uiom_get_pages(unsigned long addr, size_t size, int writable,
+ 		mmgrab(uiomr->owning_mm);
+ 
+ 	mmap_read_unlock(mm);
+-	free_page((unsigned long) page_list);
++	kfree(page_list);
+ 	return ret;
+ }
+ 
+-- 
+2.55.0
+

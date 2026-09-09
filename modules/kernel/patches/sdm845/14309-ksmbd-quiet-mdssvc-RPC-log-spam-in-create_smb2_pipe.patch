@@ -1,0 +1,51 @@
+From 6cbb144f8ed7ab7cb86f2f120740f578db9b62e0 Mon Sep 17 00:00:00 2001
+From: Gael Blivet <gael.blivet@gmail.com>
+Date: Thu, 9 Jul 2026 18:50:45 +0200
+Subject: [PATCH 14309/15333] ksmbd: quiet mdssvc RPC log spam in
+ create_smb2_pipe
+
+silenced __rpc_method()'s own "Unsupported RPC: mdssvc" log line
+but missed that ksmbd_session_rpc_open() failing for that same,
+now-still-rejected pipe also trips a second, separate pr_err() here in
+its caller. macOS's routine mdssvc (Spotlight) probes still spam the
+kernel log via this second site on every single probe, defeating the
+original commit's stated purpose.
+
+Suppress this specific case the same way the other site does; behavior
+is unchanged for every other RPC failure.
+
+__rpc_method() (mgmt/user_session.c) returns -ENOENT for mdssvc, not
+-EINVAL.
+
+Assisted-by: Claude:claude-sonnet-5
+Signed-off-by: Gael Blivet <gael.blivet@gmail.com>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/smb2pdu.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index 70f8e780da33..19d90a6eee51 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -2649,7 +2649,16 @@ static noinline int create_smb2_pipe(struct ksmbd_work *work)
+ 
+ 	id = ksmbd_session_rpc_open(work->sess, name);
+ 	if (id < 0) {
+-		pr_err("Unable to open RPC pipe: %d\n", id);
++		/*
++		 * mdssvc (Spotlight) is a routine, expected probe from macOS
++		 * that we deliberately don't support -- it's disabled at the
++		 * __rpc_method() level (mgmt/user_session.c), but this
++		 * generic failure log would otherwise still fire on every
++		 * single probe regardless.
++		 */
++		if (!(id == -ENOENT && (!strcmp(name, "\\mdssvc") ||
++					!strcmp(name, "mdssvc"))))
++			pr_err("Unable to open RPC pipe: %d\n", id);
+ 		err = id;
+ 		goto out;
+ 	}
+-- 
+2.55.0
+

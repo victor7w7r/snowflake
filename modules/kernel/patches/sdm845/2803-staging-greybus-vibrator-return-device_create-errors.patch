@@ -1,0 +1,36 @@
+From 3d2718e3b10d2409573520165fbd39ea4b01f279 Mon Sep 17 00:00:00 2001
+From: Alfie Varghese <alfievarghese22@gmail.com>
+Date: Thu, 18 Jun 2026 11:34:39 +0000
+Subject: [PATCH 02803/15333] staging: greybus: vibrator: return
+ device_create() errors
+
+gb_vibrator_probe() maps any device_create() failure to -EINVAL. This
+loses the real errno returned by the driver core, such as -ENOMEM, and
+makes probe failures harder to diagnose correctly.
+
+Return PTR_ERR(dev) instead so callers receive the actual failure reason
+while preserving the existing cleanup path.
+
+Signed-off-by: Alfie Varghese <alfievarghese22@gmail.com>
+Link: https://patch.msgid.link/20260618113439.569-1-alfievarghese22@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/greybus/vibrator.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/staging/greybus/vibrator.c b/drivers/staging/greybus/vibrator.c
+index 0ec4d317c9db..763c234fbc03 100644
+--- a/drivers/staging/greybus/vibrator.c
++++ b/drivers/staging/greybus/vibrator.c
+@@ -161,7 +161,7 @@ static int gb_vibrator_probe(struct gb_bundle *bundle,
+ 	dev = device_create(&vibrator_class, &bundle->dev,
+ 			    MKDEV(0, 0), vib, "vibrator%d", vib->minor);
+ 	if (IS_ERR(dev)) {
+-		retval = -EINVAL;
++		retval = PTR_ERR(dev);
+ 		goto err_ida_remove;
+ 	}
+ 	vib->dev = dev;
+-- 
+2.55.0
+

@@ -1,0 +1,249 @@
+From 509ca545d425512f83ca70093f6d836ec8ab5bd1 Mon Sep 17 00:00:00 2001
+From: Jordan Rife <jordan@jrife.io>
+Date: Thu, 18 Jun 2026 11:20:32 -0700
+Subject: [PATCH 00856/15333] bpf: Support BPF_F_EGRESS with bpf_redirect_peer
+
+We have several use cases where a pod injects traffic into the datapath
+of another so that the traffic appears to have originated from that
+pod. One such use case is a synthetic flow generator which injects
+synthetic traffic into a pod's datapath to enable dynamic probing and
+debugging. Another is a transparent proxy where connections originating
+from one pod are redirected towards another which proxies that
+connection. The new connection is bound to the IP of the original pod
+using IP_TRANSPARENT and its traffic is injected into that pod's
+datapath and handled as if it had originated there. This can be used for
+mTLS, etc.
+
+We use bpf_redirect(BPF_F_INGRESS) to direct traffic leaving the proxy,
+flow generator, etc. towards the target pod, ensuring that eBPF programs
+that are meant to intercept traffic leaving that pod are executed.
+However, this doesn't work with netkit.
+
+With netkit, an ingress redirection from proxy to workload skips eBPF
+programs that are meant to intercept traffic leaving the pod, since they
+reside on the netkit peer device. One workaround is to attach the
+same program to both the netkit peer device and the TCX ingress hook for
+the netkit pair's primary interface, but
+
+a) This seems hacky and we need to be careful not to run the same
+   program twice for the same skb in cases where we want to pass that
+   traffic to the host stack.
+b) We're trying to keep the proxy redirection / traffic injection
+   systems as modular and separated from Cilium as possible, the system
+   that manages netkit setup and core eBPF programming.
+
+It would be handy if instead we could redirect traffic directly from
+one netkit peer device to another. This patch proposes an extension
+to bpf_redirect_peer to allow us to do just that.
+
+With this patch, the BPF_F_EGRESS flag tells bpf_redirect_peer to emit
+the skb in the egress direction of the target interface's peer device
+While the main use case is netkit, I suppose you could also use this
+mode with veth as well if, e.g., there were some eBPF programs attached
+to that side of the veth pair that needed to intercept traffic.
+
+ +---------------------------------------------------------------------+
+ | +-------------------------+         6. bpf_redirect_neigh(eth0)     |
+ | | pod (10.244.0.10)       |           ------------------------      |
+ | |                         |          |                        |     |
+ | |              +--------+ |          |      +---------+       |     |
+ | | 1. packet -->|        | |          |      |         |       |     |
+ | |    leaves ^  | netkit |<===========|======| netkit  |       |     |
+ | |           |  | peer   |=======(eBPF)=====>| primary |       |     |
+ | |           |  |        | |          |      |         |       |     |
+ | |           |  +--------+ |          |      +---------+       |     |
+ | |           |             |          | 2. bpf_redirect        v     |
+ | +-----------|-------------+          |___________________   +-------|
+ |             |                                            |  | eth0  |
+ |             | 5. bpf_redirect_peer(BPF_F_EGRESS)         |  +-------|
+ |             |________________________                    |          |
+ | +-------------------------+          |                   |          |
+ | | proxy (10.244.0.11)     |          |                   |          |
+ | | IP_TRANSPARENT          |          |                   |          |
+ | |              +--------+ |          |      +---------+  |          |
+ | | 3. packet <--|        | |          |      |         |<--          |
+ | |    enters    | netkit |<===========|======| netkit  |             |
+ | |    [proxy]   | peer   |=======(eBPF)=====>| primary |             |
+ | | 4. packet -->|        | |                 |         |             |
+ | |    leaves    +--------+ |                 +---------+             |
+ | |    sip=10.244.0.10      |                                         |
+ | +-------------------------+                                         |
+ +---------------------------------------------------------------------+
+
+Using the proxy use case as an example, in step 5 we would redirect
+traffic leaving the proxy towards the pod's peer device using
+bpf_redirect_peer(BPF_F_EGRESS).
+
+As a bonus, since the skb doesn't have to go through the backlog queue
+it can take full advantage of netkit's performance benefits. I set up a
+test where outgoing iperf3 traffic is injected into the datapath of
+another pod using either bpf_redirect_peer(BPF_F_EGRESS) or
+bpf_redirect(BPF_F_INGRESS). I used Cilium's eBPF host routing mode
+which skips the host stack and uses BPF redirect helpers to do all the
+routing.
+
+  (net.ipv4.tcp_congestion_control=cubic,mtu=1500,100GiB link,Cilium
+   eBPF host routing mode)
+
+BASELINE [bpf_redirect(BPF_F_INGRESS)]
+  1. [iperf pod] ==bpf_redirect([pod b], BPF_F_INGRESS)==> [pod b]
+  2. [pod b]     ==bpf_redirect_neigh([eth0])==>           eth0
+  3. eth0        ==over network==>                         [host b]
+
+  [ ID] Interval           Transfer     Bitrate         Retr
+  [  5]   0.00-60.00  sec   231 GBytes  33.0 Gbits/sec  12060     sender
+  [  5]   0.00-60.00  sec   230 GBytes  33.0 Gbits/sec            receiver
+
+TEST [bpf_redirect_peer(BPF_F_EGRESS)]
+  1. [iperf pod] ==bpf_redirect_peer([pod b], BPF_F_EGRESS)==> [pod b]
+  2. [pod b]     ==bpf_redirect_neigh([eth0])==>               eth0
+  3. eth0        ==over network==>                             [host b]
+
+  [ ID] Interval           Transfer     Bitrate         Retr
+  [  5]   0.00-60.00  sec   272 GBytes  38.9 Gbits/sec    0       sender
+  [  5]   0.00-60.00  sec   272 GBytes  38.9 Gbits/sec            receiver
+
+In this test, using bpf_redirect_peer(BPF_F_EGRESS) for the hop from
+[iperf pod] to [pod b] led to ~18% more throughput compared to
+bpf_redirect(BPF_F_INGRESS).
+
+Signed-off-by: Jordan Rife <jordan@jrife.io>
+Acked-by: Daniel Borkmann <daniel@iogearbox.net>
+Acked-by: Paul Chaignon <paul.chaignon@gmail.com>
+Reviewed-by: Jiayuan Chen <jiayuan.chen@linux.dev>
+Link: https://lore.kernel.org/r/20260618182035.43811-2-jordan@jrife.io
+Signed-off-by: Alexei Starovoitov <ast@kernel.org>
+---
+ include/uapi/linux/bpf.h       | 19 +++++++++++--------
+ net/core/filter.c              | 12 +++++++-----
+ tools/include/uapi/linux/bpf.h | 19 +++++++++++--------
+ 3 files changed, 29 insertions(+), 21 deletions(-)
+
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index 89b36de5fdbb..c91b5a4bda03 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -5079,17 +5079,19 @@ union bpf_attr {
+  * 	Description
+  * 		Redirect the packet to another net device of index *ifindex*.
+  * 		This helper is somewhat similar to **bpf_redirect**\ (), except
+- * 		that the redirection happens to the *ifindex*' peer device and
+- * 		the netns switch takes place from ingress to ingress without
+- * 		going through the CPU's backlog queue.
++ * 		that the redirection happens to the *ifindex*' peer device. If
++ * 		*flags* is 0, the netns switch takes place from ingress to
++ * 		ingress without going through the CPU's backlog queue. If the
++ * 		**BPF_F_EGRESS** flag is provided then redirection happens in
++ * 		the egress direction of the peer device.
+  *
+  * 		*skb*\ **->mark** and *skb*\ **->tstamp** are not cleared during
+  * 		the netns switch.
+  *
+- * 		The *flags* argument is reserved and must be 0. The helper is
+- * 		currently only supported for tc BPF program types at the
+- * 		ingress hook and for veth and netkit target device types. The
+- * 		peer device must reside in a different network namespace.
++ * 		If the *flags* argument is 0, the helper is currently only
++ * 		supported for tc BPF program types at the ingress hook and for
++ * 		veth and netkit target device types. The peer device must reside
++ * 		in a different network namespace.
+  * 	Return
+  * 		The helper returns **TC_ACT_REDIRECT** on success or
+  * 		**TC_ACT_SHOT** on error.
+@@ -6336,9 +6338,10 @@ enum {
+ /* Flags for bpf_redirect and bpf_redirect_map helpers */
+ enum {
+ 	BPF_F_INGRESS		= (1ULL << 0), /* used for skb path */
++	BPF_F_EGRESS		= (1ULL << 1), /* used for skb path */
+ 	BPF_F_BROADCAST		= (1ULL << 3), /* used for XDP path */
+ 	BPF_F_EXCLUDE_INGRESS	= (1ULL << 4), /* used for XDP path */
+-#define BPF_F_REDIRECT_FLAGS (BPF_F_INGRESS | BPF_F_BROADCAST | BPF_F_EXCLUDE_INGRESS)
++#define BPF_F_REDIRECT_FLAGS (BPF_F_INGRESS | BPF_F_EGRESS | BPF_F_BROADCAST | BPF_F_EXCLUDE_INGRESS)
+ };
+ 
+ #define __bpf_md_ptr(type, name)	\
+diff --git a/net/core/filter.c b/net/core/filter.c
+index b446aa8be5c3..4f5cbcac3e78 100644
+--- a/net/core/filter.c
++++ b/net/core/filter.c
+@@ -2529,16 +2529,18 @@ int skb_do_redirect(struct sk_buff *skb)
+ 	if (unlikely(!dev))
+ 		goto out_drop;
+ 	if (flags & BPF_F_PEER) {
+-		if (unlikely(!skb_at_tc_ingress(skb)))
+-			goto out_drop;
+ 		dev = skb_get_peer_dev(dev);
+ 		if (unlikely(!dev ||
+ 			     !(dev->flags & IFF_UP) ||
+ 			     net_eq(net, dev_net(dev))))
+ 			goto out_drop;
++		skb_scrub_packet(skb, false);
++		if (flags & BPF_F_EGRESS)
++			return __bpf_redirect(skb, dev, 0);
++		if (unlikely(!skb_at_tc_ingress(skb)))
++			goto out_drop;
+ 		skb->dev = dev;
+ 		dev_sw_netstats_rx_add(dev, skb->len);
+-		skb_scrub_packet(skb, false);
+ 		return -EAGAIN;
+ 	}
+ 	return flags & BPF_F_NEIGH ?
+@@ -2575,10 +2577,10 @@ BPF_CALL_2(bpf_redirect_peer, u32, ifindex, u64, flags)
+ {
+ 	struct bpf_redirect_info *ri = bpf_net_ctx_get_ri();
+ 
+-	if (unlikely(flags))
++	if (unlikely(flags & ~BPF_F_EGRESS))
+ 		return TC_ACT_SHOT;
+ 
+-	ri->flags = BPF_F_PEER;
++	ri->flags = BPF_F_PEER | flags;
+ 	ri->tgt_index = ifindex;
+ 
+ 	return TC_ACT_REDIRECT;
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index 89b36de5fdbb..c91b5a4bda03 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -5079,17 +5079,19 @@ union bpf_attr {
+  * 	Description
+  * 		Redirect the packet to another net device of index *ifindex*.
+  * 		This helper is somewhat similar to **bpf_redirect**\ (), except
+- * 		that the redirection happens to the *ifindex*' peer device and
+- * 		the netns switch takes place from ingress to ingress without
+- * 		going through the CPU's backlog queue.
++ * 		that the redirection happens to the *ifindex*' peer device. If
++ * 		*flags* is 0, the netns switch takes place from ingress to
++ * 		ingress without going through the CPU's backlog queue. If the
++ * 		**BPF_F_EGRESS** flag is provided then redirection happens in
++ * 		the egress direction of the peer device.
+  *
+  * 		*skb*\ **->mark** and *skb*\ **->tstamp** are not cleared during
+  * 		the netns switch.
+  *
+- * 		The *flags* argument is reserved and must be 0. The helper is
+- * 		currently only supported for tc BPF program types at the
+- * 		ingress hook and for veth and netkit target device types. The
+- * 		peer device must reside in a different network namespace.
++ * 		If the *flags* argument is 0, the helper is currently only
++ * 		supported for tc BPF program types at the ingress hook and for
++ * 		veth and netkit target device types. The peer device must reside
++ * 		in a different network namespace.
+  * 	Return
+  * 		The helper returns **TC_ACT_REDIRECT** on success or
+  * 		**TC_ACT_SHOT** on error.
+@@ -6336,9 +6338,10 @@ enum {
+ /* Flags for bpf_redirect and bpf_redirect_map helpers */
+ enum {
+ 	BPF_F_INGRESS		= (1ULL << 0), /* used for skb path */
++	BPF_F_EGRESS		= (1ULL << 1), /* used for skb path */
+ 	BPF_F_BROADCAST		= (1ULL << 3), /* used for XDP path */
+ 	BPF_F_EXCLUDE_INGRESS	= (1ULL << 4), /* used for XDP path */
+-#define BPF_F_REDIRECT_FLAGS (BPF_F_INGRESS | BPF_F_BROADCAST | BPF_F_EXCLUDE_INGRESS)
++#define BPF_F_REDIRECT_FLAGS (BPF_F_INGRESS | BPF_F_EGRESS | BPF_F_BROADCAST | BPF_F_EXCLUDE_INGRESS)
+ };
+ 
+ #define __bpf_md_ptr(type, name)	\
+-- 
+2.55.0
+

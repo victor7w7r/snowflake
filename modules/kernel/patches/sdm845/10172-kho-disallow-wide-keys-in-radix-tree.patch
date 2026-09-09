@@ -1,0 +1,66 @@
+From 955409ba5715033ef3a028627b75b3a002d6d2fe Mon Sep 17 00:00:00 2001
+From: "Pratyush Yadav (Google)" <pratyush@kernel.org>
+Date: Sat, 1 Aug 2026 10:48:12 +0200
+Subject: [PATCH 10172/15333] kho: disallow wide keys in radix tree
+
+The KHO radix tree was designed to track preserved pages. So it does not
+provide the capability to track any 64-bit key. Instead, it limits the
+key width to how much it needs for tracking PFNs and their orders.
+Limiting the width reduces the number of levels in the tree.
+
+KHO is not expected to be the only user of the radix tree. With the API
+generalized to allow other users, now it is possible to add any key to
+the tree.
+
+Check the key width at kho_radix_add_key(), and error out if it exceeds
+what the tree can handle. Do this instead of increasing the tree depth
+since right now there are no users that need to use wider keys, so this
+avoids memory overhead and ABI breakage.
+
+Signed-off-by: Pratyush Yadav (Google) <pratyush@kernel.org>
+Link: https://patch.msgid.link/20260801084833.1897543-4-pratyush@kernel.org
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+---
+ kernel/liveupdate/kexec_handover.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/kernel/liveupdate/kexec_handover.c b/kernel/liveupdate/kexec_handover.c
+index ea24f23ce292..e7451743b87e 100644
+--- a/kernel/liveupdate/kexec_handover.c
++++ b/kernel/liveupdate/kexec_handover.c
+@@ -156,6 +156,11 @@ static unsigned long kho_radix_get_table_index(unsigned long key,
+  * intermediate nodes do not exist along the path, they are allocated and added
+  * to the tree.
+  *
++ * NOTE: Currently only keys of width up to %KHO_RADIX_KEY_WIDTH are supported.
++ * This limit only exists because current users of the radix tree don't use more
++ * than that. Changing the maximum width requires changing the tree depth, which
++ * needs bumping the ABI version.
++ *
+  * Return: 0 on success, or a negative error code on failure.
+  */
+ int kho_radix_add_key(struct kho_radix_tree *tree, unsigned long key)
+@@ -172,6 +177,9 @@ int kho_radix_add_key(struct kho_radix_tree *tree, unsigned long key)
+ 	if (WARN_ON_ONCE(!tree->root))
+ 		return -EINVAL;
+ 
++	if (unlikely(fls64(key) > KHO_RADIX_KEY_WIDTH))
++		return -ERANGE;
++
+ 	might_sleep();
+ 
+ 	guard(mutex)(&tree->lock);
+@@ -244,6 +252,10 @@ void kho_radix_del_key(struct kho_radix_tree *tree, unsigned long key)
+ 	if (WARN_ON_ONCE(!tree->root))
+ 		return;
+ 
++	/* Keys wider than KHO_RADIX_KEY_WIDTH are not allowed to be added. */
++	if (unlikely(fls64(key) > KHO_RADIX_KEY_WIDTH))
++		return;
++
+ 	might_sleep();
+ 
+ 	guard(mutex)(&tree->lock);
+-- 
+2.55.0
+

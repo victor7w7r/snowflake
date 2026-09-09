@@ -1,0 +1,71 @@
+From 5ec6f300e26ee1c7d34e0d7e9acd9083af124b55 Mon Sep 17 00:00:00 2001
+From: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+Date: Fri, 24 Jul 2026 10:57:25 -0400
+Subject: [PATCH 12154/15333] Bluetooth: Add MGMT Shorter Connection Interval
+ setting
+
+Add MGMT_SETTING_SCI (bit 25) to advertise support for the Shorter
+Connection Interval (SCI) feature. It is reported in the supported
+settings whenever the controller is SCI capable, and in the current
+settings whenever LE is enabled and the controller is SCI capable
+(SCI has no separate enable command, so it is a passive capability).
+
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ include/net/bluetooth/hci_core.h | 2 ++
+ include/net/bluetooth/mgmt.h     | 1 +
+ net/bluetooth/mgmt.c             | 6 ++++++
+ 3 files changed, 9 insertions(+)
+
+diff --git a/include/net/bluetooth/hci_core.h b/include/net/bluetooth/hci_core.h
+index f48f875022d4..b1f531b3b6ab 100644
+--- a/include/net/bluetooth/hci_core.h
++++ b/include/net/bluetooth/hci_core.h
+@@ -2087,6 +2087,8 @@ void hci_conn_del_sysfs(struct hci_conn *conn);
+ 
+ #define le_sci_capable(dev) \
+ 	((dev)->le_features[9] & HCI_LE_SCI)
++#define le_sci_enabled(dev) \
++	(le_enabled(dev) && le_sci_capable(dev))
+ 
+ #define mws_transport_config_capable(dev) (((dev)->commands[30] & 0x08) && \
+ 	(!hci_test_quirk((dev), HCI_QUIRK_BROKEN_MWS_TRANSPORT_CONFIG)))
+diff --git a/include/net/bluetooth/mgmt.h b/include/net/bluetooth/mgmt.h
+index 08daed7a96d5..b285441db55b 100644
+--- a/include/net/bluetooth/mgmt.h
++++ b/include/net/bluetooth/mgmt.h
+@@ -118,6 +118,7 @@ struct mgmt_rp_read_index_list {
+ #define MGMT_SETTING_LL_PRIVACY		BIT(22)
+ #define MGMT_SETTING_PAST_SENDER	BIT(23)
+ #define MGMT_SETTING_PAST_RECEIVER	BIT(24)
++#define MGMT_SETTING_SCI		BIT(25)
+ 
+ #define MGMT_OP_READ_INFO		0x0004
+ #define MGMT_READ_INFO_SIZE		0
+diff --git a/net/bluetooth/mgmt.c b/net/bluetooth/mgmt.c
+index 167d75e34526..fec41af69d62 100644
+--- a/net/bluetooth/mgmt.c
++++ b/net/bluetooth/mgmt.c
+@@ -861,6 +861,9 @@ static u32 get_supported_settings(struct hci_dev *hdev)
+ 	if (past_receiver_capable(hdev))
+ 		settings |= MGMT_SETTING_PAST_RECEIVER;
+ 
++	if (le_sci_capable(hdev))
++		settings |= MGMT_SETTING_SCI;
++
+ 	settings |= MGMT_SETTING_PHY_CONFIGURATION;
+ 
+ 	return settings;
+@@ -952,6 +955,9 @@ static u32 get_current_settings(struct hci_dev *hdev)
+ 	if (past_receiver_enabled(hdev))
+ 		settings |= MGMT_SETTING_PAST_RECEIVER;
+ 
++	if (le_sci_enabled(hdev))
++		settings |= MGMT_SETTING_SCI;
++
+ 	return settings;
+ }
+ 
+-- 
+2.55.0
+

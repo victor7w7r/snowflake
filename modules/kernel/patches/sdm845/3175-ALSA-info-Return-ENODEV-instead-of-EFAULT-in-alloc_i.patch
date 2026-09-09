@@ -1,0 +1,37 @@
+From 52f15bf51b6c61f03c51e9acfa38145ee6c7c07a Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Tue, 7 Jul 2026 15:45:03 +0700
+Subject: [PATCH 03175/15333] ALSA: info: Return -ENODEV instead of -EFAULT in
+ alloc_info_private()
+
+When try_module_get() fails in alloc_info_private(), the owning module is
+going away and the device is no longer usable, so -EFAULT ("bad address")
+is the wrong error. Return -ENODEV, matching the other -ENODEV path in the
+same function.
+This changes the errno reported to userspace on this rare race.
+No other behaviour changes.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260707084506.718583-4-phucduc.bui@gmail.com
+---
+ sound/core/info.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sound/core/info.c b/sound/core/info.c
+index 54834dbe6b59..3b8ccda04e1a 100644
+--- a/sound/core/info.c
++++ b/sound/core/info.c
+@@ -78,7 +78,7 @@ static int alloc_info_private(struct snd_info_entry *entry,
+ 	if (!entry || !entry->p)
+ 		return -ENODEV;
+ 	if (!try_module_get(entry->module))
+-		return -EFAULT;
++		return -ENODEV;
+ 	data = kzalloc_obj(*data);
+ 	if (!data) {
+ 		module_put(entry->module);
+-- 
+2.55.0
+

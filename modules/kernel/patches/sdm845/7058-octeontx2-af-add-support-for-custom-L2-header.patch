@@ -1,0 +1,55 @@
+From e2834100751ab80b32a29390fac4c26660b86a9b Mon Sep 17 00:00:00 2001
+From: Satheesh Paul A <psatheesh@marvell.com>
+Date: Wed, 15 Jul 2026 12:50:34 +0530
+Subject: [PATCH 07058/15333] octeontx2-af: add support for custom L2 header
+
+Add packet parsing support for custom L2 headers. Also add support
+to include a field from the custom header for flow tag generation.
+
+Introduce a new flow key type NIX_FLOW_KEY_TYPE_CH_LEN_90B which
+maps to the NPC_LT_LA_CUSTOM_L2_90B_ETHER layer type. This extracts
+a 2-byte field at a 24-byte offset in layer A to be used in flow
+tag generation.
+
+Signed-off-by: Satheesh Paul A <psatheesh@marvell.com>
+Signed-off-by: Nitin Shetty J <nshettyj@marvell.com>
+Link: https://patch.msgid.link/20260715072035.617544-1-nshettyj@marvell.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/marvell/octeontx2/af/mbox.h    | 1 +
+ drivers/net/ethernet/marvell/octeontx2/af/rvu_nix.c | 7 +++++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/drivers/net/ethernet/marvell/octeontx2/af/mbox.h b/drivers/net/ethernet/marvell/octeontx2/af/mbox.h
+index 253dfee9646e..10552e9cf519 100644
+--- a/drivers/net/ethernet/marvell/octeontx2/af/mbox.h
++++ b/drivers/net/ethernet/marvell/octeontx2/af/mbox.h
+@@ -1263,6 +1263,7 @@ struct nix_rss_flowkey_cfg {
+ #define NIX_FLOW_KEY_TYPE_INNR_UDP      BIT(15)
+ #define NIX_FLOW_KEY_TYPE_INNR_SCTP     BIT(16)
+ #define NIX_FLOW_KEY_TYPE_INNR_ETH_DMAC BIT(17)
++#define NIX_FLOW_KEY_TYPE_CH_LEN_90B    BIT(18)
+ #define NIX_FLOW_KEY_TYPE_CUSTOM0	BIT(19)
+ #define NIX_FLOW_KEY_TYPE_VLAN		BIT(20)
+ #define NIX_FLOW_KEY_TYPE_IPV4_PROTO	BIT(21)
+diff --git a/drivers/net/ethernet/marvell/octeontx2/af/rvu_nix.c b/drivers/net/ethernet/marvell/octeontx2/af/rvu_nix.c
+index c5bddd2ad920..dade7bb6deb7 100644
+--- a/drivers/net/ethernet/marvell/octeontx2/af/rvu_nix.c
++++ b/drivers/net/ethernet/marvell/octeontx2/af/rvu_nix.c
+@@ -4288,6 +4288,13 @@ static int set_flowkey_fields(struct nix_rx_flowkey_alg *alg, u32 flow_cfg)
+ 			field->ltype_match = NPC_LT_LC_CUSTOM0;
+ 			field->ltype_mask = 0xF;
+ 			break;
++		case NIX_FLOW_KEY_TYPE_CH_LEN_90B:
++			field->lid = NPC_LID_LA;
++			field->hdr_offset = 24;
++			field->bytesm1 = 1; /* 2 Bytes*/
++			field->ltype_match = NPC_LT_LA_CUSTOM_L2_90B_ETHER;
++			field->ltype_mask = 0xF;
++			break;
+ 		case NIX_FLOW_KEY_TYPE_VLAN:
+ 			field->lid = NPC_LID_LB;
+ 			field->hdr_offset = 2; /* Skip TPID (2-bytes) */
+-- 
+2.55.0
+

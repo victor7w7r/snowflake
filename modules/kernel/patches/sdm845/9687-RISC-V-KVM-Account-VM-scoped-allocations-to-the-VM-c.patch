@@ -1,0 +1,131 @@
+From b7a4bd0c80656dae7f0a7a9c9be4fdf6f58d29ab Mon Sep 17 00:00:00 2001
+From: "Yuhang.chen" <yhchen312@gmail.com>
+Date: Thu, 16 Jul 2026 14:41:12 +0800
+Subject: [PATCH 09687/15333] RISC-V: KVM: Account VM-scoped allocations to the
+ VM cgroup
+
+Charge the per-VM and per-vCPU allocations (stage-2 PGD, APLIC state,
+IMSIC context, vector context, FWFT config, PMU snapshot) to the
+allocating process's memory cgroup via GFP_KERNEL_ACCOUNT / __GFP_ACCOUNT.
+Per-CPU module-init allocations and transient scratch buffers are left
+unaccounted.
+
+Measured results (KVM guest run in a memory cgroup; VM cgroup
+memory.current after guest boot):
+
+  VM cgroup memory.current    1044480 bytes
+
+Assisted-by: YuanSheng:deepseek-v4-pro
+Co-developed-by: Quan Zhou <zhouquan@iscas.ac.cn>
+Signed-off-by: Quan Zhou <zhouquan@iscas.ac.cn>
+Signed-off-by: Yuhang.chen <yhchen312@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+Link: https://lore.kernel.org/r/20260716064112.2387938-1-yhchen312@gmail.com
+Signed-off-by: Anup Patel <anup@brainfault.org>
+---
+ arch/riscv/kvm/aia_aplic.c     | 3 ++-
+ arch/riscv/kvm/aia_imsic.c     | 4 ++--
+ arch/riscv/kvm/mmu.c           | 4 ++--
+ arch/riscv/kvm/vcpu_pmu.c      | 2 +-
+ arch/riscv/kvm/vcpu_sbi_fwft.c | 2 +-
+ arch/riscv/kvm/vcpu_vector.c   | 4 ++--
+ 6 files changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/arch/riscv/kvm/aia_aplic.c b/arch/riscv/kvm/aia_aplic.c
+index 748107c347d9..be902ea6480b 100644
+--- a/arch/riscv/kvm/aia_aplic.c
++++ b/arch/riscv/kvm/aia_aplic.c
+@@ -581,7 +581,8 @@ int kvm_riscv_aia_aplic_init(struct kvm *kvm)
+ 		return 0;
+ 
+ 	/* Allocate APLIC global state */
+-	aplic = kzalloc_flex(*aplic, irqs, kvm->arch.aia.nr_sources + 1);
++	aplic = kzalloc_flex(*aplic, irqs, kvm->arch.aia.nr_sources + 1,
++			     GFP_KERNEL_ACCOUNT);
+ 	if (!aplic)
+ 		return -ENOMEM;
+ 	kvm->arch.aia.aplic_state = aplic;
+diff --git a/arch/riscv/kvm/aia_imsic.c b/arch/riscv/kvm/aia_imsic.c
+index bea9ec7192cd..c1af23e79ae0 100644
+--- a/arch/riscv/kvm/aia_imsic.c
++++ b/arch/riscv/kvm/aia_imsic.c
+@@ -1104,7 +1104,7 @@ int kvm_riscv_vcpu_aia_imsic_init(struct kvm_vcpu *vcpu)
+ 		return -EINVAL;
+ 
+ 	/* Allocate IMSIC context */
+-	imsic = kzalloc_obj(*imsic);
++	imsic = kzalloc_obj(*imsic, GFP_KERNEL_ACCOUNT);
+ 	if (!imsic)
+ 		return -ENOMEM;
+ 	vcpu->arch.aia_context.imsic_state = imsic;
+@@ -1117,7 +1117,7 @@ int kvm_riscv_vcpu_aia_imsic_init(struct kvm_vcpu *vcpu)
+ 	imsic->vsfile_hgei = imsic->vsfile_cpu = -1;
+ 
+ 	/* Setup IMSIC SW-file */
+-	swfile_page = alloc_pages(GFP_KERNEL | __GFP_ZERO,
++	swfile_page = alloc_pages(GFP_KERNEL_ACCOUNT | __GFP_ZERO,
+ 				  get_order(sizeof(*imsic->swfile)));
+ 	if (!swfile_page) {
+ 		ret = -ENOMEM;
+diff --git a/arch/riscv/kvm/mmu.c b/arch/riscv/kvm/mmu.c
+index 154f3afaf1c9..496cd9ede5cd 100644
+--- a/arch/riscv/kvm/mmu.c
++++ b/arch/riscv/kvm/mmu.c
+@@ -757,8 +757,8 @@ int kvm_riscv_mmu_alloc_pgd(struct kvm *kvm)
+ 		return -EINVAL;
+ 	}
+ 
+-	pgd_page = alloc_pages(GFP_KERNEL | __GFP_ZERO,
+-				get_order(kvm_riscv_gstage_pgd_size));
++	pgd_page = alloc_pages(GFP_KERNEL_ACCOUNT | __GFP_ZERO,
++			       get_order(kvm_riscv_gstage_pgd_size));
+ 	if (!pgd_page)
+ 		return -ENOMEM;
+ 	kvm->arch.pgd = page_to_virt(pgd_page);
+diff --git a/arch/riscv/kvm/vcpu_pmu.c b/arch/riscv/kvm/vcpu_pmu.c
+index 2025b664961c..f241cfb6eb3a 100644
+--- a/arch/riscv/kvm/vcpu_pmu.c
++++ b/arch/riscv/kvm/vcpu_pmu.c
+@@ -452,7 +452,7 @@ int kvm_riscv_vcpu_pmu_snapshot_set_shmem(struct kvm_vcpu *vcpu, unsigned long s
+ 		}
+ 	}
+ 
+-	kvpmu->sdata = kzalloc(snapshot_area_size, GFP_ATOMIC);
++	kvpmu->sdata = kzalloc(snapshot_area_size, GFP_ATOMIC | __GFP_ACCOUNT);
+ 	if (!kvpmu->sdata) {
+ 		sbiret = SBI_ERR_FAILURE;
+ 		goto out;
+diff --git a/arch/riscv/kvm/vcpu_sbi_fwft.c b/arch/riscv/kvm/vcpu_sbi_fwft.c
+index fb7df1201840..7d0aaeff537b 100644
+--- a/arch/riscv/kvm/vcpu_sbi_fwft.c
++++ b/arch/riscv/kvm/vcpu_sbi_fwft.c
+@@ -557,7 +557,7 @@ static int kvm_sbi_ext_fwft_init(struct kvm_vcpu *vcpu)
+ 	int i;
+ 
+ 	fwft->configs = kzalloc_objs(struct kvm_sbi_fwft_config,
+-				     ARRAY_SIZE(features));
++				     ARRAY_SIZE(features), GFP_KERNEL_ACCOUNT);
+ 	if (!fwft->configs)
+ 		return -ENOMEM;
+ 
+diff --git a/arch/riscv/kvm/vcpu_vector.c b/arch/riscv/kvm/vcpu_vector.c
+index 3708616e2c32..e87f49e06f14 100644
+--- a/arch/riscv/kvm/vcpu_vector.c
++++ b/arch/riscv/kvm/vcpu_vector.c
+@@ -77,11 +77,11 @@ void kvm_riscv_vcpu_host_vector_restore(struct kvm_cpu_context *cntx)
+ 
+ int kvm_riscv_vcpu_alloc_vector_context(struct kvm_vcpu *vcpu)
+ {
+-	vcpu->arch.guest_context.vector.datap = kzalloc(riscv_v_vsize, GFP_KERNEL);
++	vcpu->arch.guest_context.vector.datap = kzalloc(riscv_v_vsize, GFP_KERNEL_ACCOUNT);
+ 	if (!vcpu->arch.guest_context.vector.datap)
+ 		return -ENOMEM;
+ 
+-	vcpu->arch.host_context.vector.datap = kzalloc(riscv_v_vsize, GFP_KERNEL);
++	vcpu->arch.host_context.vector.datap = kzalloc(riscv_v_vsize, GFP_KERNEL_ACCOUNT);
+ 	if (!vcpu->arch.host_context.vector.datap) {
+ 		kfree(vcpu->arch.guest_context.vector.datap);
+ 		vcpu->arch.guest_context.vector.datap = NULL;
+-- 
+2.55.0
+

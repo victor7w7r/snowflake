@@ -1,0 +1,63 @@
+From 14b68141bcffafde22848c18569e821675afe9e6 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 10 Jul 2026 17:21:36 +0700
+Subject: [PATCH 03699/15333] ASoC: xilinx: xlnx_i2s: Use dev_err_probe() and
+ drop redundant error handling
+
+Use dev_err_probe() for probe error handling where appropriate to
+simplify the code and properly handle deferred probe.
+Also remove redundant error messages when the called helper already
+reports failures, returning the error directly to avoid duplicate
+logging.
+
+Reviewed-by: Michal Simek <michal.simek@amd.com>
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260710102138.29347-2-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/xilinx/xlnx_i2s.c | 18 +++++++-----------
+ 1 file changed, 7 insertions(+), 11 deletions(-)
+
+diff --git a/sound/soc/xilinx/xlnx_i2s.c b/sound/soc/xilinx/xlnx_i2s.c
+index ca915a001ad5..0676da122edd 100644
+--- a/sound/soc/xilinx/xlnx_i2s.c
++++ b/sound/soc/xilinx/xlnx_i2s.c
+@@ -185,17 +185,15 @@ static int xlnx_i2s_probe(struct platform_device *pdev)
+ 		return PTR_ERR(drv_data->base);
+ 
+ 	ret = of_property_read_u32(node, "xlnx,num-channels", &drv_data->channels);
+-	if (ret < 0) {
+-		dev_err(dev, "cannot get supported channels\n");
+-		return ret;
+-	}
++	if (ret < 0)
++		return dev_err_probe(dev, ret, "cannot get supported channels\n");
++
+ 	drv_data->channels *= 2;
+ 
+ 	ret = of_property_read_u32(node, "xlnx,dwidth", &drv_data->data_width);
+-	if (ret < 0) {
+-		dev_err(dev, "cannot get data width\n");
+-		return ret;
+-	}
++	if (ret < 0)
++		return dev_err_probe(dev, ret, "cannot get data width\n");
++
+ 	switch (drv_data->data_width) {
+ 	case 16:
+ 		format = SNDRV_PCM_FMTBIT_S16_LE;
+@@ -233,10 +231,8 @@ static int xlnx_i2s_probe(struct platform_device *pdev)
+ 
+ 	ret = devm_snd_soc_register_component(&pdev->dev, &xlnx_i2s_component,
+ 					      &drv_data->dai_drv, 1);
+-	if (ret) {
+-		dev_err(&pdev->dev, "i2s component registration failed\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	dev_info(&pdev->dev, "%s DAI registered\n", drv_data->dai_drv.name);
+ 
+-- 
+2.55.0
+

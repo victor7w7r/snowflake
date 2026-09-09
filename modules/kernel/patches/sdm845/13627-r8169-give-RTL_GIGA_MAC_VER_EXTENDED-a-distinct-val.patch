@@ -1,0 +1,43 @@
+From d77f3f01682688ff5db18f027f66c34b4b39e1ac Mon Sep 17 00:00:00 2001
+From: Karl Mehltretter <kmehltretter@gmail.com>
+Date: Sat, 8 Aug 2026 12:19:41 +0200
+Subject: [PATCH 13627/15333] r8169: give RTL_GIGA_MAC_VER_EXTENDED a distinct
+ value
+
+RTL_GIGA_MAC_VER_EXTENDED implicitly follows
+RTL_GIGA_MAC_VER_LAST = RTL_GIGA_MAC_NONE - 1, so it has the same value
+as RTL_GIGA_MAC_NONE.
+
+rtl_init_one() therefore sends unknown chips through extended detection.
+If TX_CONFIG_V2 reads as zero, they are misidentified as RTL9151AS
+instead of being rejected.
+
+Give RTL_GIGA_MAC_VER_EXTENDED a distinct value. It is only a detection
+marker and is never stored in tp->mac_version.
+
+Found by Clang's -Wduplicate-enum and verified with a QEMU stub.
+
+Cc: stable+noautosel@kernel.org # untested fix to unlikely driver error path
+Signed-off-by: Karl Mehltretter <kmehltretter@gmail.com>
+Link: https://patch.msgid.link/20260808101941.57666-1-kmehltretter@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/realtek/r8169.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/realtek/r8169.h b/drivers/net/ethernet/realtek/r8169.h
+index 0b9c1d4eb48b..fb772cc04310 100644
+--- a/drivers/net/ethernet/realtek/r8169.h
++++ b/drivers/net/ethernet/realtek/r8169.h
+@@ -74,7 +74,7 @@ enum mac_version {
+ 	RTL_GIGA_MAC_VER_80,
+ 	RTL_GIGA_MAC_NONE,
+ 	RTL_GIGA_MAC_VER_LAST = RTL_GIGA_MAC_NONE - 1,
+-	RTL_GIGA_MAC_VER_EXTENDED
++	RTL_GIGA_MAC_VER_EXTENDED = RTL_GIGA_MAC_NONE + 1
+ };
+ 
+ struct rtl8169_private;
+-- 
+2.55.0
+

@@ -1,0 +1,39 @@
+From 33da57cc4a3a6f0c4accc3ec6ca26314efd1700b Mon Sep 17 00:00:00 2001
+From: Igor Putko <igorpetindev@gmail.com>
+Date: Fri, 10 Jul 2026 18:01:13 +0300
+Subject: [PATCH 05429/15333] staging: nvec: nvec_power: use GFP_KERNEL in
+ probe()
+
+nvec_power_probe() calls devm_kzalloc() with GFP_NOWAIT, which
+disables direct reclaim and is meant for atomic context. probe()
+runs in normal process context and may sleep, so this needlessly
+risks a spurious -ENOMEM under memory pressure instead of just
+waiting for reclaim like every other probe() allocation does.
+
+nvec.c's own tegra_nvec_probe() already uses GFP_KERNEL for the
+identical pattern, confirming this is an oversight, not intentional.
+
+Signed-off-by: Igor Putko <igorpetindev@gmail.com>
+Acked-by: Marc Dietrich <marvin24@gmx.de>
+Link: https://patch.msgid.link/20260710150113.3041-1-igorpetindev@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/nvec/nvec_power.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/staging/nvec/nvec_power.c b/drivers/staging/nvec/nvec_power.c
+index 2faab9fdedef..c514d51a9e57 100644
+--- a/drivers/staging/nvec/nvec_power.c
++++ b/drivers/staging/nvec/nvec_power.c
+@@ -377,7 +377,7 @@ static int nvec_power_probe(struct platform_device *pdev)
+ 	struct nvec_chip *nvec = dev_get_drvdata(pdev->dev.parent);
+ 	struct power_supply_config psy_cfg = {};
+ 
+-	power = devm_kzalloc(&pdev->dev, sizeof(struct nvec_power), GFP_NOWAIT);
++	power = devm_kzalloc(&pdev->dev, sizeof(struct nvec_power), GFP_KERNEL);
+ 	if (!power)
+ 		return -ENOMEM;
+ 
+-- 
+2.55.0
+

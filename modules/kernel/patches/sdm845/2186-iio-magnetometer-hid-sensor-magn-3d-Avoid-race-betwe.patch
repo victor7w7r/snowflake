@@ -1,0 +1,81 @@
+From 3e37afb5697e1b30bd739fe38909d3dbf2493bb9 Mon Sep 17 00:00:00 2001
+From: Sanjay Chitroda <sanjayembeddedse@gmail.com>
+Date: Mon, 22 Jun 2026 11:00:03 +0530
+Subject: [PATCH 02186/15333] iio: magnetometer: hid-sensor-magn-3d: Avoid race
+ between callback setup and device exposure
+
+The driver currently exposes the IIO device to userspace before
+completing sensor hub callback registration, and similarly removes
+callbacks while the device can still be accessed during teardown.
+
+This creates a timing window where userspace may enable the buffer
+before callbacks are available. In such cases:
+- samples can be dropped,
+- buffered reads may observe stale or no data.
+
+Reorder probe and remove paths to ensure callbacks are active before
+device exposure and are removed after device is no longer accessible.
+
+This avoids a race window leading to data loss.
+
+Signed-off-by: Sanjay Chitroda <sanjayembeddedse@gmail.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@intel.com>
+Acked-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/magnetometer/hid-sensor-magn-3d.c | 20 +++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/iio/magnetometer/hid-sensor-magn-3d.c b/drivers/iio/magnetometer/hid-sensor-magn-3d.c
+index 23884825eb00..acae77273bd5 100644
+--- a/drivers/iio/magnetometer/hid-sensor-magn-3d.c
++++ b/drivers/iio/magnetometer/hid-sensor-magn-3d.c
+@@ -513,12 +513,6 @@ static int hid_magn_3d_probe(struct platform_device *pdev)
+ 		return ret;
+ 	}
+ 
+-	ret = iio_device_register(indio_dev);
+-	if (ret) {
+-		dev_err(&pdev->dev, "device register failed\n");
+-		goto error_remove_trigger;
+-	}
+-
+ 	magn_state->callbacks.send_event = magn_3d_proc_event;
+ 	magn_state->callbacks.capture_sample = magn_3d_capture_sample;
+ 	magn_state->callbacks.pdev = pdev;
+@@ -526,13 +520,19 @@ static int hid_magn_3d_probe(struct platform_device *pdev)
+ 					&magn_state->callbacks);
+ 	if (ret < 0) {
+ 		dev_err(&pdev->dev, "callback reg failed\n");
+-		goto error_iio_unreg;
++		goto error_remove_trigger;
++	}
++
++	ret = iio_device_register(indio_dev);
++	if (ret) {
++		dev_err(&pdev->dev, "device register failed\n");
++		goto error_remove_callback;
+ 	}
+ 
+ 	return ret;
+ 
+-error_iio_unreg:
+-	iio_device_unregister(indio_dev);
++error_remove_callback:
++	sensor_hub_remove_callback(hsdev, HID_USAGE_SENSOR_COMPASS_3D);
+ error_remove_trigger:
+ 	hid_sensor_remove_trigger(indio_dev, &magn_state->magn_flux_attributes);
+ 	return ret;
+@@ -545,8 +545,8 @@ static void hid_magn_3d_remove(struct platform_device *pdev)
+ 	struct iio_dev *indio_dev = platform_get_drvdata(pdev);
+ 	struct magn_3d_state *magn_state = iio_priv(indio_dev);
+ 
+-	sensor_hub_remove_callback(hsdev, HID_USAGE_SENSOR_COMPASS_3D);
+ 	iio_device_unregister(indio_dev);
++	sensor_hub_remove_callback(hsdev, HID_USAGE_SENSOR_COMPASS_3D);
+ 	hid_sensor_remove_trigger(indio_dev, &magn_state->magn_flux_attributes);
+ }
+ 
+-- 
+2.55.0
+

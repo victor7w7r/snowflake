@@ -1,0 +1,37 @@
+From 4137d69124a29506a09756af0aaf0c7acd2a60f6 Mon Sep 17 00:00:00 2001
+From: Joel Fernandes <joelagnelf@nvidia.com>
+Date: Sat, 18 Jul 2026 13:15:32 -0400
+Subject: [PATCH 07074/15333] rcu: Remove unused expedited_need_qs field from
+ rcu_state
+
+The ->expedited_need_qs counter was part of the old expedited
+grace-period machinery that spun waiting for each CPU to check in.
+The current implementation instead tracks holdout CPUs via the
+rcu_node structures' ->expmask fields and waits on the ->exp_wq[]
+wait queues, so nothing reads or writes ->expedited_need_qs any
+longer.
+
+Remove the field to avoid wasting space in rcu_state and to keep
+readers of the expedited code from searching for nonexistent users.
+
+Signed-off-by: Joel Fernandes <joelagnelf@nvidia.com>
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ kernel/rcu/tree.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/kernel/rcu/tree.h b/kernel/rcu/tree.h
+index 4069132f9d44..587bd71396ea 100644
+--- a/kernel/rcu/tree.h
++++ b/kernel/rcu/tree.h
+@@ -391,7 +391,6 @@ struct rcu_state {
+ 	struct mutex exp_mutex;			/* Serialize expedited GP. */
+ 	struct mutex exp_wake_mutex;		/* Serialize wakeup. */
+ 	unsigned long expedited_sequence;	/* Take a ticket. */
+-	atomic_t expedited_need_qs;		/* # CPUs left to check in. */
+ 	struct swait_queue_head expedited_wq;	/* Wait for check-ins. */
+ 	int ncpus_snap;				/* # CPUs seen last time. */
+ 	u8 cbovld;				/* Callback overload now? */
+-- 
+2.55.0
+

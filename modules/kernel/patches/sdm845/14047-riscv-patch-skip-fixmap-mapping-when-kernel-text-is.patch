@@ -1,0 +1,46 @@
+From 8d9d4fd2a15ff961a5f4ddd8ac672ec4628542be Mon Sep 17 00:00:00 2001
+From: Xiaofeng Yuan <xiaofengmian@163.com>
+Date: Fri, 14 Aug 2026 08:27:42 +0000
+Subject: [PATCH 14047/15333] riscv: patch: skip fixmap mapping when kernel
+ text is already writable
+
+patch_map() always creates a temporary writable mapping via fixmap for
+kernel text addresses, even when CONFIG_STRICT_KERNEL_RWX is disabled
+and the kernel text is already mapped with _PAGE_WRITE.
+
+This is unnecessary overhead at best, and on minimal configurations
+it can cause page faults.
+
+Skip the fixmap path for kernel text when CONFIG_STRICT_KERNEL_RWX
+is not enabled, since the text pages are already writable in that case.
+The module text path is already gated on CONFIG_STRICT_MODULE_RWX and
+is kept unchanged.
+
+Reported-by: Klara Modin <klara@kasm.eu>
+Closes: https://lore.kernel.org/all/ant_8TaBbov_GS4i@soda.int.kasm.eu/
+Reported-by: Lad Prabhakar <prabhakar.csengg@gmail.com>
+Closes: https://lore.kernel.org/all/CA+V-a8tQK8rih9SGGTyqrEBGpNkx4H0eX2YccCRrgkVAPr+EBg@mail.gmail.com/
+Tested-by: Klara Modin <klarasmodin@gmail.com>
+Tested-by: Lad Prabhakar <prabhakar.mahadev-lad.rj@bp.renesas.com>
+Link: https://patch.msgid.link/20260814082742.148403-3-xiaofengmian@163.com
+Signed-off-by: Paul Walmsley <pjw@kernel.org>
+---
+ arch/riscv/kernel/patch.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/riscv/kernel/patch.c b/arch/riscv/kernel/patch.c
+index 16b243376f36..2239c28981bc 100644
+--- a/arch/riscv/kernel/patch.c
++++ b/arch/riscv/kernel/patch.c
+@@ -45,6 +45,8 @@ static __always_inline void *patch_map(void *addr, const unsigned int fixmap)
+ 	phys_addr_t phys;
+ 
+ 	if (core_kernel_text(uintaddr) || is_kernel_exittext(uintaddr)) {
++		if (!IS_ENABLED(CONFIG_STRICT_KERNEL_RWX))
++			return addr;
+ 		phys = __pa_symbol(addr);
+ 	} else if (IS_ENABLED(CONFIG_STRICT_MODULE_RWX)) {
+ 		struct page *page = vmalloc_to_page(addr);
+-- 
+2.55.0
+

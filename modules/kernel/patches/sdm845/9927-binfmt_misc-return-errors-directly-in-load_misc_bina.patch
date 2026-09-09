@@ -1,0 +1,134 @@
+From 0eec8a042817b9a70fd183689e55969d00965d4e Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Fri, 10 Jul 2026 11:33:16 +0200
+Subject: [PATCH 09927/15333] binfmt_misc: return errors directly in
+ load_misc_binary()
+
+load_misc_binary() seeds retval with the error for checks that
+happen further down, reassigns it along the way and funnels every
+exit through a ret label whose only job is dropping the entry
+reference, so figuring out what an early return actually returns
+means replaying the assignment history. Give put_binfmt_handler() a
+cleanup class and take the reference with __free() so every failure
+can return its error right where the condition is checked. The
+comment at the label restated what the put_binfmt_handler()
+kernel-doc already explains, it goes with the label. Drop the dead
+NULL initialization of interp_file which is assigned on all paths
+before use.
+
+No functional change.
+
+Link: https://patch.msgid.link/20260710-work-binfmt_misc-locking-v3-15-a162f7cb58d6@kernel.org
+Reviewed-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/binfmt_misc.c | 41 ++++++++++++++---------------------------
+ 1 file changed, 14 insertions(+), 27 deletions(-)
+
+diff --git a/fs/binfmt_misc.c b/fs/binfmt_misc.c
+index 7c631001d394..cb66f40eb145 100644
+--- a/fs/binfmt_misc.c
++++ b/fs/binfmt_misc.c
+@@ -183,6 +183,8 @@ static void put_binfmt_handler(struct binfmt_misc_entry *e)
+ 	}
+ }
+ 
++DEFINE_FREE(put_binfmt_handler, struct binfmt_misc_entry *, if (_T) put_binfmt_handler(_T))
++
+ /**
+  * current_binfmt_misc - get the binfmt_misc instance of the caller's user namespace
+  *
+@@ -215,48 +217,47 @@ static struct binfmt_misc *current_binfmt_misc(void)
+  */
+ static int load_misc_binary(struct linux_binprm *bprm)
+ {
+-	struct binfmt_misc_entry *fmt;
+-	struct file *interp_file = NULL;
+-	int retval = -ENOEXEC;
++	struct binfmt_misc_entry *fmt __free(put_binfmt_handler) = NULL;
++	struct file *interp_file;
+ 	struct binfmt_misc *misc;
++	int retval;
+ 
+ 	misc = current_binfmt_misc();
+ 	if (!READ_ONCE(misc->enabled))
+-		return retval;
++		return -ENOEXEC;
+ 
+ 	fmt = get_binfmt_handler(misc, bprm);
+ 	if (!fmt)
+-		return retval;
++		return -ENOEXEC;
+ 
+ 	/* Need to be able to load the file after exec */
+-	retval = -ENOENT;
+ 	if (bprm->interp_flags & BINPRM_FLAGS_PATH_INACCESSIBLE)
+-		goto ret;
++		return -ENOENT;
+ 
+ 	if (fmt->flags & MISC_FMT_PRESERVE_ARGV0) {
+ 		bprm->interp_flags |= BINPRM_FLAGS_PRESERVE_ARGV0;
+ 	} else {
+ 		retval = remove_arg_zero(bprm);
+ 		if (retval)
+-			goto ret;
++			return retval;
+ 	}
+ 
+ 	/* make argv[1] be the path to the binary */
+ 	retval = copy_string_kernel(bprm->interp, bprm);
+ 	if (retval < 0)
+-		goto ret;
++		return retval;
+ 	bprm->argc++;
+ 
+ 	/* add the interp as argv[0] */
+ 	retval = copy_string_kernel(fmt->interpreter, bprm);
+ 	if (retval < 0)
+-		goto ret;
++		return retval;
+ 	bprm->argc++;
+ 
+ 	/* Update interp in case binfmt_script needs it. */
+ 	retval = bprm_change_interp(fmt->interpreter, bprm);
+ 	if (retval < 0)
+-		goto ret;
++		return retval;
+ 
+ 	if (fmt->flags & MISC_FMT_OPEN_FILE) {
+ 		interp_file = file_clone_open(fmt->interp_file);
+@@ -271,29 +272,15 @@ static int load_misc_binary(struct linux_binprm *bprm)
+ 	} else {
+ 		interp_file = open_exec(fmt->interpreter);
+ 	}
+-	retval = PTR_ERR(interp_file);
+ 	if (IS_ERR(interp_file))
+-		goto ret;
++		return PTR_ERR(interp_file);
+ 
+ 	bprm->interpreter = interp_file;
+ 	if (fmt->flags & MISC_FMT_OPEN_BINARY)
+ 		bprm->have_execfd = 1;
+ 	if (fmt->flags & MISC_FMT_CREDENTIALS)
+ 		bprm->execfd_creds = 1;
+-
+-	retval = 0;
+-ret:
+-
+-	/*
+-	 * If we actually put the entry here all concurrent calls to
+-	 * load_misc_binary() will have finished. We also know
+-	 * that for the refcount to be zero someone must have concurently
+-	 * removed the binary type handler from the list and it's our job to
+-	 * free it.
+-	 */
+-	put_binfmt_handler(fmt);
+-
+-	return retval;
++	return 0;
+ }
+ 
+ /* Command parsers */
+-- 
+2.55.0
+

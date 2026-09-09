@@ -1,0 +1,101 @@
+From 0fdee7c5fa886554503001cecea049f053237381 Mon Sep 17 00:00:00 2001
+From: Yang Erkun <yangerkun@huawei.com>
+Date: Wed, 5 Aug 2026 20:29:25 +0800
+Subject: [PATCH 14217/15333] nbd: clear queue limits on disconnect
+
+An inactive nbd device may refuse any I/O operations. The nbd_config_put
+function calls invalidate_disk, which sets the device capacity to zero
+to reject all read and write I/O. For zero-sector flush I/O requests
+from blkdev_issue_flush, if the write cache is disabled, the zero-sector
+flush I/O immediately returns 0 in submit_bio_noacct. However, since
+nbd_config_put does not clear the write cache state, an inactive nbd
+device might still have the write cache enabled. In this situation,
+zero-sector flush I/O will return -EIO because there is no active socket.
+Additionally, BLK_FEAT_FUA and BLK_FEAT_ROTATIONAL flags may also remain
+stale, resetting all of them ensures consistent behavior.
+
+The limits update uses queue_limits_commit_update() (the non-freezing
+variant) because config_refs == 0 here means every fd is closed and recv
+threads have drained, so no in-flight I/O can read q->limits concurrently.
+
+Reviewed-by: Yu Kuai <yukuai@fygo.io>
+Signed-off-by: Yang Erkun <yangerkun@huawei.com>
+Link: https://patch.msgid.link/20260805122930.57647-4-yangerkun@huawei.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ drivers/block/nbd.c | 43 ++++++++++++++++++++++++++-----------------
+ 1 file changed, 26 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/block/nbd.c b/drivers/block/nbd.c
+index 7ec85f94f742..78df6f459da6 100644
+--- a/drivers/block/nbd.c
++++ b/drivers/block/nbd.c
+@@ -331,6 +331,26 @@ static void nbd_mark_nsock_dead(struct nbd_device *nbd, struct nbd_sock *nsock,
+ 	nsock->sent = 0;
+ }
+ 
++static void nbd_apply_limits(struct queue_limits *lim, u32 flags)
++{
++	lim->features &= ~(BLK_FEAT_WRITE_CACHE | BLK_FEAT_FUA | BLK_FEAT_ROTATIONAL);
++	lim->max_hw_discard_sectors = 0;
++	lim->max_write_zeroes_sectors = 0;
++
++	if (flags & NBD_FLAG_SEND_TRIM)
++		lim->max_hw_discard_sectors = UINT_MAX >> SECTOR_SHIFT;
++	if (flags & NBD_FLAG_SEND_FLUSH) {
++		lim->features |= BLK_FEAT_WRITE_CACHE;
++		if (flags & NBD_FLAG_SEND_FUA)
++			lim->features |= BLK_FEAT_FUA;
++	}
++
++	if (flags & NBD_FLAG_ROTATIONAL)
++		lim->features |= BLK_FEAT_ROTATIONAL;
++	if (flags & NBD_FLAG_SEND_WRITE_ZEROES)
++		lim->max_write_zeroes_sectors = UINT_MAX >> SECTOR_SHIFT;
++}
++
+ static int nbd_set_size(struct nbd_device *nbd, loff_t bytesize, loff_t blksize)
+ {
+ 	struct queue_limits lim;
+@@ -352,23 +372,7 @@ static int nbd_set_size(struct nbd_device *nbd, loff_t bytesize, loff_t blksize)
+ 		return 0;
+ 
+ 	lim = queue_limits_start_update(nbd->disk->queue);
+-	if (nbd->config->flags & NBD_FLAG_SEND_TRIM)
+-		lim.max_hw_discard_sectors = UINT_MAX >> SECTOR_SHIFT;
+-	else
+-		lim.max_hw_discard_sectors = 0;
+-	if (!(nbd->config->flags & NBD_FLAG_SEND_FLUSH)) {
+-		lim.features &= ~(BLK_FEAT_WRITE_CACHE | BLK_FEAT_FUA);
+-	} else if (nbd->config->flags & NBD_FLAG_SEND_FUA) {
+-		lim.features |= BLK_FEAT_WRITE_CACHE | BLK_FEAT_FUA;
+-	} else {
+-		lim.features |= BLK_FEAT_WRITE_CACHE;
+-		lim.features &= ~BLK_FEAT_FUA;
+-	}
+-	if (nbd->config->flags & NBD_FLAG_ROTATIONAL)
+-		lim.features |= BLK_FEAT_ROTATIONAL;
+-	if (nbd->config->flags & NBD_FLAG_SEND_WRITE_ZEROES)
+-		lim.max_write_zeroes_sectors = UINT_MAX >> SECTOR_SHIFT;
+-
++	nbd_apply_limits(&lim, nbd->config->flags);
+ 	lim.logical_block_size = blksize;
+ 	lim.physical_block_size = blksize;
+ 	error = queue_limits_commit_update_frozen(nbd->disk->queue, &lim);
+@@ -1469,8 +1473,13 @@ static void nbd_config_put(struct nbd_device *nbd)
+ 	if (refcount_dec_and_mutex_lock(&nbd->config_refs,
+ 					&nbd->config_lock)) {
+ 		struct nbd_config *config = nbd->config;
++		struct queue_limits lim;
+ 		nbd_dev_dbg_close(nbd);
+ 		invalidate_disk(nbd->disk);
++		/* reset queue limits to default */
++		lim = queue_limits_start_update(nbd->disk->queue);
++		nbd_apply_limits(&lim, 0);
++		queue_limits_commit_update(nbd->disk->queue, &lim);
+ 		if (nbd->config->bytesize)
+ 			kobject_uevent(&nbd_to_dev(nbd)->kobj, KOBJ_CHANGE);
+ 		if (test_and_clear_bit(NBD_RT_HAS_PID_FILE,
+-- 
+2.55.0
+

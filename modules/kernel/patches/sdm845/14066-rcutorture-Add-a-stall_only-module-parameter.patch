@@ -1,0 +1,76 @@
+From d1ff05605db14d8d6d1578f289595210c60b385f Mon Sep 17 00:00:00 2001
+From: "Paul E. McKenney" <paulmck@kernel.org>
+Date: Fri, 26 Jun 2026 12:44:20 -0700
+Subject: [PATCH 14066/15333] rcutorture: Add a stall_only module parameter
+
+This commit adds a stall_only module parameter that shuts off all
+rcutorture kthreads other than the RCU CPU stall-warning test kthreads.
+The purpose of this is to test production applictions' reactions to
+CPU stalls, and with minimal additional overhead.  Or you can omit the
+stall-warning tests as well and get a heavy no-op, your choice!
+
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ .../admin-guide/kernel-parameters.txt          |  9 +++++++++
+ kernel/rcu/rcutorture.c                        | 18 ++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index b942149720c9..40d2831add4a 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -6211,6 +6211,15 @@ Kernel parameters
+ 			and stall_gp_kthread are specified, the
+ 			kthread is starved first, then the CPU.
+ 
++	rcutorture.stall_only= [KNL]
++			Shut off all rcutorture kthreads other than the
++			RCU CPU stall-warning test kthreads.  The purpose
++			of this is to test production applictions'
++			reactions to CPU stalls, and with minimal
++			additional overhead.  Or you can omit the
++			stall-warning tests as well and get a heavy
++			no-op, your choice!
++
+ 	rcutorture.stat_interval= [KNL]
+ 			Time (s) between statistics printk()s.
+ 
+diff --git a/kernel/rcu/rcutorture.c b/kernel/rcu/rcutorture.c
+index acda5c5fca5f..6e9822baa236 100644
+--- a/kernel/rcu/rcutorture.c
++++ b/kernel/rcu/rcutorture.c
+@@ -140,6 +140,7 @@ torture_param(int, stall_cpu_irqsoff, 0, "Disable interrupts while stalling.");
+ torture_param(int, stall_cpu_block, 0, "Sleep while stalling.");
+ torture_param(int, stall_cpu_repeat, 0, "Number of additional stalls after the first one.");
+ torture_param(int, stall_gp_kthread, 0, "Grace-period kthread stall duration (s).");
++torture_param(bool, stall_only, 0, "Suppress all non-CPU-stall kthreads.");
+ torture_param(int, stat_interval, 60, "Number of seconds between stats printk()s");
+ torture_param(int, stutter, 5, "Number of seconds to run/halt test");
+ torture_param(int, test_boost, 1, "Test RCU prio boost: 0=no, 1=maybe, 2=yes.");
+@@ -4649,6 +4650,23 @@ rcu_torture_init(void)
+ 		cur_ops = NULL;
+ 		goto unwind;
+ 	}
++	if (stall_only) {
++		pr_alert("rcu-torture: stall_only specified, suppressing all else.\n");
++		fqs_stutter = 0;
++		fwd_progress = 0;
++		n_barrier_cbs = 0;
++		nfakewriters = 0;
++		nocbs_nthreads = 0;
++		nreaders = 0;
++		n_up_down = 0;
++		nwriters = 0;
++		onoff_interval = 0;
++		preempt_duration = 0;
++		read_exit_burst = 0;
++		shuffle_interval = 0;
++		stutter = 0;
++		test_boost = 0;
++	}
+ 	if (cur_ops->fqs == NULL && fqs_duration != 0) {
+ 		pr_alert("rcu-torture: ->fqs NULL and non-zero fqs_duration, fqs disabled.\n");
+ 		fqs_duration = 0;
+-- 
+2.55.0
+

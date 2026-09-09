@@ -1,0 +1,28 @@
+From d95094d4c0a62ea17b8a7c6399b42381b8a55bc0 Mon Sep 17 00:00:00 2001
+From: Jan Kara <jack@suse.cz>
+Date: Mon, 27 Jul 2026 13:37:12 +0200
+Subject: [PATCH 07295/15333] udf: Fix bh leak for unallocated space entries
+
+When processing unallocated space entries we didn't properly release the
+inode bh. Fix it.
+
+Signed-off-by: Jan Kara <jack@suse.cz>
+---
+ fs/udf/inode.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fs/udf/inode.c b/fs/udf/inode.c
+index b6d79ecac44a..ee0cd402f3d8 100644
+--- a/fs/udf/inode.c
++++ b/fs/udf/inode.c
+@@ -1486,6 +1486,7 @@ static int udf_read_inode(struct inode *inode, bool hidden_inode)
+ 		memcpy(iinfo->i_data,
+ 		       bh->b_data + sizeof(struct unallocSpaceEntry),
+ 		       bs - sizeof(struct unallocSpaceEntry));
++		brelse(bh);
+ 		return 0;
+ 	}
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,35 @@
+From ca0058e8b599ae75a30e7f53025a46b62905bea3 Mon Sep 17 00:00:00 2001
+From: Nilay Shroff <nilay@linux.ibm.com>
+Date: Mon, 13 Jul 2026 17:24:13 +0530
+Subject: [PATCH 07794/15333] nvme: add context annotations for
+ nvme_ctrl::ana_lock
+
+nvme_parse_ana_log() accesses ANA state protected by ctrl->ana_lock and
+therefore requires callers to hold the lock.
+
+Annotate nvme_parse_ana_log() with __must_hold(&ctrl->ana_lock) so that
+Clang's lock context analysis can verify the locking requirement at
+compile time.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Nilay Shroff <nilay@linux.ibm.com>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/multipath.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/nvme/host/multipath.c b/drivers/nvme/host/multipath.c
+index 091aceb9b1d8..75dbb58286a3 100644
+--- a/drivers/nvme/host/multipath.c
++++ b/drivers/nvme/host/multipath.c
+@@ -832,6 +832,7 @@ static void nvme_mpath_set_live(struct nvme_ns *ns)
+ static int nvme_parse_ana_log(struct nvme_ctrl *ctrl, void *data,
+ 		int (*cb)(struct nvme_ctrl *ctrl, struct nvme_ana_group_desc *,
+ 			void *))
++		__must_hold(&ctrl->ana_lock)
+ {
+ 	void *base = ctrl->ana_log_buf;
+ 	size_t offset = sizeof(struct nvme_ana_rsp_hdr);
+-- 
+2.55.0
+

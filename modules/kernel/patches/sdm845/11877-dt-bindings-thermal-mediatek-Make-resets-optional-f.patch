@@ -1,0 +1,56 @@
+From 5f0d4a79439120650a858b9ccb345d08929df990 Mon Sep 17 00:00:00 2001
+From: AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>
+Date: Tue, 21 Jul 2026 12:52:29 +0200
+Subject: [PATCH 11877/15333] dt-bindings: thermal: mediatek: Make resets
+ optional for MT8196
+
+Both LVTS-AP and LVTS-MCU may be shared with SoC-internal MCUs
+running some sort of firmware that checks thermals in order to
+scale frequency, or to take action for critical SoC thermal
+protection - and this is seen on most MT8196 boards.
+
+Make resets optional, as doing a HW reset on such boards will
+result in either an immediate thermal protect shutdown or in
+a rather important and usually permanent system slowdown.
+
+Signed-off-by: AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>
+Signed-off-by: Daniel Lezcano <daniel.lezcano@kernel.org>
+Reviewed-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Reviewed-by: Chen-Yu Tsai <wenst@chromium.org>
+Link: https://patch.msgid.link/20260721105230.101906-2-angelogioacchino.delregno@collabora.com
+---
+ .../bindings/thermal/mediatek,lvts-thermal.yaml     | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/devicetree/bindings/thermal/mediatek,lvts-thermal.yaml b/Documentation/devicetree/bindings/thermal/mediatek,lvts-thermal.yaml
+index 975235130670..29f431fcdcd5 100644
+--- a/Documentation/devicetree/bindings/thermal/mediatek,lvts-thermal.yaml
++++ b/Documentation/devicetree/bindings/thermal/mediatek,lvts-thermal.yaml
+@@ -94,12 +94,23 @@ allOf:
+         nvmem-cell-names:
+           minItems: 2
+ 
++  - if:
++      properties:
++        compatible:
++          not:
++            contains:
++              enum:
++                - mediatek,mt8196-lvts-ap
++                - mediatek,mt8196-lvts-mcu
++    then:
++      required:
++        - resets
++
+ required:
+   - compatible
+   - reg
+   - interrupts
+   - clocks
+-  - resets
+   - nvmem-cells
+   - nvmem-cell-names
+ 
+-- 
+2.55.0
+

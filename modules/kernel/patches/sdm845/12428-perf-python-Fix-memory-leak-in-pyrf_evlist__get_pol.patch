@@ -1,0 +1,41 @@
+From 38d778acbee3ee96c14e33863b747e674d975eae Mon Sep 17 00:00:00 2001
+From: Ian Rogers <irogers@google.com>
+Date: Sun, 9 Aug 2026 00:14:43 -0700
+Subject: [PATCH 12428/15333] perf python: Fix memory leak in
+ pyrf_evlist__get_pollfd
+
+Fix a Python list object leak in pyrf_evlist__get_pollfd() by adding
+a missing Py_DECREF on the error exit path.
+
+Assisted-by: Antigravity:gemini-3.1-pro
+Fixes: 877108e42b1b ("perf tools: Initial python binding")
+Signed-off-by: Ian Rogers <irogers@google.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/util/python.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/tools/perf/util/python.c b/tools/perf/util/python.c
+index af85c0771c44..c7ae1f85aec6 100644
+--- a/tools/perf/util/python.c
++++ b/tools/perf/util/python.c
+@@ -2825,6 +2825,8 @@ static PyObject *pyrf_evlist__get_pollfd(struct pyrf_evlist *pevlist,
+ 
+ 	evlist = pevlist->evlist;
+ 	list = PyList_New(0);
++	if (!list)
++		return NULL;
+ 
+ 	for (i = 0; i < evlist__core(evlist)->pollfd.nr; ++i) {
+ 		PyObject *file;
+@@ -2843,6 +2845,7 @@ static PyObject *pyrf_evlist__get_pollfd(struct pyrf_evlist *pevlist,
+ 
+ 	return list;
+ free_list:
++	Py_XDECREF(list);
+ 	return PyErr_NoMemory();
+ }
+ 
+-- 
+2.55.0
+

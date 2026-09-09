@@ -1,0 +1,55 @@
+From 3ad38c26019b80ee44727dd167328152ba668f6f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Wed, 17 Jun 2026 21:14:28 +0200
+Subject: [PATCH 01747/15333] drm/amdgpu/gfx8: Enable IP block soft reset as a
+ GPU recovery method
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Enable IP block soft reset as a GPU recovery method for GFX8
+graphics and compute rings.
+
+Tested with the "hard_reset_cp_wait" test case from the
+Hang Test Suite created by Natalie Vock and Konstantin Seurer.
+This Vulkan testcase waits for an event that never occurs,
+effectively a WAIT_REG_MEM packet that intentionally hangs.
+IP block soft reset can resolve that hang and allow
+the rest of the system to move on and keep functioning
+without needing a full ASIC reset.
+
+Tested on the following chips:
+
+Polaris 10 (Radeon RX 570)
+Polaris 11 (Radeon RX 560)
+Polaris 12 (Radeon RX 550)
+Fiji (Radeon R9 Nano)
+Tonga (Radeon R9 380X)
+Carrizo (A8-9600)
+
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
+index 88dcadc53d91..bee2ff6865f9 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
+@@ -2035,6 +2035,11 @@ static int gfx_v8_0_sw_init(struct amdgpu_ip_block *ip_block)
+ 	adev->gfx.compute_supported_reset =
+ 		amdgpu_get_soft_full_reset_mask(&adev->gfx.compute_ring[0]);
+ 
++	if (!amdgpu_sriov_vf(adev) && !adev->debug_disable_ip_block_soft_reset) {
++		adev->gfx.compute_supported_reset |= AMDGPU_RESET_TYPE_IP_BLOCK_SOFT_RESET;
++		adev->gfx.gfx_supported_reset |= AMDGPU_RESET_TYPE_IP_BLOCK_SOFT_RESET;
++	}
++
+ 	return 0;
+ }
+ 
+-- 
+2.55.0
+

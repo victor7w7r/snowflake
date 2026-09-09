@@ -1,0 +1,39 @@
+From 782cca1ac6f43f5e6d0b1512b63fa517da223aca Mon Sep 17 00:00:00 2001
+From: Jonas Rebmann <jre@pengutronix.de>
+Date: Fri, 5 Jun 2026 09:27:48 +0200
+Subject: [PATCH 01988/15333] leds: pwm-multicolor: Introduce default-intensity
+ property
+
+Like all LED drivers, pwm-multicolor supports turning on an LED on boot
+by setting linux,default-trigger, e.g. to "default-on". pwm-multicolor
+however scales the brightness of the color-component sub-LEDs with their
+individual intensity value. Since these intensities are
+zero-initialized, on boot a trigger is invisible until colors are set
+from userspace.
+
+Fix linux,default-trigger for pwm-multicolor by allowing for nonzero
+default-intensities but default to 0 for backwards-compatibility.
+
+Signed-off-by: Jonas Rebmann <jre@pengutronix.de>
+Link: https://patch.msgid.link/20260605-multicolor-default-v2-2-ed07271df6b0@pengutronix.de
+Signed-off-by: Lee Jones <lee@kernel.org>
+---
+ drivers/leds/rgb/leds-pwm-multicolor.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/leds/rgb/leds-pwm-multicolor.c b/drivers/leds/rgb/leds-pwm-multicolor.c
+index e0d7d3c9215c..3e515df40583 100644
+--- a/drivers/leds/rgb/leds-pwm-multicolor.c
++++ b/drivers/leds/rgb/leds-pwm-multicolor.c
+@@ -95,6 +95,8 @@ static int iterate_subleds(struct device *dev, struct pwm_mc_led *priv,
+ 		}
+ 
+ 		subled[priv->mc_cdev.num_colors].color_index = color;
++		fwnode_property_read_u32(fwnode, "default-intensity",
++					 &subled[priv->mc_cdev.num_colors].intensity);
+ 		priv->mc_cdev.num_colors++;
+ 	}
+ 
+-- 
+2.55.0
+

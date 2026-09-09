@@ -1,0 +1,94 @@
+From 198bb8bf8b9053cad7dfc6553c46d112ae2a9a34 Mon Sep 17 00:00:00 2001
+From: Ayyagari Ushasreevalli <aushasre@qti.qualcomm.com>
+Date: Tue, 28 Jul 2026 21:19:43 +0530
+Subject: [PATCH 08756/15333] arm64: dts: qcom: monaco-pmics: Add ADC support
+ for PMM8620AU
+
+Add ADC nodes for PMM8620AU PMIC instances (SID 0 and SID 2)
+present on the Monaco platform.
+
+Each ADC node exposes the following ADC channels:
+ - DIE_TEMP: PMIC die temperature channel
+ - VPH_PWR: Battery/supply voltage channel
+
+Signed-off-by: Ayyagari Ushasreevalli <aushasre@qti.qualcomm.com>
+Tested-by: Loic Poulain <loic.poulain@oss.qualcomm.com>
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Jishnu Prakash <jishnu.prakash@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260728-adc5_gen3_dt-v4-3-355f0edece77@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ arch/arm64/boot/dts/qcom/monaco-pmics.dtsi | 43 ++++++++++++++++++++++
+ 1 file changed, 43 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/monaco-pmics.dtsi b/arch/arm64/boot/dts/qcom/monaco-pmics.dtsi
+index e990d7367719..6e096b9b7546 100644
+--- a/arch/arm64/boot/dts/qcom/monaco-pmics.dtsi
++++ b/arch/arm64/boot/dts/qcom/monaco-pmics.dtsi
+@@ -5,6 +5,7 @@
+ 
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/spmi/spmi.h>
++#include "qcom-adc5-gen3.h"
+ 
+ &spmi_bus {
+ 	pmm8620au_0: pmic@0 {
+@@ -20,6 +21,27 @@ pmm8620au_0_rtc: rtc@6100 {
+ 			interrupts = <0x0 0x62 0x1 IRQ_TYPE_EDGE_RISING>;
+ 		};
+ 
++		pmm8620au_0_adc: adc@8000 {
++			compatible = "qcom,spmi-adc5-gen3";
++			reg = <0x8000>;
++			interrupts-extended = <&spmi_bus 0x0 0x80 0x1 IRQ_TYPE_EDGE_RISING>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			#io-channel-cells = <1>;
++
++			channel@3 {
++				reg = <ADC5_GEN3_DIE_TEMP(0)>;
++				label = "pmm8620au_0_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@8e {
++				reg = <ADC5_GEN3_VPH_PWR(0)>;
++				label = "pmm8620au_0_vph_pwr";
++				qcom,pre-scaling = <1 3>;
++			};
++		};
++
+ 		pmm8620au_0_gpios: gpio@8800 {
+ 			compatible = "qcom,pmm8654au-gpio", "qcom,spmi-gpio";
+ 			reg = <0x8800>;
+@@ -37,6 +59,27 @@ pmm8650au_1: pmic@2 {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+ 
++		pmm8650au_1_adc: adc@8000 {
++			compatible = "qcom,spmi-adc5-gen3";
++			reg = <0x8000>;
++			interrupts-extended = <&spmi_bus 0x2 0x80 0x1 IRQ_TYPE_EDGE_RISING>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			#io-channel-cells = <1>;
++
++			channel@203 {
++				reg = <ADC5_GEN3_DIE_TEMP(2)>;
++				label = "pmm8650au_1_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@28e {
++				reg = <ADC5_GEN3_VPH_PWR(2)>;
++				label = "pmm8650au_1_vph_pwr";
++				qcom,pre-scaling = <1 3>;
++			};
++		};
++
+ 		pmm8650au_1_gpios: gpio@8800 {
+ 			compatible = "qcom,pmm8654au-gpio", "qcom,spmi-gpio";
+ 			reg = <0x8800>;
+-- 
+2.55.0
+

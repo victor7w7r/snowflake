@@ -1,0 +1,83 @@
+From 0d774e0517f30b9684e936c2559fb50681a45329 Mon Sep 17 00:00:00 2001
+From: Ada Couprie Diaz <ada.coupriediaz@arm.com>
+Date: Mon, 27 Jul 2026 17:34:15 +0100
+Subject: [PATCH 11271/15333] arm64: entry: mask DAIF before returning from C
+ EL1 handlers
+
+Most EL1 exceptions already call local_daif_mask() before returning,
+with the exception of debug exception handlers which do not change
+DAIF, and the IRQ/FIQ/Error handlers.
+
+However, DAIF get masked in kernel_exit() in all cases when returning
+from EL1 C handlers anyway.
+
+Move this masking from assembly to C by calling local_daif_mask()
+before irqentry_nmi_exit(). Unlike the raw DAIF masking helper,
+local_daif_mask() invokes trace_hardirqs_off(), so it must execute
+while RCU is still watching.
+
+Remove the disable_daif assembly macro, as this was its only use.
+
+Signed-off-by: Ada Couprie Diaz <ada.coupriediaz@arm.com>
+Signed-off-by: Vladimir Murzin <vladimir.murzin@arm.com>
+Reviewed-by: Jinjie Ruan <ruanjinjie@huawei.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/include/asm/assembler.h | 4 ----
+ arch/arm64/kernel/entry-common.c   | 2 ++
+ arch/arm64/kernel/entry.S          | 4 ----
+ 3 files changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/arch/arm64/include/asm/assembler.h b/arch/arm64/include/asm/assembler.h
+index effae53e9739..0b58b550e8dc 100644
+--- a/arch/arm64/include/asm/assembler.h
++++ b/arch/arm64/include/asm/assembler.h
+@@ -34,10 +34,6 @@
+ 	wx\n	.req	w\n
+ 	.endr
+ 
+-	.macro disable_daif
+-	msr	daifset, #0xf
+-	.endm
+-
+ /*
+  * Save/restore interrupts.
+  */
+diff --git a/arch/arm64/kernel/entry-common.c b/arch/arm64/kernel/entry-common.c
+index ceb4eb11232a..2be42d7f4eaa 100644
+--- a/arch/arm64/kernel/entry-common.c
++++ b/arch/arm64/kernel/entry-common.c
+@@ -495,6 +495,7 @@ static __always_inline void __el1_pnmi(struct pt_regs *regs,
+ 
+ 	state = irqentry_nmi_enter(regs);
+ 	do_interrupt_handler(regs, handler);
++	local_daif_mask();
+ 	irqentry_nmi_exit(regs, state);
+ }
+ 
+@@ -540,6 +541,7 @@ asmlinkage void noinstr el1h_64_error_handler(struct pt_regs *regs)
+ 	local_daif_restore(DAIF_ERRCTX);
+ 	state = irqentry_nmi_enter(regs);
+ 	do_serror(regs, esr);
++	local_daif_mask();
+ 	irqentry_nmi_exit(regs, state);
+ }
+ 
+diff --git a/arch/arm64/kernel/entry.S b/arch/arm64/kernel/entry.S
+index e0db14e9c843..f63049ac32dc 100644
+--- a/arch/arm64/kernel/entry.S
++++ b/arch/arm64/kernel/entry.S
+@@ -333,10 +333,6 @@ alternative_else_nop_endif
+ 	.endm
+ 
+ 	.macro	kernel_exit, el
+-	.if	\el != 0
+-	disable_daif
+-	.endif
+-
+ #ifdef CONFIG_ARM64_PSEUDO_NMI
+ alternative_if_not ARM64_HAS_GIC_PRIO_MASKING
+ 	b	.Lskip_pmr_restore\@
+-- 
+2.55.0
+

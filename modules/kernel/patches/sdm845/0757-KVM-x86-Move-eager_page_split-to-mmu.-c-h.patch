@@ -1,0 +1,79 @@
+From cde542b6526639571a848e1d70f8ff6817e40e4e Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 12 Jun 2026 17:03:08 -0700
+Subject: [PATCH 00757/15333] KVM: x86: Move eager_page_split to mmu.{c,h}
+
+Move KVM's eager_page_split module param to the MMU, as it is very much an
+MMU knob.
+
+No functional change intended.
+
+Reviewed-by: Kai Huang <kai.huang@intel.com>
+Reviewed-by: Yosry Ahmed <yosry@kernel.org>
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+Reviewed-by: Binbin Wu <binbin.wu@linux.intel.com>
+Message-ID: <20260613000329.732085-10-seanjc@google.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/kvm/mmu.h     | 1 +
+ arch/x86/kvm/mmu/mmu.c | 3 +++
+ arch/x86/kvm/x86.c     | 3 ---
+ arch/x86/kvm/x86.h     | 2 --
+ 4 files changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu.h b/arch/x86/kvm/mmu.h
+index f616af6f8e69..8e57f09b9d6b 100644
+--- a/arch/x86/kvm/mmu.h
++++ b/arch/x86/kvm/mmu.h
+@@ -13,6 +13,7 @@ extern bool tdp_mmu_enabled;
+ #define tdp_mmu_enabled false
+ #endif
+ extern bool __read_mostly enable_mmio_caching;
++extern bool eager_page_split;
+ 
+ #define PT_WRITABLE_SHIFT 1
+ #define PT_USER_SHIFT 2
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index bb09a9af3a35..2abcef6bb598 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -114,6 +114,9 @@ module_param_named(tdp_mmu, tdp_mmu_enabled, bool, 0444);
+ EXPORT_SYMBOL_FOR_KVM_INTERNAL(tdp_mmu_enabled);
+ #endif
+ 
++bool __read_mostly eager_page_split = true;
++module_param(eager_page_split, bool, 0644);
++
+ static int max_huge_page_level __read_mostly;
+ static int tdp_root_level __read_mostly;
+ static int max_tdp_level __read_mostly;
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index bab6bcac9765..de2b07f54e7f 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -177,9 +177,6 @@ module_param(force_emulation_prefix, int, 0644);
+ int __read_mostly pi_inject_timer = -1;
+ module_param(pi_inject_timer, bint, 0644);
+ 
+-bool __read_mostly eager_page_split = true;
+-module_param(eager_page_split, bool, 0644);
+-
+ /* Enable/disable SMT_RSB bug mitigation */
+ static bool __read_mostly mitigate_smt_rsb;
+ module_param(mitigate_smt_rsb, bool, 0444);
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index a0e68eaf1f80..635a21bfa681 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -415,8 +415,6 @@ extern int pi_inject_timer;
+ 
+ extern bool report_ignored_msrs;
+ 
+-extern bool eager_page_split;
+-
+ static inline void kvm_pr_unimpl_wrmsr(struct kvm_vcpu *vcpu, u32 msr, u64 data)
+ {
+ 	if (report_ignored_msrs)
+-- 
+2.55.0
+

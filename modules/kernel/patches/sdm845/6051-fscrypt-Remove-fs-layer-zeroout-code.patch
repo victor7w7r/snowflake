@@ -1,0 +1,242 @@
+From 8c2c9c4063d1cf8ed00ba32ab3677725559f8334 Mon Sep 17 00:00:00 2001
+From: Eric Biggers <ebiggers@kernel.org>
+Date: Sun, 12 Jul 2026 22:37:05 -0400
+Subject: [PATCH 06051/15333] fscrypt: Remove fs-layer zeroout code
+
+Now that fscrypt's file contents en/decryption is always implemented
+using blk-crypto when the filesystem is block-based, the fs-layer
+zeroout code in fs/crypto/bio.c is unused code.  Remove it, then fold
+fscrypt_zeroout_range_inline_crypt() into fscrypt_zeroout_range().
+
+Then make fscrypt_alloc_bounce_page() and fscrypt_crypt_data_unit()
+static, since they're no longer called from any other file.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Link: https://patch.msgid.link/20260713023708.9245-15-ebiggers@kernel.org
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+---
+ fs/crypto/bio.c             | 134 +++++++-----------------------------
+ fs/crypto/crypto.c          |  14 ++--
+ fs/crypto/fscrypt_private.h |   5 --
+ 3 files changed, 32 insertions(+), 121 deletions(-)
+
+diff --git a/fs/crypto/bio.c b/fs/crypto/bio.c
+index d07740680602..58b6b13eeedd 100644
+--- a/fs/crypto/bio.c
++++ b/fs/crypto/bio.c
+@@ -69,16 +69,36 @@ static void fscrypt_zeroout_range_end_io(struct bio *bio)
+ 	bio_put(bio);
+ }
+ 
+-static int fscrypt_zeroout_range_inline_crypt(const struct inode *inode,
+-					      loff_t pos, sector_t sector,
+-					      u64 len)
++/**
++ * fscrypt_zeroout_range() - zero out a range of blocks in an encrypted file
++ * @inode: the file's inode
++ * @pos: the first file position (in bytes) to zero out
++ * @sector: the first sector to zero out
++ * @len: bytes to zero out
++ *
++ * Zero out filesystem blocks in an encrypted regular file on-disk, i.e. write
++ * ciphertext blocks which decrypt to the all-zeroes block.  The blocks must be
++ * both logically and physically contiguous.  It's also assumed that the
++ * filesystem only uses a single block device, ->s_bdev.  @len must be a
++ * multiple of the file system logical block size.
++ *
++ * Note that since each block uses a different IV, this involves writing a
++ * different ciphertext to each block; we can't simply reuse the same one.
++ *
++ * Return: 0 on success; -errno on failure.
++ */
++int fscrypt_zeroout_range(const struct inode *inode, loff_t pos,
++			  sector_t sector, u64 len)
+ {
+ 	struct fscrypt_zero_done done = {
+ 		.pending	= ATOMIC_INIT(1),
+ 		.done		= COMPLETION_INITIALIZER_ONSTACK(done.done),
+ 	};
+ 
+-	while (len) {
++	if (len == 0)
++		return 0;
++
++	do {
+ 		struct bio *bio;
+ 		unsigned int n;
+ 
+@@ -102,115 +122,11 @@ static int fscrypt_zeroout_range_inline_crypt(const struct inode *inode,
+ 
+ 		atomic_inc(&done.pending);
+ 		blk_crypto_submit_bio(bio);
+-	}
++	} while (len);
+ 
+ 	fscrypt_zeroout_range_done(&done);
+ 
+ 	wait_for_completion(&done.done);
+ 	return blk_status_to_errno(done.status);
+ }
+-
+-/**
+- * fscrypt_zeroout_range() - zero out a range of blocks in an encrypted file
+- * @inode: the file's inode
+- * @pos: the first file position (in bytes) to zero out
+- * @sector: the first sector to zero out
+- * @len: bytes to zero out
+- *
+- * Zero out filesystem blocks in an encrypted regular file on-disk, i.e. write
+- * ciphertext blocks which decrypt to the all-zeroes block.  The blocks must be
+- * both logically and physically contiguous.  It's also assumed that the
+- * filesystem only uses a single block device, ->s_bdev.  @len must be a
+- * multiple of the file system logical block size.
+- *
+- * Note that since each block uses a different IV, this involves writing a
+- * different ciphertext to each block; we can't simply reuse the same one.
+- *
+- * Return: 0 on success; -errno on failure.
+- */
+-int fscrypt_zeroout_range(const struct inode *inode, loff_t pos,
+-			  sector_t sector, u64 len)
+-{
+-	const struct fscrypt_inode_info *ci = fscrypt_get_inode_info_raw(inode);
+-	const unsigned int du_bits = ci->ci_data_unit_bits;
+-	const unsigned int du_size = 1U << du_bits;
+-	const unsigned int du_per_page_bits = PAGE_SHIFT - du_bits;
+-	const unsigned int du_per_page = 1U << du_per_page_bits;
+-	u64 du_index = pos >> du_bits;
+-	u64 du_remaining = len >> du_bits;
+-	struct page *pages[16]; /* write up to 16 pages at a time */
+-	unsigned int nr_pages;
+-	unsigned int i;
+-	unsigned int offset;
+-	struct bio *bio;
+-	int ret, err;
+-
+-	if (len == 0)
+-		return 0;
+-
+-	if (fscrypt_inode_uses_inline_crypto(inode))
+-		return fscrypt_zeroout_range_inline_crypt(inode, pos, sector,
+-							  len);
+-
+-	BUILD_BUG_ON(ARRAY_SIZE(pages) > BIO_MAX_VECS);
+-	nr_pages = min_t(u64, ARRAY_SIZE(pages),
+-			 (du_remaining + du_per_page - 1) >> du_per_page_bits);
+-
+-	/*
+-	 * We need at least one page for ciphertext.  Allocate the first one
+-	 * from a mempool, with __GFP_DIRECT_RECLAIM set so that it can't fail.
+-	 *
+-	 * Any additional page allocations are allowed to fail, as they only
+-	 * help performance, and waiting on the mempool for them could deadlock.
+-	 */
+-	for (i = 0; i < nr_pages; i++) {
+-		pages[i] = fscrypt_alloc_bounce_page(i == 0 ? GFP_NOFS :
+-						     GFP_NOWAIT);
+-		if (!pages[i])
+-			break;
+-	}
+-	nr_pages = i;
+-	if (WARN_ON_ONCE(nr_pages <= 0))
+-		return -EINVAL;
+-
+-	/* This always succeeds since __GFP_DIRECT_RECLAIM is set. */
+-	bio = bio_alloc(inode->i_sb->s_bdev, nr_pages, REQ_OP_WRITE, GFP_NOFS);
+-
+-	do {
+-		bio->bi_iter.bi_sector = sector;
+-
+-		i = 0;
+-		offset = 0;
+-		do {
+-			err = fscrypt_crypt_data_unit(ci, FS_ENCRYPT, du_index,
+-						      ZERO_PAGE(0), pages[i],
+-						      du_size, offset);
+-			if (err)
+-				goto out;
+-			du_index++;
+-			sector += 1U << (du_bits - SECTOR_SHIFT);
+-			du_remaining--;
+-			offset += du_size;
+-			if (offset == PAGE_SIZE || du_remaining == 0) {
+-				ret = bio_add_page(bio, pages[i++], offset, 0);
+-				if (WARN_ON_ONCE(ret != offset)) {
+-					err = -EIO;
+-					goto out;
+-				}
+-				offset = 0;
+-			}
+-		} while (i != nr_pages && du_remaining != 0);
+-
+-		err = submit_bio_wait(bio);
+-		if (err)
+-			goto out;
+-		bio_reset(bio, inode->i_sb->s_bdev, REQ_OP_WRITE);
+-	} while (du_remaining != 0);
+-	err = 0;
+-out:
+-	bio_put(bio);
+-	for (i = 0; i < nr_pages; i++)
+-		fscrypt_free_bounce_page(pages[i]);
+-	return err;
+-}
+ EXPORT_SYMBOL(fscrypt_zeroout_range);
+diff --git a/fs/crypto/crypto.c b/fs/crypto/crypto.c
+index 94dd6c89ddcd..8c4660429418 100644
+--- a/fs/crypto/crypto.c
++++ b/fs/crypto/crypto.c
+@@ -49,7 +49,7 @@ void fscrypt_enqueue_decrypt_work(struct work_struct *work)
+ }
+ EXPORT_SYMBOL(fscrypt_enqueue_decrypt_work);
+ 
+-struct page *fscrypt_alloc_bounce_page(gfp_t gfp_flags)
++static struct page *fscrypt_alloc_bounce_page(gfp_t gfp_flags)
+ {
+ 	if (WARN_ON_ONCE(!fscrypt_bounce_page_pool)) {
+ 		/*
+@@ -65,8 +65,7 @@ struct page *fscrypt_alloc_bounce_page(gfp_t gfp_flags)
+  * fscrypt_free_bounce_page() - free a ciphertext bounce page
+  * @bounce_page: the bounce page to free, or NULL
+  *
+- * Free a bounce page that was allocated by fscrypt_encrypt_pagecache_blocks(),
+- * or by fscrypt_alloc_bounce_page() directly.
++ * Free a bounce page that was allocated by fscrypt_encrypt_pagecache_blocks().
+  */
+ void fscrypt_free_bounce_page(struct page *bounce_page)
+ {
+@@ -107,10 +106,11 @@ void fscrypt_generate_iv(union fscrypt_iv *iv, u64 index,
+ }
+ 
+ /* Encrypt or decrypt a single "data unit" of file contents. */
+-int fscrypt_crypt_data_unit(const struct fscrypt_inode_info *ci,
+-			    fscrypt_direction_t rw, u64 index,
+-			    struct page *src_page, struct page *dest_page,
+-			    unsigned int len, unsigned int offs)
++static int fscrypt_crypt_data_unit(const struct fscrypt_inode_info *ci,
++				   fscrypt_direction_t rw, u64 index,
++				   struct page *src_page,
++				   struct page *dest_page, unsigned int len,
++				   unsigned int offs)
+ {
+ 	struct crypto_sync_skcipher *tfm = ci->ci_enc_key.tfm;
+ 	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
+diff --git a/fs/crypto/fscrypt_private.h b/fs/crypto/fscrypt_private.h
+index 57b7ae2cfafc..da9040407d4a 100644
+--- a/fs/crypto/fscrypt_private.h
++++ b/fs/crypto/fscrypt_private.h
+@@ -329,11 +329,6 @@ typedef enum {
+ /* crypto.c */
+ extern struct kmem_cache *fscrypt_inode_info_cachep;
+ int fscrypt_initialize(struct super_block *sb);
+-int fscrypt_crypt_data_unit(const struct fscrypt_inode_info *ci,
+-			    fscrypt_direction_t rw, u64 index,
+-			    struct page *src_page, struct page *dest_page,
+-			    unsigned int len, unsigned int offs);
+-struct page *fscrypt_alloc_bounce_page(gfp_t gfp_flags);
+ 
+ void __printf(3, 4) __cold
+ fscrypt_msg(const struct inode *inode, const char *level, const char *fmt, ...);
+-- 
+2.55.0
+

@@ -1,0 +1,135 @@
+From b18ee21055a77eb1fb6070cb3f819cd3372c466e Mon Sep 17 00:00:00 2001
+From: Hemanth Selam <hemanth.selam@gmail.com>
+Date: Fri, 10 Jul 2026 10:34:42 +0530
+Subject: [PATCH 09611/15333] KVM: selftests: Add a test for KVM_CREATE_VM VM
+ type enforcement
+
+KVM_CAP_VM_TYPES advertises the bitmap of VM types that KVM_CREATE_VM
+accepts, but nothing verified that the ioctl actually enforces it: that
+every advertised type can be created and every non-advertised type is
+rejected. sev_init2_tests carried a TODO for this ("check that
+unsupported types cannot be created. Probably a separate selftest"),
+but the check is not specific to SEV or KVM_SEV_INIT2, and not even to
+x86.
+
+Add a standalone test that walks the type space and, for each value,
+asserts that KVM_CREATE_VM succeeds iff the corresponding bit is set in
+KVM_CAP_VM_TYPES, and otherwise fails with -EINVAL. The walk extends
+past bit 31 so that out-of-range type values, which can never be
+advertised in the u32 bitmap, are also confirmed to be rejected. The
+test only depends on KVM_CAP_VM_TYPES, so it lives in the common set and
+is skipped on architectures that don't advertise the capability.
+
+Drop the now-addressed TODO from sev_init2_tests.c.
+
+Tested on an AMD SEV-SNP capable host. With KVM_CAP_VM_TYPES=0x15
+(DEFAULT/SEV/SNP), only the advertised types are created and everything
+else is rejected:
+
+  $ strace -e trace=ioctl ./vm_types_test 2>&1 | grep KVM_CREATE_VM
+  ioctl(3, KVM_CREATE_VM, 0)    = 4              # DEFAULT
+  ioctl(3, KVM_CREATE_VM, 0x1)  = -1 EINVAL      # SW_PROTECTED
+  ioctl(3, KVM_CREATE_VM, 0x2)  = 4              # SEV
+  ioctl(3, KVM_CREATE_VM, 0x3)  = -1 EINVAL      # SEV-ES
+  ioctl(3, KVM_CREATE_VM, 0x4)  = 4              # SNP
+  ioctl(3, KVM_CREATE_VM, 0x5)  = -1 EINVAL      # TDX
+  ... 0x6..0x3f all -1 EINVAL ...
+
+Reloading kvm_amd with sev_snp=0 drops the bitmap to 0x5 and only types
+0 and 2 are then created, confirming the test tracks the advertised set
+rather than hard-coded types.
+
+Signed-off-by: Hemanth Selam <hemanth.selam@gmail.com>
+Link: https://patch.msgid.link/20260710050442.826777-1-hemanth.selam@gmail.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ tools/testing/selftests/kvm/Makefile.kvm      |  1 +
+ tools/testing/selftests/kvm/vm_types_test.c   | 48 +++++++++++++++++++
+ .../selftests/kvm/x86/sev_init2_tests.c       |  4 --
+ 3 files changed, 49 insertions(+), 4 deletions(-)
+ create mode 100644 tools/testing/selftests/kvm/vm_types_test.c
+
+diff --git a/tools/testing/selftests/kvm/Makefile.kvm b/tools/testing/selftests/kvm/Makefile.kvm
+index b5870d37533e..d23a3d29ce22 100644
+--- a/tools/testing/selftests/kvm/Makefile.kvm
++++ b/tools/testing/selftests/kvm/Makefile.kvm
+@@ -66,6 +66,7 @@ TEST_GEN_PROGS_COMMON += kvm_page_table_test
+ TEST_GEN_PROGS_COMMON += set_memory_region_test
+ TEST_GEN_PROGS_COMMON += memslot_modification_stress_test
+ TEST_GEN_PROGS_COMMON += memslot_perf_test
++TEST_GEN_PROGS_COMMON += vm_types_test
+ 
+ # Compiled test targets
+ TEST_GEN_PROGS_x86 = $(TEST_GEN_PROGS_COMMON)
+diff --git a/tools/testing/selftests/kvm/vm_types_test.c b/tools/testing/selftests/kvm/vm_types_test.c
+new file mode 100644
+index 000000000000..6c421871e74b
+--- /dev/null
++++ b/tools/testing/selftests/kvm/vm_types_test.c
+@@ -0,0 +1,48 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Verify that KVM_CREATE_VM accepts exactly the VM types enumerated by
++ * KVM_CAP_VM_TYPES, and rejects every other type with -EINVAL.
++ */
++#include <errno.h>
++#include <stdbool.h>
++#include <unistd.h>
++
++#include <linux/kvm.h>
++
++#include "kvm_util.h"
++#include "test_util.h"
++
++int main(void)
++{
++	unsigned long type, supported_types;
++	int kvm_fd;
++
++	TEST_REQUIRE(kvm_has_cap(KVM_CAP_VM_TYPES));
++
++	kvm_fd = open_kvm_dev_path_or_exit();
++	supported_types = kvm_check_cap(KVM_CAP_VM_TYPES);
++	pr_info("Supported VM types: 0x%lx\n", supported_types);
++
++	/*
++	 * For compatibility with 32-bit kernels, KVM_CHECK_EXTENSION restricts
++	 * its return to 32-bit values, i.e. only types 0..31 can be advertised.
++	 * Walk past that range as well to confirm that any out-of-range type is
++	 * rejected rather than silently accepted (or truncated).
++	 */
++	for (type = 0; type < BITS_PER_TYPE(supported_types); type++) {
++		int fd = __kvm_ioctl(kvm_fd, KVM_CREATE_VM, (void *)type);
++
++		if (supported_types & BIT(type)) {
++			TEST_ASSERT(fd >= 0,
++				    "KVM_CREATE_VM(%lu) should succeed, supported types = 0x%lx",
++				    type, supported_types);
++			kvm_close(fd);
++		} else {
++			TEST_ASSERT(fd < 0 && errno == EINVAL,
++				    "KVM_CREATE_VM(%lu) should fail with EINVAL, supported types = 0x%lx",
++				    type, supported_types);
++		}
++	}
++
++	return 0;
++}
+diff --git a/tools/testing/selftests/kvm/x86/sev_init2_tests.c b/tools/testing/selftests/kvm/x86/sev_init2_tests.c
+index 8db88c355f16..d4227dc922ab 100644
+--- a/tools/testing/selftests/kvm/x86/sev_init2_tests.c
++++ b/tools/testing/selftests/kvm/x86/sev_init2_tests.c
+@@ -77,10 +77,6 @@ void test_vm_types(void)
+ {
+ 	test_init2(KVM_X86_SEV_VM, &(struct kvm_sev_init){});
+ 
+-	/*
+-	 * TODO: check that unsupported types cannot be created.  Probably
+-	 * a separate selftest.
+-	 */
+ 	if (have_sev_es)
+ 		test_init2(KVM_X86_SEV_ES_VM, &(struct kvm_sev_init){});
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,55 @@
+From 3c707d4b3f926fc9b7b13b5bfe71462cb0e0e5d8 Mon Sep 17 00:00:00 2001
+From: Namjae Jeon <linkinjeon@kernel.org>
+Date: Sat, 11 Jul 2026 23:54:43 +0900
+Subject: [PATCH 14311/15333] ksmbd: fix permission checks for file allocation
+ ioctls
+
+FSCTL_SET_SPARSE should not require FILE_WRITE_ATTRIBUTES only. A handle
+with FILE_WRITE_DATA or FILE_APPEND_DATA is also allowed to set the file
+allocation state, while FILE_WRITE_EA alone must still be rejected.
+
+FSCTL_QUERY_ALLOCATED_RANGES needs FILE_READ_DATA access. Reject handles
+that only have metadata access such as FILE_READ_ATTRIBUTES.
+
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/smb2pdu.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index 19d90a6eee51..883db2ceba3f 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -9311,6 +9311,11 @@ static int fsctl_query_allocated_ranges(struct ksmbd_work *work, u64 id,
+ 	if (!fp)
+ 		return -ENOENT;
+ 
++	if (!(fp->daccess & FILE_READ_DATA_LE)) {
++		ret = -EACCES;
++		goto out;
++	}
++
+ 	if (!in_count) {
+ 		struct file_allocated_range_buffer range;
+ 
+@@ -9326,6 +9331,7 @@ static int fsctl_query_allocated_ranges(struct ksmbd_work *work, u64 id,
+ 	if (ret && ret != -E2BIG)
+ 		*out_count = 0;
+ 
++out:
+ 	ksmbd_fd_put(work, fp);
+ 	return ret;
+ }
+@@ -9397,7 +9403,8 @@ static inline int fsctl_set_sparse(struct ksmbd_work *work, u64 id,
+ 		goto out;
+ 	}
+ 
+-	if (!(fp->daccess & (FILE_WRITE_DATA_LE | FILE_WRITE_ATTRIBUTES_LE))) {
++	if (!(fp->daccess & (FILE_WRITE_DATA_LE | FILE_APPEND_DATA_LE |
++			     FILE_WRITE_ATTRIBUTES_LE))) {
+ 		ret = -EACCES;
+ 		goto out;
+ 	}
+-- 
+2.55.0
+

@@ -1,0 +1,89 @@
+From fedcff16a9b60a94e68e2a0478ceda309566d61a Mon Sep 17 00:00:00 2001
+From: Loic Poulain <loic.poulain@oss.qualcomm.com>
+Date: Wed, 22 Jul 2026 15:45:20 +0200
+Subject: [PATCH 11747/15333] phy: qcom: qmp-usb: Prevent unnecessary PM
+ runtime suspend at boot
+
+Runtime PM has to be enabled before creating the PHY, since phy_create()
+only enables runtime PM on the PHY device if it is already enabled on
+this parent device. This opens a small window where the device can be
+runtime suspended after pm_runtime_enable() and before the later
+pm_runtime_forbid(), causing an unnecessary suspend/resume cycle while
+the PHY is not yet registered.
+
+Take a runtime PM usage reference with pm_runtime_get_noresume() before
+enabling runtime PM and release it once the PHY has been created to
+prevent the device from being runtime suspended during that window.
+
+This also makes the probe path safe independently of pm_runtime_forbid(),
+which is a good preparation for potentially dropping the forbid() call in
+the future and letting runtime PM be enabled by default.
+
+Signed-off-by: Loic Poulain <loic.poulain@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260722-qcom-usb-phy-fix-null-v6-7-534f7e61b9a6@oss.qualcomm.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/phy/qualcomm/phy-qcom-qmp-usb.c | 24 +++++++++++++++++++-----
+ 1 file changed, 19 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/phy/qualcomm/phy-qcom-qmp-usb.c b/drivers/phy/qualcomm/phy-qcom-qmp-usb.c
+index bb905c437a01..b0790bcf0bc8 100644
+--- a/drivers/phy/qualcomm/phy-qcom-qmp-usb.c
++++ b/drivers/phy/qualcomm/phy-qcom-qmp-usb.c
+@@ -2419,10 +2419,16 @@ static int qmp_usb_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		goto err_node_put;
+ 
++	/*
++	 * Enable runtime PM before creating the PHY, phy_create() only enables
++	 * it on the PHY device if already enabled on the parent. Hold a usage
++	 * reference so callbacks cannot run before qmp->phy is assigned.
++	 */
++	pm_runtime_get_noresume(dev);
+ 	pm_runtime_set_active(dev);
+ 	ret = devm_pm_runtime_enable(dev);
+ 	if (ret)
+-		goto err_node_put;
++		goto err_pm_put;
+ 	/*
+ 	 * Prevent runtime pm from being ON by default. Users can enable
+ 	 * it using power/control in sysfs.
+@@ -2431,23 +2437,31 @@ static int qmp_usb_probe(struct platform_device *pdev)
+ 
+ 	ret = phy_pipe_clk_register(qmp, np);
+ 	if (ret)
+-		goto err_node_put;
++		goto err_pm_put;
+ 
+ 	qmp->phy = devm_phy_create(dev, np, &qmp_usb_phy_ops);
+ 	if (IS_ERR(qmp->phy)) {
+ 		ret = PTR_ERR(qmp->phy);
+ 		dev_err(dev, "failed to create PHY: %d\n", ret);
+-		goto err_node_put;
++		goto err_pm_put;
+ 	}
+ 
+ 	phy_set_drvdata(qmp->phy, qmp);
+ 
++	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
++	if (IS_ERR(phy_provider)) {
++		ret = PTR_ERR(phy_provider);
++		goto err_pm_put;
++	}
++
+ 	of_node_put(np);
+ 
+-	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
++	pm_runtime_put(dev);
+ 
+-	return PTR_ERR_OR_ZERO(phy_provider);
++	return 0;
+ 
++err_pm_put:
++	pm_runtime_put_noidle(dev);
+ err_node_put:
+ 	of_node_put(np);
+ 	return ret;
+-- 
+2.55.0
+

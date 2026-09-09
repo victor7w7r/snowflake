@@ -1,0 +1,49 @@
+From 65ccb2203ef8919390ccdcbe34ac6f8ec1fee672 Mon Sep 17 00:00:00 2001
+From: Qiang Yu <qiang.yu@oss.qualcomm.com>
+Date: Mon, 13 Jul 2026 00:42:51 -0700
+Subject: [PATCH 09553/15333] PCI: qcom: Clear Attention Button Present in Slot
+ Capabilities
+
+Qcom PCIe Root Ports advertise the Attention Button Present (ABP) bit in
+the Slot Capabilities register, but the slots have no attention button.
+
+When ABP is set, pcie_enable_notification() in the pciehp driver enables
+the Attention Button Pressed interrupt (ABPE) and leaves the Presence
+Detect Changed interrupt (PDCE) disabled. As a result, presence detect
+changes are never reported, and surprise hot-plug detection that relies on
+Presence Detect Changed events does not work.
+
+Clear the Attention Button Present (ABP) bit in the Slot Capabilities
+register so pciehp Presence Detect Changed events work.
+
+Signed-off-by: Qiang Yu <qiang.yu@oss.qualcomm.com>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@oss.qualcomm.com>
+[bhelgaas: say what the patch does in the commit log]
+Signed-off-by: Bjorn Helgaas <bhelgaas@google.com>
+Tested-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com> # X1E80100 CRD
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260713-b4-clear_abp_0713-v2-2-4f0333a98d4e@oss.qualcomm.com
+---
+ drivers/pci/controller/dwc/pcie-qcom.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/pci/controller/dwc/pcie-qcom.c b/drivers/pci/controller/dwc/pcie-qcom.c
+index 465c940109a7..0a826ba63277 100644
+--- a/drivers/pci/controller/dwc/pcie-qcom.c
++++ b/drivers/pci/controller/dwc/pcie-qcom.c
+@@ -372,6 +372,12 @@ static void qcom_pcie_set_slot_cap(struct dw_pcie *pci)
+ 	 */
+ 	val = readl(pci->dbi_base + offset + PCI_EXP_SLTCAP);
+ 	val |= PCI_EXP_SLTCAP_NCCS;
++
++	/*
++	 * Qcom PCIe Root Ports do not support Attention Button, so clear
++	 * Attention Button Present in Slot Capabilities.
++	 */
++	val &= ~PCI_EXP_SLTCAP_ABP;
+ 	writel(val, pci->dbi_base + offset + PCI_EXP_SLTCAP);
+ 
+ 	dw_pcie_dbi_ro_wr_dis(pci);
+-- 
+2.55.0
+

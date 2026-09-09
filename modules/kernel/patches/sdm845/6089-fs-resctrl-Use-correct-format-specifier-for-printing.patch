@@ -1,0 +1,49 @@
+From f20bed0cc8da988edeabda77f48005cdef3344cb Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Tue, 30 Jun 2026 21:27:01 -0700
+Subject: [PATCH 06089/15333] fs/resctrl: Use correct format specifier for
+ printing error pointers
+
+Use correct format specifier for error pointer as Coccinelle suggests:
+
+  .../fs/resctrl/monitor.c:148:8-15: WARNING: Consider using %pe to print PTR_ERR()
+  .../fs/resctrl/monitor.c:760:9-16: WARNING: Consider using %pe to print PTR_ERR()
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Tested-by: Babu Moger <babu.moger@amd.com>
+Link: https://patch.msgid.link/b4a45de57eca6364b7df9455f9eb25aa9bab5807.1782857711.git.reinette.chatre@intel.com
+---
+ fs/resctrl/monitor.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/fs/resctrl/monitor.c b/fs/resctrl/monitor.c
+index 7340b1d17f17..29b13a690cf3 100644
+--- a/fs/resctrl/monitor.c
++++ b/fs/resctrl/monitor.c
+@@ -144,8 +144,8 @@ void __check_limbo(struct rdt_l3_mon_domain *d, bool force_free)
+ 	arch_priv = mon_event_all[QOS_L3_OCCUP_EVENT_ID].arch_priv;
+ 	arch_mon_ctx = resctrl_arch_mon_ctx_alloc(r, QOS_L3_OCCUP_EVENT_ID);
+ 	if (IS_ERR(arch_mon_ctx)) {
+-		pr_warn_ratelimited("Failed to allocate monitor context: %ld",
+-				    PTR_ERR(arch_mon_ctx));
++		pr_warn_ratelimited("Failed to allocate monitor context: %pe",
++				    arch_mon_ctx);
+ 		return;
+ 	}
+ 
+@@ -771,8 +771,8 @@ static void mbm_update_one_event(struct rdt_resource *r, struct rdt_l3_mon_domai
+ 	} else {
+ 		rr.arch_mon_ctx = resctrl_arch_mon_ctx_alloc(rr.r, evtid);
+ 		if (IS_ERR(rr.arch_mon_ctx)) {
+-			pr_warn_ratelimited("Failed to allocate monitor context: %ld",
+-					    PTR_ERR(rr.arch_mon_ctx));
++			pr_warn_ratelimited("Failed to allocate monitor context: %pe",
++					    rr.arch_mon_ctx);
+ 			return;
+ 		}
+ 	}
+-- 
+2.55.0
+

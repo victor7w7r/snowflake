@@ -1,0 +1,50 @@
+From c36d435b745582cb740cfa6f748f4535c322b0d2 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 15:59:46 +0200
+Subject: [PATCH 12800/15333] ASoC: rt5575: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Cc: Oder Chiou <oder_chiou@realtek.com>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-15-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/rt5575-spi.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/sound/soc/codecs/rt5575-spi.c b/sound/soc/codecs/rt5575-spi.c
+index d5b3a57c8866..750f1f7169e6 100644
+--- a/sound/soc/codecs/rt5575-spi.c
++++ b/sound/soc/codecs/rt5575-spi.c
+@@ -93,7 +93,6 @@ static void rt5575_spi_burst_write(struct spi_device *spi, u32 addr, const u8 *t
+ int rt5575_spi_fw_load(struct spi_device *spi)
+ {
+ 	struct device *dev = &spi->dev;
+-	const struct firmware *firmware;
+ 	int i, ret;
+ 	static const char * const fw_path[] = {
+ 		"realtek/rt5575/rt5575_fw1.bin",
+@@ -104,6 +103,7 @@ int rt5575_spi_fw_load(struct spi_device *spi)
+ 	static const u32 fw_addr[] = { 0x5f400000, 0x5f600000, 0x5f7fe000, 0x5f7ff000 };
+ 
+ 	for (i = 0; i < ARRAY_SIZE(fw_addr); i++) {
++		const struct firmware *firmware __free(firmware) = NULL;
+ 		ret = request_firmware(&firmware, fw_path[i], dev);
+ 		if (ret) {
+ 			dev_err(dev, "Request firmware failure: %d\n", ret);
+@@ -111,7 +111,6 @@ int rt5575_spi_fw_load(struct spi_device *spi)
+ 		}
+ 
+ 		rt5575_spi_burst_write(spi, fw_addr[i], firmware->data, firmware->size);
+-		release_firmware(firmware);
+ 	}
+ 
+ 	return 0;
+-- 
+2.55.0
+

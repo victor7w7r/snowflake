@@ -1,0 +1,89 @@
+From c4c4434e41e5875b1c922e4c5783466687e75c76 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Adri=C3=A1n=20Larumbe?= <adrian.larumbe@collabora.com>
+Date: Mon, 8 Jun 2026 23:33:52 +0100
+Subject: [PATCH 02390/15333] drm/gpuvm: Remove dead code
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+drm_gpuva_find_{prev|next}() have no consumers.
+
+Signed-off-by: Adrián Larumbe <adrian.larumbe@collabora.com>
+Link: https://patch.msgid.link/20260608-gpuvm-minor-fixes-v2-1-af07ef9ca969@collabora.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/gpu/drm/drm_gpuvm.c | 44 -------------------------------------
+ include/drm/drm_gpuvm.h     |  2 --
+ 2 files changed, 46 deletions(-)
+
+diff --git a/drivers/gpu/drm/drm_gpuvm.c b/drivers/gpu/drm/drm_gpuvm.c
+index c422c5af1f4b..d1c80ad3dead 100644
+--- a/drivers/gpu/drm/drm_gpuvm.c
++++ b/drivers/gpu/drm/drm_gpuvm.c
+@@ -2229,50 +2229,6 @@ drm_gpuva_find(struct drm_gpuvm *gpuvm,
+ }
+ EXPORT_SYMBOL_GPL(drm_gpuva_find);
+ 
+-/**
+- * drm_gpuva_find_prev() - find the &drm_gpuva before the given address
+- * @gpuvm: the &drm_gpuvm to search in
+- * @start: the given GPU VA's start address
+- *
+- * Find the adjacent &drm_gpuva before the GPU VA with given &start address.
+- *
+- * Note that if there is any free space between the GPU VA mappings no mapping
+- * is returned.
+- *
+- * Returns: a pointer to the found &drm_gpuva or NULL if none was found
+- */
+-struct drm_gpuva *
+-drm_gpuva_find_prev(struct drm_gpuvm *gpuvm, u64 start)
+-{
+-	if (!drm_gpuvm_range_valid(gpuvm, start - 1, 1))
+-		return NULL;
+-
+-	return drm_gpuva_it_iter_first(&gpuvm->rb.tree, start - 1, start);
+-}
+-EXPORT_SYMBOL_GPL(drm_gpuva_find_prev);
+-
+-/**
+- * drm_gpuva_find_next() - find the &drm_gpuva after the given address
+- * @gpuvm: the &drm_gpuvm to search in
+- * @end: the given GPU VA's end address
+- *
+- * Find the adjacent &drm_gpuva after the GPU VA with given &end address.
+- *
+- * Note that if there is any free space between the GPU VA mappings no mapping
+- * is returned.
+- *
+- * Returns: a pointer to the found &drm_gpuva or NULL if none was found
+- */
+-struct drm_gpuva *
+-drm_gpuva_find_next(struct drm_gpuvm *gpuvm, u64 end)
+-{
+-	if (!drm_gpuvm_range_valid(gpuvm, end, 1))
+-		return NULL;
+-
+-	return drm_gpuva_it_iter_first(&gpuvm->rb.tree, end, end + 1);
+-}
+-EXPORT_SYMBOL_GPL(drm_gpuva_find_next);
+-
+ /**
+  * drm_gpuvm_interval_empty() - indicate whether a given interval of the VA space
+  * is empty
+diff --git a/include/drm/drm_gpuvm.h b/include/drm/drm_gpuvm.h
+index 655bd9104ffb..f8fc0296c4b7 100644
+--- a/include/drm/drm_gpuvm.h
++++ b/include/drm/drm_gpuvm.h
+@@ -159,8 +159,6 @@ struct drm_gpuva *drm_gpuva_find(struct drm_gpuvm *gpuvm,
+ 				 u64 addr, u64 range);
+ struct drm_gpuva *drm_gpuva_find_first(struct drm_gpuvm *gpuvm,
+ 				       u64 addr, u64 range);
+-struct drm_gpuva *drm_gpuva_find_prev(struct drm_gpuvm *gpuvm, u64 start);
+-struct drm_gpuva *drm_gpuva_find_next(struct drm_gpuvm *gpuvm, u64 end);
+ 
+ /**
+  * drm_gpuva_invalidate() - sets whether the backing GEM of this &drm_gpuva is
+-- 
+2.55.0
+

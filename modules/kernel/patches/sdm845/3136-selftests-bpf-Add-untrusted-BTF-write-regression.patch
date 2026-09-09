@@ -1,0 +1,93 @@
+From 9eab4790f11f751de2da13436845a39c4ca54e54 Mon Sep 17 00:00:00 2001
+From: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Date: Wed, 8 Jul 2026 05:07:51 +0200
+Subject: [PATCH 03136/15333] selftests/bpf: Add untrusted BTF write regression
+
+Add a TCP congestion-control struct_ops load test for a write through a
+BTF pointer produced by bpf_rdonly_cast().
+
+The test expects the verifier to reject the program before the TCP CA
+btf_struct_access callback can whitelist the tcp_sock field write.
+
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+Reviewed-by: Amery Hung <ameryhung@gmail.com>
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ .../selftests/bpf/prog_tests/bpf_tcp_ca.c     | 12 +++++++++
+ .../bpf/progs/tcp_ca_untrusted_btf_write.c    | 26 +++++++++++++++++++
+ 2 files changed, 38 insertions(+)
+ create mode 100644 tools/testing/selftests/bpf/progs/tcp_ca_untrusted_btf_write.c
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/bpf_tcp_ca.c b/tools/testing/selftests/bpf/prog_tests/bpf_tcp_ca.c
+index fe30181e6336..eb05fc82f81b 100644
+--- a/tools/testing/selftests/bpf/prog_tests/bpf_tcp_ca.c
++++ b/tools/testing/selftests/bpf/prog_tests/bpf_tcp_ca.c
+@@ -14,6 +14,7 @@
+ #include "tcp_ca_incompl_cong_ops.skel.h"
+ #include "tcp_ca_unsupp_cong_op.skel.h"
+ #include "tcp_ca_kfunc.skel.h"
++#include "tcp_ca_untrusted_btf_write.skel.h"
+ #include "bpf_cc_cubic.skel.h"
+ 
+ static const unsigned int total_bytes = 10 * 1024 * 1024;
+@@ -579,6 +580,15 @@ static void test_tcp_ca_kfunc(void)
+ 	tcp_ca_kfunc__destroy(skel);
+ }
+ 
++static void test_untrusted_btf_write(void)
++{
++	struct tcp_ca_untrusted_btf_write *skel;
++
++	skel = tcp_ca_untrusted_btf_write__open_and_load();
++	ASSERT_ERR_PTR(skel, "tcp_ca_untrusted_btf_write__open_and_load");
++	tcp_ca_untrusted_btf_write__destroy(skel);
++}
++
+ static void test_cc_cubic(void)
+ {
+ 	struct cb_opts cb_opts = {
+@@ -637,6 +647,8 @@ void test_bpf_tcp_ca(void)
+ 		test_link_replace();
+ 	if (test__start_subtest("tcp_ca_kfunc"))
+ 		test_tcp_ca_kfunc();
++	if (test__start_subtest("untrusted_btf_write"))
++		test_untrusted_btf_write();
+ 	if (test__start_subtest("cc_cubic"))
+ 		test_cc_cubic();
+ 	if (test__start_subtest("dctcp_autoattach_map"))
+diff --git a/tools/testing/selftests/bpf/progs/tcp_ca_untrusted_btf_write.c b/tools/testing/selftests/bpf/progs/tcp_ca_untrusted_btf_write.c
+new file mode 100644
+index 000000000000..eda4697aac80
+--- /dev/null
++++ b/tools/testing/selftests/bpf/progs/tcp_ca_untrusted_btf_write.c
+@@ -0,0 +1,26 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include "bpf_tracing_net.h"
++#include <bpf/bpf_core_read.h>
++#include <bpf/bpf_helpers.h>
++#include <bpf/bpf_tracing.h>
++
++char _license[] SEC("license") = "GPL";
++
++SEC("struct_ops")
++void BPF_PROG(untrusted_btf_write_init, struct sock *sk)
++{
++	struct tcp_sock *tp;
++	int v = 1;
++	void *p;
++
++	p = bpf_rdonly_cast(&v, 0);
++	tp = bpf_rdonly_cast(p, bpf_core_type_id_kernel(struct tcp_sock));
++	tp->snd_cwnd = 1;
++}
++
++SEC(".struct_ops")
++struct tcp_congestion_ops untrusted_btf_write = {
++	.init = (void *)untrusted_btf_write_init,
++	.name = "bpf_ro_btf",
++};
+-- 
+2.55.0
+

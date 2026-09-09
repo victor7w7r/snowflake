@@ -1,0 +1,48 @@
+From 4f93b12cf7b25fbf8e73d222722805b049f0a6d3 Mon Sep 17 00:00:00 2001
+From: Xu Rao <raoxu@uniontech.com>
+Date: Mon, 10 Aug 2026 16:44:35 +0800
+Subject: [PATCH 13872/15333] net: usb: lg-vl600: fix Ethernet header on
+ fragmented RX packets
+
+The LG VL600 RX path can assemble one device frame from multiple USB RX
+URBs.  In the single-URB case, the input skb passed by usbnet is also the
+buffer being parsed, so @skb and @buf point to the same skb.
+
+When a frame is completed from current_rx_buf, however, @buf points to
+the assembled skb while @skb still points to the last URB fragment.
+vl600_rx_fixup() returns @buf to the network stack in that path, but it
+currently obtains the Ethernet header from @skb.
+
+As a result, the source/destination address fixups and the IPv6 ethertype
+fixup can be applied to the final fragment instead of the assembled skb
+that is actually delivered.  Use @buf for the Ethernet header so the
+fixups are applied to the packet being parsed and returned.
+
+This has likely gone unnoticed because the common single-URB path has
+@skb == @buf and therefore behaves correctly.
+
+Cc: stable+noautosel@kernel.org # untested fix to unlikely driver error path
+Signed-off-by: Xu Rao <raoxu@uniontech.com>
+Reviewed-by: Simon Horman <horms@kernel.org>
+Link: https://patch.msgid.link/30CC616506DE5BC4+20260810084435.2099229-1-raoxu@uniontech.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/usb/lg-vl600.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/usb/lg-vl600.c b/drivers/net/usb/lg-vl600.c
+index c4ad2d9f6f4f..d6b2e3e3d950 100644
+--- a/drivers/net/usb/lg-vl600.c
++++ b/drivers/net/usb/lg-vl600.c
+@@ -172,7 +172,7 @@ static int vl600_rx_fixup(struct usbnet *dev, struct sk_buff *skb)
+ 		 * the h_proto field is in the same place so we just leave it
+ 		 * alone and fill in the remaining fields.
+ 		 */
+-		ethhdr = (struct ethhdr *) skb->data;
++		ethhdr = (struct ethhdr *)buf->data;
+ 		if (be16_to_cpup(&ethhdr->h_proto) == ETH_P_ARP &&
+ 				buf->len > 0x26) {
+ 			/* Copy the addresses from packet contents */
+-- 
+2.55.0
+

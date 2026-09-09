@@ -1,0 +1,170 @@
+From f5b57e9e9cfd9736246eb9a5f385da451d199039 Mon Sep 17 00:00:00 2001
+From: Song Liu <song@kernel.org>
+Date: Fri, 14 Aug 2026 08:56:23 -0700
+Subject: [PATCH 14079/15333] bpf: Populate mmap-able array map memory lazily
+
+An mmap-able BPF array map (BPF_F_MMAPABLE) has its backing memory
+vmalloc'ed up front at map creation time. array_map_mmap() then wired up
+the whole mapping eagerly via remap_vmalloc_range(), which calls
+vm_insert_page() for every page of the map. For large maps this makes
+every mmap() O(number of pages): an 8MiB map inserts 2048 PTEs per
+mmap() and tears them all down again on munmap(), even when user space
+only touches a few pages (or none at all).
+
+Populate the mapping lazily instead, the same way the arena map already
+does. array_map_mmap() now only performs the bounds check and returns,
+leaving the PTEs unpopulated; pages are inserted on demand by a new
+array_map_mmap_fault() handler. Because the memory is already resident,
+the fault handler simply resolves the vmalloc page and hands it to the
+fault path. This makes mmap() O(1), and munmap() proportional to the
+number of pages that were actually faulted in rather than to the size of
+the map.
+
+The handler is reached through a new optional ->map_mmap_fault callback.
+Maps that provide it get a vm_operations_struct with a .fault handler;
+maps that populate their mapping eagerly keep the one they had. Both
+share the same open/close callbacks, so the existing VMA accounting
+(VM_MAYWRITE write-active tracking, freeze handling) stays centralized
+rather than each map installing its own vm_operations_struct.
+
+Callers that want the pages populated up front can still request that
+explicitly with MAP_POPULATE. Kernel-side access to the map (via the
+vmalloc address) is unaffected.
+
+Time for one mmap()+munmap() of an 8MiB mmap-able array map:
+
+                                       before     after
+  no MAP_POPULATE, no access            226us     1.1us
+  no MAP_POPULATE, access all pages     236us    1341us
+  MAP_POPULATE, no access               312us     493us
+  MAP_POPULATE, access all pages        318us     519us
+
+Mapping without touching the data, which is what this change targets,
+gets ~160x cheaper. Faulting in the whole mapping one page at a time is
+more expensive than the eager remap_vmalloc_range() loop, so users that
+do touch every page should ask for MAP_POPULATE. Note that MAP_POPULATE
+is not free before this change either: it adds ~85us (226us => 312us)
+for no benefit, as the mapping is already fully populated.
+
+Assisted-by: Claude:claude-opus-4-8
+Signed-off-by: Song Liu <song@kernel.org>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Link: https://lore.kernel.org/bpf/20260814155623.111565-1-song@kernel.org
+---
+ include/linux/bpf.h   |  1 +
+ kernel/bpf/arraymap.c | 34 ++++++++++++++++++++++++++++++----
+ kernel/bpf/syscall.c  | 15 ++++++++++++++-
+ 3 files changed, 45 insertions(+), 5 deletions(-)
+
+diff --git a/include/linux/bpf.h b/include/linux/bpf.h
+index f4e8d372253a..04cadd987169 100644
+--- a/include/linux/bpf.h
++++ b/include/linux/bpf.h
+@@ -145,6 +145,7 @@ struct bpf_map_ops {
+ 	int (*map_direct_value_meta)(const struct bpf_map *map,
+ 				     u64 imm, u32 *off);
+ 	int (*map_mmap)(struct bpf_map *map, struct vm_area_struct *vma);
++	vm_fault_t (*map_mmap_fault)(struct bpf_map *map, struct vm_fault *vmf);
+ 	__poll_t (*map_poll)(struct bpf_map *map, struct file *filp,
+ 			     struct poll_table_struct *pts);
+ 	unsigned long (*map_get_unmapped_area)(struct file *filep, unsigned long addr,
+diff --git a/kernel/bpf/arraymap.c b/kernel/bpf/arraymap.c
+index 34865701f7f7..ef315b168b29 100644
+--- a/kernel/bpf/arraymap.c
++++ b/kernel/bpf/arraymap.c
+@@ -608,17 +608,42 @@ static int array_map_check_btf(struct bpf_map *map,
+ static int array_map_mmap(struct bpf_map *map, struct vm_area_struct *vma)
+ {
+ 	struct bpf_array *array = container_of(map, struct bpf_array, map);
+-	pgoff_t pgoff = PAGE_ALIGN(sizeof(*array)) >> PAGE_SHIFT;
+ 
+ 	if (!(map->map_flags & BPF_F_MMAPABLE))
+ 		return -EINVAL;
+ 
+-	if (vma->vm_pgoff * PAGE_SIZE + (vma->vm_end - vma->vm_start) >
++	/* use u64 math so the offset cannot overflow on 32-bit archs */
++	if ((u64)vma->vm_pgoff * PAGE_SIZE + (vma->vm_end - vma->vm_start) >
+ 	    PAGE_ALIGN((u64)array->map.max_entries * array->elem_size))
+ 		return -EINVAL;
+ 
+-	return remap_vmalloc_range(vma, array_map_vmalloc_addr(array),
+-				   vma->vm_pgoff + pgoff);
++	/*
++	 * Pages are faulted in on demand by array_map_mmap_fault(). Set the
++	 * same flags that the eager remap_vmalloc_range() path used to set
++	 * via vm_insert_page(), so that e.g. NUMA balancing keeps skipping
++	 * these VMAs.
++	 */
++	vm_flags_set(vma, VM_DONTEXPAND | VM_DONTDUMP | VM_MIXEDMAP);
++
++	return 0;
++}
++
++static vm_fault_t array_map_mmap_fault(struct bpf_map *map,
++				       struct vm_fault *vmf)
++{
++	struct bpf_array *array = container_of(map, struct bpf_array, map);
++	struct page *page;
++
++	page = vmalloc_to_page(array->value + ((u64)vmf->pgoff << PAGE_SHIFT));
++	if (!page)
++		return VM_FAULT_SIGBUS;
++
++	/* the eager remap_vmalloc_range() flushed via vm_insert_page() */
++	flush_dcache_folio(page_folio(page));
++	get_page(page);
++	vmf->page = page;
++
++	return 0;
+ }
+ 
+ static bool array_map_meta_equal(const struct bpf_map *meta0,
+@@ -844,6 +869,7 @@ const struct bpf_map_ops array_map_ops = {
+ 	.map_direct_value_addr = array_map_direct_value_addr,
+ 	.map_direct_value_meta = array_map_direct_value_meta,
+ 	.map_mmap = array_map_mmap,
++	.map_mmap_fault = array_map_mmap_fault,
+ 	.map_seq_show_elem = array_map_seq_show_elem,
+ 	.map_check_btf = array_map_check_btf,
+ 	.map_lookup_batch = generic_map_lookup_batch,
+diff --git a/kernel/bpf/syscall.c b/kernel/bpf/syscall.c
+index 7d8c3e8e6d62..6874ba1424af 100644
+--- a/kernel/bpf/syscall.c
++++ b/kernel/bpf/syscall.c
+@@ -1076,11 +1076,24 @@ static void bpf_map_mmap_close(struct vm_area_struct *vma)
+ 		bpf_map_write_active_dec(map);
+ }
+ 
++static vm_fault_t bpf_map_mmap_fault(struct vm_fault *vmf)
++{
++	struct bpf_map *map = vmf->vma->vm_private_data;
++
++	return map->ops->map_mmap_fault(map, vmf);
++}
++
+ static const struct vm_operations_struct bpf_map_default_vmops = {
+ 	.open		= bpf_map_mmap_open,
+ 	.close		= bpf_map_mmap_close,
+ };
+ 
++static const struct vm_operations_struct bpf_map_lazy_vmops = {
++	.open		= bpf_map_mmap_open,
++	.close		= bpf_map_mmap_close,
++	.fault		= bpf_map_mmap_fault,
++};
++
+ static int bpf_map_mmap(struct file *filp, struct vm_area_struct *vma)
+ {
+ 	struct bpf_map *map = filp->private_data;
+@@ -1116,7 +1129,7 @@ static int bpf_map_mmap(struct file *filp, struct vm_area_struct *vma)
+ 		return err;
+ 
+ 	/* set default open/close callbacks */
+-	vma->vm_ops = &bpf_map_default_vmops;
++	vma->vm_ops = map->ops->map_mmap_fault ? &bpf_map_lazy_vmops : &bpf_map_default_vmops;
+ 	vma->vm_private_data = map;
+ 	vm_flags_clear(vma, VM_MAYEXEC);
+ 	/* If mapping is read-only, then disallow potentially re-mapping with
+-- 
+2.55.0
+

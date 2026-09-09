@@ -1,0 +1,106 @@
+From 54324f3973c84f3cc81d2c614cb846be086f37f4 Mon Sep 17 00:00:00 2001
+From: Mohammad Rafi Shaik <mohammad.rafi.shaik@oss.qualcomm.com>
+Date: Fri, 24 Jul 2026 23:54:44 +0530
+Subject: [PATCH 07168/15333] ASoC: dt-bindings: qcom,q6apm-lpass-dais:
+ Document DAI subnode
+
+Extend the qcom,q6apm-lpass-dais device tree binding to explicitly
+describe Digital Audio Interface (DAI) child nodes.
+
+Add #address-cells and #size-cells to allow representation of multiple
+DAI instances as child nodes, and define a dai@<id> pattern to document
+per-DAI properties such as the interface ID and associated clocks.
+
+On platforms such as Monaco and Lemans, third-party codecs are hardware
+wired to the SoC and do not always have an in-tree codec driver to manage
+their clocks. For these designs, clock line enablement must be driven
+from the platform side, and this series provides the necessary support
+for that.
+
+On QAIF-based platforms such as Shikra and Hawi, responsibility for voting
+I2S MCLK and BCLK has moved from the DSP to the kernel. This series
+introduces the required device tree binding support to represent and
+vote for these clocks from the kernel.
+
+Co-developed-by: Srinivas Kandagatla <srinivas.kandagatla@oss.qualcomm.com>
+Signed-off-by: Srinivas Kandagatla <srinivas.kandagatla@oss.qualcomm.com>
+Signed-off-by: Mohammad Rafi Shaik <mohammad.rafi.shaik@oss.qualcomm.com>
+Reviewed-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260724182446.1484894-2-mohammad.rafi.shaik@oss.qualcomm.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ .../bindings/sound/qcom,q6apm-lpass-dais.yaml | 50 +++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/sound/qcom,q6apm-lpass-dais.yaml b/Documentation/devicetree/bindings/sound/qcom,q6apm-lpass-dais.yaml
+index 2fb95544db8b..4878c424ef03 100644
+--- a/Documentation/devicetree/bindings/sound/qcom,q6apm-lpass-dais.yaml
++++ b/Documentation/devicetree/bindings/sound/qcom,q6apm-lpass-dais.yaml
+@@ -21,6 +21,43 @@ properties:
+   '#sound-dai-cells':
+     const: 1
+ 
++  '#address-cells':
++    const: 1
++
++  '#size-cells':
++    const: 0
++
++# Digital Audio Interfaces
++patternProperties:
++  '^dai@[0-9a-f]+$':
++    type: object
++    description:
++      Q6DSP Digital Audio Interfaces.
++
++    properties:
++      reg:
++        maxItems: 1
++        description:
++          Digital Audio Interface ID
++
++      clocks:
++        minItems: 1
++        maxItems: 2
++
++      clock-names:
++        minItems: 1
++        items:
++          - enum: [bclk, mclk]
++          - const: mclk
++
++    dependencies:
++      clocks: [clock-names]
++
++    required:
++      - reg
++
++    additionalProperties: false
++
+ required:
+   - compatible
+   - '#sound-dai-cells'
+@@ -29,7 +66,20 @@ unevaluatedProperties: false
+ 
+ examples:
+   - |
++    #include <dt-bindings/sound/qcom,q6afe.h>
++
+     dais {
+         compatible = "qcom,q6apm-lpass-dais";
+         #sound-dai-cells = <1>;
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        dai@10 {
++           reg = <PRIMARY_MI2S_RX>;
++           clocks = <&q6prmcc LPASS_CLK_ID_PRI_MI2S_IBIT
++                              LPASS_CLK_ATTRIBUTE_COUPLE_NO>,
++                    <&q6prmcc LPASS_CLK_ID_MCLK_1
++                              LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
++           clock-names = "bclk", "mclk";
++        };
+     };
+-- 
+2.55.0
+

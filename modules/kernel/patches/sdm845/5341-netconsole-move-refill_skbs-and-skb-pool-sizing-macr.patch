@@ -1,0 +1,155 @@
+From 2fbebfbe2953bc0ba1656b25d03338fde1066ad5 Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Fri, 10 Jul 2026 04:38:57 -0700
+Subject: [PATCH 05341/15333] netconsole: move refill_skbs() and skb-pool
+ sizing macros from netpoll
+
+refill_skbs() is now only called from netconsole (directly via
+netconsole_skb_pool_init() and indirectly via the just-moved
+refill_skbs_work_handler()), and the MAX_UDP_CHUNK / MAX_SKBS /
+MAX_SKB_SIZE macros are private to it. Move them all into
+drivers/net/netconsole.c.
+
+MAX_UDP_CHUNK and MAX_SKB_SIZE were promoted to <linux/netpoll.h>
+by commit 6c537b845c99 ("netconsole: do not dequeue pooled skbs that
+cannot satisfy len") so find_skb() could detect oversized requests
+against the same value refill_skbs() used. With both functions now
+local to netconsole, the shared definition no longer needs to live
+in the header.
+
+Pure code motion: bodies and pool sizing semantics are unchanged.
+
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Link: https://patch.msgid.link/20260710-netconsole_move_more-v3-5-6f63f76b28bc@debian.org
+Reviewed-by: Simon Horman <horms@kernel.org>
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/netconsole.c | 29 +++++++++++++++++++++++++++++
+ include/linux/netpoll.h  | 15 ---------------
+ net/core/netpoll.c       | 23 -----------------------
+ 3 files changed, 29 insertions(+), 38 deletions(-)
+
+diff --git a/drivers/net/netconsole.c b/drivers/net/netconsole.c
+index 96d9a47312cd..efeada762536 100644
+--- a/drivers/net/netconsole.c
++++ b/drivers/net/netconsole.c
+@@ -61,6 +61,19 @@ MODULE_IMPORT_NS("NETDEV_INTERNAL");
+ #define MAX_USERDATA_ITEMS		256
+ #define MAX_PRINT_CHUNK			1000
+ 
++/*
++ * Sizing for the per-target fallback skb pool consulted by find_skb()
++ * when its GFP_ATOMIC allocation fails so messages still get out under
++ * memory pressure.
++ */
++#define MAX_UDP_CHUNK			1460
++#define MAX_SKBS			32
++#define MAX_SKB_SIZE							\
++	(sizeof(struct ethhdr) +					\
++	 sizeof(struct iphdr) +						\
++	 sizeof(struct udphdr) +					\
++	 MAX_UDP_CHUNK)
++
+ static char config[MAX_PARAM_LENGTH];
+ module_param_string(netconsole, config, MAX_PARAM_LENGTH, 0);
+ MODULE_PARM_DESC(netconsole, " netconsole=[src-port]@[src-ip]/[dev],[tgt-port]@<tgt-ip>/[tgt-macaddr]");
+@@ -292,6 +305,22 @@ static void netcons_release_dev(struct netconsole_target *nt)
+ 		memset(&nt->np.dev_name, 0, IFNAMSIZ);
+ }
+ 
++static void refill_skbs(struct netpoll *np)
++{
++	struct sk_buff_head *skb_pool;
++	struct sk_buff *skb;
++
++	skb_pool = &np->skb_pool;
++
++	while (READ_ONCE(skb_pool->qlen) < MAX_SKBS) {
++		skb = alloc_skb(MAX_SKB_SIZE, GFP_ATOMIC | __GFP_NOWARN);
++		if (!skb)
++			break;
++
++		skb_queue_tail(skb_pool, skb);
++	}
++}
++
+ static void refill_skbs_work_handler(struct work_struct *work)
+ {
+ 	struct netpoll *np =
+diff --git a/include/linux/netpoll.h b/include/linux/netpoll.h
+index 51e5863d8e67..7e2fbce863e9 100644
+--- a/include/linux/netpoll.h
++++ b/include/linux/netpoll.h
+@@ -21,20 +21,6 @@ union inet_addr {
+ 	struct in6_addr	in6;
+ };
+ 
+-/*
+- * Maximum payload netpoll's preallocated skb pool can carry. Keep this in
+- * sync with the buffer size used by refill_skbs() in net/core/netpoll.c;
+- * callers (e.g. netconsole) use it to detect requests the pool can never
+- * satisfy and avoid dequeuing a pooled skb that would later trip
+- * skb_over_panic() in skb_put().
+- */
+-#define MAX_UDP_CHUNK	1460
+-#define MAX_SKB_SIZE						\
+-	(sizeof(struct ethhdr) +				\
+-	 sizeof(struct iphdr) +					\
+-	 sizeof(struct udphdr) +				\
+-	 MAX_UDP_CHUNK)
+-
+ struct netpoll {
+ 	struct net_device *dev;
+ 	netdevice_tracker dev_tracker;
+@@ -90,7 +76,6 @@ void netpoll_cleanup(struct netpoll *np);
+ void do_netpoll_cleanup(struct netpoll *np);
+ netdev_tx_t netpoll_send_skb(struct netpoll *np, struct sk_buff *skb);
+ void netpoll_zap_completion_queue(void);
+-void refill_skbs(struct netpoll *np);
+ void skb_pool_flush(struct netpoll *np);
+ 
+ #ifdef CONFIG_NETPOLL
+diff --git a/net/core/netpoll.c b/net/core/netpoll.c
+index 93a16faf808c..9ca695f64210 100644
+--- a/net/core/netpoll.c
++++ b/net/core/netpoll.c
+@@ -36,12 +36,6 @@
+ #include <trace/events/napi.h>
+ #include <linux/kconfig.h>
+ 
+-/*
+- * We maintain a small pool of fully-sized skbs, to make sure the
+- * message gets out even in extreme OOM situations.
+- */
+-
+-#define MAX_SKBS 32
+ #define USEC_PER_POLL	50
+ 
+ static unsigned int carrier_timeout = 4;
+@@ -213,23 +207,6 @@ void netpoll_poll_enable(struct net_device *dev)
+ 		up(&ni->dev_lock);
+ }
+ 
+-void refill_skbs(struct netpoll *np)
+-{
+-	struct sk_buff_head *skb_pool;
+-	struct sk_buff *skb;
+-
+-	skb_pool = &np->skb_pool;
+-
+-	while (READ_ONCE(skb_pool->qlen) < MAX_SKBS) {
+-		skb = alloc_skb(MAX_SKB_SIZE, GFP_ATOMIC | __GFP_NOWARN);
+-		if (!skb)
+-			break;
+-
+-		skb_queue_tail(skb_pool, skb);
+-	}
+-}
+-EXPORT_SYMBOL_GPL(refill_skbs);
+-
+ void netpoll_zap_completion_queue(void)
+ {
+ 	unsigned long flags;
+-- 
+2.55.0
+

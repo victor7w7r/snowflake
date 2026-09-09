@@ -1,0 +1,60 @@
+From b39c748d9db0c6f3ada5e7cef7f56415827d5f81 Mon Sep 17 00:00:00 2001
+From: Matt Turner <mattst88@gmail.com>
+Date: Mon, 3 Aug 2026 13:08:42 -0400
+Subject: [PATCH 14229/15333] alpha: read $gp and $sp explicitly for clang
+
+clang honors a local `register unsigned long x __asm__("$N")` variable
+only where it appears as an inline-asm operand; merely reading it does
+not produce the contents of that register.  So trap_init() passed an
+undefined global pointer to PAL_wrkgp, and load_PCB() stored an undefined
+stack pointer into the PCB that swpctx then loaded.  Either one wedges an
+early boot.
+
+Read the registers explicitly instead: an inline mov for $gp in
+trap_init(), and the file-scope current_stack_pointer for $sp in
+load_PCB().  A file-scope register-asm variable is the form clang does
+support.
+
+Signed-off-by: Matt Turner <mattst88@gmail.com>
+Reviewed-by: Maciej W. Rozycki <macro@orcam.me.uk>
+Reviewed-by: Magnus Lindholm <linmag7@gmail.com>
+Tested-by: Magnus Lindholm <linmag7@gmail.com>
+Link: https://lore.kernel.org/r/20260803-alpha-clang-v1-2-1c4ba5ba7a64@gmail.com
+Signed-off-by: Magnus Lindholm <linmag7@gmail.com>
+---
+ arch/alpha/kernel/traps.c | 4 +++-
+ arch/alpha/mm/init.c      | 3 +--
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/arch/alpha/kernel/traps.c b/arch/alpha/kernel/traps.c
+index 4492a90a579f..cfaef96c4ce8 100644
+--- a/arch/alpha/kernel/traps.c
++++ b/arch/alpha/kernel/traps.c
+@@ -925,7 +925,9 @@ void
+ trap_init(void)
+ {
+ 	/* Tell PAL-code what global pointer we want in the kernel.  */
+-	register unsigned long gptr __asm__("$29");
++	unsigned long gptr;
++
++	__asm__ __volatile__("mov $29, %0" : "=r" (gptr));
+ 	wrkgp(gptr);
+ 
+ 	wrent(entArith, 1);
+diff --git a/arch/alpha/mm/init.c b/arch/alpha/mm/init.c
+index 9531cbc761c0..f4d65a60c869 100644
+--- a/arch/alpha/mm/init.c
++++ b/arch/alpha/mm/init.c
+@@ -63,8 +63,7 @@ pgd_alloc(struct mm_struct *mm)
+ static inline unsigned long
+ load_PCB(struct pcb_struct *pcb)
+ {
+-	register unsigned long sp __asm__("$30");
+-	pcb->ksp = sp;
++	pcb->ksp = (unsigned long)current_stack_pointer;
+ 	return __reload_thread(pcb);
+ }
+ 
+-- 
+2.55.0
+

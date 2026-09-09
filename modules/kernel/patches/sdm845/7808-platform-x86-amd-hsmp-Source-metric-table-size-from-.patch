@@ -1,0 +1,158 @@
+From 96f1ba765ab55d57ee2a2bf88e05c2ee699c7c5b Mon Sep 17 00:00:00 2001
+From: Muralidhara M K <muralidhara.mk@amd.com>
+Date: Mon, 27 Jul 2026 19:45:40 +0530
+Subject: [PATCH 07808/15333] platform/x86/amd/hsmp: Source metric-table size
+ from firmware
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The driver hard-codes the metric-table region size to
+sizeof(struct hsmp_metric_table). That is correct for HSMP protocol
+version 6 but mis-sizes the ioremap of the SMU DRAM region on newer
+platforms: Family 1Ah Model 50h-5Fh exposes a ~13 KB table under
+protocol version 7, and the table is expected to keep growing on
+future firmware. The same hard-coded value also forces
+hsmp_metric_tbl_read() to reject any read that follows the actual
+firmware layout.
+
+Pick up the table size from firmware instead. SMU on Family 1Ah
+Model 50h and later populates HSMP_GET_METRIC_TABLE_DRAM_ADDR's
+args[2] with the DRAM region size in bytes; older firmware leaves it
+0. Bump the descriptor's response_sz to 3 so the field is read, and
+store the result in the new per-socket hsmp_socket.metric_tbl_size,
+which is then used both for the ioremap() of the region and as the
+expected size in hsmp_metric_tbl_read().
+
+The size is stored per socket rather than per platform because
+hsmp_get_tbl_dram_base() runs once per socket and each socket maps
+its own region. A single platform-wide field would let the last
+socket's size be used to copy out of an earlier socket's smaller
+mapping.
+
+Bump DRIVER_VERSION to 2.6.
+
+Behaviour on existing protocol-version-6 hardware is unchanged.
+Reading a third response word is safe there: for this command SMU
+leaves args[2] as 0 rather than a stale value from an earlier
+mailbox transaction, so the fallback always applies, yielding the
+same value as the previous hard-coded one, and both the ioremap and
+the size check produce the same result as before.
+
+Co-developed-by: Muthusamy Ramalingam <muthusamy.ramalingam@amd.com>
+Signed-off-by: Muthusamy Ramalingam <muthusamy.ramalingam@amd.com>
+Signed-off-by: Muralidhara M K <muralidhara.mk@amd.com>
+Link: https://patch.msgid.link/20260727141542.3370108-4-muralidhara.mk@amd.com
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ arch/x86/include/uapi/asm/amd_hsmp.h |  5 +++--
+ drivers/platform/x86/amd/hsmp/hsmp.c | 17 ++++++++++++++---
+ drivers/platform/x86/amd/hsmp/hsmp.h |  5 ++++-
+ 3 files changed, 21 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/include/uapi/asm/amd_hsmp.h b/arch/x86/include/uapi/asm/amd_hsmp.h
+index eff35c3c6ce0..d1d3bc60cffc 100644
+--- a/arch/x86/include/uapi/asm/amd_hsmp.h
++++ b/arch/x86/include/uapi/asm/amd_hsmp.h
+@@ -367,11 +367,12 @@ static const struct hsmp_msg_desc hsmp_msg_desc_table[]
+ 	{0, 0, HSMP_GET},
+ 
+ 	/*
+-	 * HSMP_GET_METRIC_TABLE_DRAM_ADDR, num_args = 0, response_sz = 2
++	 * HSMP_GET_METRIC_TABLE_DRAM_ADDR, num_args = 0, response_sz = 3
+ 	 * output: args[0] = lower 32 bits of the address
+ 	 * output: args[1] = upper 32 bits of the address
++	 * output: args[2] = DRAM region size in bytes
+ 	 */
+-	{0, 2, HSMP_GET},
++	{0, 3, HSMP_GET},
+ 
+ 	/*
+ 	 * HSMP_SET_XGMI_PSTATE_RANGE, num_args = 1, response_sz = 0
+diff --git a/drivers/platform/x86/amd/hsmp/hsmp.c b/drivers/platform/x86/amd/hsmp/hsmp.c
+index 02425f7e6f14..3e9bdbcd9ea9 100644
+--- a/drivers/platform/x86/amd/hsmp/hsmp.c
++++ b/drivers/platform/x86/amd/hsmp/hsmp.c
+@@ -429,8 +429,7 @@ ssize_t hsmp_metric_tbl_read(struct hsmp_socket *sock, char *buf, size_t size)
+ 		return -ENOMEM;
+ 	}
+ 
+-	/* Do not support lseek(), also don't allow more than the size of metric table */
+-	if (size != sizeof(struct hsmp_metric_table)) {
++	if (size != sock->metric_tbl_size) {
+ 		dev_err(sock->dev, "Wrong buffer size\n");
+ 		return -EINVAL;
+ 	}
+@@ -484,6 +483,7 @@ void hsmp_unmap_metric_tbls(struct hsmp_plat_device *pdev)
+ 			iounmap(sock->metric_tbl_addr);
+ 			sock->metric_tbl_addr = NULL;
+ 		}
++		sock->metric_tbl_size = 0;
+ 	}
+ }
+ EXPORT_SYMBOL_NS_GPL(hsmp_unmap_metric_tbls, "AMD_HSMP");
+@@ -493,6 +493,7 @@ int hsmp_get_tbl_dram_base(u16 sock_ind)
+ 	struct hsmp_socket *sock = &hsmp_pdev.sock[sock_ind];
+ 	struct hsmp_message msg = { 0 };
+ 	phys_addr_t dram_addr;
++	size_t tbl_size;
+ 	int ret;
+ 
+ 	msg.sock_ind	= sock_ind;
+@@ -524,11 +525,21 @@ int hsmp_get_tbl_dram_base(u16 sock_ind)
+ 		iounmap(sock->metric_tbl_addr);
+ 		sock->metric_tbl_addr = NULL;
+ 	}
+-	sock->metric_tbl_addr = ioremap(dram_addr, sizeof(struct hsmp_metric_table));
++	sock->metric_tbl_size = 0;
++
++	/* SMU returns table size from Family 1Ah Model 50h and forward */
++	if (msg.args[2])
++		tbl_size = msg.args[2];
++	else
++		tbl_size = sizeof(struct hsmp_metric_table);
++
++	sock->metric_tbl_addr = ioremap(dram_addr, tbl_size);
+ 	if (!sock->metric_tbl_addr) {
+ 		dev_err(sock->dev, "Failed to ioremap metric table addr\n");
+ 		return -ENOMEM;
+ 	}
++	sock->metric_tbl_size = tbl_size;
++
+ 	return 0;
+ }
+ EXPORT_SYMBOL_NS_GPL(hsmp_get_tbl_dram_base, "AMD_HSMP");
+diff --git a/drivers/platform/x86/amd/hsmp/hsmp.h b/drivers/platform/x86/amd/hsmp/hsmp.h
+index cfd1a8cbd459..8dbff16a87b1 100644
+--- a/drivers/platform/x86/amd/hsmp/hsmp.h
++++ b/drivers/platform/x86/amd/hsmp/hsmp.h
+@@ -20,6 +20,7 @@
+ #include <linux/rwsem.h>
+ #include <linux/semaphore.h>
+ #include <linux/sysfs.h>
++#include <linux/types.h>
+ 
+ #define HSMP_METRICS_TABLE_NAME	"metrics_bin"
+ 
+@@ -29,7 +30,7 @@
+ #define HSMP_DEVNODE_NAME	"hsmp"
+ #define ACPI_HSMP_DEVICE_HID    "AMDI0097"
+ 
+-#define DRIVER_VERSION		"2.5"
++#define DRIVER_VERSION		"2.6"
+ 
+ struct hsmp_mbaddr_info {
+ 	u32 base_addr;
+@@ -43,6 +44,8 @@ struct hsmp_socket {
+ 	struct bin_attribute hsmp_attr;
+ 	struct hsmp_mbaddr_info mbinfo;
+ 	void __iomem *metric_tbl_addr;
++	/* Size of the region mapped at @metric_tbl_addr, as reported by SMU */
++	size_t metric_tbl_size;
+ 	void __iomem *virt_base_addr;
+ 	struct semaphore hsmp_sem;
+ 	/* Serializes HSMP_GET_METRIC_TABLE fill-and-copy for this socket */
+-- 
+2.55.0
+

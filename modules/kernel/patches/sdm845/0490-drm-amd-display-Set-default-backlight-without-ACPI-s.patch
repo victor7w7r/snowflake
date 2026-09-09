@@ -1,0 +1,59 @@
+From e3d0810f50add1e63883a993bac9e01603a81b53 Mon Sep 17 00:00:00 2001
+From: Mario Limonciello <mario.limonciello@amd.com>
+Date: Thu, 4 Jun 2026 09:38:12 -0500
+Subject: [PATCH 00490/15333] drm/amd/display: Set default backlight without
+ ACPI support
+
+[Why]
+If BIOS doesn't include ATIF method it will not specify default AC or DC
+levels. This means that backlight will always start at 0%, which isn't
+expected behavior.
+
+[How]
+Set default AC and DC level when no valid caps found.  Also reduce code
+duplication for ACPI and non-ACPI cases.
+
+Reported-by: Edson Juliano Drosdeck <edson.drosdeck@gmail.com>
+Closes: https://lore.kernel.org/dri-devel/20260526210048.1162477-1-edson.drosdeck@gmail.com/
+Reviewed-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Mario Limonciello <mario.limonciello@amd.com>
+Signed-off-by: Chenyu Chen <chen-yu.chen@amd.com>
+Tested-by: Daniel Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../amd/display/amdgpu_dm/amdgpu_dm_backlight.c    | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c
+index f101aed75bb3..0a861d846677 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c
+@@ -78,20 +78,16 @@ void amdgpu_dm_update_backlight_caps(struct amdgpu_display_manager *dm,
+ 			caps->caps_valid = false;
+ 		}
+ 	}
+-
++#else
++	if (caps->aux_support)
++		return;
++#endif
+ 	if (!caps->caps_valid) {
+ 		caps->min_input_signal = AMDGPU_DM_DEFAULT_MIN_BACKLIGHT;
+ 		caps->max_input_signal = AMDGPU_DM_DEFAULT_MAX_BACKLIGHT;
++		caps->ac_level = caps->dc_level = 50;
+ 		caps->caps_valid = true;
+ 	}
+-#else
+-	if (caps->aux_support)
+-		return;
+-
+-	caps->min_input_signal = AMDGPU_DM_DEFAULT_MIN_BACKLIGHT;
+-	caps->max_input_signal = AMDGPU_DM_DEFAULT_MAX_BACKLIGHT;
+-	caps->caps_valid = true;
+-#endif
+ }
+ EXPORT_IF_KUNIT(amdgpu_dm_update_backlight_caps);
+ 
+-- 
+2.55.0
+

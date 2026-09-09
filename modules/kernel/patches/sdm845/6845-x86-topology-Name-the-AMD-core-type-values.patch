@@ -1,0 +1,59 @@
+From bdb1b1f03b9b1cc1cde7d54f8b5b2f9a6bdda782 Mon Sep 17 00:00:00 2001
+From: Vishal Badole <Vishal.Badole@amd.com>
+Date: Tue, 21 Jul 2026 21:15:13 +0530
+Subject: [PATCH 06845/15333] x86/topology: Name the AMD core-type values
+
+Replace the bare 0/1 in get_topology_cpu_type() with named constants that
+mirror what the AMD APM publishes for CPUID Fn0x80000026 EBX[31:28] (Extended
+CPU Topology, Core Type):
+
+  0 - Performance core
+  1 - Efficient core
+  2 - Low-power core (used by a follow-up)
+
+No functional change.
+
+Suggested-by: Borislav Petkov (AMD) <bp@alien8.de>
+Signed-off-by: Vishal Badole <Vishal.Badole@amd.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Link: https://patch.msgid.link/20260721154514.2506972-3-Vishal.Badole@amd.com
+---
+ arch/x86/include/asm/topology.h       | 6 ++++++
+ arch/x86/kernel/cpu/topology_common.c | 4 ++--
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/include/asm/topology.h b/arch/x86/include/asm/topology.h
+index ef76ba674f1b..1825691af941 100644
+--- a/arch/x86/include/asm/topology.h
++++ b/arch/x86/include/asm/topology.h
+@@ -114,6 +114,12 @@ enum x86_topology_domains {
+ 	TOPO_MAX_DOMAIN,
+ };
+ 
++enum amd_cpu_type {
++	AMD_CPU_TYPE_PERFORMANCE	= 0,
++	AMD_CPU_TYPE_EFFICIENCY		= 1,
++	AMD_CPU_TYPE_LOW_POWER		= 2,
++};
++
+ struct x86_topology_system {
+ 	unsigned int	dom_shifts[TOPO_MAX_DOMAIN];
+ 	unsigned int	dom_size[TOPO_MAX_DOMAIN];
+diff --git a/arch/x86/kernel/cpu/topology_common.c b/arch/x86/kernel/cpu/topology_common.c
+index b9d025f3373a..71b6c33afe0b 100644
+--- a/arch/x86/kernel/cpu/topology_common.c
++++ b/arch/x86/kernel/cpu/topology_common.c
+@@ -42,8 +42,8 @@ enum x86_topology_cpu_type get_topology_cpu_type(struct cpuinfo_x86 *c)
+ 	}
+ 	if (c->x86_vendor == X86_VENDOR_AMD) {
+ 		switch (c->topo.amd_type) {
+-		case 0:	return TOPO_CPU_TYPE_PERFORMANCE;
+-		case 1:	return TOPO_CPU_TYPE_EFFICIENCY;
++		case AMD_CPU_TYPE_PERFORMANCE:	return TOPO_CPU_TYPE_PERFORMANCE;
++		case AMD_CPU_TYPE_EFFICIENCY:	return TOPO_CPU_TYPE_EFFICIENCY;
+ 		}
+ 	}
+ 
+-- 
+2.55.0
+

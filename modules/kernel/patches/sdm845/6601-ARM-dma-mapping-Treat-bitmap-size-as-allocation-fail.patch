@@ -1,0 +1,41 @@
+From d00e89988e0192b3a1e413ec095e1699e5d23f2b Mon Sep 17 00:00:00 2001
+From: Yury Norov <ynorov@nvidia.com>
+Date: Wed, 8 Jul 2026 22:03:07 -0400
+Subject: [PATCH 06601/15333] ARM: dma-mapping: Treat bitmap size as allocation
+ failure
+
+bitmap_find_next_zero_area() uses an out-of-range return value to
+indicate failure. Check for values greater than or equal to the bitmap
+size so the caller does not depend on the exact failure sentinel.
+
+Acked-by: Marek Szyprowski <m.szyprowski@samsung.com>
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ arch/arm/mm/dma-mapping.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/mm/dma-mapping.c b/arch/arm/mm/dma-mapping.c
+index f9bc53b60f99..7761099dde9e 100644
+--- a/arch/arm/mm/dma-mapping.c
++++ b/arch/arm/mm/dma-mapping.c
+@@ -773,7 +773,7 @@ static inline dma_addr_t __alloc_iova(struct dma_iommu_mapping *mapping,
+ 		start = bitmap_find_next_zero_area(mapping->bitmaps[i],
+ 				mapping->bits, 0, count, align);
+ 
+-		if (start > mapping->bits)
++		if (start >= mapping->bits)
+ 			continue;
+ 
+ 		bitmap_set(mapping->bitmaps[i], start, count);
+@@ -794,7 +794,7 @@ static inline dma_addr_t __alloc_iova(struct dma_iommu_mapping *mapping,
+ 		start = bitmap_find_next_zero_area(mapping->bitmaps[i],
+ 				mapping->bits, 0, count, align);
+ 
+-		if (start > mapping->bits) {
++		if (start >= mapping->bits) {
+ 			spin_unlock_irqrestore(&mapping->lock, flags);
+ 			return DMA_MAPPING_ERROR;
+ 		}
+-- 
+2.55.0
+

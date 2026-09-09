@@ -1,0 +1,228 @@
+From 13cc6b788b1a361d6903c141a8e609bcae664301 Mon Sep 17 00:00:00 2001
+From: Yonghong Song <yonghong.song@linux.dev>
+Date: Tue, 28 Jul 2026 22:02:09 -0700
+Subject: [PATCH 09661/15333] selftests/bpf: Add tests for >8 byte return value
+ and 128-bit arguments
+
+The BPF trampoline preserves only 8 bytes of the target's return value
+(R0), so attaching an fexit/fmod_ret/fsession program to a function that
+returns a >8 byte value is now rejected by the verifier. Add a bpf_testmod
+function returning __int128 and an fexit program that targets it. The
+program is expected to fail to load with the "with a >8 byte return value
+is not supported for this attach type" message.
+
+A 128-bit __int128 argument is passed in a register pair and occupies two
+trampoline context slots. Add a bpf_testmod function taking a leading
+__int128 argument followed by an int and a long, and an fexit program that
+reads those two trailing arguments and the return value, verifying that the
+trampoline reserves enough stack for the 128-bit argument and places the
+following arguments and the return value at the right context slots.
+
+__int128 is only available on 64-bit targets (where the compiler defines
+__SIZEOF_INT128__). The argument test additionally depends on the calling
+convention: x86_64 and arm64 pass an __int128 in a register pair as the
+trampoline expects, while other architectures pass it differently (e.g.
+s390x passes larger arguments by reference), so that subtest runs only on
+x86_64 and arm64 and is skipped elsewhere.
+
+Signed-off-by: Yonghong Song <yonghong.song@linux.dev>
+Acked-by: Leon Hwang <leon.hwang@linux.dev>
+Link: https://lore.kernel.org/bpf/20260729050209.2587581-1-yonghong.song@linux.dev
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ .../bpf/prog_tests/tracing_failure.c          | 20 +++++++++++
+ .../selftests/bpf/prog_tests/tracing_struct.c | 36 +++++++++++++++++++
+ .../selftests/bpf/progs/tracing_failure.c     |  6 ++++
+ .../bpf/progs/tracing_struct_int128.c         | 18 ++++++++++
+ .../selftests/bpf/test_kmods/bpf_testmod.c    | 32 +++++++++++++++++
+ 5 files changed, 112 insertions(+)
+ create mode 100644 tools/testing/selftests/bpf/progs/tracing_struct_int128.c
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/tracing_failure.c b/tools/testing/selftests/bpf/prog_tests/tracing_failure.c
+index f9f9e1cb87bf..eb585918f0d4 100644
+--- a/tools/testing/selftests/bpf/prog_tests/tracing_failure.c
++++ b/tools/testing/selftests/bpf/prog_tests/tracing_failure.c
+@@ -76,6 +76,24 @@ static void test_fexit_noreturns(void)
+ 			       "Attaching fexit/fsession/fmod_ret to __noreturn function 'do_exit' is rejected.");
+ }
+ 
++static void test_fexit_int128_ret(void)
++{
++	/*
++	 * __int128 is returned in a register pair on x86_64 and arm64, so
++	 * bpf_testmod_test_int128_ret() is BTF-encoded and attachable and the
++	 * verifier can reject its >8 byte return value. Other architectures
++	 * return a __int128 differently (e.g. s390x returns larger values by
++	 * reference, which makes pahole skip BTF encoding of the function), so
++	 * only exercise this on x86_64 and arm64.
++	 */
++#if defined(__x86_64__) || defined(__aarch64__)
++	test_tracing_fail_prog("fexit_int128_ret",
++			       "with a >8 byte return value is not supported for this attach type");
++#else
++	test__skip();
++#endif
++}
++
+ void test_tracing_failure(void)
+ {
+ 	if (test__start_subtest("bpf_spin_lock"))
+@@ -86,4 +104,6 @@ void test_tracing_failure(void)
+ 		test_tracing_deny();
+ 	if (test__start_subtest("fexit_noreturns"))
+ 		test_fexit_noreturns();
++	if (test__start_subtest("fexit_int128_ret"))
++		test_fexit_int128_ret();
+ }
+diff --git a/tools/testing/selftests/bpf/prog_tests/tracing_struct.c b/tools/testing/selftests/bpf/prog_tests/tracing_struct.c
+index 6f8c0bfb0415..15b95d0235b5 100644
+--- a/tools/testing/selftests/bpf/prog_tests/tracing_struct.c
++++ b/tools/testing/selftests/bpf/prog_tests/tracing_struct.c
+@@ -4,6 +4,7 @@
+ #include <test_progs.h>
+ #include "tracing_struct.skel.h"
+ #include "tracing_struct_many_args.skel.h"
++#include "tracing_struct_int128.skel.h"
+ 
+ static void test_struct_args(void)
+ {
+@@ -112,6 +113,39 @@ static void test_struct_many_args(void)
+ 	tracing_struct_many_args__destroy(skel);
+ }
+ 
++static void test_int128_args(void)
++{
++	/*
++	 * __int128 arguments are passed in a register pair on x86_64 and
++	 * arm64, which the trampoline packs into two context slots. Other
++	 * architectures pass a __int128 differently (e.g. s390x passes larger
++	 * arguments by reference), so only exercise this on x86_64 and arm64.
++	 */
++#if defined(__x86_64__) || defined(__aarch64__)
++	struct tracing_struct_int128 *skel;
++	int err;
++
++	skel = tracing_struct_int128__open_and_load();
++	if (!ASSERT_OK_PTR(skel, "tracing_struct_int128__open_and_load"))
++		return;
++
++	err = tracing_struct_int128__attach(skel);
++	if (!ASSERT_OK(err, "tracing_struct_int128__attach"))
++		goto destroy_skel;
++
++	ASSERT_OK(trigger_module_test_read(256), "trigger_read");
++
++	ASSERT_EQ(skel->bss->t_b, 2, "t:b");
++	ASSERT_EQ(skel->bss->t_c, 3, "t:c");
++	ASSERT_EQ(skel->bss->t_ret, 6, "t ret");
++
++destroy_skel:
++	tracing_struct_int128__destroy(skel);
++#else
++	test__skip();
++#endif
++}
++
+ static void test_union_args(void)
+ {
+ 	struct tracing_struct *skel;
+@@ -145,6 +179,8 @@ void test_tracing_struct(void)
+ 		test_struct_args();
+ 	if (test__start_subtest("struct_many_args"))
+ 		test_struct_many_args();
++	if (test__start_subtest("int128_args"))
++		test_int128_args();
+ 	if (test__start_subtest("union_args"))
+ 		test_union_args();
+ }
+diff --git a/tools/testing/selftests/bpf/progs/tracing_failure.c b/tools/testing/selftests/bpf/progs/tracing_failure.c
+index 65e485c4468c..f7a095767679 100644
+--- a/tools/testing/selftests/bpf/progs/tracing_failure.c
++++ b/tools/testing/selftests/bpf/progs/tracing_failure.c
+@@ -30,3 +30,9 @@ int BPF_PROG(fexit_noreturns)
+ {
+ 	return 0;
+ }
++
++SEC("?fexit/bpf_testmod_test_int128_ret")
++int BPF_PROG(fexit_int128_ret)
++{
++	return 0;
++}
+diff --git a/tools/testing/selftests/bpf/progs/tracing_struct_int128.c b/tools/testing/selftests/bpf/progs/tracing_struct_int128.c
+new file mode 100644
+index 000000000000..4638dfec1f38
+--- /dev/null
++++ b/tools/testing/selftests/bpf/progs/tracing_struct_int128.c
+@@ -0,0 +1,18 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (c) 2026 Meta Platforms, Inc. and affiliates. */
++#include <vmlinux.h>
++#include <bpf/bpf_tracing.h>
++#include <bpf/bpf_helpers.h>
++
++long t_b, t_c, t_ret;
++
++SEC("fexit/bpf_testmod_test_int128_arg")
++int test_int128_arg_fexit(unsigned long long *ctx)
++{
++	t_b = (int)ctx[2];
++	t_c = (long)ctx[3];
++	t_ret = (long)ctx[4];
++	return 0;
++}
++
++char _license[] SEC("license") = "GPL";
+diff --git a/tools/testing/selftests/bpf/test_kmods/bpf_testmod.c b/tools/testing/selftests/bpf/test_kmods/bpf_testmod.c
+index 30f1cd23093c..eb0f9b5e18d8 100644
+--- a/tools/testing/selftests/bpf/test_kmods/bpf_testmod.c
++++ b/tools/testing/selftests/bpf/test_kmods/bpf_testmod.c
+@@ -161,6 +161,33 @@ bpf_testmod_test_arg_ptr_to_struct(struct bpf_testmod_struct_arg_1 *a) {
+ 	return bpf_testmod_test_struct_arg_result;
+ }
+ 
++#ifdef __SIZEOF_INT128__
++noinline __int128
++bpf_testmod_test_int128_ret(int a)
++{
++	bpf_testmod_test_struct_arg_result = a;
++	return (__int128)a;
++}
++
++/*
++ * The __int128 'a' is the first argument on purpose. On arm64 a 16-byte
++ * argument must start in an even-numbered register pair, so placing it
++ * after a single-register scalar would leave a padding register (x1)
++ * unused. pahole maps parameters to registers positionally and would then
++ * see the following argument in an "unexpected" register and skip BTF
++ * encoding of the whole function, making it unattachable. Keeping the
++ * __int128 first (x0:x1) avoids the padding while still exercising the
++ * trampoline packing of a 128-bit argument together with the trailing
++ * int and long arguments.
++ */
++noinline long
++bpf_testmod_test_int128_arg(__int128 a, int b, long c)
++{
++	bpf_testmod_test_struct_arg_result = (long)a + b + c;
++	return bpf_testmod_test_struct_arg_result;
++}
++#endif
++
+ __weak noinline void bpf_testmod_looooooooooooooooooooooooooooooong_name(void)
+ {
+ }
+@@ -514,6 +541,11 @@ bpf_testmod_test_read(struct file *file, struct kobject *kobj,
+ 
+ 	(void)bpf_testmod_test_arg_ptr_to_struct(&struct_arg1_2);
+ 
++#ifdef __SIZEOF_INT128__
++	(void)bpf_testmod_test_int128_ret(i);
++	(void)bpf_testmod_test_int128_arg((__int128)1, 2, 3);
++#endif
++
+ 	(void)trace_bpf_testmod_test_raw_tp_null_tp(NULL);
+ 
+ 	bpf_testmod_test_struct_ops3();
+-- 
+2.55.0
+

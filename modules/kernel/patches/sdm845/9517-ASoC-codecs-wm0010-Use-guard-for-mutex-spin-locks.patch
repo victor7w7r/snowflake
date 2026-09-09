@@ -1,0 +1,99 @@
+From c7e517ed25438f3cc572ca27fbcdb6d0dc0af04f Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 31 Jul 2026 10:06:38 +0700
+Subject: [PATCH 09517/15333] ASoC: codecs: wm0010: Use guard() for mutex &
+ spin locks
+
+Clean up the code using guard() for mutex & spin locks.
+Merely code refactoring, and no behavior change.
+
+Reviewed-by: Richard Fitzgerald <rf@opensource.cirrus.com>
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/20260731030648.8706-17-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/wm0010.c | 28 +++++++++++-----------------
+ 1 file changed, 11 insertions(+), 17 deletions(-)
+
+diff --git a/sound/soc/codecs/wm0010.c b/sound/soc/codecs/wm0010.c
+index 2a8c61a72c17..58c0c601ee6c 100644
+--- a/sound/soc/codecs/wm0010.c
++++ b/sound/soc/codecs/wm0010.c
+@@ -9,6 +9,7 @@
+  *          Scott Ling <sl@opensource.wolfsonmicro.com>
+  */
+ 
++#include <linux/cleanup.h>
+ #include <linux/module.h>
+ #include <linux/moduleparam.h>
+ #include <linux/interrupt.h>
+@@ -148,13 +149,11 @@ static const char *wm0010_state_to_str(enum wm0010_state state)
+ static void wm0010_halt(struct snd_soc_component *component)
+ {
+ 	struct wm0010_priv *wm0010 = snd_soc_component_get_drvdata(component);
+-	unsigned long flags;
+ 	enum wm0010_state state;
+ 
+ 	/* Fetch the wm0010 state */
+-	spin_lock_irqsave(&wm0010->irq_lock, flags);
+-	state = wm0010->state;
+-	spin_unlock_irqrestore(&wm0010->irq_lock, flags);
++	scoped_guard(spinlock_irqsave, &wm0010->irq_lock)
++		state = wm0010->state;
+ 
+ 	switch (state) {
+ 	case WM0010_POWER_OFF:
+@@ -173,9 +172,8 @@ static void wm0010_halt(struct snd_soc_component *component)
+ 		break;
+ 	}
+ 
+-	spin_lock_irqsave(&wm0010->irq_lock, flags);
+-	wm0010->state = WM0010_POWER_OFF;
+-	spin_unlock_irqrestore(&wm0010->irq_lock, flags);
++	scoped_guard(spinlock_irqsave, &wm0010->irq_lock)
++		wm0010->state = WM0010_POWER_OFF;
+ }
+ 
+ struct wm0010_boot_xfer {
+@@ -190,11 +188,9 @@ struct wm0010_boot_xfer {
+ static void wm0010_mark_boot_failure(struct wm0010_priv *wm0010)
+ {
+ 	enum wm0010_state state;
+-	unsigned long flags;
+ 
+-	spin_lock_irqsave(&wm0010->irq_lock, flags);
+-	state = wm0010->state;
+-	spin_unlock_irqrestore(&wm0010->irq_lock, flags);
++	scoped_guard(spinlock_irqsave, &wm0010->irq_lock)
++		state = wm0010->state;
+ 
+ 	dev_err(wm0010->dev, "Failed to transition from `%s' state to `%s' state\n",
+ 		wm0010_state_to_str(state), wm0010_state_to_str(state + 1));
+@@ -734,9 +730,8 @@ static int wm0010_set_bias_level(struct snd_soc_component *component,
+ 		break;
+ 	case SND_SOC_BIAS_STANDBY:
+ 		if (snd_soc_dapm_get_bias_level(dapm) == SND_SOC_BIAS_PREPARE) {
+-			mutex_lock(&wm0010->lock);
+-			wm0010_halt(component);
+-			mutex_unlock(&wm0010->lock);
++			scoped_guard(mutex, &wm0010->lock)
++				wm0010_halt(component);
+ 		}
+ 		break;
+ 	case SND_SOC_BIAS_OFF:
+@@ -832,9 +827,8 @@ static irqreturn_t wm0010_irq(int irq, void *data)
+ 	case WM0010_OUT_OF_RESET:
+ 	case WM0010_BOOTROM:
+ 	case WM0010_STAGE2:
+-		spin_lock(&wm0010->irq_lock);
+-		complete(&wm0010->boot_completion);
+-		spin_unlock(&wm0010->irq_lock);
++		scoped_guard(spinlock, &wm0010->irq_lock)
++			complete(&wm0010->boot_completion);
+ 		return IRQ_HANDLED;
+ 	default:
+ 		return IRQ_NONE;
+-- 
+2.55.0
+

@@ -1,0 +1,84 @@
+From eda862176c4e8edd4beebac1b8df4726fcc6719e Mon Sep 17 00:00:00 2001
+From: Dibin Moolakadan Subrahmanian <dibin.moolakadan.subrahmanian@intel.com>
+Date: Tue, 16 Jun 2026 21:51:47 +0530
+Subject: [PATCH 00356/15333] drm/i915/display: Store DC3CO eligibility in PSR
+ state
+
+Store DC3CO eligibility in intel_dp->psr during
+intel_psr_post_plane_update() so PSR configuration
+can take DC3CO into account.
+
+This will be used to control PSR2 parameters such as idle frames.
+
+Changes in v2:
+- Use intel_display_power_dc3co_allowed(display) instead
+  of intel_dc3co_allowed(state)
+
+Changes in v3:
+- Update psr.dc3co_eligible before
+  intel_psr_enable_locked() call (sashiko)
+
+Changes in v4:
+- rename eligible to allowed (Jani Nikula)
+
+Signed-off-by: Dibin Moolakadan Subrahmanian <dibin.moolakadan.subrahmanian@intel.com>
+Reviewed-by: Uma Shankar <uma.shankar@intel.com>
+Reviewed-by: Animesh Manna <animesh.manna@intel.com>
+Signed-off-by: Animesh Manna <animesh.manna@intel.com>
+Link: https://patch.msgid.link/20260616162154.2630995-10-dibin.moolakadan.subrahmanian@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_display_types.h | 2 ++
+ drivers/gpu/drm/i915/display/intel_psr.c           | 6 ++++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_types.h b/drivers/gpu/drm/i915/display/intel_display_types.h
+index f18b13f3e99e..30feed50a2d1 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_types.h
++++ b/drivers/gpu/drm/i915/display/intel_display_types.h
+@@ -1776,6 +1776,8 @@ struct intel_psr {
+ 	ktime_t last_exit;
+ 	bool sink_not_reliable;
+ 	bool irq_aux_error;
++	/* DC3CO allowed used to control PSR configuration */
++	bool dc3co_allowed;
+ 	u16 su_w_granularity;
+ 	u16 su_y_granularity;
+ 	bool source_panel_replay_support;
+diff --git a/drivers/gpu/drm/i915/display/intel_psr.c b/drivers/gpu/drm/i915/display/intel_psr.c
+index 932aff386023..0f4263885416 100644
+--- a/drivers/gpu/drm/i915/display/intel_psr.c
++++ b/drivers/gpu/drm/i915/display/intel_psr.c
+@@ -2330,6 +2330,7 @@ static void intel_psr_disable_locked(struct intel_dp *intel_dp)
+ 	intel_dp->psr.psr2_sel_fetch_cff_enabled = false;
+ 	intel_dp->psr.active_non_psr_pipes = 0;
+ 	intel_dp->psr.pkg_c_latency_used = 0;
++	intel_dp->psr.dc3co_allowed = false;
+ }
+ 
+ /**
+@@ -3120,10 +3121,13 @@ void intel_psr_post_plane_update(struct intel_atomic_state *state,
+ 	const struct intel_crtc_state *crtc_state =
+ 		intel_atomic_get_new_crtc_state(state, crtc);
+ 	struct intel_encoder *encoder;
++	bool dc3co_allowed;
+ 
+ 	if (!crtc_state->has_psr)
+ 		return;
+ 
++	dc3co_allowed = intel_display_power_dc3co_allowed(display);
++
+ 	verify_panel_replay_dsc_state(crtc_state);
+ 
+ 	for_each_intel_encoder_mask_with_psr(state->base.dev, encoder,
+@@ -3151,6 +3155,8 @@ void intel_psr_post_plane_update(struct intel_atomic_state *state,
+ 			keep_disabled = true;
+ 		}
+ 
++		intel_dp->psr.dc3co_allowed = dc3co_allowed;
++
+ 		if (!psr->enabled && !keep_disabled)
+ 			intel_psr_enable_locked(intel_dp, crtc_state);
+ 		else if (psr->enabled && !crtc_state->wm_level_disabled)
+-- 
+2.55.0
+

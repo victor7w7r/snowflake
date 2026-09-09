@@ -1,0 +1,41 @@
+From 42560699a83db261d1a671a5eadade460d0f9eee Mon Sep 17 00:00:00 2001
+From: Daniel Borkmann <daniel@iogearbox.net>
+Date: Wed, 8 Jul 2026 23:15:36 +0200
+Subject: [PATCH 03374/15333] bpf: Account insn_aux_data allocation in
+ bpf_check
+
+The insn_aux_data array is allocated with a plain vzalloc(), while every
+other allocation scoped to the verification - verifier states, explored
+states, the cfg/scc arrays, liveness masks, jump history - is charged to
+the loader's memcg via GFP_KERNEL_ACCOUNT.
+
+At 136 bytes per instruction it is one of the largest verification-time
+buffers, in the range of ~130MB for a program at the 1M instruction limit
+(worst case), and it lives across the whole verification. The buffer is
+also inconsistent with itself: when instruction patching grows it, the
+vrealloc() in bpf_patch_insn_data() already passes GFP_KERNEL_ACCOUNT.
+
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Link: https://lore.kernel.org/bpf/20260708211537.371874-4-daniel@iogearbox.net
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ kernel/bpf/verifier.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 40e20dfa3212..ad8ff228c963 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -20096,7 +20096,8 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr,
+ 
+ 	len = env->prog->len;
+ 	env->insn_aux_data =
+-		vzalloc(array_size(sizeof(struct bpf_insn_aux_data), len));
++		__vmalloc(array_size(sizeof(struct bpf_insn_aux_data), len),
++			  GFP_KERNEL_ACCOUNT | __GFP_ZERO);
+ 	ret = -ENOMEM;
+ 	if (!env->insn_aux_data)
+ 		goto skip_full_check;
+-- 
+2.55.0
+

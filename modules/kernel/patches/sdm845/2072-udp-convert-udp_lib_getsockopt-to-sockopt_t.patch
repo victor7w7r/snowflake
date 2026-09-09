@@ -1,0 +1,146 @@
+From f99d7065a4d45529ccfdc630c1f278da805cf59f Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Tue, 30 Jun 2026 07:01:27 -0700
+Subject: [PATCH 02072/15333] udp: convert udp_lib_getsockopt to sockopt_t
+
+In preparation for converting the proto-layer getsockopt callbacks to the
+sockopt_t interface, switch udp_lib_getsockopt() to take a sockopt_t.
+
+The thin udp_getsockopt()/udpv6_getsockopt() wrappers keep their __user
+signature for now: they build a user-backed sockopt_t with
+sockopt_init_user(), call the helper, and write the returned length back
+to optlen. The helper uses copy_to_iter() instead of copy_to_user().
+No functional change.
+
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Acked-by: Stanislav Fomichev <sdf@fomichev.me>
+Acked-by: Willem de Bruijn <willemb@google.com>
+Link: https://patch.msgid.link/20260630-getsockopt_phase2-v2-2-193335f3d4d1@debian.org
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ include/net/udp.h |  2 +-
+ net/ipv4/udp.c    | 39 +++++++++++++++++++++++++++++----------
+ net/ipv6/udp.c    | 19 ++++++++++++++++---
+ 3 files changed, 46 insertions(+), 14 deletions(-)
+
+diff --git a/include/net/udp.h b/include/net/udp.h
+index 8262e2b215b4..1fee17274745 100644
+--- a/include/net/udp.h
++++ b/include/net/udp.h
+@@ -430,7 +430,7 @@ struct sk_buff *skb_udp_tunnel_segment(struct sk_buff *skb,
+ 				       netdev_features_t features,
+ 				       bool is_ipv6);
+ int udp_lib_getsockopt(struct sock *sk, int level, int optname,
+-		       char __user *optval, int __user *optlen);
++		       sockopt_t *opt);
+ int udp_lib_setsockopt(struct sock *sk, int level, int optname,
+ 		       sockptr_t optval, unsigned int optlen,
+ 		       int (*push_pending_frames)(struct sock *));
+diff --git a/net/ipv4/udp.c b/net/ipv4/udp.c
+index 70f6cbd4ef73..59248a59358c 100644
+--- a/net/ipv4/udp.c
++++ b/net/ipv4/udp.c
+@@ -76,6 +76,7 @@
+ 
+ #include <linux/bpf-cgroup.h>
+ #include <linux/uaccess.h>
++#include <linux/uio.h>
+ #include <asm/ioctls.h>
+ #include <linux/memblock.h>
+ #include <linux/highmem.h>
+@@ -2995,14 +2996,13 @@ static int udp_setsockopt(struct sock *sk, int level, int optname, sockptr_t opt
+ }
+ 
+ int udp_lib_getsockopt(struct sock *sk, int level, int optname,
+-		       char __user *optval, int __user *optlen)
++		       sockopt_t *opt)
+ {
+ 	struct udp_sock *up = udp_sk(sk);
+ 	int val, len;
+ 
+-	if (get_user(len, optlen))
+-		return -EFAULT;
+-
++	len = opt->optlen;
++	/* keep the check so direct sockopt_t callers stay covered. */
+ 	if (len < 0)
+ 		return -EINVAL;
+ 
+@@ -3037,9 +3037,8 @@ int udp_lib_getsockopt(struct sock *sk, int level, int optname,
+ 		return -ENOPROTOOPT;
+ 	}
+ 
+-	if (put_user(len, optlen))
+-		return -EFAULT;
+-	if (copy_to_user(optval, &val, len))
++	opt->optlen = len;
++	if (copy_to_iter(&val, len, &opt->iter_out) != len)
+ 		return -EFAULT;
+ 	return 0;
+ }
+@@ -3047,9 +3046,29 @@ int udp_lib_getsockopt(struct sock *sk, int level, int optname,
+ static int udp_getsockopt(struct sock *sk, int level, int optname,
+ 			  char __user *optval, int __user *optlen)
+ {
+-	if (level == SOL_UDP)
+-		return udp_lib_getsockopt(sk, level, optname, optval, optlen);
+-	return ip_getsockopt(sk, level, optname, optval, optlen);
++	sockopt_t opt;
++	int err;
++
++	/*
++	 * keep the old __user pointers, until ip_getsockopt() moves
++	 * to sockopt_t
++	 */
++	if (level != SOL_UDP)
++		return ip_getsockopt(sk, level, optname, optval, optlen);
++
++	err = sockopt_init_user(&opt, optval, optlen);
++	if (err)
++		return err;
++
++	err = udp_lib_getsockopt(sk, level, optname, &opt);
++	if (err)
++		return err;
++
++	/* optval was written by copy_to_iter() in udp_lib_getsockopt() */
++	if (put_user(opt.optlen, optlen))
++		return -EFAULT;
++
++	return 0;
+ }
+ 
+ /**
+diff --git a/net/ipv6/udp.c b/net/ipv6/udp.c
+index 15e032194ecc..392e18b97045 100644
+--- a/net/ipv6/udp.c
++++ b/net/ipv6/udp.c
+@@ -1826,9 +1826,22 @@ static int udpv6_setsockopt(struct sock *sk, int level, int optname,
+ static int udpv6_getsockopt(struct sock *sk, int level, int optname,
+ 			    char __user *optval, int __user *optlen)
+ {
+-	if (level == SOL_UDP)
+-		return udp_lib_getsockopt(sk, level, optname, optval, optlen);
+-	return ipv6_getsockopt(sk, level, optname, optval, optlen);
++	sockopt_t opt;
++	int err;
++
++	if (level != SOL_UDP)
++		return ipv6_getsockopt(sk, level, optname, optval, optlen);
++
++	err = sockopt_init_user(&opt, optval, optlen);
++	if (err)
++		return err;
++
++	err = udp_lib_getsockopt(sk, level, optname, &opt);
++	if (err)
++		return err;
++	if (put_user(opt.optlen, optlen))
++		return -EFAULT;
++	return 0;
+ }
+ 
+ 
+-- 
+2.55.0
+

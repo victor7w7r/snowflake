@@ -1,0 +1,136 @@
+From e51014984c05bbf2eb10ea6922670e3719c6447e Mon Sep 17 00:00:00 2001
+From: Taniya Das <taniya.das@oss.qualcomm.com>
+Date: Sat, 1 Aug 2026 19:43:56 +0530
+Subject: [PATCH 12989/15333] clk: qcom: videocc-glymur: Add video clock
+ controller support for Nord
+
+Nord shares the video clock controller topology with Glymur, differing
+only in the PLL0 hardware (Lucid-OLE vs Taycan-EKO-T) and the MVS0
+frequency table. Extend the existing Glymur video clock controller
+driver to also probe on the qcom,nord-videocc compatible, switching to
+the Nord PLL configuration, VCO table, and MVS0 frequency table at
+probe time.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Taniya Das <taniya.das@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260801-nord_videocc_camcc-v2-5-674d7718e41f@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ drivers/clk/qcom/Kconfig          | 11 +++++++++
+ drivers/clk/qcom/Makefile         |  1 +
+ drivers/clk/qcom/videocc-glymur.c | 38 +++++++++++++++++++++++++++++++
+ 3 files changed, 50 insertions(+)
+
+diff --git a/drivers/clk/qcom/Kconfig b/drivers/clk/qcom/Kconfig
+index 777186b67e8f..4069b2603164 100644
+--- a/drivers/clk/qcom/Kconfig
++++ b/drivers/clk/qcom/Kconfig
+@@ -254,6 +254,17 @@ config CLK_SHIKRA_AUDIOCORECC
+ 	  Say Y if you want to use AudioCoreCC clocks required to support audio
+ 	  devices and it's functionality.
+ 
++config CLK_NORD_VIDEOCC
++	tristate "Nord VIDEO Clock Controller"
++	depends on ARM64 || COMPILE_TEST
++	select CLK_NORD_GCC
++	default m if ARCH_QCOM
++	help
++	  Support for the video clock controller on Qualcomm Technologies, Inc.
++	  Nord devices.
++	  Say Y if you want to support video devices and functionality such as
++	  video encode/decode.
++
+ config CLK_SHIKRA_GCC
+ 	tristate "Shikra Global Clock Controller"
+ 	depends on ARM64 || COMPILE_TEST
+diff --git a/drivers/clk/qcom/Makefile b/drivers/clk/qcom/Makefile
+index e867cf0fdd67..abab25fff91c 100644
+--- a/drivers/clk/qcom/Makefile
++++ b/drivers/clk/qcom/Makefile
+@@ -50,6 +50,7 @@ obj-$(CONFIG_CLK_NORD_DISPCC) += dispcc0-nord.o dispcc1-nord.o
+ obj-$(CONFIG_CLK_NORD_GCC) += gcc-nord.o negcc-nord.o nwgcc-nord.o segcc-nord.o
+ obj-$(CONFIG_CLK_NORD_GPUCC) += gpucc-nord.o gpu2cc-nord.o
+ obj-$(CONFIG_CLK_NORD_TCSRCC) += tcsrcc-nord.o
++obj-$(CONFIG_CLK_NORD_VIDEOCC) += videocc-glymur.o
+ obj-$(CONFIG_CLK_SHIKRA_AUDIOCORECC) += audiocorecc-shikra.o
+ obj-$(CONFIG_CLK_SHIKRA_GCC) += gcc-shikra.o
+ obj-$(CONFIG_CLK_X1E80100_CAMCC) += camcc-x1e80100.o
+diff --git a/drivers/clk/qcom/videocc-glymur.c b/drivers/clk/qcom/videocc-glymur.c
+index bbf13f4ba82d..8c57666b5744 100644
+--- a/drivers/clk/qcom/videocc-glymur.c
++++ b/drivers/clk/qcom/videocc-glymur.c
+@@ -38,6 +38,10 @@ static const struct pll_vco taycan_eko_t_vco[] = {
+ 	{ 249600000, 2500000000, 0 },
+ };
+ 
++static const struct pll_vco lucid_ole_vco[] = {
++	{ 249600000, 2300000000, 0 },
++};
++
+ /* 720.0 MHz Configuration */
+ static const struct alpha_pll_config video_cc_pll0_config = {
+ 	.l = 0x25,
+@@ -49,6 +53,21 @@ static const struct alpha_pll_config video_cc_pll0_config = {
+ 	.user_ctl_hi_val = 0x00000002,
+ };
+ 
++/* 720.0 MHz Configuration */
++static const struct alpha_pll_config video_cc_pll0_config_nord = {
++	.l = 0x25,
++	.alpha = 0x8000,
++	.config_ctl_val = 0x20485699,
++	.config_ctl_hi_val = 0x00182261,
++	.config_ctl_hi1_val = 0x82aa299c,
++	.test_ctl_val = 0x00000000,
++	.test_ctl_hi_val = 0x00000003,
++	.test_ctl_hi1_val = 0x00009000,
++	.test_ctl_hi2_val = 0x00000034,
++	.user_ctl_val = 0x00000000,
++	.user_ctl_hi_val = 0x00400005,
++};
++
+ static struct clk_alpha_pll video_cc_pll0 = {
+ 	.offset = 0x0,
+ 	.config = &video_cc_pll0_config,
+@@ -113,6 +132,15 @@ static struct clk_rcg2 video_cc_ahb_clk_src = {
+ 	},
+ };
+ 
++static const struct freq_tbl ftbl_video_cc_mvs0_clk_src_nord[] = {
++	F(720000000, P_VIDEO_CC_PLL0_OUT_MAIN, 1, 0, 0),
++	F(1305000000, P_VIDEO_CC_PLL0_OUT_MAIN, 1, 0, 0),
++	F(1440000000, P_VIDEO_CC_PLL0_OUT_MAIN, 1, 0, 0),
++	F(1600000000, P_VIDEO_CC_PLL0_OUT_MAIN, 1, 0, 0),
++	F(1680000000, P_VIDEO_CC_PLL0_OUT_MAIN, 1, 0, 0),
++	{ }
++};
++
+ static const struct freq_tbl ftbl_video_cc_mvs0_clk_src[] = {
+ 	F(720000000, P_VIDEO_CC_PLL0_OUT_MAIN, 1, 0, 0),
+ 	F(1014000000, P_VIDEO_CC_PLL0_OUT_MAIN, 1, 0, 0),
+@@ -509,12 +537,22 @@ static const struct qcom_cc_desc video_cc_glymur_desc = {
+ 
+ static const struct of_device_id video_cc_glymur_match_table[] = {
+ 	{ .compatible = "qcom,glymur-videocc" },
++	{ .compatible = "qcom,nord-videocc" },
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, video_cc_glymur_match_table);
+ 
+ static int video_cc_glymur_probe(struct platform_device *pdev)
+ {
++	if (of_device_is_compatible(pdev->dev.of_node, "qcom,nord-videocc")) {
++		video_cc_pll0.vco_table = lucid_ole_vco;
++		video_cc_pll0.num_vco = ARRAY_SIZE(lucid_ole_vco);
++		video_cc_pll0.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID_OLE];
++		video_cc_pll0.config = &video_cc_pll0_config_nord;
++
++		video_cc_mvs0_clk_src.freq_tbl = ftbl_video_cc_mvs0_clk_src_nord;
++	}
++
+ 	return qcom_cc_probe(pdev, &video_cc_glymur_desc);
+ }
+ 
+-- 
+2.55.0
+

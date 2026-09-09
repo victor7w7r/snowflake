@@ -1,0 +1,58 @@
+From 06b3eee8ac1ebc756858ab2a8df1488707a82a55 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 31 Jul 2026 10:06:42 +0700
+Subject: [PATCH 09521/15333] ASoC: codecs: wm8903: Use guard() for mutex locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Reviewed-by: Richard Fitzgerald <rf@opensource.cirrus.com>
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/20260731030648.8706-21-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/wm8903.c | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/sound/soc/codecs/wm8903.c b/sound/soc/codecs/wm8903.c
+index 320d7737699d..156e1e24a388 100644
+--- a/sound/soc/codecs/wm8903.c
++++ b/sound/soc/codecs/wm8903.c
+@@ -14,6 +14,7 @@
+ #include <linux/module.h>
+ #include <linux/moduleparam.h>
+ #include <linux/init.h>
++#include <linux/cleanup.h>
+ #include <linux/completion.h>
+ #include <linux/delay.h>
+ #include <linux/gpio/driver.h>
+@@ -458,22 +459,20 @@ static int wm8903_put_deemph(struct snd_kcontrol *kcontrol,
+ 	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
+ 	struct wm8903_priv *wm8903 = snd_soc_component_get_drvdata(component);
+ 	unsigned int deemph = ucontrol->value.integer.value[0];
+-	int ret = 0;
+ 
+ 	if (deemph > 1)
+ 		return -EINVAL;
+ 
+-	mutex_lock(&wm8903->lock);
++	guard(mutex)(&wm8903->lock);
+ 	if (wm8903->deemph != deemph) {
+ 		wm8903->deemph = deemph;
+ 
+ 		wm8903_set_deemph(component);
+ 
+-		ret = 1;
++		return 1;
+ 	}
+-	mutex_unlock(&wm8903->lock);
+ 
+-	return ret;
++	return 0;
+ }
+ 
+ /* ALSA can only do steps of .01dB */
+-- 
+2.55.0
+

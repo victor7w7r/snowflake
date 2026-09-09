@@ -1,0 +1,40 @@
+From 553edb793e5be81a0d9bdb7b5aa2f9f1e0eb237b Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 7 Aug 2026 15:04:47 +0700
+Subject: [PATCH 12969/15333] watchdog: stm32_iwdg: Propagate errors from
+ optional IRQ lookup
+
+platform_get_irq_optional() returns a positive IRQ number on success or
+a negative error code on failure. For an optional IRQ, -ENXIO indicates
+that no IRQ is available, while other errors should be propagated.
+
+Propagate errors such as -EPROBE_DEFER and -EINVAL instead of continuing
+probe without the IRQ.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://lore.kernel.org/r/20260807080447.35479-2-phucduc.bui@gmail.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/watchdog/stm32_iwdg.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/watchdog/stm32_iwdg.c b/drivers/watchdog/stm32_iwdg.c
+index b356a272ff9a..a8d2db2d3cf8 100644
+--- a/drivers/watchdog/stm32_iwdg.c
++++ b/drivers/watchdog/stm32_iwdg.c
+@@ -287,8 +287,11 @@ static int stm32_iwdg_irq_init(struct platform_device *pdev,
+ 		return 0;
+ 
+ 	irq = platform_get_irq_optional(pdev, 0);
+-	if (irq <= 0)
++	if (irq < 0) {
++		if (irq != -ENXIO)
++			return irq;
+ 		return 0;
++	}
+ 
+ 	if (of_property_read_bool(np, "wakeup-source")) {
+ 		ret = devm_device_init_wakeup(dev);
+-- 
+2.55.0
+

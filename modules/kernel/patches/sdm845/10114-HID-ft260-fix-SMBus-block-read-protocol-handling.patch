@@ -1,0 +1,114 @@
+From 2d68d67151eb2a22af7afdb75e1bc5097b082b9d Mon Sep 17 00:00:00 2001
+From: Raman Varabets <kernel-linux-20260610-80b7ab08@raman.v1.sg>
+Date: Wed, 10 Jun 2026 21:41:19 +0800
+Subject: [PATCH 10114/15333] HID: ft260: fix SMBus block read protocol
+ handling
+
+For I2C_SMBUS_BLOCK_DATA reads, ft260_smbus_xfer() passed
+data->block[0] + 1 as the read length. But on a block read the byte
+count is supplied by the slave as the first byte of the response;
+data->block[0] is not initialized by the caller, so the transfer
+length was taken from stale buffer contents, and the count byte the
+slave did return was stored without any validation.
+
+Implement the SMBus 2.0 block read protocol properly: read the count
+byte first with a repeated START and no STOP, validate it against
+I2C_SMBUS_BLOCK_MAX (resetting the bus and returning -EPROTO on a
+bogus count), then read exactly that many data bytes and finish the
+transaction with STOP. This keeps the whole sequence within a single
+I2C transaction:
+
+  S Addr+Wr A Reg A Sr Addr+Rd A Count A Data... P
+
+To support issuing the two reads as one transaction, teach
+ft260_i2c_read() to honor the caller's flags instead of always
+forcing a START and unconditionally appending STOP to the last
+chunk: START is only emitted if requested, and STOP is appended to
+the final chunk only when the caller asked for it.
+
+Signed-off-by: Raman Varabets <kernel-linux-20260610-80b7ab08@raman.v1.sg>
+Reviewed-by: Michael Zaidman <michaelz@xsightlabs.com>
+Reviewed-by: Michael Zaidman <michael.zaidman@gmail.com>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ drivers/hid/hid-ft260.c | 45 ++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 40 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/hid/hid-ft260.c b/drivers/hid/hid-ft260.c
+index 70e2eedb465a..946ed0c6fc39 100644
+--- a/drivers/hid/hid-ft260.c
++++ b/drivers/hid/hid-ft260.c
+@@ -502,15 +502,23 @@ static int ft260_i2c_read(struct ft260_device *dev, u8 addr, u8 *data,
+ 	struct ft260_i2c_read_request_report rep;
+ 	struct hid_device *hdev = dev->hdev;
+ 	u8 bus_busy = 0;
++	/*
++	 * STOP terminates the last chunk; clear means hold the bus so a
++	 * follow-up call continues the same I2C transaction.
++	 */
++	bool want_stop = !!(flag & FT260_FLAG_STOP);
+ 
+ 	if ((flag & FT260_FLAG_START_REPEATED) == FT260_FLAG_START_REPEATED)
+ 		flag = FT260_FLAG_START_REPEATED;
+-	else
++	else if (flag & FT260_FLAG_START)
+ 		flag = FT260_FLAG_START;
++	else
++		flag = 0;	/* no fresh START - continue current transaction */
+ 	do {
+ 		if (len <= rd_data_max) {
+ 			rd_len = len;
+-			flag |= FT260_FLAG_STOP;
++			if (want_stop)
++				flag |= FT260_FLAG_STOP;
+ 		} else {
+ 			rd_len = rd_data_max;
+ 		}
+@@ -708,14 +716,41 @@ static int ft260_smbus_xfer(struct i2c_adapter *adapter, u16 addr, u16 flags,
+ 		break;
+ 	case I2C_SMBUS_BLOCK_DATA:
+ 		if (read_write == I2C_SMBUS_READ) {
++			u8 count = 0;
++
++			/*
++			 * SMBus 2.0 section 6.5.7 block read in one I2C
++			 * transaction:
++			 *
++			 *   S Addr+Wr A Reg A Sr Addr+Rd A Count A Data... P
++			 *
++			 * The count is read separately and validated
++			 * before sizing the data read so a misbehaving
++			 * slave cannot drive a write past data->block[].
++			 */
+ 			ret = ft260_smbus_write(dev, addr, cmd, NULL, 0,
+ 						FT260_FLAG_START);
+ 			if (ret)
+ 				goto smbus_exit;
+ 
+-			ret = ft260_i2c_read(dev, addr, data->block,
+-					     data->block[0] + 1,
+-					     FT260_FLAG_START_STOP_REPEATED);
++			ret = ft260_i2c_read(dev, addr, &count, 1,
++					     FT260_FLAG_START_REPEATED);
++			if (ret)
++				goto smbus_exit;
++
++			if (count == 0 || count > I2C_SMBUS_BLOCK_MAX) {
++				hid_warn(hdev,
++					 "smbus block read: invalid count %u from slave 0x%02x\n",
++					 count, addr);
++				ft260_i2c_reset(hdev);
++				ret = -EPROTO;
++				goto smbus_exit;
++			}
++
++			data->block[0] = count;
++
++			ret = ft260_i2c_read(dev, addr, data->block + 1,
++					     count, FT260_FLAG_STOP);
+ 		} else {
+ 			ret = ft260_smbus_write(dev, addr, cmd, data->block,
+ 						data->block[0] + 1,
+-- 
+2.55.0
+

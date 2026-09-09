@@ -1,0 +1,84 @@
+From b4ef6d7f2298683bee5580c66db85312f6d3574a Mon Sep 17 00:00:00 2001
+From: David Heidelberg <david@ixit.cz>
+Date: Fri, 4 Sep 2026 18:13:10 +0200
+Subject: [PATCH 15331/15333] arm64: dts: qcom: sdm845-google: Enable
+ VoiceMMode1 for voice calls
+
+Enable the MVM, CVS and CVP APR services and add the VoiceMMode1
+frontend so the ADSP can route a cellular call between the modem, the
+WCD9340 microphones on SLIMBUS_0_TX and the CS35L36 amplifiers on
+QUATERNARY_TDM_RX_0. The Pixel 3 has no receiver; the top amplifier
+doubles as the earpiece, so the downlink goes to the same TDM port as
+media playback.
+
+The link sits after the MultiMedia frontends so it enumerates as PCM 2,
+matching the other sdm845 boards that carry the q6voice series.
+
+Depends on the out-of-tree q6voice driver; not for upstream until the
+reworked voice support lands.
+
+Derived from Casey Tunturi's blueline bring-up branch.
+
+Assisted-by: Claude:claude-fable-5-1
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01VHXJi2dPcfwxx6wmiRkyjS
+Signed-off-by: David Heidelberg <david@ixit.cz>
+---
+ .../boot/dts/qcom/sdm845-google-common.dtsi   | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sdm845-google-common.dtsi b/arch/arm64/boot/dts/qcom/sdm845-google-common.dtsi
+index ef6d23d39c72..59efc059a6e2 100644
+--- a/arch/arm64/boot/dts/qcom/sdm845-google-common.dtsi
++++ b/arch/arm64/boot/dts/qcom/sdm845-google-common.dtsi
+@@ -12,6 +12,7 @@
+ #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
+ #include <dt-bindings/sound/qcom,q6afe.h>
+ #include <dt-bindings/sound/qcom,q6asm.h>
++#include <dt-bindings/sound/qcom,q6voice.h>
+ #include <dt-bindings/sound/qcom,wcd934x.h>
+ 
+ #include "sdm845.dtsi"
+@@ -789,6 +790,24 @@ dai@1 {
+ 	};
+ };
+ 
++&q6cvp {
++	status = "okay";
++};
++
++&q6cvs {
++	status = "okay";
++};
++
++&q6mvm {
++	status = "okay";
++};
++
++&q6voicedai {
++	dai@1 {
++		reg = <VOICEMMODE1>;
++	};
++};
++
+ &qupv3_id_0 {
+ 	status = "okay";
+ };
+@@ -838,6 +857,14 @@ cpu {
+ 		};
+ 	};
+ 
++	voicemmode1-dai-link {
++		link-name = "VoiceMMode1";
++
++		cpu {
++			sound-dai = <&q6voicedai VOICEMMODE1>;
++		};
++	};
++
+ 	cs35l36-dai-link {
+ 		link-name = "Speaker Playback";
+ 
+-- 
+2.55.0
+

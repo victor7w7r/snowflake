@@ -1,0 +1,43 @@
+From f6cff820877ff34839920ff9de9b912359cfb607 Mon Sep 17 00:00:00 2001
+From: Hamza Mahfooz <hamzamahfooz@linux.microsoft.com>
+Date: Tue, 23 Jun 2026 11:24:29 -0400
+Subject: [PATCH 03659/15333] x86/build: Only align ENTRY_TEXT to PMD_SIZE if
+ necessary
+
+PTI requires the begin and end of ENTRY_TEXT be aligned to PMD_SIZE.  SRSO
+requires srso_alias_untrain_ret to be 2M aligned. This costs between 2-4 MiB
+of RAM (depending on the size of the preceding section).  So, only align when
+either of the two are enabled.
+
+Co-developed-by: Jared White <jaredwhite@microsoft.com>
+Signed-off-by: Jared White <jaredwhite@microsoft.com>
+Signed-off-by: Hamza Mahfooz <hamzamahfooz@linux.microsoft.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Link: https://patch.msgid.link/20260623152430.1473481-1-hamzamahfooz@linux.microsoft.com
+---
+ arch/x86/kernel/vmlinux.lds.S | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/x86/kernel/vmlinux.lds.S b/arch/x86/kernel/vmlinux.lds.S
+index 74e336d7f9dd..10caf92d075d 100644
+--- a/arch/x86/kernel/vmlinux.lds.S
++++ b/arch/x86/kernel/vmlinux.lds.S
+@@ -65,8 +65,14 @@ const_cpu_current_top_of_stack = cpu_current_top_of_stack;
+ 		__end_rodata_hpage_align = .;			\
+ 		__end_rodata_aligned = .;
+ 
++#if defined(CONFIG_MITIGATION_PAGE_TABLE_ISOLATION) || defined(CONFIG_MITIGATION_SRSO)
+ #define ALIGN_ENTRY_TEXT_BEGIN	. = ALIGN(PMD_SIZE);
+ #define ALIGN_ENTRY_TEXT_END	. = ALIGN(PMD_SIZE);
++#else
++#define ALIGN_ENTRY_TEXT_BEGIN
++#define ALIGN_ENTRY_TEXT_END
++#endif
++
+ #else
+ 
+ #define X86_ALIGN_RODATA_BEGIN
+-- 
+2.55.0
+

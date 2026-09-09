@@ -1,0 +1,68 @@
+From a8e59e3ac9f7f7154e0e80f45933799da8b4dc89 Mon Sep 17 00:00:00 2001
+From: Colin Ian King <colin.i.king@gmail.com>
+Date: Tue, 14 Jul 2026 18:02:58 +0100
+Subject: [PATCH 04656/15333] gpio: bd72720: make read-only const arrays regs
+ static
+
+Don't populate the read-only const arrays regs on the stack at run
+time, instead make them static.
+
+Signed-off-by: Colin Ian King <colin.i.king@gmail.com>
+Link: https://patch.msgid.link/20260714170258.186766-1-colin.i.king@gmail.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/gpio/gpio-bd72720.c | 24 +++++++++++++++---------
+ 1 file changed, 15 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/gpio/gpio-bd72720.c b/drivers/gpio/gpio-bd72720.c
+index 306e23411209..c124d964e4cf 100644
+--- a/drivers/gpio/gpio-bd72720.c
++++ b/drivers/gpio/gpio-bd72720.c
+@@ -85,9 +85,11 @@ static int bd72720gpi_get(struct bd72720_gpio *bdgpio, unsigned int reg_offset)
+ static int bd72720gpo_get(struct bd72720_gpio *bdgpio,
+ 			  unsigned int offset)
+ {
+-	const int regs[] = { BD72720_REG_GPIO1_CTRL, BD72720_REG_GPIO2_CTRL,
+-			     BD72720_REG_GPIO3_CTRL, BD72720_REG_GPIO4_CTRL,
+-			     BD72720_REG_GPIO5_CTRL, BD72720_REG_EPDEN_CTRL };
++	static const int regs[] = {
++		BD72720_REG_GPIO1_CTRL, BD72720_REG_GPIO2_CTRL,
++		BD72720_REG_GPIO3_CTRL, BD72720_REG_GPIO4_CTRL,
++		BD72720_REG_GPIO5_CTRL, BD72720_REG_EPDEN_CTRL
++	};
+ 	int ret, val;
+ 
+ 	ret = regmap_read(bdgpio->regmap, regs[offset], &val);
+@@ -111,9 +113,11 @@ static int bd72720gpo_set(struct gpio_chip *chip, unsigned int offset,
+ 			  int value)
+ {
+ 	struct bd72720_gpio *bdgpio = gpiochip_get_data(chip);
+-	const int regs[] = { BD72720_REG_GPIO1_CTRL, BD72720_REG_GPIO2_CTRL,
+-			     BD72720_REG_GPIO3_CTRL, BD72720_REG_GPIO4_CTRL,
+-			     BD72720_REG_GPIO5_CTRL, BD72720_REG_EPDEN_CTRL };
++	static const int regs[] = {
++		BD72720_REG_GPIO1_CTRL, BD72720_REG_GPIO2_CTRL,
++		BD72720_REG_GPIO3_CTRL, BD72720_REG_GPIO4_CTRL,
++		BD72720_REG_GPIO5_CTRL, BD72720_REG_EPDEN_CTRL
++	};
+ 
+ 	if (BIT(offset) & bdgpio->gpio_is_input) {
+ 		dev_dbg(bdgpio->dev, "pin %d not output.\n", offset);
+@@ -132,9 +136,11 @@ static int bd72720_gpio_set_config(struct gpio_chip *chip, unsigned int offset,
+ 				   unsigned long config)
+ {
+ 	struct bd72720_gpio *bdgpio = gpiochip_get_data(chip);
+-	const int regs[] = { BD72720_REG_GPIO1_CTRL, BD72720_REG_GPIO2_CTRL,
+-			     BD72720_REG_GPIO3_CTRL, BD72720_REG_GPIO4_CTRL,
+-			     BD72720_REG_GPIO5_CTRL, BD72720_REG_EPDEN_CTRL };
++	static const int regs[] = {
++		BD72720_REG_GPIO1_CTRL, BD72720_REG_GPIO2_CTRL,
++		BD72720_REG_GPIO3_CTRL, BD72720_REG_GPIO4_CTRL,
++		BD72720_REG_GPIO5_CTRL, BD72720_REG_EPDEN_CTRL
++	};
+ 
+ 	/*
+ 	 * We can only set the output mode, which makes sense only when output
+-- 
+2.55.0
+

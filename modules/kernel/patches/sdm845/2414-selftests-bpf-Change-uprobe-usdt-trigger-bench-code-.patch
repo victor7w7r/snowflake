@@ -1,0 +1,166 @@
+From b2cf7c41e4f12f76f6f7b6a21194367cf8d3e7b9 Mon Sep 17 00:00:00 2001
+From: Jiri Olsa <jolsa@kernel.org>
+Date: Fri, 3 Jul 2026 13:49:14 +0200
+Subject: [PATCH 02414/15333] selftests/bpf: Change uprobe/usdt trigger bench
+ code to use nop10
+
+Changing uprobe/usdt trigger bench code to use nop10 instead
+of nop5. Also changing run_bench_uprobes.sh to use nop10 triggers.
+
+Signed-off-by: Jiri Olsa <jolsa@kernel.org>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Reviewed-by: Jakub Sitnicki <jakub@cloudflare.com>
+Link: https://patch.msgid.link/20260703114917.238144-11-jolsa@kernel.org
+---
+ tools/testing/selftests/bpf/bench.c           | 20 +++++------
+ .../selftests/bpf/benchs/bench_trigger.c      | 36 +++++++++----------
+ .../selftests/bpf/benchs/run_bench_uprobes.sh |  2 +-
+ 3 files changed, 29 insertions(+), 29 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/bench.c b/tools/testing/selftests/bpf/bench.c
+index 3d9d2cd7764b..c4a3a6b3eb83 100644
+--- a/tools/testing/selftests/bpf/bench.c
++++ b/tools/testing/selftests/bpf/bench.c
+@@ -539,12 +539,12 @@ extern const struct bench bench_trig_uretprobe_multi_push;
+ extern const struct bench bench_trig_uprobe_multi_ret;
+ extern const struct bench bench_trig_uretprobe_multi_ret;
+ #ifdef __x86_64__
+-extern const struct bench bench_trig_uprobe_nop5;
+-extern const struct bench bench_trig_uretprobe_nop5;
+-extern const struct bench bench_trig_uprobe_multi_nop5;
+-extern const struct bench bench_trig_uretprobe_multi_nop5;
++extern const struct bench bench_trig_uprobe_nop10;
++extern const struct bench bench_trig_uretprobe_nop10;
++extern const struct bench bench_trig_uprobe_multi_nop10;
++extern const struct bench bench_trig_uretprobe_multi_nop10;
+ extern const struct bench bench_trig_usdt_nop;
+-extern const struct bench bench_trig_usdt_nop5;
++extern const struct bench bench_trig_usdt_nop10;
+ #endif
+ 
+ extern const struct bench bench_rb_libbpf;
+@@ -622,12 +622,12 @@ static const struct bench *benchs[] = {
+ 	&bench_trig_uprobe_multi_ret,
+ 	&bench_trig_uretprobe_multi_ret,
+ #ifdef __x86_64__
+-	&bench_trig_uprobe_nop5,
+-	&bench_trig_uretprobe_nop5,
+-	&bench_trig_uprobe_multi_nop5,
+-	&bench_trig_uretprobe_multi_nop5,
++	&bench_trig_uprobe_nop10,
++	&bench_trig_uretprobe_nop10,
++	&bench_trig_uprobe_multi_nop10,
++	&bench_trig_uretprobe_multi_nop10,
+ 	&bench_trig_usdt_nop,
+-	&bench_trig_usdt_nop5,
++	&bench_trig_usdt_nop10,
+ #endif
+ 	/* ringbuf/perfbuf benchmarks */
+ 	&bench_rb_libbpf,
+diff --git a/tools/testing/selftests/bpf/benchs/bench_trigger.c b/tools/testing/selftests/bpf/benchs/bench_trigger.c
+index a60b8173cdc4..61513efc167a 100644
+--- a/tools/testing/selftests/bpf/benchs/bench_trigger.c
++++ b/tools/testing/selftests/bpf/benchs/bench_trigger.c
+@@ -396,15 +396,15 @@ static void *uprobe_producer_ret(void *input)
+ }
+ 
+ #ifdef __x86_64__
+-__nocf_check __weak void uprobe_target_nop5(void)
++__nocf_check __weak void uprobe_target_nop10(void)
+ {
+ 	asm volatile (".byte 0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00");
+ }
+ 
+-static void *uprobe_producer_nop5(void *input)
++static void *uprobe_producer_nop10(void *input)
+ {
+ 	while (true)
+-		uprobe_target_nop5();
++		uprobe_target_nop10();
+ 	return NULL;
+ }
+ 
+@@ -418,7 +418,7 @@ static void *uprobe_producer_usdt_nop(void *input)
+ 	return NULL;
+ }
+ 
+-static void *uprobe_producer_usdt_nop5(void *input)
++static void *uprobe_producer_usdt_nop10(void *input)
+ {
+ 	while (true)
+ 		usdt_2();
+@@ -542,24 +542,24 @@ static void uretprobe_multi_ret_setup(void)
+ }
+ 
+ #ifdef __x86_64__
+-static void uprobe_nop5_setup(void)
++static void uprobe_nop10_setup(void)
+ {
+-	usetup(false, false /* !use_multi */, &uprobe_target_nop5);
++	usetup(false, false /* !use_multi */, &uprobe_target_nop10);
+ }
+ 
+-static void uretprobe_nop5_setup(void)
++static void uretprobe_nop10_setup(void)
+ {
+-	usetup(true, false /* !use_multi */, &uprobe_target_nop5);
++	usetup(true, false /* !use_multi */, &uprobe_target_nop10);
+ }
+ 
+-static void uprobe_multi_nop5_setup(void)
++static void uprobe_multi_nop10_setup(void)
+ {
+-	usetup(false, true /* use_multi */, &uprobe_target_nop5);
++	usetup(false, true /* use_multi */, &uprobe_target_nop10);
+ }
+ 
+-static void uretprobe_multi_nop5_setup(void)
++static void uretprobe_multi_nop10_setup(void)
+ {
+-	usetup(true, true /* use_multi */, &uprobe_target_nop5);
++	usetup(true, true /* use_multi */, &uprobe_target_nop10);
+ }
+ 
+ static void usdt_setup(const char *name)
+@@ -598,7 +598,7 @@ static void usdt_nop_setup(void)
+ 	usdt_setup("usdt_1");
+ }
+ 
+-static void usdt_nop5_setup(void)
++static void usdt_nop10_setup(void)
+ {
+ 	usdt_setup("usdt_2");
+ }
+@@ -665,10 +665,10 @@ BENCH_TRIG_USERMODE(uretprobe_multi_nop, nop, "uretprobe-multi-nop");
+ BENCH_TRIG_USERMODE(uretprobe_multi_push, push, "uretprobe-multi-push");
+ BENCH_TRIG_USERMODE(uretprobe_multi_ret, ret, "uretprobe-multi-ret");
+ #ifdef __x86_64__
+-BENCH_TRIG_USERMODE(uprobe_nop5, nop5, "uprobe-nop5");
+-BENCH_TRIG_USERMODE(uretprobe_nop5, nop5, "uretprobe-nop5");
+-BENCH_TRIG_USERMODE(uprobe_multi_nop5, nop5, "uprobe-multi-nop5");
+-BENCH_TRIG_USERMODE(uretprobe_multi_nop5, nop5, "uretprobe-multi-nop5");
++BENCH_TRIG_USERMODE(uprobe_nop10, nop10, "uprobe-nop10");
++BENCH_TRIG_USERMODE(uretprobe_nop10, nop10, "uretprobe-nop10");
++BENCH_TRIG_USERMODE(uprobe_multi_nop10, nop10, "uprobe-multi-nop10");
++BENCH_TRIG_USERMODE(uretprobe_multi_nop10, nop10, "uretprobe-multi-nop10");
+ BENCH_TRIG_USERMODE(usdt_nop, usdt_nop, "usdt-nop");
+-BENCH_TRIG_USERMODE(usdt_nop5, usdt_nop5, "usdt-nop5");
++BENCH_TRIG_USERMODE(usdt_nop10, usdt_nop10, "usdt-nop10");
+ #endif
+diff --git a/tools/testing/selftests/bpf/benchs/run_bench_uprobes.sh b/tools/testing/selftests/bpf/benchs/run_bench_uprobes.sh
+index 9ec59423b949..e490b337e960 100755
+--- a/tools/testing/selftests/bpf/benchs/run_bench_uprobes.sh
++++ b/tools/testing/selftests/bpf/benchs/run_bench_uprobes.sh
+@@ -2,7 +2,7 @@
+ 
+ set -eufo pipefail
+ 
+-for i in usermode-count syscall-count {uprobe,uretprobe}-{nop,push,ret,nop5} usdt-nop usdt-nop5
++for i in usermode-count syscall-count {uprobe,uretprobe}-{nop,push,ret,nop10} usdt-nop usdt-nop10
+ do
+ 	summary=$(sudo ./bench -w2 -d5 -a trig-$i | tail -n1 | cut -d'(' -f1 | cut -d' ' -f3-)
+ 	printf "%-15s: %s\n" $i "$summary"
+-- 
+2.55.0
+

@@ -1,0 +1,207 @@
+From 0cfd468c995644a512c3fe82f391814f7ea30e77 Mon Sep 17 00:00:00 2001
+From: Thomas Zimmermann <tzimmermann@suse.de>
+Date: Thu, 18 Jun 2026 16:11:33 +0200
+Subject: [PATCH 09431/15333] drm/msm: fbdev: Inline msm_alloc_stolen_fb()
+
+Inline msm_alloc_stolen_fb() into its only caller. This is necessary
+for converting fbdev emulation to use client buffers.
+
+There are some minor changes:
+
+- Handle errors for the non-stolen BO in the respective branch.
+
+- Fill mode_cmd right before using it with msm_framebuffer_init(). Both
+will later be replaced with client-buffer interfaces.
+
+- Set the modifier[0] to DRM_FORMAT_MOD_LINEAR. No functional change.
+
+- Integrate the error handling with the existing clean-up.
+
+Signed-off-by: Thomas Zimmermann <tzimmermann@suse.de>
+Reviewed-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Patchwork: https://patchwork.freedesktop.org/patch/733884/
+Link: https://lore.kernel.org/r/20260618141249.151338-3-tzimmermann@suse.de
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+---
+ drivers/gpu/drm/msm/msm_drv.h   |  2 --
+ drivers/gpu/drm/msm/msm_fb.c    | 46 ---------------------------------
+ drivers/gpu/drm/msm/msm_fbdev.c | 44 +++++++++++++++++++++++++------
+ 3 files changed, 36 insertions(+), 56 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/msm_drv.h b/drivers/gpu/drm/msm/msm_drv.h
+index 7dccf0713b02..01a64a32b843 100644
+--- a/drivers/gpu/drm/msm/msm_drv.h
++++ b/drivers/gpu/drm/msm/msm_drv.h
+@@ -265,8 +265,6 @@ struct drm_framebuffer *msm_framebuffer_init(struct drm_device *dev,
+ struct drm_framebuffer *msm_framebuffer_create(struct drm_device *dev,
+ 		struct drm_file *file, const struct drm_format_info *info,
+ 		const struct drm_mode_fb_cmd2 *mode_cmd);
+-struct drm_framebuffer * msm_alloc_stolen_fb(struct drm_device *dev,
+-		int w, int h, int p, uint32_t format);
+ 
+ #ifdef CONFIG_DRM_MSM_KMS_FBDEV
+ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+diff --git a/drivers/gpu/drm/msm/msm_fb.c b/drivers/gpu/drm/msm/msm_fb.c
+index c98710569a2e..dec550e6cf75 100644
+--- a/drivers/gpu/drm/msm/msm_fb.c
++++ b/drivers/gpu/drm/msm/msm_fb.c
+@@ -6,7 +6,6 @@
+ 
+ #include <drm/drm_crtc.h>
+ #include <drm/drm_damage_helper.h>
+-#include <drm/drm_file.h>
+ #include <drm/drm_fourcc.h>
+ #include <drm/drm_framebuffer.h>
+ #include <drm/drm_gem_framebuffer_helper.h>
+@@ -248,48 +247,3 @@ struct drm_framebuffer *msm_framebuffer_create(struct drm_device *dev,
+ 		drm_gem_object_put(bos[i]);
+ 	return ERR_PTR(ret);
+ }
+-
+-struct drm_framebuffer *
+-msm_alloc_stolen_fb(struct drm_device *dev, int w, int h, int p, uint32_t format)
+-{
+-	struct drm_mode_fb_cmd2 mode_cmd = {
+-		.pixel_format = format,
+-		.width = w,
+-		.height = h,
+-		.pitches = { p },
+-	};
+-	struct drm_gem_object *bo;
+-	struct drm_framebuffer *fb;
+-	int size;
+-
+-	/* allocate backing bo */
+-	size = mode_cmd.pitches[0] * mode_cmd.height;
+-	DBG("allocating %d bytes for fb %d", size, dev->primary->index);
+-	bo = msm_gem_new(dev, size, MSM_BO_SCANOUT | MSM_BO_WC | MSM_BO_STOLEN, NULL);
+-	if (IS_ERR(bo)) {
+-		dev_warn(dev->dev, "could not allocate stolen bo\n");
+-		/* try regular bo: */
+-		bo = msm_gem_new(dev, size, MSM_BO_SCANOUT | MSM_BO_WC, NULL);
+-	}
+-	if (IS_ERR(bo)) {
+-		DRM_DEV_ERROR(dev->dev, "failed to allocate buffer object\n");
+-		return ERR_CAST(bo);
+-	}
+-
+-	msm_gem_object_set_name(bo, "stolenfb");
+-
+-	fb = msm_framebuffer_init(dev,
+-				  drm_get_format_info(dev, mode_cmd.pixel_format,
+-						      mode_cmd.modifier[0]),
+-				  &mode_cmd, &bo);
+-	if (IS_ERR(fb)) {
+-		DRM_DEV_ERROR(dev->dev, "failed to allocate fb\n");
+-		/* note: if fb creation failed, we can't rely on fb destroy
+-		 * to unref the bo:
+-		 */
+-		drm_gem_object_put(bo);
+-		return ERR_CAST(fb);
+-	}
+-
+-	return fb;
+-}
+diff --git a/drivers/gpu/drm/msm/msm_fbdev.c b/drivers/gpu/drm/msm/msm_fbdev.c
+index fd19995b12b5..f834a595e55e 100644
+--- a/drivers/gpu/drm/msm/msm_fbdev.c
++++ b/drivers/gpu/drm/msm/msm_fbdev.c
+@@ -9,6 +9,7 @@
+ #include <drm/drm_drv.h>
+ #include <drm/drm_crtc_helper.h>
+ #include <drm/drm_fb_helper.h>
++#include <drm/drm_file.h>
+ #include <drm/drm_fourcc.h>
+ #include <drm/drm_framebuffer.h>
+ #include <drm/drm_prime.h>
+@@ -92,11 +93,13 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	struct drm_device *dev = helper->dev;
+ 	struct msm_drm_private *priv = dev->dev_private;
+ 	struct fb_info *fbi = helper->info;
++	struct drm_mode_fb_cmd2 mode_cmd = { };
+ 	struct drm_framebuffer *fb = NULL;
+ 	struct drm_gem_object *bo;
+ 	uint64_t paddr;
+ 	uint32_t format;
+ 	int ret, pitch;
++	int size;
+ 
+ 	format = drm_mode_legacy_fb_format(sizes->surface_bpp, sizes->surface_depth);
+ 
+@@ -105,16 +108,39 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 			sizes->fb_width, sizes->fb_height);
+ 
+ 	pitch = align_pitch(sizes->surface_width, sizes->surface_bpp);
+-	fb = msm_alloc_stolen_fb(dev, sizes->surface_width,
+-			sizes->surface_height, pitch, format);
+ 
++	/* allocate backing bo */
++	size = pitch * sizes->surface_height;
++	DBG("allocating %d bytes for fb %d", size, dev->primary->index);
++	bo = msm_gem_new(dev, size, MSM_BO_SCANOUT | MSM_BO_WC | MSM_BO_STOLEN, NULL);
++	if (IS_ERR(bo)) {
++		dev_warn(dev->dev, "could not allocate stolen bo\n");
++		/* try regular bo: */
++		bo = msm_gem_new(dev, size, MSM_BO_SCANOUT | MSM_BO_WC, NULL);
++		if (IS_ERR(bo)) {
++			DRM_DEV_ERROR(dev->dev, "failed to allocate buffer object\n");
++			return PTR_ERR(bo);
++		}
++	}
++
++	msm_gem_object_set_name(bo, "stolenfb");
++
++	mode_cmd.pixel_format = format;
++	mode_cmd.width = sizes->surface_width;
++	mode_cmd.height = sizes->surface_height;
++	mode_cmd.pitches[0] = pitch;
++	mode_cmd.modifier[0] = DRM_FORMAT_MOD_LINEAR;
++
++	fb = msm_framebuffer_init(dev,
++				  drm_get_format_info(dev, mode_cmd.pixel_format,
++						      mode_cmd.modifier[0]),
++				  &mode_cmd, &bo);
+ 	if (IS_ERR(fb)) {
+ 		DRM_DEV_ERROR(dev->dev, "failed to allocate fb\n");
+-		return PTR_ERR(fb);
++		ret = PTR_ERR(fb);
++		goto err_drm_gem_object_put;
+ 	}
+ 
+-	bo = msm_framebuffer_bo(fb, 0);
+-
+ 	/*
+ 	 * NOTE: if we can be guaranteed to be able to map buffer
+ 	 * in panic (ie. lock-safe, etc) we could avoid pinning the
+@@ -123,7 +149,7 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	ret = msm_gem_get_and_pin_iova(bo, priv->kms->vm, &paddr);
+ 	if (ret) {
+ 		DRM_DEV_ERROR(dev->dev, "failed to get buffer obj iova: %d\n", ret);
+-		goto fail;
++		goto err_drm_framebuffer_remove;
+ 	}
+ 
+ 	DBG("fbi=%p, dev=%p", fbi, dev);
+@@ -138,7 +164,7 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 	fbi->screen_buffer = msm_gem_get_vaddr(bo);
+ 	if (IS_ERR(fbi->screen_buffer)) {
+ 		ret = PTR_ERR(fbi->screen_buffer);
+-		goto fail;
++		goto err_drm_framebuffer_remove;
+ 	}
+ 	fbi->screen_size = bo->size;
+ 	fbi->fix.smem_start = paddr;
+@@ -149,7 +175,9 @@ int msm_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 
+ 	return 0;
+ 
+-fail:
++err_drm_framebuffer_remove:
+ 	drm_framebuffer_remove(fb);
++err_drm_gem_object_put:
++	drm_gem_object_put(bo);
+ 	return ret;
+ }
+-- 
+2.55.0
+

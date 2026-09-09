@@ -1,0 +1,73 @@
+From 75e536852f9a5f1880091d58f46cdf2fce2101b4 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 21 Jul 2026 16:13:53 +0200
+Subject: [PATCH 09955/15333] binfmt_misc: add a static transparent flag 'T'
+
+Let a registration opt into transparent dispatch. The 'T' flag lets a
+matched binary keep its argument vector and is sent to the interpreter
+through AT_EXECFD. The process's identity is the binary's.
+
+'T' implies 'O' exactly like 'C' does. 'P' is rejected in combination
+with it. Transparency preserves the whole argument vector so there is
+nothing left for 'P' to say. 'C' remains an independent choice and 'F'
+keeps working. A pre-opened interpreter is orthogonal to how the binary
+is handed over.
+
+Like the other flag characters 'T' cannot be used as the field
+delimiter. The flag scan would run off the registration buffer.
+
+Link: https://patch.msgid.link/20260721-work-bpf-binfmt_misc-ptinterp-v2-11-e57866e4ae0f@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ Documentation/admin-guide/binfmt-misc.rst | 10 ++++++++++
+ fs/binfmt_misc.c                          |  6 ++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/Documentation/admin-guide/binfmt-misc.rst b/Documentation/admin-guide/binfmt-misc.rst
+index 9f0d9132723f..62088468350b 100644
+--- a/Documentation/admin-guide/binfmt-misc.rst
++++ b/Documentation/admin-guide/binfmt-misc.rst
+@@ -90,6 +90,16 @@ Here is what the fields mean:
+ 	    emulation is installed and uses the opened image to spawn the
+ 	    emulator, meaning it is always available once installed,
+ 	    regardless of how the environment changes.
++      ``T`` - transparent
++            Run the interpreter transparently. The binary is handed to
++            the interpreter through ``AT_EXECFD`` (``T`` implies ``O``),
++            the argument vector is left exactly as the caller built it
++            and the kernel labels ``/proc/pid/exe`` with the binary
++            instead of the interpreter. The interpreter has to load the
++            binary from ``AT_EXECFD`` and follow the
++            ``AT_FLAGS_TRANSPARENT_INTERP`` contract. Combining ``T``
++            with ``P`` is rejected: transparency preserves the whole
++            argument vector, argv[0] included.
+ 
+ 
+ There are some restrictions:
+diff --git a/fs/binfmt_misc.c b/fs/binfmt_misc.c
+index c49e88283f12..d32ef07c810f 100644
+--- a/fs/binfmt_misc.c
++++ b/fs/binfmt_misc.c
+@@ -72,6 +72,7 @@ static const struct binfmt_misc_flag misc_flags[] = {
+ 	{ 'O', MISC_FMT_OPEN_BINARY,	0,			"open binary"			},
+ 	{ 'C', MISC_FMT_CREDENTIALS,	MISC_FMT_OPEN_BINARY,	"credentials from the binary"	},
+ 	{ 'F', MISC_FMT_OPEN_FILE,	0,			"open interpreter file now"	},
++	{ 'T', MISC_FMT_TRANSPARENT,	MISC_FMT_OPEN_BINARY,	"transparent"			},
+ };
+ 
+ /* Look up a flag character, NULL if @c is not one. */
+@@ -764,6 +765,11 @@ static struct binfmt_misc_entry *create_entry(const char __user *buffer,
+ 	if (test_bit(MISC_FMT_BPF_BIT, &e->flags) && p != flags)
+ 		return ERR_PTR(-EINVAL);
+ 
++	/* Transparency preserves the whole argv, argv[0] included. */
++	if ((e->flags & MISC_FMT_TRANSPARENT) &&
++	    (e->flags & MISC_FMT_PRESERVE_ARGV0))
++		return ERR_PTR(-EINVAL);
++
+ 	if (*p == '\n')
+ 		p++;
+ 	if (p != buf + count)
+-- 
+2.55.0
+

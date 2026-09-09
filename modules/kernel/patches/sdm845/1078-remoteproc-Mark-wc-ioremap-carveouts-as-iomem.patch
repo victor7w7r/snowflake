@@ -1,0 +1,40 @@
+From 0db071a39c8637262a00763adfc44c2fae89c82c Mon Sep 17 00:00:00 2001
+From: Ben Levinsky <ben.levinsky@amd.com>
+Date: Thu, 28 May 2026 19:16:35 -0700
+Subject: [PATCH 01078/15333] remoteproc: Mark wc-ioremap carveouts as iomem
+
+Carveouts registered through the shared wc-ioremap helper are backed by
+I/O memory, but rproc_da_to_va() only reports that to its callers when
+mem->is_iomem is set on the carveout.
+
+Without that flag, the remoteproc ELF loader and coredump paths can
+fall back to normal memcpy()/memset() accessors instead of the I/O
+helpers used for iomapped memory.
+
+Mark shared wc-ioremap carveouts as iomem so the framework uses the
+proper memcpy_toio(), memset_io(), and memcpy_fromio() accessors for
+these regions.
+
+Signed-off-by: Ben Levinsky <ben.levinsky@amd.com>
+Tested-by: Peng Fan <peng.fan@nxp.com> #i.MX8MP-EVK
+Link: https://lore.kernel.org/r/20260529021637.2077602-4-ben.levinsky@amd.com
+Signed-off-by: Mathieu Poirier <mathieu.poirier@linaro.org>
+---
+ drivers/remoteproc/remoteproc_internal.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/remoteproc/remoteproc_internal.h b/drivers/remoteproc/remoteproc_internal.h
+index 46080c1c030e..9afda697271d 100644
+--- a/drivers/remoteproc/remoteproc_internal.h
++++ b/drivers/remoteproc/remoteproc_internal.h
+@@ -136,6 +136,7 @@ static inline int rproc_mem_entry_ioremap_wc(struct rproc *rproc,
+ 	}
+ 
+ 	mem->va = (__force void *)va;
++	mem->is_iomem = true;
+ 
+ 	return 0;
+ }
+-- 
+2.55.0
+

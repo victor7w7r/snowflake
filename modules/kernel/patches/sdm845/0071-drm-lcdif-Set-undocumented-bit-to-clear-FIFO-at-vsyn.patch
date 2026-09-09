@@ -1,0 +1,51 @@
+From 108b5876d6aa2c719001ba64c9c30dfb5ff15807 Mon Sep 17 00:00:00 2001
+From: Paul Kocialkowski <paulk@sys-base.io>
+Date: Thu, 2 Apr 2026 20:33:50 +0200
+Subject: [PATCH 00071/15333] drm: lcdif: Set undocumented bit to clear FIFO at
+ vsync
+
+There is an undocumented bit used in the NXP BSP to clear the FIFO
+systematically at vsync. In normal operation, the FIFO should already
+be empty but it doesn't hurt to add it as an extra safety measure.
+
+Signed-off-by: Paul Kocialkowski <paulk@sys-base.io>
+Reviewed-by: Lucas Stach <l.stach@pengutronix.de>
+Reviewed-by: Frieder Schrempf <frieder.schrempf@kontron.de>
+Tested-by: Frieder Schrempf <frieder.schrempf@kontron.de>
+Reviewed-by: Liu Ying <victor.liu@nxp.com>
+Link: https://patch.msgid.link/20260402183351.3281123-2-paulk@sys-base.io
+Signed-off-by: Lucas Stach <l.stach@pengutronix.de>
+---
+ drivers/gpu/drm/mxsfb/lcdif_kms.c  | 3 ++-
+ drivers/gpu/drm/mxsfb/lcdif_regs.h | 1 +
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/mxsfb/lcdif_kms.c b/drivers/gpu/drm/mxsfb/lcdif_kms.c
+index ade76c3f4e4e..0b5f86c6d206 100644
+--- a/drivers/gpu/drm/mxsfb/lcdif_kms.c
++++ b/drivers/gpu/drm/mxsfb/lcdif_kms.c
+@@ -338,7 +338,8 @@ static void lcdif_set_mode(struct lcdif_drm_private *lcdif, u32 bus_flags)
+ 	 * Downstream set it to 256B burst size to improve the memory
+ 	 * efficiency so set it here too.
+ 	 */
+-	ctrl = CTRLDESCL0_3_P_SIZE(2) | CTRLDESCL0_3_T_SIZE(2) |
++	ctrl = CTRLDESCL0_3_STATE_CLEAR_VSYNC |
++	       CTRLDESCL0_3_P_SIZE(2) | CTRLDESCL0_3_T_SIZE(2) |
+ 	       CTRLDESCL0_3_PITCH(lcdif->crtc.primary->state->fb->pitches[0]);
+ 	writel(ctrl, lcdif->base + LCDC_V8_CTRLDESCL0_3);
+ }
+diff --git a/drivers/gpu/drm/mxsfb/lcdif_regs.h b/drivers/gpu/drm/mxsfb/lcdif_regs.h
+index c55dfb236c1d..17882c593d27 100644
+--- a/drivers/gpu/drm/mxsfb/lcdif_regs.h
++++ b/drivers/gpu/drm/mxsfb/lcdif_regs.h
+@@ -190,6 +190,7 @@
+ #define CTRLDESCL0_1_WIDTH(n)		((n) & 0xffff)
+ #define CTRLDESCL0_1_WIDTH_MASK		GENMASK(15, 0)
+ 
++#define CTRLDESCL0_3_STATE_CLEAR_VSYNC	BIT(23)
+ #define CTRLDESCL0_3_P_SIZE(n)		(((n) << 20) & CTRLDESCL0_3_P_SIZE_MASK)
+ #define CTRLDESCL0_3_P_SIZE_MASK	GENMASK(22, 20)
+ #define CTRLDESCL0_3_T_SIZE(n)		(((n) << 16) & CTRLDESCL0_3_T_SIZE_MASK)
+-- 
+2.55.0
+

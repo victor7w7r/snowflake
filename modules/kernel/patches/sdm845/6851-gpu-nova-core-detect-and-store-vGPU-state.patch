@@ -1,0 +1,305 @@
+From c0ce158096d4c2e88d270777588bf5ea7cee5f5c Mon Sep 17 00:00:00 2001
+From: Zhi Wang <zhiw@nvidia.com>
+Date: Wed, 22 Jul 2026 10:39:11 +0300
+Subject: [PATCH 06851/15333] gpu: nova-core: detect and store vGPU state
+
+GSP boot needs a stable view of vGPU state before it starts building the
+boot-time data structures that depend on SR-IOV and firmware policy. That
+state must be derived once from the PCI VF count and the FSP PRC vGPU mode
+knob before booting GSP.
+
+Add VgpuManager to detect and retain the vGPU state during GPU
+construction. Keep the manager separate from the detected state because
+later vGPU milestones will add vGPU resources and lifecycle state to it.
+
+Keep the vGPU capability gate local to the vGPU module with per-chip HAL
+modules. Treat failures to detect the optional vGPU state as disabled so
+they do not prevent a bare-metal probe, and log both the failure and the
+detected state where the manager is constructed.
+
+Cc: Alexandre Courbot <acourbot@nvidia.com>
+Signed-off-by: Zhi Wang <zhiw@nvidia.com>
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Link: https://patch.msgid.link/20260722073913.1807677-5-zhiw@nvidia.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/gpu/nova-core/fsp.rs            |  1 -
+ drivers/gpu/nova-core/gpu.rs            |  7 ++
+ drivers/gpu/nova-core/gsp.rs            |  3 +
+ drivers/gpu/nova-core/nova_core.rs      |  1 +
+ drivers/gpu/nova-core/vgpu.rs           | 93 +++++++++++++++++++++++++
+ drivers/gpu/nova-core/vgpu/hal.rs       | 25 +++++++
+ drivers/gpu/nova-core/vgpu/hal/gb202.rs | 15 ++++
+ drivers/gpu/nova-core/vgpu/hal/tu102.rs | 15 ++++
+ 8 files changed, 159 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/gpu/nova-core/vgpu.rs
+ create mode 100644 drivers/gpu/nova-core/vgpu/hal.rs
+ create mode 100644 drivers/gpu/nova-core/vgpu/hal/gb202.rs
+ create mode 100644 drivers/gpu/nova-core/vgpu/hal/tu102.rs
+
+diff --git a/drivers/gpu/nova-core/fsp.rs b/drivers/gpu/nova-core/fsp.rs
+index e63c8869379c..ba4544210e40 100644
+--- a/drivers/gpu/nova-core/fsp.rs
++++ b/drivers/gpu/nova-core/fsp.rs
+@@ -495,7 +495,6 @@ fn send_sync_fsp<M>(&mut self, dev: &device::Device, msg: &M) -> Result<KVec<u8>
+     /// Reads the active vGPU mode from FSP using the PRC protocol.
+     ///
+     /// Queries FSP's Management Partition for the active vGPU mode knob value.
+-    #[expect(dead_code)]
+     pub(crate) fn read_vgpu_mode(
+         &mut self,
+         dev: &device::Device<device::Bound>,
+diff --git a/drivers/gpu/nova-core/gpu.rs b/drivers/gpu/nova-core/gpu.rs
+index 442c0979f9c6..42a4cd7971fa 100644
+--- a/drivers/gpu/nova-core/gpu.rs
++++ b/drivers/gpu/nova-core/gpu.rs
+@@ -30,6 +30,7 @@
+         GspBootContext, //
+     },
+     regs,
++    vgpu::VgpuManager, //
+ };
+ 
+ mod hal;
+@@ -267,6 +268,8 @@ struct GspResources<'gpu> {
+     // TODO: use different resource types for each boot method, and make the relevant Gsp methods
+     // generic against them.
+     fsp: Option<Fsp<'gpu>>,
++    /// vGPU state detected before GSP boot.
++    vgpu: VgpuManager,
+     /// GSP runtime data.
+     #[pin]
+     gsp: Gsp,
+@@ -311,6 +314,7 @@ fn drop(self: Pin<&mut Self>) {
+                     gsp_falcon: &*this.gsp_falcon,
+                     sec2_falcon: &*this.sec2_falcon,
+                     fsp: this.fsp.as_mut(),
++                    vgpu: &*this.vgpu,
+                 },
+                 bundle,
+             )
+@@ -364,6 +368,8 @@ pub(crate) fn new(
+ 
+                 fsp: Fsp::try_new(dev, bar, spec.chipset)?,
+ 
++                vgpu: VgpuManager::new(pdev, spec.chipset, fsp.as_mut()),
++
+                 gsp <- Gsp::new(pdev),
+ 
+                 // This member must be initialized last, so the `UnloadBundle` can never be dropped
+@@ -376,6 +382,7 @@ pub(crate) fn new(
+                     gsp_falcon,
+                     sec2_falcon,
+                     fsp: fsp.as_mut(),
++                    vgpu,
+                 })?,
+             }),
+ 
+diff --git a/drivers/gpu/nova-core/gsp.rs b/drivers/gpu/nova-core/gsp.rs
+index c7b18c44c03d..d3c97da5848c 100644
+--- a/drivers/gpu/nova-core/gsp.rs
++++ b/drivers/gpu/nova-core/gsp.rs
+@@ -49,6 +49,7 @@
+         fw::GspArgumentsPadded, //
+     },
+     num,
++    vgpu::VgpuManager, //
+ };
+ 
+ pub(crate) const GSP_PAGE_SHIFT: usize = 12;
+@@ -67,6 +68,8 @@ pub(crate) struct GspBootContext<'ctx, 'gpu> {
+     pub(crate) gsp_falcon: &'ctx Falcon<'gpu, GspFalcon>,
+     pub(crate) sec2_falcon: &'ctx Falcon<'gpu, Sec2Falcon>,
+     pub(crate) fsp: Option<&'ctx mut Fsp<'gpu>>,
++    #[expect(dead_code)]
++    pub(crate) vgpu: &'ctx VgpuManager,
+ }
+ 
+ impl<'ctx, 'gpu> GspBootContext<'ctx, 'gpu> {
+diff --git a/drivers/gpu/nova-core/nova_core.rs b/drivers/gpu/nova-core/nova_core.rs
+index a61406ba5c0b..35a8b1214b0e 100644
+--- a/drivers/gpu/nova-core/nova_core.rs
++++ b/drivers/gpu/nova-core/nova_core.rs
+@@ -23,6 +23,7 @@
+ mod regs;
+ mod sbuffer;
+ mod vbios;
++mod vgpu;
+ 
+ pub(crate) const MODULE_NAME: &core::ffi::CStr = <LocalModule as kernel::ModuleMetadata>::NAME;
+ 
+diff --git a/drivers/gpu/nova-core/vgpu.rs b/drivers/gpu/nova-core/vgpu.rs
+new file mode 100644
+index 000000000000..71fd0fe879c2
+--- /dev/null
++++ b/drivers/gpu/nova-core/vgpu.rs
+@@ -0,0 +1,93 @@
++// SPDX-License-Identifier: GPL-2.0
++
++use core::num::NonZero;
++
++use kernel::{
++    device,
++    pci,
++    prelude::*, //
++};
++
++use crate::{
++    fsp::{
++        Fsp,
++        VgpuMode, //
++    },
++    gpu::Chipset, //
++};
++
++mod hal;
++
++/// vGPU state detected during GPU construction.
++#[derive(Debug, Clone, Copy)]
++pub(crate) enum VgpuState {
++    /// vGPU mode is not enabled for this boot.
++    Disabled,
++    /// vGPU mode is enabled for this boot.
++    Enabled {
++        /// Total number of SR-IOV VFs supported by this device.
++        #[expect(dead_code)]
++        total_vfs: NonZero<u16>,
++    },
++}
++
++/// vGPU state manager.
++pub(crate) struct VgpuManager {
++    state: VgpuState,
++}
++
++impl VgpuManager {
++    /// Creates a vGPU manager by querying SR-IOV and the FSP PRC vGPU knob.
++    pub(crate) fn new(
++        pdev: &pci::Device<device::Core<'_>>,
++        chipset: Chipset,
++        fsp: Option<&mut Fsp<'_>>,
++    ) -> Self {
++        let state = Self::detect_state(pdev, chipset, fsp).unwrap_or_else(|e| {
++            dev_warn!(
++                pdev,
++                "vGPU state detection failed: {:?}; disabling vGPU\n",
++                e
++            );
++            VgpuState::Disabled
++        });
++        dev_dbg!(pdev, "vGPU state: {:?}\n", state);
++
++        Self { state }
++    }
++
++    /// Detects the vGPU state from the chipset, SR-IOV capability and FSP PRC knob.
++    fn detect_state(
++        pdev: &pci::Device<device::Core<'_>>,
++        chipset: Chipset,
++        fsp: Option<&mut Fsp<'_>>,
++    ) -> Result<VgpuState> {
++        if !hal::vgpu_hal(chipset).supports_vgpu() {
++            return Ok(VgpuState::Disabled);
++        }
++
++        let Some(total_vfs) = pdev.sriov_get_totalvfs() else {
++            return Ok(VgpuState::Disabled);
++        };
++
++        if total_vfs.get() < 2 {
++            // The current vGPU path does not support single-VF SR-IOV devices yet.
++            // Treat one total VF as vGPU-disabled for now; single-VF support can relax
++            // this gate once the manager handles that topology.
++            return Ok(VgpuState::Disabled);
++        }
++
++        let fsp = fsp.ok_or(ENODEV)?;
++
++        match fsp.read_vgpu_mode(pdev.as_ref())? {
++            VgpuMode::Enabled => Ok(VgpuState::Enabled { total_vfs }),
++            VgpuMode::Disabled => Ok(VgpuState::Disabled),
++        }
++    }
++
++    /// Returns the detected vGPU state for this boot.
++    #[expect(dead_code)]
++    pub(crate) fn state(&self) -> VgpuState {
++        self.state
++    }
++}
+diff --git a/drivers/gpu/nova-core/vgpu/hal.rs b/drivers/gpu/nova-core/vgpu/hal.rs
+new file mode 100644
+index 000000000000..456f8fe27582
+--- /dev/null
++++ b/drivers/gpu/nova-core/vgpu/hal.rs
+@@ -0,0 +1,25 @@
++// SPDX-License-Identifier: GPL-2.0
++
++use crate::gpu::{
++    Architecture,
++    Chipset, //
++};
++
++mod gb202;
++mod tu102;
++
++pub(super) trait VgpuHal {
++    /// Returns whether this chipset can support vGPU.
++    fn supports_vgpu(&self) -> bool;
++}
++
++pub(super) fn vgpu_hal(chipset: Chipset) -> &'static dyn VgpuHal {
++    match chipset.arch() {
++        Architecture::BlackwellGB20x => gb202::GB202_HAL,
++        Architecture::Turing
++        | Architecture::Ampere
++        | Architecture::Hopper
++        | Architecture::Ada
++        | Architecture::BlackwellGB10x => tu102::TU102_HAL,
++    }
++}
+diff --git a/drivers/gpu/nova-core/vgpu/hal/gb202.rs b/drivers/gpu/nova-core/vgpu/hal/gb202.rs
+new file mode 100644
+index 000000000000..3add8af26616
+--- /dev/null
++++ b/drivers/gpu/nova-core/vgpu/hal/gb202.rs
+@@ -0,0 +1,15 @@
++// SPDX-License-Identifier: GPL-2.0
++// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++
++use crate::vgpu::hal::VgpuHal;
++
++struct Gb202;
++
++impl VgpuHal for Gb202 {
++    fn supports_vgpu(&self) -> bool {
++        true
++    }
++}
++
++const GB202: Gb202 = Gb202;
++pub(super) const GB202_HAL: &dyn VgpuHal = &GB202;
+diff --git a/drivers/gpu/nova-core/vgpu/hal/tu102.rs b/drivers/gpu/nova-core/vgpu/hal/tu102.rs
+new file mode 100644
+index 000000000000..baeea3ac5754
+--- /dev/null
++++ b/drivers/gpu/nova-core/vgpu/hal/tu102.rs
+@@ -0,0 +1,15 @@
++// SPDX-License-Identifier: GPL-2.0
++// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++
++use crate::vgpu::hal::VgpuHal;
++
++struct Tu102;
++
++impl VgpuHal for Tu102 {
++    fn supports_vgpu(&self) -> bool {
++        false
++    }
++}
++
++const TU102: Tu102 = Tu102;
++pub(super) const TU102_HAL: &dyn VgpuHal = &TU102;
+-- 
+2.55.0
+

@@ -1,0 +1,54 @@
+From 32782e3115aa892f7e67cc8254808327f77217c9 Mon Sep 17 00:00:00 2001
+From: Tamir Duberstein <tamird@kernel.org>
+Date: Tue, 26 May 2026 14:39:07 -0400
+Subject: [PATCH 02283/15333] rust: binder: use strict provenance APIs
+
+Replace the pointer-to-integer conversions in the Binder Rust driver
+with calls to the strict provenance APIs.
+
+The strict provenance APIs were stabilized in Rust 1.84.0 [1]. Since
+commit f32fb9c58a5b ("rust: bump Rust minimum supported version to
+1.85.0 (Debian Trixie)"), the minimum supported Rust version is 1.85.0,
+so no polyfills are needed.
+
+Link: https://blog.rust-lang.org/2025/01/09/Rust-1.84.0.html#strict-provenance-apis [1]
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Assisted-by: Codex:gpt-5
+Signed-off-by: Tamir Duberstein <tamird@kernel.org>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Link: https://patch.msgid.link/20260526-binder-strict-provenance-v2-1-a41d89c29bc5@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/android/binder/node.rs             | 2 +-
+ drivers/android/binder/rust_binder_main.rs | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/android/binder/node.rs b/drivers/android/binder/node.rs
+index 69f757ff7461..d710940c3c8f 100644
+--- a/drivers/android/binder/node.rs
++++ b/drivers/android/binder/node.rs
+@@ -321,7 +321,7 @@ pub(crate) unsafe fn remove_node_info(
+     /// An id that is unique across all binder nodes on the system. Used as the key in the
+     /// `by_node` map.
+     pub(crate) fn global_id(&self) -> usize {
+-        self as *const Node as usize
++        (self as *const Node).addr()
+     }
+ 
+     pub(crate) fn get_id(&self) -> (u64, u64) {
+diff --git a/drivers/android/binder/rust_binder_main.rs b/drivers/android/binder/rust_binder_main.rs
+index dc1941cd2407..d487638266e3 100644
+--- a/drivers/android/binder/rust_binder_main.rs
++++ b/drivers/android/binder/rust_binder_main.rs
+@@ -511,7 +511,7 @@ unsafe impl<T> Sync for AssertSync<T> {}
+     _: *mut kernel::ffi::c_void,
+ ) -> kernel::ffi::c_int {
+     // SAFETY: Accessing the private field of `seq_file` is okay.
+-    let pid = (unsafe { (*ptr).private }) as usize as Pid;
++    let pid = unsafe { (*ptr).private }.addr() as Pid;
+     // SAFETY: The caller ensures that the pointer is valid and exclusive for the duration in which
+     // this method is called.
+     let m = unsafe { SeqFile::from_raw(ptr) };
+-- 
+2.55.0
+

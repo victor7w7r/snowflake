@@ -1,0 +1,69 @@
+From f4f9b372a8a6aeb9b95e9ca4d9542b384ebb983c Mon Sep 17 00:00:00 2001
+From: Wolfram Sang <wsa+renesas@sang-engineering.com>
+Date: Fri, 26 Jun 2026 20:03:25 +0200
+Subject: [PATCH 04348/15333] ARM: dts: renesas: r9a06g032-rzn1d400-eb: Enable
+ SPI-FRAM
+
+Activate the FRAM and the SPI bus which it is attached to.
+
+Signed-off-by: Wolfram Sang <wsa+renesas@sang-engineering.com>
+Reviewed-by: Geert Uytterhoeven <geert+renesas@glider.be>
+Link: https://patch.msgid.link/20260626180326.9593-5-wsa+renesas@sang-engineering.com
+Signed-off-by: Geert Uytterhoeven <geert+renesas@glider.be>
+---
+ .../dts/renesas/r9a06g032-rzn1d400-eb.dts     | 25 +++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/arch/arm/boot/dts/renesas/r9a06g032-rzn1d400-eb.dts b/arch/arm/boot/dts/renesas/r9a06g032-rzn1d400-eb.dts
+index 97a339b30d76..ead379988fb1 100644
+--- a/arch/arm/boot/dts/renesas/r9a06g032-rzn1d400-eb.dts
++++ b/arch/arm/boot/dts/renesas/r9a06g032-rzn1d400-eb.dts
+@@ -53,6 +53,10 @@ led@1 {
+ 	};
+ };
+ 
++&gpio2 {
++	status = "okay";
++};
++
+ &i2c2 {
+ 	/* Sensors are different across revisions. All are LM75B compatible */
+ 	sensor@49 {
+@@ -152,6 +156,13 @@ pins_sdio1_clk: pins-sdio1-clk {
+ 		drive-strength = <12>;
+ 	};
+ 
++	pins_spi1: pins-spi1 {
++		pinmux = <RZN1_PINMUX(156, RZN1_FUNC_SPI0_M)>,
++			 <RZN1_PINMUX(157, RZN1_FUNC_SPI0_M)>,
++			 <RZN1_PINMUX(158, RZN1_FUNC_SPI0_M)>,
++			 <RZN1_PINMUX(159, RZN1_FUNC_GPIO)>;
++	};
++
+ 	pins_uart2: pins-uart2 {
+ 		pinmux = <RZN1_PINMUX(105, RZN1_FUNC_UART2)>,
+ 			 <RZN1_PINMUX(106, RZN1_FUNC_UART2)>,
+@@ -168,6 +179,20 @@ &sdio1 {
+ 	status = "okay";
+ };
+ 
++&spi1 {
++	pinctrl-0 = <&pins_spi1>;
++	pinctrl-names = "default";
++	status = "okay";
++
++	cs-gpios = <&gpio2a 31 GPIO_ACTIVE_LOW>;
++
++	fram: fram@0 {
++		compatible = "cypress,fm25", "atmel,at25";
++		reg = <0>;
++		spi-max-frequency = <12500000>;
++	};
++};
++
+ &switch {
+ 	pinctrl-0 = <&pins_eth1>, <&pins_eth2>, <&pins_eth3>, <&pins_eth4>,
+ 		    <&pins_mdio1>;
+-- 
+2.55.0
+

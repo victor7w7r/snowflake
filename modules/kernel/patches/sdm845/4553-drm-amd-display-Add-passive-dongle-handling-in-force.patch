@@ -1,0 +1,64 @@
+From ffa0cfa9d616aeea2adf182bda8e4dabc95f4531 Mon Sep 17 00:00:00 2001
+From: Matthew Stewart <Matthew.Stewart2@amd.com>
+Date: Wed, 24 Jun 2026 16:34:03 -0400
+Subject: [PATCH 04553/15333] drm/amd/display: Add passive dongle handling in
+ force_to_use_aux case
+
+[why]
+
+Need special handling for passive HDMI dongles with I2C over AUX.
+
+Reviewed-by: Aurabindo Pillai <Aurabindo.Pillai@amd.com>
+Signed-off-by: Matthew Stewart <Matthew.Stewart2@amd.com>
+Signed-off-by: George Zhang <george.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../drm/amd/display/dc/link/link_detection.c  | 25 ++++++++++++++++++-
+ 1 file changed, 24 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/link/link_detection.c b/drivers/gpu/drm/amd/display/dc/link/link_detection.c
+index 281a7c5acaca..2abe9d3a68d5 100644
+--- a/drivers/gpu/drm/amd/display/dc/link/link_detection.c
++++ b/drivers/gpu/drm/amd/display/dc/link/link_detection.c
+@@ -497,6 +497,12 @@ static void query_hdcp_capability(enum signal_type signal, struct dc_link *link)
+ 		msg22.data = link->hdcp_caps.rx_caps.raw;
+ 		msg22.length = sizeof(link->hdcp_caps.rx_caps.raw);
+ 		msg22.msg_id = HDCP_MESSAGE_ID_RX_CAPS;
++		if (link->force_to_use_aux && (signal == SIGNAL_TYPE_HDMI_TYPE_A)) {
++			// case with passive dongle with i2c over aux
++			msg22.data = &link->hdcp_caps.rx_caps.fields.version;
++			msg22.length = sizeof(link->hdcp_caps.rx_caps.fields.version);
++			msg22.msg_id = HDCP_MESSAGE_ID_HDCP2VERSION;
++		}
+ 	} else {
+ 		msg22.data = &link->hdcp_caps.rx_caps.fields.version;
+ 		msg22.length = sizeof(link->hdcp_caps.rx_caps.fields.version);
+@@ -597,7 +603,24 @@ static bool detect_dp(struct dc_link *link,
+ 	if (sink_caps->transaction_type == DDC_TRANSACTION_TYPE_I2C_OVER_AUX) {
+ 		sink_caps->signal = SIGNAL_TYPE_DISPLAY_PORT;
+ 		if (!detect_dp_sink_caps(link)) {
+-			return false;
++			if (link->force_to_use_aux) {
++				sink_caps->signal = dp_passive_dongle_detection(link->ddc, sink_caps, audio_support);
++				link->dpcd_caps.dongle_type = sink_caps->dongle_type;
++				link->dpcd_caps.is_dongle_type_one = sink_caps->is_dongle_type_one;
++				link->dpcd_caps.dpcd_rev.raw = 0;
++				/* Type 1 dongles do not work with I2C over Aux and also some of
++				 * Type 2 dongles do not support I2C over Aux well, so for these
++				 * cases when native Aux transactons fails and I2C over Aux fails
++				 * report that nothing is connected, as we can't tell is it bad
++				 * DP sink or bad passive dongle.
++				 */
++				if (sink_caps->dongle_type == DISPLAY_DONGLE_NONE)
++					return false;
++				else
++					return true;
++			} else {
++				return false;
++			}
+ 		}
+ 
+ 		if (is_dp_branch_device(link))
+-- 
+2.55.0
+

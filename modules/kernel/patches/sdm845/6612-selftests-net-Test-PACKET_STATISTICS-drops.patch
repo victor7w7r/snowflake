@@ -1,0 +1,169 @@
+From 1451e5302941988cc2da2d2c0bc3e2f7b9f93451 Mon Sep 17 00:00:00 2001
+From: Joe Damato <joe@dama.to>
+Date: Mon, 20 Jul 2026 05:27:11 -0700
+Subject: [PATCH 06612/15333] selftests/net: Test PACKET_STATISTICS drops
+
+Extend psock_snd to test drops by setting a tiny receive buffer and
+sending a large burst of packets.
+
+Signed-off-by: Joe Damato <joe@dama.to>
+Reviewed-by: Willem de Bruijn <willemb@google.com>
+Link: https://patch.msgid.link/20260720122714.759175-3-joe@dama.to
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ tools/testing/selftests/net/psock_snd.c  | 48 ++++++++++++++++++++----
+ tools/testing/selftests/net/psock_snd.sh |  5 +++
+ 2 files changed, 46 insertions(+), 7 deletions(-)
+
+diff --git a/tools/testing/selftests/net/psock_snd.c b/tools/testing/selftests/net/psock_snd.c
+index 5be481a3d2bd..81096df5cffc 100644
+--- a/tools/testing/selftests/net/psock_snd.c
++++ b/tools/testing/selftests/net/psock_snd.c
+@@ -39,6 +39,7 @@ static bool	cfg_use_gso;
+ static bool	cfg_use_qdisc_bypass;
+ static bool	cfg_use_vlan;
+ static bool	cfg_use_vnet;
++static bool	cfg_drop;
+ 
+ static char	*cfg_ifname = "lo";
+ static int	cfg_mtu	= 1500;
+@@ -49,6 +50,8 @@ static uint16_t	cfg_port = 8000;
+ /* test sending up to max mtu + 1 */
+ #define TEST_SZ	(sizeof(struct virtio_net_hdr) + ETH_HLEN + ETH_MAX_MTU + 1)
+ 
++#define BURST_CNT (1000)
++
+ static char tbuf[TEST_SZ], rbuf[TEST_SZ];
+ 
+ static unsigned long add_csum_hword(const uint16_t *start, int num_u16)
+@@ -212,13 +215,14 @@ static void do_send(int fd, char *buf, int len)
+ 	if (ret != len)
+ 		error(1, 0, "write: %u %u", ret, len);
+ 
+-	fprintf(stderr, "tx: %u\n", ret);
++	if (!cfg_drop)
++		fprintf(stderr, "tx: %u\n", ret);
+ }
+ 
+ static int do_tx(void)
+ {
+ 	const int one = 1;
+-	int fd, len;
++	int i, fd, len;
+ 
+ 	fd = socket(PF_PACKET, cfg_use_dgram ? SOCK_DGRAM : SOCK_RAW, 0);
+ 	if (fd == -1)
+@@ -242,6 +246,10 @@ static int do_tx(void)
+ 
+ 	do_send(fd, tbuf, len);
+ 
++	if (cfg_drop)
++		for (i = 0; i < BURST_CNT; i++)
++			do_send(fd, tbuf, len);
++
+ 	if (close(fd))
+ 		error(1, errno, "close t");
+ 
+@@ -290,6 +298,7 @@ static void do_rx(int fd, int expected_len, char *expected)
+ static int setup_sniffer(void)
+ {
+ 	struct timeval tv = { .tv_usec = 100 * 1000 };
++	const int one = 1;
+ 	int fd;
+ 
+ 	fd = socket(PF_PACKET, SOCK_RAW, 0);
+@@ -299,6 +308,10 @@ static int setup_sniffer(void)
+ 	if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)))
+ 		error(1, errno, "setsockopt rcv timeout");
+ 
++	if (cfg_drop)
++		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &one, sizeof(one)))
++			error(1, errno, "setsockopt SO_RCVBUF");
++
+ 	pair_udp_setfilter(fd);
+ 	do_bind(fd);
+ 
+@@ -309,7 +322,7 @@ static void parse_opts(int argc, char **argv)
+ {
+ 	int c;
+ 
+-	while ((c = getopt(argc, argv, "bcCdgl:qt:vV")) != -1) {
++	while ((c = getopt(argc, argv, "bcCdDgl:qt:vV")) != -1) {
+ 		switch (c) {
+ 		case 'b':
+ 			cfg_use_bind = true;
+@@ -323,6 +336,9 @@ static void parse_opts(int argc, char **argv)
+ 		case 'd':
+ 			cfg_use_dgram = true;
+ 			break;
++		case 'D':
++			cfg_drop = true;
++			break;
+ 		case 'g':
+ 			cfg_use_gso = true;
+ 			break;
+@@ -367,11 +383,23 @@ static void check_packet_stats(int fd)
+ 	if (getsockopt(fd, SOL_PACKET, PACKET_STATISTICS, &st, &len))
+ 		error(1, errno, "getsockopt packet statistics");
+ 
+-	if (st.tp_packets != 1)
+-		error(1, 0, "stats: tp_packets %u != 1", st.tp_packets);
++	if (cfg_drop) {
++		/* PACKET_STATISTICS reports all packets seen (including
++		 * drops) in tp_packets
++		 */
++		if (st.tp_packets < st.tp_drops)
++			error(1, 0, "stats: tp_packets %u < tp_drops %u",
++			      st.tp_packets, st.tp_drops);
+ 
+-	if (st.tp_drops != 0)
+-		error(1, 0, "stats: tp_drops %u != 0", st.tp_drops);
++		if (st.tp_drops == 0)
++			error(1, 0, "stats: expected drops but tp_drops == 0");
++	} else {
++		if (st.tp_packets != 1)
++			error(1, 0, "stats: tp_packets %u != 1", st.tp_packets);
++
++		if (st.tp_drops != 0)
++			error(1, 0, "stats: tp_drops %u != 0", st.tp_drops);
++	}
+ 
+ 	/* verify clear on read */
+ 	memset(&st, 0xff, sizeof(st));
+@@ -396,6 +424,11 @@ static void run_test(void)
+ 
+ 	total_len = do_tx();
+ 
++	if (cfg_drop) {
++		check_packet_stats(fds);
++		goto out;
++	}
++
+ 	/* BPF filter accepts only this length, vlan changes MAC */
+ 	if (cfg_payload_len == DATA_LEN && !cfg_use_vlan) {
+ 		do_rx(fds, total_len - sizeof(struct virtio_net_hdr),
+@@ -405,6 +438,7 @@ static void run_test(void)
+ 
+ 	do_rx(fdr, cfg_payload_len, tbuf + total_len - cfg_payload_len);
+ 
++out:
+ 	if (close(fds))
+ 		error(1, errno, "close s");
+ 	if (close(fdr))
+diff --git a/tools/testing/selftests/net/psock_snd.sh b/tools/testing/selftests/net/psock_snd.sh
+index 1cbfeb5052ec..b6ef12fad5d5 100755
+--- a/tools/testing/selftests/net/psock_snd.sh
++++ b/tools/testing/selftests/net/psock_snd.sh
+@@ -92,4 +92,9 @@ echo "raw gso max size"
+ echo "raw gso max size + 1 (expected to fail)"
+ (! ./in_netns.sh ./psock_snd -v -c -g -l "${max_mss_exceeds}")
+ 
++# test drops statistics
++
++echo "test drops statistics"
++./in_netns.sh ./psock_snd -D
++
+ echo "OK. All tests passed"
+-- 
+2.55.0
+

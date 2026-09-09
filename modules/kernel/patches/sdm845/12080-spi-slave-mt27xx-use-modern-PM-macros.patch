@@ -1,0 +1,68 @@
+From abc34022d658ccd414665f507c0abb608f6ca97c Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:54 +0800
+Subject: [PATCH 12080/15333] spi: slave-mt27xx: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use #ifdef guards.
+
+This has the advantage of always compiling these functions in,
+independently of any Kconfig option. Thanks to that, bugs and other
+regressions are subsequently easier to catch.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-31-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-slave-mt27xx.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/spi/spi-slave-mt27xx.c b/drivers/spi/spi-slave-mt27xx.c
+index e60ab4c18bed..256b510fa676 100644
+--- a/drivers/spi/spi-slave-mt27xx.c
++++ b/drivers/spi/spi-slave-mt27xx.c
+@@ -471,7 +471,6 @@ static void mtk_spi_slave_remove(struct platform_device *pdev)
+ 	pm_runtime_disable(&pdev->dev);
+ }
+ 
+-#ifdef CONFIG_PM_SLEEP
+ static int mtk_spi_slave_suspend(struct device *dev)
+ {
+ 	struct spi_controller *ctlr = dev_get_drvdata(dev);
+@@ -508,9 +507,7 @@ static int mtk_spi_slave_resume(struct device *dev)
+ 
+ 	return ret;
+ }
+-#endif /* CONFIG_PM_SLEEP */
+ 
+-#ifdef CONFIG_PM
+ static int mtk_spi_slave_runtime_suspend(struct device *dev)
+ {
+ 	struct spi_controller *ctlr = dev_get_drvdata(dev);
+@@ -535,18 +532,17 @@ static int mtk_spi_slave_runtime_resume(struct device *dev)
+ 
+ 	return 0;
+ }
+-#endif /* CONFIG_PM */
+ 
+ static const struct dev_pm_ops mtk_spi_slave_pm = {
+-	SET_SYSTEM_SLEEP_PM_OPS(mtk_spi_slave_suspend, mtk_spi_slave_resume)
+-	SET_RUNTIME_PM_OPS(mtk_spi_slave_runtime_suspend,
+-			   mtk_spi_slave_runtime_resume, NULL)
++	SYSTEM_SLEEP_PM_OPS(mtk_spi_slave_suspend, mtk_spi_slave_resume)
++	RUNTIME_PM_OPS(mtk_spi_slave_runtime_suspend,
++		       mtk_spi_slave_runtime_resume, NULL)
+ };
+ 
+ static struct platform_driver mtk_spi_slave_driver = {
+ 	.driver = {
+ 		.name = "mtk-spi-slave",
+-		.pm	= &mtk_spi_slave_pm,
++		.pm	= pm_ptr(&mtk_spi_slave_pm),
+ 		.of_match_table = mtk_spi_slave_of_match,
+ 	},
+ 	.probe = mtk_spi_slave_probe,
+-- 
+2.55.0
+

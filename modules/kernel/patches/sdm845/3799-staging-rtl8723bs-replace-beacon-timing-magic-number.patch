@@ -1,0 +1,87 @@
+From 153ff286d098a0368d29b3a04b8f0559e18d2368 Mon Sep 17 00:00:00 2001
+From: Jad Keskes <inasj268@gmail.com>
+Date: Wed, 8 Jul 2026 16:09:30 +0100
+Subject: [PATCH 03799/15333] staging: rtl8723bs: replace beacon timing magic
+ numbers with named constants
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Break down the 0x6404 and 0x660F in rtl8723b_InitBeaconParameters()
+as requested by the TODO in the source.
+
+REG_TBTT_PROHIBIT (0x0540): 0x6404 = hold (0x64) and setup (0x04),
+both in 32us ticks.  Same layout as rtw88 (WLAN_TBTT_HOLD_TIME << 8 |
+WLAN_TBTT_PROHIBIT in rtw88.h).
+
+REG_BCNTCFG (0x0510): 0x660F is an EDCA-like register.  Lower byte is
+AIFS (0x0F = no contention before beacon), next nibble is CWmin (0x06),
+top nibble is CWmax (0x06).  Confirmed by rtl8192du/rtl8723ae in the
+tree which write 0x66FF (test chips) and 0x660F (production) — only
+AIFS varies, the CW byte stays 0x66.
+
+The out-of-tree driver that Dan linked in the TODO discussion was the
+reference for the bit assignments:
+Link: https://lore.kernel.org/all/aiGMXBNQ0TbIGbpP@stanley.mountain/
+
+Drop the TODO since this was the last thing it referenced.
+
+Signed-off-by: Jad Keskes <inasj268@gmail.com>
+Reviewed-by: Dan Carpenter <error27@gmail.com>
+Link: https://patch.msgid.link/20260708150930.1813224-1-inasj268@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c |  5 ++---
+ drivers/staging/rtl8723bs/include/rtl8723b_hal.h  | 13 +++++++++++++
+ 2 files changed, 15 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c b/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c
+index 58c9b5de4ae2..9fcff26ddd85 100644
+--- a/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c
++++ b/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c
+@@ -859,8 +859,7 @@ void rtl8723b_InitBeaconParameters(struct adapter *padapter)
+ 
+ 	rtw_write16(padapter, REG_BCN_CTRL, val16);
+ 
+-	/*  TODO: Remove these magic number */
+-	rtw_write16(padapter, REG_TBTT_PROHIBIT, 0x6404);/*  ms */
++	rtw_write16(padapter, REG_TBTT_PROHIBIT, TBTT_PROHIBIT_TIME_8723B);
+ 	/*  Firmware will control REG_DRVERLYINT when power saving is enable, */
+ 	/*  so don't set this register on STA mode. */
+ 	if (!check_fwstate(&padapter->mlmepriv, WIFI_STATION_STATE))
+@@ -869,7 +868,7 @@ void rtl8723b_InitBeaconParameters(struct adapter *padapter)
+ 
+ 	/*  Suggested by designer timchen. Change beacon AIFS to the largest number */
+ 	/*  because test chip does not contension before sending beacon. by tynli. 2009.11.03 */
+-	rtw_write16(padapter, REG_BCNTCFG, 0x660F);
++	rtw_write16(padapter, REG_BCNTCFG, BCNTCFG_8723B);
+ 
+ 	pHalData->RegBcnCtrlVal = rtw_read8(padapter, REG_BCN_CTRL);
+ 	pHalData->RegTxPause = rtw_read8(padapter, REG_TXPAUSE);
+diff --git a/drivers/staging/rtl8723bs/include/rtl8723b_hal.h b/drivers/staging/rtl8723bs/include/rtl8723b_hal.h
+index b6006110ad6b..aa7676828371 100644
+--- a/drivers/staging/rtl8723bs/include/rtl8723b_hal.h
++++ b/drivers/staging/rtl8723bs/include/rtl8723b_hal.h
+@@ -72,6 +72,19 @@ struct rt_firmware_hdr {
+ #define DRIVER_EARLY_INT_TIME_8723B  0x05
+ #define BCN_DMA_ATIME_INT_TIME_8723B 0x02
+ 
++/* REG_TBTT_PROHIBIT (0x0540) - TBTT prohibit hold/setup in 32us units */
++#define TBTT_PROHIBIT_SETUP_8723B 0x04
++#define TBTT_PROHIBIT_HOLD_8723B  0x64
++#define TBTT_PROHIBIT_TIME_8723B \
++	((TBTT_PROHIBIT_HOLD_8723B << 8) | TBTT_PROHIBIT_SETUP_8723B)
++
++/* REG_BCNTCFG (0x0510) - beacon AIFS, CWmin, CWmax (EDCA-like layout) */
++#define BCN_AIFS_8723B   0x0F
++#define BCN_CW_MIN_8723B 0x06
++#define BCN_CW_MAX_8723B 0x06
++#define BCNTCFG_8723B \
++	((BCN_CW_MAX_8723B << 12) | (BCN_CW_MIN_8723B << 8) | BCN_AIFS_8723B)
++
+ /* for 8723B */
+ /* TX 32K, RX 16K, Page size 128B for TX, 8B for RX */
+ #define PAGE_SIZE_TX_8723B 128
+-- 
+2.55.0
+

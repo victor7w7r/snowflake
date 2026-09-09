@@ -1,0 +1,171 @@
+From 4f104fc10a461684bbc72d51ffa56707749dc6fd Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Wed, 1 Jul 2026 18:31:47 +0300
+Subject: [PATCH 03409/15333] drm/i915/dp: Iterate configurations via link_caps
+ for SST DSC
+
+Use the link caps configuration iterator for DP SST link configuration
+computation for DSC mode. This is a step towards unifying configuration
+selection and iteration across connector types and between compute and
+fallback paths.
+
+The iteration preserves the DP SST connector rate/lane ordering used by
+the current code.
+
+This also allows removing the now unused common rate count helper.
+
+v2:
+- Rebase on changes using a filter object instead of a mask of
+  configuration indices.
+- Rebase on changes using an iteration object.
+
+Reviewed-by: Luca Coelho <luciano.coelho@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260701153204.4124150-19-imre.deak@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_dp.c       | 94 +++++++++----------
+ .../gpu/drm/i915/display/intel_dp_link_caps.c |  5 -
+ .../gpu/drm/i915/display/intel_dp_link_caps.h |  1 -
+ 3 files changed, 45 insertions(+), 55 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+index 163b1fbad0de..d9c31be6bab7 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
++++ b/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -1988,60 +1988,56 @@ static int dsc_compute_link_config(struct intel_dp *intel_dp,
+ 				   const struct link_config_limits *limits,
+ 				   int dsc_bpp_x16)
+ {
+-	struct intel_dp_link_caps *link_caps = intel_dp->link.caps;
+ 	const struct drm_display_mode *adjusted_mode = &pipe_config->hw.adjusted_mode;
+-	int link_rate, lane_count;
+-	int i;
++	struct intel_connector *connector = to_intel_connector(conn_state->connector);
++	struct intel_dp_link_caps *link_caps = intel_dp->link.caps;
++	struct intel_dp_link_caps_order order =
++		intel_dp_link_caps_connector_compute_order(connector);
++	struct intel_dp_link_config link_config;
++	struct intel_dp_link_caps_iter iter;
+ 
+-	for (i = 0; i < intel_dp_link_caps_num_common_rates(intel_dp->link.caps); i++) {
+-		link_rate = intel_dp_common_rate(link_caps, i);
+-		if (link_rate < limits->min_rate || link_rate > limits->max_rate)
+-			continue;
++	intel_dp_link_caps_iter_start(&iter, link_caps, order, limits->link_config_filter);
++	for_each_dp_link_config(&iter, &link_config) {
++		/*
++		 * FIXME: intel_dp_mtp_tu_compute_config() requires
++		 * ->lane_count and ->port_clock set before we know
++		 * they'll work. If we end up failing altogether,
++		 * they'll remain in crtc state. This shouldn't matter,
++		 * as we'd then bail out from compute config, but it's
++		 * just ugly.
++		 */
++		pipe_config->lane_count = link_config.lane_count;
++		pipe_config->port_clock = link_config.rate;
+ 
+-		for (lane_count = limits->min_lane_count;
+-		     lane_count <= limits->max_lane_count;
+-		     lane_count <<= 1) {
++		if (drm_dp_is_uhbr_rate(link_config.rate)) {
++			int ret;
+ 
+-			/*
+-			 * FIXME: intel_dp_mtp_tu_compute_config() requires
+-			 * ->lane_count and ->port_clock set before we know
+-			 * they'll work. If we end up failing altogether,
+-			 * they'll remain in crtc state. This shouldn't matter,
+-			 * as we'd then bail out from compute config, but it's
+-			 * just ugly.
+-			 */
+-			pipe_config->lane_count = lane_count;
+-			pipe_config->port_clock = link_rate;
+-
+-			if (drm_dp_is_uhbr_rate(link_rate)) {
+-				int ret;
+-
+-				ret = intel_dp_mtp_tu_compute_config(intel_dp,
+-								     pipe_config,
+-								     conn_state,
+-								     dsc_bpp_x16,
+-								     dsc_bpp_x16,
+-								     0, true);
+-				if (ret)
+-					continue;
+-			} else {
+-				unsigned long bw_overhead_flags =
+-					pipe_config->fec_enable ? DRM_DP_BW_OVERHEAD_FEC : 0;
+-				int line_slice_count =
+-					intel_dsc_line_slice_count(&pipe_config->dsc.slice_config);
+-
+-				if (!is_bw_sufficient_for_dsc_config(intel_dp,
+-								     link_rate, lane_count,
+-								     adjusted_mode->crtc_clock,
+-								     adjusted_mode->hdisplay,
+-								     line_slice_count,
+-								     dsc_bpp_x16,
+-								     bw_overhead_flags))
+-					continue;
+-			}
+-
+-			return 0;
++			ret = intel_dp_mtp_tu_compute_config(intel_dp,
++							     pipe_config,
++							     conn_state,
++							     dsc_bpp_x16,
++							     dsc_bpp_x16,
++							     0, true);
++			if (ret)
++				continue;
++		} else {
++			unsigned long bw_overhead_flags =
++				pipe_config->fec_enable ? DRM_DP_BW_OVERHEAD_FEC : 0;
++			int line_slice_count =
++				intel_dsc_line_slice_count(&pipe_config->dsc.slice_config);
++
++			if (!is_bw_sufficient_for_dsc_config(intel_dp,
++							     link_config.rate,
++							     link_config.lane_count,
++							     adjusted_mode->crtc_clock,
++							     adjusted_mode->hdisplay,
++							     line_slice_count,
++							     dsc_bpp_x16,
++							     bw_overhead_flags))
++				continue;
+ 		}
++
++		return 0;
+ 	}
+ 
+ 	return -EINVAL;
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+index 8dfb7f4f703b..4ce35b76afee 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+@@ -273,11 +273,6 @@ int intel_dp_max_common_rate(struct intel_dp_link_caps *link_caps)
+ 	return intel_dp_common_rate(link_caps, link_caps->num_rates - 1);
+ }
+ 
+-int intel_dp_link_caps_num_common_rates(struct intel_dp_link_caps *link_caps)
+-{
+-	return link_caps->num_rates;
+-}
+-
+ void intel_dp_link_caps_print_common_rates(struct intel_dp_link_caps *link_caps)
+ {
+ 	struct intel_display *display = to_intel_display(link_caps->dp);
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+index 07002d745d38..3c7e6c8d1ab1 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+@@ -124,7 +124,6 @@ int intel_dp_common_len_rate_limit(struct intel_dp_link_caps *link_caps,
+ int intel_dp_common_rate(struct intel_dp_link_caps *link_caps, int index);
+ int intel_dp_link_caps_common_rate_idx(struct intel_dp_link_caps *link_caps, int rate);
+ int intel_dp_max_common_rate(struct intel_dp_link_caps *link_caps);
+-int intel_dp_link_caps_num_common_rates(struct intel_dp_link_caps *link_caps);
+ 
+ void intel_dp_link_caps_print_common_rates(struct intel_dp_link_caps *link_caps);
+ 
+-- 
+2.55.0
+

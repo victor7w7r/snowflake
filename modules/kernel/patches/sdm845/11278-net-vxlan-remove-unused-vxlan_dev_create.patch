@@ -1,0 +1,101 @@
+From a5ae637f863dc3a5f14e6b478064715ec4c1ac87 Mon Sep 17 00:00:00 2001
+From: Ilya Maximets <i.maximets@ovn.org>
+Date: Tue, 4 Aug 2026 20:20:40 +0200
+Subject: [PATCH 11278/15333] net: vxlan: remove unused vxlan_dev_create
+
+The vport-vxlan in openvswitch was the last user and it is now gone.
+
+And we can now rename the internal function to have a better name.
+
+Signed-off-by: Ilya Maximets <i.maximets@ovn.org>
+Link: https://patch.msgid.link/20260804182049.2289754-7-i.maximets@ovn.org
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/vxlan/vxlan_core.c | 42 ++++------------------------------
+ include/net/vxlan.h            |  3 ---
+ 2 files changed, 4 insertions(+), 41 deletions(-)
+
+diff --git a/drivers/net/vxlan/vxlan_core.c b/drivers/net/vxlan/vxlan_core.c
+index 25e3fe1ee751..fd5505153d0b 100644
+--- a/drivers/net/vxlan/vxlan_core.c
++++ b/drivers/net/vxlan/vxlan_core.c
+@@ -3966,9 +3966,9 @@ static int vxlan_dev_configure(struct net *src_net, struct net_device *dev,
+ 	return 0;
+ }
+ 
+-static int __vxlan_dev_create(struct net *net, struct net_device *dev,
+-			      struct vxlan_config *conf,
+-			      struct netlink_ext_ack *extack)
++static int vxlan_dev_create(struct net *net, struct net_device *dev,
++			    struct vxlan_config *conf,
++			    struct netlink_ext_ack *extack)
+ {
+ 	struct vxlan_net *vn = net_generic(net, vxlan_net_id);
+ 	struct vxlan_dev *vxlan = netdev_priv(dev);
+@@ -4416,7 +4416,7 @@ static int vxlan_newlink(struct net_device *dev,
+ 	if (err)
+ 		return err;
+ 
+-	return __vxlan_dev_create(link_net, dev, &conf, extack);
++	return vxlan_dev_create(link_net, dev, &conf, extack);
+ }
+ 
+ static int vxlan_changelink(struct net_device *dev, struct nlattr *tb[],
+@@ -4700,40 +4700,6 @@ static struct rtnl_link_ops vxlan_link_ops __read_mostly = {
+ 	.get_link_net	= vxlan_get_link_net,
+ };
+ 
+-struct net_device *vxlan_dev_create(struct net *net, const char *name,
+-				    u8 name_assign_type,
+-				    struct vxlan_config *conf)
+-{
+-	struct nlattr *tb[IFLA_MAX + 1];
+-	struct net_device *dev;
+-	int err;
+-
+-	memset(&tb, 0, sizeof(tb));
+-
+-	dev = rtnl_create_link(net, name, name_assign_type,
+-			       &vxlan_link_ops, tb, NULL);
+-	if (IS_ERR(dev))
+-		return dev;
+-
+-	err = __vxlan_dev_create(net, dev, conf, NULL);
+-	if (err < 0) {
+-		free_netdev(dev);
+-		return ERR_PTR(err);
+-	}
+-
+-	err = rtnl_configure_link(dev, NULL, 0, NULL);
+-	if (err < 0) {
+-		LIST_HEAD(list_kill);
+-
+-		vxlan_dellink(dev, &list_kill);
+-		unregister_netdevice_many(&list_kill);
+-		return ERR_PTR(err);
+-	}
+-
+-	return dev;
+-}
+-EXPORT_SYMBOL_GPL(vxlan_dev_create);
+-
+ static void vxlan_handle_lowerdev_unregister(struct vxlan_net *vn,
+ 					     struct net_device *dev)
+ {
+diff --git a/include/net/vxlan.h b/include/net/vxlan.h
+index 6e64757151b8..7b8207505523 100644
+--- a/include/net/vxlan.h
++++ b/include/net/vxlan.h
+@@ -359,9 +359,6 @@ struct vxlan_dev {
+ 					 VXLAN_F_MC_ROUTE          |	\
+ 					 0)
+ 
+-struct net_device *vxlan_dev_create(struct net *net, const char *name,
+-				    u8 name_assign_type, struct vxlan_config *conf);
+-
+ static inline netdev_features_t vxlan_features_check(struct sk_buff *skb,
+ 						     netdev_features_t features)
+ {
+-- 
+2.55.0
+

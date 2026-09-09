@@ -1,0 +1,91 @@
+From 11d4f5e69fe25bc76e27eca75b4ef6f7aae53214 Mon Sep 17 00:00:00 2001
+From: Heiko Carstens <hca@linux.ibm.com>
+Date: Thu, 6 Aug 2026 15:00:49 +0200
+Subject: [PATCH 11351/15333] s390/dasd: Add __context_unsafe() attribute to
+ various functions
+
+Disable context analysis for various functions to get rid of context
+analysis compile time warnings using clang caused by conditional
+locking like e.g.:
+
+drivers/s390/block/dasd_eckd.c:1462:3:
+  warning: releasing mutex 'dasd_pe_handler_mutex' that was not held [-Wthread-safety-analysis]
+ 1462 |                 mutex_unlock(&dasd_pe_handler_mutex);
+      |                 ^
+
+Use __context_unsafe() to provide a short comment why context analysis is
+disabled for each function. It doesn't look like those functions can be
+easily reworked to get rid of conditional locking.
+Therefore disable context analysis for (only) those functions.
+
+Signed-off-by: Heiko Carstens <hca@linux.ibm.com>
+Acked-by: Stefan Haberland <sth@linux.ibm.com>
+Link: https://patch.msgid.link/20260806130050.2057443-2-hca@linux.ibm.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ drivers/s390/block/dasd_eckd.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/s390/block/dasd_eckd.c b/drivers/s390/block/dasd_eckd.c
+index bacf770c0e1f..b4dcef06edaa 100644
+--- a/drivers/s390/block/dasd_eckd.c
++++ b/drivers/s390/block/dasd_eckd.c
+@@ -1468,6 +1468,7 @@ static void dasd_eckd_path_available_action(struct dasd_device *device,
+ }
+ 
+ static void do_pe_handler_work(struct work_struct *work)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct pe_handler_work_data *data;
+ 	struct dasd_device *device;
+@@ -1501,6 +1502,7 @@ static void do_pe_handler_work(struct work_struct *work)
+ 
+ static int dasd_eckd_pe_handler(struct dasd_device *device,
+ 				__u8 tbvpm, __u8 fcsecpm)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct pe_handler_work_data *data;
+ 
+@@ -1601,6 +1603,7 @@ static int dasd_eckd_read_features(struct dasd_device *device)
+ 
+ /* Read Volume Information - Volume Storage Query */
+ static int dasd_eckd_read_vol_info(struct dasd_device *device)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct dasd_eckd_private *private = device->private;
+ 	struct dasd_psf_prssd_data *prssdp;
+@@ -5965,6 +5968,7 @@ dasd_eckd_fill_info(struct dasd_device * device,
+  */
+ static int
+ dasd_eckd_release(struct dasd_device *device)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct dasd_ccw_req *cqr;
+ 	int rc;
+@@ -6020,6 +6024,7 @@ dasd_eckd_release(struct dasd_device *device)
+  */
+ static int
+ dasd_eckd_reserve(struct dasd_device *device)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct dasd_ccw_req *cqr;
+ 	int rc;
+@@ -6074,6 +6079,7 @@ dasd_eckd_reserve(struct dasd_device *device)
+  */
+ static int
+ dasd_eckd_steal_lock(struct dasd_device *device)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct dasd_ccw_req *cqr;
+ 	int rc;
+@@ -6129,6 +6135,7 @@ dasd_eckd_steal_lock(struct dasd_device *device)
+  */
+ static int dasd_eckd_snid(struct dasd_device *device,
+ 			  void __user *argp)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct dasd_ccw_req *cqr;
+ 	int rc;
+-- 
+2.55.0
+

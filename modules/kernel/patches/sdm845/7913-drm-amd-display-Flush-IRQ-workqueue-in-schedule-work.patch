@@ -1,0 +1,105 @@
+From 4bba99a69a94528f7cd9477c6cbb849e0129fd35 Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Mon, 13 Jul 2026 11:34:47 -0600
+Subject: [PATCH 07913/15333] drm/amd/display: Flush IRQ workqueue in
+ schedule-work tests
+
+[WHAT]
+The tests dm_test_irq_schedule_work_queues_handler,
+dm_test_irq_schedule_work_requeue_fallback, and
+dm_test_irq_handler_dispatches_work relied on amdgpu_dm_irq_fini()
+running each pending low-context work item before freeing the
+handlers, and only checked the handler counts afterwards.
+
+amdgpu_dm_irq_fini() now cancels pending work with
+cancel_work_sync() instead of flushing it, so work that has not yet
+started never runs and the counts stay below the expected values,
+failing the tests.
+
+Flush the private DM IRQ workqueue (adev->dm.irq_wq) so the
+scheduled handlers complete, check the counts, then tear down.
+Flushing this driver-owned workqueue is allowed, unlike the
+system-wide workqueues.
+
+Fixes: 0d6453fd6e17 ("drm/amd/display: Fix DM IRQ teardown races")
+Cc: Geoffrey McRae <geoffrey.mcrae@amd.com>
+Reviewed-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Wayne Lin <wayne.lin@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../amdgpu_dm/tests/amdgpu_dm_irq_test.c      | 31 +++++++++++++------
+ 1 file changed, 22 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_irq_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_irq_test.c
+index ed20e278742d..dc7ef0523b8f 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_irq_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_irq_test.c
+@@ -1842,12 +1842,15 @@ static void dm_test_irq_schedule_work_queues_handler(struct kunit *test)
+ 	amdgpu_dm_irq_schedule_work(adev, DC_IRQ_SOURCE_HPD1);
+ 
+ 	/*
+-	 * Low-context work runs asynchronously on system_highpri_wq.
+-	 * amdgpu_dm_irq_fini() flushes each pending work item before freeing
+-	 * the handlers, so the handler is guaranteed to have run afterwards.
++	 * Low-context work runs asynchronously on the DM IRQ workqueue.
++	 * Flush it so the handler completes before we check the count;
++	 * amdgpu_dm_irq_fini() cancels (rather than runs) any work that is
++	 * still pending, so the flush must happen first.
+ 	 */
+-	amdgpu_dm_irq_fini(adev);
++	flush_workqueue(adev->dm.irq_wq);
+ 	KUNIT_EXPECT_EQ(test, count, 1);
++
++	amdgpu_dm_irq_fini(adev);
+ }
+ 
+ /**
+@@ -1858,7 +1861,7 @@ static void dm_test_irq_schedule_work_queues_handler(struct kunit *test)
+  * schedule before the work has run makes queue_work() fail for the
+  * still-pending item, forcing amdgpu_dm_irq_schedule_work() into the fallback
+  * that allocates and queues a fresh handler copy. Both work items run when
+- * amdgpu_dm_irq_fini() flushes the queue, so the handler fires twice.
++ * the DM IRQ workqueue is flushed, so the handler fires twice.
+  */
+ static void dm_test_irq_schedule_work_requeue_fallback(struct kunit *test)
+ {
+@@ -1880,8 +1883,15 @@ static void dm_test_irq_schedule_work_requeue_fallback(struct kunit *test)
+ 	amdgpu_dm_irq_schedule_work(adev, DC_IRQ_SOURCE_HPD1);
+ 	amdgpu_dm_irq_schedule_work(adev, DC_IRQ_SOURCE_HPD1);
+ 
+-	amdgpu_dm_irq_fini(adev);
++	/*
++	 * Flush the DM IRQ workqueue so both work items run before we check
++	 * the count; amdgpu_dm_irq_fini() would cancel any still-pending work
++	 * instead of running it.
++	 */
++	flush_workqueue(adev->dm.irq_wq);
+ 	KUNIT_EXPECT_EQ(test, count, 2);
++
++	amdgpu_dm_irq_fini(adev);
+ }
+ 
+ /* Tests for amdgpu_dm_set_hpd_irq_state() */
+@@ -3855,11 +3865,14 @@ static void dm_test_irq_handler_dispatches_work(struct kunit *test)
+ 	KUNIT_EXPECT_EQ(test, high_count, 1);
+ 
+ 	/*
+-	 * Low-context work runs asynchronously; amdgpu_dm_irq_fini() flushes
+-	 * each pending work item before freeing, so it has run afterwards.
++	 * Low-context work runs asynchronously; flush the DM IRQ workqueue so
++	 * it completes before we check the count. amdgpu_dm_irq_fini() cancels
++	 * any still-pending work rather than running it.
+ 	 */
+-	amdgpu_dm_irq_fini(adev);
++	flush_workqueue(adev->dm.irq_wq);
+ 	KUNIT_EXPECT_EQ(test, low_count, 1);
++
++	amdgpu_dm_irq_fini(adev);
+ }
+ 
+ /* Tests for dm_handle_vmin_vmax_update() */
+-- 
+2.55.0
+

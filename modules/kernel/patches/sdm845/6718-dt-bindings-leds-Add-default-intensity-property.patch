@@ -1,0 +1,72 @@
+From 2ebd1cb772b00d1223895718155a03af4c56f396 Mon Sep 17 00:00:00 2001
+From: Jonas Rebmann <jre@pengutronix.de>
+Date: Mon, 13 Jul 2026 10:50:28 +0200
+Subject: [PATCH 06718/15333] dt-bindings: leds: Add default-intensity property
+
+Document the default-intensity property to set a default color on
+multicolor LEDs.
+
+Update pwm-multicolor to support it and update the example to turn the
+LED red on boot.
+
+Signed-off-by: Jonas Rebmann <jre@pengutronix.de>
+Acked-by: Conor Dooley <conor.dooley@microchip.com>
+Link: https://patch.msgid.link/20260713-multicolor-default-v3-1-fb43f3f789cf@pengutronix.de
+Signed-off-by: Lee Jones <lee@kernel.org>
+---
+ Documentation/devicetree/bindings/leds/common.yaml     | 10 ++++++++++
+ .../devicetree/bindings/leds/leds-pwm-multicolor.yaml  |  4 ++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/leds/common.yaml b/Documentation/devicetree/bindings/leds/common.yaml
+index e148b4277a6f..a0ef2f2f0724 100644
+--- a/Documentation/devicetree/bindings/leds/common.yaml
++++ b/Documentation/devicetree/bindings/leds/common.yaml
+@@ -73,6 +73,16 @@ properties:
+       - keep
+     default: off
+ 
++  default-intensity:
++    description:
++      The initial intensity of the LED color component. As the intensity of
++      each sub-LED is multiplied with the overall brightness, without this
++      property on a sub-LED, it may effectively be initialized at minimum
++      brightness regardless of its linux,default-trigger and default-brightness
++      properties.
++    $ref: /schemas/types.yaml#/definitions/uint32
++    default: 0
++
+   linux,default-trigger:
+     description:
+       This parameter, if present, is a string defining the trigger assigned to
+diff --git a/Documentation/devicetree/bindings/leds/leds-pwm-multicolor.yaml b/Documentation/devicetree/bindings/leds/leds-pwm-multicolor.yaml
+index a31a202afe5c..7bf687c89411 100644
+--- a/Documentation/devicetree/bindings/leds/leds-pwm-multicolor.yaml
++++ b/Documentation/devicetree/bindings/leds/leds-pwm-multicolor.yaml
+@@ -45,6 +45,8 @@ properties:
+ 
+           color: true
+ 
++          default-intensity: true
++
+         required:
+           - pwms
+           - color
+@@ -63,12 +65,14 @@ examples:
+ 
+         multi-led {
+             color = <LED_COLOR_ID_RGB>;
++            linux,default-trigger = "default-on";
+             function = LED_FUNCTION_INDICATOR;
+             max-brightness = <65535>;
+ 
+             led-red {
+                 pwms = <&pwm1 0 1000000>;
+                 color = <LED_COLOR_ID_RED>;
++                default-intensity = <65535>;
+             };
+ 
+             led-green {
+-- 
+2.55.0
+

@@ -1,0 +1,56 @@
+From fa6222d5e1219468301370c8b316f9b729ee600b Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Thu, 2 Jul 2026 01:45:55 +0000
+Subject: [PATCH 03845/15333] ASoC: audio-graph-card2: tidyup
+ simple_util_parse_xxx() in audio_graph2_parse_of()
+
+audio_graph2_parse_of() calls simple_util_parse_xxx(), but are random.
+Let's gather them all in one place.
+
+Let's keep same style with simple-card/audio-graph-card.
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Link: https://patch.msgid.link/874iiixiy5.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/generic/audio-graph-card2.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/sound/soc/generic/audio-graph-card2.c b/sound/soc/generic/audio-graph-card2.c
+index 4dee28276671..9ef7373a6ca6 100644
+--- a/sound/soc/generic/audio-graph-card2.c
++++ b/sound/soc/generic/audio-graph-card2.c
+@@ -1344,12 +1344,16 @@ int audio_graph2_parse_of(struct simple_util_priv *priv, struct device *dev,
+ 	if (ret < 0)
+ 		goto end;
+ 
+-	memset(li, 0, sizeof(*li));
+-	ret = graph_for_each_link(priv, hooks, li, graph_link);
++	ret = simple_util_parse_card_name(priv, NULL);
+ 	if (ret < 0)
+ 		goto err;
+ 
+-	ret = simple_util_parse_card_name(priv, NULL);
++	ret = simple_util_parse_aux_devs(priv, NULL);
++	if (ret < 0)
++		goto err;
++
++	memset(li, 0, sizeof(*li));
++	ret = graph_for_each_link(priv, hooks, li, graph_link);
+ 	if (ret < 0)
+ 		goto err;
+ 
+@@ -1363,10 +1367,6 @@ int audio_graph2_parse_of(struct simple_util_priv *priv, struct device *dev,
+ 
+ 	simple_util_debug_info(priv);
+ 
+-	ret = simple_util_parse_aux_devs(priv, NULL);
+-	if (ret < 0)
+-		goto err;
+-
+ 	ret = devm_snd_soc_register_card(dev, card);
+ err:
+ 	if (ret < 0) {
+-- 
+2.55.0
+

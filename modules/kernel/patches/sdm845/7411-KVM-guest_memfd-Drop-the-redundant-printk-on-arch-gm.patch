@@ -1,0 +1,46 @@
+From 0f68fabe68fe138a5c00310ba7935dc849ab111d Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Thu, 23 Jul 2026 14:08:06 -0700
+Subject: [PATCH 07411/15333] KVM: guest_memfd: Drop the redundant printk on
+ arch gmem_prepare() failure
+
+Drop guest_memfd's ratelimited printk to log "preparation" failures, as KVM
+SNP already logs more precise messages in all error paths, and whether or
+not failure to convert the pfn to private is "unexpected", i.e. warrants
+logging, is firmly an architecture specific detail.
+
+Reviewed-by: Ackerley Tng <ackerleytng@google.com>
+Reviewed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Reviewed-by: Fuad Tabba <fuad.tabba@linux.dev>
+Link: https://patch.msgid.link/20260723210811.72720-5-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ virt/kvm/guest_memfd.c | 10 +++-------
+ 1 file changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/virt/kvm/guest_memfd.c b/virt/kvm/guest_memfd.c
+index c086cfcd0257..3e4273f60a8c 100644
+--- a/virt/kvm/guest_memfd.c
++++ b/virt/kvm/guest_memfd.c
+@@ -66,15 +66,11 @@ static int __kvm_gmem_prepare_folio(struct kvm *kvm, struct kvm_memory_slot *slo
+ #ifdef CONFIG_HAVE_KVM_ARCH_GMEM_PREPARE
+ 	kvm_pfn_t pfn = folio_file_pfn(folio, index);
+ 	gfn_t gfn = slot->base_gfn + index - slot->gmem.pgoff;
+-	int rc = kvm_arch_gmem_prepare(kvm, gfn, pfn, folio_order(folio));
+-	if (rc) {
+-		pr_warn_ratelimited("gmem: Failed to prepare folio for index %lx GFN %llx PFN %llx error %d.\n",
+-				    index, gfn, pfn, rc);
+-		return rc;
+-	}
+-#endif
+ 
++	return kvm_arch_gmem_prepare(kvm, gfn, pfn, folio_order(folio));
++#else
+ 	return 0;
++#endif
+ }
+ 
+ /*
+-- 
+2.55.0
+

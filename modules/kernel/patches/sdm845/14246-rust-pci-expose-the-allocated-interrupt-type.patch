@@ -1,0 +1,88 @@
+From 3b5ea0f078e1b72276e99c237f3dfc2fd72938bb Mon Sep 17 00:00:00 2001
+From: Danilo Krummrich <dakr@kernel.org>
+Date: Thu, 13 Aug 2026 18:52:05 +0200
+Subject: [PATCH 14246/15333] rust: pci: expose the allocated interrupt type
+
+Add irq_type() on IrqVectorRegistration and IrqVector, wrapping the new
+pci_irq_type() C function. A driver whose interrupt acknowledgment
+depends on the type (MSI-X vs MSI vs INTx) queries it here rather than
+assuming which type the PCI core selected.
+
+Tested-by: John Hubbard <jhubbard@nvidia.com>
+Suggested-by: John Hubbard <jhubbard@nvidia.com>
+Link: https://lore.kernel.org/all/20260808031120.363869-4-jhubbard@nvidia.com/
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Link: https://patch.msgid.link/20260813165234.620555-6-dakr@kernel.org
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/helpers/pci.c     |  5 +++++
+ rust/kernel/pci/irq.rs | 23 +++++++++++++++++++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/rust/helpers/pci.c b/rust/helpers/pci.c
+index e44905317d75..23b06becb448 100644
+--- a/rust/helpers/pci.c
++++ b/rust/helpers/pci.c
+@@ -24,6 +24,11 @@ __rust_helper bool rust_helper_dev_is_pci(const struct device *dev)
+ 	return dev_is_pci(dev);
+ }
+ 
++__rust_helper unsigned int rust_helper_pci_irq_type(struct pci_dev *pdev)
++{
++	return pci_irq_type(pdev);
++}
++
+ #ifndef CONFIG_PCI_MSI
+ __rust_helper int rust_helper_pci_alloc_irq_vectors(struct pci_dev *dev,
+ 						    unsigned int min_vecs,
+diff --git a/rust/kernel/pci/irq.rs b/rust/kernel/pci/irq.rs
+index b6d1699ee3eb..6741046ec1c0 100644
+--- a/rust/kernel/pci/irq.rs
++++ b/rust/kernel/pci/irq.rs
+@@ -33,6 +33,16 @@ const fn as_raw(self) -> u32 {
+             IrqType::MsiX => bindings::PCI_IRQ_MSIX,
+         }
+     }
++
++    /// Construct from raw value.
++    #[inline]
++    const fn from_raw(raw: u32) -> Self {
++        match raw {
++            bindings::PCI_IRQ_MSIX => IrqType::MsiX,
++            bindings::PCI_IRQ_MSI => IrqType::Msi,
++            _ => IrqType::Intx,
++        }
++    }
+ }
+ 
+ /// Set of IRQ types that can be used for PCI interrupt allocation.
+@@ -90,6 +100,12 @@ unsafe fn new(request: IrqRequest<'a>, reg: &'a IrqVectorRegistration<'a>) -> Se
+     pub fn vectors(&self) -> &'a IrqVectorRegistration<'a> {
+         self.reg
+     }
++
++    /// Returns the interrupt type the PCI core selected for this vector's allocation.
++    #[inline]
++    pub fn irq_type(&self) -> IrqType {
++        self.reg.irq_type()
++    }
+ }
+ 
+ impl<'a> From<IrqVector<'a>> for IrqRequest<'a> {
+@@ -122,6 +138,13 @@ pub fn len(&self) -> usize {
+         self.len.get()
+     }
+ 
++    /// Returns the interrupt type the PCI core selected for this allocation.
++    #[inline]
++    pub fn irq_type(&self) -> IrqType {
++        // SAFETY: `self.dev.as_raw()` is a valid pointer to a `struct pci_dev`.
++        IrqType::from_raw(unsafe { bindings::pci_irq_type(self.dev.as_raw()) })
++    }
++
+     /// Returns the [`IrqVector`] at `index`.
+     ///
+     /// Returns [`EINVAL`] if the `index` is out of bounds for the length reported by
+-- 
+2.55.0
+

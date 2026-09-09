@@ -1,0 +1,56 @@
+From d5760123484ba05767913cd03cc7588939ec27a5 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Wed, 22 Jul 2026 11:43:31 +0800
+Subject: [PATCH 08601/15333] serial: mvebu-uart: Remove redundant dev_err()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() automatically logs
+detailed error messages on failure. Remove the now-redundant
+driver-specific dev_err() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://patch.msgid.link/20260722034342.316755-4-panchuang@vivo.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/mvebu-uart.c | 12 ++----------
+ 1 file changed, 2 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/tty/serial/mvebu-uart.c b/drivers/tty/serial/mvebu-uart.c
+index 8e52be2b34ea..33ea496c93b2 100644
+--- a/drivers/tty/serial/mvebu-uart.c
++++ b/drivers/tty/serial/mvebu-uart.c
+@@ -404,29 +404,21 @@ static int mvebu_uart_startup(struct uart_port *port)
+ 		ret = devm_request_irq(port->dev, mvuart->irq[UART_IRQ_SUM],
+ 				       mvebu_uart_isr, port->irqflags,
+ 				       dev_name(port->dev), port);
+-		if (ret) {
+-			dev_err(port->dev, "unable to request IRQ %d\n",
+-				mvuart->irq[UART_IRQ_SUM]);
++		if (ret)
+ 			return ret;
+-		}
+ 	} else {
+ 		/* New bindings with an IRQ for RX and TX (both UART) */
+ 		ret = devm_request_irq(port->dev, mvuart->irq[UART_RX_IRQ],
+ 				       mvebu_uart_rx_isr, port->irqflags,
+ 				       dev_name(port->dev), port);
+-		if (ret) {
+-			dev_err(port->dev, "unable to request IRQ %d\n",
+-				mvuart->irq[UART_RX_IRQ]);
++		if (ret)
+ 			return ret;
+-		}
+ 
+ 		ret = devm_request_irq(port->dev, mvuart->irq[UART_TX_IRQ],
+ 				       mvebu_uart_tx_isr, port->irqflags,
+ 				       dev_name(port->dev),
+ 				       port);
+ 		if (ret) {
+-			dev_err(port->dev, "unable to request IRQ %d\n",
+-				mvuart->irq[UART_TX_IRQ]);
+ 			devm_free_irq(port->dev, mvuart->irq[UART_RX_IRQ],
+ 				      port);
+ 			return ret;
+-- 
+2.55.0
+

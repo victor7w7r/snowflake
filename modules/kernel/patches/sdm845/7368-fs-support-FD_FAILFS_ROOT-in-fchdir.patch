@@ -1,0 +1,101 @@
+From cdf930a00949af72fbe9a22da2a8efa77981baa7 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Fri, 24 Jul 2026 15:41:18 +0200
+Subject: [PATCH 07368/15333] fs: support FD_FAILFS_ROOT in fchdir()
+
+Add a new file descriptor sentinel FD_FAILFS_ROOT following
+FD_PIDFS_ROOT and FD_NSFS_ROOT and teach fchdir() to accept it. A
+process calling fchdir(FD_FAILFS_ROOT) moves its working directory
+into failfs. Every AT_FDCWD-relative lookup afterwards fails with
+EOPNOTSUPP including "." and ".." and getcwd() reports the working
+directory as unreachable from the process root by returning a path
+prefixed with "(unreachable)". Lookups relative to explicit directory
+file descriptors are unaffected.
+
+The sentinel is the only way in. No privilege or gating is required.
+Setting the working directory to a directory in which every operation
+fails grants nothing and loses nothing that closing file descriptors
+couldn't lose. An unlinked working directory behaves the same way today
+modulo errno. The working directory also plays no role in confining ".."
+resolution so no boundary is weakened.
+
+Link: https://patch.msgid.link/20260724-work-failfs-v2-2-485dabbae185@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/failfs.c                | 11 +++++++++++
+ fs/internal.h              |  1 +
+ fs/open.c                  |  5 ++++-
+ include/uapi/linux/fcntl.h |  1 +
+ 4 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/fs/failfs.c b/fs/failfs.c
+index d0ca1fc6c459..66a36da3d236 100644
+--- a/fs/failfs.c
++++ b/fs/failfs.c
+@@ -3,6 +3,7 @@
+ #include <linux/fs.h>
+ #include <linux/fs/super_types.h>
+ #include <linux/fs_context.h>
++#include <linux/fs_struct.h>
+ #include <linux/magic.h>
+ #include <linux/mount.h>
+ 
+@@ -135,6 +136,16 @@ static int failfs_init_fs_context(struct fs_context *fc)
+ 	return 0;
+ }
+ 
++int failfs_current_chdir(void)
++{
++	struct path path;
++
++	failfs_get_root(&path);
++	set_fs_pwd(current->fs, &path);
++	path_put(&path);
++	return 0;
++}
++
+ static struct file_system_type failfs_fs_type = {
+ 	.name			= "failfs",
+ 	.init_fs_context	= failfs_init_fs_context,
+diff --git a/fs/internal.h b/fs/internal.h
+index ce7f12c5a65b..67aa0444351b 100644
+--- a/fs/internal.h
++++ b/fs/internal.h
+@@ -365,3 +365,4 @@ void nsfs_get_root(struct path *path);
+ void failfs_get_root(struct path *path);
+ void __init failfs_init(void);
+ bool failfs_mnt(const struct vfsmount *mnt);
++int failfs_current_chdir(void);
+diff --git a/fs/open.c b/fs/open.c
+index 408925d7bd0b..56b6032d4d81 100644
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -570,9 +570,12 @@ SYSCALL_DEFINE1(chdir, const char __user *, filename)
+ 
+ SYSCALL_DEFINE1(fchdir, unsigned int, fd)
+ {
+-	CLASS(fd_raw, f)(fd);
+ 	int error;
+ 
++	if ((int)fd == FD_FAILFS_ROOT)
++		return failfs_current_chdir();
++
++	CLASS(fd_raw, f)(fd);
+ 	if (fd_empty(f))
+ 		return -EBADF;
+ 
+diff --git a/include/uapi/linux/fcntl.h b/include/uapi/linux/fcntl.h
+index aadfbf6e0cb3..e43e3de3e9ee 100644
+--- a/include/uapi/linux/fcntl.h
++++ b/include/uapi/linux/fcntl.h
+@@ -124,6 +124,7 @@ struct delegation {
+ 
+ #define FD_PIDFS_ROOT			-10002 /* Root of the pidfs filesystem */
+ #define FD_NSFS_ROOT			-10003 /* Root of the nsfs filesystem */
++#define FD_FAILFS_ROOT			-10004 /* Root of the failfs filesystem */
+ #define FD_INVALID			-10009 /* Invalid file descriptor: -10000 - EBADF = -10009 */
+ 
+ /* Generic flags for the *at(2) family of syscalls. */
+-- 
+2.55.0
+

@@ -1,0 +1,85 @@
+From 2bb54b49e9d522f54dc9c0fe10ba40fbc56041c8 Mon Sep 17 00:00:00 2001
+From: Qingfang Deng <qingfang.deng@linux.dev>
+Date: Mon, 27 Jul 2026 11:28:00 +0800
+Subject: [PATCH 08041/15333] ppp: convert chan_sem to a mutex
+
+chan_sem's read-side lock is taken under another mutex, so there is no
+benefit in keeping it as an rwsem. Replace the rwsem with a mutex.
+
+Signed-off-by: Qingfang Deng <qingfang.deng@linux.dev>
+Link: https://patch.msgid.link/20260727032802.4090-1-qingfang.deng@linux.dev
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ppp/ppp_generic.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/net/ppp/ppp_generic.c b/drivers/net/ppp/ppp_generic.c
+index cacc4c3a37d2..08bb89765487 100644
+--- a/drivers/net/ppp/ppp_generic.c
++++ b/drivers/net/ppp/ppp_generic.c
+@@ -39,7 +39,6 @@
+ #include <linux/ip.h>
+ #include <linux/tcp.h>
+ #include <linux/spinlock.h>
+-#include <linux/rwsem.h>
+ #include <linux/stddef.h>
+ #include <linux/device.h>
+ #include <linux/mutex.h>
+@@ -176,7 +175,7 @@ struct channel {
+ 	struct ppp_file	file;		/* stuff for read/write/poll */
+ 	struct list_head list;		/* link in all/new_channels list */
+ 	struct ppp_channel *chan;	/* public channel data structure */
+-	struct rw_semaphore chan_sem;	/* protects `chan' during chan ioctl */
++	struct mutex chan_sem;		/* protects `chan' during chan ioctl */
+ 	spinlock_t	downl;		/* protects `chan', file.xq dequeue */
+ 	struct ppp __rcu *ppp;		/* ppp unit we're connected to */
+ 	struct net	*chan_net;	/* the net channel belongs to */
+@@ -788,12 +787,12 @@ static long ppp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+ 			break;
+ 
+ 		default:
+-			down_read(&pch->chan_sem);
++			mutex_lock(&pch->chan_sem);
+ 			chan = pch->chan;
+ 			err = -ENOTTY;
+ 			if (chan && chan->ops->ioctl)
+ 				err = chan->ops->ioctl(chan, cmd, arg);
+-			up_read(&pch->chan_sem);
++			mutex_unlock(&pch->chan_sem);
+ 		}
+ 		goto out;
+ 	}
+@@ -2922,7 +2921,7 @@ int ppp_register_net_channel(struct net *net, struct ppp_channel *chan)
+ #ifdef CONFIG_PPP_MULTILINK
+ 	pch->lastseq = -1;
+ #endif /* CONFIG_PPP_MULTILINK */
+-	init_rwsem(&pch->chan_sem);
++	mutex_init(&pch->chan_sem);
+ 	spin_lock_init(&pch->downl);
+ 	spin_lock_init(&pch->upl);
+ 
+@@ -3005,11 +3004,11 @@ ppp_unregister_channel(struct ppp_channel *chan)
+ 	 * the channel's start_xmit or ioctl routine before we proceed.
+ 	 */
+ 	ppp_disconnect_channel(pch);
+-	down_write(&pch->chan_sem);
++	mutex_lock(&pch->chan_sem);
+ 	spin_lock_bh(&pch->downl);
+ 	pch->chan = NULL;
+ 	spin_unlock_bh(&pch->downl);
+-	up_write(&pch->chan_sem);
++	mutex_unlock(&pch->chan_sem);
+ 
+ 	pn = ppp_pernet(pch->chan_net);
+ 	spin_lock_bh(&pn->all_channels_lock);
+@@ -3600,6 +3599,7 @@ static void ppp_release_channel(struct channel *pch)
+ 		pr_err("ppp: destroying undead channel %p !\n", pch);
+ 		return;
+ 	}
++	mutex_destroy(&pch->chan_sem);
+ 	call_rcu(&pch->rcu, ppp_release_channel_free);
+ }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,32 @@
+From e46185c13953500ed868751b944a96974eaca923 Mon Sep 17 00:00:00 2001
+From: Yury Norov <ynorov@nvidia.com>
+Date: Wed, 8 Jul 2026 22:03:10 -0400
+Subject: [PATCH 06604/15333] media: s5p-mfc: Treat bitmap size as allocation
+ failure
+
+bitmap_find_next_zero_area() uses an out-of-range return value to
+indicate failure. Check for values greater than or equal to the bitmap
+size so the caller does not depend on the exact failure sentinel.
+
+Acked-by: Marek Szyprowski <m.szyprowski@samsung.com>
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ drivers/media/platform/samsung/s5p-mfc/s5p_mfc_opr.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/samsung/s5p-mfc/s5p_mfc_opr.c b/drivers/media/platform/samsung/s5p-mfc/s5p_mfc_opr.c
+index 5ba791fa3676..b25ad2a37196 100644
+--- a/drivers/media/platform/samsung/s5p-mfc/s5p_mfc_opr.c
++++ b/drivers/media/platform/samsung/s5p-mfc/s5p_mfc_opr.c
+@@ -43,7 +43,7 @@ int s5p_mfc_alloc_priv_buf(struct s5p_mfc_dev *dev, unsigned int mem_ctx,
+ 
+ 	if (dev->mem_virt) {
+ 		start = bitmap_find_next_zero_area(dev->mem_bitmap, bits, 0, count, align);
+-		if (start > bits)
++		if (start >= bits)
+ 			goto no_mem;
+ 
+ 		bitmap_set(dev->mem_bitmap, start, count);
+-- 
+2.55.0
+

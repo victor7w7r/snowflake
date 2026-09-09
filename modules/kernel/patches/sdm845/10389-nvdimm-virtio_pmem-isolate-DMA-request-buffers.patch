@@ -1,0 +1,56 @@
+From 926e727970a9e95d31cb5ad83d55de5754d2be84 Mon Sep 17 00:00:00 2001
+From: Li Chen <me@linux.beauty>
+Date: Tue, 30 Jun 2026 17:23:35 +0800
+Subject: [PATCH 10389/15333] nvdimm: virtio_pmem: isolate DMA request buffers
+
+The virtio-pmem request object stores wait queues, flags, and list
+pointers next to buffers mapped for virtqueue DMA. The response buffer is
+mapped DMA_FROM_DEVICE, so non-coherent DMA invalidation must not share a
+cache line with CPU-owned fields.
+
+Keep the request buffer outside the DMA-from-device group and wrap only
+the response buffer with __dma_from_device_group_begin/end.
+
+Signed-off-by: Li Chen <me@linux.beauty>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Message-ID: <20260630092338.2094628-11-me@linux.beauty>
+---
+ drivers/nvdimm/virtio_pmem.h | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/nvdimm/virtio_pmem.h b/drivers/nvdimm/virtio_pmem.h
+index 3af92588bd9d..8843a8b96587 100644
+--- a/drivers/nvdimm/virtio_pmem.h
++++ b/drivers/nvdimm/virtio_pmem.h
+@@ -10,6 +10,7 @@
+ #ifndef _LINUX_VIRTIO_PMEM_H
+ #define _LINUX_VIRTIO_PMEM_H
+ 
++#include <linux/dma-mapping.h>
+ #include <linux/module.h>
+ #include <uapi/linux/virtio_pmem.h>
+ #include <linux/kref.h>
+@@ -20,8 +21,6 @@
+ 
+ struct virtio_pmem_request {
+ 	struct kref kref;
+-	struct virtio_pmem_req req;
+-	struct virtio_pmem_resp resp;
+ 
+ 	/* Wait queue to process deferred work after ack from host */
+ 	wait_queue_head_t host_acked;
+@@ -31,6 +30,11 @@ struct virtio_pmem_request {
+ 	wait_queue_head_t wq_buf;
+ 	bool wq_buf_avail;
+ 	struct list_head list;
++
++	struct virtio_pmem_req req;
++	__dma_from_device_group_begin(resp);
++	struct virtio_pmem_resp resp;
++	__dma_from_device_group_end(resp);
+ };
+ 
+ struct virtio_pmem {
+-- 
+2.55.0
+

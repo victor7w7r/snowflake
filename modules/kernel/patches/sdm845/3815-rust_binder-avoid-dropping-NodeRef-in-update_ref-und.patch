@@ -1,0 +1,64 @@
+From 521eae8326a18cbf7fb4640dcfb2d1396423d1ab Mon Sep 17 00:00:00 2001
+From: Alice Ryhl <aliceryhl@google.com>
+Date: Mon, 15 Jun 2026 12:36:42 +0000
+Subject: [PATCH 03815/15333] rust_binder: avoid dropping NodeRef in
+ update_ref() under lock
+
+In preparation for changing the node_refs lock to a spinlock, move the
+cleanup of NodeRefInfo in update_ref() so that it occurs without the
+node_refs lock held. This avoids dropping an Arc<Node> with the lock
+held. Furthermore, the NodeDeath field is kept in the NodeRefInfo to be
+dropped outside the lock as well.
+
+The removal from the rbtree is updated to use remove_node(), which keeps
+the rbtree node allocation until after node_refs is unlocked as well.
+This is not strictly necessary as it just moves a kfree() outside the
+lock, but there's no reason to invoke the kfree() under the lock if we
+can easily avoid it, so avoid it.
+
+Reviewed-by: Matthew Maurer <mmaurer@google.com>
+Signed-off-by: Alice Ryhl <aliceryhl@google.com>
+Link: https://patch.msgid.link/20260615-binder-noderefs-spin-v3-2-3235f5a3e0a0@google.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/android/binder/process.rs | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/android/binder/process.rs b/drivers/android/binder/process.rs
+index 99d1a7ade599..73a2582c4d9c 100644
+--- a/drivers/android/binder/process.rs
++++ b/drivers/android/binder/process.rs
+@@ -942,13 +942,17 @@ pub(crate) fn update_ref(
+ 
+         // To preserve original binder behaviour, we only fail requests where the manager tries to
+         // increment references on itself.
++        let _to_free_by_handle;
++        let _to_free_by_node;
+         let mut refs = self.node_refs.lock();
+         if let Some(info) = refs.by_handle.get_mut(&handle) {
+             if info.node_ref().update(inc, strong) {
+                 // Clean up death if there is one attached to this node reference.
+-                if let Some(death) = info.death().take() {
++                //
++                // We remove the entire `info` below, so no need to remove `death` from `info`.
++                if let Some(death) = info.death().as_ref() {
+                     death.set_cleared(true);
+-                    self.remove_from_delivered_deaths(&death);
++                    self.remove_from_delivered_deaths(death);
+                 }
+ 
+                 // Remove reference from process tables, and from the node's `refs` list.
+@@ -957,8 +961,8 @@ pub(crate) fn update_ref(
+                 unsafe { info.node_ref2().node.remove_node_info(info) };
+ 
+                 let id = info.node_ref().node.global_id();
+-                refs.by_handle.remove(&handle);
+-                refs.by_node.remove(&id);
++                _to_free_by_handle = refs.by_handle.remove_node(&handle);
++                _to_free_by_node = refs.by_node.remove_node(&id);
+                 refs.handle_is_present.release_id(handle as usize);
+ 
+                 if let Some(shrink) = refs.handle_is_present.shrink_request() {
+-- 
+2.55.0
+

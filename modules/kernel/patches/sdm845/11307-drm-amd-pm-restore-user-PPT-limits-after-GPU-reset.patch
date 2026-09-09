@@ -1,0 +1,45 @@
+From cf9fa4d4d0334b04cde3436f0ae0d3c5bb97cae8 Mon Sep 17 00:00:00 2001
+From: Yang Wang <kevinyang.wang@amd.com>
+Date: Fri, 31 Jul 2026 06:07:20 +0800
+Subject: [PATCH 11307/15333] drm/amd/pm: restore user PPT limits after GPU
+ reset
+
+GPU reset reinitializes PMFW and reloads the platform power table. The
+saved user policy remains valid, but suspend-only restore does not run
+because adev->in_suspend is clear.
+
+Restore the active PPT policy from SMU late initialization while the
+device is in reset recovery. Route each value through the common range
+validation and ASIC setter before updating PMFW.
+
+Signed-off-by: Yang Wang <kevinyang.wang@amd.com>
+Reviewed-by: Kenneth Feng <kenneth.feng@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+index 7a3aabeac05d..cca32f74abf0 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+@@ -28,6 +28,7 @@
+ #include <linux/reboot.h>
+ 
+ #include "amdgpu.h"
++#include "amdgpu_reset.h"
+ #include "amdgpu_smu.h"
+ #include "smu_internal.h"
+ #include "atom.h"
+@@ -994,7 +995,7 @@ static int smu_late_init(struct amdgpu_ip_block *ip_block)
+ 		return ret;
+ 	}
+ 
+-	if (adev->in_suspend)
++	if (adev->in_suspend || amdgpu_reset_in_recovery(adev))
+ 		smu_restore_ppt_limits(smu, false);
+ 	smu_restore_dpm_user_profile(smu);
+ 
+-- 
+2.55.0
+

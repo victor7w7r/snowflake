@@ -1,0 +1,72 @@
+From 0ab32c1c2b6db53a39c742b9ea5d488dca57cde2 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:07:27 +0800
+Subject: [PATCH 10549/15333] spi: cadence-xspi: only use readsq/writesq under
+ 64BIT
+
+Currently, cadence-xspi depends on 64BIT. This dependency isn't from
+cadence xspi controller itself, but from marvell support code and 64bit
+slave dma interface performance optimization.
+
+readsq and writesq are only available under 64BIT. For 32BIT platforms,
+we can fallback to ioread32_rep/iowrite32_rep. So we can remove another
+reason of the 64BIT dependency.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803140728.12747-4-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-cadence-xspi.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/spi/spi-cadence-xspi.c b/drivers/spi/spi-cadence-xspi.c
+index 784619f17b40..39c868a5b171 100644
+--- a/drivers/spi/spi-cadence-xspi.c
++++ b/drivers/spi/spi-cadence-xspi.c
+@@ -454,18 +454,20 @@ static inline void cdns_xspi_sdma_read(struct cdns_xspi_dev *cdns_xspi, size_t l
+ 	void *buf = cdns_xspi->in_buffer;
+ 	size_t offset = 0;
+ 
+-	if (cdns_xspi->dma_data_width == 4) {
++	if (!IS_ENABLED(CONFIG_64BIT) || cdns_xspi->dma_data_width == 4) {
+ 		if (IS_ALIGNED((uintptr_t)src, 4) && IS_ALIGNED((uintptr_t)buf, 4)) {
+ 			ioread32_rep(src, buf, len >> 2);
+ 			offset = len & ~0x3;
+ 			len -= offset;
+ 		}
++#ifdef CONFIG_64BIT
+ 	} else {
+ 		if (IS_ALIGNED((uintptr_t)src, 8) && IS_ALIGNED((uintptr_t)buf, 8)) {
+ 			readsq(src, buf, len >> 3);
+ 			offset = len & ~0x7;
+ 			len -= offset;
+ 		}
++#endif
+ 	}
+ 	ioread8_rep(src, (u8 *)buf + offset, len);
+ }
+@@ -476,18 +478,20 @@ static inline void cdns_xspi_sdma_write(struct cdns_xspi_dev *cdns_xspi, size_t
+ 	const void *buf = cdns_xspi->out_buffer;
+ 	size_t offset = 0;
+ 
+-	if (cdns_xspi->dma_data_width == 4) {
++	if (!IS_ENABLED(CONFIG_64BIT) || cdns_xspi->dma_data_width == 4) {
+ 		if (IS_ALIGNED((uintptr_t)dst, 4) && IS_ALIGNED((uintptr_t)buf, 4)) {
+ 			iowrite32_rep(dst, buf, len >> 2);
+ 			offset = len & ~0x3;
+ 			len -= offset;
+ 		}
++#ifdef CONFIG_64BIT
+ 	} else {
+ 		if (IS_ALIGNED((uintptr_t)dst, 8) && IS_ALIGNED((uintptr_t)buf, 8)) {
+ 			writesq(dst, buf, len >> 3);
+ 			offset = len & ~0x7;
+ 			len -= offset;
+ 		}
++#endif
+ 	}
+ 	iowrite8_rep(dst, (const u8 *)buf + offset, len);
+ }
+-- 
+2.55.0
+

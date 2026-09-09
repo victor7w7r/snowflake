@@ -1,0 +1,63 @@
+From d0ab37b02826fc4b2b78cb3f47416cc2dbbd9e7e Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Thu, 2 Jul 2026 01:45:32 +0000
+Subject: [PATCH 03842/15333] ASoC: simple_card_utils: add
+ simple_util_parse_aux_devs()
+
+We are using snd_soc_of_parse_aux_devs() directly, but can use
+simple_util_parse_property(). use it.
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Link: https://patch.msgid.link/878q7uxiyr.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/simple_card_utils.h     | 5 +++++
+ sound/soc/generic/audio-graph-card2.c | 2 +-
+ sound/soc/generic/simple-card.c       | 2 +-
+ 3 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/include/sound/simple_card_utils.h b/include/sound/simple_card_utils.h
+index dfa1b5fb7aa8..ff9747c6aa49 100644
+--- a/include/sound/simple_card_utils.h
++++ b/include/sound/simple_card_utils.h
+@@ -210,6 +210,11 @@ static inline int simple_util_parse_pin_switches(struct simple_util_priv *priv,
+ 					  prefix, "pin-switches");
+ }
+ 
++static inline int simple_util_parse_aux_devs(struct simple_util_priv *priv, char *prefix)
++{
++	return simple_util_parse_property(priv, snd_soc_of_parse_aux_devs,
++					  prefix, "aux-devs");
++}
+ 
+ int simple_util_init_jack(struct snd_soc_card *card,
+ 			       struct simple_util_jack *sjack,
+diff --git a/sound/soc/generic/audio-graph-card2.c b/sound/soc/generic/audio-graph-card2.c
+index b4ae9bb860a1..4dee28276671 100644
+--- a/sound/soc/generic/audio-graph-card2.c
++++ b/sound/soc/generic/audio-graph-card2.c
+@@ -1363,7 +1363,7 @@ int audio_graph2_parse_of(struct simple_util_priv *priv, struct device *dev,
+ 
+ 	simple_util_debug_info(priv);
+ 
+-	ret = snd_soc_of_parse_aux_devs(card, "aux-devs");
++	ret = simple_util_parse_aux_devs(priv, NULL);
+ 	if (ret < 0)
+ 		goto err;
+ 
+diff --git a/sound/soc/generic/simple-card.c b/sound/soc/generic/simple-card.c
+index 6e432733649f..4dd05e726213 100644
+--- a/sound/soc/generic/simple-card.c
++++ b/sound/soc/generic/simple-card.c
+@@ -720,7 +720,7 @@ static int simple_parse_of(struct simple_util_priv *priv)
+ 	if (ret < 0)
+ 		goto err;
+ 
+-	ret = snd_soc_of_parse_aux_devs(card, PREFIX "aux-devs");
++	ret = simple_util_parse_aux_devs(priv, PREFIX);
+ 	if (ret < 0)
+ 		goto err;
+ 
+-- 
+2.55.0
+

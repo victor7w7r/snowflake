@@ -1,0 +1,51 @@
+From 524381ef281bb886f215ac9341b3c2e5b59ec178 Mon Sep 17 00:00:00 2001
+From: Yonatan Nachum <ynachum@amazon.com>
+Date: Wed, 22 Jul 2026 11:33:31 +0000
+Subject: [PATCH 06693/15333] RDMA/efa: Expose 64-bit send WR ID support to
+ userspace
+
+Currently EFA WRs support 16-bit request ID, this requires EFA to manage
+a translation table to translate the IB WR ID from 64-bits to 16-bits
+and translating it back on CQ completion.
+Expose a new device capability to handle 64-bit request ID for SQ WRs
+allowing userspace to directly post the 64-bit ID to the device.
+
+Reviewed-by: Michael Margolin <mrgolin@amazon.com>
+Reviewed-by: Tom Sela <tomsela@amazon.com>
+Signed-off-by: Yonatan Nachum <ynachum@amazon.com>
+Link: https://patch.msgid.link/20260722113331.2515247-3-ynachum@amazon.com
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/hw/efa/efa_verbs.c | 3 +++
+ include/uapi/rdma/efa-abi.h           | 1 +
+ 2 files changed, 4 insertions(+)
+
+diff --git a/drivers/infiniband/hw/efa/efa_verbs.c b/drivers/infiniband/hw/efa/efa_verbs.c
+index 73a80caca7e2..6abb93b50731 100644
+--- a/drivers/infiniband/hw/efa/efa_verbs.c
++++ b/drivers/infiniband/hw/efa/efa_verbs.c
+@@ -272,6 +272,9 @@ int efa_query_device(struct ib_device *ibdev,
+ 		if (EFA_DEV_CAP(dev, EVENT_COUNTERS))
+ 			resp.device_caps |= EFA_QUERY_DEVICE_CAPS_COMP_CNTR;
+ 
++		if (EFA_DEV_CAP(dev, SQ_64_BIT_REQ_ID))
++			resp.device_caps |= EFA_QUERY_DEVICE_CAPS_SQ_64_BIT_REQ_ID;
++
+ 		if (dev->neqs)
+ 			resp.device_caps |= EFA_QUERY_DEVICE_CAPS_CQ_NOTIFICATIONS;
+ 
+diff --git a/include/uapi/rdma/efa-abi.h b/include/uapi/rdma/efa-abi.h
+index 5d3d01b6333e..2094b4bcc5cf 100644
+--- a/include/uapi/rdma/efa-abi.h
++++ b/include/uapi/rdma/efa-abi.h
+@@ -136,6 +136,7 @@ enum {
+ 	EFA_QUERY_DEVICE_CAPS_UNSOLICITED_WRITE_RECV = 1 << 6,
+ 	EFA_QUERY_DEVICE_CAPS_CQ_WITH_EXT_MEM = 1 << 7,
+ 	EFA_QUERY_DEVICE_CAPS_COMP_CNTR = 1 << 8,
++	EFA_QUERY_DEVICE_CAPS_SQ_64_BIT_REQ_ID = 1 << 9,
+ };
+ 
+ struct efa_ibv_ex_query_device_resp {
+-- 
+2.55.0
+

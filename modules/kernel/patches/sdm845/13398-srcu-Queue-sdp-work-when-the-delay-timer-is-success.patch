@@ -1,0 +1,54 @@
+From 78a38cbf6f20bc8247e93d1149f97c12dba9fbfb Mon Sep 17 00:00:00 2001
+From: Zqiang <qiang.zhang@linux.dev>
+Date: Thu, 9 Jul 2026 18:06:02 +0800
+Subject: [PATCH 13398/15333] srcu: Queue sdp->work when the delay timer is
+ successfully deleted
+
+In the cleanup_srcu_struct() function, when iterating over per-cpu's
+srcu_data, timer_delete_sync(&sdp->delay_work) is called to cancel the
+delayed work before doing flush_work(&sdp->work).
+
+However, suppose that timer_delete_sync() returns 1, which means that it
+successfully deleted an pending timer before it had a chance to fire.
+But this also means that the sdp->work will not be queued, so that the
+subsequent flush_work(&sdp->work) will returns immediately without waiting
+for anything.  Taken together, all of this means that any recently queued
+SRCU callbacks to not be invoked, which can result in memory leaks,
+hangs, or worse.
+
+Fix this by checking the return value of timer_delete_sync(), if it
+returns 1, explicitly queue sdp->work so that the callbacks will be
+invoked and the following flush_work() will correctly wait for all of
+those callbacks to finish executing.
+
+[ Zqiang: Apply feedback from Breno Leitao and kernel test robot. ]
+
+Signed-off-by: Zqiang <qiang.zhang@linux.dev>
+Tested-by: kernel test robot <oliver.sang@intel.com>
+Reviewed-by: Frederic Weisbecker <frederic@kernel.org>
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ kernel/rcu/srcutree.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/rcu/srcutree.c b/kernel/rcu/srcutree.c
+index 4a00e90e17fc..02a101824f12 100644
+--- a/kernel/rcu/srcutree.c
++++ b/kernel/rcu/srcutree.c
+@@ -701,7 +701,12 @@ void cleanup_srcu_struct(struct srcu_struct *ssp)
+ 	for_each_possible_cpu(cpu) {
+ 		struct srcu_data *sdp = per_cpu_ptr(ssp->sda, cpu);
+ 
+-		timer_delete_sync(&sdp->delay_work);
++		// Call srcu_barrier() before this cleanup_srcu_struct()
++		// to avoid triggering this WARN_ON().
++		if (WARN_ON(timer_delete_sync(&sdp->delay_work) &&
++			    rcu_segcblist_n_cbs(&sdp->srcu_cblist)) &&
++		    rcu_cpu_beenfullyonline(sdp->cpu))
++			queue_work_on(sdp->cpu, rcu_gp_wq, &sdp->work);
+ 		flush_work(&sdp->work);
+ 		if (WARN_ON(rcu_segcblist_n_cbs(&sdp->srcu_cblist)))
+ 			return; /* Forgot srcu_barrier(), so just leak it! */
+-- 
+2.55.0
+

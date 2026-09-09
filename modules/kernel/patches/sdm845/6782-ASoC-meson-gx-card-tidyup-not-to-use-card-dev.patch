@@ -1,0 +1,54 @@
+From 138a0faeaca4384e0324865c1e41b199e5f8d406 Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Thu, 23 Jul 2026 04:11:55 +0000
+Subject: [PATCH 06782/15333] ASoC: meson: gx-card: tidyup not to use card->dev
+
+struct snd_soc_card will be capsuled soon, its member will not be
+able to access from non soc-card.c.
+
+To reduce the difference during conversion, replace dev.
+
+	- card->dev, ...
+	+ dev, ...
+
+No functional change, but is preparation for Card capsuling.
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Reviewed-by: Jerome Brunet <jbrunet@baylibre.com>
+Link: https://patch.msgid.link/878q72tkdw.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/meson/gx-card.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/meson/gx-card.c b/sound/soc/meson/gx-card.c
+index b408cc2bbc91..932be0a09306 100644
+--- a/sound/soc/meson/gx-card.c
++++ b/sound/soc/meson/gx-card.c
+@@ -48,9 +48,10 @@ static int gx_card_parse_i2s(struct snd_soc_card *card,
+ 	struct meson_card *priv = snd_soc_card_get_drvdata(card);
+ 	struct snd_soc_dai_link *link = &card->dai_link[*index];
+ 	struct gx_dai_link_i2s_data *be;
++	struct device *dev = card->dev;
+ 
+ 	/* Allocate i2s link parameters */
+-	be = devm_kzalloc(card->dev, sizeof(*be), GFP_KERNEL);
++	be = devm_kzalloc(dev, sizeof(*be), GFP_KERNEL);
+ 	if (!be)
+ 		return -ENOMEM;
+ 	priv->link_data[*index] = be;
+@@ -81,9 +82,10 @@ static int gx_card_add_link(struct snd_soc_card *card, struct device_node *np,
+ {
+ 	struct snd_soc_dai_link *dai_link = &card->dai_link[*index];
+ 	struct snd_soc_dai_link_component *cpu;
++	struct device *dev = card->dev;
+ 	int ret;
+ 
+-	cpu = devm_kzalloc(card->dev, sizeof(*cpu), GFP_KERNEL);
++	cpu = devm_kzalloc(dev, sizeof(*cpu), GFP_KERNEL);
+ 	if (!cpu)
+ 		return -ENOMEM;
+ 
+-- 
+2.55.0
+

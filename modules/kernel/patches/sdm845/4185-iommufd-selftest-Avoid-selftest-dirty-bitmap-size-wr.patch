@@ -1,0 +1,57 @@
+From 4132ba2ae2cf14c289e3fabc1c95ac244d643356 Mon Sep 17 00:00:00 2001
+From: Samuel Moelius <sam.moelius@trailofbits.com>
+Date: Sun, 28 Jun 2026 15:23:32 +0000
+Subject: [PATCH 04185/15333] iommufd/selftest: Avoid selftest dirty bitmap
+ size wrap
+
+IOMMU_TEST_OP_DIRTY sizes its temporary dirty bitmap from length /
+page_size.  Very large selftest ranges can make the DIV_ROUND_UP()
+additions wrap before allocation, producing a zero-length allocation while
+the later test_bit() loop still walks the original number of bits.
+
+The selftest helper does not need to support unbounded dirty bitmap sizes.
+Reject requests that would allocate more than SZ_16M for the temporary
+buffer.
+
+Fixes: 79ea4a496ab5 ("iommufd/selftest: Fix buffer read overrrun in the dirty test")
+Link: https://patch.msgid.link/r/20260628152331.82122.408afd7b466c.iommufd-test-dirty-bitmap-size-wrap@trailofbits.com
+Assisted-by: Codex:gpt-5.5-cyber-preview
+Signed-off-by: Samuel Moelius <sam.moelius@trailofbits.com>
+Signed-off-by: Jason Gunthorpe <jgg@nvidia.com>
+---
+ drivers/iommu/iommufd/selftest.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/iommufd/selftest.c b/drivers/iommu/iommufd/selftest.c
+index af07c642a526..7ee9441c25c3 100644
+--- a/drivers/iommu/iommufd/selftest.c
++++ b/drivers/iommu/iommufd/selftest.c
+@@ -12,6 +12,7 @@
+ #include <linux/iommu.h>
+ #include <linux/platform_device.h>
+ #include <linux/slab.h>
++#include <linux/sizes.h>
+ #include <linux/xarray.h>
+ #include <uapi/linux/iommufd.h>
+ #include <linux/generic_pt/iommu.h>
+@@ -1695,6 +1696,9 @@ static int iommufd_test_dirty(struct iommufd_ucmd *ucmd, unsigned int mockpt_id,
+ 	if (!page_size || !length || iova % page_size || length % page_size ||
+ 	    !uptr)
+ 		return -EINVAL;
++	max = length / page_size;
++	if (max > SZ_16M * BITS_PER_BYTE)
++		return -EOVERFLOW;
+ 
+ 	hwpt = get_md_pagetable(ucmd, mockpt_id, &mock);
+ 	if (IS_ERR(hwpt))
+@@ -1705,7 +1709,6 @@ static int iommufd_test_dirty(struct iommufd_ucmd *ucmd, unsigned int mockpt_id,
+ 		goto out_put;
+ 	}
+ 
+-	max = length / page_size;
+ 	tmp = kvzalloc(DIV_ROUND_UP(max, BITS_PER_LONG) * sizeof(unsigned long),
+ 		       GFP_KERNEL_ACCOUNT);
+ 	if (!tmp) {
+-- 
+2.55.0
+

@@ -1,0 +1,109 @@
+From aabaf84560e0737eeba0927395d04a813cbec8c0 Mon Sep 17 00:00:00 2001
+From: Alex Williamson <alex.williamson@nvidia.com>
+Date: Wed, 5 Aug 2026 00:20:58 +0000
+Subject: [PATCH 13016/15333] vfio: selftests: Add helpers to re-enable
+ interrupts
+
+Selftest drivers that recover from a fault by issuing VFIO_DEVICE_RESET
+need to re-arm device interrupts afterwards.  VFIO_DEVICE_RESET tears
+down the kernel-side IRQ trigger so a subsequent VFIO_DEVICE_SET_IRQS
+is required, but the user-side eventfds (and any fd cached in a test
+fixture) are still valid and must be preserved.
+
+vfio_pci_irq_enable() refuses to be called for vectors that already
+have an eventfd (VFIO_ASSERT_LT), and vfio_pci_irq_disable() closes
+all eventfds before resetting the trigger, so neither is suitable.
+
+Add vfio_pci_irq_reenable(device, index, vector, count) which asserts
+that the requested range has existing eventfds and re-issues
+VFIO_DEVICE_SET_IRQS using them.  Signature mirrors vfio_pci_irq_enable().
+
+Add vfio_pci_msi{,x}_reenable() wrappers around vfio_pci_irq_reenable()
+for additional ease of use and readability.
+
+Assisted-by: Claude:claude-opus-4-7
+Signed-off-by: Alex Williamson <alex.williamson@nvidia.com>
+Reviewed-by: David Matlack <dmatlack@google.com>
+Acked-by: David Matlack <dmatlack@google.com>
+Link: https://lore.kernel.org/r/20260805-igb_v3_b4-v10-1-9c86dc849c0d@google.com
+Signed-off-by: Alex Williamson <alex@shazbot.org>
+---
+ .../lib/include/libvfio/vfio_pci_device.h     | 14 ++++++++++++
+ .../selftests/vfio/lib/vfio_pci_device.c      | 22 +++++++++++++++++++
+ 2 files changed, 36 insertions(+)
+
+diff --git a/tools/testing/selftests/vfio/lib/include/libvfio/vfio_pci_device.h b/tools/testing/selftests/vfio/lib/include/libvfio/vfio_pci_device.h
+index 59acef381d05..89a039ab3075 100644
+--- a/tools/testing/selftests/vfio/lib/include/libvfio/vfio_pci_device.h
++++ b/tools/testing/selftests/vfio/lib/include/libvfio/vfio_pci_device.h
+@@ -84,6 +84,8 @@ static inline void vfio_pci_cmd_clear(struct vfio_pci_device *device, u16 bits)
+ void vfio_pci_irq_enable(struct vfio_pci_device *device, u32 index,
+ 			 u32 vector, int count);
+ void vfio_pci_irq_disable(struct vfio_pci_device *device, u32 index);
++void vfio_pci_irq_reenable(struct vfio_pci_device *device, u32 index,
++			   u32 vector, int count);
+ void vfio_pci_irq_trigger(struct vfio_pci_device *device, u32 index, u32 vector);
+ 
+ static inline void fcntl_set_nonblock(int fd)
+@@ -108,6 +110,12 @@ static inline void vfio_pci_msi_disable(struct vfio_pci_device *device)
+ 	vfio_pci_irq_disable(device, VFIO_PCI_MSI_IRQ_INDEX);
+ }
+ 
++static inline void vfio_pci_msi_reenable(struct vfio_pci_device *device,
++					 u32 vector, int count)
++{
++	vfio_pci_irq_reenable(device, VFIO_PCI_MSI_IRQ_INDEX, vector, count);
++}
++
+ static inline void vfio_pci_msix_enable(struct vfio_pci_device *device,
+ 					u32 vector, int count)
+ {
+@@ -119,6 +127,12 @@ static inline void vfio_pci_msix_disable(struct vfio_pci_device *device)
+ 	vfio_pci_irq_disable(device, VFIO_PCI_MSIX_IRQ_INDEX);
+ }
+ 
++static inline void vfio_pci_msix_reenable(struct vfio_pci_device *device,
++					  u32 vector, int count)
++{
++	vfio_pci_irq_reenable(device, VFIO_PCI_MSIX_IRQ_INDEX, vector, count);
++}
++
+ static inline int __to_iova(struct vfio_pci_device *device, void *vaddr, iova_t *iova)
+ {
+ 	return __iommu_hva2iova(device->iommu, vaddr, iova);
+diff --git a/tools/testing/selftests/vfio/lib/vfio_pci_device.c b/tools/testing/selftests/vfio/lib/vfio_pci_device.c
+index 28868343f2ab..65a4fffb480c 100644
+--- a/tools/testing/selftests/vfio/lib/vfio_pci_device.c
++++ b/tools/testing/selftests/vfio/lib/vfio_pci_device.c
+@@ -105,6 +105,28 @@ void vfio_pci_irq_disable(struct vfio_pci_device *device, u32 index)
+ 	vfio_pci_irq_set(device, index, 0, 0, NULL);
+ }
+ 
++/*
++ * Re-issue VFIO_DEVICE_SET_IRQS for an already-enabled vector range using
++ * the existing eventfds.  Intended for drivers that need to re-arm device
++ * interrupts after a VFIO_DEVICE_RESET, which tears down the kernel-side
++ * IRQ trigger but leaves user-side eventfds intact.  Recreating the
++ * eventfds would invalidate any test-fixture cache of the fd, so this
++ * helper deliberately preserves them.
++ */
++void vfio_pci_irq_reenable(struct vfio_pci_device *device, u32 index,
++			   u32 vector, int count)
++{
++	int i;
++
++	check_supported_irq_index(index);
++
++	for (i = vector; i < vector + count; i++)
++		VFIO_ASSERT_GE(device->msi_eventfds[i], 0,
++			       "vector %d eventfd not allocated\n", i);
++
++	vfio_pci_irq_set(device, index, vector, count, device->msi_eventfds + vector);
++}
++
+ static void vfio_pci_irq_get(struct vfio_pci_device *device, u32 index,
+ 			     struct vfio_irq_info *irq_info)
+ {
+-- 
+2.55.0
+

@@ -1,0 +1,80 @@
+From b8d2262b966a068dc567e72d493230f4ba62cc4a Mon Sep 17 00:00:00 2001
+From: Stanislav Fomichev <sdf.kernel@gmail.com>
+Date: Thu, 2 Jul 2026 15:41:48 -0700
+Subject: [PATCH 02924/15333] net: rtnetlink: take instance lock inside
+ rtnl_configure_link
+
+rtnl_configure_link calls __dev_change_flags() and __dev_notify_flags,
+both need the instance lock. rtnl_newlink_create grabs it but stacked
+devices do not. Move the lock inside rtnl_configure_link.
+
+Signed-off-by: Stanislav Fomichev <sdf@fomichev.me>
+Link: https://patch.msgid.link/20260702224150.3730033-5-sdf@fomichev.me
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ net/core/rtnetlink.c | 17 ++++++++++-------
+ 1 file changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/net/core/rtnetlink.c b/net/core/rtnetlink.c
+index 12aa3aa1688b..1b7d6f6b8b68 100644
+--- a/net/core/rtnetlink.c
++++ b/net/core/rtnetlink.c
+@@ -3660,14 +3660,16 @@ int rtnl_configure_link(struct net_device *dev, const struct ifinfomsg *ifm,
+ 			u32 portid, const struct nlmsghdr *nlh)
+ {
+ 	unsigned int old_flags, changed;
+-	int err;
++	int err = 0;
++
++	netdev_lock_ops(dev);
+ 
+ 	old_flags = dev->flags;
+ 	if (ifm && (ifm->ifi_flags || ifm->ifi_change)) {
+ 		err = __dev_change_flags(dev, rtnl_dev_combine_flags(dev, ifm),
+ 					 NULL);
+ 		if (err < 0)
+-			return err;
++			goto out;
+ 	}
+ 
+ 	changed = old_flags ^ dev->flags;
+@@ -3677,7 +3679,10 @@ int rtnl_configure_link(struct net_device *dev, const struct ifinfomsg *ifm,
+ 	}
+ 
+ 	__dev_notify_flags(dev, old_flags, changed, portid, nlh);
+-	return 0;
++
++out:
++	netdev_unlock_ops(dev);
++	return err;
+ }
+ EXPORT_SYMBOL(rtnl_configure_link);
+ 
+@@ -3918,22 +3923,20 @@ static int rtnl_newlink_create(struct sk_buff *skb, struct ifinfomsg *ifm,
+ 		goto out;
+ 	}
+ 
+-	netdev_lock_ops(dev);
+-
+ 	err = rtnl_configure_link(dev, ifm, portid, nlh);
+ 	if (err < 0)
+ 		goto out_unregister;
+ 	if (tb[IFLA_MASTER]) {
++		netdev_lock_ops(dev);
+ 		err = do_set_master(dev, nla_get_u32(tb[IFLA_MASTER]), extack);
++		netdev_unlock_ops(dev);
+ 		if (err)
+ 			goto out_unregister;
+ 	}
+ 
+-	netdev_unlock_ops(dev);
+ out:
+ 	return err;
+ out_unregister:
+-	netdev_unlock_ops(dev);
+ 	if (ops->newlink) {
+ 		LIST_HEAD(list_kill);
+ 
+-- 
+2.55.0
+

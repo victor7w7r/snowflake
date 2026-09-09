@@ -1,0 +1,74 @@
+From 2ac1d4de8e5113b8b40bd22374ff51a5cd95dd9e Mon Sep 17 00:00:00 2001
+From: Masi Osmani <mas-i@hotmail.de>
+Date: Thu, 12 Mar 2026 11:38:00 +0100
+Subject: [PATCH 06525/15333] wifi: carl9170: rx: track PHY errors via debugfs
+
+Count PHY errors reported by the hardware in the RX status and
+expose the counter through debugfs as rx_phy_errors.  Previously,
+PHY errors from ar9170_rx_phystatus were silently ignored (marked
+with a TODO comment).
+
+The counter helps diagnose RF environment issues (interference,
+multipath, low SNR) without requiring monitor mode or additional
+tooling.
+
+Signed-off-by: Masi Osmani <mas-i@hotmail.de>
+Acked-by: Christian Lamparter <chunkeey@gmail.com>
+Link: https://patch.msgid.link/AM7PPF5613FA0B6B42814E38096301FE9429444A@AM7PPF5613FA0B6.EURP251.PROD.OUTLOOK.COM
+Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
+---
+ drivers/net/wireless/ath/carl9170/carl9170.h | 1 +
+ drivers/net/wireless/ath/carl9170/debug.c    | 2 ++
+ drivers/net/wireless/ath/carl9170/rx.c       | 4 +++-
+ 3 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/wireless/ath/carl9170/carl9170.h b/drivers/net/wireless/ath/carl9170/carl9170.h
+index b13685e22a0d..e66e3e2ae952 100644
+--- a/drivers/net/wireless/ath/carl9170/carl9170.h
++++ b/drivers/net/wireless/ath/carl9170/carl9170.h
+@@ -381,6 +381,7 @@ struct ar9170 {
+ 	unsigned int tx_ack_failures;
+ 	unsigned int tx_fcs_errors;
+ 	unsigned int rx_dropped;
++	unsigned int rx_phy_errors;
+ 
+ 	/* EEPROM */
+ 	struct ar9170_eeprom eeprom;
+diff --git a/drivers/net/wireless/ath/carl9170/debug.c b/drivers/net/wireless/ath/carl9170/debug.c
+index 2d734567000a..0498df2a2160 100644
+--- a/drivers/net/wireless/ath/carl9170/debug.c
++++ b/drivers/net/wireless/ath/carl9170/debug.c
+@@ -794,6 +794,7 @@ DEBUGFS_READONLY_FILE(tx_janitor_last_run, 64, "last run:%d ms ago",
+ DEBUGFS_READONLY_FILE(tx_dropped, 20, "%d", ar->tx_dropped);
+ 
+ DEBUGFS_READONLY_FILE(rx_dropped, 20, "%d", ar->rx_dropped);
++DEBUGFS_READONLY_FILE(rx_phy_errors, 20, "%d", ar->rx_phy_errors);
+ 
+ DEBUGFS_READONLY_FILE(sniffer_enabled, 20, "%d", ar->sniffer_enabled);
+ DEBUGFS_READONLY_FILE(rx_software_decryption, 20, "%d",
+@@ -830,6 +831,7 @@ void carl9170_debugfs_register(struct ar9170 *ar)
+ 	DEBUGFS_ADD(tx_ampdu_list_len);
+ 
+ 	DEBUGFS_ADD(rx_dropped);
++	DEBUGFS_ADD(rx_phy_errors);
+ 	DEBUGFS_ADD(sniffer_enabled);
+ 	DEBUGFS_ADD(rx_software_decryption);
+ 
+diff --git a/drivers/net/wireless/ath/carl9170/rx.c b/drivers/net/wireless/ath/carl9170/rx.c
+index 6833430130f4..ec4d440e6ac8 100644
+--- a/drivers/net/wireless/ath/carl9170/rx.c
++++ b/drivers/net/wireless/ath/carl9170/rx.c
+@@ -455,7 +455,9 @@ static void carl9170_rx_phy_status(struct ar9170 *ar,
+ 		if (phy->rssi[i] & 0x80)
+ 			phy->rssi[i] = ((~phy->rssi[i] & 0x7f) + 1) & 0x7f;
+ 
+-	/* TODO: we could do something with phy_errors */
++	if (phy->phy_err)
++		ar->rx_phy_errors++;
++
+ 	status->signal = ar->noise[0] + phy->rssi_combined;
+ }
+ 
+-- 
+2.55.0
+

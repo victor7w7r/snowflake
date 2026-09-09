@@ -1,0 +1,225 @@
+From b20dfde5ec543597f7f178f7b96cf6ebcc50e5ee Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Sat, 18 Jul 2026 00:04:25 -1000
+Subject: [PATCH 05917/15333] sched_ext: Rename the cid-form cgroup ops to
+ cpuctl_*
+
+Two unrelated things go by "cgroup" in the cid form. Sub-schedulers attach
+to cgroups, and the cgroup_*() ops deliver cpu controller events. While the
+ops names suggest cgroup2 hierarchy, they actually operate on the cpu
+controller.
+
+Rename them to cpuctl_* in struct sched_ext_ops_cid, which has no users
+outside scx_qmap yet. The cpu form is deployed ABI and keeps the old names.
+The layout is unchanged and the kernel keeps calling through the cpu-form
+union view.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/ext.c         | 36 +++++++++++++++++-----------------
+ kernel/sched/ext/internal.h    | 25 ++++++++++++-----------
+ tools/sched_ext/scx_qmap.bpf.c | 22 ++++++++++-----------
+ tools/sched_ext/scx_qmap.c     |  2 +-
+ tools/sched_ext/scx_qmap.h     |  2 +-
+ 5 files changed, 43 insertions(+), 44 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 58cd971e5fc5..b730eac4b13f 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -7952,14 +7952,14 @@ static struct sched_ext_ops_cid __bpf_ops_sched_ext_ops_cid = {
+ 	.enable			= sched_ext_ops__enable,
+ 	.disable		= sched_ext_ops__disable,
+ #ifdef CONFIG_EXT_GROUP_SCHED
+-	.cgroup_init		= sched_ext_ops__cgroup_init,
+-	.cgroup_exit		= sched_ext_ops__cgroup_exit,
+-	.cgroup_prep_move	= sched_ext_ops__cgroup_prep_move,
+-	.cgroup_move		= sched_ext_ops__cgroup_move,
+-	.cgroup_cancel_move	= sched_ext_ops__cgroup_cancel_move,
+-	.cgroup_set_weight	= sched_ext_ops__cgroup_set_weight,
+-	.cgroup_set_bandwidth	= sched_ext_ops__cgroup_set_bandwidth,
+-	.cgroup_set_idle	= sched_ext_ops__cgroup_set_idle,
++	.cpuctl_init		= sched_ext_ops__cgroup_init,
++	.cpuctl_exit		= sched_ext_ops__cgroup_exit,
++	.cpuctl_prep_move	= sched_ext_ops__cgroup_prep_move,
++	.cpuctl_move		= sched_ext_ops__cgroup_move,
++	.cpuctl_cancel_move	= sched_ext_ops__cgroup_cancel_move,
++	.cpuctl_set_weight	= sched_ext_ops__cgroup_set_weight,
++	.cpuctl_set_bandwidth	= sched_ext_ops__cgroup_set_bandwidth,
++	.cpuctl_set_idle	= sched_ext_ops__cgroup_set_idle,
+ #endif
+ 	.sub_attach		= sched_ext_ops__sub_attach,
+ 	.sub_detach		= sched_ext_ops__sub_detach,
+@@ -10479,22 +10479,22 @@ static int __init scx_init(void)
+ 	CID_OFFSET_MATCH(init_cids, init_cids);
+ 	CID_OFFSET_MATCH(init, init);
+ 	CID_OFFSET_MATCH(exit, exit);
+-#ifdef CONFIG_EXT_GROUP_SCHED
+-	CID_OFFSET_MATCH(cgroup_init, cgroup_init);
+-	CID_OFFSET_MATCH(cgroup_exit, cgroup_exit);
+-	CID_OFFSET_MATCH(cgroup_prep_move, cgroup_prep_move);
+-	CID_OFFSET_MATCH(cgroup_move, cgroup_move);
+-	CID_OFFSET_MATCH(cgroup_cancel_move, cgroup_cancel_move);
+-	CID_OFFSET_MATCH(cgroup_set_weight, cgroup_set_weight);
+-	CID_OFFSET_MATCH(cgroup_set_bandwidth, cgroup_set_bandwidth);
+-	CID_OFFSET_MATCH(cgroup_set_idle, cgroup_set_idle);
+-#endif
+ 	/* renamed callbacks must occupy the same slot as their cpu-form sibling */
+ 	CID_OFFSET_MATCH(select_cpu, select_cid);
+ 	CID_OFFSET_MATCH(set_cpumask, set_cmask);
+ 	CID_OFFSET_MATCH(cpu_online, cid_online);
+ 	CID_OFFSET_MATCH(cpu_offline, cid_offline);
+ 	CID_OFFSET_MATCH(dump_cpu, dump_cid);
++#ifdef CONFIG_EXT_GROUP_SCHED
++	CID_OFFSET_MATCH(cgroup_init, cpuctl_init);
++	CID_OFFSET_MATCH(cgroup_exit, cpuctl_exit);
++	CID_OFFSET_MATCH(cgroup_prep_move, cpuctl_prep_move);
++	CID_OFFSET_MATCH(cgroup_move, cpuctl_move);
++	CID_OFFSET_MATCH(cgroup_cancel_move, cpuctl_cancel_move);
++	CID_OFFSET_MATCH(cgroup_set_weight, cpuctl_set_weight);
++	CID_OFFSET_MATCH(cgroup_set_bandwidth, cpuctl_set_bandwidth);
++	CID_OFFSET_MATCH(cgroup_set_idle, cpuctl_set_idle);
++#endif
+ 	/* @priv tail must align since both share the same data block */
+ 	CID_OFFSET_MATCH(priv, priv);
+ 	/*
+diff --git a/kernel/sched/ext/internal.h b/kernel/sched/ext/internal.h
+index 0c0a8fdaa2c4..26bfda216524 100644
+--- a/kernel/sched/ext/internal.h
++++ b/kernel/sched/ext/internal.h
+@@ -992,6 +992,7 @@ struct sched_ext_ops {
+  *   - cpu_online       -> cid_online
+  *   - cpu_offline      -> cid_offline
+  *   - dump_cpu         -> dump_cid
++ *   - cgroup_*         -> cpuctl_* (they track the cgroup cpu controller)
+  *   - cpu_acquire/cpu_release  -> not present (deprecated in sched_ext_ops)
+  *
+  * BPF schedulers using this type cannot call cpu-form scx_bpf_* kfuncs;
+@@ -1027,19 +1028,17 @@ struct sched_ext_ops_cid {
+ 	void (*dump_cid)(struct scx_dump_ctx *ctx, s32 cid, bool idle);
+ 	void (*dump_task)(struct scx_dump_ctx *ctx, struct task_struct *p);
+ #ifdef CONFIG_EXT_GROUP_SCHED
+-	s32 (*cgroup_init)(struct cgroup *cgrp,
+-			    struct scx_cgroup_init_args *args);
+-	void (*cgroup_exit)(struct cgroup *cgrp);
+-	s32 (*cgroup_prep_move)(struct task_struct *p,
+-				 struct cgroup *from, struct cgroup *to);
+-	void (*cgroup_move)(struct task_struct *p,
+-			     struct cgroup *from, struct cgroup *to);
+-	void (*cgroup_cancel_move)(struct task_struct *p,
+-				    struct cgroup *from, struct cgroup *to);
+-	void (*cgroup_set_weight)(struct cgroup *cgrp, u32 weight);
+-	void (*cgroup_set_bandwidth)(struct cgroup *cgrp,
+-				      u64 period_us, u64 quota_us, u64 burst_us);
+-	void (*cgroup_set_idle)(struct cgroup *cgrp, bool idle);
++	s32 (*cpuctl_init)(struct cgroup *cgrp, struct scx_cgroup_init_args *args);
++	void (*cpuctl_exit)(struct cgroup *cgrp);
++	s32 (*cpuctl_prep_move)(struct task_struct *p, struct cgroup *from,
++				struct cgroup *to);
++	void (*cpuctl_move)(struct task_struct *p, struct cgroup *from, struct cgroup *to);
++	void (*cpuctl_cancel_move)(struct task_struct *p, struct cgroup *from,
++				   struct cgroup *to);
++	void (*cpuctl_set_weight)(struct cgroup *cgrp, u32 weight);
++	void (*cpuctl_set_bandwidth)(struct cgroup *cgrp, u64 period_us, u64 quota_us,
++				     u64 burst_us);
++	void (*cpuctl_set_idle)(struct cgroup *cgrp, bool idle);
+ #endif	/* CONFIG_EXT_GROUP_SCHED */
+ 	s32 (*sub_attach)(struct scx_sub_attach_args *args);
+ 	void (*sub_detach)(struct scx_sub_detach_args *args);
+diff --git a/tools/sched_ext/scx_qmap.bpf.c b/tools/sched_ext/scx_qmap.bpf.c
+index 925ae1a1d440..aead17658573 100644
+--- a/tools/sched_ext/scx_qmap.bpf.c
++++ b/tools/sched_ext/scx_qmap.bpf.c
+@@ -1014,7 +1014,7 @@ void BPF_STRUCT_OPS(qmap_dump_task, struct scx_dump_ctx *dctx, struct task_struc
+ 		     taskc->force_local, taskc->core_sched_seq);
+ }
+ 
+-s32 BPF_STRUCT_OPS(qmap_cgroup_init, struct cgroup *cgrp, struct scx_cgroup_init_args *args)
++s32 BPF_STRUCT_OPS(qmap_cpuctl_init, struct cgroup *cgrp, struct scx_cgroup_init_args *args)
+ {
+ 	QMAP_TOUCH_ARENA();
+ 
+@@ -1036,7 +1036,7 @@ s32 BPF_STRUCT_OPS(qmap_cgroup_init, struct cgroup *cgrp, struct scx_cgroup_init
+ 
+ static void redistribute(void);
+ 
+-void BPF_STRUCT_OPS(qmap_cgroup_set_weight, struct cgroup *cgrp, u32 weight)
++void BPF_STRUCT_OPS(qmap_cpuctl_set_weight, struct cgroup *cgrp, u32 weight)
+ {
+ 	u64 cgid = cgrp->kn->id;
+ 	s32 i;
+@@ -1062,16 +1062,16 @@ void BPF_STRUCT_OPS(qmap_cgroup_set_weight, struct cgroup *cgrp, u32 weight)
+ 	}
+ }
+ 
+-void BPF_STRUCT_OPS(qmap_cgroup_set_bandwidth, struct cgroup *cgrp,
+-		    u64 period_us, u64 quota_us, u64 burst_us)
++void BPF_STRUCT_OPS(qmap_cpuctl_set_bandwidth, struct cgroup *cgrp, u64 period_us,
++		    u64 quota_us, u64 burst_us)
+ {
+ 	if (print_msgs)
+ 		bpf_printk("CGRP SET %llu period=%lu quota=%ld burst=%lu",
+ 			   cgrp->kn->id, period_us, quota_us, burst_us);
+ }
+ 
+-void BPF_STRUCT_OPS(qmap_cgroup_move, struct task_struct *p,
+-		    struct cgroup *from, struct cgroup *to)
++void BPF_STRUCT_OPS(qmap_cpuctl_move, struct task_struct *p, struct cgroup *from,
++		    struct cgroup *to)
+ {
+ 	if (print_msgs)
+ 		bpf_printk("CGRP MOVE %d %llu -> %llu",
+@@ -1890,7 +1890,7 @@ void BPF_STRUCT_OPS(qmap_exit, struct scx_exit_info *ei)
+ 
+ /*
+  * Seed a new sub slot with the cgroup's current weight. The kernel delivers
+- * ops.cgroup_set_weight() only on value-changing writes, so a weight set
++ * ops.cpuctl_set_weight() only on value-changing writes, so a weight set
+  * before the sub attached would otherwise go unnoticed.
+  */
+ static u32 cgrp_cur_weight(u64 cgid)
+@@ -1989,10 +1989,10 @@ SCX_OPS_CID_DEFINE(qmap_ops,
+ 	       .dump			= (void *)qmap_dump,
+ 	       .dump_cid		= (void *)qmap_dump_cid,
+ 	       .dump_task		= (void *)qmap_dump_task,
+-	       .cgroup_init		= (void *)qmap_cgroup_init,
+-	       .cgroup_set_weight	= (void *)qmap_cgroup_set_weight,
+-	       .cgroup_set_bandwidth	= (void *)qmap_cgroup_set_bandwidth,
+-	       .cgroup_move		= (void *)qmap_cgroup_move,
++	       .cpuctl_init		= (void *)qmap_cpuctl_init,
++	       .cpuctl_set_weight	= (void *)qmap_cpuctl_set_weight,
++	       .cpuctl_set_bandwidth	= (void *)qmap_cpuctl_set_bandwidth,
++	       .cpuctl_move		= (void *)qmap_cpuctl_move,
+ 	       .sub_attach		= (void *)qmap_sub_attach,
+ 	       .sub_detach		= (void *)qmap_sub_detach,
+ 	       .sub_caps_updated	= (void *)qmap_sub_caps_updated,
+diff --git a/tools/sched_ext/scx_qmap.c b/tools/sched_ext/scx_qmap.c
+index ddb524b4946c..27ffda1c519e 100644
+--- a/tools/sched_ext/scx_qmap.c
++++ b/tools/sched_ext/scx_qmap.c
+@@ -70,7 +70,7 @@ const char help_fmt[] =
+ "  -i SEC        Stats interval, seconds (default 5)\n"
+ "  -R MS         Round-robin period for time-shared cpus, ms (default 200)\n"
+ "  -J MODE       Fault injection (wrong-cid: dispatch to a cid not held,\n"
+-"                init-fail/cgrp-init-fail: fail init_task/cgroup_init for\n"
++"                init-fail/cgrp-init-fail: fail init_task/cpuctl_init for\n"
+ "                \"qmfail*\" comms/cgroups)\n"
+ "  -v            Print libbpf debug messages\n"
+ "  -h            Display this help and exit\n";
+diff --git a/tools/sched_ext/scx_qmap.h b/tools/sched_ext/scx_qmap.h
+index cc2840e7aa3c..c42f7ef74b89 100644
+--- a/tools/sched_ext/scx_qmap.h
++++ b/tools/sched_ext/scx_qmap.h
+@@ -65,7 +65,7 @@ enum qmap_inject {
+ 	QMAP_INJ_OFF		= 0,
+ 	QMAP_INJ_WRONG_CID	= 1,	/* dispatch to a cid we don't hold */
+ 	QMAP_INJ_INIT_FAIL	= 2,	/* fail init_task for "qmfail*" comms */
+-	QMAP_INJ_CGRP_INIT_FAIL	= 3,	/* fail cgroup_init for "qmfail*" cgroups */
++	QMAP_INJ_CGRP_INIT_FAIL	= 3,	/* fail cpuctl_init for "qmfail*" cgroups */
+ };
+ 
+ /*
+-- 
+2.55.0
+

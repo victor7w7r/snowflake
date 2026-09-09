@@ -1,0 +1,92 @@
+From c8e412f79db6a0c1a89e4289e593eb991a068bce Mon Sep 17 00:00:00 2001
+From: Thomas Huth <thuth@redhat.com>
+Date: Fri, 10 Apr 2026 14:27:48 +0200
+Subject: [PATCH 02020/15333] x86/ras: Move contents from arch/x86/ras/Kconfig
+ into drivers/ras/Kconfig
+
+Commit
+
+  bc8e80d56c1ec ("x86/mce: Merge mce_amd_inj into mce-inject")
+
+removed the last .c file from arch/x86/ras/, so that there is now only
+a lonely Kconfig file in this folder. Its config switches CONFIG_RAS_CEC and
+CONFIG_RAS_CEC_DEBUG are only used in code that resides in drivers/ras/, so
+those Kconfig switches should better reside in drivers/ras/, too. Thus move
+the contents of arch/x86/ras/ into drivers/ras/Kconfig now.
+
+Signed-off-by: Thomas Huth <thuth@redhat.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Link: https://patch.msgid.link/20260410122748.29978-1-thuth@redhat.com
+---
+ arch/x86/ras/Kconfig | 23 -----------------------
+ drivers/ras/Kconfig  | 24 +++++++++++++++++++++++-
+ 2 files changed, 23 insertions(+), 24 deletions(-)
+ delete mode 100644 arch/x86/ras/Kconfig
+
+diff --git a/arch/x86/ras/Kconfig b/arch/x86/ras/Kconfig
+deleted file mode 100644
+index 7488c715427e..000000000000
+--- a/arch/x86/ras/Kconfig
++++ /dev/null
+@@ -1,23 +0,0 @@
+-# SPDX-License-Identifier: GPL-2.0
+-config RAS_CEC
+-	bool "Correctable Errors Collector"
+-	depends on X86_MCE && MEMORY_FAILURE && DEBUG_FS
+-	help
+-	  This is a small cache which collects correctable memory errors per 4K
+-	  page PFN and counts their repeated occurrence. Once the counter for a
+-	  PFN overflows, we try to soft-offline that page as we take it to mean
+-	  that it has reached a relatively high error count and would probably
+-	  be best if we don't use it anymore.
+-
+-	  Bear in mind that this is absolutely useless if your platform doesn't
+-	  have ECC DIMMs and doesn't have DRAM ECC checking enabled in the BIOS.
+-
+-config RAS_CEC_DEBUG
+-	bool "CEC debugging machinery"
+-	default n
+-	depends on RAS_CEC
+-	help
+-	  Add extra files to (debugfs)/ras/cec to test the correctable error
+-	  collector feature. "pfn" is a writable file that allows user to
+-	  simulate an error in a particular page frame. "array" is a read-only
+-	  file that dumps out the current state of all pages logged so far.
+diff --git a/drivers/ras/Kconfig b/drivers/ras/Kconfig
+index fc4f4bb94a4c..070e17639faa 100644
+--- a/drivers/ras/Kconfig
++++ b/drivers/ras/Kconfig
+@@ -31,7 +31,29 @@ menuconfig RAS
+ 
+ if RAS
+ 
+-source "arch/x86/ras/Kconfig"
++config RAS_CEC
++	bool "Correctable Errors Collector"
++	depends on X86_MCE && MEMORY_FAILURE && DEBUG_FS
++	help
++	  This is a small cache which collects correctable memory errors per 4K
++	  page PFN and counts their repeated occurrence. Once the counter for a
++	  PFN overflows, we try to soft-offline that page as we take it to mean
++	  that it has reached a relatively high error count and would probably
++	  be best if we don't use it anymore.
++
++	  Bear in mind that this is absolutely useless if your platform doesn't
++	  have ECC DIMMs and doesn't have DRAM ECC checking enabled in the BIOS.
++
++config RAS_CEC_DEBUG
++	bool "CEC debugging machinery"
++	default n
++	depends on RAS_CEC
++	help
++	  Add extra files to (debugfs)/ras/cec to test the correctable error
++	  collector feature. "pfn" is a writable file that allows user to
++	  simulate an error in a particular page frame. "array" is a read-only
++	  file that dumps out the current state of all pages logged so far.
++
+ source "drivers/ras/amd/atl/Kconfig"
+ 
+ config RAS_FMPM
+-- 
+2.55.0
+

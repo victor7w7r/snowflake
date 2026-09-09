@@ -1,0 +1,203 @@
+From 46841a37948dc9b476744750d44082afd582347e Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Fri, 17 Jul 2026 14:52:23 +0800
+Subject: [PATCH 06033/15333] remoteproc: Remove redundant
+ dev_err()/dev_err_probe()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() and devm_request_threaded_irq()
+automatically log detailed error messages on failure. Remove the
+now-redundant driver-specific dev_err() and dev_err_probe() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Acked-by: Paul Cercueil <paul@crapouillou.net> # Ingenic
+Link: https://lore.kernel.org/r/20260717065224.600593-1-panchuang@vivo.com
+Signed-off-by: Mathieu Poirier <mathieu.poirier@linaro.org>
+---
+ drivers/remoteproc/da8xx_remoteproc.c    |  2 +-
+ drivers/remoteproc/ingenic_rproc.c       |  4 +---
+ drivers/remoteproc/keystone_remoteproc.c |  4 ++--
+ drivers/remoteproc/mtk_scp.c             |  4 +---
+ drivers/remoteproc/qcom_q6v5.c           | 20 +++++---------------
+ drivers/remoteproc/qcom_sysmon.c         |  2 --
+ drivers/remoteproc/qcom_wcnss.c          |  4 +---
+ drivers/remoteproc/stm32_rproc.c         |  3 +--
+ 8 files changed, 12 insertions(+), 31 deletions(-)
+
+diff --git a/drivers/remoteproc/da8xx_remoteproc.c b/drivers/remoteproc/da8xx_remoteproc.c
+index 23fca7176539..006fa7b56727 100644
+--- a/drivers/remoteproc/da8xx_remoteproc.c
++++ b/drivers/remoteproc/da8xx_remoteproc.c
+@@ -298,7 +298,7 @@ static int da8xx_rproc_probe(struct platform_device *pdev)
+ 					handle_event, 0, "da8xx-remoteproc",
+ 					rproc);
+ 	if (ret)
+-		return dev_err_probe(dev, ret, "devm_request_threaded_irq error\n");
++		return ret;
+ 
+ 	/*
+ 	 * rproc_add() can end up enabling the DSP's clk with the DSP
+diff --git a/drivers/remoteproc/ingenic_rproc.c b/drivers/remoteproc/ingenic_rproc.c
+index 1b78d8ddeacf..252519f48964 100644
+--- a/drivers/remoteproc/ingenic_rproc.c
++++ b/drivers/remoteproc/ingenic_rproc.c
+@@ -219,10 +219,8 @@ static int ingenic_rproc_probe(struct platform_device *pdev)
+ 
+ 	ret = devm_request_irq(dev, vpu->irq, vpu_interrupt, IRQF_NO_AUTOEN,
+ 			       "VPU", rproc);
+-	if (ret < 0) {
+-		dev_err(dev, "Failed to request IRQ\n");
++	if (ret < 0)
+ 		return ret;
+-	}
+ 
+ 	ret = devm_rproc_add(dev, rproc);
+ 	if (ret) {
+diff --git a/drivers/remoteproc/keystone_remoteproc.c b/drivers/remoteproc/keystone_remoteproc.c
+index 83763d640c4e..407d6034f748 100644
+--- a/drivers/remoteproc/keystone_remoteproc.c
++++ b/drivers/remoteproc/keystone_remoteproc.c
+@@ -411,7 +411,7 @@ static int keystone_rproc_probe(struct platform_device *pdev)
+ 	ret = devm_request_irq(dev, ksproc->irq_ring, keystone_rproc_vring_interrupt,
+ 			       IRQF_NO_AUTOEN, dev_name(dev), ksproc);
+ 	if (ret)
+-		return dev_err_probe(dev, ret, "failed to request vring interrupt\n");
++		return ret;
+ 
+ 	ksproc->irq_fault = platform_get_irq_byname(pdev, "exception");
+ 	if (ksproc->irq_fault < 0)
+@@ -419,7 +419,7 @@ static int keystone_rproc_probe(struct platform_device *pdev)
+ 	ret = devm_request_irq(dev, ksproc->irq_fault, keystone_rproc_exception_interrupt,
+ 			       IRQF_NO_AUTOEN, dev_name(dev), ksproc);
+ 	if (ret)
+-		return dev_err_probe(dev, ret, "failed to enable exception interrupt\n");
++		return ret;
+ 
+ 	ksproc->kick_gpio = devm_gpiod_get(dev, "kick", GPIOD_ASIS);
+ 	ret = PTR_ERR_OR_ZERO(ksproc->kick_gpio);
+diff --git a/drivers/remoteproc/mtk_scp.c b/drivers/remoteproc/mtk_scp.c
+index 436656bdfa8b..9751acc2bf83 100644
+--- a/drivers/remoteproc/mtk_scp.c
++++ b/drivers/remoteproc/mtk_scp.c
+@@ -1246,10 +1246,8 @@ static struct mtk_scp *scp_rproc_init(struct platform_device *pdev,
+ 					scp_irq_handler, IRQF_ONESHOT,
+ 					pdev->name, scp);
+ 
+-	if (ret) {
+-		dev_err(dev, "failed to request irq\n");
++	if (ret)
+ 		goto remove_subdev;
+-	}
+ 
+ 	return scp;
+ 
+diff --git a/drivers/remoteproc/qcom_q6v5.c b/drivers/remoteproc/qcom_q6v5.c
+index 0206a4a19254..1075ef4027b7 100644
+--- a/drivers/remoteproc/qcom_q6v5.c
++++ b/drivers/remoteproc/qcom_q6v5.c
+@@ -302,10 +302,8 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
+ 					NULL, q6v5_wdog_interrupt,
+ 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+ 					"q6v5 wdog", q6v5);
+-	if (ret) {
+-		dev_err(&pdev->dev, "failed to acquire wdog IRQ\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	q6v5->fatal_irq = platform_get_irq_byname(pdev, "fatal");
+ 	if (q6v5->fatal_irq < 0)
+@@ -315,10 +313,8 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
+ 					NULL, q6v5_fatal_interrupt,
+ 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+ 					"q6v5 fatal", q6v5);
+-	if (ret) {
+-		dev_err(&pdev->dev, "failed to acquire fatal IRQ\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	q6v5->ready_irq = platform_get_irq_byname(pdev, "ready");
+ 	if (q6v5->ready_irq < 0)
+@@ -328,10 +324,8 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
+ 					NULL, q6v5_ready_interrupt,
+ 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+ 					"q6v5 ready", q6v5);
+-	if (ret) {
+-		dev_err(&pdev->dev, "failed to acquire ready IRQ\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	q6v5->handover_irq = platform_get_irq_byname(pdev, "handover");
+ 	if (q6v5->handover_irq < 0)
+@@ -342,10 +336,8 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
+ 					IRQF_TRIGGER_RISING | IRQF_ONESHOT |
+ 					IRQF_NO_AUTOEN,
+ 					"q6v5 handover", q6v5);
+-	if (ret) {
+-		dev_err(&pdev->dev, "failed to acquire handover IRQ\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	q6v5->stop_irq = platform_get_irq_byname(pdev, "stop-ack");
+ 	if (q6v5->stop_irq < 0)
+@@ -355,10 +347,8 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
+ 					NULL, q6v5_stop_interrupt,
+ 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+ 					"q6v5 stop", q6v5);
+-	if (ret) {
+-		dev_err(&pdev->dev, "failed to acquire stop-ack IRQ\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	q6v5->state = devm_qcom_smem_state_get(&pdev->dev, "stop", &q6v5->stop_bit);
+ 	if (IS_ERR(q6v5->state)) {
+diff --git a/drivers/remoteproc/qcom_sysmon.c b/drivers/remoteproc/qcom_sysmon.c
+index a0830a48b1f4..61e1038328e8 100644
+--- a/drivers/remoteproc/qcom_sysmon.c
++++ b/drivers/remoteproc/qcom_sysmon.c
+@@ -662,8 +662,6 @@ struct qcom_sysmon *qcom_add_sysmon_subdev(struct rproc *rproc,
+ 						IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+ 						"q6v5 shutdown-ack", sysmon);
+ 		if (ret) {
+-			dev_err(sysmon->dev,
+-				"failed to acquire shutdown-ack IRQ\n");
+ 			kfree(sysmon);
+ 			return ERR_PTR(ret);
+ 		}
+diff --git a/drivers/remoteproc/qcom_wcnss.c b/drivers/remoteproc/qcom_wcnss.c
+index 3392c9380202..e9a00efe97f6 100644
+--- a/drivers/remoteproc/qcom_wcnss.c
++++ b/drivers/remoteproc/qcom_wcnss.c
+@@ -521,10 +521,8 @@ static int wcnss_request_irq(struct qcom_wcnss *wcnss,
+ 					NULL, thread_fn,
+ 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+ 					"wcnss", wcnss);
+-	if (ret) {
+-		dev_err(&pdev->dev, "request %s IRQ failed\n", name);
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	/* Return the IRQ number if the IRQ was successfully acquired */
+ 	return irq_number;
+diff --git a/drivers/remoteproc/stm32_rproc.c b/drivers/remoteproc/stm32_rproc.c
+index 0e5d64fbe52c..1fe4cdc0a13a 100644
+--- a/drivers/remoteproc/stm32_rproc.c
++++ b/drivers/remoteproc/stm32_rproc.c
+@@ -682,8 +682,7 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
+ 		err = devm_request_irq(dev, irq, stm32_rproc_wdg, 0,
+ 				       dev_name(dev), pdev);
+ 		if (err)
+-			return dev_err_probe(dev, err,
+-					     "failed to request wdg irq\n");
++			return err;
+ 
+ 		ddata->wdg_irq = irq;
+ 
+-- 
+2.55.0
+

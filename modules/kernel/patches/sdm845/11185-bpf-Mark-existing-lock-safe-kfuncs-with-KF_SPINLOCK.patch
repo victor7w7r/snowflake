@@ -1,0 +1,208 @@
+From 7619a0ee9340b3cef114b1c7aae42c0835cf2bff Mon Sep 17 00:00:00 2001
+From: Kaitao Cheng <chengkaitao@kylinos.cn>
+Date: Wed, 5 Aug 2026 23:33:39 +0800
+Subject: [PATCH 11185/15333] bpf: Mark existing lock-safe kfuncs with
+ KF_SPINLOCK_SAFE
+
+The verifier currently keeps a hard-coded list of kfuncs that may be
+called while holding a bpf_spin_lock. With KF_SPINLOCK_SAFE available,
+retaining this list creates two sources of truth and requires verifier
+changes whenever another lock-safe kfunc is added.
+
+Mark every kfunc currently accepted by kfunc_spin_allowed() with
+KF_SPINLOCK_SAFE. This covers the graph, numeric iterator, resource
+spin lock, arena, and stream kfuncs.
+
+Remove the obsolete category checks and make kfunc_spin_allowed() rely
+solely on the kfunc registration metadata. This preserves the behavior
+of existing kfuncs while using the same mechanism for built-in and
+module kfuncs.
+
+Signed-off-by: Kaitao Cheng <chengkaitao@kylinos.cn>
+Acked-by: Leon Hwang <leon.hwang@linux.dev>
+Link: https://lore.kernel.org/bpf/20260805153340.34776-3-kaitao.cheng@linux.dev
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ kernel/bpf/arena.c      |  6 ++---
+ kernel/bpf/helpers.c    | 56 +++++++++++++++++++++--------------------
+ kernel/bpf/rqspinlock.c |  8 +++---
+ kernel/bpf/verifier.c   | 32 -----------------------
+ 4 files changed, 36 insertions(+), 66 deletions(-)
+
+diff --git a/kernel/bpf/arena.c b/kernel/bpf/arena.c
+index 555ee2531ef9..7b6847200b43 100644
+--- a/kernel/bpf/arena.c
++++ b/kernel/bpf/arena.c
+@@ -1118,9 +1118,9 @@ __bpf_kfunc int bpf_arena_reserve_pages(void *p__map, void *ptr__ign, u32 page_c
+ __bpf_kfunc_end_defs();
+ 
+ BTF_KFUNCS_START(arena_kfuncs)
+-BTF_ID_FLAGS(func, bpf_arena_alloc_pages, KF_ARENA_RET | KF_ARENA_ARG2)
+-BTF_ID_FLAGS(func, bpf_arena_free_pages, KF_ARENA_ARG2)
+-BTF_ID_FLAGS(func, bpf_arena_reserve_pages, KF_ARENA_ARG2)
++BTF_ID_FLAGS(func, bpf_arena_alloc_pages, KF_ARENA_RET | KF_ARENA_ARG2 | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_arena_free_pages, KF_ARENA_ARG2 | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_arena_reserve_pages, KF_ARENA_ARG2 | KF_SPINLOCK_SAFE)
+ BTF_KFUNCS_END(arena_kfuncs)
+ 
+ static const struct btf_kfunc_id_set common_kfunc_set = {
+diff --git a/kernel/bpf/helpers.c b/kernel/bpf/helpers.c
+index 4709a5ad0474..6388b6b23e49 100644
+--- a/kernel/bpf/helpers.c
++++ b/kernel/bpf/helpers.c
+@@ -4812,30 +4812,32 @@ BTF_ID_FLAGS(func, bpf_obj_drop, KF_RELEASE | KF_IMPLICIT_ARGS)
+ BTF_ID_FLAGS(func, bpf_obj_drop_impl, KF_RELEASE)
+ BTF_ID_FLAGS(func, bpf_percpu_obj_drop, KF_RELEASE | KF_IMPLICIT_ARGS)
+ BTF_ID_FLAGS(func, bpf_percpu_obj_drop_impl, KF_RELEASE)
+-BTF_ID_FLAGS(func, bpf_refcount_acquire, KF_ACQUIRE | KF_RET_NULL | KF_RCU | KF_IMPLICIT_ARGS)
+-BTF_ID_FLAGS(func, bpf_refcount_acquire_impl, KF_ACQUIRE | KF_RET_NULL | KF_RCU)
+-BTF_ID_FLAGS(func, bpf_list_push_front, KF_IMPLICIT_ARGS)
+-BTF_ID_FLAGS(func, bpf_list_push_front_impl)
+-BTF_ID_FLAGS(func, bpf_list_push_back, KF_IMPLICIT_ARGS)
+-BTF_ID_FLAGS(func, bpf_list_push_back_impl)
+-BTF_ID_FLAGS(func, bpf_list_add, KF_IMPLICIT_ARGS)
+-BTF_ID_FLAGS(func, bpf_list_pop_front, KF_ACQUIRE | KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_list_pop_back, KF_ACQUIRE | KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_list_del, KF_ACQUIRE | KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_list_front, KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_list_back, KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_list_is_first)
+-BTF_ID_FLAGS(func, bpf_list_is_last)
+-BTF_ID_FLAGS(func, bpf_list_empty)
++BTF_ID_FLAGS(func, bpf_refcount_acquire,
++	     KF_ACQUIRE | KF_RET_NULL | KF_RCU | KF_IMPLICIT_ARGS | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_refcount_acquire_impl,
++	     KF_ACQUIRE | KF_RET_NULL | KF_RCU | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_push_front, KF_IMPLICIT_ARGS | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_push_front_impl, KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_push_back, KF_IMPLICIT_ARGS | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_push_back_impl, KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_add, KF_IMPLICIT_ARGS | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_pop_front, KF_ACQUIRE | KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_pop_back, KF_ACQUIRE | KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_del, KF_ACQUIRE | KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_front, KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_back, KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_is_first, KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_is_last, KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_list_empty, KF_SPINLOCK_SAFE)
+ BTF_ID_FLAGS(func, bpf_task_acquire, KF_ACQUIRE | KF_RCU | KF_RET_NULL)
+ BTF_ID_FLAGS(func, bpf_task_release, KF_RELEASE)
+-BTF_ID_FLAGS(func, bpf_rbtree_remove, KF_ACQUIRE | KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_rbtree_add, KF_IMPLICIT_ARGS)
+-BTF_ID_FLAGS(func, bpf_rbtree_add_impl)
+-BTF_ID_FLAGS(func, bpf_rbtree_first, KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_rbtree_root, KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_rbtree_left, KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_rbtree_right, KF_RET_NULL)
++BTF_ID_FLAGS(func, bpf_rbtree_remove, KF_ACQUIRE | KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_rbtree_add, KF_IMPLICIT_ARGS | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_rbtree_add_impl, KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_rbtree_first, KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_rbtree_root, KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_rbtree_left, KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_rbtree_right, KF_RET_NULL | KF_SPINLOCK_SAFE)
+ 
+ #ifdef CONFIG_CGROUPS
+ BTF_ID_FLAGS(func, bpf_cgroup_acquire, KF_ACQUIRE | KF_RCU | KF_RET_NULL)
+@@ -4885,9 +4887,9 @@ BTF_ID_FLAGS(func, bpf_rcu_read_lock)
+ BTF_ID_FLAGS(func, bpf_rcu_read_unlock)
+ BTF_ID_FLAGS(func, bpf_dynptr_slice, KF_RET_NULL)
+ BTF_ID_FLAGS(func, bpf_dynptr_slice_rdwr, KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_iter_num_new, KF_ITER_NEW)
+-BTF_ID_FLAGS(func, bpf_iter_num_next, KF_ITER_NEXT | KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_iter_num_destroy, KF_ITER_DESTROY)
++BTF_ID_FLAGS(func, bpf_iter_num_new, KF_ITER_NEW | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_iter_num_next, KF_ITER_NEXT | KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_iter_num_destroy, KF_ITER_DESTROY | KF_SPINLOCK_SAFE)
+ BTF_ID_FLAGS(func, bpf_iter_task_vma_new, KF_ITER_NEW | KF_RCU)
+ BTF_ID_FLAGS(func, bpf_iter_task_vma_next, KF_ITER_NEXT | KF_RET_NULL)
+ BTF_ID_FLAGS(func, bpf_iter_task_vma_destroy, KF_ITER_DESTROY)
+@@ -4962,8 +4964,8 @@ BTF_ID_FLAGS(func, bpf_strncasestr);
+ #if defined(CONFIG_BPF_LSM) && defined(CONFIG_CGROUPS)
+ BTF_ID_FLAGS(func, bpf_cgroup_read_xattr, KF_RCU)
+ #endif
+-BTF_ID_FLAGS(func, bpf_stream_vprintk, KF_IMPLICIT_ARGS)
+-BTF_ID_FLAGS(func, bpf_stream_print_stack, KF_IMPLICIT_ARGS)
++BTF_ID_FLAGS(func, bpf_stream_vprintk, KF_IMPLICIT_ARGS | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_stream_print_stack, KF_IMPLICIT_ARGS | KF_SPINLOCK_SAFE)
+ BTF_ID_FLAGS(func, bpf_task_work_schedule_signal, KF_IMPLICIT_ARGS)
+ BTF_ID_FLAGS(func, bpf_task_work_schedule_resume, KF_IMPLICIT_ARGS)
+ BTF_ID_FLAGS(func, bpf_dynptr_from_file)
+diff --git a/kernel/bpf/rqspinlock.c b/kernel/bpf/rqspinlock.c
+index e4e338cdb437..e527cb425cf4 100644
+--- a/kernel/bpf/rqspinlock.c
++++ b/kernel/bpf/rqspinlock.c
+@@ -744,10 +744,10 @@ __bpf_kfunc void bpf_res_spin_unlock_irqrestore(struct bpf_res_spin_lock *lock,
+ __bpf_kfunc_end_defs();
+ 
+ BTF_KFUNCS_START(rqspinlock_kfunc_ids)
+-BTF_ID_FLAGS(func, bpf_res_spin_lock, KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_res_spin_unlock)
+-BTF_ID_FLAGS(func, bpf_res_spin_lock_irqsave, KF_RET_NULL)
+-BTF_ID_FLAGS(func, bpf_res_spin_unlock_irqrestore)
++BTF_ID_FLAGS(func, bpf_res_spin_lock, KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_res_spin_unlock, KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_res_spin_lock_irqsave, KF_RET_NULL | KF_SPINLOCK_SAFE)
++BTF_ID_FLAGS(func, bpf_res_spin_unlock_irqrestore, KF_SPINLOCK_SAFE)
+ BTF_KFUNCS_END(rqspinlock_kfunc_ids)
+ 
+ static const struct btf_kfunc_id_set rqspinlock_kfunc_set = {
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 8daba32306be..d952bd95cbb7 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -11802,20 +11802,6 @@ static bool is_bpf_rbtree_api_kfunc(u32 btf_id)
+ 	       btf_id == special_kfunc_list[KF_bpf_rbtree_right];
+ }
+ 
+-static bool is_bpf_iter_num_api_kfunc(u32 btf_id)
+-{
+-	return btf_id == special_kfunc_list[KF_bpf_iter_num_new] ||
+-	       btf_id == special_kfunc_list[KF_bpf_iter_num_next] ||
+-	       btf_id == special_kfunc_list[KF_bpf_iter_num_destroy];
+-}
+-
+-static bool is_bpf_graph_api_kfunc(u32 btf_id)
+-{
+-	return is_bpf_list_api_kfunc(btf_id) ||
+-	       is_bpf_rbtree_api_kfunc(btf_id) ||
+-	       is_bpf_refcount_acquire_kfunc(btf_id);
+-}
+-
+ static bool is_bpf_res_spin_lock_kfunc(u32 btf_id)
+ {
+ 	return btf_id == special_kfunc_list[KF_bpf_res_spin_lock] ||
+@@ -11824,29 +11810,11 @@ static bool is_bpf_res_spin_lock_kfunc(u32 btf_id)
+ 	       btf_id == special_kfunc_list[KF_bpf_res_spin_unlock_irqrestore];
+ }
+ 
+-static bool is_bpf_arena_kfunc(u32 btf_id)
+-{
+-	return btf_id == special_kfunc_list[KF_bpf_arena_alloc_pages] ||
+-	       btf_id == special_kfunc_list[KF_bpf_arena_free_pages] ||
+-	       btf_id == special_kfunc_list[KF_bpf_arena_reserve_pages];
+-}
+-
+-static bool is_bpf_stream_kfunc(u32 btf_id)
+-{
+-	return btf_id == special_kfunc_list[KF_bpf_stream_vprintk] ||
+-	       btf_id == special_kfunc_list[KF_bpf_stream_print_stack];
+-}
+-
+ static bool kfunc_spin_allowed(struct bpf_verifier_env *env, s32 func_id, s16 offset)
+ {
+ 	struct bpf_kfunc_meta kfunc;
+ 	int err;
+ 
+-	if (is_bpf_graph_api_kfunc(func_id) || is_bpf_iter_num_api_kfunc(func_id) ||
+-	    is_bpf_res_spin_lock_kfunc(func_id) || is_bpf_arena_kfunc(func_id) ||
+-	    is_bpf_stream_kfunc(func_id))
+-		return true;
+-
+ 	err = fetch_kfunc_meta(env, func_id, offset, &kfunc);
+ 	if (err || !kfunc.flags)
+ 		return false;
+-- 
+2.55.0
+

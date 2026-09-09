@@ -1,0 +1,106 @@
+From 9c96c8c2caf8e6095feff63c3e5bc05a95feebc6 Mon Sep 17 00:00:00 2001
+From: Eliot Courtney <ecourtney@nvidia.com>
+Date: Fri, 3 Jul 2026 19:22:08 +0900
+Subject: [PATCH 06667/15333] gpu: nova-core: gsp: ensure LibOS DMA allocation
+ lives long enough
+
+Currently, `GspSequencer` stores a raw DMA handle. Instead, store a
+reference to `Coherent` to statically ensure that the allocation lives
+long enough.
+
+Signed-off-by: Eliot Courtney <ecourtney@nvidia.com>
+Reviewed-by: Alistair Popple <apopple@nvidia.com>
+Link: https://patch.msgid.link/20260703-blackwell-fixes-v2-4-8e3d8bc32bb9@nvidia.com
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/gsp/hal/tu102.rs |  7 +------
+ drivers/gpu/nova-core/gsp/sequencer.rs | 18 +++++++++++-------
+ 2 files changed, 12 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/gsp/hal/tu102.rs b/drivers/gpu/nova-core/gsp/hal/tu102.rs
+index 29bb17171f56..648657e248da 100644
+--- a/drivers/gpu/nova-core/gsp/hal/tu102.rs
++++ b/drivers/gpu/nova-core/gsp/hal/tu102.rs
+@@ -320,12 +320,7 @@ fn post_boot(
+         ctx: &mut GspBootContext<'_, '_>,
+         gsp_fw: &GspFirmware,
+     ) -> Result {
+-        GspSequencer::run(
+-            &gsp.cmdq,
+-            ctx,
+-            gsp.libos.dma_handle(),
+-            gsp_fw.bootloader.app_version,
+-        )?;
++        GspSequencer::run(&gsp.cmdq, ctx, &gsp.libos, gsp_fw.bootloader.app_version)?;
+ 
+         Ok(())
+     }
+diff --git a/drivers/gpu/nova-core/gsp/sequencer.rs b/drivers/gpu/nova-core/gsp/sequencer.rs
+index 422a74f9ecbd..5e1ec7e59ab0 100644
+--- a/drivers/gpu/nova-core/gsp/sequencer.rs
++++ b/drivers/gpu/nova-core/gsp/sequencer.rs
+@@ -6,6 +6,7 @@
+ 
+ use kernel::{
+     device,
++    dma::Coherent,
+     io::{
+         poll::read_poll_timeout,
+         Io, //
+@@ -31,7 +32,8 @@
+             MessageFromGsp, //
+         },
+         fw,
+-        GspBootContext, //
++        GspBootContext,
++        LibosMemoryRegionInitArgument, //
+     },
+     num::FromSafeCast,
+     sbuffer::SBufferIter,
+@@ -135,8 +137,8 @@ pub(crate) struct GspSequencer<'a> {
+     sec2_falcon: &'a Falcon<'a, Sec2>,
+     /// GSP falcon for core operations.
+     gsp_falcon: &'a Falcon<'a, Gsp>,
+-    /// LibOS DMA handle address.
+-    libos_dma_handle: u64,
++    /// LibOS memory region init arguments.
++    libos: &'a Coherent<[LibosMemoryRegionInitArgument]>,
+     /// Bootloader application version.
+     bootloader_app_version: u32,
+     /// Device for logging.
+@@ -232,10 +234,12 @@ fn run(&self, seq: &GspSequencer<'_>) -> Result {
+                 // Reset the GSP to prepare it for resuming.
+                 seq.gsp_falcon.reset()?;
+ 
++                let libos_dma_handle = seq.libos.dma_handle();
++
+                 // Write the libOS DMA handle to GSP mailboxes.
+                 seq.gsp_falcon.write_mailboxes(
+-                    Some(seq.libos_dma_handle as u32),
+-                    Some((seq.libos_dma_handle >> 32) as u32),
++                    Some(libos_dma_handle as u32),
++                    Some((libos_dma_handle >> 32) as u32),
+                 );
+ 
+                 // Start the SEC2 falcon which will trigger GSP-RM to resume on the GSP.
+@@ -336,7 +340,7 @@ impl<'a> GspSequencer<'a> {
+     pub(crate) fn run(
+         cmdq: &Cmdq,
+         ctx: &'a GspBootContext<'_, '_>,
+-        libos_dma_handle: u64,
++        libos: &'a Coherent<[LibosMemoryRegionInitArgument]>,
+         bootloader_app_version: u32,
+     ) -> Result {
+         let seq_info = loop {
+@@ -351,7 +355,7 @@ pub(crate) fn run(
+             bar: ctx.bar,
+             sec2_falcon: ctx.sec2_falcon,
+             gsp_falcon: ctx.gsp_falcon,
+-            libos_dma_handle,
++            libos,
+             bootloader_app_version,
+             dev: ctx.dev(),
+         };
+-- 
+2.55.0
+

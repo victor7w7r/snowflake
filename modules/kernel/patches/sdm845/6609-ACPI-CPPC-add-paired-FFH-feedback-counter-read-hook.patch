@@ -1,0 +1,131 @@
+From 9aa7df52052399f7759b70f64c6ee561f901a28a Mon Sep 17 00:00:00 2001
+From: Pengjie Zhang <zhangpengjie2@huawei.com>
+Date: Wed, 8 Jul 2026 16:28:17 +0800
+Subject: [PATCH 06609/15333] ACPI: CPPC: add paired FFH feedback-counter read
+ hook
+
+cppc_get_perf_ctrs() reads the delivered and reference performance
+counters one at a time.
+
+Allow architectures to provide both FFH feedback counters in one
+operation when that either narrows the sampling window or avoids extra
+cross-CPU reads. Add a small FFH-specific hook for that case and fall
+back to the existing per-register reads when unsupported.
+
+Tested-by: Sumit Gupta <sumitg@nvidia.com>
+Reviewed-by: Sumit Gupta <sumitg@nvidia.com>
+Tested-by: Vanshidhar Konda <vanshikonda@os.amperecomputing.com>
+Reviewed-by: Vanshidhar Konda <vanshikonda@os.amperecomputing.com>
+Signed-off-by: Pengjie Zhang <zhangpengjie2@huawei.com>
+Acked-by: Rafael J. Wysocki (Intel) <rafael@kernel.org>
+Tested-by: Jeremy Linton <jeremy.linton@arm.com>
+Reviewed-by: Jeremy Linton <jeremy.linton@arm.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ drivers/acpi/cppc_acpi.c | 50 ++++++++++++++++++++++++++++++++++++----
+ include/acpi/cppc_acpi.h |  7 ++++++
+ 2 files changed, 52 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/acpi/cppc_acpi.c b/drivers/acpi/cppc_acpi.c
+index 9f572f481241..b6356476a46e 100644
+--- a/drivers/acpi/cppc_acpi.c
++++ b/drivers/acpi/cppc_acpi.c
+@@ -1004,6 +1004,22 @@ int __weak cpc_read_ffh(int cpunum, struct cpc_reg *reg, u64 *val)
+ 	return -ENOTSUPP;
+ }
+ 
++/**
++ * cpc_read_ffh_fb_ctrs() - Read FFH feedback counters together
++ * @cpunum:	Target CPU
++ * @reg1:	first CPPC register information
++ * @val1:	place holder for first return value
++ * @reg2:	second CPPC register information
++ * @val2:	place holder for second return value
++ *
++ * Return: 0 on success, error code otherwise
++ */
++int __weak cpc_read_ffh_fb_ctrs(int cpunum, struct cpc_reg *reg1,
++				u64 *val1, struct cpc_reg *reg2, u64 *val2)
++{
++	return -EOPNOTSUPP;
++}
++
+ /**
+  * cpc_write_ffh() - Write FFH register
+  * @cpunum:	CPU number to write
+@@ -1496,6 +1512,33 @@ bool cppc_perf_ctrs_in_pcc_cpu(unsigned int cpu)
+ }
+ EXPORT_SYMBOL_GPL(cppc_perf_ctrs_in_pcc_cpu);
+ 
++static int cppc_read_fb_ctrs(int cpunum,
++			     struct cpc_register_resource *delivered_reg,
++			     struct cpc_register_resource *reference_reg,
++			     u64 *delivered, u64 *reference)
++{
++	int ret;
++
++	/*
++	 * For FFH feedback counters, try a paired read first to reduce
++	 * sampling skew between delivered and reference counters. Fall
++	 * back to the existing per-register reads if unsupported.
++	 */
++	if (CPC_IN_FFH(delivered_reg) && CPC_IN_FFH(reference_reg)) {
++		ret = cpc_read_ffh_fb_ctrs(cpunum,
++					&delivered_reg->cpc_entry.reg, delivered,
++					&reference_reg->cpc_entry.reg, reference);
++		if (ret != -EOPNOTSUPP)
++			return ret;
++	}
++
++	ret = cpc_read(cpunum, delivered_reg, delivered);
++	if (ret)
++		return ret;
++
++	return cpc_read(cpunum, reference_reg, reference);
++}
++
+ /**
+  * cppc_perf_ctrs_in_pcc - Check if any perf counters are in a PCC region.
+  *
+@@ -1561,11 +1604,8 @@ int cppc_get_perf_ctrs(int cpunum, struct cppc_perf_fb_ctrs *perf_fb_ctrs)
+ 		}
+ 	}
+ 
+-	ret = cpc_read(cpunum, delivered_reg, &delivered);
+-	if (ret)
+-		goto out_err;
+-
+-	ret = cpc_read(cpunum, reference_reg, &reference);
++	ret = cppc_read_fb_ctrs(cpunum, delivered_reg, reference_reg,
++				&delivered, &reference);
+ 	if (ret)
+ 		goto out_err;
+ 
+diff --git a/include/acpi/cppc_acpi.h b/include/acpi/cppc_acpi.h
+index 8693890a7275..5acebe62feac 100644
+--- a/include/acpi/cppc_acpi.h
++++ b/include/acpi/cppc_acpi.h
+@@ -176,6 +176,8 @@ extern int cppc_get_transition_latency(int cpu);
+ extern bool cpc_ffh_supported(void);
+ extern bool cpc_supported_by_cpu(void);
+ extern int cpc_read_ffh(int cpunum, struct cpc_reg *reg, u64 *val);
++extern int cpc_read_ffh_fb_ctrs(int cpu, struct cpc_reg *reg1, u64 *val1,
++				struct cpc_reg *reg2, u64 *val2);
+ extern int cpc_write_ffh(int cpunum, struct cpc_reg *reg, u64 val);
+ extern int cppc_get_epp_perf(int cpunum, u64 *epp_perf);
+ extern int cppc_set_epp_perf(int cpu, struct cppc_perf_ctrls *perf_ctrls, bool enable);
+@@ -250,6 +252,11 @@ static inline int cpc_read_ffh(int cpunum, struct cpc_reg *reg, u64 *val)
+ {
+ 	return -EOPNOTSUPP;
+ }
++static inline int cpc_read_ffh_fb_ctrs(int cpu, struct cpc_reg *reg1, u64 *val1,
++				       struct cpc_reg *reg2, u64 *val2)
++{
++	return -EOPNOTSUPP;
++}
+ static inline int cpc_write_ffh(int cpunum, struct cpc_reg *reg, u64 val)
+ {
+ 	return -EOPNOTSUPP;
+-- 
+2.55.0
+

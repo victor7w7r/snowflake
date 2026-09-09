@@ -1,0 +1,34 @@
+From afc8e3ee83078eb5dab5a9ea561cdb0008f64f5d Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Mon, 20 Jul 2026 10:32:38 +0700
+Subject: [PATCH 06064/15333] regcache: Validate cache_only state in
+ regcache_sync_region()
+
+Add a WARN_ON() check to ensure regcache_sync_region() is not called
+while cache_only is enabled.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260720033238.52479-2-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/base/regmap/regcache.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/base/regmap/regcache.c b/drivers/base/regmap/regcache.c
+index 29a9fda41c44..0e3b6942640c 100644
+--- a/drivers/base/regmap/regcache.c
++++ b/drivers/base/regmap/regcache.c
+@@ -516,6 +516,10 @@ int regcache_sync_region(struct regmap *map, unsigned int min,
+ 
+ 	map->lock(map->lock_arg);
+ 
++	if (WARN_ON(map->cache_only)) {
++		map->unlock(map->lock_arg);
++		return -EINVAL;
++	}
+ 	/* Remember the initial bypass state */
+ 	bypass = map->cache_bypass;
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,105 @@
+From dd9850c91665a56babd964df19de2cb90a98c538 Mon Sep 17 00:00:00 2001
+From: Vishal Moola <vishal.moola@gmail.com>
+Date: Mon, 29 Jun 2026 11:57:40 -0700
+Subject: [PATCH 04265/15333] x86/mm: Convert pgd_page_get_mm() to ptdescs
+
+Convert pgd_page_get_mm() to ptdescs. Define struct ptdesc in our
+pgtable_types so that our declarations recognize ptdesc as an
+appropriate page table type.
+
+Now that all callers are using ptdescs, we can pass in that
+ptdesc to get the underlying mm_struct.
+
+Signed-off-by: Vishal Moola <vishal.moola@gmail.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Reviewed-by: William Kucharski <william.kucharski@linux.dev>
+Acked-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Link: https://patch.msgid.link/20260629185742.126987-8-vishal.moola@gmail.com
+---
+ arch/x86/include/asm/pgtable.h       | 2 +-
+ arch/x86/include/asm/pgtable_types.h | 2 +-
+ arch/x86/mm/fault.c                  | 2 +-
+ arch/x86/mm/init_64.c                | 4 ++--
+ arch/x86/mm/pgtable.c                | 4 ++--
+ 5 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/include/asm/pgtable.h b/arch/x86/include/asm/pgtable.h
+index ac295ca6c92f..dd046f29ec31 100644
+--- a/arch/x86/include/asm/pgtable.h
++++ b/arch/x86/include/asm/pgtable.h
+@@ -50,7 +50,7 @@ void ptdump_walk_user_pgd_level_checkwx(void);
+ extern spinlock_t pgd_lock;
+ extern struct list_head pgd_list;
+ 
+-extern struct mm_struct *pgd_page_get_mm(struct page *page);
++struct mm_struct *pgd_page_get_mm(struct ptdesc *pt);
+ 
+ extern pmdval_t early_pmd_flags;
+ 
+diff --git a/arch/x86/include/asm/pgtable_types.h b/arch/x86/include/asm/pgtable_types.h
+index 2ec250ba467e..95c7f453db17 100644
+--- a/arch/x86/include/asm/pgtable_types.h
++++ b/arch/x86/include/asm/pgtable_types.h
+@@ -512,7 +512,7 @@ static inline pgprot_t pgprot_large_2_4k(pgprot_t pgprot)
+ 	return __pgprot(protval_large_2_4k(pgprot_val(pgprot)));
+ }
+ 
+-
++struct ptdesc;
+ typedef struct page *pgtable_t;
+ 
+ extern pteval_t __supported_pte_mask;
+diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
+index c31ffeac0714..aa88370ce739 100644
+--- a/arch/x86/mm/fault.c
++++ b/arch/x86/mm/fault.c
+@@ -282,7 +282,7 @@ void arch_sync_kernel_mappings(unsigned long start, unsigned long end)
+ 			spinlock_t *pgt_lock;
+ 
+ 			/* the pgt_lock only for Xen */
+-			pgt_lock = &pgd_page_get_mm(ptdesc_page(ptdesc))->page_table_lock;
++			pgt_lock = &pgd_page_get_mm(ptdesc)->page_table_lock;
+ 
+ 			spin_lock(pgt_lock);
+ 			vmalloc_sync_one(ptdesc_address(ptdesc), addr);
+diff --git a/arch/x86/mm/init_64.c b/arch/x86/mm/init_64.c
+index 1441f5fbd84f..bf529a99ebd1 100644
+--- a/arch/x86/mm/init_64.c
++++ b/arch/x86/mm/init_64.c
+@@ -152,7 +152,7 @@ static void sync_global_pgds_l5(unsigned long start, unsigned long end)
+ 
+ 			pgd = (pgd_t *)ptdesc_address(ptdesc) + pgd_index(addr);
+ 			/* the pgt_lock only for Xen */
+-			pgt_lock = &pgd_page_get_mm(ptdesc_page(ptdesc))->page_table_lock;
++			pgt_lock = &pgd_page_get_mm(ptdesc)->page_table_lock;
+ 			spin_lock(pgt_lock);
+ 
+ 			if (!pgd_none(*pgd_ref) && !pgd_none(*pgd))
+@@ -195,7 +195,7 @@ static void sync_global_pgds_l4(unsigned long start, unsigned long end)
+ 			pgd = (pgd_t *)ptdesc_address(ptdesc) + pgd_index(addr);
+ 			p4d = p4d_offset(pgd, addr);
+ 			/* the pgt_lock only for Xen */
+-			pgt_lock = &pgd_page_get_mm(ptdesc_page(ptdesc))->page_table_lock;
++			pgt_lock = &pgd_page_get_mm(ptdesc)->page_table_lock;
+ 			spin_lock(pgt_lock);
+ 
+ 			if (!p4d_none(*p4d_ref) && !p4d_none(*p4d))
+diff --git a/arch/x86/mm/pgtable.c b/arch/x86/mm/pgtable.c
+index f32facdb3035..cb03f5a2b243 100644
+--- a/arch/x86/mm/pgtable.c
++++ b/arch/x86/mm/pgtable.c
+@@ -74,9 +74,9 @@ static void pgd_set_mm(pgd_t *pgd, struct mm_struct *mm)
+ 	virt_to_ptdesc(pgd)->pt_mm = mm;
+ }
+ 
+-struct mm_struct *pgd_page_get_mm(struct page *page)
++struct mm_struct *pgd_page_get_mm(struct ptdesc *pt)
+ {
+-	return page_ptdesc(page)->pt_mm;
++	return pt->pt_mm;
+ }
+ 
+ static void pgd_ctor(struct mm_struct *mm, pgd_t *pgd)
+-- 
+2.55.0
+

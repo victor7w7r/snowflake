@@ -1,0 +1,571 @@
+From fe8c977b35fd9e945ff281382c808026d41731e5 Mon Sep 17 00:00:00 2001
+From: Tze Yee Ng <tze.yee.ng@altera.com>
+Date: Thu, 14 May 2026 19:11:58 -0700
+Subject: [PATCH 01045/15333] firmware: stratix10-rsu: Add flash device info
+ retrieval via SMC
+
+Extend the Intel Remote System Update (RSU) driver to retrieve the
+device info table through an ARM SMC call to the service layer.
+
+The table reports flash size and erase size for multiple devices.
+
+Signed-off-by: Tze Yee Ng <tze.yee.ng@altera.com>
+Signed-off-by: Dinh Nguyen <dinguyen@kernel.org>
+---
+ drivers/firmware/stratix10-rsu.c              | 200 +++++++++++++++++-
+ drivers/firmware/stratix10-svc.c              |  94 +++++++-
+ include/linux/firmware/intel/stratix10-smc.h  |  25 ++-
+ .../firmware/intel/stratix10-svc-client.h     |  12 +-
+ 4 files changed, 315 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/firmware/stratix10-rsu.c b/drivers/firmware/stratix10-rsu.c
+index daddb5224794..d887c74b9821 100644
+--- a/drivers/firmware/stratix10-rsu.c
++++ b/drivers/firmware/stratix10-rsu.c
+@@ -7,17 +7,24 @@
+ #include <linux/arm-smccc.h>
+ #include <linux/bitfield.h>
+ #include <linux/completion.h>
++#include <linux/delay.h>
++#include <linux/firmware/intel/stratix10-svc-client.h>
++#include <linux/kernel.h>
+ #include <linux/kobject.h>
+ #include <linux/module.h>
+ #include <linux/mutex.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
+-#include <linux/firmware/intel/stratix10-svc-client.h>
+ #include <linux/string.h>
+ #include <linux/sysfs.h>
+-#include <linux/delay.h>
+ 
+-#define RSU_ERASE_SIZE_MASK		GENMASK_ULL(63, 32)
++/*
++ * INTEL_SIP_SMC_RSU_GET_DEVICE_INFO packs each flash word as:
++ *   [63:32] erase_size, [31:0] size (see stratix10-smc.h).
++ */
++#define RSU_DEVICE_INFO_SIZE_MASK	GENMASK_ULL(31, 0)
++#define RSU_DEVICE_INFO_ERASE_SIZE_MASK	GENMASK_ULL(63, 32)
++
+ #define RSU_DCMF0_MASK			GENMASK_ULL(31, 0)
+ #define RSU_DCMF1_MASK			GENMASK_ULL(63, 32)
+ #define RSU_DCMF2_MASK			GENMASK_ULL(31, 0)
+@@ -33,11 +40,31 @@
+ #define INVALID_DCMF_VERSION		0xFF
+ #define INVALID_DCMF_STATUS		0xFFFFFFFF
+ #define INVALID_SPT_ADDRESS		0x0
++#define INVALID_DEVICE_INFO		(~0U)
+ 
+ #define RSU_RETRY_SLEEP_MS		(1U)
+ #define RSU_ASYNC_MSG_RETRY		(3U)
+ #define RSU_GET_SPT_RESP_LEN		(4 * sizeof(unsigned int))
+ 
++struct flash_device_info {
++	unsigned int size;
++	unsigned int erase_size;
++};
++
++/**
++ * rsu_device_info_set_from_packed() - Decode one RSU device-info SMC word
++ * @di: slot to fill
++ * @packed: register value: [63:32] erase_size, [31:0] size
++ *	(INTEL_SIP_SMC_RSU_GET_DEVICE_INFO)
++ */
++static void rsu_device_info_set_from_packed(struct flash_device_info *di,
++					    unsigned long packed)
++{
++	di->size = (unsigned int)FIELD_GET(RSU_DEVICE_INFO_SIZE_MASK, packed);
++	di->erase_size = (unsigned int)FIELD_GET(RSU_DEVICE_INFO_ERASE_SIZE_MASK,
++						 packed);
++}
++
+ typedef void (*rsu_callback)(struct stratix10_svc_client *client,
+ 			     struct stratix10_svc_cb_data *data);
+ /**
+@@ -60,6 +87,8 @@ typedef void (*rsu_callback)(struct stratix10_svc_client *client,
+  * @dcmf_status.dcmf1: dcmf1 status
+  * @dcmf_status.dcmf2: dcmf2 status
+  * @dcmf_status.dcmf3: dcmf3 status
++ * @device_info: per-device flash information array; each entry contains
++ * size and erase size for one flash device
+  * @retry_counter: the current image's retry counter
+  * @max_retry: the preset max retry value
+  * @spt0_address: address of spt0
+@@ -93,6 +122,8 @@ struct stratix10_rsu_priv {
+ 		unsigned int dcmf3;
+ 	} dcmf_status;
+ 
++	struct flash_device_info device_info[4];
++
+ 	unsigned int retry_counter;
+ 	unsigned int max_retry;
+ 
+@@ -100,6 +131,20 @@ struct stratix10_rsu_priv {
+ 	unsigned long spt1_address;
+ };
+ 
++/**
++ * rsu_device_info_invalidate() - Mark all cached QSPI device slots invalid
++ * @priv: RSU private data
++ */
++static void rsu_device_info_invalidate(struct stratix10_rsu_priv *priv)
++{
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(priv->device_info); i++) {
++		priv->device_info[i].size = INVALID_DEVICE_INFO;
++		priv->device_info[i].erase_size = INVALID_DEVICE_INFO;
++	}
++}
++
+ typedef void (*rsu_async_callback)(struct device *dev,
+ 	struct stratix10_rsu_priv *priv, struct stratix10_svc_cb_data *data);
+ 
+@@ -229,8 +274,57 @@ static void rsu_dcmf_status_callback(struct stratix10_svc_client *client,
+ }
+ 
+ /**
+- * rsu_async_get_spt_table_callback() - Callback to be used by the rsu_async_send()
+- * to retrieve the SPT table information.
++ * rsu_get_device_info_callback() - Callback from Intel service layer for
++ * getting the QSPI device info
++ * @client: pointer to client
++ * @data: pointer to callback data structure
++ *
++ * Callback from Intel service layer for QSPI device info.
++ * @data->kaddr1 points to struct arm_smccc_1_2_regs on SVC_STATUS_OK or
++ * SVC_STATUS_ERROR; it is NULL on SVC_STATUS_NO_SUPPORT (unsupported command).
++ */
++static void rsu_get_device_info_callback(struct stratix10_svc_client *client,
++					 struct stratix10_svc_cb_data *data)
++{
++	struct stratix10_rsu_priv *priv = client->priv;
++	struct arm_smccc_1_2_regs *res = data->kaddr1;
++
++	if (data->status == BIT(SVC_STATUS_OK)) {
++		if (!res) {
++			dev_err(client->dev,
++				"COMMAND_RSU_GET_DEVICE_INFO: missing result payload\n");
++			rsu_device_info_invalidate(priv);
++			complete(&priv->completion);
++			return;
++		}
++
++		rsu_device_info_set_from_packed(&priv->device_info[0], res->a1);
++		rsu_device_info_set_from_packed(&priv->device_info[1], res->a2);
++		rsu_device_info_set_from_packed(&priv->device_info[2], res->a3);
++		rsu_device_info_set_from_packed(&priv->device_info[3], res->a4);
++
++	} else if (data->status == BIT(SVC_STATUS_NO_SUPPORT)) {
++		dev_warn(client->dev,
++			 "COMMAND_RSU_GET_DEVICE_INFO not supported by firmware\n");
++		rsu_device_info_invalidate(priv);
++	} else {
++		if (res)
++			dev_err(client->dev,
++				"COMMAND_RSU_GET_DEVICE_INFO returned 0x%lX\n",
++				res->a0);
++		else
++			dev_err(client->dev,
++				"COMMAND_RSU_GET_DEVICE_INFO failed with status 0x%X\n",
++				data->status);
++		rsu_device_info_invalidate(priv);
++	}
++
++	complete(&priv->completion);
++}
++
++/**
++ * rsu_async_get_spt_table_callback() - Callback to be used by the
++ * rsu_async_send() to retrieve the SPT table information.
+  * @dev: pointer to device object
+  * @priv: pointer to priv object
+  * @data: pointer to callback data structure
+@@ -698,6 +792,75 @@ static ssize_t notify_store(struct device *dev,
+ 	return count;
+ }
+ 
++static ssize_t rsu_device_info_show(struct device *dev, char *buf,
++				    unsigned int index, bool erase_size)
++{
++	struct stratix10_rsu_priv *priv = dev_get_drvdata(dev);
++	unsigned int value;
++
++	if (!priv)
++		return -ENODEV;
++
++	if (index >= ARRAY_SIZE(priv->device_info))
++		return -EINVAL;
++
++	value = erase_size ? priv->device_info[index].erase_size :
++			     priv->device_info[index].size;
++
++	if (value == INVALID_DEVICE_INFO)
++		return -EIO;
++
++	return sysfs_emit(buf, "0x%08x\n", value);
++}
++
++static ssize_t size0_show(struct device *dev,
++			  struct device_attribute *attr, char *buf)
++{
++	return rsu_device_info_show(dev, buf, 0, false);
++}
++
++static ssize_t size1_show(struct device *dev,
++			  struct device_attribute *attr, char *buf)
++{
++	return rsu_device_info_show(dev, buf, 1, false);
++}
++
++static ssize_t size2_show(struct device *dev,
++			  struct device_attribute *attr, char *buf)
++{
++	return rsu_device_info_show(dev, buf, 2, false);
++}
++
++static ssize_t size3_show(struct device *dev,
++			  struct device_attribute *attr, char *buf)
++{
++	return rsu_device_info_show(dev, buf, 3, false);
++}
++
++static ssize_t erase_size0_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	return rsu_device_info_show(dev, buf, 0, true);
++}
++
++static ssize_t erase_size1_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	return rsu_device_info_show(dev, buf, 1, true);
++}
++
++static ssize_t erase_size2_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	return rsu_device_info_show(dev, buf, 2, true);
++}
++
++static ssize_t erase_size3_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	return rsu_device_info_show(dev, buf, 3, true);
++}
++
+ static ssize_t spt0_address_show(struct device *dev,
+ 				 struct device_attribute *attr, char *buf)
+ {
+@@ -742,6 +905,14 @@ static DEVICE_ATTR_RO(dcmf0_status);
+ static DEVICE_ATTR_RO(dcmf1_status);
+ static DEVICE_ATTR_RO(dcmf2_status);
+ static DEVICE_ATTR_RO(dcmf3_status);
++static DEVICE_ATTR_RO(size0);
++static DEVICE_ATTR_RO(size1);
++static DEVICE_ATTR_RO(size2);
++static DEVICE_ATTR_RO(size3);
++static DEVICE_ATTR_RO(erase_size0);
++static DEVICE_ATTR_RO(erase_size1);
++static DEVICE_ATTR_RO(erase_size2);
++static DEVICE_ATTR_RO(erase_size3);
+ static DEVICE_ATTR_WO(reboot_image);
+ static DEVICE_ATTR_WO(notify);
+ static DEVICE_ATTR_RO(spt0_address);
+@@ -764,6 +935,14 @@ static struct attribute *rsu_attrs[] = {
+ 	&dev_attr_dcmf1_status.attr,
+ 	&dev_attr_dcmf2_status.attr,
+ 	&dev_attr_dcmf3_status.attr,
++	&dev_attr_size0.attr,
++	&dev_attr_size1.attr,
++	&dev_attr_size2.attr,
++	&dev_attr_size3.attr,
++	&dev_attr_erase_size0.attr,
++	&dev_attr_erase_size1.attr,
++	&dev_attr_erase_size2.attr,
++	&dev_attr_erase_size3.attr,
+ 	&dev_attr_reboot_image.attr,
+ 	&dev_attr_notify.attr,
+ 	&dev_attr_spt0_address.attr,
+@@ -796,6 +975,7 @@ static int stratix10_rsu_probe(struct platform_device *pdev)
+ 	priv->dcmf_status.dcmf2 = INVALID_DCMF_STATUS;
+ 	priv->dcmf_status.dcmf3 = INVALID_DCMF_STATUS;
+ 	/* spt0/1_address and status fields default to 0 from kzalloc */
++	rsu_device_info_invalidate(priv);
+ 
+ 	mutex_init(&priv->lock);
+ 	init_completion(&priv->completion);
+@@ -846,6 +1026,16 @@ static int stratix10_rsu_probe(struct platform_device *pdev)
+ 		goto remove_async_client;
+ 	}
+ 
++	/* get QSPI device info from firmware */
++	ret = rsu_send_msg(priv, COMMAND_RSU_GET_DEVICE_INFO, 0,
++			   rsu_get_device_info_callback);
++	if (ret) {
++		dev_err(dev, "Error, getting QSPI Device Info %i\n", ret);
++		stratix10_svc_remove_async_client(priv->chan);
++		stratix10_svc_free_channel(priv->chan);
++		return ret;
++	}
++
+ 	ret = rsu_send_async_msg(dev, priv, COMMAND_RSU_GET_SPT_TABLE, 0,
+ 				 rsu_async_get_spt_table_callback);
+ 	if (ret) {
+diff --git a/drivers/firmware/stratix10-svc.c b/drivers/firmware/stratix10-svc.c
+index c24ca5823078..de938ab2db0b 100644
+--- a/drivers/firmware/stratix10-svc.c
++++ b/drivers/firmware/stratix10-svc.c
+@@ -20,6 +20,7 @@
+ #include <linux/platform_device.h>
+ #include <linux/slab.h>
+ #include <linux/spinlock.h>
++#include <linux/string.h>
+ #include <linux/firmware/intel/stratix10-smc.h>
+ #include <linux/firmware/intel/stratix10-svc-client.h>
+ #include <linux/types.h>
+@@ -445,13 +446,15 @@ static void svc_thread_cmd_config_status(struct stratix10_svc_controller *ctrl,
+  * svc_thread_recv_status_ok() - handle the successful status
+  * @p_data: pointer to service data structure
+  * @cb_data: pointer to callback data structure to service client
+- * @res: result from SMC or HVC call
++ * @res: result from SMC or HVC call (a0-a3; used for routing and most commands)
++ * @res12: full v1.2 result for %COMMAND_RSU_GET_DEVICE_INFO, else NULL
+  *
+  * Send back the correspond status to the service clients.
+  */
+ static void svc_thread_recv_status_ok(struct stratix10_svc_data *p_data,
+ 				      struct stratix10_svc_cb_data *cb_data,
+-				      struct arm_smccc_res res)
++				      struct arm_smccc_res res,
++				      struct arm_smccc_1_2_regs *res12)
+ {
+ 	cb_data->kaddr1 = NULL;
+ 	cb_data->kaddr2 = NULL;
+@@ -513,6 +516,16 @@ static void svc_thread_recv_status_ok(struct stratix10_svc_data *p_data,
+ 		res.a2 = res.a2 * BYTE_TO_WORD_SIZE;
+ 		cb_data->kaddr2 = &res.a2;
+ 		break;
++	case COMMAND_RSU_GET_DEVICE_INFO:
++		if (WARN_ON(!res12)) {
++			cb_data->status = BIT(SVC_STATUS_ERROR);
++			break;
++		}
++		cb_data->status = BIT(SVC_STATUS_OK);
++		cb_data->kaddr1 = res12;
++		cb_data->kaddr2 = NULL;
++		cb_data->kaddr3 = NULL;
++		break;
+ 	default:
+ 		pr_warn("it shouldn't happen\n");
+ 		break;
+@@ -522,6 +535,10 @@ static void svc_thread_recv_status_ok(struct stratix10_svc_data *p_data,
+ 	p_data->chan->scl->receive_cb(p_data->chan->scl, cb_data);
+ }
+ 
++static void svc_smccc_1_2_full(struct stratix10_svc_controller *ctrl,
++			       const struct arm_smccc_1_2_regs *args,
++			       struct arm_smccc_1_2_regs *res);
++
+ /**
+  * svc_normal_to_secure_thread() - the function to run in the kthread
+  * @data: data pointer for kthread function
+@@ -539,6 +556,7 @@ static int svc_normal_to_secure_thread(void *data)
+ 	struct stratix10_svc_data *pdata = NULL;
+ 	struct stratix10_svc_cb_data *cbdata = NULL;
+ 	struct arm_smccc_res res;
++	struct arm_smccc_1_2_regs res12 = { 0 };
+ 	unsigned long a0, a1, a2, a3, a4, a5, a6, a7;
+ 	int ret_fifo = 0;
+ 
+@@ -727,6 +745,16 @@ static int svc_normal_to_secure_thread(void *data)
+ 			a5 = (unsigned long)pdata->paddr_output;
+ 			a6 = (unsigned long)pdata->size_output / BYTE_TO_WORD_SIZE;
+ 			break;
++		case COMMAND_RSU_GET_DEVICE_INFO:
++			a0 = INTEL_SIP_SMC_RSU_GET_DEVICE_INFO;
++			a1 = 0;
++			a2 = 0;
++			a3 = 0;
++			a4 = 0;
++			a5 = 0;
++			a6 = 0;
++			a7 = 0;
++			break;
+ 		default:
+ 			pr_warn("it shouldn't happen\n");
+ 			mutex_unlock(&ctrl->sdm_lock);
+@@ -740,7 +768,18 @@ static int svc_normal_to_secure_thread(void *data)
+ 		pr_debug(" a3=0x%016x\n", (unsigned int)a3);
+ 		pr_debug(" a4=0x%016x\n", (unsigned int)a4);
+ 		pr_debug(" a5=0x%016x\n", (unsigned int)a5);
+-		ctrl->invoke_fn(a0, a1, a2, a3, a4, a5, a6, a7, &res);
++		if (pdata->command == COMMAND_RSU_GET_DEVICE_INFO) {
++			struct arm_smccc_1_2_regs args12 = { 0 };
++
++			args12.a0 = INTEL_SIP_SMC_RSU_GET_DEVICE_INFO;
++			svc_smccc_1_2_full(ctrl, &args12, &res12);
++			res.a0 = res12.a0;
++			res.a1 = res12.a1;
++			res.a2 = res12.a2;
++			res.a3 = res12.a3;
++		} else {
++			ctrl->invoke_fn(a0, a1, a2, a3, a4, a5, a6, a7, &res);
++		}
+ 
+ 		pr_debug("%s: %s: after SMC call -- res.a0=0x%016x",
+ 			 __func__, chan->name, (unsigned int)res.a0);
+@@ -763,9 +802,15 @@ static int svc_normal_to_secure_thread(void *data)
+ 		}
+ 
+ 		switch (res.a0) {
+-		case INTEL_SIP_SMC_STATUS_OK:
+-			svc_thread_recv_status_ok(pdata, cbdata, res);
++		case INTEL_SIP_SMC_STATUS_OK: {
++			struct arm_smccc_1_2_regs *devinfo_res =
++				(pdata->command == COMMAND_RSU_GET_DEVICE_INFO) ?
++				&res12 : NULL;
++
++			svc_thread_recv_status_ok(pdata, cbdata, res,
++						  devinfo_res);
+ 			break;
++		}
+ 		case INTEL_SIP_SMC_STATUS_BUSY:
+ 			switch (pdata->command) {
+ 			case COMMAND_RECONFIG_DATA_SUBMIT:
+@@ -806,10 +851,16 @@ static int svc_normal_to_secure_thread(void *data)
+ 		case INTEL_SIP_SMC_RSU_ERROR:
+ 			pr_err("%s: STATUS_ERROR\n", __func__);
+ 			cbdata->status = BIT(SVC_STATUS_ERROR);
+-			cbdata->kaddr1 = &res.a1;
+-			cbdata->kaddr2 = (res.a2) ?
+-				svc_pa_to_va(res.a2) : NULL;
+-			cbdata->kaddr3 = (res.a3) ? &res.a3 : NULL;
++			if (pdata->command == COMMAND_RSU_GET_DEVICE_INFO) {
++				cbdata->kaddr1 = &res12;
++				cbdata->kaddr2 = NULL;
++				cbdata->kaddr3 = NULL;
++			} else {
++				cbdata->kaddr1 = &res.a1;
++				cbdata->kaddr2 = (res.a2) ?
++					svc_pa_to_va(res.a2) : NULL;
++				cbdata->kaddr3 = (res.a3) ? &res.a3 : NULL;
++			}
+ 			pdata->chan->scl->receive_cb(pdata->chan->scl, cbdata);
+ 			break;
+ 		default:
+@@ -1025,6 +1076,31 @@ static void svc_smccc_hvc(unsigned long a0, unsigned long a1,
+ 	arm_smccc_hvc(a0, a1, a2, a3, a4, a5, a6, a7, res);
+ }
+ 
++/**
++ * svc_smccc_1_2_full() - SMC/HVC v1.2 call matching the sync channel method
++ * @ctrl: service controller (selects SMC vs HVC)
++ * @args: arguments
++ * @res: full register-file result (a0-a17)
++ */
++static void svc_smccc_1_2_full(struct stratix10_svc_controller *ctrl,
++			       const struct arm_smccc_1_2_regs *args,
++			       struct arm_smccc_1_2_regs *res)
++{
++	if (ctrl->invoke_fn == svc_smccc_smc) {
++		arm_smccc_1_2_smc(args, res);
++	} else if (ctrl->invoke_fn == svc_smccc_hvc) {
++		arm_smccc_1_2_hvc(args, res);
++	} else {
++		WARN_ON_ONCE(1);
++		/*
++		 * INTEL_SIP_SMC_STATUS_OK is 0; zero-filled res would be misrouted
++		 * as success. Force an error path and clear fabricated payload.
++		 */
++		memset(res, 0, sizeof(*res));
++		res->a0 = INTEL_SIP_SMC_STATUS_ERROR;
++	}
++}
++
+ /**
+  * get_invoke_func() - invoke SMC or HVC call
+  * @dev: pointer to device
+diff --git a/include/linux/firmware/intel/stratix10-smc.h b/include/linux/firmware/intel/stratix10-smc.h
+index 9116512169dc..6e042943b6ce 100644
+--- a/include/linux/firmware/intel/stratix10-smc.h
++++ b/include/linux/firmware/intel/stratix10-smc.h
+@@ -429,6 +429,29 @@ INTEL_SIP_SMC_FAST_CALL_VAL(INTEL_SIP_SMC_FUNCID_FPGA_CONFIG_COMPLETED_WRITE)
+ #define INTEL_SIP_SMC_RSU_DCMF_STATUS \
+ 	INTEL_SIP_SMC_FAST_CALL_VAL(INTEL_SIP_SMC_FUNCID_RSU_DCMF_STATUS)
+ 
++/**
++ * Request INTEL_SIP_SMC_RSU_GET_DEVICE_INFO
++ *
++ * Sync call used by service driver at EL1 to query QSPI device info from FW
++ *
++ * Call register usage:
++ * a0 INTEL_SIP_SMC_RSU_GET_DEVICE_INFO
++ * a1-7 not used
++ *
++ * Return status
++ * a0 INTEL_SIP_SMC_STATUS_OK
++ * a1 erasesize0 | size0
++ * a2 erasesize1 | size1
++ * a3 erasesize2 | size2
++ * a4 erasesize3 | size3
++ * Or
++ *
++ * a0 INTEL_SIP_SMC_RSU_ERROR
++ */
++#define INTEL_SIP_SMC_FUNCID_RSU_GET_DEVICE_INFO 22
++#define INTEL_SIP_SMC_RSU_GET_DEVICE_INFO \
++	INTEL_SIP_SMC_FAST_CALL_VAL(INTEL_SIP_SMC_FUNCID_RSU_GET_DEVICE_INFO)
++
+ /**
+  * Request INTEL_SIP_SMC_SERVICE_COMPLETED
+  * Sync call to check if the secure world have completed service request
+@@ -493,7 +516,7 @@ INTEL_SIP_SMC_FAST_CALL_VAL(INTEL_SIP_SMC_FUNCID_FPGA_CONFIG_COMPLETED_WRITE)
+  * a3 not used
+  */
+ #define INTEL_SIP_SMC_FUNCID_MBOX_SEND_CMD 60
+-	#define INTEL_SIP_SMC_MBOX_SEND_CMD \
++#define INTEL_SIP_SMC_MBOX_SEND_CMD \
+ 	INTEL_SIP_SMC_FAST_CALL_VAL(INTEL_SIP_SMC_FUNCID_MBOX_SEND_CMD)
+ 
+ /**
+diff --git a/include/linux/firmware/intel/stratix10-svc-client.h b/include/linux/firmware/intel/stratix10-svc-client.h
+index 3edd93502bf8..af13dacdf5ac 100644
+--- a/include/linux/firmware/intel/stratix10-svc-client.h
++++ b/include/linux/firmware/intel/stratix10-svc-client.h
+@@ -128,6 +128,10 @@ struct stratix10_svc_chan;
+  * @COMMAND_RSU_DCMF_STATUS: query firmware for the DCMF status
+  * return status is SVC_STATUS_OK or SVC_STATUS_ERROR
+  *
++ * @COMMAND_RSU_GET_DEVICE_INFO: query firmware for QSPI device info;
++ * return status is SVC_STATUS_OK, SVC_STATUS_ERROR, or SVC_STATUS_NO_SUPPORT
++ * (unsupported command / firmware compatibility path in the service layer).
++ *
+  * @COMMAND_RSU_GET_SPT_TABLE: query firmware for SPT table
+  * return status is SVC_STATUS_OK or SVC_STATUS_ERROR
+  *
+@@ -174,6 +178,7 @@ enum stratix10_svc_command_code {
+ 	COMMAND_RSU_MAX_RETRY,
+ 	COMMAND_RSU_DCMF_VERSION,
+ 	COMMAND_RSU_DCMF_STATUS,
++	COMMAND_RSU_GET_DEVICE_INFO,
+ 	COMMAND_FIRMWARE_VERSION,
+ 	COMMAND_RSU_GET_SPT_TABLE,
+ 	/* for FCS */
+@@ -224,7 +229,12 @@ struct stratix10_svc_command_config_type {
+ /**
+  * struct stratix10_svc_cb_data - callback data structure from service layer
+  * @status: the status of sent command
+- * @kaddr1: address of 1st completed data block
++ * @kaddr1: address of 1st completed data block, or command-specific payload.
++ *	For COMMAND_RSU_GET_DEVICE_INFO on SVC_STATUS_OK or SVC_STATUS_ERROR,
++ *	points to struct arm_smccc_1_2_regs filled by the SMC/HVC return
++ *	registers (a0 status, a1-a4 packed device words per
++ *	INTEL_SIP_SMC_RSU_GET_DEVICE_INFO).  On SVC_STATUS_NO_SUPPORT (older
++ *	firmware that does not handle this command), kaddr1 is NULL.
+  * @kaddr2: address of 2nd completed data block
+  * @kaddr3: address of 3rd completed data block
+  */
+-- 
+2.55.0
+

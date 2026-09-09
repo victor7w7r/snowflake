@@ -1,0 +1,70 @@
+From 4fa377c19e111c539a530a8200996b911ceff9ff Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh=20=28Schneider=20Electric=29?=
+ <thomas.weissschuh@linutronix.de>
+Date: Mon, 3 Aug 2026 12:04:48 +0200
+Subject: [PATCH 13266/15333] selftests: timers: nsleep-lat: Check all calls to
+ clock_nanosleep() and clock_gettime()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Both these functions can fail.
+
+The first calls to those functions are already checked and result in
+KSFT_SKIP.
+
+If they start failing afterwards unexpectedly, report a hard error.
+
+Signed-off-by: Thomas Weißschuh (Schneider Electric) <thomas.weissschuh@linutronix.de>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Acked-by: John Stultz <jstultz@google.com>
+Link: https://patch.msgid.link/20260803-auxclock-nanosleep-prep-v2-17-910cbd485390@linutronix.de
+---
+ tools/testing/selftests/timers/nsleep-lat.c | 23 ++++++++++++++-------
+ 1 file changed, 16 insertions(+), 7 deletions(-)
+
+diff --git a/tools/testing/selftests/timers/nsleep-lat.c b/tools/testing/selftests/timers/nsleep-lat.c
+index 266ca0cc37ec..5de0051ac8e3 100644
+--- a/tools/testing/selftests/timers/nsleep-lat.c
++++ b/tools/testing/selftests/timers/nsleep-lat.c
+@@ -65,10 +65,16 @@ int nanosleep_lat_test(int clockid, long long ns)
+ 	count = 10;
+ 
+ 	/* First check relative latency */
+-	clock_gettime(clockid, &start);
+-	for (i = 0; i < count; i++)
+-		clock_nanosleep(clockid, 0, &target, NULL);
+-	clock_gettime(clockid, &end);
++	if (clock_gettime(clockid, &start))
++		return KSFT_FAIL;
++
++	for (i = 0; i < count; i++) {
++		if (clock_nanosleep(clockid, 0, &target, NULL))
++			return KSFT_FAIL;
++	}
++
++	if (clock_gettime(clockid, &end))
++		return KSFT_FAIL;
+ 
+ 	if (((timespec_sub(start, end)/count)-ns) > UNRESONABLE_LATENCY) {
+ 		ksft_print_msg("Large rel latency: %lld ns :", (timespec_sub(start, end)/count)-ns);
+@@ -77,10 +83,13 @@ int nanosleep_lat_test(int clockid, long long ns)
+ 
+ 	/* Next check absolute latency */
+ 	for (i = 0; i < count; i++) {
+-		clock_gettime(clockid, &start);
++		if (clock_gettime(clockid, &start))
++			return KSFT_FAIL;
+ 		target = timespec_add(start, ns);
+-		clock_nanosleep(clockid, TIMER_ABSTIME, &target, NULL);
+-		clock_gettime(clockid, &end);
++		if (clock_nanosleep(clockid, TIMER_ABSTIME, &target, NULL))
++			return KSFT_FAIL;
++		if (clock_gettime(clockid, &end))
++			return KSFT_FAIL;
+ 		latency += timespec_sub(target, end);
+ 	}
+ 
+-- 
+2.55.0
+

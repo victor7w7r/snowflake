@@ -1,0 +1,72 @@
+From 4e324f1bc00390508444256b01e8568b5ddbdae7 Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Fri, 24 Jul 2026 03:45:19 +0900
+Subject: [PATCH 07747/15333] clk: remove conditional return with no effect
+
+Both branches of the check return the same value, so the check has
+no effect. Remove it and return the value directly.
+
+In the lmk04832 driver, the hardware sequence comments are moved
+above the final return by hand.
+
+This is the result of running the Coccinelle script from
+scripts/coccinelle/misc/cond_return_no_effect.cocci.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Reviewed-by: Brian Masney <bmasney@redhat.com>
+Signed-off-by: Brian Masney <bmasney@redhat.com>
+---
+ drivers/clk/clk-cs2000-cp.c |  6 +-----
+ drivers/clk/clk-lmk04832.c  | 12 ++++--------
+ 2 files changed, 5 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/clk/clk-cs2000-cp.c b/drivers/clk/clk-cs2000-cp.c
+index 8800472ba63f..4de581771d7d 100644
+--- a/drivers/clk/clk-cs2000-cp.c
++++ b/drivers/clk/clk-cs2000-cp.c
+@@ -404,11 +404,7 @@ static int cs2000_enable(struct clk_hw *hw)
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	ret = cs2000_wait_pll_lock(priv);
+-	if (ret < 0)
+-		return ret;
+-
+-	return ret;
++	return cs2000_wait_pll_lock(priv);
+ }
+ 
+ static void cs2000_disable(struct clk_hw *hw)
+diff --git a/drivers/clk/clk-lmk04832.c b/drivers/clk/clk-lmk04832.c
+index 9bf86caad829..f006401c1586 100644
+--- a/drivers/clk/clk-lmk04832.c
++++ b/drivers/clk/clk-lmk04832.c
+@@ -822,13 +822,6 @@ static int lmk04832_sclk_sync_sequence(struct lmk04832 *lmk)
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = regmap_update_bits(lmk->regmap, LMK04832_REG_SYNC,
+-				 LMK04832_BIT_SYNC_MODE,
+-				 FIELD_PREP(LMK04832_BIT_SYNC_MODE,
+-					    lmk->sync_mode));
+-	if (ret)
+-		return ret;
+-
+ 	/*
+ 	 * 9. (optional) if SCLKx_y_DIS_MODE was used to mute SYSREF outputs
+ 	 *    during the SYNC event, restore SCLKx_y_DIS_MODE=0 for active state,
+@@ -843,7 +836,10 @@ static int lmk04832_sclk_sync_sequence(struct lmk04832 *lmk)
+ 	 *     SYNC pulse to delay the output by some number of VCO counts).
+ 	 */
+ 
+-	return ret;
++	return regmap_update_bits(lmk->regmap, LMK04832_REG_SYNC,
++				  LMK04832_BIT_SYNC_MODE,
++				  FIELD_PREP(LMK04832_BIT_SYNC_MODE,
++					     lmk->sync_mode));
+ }
+ 
+ static int lmk04832_sclk_is_enabled(struct clk_hw *hw)
+-- 
+2.55.0
+

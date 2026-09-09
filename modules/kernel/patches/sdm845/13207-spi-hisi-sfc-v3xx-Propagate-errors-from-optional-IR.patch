@@ -1,0 +1,39 @@
+From e4702b6ff30e2c0c52688d2c76090ee73c6e0299 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 7 Aug 2026 17:38:47 +0700
+Subject: [PATCH 13207/15333] spi: hisi-sfc-v3xx: Propagate errors from
+ optional IRQ lookup
+
+platform_get_irq_optional() returns a positive IRQ number on success or
+a negative error code on failure. For an optional IRQ, -ENXIO indicates
+that no IRQ is available, while other errors should be propagated.
+
+Instead of only checking for -EPROBE_DEFER, propagate all error codes
+returned by platform_get_irq_optional() other than -ENXIO, so that
+failures are properly reported to the caller.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260807103848.46315-1-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-hisi-sfc-v3xx.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/spi/spi-hisi-sfc-v3xx.c b/drivers/spi/spi-hisi-sfc-v3xx.c
+index d60db579b0fb..0790c7179868 100644
+--- a/drivers/spi/spi-hisi-sfc-v3xx.c
++++ b/drivers/spi/spi-hisi-sfc-v3xx.c
+@@ -454,8 +454,8 @@ static int hisi_sfc_v3xx_probe(struct platform_device *pdev)
+ 		return PTR_ERR(host->regbase);
+ 
+ 	host->irq = platform_get_irq_optional(pdev, 0);
+-	if (host->irq == -EPROBE_DEFER)
+-		return -EPROBE_DEFER;
++	if (host->irq < 0 && host->irq != -ENXIO)
++		return host->irq;
+ 
+ 	hisi_sfc_v3xx_disable_int(host);
+ 
+-- 
+2.55.0
+

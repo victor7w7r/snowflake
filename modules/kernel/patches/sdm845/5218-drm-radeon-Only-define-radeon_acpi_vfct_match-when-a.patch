@@ -1,0 +1,47 @@
+From 8e1f8214cbba2ccda3f3c625df0a67dcfd9b1356 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig?= <u.kleine-koenig@baylibre.com>
+Date: Thu, 16 Jul 2026 14:36:45 +0200
+Subject: [PATCH 05218/15333] drm/radeon: Only define radeon_acpi_vfct_match
+ when actually used
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This fixes the build failure
+
+drivers/gpu/drm/radeon/radeon_bios.c:614:12: error: ‘radeon_acpi_vfct_match’ defined but not used [-Werror=unused-function]
+  614 | static int radeon_acpi_vfct_match(struct radeon_device *rdev,
+      |            ^~~~~~~~~~~~~~~~~~~~~~
+
+for builds with CONFIG_ACPI unset.
+
+Fixes: 4059e2f02c8a ("drm/radeon: Fix VFCT bus number matching with soft filter")
+Signed-off-by: Uwe Kleine-König <u.kleine-koenig@baylibre.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/radeon/radeon_bios.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/radeon/radeon_bios.c b/drivers/gpu/drm/radeon/radeon_bios.c
+index 215e47c94d29..8595f4c6e2e5 100644
+--- a/drivers/gpu/drm/radeon/radeon_bios.c
++++ b/drivers/gpu/drm/radeon/radeon_bios.c
+@@ -596,6 +596,7 @@ static bool radeon_read_disabled_bios(struct radeon_device *rdev)
+ 		return legacy_read_disabled_bios(rdev);
+ }
+ 
++#ifdef CONFIG_ACPI
+ /**
+  * radeon_acpi_vfct_match() - Check if a VFCT entry matches the device
+  * @rdev: Radeon device
+@@ -635,7 +636,6 @@ static int radeon_acpi_vfct_match(struct radeon_device *rdev,
+ 	return 0;
+ }
+ 
+-#ifdef CONFIG_ACPI
+ static bool radeon_acpi_vfct_bios(struct radeon_device *rdev)
+ {
+ 	struct acpi_table_header *hdr;
+-- 
+2.55.0
+

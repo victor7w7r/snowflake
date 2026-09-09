@@ -1,0 +1,39 @@
+From 0fdb6ca821170c0c80a42b7dcb34cc75b55c2f1b Mon Sep 17 00:00:00 2001
+From: Li Qiang <liqiang01@kylinos.cn>
+Date: Thu, 16 Jul 2026 16:47:31 +0800
+Subject: [PATCH 12135/15333] Bluetooth: hci_ldisc: reject invalid tty write
+ lengths
+
+The HCI UART write worker assumes that a tty write callback returns a
+value in the range from zero through the skb length. A negative value or
+a value larger than the skb length is passed to accounting and skb_pull,
+which can corrupt skb state.
+
+Treat either return value as a transmit error and discard the skb.
+
+Signed-off-by: Li Qiang <liqiang01@kylinos.cn>
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ drivers/bluetooth/hci_ldisc.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/bluetooth/hci_ldisc.c b/drivers/bluetooth/hci_ldisc.c
+index 2ad42c3bbaac..46dfbe6f1c2e 100644
+--- a/drivers/bluetooth/hci_ldisc.c
++++ b/drivers/bluetooth/hci_ldisc.c
+@@ -163,6 +163,12 @@ static void hci_uart_write_work(struct work_struct *work)
+ 
+ 		set_bit(TTY_DO_WRITE_WAKEUP, &tty->flags);
+ 		len = tty->ops->write(tty, skb->data, skb->len);
++		if (len < 0 || len > skb->len) {
++			hdev->stat.err_tx++;
++			kfree_skb(skb);
++			continue;
++		}
++
+ 		hdev->stat.byte_tx += len;
+ 
+ 		skb_pull(skb, len);
+-- 
+2.55.0
+

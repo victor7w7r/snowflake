@@ -1,0 +1,38 @@
+From 34ff636f322c6d5e4f0a52338fa63a7dff09a495 Mon Sep 17 00:00:00 2001
+From: Joel Fernandes <joelagnelf@nvidia.com>
+Date: Sat, 18 Jul 2026 13:15:36 -0400
+Subject: [PATCH 06804/15333] scftorture: Count single_rpc offline failures in
+ statistics output
+
+scf_torture_stats_print() aggregates each invoker thread's counters
+into a local scf_statistics structure before printing, but the
+n_single_rpc_ofl field is missing from the aggregation loop.  As a
+result, the "single_rpc_ofl" value printed in the statistics line is
+always zero, even when smp_call_function_single() invocations for the
+RPC test have failed due to offline CPUs and been counted by the
+invoker threads.
+
+Add the missing accumulation so that the printed value reflects the
+actual counts.
+
+Signed-off-by: Joel Fernandes <joelagnelf@nvidia.com>
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ kernel/scftorture.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/scftorture.c b/kernel/scftorture.c
+index 327c315f411c..ffd6c83732ee 100644
+--- a/kernel/scftorture.c
++++ b/kernel/scftorture.c
+@@ -193,6 +193,7 @@ static void scf_torture_stats_print(void)
+ 		scfs.n_single += scf_stats_p[i].n_single;
+ 		scfs.n_single_ofl += scf_stats_p[i].n_single_ofl;
+ 		scfs.n_single_rpc += scf_stats_p[i].n_single_rpc;
++		scfs.n_single_rpc_ofl += scf_stats_p[i].n_single_rpc_ofl;
+ 		scfs.n_single_wait += scf_stats_p[i].n_single_wait;
+ 		scfs.n_single_wait_ofl += scf_stats_p[i].n_single_wait_ofl;
+ 		scfs.n_many += scf_stats_p[i].n_many;
+-- 
+2.55.0
+

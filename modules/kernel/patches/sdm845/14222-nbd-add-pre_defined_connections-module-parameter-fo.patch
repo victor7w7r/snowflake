@@ -1,0 +1,86 @@
+From 326d49039c10b65522ac7277b19b9b5c42ed1aeb Mon Sep 17 00:00:00 2001
+From: Yang Erkun <yangerkun@huawei.com>
+Date: Wed, 5 Aug 2026 20:29:30 +0800
+Subject: [PATCH 14222/15333] nbd: add pre_defined_connections module parameter
+ for pre-created devices
+
+blk_mq_update_nr_hw_queues() in nbd_start_device() may cause a queue
+freeze.  The previous commit addressed this for newly created nbd
+devices by setting the expected nr_hw_queues in nbd_dev_add().  However,
+when reusing an old inactive nbd device, the queue freeze can still
+occur if the old nbd->tag_set->nr_hw_queues does not match the new
+socket connection count.  Inactive nbd devices can originate from two
+sources: loading the nbd module with nbds_max, which sets the default
+nr_hw_queues to 1, and the netlink method, which sets nr_hw_queues
+according to the expected number of socket connections.  For the first
+case, add a module parameter so the default nr_hw_queues can be
+changed.  Users who know their expected number of connections can then
+prevent queue freezes on pre-created devices via nbds_max.
+
+Before this patchset:
+real    0m2.195s
+user    0m0.005s
+sys     0m0.022s
+
+After this patchset:
+real    0m0.090s
+user    0m0.004s
+sys     0m0.018s
+
+Signed-off-by: Yang Erkun <yangerkun@huawei.com>
+Reviewed-by: Yu Kuai <yukuai@fygo.io>
+Link: https://patch.msgid.link/20260805122930.57647-9-yangerkun@huawei.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ drivers/block/nbd.c | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/block/nbd.c b/drivers/block/nbd.c
+index 6c4aa19ea11a..ffce519bf008 100644
+--- a/drivers/block/nbd.c
++++ b/drivers/block/nbd.c
+@@ -166,6 +166,7 @@ static struct dentry *nbd_dbg_dir;
+ 
+ static unsigned int nbds_max = 16;
+ static int max_part = 16;
++static int pre_defined_connections = 1;
+ static int part_shift;
+ 
+ static int nbd_dev_dbg_init(struct nbd_device *nbd);
+@@ -2712,6 +2713,12 @@ static int __init nbd_init(void)
+ 	if (nbds_max > 1UL << (MINORBITS - part_shift))
+ 		return -EINVAL;
+ 
++	/* An excessively large value will be adjusted in blk_mq_alloc_tag_set */
++	if (pre_defined_connections < 1) {
++		pr_err("pre_defined_connections must be >= 1\n");
++		return -EINVAL;
++	}
++
+ 	if (register_blkdev(NBD_MAJOR, "nbd"))
+ 		return -EIO;
+ 
+@@ -2728,8 +2735,12 @@ static int __init nbd_init(void)
+ 	}
+ 	nbd_dbg_init();
+ 
++	/*
++	 * Set to the intended connection count so nbd_start_device() can skip
++	 * the queue-freezing blk_mq_update_nr_hw_queues() call.
++	 */
+ 	for (i = 0; i < nbds_max; i++)
+-		nbd_dev_add(i, 1, 1);
++		nbd_dev_add(i, 1, pre_defined_connections);
+ 	return 0;
+ }
+ 
+@@ -2790,3 +2801,6 @@ module_param(nbds_max, int, 0444);
+ MODULE_PARM_DESC(nbds_max, "number of network block devices to initialize (default: 16)");
+ module_param(max_part, int, 0444);
+ MODULE_PARM_DESC(max_part, "number of partitions per device (default: 16)");
++module_param(pre_defined_connections, int, 0444);
++MODULE_PARM_DESC(pre_defined_connections,
++"number of connections for devices pre-created at module load (default: 1)");
+-- 
+2.55.0
+

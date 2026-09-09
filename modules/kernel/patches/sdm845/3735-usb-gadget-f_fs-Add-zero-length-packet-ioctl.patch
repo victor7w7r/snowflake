@@ -1,0 +1,180 @@
+From c3249c462b30e003712cd80f05c26ae3ee29040c Mon Sep 17 00:00:00 2001
+From: Neill Kapron <nkapron@google.com>
+Date: Fri, 19 Jun 2026 04:06:05 +0000
+Subject: [PATCH 03735/15333] usb: gadget: f_fs: Add zero-length packet ioctl
+
+When transferring data from a USB gadget to a host, a transfer is
+considered complete when the host receives a short packet (a packet
+smaller than wMaxPacketSize). If the total transfer length is an
+exact multiple of wMaxPacketSize, a Zero-Length Packet (ZLP) must
+be appended to signal the end of the transfer.
+
+FunctionFS currently provides no mechanism for userspace to instruct
+the kernel to set the `req->zero` flag on transfers. Userspace
+workarounds, such as manually submitting separate 0-byte requests,
+may not be available for legacy protocols which must maintain write
+behavior compatibility when moved to functionfs implementations.
+
+To resolve this, introduce a new ioctl, FUNCTIONFS_ENDPOINT_ENABLE_ZLP,
+which takes a pointer to a __u32 flag. When enabled, all subsequent
+transfers on that endpoint will have the `req->zero` flag set, allowing
+the underlying USB Device Controller (UDC) hardware to automatically
+append a ZLP only when mathematically required. For logical transfers
+chunked across multiple requests, userspace can dynamically toggle this
+flag, enabling it only prior to submitting the final chunk.
+
+The flag defaults to false to maintain backward compatibility. Once
+enabled, the state is persistent for the lifetime of the endpoint and
+will not be reset by opening or closing the endpoint file descriptors.
+
+Assisted-by: Gemini-CLI:gemini-3.1-pro-preview
+Signed-off-by: Neill Kapron <nkapron@google.com>
+Link: https://patch.msgid.link/20260619040609.4010746-4-nkapron@google.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ Documentation/usb/functionfs.rst    | 24 ++++++++++++++++++++++++
+ drivers/usb/gadget/function/f_fs.c  | 25 ++++++++++++++++++++++++-
+ include/uapi/linux/usb/functionfs.h | 23 +++++++++++++++++++++++
+ 3 files changed, 71 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/usb/functionfs.rst b/Documentation/usb/functionfs.rst
+index f7487b0d8057..582e53549d5b 100644
+--- a/Documentation/usb/functionfs.rst
++++ b/Documentation/usb/functionfs.rst
+@@ -72,6 +72,30 @@ have been written to their ep0's.
+ Conversely, the gadget is unregistered after the first USB function
+ closes its endpoints.
+ 
++Endpoint IOCTLs
++===============
++
++FunctionFS supports additional IOCTLs that can be performed on data endpoints
++(ie. not ep0). For a full list of these IOCTLs, please refer to the documentation
++in ``include/uapi/linux/usb/functionfs.h``.
++
++One such IOCTL is:
++
++  ``FUNCTIONFS_ENDPOINT_ENABLE_ZLP(__u32 *)``
++    Enable or disable automatic zero-length packet (ZLP) appending for the
++    endpoint. The argument is a pointer to a __u32: 0 to disable, non-zero to
++    enable. When enabled, the kernel will automatically append a ZLP at the end
++    of a transfer if the payload length is an exact multiple of the endpoint's
++    max packet size. This is useful for compatibility with legacy protocols
++    which require automatic ZLP appending to data written from userspace. This
++    IOCTL can only be used on IN endpoints. It can be called at any time after
++    the FunctionFS instance is active, even before the host has connected or
++    enabled the endpoint. Returns zero on success, or a negative errno value on
++    error:
++
++    * ``-ENODEV``: The FunctionFS instance is not active.
++    * ``-EINVAL``: The endpoint is not an IN endpoint.
++    * ``-EFAULT``: Invalid user space pointer for the argument.
+ DMABUF interface
+ ================
+ 
+diff --git a/drivers/usb/gadget/function/f_fs.c b/drivers/usb/gadget/function/f_fs.c
+index ac8c53789ec2..70e7c18ce062 100644
+--- a/drivers/usb/gadget/function/f_fs.c
++++ b/drivers/usb/gadget/function/f_fs.c
+@@ -224,7 +224,7 @@ struct ffs_epfile {
+ 	unsigned char			in;	/* P: ffs->eps_lock */
+ 	unsigned char			isoc;	/* P: ffs->eps_lock */
+ 
+-	unsigned char			_pad;
++	u8				zlp_enabled; /* P: ffs->eps_lock */
+ 
+ 	/* Protects dmabufs */
+ 	struct mutex			dmabufs_mutex;
+@@ -1114,6 +1114,8 @@ static ssize_t ffs_epfile_io(struct file *file, struct ffs_io_data *io_data)
+ 			req->buf = data;
+ 			req->num_sgs = 0;
+ 		}
++
++		req->zero = epfile->zlp_enabled;
+ 		req->length = data_len;
+ 
+ 		io_data->buf = data;
+@@ -1165,6 +1167,8 @@ static ssize_t ffs_epfile_io(struct file *file, struct ffs_io_data *io_data)
+ 			req->buf = data;
+ 			req->num_sgs = 0;
+ 		}
++
++		req->zero = epfile->zlp_enabled;
+ 		req->length = data_len;
+ 
+ 		io_data->buf = data;
+@@ -1708,6 +1712,7 @@ static int ffs_dmabuf_transfer(struct file *file,
+ 
+ 	/* Now that the dma_fence is in place, queue the transfer. */
+ 
++	usb_req->zero = epfile->zlp_enabled;
+ 	usb_req->length = req->length;
+ 	usb_req->buf = NULL;
+ 	usb_req->sg = priv->sgt->sgl;
+@@ -1755,6 +1760,7 @@ static long ffs_epfile_ioctl(struct file *file, unsigned code,
+ 	struct ffs_epfile *epfile = file->private_data;
+ 	struct ffs_ep *ep;
+ 	int ret;
++	__u32 enable_zlp = 0;
+ 
+ 	if (WARN_ON(epfile->ffs->state != FFS_ACTIVE))
+ 		return -ENODEV;
+@@ -1787,6 +1793,23 @@ static long ffs_epfile_ioctl(struct file *file, unsigned code,
+ 
+ 		return ffs_dmabuf_transfer(file, &req);
+ 	}
++	/*
++	 * We handle this IOCTL before ffs_epfile_wait_ep() to allow userspace
++	 * to configure ZLP behavior immediately without blocking indefinitely
++	 * while waiting for the USB host to connect and enable the endpoint.
++	 */
++	case FUNCTIONFS_ENDPOINT_ENABLE_ZLP:
++		if (!epfile->in)
++			return -EINVAL;
++
++		if (copy_from_user(&enable_zlp, (void __user *)value, sizeof(enable_zlp)))
++			return -EFAULT;
++
++		spin_lock_irq(&epfile->ffs->eps_lock);
++		epfile->zlp_enabled = !!enable_zlp;
++		spin_unlock_irq(&epfile->ffs->eps_lock);
++
++		return 0;
+ 	default:
+ 		break;
+ 	}
+diff --git a/include/uapi/linux/usb/functionfs.h b/include/uapi/linux/usb/functionfs.h
+index beef1752e36e..06134dca4e8a 100644
+--- a/include/uapi/linux/usb/functionfs.h
++++ b/include/uapi/linux/usb/functionfs.h
+@@ -414,4 +414,27 @@ struct usb_functionfs_event {
+ #define FUNCTIONFS_DMABUF_TRANSFER	_IOW('g', 133, \
+ 					     struct usb_ffs_dmabuf_transfer_req)
+ 
++/*
++ * Enable or disable automatic zero-length packet (ZLP) appending for the
++ * endpoint. The argument is a pointer to a __u32: 0 to disable, non-zero to
++ * enable.
++ *
++ * When enabled, the kernel will automatically append a ZLP at the end of
++ * a transfer if the payload length is an exact multiple of the endpoint's
++ * max packet size.
++ *
++ * This is useful for compatibility with legacy protocols which require
++ * automatic ZLP appending to data written from userspace.
++ *
++ * This ioctl can only be used on IN endpoints. It can be called at any time
++ * after the FunctionFS instance is active, even before the host has connected
++ * or enabled the endpoint.
++ *
++ * Returns zero on success, or a negative errno value on error:
++ * -ENODEV: The FunctionFS instance is not active.
++ * -EINVAL: The endpoint is not an IN endpoint.
++ * -EFAULT: Invalid user space pointer for the argument.
++ */
++#define	FUNCTIONFS_ENDPOINT_ENABLE_ZLP	_IOW('g', 134, __u32)
++
+ #endif /* _UAPI__LINUX_FUNCTIONFS_H__ */
+-- 
+2.55.0
+

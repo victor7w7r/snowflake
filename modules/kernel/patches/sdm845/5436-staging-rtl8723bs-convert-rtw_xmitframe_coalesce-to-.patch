@@ -1,0 +1,102 @@
+From bc5ca34cf5a0dc61608876d403a898a29781e24d Mon Sep 17 00:00:00 2001
+From: Hungyu Lin <dennylin0707@gmail.com>
+Date: Mon, 13 Jul 2026 07:05:37 +0000
+Subject: [PATCH 05436/15333] staging: rtl8723bs: convert
+ rtw_xmitframe_coalesce() to return errno
+
+Convert rtw_xmitframe_coalesce() to return 0 on success
+and a negative errno on failure.
+
+Propagate errno values returned by the helper functions
+instead of converting them to _FAIL.
+
+No functional change intended.
+
+Signed-off-by: Hungyu Lin <dennylin0707@gmail.com>
+Reviewed-by: Dan Carpenter <error27@gmail.com>
+Link: https://patch.msgid.link/20260713070537.15903-6-dennylin0707@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/core/rtw_xmit.c      | 10 +++++-----
+ drivers/staging/rtl8723bs/hal/rtl8723bs_xmit.c |  2 +-
+ drivers/staging/rtl8723bs/include/rtw_xmit.h   |  2 +-
+ 3 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/core/rtw_xmit.c b/drivers/staging/rtl8723bs/core/rtw_xmit.c
+index 3baa9704dec7..16e6c9567224 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_xmit.c
++++ b/drivers/staging/rtl8723bs/core/rtw_xmit.c
+@@ -1064,7 +1064,7 @@ u32 rtw_calculate_wlan_pkt_size_by_attribue(struct pkt_attrib *pattrib)
+  * 5. move frag chunk from pframe to pxmitframe->mem
+  * 6. apply sw-encrypt, if necessary.
+  */
+-s32 rtw_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct xmit_frame *pxmitframe)
++int rtw_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct xmit_frame *pxmitframe)
+ {
+ 	struct pkt_file pktfile;
+ 
+@@ -1085,7 +1085,7 @@ s32 rtw_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct
+ 	int ret;
+ 
+ 	if (!pxmitframe->buf_addr)
+-		return _FAIL;
++		return -EINVAL;
+ 
+ 	pbuf_start = pxmitframe->buf_addr;
+ 
+@@ -1094,7 +1094,7 @@ s32 rtw_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct
+ 
+ 	ret = rtw_make_wlanhdr(padapter, mem_start, pattrib);
+ 	if (ret)
+-		return _FAIL;
++		return ret;
+ 
+ 	_rtw_open_pktfile(pkt, &pktfile);
+ 	ret = _rtw_pktfile_read(&pktfile, NULL, pattrib->pkt_hdrlen);
+@@ -1174,7 +1174,7 @@ s32 rtw_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct
+ 
+ 	ret = xmitframe_addmic(padapter, pxmitframe);
+ 	if (ret)
+-		return _FAIL;
++		return ret;
+ 
+ 	xmitframe_swencrypt(padapter, pxmitframe);
+ 
+@@ -1183,7 +1183,7 @@ s32 rtw_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct
+ 	else
+ 		pattrib->vcs_mode = NONE_VCS;
+ 
+-	return _SUCCESS;
++	return 0;
+ }
+ 
+ /* broadcast or multicast management pkt use BIP, unicast management pkt use CCMP encryption */
+diff --git a/drivers/staging/rtl8723bs/hal/rtl8723bs_xmit.c b/drivers/staging/rtl8723bs/hal/rtl8723bs_xmit.c
+index e40f69c13c44..79dbca1b5525 100644
+--- a/drivers/staging/rtl8723bs/hal/rtl8723bs_xmit.c
++++ b/drivers/staging/rtl8723bs/hal/rtl8723bs_xmit.c
+@@ -285,7 +285,7 @@ static s32 xmit_xmitframes(struct adapter *padapter, struct xmit_priv *pxmitpriv
+ 				pxmitframe->buf_addr = pxmitbuf->ptail;
+ 
+ 				ret = rtw_xmitframe_coalesce(padapter, pxmitframe->pkt, pxmitframe);
+-				if (ret != _SUCCESS) {
++				if (ret) {
+ 					netdev_err(padapter->pnetdev,
+ 						   "%s: coalesce failed with error %d\n",
+ 						   __func__, ret);
+diff --git a/drivers/staging/rtl8723bs/include/rtw_xmit.h b/drivers/staging/rtl8723bs/include/rtw_xmit.h
+index 303b50051274..917e846e9ce2 100644
+--- a/drivers/staging/rtl8723bs/include/rtw_xmit.h
++++ b/drivers/staging/rtl8723bs/include/rtw_xmit.h
+@@ -423,7 +423,7 @@ int rtw_xmitframe_enqueue(struct adapter *padapter, struct xmit_frame *pxmitfram
+ 
+ extern u32 rtw_calculate_wlan_pkt_size_by_attribue(struct pkt_attrib *pattrib);
+ #define rtw_wlan_pkt_size(f) rtw_calculate_wlan_pkt_size_by_attribue(&f->attrib)
+-extern s32 rtw_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct xmit_frame *pxmitframe);
++extern int rtw_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct xmit_frame *pxmitframe);
+ extern s32 rtw_mgmt_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct xmit_frame *pxmitframe);
+ s32 _rtw_init_hw_txqueue(struct hw_txqueue *phw_txqueue, u8 ac_tag);
+ void _rtw_init_sta_xmit_priv(struct sta_xmit_priv *psta_xmitpriv);
+-- 
+2.55.0
+

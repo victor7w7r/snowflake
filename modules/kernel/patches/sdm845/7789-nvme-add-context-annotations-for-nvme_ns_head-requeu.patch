@@ -1,0 +1,35 @@
+From aa5d8dda3a455c8b0c06a9ab360a52c6a6fae0b6 Mon Sep 17 00:00:00 2001
+From: Nilay Shroff <nilay@linux.ibm.com>
+Date: Mon, 13 Jul 2026 17:24:08 +0530
+Subject: [PATCH 07789/15333] nvme: add context annotations for
+ nvme_ns_head::requeue_list
+
+nvme_ns_head::requeue_list is protected by
+nvme_ns_head::requeue_lock. Annotate requeue_list with
+__guarded_by(&requeue_lock) so that Clang's context analysis can
+validate accesses to the list.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Nilay Shroff <nilay@linux.ibm.com>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/nvme.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/nvme/host/nvme.h b/drivers/nvme/host/nvme.h
+index ec9dea4d7fb9..27023648cbd1 100644
+--- a/drivers/nvme/host/nvme.h
++++ b/drivers/nvme/host/nvme.h
+@@ -561,7 +561,8 @@ struct nvme_ns_head {
+ 	u16			nr_plids;
+ 	u16			*plids;
+ #ifdef CONFIG_NVME_MULTIPATH
+-	struct bio_list		requeue_list;
++	struct bio_list		requeue_list
++		__guarded_by(&requeue_lock);
+ 	spinlock_t		requeue_lock;
+ 	struct work_struct	requeue_work;
+ 	struct work_struct	partition_scan_work;
+-- 
+2.55.0
+

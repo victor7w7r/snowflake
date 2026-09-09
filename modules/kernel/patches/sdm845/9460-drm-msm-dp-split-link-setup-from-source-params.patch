@@ -1,0 +1,47 @@
+From 0a19867dfb8dc4491737e64987566fc2c5962778 Mon Sep 17 00:00:00 2001
+From: Yongxing Mou <yongxing.mou@oss.qualcomm.com>
+Date: Tue, 28 Jul 2026 18:21:35 +0800
+Subject: [PATCH 09460/15333] drm/msm/dp: split link setup from source params
+
+msm_dp_ctrl_configure_source_params() should only handle stream-related
+configuration. Move the link setup out of it so MST can program link and
+stream settings separately.
+
+Signed-off-by: Yongxing Mou <yongxing.mou@oss.qualcomm.com>
+Reviewed-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Patchwork: https://patchwork.freedesktop.org/patch/742737/
+Link: https://lore.kernel.org/r/20260728-dp_mstclean-v9-6-f7779fce10f4@oss.qualcomm.com
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+---
+ drivers/gpu/drm/msm/dp/dp_ctrl.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dp/dp_ctrl.c b/drivers/gpu/drm/msm/dp/dp_ctrl.c
+index c557e0f01dc6..f343bd6c2b81 100644
+--- a/drivers/gpu/drm/msm/dp/dp_ctrl.c
++++ b/drivers/gpu/drm/msm/dp/dp_ctrl.c
+@@ -486,10 +486,6 @@ static void msm_dp_ctrl_config_misc1_misc0(struct msm_dp_ctrl_private *ctrl,
+ 
+ static void msm_dp_ctrl_configure_source_params(struct msm_dp_ctrl_private *ctrl)
+ {
+-	msm_dp_ctrl_lane_mapping(ctrl);
+-	msm_dp_setup_peripheral_flush(ctrl);
+-
+-	msm_dp_ctrl_config_ctrl_link(ctrl);
+ 	msm_dp_ctrl_config_ctrl_streams(ctrl, ctrl->panel);
+ 
+ 	msm_dp_ctrl_config_misc1_misc0(ctrl, ctrl->panel);
+@@ -2556,6 +2552,10 @@ int msm_dp_ctrl_on_stream(struct msm_dp_ctrl *msm_dp_ctrl, bool force_link_train
+ 	 */
+ 	reinit_completion(&ctrl->video_comp);
+ 
++	msm_dp_ctrl_lane_mapping(ctrl);
++	msm_dp_setup_peripheral_flush(ctrl);
++	msm_dp_ctrl_config_ctrl_link(ctrl);
++
+ 	msm_dp_ctrl_configure_source_params(ctrl);
+ 
+ 	msm_dp_ctrl_config_msa(ctrl,
+-- 
+2.55.0
+

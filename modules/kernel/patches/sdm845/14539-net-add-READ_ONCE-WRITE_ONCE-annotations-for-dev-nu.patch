@@ -1,0 +1,406 @@
+From 0c6c32a8c854e570998494b8368d314d526ddbd3 Mon Sep 17 00:00:00 2001
+From: Eric Dumazet <edumazet@google.com>
+Date: Wed, 12 Aug 2026 08:54:39 +0000
+Subject: [PATCH 14539/15333] net: add READ_ONCE()/WRITE_ONCE() annotations for
+ dev->num_tc
+
+Several fast-path and control-path lockless readers access dev->num_tc
+(e.g., skb_tx_hash(), netdev_txq_to_tc(), netdev_get_num_tc(), and
+qdisc/driver lookups) while concurrent writers update dev->num_tc
+during TC setup, device reset, or channel configuration.
+
+Add READ_ONCE() and WRITE_ONCE() annotations to prevent compiler
+reordering and load/store tearing when accessing dev->num_tc.
+
+Update inline helpers in netdevice.h (netdev_get_num_tc(),
+netdev_set_prio_tc_map(), and netdev_get_sb_channel()) as well as
+writers and lockless readers in core networking code and drivers.
+
+Signed-off-by: Eric Dumazet <edumazet@google.com>
+Link: https://patch.msgid.link/20260812085440.3917924-3-edumazet@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ .../net/ethernet/chelsio/cxgb4/cxgb4_main.c   |  2 +-
+ .../net/ethernet/freescale/dpaa2/dpaa2-eth.c  | 12 +++++----
+ drivers/net/ethernet/intel/igc/igc_tsn.c      |  2 +-
+ .../net/ethernet/mellanox/mlx5/core/en_main.c |  2 +-
+ drivers/net/ethernet/sfc/falcon/net_driver.h  |  2 +-
+ drivers/net/ethernet/sfc/falcon/tx.c          |  8 +++---
+ drivers/net/ethernet/sfc/siena/tx.c           |  4 +--
+ drivers/net/ethernet/ti/cpsw_priv.c           |  2 +-
+ include/linux/netdevice.h                     |  8 +++---
+ net/core/dev.c                                | 25 ++++++++++---------
+ net/core/net-sysfs.c                          |  2 +-
+ net/sched/sch_taprio.c                        |  7 +++---
+ 12 files changed, 40 insertions(+), 36 deletions(-)
+
+diff --git a/drivers/net/ethernet/chelsio/cxgb4/cxgb4_main.c b/drivers/net/ethernet/chelsio/cxgb4/cxgb4_main.c
+index 9e2c2fa16d7a..1ced6df6eac8 100644
+--- a/drivers/net/ethernet/chelsio/cxgb4/cxgb4_main.c
++++ b/drivers/net/ethernet/chelsio/cxgb4/cxgb4_main.c
+@@ -1163,7 +1163,7 @@ static u16 cxgb_select_queue(struct net_device *dev, struct sk_buff *skb,
+ 	}
+ #endif /* CONFIG_CHELSIO_T4_DCB */
+ 
+-	if (dev->num_tc) {
++	if (netdev_get_num_tc(dev)) {
+ 		struct port_info *pi = netdev2pinfo(dev);
+ 		u8 ver, proto;
+ 
+diff --git a/drivers/net/ethernet/freescale/dpaa2/dpaa2-eth.c b/drivers/net/ethernet/freescale/dpaa2/dpaa2-eth.c
+index 764d2a09668f..6f1046c9cc51 100644
+--- a/drivers/net/ethernet/freescale/dpaa2/dpaa2-eth.c
++++ b/drivers/net/ethernet/freescale/dpaa2/dpaa2-eth.c
+@@ -1403,10 +1403,10 @@ static netdev_tx_t __dpaa2_eth_tx(struct sk_buff *skb,
+ 	struct dpaa2_eth_fq *fq;
+ 	struct netdev_queue *nq;
+ 	struct dpaa2_fd *fd;
++	int err, i, num_tc;
+ 	u16 queue_mapping;
+ 	void *swa = NULL;
+ 	u8 prio = 0;
+-	int err, i;
+ 	u32 fd_len;
+ 
+ 	percpu_stats = this_cpu_ptr(priv->percpu_stats);
+@@ -1468,12 +1468,14 @@ static netdev_tx_t __dpaa2_eth_tx(struct sk_buff *skb,
+ 	 */
+ 	queue_mapping = skb_get_queue_mapping(skb);
+ 
+-	if (net_dev->num_tc) {
++	num_tc = netdev_get_num_tc(net_dev);
++
++	if (num_tc) {
+ 		prio = netdev_txq_to_tc(net_dev, queue_mapping);
+ 		/* Hardware interprets priority level 0 as being the highest,
+ 		 * so we need to do a reverse mapping to the netdev tc index
+ 		 */
+-		prio = net_dev->num_tc - prio - 1;
++		prio = num_tc - prio - 1;
+ 		/* We have only one FQ array entry for all Tx hardware queues
+ 		 * with the same flow id (but different priority levels)
+ 		 */
+@@ -2913,7 +2915,7 @@ static int update_xps(struct dpaa2_eth_priv *priv)
+ 		return -ENOMEM;
+ 
+ 	num_queues = dpaa2_eth_queue_count(priv);
+-	netdev_queues = (net_dev->num_tc ? : 1) * num_queues;
++	netdev_queues = (netdev_get_num_tc(net_dev) ? : 1) * num_queues;
+ 
+ 	/* The first <num_queues> entries in priv->fq array are Tx/Tx conf
+ 	 * queues, so only process those
+@@ -2946,7 +2948,7 @@ static int dpaa2_eth_setup_mqprio(struct net_device *net_dev,
+ 	num_queues = dpaa2_eth_queue_count(priv);
+ 	num_tc = mqprio->num_tc;
+ 
+-	if (num_tc == net_dev->num_tc)
++	if (num_tc == netdev_get_num_tc(net_dev))
+ 		return 0;
+ 
+ 	if (num_tc  > dpaa2_eth_tc_count(priv)) {
+diff --git a/drivers/net/ethernet/intel/igc/igc_tsn.c b/drivers/net/ethernet/intel/igc/igc_tsn.c
+index 0c08650d3bb2..d23a45a34fa3 100644
+--- a/drivers/net/ethernet/intel/igc/igc_tsn.c
++++ b/drivers/net/ethernet/intel/igc/igc_tsn.c
+@@ -182,7 +182,7 @@ static u32 igc_fpe_map_preempt_tc_to_queue(const struct igc_adapter *adapter,
+ 	struct net_device *dev = adapter->netdev;
+ 	u32 i, queue = 0;
+ 
+-	for (i = 0; i < dev->num_tc; i++) {
++	for (i = 0; i < netdev_get_num_tc(dev); i++) {
+ 		struct netdev_tc_txq res;
+ 		u32 offset, count;
+ 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_main.c b/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
+index 8a877891e690..fc110a7d16e8 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
+@@ -3245,7 +3245,7 @@ static int mlx5e_update_tc_and_tx_queues(struct mlx5e_priv *priv)
+ 	int i;
+ 
+ 	old_num_txqs = netdev->real_num_tx_queues;
+-	old_ntc = netdev->num_tc ? : 1;
++	old_ntc = netdev_get_num_tc(netdev) ? : 1;
+ 	for (i = 0; i < ARRAY_SIZE(old_tc_to_txq); i++)
+ 		old_tc_to_txq[i].combined = READ_ONCE(netdev->tc_to_txq[i].combined);
+ 
+diff --git a/drivers/net/ethernet/sfc/falcon/net_driver.h b/drivers/net/ethernet/sfc/falcon/net_driver.h
+index 7ab0db44720d..63016bbae115 100644
+--- a/drivers/net/ethernet/sfc/falcon/net_driver.h
++++ b/drivers/net/ethernet/sfc/falcon/net_driver.h
+@@ -1208,7 +1208,7 @@ ef4_channel_get_tx_queue(struct ef4_channel *channel, unsigned type)
+ 
+ static inline bool ef4_tx_queue_used(struct ef4_tx_queue *tx_queue)
+ {
+-	return !(tx_queue->efx->net_dev->num_tc < 2 &&
++	return !(netdev_get_num_tc(tx_queue->efx->net_dev) < 2 &&
+ 		 tx_queue->queue & EF4_TXQ_TYPE_HIGHPRI);
+ }
+ 
+diff --git a/drivers/net/ethernet/sfc/falcon/tx.c b/drivers/net/ethernet/sfc/falcon/tx.c
+index e4d47d26a87a..2103b6fdf968 100644
+--- a/drivers/net/ethernet/sfc/falcon/tx.c
++++ b/drivers/net/ethernet/sfc/falcon/tx.c
+@@ -435,7 +435,7 @@ int ef4_setup_tc(struct net_device *net_dev, enum tc_setup_type type,
+ 
+ 	mqprio->hw = TC_MQPRIO_HW_OFFLOAD_TCS;
+ 
+-	if (num_tc == net_dev->num_tc)
++	if (num_tc == netdev_get_num_tc(net_dev))
+ 		return 0;
+ 
+ 	for (tc = 0; tc < num_tc; tc++) {
+@@ -447,7 +447,7 @@ int ef4_setup_tc(struct net_device *net_dev, enum tc_setup_type type,
+ 		WRITE_ONCE(net_dev->tc_to_txq[tc].combined, res.combined);
+ 	}
+ 
+-	if (num_tc > net_dev->num_tc) {
++	if (num_tc > netdev_get_num_tc(net_dev)) {
+ 		/* Initialise high-priority queues as necessary */
+ 		ef4_for_each_channel(channel, efx) {
+ 			ef4_for_each_possible_channel_tx_queue(tx_queue,
+@@ -466,7 +466,7 @@ int ef4_setup_tc(struct net_device *net_dev, enum tc_setup_type type,
+ 		}
+ 	} else {
+ 		/* Reduce number of classes before number of queues */
+-		net_dev->num_tc = num_tc;
++		WRITE_ONCE(net_dev->num_tc, num_tc);
+ 	}
+ 
+ 	rc = netif_set_real_num_tx_queues(net_dev,
+@@ -481,7 +481,7 @@ int ef4_setup_tc(struct net_device *net_dev, enum tc_setup_type type,
+ 	 * it to ef4_fini_channels().
+ 	 */
+ 
+-	net_dev->num_tc = num_tc;
++	WRITE_ONCE(net_dev->num_tc, num_tc);
+ 	return 0;
+ }
+ 
+diff --git a/drivers/net/ethernet/sfc/siena/tx.c b/drivers/net/ethernet/sfc/siena/tx.c
+index 1ce98f8fdaf8..67c77d67d984 100644
+--- a/drivers/net/ethernet/sfc/siena/tx.c
++++ b/drivers/net/ethernet/sfc/siena/tx.c
+@@ -376,7 +376,7 @@ int efx_siena_setup_tc(struct net_device *net_dev, enum tc_setup_type type,
+ 
+ 	mqprio->hw = TC_MQPRIO_HW_OFFLOAD_TCS;
+ 
+-	if (num_tc == net_dev->num_tc)
++	if (num_tc == netdev_get_num_tc(net_dev))
+ 		return 0;
+ 
+ 	for (tc = 0; tc < num_tc; tc++) {
+@@ -388,7 +388,7 @@ int efx_siena_setup_tc(struct net_device *net_dev, enum tc_setup_type type,
+ 		WRITE_ONCE(net_dev->tc_to_txq[tc].combined, res.combined);
+ 	}
+ 
+-	net_dev->num_tc = num_tc;
++	WRITE_ONCE(net_dev->num_tc, num_tc);
+ 
+ 	return netif_set_real_num_tx_queues(net_dev,
+ 					    max_t(int, num_tc, 1) *
+diff --git a/drivers/net/ethernet/ti/cpsw_priv.c b/drivers/net/ethernet/ti/cpsw_priv.c
+index 1f6f374551cb..0580a7885d33 100644
+--- a/drivers/net/ethernet/ti/cpsw_priv.c
++++ b/drivers/net/ethernet/ti/cpsw_priv.c
+@@ -949,7 +949,7 @@ static int cpsw_set_cbs(struct net_device *ndev,
+ 	 * limited first and for compliance with CPDMA rate limited channels
+ 	 * that also used in bacward order. FIFO0 cannot be rate limited.
+ 	 */
+-	fifo = cpsw_tc_to_fifo(tc, ndev->num_tc);
++	fifo = cpsw_tc_to_fifo(tc, netdev_get_num_tc(ndev));
+ 	if (!fifo) {
+ 		dev_err(priv->dev, "Last tc%d can't be rate limited", tc);
+ 		return -EINVAL;
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+index 9d22e6b0df60..fd1916261072 100644
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -2678,7 +2678,7 @@ int netdev_get_prio_tc_map(const struct net_device *dev, u32 prio)
+ static inline
+ int netdev_set_prio_tc_map(struct net_device *dev, u8 prio, u8 tc)
+ {
+-	if (tc >= dev->num_tc)
++	if (tc >= READ_ONCE(dev->num_tc))
+ 		return -EINVAL;
+ 
+ 	dev->prio_tc_map[prio & TC_BITMASK] = tc & TC_BITMASK;
+@@ -2691,9 +2691,9 @@ int netdev_set_tc_queue(struct net_device *dev, u8 tc, u16 count, u16 offset);
+ int netdev_set_num_tc(struct net_device *dev, u8 num_tc);
+ 
+ static inline
+-int netdev_get_num_tc(struct net_device *dev)
++int netdev_get_num_tc(const struct net_device *dev)
+ {
+-	return dev->num_tc;
++	return READ_ONCE(dev->num_tc);
+ }
+ 
+ static inline void net_prefetch(void *p)
+@@ -2720,7 +2720,7 @@ int netdev_bind_sb_channel_queue(struct net_device *dev,
+ int netdev_set_sb_channel(struct net_device *dev, u16 channel);
+ static inline int netdev_get_sb_channel(struct net_device *dev)
+ {
+-	return max_t(int, -dev->num_tc, 0);
++	return max_t(int, -READ_ONCE(dev->num_tc), 0);
+ }
+ 
+ static inline
+diff --git a/net/core/dev.c b/net/core/dev.c
+index 694a5ab773f7..9fc6eeb4d066 100644
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -2660,7 +2660,7 @@ static void netif_setup_tc(struct net_device *dev, unsigned int txq)
+ 	/* If TC0 is invalidated disable TC mapping */
+ 	if (res.offset + res.count > txq) {
+ 		netdev_warn(dev, "Number of in use tx queues changed invalidating tc mappings. Priority traffic classification disabled!\n");
+-		dev->num_tc = 0;
++		WRITE_ONCE(dev->num_tc, 0);
+ 		return;
+ 	}
+ 
+@@ -2679,7 +2679,7 @@ static void netif_setup_tc(struct net_device *dev, unsigned int txq)
+ 
+ int netdev_txq_to_tc(struct net_device *dev, unsigned int txq)
+ {
+-	if (dev->num_tc) {
++	if (READ_ONCE(dev->num_tc)) {
+ 		struct netdev_tc_txq *tc = &dev->tc_to_txq[0];
+ 		int i;
+ 
+@@ -2881,18 +2881,19 @@ int __netif_set_xps_queue(struct net_device *dev, const unsigned long *mask,
+ 			  u16 index, enum xps_map_type type)
+ {
+ 	struct xps_dev_maps *dev_maps, *new_dev_maps = NULL, *old_dev_maps = NULL;
++	int maps_sz, num_tc = 1, tc = 0, dev_num_tc;
+ 	const unsigned long *online_mask = NULL;
+ 	bool active = false, copy = false;
+ 	int i, j, tci, numa_node_id = -2;
+-	int maps_sz, num_tc = 1, tc = 0;
+ 	struct xps_map *map, *new_map;
+ 	unsigned int nr_ids;
+ 
+ 	WARN_ON_ONCE(index >= dev->num_tx_queues);
+ 
+-	if (dev->num_tc) {
++	dev_num_tc = READ_ONCE(dev->num_tc);
++	if (dev_num_tc) {
+ 		/* Do not allow XPS on subordinate device directly */
+-		num_tc = dev->num_tc;
++		num_tc = dev_num_tc;
+ 		if (num_tc < 0)
+ 			return -EINVAL;
+ 
+@@ -3116,7 +3117,7 @@ void netdev_reset_tc(struct net_device *dev)
+ 	netdev_unbind_all_sb_channels(dev);
+ 
+ 	/* Reset TC configuration of device */
+-	dev->num_tc = 0;
++	WRITE_ONCE(dev->num_tc, 0);
+ 	for (i = 0; i < TC_MAX_QUEUE; i++)
+ 		WRITE_ONCE(dev->tc_to_txq[i].combined, 0);
+ 	memset(dev->prio_tc_map, 0, sizeof(dev->prio_tc_map));
+@@ -3130,7 +3131,7 @@ int netdev_set_tc_queue(struct net_device *dev, u8 tc, u16 count, u16 offset)
+ 		.offset = offset,
+ 	};
+ 
+-	if (tc >= dev->num_tc)
++	if (tc >= READ_ONCE(dev->num_tc))
+ 		return -EINVAL;
+ 
+ #ifdef CONFIG_XPS
+@@ -3151,7 +3152,7 @@ int netdev_set_num_tc(struct net_device *dev, u8 num_tc)
+ #endif
+ 	netdev_unbind_all_sb_channels(dev);
+ 
+-	dev->num_tc = num_tc;
++	WRITE_ONCE(dev->num_tc, num_tc);
+ 	return 0;
+ }
+ EXPORT_SYMBOL(netdev_set_num_tc);
+@@ -3181,7 +3182,7 @@ int netdev_bind_sb_channel_queue(struct net_device *dev,
+ 				 u8 tc, u16 count, u16 offset)
+ {
+ 	/* Make certain the sb_dev and dev are already configured */
+-	if (sb_dev->num_tc >= 0 || tc >= dev->num_tc)
++	if (READ_ONCE(sb_dev->num_tc) >= 0 || tc >= READ_ONCE(dev->num_tc))
+ 		return -EINVAL;
+ 
+ 	/* We cannot hand out queues we don't have */
+@@ -3220,7 +3221,7 @@ int netdev_set_sb_channel(struct net_device *dev, u16 channel)
+ 	if (channel > S16_MAX)
+ 		return -EINVAL;
+ 
+-	dev->num_tc = -channel;
++	WRITE_ONCE(dev->num_tc, -channel);
+ 
+ 	return 0;
+ }
+@@ -3249,7 +3250,7 @@ int netif_set_real_num_tx_queues(struct net_device *dev, unsigned int txq)
+ 		if (rc)
+ 			return rc;
+ 
+-		if (dev->num_tc)
++		if (READ_ONCE(dev->num_tc))
+ 			netif_setup_tc(dev, txq);
+ 
+ 		net_shaper_set_real_num_tx_queues(dev, txq);
+@@ -3558,7 +3559,7 @@ static u16 skb_tx_hash(const struct net_device *dev,
+ 	u16 qoffset = 0;
+ 	u16 qcount = dev->real_num_tx_queues;
+ 
+-	if (dev->num_tc) {
++	if (READ_ONCE(dev->num_tc)) {
+ 		u8 tc = netdev_get_prio_tc_map(dev, skb->priority);
+ 		struct netdev_tc_txq res;
+ 
+diff --git a/net/core/net-sysfs.c b/net/core/net-sysfs.c
+index 25546deacec8..352173df7578 100644
+--- a/net/core/net-sysfs.c
++++ b/net/core/net-sysfs.c
+@@ -1432,7 +1432,7 @@ static ssize_t traffic_class_show(struct kobject *kobj, struct attribute *attr,
+ 	/* If queue belongs to subordinate dev use its TC mapping */
+ 	dev = netdev_get_tx_queue(dev, index)->sb_dev ? : dev;
+ 
+-	num_tc = dev->num_tc;
++	num_tc = READ_ONCE(dev->num_tc);
+ 	tc = netdev_txq_to_tc(dev, index);
+ 
+ 	rtnl_unlock();
+diff --git a/net/sched/sch_taprio.c b/net/sched/sch_taprio.c
+index 7d5fe93a4c12..18fcb4e78456 100644
+--- a/net/sched/sch_taprio.c
++++ b/net/sched/sch_taprio.c
+@@ -1185,7 +1185,7 @@ static int taprio_parse_mqprio_opt(struct net_device *dev,
+ 	bool allow_overlapping_txqs = TXTIME_ASSIST_IS_ENABLED(taprio_flags);
+ 
+ 	if (!qopt) {
+-		if (!dev->num_tc) {
++		if (!netdev_get_num_tc(dev)) {
+ 			NL_SET_ERR_MSG(extack, "'mqprio' configuration is necessary");
+ 			return -EINVAL;
+ 		}
+@@ -1439,9 +1439,10 @@ static void taprio_offload_config_changed(struct taprio_sched *q)
+ 
+ static u32 tc_map_to_queue_mask(struct net_device *dev, u32 tc_mask)
+ {
++	int num_tc = netdev_get_num_tc(dev);
+ 	u32 i, queue_mask = 0;
+ 
+-	for (i = 0; i < dev->num_tc; i++) {
++	for (i = 0; i < num_tc; i++) {
+ 		struct netdev_tc_txq res;
+ 
+ 		if (!(tc_mask & BIT(i)))
+@@ -1799,7 +1800,7 @@ static int taprio_mqprio_cmp(const struct net_device *dev,
+ {
+ 	int i;
+ 
+-	if (!mqprio || mqprio->num_tc != dev->num_tc)
++	if (!mqprio || mqprio->num_tc != netdev_get_num_tc(dev))
+ 		return -1;
+ 
+ 	for (i = 0; i < mqprio->num_tc; i++) {
+-- 
+2.55.0
+

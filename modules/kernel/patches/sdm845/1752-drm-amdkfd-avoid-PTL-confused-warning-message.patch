@@ -1,0 +1,54 @@
+From b78bd145e42c831f7d3a4ba612ebb89060efa720 Mon Sep 17 00:00:00 2001
+From: Eric Huang <jinhuieric.huang@amd.com>
+Date: Fri, 19 Jun 2026 12:37:01 -0400
+Subject: [PATCH 01752/15333] drm/amdkfd: avoid PTL confused warning message
+
+PTL is a special feature for gfxv9.4.4, but the warning is
+always appearing on other ASICs when rocprof is running, it
+causes confusion, so move hw_supported check earlier to
+avoid it.
+
+Signed-off-by: Eric Huang <jinhuieric.huang@amd.com>
+Reviewed-by: Kent Russell <kent.russell@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdkfd/kfd_chardev.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
+index fcdb4e222167..38c6cb1f49a6 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
+@@ -1783,9 +1783,6 @@ static int kfd_ptl_control(struct kfd_process_device *pdd, bool enable)
+ 	uint32_t ptl_state = enable ? 1 : 0;
+ 	int ret;
+ 
+-	if (!ptl->hw_supported)
+-		return -EOPNOTSUPP;
+-
+ 	if (!pdd->dev->kfd2kgd || !pdd->dev->kfd2kgd->ptl_ctrl)
+ 		return -EOPNOTSUPP;
+ 
+@@ -1804,6 +1801,9 @@ int kfd_ptl_disable_request(struct kfd_process_device *pdd,
+ 	struct amdgpu_ptl *ptl = &adev->psp.ptl;
+ 	int ret = 0;
+ 
++	if (!ptl->hw_supported)
++		return -EOPNOTSUPP;
++
+ 	mutex_lock(&ptl->mutex);
+ 
+ 	if (pdd->ptl_disable_req)
+@@ -1833,6 +1833,9 @@ int kfd_ptl_disable_release(struct kfd_process_device *pdd,
+ 	struct amdgpu_ptl *ptl = &adev->psp.ptl;
+ 	int ret = 0;
+ 
++	if (!ptl->hw_supported)
++		return -EOPNOTSUPP;
++
+ 	mutex_lock(&ptl->mutex);
+ 
+ 	if (!pdd->ptl_disable_req)
+-- 
+2.55.0
+

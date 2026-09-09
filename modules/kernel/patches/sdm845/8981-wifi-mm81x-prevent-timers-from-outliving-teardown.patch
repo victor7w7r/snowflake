@@ -1,0 +1,74 @@
+From 333f7de560e1196034b67db16916b10a0c529e1d Mon Sep 17 00:00:00 2001
+From: Linmao Li <lilinmao@kylinos.cn>
+Date: Thu, 23 Jul 2026 19:39:27 +0800
+Subject: [PATCH 08981/15333] wifi: mm81x: prevent timers from outliving
+ teardown
+
+The three timer teardown paths call timer_delete_sync_try() and ignore
+its return value. If a callback is running on another CPU it returns -1
+without waiting, and it does not prevent a later rearm even when it does
+deactivate a pending timer. mm81x_skbq_tx_complete() can rearm the
+stale-status timer, and the rc and yaps callbacks queue work that rearms
+their timers. Teardown can therefore continue with a callback still
+running or the timer rearmed, so it fires after the associated state has
+been freed.
+
+Use timer_shutdown_sync() for these permanent teardowns: it waits for an
+in-flight callback and prevents any future rearm. In mm81x_rc_deinit()
+shut the timer down before cancel_work_sync() so the work can no longer
+recreate the timer/work cycle.
+
+Fixes: b1906cea00b0 ("wifi: mm81x: add mm81x Wi-Fi HaLow driver")
+Signed-off-by: Linmao Li <lilinmao@kylinos.cn>
+Reviewed-by: Dan Callaghan <dan.callaghan@morsemicro.com>
+Link: https://patch.msgid.link/20260723113927.2370301-1-lilinmao@kylinos.cn
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+---
+ drivers/net/wireless/morsemicro/mm81x/mac.c  | 2 +-
+ drivers/net/wireless/morsemicro/mm81x/rc.c   | 2 +-
+ drivers/net/wireless/morsemicro/mm81x/yaps.c | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/wireless/morsemicro/mm81x/mac.c b/drivers/net/wireless/morsemicro/mm81x/mac.c
+index 392dae5d7ce9..08ca116a68b4 100644
+--- a/drivers/net/wireless/morsemicro/mm81x/mac.c
++++ b/drivers/net/wireless/morsemicro/mm81x/mac.c
+@@ -2349,7 +2349,7 @@ static void mm81x_stale_tx_status_timer(struct timer_list *t)
+ 
+ static void mm81x_stale_tx_status_timer_finish(struct mm81x *mors)
+ {
+-	timer_delete_sync_try(&mors->stale_status.timer);
++	timer_shutdown_sync(&mors->stale_status.timer);
+ }
+ 
+ static void mm81x_mac_stale_tx_status_timer_init(struct mm81x *mors)
+diff --git a/drivers/net/wireless/morsemicro/mm81x/rc.c b/drivers/net/wireless/morsemicro/mm81x/rc.c
+index 04aff66de4bd..28dd293df966 100644
+--- a/drivers/net/wireless/morsemicro/mm81x/rc.c
++++ b/drivers/net/wireless/morsemicro/mm81x/rc.c
+@@ -60,8 +60,8 @@ void mm81x_rc_init(struct mm81x *mors)
+ 
+ void mm81x_rc_deinit(struct mm81x *mors)
+ {
++	timer_shutdown_sync(&mors->mrc.timer);
+ 	cancel_work_sync(&mors->mrc.work);
+-	timer_delete_sync_try(&mors->mrc.timer);
+ }
+ 
+ static void mm81x_rc_sta_config_guard_per_bw(struct ieee80211_sta *sta,
+diff --git a/drivers/net/wireless/morsemicro/mm81x/yaps.c b/drivers/net/wireless/morsemicro/mm81x/yaps.c
+index bdadb822bf9a..e98a2a58726f 100644
+--- a/drivers/net/wireless/morsemicro/mm81x/yaps.c
++++ b/drivers/net/wireless/morsemicro/mm81x/yaps.c
+@@ -597,7 +597,7 @@ static void mm81x_yaps_q_chip_full_timer_init(struct mm81x_yaps *yaps)
+ 
+ static void mm81x_yaps_q_chip_full_timer_finish(struct mm81x_yaps *yaps)
+ {
+-	timer_delete_sync_try(&yaps->chip_queue_full.timer);
++	timer_shutdown_sync(&yaps->chip_queue_full.timer);
+ }
+ 
+ int mm81x_yaps_init(struct mm81x *mors)
+-- 
+2.55.0
+

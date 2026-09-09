@@ -1,0 +1,40 @@
+From feaa9dc2a792e1d0766960368f911bc6b4feaa20 Mon Sep 17 00:00:00 2001
+From: Paul Louvel <paul.louvel@bootlin.com>
+Date: Wed, 8 Jul 2026 12:15:20 +0200
+Subject: [PATCH 10016/15333] soc: fsl: qe: Handle spurious interrupts
+
+When no interrupt bits are set in the event register, call
+handle_bad_irq() to account for the spurious interrupt before
+exiting the cascade handler.
+
+Signed-off-by: Paul Louvel <paul.louvel@bootlin.com>
+Reviewed-by: Christophe Leroy (CS GROUP) <chleroy@kernel.org>
+Link: https://lore.kernel.org/r/20260708-qe-pic-gpios-v2-7-1972044cfbd1@bootlin.com
+Signed-off-by: Christophe Leroy (CS GROUP) <chleroy@kernel.org>
+---
+ drivers/soc/fsl/qe/qe_ports_ic.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/soc/fsl/qe/qe_ports_ic.c b/drivers/soc/fsl/qe/qe_ports_ic.c
+index bc8b68e5d1a9..29f4334db5a0 100644
+--- a/drivers/soc/fsl/qe/qe_ports_ic.c
++++ b/drivers/soc/fsl/qe/qe_ports_ic.c
+@@ -80,9 +80,15 @@ static void qepic_cascade(struct irq_desc *desc)
+ 	chained_irq_enter(chip, desc);
+ 
+ 	event = ioread32be(data->reg + CEPIER);
++	if (!event) {
++		handle_bad_irq(desc);
++		goto out;
++	}
++
+ 	for_each_set_bit(bit, &event, 32)
+ 		generic_handle_domain_irq(data->host, 31 - bit);
+ 
++out:
+ 	chained_irq_exit(chip, desc);
+ }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,33 @@
+From f18dbadb52e43b9a279a6f87d3bf668fa7c41236 Mon Sep 17 00:00:00 2001
+From: Hongling Zeng <zenghongling@kylinos.cn>
+Date: Tue, 14 Jul 2026 09:28:50 +0800
+Subject: [PATCH 12007/15333] btrfs: add missing sctx check in cleanup path in
+ btrfs_ioctl_send()
+
+Add sctx NULL check in the for loop condition of the sort_clone_roots
+cleanup path for consistency with the else branch.
+
+Reviewed-by: Boris Burkov <boris@bur.io>
+Signed-off-by: Hongling Zeng <zenghongling@kylinos.cn>
+Reviewed-by: David Sterba <dsterba@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/send.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/btrfs/send.c b/fs/btrfs/send.c
+index 02a1450bf710..dca3570168c7 100644
+--- a/fs/btrfs/send.c
++++ b/fs/btrfs/send.c
+@@ -8250,7 +8250,7 @@ long btrfs_ioctl_send(struct btrfs_root *send_root, const struct btrfs_ioctl_sen
+ 	}
+ 
+ 	if (sort_clone_roots) {
+-		for (i = 0; i < sctx->clone_roots_cnt; i++) {
++		for (i = 0; sctx && i < sctx->clone_roots_cnt; i++) {
+ 			btrfs_root_dec_send_in_progress(
+ 					sctx->clone_roots[i].root);
+ 			btrfs_put_root(sctx->clone_roots[i].root);
+-- 
+2.55.0
+

@@ -1,0 +1,377 @@
+From 174845dc5135073764b65e4c909f1bf8b322418a Mon Sep 17 00:00:00 2001
+From: Chun-Tse Shao <ctshao@google.com>
+Date: Tue, 9 Jun 2026 14:50:44 -0700
+Subject: [PATCH 01511/15333] perf vendor events intel: Update pantherlake
+ events from 1.05 to 1.06
+
+The updated events were published in:
+https://github.com/intel/perfmon/commit/ffc03fc3b414127c5a36bbb648e500c4afeff134
+
+Signed-off-by: Chun-Tse Shao <ctshao@google.com>
+Reviewed-by: Dapeng Mi <dapeng1.mi@linux.intel.com>
+Reviewed-by: Ian Rogers <irogers@google.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/pmu-events/arch/x86/mapfile.csv    |   2 +-
+ .../arch/x86/pantherlake/counter.json         |   5 +
+ .../arch/x86/pantherlake/pipeline.json        |  29 ++-
+ .../x86/pantherlake/uncore-interconnect.json  |  10 +
+ .../arch/x86/pantherlake/uncore-memory.json   | 221 +++++++++++++++++-
+ 5 files changed, 260 insertions(+), 7 deletions(-)
+ create mode 100644 tools/perf/pmu-events/arch/x86/pantherlake/uncore-interconnect.json
+
+diff --git a/tools/perf/pmu-events/arch/x86/mapfile.csv b/tools/perf/pmu-events/arch/x86/mapfile.csv
+index 7d19f8fa335a..6af3cee12c8a 100644
+--- a/tools/perf/pmu-events/arch/x86/mapfile.csv
++++ b/tools/perf/pmu-events/arch/x86/mapfile.csv
+@@ -26,7 +26,7 @@ GenuineIntel-6-BD,v1.25,lunarlake,core
+ GenuineIntel-6-(AA|AC|B5),v1.21,meteorlake,core
+ GenuineIntel-6-1[AEF],v4,nehalemep,core
+ GenuineIntel-6-2E,v4,nehalemex,core
+-GenuineIntel-6-(CC|D5),v1.05,pantherlake,core
++GenuineIntel-6-(CC|D5),v1.06,pantherlake,core
+ GenuineIntel-6-A7,v1.04,rocketlake,core
+ GenuineIntel-6-2A,v19,sandybridge,core
+ GenuineIntel-6-8F,v1.39,sapphirerapids,core
+diff --git a/tools/perf/pmu-events/arch/x86/pantherlake/counter.json b/tools/perf/pmu-events/arch/x86/pantherlake/counter.json
+index 432b6946ccbc..9794b435f650 100644
+--- a/tools/perf/pmu-events/arch/x86/pantherlake/counter.json
++++ b/tools/perf/pmu-events/arch/x86/pantherlake/counter.json
+@@ -13,5 +13,10 @@
+         "Unit": "iMC",
+         "CountersNumFixed": "0",
+         "CountersNumGeneric": "5"
++    },
++    {
++        "Unit": "SANTA",
++        "CountersNumFixed": 1,
++        "CountersNumGeneric": "0"
+     }
+ ]
+\ No newline at end of file
+diff --git a/tools/perf/pmu-events/arch/x86/pantherlake/pipeline.json b/tools/perf/pmu-events/arch/x86/pantherlake/pipeline.json
+index d476bad5e2a7..5d5303c02954 100644
+--- a/tools/perf/pmu-events/arch/x86/pantherlake/pipeline.json
++++ b/tools/perf/pmu-events/arch/x86/pantherlake/pipeline.json
+@@ -887,11 +887,32 @@
+         "Unit": "cpu_core"
+     },
+     {
+-        "BriefDescription": "This event counts the number of mispredicted ret instructions retired. Non PEBS [This event is alias to BR_MISP_RETIRED.RET]",
++        "BriefDescription": "This event is deprecated. [This event is alias to BR_MISP_RETIRED.NEAR_RETURN]",
++        "Counter": "0,1,2,3,4,5,6,7",
++        "Deprecated": "1",
++        "EventCode": "0xc5",
++        "EventName": "BR_MISP_RETIRED.NEAR_RET",
++        "PublicDescription": "This event is deprecated. [This event is alias to BR_MISP_RETIRED.NEAR_RETURN] Available PDIST counters: 0,1",
++        "SampleAfterValue": "1000003",
++        "UMask": "0x8",
++        "Unit": "cpu_atom"
++    },
++    {
++        "BriefDescription": "Counts the number of mispredicted near RET branch instructions retired. [This event is alias to BR_MISP_RETIRED.NEAR_RET]",
++        "Counter": "0,1,2,3,4,5,6,7",
++        "EventCode": "0xc5",
++        "EventName": "BR_MISP_RETIRED.NEAR_RETURN",
++        "PublicDescription": "Counts the number of mispredicted near RET branch instructions retired. [This event is alias to BR_MISP_RETIRED.NEAR_RET] Available PDIST counters: 0,1",
++        "SampleAfterValue": "1000003",
++        "UMask": "0x8",
++        "Unit": "cpu_atom"
++    },
++    {
++        "BriefDescription": "This event counts the number of mispredicted ret instructions retired [This event is alias to BR_MISP_RETIRED.RET]",
+         "Counter": "0,1,2,3,4,5,6,7,8,9",
+         "EventCode": "0xc5",
+         "EventName": "BR_MISP_RETIRED.NEAR_RETURN",
+-        "PublicDescription": "This is a non-precise version (that is, does not use PEBS) of the event that counts mispredicted return instructions retired. [This event is alias to BR_MISP_RETIRED.RET] Available PDIST counters: 0,1",
++        "PublicDescription": "This event counts the number of mispredicted ret instructions retired [This event is alias to BR_MISP_RETIRED.RET] Available PDIST counters: 0,1",
+         "SampleAfterValue": "100007",
+         "UMask": "0x8",
+         "Unit": "cpu_core"
+@@ -1726,7 +1747,7 @@
+         "Unit": "cpu_atom"
+     },
+     {
+-        "BriefDescription": "Counts the number of machines clears due to memory renaming.",
++        "BriefDescription": "Counts the number of machine clears due to memory renaming.",
+         "Counter": "0,1,2,3,4,5,6,7",
+         "EventCode": "0xc3",
+         "EventName": "MACHINE_CLEARS.MRN_NUKE",
+@@ -1930,7 +1951,7 @@
+         "Unit": "cpu_atom"
+     },
+     {
+-        "BriefDescription": "Counts the number issue slots not consumed  due to a  color request for an FCW or MXCSR control register when all 4 colors (copies) are already in use.",
++        "BriefDescription": "Counts the number of issue slots not consumed due to a color request for an FCW or MXCSR control register when all 4 colors (copies) are already in use.",
+         "Counter": "0,1,2,3,4,5,6,7",
+         "EventCode": "0x75",
+         "EventName": "SERIALIZATION.COLOR_STALLS",
+diff --git a/tools/perf/pmu-events/arch/x86/pantherlake/uncore-interconnect.json b/tools/perf/pmu-events/arch/x86/pantherlake/uncore-interconnect.json
+new file mode 100644
+index 000000000000..69ef928d57f6
+--- /dev/null
++++ b/tools/perf/pmu-events/arch/x86/pantherlake/uncore-interconnect.json
+@@ -0,0 +1,10 @@
++[
++    {
++        "BriefDescription": "This 48-bit fixed counter counts the UCLK cycles.",
++        "Counter": "FIXED",
++        "EventCode": "0xff",
++        "EventName": "UNC_CLOCK.SOCKET",
++        "PerPkg": "1",
++        "Unit": "SANTA"
++    }
++]
+diff --git a/tools/perf/pmu-events/arch/x86/pantherlake/uncore-memory.json b/tools/perf/pmu-events/arch/x86/pantherlake/uncore-memory.json
+index a881b99be5f3..8faa03e1c6d0 100644
+--- a/tools/perf/pmu-events/arch/x86/pantherlake/uncore-memory.json
++++ b/tools/perf/pmu-events/arch/x86/pantherlake/uncore-memory.json
+@@ -1,6 +1,30 @@
+ [
+     {
+-        "BriefDescription": "Read CAS command sent to DRAM",
++        "BriefDescription": "ACT command for a read request sent to DRAM.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x24",
++        "EventName": "UNC_M_ACT_COUNT_RD",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "ACT command sent to DRAM.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x26",
++        "EventName": "UNC_M_ACT_COUNT_TOTAL",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "ACT command for a write request sent to DRAM.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x25",
++        "EventName": "UNC_M_ACT_COUNT_WR",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Read CAS command sent to DRAM.",
+         "Counter": "0,1,2,3,4",
+         "EventCode": "0x22",
+         "EventName": "UNC_M_CAS_COUNT_RD",
+@@ -8,13 +32,153 @@
+         "Unit": "iMC"
+     },
+     {
+-        "BriefDescription": "Write CAS command sent to DRAM",
++        "BriefDescription": "Write CAS command sent to DRAM.",
+         "Counter": "0,1,2,3,4",
+         "EventCode": "0x23",
+         "EventName": "UNC_M_CAS_COUNT_WR",
+         "PerPkg": "1",
+         "Unit": "iMC"
+     },
++    {
++        "BriefDescription": "Counting the number of clocks.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x01",
++        "EventName": "UNC_M_CLOCKTICKS",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "CKE in DRAM is low.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x29",
++        "EventName": "UNC_M_DRAM_CKE_OFF_CYCLES",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Incoming read request page status is Page Empty.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x1D",
++        "EventName": "UNC_M_DRAM_PAGE_EMPTY_RD",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "PublicDescription": "incoming read request page status is Page Empty",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Incoming write request page status is Page Empty.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x20",
++        "EventName": "UNC_M_DRAM_PAGE_EMPTY_WR",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "PublicDescription": "incoming write request page status is Page Empty",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Incoming read request page status is Page Hit.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x1C",
++        "EventName": "UNC_M_DRAM_PAGE_HIT_RD",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "PublicDescription": "incoming read request page status is Page Hit",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Incoming write request page status is Page Hit.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x1F",
++        "EventName": "UNC_M_DRAM_PAGE_HIT_WR",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "PublicDescription": "incoming write request page status is Page Hit",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Incoming read request page status is Page Miss.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x1E",
++        "EventName": "UNC_M_DRAM_PAGE_MISS_RD",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "PublicDescription": "incoming read request page status is Page Miss",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Incoming write request page status is Page Miss.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x21",
++        "EventName": "UNC_M_DRAM_PAGE_MISS_WR",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "PublicDescription": "incoming write request page status is Page Miss",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "DRAM in Self-refresh (all channels).",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x12",
++        "EventName": "UNC_M_DRAM_SELF_REFRESH",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Any Rank at Hot state.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x19",
++        "EventName": "UNC_M_DRAM_THERMAL_HOT",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Any Rank at Warm state.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x1A",
++        "EventName": "UNC_M_DRAM_THERMAL_WARM",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "PRE command sent to DRAM for a read/write request.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x27",
++        "EventName": "UNC_M_PRE_COUNT_PAGE_MISS",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Counts number of bytes read, in 32B chunk, per DDR channel. Counter increments by 1 after receiving 32B chunk data.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x3A",
++        "EventName": "UNC_M_RD_DATA",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Number of VC0 read in channel0  - this event can increment by more than 1 (per channel/sub-ch).",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x13",
++        "EventName": "UNC_M_RD_OCCUPANCY_CH0",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "PublicDescription": "Number of VC0 read in channel0  - this event can  increment by more than 1 (per channel/sub-ch)",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Number of VC0 read in channel1 - this event can increment by more than 1 (per channel/sub-ch).",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x14",
++        "EventName": "UNC_M_RD_OCCUPANCY_CH1",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
+     {
+         "BriefDescription": "Total number of read and write byte transfers to/from DRAM, in 32B chunk, per DDR channel. Counter increments by 1 after sending  or receiving 32B chunk data.",
+         "Counter": "0,1,2,3,4",
+@@ -22,5 +186,58 @@
+         "EventName": "UNC_M_TOTAL_DATA",
+         "PerPkg": "1",
+         "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Total number of requests entering MC, this is the sum of all RD + WR requests for all VCs.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x39",
++        "EventName": "UNC_M_TOTAL_REQUESTS",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Incoming VC0 read request.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x02",
++        "EventName": "UNC_M_VC0_REQUESTS_RD",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Incoming VC0 write request.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x03",
++        "EventName": "UNC_M_VC0_REQUESTS_WR",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Incoming VC1 read request.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x04",
++        "EventName": "UNC_M_VC1_REQUESTS_RD",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Incoming VC1 write request.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x05",
++        "EventName": "UNC_M_VC1_REQUESTS_WR",
++        "Experimental": "1",
++        "PerPkg": "1",
++        "Unit": "iMC"
++    },
++    {
++        "BriefDescription": "Counts number of bytes written, in 32B chunk, per DDR channel. Counter increments by 1 after sending 32B chunk data.",
++        "Counter": "0,1,2,3,4",
++        "EventCode": "0x3B",
++        "EventName": "UNC_M_WR_DATA",
++        "PerPkg": "1",
++        "Unit": "iMC"
+     }
+ ]
+-- 
+2.55.0
+

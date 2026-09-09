@@ -1,0 +1,78 @@
+From 1e63cd6be0557fa1fc57522ec1f681a1dde11078 Mon Sep 17 00:00:00 2001
+From: Amery Hung <ameryhung@gmail.com>
+Date: Tue, 14 Jul 2026 23:40:45 -0700
+Subject: [PATCH 04701/15333] selftests/bpf: Test kfunc returning zero-sized
+ allocation buffer
+
+Add a test passing an explicit rdwr_buf_size of 0 to
+bpf_kfunc_call_test_get_rdwr_mem() and then reading the returned R0.
+R0 should be a zero-sized PTR_TO_MEM, so the access must be rejected
+with "min value is outside of the allowed memory range".
+
+This covers the pre-existing bug where a zero size argument was
+treated as "no size argument": the verifier fell through to
+btf_resolve_size() and sized R0 after the pointed-to return type,
+wrongly allowing the read.
+
+Suggested-by: Eduard Zingerman <eddyz87@gmail.com>
+Signed-off-by: Amery Hung <ameryhung@gmail.com>
+Link: https://lore.kernel.org/bpf/20260715064047.1793790-6-ameryhung@gmail.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ .../selftests/bpf/prog_tests/kfunc_call.c     |  1 +
+ .../selftests/bpf/progs/kfunc_call_fail.c     | 27 +++++++++++++++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/kfunc_call.c b/tools/testing/selftests/bpf/prog_tests/kfunc_call.c
+index c9fce95d220e..7af5560f2a08 100644
+--- a/tools/testing/selftests/bpf/prog_tests/kfunc_call.c
++++ b/tools/testing/selftests/bpf/prog_tests/kfunc_call.c
+@@ -66,6 +66,7 @@ static struct kfunc_test_params kfunc_tests[] = {
+ 	TC_FAIL(kfunc_call_test_get_mem_fail_rdonly, 0, "R0 cannot write into rdonly_mem"),
+ 	TC_FAIL(kfunc_call_test_get_mem_fail_use_after_free, 0, "invalid mem access 'scalar'"),
+ 	TC_FAIL(kfunc_call_test_get_mem_fail_oob, 0, "min value is outside of the allowed memory range"),
++	TC_FAIL(kfunc_call_test_get_mem_fail_zero_size, 0, "min value is outside of the allowed memory range"),
+ 	TC_FAIL(kfunc_call_test_get_mem_fail_oversized, 0, "allocation size exceeds u32 max"),
+ 	TC_FAIL(kfunc_call_test_get_mem_fail_not_const, 0, "is not a const"),
+ 	TC_FAIL(kfunc_call_test_mem_acquire_fail, 0, "acquire kernel function does not return PTR_TO_BTF_ID"),
+diff --git a/tools/testing/selftests/bpf/progs/kfunc_call_fail.c b/tools/testing/selftests/bpf/progs/kfunc_call_fail.c
+index 6144ce3ff0b2..64b6a0b0ab1c 100644
+--- a/tools/testing/selftests/bpf/progs/kfunc_call_fail.c
++++ b/tools/testing/selftests/bpf/progs/kfunc_call_fail.c
+@@ -103,6 +103,33 @@ int kfunc_call_test_get_mem_fail_oob(struct __sk_buff *skb)
+ 	return ret;
+ }
+ 
++SEC("?tc")
++int kfunc_call_test_get_mem_fail_zero_size(struct __sk_buff *skb)
++{
++	struct prog_test_ref_kfunc *pt;
++	unsigned long s = 0;
++	int *p = NULL;
++	int ret = 0;
++
++	pt = bpf_kfunc_call_test_acquire(&s);
++	if (pt) {
++		/*
++		 * An explicit rdwr_buf_size of 0 gives R0 a zero-sized buffer,
++		 * so any access is out of bounds, hence -EACCES. Previously the
++		 * verifier treated a zero size as "no size argument" and sized
++		 * R0 after the pointed-to return type, wrongly allowing the read.
++		 */
++		p = bpf_kfunc_call_test_get_rdwr_mem(pt, 0);
++		if (p)
++			ret = p[0];
++		else
++			ret = -1;
++
++		bpf_kfunc_call_test_release(pt);
++	}
++	return ret;
++}
++
+ SEC("?tc")
+ int kfunc_call_test_get_mem_fail_oversized(struct __sk_buff *skb)
+ {
+-- 
+2.55.0
+

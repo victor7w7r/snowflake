@@ -1,0 +1,62 @@
+From 57d0ef995d313435686390119cb01d057bf1a65d Mon Sep 17 00:00:00 2001
+From: Brian Foster <bfoster@redhat.com>
+Date: Wed, 17 Jun 2026 07:42:53 -0400
+Subject: [PATCH 00935/15333] iomap: always return status from iomap_write_iter
+
+iomap_write_iter() returns either an error code or 0 if partial
+progress has been made. The error sanitization was required in the
+past because the return value was used by iomap_iter() to determine
+how much progress was made, and thus what to pass to ->iomap_end()
+and how much to advance the iter.
+
+Now that iter handlers advance the iter incrementally and progress
+is separate from return status, this is no longer needed.
+iomap_iter() infers partial progress directly from the iter state
+and similarly, iomap_file_buffered_write() uses iter.pos to
+determine whether to return a short write or an error code.
+
+This also eliminates a minor quirk in the write iteration where if
+an error interrupts a partial write, we'd have to loop back into
+iomap_write_iter() once more and run into the error a second time
+before iomap terminates the operation and returns the error. With
+the error code returned directly and separate from write progress,
+we can complete the operation and return from iomap_iter()
+immediately.
+
+Signed-off-by: Brian Foster <bfoster@redhat.com>
+Link: https://patch.msgid.link/20260617114253.635751-1-bfoster@redhat.com
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/iomap/buffered-io.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/fs/iomap/buffered-io.c b/fs/iomap/buffered-io.c
+index 8d4806dc46d4..fb1f60130cd0 100644
+--- a/fs/iomap/buffered-io.c
++++ b/fs/iomap/buffered-io.c
+@@ -1156,7 +1156,6 @@ static bool iomap_write_end(struct iomap_iter *iter, size_t len, size_t copied,
+ static int iomap_write_iter(struct iomap_iter *iter, struct iov_iter *i,
+ 		const struct iomap_write_ops *write_ops)
+ {
+-	ssize_t total_written = 0;
+ 	int status = 0;
+ 	struct address_space *mapping = iter->inode->i_mapping;
+ 	size_t chunk = mapping_max_folio_size(mapping);
+@@ -1252,12 +1251,11 @@ static int iomap_write_iter(struct iomap_iter *iter, struct iov_iter *i,
+ 				goto retry;
+ 			}
+ 		} else {
+-			total_written += written;
+ 			iomap_iter_advance(iter, written);
+ 		}
+ 	} while (iov_iter_count(i) && iomap_length(iter));
+ 
+-	return total_written ? 0 : status;
++	return status;
+ }
+ 
+ ssize_t
+-- 
+2.55.0
+

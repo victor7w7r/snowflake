@@ -1,0 +1,67 @@
+From ee9e2b39ea4890f804b0c75c8a40a0f68ecd8d0a Mon Sep 17 00:00:00 2001
+From: Xu Yang <xu.yang_2@nxp.com>
+Date: Fri, 31 Jul 2026 16:11:24 +0800
+Subject: [PATCH 11387/15333] phy: fsl-imx8mq-usb: keep PHY power domain
+ runtime always-on for i.MX8MP
+
+On i.MX8MP, the USB PHY has a dedicated power domain that was previously
+never powered off at runtime. With the introduction of runtime PM support,
+the power domain will be powered off if the device is runtime suspended,
+which breaks USB wakeup functionality.
+
+To preserve wakeup functionality, mark the PHY power domain as runtime
+always-on for i.MX8MP platform. To limit the behavior to i.MX8MP, add a
+need_genpd_rpm_on to imx8mq_usb_phy_drvdata and set it as true for i.MX8MP.
+
+Signed-off-by: Xu Yang <xu.yang_2@nxp.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260731-imx8mp-usb-phy-improvement-v8-6-2ec8d6b3854d@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/phy/freescale/phy-fsl-imx8mq-usb.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/phy/freescale/phy-fsl-imx8mq-usb.c b/drivers/phy/freescale/phy-fsl-imx8mq-usb.c
+index ba7603a008d8..8859835541b1 100644
+--- a/drivers/phy/freescale/phy-fsl-imx8mq-usb.c
++++ b/drivers/phy/freescale/phy-fsl-imx8mq-usb.c
+@@ -9,6 +9,7 @@
+ #include <linux/of.h>
+ #include <linux/phy/phy.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_domain.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/regulator/consumer.h>
+ #include <linux/regmap.h>
+@@ -134,6 +135,7 @@ struct imx8mq_usb_phy {
+ 
+ struct imx8mq_usb_phy_drvdata {
+ 	const struct phy_ops *ops;
++	bool need_genpd_rpm_on;
+ };
+ 
+ static void tca_blk_orientation_set(struct tca_blk *tca,
+@@ -669,6 +671,7 @@ static const struct imx8mq_usb_phy_drvdata imx8mq_usb_phy_data = {
+ 
+ static const struct imx8mq_usb_phy_drvdata imx8mp_usb_phy_data = {
+ 	.ops = &imx8mp_usb_phy_ops,
++	.need_genpd_rpm_on = true,
+ };
+ 
+ static const struct imx8mq_usb_phy_drvdata imx95_usb_phy_data = {
+@@ -738,6 +741,12 @@ static int imx8mq_usb_phy_probe(struct platform_device *pdev)
+ 	if (!phy_data)
+ 		return -EINVAL;
+ 
++	if (phy_data->need_genpd_rpm_on) {
++		ret = dev_pm_genpd_rpm_always_on(dev, true);
++		if (ret && ret != -EOPNOTSUPP)
++			dev_warn(dev, "failed to set genpd rpm always on\n");
++	}
++
+ 	pm_runtime_set_active(dev);
+ 	pm_runtime_enable(dev);
+ 
+-- 
+2.55.0
+

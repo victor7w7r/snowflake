@@ -1,0 +1,62 @@
+From 6385fd09a399805e82e50b228f1af318316aaeb0 Mon Sep 17 00:00:00 2001
+From: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
+Date: Sat, 11 Jul 2026 08:31:10 -0700
+Subject: [PATCH 04486/15333] wifi: ath12k: Fix ath12k_wifi7_mac_op_tx() style
+ issues
+
+Commit e47d6c9bb416 ("wifi: ath12k: Advertise multicast Ethernet
+encapsulation offload support") introduced a few style issues.
+
+ath12k-check reports:
+drivers/net/wireless/ath/ath12k/wifi7/hw.c:1042: line length of 92 exceeds 90 columns
+
+And automated review did not like one if/else that did not use braces
+for a single statement that also included a block comment.
+
+Fix these issues.
+
+Reviewed-by: Rameshkumar Sundaram <rameshkumar.sundaram@oss.qualcomm.com>
+Reviewed-by: Baochen Qiang <baochen.qiang@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260711-ath12k_wifi7_mac_op_tx-line-length-v1-1-10e4899b98ef@oss.qualcomm.com
+Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/wifi7/hw.c | 18 +++++++++++-------
+ 1 file changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/wifi7/hw.c b/drivers/net/wireless/ath/ath12k/wifi7/hw.c
+index e5bf9d218104..d54c2a6d83b2 100644
+--- a/drivers/net/wireless/ath/ath12k/wifi7/hw.c
++++ b/drivers/net/wireless/ath/ath12k/wifi7/hw.c
+@@ -1031,18 +1031,22 @@ static void ath12k_wifi7_mac_op_tx(struct ieee80211_hw *hw,
+ 
+ 			if (cb_flags & ATH12K_SKB_HW_80211_ENCAP) {
+ 				/*
+-				 * skb->data may be modified for the iova_mask devices.
+-				 * It is better to use skb_copy() for such devices
+-				 * to avoid any potential skb corruption related issues.
++				 * skb->data may be modified for the
++				 * iova_mask devices. It is better to
++				 * use skb_copy() for such devices to
++				 * avoid any potential skb corruption
++				 * related issues.
+ 				 */
+-				if (tmp_dp->hw_params->iova_mask)
++				if (tmp_dp->hw_params->iova_mask) {
+ 					msdu_copied = skb_copy(skb, GFP_ATOMIC);
+-				else
++				} else {
+ 					/*
+-					 * ath12k_wifi7_dp_tx() should treat cloned HW-encap
+-					 * Ethernet multicast frames as read-only.
++					 * ath12k_wifi7_dp_tx() should
++					 * treat cloned HW-encap Ethernet
++					 * multicast frames as read-only.
+ 					 */
+ 					msdu_copied = skb_clone(skb, GFP_ATOMIC);
++				}
+ 				if (!msdu_copied) {
+ 					ath12k_err(ar->ab,
+ 						   "skb copy/clone failure link_id 0x%X vdevid 0x%X\n",
+-- 
+2.55.0
+

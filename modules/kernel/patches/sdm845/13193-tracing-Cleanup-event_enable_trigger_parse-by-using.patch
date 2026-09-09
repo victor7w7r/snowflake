@@ -1,0 +1,79 @@
+From a8aaf7445bfcdb6e61ee4b8e4946d684c1b4a228 Mon Sep 17 00:00:00 2001
+From: Steven Rostedt <rostedt@goodmis.org>
+Date: Fri, 7 Aug 2026 11:35:58 -0400
+Subject: [PATCH 13193/15333] tracing: Cleanup event_enable_trigger_parse() by
+ using __free()
+
+The enable_data variable gets freed on most error paths in
+event_enable_trigger_parse(). Use free() to free it and just before
+returning normally, call retain_and_null_ptr(enable_data) just before a
+successful exit to keep it from being freed. On success, the enable_data
+is assigned to the trigger_data->private_data field.
+
+Also add a comment to why event_trigger_free(trigger_data) is being called
+before a successful exit.
+
+Link: https://patch.msgid.link/20260807113558.0ff14e96@gandalf.local.home
+Reviewed-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+Signed-off-by: Steven Rostedt <rostedt@goodmis.org>
+---
+ kernel/trace/trace_events_trigger.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/kernel/trace/trace_events_trigger.c b/kernel/trace/trace_events_trigger.c
+index ad83419cb420..149300cc5e8a 100644
+--- a/kernel/trace/trace_events_trigger.c
++++ b/kernel/trace/trace_events_trigger.c
+@@ -1753,7 +1753,7 @@ int event_enable_trigger_parse(struct event_command *cmd_ops,
+ 			       char *glob, char *cmd, char *param_and_filter)
+ {
+ 	struct trace_event_file *event_enable_file;
+-	struct enable_trigger_data *enable_data;
++	struct enable_trigger_data *enable_data __free(kfree) = NULL;
+ 	struct event_trigger_data *trigger_data;
+ 	struct trace_array *tr = file->tr;
+ 	char *param, *filter;
+@@ -1803,17 +1803,13 @@ int event_enable_trigger_parse(struct event_command *cmd_ops,
+ 	enable_data->file = event_enable_file;
+ 
+ 	trigger_data = trigger_data_alloc(cmd_ops, cmd, param, enable_data);
+-	if (!trigger_data) {
+-		kfree(enable_data);
++	if (!trigger_data)
+ 		return ret;
+-	}
+ 
+ 	if (remove) {
+ 		event_trigger_unregister(cmd_ops, file, glob+1, trigger_data);
+ 		kfree(trigger_data);
+-		kfree(enable_data);
+-		ret = 0;
+-		return ret;
++		return 0;
+ 	}
+ 
+ 	/* Up the trigger_data count to make sure nothing frees it on failure */
+@@ -1842,7 +1838,12 @@ int event_enable_trigger_parse(struct event_command *cmd_ops,
+ 	if (ret)
+ 		goto out_disable;
+ 
++	/* It's now safe to free the reference taken earlier */
+ 	event_trigger_free(trigger_data);
++
++	/* The enabled_data is assigned to trigger_data->private_data */
++	retain_and_null_ptr(enable_data);
++
+ 	return ret;
+  out_disable:
+ 	trace_event_enable_disable(event_enable_file, 0, 1);
+@@ -1851,7 +1852,6 @@ int event_enable_trigger_parse(struct event_command *cmd_ops,
+  out_free:
+ 	event_trigger_reset_filter(cmd_ops, trigger_data);
+ 	event_trigger_free(trigger_data);
+-	kfree(enable_data);
+ 
+ 	return ret;
+ }
+-- 
+2.55.0
+

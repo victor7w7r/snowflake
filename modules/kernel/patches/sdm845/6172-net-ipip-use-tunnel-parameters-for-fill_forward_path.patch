@@ -1,0 +1,37 @@
+From f6195e3c30266679d1b93196e81424cc01862715 Mon Sep 17 00:00:00 2001
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Wed, 8 Jul 2026 13:25:18 +0200
+Subject: [PATCH 06172/15333] net: ipip: use tunnel parameters for
+ fill_forward_path route lookup
+
+Pass source address, DSCP and output interface from the tunnel
+configuration to ip_route_output() in ipip_fill_forward_path(), aligning
+the route lookup with the slow path in ipip_tunnel_xmit().
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+Reviewed-by: David Ahern <dsahern@kernel.org>
+Link: https://patch.msgid.link/20260708-ipip-route-lookup-fill_forward_path-v1-1-b77df74822ed@kernel.org
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ net/ipv4/ipip.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/net/ipv4/ipip.c b/net/ipv4/ipip.c
+index b643194f57d2..d1aa048a6099 100644
+--- a/net/ipv4/ipip.c
++++ b/net/ipv4/ipip.c
+@@ -360,8 +360,9 @@ static int ipip_fill_forward_path(struct net_device_path_ctx *ctx,
+ 	const struct iphdr *tiph = &tunnel->parms.iph;
+ 	struct rtable *rt;
+ 
+-	rt = ip_route_output(dev_net(ctx->dev), tiph->daddr, 0, 0, 0,
+-			     RT_SCOPE_UNIVERSE);
++	rt = ip_route_output(dev_net(ctx->dev), tiph->daddr, tiph->saddr,
++			     inet_dsfield_to_dscp(tiph->tos),
++			     tunnel->parms.link, RT_SCOPE_UNIVERSE);
+ 	if (IS_ERR(rt))
+ 		return PTR_ERR(rt);
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,58 @@
+From cd4a294c4b2dcdf86b87128ce4d2023fc016a285 Mon Sep 17 00:00:00 2001
+From: Eric Wu <kunjinkao.jp@gmail.com>
+Date: Fri, 31 Jul 2026 20:34:15 +0800
+Subject: [PATCH 11183/15333] soundwire: stream: validate slave port properties
+
+sdw_slave_port_config() validates that a port number is within the
+generic valid range, but does not verify that the Slave exposes the
+port for the requested stream direction. As a result, an in-range but
+unsupported port, or a valid port used in the wrong direction, can be
+accepted.
+
+Use sdw_get_slave_dpn_prop() to perform the direction-specific lookup
+and reject unsupported ports before storing the runtime configuration.
+
+Signed-off-by: Eric Wu <kunjinkao.jp@gmail.com>
+Reviewed-by: Charles Keepax <ckeepax@opensource.cirrus.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Link: https://patch.msgid.link/20260731123415.34070-1-kunjinkao.jp@gmail.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/soundwire/stream.c | 17 +++++++++++++----
+ 1 file changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/soundwire/stream.c b/drivers/soundwire/stream.c
+index cdac009b1a75..4804e1c0d6ad 100644
+--- a/drivers/soundwire/stream.c
++++ b/drivers/soundwire/stream.c
+@@ -1061,14 +1061,23 @@ static int sdw_slave_port_config(struct sdw_slave *slave,
+ 
+ 	i = 0;
+ 	list_for_each_entry(p_rt, &s_rt->port_list, port_node) {
+-		/*
+-		 * TODO: Check valid port range as defined by DisCo/
+-		 * slave
+-		 */
+ 		if (!is_bpt_stream) {
+ 			ret = sdw_slave_port_is_valid_range(&slave->dev, port_config[i].num);
+ 			if (ret < 0)
+ 				return ret;
++
++			/*
++			 * A port in the generic valid range may still be unsupported by
++			 * the Slave or unavailable for the requested stream direction.
++			 */
++			if (!sdw_get_slave_dpn_prop(slave, s_rt->direction,
++						    port_config[i].num)) {
++				dev_err(&slave->dev,
++					"port %u not supported for %s\n",
++					port_config[i].num,
++					s_rt->direction == SDW_DATA_DIR_TX ? "TX" : "RX");
++				return -EINVAL;
++			}
+ 		} else if (port_config[i].num) {
+ 			return -EINVAL;
+ 		}
+-- 
+2.55.0
+

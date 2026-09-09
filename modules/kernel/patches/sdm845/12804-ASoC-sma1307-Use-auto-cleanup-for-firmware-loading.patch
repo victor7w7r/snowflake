@@ -1,0 +1,58 @@
+From 2afbdeb48302ab076e302f11be79e4323607ec15 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 15:59:50 +0200
+Subject: [PATCH 12804/15333] ASoC: sma1307: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Cc: Kiseok Jo <kiseok.jo@irondevice.com>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-19-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/sma1307.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/sound/soc/codecs/sma1307.c b/sound/soc/codecs/sma1307.c
+index c52fe95b30c6..adb369a29b9d 100644
+--- a/sound/soc/codecs/sma1307.c
++++ b/sound/soc/codecs/sma1307.c
+@@ -1690,7 +1690,7 @@ static void sma1307_check_fault_worker(struct work_struct *work)
+ 
+ static void sma1307_setting_loaded(struct sma1307_priv *sma1307, const char *file)
+ {
+-	const struct firmware *fw;
++	const struct firmware *fw __free(firmware) = NULL;
+ 	int size, offset, num_mode;
+ 	int ret;
+ 
+@@ -1703,22 +1703,18 @@ static void sma1307_setting_loaded(struct sma1307_priv *sma1307, const char *fil
+ 		return;
+ 	} else if ((fw->size) < SMA1307_SETTING_HEADER_SIZE) {
+ 		dev_err(sma1307->dev, "%s: Invalid file\n", __func__);
+-		release_firmware(fw);
+ 		sma1307->set.status = false;
+ 		return;
+ 	}
+ 
+ 	int *data __free(kfree) = kzalloc(fw->size, GFP_KERNEL);
+ 	if (!data) {
+-		release_firmware(fw);
+ 		sma1307->set.status = false;
+ 		return;
+ 	}
+ 	size = fw->size >> 2;
+ 	memcpy(data, fw->data, fw->size);
+ 
+-	release_firmware(fw);
+-
+ 	/* HEADER */
+ 	sma1307->set.header_size = SMA1307_SETTING_HEADER_SIZE;
+ 	sma1307->set.checksum = data[sma1307->set.header_size - 2];
+-- 
+2.55.0
+

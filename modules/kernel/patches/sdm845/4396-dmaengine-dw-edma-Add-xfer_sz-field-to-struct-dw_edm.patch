@@ -1,0 +1,60 @@
+From 07680003068a8008b4585423d533ab9e86a8a4d3 Mon Sep 17 00:00:00 2001
+From: Frank Li <Frank.Li@nxp.com>
+Date: Mon, 13 Jul 2026 13:03:20 -0400
+Subject: [PATCH 04396/15333] dmaengine: dw-edma: Add xfer_sz field to struct
+ dw_edma_chunk
+
+Reusing ll_region.sz as the transfer size is misleading because
+ll_region.sz represents the memory size of the EDMA link list, not the
+amount of data to be transferred.
+
+Add a new xfer_sz field to explicitly indicate the total transfer size
+of a chunk.
+
+Tested-by: Koichiro Den <den@valinux.co.jp>
+Tested-By: Devendra Verma <devendra.verma@amd.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260713-edma_ll-v7-2-6fb7498c901e@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dw-edma/dw-edma-core.c | 4 ++--
+ drivers/dma/dw-edma/dw-edma-core.h | 1 +
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/dma/dw-edma/dw-edma-core.c b/drivers/dma/dw-edma/dw-edma-core.c
+index 1fec1b52e3d4..53469c8c8b82 100644
+--- a/drivers/dma/dw-edma/dw-edma-core.c
++++ b/drivers/dma/dw-edma/dw-edma-core.c
+@@ -192,7 +192,7 @@ static int dw_edma_start_transfer(struct dw_edma_chan *chan)
+ 		return 0;
+ 
+ 	dw_edma_core_start(dw, child, !desc->xfer_sz);
+-	desc->xfer_sz += child->ll_region.sz;
++	desc->xfer_sz += child->xfer_sz;
+ 	dw_edma_free_burst(child);
+ 	list_del(&child->list);
+ 	kfree(child);
+@@ -527,7 +527,7 @@ dw_edma_device_transfer(struct dw_edma_transfer *xfer,
+ 		else if (xfer->type == EDMA_XFER_INTERLEAVED)
+ 			burst->sz = xfer->xfer.il->sgl[i % fsz].size;
+ 
+-		chunk->ll_region.sz += burst->sz;
++		chunk->xfer_sz += burst->sz;
+ 		desc->alloc_sz += burst->sz;
+ 
+ 		if (dir == DMA_DEV_TO_MEM) {
+diff --git a/drivers/dma/dw-edma/dw-edma-core.h b/drivers/dma/dw-edma/dw-edma-core.h
+index 6474cacf7195..db5f45bf048c 100644
+--- a/drivers/dma/dw-edma/dw-edma-core.h
++++ b/drivers/dma/dw-edma/dw-edma-core.h
+@@ -57,6 +57,7 @@ struct dw_edma_chunk {
+ 	u32				bursts_alloc;
+ 
+ 	u8				cb;
++	u32				xfer_sz;
+ 	struct dw_edma_region		ll_region;	/* Linked list */
+ };
+ 
+-- 
+2.55.0
+

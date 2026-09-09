@@ -1,0 +1,64 @@
+From d4f32b8b8a3bcc7c07603b097d16320015af8e3c Mon Sep 17 00:00:00 2001
+From: Tsz Shan Chan <tsz.chan.dev@gmail.com>
+Date: Wed, 5 Aug 2026 15:55:16 +1000
+Subject: [PATCH 11571/15333] pinctrl: sx150x: get parent IRQ trigger type from
+ firmware
+
+The driver currently hardcodes the parent interrupt trigger type to
+IRQF_TRIGGER_FALLING.
+
+Use the trigger type configured by firmware instead. If no trigger type
+is specified, fall back to IRQF_TRIGGER_FALLING to maintain current
+behaviour.
+
+Support IRQF_TRIGGER_FALLING and IRQF_TRIGGER_LOW, which match the
+sx150x open drain active low interrupt output. Reject unsupported
+trigger types.
+
+Signed-off-by: Tsz Shan Chan <tchan@jacques.com.au>
+Signed-off-by: Linus Walleij <linusw@kernel.org>
+---
+ drivers/pinctrl/pinctrl-sx150x.c | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/pinctrl/pinctrl-sx150x.c b/drivers/pinctrl/pinctrl-sx150x.c
+index 3c1309e8a844..5eb6cc476eb3 100644
+--- a/drivers/pinctrl/pinctrl-sx150x.c
++++ b/drivers/pinctrl/pinctrl-sx150x.c
+@@ -1126,6 +1126,7 @@ static int sx150x_probe(struct i2c_client *client)
+ 				     I2C_FUNC_SMBUS_WRITE_WORD_DATA;
+ 	struct device *dev = &client->dev;
+ 	struct sx150x_pinctrl *pctl;
++	u32 irq_type;
+ 	int ret;
+ 
+ 	if (!i2c_check_functionality(client->adapter, i2c_funcs))
+@@ -1225,10 +1226,24 @@ static int sx150x_probe(struct i2c_client *client)
+ 		girq->handler = handle_bad_irq;
+ 		girq->threaded = true;
+ 
++		irq_type = irq_get_trigger_type(client->irq);
++		switch (irq_type) {
++		case IRQF_TRIGGER_FALLING:
++		case IRQF_TRIGGER_LOW:
++			break;
++		case IRQF_TRIGGER_NONE:
++			irq_type = IRQF_TRIGGER_FALLING;
++			break;
++		default:
++			return dev_err_probe(dev, -EINVAL,
++					"unsupported irq trigger type %x\n",
++					irq_type);
++		}
++
+ 		ret = devm_request_threaded_irq(dev, client->irq, NULL,
+ 						sx150x_irq_thread_fn,
+ 						IRQF_ONESHOT | IRQF_SHARED |
+-						IRQF_TRIGGER_FALLING,
++						irq_type,
+ 						client->name, pctl);
+ 		if (ret < 0)
+ 			return ret;
+-- 
+2.55.0
+

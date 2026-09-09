@@ -1,0 +1,54 @@
+From 9ac687a280aad334d89eb5af80f3465d3df3e601 Mon Sep 17 00:00:00 2001
+From: Heiko Carstens <hca@linux.ibm.com>
+Date: Mon, 27 Jul 2026 16:05:10 +0200
+Subject: [PATCH 10979/15333] s390: Add ftrace_stub_graph
+
+This is the s390 variant of commit f3a0c23f2539 ("riscv: Add
+ftrace_stub_graph"):
+
+"Commit 883bbbffa5a4 ("ftrace,kcfi: Separate ftrace_stub() and
+ftrace_stub_graph()") added a separate ftrace_stub_graph function for
+CFI_CLANG. Add the stub to fix FUNCTION_GRAPH_TRACER compatibility
+with CFI."
+
+Reviewed-by: Jens Remus <jremus@linux.ibm.com>
+Signed-off-by: Heiko Carstens <hca@linux.ibm.com>
+Tested-by: Nathan Chancellor <nathan@kernel.org>
+Signed-off-by: Vasily Gorbik <gor@linux.ibm.com>
+---
+ arch/s390/kernel/mcount.S | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/arch/s390/kernel/mcount.S b/arch/s390/kernel/mcount.S
+index 1fec370fecf4..6bc44c767642 100644
+--- a/arch/s390/kernel/mcount.S
++++ b/arch/s390/kernel/mcount.S
+@@ -4,6 +4,7 @@
+  *
+  */
+ 
++#include <linux/cfi_types.h>
+ #include <linux/linkage.h>
+ #include <asm/asm-offsets.h>
+ #include <asm/ftrace.h>
+@@ -34,10 +35,16 @@
+ 
+ 	.section .kprobes.text, "ax"
+ 
+-SYM_FUNC_START(ftrace_stub)
++SYM_TYPED_FUNC_START(ftrace_stub)
+ 	BR_EX	%r14
+ SYM_FUNC_END(ftrace_stub)
+ 
++#ifdef CONFIG_FUNCTION_GRAPH_TRACER
++SYM_TYPED_FUNC_START(ftrace_stub_graph)
++	BR_EX	%r14
++SYM_FUNC_END(ftrace_stub_graph)
++#endif
++
+ SYM_CODE_START(ftrace_stub_direct_tramp)
+ 	lgr	%r1, %r0
+ 	BR_EX	%r1
+-- 
+2.55.0
+

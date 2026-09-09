@@ -1,0 +1,48 @@
+From 329b7e841fea0410dcfcd76acdc10687f41caf4f Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Wed, 22 Jul 2026 16:42:14 +0800
+Subject: [PATCH 12954/15333] watchdog: orion: Remove redundant dev_err()
+
+Since commit
+55b48e23f5c4 ("genirq/devres: Add error handling in devm_request_*_irq()"),
+devm_request_irq() automatically logs detailed error messages on
+failure. Remove the now-redundant driver-specific dev_err() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://lore.kernel.org/r/20260722084218.79073-7-panchuang@vivo.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/watchdog/orion_wdt.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/watchdog/orion_wdt.c b/drivers/watchdog/orion_wdt.c
+index 0e145f762f6f..1802634cc7cd 100644
+--- a/drivers/watchdog/orion_wdt.c
++++ b/drivers/watchdog/orion_wdt.c
+@@ -613,10 +613,8 @@ static int orion_wdt_probe(struct platform_device *pdev)
+ 		 */
+ 		ret = devm_request_irq(&pdev->dev, irq, orion_wdt_irq, 0,
+ 				       pdev->name, dev);
+-		if (ret < 0) {
+-			dev_err(&pdev->dev, "failed to request IRQ\n");
++		if (ret < 0)
+ 			goto disable_clk;
+-		}
+ 	}
+ 
+ 	/* Optional 2nd interrupt for pretimeout */
+@@ -625,10 +623,8 @@ static int orion_wdt_probe(struct platform_device *pdev)
+ 		orion_wdt_info.options |= WDIOF_PRETIMEOUT;
+ 		ret = devm_request_irq(&pdev->dev, irq, orion_wdt_pre_irq,
+ 				       0, pdev->name, dev);
+-		if (ret < 0) {
+-			dev_err(&pdev->dev, "failed to request IRQ\n");
++		if (ret < 0)
+ 			goto disable_clk;
+-		}
+ 	}
+ 
+ 
+-- 
+2.55.0
+

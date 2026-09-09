@@ -1,0 +1,74 @@
+From 613550ffe30d7f3197c1f900e92c88c3705520f4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig=20=28The=20Capable=20Hub=29?=
+ <u.kleine-koenig@baylibre.com>
+Date: Mon, 15 Jun 2026 13:28:59 +0200
+Subject: [PATCH 03491/15333] platform/surface: aggregator: Consistently define
+ ssam_device_ids using named initializers
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The .driver_data member of the the two struct ssam_device_id arrays were
+initialized by list expressions. This isn't easily readable if you don't
+work with the Surface System Aggregator core regularily. Using named
+initializers is more explicit and thus easier to parse and also more
+robust to changes of the struct definition. This robustness is relevant
+for a planned change to struct ssam_device_id replacing .driver_data
+by an anonymous union.
+
+This change doesn't introduce changes to the compiled ssam_device_id
+arrays.
+
+Signed-off-by: Uwe Kleine-König (The Capable Hub) <u.kleine-koenig@baylibre.com>
+Reviewed-by: Maximilian Luz <luzmaximilian@gmail.com>
+Link: https://patch.msgid.link/4421c8c959452d8a717ebc7cc905ad9c2912680c.1781522576.git.u.kleine-koenig@baylibre.com
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/surface/surface_aggregator_hub.c      | 9 +++++++--
+ drivers/platform/surface/surface_aggregator_tabletsw.c | 9 +++++++--
+ 2 files changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/platform/surface/surface_aggregator_hub.c b/drivers/platform/surface/surface_aggregator_hub.c
+index 8b8b80228c14..541e9180f976 100644
+--- a/drivers/platform/surface/surface_aggregator_hub.c
++++ b/drivers/platform/surface/surface_aggregator_hub.c
+@@ -348,8 +348,13 @@ static const struct ssam_hub_desc kip_hub = {
+ /* -- Driver registration. -------------------------------------------------- */
+ 
+ static const struct ssam_device_id ssam_hub_match[] = {
+-	{ SSAM_VDEV(HUB, SAM, SSAM_SSH_TC_KIP, 0x00), (unsigned long)&kip_hub  },
+-	{ SSAM_VDEV(HUB, SAM, SSAM_SSH_TC_BAS, 0x00), (unsigned long)&base_hub },
++	{
++		SSAM_VDEV(HUB, SAM, SSAM_SSH_TC_KIP, 0x00),
++		.driver_data = (unsigned long)&kip_hub,
++	}, {
++		SSAM_VDEV(HUB, SAM, SSAM_SSH_TC_BAS, 0x00),
++		.driver_data = (unsigned long)&base_hub,
++	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(ssam, ssam_hub_match);
+diff --git a/drivers/platform/surface/surface_aggregator_tabletsw.c b/drivers/platform/surface/surface_aggregator_tabletsw.c
+index ffa36ed92897..13031c329553 100644
+--- a/drivers/platform/surface/surface_aggregator_tabletsw.c
++++ b/drivers/platform/surface/surface_aggregator_tabletsw.c
+@@ -622,8 +622,13 @@ static const struct ssam_tablet_sw_desc ssam_pos_sw_desc = {
+ /* -- Driver registration. -------------------------------------------------- */
+ 
+ static const struct ssam_device_id ssam_tablet_sw_match[] = {
+-	{ SSAM_SDEV(KIP, SAM, 0x00, 0x01), (unsigned long)&ssam_kip_sw_desc },
+-	{ SSAM_SDEV(POS, SAM, 0x00, 0x01), (unsigned long)&ssam_pos_sw_desc },
++	{
++		SSAM_SDEV(KIP, SAM, 0x00, 0x01),
++		.driver_data = (unsigned long)&ssam_kip_sw_desc,
++	}, {
++		SSAM_SDEV(POS, SAM, 0x00, 0x01),
++		.driver_data = (unsigned long)&ssam_pos_sw_desc,
++	},
+ 	{ },
+ };
+ MODULE_DEVICE_TABLE(ssam, ssam_tablet_sw_match);
+-- 
+2.55.0
+

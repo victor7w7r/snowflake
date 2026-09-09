@@ -1,0 +1,57 @@
+From 78ff45f849a7c24b96adbb38c901d84491e650e9 Mon Sep 17 00:00:00 2001
+From: Emery Hsin <emery.hsin@mediatek.com>
+Date: Fri, 12 Jun 2026 15:51:36 +0800
+Subject: [PATCH 09310/15333] wifi: mt76: mt792x: add tx_done ring to common
+ DMA queue allocation
+
+Add a tx_done field to mt792x_dma_layout and extend
+mt792x_dma_alloc_queues() to allocate the MT_RXQ_MCU_WA queue when
+tx_done.ring_base is configured.
+
+This is a preparation patch before enabling MT7928 PCIe support.
+
+Signed-off-by: Emery Hsin <emery.hsin@mediatek.com>
+Link: https://patch.msgid.link/20260612075136.2577553-5-jb.tsai@mediatek.com
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+---
+ drivers/net/wireless/mediatek/mt76/mt792x.h     |  1 +
+ drivers/net/wireless/mediatek/mt76/mt792x_dma.c | 11 +++++++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x.h b/drivers/net/wireless/mediatek/mt76/mt792x.h
+index eacee63e13f3..b8dc7ce38c87 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x.h
++++ b/drivers/net/wireless/mediatek/mt76/mt792x.h
+@@ -217,6 +217,7 @@ struct mt792x_dma_layout {
+ 	struct mt792x_dma_ring tx_data0;
+ 	struct mt792x_dma_ring tx_mcu;
+ 	struct mt792x_dma_ring tx_fwdl;
++	struct mt792x_dma_ring tx_done;
+ 	struct mt792x_dma_ring rx_data;
+ 	struct mt792x_dma_ring rx_mcu;
+ };
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_dma.c b/drivers/net/wireless/mediatek/mt76/mt792x_dma.c
+index b090ba9cd676..4d4c62bb0a77 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_dma.c
++++ b/drivers/net/wireless/mediatek/mt76/mt792x_dma.c
+@@ -122,6 +122,17 @@ int mt792x_dma_alloc_queues(struct mt792x_dev *dev,
+ 	if (ret)
+ 		return ret;
+ 
++	/* tx done */
++	if (layout->tx_done.ring_base) {
++		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_MCU_WA],
++				       layout->tx_done.qid,
++				       layout->tx_done.n_desc,
++				       MT_RX_BUF_SIZE,
++				       layout->tx_done.ring_base);
++		if (ret)
++			return ret;
++	}
++
+ 	/* rx event */
+ 	ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_MCU],
+ 			       layout->rx_mcu.qid,
+-- 
+2.55.0
+

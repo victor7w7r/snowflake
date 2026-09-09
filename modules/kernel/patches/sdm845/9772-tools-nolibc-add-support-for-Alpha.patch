@@ -1,0 +1,274 @@
+From b58afc8d1cf85688601b8d7e271125fff666f661 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh?= <linux@weissschuh.net>
+Date: Wed, 22 Jul 2026 00:07:05 +0200
+Subject: [PATCH 09772/15333] tools/nolibc: add support for Alpha
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A straightforward new architecture.
+
+Signed-off-by: Thomas Weißschuh <linux@weissschuh.net>
+Acked-by: Willy Tarreau <w@1wt.eu>
+Tested-by: Michael Cree <mcree@orcon.net.nz>
+Link: https://patch.msgid.link/20260722-nolibc-alpha-v2-1-4970e48eb7bf@weissschuh.net
+---
+ tools/include/nolibc/Makefile                 |   2 +-
+ tools/include/nolibc/arch-alpha.h             | 159 ++++++++++++++++++
+ tools/include/nolibc/arch.h                   |   2 +
+ .../testing/selftests/nolibc/Makefile.nolibc  |   2 +
+ tools/testing/selftests/nolibc/nolibc-test.c  |   4 +
+ tools/testing/selftests/nolibc/run-tests.sh   |   3 +-
+ 6 files changed, 170 insertions(+), 2 deletions(-)
+ create mode 100644 tools/include/nolibc/arch-alpha.h
+
+diff --git a/tools/include/nolibc/Makefile b/tools/include/nolibc/Makefile
+index 00fd2e566d75..6d213d372bf8 100644
+--- a/tools/include/nolibc/Makefile
++++ b/tools/include/nolibc/Makefile
+@@ -17,7 +17,7 @@ endif
+ # it defaults to this nolibc directory.
+ OUTPUT ?= $(CURDIR)/
+ 
+-architectures := arm arm64 loongarch m68k mips openrisc parisc powerpc riscv s390 sh sparc x86
++architectures := alpha arm arm64 loongarch m68k mips openrisc parisc powerpc riscv s390 sh sparc x86
+ arch_files := arch.h $(addsuffix .h, $(addprefix arch-, $(architectures)))
+ all_files := \
+ 		alloca.h \
+diff --git a/tools/include/nolibc/arch-alpha.h b/tools/include/nolibc/arch-alpha.h
+new file mode 100644
+index 000000000000..04ff8a95c52c
+--- /dev/null
++++ b/tools/include/nolibc/arch-alpha.h
+@@ -0,0 +1,159 @@
++/* SPDX-License-Identifier: LGPL-2.1 OR MIT */
++/*
++ * Alpha specific definitions for NOLIBC
++ * Copyright (C) 2025 Thomas Weißschuh <linux@weissschuh.net>
++ */
++
++#ifndef _NOLIBC_ARCH_ALPHA_H
++#define _NOLIBC_ARCH_ALPHA_H
++
++#include "compiler.h"
++#include "crt.h"
++
++/*
++ * Syscalls for Alpha:
++ *   - registers are 64-bit
++ *   - syscall number is passed in $0/v0
++ *   - the system call is performed by calling callsys
++ *   - syscall return comes in $0/v0, error flag in $19/a3
++ *   - arguments are passed in $16/a0 to $21/a5
++ *   - GCC does not support symbol register names
++ */
++
++#define _NOLIBC_SYSCALL_CLOBBERLIST \
++	"$1", "$2", "$3", "$4", "$5", "$6", "$7", "$8", \
++	"$22", "$23", "$24", "$25", "$27", "$28", "memory", "cc"
++
++#define __nolibc_syscall0(num)                                                \
++({                                                                            \
++	register long _num __asm__ ("$0") = (num);                            \
++	register long _err __asm__ ("$19");                                   \
++                                                                              \
++	__asm__ volatile (                                                    \
++		"callsys"                                                     \
++		: "+r"(_num), "=r"(_err)                                      \
++		:                                                             \
++		: _NOLIBC_SYSCALL_CLOBBERLIST,                                \
++		  "$16", "$17", "$18", "$20", "$21"                           \
++	);                                                                    \
++	_err ? -_num : _num;                                                  \
++})
++
++#define __nolibc_syscall1(num, arg1)                                          \
++({                                                                            \
++	register long _num __asm__ ("$0") = (num);                            \
++	register long _err __asm__ ("$19");                                   \
++	register long _arg1 __asm__ ("$16") = (long)(arg1);                   \
++                                                                              \
++	__asm__ volatile (                                                    \
++		"callsys"                                                     \
++		: "+r"(_num), "=r"(_err)                                      \
++		: "r"(_arg1)                                                  \
++		: _NOLIBC_SYSCALL_CLOBBERLIST, "$17", "$18", "$20", "$21"     \
++	);                                                                    \
++	_err ? -_num : _num;                                                  \
++})
++
++#define __nolibc_syscall2(num, arg1, arg2)                                    \
++({                                                                            \
++	register long _num __asm__ ("$0") = (num);                            \
++	register long _err __asm__ ("$19");                                   \
++	register long _arg1 __asm__ ("$16") = (long)(arg1);                   \
++	register long _arg2 __asm__ ("$17") = (long)(arg2);                   \
++                                                                              \
++	__asm__ volatile (                                                    \
++		"callsys"                                                     \
++		: "+r"(_num), "=r"(_err)                                      \
++		: "r"(_arg1), "r"(_arg2)                                      \
++		: _NOLIBC_SYSCALL_CLOBBERLIST, "$18", "$20", "$21"            \
++	);                                                                    \
++	_err ? -_num : _num;                                                  \
++})
++
++#define __nolibc_syscall3(num, arg1, arg2, arg3)                              \
++({                                                                            \
++	register long _num __asm__ ("$0") = (num);                            \
++	register long _err __asm__ ("$19");                                   \
++	register long _arg1 __asm__ ("$16") = (long)(arg1);                   \
++	register long _arg2 __asm__ ("$17") = (long)(arg2);                   \
++	register long _arg3 __asm__ ("$18") = (long)(arg3);                   \
++                                                                              \
++	__asm__ volatile (                                                    \
++		"callsys"                                                     \
++		: "+r"(_num), "=r"(_err)                                      \
++		: "r"(_arg1), "r"(_arg2), "r"(_arg3)                          \
++		: _NOLIBC_SYSCALL_CLOBBERLIST, "$20", "$21"                   \
++	);                                                                    \
++	_err ? -_num : _num;                                                  \
++})
++
++#define __nolibc_syscall4(num, arg1, arg2, arg3, arg4)                        \
++({                                                                            \
++	register long _num __asm__ ("$0") = (num);                            \
++	register long _arg1 __asm__ ("$16") = (long)(arg1);                   \
++	register long _arg2 __asm__ ("$17") = (long)(arg2);                   \
++	register long _arg3 __asm__ ("$18") = (long)(arg3);                   \
++	register long _arg4 __asm__ ("$19") = (long)(arg4);                   \
++                                                                              \
++	__asm__ volatile (                                                    \
++		"callsys"                                                     \
++		: "+r"(_num), "+r"(_arg4)                                     \
++		: "r"(_arg1), "r"(_arg2), "r"(_arg3)                          \
++		: _NOLIBC_SYSCALL_CLOBBERLIST, "$20", "$21"                   \
++	);                                                                    \
++	_arg4 ? -_num : _num;                                                 \
++})
++
++#define __nolibc_syscall5(num, arg1, arg2, arg3, arg4, arg5)                  \
++({                                                                            \
++	register long _num __asm__ ("$0") = (num);                            \
++	register long _arg1 __asm__ ("$16") = (long)(arg1);                   \
++	register long _arg2 __asm__ ("$17") = (long)(arg2);                   \
++	register long _arg3 __asm__ ("$18") = (long)(arg3);                   \
++	register long _arg4 __asm__ ("$19") = (long)(arg4);                   \
++	register long _arg5 __asm__ ("$20") = (long)(arg5);                   \
++                                                                              \
++	__asm__ volatile (                                                    \
++		"callsys"                                                     \
++		: "+r"(_num), "+r"(_arg4)                                     \
++		: "r"(_arg1), "r"(_arg2), "r"(_arg3), "r"(_arg5)              \
++		: _NOLIBC_SYSCALL_CLOBBERLIST, "$21"                          \
++	);                                                                    \
++	_arg4 ? -_num : _num;                                                 \
++})
++
++#define __nolibc_syscall6(num, arg1, arg2, arg3, arg4, arg5, arg6)            \
++({                                                                            \
++	register long _num __asm__ ("$0") = (num);                            \
++	register long _arg1 __asm__ ("$16") = (long)(arg1);                   \
++	register long _arg2 __asm__ ("$17") = (long)(arg2);                   \
++	register long _arg3 __asm__ ("$18") = (long)(arg3);                   \
++	register long _arg4 __asm__ ("$19") = (long)(arg4);                   \
++	register long _arg5 __asm__ ("$20") = (long)(arg5);                   \
++	register long _arg6 __asm__ ("$21") = (long)(arg6);                   \
++                                                                              \
++	__asm__ volatile (                                                    \
++		"callsys"                                                     \
++		: "+r"(_num), "+r"(_arg4)                                     \
++		: "r"(_arg1), "r"(_arg2), "r"(_arg3), "r"(_arg5),             \
++		  "r"(_arg6)                                                  \
++		: _NOLIBC_SYSCALL_CLOBBERLIST                                 \
++	);                                                                    \
++	_arg4 ? -_num : _num;                                                 \
++})
++
++/* startup code */
++void __attribute__((weak, noreturn)) __nolibc_entrypoint __nolibc_no_stack_protector
++_start(void)
++{
++	__asm__ volatile (
++		"br $gp, 0f\n"               /* setup $gp, so that 'lda' works                */
++		"0: ldgp $gp, 0($gp)\n"
++		"lda $27, _start_c\n"        /* setup current function address for _start_c   */
++		"mov $sp, $16\n"             /* save argc pointer to $16, as arg1 of _start_c */
++		"br  _start_c\n"             /* transfer to c runtime                         */
++	);
++	__nolibc_entrypoint_epilogue();
++}
++
++#endif /* _NOLIBC_ARCH_ALPHA_H */
+diff --git a/tools/include/nolibc/arch.h b/tools/include/nolibc/arch.h
+index b69d9c5ec5c6..06cc2dbe7a33 100644
+--- a/tools/include/nolibc/arch.h
++++ b/tools/include/nolibc/arch.h
+@@ -32,6 +32,8 @@
+ #include "arch-openrisc.h"
+ #elif defined(__hppa__)
+ #include "arch-parisc.h"
++#elif defined(__alpha__)
++#include "arch-alpha.h"
+ #else
+ #error Unsupported Architecture
+ #endif
+diff --git a/tools/testing/selftests/nolibc/Makefile.nolibc b/tools/testing/selftests/nolibc/Makefile.nolibc
+index 06f881e2e90c..f70c8dfca018 100644
+--- a/tools/testing/selftests/nolibc/Makefile.nolibc
++++ b/tools/testing/selftests/nolibc/Makefile.nolibc
+@@ -112,6 +112,7 @@ EXTRACONFIG_armthumb  = -e CONFIG_NAMESPACES
+ EXTRACONFIG_sparc32   = -e CONFIG_TMPFS
+ EXTRACONFIG_m68k      = -e CONFIG_BLK_DEV_INITRD
+ EXTRACONFIG_sh4       = -e CONFIG_BLK_DEV_INITRD -e CONFIG_CMDLINE_FROM_BOOTLOADER
++EXTRACONFIG_alpha     = -e CONFIG_BLK_DEV_INITRD
+ EXTRACONFIG           = $(EXTRACONFIG_$(XARCH))
+ 
+ # optional tests to run (default = all)
+@@ -174,6 +175,7 @@ QEMU_ARGS_m68k       = -M virt -append "console=ttyGF0,115200 panic=-1 $(TEST:%=
+ QEMU_ARGS_sh4        = -M r2d -serial file:/dev/stdout -append "console=ttySC1,115200 panic=-1 $(TEST:%=NOLIBC_TEST=%)"
+ QEMU_ARGS_openrisc   = -M virt -m 512M -append "console=ttyS0 panic=-1 $(TEST:%=NOLIBC_TEST=%)"
+ QEMU_ARGS_parisc32   = -M B160L -append "console=ttyS0 panic=-1 $(TEST:%=NOLIBC_TEST=%)"
++QEMU_ARGS_alpha      = -M clipper -append "console=ttyS0 panic=-1 $(TEST:%=NOLIBC_TEST=%)"
+ QEMU_ARGS            = -m 1G $(QEMU_ARGS_$(XARCH)) $(QEMU_ARGS_BIOS) $(QEMU_ARGS_EXTRA)
+ 
+ # OUTPUT is only set when run from the main makefile, otherwise
+diff --git a/tools/testing/selftests/nolibc/nolibc-test.c b/tools/testing/selftests/nolibc/nolibc-test.c
+index 996e8d13508e..ed860b0a15a1 100644
+--- a/tools/testing/selftests/nolibc/nolibc-test.c
++++ b/tools/testing/selftests/nolibc/nolibc-test.c
+@@ -756,6 +756,10 @@ int run_startup(int min, int max)
+ 	/* checking NULL for argv/argv0, environ and _auxv is not enough, let's compare with sbrk(0) or &end */
+ 	extern char end;
+ 	char *brk = sbrk(0) != (void *)-1 ? sbrk(0) : &end;
++#if defined(__alpha__)
++	/* the ordering above does not work on an alpha kernel due to STACK_TOP != TASK_SIZE */
++	brk = NULL;
++#endif
+ 	/* differ from nolibc, both glibc and musl have no global _auxv */
+ 	const unsigned long *test_auxv = (void *)-1;
+ #ifdef NOLIBC
+diff --git a/tools/testing/selftests/nolibc/run-tests.sh b/tools/testing/selftests/nolibc/run-tests.sh
+index 6460e25001de..dc0b1649c641 100755
+--- a/tools/testing/selftests/nolibc/run-tests.sh
++++ b/tools/testing/selftests/nolibc/run-tests.sh
+@@ -30,6 +30,7 @@ all_archs=(
+ 	m68k
+ 	sh4
+ 	parisc32
++	alpha
+ )
+ archs="${all_archs[@]}"
+ 
+@@ -193,7 +194,7 @@ test_arch() {
+ 			exit 1
+ 	esac
+ 	printf '%-15s' "$arch:"
+-	if [ "$arch" = "m68k" -o "$arch" = "sh4" -o "$arch" = "openrisc" -o "$arch" = "parisc32" ] && [ "$llvm" = "1" ]; then
++	if [ "$arch" = "m68k" -o "$arch" = "sh4" -o "$arch" = "openrisc" -o "$arch" = "parisc32" -o "$arch" = "alpha" ] && [ "$llvm" = "1" ]; then
+ 		echo "Unsupported configuration"
+ 		return
+ 	fi
+-- 
+2.55.0
+

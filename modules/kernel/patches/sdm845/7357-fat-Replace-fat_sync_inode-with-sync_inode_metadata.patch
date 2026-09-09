@@ -1,0 +1,266 @@
+From e668e06681814f7ed46ec2e08009a4dc6bb3d812 Mon Sep 17 00:00:00 2001
+From: Jan Kara <jack@suse.cz>
+Date: Mon, 27 Jul 2026 12:49:37 +0200
+Subject: [PATCH 07357/15333] fat: Replace fat_sync_inode() with
+ sync_inode_metadata()
+
+Use generic sync_inode_metadata() instead of fat_sync_inode() for
+persisting inode metadata changes for DIRSYNC inodes. This slightly
+simplifies code and also addresses a theoretical race where
+fat_sync_inode() could return before all metadata buffers associated
+with the inode were properly written out when racing with fsync(2).
+
+Signed-off-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260727104923.3828017-39-jack@suse.cz
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/fat/dir.c         |  6 +++---
+ fs/fat/fat.h         |  1 -
+ fs/fat/file.c        |  6 +++---
+ fs/fat/inode.c       | 15 ---------------
+ fs/fat/misc.c        |  7 ++++---
+ fs/fat/namei_msdos.c | 29 ++++++++++++++---------------
+ fs/fat/namei_vfat.c  | 20 ++++++++++----------
+ 7 files changed, 34 insertions(+), 50 deletions(-)
+
+diff --git a/fs/fat/dir.c b/fs/fat/dir.c
+index c6cca5d00ffd..35bdb62944a2 100644
+--- a/fs/fat/dir.c
++++ b/fs/fat/dir.c
+@@ -1109,10 +1109,10 @@ int fat_remove_entries(struct inode *dir, struct fat_slot_info *sinfo)
+ 	}
+ 
+ 	fat_truncate_time(dir, NULL, FAT_UPDATE_ATIME | FAT_UPDATE_CMTIME);
++	err = 0;
++	mark_inode_dirty(dir);
+ 	if (IS_DIRSYNC(dir))
+-		(void)fat_sync_inode(dir);
+-	else
+-		mark_inode_dirty(dir);
++		(void)sync_inode_metadata(dir, 1);
+ 
+ 	return 0;
+ }
+diff --git a/fs/fat/fat.h b/fs/fat/fat.h
+index 99ed9228a677..dcb5ba757073 100644
+--- a/fs/fat/fat.h
++++ b/fs/fat/fat.h
+@@ -421,7 +421,6 @@ extern void fat_detach(struct inode *inode);
+ extern struct inode *fat_iget(struct super_block *sb, loff_t i_pos);
+ extern struct inode *fat_build_inode(struct super_block *sb,
+ 			struct msdos_dir_entry *de, loff_t i_pos);
+-extern int fat_sync_inode(struct inode *inode);
+ extern int fat_fill_super(struct super_block *sb, struct fs_context *fc,
+ 			  void (*setup)(struct super_block *));
+ extern int fat_fill_inode(struct inode *inode, struct msdos_dir_entry *de);
+diff --git a/fs/fat/file.c b/fs/fat/file.c
+index 8a7585c25207..1c835ca5f21a 100644
+--- a/fs/fat/file.c
++++ b/fs/fat/file.c
+@@ -331,15 +331,15 @@ static int fat_free(struct inode *inode, int skip)
+ 	}
+ 	MSDOS_I(inode)->i_attrs |= ATTR_ARCH;
+ 	fat_truncate_time(inode, NULL, FAT_UPDATE_CMTIME);
++	mark_inode_dirty(inode);
+ 	if (wait) {
+-		err = fat_sync_inode(inode);
++		err = sync_inode_metadata(inode, 1);
+ 		if (err) {
+ 			MSDOS_I(inode)->i_start = i_start;
+ 			MSDOS_I(inode)->i_logstart = i_logstart;
+ 			return err;
+ 		}
+-	} else
+-		mark_inode_dirty(inode);
++	}
+ 
+ 	/* Write a new EOF, and get the remaining cluster chain for freeing. */
+ 	if (skip) {
+diff --git a/fs/fat/inode.c b/fs/fat/inode.c
+index f6f847ff1b1c..e3bb7b4713f2 100644
+--- a/fs/fat/inode.c
++++ b/fs/fat/inode.c
+@@ -955,21 +955,6 @@ static int fat_write_inode(struct inode *inode, struct writeback_control *wbc)
+ 	return err;
+ }
+ 
+-int fat_sync_inode(struct inode *inode)
+-{
+-	int err;
+-	struct writeback_control wbc = {
+-		.sync_mode = WB_SYNC_ALL,
+-	};
+-
+-	err = __fat_write_inode(inode);
+-	if (err)
+-		return err;
+-	return fat_sync_inode_metadata(inode, &wbc);
+-}
+-
+-EXPORT_SYMBOL_GPL(fat_sync_inode);
+-
+ static int fat_show_options(struct seq_file *m, struct dentry *root);
+ static const struct super_operations fat_sops = {
+ 	.alloc_inode	= fat_alloc_inode,
+diff --git a/fs/fat/misc.c b/fs/fat/misc.c
+index 3027ef53af21..be18f6b5819b 100644
+--- a/fs/fat/misc.c
++++ b/fs/fat/misc.c
+@@ -146,16 +146,17 @@ int fat_chain_add(struct inode *inode, int new_dclus, int nr_cluster)
+ 	} else {
+ 		MSDOS_I(inode)->i_start = new_dclus;
+ 		MSDOS_I(inode)->i_logstart = new_dclus;
++		mark_inode_dirty(inode);
+ 		/*
+ 		 * Since generic_write_sync() synchronizes regular files later,
+ 		 * we sync here only directories.
+ 		 */
+ 		if (S_ISDIR(inode->i_mode) && IS_DIRSYNC(inode)) {
+-			ret = fat_sync_inode(inode);
++			ret = sync_inode_metadata(inode, 1);
+ 			if (ret)
+ 				return ret;
+-		} else
+-			mark_inode_dirty(inode);
++		}
++
+ 	}
+ 	if (new_fclus != (inode->i_blocks >> (sbi->cluster_bits - 9))) {
+ 		fat_fs_error_ratelimit(
+diff --git a/fs/fat/namei_msdos.c b/fs/fat/namei_msdos.c
+index 0fd2971ad4b1..91b8d2fc9407 100644
+--- a/fs/fat/namei_msdos.c
++++ b/fs/fat/namei_msdos.c
+@@ -252,10 +252,9 @@ static int msdos_add_entry(struct inode *dir, const unsigned char *name,
+ 		return err;
+ 
+ 	fat_truncate_time(dir, ts, FAT_UPDATE_CMTIME);
++	mark_inode_dirty(dir);
+ 	if (IS_DIRSYNC(dir))
+-		(void)fat_sync_inode(dir);
+-	else
+-		mark_inode_dirty(dir);
++		(void)sync_inode_metadata(dir, 1);
+ 
+ 	return 0;
+ }
+@@ -473,21 +472,20 @@ static int do_msdos_rename(struct inode *old_dir, unsigned char *old_name,
+ 				MSDOS_I(old_inode)->i_attrs |= ATTR_HIDDEN;
+ 			else
+ 				MSDOS_I(old_inode)->i_attrs &= ~ATTR_HIDDEN;
++			mark_inode_dirty(old_inode);
+ 			if (IS_DIRSYNC(old_dir)) {
+-				err = fat_sync_inode(old_inode);
++				err = sync_inode_metadata(old_inode, 1);
+ 				if (err) {
+ 					MSDOS_I(old_inode)->i_attrs = old_attrs;
+ 					goto out;
+ 				}
+-			} else
+-				mark_inode_dirty(old_inode);
++			}
+ 
+ 			inode_inc_iversion(old_dir);
+ 			fat_truncate_time(old_dir, NULL, FAT_UPDATE_CMTIME);
++			mark_inode_dirty(old_dir);
+ 			if (IS_DIRSYNC(old_dir))
+-				(void)fat_sync_inode(old_dir);
+-			else
+-				mark_inode_dirty(old_dir);
++				(void)sync_inode_metadata(old_dir, 1);
+ 			goto out;
+ 		}
+ 	}
+@@ -519,7 +517,7 @@ static int do_msdos_rename(struct inode *old_dir, unsigned char *old_name,
+ 	else
+ 		MSDOS_I(old_inode)->i_attrs &= ~ATTR_HIDDEN;
+ 	if (IS_DIRSYNC(new_dir)) {
+-		err = fat_sync_inode(old_inode);
++		err = sync_inode_metadata(old_inode, 1);
+ 		if (err)
+ 			goto error_inode;
+ 	} else
+@@ -545,10 +543,9 @@ static int do_msdos_rename(struct inode *old_dir, unsigned char *old_name,
+ 		goto error_dotdot;
+ 	inode_inc_iversion(old_dir);
+ 	fat_truncate_time(old_dir, &ts, FAT_UPDATE_CMTIME);
++	mark_inode_dirty(old_dir);
+ 	if (IS_DIRSYNC(old_dir))
+-		(void)fat_sync_inode(old_dir);
+-	else
+-		mark_inode_dirty(old_dir);
++		(void)sync_inode_metadata(old_dir, 1);
+ 
+ 	if (new_inode) {
+ 		drop_nlink(new_inode);
+@@ -577,8 +574,10 @@ static int do_msdos_rename(struct inode *old_dir, unsigned char *old_name,
+ 	MSDOS_I(old_inode)->i_attrs = old_attrs;
+ 	if (new_inode) {
+ 		fat_attach(new_inode, new_i_pos);
+-		if (corrupt)
+-			corrupt |= fat_sync_inode(new_inode);
++		if (corrupt) {
++			mark_inode_dirty(new_inode);
++			corrupt |= sync_inode_metadata(new_inode, 1);
++		}
+ 	} else {
+ 		/*
+ 		 * If new entry was not sharing the data cluster, it
+diff --git a/fs/fat/namei_vfat.c b/fs/fat/namei_vfat.c
+index e909447873e3..0670c80305c6 100644
+--- a/fs/fat/namei_vfat.c
++++ b/fs/fat/namei_vfat.c
+@@ -678,10 +678,9 @@ static int vfat_add_entry(struct inode *dir, const struct qstr *qname,
+ 
+ 	/* update timestamp */
+ 	fat_truncate_time(dir, ts, FAT_UPDATE_CMTIME);
++	mark_inode_dirty(dir);
+ 	if (IS_DIRSYNC(dir))
+-		(void)fat_sync_inode(dir);
+-	else
+-		mark_inode_dirty(dir);
++		(void)sync_inode_metadata(dir, 1);
+ cleanup:
+ 	kfree(slots);
+ 	return err;
+@@ -904,9 +903,9 @@ static int vfat_get_dotdot_de(struct inode *inode, struct buffer_head **bh,
+ 
+ static int vfat_sync_ipos(struct inode *dir, struct inode *inode)
+ {
+-	if (IS_DIRSYNC(dir))
+-		return fat_sync_inode(inode);
+ 	mark_inode_dirty(inode);
++	if (IS_DIRSYNC(dir))
++		return sync_inode_metadata(inode, 1);
+ 	return 0;
+ }
+ 
+@@ -925,10 +924,9 @@ static void vfat_update_dir_metadata(struct inode *dir, struct timespec64 *ts)
+ {
+ 	inode_inc_iversion(dir);
+ 	fat_truncate_time(dir, ts, FAT_UPDATE_CMTIME);
++	mark_inode_dirty(dir);
+ 	if (IS_DIRSYNC(dir))
+-		(void)fat_sync_inode(dir);
+-	else
+-		mark_inode_dirty(dir);
++		(void)sync_inode_metadata(dir, 1);
+ }
+ 
+ static int vfat_rename(struct inode *old_dir, struct dentry *old_dentry,
+@@ -1024,8 +1022,10 @@ static int vfat_rename(struct inode *old_dir, struct dentry *old_dentry,
+ 	fat_attach(old_inode, old_sinfo.i_pos);
+ 	if (new_inode) {
+ 		fat_attach(new_inode, new_i_pos);
+-		if (corrupt)
+-			corrupt |= fat_sync_inode(new_inode);
++		if (corrupt) {
++			mark_inode_dirty(new_inode);
++			corrupt |= sync_inode_metadata(new_inode, 1);
++		}
+ 	} else {
+ 		/*
+ 		 * If new entry was not sharing the data cluster, it
+-- 
+2.55.0
+

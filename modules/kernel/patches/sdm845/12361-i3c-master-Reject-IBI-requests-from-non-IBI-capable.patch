@@ -1,0 +1,47 @@
+From 087efc8e88e2955ac2e8895402bd0e7fc1cfc314 Mon Sep 17 00:00:00 2001
+From: Adrian Hunter <adrian.hunter@intel.com>
+Date: Fri, 7 Aug 2026 17:56:35 +0300
+Subject: [PATCH 12361/15333] i3c: master: Reject IBI requests from
+ non-IBI-capable devices
+
+i3c_device_request_ibi() does not verify that a device advertises IBI
+support before attempting to set up IBI handling.
+
+Add a check for I3C_BCR_IBI_REQ_CAP and fail with -EOPNOTSUPP when IBI
+support is not reported by the device.  This keeps IBI setup consistent
+with other IBI-related functionality, such as exposing wakeup capability
+only for IBI-capable devices.
+
+Signed-off-by: Adrian Hunter <adrian.hunter@intel.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260807145638.168865-12-adrian.hunter@intel.com
+Signed-off-by: Alexandre Belloni <alexandre.belloni@bootlin.com>
+---
+ drivers/i3c/device.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/i3c/device.c b/drivers/i3c/device.c
+index 5e6df6de0283..f1ba363b22a1 100644
+--- a/drivers/i3c/device.c
++++ b/drivers/i3c/device.c
+@@ -204,12 +204,14 @@ int i3c_device_request_ibi(struct i3c_device *dev,
+ 		return ret;
+ 
+ 	i3c_bus_normaluse_lock(dev->bus);
+-	if (dev->desc) {
++	if (!dev->desc) {
++		ret = -ENOENT;
++	} else if (!(dev->desc->info.bcr & I3C_BCR_IBI_REQ_CAP)) {
++		ret = -EOPNOTSUPP;
++	} else {
+ 		mutex_lock(&dev->desc->ibi_lock);
+ 		ret = i3c_dev_request_ibi_locked(dev->desc, req);
+ 		mutex_unlock(&dev->desc->ibi_lock);
+-	} else {
+-		ret = -ENOENT;
+ 	}
+ 	i3c_bus_normaluse_unlock(dev->bus);
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,95 @@
+From 445ac1c8058035550c5a8330afb754420e712a9c Mon Sep 17 00:00:00 2001
+From: Danilo Krummrich <dakr@kernel.org>
+Date: Wed, 5 Aug 2026 16:59:44 +0200
+Subject: [PATCH 12446/15333] rust: types: implement ForeignOwnable for ARef<T>
+
+Implement ForeignOwnable for ARef<T>, making it possible for C code to
+own an ARef<T>.
+
+Since ARef represents shared ownership, BorrowedMut is &T rather than
+&mut T, matching the semantics of the underlying reference-counted type.
+
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Tested-by: Daniel Almeida <daniel.almeida@collabora.com>
+Signed-off-by: Philipp Stanner <phasta@kernel.org>
+Acked-by: Danilo Krummrich <dakr@kernel.org>
+Link: https://patch.msgid.link/20260805145949.938505-4-phasta@kernel.org
+[ Relaxed `'static` bound and added `#[inline]` as discussed. Added
+  the submitter's Signed-off-by tag. - Miguel ]
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ rust/kernel/sync/aref.rs | 50 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+
+diff --git a/rust/kernel/sync/aref.rs b/rust/kernel/sync/aref.rs
+index b721b2e00b98..9983ee085248 100644
+--- a/rust/kernel/sync/aref.rs
++++ b/rust/kernel/sync/aref.rs
+@@ -24,6 +24,11 @@
+     ptr::NonNull, //
+ };
+ 
++use crate::{
++    prelude::*,
++    types::ForeignOwnable, //
++};
++
+ /// Types that are _always_ reference counted.
+ ///
+ /// It allows such types to define their own custom ref increment and decrement functions.
+@@ -188,6 +193,51 @@ fn eq(&self, other: &ARef<U>) -> bool {
+ }
+ impl<T: AlwaysRefCounted + Eq> Eq for ARef<T> {}
+ 
++// SAFETY: `into_foreign` returns a pointer from `NonNull::as_ptr`, so it's non-null. The
++// `ARef` invariant guarantees that `ptr` points to a valid `T`, so it's aligned to `T`.
++unsafe impl<T: AlwaysRefCounted> ForeignOwnable for ARef<T> {
++    const FOREIGN_ALIGN: usize = core::mem::align_of::<T>();
++
++    type Borrowed<'a>
++        = &'a T
++    where
++        Self: 'a;
++    type BorrowedMut<'a>
++        = &'a T
++    where
++        Self: 'a;
++
++    #[inline]
++    fn into_foreign(self) -> *mut c_void {
++        ARef::into_raw(self).as_ptr().cast()
++    }
++
++    #[inline]
++    unsafe fn from_foreign(ptr: *mut c_void) -> Self {
++        // SAFETY: The safety requirements of this function ensure that `ptr` comes from a previous
++        // call to `Self::into_foreign`.
++        let ptr = unsafe { NonNull::new_unchecked(ptr.cast()) };
++
++        // SAFETY: `ptr` came from `into_foreign`, which consumed an `ARef` without decrementing
++        // the refcount, so we can transfer the ownership to the new `ARef`.
++        unsafe { ARef::from_raw(ptr) }
++    }
++
++    #[inline]
++    unsafe fn borrow<'a>(ptr: *mut c_void) -> &'a T {
++        // SAFETY: The safety requirements of this method ensure that the object remains alive and
++        // immutable for the duration of 'a.
++        unsafe { &*ptr.cast() }
++    }
++
++    #[inline]
++    unsafe fn borrow_mut<'a>(ptr: *mut c_void) -> &'a T {
++        // SAFETY: The safety requirements for `borrow_mut` are a superset of the safety
++        // requirements for `borrow`.
++        unsafe { <Self as ForeignOwnable>::borrow(ptr) }
++    }
++}
++
+ impl<T, U> PartialEq<&'_ U> for ARef<T>
+ where
+     T: AlwaysRefCounted + PartialEq<U>,
+-- 
+2.55.0
+

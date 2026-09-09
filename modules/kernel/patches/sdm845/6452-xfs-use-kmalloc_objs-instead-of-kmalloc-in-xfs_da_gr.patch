@@ -1,0 +1,37 @@
+From 56aa9ef3c413cb13a373226f91a19358cd9f1266 Mon Sep 17 00:00:00 2001
+From: Cihan Karadag <cihan.cihan@gmail.com>
+Date: Thu, 16 Jul 2026 15:48:12 -0600
+Subject: [PATCH 06452/15333] xfs: use kmalloc_objs() instead of kmalloc() in
+ xfs_da_grow_inode_int
+
+Convert open-coded kmalloc() multiplication to the modern kmalloc_objs()
+interface to improve type safety and prevent potential integer
+overflows.
+
+No functional changes are intended.
+
+Signed-off-by: Cihan Karadag <cihan.cihan@gmail.com>
+Reviewed-by: Carlos Maiolino <cmaiolino@redhat.com>
+Reviewed-by: "Darrick J. Wong" <djwong@kernel.org>
+Signed-off-by: Carlos Maiolino <cem@kernel.org>
+---
+ fs/xfs/libxfs/xfs_da_btree.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/fs/xfs/libxfs/xfs_da_btree.c b/fs/xfs/libxfs/xfs_da_btree.c
+index 9debb95d86fa..f190c088591b 100644
+--- a/fs/xfs/libxfs/xfs_da_btree.c
++++ b/fs/xfs/libxfs/xfs_da_btree.c
+@@ -2354,8 +2354,7 @@ xfs_da_grow_inode_int(
+ 		 * If we didn't get it and the block might work if fragmented,
+ 		 * try without the CONTIG flag.  Loop until we get it all.
+ 		 */
+-		mapp = kmalloc(sizeof(*mapp) * count,
+-				GFP_KERNEL | __GFP_NOFAIL);
++		mapp = kmalloc_objs(*mapp, count, GFP_KERNEL | __GFP_NOFAIL);
+ 		for (b = *bno, mapi = 0; b < *bno + count; ) {
+ 			c = (int)(*bno + count - b);
+ 			nmap = min(XFS_BMAP_MAX_NMAP, c);
+-- 
+2.55.0
+

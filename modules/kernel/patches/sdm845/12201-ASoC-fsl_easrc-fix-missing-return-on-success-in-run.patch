@@ -1,0 +1,41 @@
+From 82b6d37621b00ffbf32552b822d1a339fcf20d86 Mon Sep 17 00:00:00 2001
+From: Shengjiu Wang <shengjiu.wang@nxp.com>
+Date: Fri, 7 Aug 2026 15:22:02 +0800
+Subject: [PATCH 12201/15333] ASoC: fsl_easrc: fix missing return on success in
+ runtime_resume
+
+Commit 48d84310be60 ("ASoC: fsl_easrc: Use guard() for spin locks")
+refactored fsl_easrc_runtime_resume() but accidentally dropped the
+early return on the success path.  The original code had a skip_load
+label followed by "return 0"; that label was removed during cleanup
+but the corresponding success return was lost too.
+
+As a result, every successful resume falls through into the
+disable_mem_clk error path and calls clk_disable_unprepare() on a
+clock that is still in use, leading to an unbalanced clock disable.
+
+Restore the missing "return 0" before the disable_mem_clk error label.
+
+Fixes: 48d84310be60 ("ASoC: fsl_easrc: Use guard() for spin locks")
+Signed-off-by: Shengjiu Wang <shengjiu.wang@nxp.com>
+Link: https://patch.msgid.link/20260807072202.380021-1-shengjiu.wang@oss.nxp.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/fsl/fsl_easrc.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/sound/soc/fsl/fsl_easrc.c b/sound/soc/fsl/fsl_easrc.c
+index 1cece980c389..1b1b57fe0db6 100644
+--- a/sound/soc/fsl/fsl_easrc.c
++++ b/sound/soc/fsl/fsl_easrc.c
+@@ -2364,6 +2364,7 @@ static int fsl_easrc_runtime_resume(struct device *dev)
+ 			goto disable_mem_clk;
+ 	}
+ 
++	return 0;
+ disable_mem_clk:
+ 	clk_disable_unprepare(easrc->mem_clk);
+ 	return ret;
+-- 
+2.55.0
+

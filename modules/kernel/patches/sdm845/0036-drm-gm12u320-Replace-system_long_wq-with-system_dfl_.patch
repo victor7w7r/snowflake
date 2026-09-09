@@ -1,0 +1,83 @@
+From 645abe00a34588f27c856ca2b532642a8ef7691b Mon Sep 17 00:00:00 2001
+From: Marco Crivellari <marco.crivellari@suse.com>
+Date: Thu, 30 Apr 2026 11:15:32 +0200
+Subject: [PATCH 00036/15333] drm/gm12u320: Replace system_long_wq with
+ system_dfl_long_wq
+
+Currently the code enqueue work items using {queue|mod}_delayed_work(),
+using system_long_wq. This workqueue should be used when long works are
+expected, but it is a per-cpu workqueue.
+
+This is important because queue_delayed_work() queue the work using:
+
+   queue_delayed_work_on(WORK_CPU_UNBOUND, ...);
+
+Note that WORK_CPU_UNBOUND = NR_CPUS.
+
+This would end up calling __queue_delayed_work() that does:
+
+    if (housekeeping_enabled(HK_TYPE_TIMER)) {
+    //      [....]
+    } else {
+            if (likely(cpu == WORK_CPU_UNBOUND))
+                    add_timer_global(timer);
+            else
+                    add_timer_on(timer, cpu);
+    }
+
+So when cpu == WORK_CPU_UNBOUND the timer is global and is
+not using a specific CPU. Later, when __queue_work() is called:
+
+    if (req_cpu == WORK_CPU_UNBOUND) {
+            if (wq->flags & WQ_UNBOUND)
+                    cpu = wq_select_unbound_cpu(raw_smp_processor_id());
+            else
+                    cpu = raw_smp_processor_id();
+    }
+
+Because the wq is not unbound, it takes the CPU where the timer
+fired and enqueue the work on that CPU.
+The consequence of all of this is that the work can run anywhere,
+depending on where the timer fired.
+
+Recently, a new unbound workqueue specific for long running work has
+been added in commit c116737e972e ("workqueue: Add system_dfl_long_wq
+for long unbound works").
+
+So change system_long_wq with system_dfl_long_wq so that the work may
+benefit from scheduler task placement.
+
+Signed-off-by: Marco Crivellari <marco.crivellari@suse.com>
+Reviewed-by: Thomas Zimmermann <tzimmermann@suse.de>
+Signed-off-by: Thomas Zimmermann <tzimmermann@suse.de>
+Link: https://patch.msgid.link/20260430091532.115846-1-marco.crivellari@suse.com
+---
+ drivers/gpu/drm/tiny/gm12u320.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/tiny/gm12u320.c b/drivers/gpu/drm/tiny/gm12u320.c
+index d73dfebb4353..4ad074337af0 100644
+--- a/drivers/gpu/drm/tiny/gm12u320.c
++++ b/drivers/gpu/drm/tiny/gm12u320.c
+@@ -388,7 +388,7 @@ static void gm12u320_fb_update_work(struct work_struct *work)
+ 	 * We must draw a frame every 2s otherwise the projector
+ 	 * switches back to showing its logo.
+ 	 */
+-	queue_delayed_work(system_long_wq, &gm12u320->fb_update.work,
++	queue_delayed_work(system_dfl_long_wq, &gm12u320->fb_update.work,
+ 			   msecs_to_jiffies(IDLE_TIMEOUT));
+ 
+ 	return;
+@@ -427,7 +427,8 @@ static void gm12u320_fb_mark_dirty(struct drm_framebuffer *fb,
+ 	mutex_unlock(&gm12u320->fb_update.lock);
+ 
+ 	if (wakeup)
+-		mod_delayed_work(system_long_wq, &gm12u320->fb_update.work, 0);
++		mod_delayed_work(system_dfl_long_wq,
++				 &gm12u320->fb_update.work, 0);
+ 
+ 	if (old_fb)
+ 		drm_framebuffer_put(old_fb);
+-- 
+2.55.0
+

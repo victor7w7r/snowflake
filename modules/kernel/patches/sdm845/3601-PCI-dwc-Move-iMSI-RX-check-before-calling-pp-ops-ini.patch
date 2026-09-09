@@ -1,0 +1,54 @@
+From 09aad32189e4c7fa0fa624a4939acda4e4ef9ae7 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marek.vasut+renesas@mailbox.org>
+Date: Tue, 7 Jul 2026 22:35:39 +0200
+Subject: [PATCH 03601/15333] PCI: dwc: Move iMSI-RX check before calling
+ 'pp->ops->init()'
+
+The R-Car Gen4 PCIe controller integration configures MSI registers in the
+controller driver pp->ops->init() callback because they have to be
+configured while PERST# is asserted, and PERST# is asserted across the
+controller driver pp->ops->init() callback.
+
+A future change to the R-Car Gen4 pp->ops->init() callback will need to
+know whether iMSI-RX is in use.  Assign pp->use_imsi_rx before calling
+pp->ops->init() so pp->use_imsi_rx is available.
+
+Signed-off-by: Marek Vasut <marek.vasut+renesas@mailbox.org>
+Signed-off-by: Manivannan Sadhasivam <mani@kernel.org>
+Signed-off-by: Bjorn Helgaas <bhelgaas@google.com>
+Link: https://patch.msgid.link/20260707203743.88299-2-marek.vasut+renesas@mailbox.org
+---
+ drivers/pci/controller/dwc/pcie-designware-host.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/pci/controller/dwc/pcie-designware-host.c b/drivers/pci/controller/dwc/pcie-designware-host.c
+index 06722259d2e3..f5a38e6fd8d7 100644
+--- a/drivers/pci/controller/dwc/pcie-designware-host.c
++++ b/drivers/pci/controller/dwc/pcie-designware-host.c
+@@ -587,6 +587,12 @@ int dw_pcie_host_init(struct dw_pcie_rp *pp)
+ 	if (ret)
+ 		return ret;
+ 
++	if (pci_msi_enabled()) {
++		pp->use_imsi_rx = !(pp->ops->msi_init ||
++				    of_property_present(np, "msi-parent") ||
++				    of_property_present(np, "msi-map"));
++	}
++
+ 	if (pp->ops->init) {
+ 		ret = pp->ops->init(pp);
+ 		if (ret)
+@@ -594,10 +600,6 @@ int dw_pcie_host_init(struct dw_pcie_rp *pp)
+ 	}
+ 
+ 	if (pci_msi_enabled()) {
+-		pp->use_imsi_rx = !(pp->ops->msi_init ||
+-				     of_property_present(np, "msi-parent") ||
+-				     of_property_present(np, "msi-map"));
+-
+ 		/*
+ 		 * For the use_imsi_rx case the default assignment is handled
+ 		 * in the dw_pcie_msi_host_init().
+-- 
+2.55.0
+

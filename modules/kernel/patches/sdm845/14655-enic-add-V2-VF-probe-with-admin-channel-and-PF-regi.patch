@@ -1,0 +1,211 @@
+From b2dfdc966b65d335febbe596b9ffdfaac1187270 Mon Sep 17 00:00:00 2001
+From: Satish Kharat <satishkh@cisco.com>
+Date: Wed, 12 Aug 2026 05:48:10 -0700
+Subject: [PATCH 14655/15333] enic: add V2 VF probe with admin channel and PF
+ registration
+
+When a V2 SR-IOV VF probes, initialize the MBOX protocol, open the
+admin channel, perform the capability check with the PF, and register
+with the PF. This establishes the PF-VF communication path that the PF
+uses to send link state notifications.
+
+The admin channel and MBOX registration happen after enic_dev_init()
+(which discovers admin channel resources) and before register_netdev()
+so the VF is fully initialized before the interface is visible to
+userspace.
+
+A V2 VF whose firmware did not provision admin WQ/RQ/CQ resources
+fails probe with -ENODEV from enic_admin_channel_open(); the admin
+channel is a hard requirement for V2 VFs.
+
+enic_mbox_init() installs the receive handler and resets the message
+sequence number before enic_admin_channel_open() unmasks the admin
+interrupt, so a completion can never arrive before the handler is in
+place.
+
+On remove, the VF unregisters from the PF and closes its admin channel
+before tearing down data path resources.
+
+V2 VFs are not provisioned with an RES_TYPE_SRIOV_INTR resource by
+firmware, so bypass that check in the admin channel capability
+detection for V2 VFs. The PF still requires this resource.
+
+The admin MSI-X vector reserved by enic_set_intr_mode()
+is used for the admin channel interrupt.
+enic_adjust_resources() ensures the reserved slot is within
+intr_avail bounds even at maximum queue configurations.  The
+admin INTR uses a RES_TYPE_INTR_CTRL slot shared with the
+data path.
+
+Signed-off-by: Satish Kharat <satishkh@cisco.com>
+Link: https://patch.msgid.link/20260812-enic-sriov-v2-admin-channel-v2-v13-10-b3809e448aba@cisco.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/cisco/enic/enic_main.c | 94 ++++++++++++++++++---
+ drivers/net/ethernet/cisco/enic/enic_res.c  |  3 +-
+ 2 files changed, 86 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/net/ethernet/cisco/enic/enic_main.c b/drivers/net/ethernet/cisco/enic/enic_main.c
+index 27b31d5a95dd..537ed5ad7800 100644
+--- a/drivers/net/ethernet/cisco/enic/enic_main.c
++++ b/drivers/net/ethernet/cisco/enic/enic_main.c
+@@ -2414,15 +2414,19 @@ static int enic_adjust_resources(struct enic *enic)
+ 		enic->intr_count = enic->intr_avail;
+ 		break;
+ 	case VNIC_DEV_INTR_MODE_MSIX: {
+-		/* Reserve one MSI-X slot for the admin channel interrupt
+-		 * when V2 SR-IOV admin channel resources are present.
+-		 */
+-		unsigned int admin_reserve =
+-			enic->has_admin_channel ? 1 : 0;
+-
+ 		/* Adjust the number of wqs/rqs/cqs/interrupts that will be
+-		 * used based on which resource is the most constrained
++		 * used based on which resource is the most constrained.
++		 * Reserve one extra MSI-X slot for the admin channel INTR
++		 * when has_admin_channel is set so that
++		 * enic_admin_setup_intr() can allocate at intr_count
++		 * within the intr_avail bounds even when the data queue
++		 * count is maxed out.  intr_count counts only the data-path
++		 * IRQs (registered by enic_request_intr()); the admin INTR
++		 * lives at msix index intr_count and is set up later by
++		 * enic_admin_setup_intr().
+ 		 */
++		unsigned int admin_reserve = enic->has_admin_channel ? 1 : 0;
++
+ 		wq_avail = min(enic->wq_avail, ENIC_WQ_MAX);
+ 		rq_default = max(netif_get_num_default_rss_queues(),
+ 				 ENIC_RQ_MIN_DEFAULT);
+@@ -3128,6 +3132,42 @@ static int enic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+ 		goto err_out_dev_close;
+ 	}
+ 
++	/* Initialise link_notify_work before the V2-VF admin-open block below:
++	 * its error path (err_out_admin_close -> enic_admin_channel_close() ->
++	 * cancel_work_sync()) would otherwise act on an uninitialised work.
++	 */
++	INIT_WORK(&enic->link_notify_work, enic_link_notify_work_handler);
++
++	/* V2 VF: open admin channel and register with PF.
++	 * Must happen before register_netdev so the VF is fully
++	 * initialized before the interface is visible to userspace.
++	 *
++	 * enic_mbox_init() installs the receive handler and resets the
++	 * sequence number; it must run before enic_admin_channel_open()
++	 * unmasks the admin interrupt so an early completion is not dropped.
++	 */
++	if (enic_is_sriov_vf_v2(enic)) {
++		enic_mbox_init(enic);
++		err = enic_admin_channel_open(enic);
++		if (err) {
++			dev_err(dev,
++				"Failed to open admin channel: %d\n", err);
++			goto err_out_dev_deinit;
++		}
++		err = enic_mbox_vf_capability_check(enic);
++		if (err) {
++			dev_err(dev,
++				"MBOX capability check failed: %d\n", err);
++			goto err_out_admin_close;
++		}
++		err = enic_mbox_vf_register(enic);
++		if (err) {
++			dev_err(dev,
++				"MBOX VF registration failed: %d\n", err);
++			goto err_out_admin_close;
++		}
++	}
++
+ 	netif_set_real_num_tx_queues(netdev, enic->wq_count);
+ 	netif_set_real_num_rx_queues(netdev, enic->rq_count);
+ 
+@@ -3140,7 +3180,6 @@ static int enic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+ 	INIT_WORK(&enic->reset, enic_reset);
+ 	INIT_WORK(&enic->tx_hang_reset, enic_tx_hang_reset);
+ 	INIT_WORK(&enic->change_mtu_work, enic_change_mtu_work);
+-	INIT_WORK(&enic->link_notify_work, enic_link_notify_work_handler);
+ 
+ 	for (i = 0; i < enic->wq_count; i++)
+ 		spin_lock_init(&enic->wq[i].lock);
+@@ -3153,7 +3192,7 @@ static int enic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+ 	err = enic_set_mac_addr(netdev, enic->mac_addr);
+ 	if (err) {
+ 		dev_err(dev, "Invalid MAC address, aborting\n");
+-		goto err_out_dev_deinit;
++		goto err_out_admin_close;
+ 	}
+ 
+ 	enic->tx_coalesce_usecs = enic->config.intr_timer_usec;
+@@ -3251,11 +3290,23 @@ static int enic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+ 	err = register_netdev(netdev);
+ 	if (err) {
+ 		dev_err(dev, "Cannot register net device, aborting\n");
+-		goto err_out_dev_deinit;
++		goto err_out_admin_close;
+ 	}
+ 
+ 	return 0;
+ 
++err_out_admin_close:
++	if (enic_is_sriov_vf_v2(enic)) {
++		if (enic->vf_registered) {
++			int unreg_err = enic_mbox_vf_unregister(enic);
++
++			if (unreg_err)
++				netdev_warn(netdev,
++					    "Failed to unregister from PF: %d\n",
++					    unreg_err);
++		}
++		enic_admin_channel_close(enic);
++	}
+ err_out_dev_deinit:
+ 	enic_dev_deinit(enic);
+ err_out_dev_close:
+@@ -3293,7 +3344,30 @@ static void enic_remove(struct pci_dev *pdev)
+ 		disable_work_sync(&enic->reset);
+ 		disable_work_sync(&enic->tx_hang_reset);
+ 		disable_work_sync(&enic->change_mtu_work);
++
++		/* Close the admin channel and unregister from the PF before
++		 * unregister_netdev() to prevent a late PF notification from
++		 * touching a netdev that is being torn down.
++		 */
++		if (enic_is_sriov_vf_v2(enic)) {
++			if (enic->vf_registered) {
++				int unreg_err = enic_mbox_vf_unregister(enic);
++
++				if (unreg_err)
++					netdev_warn(netdev,
++						    "Failed to unregister from PF: %d\n",
++						    unreg_err);
++			}
++			enic_admin_channel_close(enic);
++		}
++
+ 		unregister_netdev(netdev);
++		/* unregister_netdev() -> enic_stop() stops the notify timer, so
++		 * no new link_notify_work can be queued past this point.  Cancel
++		 * unconditionally to cover the narrow window where
++		 * enic_link_check() scheduled it just as SR-IOV was disabled.
++		 */
++		cancel_work_sync(&enic->link_notify_work);
+ #ifdef CONFIG_PCI_IOV
+ 		if (enic_sriov_enabled(enic)) {
+ 			if (enic->vf_type == ENIC_VF_TYPE_V2)
+diff --git a/drivers/net/ethernet/cisco/enic/enic_res.c b/drivers/net/ethernet/cisco/enic/enic_res.c
+index 436326ace049..74cd2ee3af5c 100644
+--- a/drivers/net/ethernet/cisco/enic/enic_res.c
++++ b/drivers/net/ethernet/cisco/enic/enic_res.c
+@@ -211,7 +211,8 @@ void enic_get_res_counts(struct enic *enic)
+ 		vnic_dev_get_res_count(enic->vdev, RES_TYPE_ADMIN_RQ) >= 1 &&
+ 		vnic_dev_get_res_count(enic->vdev, RES_TYPE_ADMIN_CQ) >=
+ 			ARRAY_SIZE(enic->admin_cq) &&
+-		vnic_dev_get_res_count(enic->vdev, RES_TYPE_SRIOV_INTR) >= 1;
++		(enic_is_sriov_vf_v2(enic) ||
++		 vnic_dev_get_res_count(enic->vdev, RES_TYPE_SRIOV_INTR) >= 1);
+ 
+ 	dev_info(enic_get_dev(enic),
+ 		"vNIC resources avail: wq %d rq %d cq %d intr %d admin %s\n",
+-- 
+2.55.0
+

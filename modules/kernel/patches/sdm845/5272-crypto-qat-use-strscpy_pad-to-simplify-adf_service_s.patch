@@ -1,0 +1,113 @@
+From 34fd0e7c90e9108b734c4e1d37041d871d83d5e9 Mon Sep 17 00:00:00 2001
+From: Thorsten Blum <thorsten.blum@linux.dev>
+Date: Sun, 5 Jul 2026 15:38:39 +0200
+Subject: [PATCH 05272/15333] crypto: qat - use strscpy_pad to simplify
+ adf_service_string_to_mask
+
+Use strscpy_pad() to copy buf and zero-pad any trailing bytes instead of
+zero-initializing the local services buffer and then using strscpy() to
+copy into it. Also use the strscpy_pad() return value to detect string
+truncation instead of checking the caller-provided length.
+
+Remove the now-unused length parameters from
+adf_service_string_to_mask() and adf_parse_service_string(). Also remove
+the redundant strnlen() call in adf_get_service_mask(), which only
+computed the removed length argument.
+
+Signed-off-by: Thorsten Blum <thorsten.blum@linux.dev>
+Reviewed-by: Thomas Huth <thuth@redhat.com>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ .../intel/qat/qat_common/adf_cfg_services.c       | 15 ++++++---------
+ .../intel/qat/qat_common/adf_cfg_services.h       |  2 +-
+ drivers/crypto/intel/qat/qat_common/adf_sysfs.c   |  2 +-
+ 3 files changed, 8 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/crypto/intel/qat/qat_common/adf_cfg_services.c b/drivers/crypto/intel/qat/qat_common/adf_cfg_services.c
+index 0cb6cb63e995..f7237c7ef2b1 100644
+--- a/drivers/crypto/intel/qat/qat_common/adf_cfg_services.c
++++ b/drivers/crypto/intel/qat/qat_common/adf_cfg_services.c
+@@ -49,18 +49,17 @@ static_assert(sizeof(ADF_CFG_SYM ADF_SERVICES_DELIMITER
+ 		     ADF_CFG_DCC) < ADF_CFG_MAX_VAL_LEN_IN_BYTES);
+ 
+ static int adf_service_string_to_mask(struct adf_accel_dev *accel_dev, const char *buf,
+-				      size_t len, unsigned long *out_mask)
++				      unsigned long *out_mask)
+ {
+ 	struct adf_hw_device_data *hw_data = GET_HW_DATA(accel_dev);
+-	char services[ADF_CFG_MAX_VAL_LEN_IN_BYTES] = { };
++	char services[ADF_CFG_MAX_VAL_LEN_IN_BYTES];
+ 	unsigned long mask = 0;
+ 	char *substr, *token;
+ 	int id, num_svc = 0;
+ 
+-	if (len > ADF_CFG_MAX_VAL_LEN_IN_BYTES - 1)
++	if (strscpy_pad(services, buf) < 0)
+ 		return -EINVAL;
+ 
+-	strscpy(services, buf);
+ 	substr = services;
+ 
+ 	while ((token = strsep(&substr, ADF_SERVICES_DELIMITER))) {
+@@ -103,12 +102,12 @@ static int adf_service_mask_to_string(unsigned long mask, char *buf, size_t len)
+ }
+ 
+ int adf_parse_service_string(struct adf_accel_dev *accel_dev, const char *in,
+-			     size_t in_len, char *out, size_t out_len)
++			     char *out, size_t out_len)
+ {
+ 	unsigned long mask;
+ 	int ret;
+ 
+-	ret = adf_service_string_to_mask(accel_dev, in, in_len, &mask);
++	ret = adf_service_string_to_mask(accel_dev, in, &mask);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -121,7 +120,6 @@ int adf_parse_service_string(struct adf_accel_dev *accel_dev, const char *in,
+ int adf_get_service_mask(struct adf_accel_dev *accel_dev, unsigned long *mask)
+ {
+ 	char services[ADF_CFG_MAX_VAL_LEN_IN_BYTES] = { };
+-	size_t len;
+ 	int ret;
+ 
+ 	ret = adf_cfg_get_param_value(accel_dev, ADF_GENERAL_SEC,
+@@ -132,8 +130,7 @@ int adf_get_service_mask(struct adf_accel_dev *accel_dev, unsigned long *mask)
+ 		return ret;
+ 	}
+ 
+-	len = strnlen(services, ADF_CFG_MAX_VAL_LEN_IN_BYTES);
+-	ret = adf_service_string_to_mask(accel_dev, services, len, mask);
++	ret = adf_service_string_to_mask(accel_dev, services, mask);
+ 	if (ret)
+ 		dev_err(&GET_DEV(accel_dev), "Invalid value of %s param: %s\n",
+ 			ADF_SERVICES_ENABLED, services);
+diff --git a/drivers/crypto/intel/qat/qat_common/adf_cfg_services.h b/drivers/crypto/intel/qat/qat_common/adf_cfg_services.h
+index 913d717280af..89be2f2c7233 100644
+--- a/drivers/crypto/intel/qat/qat_common/adf_cfg_services.h
++++ b/drivers/crypto/intel/qat/qat_common/adf_cfg_services.h
+@@ -35,7 +35,7 @@ enum {
+ #define MAX_NUM_CONCURR_SVC	ADF_THREE_SERVICES
+ 
+ int adf_parse_service_string(struct adf_accel_dev *accel_dev, const char *in,
+-			     size_t in_len, char *out, size_t out_len);
++			     char *out, size_t out_len);
+ int adf_get_service_enabled(struct adf_accel_dev *accel_dev);
+ int adf_get_service_mask(struct adf_accel_dev *accel_dev, unsigned long *mask);
+ enum adf_cfg_service_type adf_srv_to_cfg_svc_type(enum adf_base_services svc);
+diff --git a/drivers/crypto/intel/qat/qat_common/adf_sysfs.c b/drivers/crypto/intel/qat/qat_common/adf_sysfs.c
+index 79c63dfa8ff3..8daa69a76b01 100644
+--- a/drivers/crypto/intel/qat/qat_common/adf_sysfs.c
++++ b/drivers/crypto/intel/qat/qat_common/adf_sysfs.c
+@@ -125,7 +125,7 @@ static ssize_t cfg_services_store(struct device *dev, struct device_attribute *a
+ 	if (!accel_dev)
+ 		return -EINVAL;
+ 
+-	ret = adf_parse_service_string(accel_dev, buf, count, services,
++	ret = adf_parse_service_string(accel_dev, buf, services,
+ 				       ADF_CFG_MAX_VAL_LEN_IN_BYTES);
+ 	if (ret)
+ 		return ret;
+-- 
+2.55.0
+

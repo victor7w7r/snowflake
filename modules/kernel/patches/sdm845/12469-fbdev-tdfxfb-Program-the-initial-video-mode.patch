@@ -1,0 +1,40 @@
+From 0fc41be57d485ae27a696dd2e622b4d5c1a96cfa Mon Sep 17 00:00:00 2001
+From: Daniel Palmer <daniel@0x0f.com>
+Date: Fri, 31 Jul 2026 21:19:14 +0900
+Subject: [PATCH 12469/15333] fbdev: tdfxfb: Program the initial video mode
+
+If the card does not get bound to by fbcon set_par() never happens
+and the initial video mode is not setup and the display detects
+no signal.
+
+Program the video mode and also clear the framebuffer memory so
+random garbage isn't displayed.
+
+Signed-off-by: Daniel Palmer <daniel@0x0f.com>
+Signed-off-by: Helge Deller <deller@gmx.de>
+---
+ drivers/video/fbdev/tdfxfb.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/video/fbdev/tdfxfb.c b/drivers/video/fbdev/tdfxfb.c
+index 8e5d2f3ef666..2819875022f6 100644
+--- a/drivers/video/fbdev/tdfxfb.c
++++ b/drivers/video/fbdev/tdfxfb.c
+@@ -1686,6 +1686,14 @@ static int tdfxfb_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 		goto out_err_iobase;
+ 	}
+ 
++	/*
++	 * Program a video mode and clear the framebuffer now, this
++	 * ensures the display comes up even if fbcon doesn't bind
++	 * when the framebuffer is registered.
++	 */
++	tdfxfb_set_par(info);
++	memset_io(info->screen_base, 0, info->fix.smem_len);
++
+ 	if (register_framebuffer(info) < 0) {
+ 		printk(KERN_ERR "tdfxfb: can't register framebuffer\n");
+ 		fb_dealloc_cmap(&info->cmap);
+-- 
+2.55.0
+

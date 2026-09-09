@@ -1,0 +1,64 @@
+From 799bea4b95797770599df91491563f35be70a170 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Jonas=20Schw=C3=B6bel?= <jonasschwoebel@yahoo.de>
+Date: Fri, 31 Jul 2026 14:30:06 +0300
+Subject: [PATCH 13226/15333] hwmon: (emc1403) Convert to use OF bindings
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add OF match compatible table to be able to use this driver with Device
+Trees.
+
+Signed-off-by: Jonas Schwöbel <jonasschwoebel@yahoo.de>
+Signed-off-by: Svyatoslav Ryhel <clamor95@gmail.com>
+Link: https://lore.kernel.org/r/20260731113007.145322-3-clamor95@gmail.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/hwmon/emc1403.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/hwmon/emc1403.c b/drivers/hwmon/emc1403.c
+index cd753b38709f..8b3173da2597 100644
+--- a/drivers/hwmon/emc1403.c
++++ b/drivers/hwmon/emc1403.c
+@@ -659,14 +659,14 @@ static int emc1403_probe(struct i2c_client *client)
+ {
+ 	struct thermal_data *data;
+ 	struct device *hwmon_dev;
+-	const struct i2c_device_id *id = i2c_match_id(emc1403_idtable, client);
+ 
+ 	data = devm_kzalloc(&client->dev, sizeof(struct thermal_data),
+ 			    GFP_KERNEL);
+ 	if (!data)
+ 		return -ENOMEM;
+ 
+-	data->chip = id->driver_data;
++	data->chip = (uintptr_t)i2c_get_match_data(client);
++
+ 	data->regmap = devm_regmap_init_i2c(client, &emc1403_regmap_config);
+ 	if (IS_ERR(data->regmap))
+ 		return PTR_ERR(data->regmap);
+@@ -682,10 +682,20 @@ static const unsigned short emc1403_address_list[] = {
+ 	0x18, 0x1c, 0x29, 0x3c, 0x4c, 0x4d, 0x5c, I2C_CLIENT_END
+ };
+ 
++static const struct of_device_id emc1403_of_match[] = {
++	{ .compatible = "smsc,emc1402", .data = (void *)emc1402 },
++	{ .compatible = "smsc,emc1403", .data = (void *)emc1403 },
++	{ .compatible = "smsc,emc1404", .data = (void *)emc1404 },
++	{ .compatible = "smsc,emc1428", .data = (void *)emc1428 },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, emc1403_of_match);
++
+ static struct i2c_driver sensor_emc1403 = {
+ 	.class = I2C_CLASS_HWMON,
+ 	.driver = {
+ 		.name = "emc1403",
++		.of_match_table = emc1403_of_match,
+ 	},
+ 	.detect = emc1403_detect,
+ 	.probe = emc1403_probe,
+-- 
+2.55.0
+

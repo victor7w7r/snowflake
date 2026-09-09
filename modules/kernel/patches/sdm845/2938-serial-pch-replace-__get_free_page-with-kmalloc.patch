@@ -1,0 +1,60 @@
+From 120fc59a20135d0fba20c522997da38e1a8490a6 Mon Sep 17 00:00:00 2001
+From: "Mike Rapoport (Microsoft)" <rppt@kernel.org>
+Date: Thu, 28 May 2026 13:24:17 +0300
+Subject: [PATCH 02938/15333] serial: pch: replace __get_free_page() with
+ kmalloc()
+
+pch_uart_init_port() allocates a staging buffer for non-DMA receive path
+using __get_free_page().
+
+This buffer can be allocated with kmalloc() as there's nothing special
+about it to go directly to the page allocator.
+
+kmalloc() provides a better API that does not require ugly casts and
+kfree() does not need to know the size of the freed object.
+
+Replace use of __get_free_page() with kmalloc() and free_page() with
+kfree().
+
+Link: https://lore.kernel.org/all/635405e4-9423-4a25-a6e7-e03c8ea0bcbe@redhat.com
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Link: https://patch.msgid.link/20260528-b4-tty-v1-1-9da9f7aec5f2@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/pch_uart.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/tty/serial/pch_uart.c b/drivers/tty/serial/pch_uart.c
+index 80e31c4d9536..5f7f073f285e 100644
+--- a/drivers/tty/serial/pch_uart.c
++++ b/drivers/tty/serial/pch_uart.c
+@@ -1662,7 +1662,7 @@ static struct eg20t_port *pch_uart_init_port(struct pci_dev *pdev,
+ 	if (priv == NULL)
+ 		goto init_port_alloc_err;
+ 
+-	rxbuf = (unsigned char *)__get_free_page(GFP_KERNEL);
++	rxbuf = kmalloc(PAGE_SIZE, GFP_KERNEL);
+ 	if (!rxbuf)
+ 		goto init_port_free_txbuf;
+ 
+@@ -1735,7 +1735,7 @@ static struct eg20t_port *pch_uart_init_port(struct pci_dev *pdev,
+ #ifdef CONFIG_SERIAL_PCH_UART_CONSOLE
+ 	pch_uart_ports[board->line_no] = NULL;
+ #endif
+-	free_page((unsigned long)rxbuf);
++	kfree(rxbuf);
+ init_port_free_txbuf:
+ 	kfree(priv);
+ init_port_alloc_err:
+@@ -1750,7 +1750,7 @@ static void pch_uart_exit_port(struct eg20t_port *priv)
+ 	snprintf(name, sizeof(name), "uart%d_regs", priv->port.line);
+ 	debugfs_lookup_and_remove(name, NULL);
+ 	uart_remove_one_port(&pch_uart_driver, &priv->port);
+-	free_page((unsigned long)priv->rxbuf.buf);
++	kfree(priv->rxbuf.buf);
+ }
+ 
+ static void pch_uart_pci_remove(struct pci_dev *pdev)
+-- 
+2.55.0
+

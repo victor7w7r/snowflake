@@ -1,0 +1,42 @@
+From bd0e2d9dbbe934e9c9d972b2c0c06234212f8219 Mon Sep 17 00:00:00 2001
+From: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Date: Mon, 20 Jul 2026 15:51:44 -0400
+Subject: [PATCH 08595/15333] serial: rsci: remove check for zero baud rate
+ from uart_get_baud_rate()
+
+The minimum baud rate supported by this driver is 0, so even for the B0
+case, uart_get_baud_rate() will return 9600, not zero. This check is no
+longer necessary since commit 16ae2a877bf4 ("serial: Fix crash if the
+minimum rate of the device is > 9600 baud") so remove it.
+
+Signed-off-by: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Link: https://patch.msgid.link/20260720195147.3630241-1-hugo@hugovil.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/rsci.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/drivers/tty/serial/rsci.c b/drivers/tty/serial/rsci.c
+index b00c9e385169..40db9daa4272 100644
+--- a/drivers/tty/serial/rsci.c
++++ b/drivers/tty/serial/rsci.c
+@@ -265,8 +265,6 @@ static void rsci_set_termios(struct uart_port *port, struct ktermios *termios,
+ 	}
+ 
+ 	baud = uart_get_baud_rate(port, termios, old, 0, max_freq);
+-	if (!baud)
+-		goto done;
+ 
+ 	/* Divided Functional Clock using standard Bit Rate Register */
+ 	err = sci_scbrr_calc(s, baud, &brr1, &srr1, &cks1);
+@@ -278,7 +276,6 @@ static void rsci_set_termios(struct uart_port *port, struct ktermios *termios,
+ 		cks = cks1;
+ 	}
+ 
+-done:
+ 	if (best_clk >= 0)
+ 		dev_dbg(port->dev, "Using clk %pC for %u%+d bps\n",
+ 			s->clks[best_clk], baud, min_err);
+-- 
+2.55.0
+

@@ -1,0 +1,63 @@
+From 98fb11aed12ba8c2edb42428a0188f726a61182f Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Thu, 9 Jul 2026 13:49:41 -0700
+Subject: [PATCH 03835/15333] KVM: SEV: Mark vCPU has having guest-provided
+ VMSA even if its invalid
+
+Track the guest as having a guest-provided VMSA as soon as control.vmsa_pa
+is invalidated, instead of waiting to see if the guest-provided VMSA is
+usable, so that KVM doesn't switch back to the original VMSA instead of
+exiting to userspace (due to an invalid VMSA).  By the time a vCPU tries
+to load a guest-provided VMSA, KVM has already communicated "success" for
+AP creation, i.e. KVM has committed to using the guest-provided VMSA.
+
+Reviewed-by: Michael Roth <michael.roth@amd.com>
+Link: https://patch.msgid.link/20260709204948.1988414-12-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/svm/sev.c | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/kvm/svm/sev.c b/arch/x86/kvm/svm/sev.c
+index 62c6126d52c0..a7584b7ed6dc 100644
+--- a/arch/x86/kvm/svm/sev.c
++++ b/arch/x86/kvm/svm/sev.c
+@@ -4005,6 +4005,17 @@ static void __sev_snp_reload_vmsa(struct kvm_vcpu *vcpu, gpa_t gpa)
+ 	 */
+ 	vmcb_mark_all_dirty(svm->vmcb);
+ 
++	/*
++	 * From this point forward, the VMSA will always be a guest-mapped page
++	 * rather than the initial one allocated by KVM in svm->sev_es.vmsa. In
++	 * theory, svm->sev_es.vmsa could be free'd and cleaned up here, but
++	 * that involves cleanups like flushing caches, which would ideally be
++	 * handled during teardown rather than guest boot.  Deferring that also
++	 * allows the existing logic for SEV-ES VMSAs to be re-used with
++	 * minimal SNP-specific changes.
++	 */
++	svm->sev_es.snp_has_guest_vmsa = true;
++
+ 	if (!VALID_PAGE(gpa))
+ 		return;
+ 
+@@ -4022,17 +4033,6 @@ static void __sev_snp_reload_vmsa(struct kvm_vcpu *vcpu, gpa_t gpa)
+ 	if (kvm_gmem_get_pfn(vcpu->kvm, slot, gfn, &pfn, &page, NULL))
+ 		return;
+ 
+-	/*
+-	 * From this point forward, the VMSA will always be a guest-mapped page
+-	 * rather than the initial one allocated by KVM in svm->sev_es.vmsa. In
+-	 * theory, svm->sev_es.vmsa could be free'd and cleaned up here, but
+-	 * that involves cleanups like flushing caches, which would ideally be
+-	 * handled during teardown rather than guest boot.  Deferring that also
+-	 * allows the existing logic for SEV-ES VMSAs to be re-used with
+-	 * minimal SNP-specific changes.
+-	 */
+-	svm->sev_es.snp_has_guest_vmsa = true;
+-
+ 	read_lock(&kvm->mmu_lock);
+ 	/*
+ 	 * Save the guest-provided GPA.  If retry is needed, then KVM will try
+-- 
+2.55.0
+

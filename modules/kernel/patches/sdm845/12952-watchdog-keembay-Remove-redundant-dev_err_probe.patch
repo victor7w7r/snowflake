@@ -1,0 +1,43 @@
+From 9e34598b92ae561283bdfa66309d9c711ed6e6c3 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Wed, 22 Jul 2026 16:42:12 +0800
+Subject: [PATCH 12952/15333] watchdog: keembay: Remove redundant
+ dev_err_probe()
+
+Since commit
+55b48e23f5c4 ("genirq/devres: Add error handling in devm_request_*_irq()"),
+devm_request_irq() automatically logs detailed error messages on
+failure. Remove the now-redundant driver-specific dev_err_probe() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://lore.kernel.org/r/20260722084218.79073-5-panchuang@vivo.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/watchdog/keembay_wdt.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/watchdog/keembay_wdt.c b/drivers/watchdog/keembay_wdt.c
+index 3854249c7455..7c8e53921e40 100644
+--- a/drivers/watchdog/keembay_wdt.c
++++ b/drivers/watchdog/keembay_wdt.c
+@@ -214,7 +214,7 @@ static int keembay_wdt_probe(struct platform_device *pdev)
+ 	ret = devm_request_irq(dev, wdt->th_irq, keembay_wdt_th_isr, 0,
+ 			       "keembay-wdt", wdt);
+ 	if (ret)
+-		return dev_err_probe(dev, ret, "Failed to request IRQ for threshold\n");
++		return ret;
+ 
+ 	wdt->to_irq = platform_get_irq_byname(pdev, "timeout");
+ 	if (wdt->to_irq < 0)
+@@ -223,7 +223,7 @@ static int keembay_wdt_probe(struct platform_device *pdev)
+ 	ret = devm_request_irq(dev, wdt->to_irq, keembay_wdt_to_isr, 0,
+ 			       "keembay-wdt", wdt);
+ 	if (ret)
+-		return dev_err_probe(dev, ret, "Failed to request IRQ for timeout\n");
++		return ret;
+ 
+ 	wdt->wdd.parent		= dev;
+ 	wdt->wdd.info		= &keembay_wdt_info;
+-- 
+2.55.0
+

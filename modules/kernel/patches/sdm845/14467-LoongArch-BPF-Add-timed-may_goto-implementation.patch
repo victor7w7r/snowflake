@@ -1,0 +1,123 @@
+From 3fbf3534c2ba6d9018dca04f2f96efa9f4b35fe4 Mon Sep 17 00:00:00 2001
+From: George Guo <guodongtai@kylinos.cn>
+Date: Mon, 17 Aug 2026 22:07:40 +0800
+Subject: [PATCH 14467/15333] LoongArch: BPF: Add timed may_goto implementation
+
+Implement arch_bpf_timed_may_goto() support and advertise it through
+bpf_jit_supports_timed_may_goto() so the verifier lowers may_goto into
+the timed variant: instead of a fixed iteration counter, the loop is
+bounded by a wall-clock timeout maintained in a per-loop stack slot.
+
+arch_bpf_timed_may_goto() uses a custom calling convention: the verifier
+passes the count/timestamp stack offset in BPF_REG_AX and expects the
+updated count back in the same register. The JIT call path therefore can
+skip the usual 'BPF_REG_0 = C return value' move for this helper.
+
+Acked-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Tested-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Signed-off-by: George Guo <guodongtai@kylinos.cn>
+Signed-off-by: Huacai Chen <chenhuacai@loongson.cn>
+---
+ arch/loongarch/net/Makefile             |  2 +-
+ arch/loongarch/net/bpf_jit.c            | 13 ++++++-
+ arch/loongarch/net/bpf_timed_may_goto.S | 47 +++++++++++++++++++++++++
+ 3 files changed, 60 insertions(+), 2 deletions(-)
+ create mode 100644 arch/loongarch/net/bpf_timed_may_goto.S
+
+diff --git a/arch/loongarch/net/Makefile b/arch/loongarch/net/Makefile
+index 1ec12a0c324a..8d9ddb48f9ea 100644
+--- a/arch/loongarch/net/Makefile
++++ b/arch/loongarch/net/Makefile
+@@ -4,4 +4,4 @@
+ #
+ # Copyright (C) 2022 Loongson Technology Corporation Limited
+ #
+-obj-$(CONFIG_BPF_JIT) += bpf_jit.o
++obj-$(CONFIG_BPF_JIT) += bpf_jit.o bpf_timed_may_goto.o
+diff --git a/arch/loongarch/net/bpf_jit.c b/arch/loongarch/net/bpf_jit.c
+index 4e56da413752..7533917c6d47 100644
+--- a/arch/loongarch/net/bpf_jit.c
++++ b/arch/loongarch/net/bpf_jit.c
+@@ -1192,7 +1192,13 @@ static int build_insn(const struct bpf_insn *insn, struct jit_ctx *ctx, bool ext
+ 		move_addr(ctx, t1, func_addr);
+ 		emit_insn(ctx, jirl, LOONGARCH_GPR_RA, t1, 0);
+ 
+-		if (insn->src_reg != BPF_PSEUDO_CALL)
++		/*
++		 * Call to arch_bpf_timed_may_goto() uses a custom calling
++		 * convention with the argument and return value in BPF_REG_AX,
++		 * so skip moving the C return value into BPF_REG_0.
++		 */
++		if (insn->src_reg != BPF_PSEUDO_CALL &&
++		    func_addr != (u64)arch_bpf_timed_may_goto)
+ 			move_reg(ctx, regmap[BPF_REG_0], LOONGARCH_GPR_A0);
+ 
+ 		break;
+@@ -2396,6 +2402,11 @@ bool bpf_jit_supports_subprog_tailcalls(void)
+ 	return true;
+ }
+ 
++bool bpf_jit_supports_timed_may_goto(void)
++{
++	return true;
++}
++
+ bool bpf_jit_inlines_helper_call(s32 imm)
+ {
+ 	switch (imm) {
+diff --git a/arch/loongarch/net/bpf_timed_may_goto.S b/arch/loongarch/net/bpf_timed_may_goto.S
+new file mode 100644
+index 000000000000..fa128acdb108
+--- /dev/null
++++ b/arch/loongarch/net/bpf_timed_may_goto.S
+@@ -0,0 +1,47 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Author: George Guo <guodongtai@kylinos.cn>
++ * Copyright (C) 2026 KylinSoft Corporation.
++ */
++
++#include <asm/asmmacro.h>
++#include <asm/regdef.h>
++#include <linux/export.h>
++#include <linux/linkage.h>
++
++SYM_FUNC_START(arch_bpf_timed_may_goto)
++	addi.d		sp, sp, -64
++	st.d		ra, sp, 56
++
++	/* Save BPF registers R0 - R5 (a5, a0 - a4) */
++	st.d		a5, sp, 8
++	st.d		a0, sp, 16
++	st.d		a1, sp, 24
++	st.d		a2, sp, 32
++	st.d		a3, sp, 40
++	st.d		a4, sp, 48
++
++	/*
++	 * BPF_REG_AX (t0) holds the offset passed in by the verifier;
++	 * add it to BPF_REG_FP (s4) to get the pointer to the count and
++	 * timestamp, then pass it as the first argument in a0.
++	 *
++	 * The verifier emits a load using FP right before this call,
++	 * so BPF_REG_FP (s4) is always set up by the JIT in this case.
++	 */
++	add.d		a0, t0, s4
++	bl		bpf_check_timed_may_goto
++	/* BPF_REG_AX (t0) will be stored into count, so move the return value to it. */
++	move		t0, a0
++
++	ld.d		ra, sp, 56
++	ld.d		a5, sp, 8
++	ld.d		a0, sp, 16
++	ld.d		a1, sp, 24
++	ld.d		a2, sp, 32
++	ld.d		a3, sp, 40
++	ld.d		a4, sp, 48
++	addi.d		sp, sp, 64
++
++	jr		ra
++SYM_FUNC_END(arch_bpf_timed_may_goto)
+-- 
+2.55.0
+

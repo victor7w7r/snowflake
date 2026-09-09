@@ -1,0 +1,60 @@
+From bd8f2187618980f5274a74321ea4844df8667488 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 3 Jul 2026 17:38:40 +0700
+Subject: [PATCH 02299/15333] ALSA: core: propagate actual error code from
+ register_chrdev
+
+The alsa_sound_init() function currently returns a hardcoded -EIO
+if register_chrdev() fails, masking specific error codes from
+__register_chrdev() such as -EINVAL, -ENOMEM, or -EBUSY.
+
+Masking these failures under a generic -EIO makes system-level
+diagnostics unnecessarily difficult. Propagating explicit error codes
+from register_chrdev() is also an established convention widely
+practiced across other subsystems.
+
+Fix this by capturing and propagating the dynamic error code from
+register_chrdev(). While at it, also assign the return value of
+snd_info_init() to the 'err' variable instead of hardcoding -ENOMEM
+to ensure consistency and future-proofing.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260703103840.253527-1-phucduc.bui@gmail.com
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/core/sound.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/sound/core/sound.c b/sound/core/sound.c
+index 8d05fe0d263b..3e1969a52b21 100644
+--- a/sound/core/sound.c
++++ b/sound/core/sound.c
+@@ -395,15 +395,21 @@ int __init snd_minor_info_init(void)
+ 
+ static int __init alsa_sound_init(void)
+ {
++	int err;
++
+ 	snd_major = major;
+ 	snd_ecards_limit = cards_limit;
+-	if (register_chrdev(major, "alsa", &snd_fops)) {
++
++	err = register_chrdev(major, "alsa", &snd_fops);
++	if (err < 0) {
+ 		pr_err("ALSA core: unable to register native major device number %d\n", major);
+-		return -EIO;
++		return err;
+ 	}
+-	if (snd_info_init() < 0) {
++
++	err = snd_info_init();
++	if (err < 0) {
+ 		unregister_chrdev(major, "alsa");
+-		return -ENOMEM;
++		return err;
+ 	}
+ 
+ #ifdef CONFIG_SND_DEBUG
+-- 
+2.55.0
+

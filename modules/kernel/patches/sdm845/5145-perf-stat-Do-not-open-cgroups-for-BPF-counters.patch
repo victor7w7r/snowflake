@@ -1,0 +1,32 @@
+From 3f7909fa921e38b7aba8566b03ca5e0754a8fa8b Mon Sep 17 00:00:00 2001
+From: Namhyung Kim <namhyung@kernel.org>
+Date: Wed, 8 Jul 2026 13:04:07 -0700
+Subject: [PATCH 05145/15333] perf stat: Do not open cgroups for BPF counters
+
+The --bpf-counters and --for-each-cgroup options use a set of shared
+events among the given cgroups rather than adding events for each cgroup
+respectively.  It only uses cgroup-ID to compare and calculate the
+result.  So no need to open and keep FDs for cgroups in BPF mode.
+
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/builtin-stat.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/tools/perf/builtin-stat.c b/tools/perf/builtin-stat.c
+index 3f685beba384..a85a4f30221a 100644
+--- a/tools/perf/builtin-stat.c
++++ b/tools/perf/builtin-stat.c
+@@ -2895,7 +2895,8 @@ int cmd_stat(int argc, const char **argv)
+ 			goto out;
+ 		}
+ 
+-		if (evlist__expand_cgroup(evsel_list, stat_config.cgroup_list, true) < 0) {
++		if (evlist__expand_cgroup(evsel_list, stat_config.cgroup_list,
++					  !target.use_bpf) < 0) {
+ 			parse_options_usage(stat_usage, stat_options,
+ 					    "for-each-cgroup", 0);
+ 			goto out;
+-- 
+2.55.0
+

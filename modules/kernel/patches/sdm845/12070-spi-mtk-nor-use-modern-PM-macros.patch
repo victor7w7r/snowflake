@@ -1,0 +1,76 @@
+From fcb6a6e73e588310fef575373f8f5255bbf4a9be Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:44 +0800
+Subject: [PATCH 12070/15333] spi: mtk-nor: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use __maybe_unused.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-21-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-mtk-nor.c | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/spi/spi-mtk-nor.c b/drivers/spi/spi-mtk-nor.c
+index 74f34537b02c..5e1fdbb40ffb 100644
+--- a/drivers/spi/spi-mtk-nor.c
++++ b/drivers/spi/spi-mtk-nor.c
+@@ -947,7 +947,7 @@ static void mtk_nor_remove(struct platform_device *pdev)
+ 	mtk_nor_disable_clk(sp);
+ }
+ 
+-static int __maybe_unused mtk_nor_runtime_suspend(struct device *dev)
++static int mtk_nor_runtime_suspend(struct device *dev)
+ {
+ 	struct spi_controller *ctlr = dev_get_drvdata(dev);
+ 	struct mtk_nor *sp = spi_controller_get_devdata(ctlr);
+@@ -957,7 +957,7 @@ static int __maybe_unused mtk_nor_runtime_suspend(struct device *dev)
+ 	return 0;
+ }
+ 
+-static int __maybe_unused mtk_nor_runtime_resume(struct device *dev)
++static int mtk_nor_runtime_resume(struct device *dev)
+ {
+ 	struct spi_controller *ctlr = dev_get_drvdata(dev);
+ 	struct mtk_nor *sp = spi_controller_get_devdata(ctlr);
+@@ -965,12 +965,12 @@ static int __maybe_unused mtk_nor_runtime_resume(struct device *dev)
+ 	return mtk_nor_enable_clk(sp);
+ }
+ 
+-static int __maybe_unused mtk_nor_suspend(struct device *dev)
++static int mtk_nor_suspend(struct device *dev)
+ {
+ 	return pm_runtime_force_suspend(dev);
+ }
+ 
+-static int __maybe_unused mtk_nor_resume(struct device *dev)
++static int mtk_nor_resume(struct device *dev)
+ {
+ 	struct spi_controller *ctlr = dev_get_drvdata(dev);
+ 	struct mtk_nor *sp = spi_controller_get_devdata(ctlr);
+@@ -986,16 +986,15 @@ static int __maybe_unused mtk_nor_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops mtk_nor_pm_ops = {
+-	SET_RUNTIME_PM_OPS(mtk_nor_runtime_suspend,
+-			   mtk_nor_runtime_resume, NULL)
+-	SET_SYSTEM_SLEEP_PM_OPS(mtk_nor_suspend, mtk_nor_resume)
++	RUNTIME_PM_OPS(mtk_nor_runtime_suspend, mtk_nor_runtime_resume, NULL)
++	SYSTEM_SLEEP_PM_OPS(mtk_nor_suspend, mtk_nor_resume)
+ };
+ 
+ static struct platform_driver mtk_nor_driver = {
+ 	.driver = {
+ 		.name = DRIVER_NAME,
+ 		.of_match_table = mtk_nor_match,
+-		.pm = &mtk_nor_pm_ops,
++		.pm = pm_ptr(&mtk_nor_pm_ops),
+ 	},
+ 	.probe = mtk_nor_probe,
+ 	.remove = mtk_nor_remove,
+-- 
+2.55.0
+

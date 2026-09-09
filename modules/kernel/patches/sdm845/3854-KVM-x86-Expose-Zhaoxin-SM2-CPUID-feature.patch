@@ -1,0 +1,66 @@
+From d99fc2a7c5e22734753ad7f55161fe93eaf88013 Mon Sep 17 00:00:00 2001
+From: Ewan Hai-oc <ewanhai-oc@zhaoxin.com>
+Date: Wed, 10 Jun 2026 10:35:08 +0800
+Subject: [PATCH 03854/15333] KVM: x86: Expose Zhaoxin SM2 CPUID feature
+
+Advertise the Zhaoxin SM2 instruction support to guests via CPUID
+0xC0000001 EDX bits 0 (SM2) and 1 (SM2_EN).
+
+The SM2 instruction (encoding F2 0F A6 C0) implements the SM2
+elliptic-curve public-key cryptography algorithm specified in
+GM/T 0003-2012; the hardware-level behavior is documented in the
+Zhaoxin GMI Instruction Set Reference, chapter 1 ("SM2"). The
+instruction multiplexes its sub-functions on the RDX[5:0] control
+word: encryption (subsection 1.1), decryption (1.2), signing (1.3),
+signature verification (1.4), the three key-exchange sub-operations
+of section 1.5 (1.5.1 SM2 key-pair generation, which the spec also
+uses for the initiator's ephemeral key; 1.5.2 responder shared-key
+derivation; 1.5.3 initiator shared-key derivation), and two
+preprocess steps for identity and message hashing (1.6.1 and 1.6.2).
+
+The instruction is unprivileged (no CPL restriction) and available
+in all CPU modes, with no associated MSR control. The SM2 and SM2_EN
+bits are redundant by hardware design (set or cleared together) and
+both serve purely as CPUID-level feature-presence reporting flags
+requiring no KVM emulation. Both bits are advertised because
+different software may probe either one when checking for SM2
+availability.
+
+Reviewed-by: Binbin Wu <binbin.wu@linux.intel.com>
+Signed-off-by: Ewan Hai <ewanhai-oc@zhaoxin.com>
+Link: https://patch.msgid.link/20260610023512.3690734-2-ewanhai-oc@zhaoxin.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/include/asm/cpufeatures.h | 2 ++
+ arch/x86/kvm/cpuid.c               | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
+index 35a2a0f9ab32..f9baec51f6db 100644
+--- a/arch/x86/include/asm/cpufeatures.h
++++ b/arch/x86/include/asm/cpufeatures.h
+@@ -136,6 +136,8 @@
+ #define X86_FEATURE_HYPERVISOR		( 4*32+31) /* "hypervisor" Running on a hypervisor */
+ 
+ /* VIA/Cyrix/Centaur-defined CPU features, CPUID level 0xC0000001, word 5 */
++#define X86_FEATURE_SM2			( 5*32+ 0) /* "sm2" SM2 algorithm */
++#define X86_FEATURE_SM2_EN		( 5*32+ 1) /* "sm2_en" SM2 enabled */
+ #define X86_FEATURE_XSTORE		( 5*32+ 2) /* "rng" RNG present (xstore) */
+ #define X86_FEATURE_XSTORE_EN		( 5*32+ 3) /* "rng_en" RNG enabled */
+ #define X86_FEATURE_XCRYPT		( 5*32+ 6) /* "ace" on-CPU crypto (xcrypt) */
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index f402a5dc4390..b2f860bb594f 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -1273,6 +1273,8 @@ void kvm_initialize_cpu_caps(void)
+ 		kvm_cpu_cap_set(X86_FEATURE_NULL_SEL_CLR_BASE);
+ 
+ 	kvm_cpu_cap_init(CPUID_C000_0001_EDX,
++		F(SM2),
++		F(SM2_EN),
+ 		F(XSTORE),
+ 		F(XSTORE_EN),
+ 		F(XCRYPT),
+-- 
+2.55.0
+

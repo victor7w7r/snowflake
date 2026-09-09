@@ -1,0 +1,50 @@
+From 67300656f6a690c0146b2bb375f3d30eb05a7bea Mon Sep 17 00:00:00 2001
+From: Bob Song <songxiebing@kylinos.cn>
+Date: Wed, 12 Aug 2026 11:30:07 +0800
+Subject: [PATCH 13427/15333] ALSA: hda: simplify match functions and remove
+ unreachable return
+
+hda_bus_match() has an unreachable 'return 1' after an if/else that
+covers both branches.  Remove the superfluous return and simplify the
+control flow by dropping the else branch.
+
+hdac_codec_match() uses a redundant if/else to return 1 or 0.
+Simplify to a single return statement.
+
+Signed-off-by: Bob Song <songxiebing@kylinos.cn>
+Link: https://patch.msgid.link/20260812033007.633564-1-songxiebing@kylinos.cn
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/hda/core/hda_bus_type.c | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/sound/hda/core/hda_bus_type.c b/sound/hda/core/hda_bus_type.c
+index a4afd41b6f84..e1e986a8b5b5 100644
+--- a/sound/hda/core/hda_bus_type.c
++++ b/sound/hda/core/hda_bus_type.c
+@@ -39,10 +39,7 @@ EXPORT_SYMBOL_GPL(hdac_get_device_id);
+ 
+ static int hdac_codec_match(struct hdac_device *dev, const struct hdac_driver *drv)
+ {
+-	if (hdac_get_device_id(dev, drv))
+-		return 1;
+-	else
+-		return 0;
++	return !!hdac_get_device_id(dev, drv);
+ }
+ 
+ static int hda_bus_match(struct device *dev, const struct device_driver *drv)
+@@ -59,9 +56,7 @@ static int hda_bus_match(struct device *dev, const struct device_driver *drv)
+ 	 */
+ 	if (hdrv->match)
+ 		return hdrv->match(hdev, hdrv);
+-	else
+-		return hdac_codec_match(hdev, hdrv);
+-	return 1;
++	return hdac_codec_match(hdev, hdrv);
+ }
+ 
+ static int hda_uevent(const struct device *dev, struct kobj_uevent_env *env)
+-- 
+2.55.0
+

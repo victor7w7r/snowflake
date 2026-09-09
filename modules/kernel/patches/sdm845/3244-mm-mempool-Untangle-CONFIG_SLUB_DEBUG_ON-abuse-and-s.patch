@@ -1,0 +1,137 @@
+From a561e19e76ef1ebf3f9a56977dfe87526b37146c Mon Sep 17 00:00:00 2001
+From: Li RongQing <lirongqing@baidu.com>
+Date: Thu, 4 Jun 2026 19:03:18 +0800
+Subject: [PATCH 03244/15333] mm/mempool: Untangle CONFIG_SLUB_DEBUG_ON abuse
+ and switch to static key
+
+The mempool subsystem historically wrapped its debugging logic inside an
+merely defines compile-time defaults for SLUB and caused two flaws:
+
+1. On production kernels where CONFIG_SLUB_DEBUG=y but
+   CONFIG_SLUB_DEBUG_ON=n, mempool debugging was completely compiled out
+   at compile time.
+2. On kernels with CONFIG_SLUB_DEBUG_ON=y, mempool debugging stayed active
+   even if a user explicitly disabled slub debugging at boot time.
+
+Clean up this mess by removing the #ifdef and switching to a runtime static
+key (mempool_debug_enabled), allowing mempool debugging to be toggled
+cleanly via its own boot parameter.
+
+Suggested-by: Vlastimil Babka (SUSE) <vbabka@kernel.org>
+Signed-off-by: Li RongQing <lirongqing@baidu.com>
+Cc: Vlastimil Babka <vbabka@kernel.org>
+Cc: Harry Yoo <harry@kernel.org>
+Cc: Andrew Morton <akpm@linux-foundation.org>
+Cc: Hao Li <hao.li@linux.dev>
+Cc: Christoph Lameter <cl@gentwo.org>
+Cc: David Rientjes <rientjes@google.com>
+Cc: Roman Gushchin <roman.gushchin@linux.dev>
+Cc: Matthew Wilcox <willy@infradead.org>
+Cc: Usama Arif <usama.arif@linux.dev>
+Reviewed-by: SeongJae Park <sj@kernel.org>
+Reviewed-by: Harry Yoo (Oracle) <harry@kernel.org>
+Link: https://patch.msgid.link/20260604110318.2089-1-lirongqing@baidu.com
+Signed-off-by: Vlastimil Babka (SUSE) <vbabka@kernel.org>
+---
+ .../admin-guide/kernel-parameters.txt         |  5 +++
+ mm/mempool.c                                  | 35 +++++++++++++------
+ 2 files changed, 29 insertions(+), 11 deletions(-)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index b5493a7f8f22..ca755fe185e5 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -3977,6 +3977,11 @@ Kernel parameters
+ 			Note that even when enabled, there are a few cases where
+ 			the feature is not effective.
+ 
++	mempool_debug	[MM]
++			Enable mempool debugging. This enables element
++			poison checking when freeing elements back to the
++			pool. Useful for debugging mempool corruption.
++
+ 	memtest=	[KNL,X86,ARM,M68K,PPC,RISCV,EARLY] Enable memtest
+ 			Format: <integer>
+ 			default : 0 <disable>
+diff --git a/mm/mempool.c b/mm/mempool.c
+index 473a029fa31f..cb74e718b2c6 100644
+--- a/mm/mempool.c
++++ b/mm/mempool.c
+@@ -16,11 +16,28 @@
+ #include <linux/export.h>
+ #include <linux/mempool.h>
+ #include <linux/writeback.h>
++#include <linux/static_key.h>
++#include <linux/init.h>
+ #include "slab.h"
+ 
+ static DECLARE_FAULT_ATTR(fail_mempool_alloc);
+ static DECLARE_FAULT_ATTR(fail_mempool_alloc_bulk);
+ 
++/*
++ * Debugging support for mempool using static key.
++ *
++ * This allows enabling mempool debug at boot time via:
++ *   mempool_debug
++ */
++static DEFINE_STATIC_KEY_FALSE(mempool_debug_enabled);
++
++static int __init mempool_debug_setup(char *str)
++{
++	static_branch_enable(&mempool_debug_enabled);
++	return 1;
++}
++__setup("mempool_debug", mempool_debug_setup);
++
+ static int __init mempool_faul_inject_init(void)
+ {
+ 	int error;
+@@ -37,7 +54,6 @@ static int __init mempool_faul_inject_init(void)
+ }
+ late_initcall(mempool_faul_inject_init);
+ 
+-#ifdef CONFIG_SLUB_DEBUG_ON
+ static void poison_error(struct mempool *pool, void *element, size_t size,
+ 			 size_t byte)
+ {
+@@ -140,14 +156,6 @@ static void poison_element(struct mempool *pool, void *element)
+ #endif
+ 	}
+ }
+-#else /* CONFIG_SLUB_DEBUG_ON */
+-static inline void check_element(struct mempool *pool, void *element)
+-{
+-}
+-static inline void poison_element(struct mempool *pool, void *element)
+-{
+-}
+-#endif /* CONFIG_SLUB_DEBUG_ON */
+ 
+ static __always_inline bool kasan_poison_element(struct mempool *pool,
+ 		void *element)
+@@ -175,7 +183,10 @@ static void kasan_unpoison_element(struct mempool *pool, void *element)
+ static __always_inline void add_element(struct mempool *pool, void *element)
+ {
+ 	BUG_ON(pool->min_nr != 0 && pool->curr_nr >= pool->min_nr);
+-	poison_element(pool, element);
++
++	if (static_branch_unlikely(&mempool_debug_enabled))
++		poison_element(pool, element);
++
+ 	if (kasan_poison_element(pool, element))
+ 		pool->elements[pool->curr_nr++] = element;
+ }
+@@ -186,7 +197,9 @@ static void *remove_element(struct mempool *pool)
+ 
+ 	BUG_ON(pool->curr_nr < 0);
+ 	kasan_unpoison_element(pool, element);
+-	check_element(pool, element);
++
++	if (static_branch_unlikely(&mempool_debug_enabled))
++		check_element(pool, element);
+ 	return element;
+ }
+ 
+-- 
+2.55.0
+

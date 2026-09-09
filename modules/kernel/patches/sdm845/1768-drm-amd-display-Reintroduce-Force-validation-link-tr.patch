@@ -1,0 +1,209 @@
+From c953b39f94873df5b11110b3b7a1042171f5f000 Mon Sep 17 00:00:00 2001
+From: Ivan Lipski <ivan.lipski@amd.com>
+Date: Thu, 11 Jun 2026 10:18:24 -0400
+Subject: [PATCH 01768/15333] drm/amd/display: Reintroduce "Force validation
+ link training on all ASICs"
+
+[Why & How]
+'skip_frl_pretraining' was introduced and enabled along w/ HDMI 2.1
+initial upstream, but is causing HDMI validation link training to be s
+kipped on short hotplugs and compliance issues.
+
+Remove this behaviour to force link training on all hotplugs for all
+ASICs.
+
+Reviewed-by: Relja (Reggie) Vojvodic <relja.vojvodic@amd.com>
+Reviewed-by: Sun peng (Leo) Li <sunpeng.li@amd.com>
+Signed-off-by: Ivan Lipski <ivan.lipski@amd.com>
+Signed-off-by: George Zhang <george.zhang@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/display/dc/dc.h                             | 1 -
+ drivers/gpu/drm/amd/display/dc/dc_types.h                       | 1 +
+ drivers/gpu/drm/amd/display/dc/link/link_detection.c            | 2 +-
+ drivers/gpu/drm/amd/display/dc/resource/dcn30/dcn30_resource.c  | 1 -
+ .../gpu/drm/amd/display/dc/resource/dcn302/dcn302_resource.c    | 1 -
+ .../gpu/drm/amd/display/dc/resource/dcn303/dcn303_resource.c    | 1 -
+ drivers/gpu/drm/amd/display/dc/resource/dcn31/dcn31_resource.c  | 1 -
+ .../gpu/drm/amd/display/dc/resource/dcn315/dcn315_resource.c    | 1 -
+ .../gpu/drm/amd/display/dc/resource/dcn316/dcn316_resource.c    | 1 -
+ drivers/gpu/drm/amd/display/dc/resource/dcn32/dcn32_resource.c  | 1 -
+ .../gpu/drm/amd/display/dc/resource/dcn321/dcn321_resource.c    | 1 -
+ drivers/gpu/drm/amd/display/dc/resource/dcn35/dcn35_resource.c  | 1 -
+ .../gpu/drm/amd/display/dc/resource/dcn351/dcn351_resource.c    | 1 -
+ drivers/gpu/drm/amd/display/dc/resource/dcn36/dcn36_resource.c  | 1 -
+ 14 files changed, 2 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/dc.h b/drivers/gpu/drm/amd/display/dc/dc.h
+index 2de0f9cf8264..b21fdea5fca3 100644
+--- a/drivers/gpu/drm/amd/display/dc/dc.h
++++ b/drivers/gpu/drm/amd/display/dc/dc.h
+@@ -591,7 +591,6 @@ struct dc_config {
+ 	bool enable_mipi_converter_optimization;
+ 	bool enable_frl;
+ 	bool force_hdmi21_frl_enc_enable;
+-	bool skip_frl_pretraining;
+ 	bool use_default_clock_table;
+ 	bool force_bios_enable_lttpr;
+ 	uint8_t force_bios_fixed_vs;
+diff --git a/drivers/gpu/drm/amd/display/dc/dc_types.h b/drivers/gpu/drm/amd/display/dc/dc_types.h
+index db6a89d938b6..90dd1ae7e953 100644
+--- a/drivers/gpu/drm/amd/display/dc/dc_types.h
++++ b/drivers/gpu/drm/amd/display/dc/dc_types.h
+@@ -183,6 +183,7 @@ struct dc_panel_patch {
+ 	unsigned int force_frl;
+ 	unsigned int vsdb_rcc_wa;
+ 	unsigned int delay_hdmi_link_training;
++	unsigned int skip_frl_pre_training;
+ 	unsigned int skip_avmute;
+ 	unsigned int skip_audio_sab_check;
+ 	unsigned int mst_start_top_delay;
+diff --git a/drivers/gpu/drm/amd/display/dc/link/link_detection.c b/drivers/gpu/drm/amd/display/dc/link/link_detection.c
+index a3212fd151d1..24b191d39777 100644
+--- a/drivers/gpu/drm/amd/display/dc/link/link_detection.c
++++ b/drivers/gpu/drm/amd/display/dc/link/link_detection.c
+@@ -933,7 +933,7 @@ static bool should_verify_link_capability_destructively(struct dc_link *link,
+ 		destrictive = true;
+ 		if (is_hdmi_frl_in_use(link)) {
+ 			destrictive = false;
+-		} else if (link->dc->config.skip_frl_pretraining) {
++		} else if (link->local_sink->edid_caps.panel_patch.skip_frl_pre_training) {
+ 			for (i = 0; i < MAX_PIPES; i++) {
+ 				if (pipes[i].stream != NULL &&
+ 					pipes[i].stream->link == link) {
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn30/dcn30_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn30/dcn30_resource.c
+index 01770df63d0e..d11ab57afcdd 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn30/dcn30_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn30/dcn30_resource.c
+@@ -2479,7 +2479,6 @@ static bool dcn30_resource_construct(
+ 	dc->caps.post_blend_color_processing = true;
+ 	dc->caps.force_dp_tps4_for_cp2520 = true;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.extended_aux_timeout_support = true;
+ 	dc->caps.dmcub_support = true;
+ 
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn302/dcn302_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn302/dcn302_resource.c
+index 58add1071bc1..ae8918a4ad3e 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn302/dcn302_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn302/dcn302_resource.c
+@@ -1378,7 +1378,6 @@ static bool dcn302_resource_construct(
+ 	dc->caps.post_blend_color_processing = true;
+ 	dc->caps.force_dp_tps4_for_cp2520 = true;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.extended_aux_timeout_support = true;
+ 	dc->caps.dmcub_support = true;
+ 	dc->caps.max_v_total = (1 << 15) - 1;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn303/dcn303_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn303/dcn303_resource.c
+index 6cb297cd08fd..75e6f4e46f60 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn303/dcn303_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn303/dcn303_resource.c
+@@ -1322,7 +1322,6 @@ static bool dcn303_resource_construct(
+ 	dc->caps.post_blend_color_processing = true;
+ 	dc->caps.force_dp_tps4_for_cp2520 = true;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.extended_aux_timeout_support = true;
+ 	dc->caps.dmcub_support = true;
+ 	dc->caps.max_v_total = (1 << 15) - 1;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn31/dcn31_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn31/dcn31_resource.c
+index 7c6a6872688b..02bf6f1f3100 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn31/dcn31_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn31/dcn31_resource.c
+@@ -2077,7 +2077,6 @@ static bool dcn31_resource_construct(
+ 	if (dc->config.forceHBR2CP2520)
+ 		dc->caps.force_dp_tps4_for_cp2520 = false;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.dp_hpo = true;
+ 	dc->caps.dp_hdmi21_pcon_support = true;
+ 	dc->caps.edp_dsc_support = true;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn315/dcn315_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn315/dcn315_resource.c
+index 3b2e57c6970f..ca458f30e45c 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn315/dcn315_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn315/dcn315_resource.c
+@@ -2053,7 +2053,6 @@ static bool dcn315_resource_construct(
+ 	if (dc->config.forceHBR2CP2520)
+ 		dc->caps.force_dp_tps4_for_cp2520 = false;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.dp_hpo = true;
+ 	dc->caps.dp_hdmi21_pcon_support = true;
+ 	dc->caps.edp_dsc_support = true;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn316/dcn316_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn316/dcn316_resource.c
+index 924b167bcd74..560a53de22fc 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn316/dcn316_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn316/dcn316_resource.c
+@@ -1927,7 +1927,6 @@ static bool dcn316_resource_construct(
+ 	if (dc->config.forceHBR2CP2520)
+ 		dc->caps.force_dp_tps4_for_cp2520 = false;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.dp_hpo = true;
+ 	dc->caps.dp_hdmi21_pcon_support = true;
+ 	dc->caps.edp_dsc_support = true;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn32/dcn32_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn32/dcn32_resource.c
+index a11110e304fc..004c5690f876 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn32/dcn32_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn32/dcn32_resource.c
+@@ -2405,7 +2405,6 @@ static bool dcn32_resource_construct(
+ 	if (dc->config.forceHBR2CP2520)
+ 		dc->caps.force_dp_tps4_for_cp2520 = false;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.dp_hpo = true;
+ 	dc->caps.dp_hdmi21_pcon_support = true;
+ 	dc->caps.edp_dsc_support = true;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn321/dcn321_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn321/dcn321_resource.c
+index d1dbcc8ddb71..53fd32249310 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn321/dcn321_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn321/dcn321_resource.c
+@@ -1897,7 +1897,6 @@ static bool dcn321_resource_construct(
+ 	dc->caps.post_blend_color_processing = true;
+ 	dc->caps.force_dp_tps4_for_cp2520 = true;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.dp_hpo = true;
+ 	dc->caps.dp_hdmi21_pcon_support = true;
+ 	dc->caps.edp_dsc_support = true;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn35/dcn35_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn35/dcn35_resource.c
+index a5ed62db1de8..efed9317f3ff 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn35/dcn35_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn35/dcn35_resource.c
+@@ -2028,7 +2028,6 @@ static bool dcn35_resource_construct(
+ 	if (dc->config.forceHBR2CP2520)
+ 		dc->caps.force_dp_tps4_for_cp2520 = false;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.dp_hpo = true;
+ 	dc->caps.dp_hdmi21_pcon_support = true;
+ 
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn351/dcn351_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn351/dcn351_resource.c
+index 9c1d65c2d4ab..079b4f735ab3 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn351/dcn351_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn351/dcn351_resource.c
+@@ -2001,7 +2001,6 @@ static bool dcn351_resource_construct(
+ 	if (dc->config.forceHBR2CP2520)
+ 		dc->caps.force_dp_tps4_for_cp2520 = false;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.dp_hpo = true;
+ 	dc->caps.dp_hdmi21_pcon_support = true;
+ 
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn36/dcn36_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn36/dcn36_resource.c
+index 8041e035f226..a293e05f8085 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn36/dcn36_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn36/dcn36_resource.c
+@@ -1998,7 +1998,6 @@ static bool dcn36_resource_construct(
+ 	if (dc->config.forceHBR2CP2520)
+ 		dc->caps.force_dp_tps4_for_cp2520 = false;
+ 	dc->caps.hdmi_hpo = true;
+-	dc->config.skip_frl_pretraining = true;
+ 	dc->caps.dp_hpo = true;
+ 	dc->caps.dp_hdmi21_pcon_support = true;
+ 
+-- 
+2.55.0
+

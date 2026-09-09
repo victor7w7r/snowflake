@@ -1,0 +1,45 @@
+From c34ca34f1dbdf40c368eed42efe273561c3800ba Mon Sep 17 00:00:00 2001
+From: Tyrel Datwyler <tyreld@linux.ibm.com>
+Date: Wed, 22 Jul 2026 17:01:27 -0700
+Subject: [PATCH 07197/15333] scsi: ibmvfc: add wrapper to get vhost associated
+ with a channel struct
+
+Add ibmvfc_channels_to_vhost() to recover the parent struct ibmvfc_host
+from a protocol-specific struct ibmvfc_channels.
+
+Later patches need to operate on either the SCSI or NVMe channel group
+and still access host-wide state such as the primary CRQ, device, and
+logging context. Centralize that mapping in a helper instead of open-
+coding container lookups at each call site.
+
+Signed-off-by: Tyrel Datwyler <tyreld@linux.ibm.com>
+Link: https://patch.msgid.link/20260723000149.969416-12-tyreld@linux.ibm.com
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+---
+ drivers/scsi/ibmvscsi/ibmvfc.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/scsi/ibmvscsi/ibmvfc.h b/drivers/scsi/ibmvscsi/ibmvfc.h
+index 454968de925b..67f546ff092e 100644
+--- a/drivers/scsi/ibmvscsi/ibmvfc.h
++++ b/drivers/scsi/ibmvscsi/ibmvfc.h
+@@ -1011,6 +1011,16 @@ struct ibmvfc_host {
+ 	wait_queue_head_t work_wait_q;
+ };
+ 
++static inline struct ibmvfc_host *ibmvfc_channels_to_vhost(struct ibmvfc_channels *channels)
++{
++	if (channels->protocol == IBMVFC_PROTO_SCSI)
++		return container_of(channels, struct ibmvfc_host, scsi_scrqs);
++	else if (channels->protocol == IBMVFC_PROTO_NVME)
++		return container_of(channels, struct ibmvfc_host, nvme_scrqs);
++
++	return NULL;
++}
++
+ #define DBG_CMD(CMD) do { if (ibmvfc_debug) CMD; } while (0)
+ 
+ #define tgt_dbg(t, fmt, ...)			\
+-- 
+2.55.0
+

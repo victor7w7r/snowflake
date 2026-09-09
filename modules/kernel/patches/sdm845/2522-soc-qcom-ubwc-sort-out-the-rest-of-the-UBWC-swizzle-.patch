@@ -1,0 +1,144 @@
+From 31e1c3248586dcc9aae42539152ab271dcfd37b6 Mon Sep 17 00:00:00 2001
+From: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Date: Wed, 20 May 2026 17:51:34 +0300
+Subject: [PATCH 02522/15333] soc: qcom: ubwc: sort out the rest of the UBWC
+ swizzle settings
+
+Sort out the remaining UBWC swizzle values, using flags to control
+whether level 2 and level 3 swizzling are enabled or not.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260520-ubwc-rework-v5-27-72f2749bc807@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ drivers/soc/qcom/ubwc_config.c | 16 +++-------------
+ include/linux/soc/qcom/ubwc.h  | 26 +++++++++++++-------------
+ 2 files changed, 16 insertions(+), 26 deletions(-)
+
+diff --git a/drivers/soc/qcom/ubwc_config.c b/drivers/soc/qcom/ubwc_config.c
+index 7e321389a399..f27440d5c06f 100644
+--- a/drivers/soc/qcom/ubwc_config.c
++++ b/drivers/soc/qcom/ubwc_config.c
+@@ -18,16 +18,12 @@ static const struct qcom_ubwc_cfg_data no_ubwc_data = {
+ 
+ static const struct qcom_ubwc_cfg_data eliza_data = {
+ 	.ubwc_enc_version = UBWC_5_0,
+-	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+-			UBWC_SWIZZLE_ENABLE_LVL3,
+ 	/* TODO: highest_bank_bit = 14 for LP_DDR4 */
+ 	.highest_bank_bit = 15,
+ };
+ 
+ static const struct qcom_ubwc_cfg_data kaanapali_data = {
+ 	.ubwc_enc_version = UBWC_6_0,
+-	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+-			UBWC_SWIZZLE_ENABLE_LVL3,
+ 	.highest_bank_bit = 16,
+ };
+ 
+@@ -48,7 +44,7 @@ static const struct qcom_ubwc_cfg_data qcm2290_data = {
+ 
+ static const struct qcom_ubwc_cfg_data sa8775p_data = {
+ 	.ubwc_enc_version = UBWC_4_0,
+-	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL3,
++	.flags = UBWC_FLAG_DISABLE_SWIZZLE_LVL2,
+ 	.highest_bank_bit = 13,
+ };
+ 
+@@ -119,38 +115,32 @@ static const struct qcom_ubwc_cfg_data sm8150_data = {
+ 
+ static const struct qcom_ubwc_cfg_data sm8250_data = {
+ 	.ubwc_enc_version = UBWC_4_0,
+-	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+-			UBWC_SWIZZLE_ENABLE_LVL3,
+ 	/* TODO: highest_bank_bit = 15 for LP_DDR4 */
+ 	.highest_bank_bit = 16,
+ };
+ 
+ static const struct qcom_ubwc_cfg_data sm8350_data = {
+ 	.ubwc_enc_version = UBWC_4_0,
+-	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+-			UBWC_SWIZZLE_ENABLE_LVL3,
+ 	/* TODO: highest_bank_bit = 15 for LP_DDR4 */
+ 	.highest_bank_bit = 16,
+ };
+ 
+ static const struct qcom_ubwc_cfg_data sm8550_data = {
+ 	.ubwc_enc_version = UBWC_4_0,
+-	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+-			UBWC_SWIZZLE_ENABLE_LVL3,
+ 	/* TODO: highest_bank_bit = 15 for LP_DDR4 */
+ 	.highest_bank_bit = 16,
+ };
+ 
+ static const struct qcom_ubwc_cfg_data sm8750_data = {
+ 	.ubwc_enc_version = UBWC_5_0,
+-	.ubwc_swizzle = 6,
+ 	/* TODO: highest_bank_bit = 15 for LP_DDR4 */
+ 	.highest_bank_bit = 16,
+ };
+ 
+ static const struct qcom_ubwc_cfg_data glymur_data = {
+ 	.ubwc_enc_version = UBWC_5_0,
+-	.ubwc_swizzle = 0,
++	.flags = UBWC_FLAG_DISABLE_SWIZZLE_LVL2 |
++		 UBWC_FLAG_DISABLE_SWIZZLE_LVL3,
+ 	/* TODO: highest_bank_bit = 15 for LP_DDR4 */
+ 	.highest_bank_bit = 16,
+ };
+diff --git a/include/linux/soc/qcom/ubwc.h b/include/linux/soc/qcom/ubwc.h
+index 7c9506741001..a7372d9c25fb 100644
+--- a/include/linux/soc/qcom/ubwc.h
++++ b/include/linux/soc/qcom/ubwc.h
+@@ -14,15 +14,6 @@
+ struct qcom_ubwc_cfg_data {
+ 	u32 ubwc_enc_version;
+ 
+-	/**
+-	 * @ubwc_swizzle: Whether to enable level 1, 2 & 3 bank swizzling.
+-	 *
+-	 * UBWC 1.0 always enables all three levels.
+-	 * UBWC 2.0 removes level 1 bank swizzling, leaving levels 2 & 3.
+-	 * UBWC 4.0 adds the optional ability to disable levels 2 & 3.
+-	 */
+-	u32 ubwc_swizzle;
+-
+ 	/**
+ 	 * @highest_bank_bit: Highest Bank Bit
+ 	 *
+@@ -30,6 +21,10 @@ struct qcom_ubwc_cfg_data {
+ 	 * DDR bank.  This should ideally use DRAM type detection.
+ 	 */
+ 	int highest_bank_bit;
++
++	unsigned int flags;
++#define UBWC_FLAG_DISABLE_SWIZZLE_LVL2	BIT(0)
++#define UBWC_FLAG_DISABLE_SWIZZLE_LVL3	BIT(1)
+ };
+ 
+ #define UBWC_1_0 0x10000000
+@@ -98,11 +93,16 @@ static inline u32 qcom_ubwc_swizzle(const struct qcom_ubwc_cfg_data *cfg)
+ 		       UBWC_SWIZZLE_ENABLE_LVL2 |
+ 		       UBWC_SWIZZLE_ENABLE_LVL3;
+ 
+-	if (cfg->ubwc_enc_version < UBWC_4_0)
+-		return UBWC_SWIZZLE_ENABLE_LVL2 |
+-		       UBWC_SWIZZLE_ENABLE_LVL3;
++	u32 ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
++			   UBWC_SWIZZLE_ENABLE_LVL3;
++
++	if (cfg->flags & UBWC_FLAG_DISABLE_SWIZZLE_LVL2)
++		ubwc_swizzle &= ~UBWC_SWIZZLE_ENABLE_LVL2;
++
++	if (cfg->flags & UBWC_FLAG_DISABLE_SWIZZLE_LVL3)
++		ubwc_swizzle &= ~UBWC_SWIZZLE_ENABLE_LVL3;
+ 
+-	return cfg->ubwc_swizzle;
++	return ubwc_swizzle;
+ }
+ 
+ static inline u32 qcom_ubwc_version_tag(const struct qcom_ubwc_cfg_data *cfg)
+-- 
+2.55.0
+

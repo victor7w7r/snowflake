@@ -1,0 +1,210 @@
+From ab4b571d44fbc849de7a7f57c232ff074c323704 Mon Sep 17 00:00:00 2001
+From: "Bastien Curutchet (Schneider Electric)" <bastien.curutchet@bootlin.com>
+Date: Thu, 2 Jul 2026 11:07:28 +0200
+Subject: [PATCH 03155/15333] net: dsa: microchip: move KSZ9477 errata handling
+ to ksz9477.c
+
+The KSZ9477 PHY errata is handled from the common ksz_r_mib_stat64().
+This errata clearly belongs to the KSZ9477 family so it should be handled
+from the ksz9477-specific portion of the driver.
+
+Create a ksz9477-specific r_mib_stat64() implementation that handles
+this errata.
+Remove the errata handling from the common ksz_r_mib_stat64().
+
+Signed-off-by: Bastien Curutchet (Schneider Electric) <bastien.curutchet@bootlin.com>
+Link: https://patch.msgid.link/20260702-clean-ksz-4th-v1-6-93441e695fa4@bootlin.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/dsa/microchip/ksz9477.c    | 24 ++++++++++++--
+ drivers/net/dsa/microchip/ksz9477.h    |  2 --
+ drivers/net/dsa/microchip/ksz_common.c | 46 --------------------------
+ drivers/net/dsa/microchip/ksz_common.h | 39 ++++++++++++++++++++++
+ 4 files changed, 60 insertions(+), 51 deletions(-)
+
+diff --git a/drivers/net/dsa/microchip/ksz9477.c b/drivers/net/dsa/microchip/ksz9477.c
+index ad6748905e08..a831eb884ce4 100644
+--- a/drivers/net/dsa/microchip/ksz9477.c
++++ b/drivers/net/dsa/microchip/ksz9477.c
+@@ -483,8 +483,8 @@ static int ksz9477_half_duplex_monitor(struct ksz_device *dev, int port,
+ 	return ret;
+ }
+ 
+-int ksz9477_errata_monitor(struct ksz_device *dev, int port,
+-			   u64 tx_late_col)
++static int ksz9477_errata_monitor(struct ksz_device *dev, int port,
++				  u64 tx_late_col)
+ {
+ 	u8 status;
+ 	int ret;
+@@ -502,6 +502,24 @@ int ksz9477_errata_monitor(struct ksz_device *dev, int port,
+ 	return ret;
+ }
+ 
++static void ksz9477_r_mib_stats64(struct ksz_device *dev, int port)
++{
++	struct ksz_stats_raw *raw;
++	struct ksz_port_mib *mib;
++	int ret;
++
++	ksz_r_mib_stats64(dev, port);
++
++	if (dev->info->phy_errata_9477 && !ksz_is_sgmii_port(dev, port)) {
++		mib = &dev->ports[port].mib;
++		raw = (struct ksz_stats_raw *)mib->counters;
++
++		ret = ksz9477_errata_monitor(dev, port, raw->tx_late_col);
++		if (ret)
++			dev_err(dev->dev, "Failed to monitor transmission halt\n");
++	}
++};
++
+ void ksz9477_port_init_cnt(struct ksz_device *dev, int port)
+ {
+ 	struct ksz_port_mib *mib = &dev->ports[port].mib;
+@@ -2109,7 +2127,7 @@ const struct ksz_dev_ops ksz9477_dev_ops = {
+ 	.cfg_port_member = ksz9477_cfg_port_member,
+ 	.r_mib_cnt = ksz9477_r_mib_cnt,
+ 	.r_mib_pkt = ksz9477_r_mib_pkt,
+-	.r_mib_stat64 = ksz_r_mib_stats64,
++	.r_mib_stat64 = ksz9477_r_mib_stats64,
+ 	.freeze_mib = ksz9477_freeze_mib,
+ 	.port_init_cnt = ksz9477_port_init_cnt,
+ 	.pme_write8 = ksz_write8,
+diff --git a/drivers/net/dsa/microchip/ksz9477.h b/drivers/net/dsa/microchip/ksz9477.h
+index 25b74d0af6c5..962174a922a0 100644
+--- a/drivers/net/dsa/microchip/ksz9477.h
++++ b/drivers/net/dsa/microchip/ksz9477.h
+@@ -32,8 +32,6 @@ int ksz9477_port_mirror_add(struct dsa_switch *ds, int port,
+ 			    bool ingress, struct netlink_ext_ack *extack);
+ void ksz9477_port_mirror_del(struct dsa_switch *ds, int port,
+ 			     struct dsa_mall_mirror_tc_entry *mirror);
+-int ksz9477_errata_monitor(struct ksz_device *dev, int port,
+-			   u64 tx_late_col);
+ int ksz9477_fdb_dump(struct dsa_switch *ds, int port,
+ 		     dsa_fdb_dump_cb_t *cb, void *data);
+ int ksz9477_fdb_add(struct dsa_switch *ds, int port,
+diff --git a/drivers/net/dsa/microchip/ksz_common.c b/drivers/net/dsa/microchip/ksz_common.c
+index 92fcbd9605c7..b54aea92b67d 100644
+--- a/drivers/net/dsa/microchip/ksz_common.c
++++ b/drivers/net/dsa/microchip/ksz_common.c
+@@ -37,45 +37,6 @@
+ 
+ #define MIB_COUNTER_NUM 0x20
+ 
+-struct ksz_stats_raw {
+-	u64 rx_hi;
+-	u64 rx_undersize;
+-	u64 rx_fragments;
+-	u64 rx_oversize;
+-	u64 rx_jabbers;
+-	u64 rx_symbol_err;
+-	u64 rx_crc_err;
+-	u64 rx_align_err;
+-	u64 rx_mac_ctrl;
+-	u64 rx_pause;
+-	u64 rx_bcast;
+-	u64 rx_mcast;
+-	u64 rx_ucast;
+-	u64 rx_64_or_less;
+-	u64 rx_65_127;
+-	u64 rx_128_255;
+-	u64 rx_256_511;
+-	u64 rx_512_1023;
+-	u64 rx_1024_1522;
+-	u64 rx_1523_2000;
+-	u64 rx_2001;
+-	u64 tx_hi;
+-	u64 tx_late_col;
+-	u64 tx_pause;
+-	u64 tx_bcast;
+-	u64 tx_mcast;
+-	u64 tx_ucast;
+-	u64 tx_deferred;
+-	u64 tx_total_col;
+-	u64 tx_exc_col;
+-	u64 tx_single_col;
+-	u64 tx_mult_col;
+-	u64 rx_total;
+-	u64 tx_total;
+-	u64 rx_discards;
+-	u64 tx_discards;
+-};
+-
+ static const struct ksz_mib_names ksz88xx_mib_names[] = {
+ 	{ 0x00, "rx" },
+ 	{ 0x01, "rx_hi" },
+@@ -1976,7 +1937,6 @@ void ksz_r_mib_stats64(struct ksz_device *dev, int port)
+ 	struct rtnl_link_stats64 *stats;
+ 	struct ksz_stats_raw *raw;
+ 	struct ksz_port_mib *mib;
+-	int ret;
+ 
+ 	mib = &dev->ports[port].mib;
+ 	stats = &mib->stats64;
+@@ -2018,12 +1978,6 @@ void ksz_r_mib_stats64(struct ksz_device *dev, int port)
+ 	pstats->rx_pause_frames = raw->rx_pause;
+ 
+ 	spin_unlock(&mib->stats64_lock);
+-
+-	if (dev->info->phy_errata_9477 && !ksz_is_sgmii_port(dev, port)) {
+-		ret = ksz9477_errata_monitor(dev, port, raw->tx_late_col);
+-		if (ret)
+-			dev_err(dev->dev, "Failed to monitor transmission halt\n");
+-	}
+ }
+ 
+ void ksz_get_stats64(struct dsa_switch *ds, int port,
+diff --git a/drivers/net/dsa/microchip/ksz_common.h b/drivers/net/dsa/microchip/ksz_common.h
+index 2c7716d8cf28..245329b6e0e9 100644
+--- a/drivers/net/dsa/microchip/ksz_common.h
++++ b/drivers/net/dsa/microchip/ksz_common.h
+@@ -40,6 +40,45 @@ struct vlan_table {
+ 	u32 table[3];
+ };
+ 
++struct ksz_stats_raw {
++	u64 rx_hi;
++	u64 rx_undersize;
++	u64 rx_fragments;
++	u64 rx_oversize;
++	u64 rx_jabbers;
++	u64 rx_symbol_err;
++	u64 rx_crc_err;
++	u64 rx_align_err;
++	u64 rx_mac_ctrl;
++	u64 rx_pause;
++	u64 rx_bcast;
++	u64 rx_mcast;
++	u64 rx_ucast;
++	u64 rx_64_or_less;
++	u64 rx_65_127;
++	u64 rx_128_255;
++	u64 rx_256_511;
++	u64 rx_512_1023;
++	u64 rx_1024_1522;
++	u64 rx_1523_2000;
++	u64 rx_2001;
++	u64 tx_hi;
++	u64 tx_late_col;
++	u64 tx_pause;
++	u64 tx_bcast;
++	u64 tx_mcast;
++	u64 tx_ucast;
++	u64 tx_deferred;
++	u64 tx_total_col;
++	u64 tx_exc_col;
++	u64 tx_single_col;
++	u64 tx_mult_col;
++	u64 rx_total;
++	u64 tx_total;
++	u64 rx_discards;
++	u64 tx_discards;
++};
++
+ struct ksz_port_mib {
+ 	struct mutex cnt_mutex;		/* structure access */
+ 	u8 cnt_ptr;
+-- 
+2.55.0
+

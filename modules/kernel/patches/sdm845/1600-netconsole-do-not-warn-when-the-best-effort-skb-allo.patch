@@ -1,0 +1,40 @@
+From 09f7a613a14fd6683e8e4437c97bde0f1ca7062c Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Mon, 29 Jun 2026 04:45:40 -0700
+Subject: [PATCH 01600/15333] netconsole: do not warn when the best-effort skb
+ allocation fails
+
+find_skb() allocates the skb with GFP_ATOMIC as a best-effort attempt:
+on failure it falls back to the preallocated skb pool and, failing that,
+polls the device and retries. The allocation failing is therefore an
+expected and fully handled condition, but without __GFP_NOWARN the page
+allocator still emits a warn_alloc() splat with a full stack trace on
+every miss, which then consumes the whole SKB pool, that would be useful
+printing the real issue rather than the memory failure.
+
+Pass __GFP_NOWARN so the best-effort allocation stays quiet and lets the
+existing fallback path do its job.
+
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Link: https://patch.msgid.link/20260629-netpoll_no_warn-v1-1-f380f0b2cd0c@debian.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/netconsole.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/netconsole.c b/drivers/net/netconsole.c
+index 862001d09aa8..c1812a98365b 100644
+--- a/drivers/net/netconsole.c
++++ b/drivers/net/netconsole.c
+@@ -1737,7 +1737,7 @@ static struct sk_buff *find_skb(struct netpoll *np, int len, int reserve)
+ 	netpoll_zap_completion_queue();
+ repeat:
+ 
+-	skb = alloc_skb(len, GFP_ATOMIC);
++	skb = alloc_skb(len, GFP_ATOMIC | __GFP_NOWARN);
+ 	if (!skb)
+ 		skb = netcons_skb_pop(np, len);
+ 
+-- 
+2.55.0
+

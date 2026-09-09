@@ -1,0 +1,78 @@
+From 6062e0f2045e2bab3542feb5e648d09866c70dc8 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:29 +0800
+Subject: [PATCH 12055/15333] spi: bcm-qspi: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use __maybe_unused.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-6-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-bcm-qspi.c     | 6 +++---
+ drivers/spi/spi-brcmstb-qspi.c | 2 +-
+ drivers/spi/spi-iproc-qspi.c   | 2 +-
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/spi/spi-bcm-qspi.c b/drivers/spi/spi-bcm-qspi.c
+index ae1ffe13fa46..0f96ac59da11 100644
+--- a/drivers/spi/spi-bcm-qspi.c
++++ b/drivers/spi/spi-bcm-qspi.c
+@@ -1689,7 +1689,7 @@ void bcm_qspi_remove(struct platform_device *pdev)
+ /* function to be called by SoC specific platform driver remove() */
+ EXPORT_SYMBOL_GPL(bcm_qspi_remove);
+ 
+-static int __maybe_unused bcm_qspi_suspend(struct device *dev)
++static int bcm_qspi_suspend(struct device *dev)
+ {
+ 	struct bcm_qspi *qspi = dev_get_drvdata(dev);
+ 	int ret;
+@@ -1709,7 +1709,7 @@ static int __maybe_unused bcm_qspi_suspend(struct device *dev)
+ 	return 0;
+ };
+ 
+-static int __maybe_unused bcm_qspi_resume(struct device *dev)
++static int bcm_qspi_resume(struct device *dev)
+ {
+ 	struct bcm_qspi *qspi = dev_get_drvdata(dev);
+ 	int ret = 0;
+@@ -1728,7 +1728,7 @@ static int __maybe_unused bcm_qspi_resume(struct device *dev)
+ 	return ret;
+ }
+ 
+-SIMPLE_DEV_PM_OPS(bcm_qspi_pm_ops, bcm_qspi_suspend, bcm_qspi_resume);
++DEFINE_SIMPLE_DEV_PM_OPS(bcm_qspi_pm_ops, bcm_qspi_suspend, bcm_qspi_resume);
+ 
+ /* pm_ops to be called by SoC specific platform driver */
+ EXPORT_SYMBOL_GPL(bcm_qspi_pm_ops);
+diff --git a/drivers/spi/spi-brcmstb-qspi.c b/drivers/spi/spi-brcmstb-qspi.c
+index 7a33b479c1f7..651a73446cff 100644
+--- a/drivers/spi/spi-brcmstb-qspi.c
++++ b/drivers/spi/spi-brcmstb-qspi.c
+@@ -31,7 +31,7 @@ static struct platform_driver brcmstb_qspi_driver = {
+ 	.remove			= brcmstb_qspi_remove,
+ 	.driver = {
+ 		.name		= "brcmstb_qspi",
+-		.pm		= &bcm_qspi_pm_ops,
++		.pm		= pm_sleep_ptr(&bcm_qspi_pm_ops),
+ 		.of_match_table = brcmstb_qspi_of_match,
+ 	}
+ };
+diff --git a/drivers/spi/spi-iproc-qspi.c b/drivers/spi/spi-iproc-qspi.c
+index 392acc4026ab..5255d5124385 100644
+--- a/drivers/spi/spi-iproc-qspi.c
++++ b/drivers/spi/spi-iproc-qspi.c
+@@ -141,7 +141,7 @@ static struct platform_driver bcm_iproc_driver = {
+ 	.remove			= bcm_iproc_remove,
+ 	.driver = {
+ 		.name		= "bcm_iproc",
+-		.pm		= &bcm_qspi_pm_ops,
++		.pm		= pm_sleep_ptr(&bcm_qspi_pm_ops),
+ 		.of_match_table = bcm_iproc_of_match,
+ 	}
+ };
+-- 
+2.55.0
+

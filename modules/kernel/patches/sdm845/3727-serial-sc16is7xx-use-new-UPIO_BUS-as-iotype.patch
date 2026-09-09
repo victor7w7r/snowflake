@@ -1,0 +1,44 @@
+From ac60073d41fb00be2aa0ccb88b2445b95057700b Mon Sep 17 00:00:00 2001
+From: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Date: Thu, 21 May 2026 14:16:54 -0400
+Subject: [PATCH 03727/15333] serial: sc16is7xx: use new UPIO_BUS as iotype
+
+Now that we have a new UPIO_BUS I/O type, use it to register our serial
+port and remove ambiguous membase/iobase workaround.
+
+Note that commit 5da6b1c079e6 ("sc16is7xx: Set iobase to device index")
+used the iobase field as an index within the device to allow infering
+the order through sysfs, but this is no longer needed since
+commit 1ef2c2df1199 ("serial: core: Fix serial core controller port name
+to show controller id").
+
+Signed-off-by: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Link: https://patch.msgid.link/20260521-tty-upio-v3-8-bf74567994a0@dimonoff.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/sc16is7xx.c | 9 +--------
+ 1 file changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/drivers/tty/serial/sc16is7xx.c b/drivers/tty/serial/sc16is7xx.c
+index 1fd64a47341d..4b638e69f36f 100644
+--- a/drivers/tty/serial/sc16is7xx.c
++++ b/drivers/tty/serial/sc16is7xx.c
+@@ -1472,14 +1472,7 @@ static int sc16is7xx_setup_channel(struct sc16is7xx_one *one, int i,
+ 	port->type	= PORT_SC16IS7XX;
+ 	port->fifosize	= SC16IS7XX_FIFO_SIZE;
+ 	port->flags	= UPF_FIXED_TYPE | UPF_LOW_LATENCY;
+-	port->iobase	= i;
+-	/*
+-	 * Use all ones as membase to make sure uart_configure_port() in
+-	 * serial_core.c does not abort for SPI/I2C devices where the
+-	 * membase address is not applicable.
+-	 */
+-	port->membase	= (void __iomem *)~0;
+-	port->iotype	= UPIO_PORT;
++	port->iotype	= UPIO_BUS;
+ 	port->rs485_config = sc16is7xx_config_rs485;
+ 	port->rs485_supported = sc16is7xx_rs485_supported;
+ 	port->ops	= &sc16is7xx_ops;
+-- 
+2.55.0
+

@@ -1,0 +1,112 @@
+From 3dcc74d51b223e07b54e0ad83700601598cae994 Mon Sep 17 00:00:00 2001
+From: Charles Keepax <ckeepax@opensource.cirrus.com>
+Date: Wed, 5 Aug 2026 13:41:59 +0100
+Subject: [PATCH 11253/15333] ASoC: SDCA: Remove unused dev pointer argument
+
+Remove the now unused device pointer from
+sdca_asoc_pde_poll_actual_ps().
+
+Signed-off-by: Charles Keepax <ckeepax@opensource.cirrus.com>
+Reviewed-by: Pierre-Louis Bossart <pierre-louis.bossart@linux.dev>
+Link: https://patch.msgid.link/20260805124205.4152543-3-ckeepax@opensource.cirrus.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/sdca_asoc.h      |  8 ++++----
+ sound/soc/codecs/rt766-sdca.c  |  2 +-
+ sound/soc/codecs/tac5xx2-sdw.c |  4 ++--
+ sound/soc/sdca/sdca_asoc.c     | 11 +++++------
+ 4 files changed, 12 insertions(+), 13 deletions(-)
+
+diff --git a/include/sound/sdca_asoc.h b/include/sound/sdca_asoc.h
+index d3024c3b38b9..599a72f33515 100644
+--- a/include/sound/sdca_asoc.h
++++ b/include/sound/sdca_asoc.h
+@@ -107,9 +107,9 @@ int sdca_asoc_q78_put_volsw(struct snd_kcontrol *kcontrol,
+ 			    struct snd_ctl_elem_value *ucontrol);
+ int sdca_asoc_q78_get_volsw(struct snd_kcontrol *kcontrol,
+ 			    struct snd_ctl_elem_value *ucontrol);
+-int sdca_asoc_pde_poll_actual_ps(struct device *dev, struct regmap *regmap,
++int sdca_asoc_pde_poll_actual_ps(struct regmap *regmap,
+ 				 int function_id, int entity_id,
+-			    int from_ps, int to_ps,
+-			    const struct sdca_pde_delay *pde_delays,
+-			    int num_delays);
++				 int from_ps, int to_ps,
++				 const struct sdca_pde_delay *pde_delays,
++				 int num_delays);
+ #endif // __SDCA_ASOC_H__
+diff --git a/sound/soc/codecs/rt766-sdca.c b/sound/soc/codecs/rt766-sdca.c
+index 49ee9cef5c54..4c5acd950d70 100644
+--- a/sound/soc/codecs/rt766-sdca.c
++++ b/sound/soc/codecs/rt766-sdca.c
+@@ -616,7 +616,7 @@ static int rt766_sdca_pde_event(struct snd_soc_dapm_widget *w,
+ 		return -EINVAL;
+ 	}
+ 
+-	ret = sdca_asoc_pde_poll_actual_ps(component->dev, rt766->regmap,
++	ret = sdca_asoc_pde_poll_actual_ps(rt766->regmap,
+ 				   func_num,
+ 				   pde_num,
+ 				   from_ps, to_ps,
+diff --git a/sound/soc/codecs/tac5xx2-sdw.c b/sound/soc/codecs/tac5xx2-sdw.c
+index ace06f5ab58c..ea0408b71713 100644
+--- a/sound/soc/codecs/tac5xx2-sdw.c
++++ b/sound/soc/codecs/tac5xx2-sdw.c
+@@ -800,7 +800,7 @@ static int tac_sdw_hw_params(struct snd_pcm_substream *substream,
+ 		return ret;
+ 	}
+ 
+-	ret = sdca_asoc_pde_poll_actual_ps(tac_dev->dev, tac_dev->regmap, function_id, pde_entity,
++	ret = sdca_asoc_pde_poll_actual_ps(tac_dev->regmap, function_id, pde_entity,
+ 					   SDCA_PDE_PS3, SDCA_PDE_PS0, NULL, 0);
+ 	if (ret)
+ 		dev_err(tac_dev->dev, "failed to transition func %d, pde %d from PS3 -> PS0, err=%d\n",
+@@ -847,7 +847,7 @@ static int tac_sdw_pcm_hw_free(struct snd_pcm_substream *substream,
+ 		return ret;
+ 	}
+ 
+-	ret = sdca_asoc_pde_poll_actual_ps(tac_dev->dev, tac_dev->regmap, function_id,
++	ret = sdca_asoc_pde_poll_actual_ps(tac_dev->regmap, function_id,
+ 					   pde_entity, SDCA_PDE_PS0, SDCA_PDE_PS3,
+ 					   NULL, 0);
+ 	if (ret)
+diff --git a/sound/soc/sdca/sdca_asoc.c b/sound/soc/sdca/sdca_asoc.c
+index 03486d1c1b2f..ce2e7c270765 100644
+--- a/sound/soc/sdca/sdca_asoc.c
++++ b/sound/soc/sdca/sdca_asoc.c
+@@ -364,7 +364,6 @@ static int entity_parse_ot(struct device *dev,
+ 
+ /**
+  * sdca_asoc_pde_poll_actual_ps - Verify PDE power state reached target state
+- * @dev: Pointer to the device for error logging.
+  * @regmap: Register map for reading ACTUAL_PS register.
+  * @function_id: SDCA function identifier.
+  * @entity_id: SDCA entity identifier for the power domain.
+@@ -389,11 +388,11 @@ static int entity_parse_ot(struct device *dev,
+  * polling times out before reaching the target state, or a negative error code if
+  * a register read fails.
+  */
+-int sdca_asoc_pde_poll_actual_ps(struct device *dev, struct regmap *regmap,
++int sdca_asoc_pde_poll_actual_ps(struct regmap *regmap,
+ 				 int function_id, int entity_id,
+-			    int from_ps, int to_ps,
+-			    const struct sdca_pde_delay *pde_delays,
+-			    int num_delays)
++				 int from_ps, int to_ps,
++				 const struct sdca_pde_delay *pde_delays,
++				 int num_delays)
+ {
+ 	static const int polls = 100;
+ 	static const int default_poll_us = 1000;
+@@ -451,7 +450,7 @@ static int entity_pde_event(struct snd_soc_dapm_widget *widget,
+ 		return 0;
+ 	}
+ 
+-	ret = sdca_asoc_pde_poll_actual_ps(component->dev, component->regmap,
++	ret = sdca_asoc_pde_poll_actual_ps(component->regmap,
+ 					   SDW_SDCA_CTL_FUNC(widget->reg),
+ 					   SDW_SDCA_CTL_ENT(widget->reg),
+ 					   from, to,
+-- 
+2.55.0
+

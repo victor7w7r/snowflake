@@ -1,0 +1,141 @@
+From 1ee6fef6e0dbff21fecfc1db05c79ede464e9500 Mon Sep 17 00:00:00 2001
+From: Yu Kuai <yukuai@fygo.io>
+Date: Mon, 3 Aug 2026 03:50:21 +0800
+Subject: [PATCH 11763/15333] md: add exact bitmap mapping and reshape hooks
+
+Add bitmap mapping and reshape hooks needed by llbitmap reshape
+support without teaching md core to account a single bio against
+multiple bitmap ranges.
+
+This also adds the old/new bitmap geometry helpers used by
+personalities to describe reshape mapping to llbitmap.
+
+Tested-by: Mykola Marzhan <mykola@meshstor.io>
+Link: https://patch.msgid.link/20260802195038.164272-13-yukuai@kernel.org
+Signed-off-by: Yu Kuai <yukuai@fygo.io>
+---
+ drivers/md/md-bitmap.c   |  8 ++++++++
+ drivers/md/md-bitmap.h   |  8 ++++++++
+ drivers/md/md-llbitmap.c |  8 ++++++++
+ drivers/md/md.c          | 11 ++++++++---
+ drivers/md/md.h          |  4 ++++
+ 5 files changed, 36 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/md/md-bitmap.c b/drivers/md/md-bitmap.c
+index 7e4fbca93ccb..b7f0d4acce04 100644
+--- a/drivers/md/md-bitmap.c
++++ b/drivers/md/md-bitmap.c
+@@ -1730,6 +1730,13 @@ static void bitmap_start_write(struct mddev *mddev, sector_t offset,
+ 	}
+ }
+ 
++static void bitmap_prepare_range(struct mddev *mddev, sector_t *offset,
++				 unsigned long *sectors)
++{
++	if (mddev->pers->bitmap_sector)
++		mddev->pers->bitmap_sector(mddev, offset, sectors);
++}
++
+ static void bitmap_end_write(struct mddev *mddev, sector_t offset,
+ 			     unsigned long sectors)
+ {
+@@ -3081,6 +3088,7 @@ static struct bitmap_operations bitmap_ops = {
+ 	.flush			= bitmap_flush,
+ 	.write_all		= bitmap_write_all,
+ 	.dirty_bits		= bitmap_dirty_bits,
++	.prepare_range		= bitmap_prepare_range,
+ 	.unplug			= bitmap_unplug,
+ 	.daemon_work		= bitmap_daemon_work,
+ 
+diff --git a/drivers/md/md-bitmap.h b/drivers/md/md-bitmap.h
+index 890276d9c66e..6478cf9d8816 100644
+--- a/drivers/md/md-bitmap.h
++++ b/drivers/md/md-bitmap.h
+@@ -94,6 +94,14 @@ struct bitmap_operations {
+ 	void (*write_all)(struct mddev *mddev);
+ 	void (*dirty_bits)(struct mddev *mddev, unsigned long s,
+ 			   unsigned long e);
++	/* Prepare a range for this bitmap implementation. */
++	void (*prepare_range)(struct mddev *mddev,
++			      sector_t *offset,
++			      unsigned long *sectors);
++	void (*reshape_finish)(struct mddev *mddev);
++	int (*reshape_can_start)(struct mddev *mddev);
++	void (*reshape_mark)(struct mddev *mddev, sector_t old_pos,
++			     sector_t new_pos);
+ 	void (*unplug)(struct mddev *mddev, bool sync);
+ 	void (*daemon_work)(struct mddev *mddev);
+ 
+diff --git a/drivers/md/md-llbitmap.c b/drivers/md/md-llbitmap.c
+index f5efecdb2cc4..1c361f5a97f4 100644
+--- a/drivers/md/md-llbitmap.c
++++ b/drivers/md/md-llbitmap.c
+@@ -1198,6 +1198,13 @@ static void llbitmap_destroy(struct mddev *mddev)
+ 	mutex_unlock(&mddev->bitmap_info.mutex);
+ }
+ 
++static void llbitmap_prepare_range(struct mddev *mddev, sector_t *offset,
++				   unsigned long *sectors)
++{
++	if (mddev->pers->bitmap_sector)
++		mddev->pers->bitmap_sector(mddev, offset, sectors);
++}
++
+ static void llbitmap_start_write(struct mddev *mddev, sector_t offset,
+ 				 unsigned long sectors)
+ {
+@@ -1789,6 +1796,7 @@ static struct bitmap_operations llbitmap_ops = {
+ 	.update_sb		= llbitmap_update_sb,
+ 	.get_stats		= llbitmap_get_stats,
+ 	.dirty_bits		= llbitmap_dirty_bits,
++	.prepare_range		= llbitmap_prepare_range,
+ 	.write_all		= llbitmap_write_all,
+ 
+ 	.groups			= md_llbitmap_groups,
+diff --git a/drivers/md/md.c b/drivers/md/md.c
+index f0eecdfff1cc..538ba7bab060 100644
+--- a/drivers/md/md.c
++++ b/drivers/md/md.c
+@@ -9427,6 +9427,12 @@ struct bio *mddev_bio_split_at_reshape_offset(struct mddev *mddev,
+ }
+ EXPORT_SYMBOL_GPL(mddev_bio_split_at_reshape_offset);
+ 
++static void md_bitmap_prepare_range(struct mddev *mddev, sector_t *offset,
++				    unsigned long *sectors)
++{
++	mddev->bitmap_ops->prepare_range(mddev, offset, sectors);
++}
++
+ static void md_bitmap_start(struct mddev *mddev,
+ 			    struct md_io_clone *md_io_clone)
+ {
+@@ -9434,9 +9440,8 @@ static void md_bitmap_start(struct mddev *mddev,
+ 			   mddev->bitmap_ops->start_discard :
+ 			   mddev->bitmap_ops->start_write;
+ 
+-	if (mddev->pers->bitmap_sector)
+-		mddev->pers->bitmap_sector(mddev, &md_io_clone->offset,
+-					   &md_io_clone->sectors);
++	md_bitmap_prepare_range(mddev, &md_io_clone->offset,
++				&md_io_clone->sectors);
+ 
+ 	if (!md_io_clone->sectors)
+ 		return;
+diff --git a/drivers/md/md.h b/drivers/md/md.h
+index 8146a6f50a7d..b6d2e8929a0f 100644
+--- a/drivers/md/md.h
++++ b/drivers/md/md.h
+@@ -797,6 +797,10 @@ struct md_personality
+ 	/* convert io ranges from array to bitmap */
+ 	void (*bitmap_sector)(struct mddev *mddev, sector_t *offset,
+ 			      unsigned long *sectors);
++	void (*bitmap_sector_map)(struct mddev *mddev, sector_t *offset,
++				  unsigned long *sectors, bool previous);
++	sector_t (*bitmap_sync_size)(struct mddev *mddev, bool previous);
++	sector_t (*bitmap_array_sectors)(struct mddev *mddev, bool previous);
+ };
+ 
+ struct md_sysfs_entry {
+-- 
+2.55.0
+

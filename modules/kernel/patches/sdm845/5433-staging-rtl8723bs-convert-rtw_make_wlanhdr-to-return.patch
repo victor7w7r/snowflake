@@ -1,0 +1,97 @@
+From 1044fb68a255b2062265a6f978601ccb773d88c6 Mon Sep 17 00:00:00 2001
+From: Hungyu Lin <dennylin0707@gmail.com>
+Date: Mon, 13 Jul 2026 07:05:34 +0000
+Subject: [PATCH 05433/15333] staging: rtl8723bs: convert rtw_make_wlanhdr() to
+ return errno
+
+Convert rtw_make_wlanhdr() to return 0 on success and
+a negative errno on failure.
+
+Update the immediate caller to handle errno return values
+while preserving the existing _SUCCESS/_FAIL semantics.
+
+No functional change intended.
+
+Signed-off-by: Hungyu Lin <dennylin0707@gmail.com>
+Reviewed-by: Dan Carpenter <error27@gmail.com>
+Link: https://patch.msgid.link/20260713070537.15903-3-dennylin0707@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/core/rtw_xmit.c    | 15 ++++++++-------
+ drivers/staging/rtl8723bs/include/rtw_xmit.h |  2 +-
+ 2 files changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/core/rtw_xmit.c b/drivers/staging/rtl8723bs/core/rtw_xmit.c
+index e5a2f825cccb..bbc7f89f1e76 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_xmit.c
++++ b/drivers/staging/rtl8723bs/core/rtw_xmit.c
+@@ -903,7 +903,7 @@ static s32 xmitframe_swencrypt(struct adapter *padapter, struct xmit_frame *pxmi
+ 	return _SUCCESS;
+ }
+ 
+-s32 rtw_make_wlanhdr(struct adapter *padapter, u8 *hdr, struct pkt_attrib *pattrib)
++int rtw_make_wlanhdr(struct adapter *padapter, u8 *hdr, struct pkt_attrib *pattrib)
+ {
+ 	u16 *qc;
+ 
+@@ -950,7 +950,7 @@ s32 rtw_make_wlanhdr(struct adapter *padapter, u8 *hdr, struct pkt_attrib *pattr
+ 			if (pattrib->qos_en)
+ 				qos_option = true;
+ 		} else {
+-			return _FAIL;
++			return -EINVAL;
+ 		}
+ 
+ 		if (pattrib->mdata)
+@@ -978,13 +978,13 @@ s32 rtw_make_wlanhdr(struct adapter *padapter, u8 *hdr, struct pkt_attrib *pattr
+ 
+ 			psta = rtw_get_stainfo(&padapter->stapriv, pattrib->ra);
+ 			if (pattrib->psta != psta)
+-				return _FAIL;
++				return -EINVAL;
+ 
+ 			if (!psta)
+-				return _FAIL;
++				return -ENOENT;
+ 
+ 			if (!(psta->state & _FW_LINKED))
+-				return _FAIL;
++				return -ENOLINK;
+ 
+ 			if (psta) {
+ 				psta->sta_xmitpriv.txseq_tid[pattrib->priority]++;
+@@ -1024,7 +1024,7 @@ s32 rtw_make_wlanhdr(struct adapter *padapter, u8 *hdr, struct pkt_attrib *pattr
+ 	} else {
+ 	}
+ 
+-	return _SUCCESS;
++	return 0;
+ }
+ 
+ s32 rtw_txframes_pending(struct adapter *padapter)
+@@ -1093,7 +1093,8 @@ s32 rtw_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct
+ 	hw_hdr_offset = TXDESC_OFFSET;
+ 	mem_start = pbuf_start +	hw_hdr_offset;
+ 
+-	if (rtw_make_wlanhdr(padapter, mem_start, pattrib) == _FAIL) {
++	ret = rtw_make_wlanhdr(padapter, mem_start, pattrib);
++	if (ret) {
+ 		res = _FAIL;
+ 		goto exit;
+ 	}
+diff --git a/drivers/staging/rtl8723bs/include/rtw_xmit.h b/drivers/staging/rtl8723bs/include/rtw_xmit.h
+index f67cb22e3396..303b50051274 100644
+--- a/drivers/staging/rtl8723bs/include/rtw_xmit.h
++++ b/drivers/staging/rtl8723bs/include/rtw_xmit.h
+@@ -410,7 +410,7 @@ extern s32 rtw_free_xmitbuf(struct xmit_priv *pxmitpriv, struct xmit_buf *pxmitb
+ 
+ void rtw_count_tx_stats(struct adapter *padapter, struct xmit_frame *pxmitframe, int sz);
+ extern void rtw_update_protection(struct adapter *padapter, u8 *ie, uint ie_len);
+-extern s32 rtw_make_wlanhdr(struct adapter *padapter, u8 *hdr, struct pkt_attrib *pattrib);
++extern int rtw_make_wlanhdr(struct adapter *padapter, u8 *hdr, struct pkt_attrib *pattrib);
+ extern s32 rtw_put_snap(u8 *data, u16 h_proto);
+ 
+ extern struct xmit_frame *rtw_alloc_xmitframe(struct xmit_priv *pxmitpriv);
+-- 
+2.55.0
+

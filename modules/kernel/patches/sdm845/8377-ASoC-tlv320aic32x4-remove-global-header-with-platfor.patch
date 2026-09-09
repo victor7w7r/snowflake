@@ -1,0 +1,129 @@
+From 3906ea776a08d13bd5ef221b1d8112a49988c644 Mon Sep 17 00:00:00 2001
+From: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Date: Sat, 25 Jul 2026 18:05:11 -0700
+Subject: [PATCH 08377/15333] ASoC: tlv320aic32x4: remove global header with
+ platform data
+
+Commit 69d5b62c4bde ("ASoC: codec: tlv320aic32x4: Drop aic32x4_pdata
+usage") removed support for platform data, but left a global header file
+with #defines and platform data structure.
+
+Move the contents to the driver-private header.
+
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Link: https://patch.msgid.link/20260726010519.117805-1-dmitry.torokhov@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/tlv320aic32x4.h    | 43 --------------------------------
+ sound/soc/codecs/tlv320aic32x4.c |  5 +++-
+ sound/soc/codecs/tlv320aic32x4.h | 27 ++++++++++++++++++++
+ 3 files changed, 31 insertions(+), 44 deletions(-)
+ delete mode 100644 include/sound/tlv320aic32x4.h
+
+diff --git a/include/sound/tlv320aic32x4.h b/include/sound/tlv320aic32x4.h
+deleted file mode 100644
+index b779d671a995..000000000000
+--- a/include/sound/tlv320aic32x4.h
++++ /dev/null
+@@ -1,43 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0-only */
+-/*
+- * tlv320aic32x4.h  --  TLV320AIC32X4 Soc Audio driver platform data
+- *
+- * Copyright 2011 Vista Silicon S.L.
+- *
+- * Author: Javier Martin <javier.martin@vista-silicon.com>
+- */
+-
+-#ifndef _AIC32X4_PDATA_H
+-#define _AIC32X4_PDATA_H
+-
+-#define AIC32X4_PWR_MICBIAS_2075_LDOIN		0x00000001
+-#define AIC32X4_PWR_AVDD_DVDD_WEAK_DISABLE	0x00000002
+-#define AIC32X4_PWR_AIC32X4_LDO_ENABLE		0x00000004
+-#define AIC32X4_PWR_CMMODE_LDOIN_RANGE_18_36	0x00000008
+-#define AIC32X4_PWR_CMMODE_HP_LDOIN_POWERED	0x00000010
+-
+-#define AIC32X4_MICPGA_ROUTE_LMIC_IN2R_10K	0x00000001
+-#define AIC32X4_MICPGA_ROUTE_RMIC_IN1L_10K	0x00000002
+-
+-/* GPIO API */
+-#define AIC32X4_MFPX_DEFAULT_VALUE	0xff
+-
+-#define AIC32X4_MFP1_DIN_DISABLED	0
+-#define AIC32X4_MFP1_DIN_ENABLED	0x2
+-#define AIC32X4_MFP1_GPIO_IN		0x4
+-
+-#define AIC32X4_MFP2_GPIO_OUT_LOW	0x0
+-#define AIC32X4_MFP2_GPIO_OUT_HIGH	0x1
+-
+-#define AIC32X4_MFP_GPIO_ENABLED	0x4
+-
+-#define AIC32X4_MFP5_GPIO_DISABLED	0x0
+-#define AIC32X4_MFP5_GPIO_INPUT		0x8
+-#define AIC32X4_MFP5_GPIO_OUTPUT	0xc
+-#define AIC32X4_MFP5_GPIO_OUT_LOW	0x0
+-#define AIC32X4_MFP5_GPIO_OUT_HIGH	0x1
+-
+-struct aic32x4_setup_data {
+-	unsigned int gpio_func[5];
+-};
+-#endif
+diff --git a/sound/soc/codecs/tlv320aic32x4.c b/sound/soc/codecs/tlv320aic32x4.c
+index d85094557215..da582f2c940c 100644
+--- a/sound/soc/codecs/tlv320aic32x4.c
++++ b/sound/soc/codecs/tlv320aic32x4.c
+@@ -28,10 +28,13 @@
+ #include <sound/soc.h>
+ #include <sound/soc-dapm.h>
+ #include <sound/tlv.h>
+-#include <sound/tlv320aic32x4.h>
+ 
+ #include "tlv320aic32x4.h"
+ 
++struct aic32x4_setup_data {
++	unsigned int gpio_func[5];
++};
++
+ struct aic32x4_priv {
+ 	struct regmap *regmap;
+ 	u32 power_cfg;
+diff --git a/sound/soc/codecs/tlv320aic32x4.h b/sound/soc/codecs/tlv320aic32x4.h
+index f68a846ef61d..8eb9c6a4c99e 100644
+--- a/sound/soc/codecs/tlv320aic32x4.h
++++ b/sound/soc/codecs/tlv320aic32x4.h
+@@ -234,4 +234,31 @@ int aic32x4_register_clocks(struct device *dev, const char *mclk_name);
+ #define AIC32X4_MAX_CODEC_CLKIN_FREQ    110000000
+ #define AIC32X4_MAX_PLL_CLKIN		20000000
+ 
++#define AIC32X4_PWR_MICBIAS_2075_LDOIN		0x00000001
++#define AIC32X4_PWR_AVDD_DVDD_WEAK_DISABLE	0x00000002
++#define AIC32X4_PWR_AIC32X4_LDO_ENABLE		0x00000004
++#define AIC32X4_PWR_CMMODE_LDOIN_RANGE_18_36	0x00000008
++#define AIC32X4_PWR_CMMODE_HP_LDOIN_POWERED	0x00000010
++
++#define AIC32X4_MICPGA_ROUTE_LMIC_IN2R_10K	0x00000001
++#define AIC32X4_MICPGA_ROUTE_RMIC_IN1L_10K	0x00000002
++
++/* GPIO API */
++#define AIC32X4_MFPX_DEFAULT_VALUE	0xff
++
++#define AIC32X4_MFP1_DIN_DISABLED	0
++#define AIC32X4_MFP1_DIN_ENABLED	0x2
++#define AIC32X4_MFP1_GPIO_IN		0x4
++
++#define AIC32X4_MFP2_GPIO_OUT_LOW	0x0
++#define AIC32X4_MFP2_GPIO_OUT_HIGH	0x1
++
++#define AIC32X4_MFP_GPIO_ENABLED	0x4
++
++#define AIC32X4_MFP5_GPIO_DISABLED	0x0
++#define AIC32X4_MFP5_GPIO_INPUT		0x8
++#define AIC32X4_MFP5_GPIO_OUTPUT	0xc
++#define AIC32X4_MFP5_GPIO_OUT_LOW	0x0
++#define AIC32X4_MFP5_GPIO_OUT_HIGH	0x1
++
+ #endif				/* _TLV320AIC32X4_H */
+-- 
+2.55.0
+

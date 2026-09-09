@@ -1,0 +1,39 @@
+From ff2ab3146e7c23969bf0c75bde180f737d7e4b51 Mon Sep 17 00:00:00 2001
+From: Joanne Koong <joannelkoong@gmail.com>
+Date: Wed, 29 Jul 2026 12:27:22 -0700
+Subject: [PATCH 09173/15333] btrfs: convert iomap ops to ->iomap_next()
+
+Convert btrfs iomap_ops to the new ->iomap_next() callback. The callback is
+generated with the DEFINE_IOMAP_ITER_NEXT_END() macro, which wraps the
+iomap_iter_next() helper to finish the previous mapping if needed and
+produce the next one. No functional changes are intended.
+
+Acked-by: David Sterba <dsterba@suse.com>
+Signed-off-by: Joanne Koong <joannelkoong@gmail.com>
+Link: https://patch.msgid.link/20260729192737.3190206-8-joannelkoong@gmail.com
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/btrfs/direct-io.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/fs/btrfs/direct-io.c b/fs/btrfs/direct-io.c
+index 460326d34143..d5439b06cdc9 100644
+--- a/fs/btrfs/direct-io.c
++++ b/fs/btrfs/direct-io.c
+@@ -798,9 +798,11 @@ static void btrfs_dio_submit_io(const struct iomap_iter *iter, struct bio *bio,
+ 	btrfs_submit_bbio(bbio, 0);
+ }
+ 
++static DEFINE_IOMAP_ITER_NEXT_END(btrfs_dio_iomap_next, btrfs_dio_iomap_begin,
++				  btrfs_dio_iomap_end);
++
+ static const struct iomap_ops btrfs_dio_iomap_ops = {
+-	.iomap_begin            = btrfs_dio_iomap_begin,
+-	.iomap_end              = btrfs_dio_iomap_end,
++	.iomap_next             = btrfs_dio_iomap_next,
+ };
+ 
+ static const struct iomap_dio_ops btrfs_dio_ops = {
+-- 
+2.55.0
+

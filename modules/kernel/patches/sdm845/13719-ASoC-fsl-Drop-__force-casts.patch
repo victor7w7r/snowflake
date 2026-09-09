@@ -1,0 +1,144 @@
+From fde65373cb861edf560af50782b08a52b39e7585 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Wed, 12 Aug 2026 08:04:43 +0200
+Subject: [PATCH 13719/15333] ASoC: fsl: Drop __force casts
+
+Now that the bitwise parameter definitions are gone for PCM
+parameters, we don't have to cast with ugly __force prefix.
+Simply drop those superfluous casts.
+
+Reviewed-by: Shengjiu Wang <shengjiu.wang@gmail.com>
+Acked-by: Mark Brown <broonie@kernel.org>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260812060557.80445-12-tiwai@suse.de
+---
+ sound/soc/fsl/fsl-asoc-card.c |  2 +-
+ sound/soc/fsl/fsl_asrc.c      |  2 +-
+ sound/soc/fsl/fsl_asrc_m2m.c  | 10 +++++-----
+ sound/soc/fsl/fsl_easrc.c     |  2 +-
+ sound/soc/fsl/fsl_qmc_audio.c |  8 ++++----
+ sound/soc/fsl/imx-card.c      |  4 ++--
+ 6 files changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/sound/soc/fsl/fsl-asoc-card.c b/sound/soc/fsl/fsl-asoc-card.c
+index 709543308fe9..9dc46ab1d3e1 100644
+--- a/sound/soc/fsl/fsl-asoc-card.c
++++ b/sound/soc/fsl/fsl-asoc-card.c
+@@ -1118,7 +1118,7 @@ static int fsl_asoc_card_probe(struct platform_device *pdev)
+ 		}
+ 
+ 		ret = of_property_read_u32(asrc_np, "fsl,asrc-format", &asrc_fmt);
+-		priv->asrc_format = (__force snd_pcm_format_t)asrc_fmt;
++		priv->asrc_format = asrc_fmt;
+ 		if (ret) {
+ 			/* Fallback to old binding; translate to asrc_format */
+ 			ret = of_property_read_u32(asrc_np, "fsl,asrc-width",
+diff --git a/sound/soc/fsl/fsl_asrc.c b/sound/soc/fsl/fsl_asrc.c
+index f23c21032287..11748c65d5cc 100644
+--- a/sound/soc/fsl/fsl_asrc.c
++++ b/sound/soc/fsl/fsl_asrc.c
+@@ -1358,7 +1358,7 @@ static int fsl_asrc_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	ret = of_property_read_u32(np, "fsl,asrc-format", &asrc_fmt);
+-	asrc->asrc_format = (__force snd_pcm_format_t)asrc_fmt;
++	asrc->asrc_format = asrc_fmt;
+ 	if (ret) {
+ 		ret = of_property_read_u32(np, "fsl,asrc-width", &width);
+ 		if (ret) {
+diff --git a/sound/soc/fsl/fsl_asrc_m2m.c b/sound/soc/fsl/fsl_asrc_m2m.c
+index 7d39378c0622..4bc40f328f58 100644
+--- a/sound/soc/fsl/fsl_asrc_m2m.c
++++ b/sound/soc/fsl/fsl_asrc_m2m.c
+@@ -367,13 +367,13 @@ static int fsl_asrc_m2m_comp_set_params(struct snd_compr_stream *stream,
+ 	if (ret)
+ 		return -EINVAL;
+ 
+-	if (pcm_format_to_bits((__force snd_pcm_format_t)params->codec.format) & cap.fmt_in)
+-		pair->sample_format[IN] = (__force snd_pcm_format_t)params->codec.format;
++	if (pcm_format_to_bits(params->codec.format) & cap.fmt_in)
++		pair->sample_format[IN] = params->codec.format;
+ 	else
+ 		return -EINVAL;
+ 
+-	if (pcm_format_to_bits((__force snd_pcm_format_t)params->codec.pcm_format) & cap.fmt_out)
+-		pair->sample_format[OUT] = (__force snd_pcm_format_t)params->codec.pcm_format;
++	if (pcm_format_to_bits(params->codec.pcm_format) & cap.fmt_out)
++		pair->sample_format[OUT] = params->codec.pcm_format;
+ 	else
+ 		return -EINVAL;
+ 
+@@ -600,7 +600,7 @@ static int fsl_asrc_m2m_fill_codec_caps(struct fsl_asrc *asrc,
+ 			       cap.rate_in,
+ 			       cap.rate_in_count * sizeof(__u32));
+ 			codec->descriptor[j].num_sample_rates = cap.rate_in_count;
+-			codec->descriptor[j].formats = (__force __u32)k;
++			codec->descriptor[j].formats = k;
+ 			codec->descriptor[j].pcm_formats = cap.fmt_out;
+ 			codec->descriptor[j].src.out_sample_rate_min = cap.rate_out[0];
+ 			codec->descriptor[j].src.out_sample_rate_max =
+diff --git a/sound/soc/fsl/fsl_easrc.c b/sound/soc/fsl/fsl_easrc.c
+index 8535ef844ce0..79eb2391058d 100644
+--- a/sound/soc/fsl/fsl_easrc.c
++++ b/sound/soc/fsl/fsl_easrc.c
+@@ -2227,7 +2227,7 @@ static int fsl_easrc_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	ret = of_property_read_u32(np, "fsl,asrc-format", &asrc_fmt);
+-	easrc->asrc_format = (__force snd_pcm_format_t)asrc_fmt;
++	easrc->asrc_format = asrc_fmt;
+ 	if (ret) {
+ 		dev_err(dev, "failed to asrc format\n");
+ 		return ret;
+diff --git a/sound/soc/fsl/fsl_qmc_audio.c b/sound/soc/fsl/fsl_qmc_audio.c
+index d0f644573f49..f27934cf49da 100644
+--- a/sound/soc/fsl/fsl_qmc_audio.c
++++ b/sound/soc/fsl/fsl_qmc_audio.c
+@@ -503,8 +503,8 @@ static int qmc_dai_constraints_interleaved(struct snd_pcm_substream *substream,
+ 		return ret;
+ 	}
+ 
+-	access = 1ULL << (__force int)SNDRV_PCM_ACCESS_MMAP_INTERLEAVED |
+-		 1ULL << (__force int)SNDRV_PCM_ACCESS_RW_INTERLEAVED;
++	access = 1ULL << SNDRV_PCM_ACCESS_MMAP_INTERLEAVED |
++		 1ULL << SNDRV_PCM_ACCESS_RW_INTERLEAVED;
+ 	ret = snd_pcm_hw_constraint_mask64(substream->runtime, SNDRV_PCM_HW_PARAM_ACCESS,
+ 					   access);
+ 	if (ret) {
+@@ -532,8 +532,8 @@ static int qmc_dai_constraints_noninterleaved(struct snd_pcm_substream *substrea
+ 		return ret;
+ 	}
+ 
+-	access = 1ULL << (__force int)SNDRV_PCM_ACCESS_MMAP_NONINTERLEAVED |
+-		 1ULL << (__force int)SNDRV_PCM_ACCESS_RW_NONINTERLEAVED;
++	access = 1ULL << SNDRV_PCM_ACCESS_MMAP_NONINTERLEAVED |
++		 1ULL << SNDRV_PCM_ACCESS_RW_NONINTERLEAVED;
+ 	ret = snd_pcm_hw_constraint_mask64(substream->runtime, SNDRV_PCM_HW_PARAM_ACCESS,
+ 					   access);
+ 	if (ret) {
+diff --git a/sound/soc/fsl/imx-card.c b/sound/soc/fsl/imx-card.c
+index 43438af1e1c6..e3cb1438e837 100644
+--- a/sound/soc/fsl/imx-card.c
++++ b/sound/soc/fsl/imx-card.c
+@@ -531,7 +531,7 @@ static int be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+ 
+ 	mask = hw_param_mask(params, SNDRV_PCM_HW_PARAM_FORMAT);
+ 	snd_mask_none(mask);
+-	snd_mask_set(mask, (__force unsigned int)data->asrc_format);
++	snd_mask_set(mask, data->asrc_format);
+ 
+ 	return 0;
+ }
+@@ -684,7 +684,7 @@ static int imx_card_parse_of(struct imx_card_data *data)
+ 			}
+ 
+ 			ret = of_property_read_u32(args.np, "fsl,asrc-format", &asrc_fmt);
+-			data->asrc_format = (__force snd_pcm_format_t)asrc_fmt;
++			data->asrc_format = asrc_fmt;
+ 			if (ret) {
+ 				/* Fallback to old binding; translate to asrc_format */
+ 				ret = of_property_read_u32(args.np, "fsl,asrc-width", &width);
+-- 
+2.55.0
+

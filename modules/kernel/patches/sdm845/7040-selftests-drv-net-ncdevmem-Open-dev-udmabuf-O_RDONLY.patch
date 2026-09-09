@@ -1,0 +1,42 @@
+From be6f0d0bae229ebd03e9bfe736f78e2d6b35885f Mon Sep 17 00:00:00 2001
+From: "T.J. Mercier" <tjmercier@google.com>
+Date: Wed, 22 Jul 2026 13:54:42 -0700
+Subject: [PATCH 07040/15333] selftests: drv-net: ncdevmem: Open /dev/udmabuf
+ O_RDONLY
+
+Write permissions on the /dev/udmabuf device file are not required to
+issue ioctls and allocate udmabufs. Applications should be opening this
+file as O_RDONLY. The BPF dmabuf_iter selftest already does this. [1]
+
+Users are pointing to these selftests as examples of how use udmabuf,
+and encountering permission errors on systems where write permissions
+are not available on /dev/udmabuf. Apply the principle of least
+privilege to selftests which use udmabuf by removing the write access
+mode from drivers/net/hw/ncdevmem.c.
+
+[1] https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/testing/selftests/bpf/prog_tests/dmabuf_iter.c?h=v7.1#n49
+
+Signed-off-by: T.J. Mercier <tjmercier@google.com>
+Reviewed-by: Bobby Eshleman <bobbyeshleman@meta.com>
+Link: https://patch.msgid.link/20260722205442.1894665-1-tjmercier@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ tools/testing/selftests/drivers/net/hw/ncdevmem.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/drivers/net/hw/ncdevmem.c b/tools/testing/selftests/drivers/net/hw/ncdevmem.c
+index d96e8a3b5a65..ffe1d5c1fa4e 100644
+--- a/tools/testing/selftests/drivers/net/hw/ncdevmem.c
++++ b/tools/testing/selftests/drivers/net/hw/ncdevmem.c
+@@ -150,7 +150,7 @@ static struct memory_buffer *udmabuf_alloc(size_t size)
+ 
+ 	ctx->size = size;
+ 
+-	ctx->devfd = open("/dev/udmabuf", O_RDWR);
++	ctx->devfd = open("/dev/udmabuf", O_RDONLY);
+ 	if (ctx->devfd < 0) {
+ 		pr_err("[skip,no-udmabuf: Unable to access DMA buffer device file]");
+ 		goto err_free_ctx;
+-- 
+2.55.0
+

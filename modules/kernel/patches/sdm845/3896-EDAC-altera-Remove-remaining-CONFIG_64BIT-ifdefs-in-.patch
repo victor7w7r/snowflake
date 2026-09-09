@@ -1,0 +1,88 @@
+From 11f5fd36076a2ef229ec5062c06954c955d90f9d Mon Sep 17 00:00:00 2001
+From: Rounak Das <rounakdas2025@gmail.com>
+Date: Wed, 8 Jul 2026 13:11:35 +0400
+Subject: [PATCH 03896/15333] EDAC/altera: Remove remaining CONFIG_64BIT ifdefs
+ in the DB-error path
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Replace the remaining two CONFIG_64BIT ifdefs with the is_s10 flag, so driver
+behavior is fully determined by the ECC manager's compatible string rather
+than the build architecture.
+
+These two ifdefs guard the double-bit-error path, where SError handling and
+the arm_smccc_smc() reboot call are arm64-specific. Switching to is_s10 means
+s10_edac_dberr_handler() now compiles on 32-bit as well — this is safe because
+all the symbols it depends on (arm_smccc_smc, INTEL_SIP_SMC_ECC_DBE, and the
+S10 sysmgr defines) are already available on 32-bit socfpga. Since the
+function only executes when is_s10 is true, Arria10 behavior is unaffected.
+
+This is handled separately from the IRQ-index selection change, as the
+double-bit-error path is a distinct concern.
+
+Signed-off-by: Rounak Das <rounakdas2025@gmail.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Acked-by: Dinh Nguyen <dinguyen@kernel.org>
+Assisted-by: Claude:claude-sonnet-5
+Link: https://patch.msgid.link/20260708091135.94114-3-rounakdas2025@gmail.com
+---
+ drivers/edac/altera_edac.c | 20 ++++++++------------
+ 1 file changed, 8 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/edac/altera_edac.c b/drivers/edac/altera_edac.c
+index 24bdf7f5bac6..1d1e2b5ca14c 100644
+--- a/drivers/edac/altera_edac.c
++++ b/drivers/edac/altera_edac.c
+@@ -2058,7 +2058,6 @@ static const struct irq_domain_ops a10_eccmgr_ic_ops = {
+ /************** Stratix 10 EDAC Double Bit Error Handler ************/
+ #define to_a10edac(p, m) container_of(p, struct altr_arria10_edac, m)
+ 
+-#ifdef CONFIG_64BIT
+ /* panic routine issues reboot on non-zero panic_timeout */
+ extern int panic_timeout;
+ 
+@@ -2105,7 +2104,6 @@ static int s10_edac_dberr_handler(struct notifier_block *this,
+ 
+ 	return NOTIFY_DONE;
+ }
+-#endif
+ 
+ /****************** Arria 10 EDAC Probe Function *********************/
+ static int altr_edac_a10_probe(struct platform_device *pdev)
+@@ -2154,8 +2152,7 @@ static int altr_edac_a10_probe(struct platform_device *pdev)
+ 	irq_set_chained_handler_and_data(edac->sb_irq,
+ 					 altr_edac_a10_irq_handler,
+ 					 edac);
+-
+-#ifdef CONFIG_64BIT
++	if (edac->is_s10)
+ 	{
+ 		int dberror, err_addr;
+ 
+@@ -2178,15 +2175,14 @@ static int altr_edac_a10_probe(struct platform_device *pdev)
+ 			regmap_write(edac->ecc_mgr_map,
+ 				     S10_SYSMGR_UE_ADDR_OFST, 0);
+ 		}
+-	}
+-#else
+-	edac->db_irq = platform_get_irq(pdev, 1);
+-	if (edac->db_irq < 0)
+-		return edac->db_irq;
++	} else {
++		edac->db_irq = platform_get_irq(pdev, 1);
++		if (edac->db_irq < 0)
++			return edac->db_irq;
+ 
+-	irq_set_chained_handler_and_data(edac->db_irq,
+-					 altr_edac_a10_irq_handler, edac);
+-#endif
++		irq_set_chained_handler_and_data(edac->db_irq,
++						 altr_edac_a10_irq_handler, edac);
++	}
+ 
+ 	for_each_child_of_node(pdev->dev.of_node, child) {
+ 		if (!of_device_is_available(child))
+-- 
+2.55.0
+

@@ -1,0 +1,82 @@
+From eb78ef9cf77a156b4bdebc4417427ef99aab3125 Mon Sep 17 00:00:00 2001
+From: Jinjie Ruan <ruanjinjie@huawei.com>
+Date: Thu, 6 Aug 2026 19:15:46 +0800
+Subject: [PATCH 11280/15333] kselftest/arm64: Fix abi test compilation errors
+
+The arm64 ABI selftests fail to compile due to missing include paths
+for kernel headers, causing errors like incomplete type struct sock_filter
+and implicit BPF macro declarations.
+
+Add $(KHDR_INCLUDES) and -I$(top_srcdir)/tools/include to CFLAGS
+to resolve the header search path. Also remove the hardcoded __NR_write
+macro and include <asm/unistd.h> to obtain the correct syscall number.
+
+Fixes: 21e37da12071 ("kselftest/arm64: Add testcase for SECCOMP_RET_TRACE orig_x0 bypass")
+Fixes: 2fcbc4adf997 ("kselftest/arm64: Add seccomp ptrace x0 bypass test")
+Reported-by: kernel test robot <lkp@intel.com>
+Closes: https://lore.kernel.org/r/202608021842.jp6IBrFi-lkp@intel.com/
+Suggested-by: Mark Brown <broonie@kernel.org>
+Reviewed-by: Mark Brown <broonie@kernel.org>
+Tested-by: Mark Brown <broonie@kernel.org>
+Signed-off-by: Jinjie Ruan <ruanjinjie@huawei.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ tools/testing/selftests/arm64/abi/Makefile                   | 2 ++
+ tools/testing/selftests/arm64/abi/seccomp_ptrace_x0_bypass.c | 5 +----
+ .../selftests/arm64/abi/seccomp_ret_trace_x0_bypass.c        | 5 +----
+ 3 files changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/tools/testing/selftests/arm64/abi/Makefile b/tools/testing/selftests/arm64/abi/Makefile
+index a01d3806eba8..e91d4cdf17ad 100644
+--- a/tools/testing/selftests/arm64/abi/Makefile
++++ b/tools/testing/selftests/arm64/abi/Makefile
+@@ -1,6 +1,8 @@
+ # SPDX-License-Identifier: GPL-2.0
+ # Copyright (C) 2021 ARM Limited
+ 
++CFLAGS += $(KHDR_INCLUDES) -I$(top_srcdir)/tools/include
++
+ TEST_GEN_PROGS := hwcap ptrace syscall-abi tpidr2 seccomp_ptrace_x0_bypass seccomp_ret_trace_x0_bypass
+ 
+ include ../../lib.mk
+diff --git a/tools/testing/selftests/arm64/abi/seccomp_ptrace_x0_bypass.c b/tools/testing/selftests/arm64/abi/seccomp_ptrace_x0_bypass.c
+index a00621a8949c..4ee8e5aaad6f 100644
+--- a/tools/testing/selftests/arm64/abi/seccomp_ptrace_x0_bypass.c
++++ b/tools/testing/selftests/arm64/abi/seccomp_ptrace_x0_bypass.c
+@@ -34,13 +34,10 @@
+ #include <linux/elf.h>
+ #include <linux/filter.h>
+ #include <linux/seccomp.h>
++#include <asm/unistd.h>
+ 
+ #include "kselftest.h"
+ 
+-#ifndef __NR_write
+-#define __NR_write 64
+-#endif
+-
+ #define EXPECTED_TESTS 1
+ 
+ #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+diff --git a/tools/testing/selftests/arm64/abi/seccomp_ret_trace_x0_bypass.c b/tools/testing/selftests/arm64/abi/seccomp_ret_trace_x0_bypass.c
+index 3a69f53f4f88..a23081763328 100644
+--- a/tools/testing/selftests/arm64/abi/seccomp_ret_trace_x0_bypass.c
++++ b/tools/testing/selftests/arm64/abi/seccomp_ret_trace_x0_bypass.c
+@@ -44,13 +44,10 @@
+ #include <linux/filter.h>
+ #include <linux/seccomp.h>
+ #include <linux/ptrace.h>
++#include <asm/unistd.h>
+ 
+ #include "kselftest.h"
+ 
+-#ifndef __NR_write
+-#define __NR_write 64
+-#endif
+-
+ #define PTRACE_EVENT_MASK(status) ((status) >> 16)
+ 
+ #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+-- 
+2.55.0
+

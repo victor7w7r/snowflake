@@ -1,0 +1,124 @@
+From 71d4e7233f235871b13553e504e591ace6b54373 Mon Sep 17 00:00:00 2001
+From: Eliot Courtney <ecourtney@nvidia.com>
+Date: Fri, 3 Jul 2026 19:22:14 +0900
+Subject: [PATCH 06674/15333] gpu: nova-core: wait for RISC-V HALTED on FSP
+ unload
+
+Currently the code waits for "not active" but this is not the same as
+halted as there are more than two states. Match openrm here and wait for
+halted instead.
+
+Fixes: c7fea1f70944 ("gpu: nova-core: add non-sec2 unload path")
+Signed-off-by: Eliot Courtney <ecourtney@nvidia.com>
+Link: https://patch.msgid.link/20260703-blackwell-fixes-v2-10-8e3d8bc32bb9@nvidia.com
+[acourbot: s/imply/guarantee.]
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/falcon.rs           | 11 +++++++++++
+ drivers/gpu/nova-core/falcon/hal.rs       |  5 +++++
+ drivers/gpu/nova-core/falcon/hal/ga102.rs |  7 +++++++
+ drivers/gpu/nova-core/falcon/hal/tu102.rs |  4 ++++
+ drivers/gpu/nova-core/gsp/hal/gh100.rs    | 11 +++++++++--
+ 5 files changed, 36 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/falcon.rs b/drivers/gpu/nova-core/falcon.rs
+index 78948cc8bff3..a91cbdd5d636 100644
+--- a/drivers/gpu/nova-core/falcon.rs
++++ b/drivers/gpu/nova-core/falcon.rs
+@@ -749,11 +749,22 @@ pub(crate) fn signature_reg_fuse_version(
+ 
+     /// Check if the RISC-V core is active.
+     ///
++    /// Note that this does not guarantee that the RISC-V core is halted if it returns `false`.
++    ///
+     /// Returns `true` if the RISC-V core is active, `false` otherwise.
+     pub(crate) fn is_riscv_active(&self) -> bool {
+         self.hal.is_riscv_active(self)
+     }
+ 
++    /// Checks whether the RISC-V core is halted.
++    ///
++    /// Note that this does not guarantee that the RISC-V core is active if it returns `false`.
++    ///
++    /// Returns [`ENOTSUPP`] if the status is not available.
++    pub(crate) fn is_riscv_halted(&self) -> Result<bool> {
++        self.hal.is_riscv_halted(self)
++    }
++
+     /// Load a firmware image into Falcon memory, using the preferred method for the current
+     /// chipset.
+     pub(crate) fn load<F: FalconFirmware<Target = E> + FalconDmaLoadable>(&self, fw: &F) -> Result {
+diff --git a/drivers/gpu/nova-core/falcon/hal.rs b/drivers/gpu/nova-core/falcon/hal.rs
+index ee4a017f3a4c..7e532889a1f4 100644
+--- a/drivers/gpu/nova-core/falcon/hal.rs
++++ b/drivers/gpu/nova-core/falcon/hal.rs
+@@ -53,6 +53,11 @@ fn signature_reg_fuse_version(
+     /// Returns `true` if the RISC-V core is active, `false` otherwise.
+     fn is_riscv_active(&self, falcon: &Falcon<'_, E>) -> bool;
+ 
++    /// Checks whether the RISC-V core is halted.
++    ///
++    /// Returns [`ENOTSUPP`] if the chipset does not expose RISC-V halt status.
++    fn is_riscv_halted(&self, falcon: &Falcon<'_, E>) -> Result<bool>;
++
+     /// Wait for memory scrubbing to complete.
+     fn reset_wait_mem_scrubbing(&self, falcon: &Falcon<'_, E>) -> Result;
+ 
+diff --git a/drivers/gpu/nova-core/falcon/hal/ga102.rs b/drivers/gpu/nova-core/falcon/hal/ga102.rs
+index fe821ded5fa1..7600ee07ca2e 100644
+--- a/drivers/gpu/nova-core/falcon/hal/ga102.rs
++++ b/drivers/gpu/nova-core/falcon/hal/ga102.rs
+@@ -139,6 +139,13 @@ fn is_riscv_active(&self, falcon: &Falcon<'_, E>) -> bool {
+             .active_stat()
+     }
+ 
++    fn is_riscv_halted(&self, falcon: &Falcon<'_, E>) -> Result<bool> {
++        Ok(falcon
++            .bar
++            .read(regs::NV_PRISCV_RISCV_CPUCTL::of::<E>())
++            .halted())
++    }
++
+     fn reset_wait_mem_scrubbing(&self, falcon: &Falcon<'_, E>) -> Result {
+         // TIMEOUT: memory scrubbing should complete in less than 20ms.
+         read_poll_timeout(
+diff --git a/drivers/gpu/nova-core/falcon/hal/tu102.rs b/drivers/gpu/nova-core/falcon/hal/tu102.rs
+index 34bf9f3f44c7..5291598fedf7 100644
+--- a/drivers/gpu/nova-core/falcon/hal/tu102.rs
++++ b/drivers/gpu/nova-core/falcon/hal/tu102.rs
+@@ -55,6 +55,10 @@ fn is_riscv_active(&self, falcon: &Falcon<'_, E>) -> bool {
+             .active_stat()
+     }
+ 
++    fn is_riscv_halted(&self, _falcon: &Falcon<'_, E>) -> Result<bool> {
++        Err(ENOTSUPP)
++    }
++
+     fn reset_wait_mem_scrubbing(&self, falcon: &Falcon<'_, E>) -> Result {
+         // TIMEOUT: memory scrubbing should complete in less than 10ms.
+         read_poll_timeout(
+diff --git a/drivers/gpu/nova-core/gsp/hal/gh100.rs b/drivers/gpu/nova-core/gsp/hal/gh100.rs
+index ee086f1c2876..22b60f9233de 100644
+--- a/drivers/gpu/nova-core/gsp/hal/gh100.rs
++++ b/drivers/gpu/nova-core/gsp/hal/gh100.rs
+@@ -116,8 +116,15 @@ impl UnloadBundle for FspUnloadBundle {
+     fn run(&self, ctx: &mut GspBootContext<'_, '_>) -> Result {
+         // GSP falcon does most of the work of resetting, so just wait for it to finish.
+         read_poll_timeout(
+-            || Ok(ctx.gsp_falcon.is_riscv_active()),
+-            |&active| !active,
++            || {
++                // GSP register reads are not meaningful until the PRIV target mask is released.
++                if !ctx.gsp_falcon.priv_target_mask_released() {
++                    return Ok(false);
++                }
++
++                ctx.gsp_falcon.is_riscv_halted()
++            },
++            |&halted| halted,
+             Delta::from_millis(10),
+             Delta::from_secs(5),
+         )
+-- 
+2.55.0
+

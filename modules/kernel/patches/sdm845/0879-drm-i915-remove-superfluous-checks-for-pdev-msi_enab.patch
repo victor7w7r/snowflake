@@ -1,0 +1,46 @@
+From 2420e540785053bcc8bc00d9df5ce2d18bb7e1ca Mon Sep 17 00:00:00 2001
+From: Jani Nikula <jani.nikula@intel.com>
+Date: Mon, 15 Jun 2026 21:47:59 +0300
+Subject: [PATCH 00879/15333] drm/i915: remove superfluous checks for
+ pdev->msi_enabled
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+pci_disable_msi() checks for pdev->msi_enabled internally. There's no
+need to peek at pdev internals in i915. Remove them.
+
+Reviewed-by: Michał Grzelak <michal.grzelak@intel.com>
+Link: https://patch.msgid.link/71f61eee227178b61af9c1211be8545828a3f3ef.1781549229.git.jani.nikula@intel.com
+Signed-off-by: Jani Nikula <jani.nikula@intel.com>
+---
+ drivers/gpu/drm/i915/i915_driver.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/i915_driver.c b/drivers/gpu/drm/i915/i915_driver.c
+index 09810d5a0ad4..e36566f34960 100644
+--- a/drivers/gpu/drm/i915/i915_driver.c
++++ b/drivers/gpu/drm/i915/i915_driver.c
+@@ -583,8 +583,7 @@ static int i915_driver_hw_probe(struct drm_i915_private *dev_priv)
+ 
+ err_opregion:
+ 	intel_opregion_cleanup(display);
+-	if (pdev->msi_enabled)
+-		pci_disable_msi(pdev);
++	pci_disable_msi(pdev);
+ err_mem_regions:
+ 	intel_memory_regions_driver_release(dev_priv);
+ err_ggtt:
+@@ -610,8 +609,7 @@ static void i915_driver_hw_remove(struct drm_i915_private *dev_priv)
+ 
+ 	intel_opregion_cleanup(display);
+ 
+-	if (pdev->msi_enabled)
+-		pci_disable_msi(pdev);
++	pci_disable_msi(pdev);
+ }
+ 
+ /**
+-- 
+2.55.0
+

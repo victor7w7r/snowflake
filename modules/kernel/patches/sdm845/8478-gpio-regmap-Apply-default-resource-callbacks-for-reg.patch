@@ -1,0 +1,97 @@
+From 2da8b903cf7039338e6cc1b1d0e9f9e1cf9159c3 Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Sun, 26 Jul 2026 20:51:54 +0800
+Subject: [PATCH 08478/15333] gpio: regmap: Apply default resource callbacks
+ for regmap IRQ chip
+
+When GPIO regmap creates an IRQ chip on behalf of the user, it also
+takes an ownership of the respective callbacks and driver data.
+With that being done, apply default resource callbacks that keep
+tracking the IRQ requests and releases.
+
+Reviewed-by: Michael Walle <mwalle@kernel.org>
+Reviewed-by: Mathieu Dubois-Briand <mathieu.dubois-briand@bootlin.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Signed-off-by: Yu-Chun Lin <eleanor.lin@realtek.com>
+Link: https://patch.msgid.link/20260726125209.140307-4-eleanor.lin@realtek.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/gpio/gpio-max7360.c |  7 ++++---
+ drivers/gpio/gpio-regmap.c  | 14 ++++++++++++++
+ 2 files changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpio/gpio-max7360.c b/drivers/gpio/gpio-max7360.c
+index d12cf1dc8d57..07eda49f375b 100644
+--- a/drivers/gpio/gpio-max7360.c
++++ b/drivers/gpio/gpio-max7360.c
+@@ -127,7 +127,7 @@ static int max7360_handle_mask_sync(const int index,
+ 				    const unsigned int mask_buf,
+ 				    void *const irq_drv_data)
+ {
+-	struct regmap *regmap = irq_drv_data;
++	struct regmap *regmap = gpio_regmap_get_drvdata(irq_drv_data);
+ 	int ret;
+ 
+ 	for (unsigned int i = 0; i < MAX7360_MAX_GPIO; i++) {
+@@ -170,7 +170,6 @@ static int max7360_gpio_probe(struct platform_device *pdev)
+ 
+ 			/* Create custom IRQ configuration. */
+ 			irq_chip = devm_kzalloc(dev, sizeof(*irq_chip), GFP_KERNEL);
+-			gpio_config.regmap_irq_chip = irq_chip;
+ 			if (!irq_chip)
+ 				return -ENOMEM;
+ 
+@@ -181,7 +180,9 @@ static int max7360_gpio_probe(struct platform_device *pdev)
+ 			irq_chip->num_irqs = MAX7360_MAX_GPIO;
+ 			irq_chip->irqs = max7360_regmap_irqs;
+ 			irq_chip->handle_mask_sync = max7360_handle_mask_sync;
+-			irq_chip->irq_drv_data = regmap;
++
++			gpio_config.regmap_irq_chip = irq_chip;
++			gpio_config.drvdata = regmap;
+ 
+ 			for (unsigned int i = 0; i < MAX7360_MAX_GPIO; i++) {
+ 				ret = regmap_write_bits(regmap, MAX7360_REG_PWMCFG(i),
+diff --git a/drivers/gpio/gpio-regmap.c b/drivers/gpio/gpio-regmap.c
+index 535bd9deaa71..658b892b624c 100644
+--- a/drivers/gpio/gpio-regmap.c
++++ b/drivers/gpio/gpio-regmap.c
+@@ -6,6 +6,7 @@
+  */
+ 
+ #include <linux/bits.h>
++#include <linux/compiler_attributes.h>
+ #include <linux/device.h>
+ #include <linux/err.h>
+ #include <linux/io.h>
+@@ -288,6 +289,16 @@ void gpio_regmap_relres_irq(struct gpio_regmap *gpio, unsigned int offset)
+ }
+ EXPORT_SYMBOL_GPL(gpio_regmap_relres_irq);
+ 
++static int __maybe_unused gpio_regmap_irq_reqres(void *irq_drv_data, irq_hw_number_t hwirq)
++{
++	return gpio_regmap_reqres_irq(irq_drv_data, hwirq);
++}
++
++static void __maybe_unused gpio_regmap_irq_relres(void *irq_drv_data, irq_hw_number_t hwirq)
++{
++	gpio_regmap_relres_irq(irq_drv_data, hwirq);
++}
++
+ void *gpio_regmap_get_drvdata(struct gpio_regmap *gpio)
+ {
+ 	return gpio->driver_data;
+@@ -409,6 +420,9 @@ struct gpio_regmap *gpio_regmap_register(const struct gpio_regmap_config *config
+ #ifdef CONFIG_REGMAP_IRQ
+ 	if (config->regmap_irq_chip) {
+ 		gpio->regmap_irq_line = config->regmap_irq_line;
++		config->regmap_irq_chip->irq_reqres = gpio_regmap_irq_reqres;
++		config->regmap_irq_chip->irq_relres = gpio_regmap_irq_relres;
++		config->regmap_irq_chip->irq_drv_data = gpio;
+ 		ret = regmap_add_irq_chip_fwnode(dev_fwnode(config->parent), config->regmap,
+ 						 config->regmap_irq_line, config->regmap_irq_flags,
+ 						 0, config->regmap_irq_chip, &gpio->irq_chip_data);
+-- 
+2.55.0
+

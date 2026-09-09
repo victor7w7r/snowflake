@@ -1,0 +1,68 @@
+From 84778cb2b101321416646e9f89511b190ddbabb3 Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Mon, 1 Jun 2026 12:38:15 +0300
+Subject: [PATCH 00171/15333] drm/i915/dp_link_training: Factor out link
+ training state reset helper
+
+Factor out the link training state reset into a helper in
+intel_dp_link_training.c to prepare for isolating the link training state
+from the generic DP code.
+
+Reviewed-by: Mika Kahola <mika.kahola@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260601093836.3057345-3-imre.deak@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_dp.c               | 3 +--
+ drivers/gpu/drm/i915/display/intel_dp_link_training.c | 8 ++++++++
+ drivers/gpu/drm/i915/display/intel_dp_link_training.h | 2 ++
+ 3 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+index 5ba72bc728b6..91e3853f0a08 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
++++ b/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -3775,8 +3775,7 @@ void intel_dp_reset_link_params(struct intel_dp *intel_dp)
+ 	intel_dp->link.max_rate = intel_dp_max_common_rate(intel_dp);
+ 	intel_dp->link.mst_probed_lane_count = 0;
+ 	intel_dp->link.mst_probed_rate = 0;
+-	intel_dp->link.retrain_disabled = false;
+-	intel_dp->link.seq_train_failures = 0;
++	intel_dp_link_training_reset(intel_dp->link.training);
+ }
+ 
+ /* Enable backlight PWM and backlight PP control. */
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_training.c b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+index 9ab18cc80639..eb75819a85c0 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_training.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+@@ -2238,6 +2238,14 @@ void intel_dp_link_training_debugfs_add(struct intel_connector *connector)
+ 			    connector, &i915_dp_link_retrain_disabled_fops);
+ }
+ 
++void intel_dp_link_training_reset(struct intel_dp_link_training *link_training)
++{
++	struct intel_dp *intel_dp = link_training->dp;
++
++	intel_dp->link.retrain_disabled = false;
++	intel_dp->link.seq_train_failures = 0;
++}
++
+ struct intel_dp_link_training *intel_dp_link_training_init(struct intel_dp *intel_dp)
+ {
+ 	struct intel_dp_link_training *link_training;
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_training.h b/drivers/gpu/drm/i915/display/intel_dp_link_training.h
+index eefc6df8bc85..c9a1ca4557f4 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_training.h
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_training.h
+@@ -57,6 +57,8 @@ void intel_dp_128b132b_sdp_crc16(struct intel_dp *intel_dp,
+ 
+ void intel_dp_link_training_debugfs_add(struct intel_connector *connector);
+ 
++void intel_dp_link_training_reset(struct intel_dp_link_training *link_training);
++
+ struct intel_dp_link_training *intel_dp_link_training_init(struct intel_dp *intel_dp);
+ void intel_dp_link_training_cleanup(struct intel_dp_link_training *link_training);
+ 
+-- 
+2.55.0
+

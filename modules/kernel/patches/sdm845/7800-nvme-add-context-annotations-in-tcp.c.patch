@@ -1,0 +1,71 @@
+From 27a75a6290d610b40e4ef8024bef2acf7e3268ce Mon Sep 17 00:00:00 2001
+From: Nilay Shroff <nilay@linux.ibm.com>
+Date: Mon, 13 Jul 2026 17:24:19 +0530
+Subject: [PATCH 07800/15333] nvme: add context annotations in tcp.c
+
+The nvme_tcp_ctrl_list and nvme_tcp_ctrl::list are protected by
+nvme_tcp_ctrl_mutex. Define nvme_tcp_ctrl_list using
+LIST_HEAD_GUARDED(nvme_tcp_ctrl_list, nvme_tcp_ctrl_mutex) and
+annotate nvme_tcp_ctrl::list using
+__guarded_by(&nvme_tcp_ctrl_mutex) so that Clang's context analysis
+can validate accesses against the corresponding locking requirements.
+
+It is safe to initialize nvme_tcp_ctrl::list while allocating the
+controller object because the list entry has not yet been added to
+nvme_tcp_ctrl_list. Annotate the initialization with context_unsafe()
+to suppress the corresponding Clang warning.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Nilay Shroff <nilay@linux.ibm.com>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/tcp.c | 13 +++++++++----
+ 1 file changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/nvme/host/tcp.c b/drivers/nvme/host/tcp.c
+index ba5c7b3e2a7c..8d2fbfc7cd8d 100644
+--- a/drivers/nvme/host/tcp.c
++++ b/drivers/nvme/host/tcp.c
+@@ -149,13 +149,17 @@ struct nvme_tcp_queue {
+ #endif
+ };
+ 
++static DEFINE_MUTEX(nvme_tcp_ctrl_mutex);
++static LIST_HEAD_GUARDED(nvme_tcp_ctrl_list, nvme_tcp_ctrl_mutex);
++
+ struct nvme_tcp_ctrl {
+ 	/* read only in the hot path */
+ 	struct nvme_tcp_queue	*queues;
+ 	struct blk_mq_tag_set	tag_set;
+ 
+ 	/* other member variables */
+-	struct list_head	list;
++	struct list_head	list
++		__guarded_by(&nvme_tcp_ctrl_mutex);
+ 	struct blk_mq_tag_set	admin_tag_set;
+ 	struct sockaddr_storage addr;
+ 	struct sockaddr_storage src_addr;
+@@ -167,8 +171,6 @@ struct nvme_tcp_ctrl {
+ 	u32			io_queues[HCTX_MAX_TYPES];
+ };
+ 
+-static LIST_HEAD(nvme_tcp_ctrl_list);
+-static DEFINE_MUTEX(nvme_tcp_ctrl_mutex);
+ static struct workqueue_struct *nvme_tcp_wq;
+ static const struct blk_mq_ops nvme_tcp_mq_ops;
+ static const struct blk_mq_ops nvme_tcp_admin_mq_ops;
+@@ -2919,7 +2921,10 @@ static struct nvme_tcp_ctrl *nvme_tcp_alloc_ctrl(struct device *dev,
+ 	if (!ctrl)
+ 		return ERR_PTR(-ENOMEM);
+ 
+-	INIT_LIST_HEAD(&ctrl->list);
++	/*
++	 * Safe to init list while allocating ctrl object.
++	 */
++	context_unsafe(INIT_LIST_HEAD(&ctrl->list));
+ 	ctrl->ctrl.opts = opts;
+ 	ctrl->ctrl.queue_count = opts->nr_io_queues + opts->nr_write_queues +
+ 				opts->nr_poll_queues + 1;
+-- 
+2.55.0
+

@@ -1,0 +1,35 @@
+From ccb4470c7f241f0161aacb26f37b272b659717a8 Mon Sep 17 00:00:00 2001
+From: Animesh Manna <animesh.manna@intel.com>
+Date: Tue, 16 Jun 2026 01:33:23 +0530
+Subject: [PATCH 00317/15333] drm/i915/display: Skip DP_MIN_HBLANK_CTL
+ programming for CMTG transcoders
+
+DP_MIN_HBLANK_CTL is a CPU transcoder register and must not be written
+for the CMTG transcoders. Skip the programming when the target
+transcoder is TRANSCODER_CMTG0 or TRANSCODER_CMTG1.
+
+Reviewed-by: Uma Shankar <uma.shankar@intel.com>
+Signed-off-by: Animesh Manna <animesh.manna@intel.com>
+Link: https://patch.msgid.link/20260615200339.885190-7-animesh.manna@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_display.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display.c b/drivers/gpu/drm/i915/display/intel_display.c
+index c11def137711..8f8e24565a6d 100644
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -2761,7 +2761,9 @@ static void intel_set_transcoder_timings(const struct intel_crtc_state *crtc_sta
+ 			       VACTIVE(crtc_vdisplay - 1) |
+ 			       VTOTAL(crtc_vtotal - 1));
+ 
+-	if (DISPLAY_VER(display) >= 30) {
++	if (DISPLAY_VER(display) >= 30 &&
++	    transcoder != TRANSCODER_CMTG0 &&
++	    transcoder != TRANSCODER_CMTG1) {
+ 		/*
+ 		 * Address issues for resolutions with high refresh rate that
+ 		 * have small Hblank, specifically where Hblank is smaller than
+-- 
+2.55.0
+

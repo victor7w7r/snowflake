@@ -1,0 +1,44 @@
+From 18bf0ac84334aac237ecf14a8c427866109fb8c9 Mon Sep 17 00:00:00 2001
+From: Wei Fang <wei.fang@nxp.com>
+Date: Mon, 20 Jul 2026 09:43:16 +0800
+Subject: [PATCH 07524/15333] net: enetc: use kzalloc_flex() for
+ enetc_psfp_gate allocation
+
+Replace the open-coded struct_size() + kzalloc() pattern with the
+kzalloc_flex() helper when allocating struct enetc_psfp_gate. This
+removes the intermediate entries_size local variable and makes the
+allocation site more concise.
+
+Signed-off-by: Wei Fang <wei.fang@nxp.com>
+Reviewed-by: Joe Damato <joe@dama.to>
+Link: https://patch.msgid.link/20260720014317.1059359-15-wei.fang@oss.nxp.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/freescale/enetc/enetc_qos.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/drivers/net/ethernet/freescale/enetc/enetc_qos.c b/drivers/net/ethernet/freescale/enetc/enetc_qos.c
+index 7b17bca24f26..2aa0fcaafcd2 100644
+--- a/drivers/net/ethernet/freescale/enetc/enetc_qos.c
++++ b/drivers/net/ethernet/freescale/enetc/enetc_qos.c
+@@ -1135,7 +1135,6 @@ static int enetc_psfp_parse_clsflower(struct enetc_ndev_priv *priv,
+ 	struct flow_action_entry *entry;
+ 	struct action_gate_entry *e;
+ 	u8 sfi_overwrite = 0;
+-	int entries_size;
+ 	int i, err;
+ 
+ 	if (f->common.chain_index >= priv->psfp_cap.max_streamid) {
+@@ -1242,8 +1241,7 @@ static int enetc_psfp_parse_clsflower(struct enetc_ndev_priv *priv,
+ 		goto free_filter;
+ 	}
+ 
+-	entries_size = struct_size(sgi, entries, entryg->gate.num_entries);
+-	sgi = kzalloc(entries_size, GFP_KERNEL);
++	sgi = kzalloc_flex(*sgi, entries, entryg->gate.num_entries);
+ 	if (!sgi) {
+ 		err = -ENOMEM;
+ 		goto free_filter;
+-- 
+2.55.0
+

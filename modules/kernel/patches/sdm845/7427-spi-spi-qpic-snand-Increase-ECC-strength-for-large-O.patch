@@ -1,0 +1,58 @@
+From ed4b52b24c556cd681b99739e2bbef7cf48fe66e Mon Sep 17 00:00:00 2001
+From: Md Sadre Alam <md.alam@oss.qualcomm.com>
+Date: Thu, 16 Jul 2026 11:13:05 +0530
+Subject: [PATCH 07427/15333] spi: spi-qpic-snand: Increase ECC strength for
+ large OOB SPI-NAND devices
+
+Some SPI-NAND devices with large OOB areas require a stronger ECC
+configuration than the default one provided through firmware
+description. For example, Macronix devices with a 256-byte OOB area
+report that 4-bit ECC is insufficient and trigger:
+
+  nand: WARNING: the ECC used on your system is too weak compared
+  to the one required by the NAND chip
+
+The QPIC SPI-NAND controller supports both 4-bit and 8-bit BCH ECC
+modes. When a device exposes an OOB area of at least 128 bytes, there
+is sufficient space to accommodate 8-bit ECC without exceeding the OOB
+layout constraints.
+
+Automatically increase the ECC strength to 8 bits when the detected OOB
+size is 128 bytes or larger and the current configuration requests a
+weaker ECC level. This avoids ECC capability mismatches on devices that
+require stronger error correction and improves reliability.
+
+Signed-off-by: Md Sadre Alam <md.alam@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260716-8bitecc-v1-1-6eef4bcc3a14@oss.qualcomm.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-qpic-snand.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/drivers/spi/spi-qpic-snand.c b/drivers/spi/spi-qpic-snand.c
+index 6cc53586b8a8..19812400124f 100644
+--- a/drivers/spi/spi-qpic-snand.c
++++ b/drivers/spi/spi-qpic-snand.c
+@@ -274,6 +274,19 @@ static int qcom_spi_ecc_init_ctx_pipelined(struct nand_device *nand)
+ 		ecc_cfg->strength = 4;
+ 	}
+ 
++	/*
++	 * Override ECC strength based on OOB size to avoid weak ECC warning.
++	 * If OOB size is more than 128 bytes, use 8-bit ECC for better
++	 * error correction capability, which is required by chips with
++	 * larger OOB areas like Macronix SPI NAND with 256 bytes OOB.
++	 */
++	if (mtd->oobsize >= 128 && ecc_cfg->strength < 8) {
++		dev_info(snandc->dev,
++			 "Upgrading ECC strength from %d to 8 bits (OOB size: %d bytes)\n",
++			 ecc_cfg->strength, mtd->oobsize);
++		ecc_cfg->strength = 8;
++	}
++
+ 	if (ecc_cfg->step_size != NANDC_STEP_SIZE) {
+ 		dev_err(snandc->dev,
+ 			"only %u bytes ECC step size is supported\n",
+-- 
+2.55.0
+

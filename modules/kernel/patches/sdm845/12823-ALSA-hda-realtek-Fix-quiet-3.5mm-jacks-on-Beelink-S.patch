@@ -1,0 +1,54 @@
+From 2ce1d17dcbb38db4d44394c822b9d03c65a22931 Mon Sep 17 00:00:00 2001
+From: Brian Koebbe <brian@koeb.be>
+Date: Mon, 10 Aug 2026 09:57:00 -0500
+Subject: [PATCH 12823/15333] ALSA: hda/realtek: Fix quiet 3.5mm jacks on
+ Beelink SER6
+
+Both the front headphone jack and the rear line-out jack play back
+at a barely audible volume on the Beelink SER6 Max (ALC897, PCI subsystem
+ID 1f66:0202), even with all mixer controls at 0dB. GPIO2 on the
+codec gates an external headphone/line amplifier that the generic
+parser never enables. Add a fixup that asserts it. Verified fixed
+on both jacks.
+
+Signed-off-by: Brian Koebbe <brian@koeb.be>
+Link: https://patch.msgid.link/20260810145700.1206010-1-brian@koeb.be
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/hda/codecs/realtek/alc662.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/sound/hda/codecs/realtek/alc662.c b/sound/hda/codecs/realtek/alc662.c
+index a640292c4f10..eff7c83b9c59 100644
+--- a/sound/hda/codecs/realtek/alc662.c
++++ b/sound/hda/codecs/realtek/alc662.c
+@@ -325,6 +325,7 @@ enum {
+ 	ALC897_FIXUP_UNIS_H3C_X500S,
+ 	ALC897_FIXUP_HEADSET_MIC_PIN3,
+ 	ALC662_FIXUP_CSL_GPIO,
++	ALC897_FIXUP_BEELINK_SER6_AMP,
+ };
+ 
+ static const struct hda_fixup alc662_fixups[] = {
+@@ -782,6 +783,10 @@ static const struct hda_fixup alc662_fixups[] = {
+ 		.type = HDA_FIXUP_FUNC,
+ 		.v.func = alc662_fixup_csl_amp,
+ 	},
++	[ALC897_FIXUP_BEELINK_SER6_AMP] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc_fixup_gpio4,
++	},
+ };
+ 
+ static const struct hda_quirk alc662_fixup_tbl[] = {
+@@ -853,6 +858,7 @@ static const struct hda_quirk alc662_fixup_tbl[] = {
+ 	SND_PCI_QUIRK(0x1b35, 0x2206, "CZC P10T", ALC662_FIXUP_CZC_P10T),
+ 	SND_PCI_QUIRK(0x1c6c, 0x1239, "Compaq N14JP6-V2", ALC897_FIXUP_HP_HSMIC_VERB),
+ 	SND_PCI_QUIRK(0x1e63, 0x6d9a, "F+ FLAPTOP r", ALC897_FIXUP_HP_HSMIC_VERB),
++	SND_PCI_QUIRK(0x1f66, 0x0202, "Beelink SER6 Max 6900", ALC897_FIXUP_BEELINK_SER6_AMP),
+ 
+ #if 0
+ 	/* Below is a quirk table taken from the old code.
+-- 
+2.55.0
+

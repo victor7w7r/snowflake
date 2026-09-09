@@ -1,0 +1,120 @@
+From da991304c9afc0f1567033ac743ce27dcc947652 Mon Sep 17 00:00:00 2001
+From: Wenzhao Liao <wenzhaoliao@ruc.edu.cn>
+Date: Sat, 11 Apr 2026 09:02:54 -0400
+Subject: [PATCH 11220/15333] rust: module_param: support bool parameters
+
+Add support for parsing boolean module parameters in the Rust
+module! macro.
+
+Currently, only integer types are supported by the `module_param!`
+macros. This patch implements the `ModuleParam` trait for `bool`
+by delegating the string parsing to the existing C implementation
+via `kstrtobool_bytes()`. It also wires up `PARAM_OPS_BOOL` so that
+the Rust parameter system correctly links to the C `param_ops_bool`
+structure.
+
+For demonstration and verification, a boolean parameter is added
+to `samples/rust/rust_minimal.rs`.
+
+Support for boolean parameters will initially be used by the Rust
+null block driver [1].
+
+Link: https://lore.kernel.org/all/20260609-rnull-v6-19-rc5-send-v2-4-82c7404542e2@kernel.org/ [1]
+Assisted-by: Codex:GPT-5
+Signed-off-by: Wenzhao Liao <wenzhaoliao@ruc.edu.cn>
+Tested-by: Andreas Hindborg <a.hindborg@kernel.org>
+Reviewed-by: Andreas Hindborg <a.hindborg@kernel.org>
+Link: https://lore.kernel.org/linux-modules/20260411130254.3510128-1-wenzhaoliao@ruc.edu.cn/
+[ppavlu: add motivation to the commit message and rebase the patch]
+Signed-off-by: Petr Pavlu <petr.pavlu@suse.com>
+---
+ rust/kernel/module_param.rs  | 9 ++++++++-
+ rust/macros/lib.rs           | 1 +
+ rust/macros/module.rs        | 1 +
+ samples/rust/rust_minimal.rs | 8 ++++++++
+ 4 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/rust/kernel/module_param.rs b/rust/kernel/module_param.rs
+index a1724c890566..f9a14765a926 100644
+--- a/rust/kernel/module_param.rs
++++ b/rust/kernel/module_param.rs
+@@ -5,7 +5,7 @@
+ //! C header: [`include/linux/moduleparam.h`](srctree/include/linux/moduleparam.h)
+ 
+ use crate::prelude::*;
+-use crate::str::BStr;
++use crate::str::{kstrtobool_bytes, BStr};
+ use bindings;
+ use kernel::sync::SetOnce;
+ 
+@@ -105,6 +105,12 @@ fn try_from_param_arg(arg: &BStr) -> Result<Self> {
+ impl_int_module_param!(isize);
+ impl_int_module_param!(usize);
+ 
++impl ModuleParam for bool {
++    fn try_from_param_arg(arg: &BStr) -> Result<Self> {
++        kstrtobool_bytes(arg)
++    }
++}
++
+ /// A wrapper for kernel parameters.
+ ///
+ /// This type is instantiated by the [`module!`] macro when module parameters are
+@@ -195,3 +201,4 @@ macro_rules! make_param_ops {
+ make_param_ops!(PARAM_OPS_U64, u64);
+ make_param_ops!(PARAM_OPS_ISIZE, isize);
+ make_param_ops!(PARAM_OPS_USIZE, usize);
++make_param_ops!(PARAM_OPS_BOOL, bool);
+diff --git a/rust/macros/lib.rs b/rust/macros/lib.rs
+index 4a48fabbc268..5cff7fa4f111 100644
+--- a/rust/macros/lib.rs
++++ b/rust/macros/lib.rs
+@@ -56,6 +56,7 @@
+ /// - [`u64`]
+ /// - [`isize`]
+ /// - [`usize`]
++/// - [`bool`]
+ ///
+ /// C header: [`include/linux/moduleparam.h`](srctree/include/linux/moduleparam.h)
+ ///
+diff --git a/rust/macros/module.rs b/rust/macros/module.rs
+index 06c18e207508..025323fb030d 100644
+--- a/rust/macros/module.rs
++++ b/rust/macros/module.rs
+@@ -192,6 +192,7 @@ fn param_ops_path(param_type: &str) -> Path {
+         "u64" => parse_quote!(::kernel::module_param::PARAM_OPS_U64),
+         "isize" => parse_quote!(::kernel::module_param::PARAM_OPS_ISIZE),
+         "usize" => parse_quote!(::kernel::module_param::PARAM_OPS_USIZE),
++        "bool" => parse_quote!(::kernel::module_param::PARAM_OPS_BOOL),
+         t => panic!("Unsupported parameter type {}", t),
+     }
+ }
+diff --git a/samples/rust/rust_minimal.rs b/samples/rust/rust_minimal.rs
+index 60d03df6cd80..8c910d314dfa 100644
+--- a/samples/rust/rust_minimal.rs
++++ b/samples/rust/rust_minimal.rs
+@@ -15,6 +15,10 @@
+             default: 1,
+             description: "This parameter has a default of 1",
+         },
++        test_bool_parameter: bool {
++            default: false,
++            description: "This boolean parameter defaults to false",
++        },
+     },
+ }
+ 
+@@ -30,6 +34,10 @@ fn init(_module: &'static ThisModule) -> Result<Self> {
+             "test_parameter: {}\n",
+             module_parameters::test_parameter.value()
+         );
++        pr_info!(
++            "test_bool_parameter: {}\n",
++            module_parameters::test_bool_parameter.value()
++        );
+ 
+         let mut numbers = KVec::new();
+         numbers.push(72, GFP_KERNEL)?;
+-- 
+2.55.0
+

@@ -1,0 +1,139 @@
+From 4f2b89b0341126ddddcfcf8a5a9895d226930e73 Mon Sep 17 00:00:00 2001
+From: Thomas Zimmermann <tzimmermann@suse.de>
+Date: Thu, 18 Jun 2026 16:11:32 +0200
+Subject: [PATCH 09430/15333] drm/msm: Do not declare msm_framebuffer_init() as
+ static
+
+Declare msm_framebuffer_init() in msm_drv.h and remove the static
+qualifier. The function will be required in msm_fbdev.c after inlining
+msm_alloc_stolen_fb().
+
+Also move msm_framebuffer_init() before msm_framebuffer_create(), so
+that it can later be made static again. Prepares msm's fbdev emulation
+for using client buffers.
+
+Signed-off-by: Thomas Zimmermann <tzimmermann@suse.de>
+Reviewed-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Patchwork: https://patchwork.freedesktop.org/patch/733883/
+Link: https://lore.kernel.org/r/20260618141249.151338-2-tzimmermann@suse.de
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+---
+ drivers/gpu/drm/msm/msm_drv.h |  4 ++
+ drivers/gpu/drm/msm/msm_fb.c  | 72 +++++++++++++++++------------------
+ 2 files changed, 39 insertions(+), 37 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/msm_drv.h b/drivers/gpu/drm/msm/msm_drv.h
+index 3787db8770ad..7dccf0713b02 100644
+--- a/drivers/gpu/drm/msm/msm_drv.h
++++ b/drivers/gpu/drm/msm/msm_drv.h
+@@ -258,6 +258,10 @@ void msm_framebuffer_cleanup(struct drm_framebuffer *fb, bool needed_dirtyfb);
+ uint32_t msm_framebuffer_iova(struct drm_framebuffer *fb, int plane);
+ struct drm_gem_object *msm_framebuffer_bo(struct drm_framebuffer *fb, int plane);
+ const struct msm_format *msm_framebuffer_format(struct drm_framebuffer *fb);
++struct drm_framebuffer *msm_framebuffer_init(struct drm_device *dev,
++					     const struct drm_format_info *info,
++					     const struct drm_mode_fb_cmd2 *mode_cmd,
++					     struct drm_gem_object **bos);
+ struct drm_framebuffer *msm_framebuffer_create(struct drm_device *dev,
+ 		struct drm_file *file, const struct drm_format_info *info,
+ 		const struct drm_mode_fb_cmd2 *mode_cmd);
+diff --git a/drivers/gpu/drm/msm/msm_fb.c b/drivers/gpu/drm/msm/msm_fb.c
+index ee17a47f31c4..c98710569a2e 100644
+--- a/drivers/gpu/drm/msm/msm_fb.c
++++ b/drivers/gpu/drm/msm/msm_fb.c
+@@ -29,10 +29,6 @@ struct msm_framebuffer {
+ };
+ #define to_msm_framebuffer(x) container_of(x, struct msm_framebuffer, base)
+ 
+-static struct drm_framebuffer *msm_framebuffer_init(struct drm_device *dev,
+-		const struct drm_format_info *info,
+-		const struct drm_mode_fb_cmd2 *mode_cmd, struct drm_gem_object **bos);
+-
+ static int msm_framebuffer_dirtyfb(struct drm_framebuffer *fb,
+ 				   struct drm_file *file_priv, unsigned int flags,
+ 				   unsigned int color, struct drm_clip_rect *clips,
+@@ -139,39 +135,10 @@ const struct msm_format *msm_framebuffer_format(struct drm_framebuffer *fb)
+ 	return msm_fb->format;
+ }
+ 
+-struct drm_framebuffer *msm_framebuffer_create(struct drm_device *dev,
+-		struct drm_file *file, const struct drm_format_info *info,
+-		const struct drm_mode_fb_cmd2 *mode_cmd)
+-{
+-	struct drm_gem_object *bos[4] = {0};
+-	struct drm_framebuffer *fb;
+-	int ret, i, n = info->num_planes;
+-
+-	for (i = 0; i < n; i++) {
+-		bos[i] = drm_gem_object_lookup(file, mode_cmd->handles[i]);
+-		if (!bos[i]) {
+-			ret = -ENXIO;
+-			goto out_unref;
+-		}
+-	}
+-
+-	fb = msm_framebuffer_init(dev, info, mode_cmd, bos);
+-	if (IS_ERR(fb)) {
+-		ret = PTR_ERR(fb);
+-		goto out_unref;
+-	}
+-
+-	return fb;
+-
+-out_unref:
+-	for (i = 0; i < n; i++)
+-		drm_gem_object_put(bos[i]);
+-	return ERR_PTR(ret);
+-}
+-
+-static struct drm_framebuffer *msm_framebuffer_init(struct drm_device *dev,
+-		const struct drm_format_info *info,
+-		const struct drm_mode_fb_cmd2 *mode_cmd, struct drm_gem_object **bos)
++struct drm_framebuffer *msm_framebuffer_init(struct drm_device *dev,
++					     const struct drm_format_info *info,
++					     const struct drm_mode_fb_cmd2 *mode_cmd,
++					     struct drm_gem_object **bos)
+ {
+ 	struct msm_drm_private *priv = dev->dev_private;
+ 	struct msm_kms *kms = priv->kms;
+@@ -251,6 +218,37 @@ static struct drm_framebuffer *msm_framebuffer_init(struct drm_device *dev,
+ 	return ERR_PTR(ret);
+ }
+ 
++struct drm_framebuffer *msm_framebuffer_create(struct drm_device *dev,
++					       struct drm_file *file,
++					       const struct drm_format_info *info,
++					       const struct drm_mode_fb_cmd2 *mode_cmd)
++{
++	struct drm_gem_object *bos[4] = {0};
++	struct drm_framebuffer *fb;
++	int ret, i, n = info->num_planes;
++
++	for (i = 0; i < n; i++) {
++		bos[i] = drm_gem_object_lookup(file, mode_cmd->handles[i]);
++		if (!bos[i]) {
++			ret = -ENXIO;
++			goto out_unref;
++		}
++	}
++
++	fb = msm_framebuffer_init(dev, info, mode_cmd, bos);
++	if (IS_ERR(fb)) {
++		ret = PTR_ERR(fb);
++		goto out_unref;
++	}
++
++	return fb;
++
++out_unref:
++	for (i = 0; i < n; i++)
++		drm_gem_object_put(bos[i]);
++	return ERR_PTR(ret);
++}
++
+ struct drm_framebuffer *
+ msm_alloc_stolen_fb(struct drm_device *dev, int w, int h, int p, uint32_t format)
+ {
+-- 
+2.55.0
+

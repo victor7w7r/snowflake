@@ -1,0 +1,48 @@
+From 0c50c9e3b2a4acb2b5b238ba58537f5525532527 Mon Sep 17 00:00:00 2001
+From: Sanjay Chitroda <sanjayembeddedse@gmail.com>
+Date: Thu, 2 Jul 2026 21:48:03 +0530
+Subject: [PATCH 02141/15333] iio: temperature: hid-sensor-temperature: use
+ common device for devres
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+kmemdup() is used for memory that is logically tied to the HID
+platform device, even though the driver binds into the IIO framework.
+
+Using &indio_dev->dev for devres allocations works functionally, but it
+results in two separate devres ownership trees—one for the HID
+platform device (pdev) and another for the IIO device (indio_dev).
+
+The devres framework is intended to have a single, well-defined parent
+device. Since the memory originates from HID sensor probing and is not
+IIO-specific, &pdev->dev is the correct and logical owner.
+
+Switch to using the platform device for devm_kmemdup() so that all
+resources are released deterministically and consistently.
+
+Signed-off-by: Sanjay Chitroda <sanjayembeddedse@gmail.com>
+Reviewed-by: Maxwell Doose <m32285159@gmail.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/temperature/hid-sensor-temperature.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/iio/temperature/hid-sensor-temperature.c b/drivers/iio/temperature/hid-sensor-temperature.c
+index a8d3a15f9c53..d3bc13b4258e 100644
+--- a/drivers/iio/temperature/hid-sensor-temperature.c
++++ b/drivers/iio/temperature/hid-sensor-temperature.c
+@@ -213,8 +213,8 @@ static int hid_temperature_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		return ret;
+ 
+-	temp_chans = devm_kmemdup(&indio_dev->dev, temperature_channels,
+-				sizeof(temperature_channels), GFP_KERNEL);
++	temp_chans = devm_kmemdup(&pdev->dev, temperature_channels,
++				  sizeof(temperature_channels), GFP_KERNEL);
+ 	if (!temp_chans)
+ 		return -ENOMEM;
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,159 @@
+From 66f46209fd5ea6f7944f9f9d527f7ed46b6206b9 Mon Sep 17 00:00:00 2001
+From: Srinivasan Shanmugam <srinivasan.shanmugam@amd.com>
+Date: Mon, 20 Jul 2026 08:41:09 +0530
+Subject: [PATCH 07916/15333] drm/amdgpu: Drop vm_manager PASID to VM mapping
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+VM lookup users now resolve DRM PASIDs through the global PASID xarray:
+
+	PASID -> fpriv -> VM
+
+The per-device vm_manager.pasids xarray is no longer needed.
+
+Remove PASID registration and removal from the VM init/fini paths, drop
+vm_manager PASID initialization/cleanup, and remove the xarray from
+struct amdgpu_vm_manager.
+
+The PASID is allocated only after amdgpu_vm_init() completes, so the
+initializer no longer consumes or assigns a PASID. Remove the now-unused
+argument while keeping vm->pasid as per-VM state for TLB flushes and
+other hardware programming paths.
+
+v6:
+- Remove the now-unused PASID argument from amdgpu_vm_init().
+- Remove the related vm->pasid assignment and error-path reset from VM
+  init.
+- Keep vm->pasid in struct amdgpu_vm for existing hardware users.
+
+Cc: Alex Deucher <alexander.deucher@amd.com>
+Suggested-by: Christian König <christian.koenig@amd.com>
+Signed-off-by: Srinivasan Shanmugam <srinivasan.shanmugam@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c |  2 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c  | 27 +------------------------
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h  |  6 +-----
+ 3 files changed, 3 insertions(+), 32 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c
+index 46eabdda49f3..1e6ad59b74e0 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c
+@@ -1494,7 +1494,7 @@ int amdgpu_driver_open_kms(struct drm_device *dev, struct drm_file *file_priv)
+ 
+ 	amdgpu_debugfs_vm_init(file_priv);
+ 
+-	r = amdgpu_vm_init(adev, &fpriv->vm, fpriv->xcp_id, 0);
++	r = amdgpu_vm_init(adev, &fpriv->vm, fpriv->xcp_id);
+ 	if (r)
+ 		goto error_pasid;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
+index 146902ffc875..aac8ace9d7a6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
+@@ -2556,7 +2556,6 @@ void amdgpu_vm_set_task_info(struct amdgpu_vm *vm)
+  * @adev: amdgpu_device pointer
+  * @vm: requested vm
+  * @xcp_id: GPU partition selection id
+- * @pasid: the pasid the VM is using on this GPU
+  *
+  * Init @vm fields.
+  *
+@@ -2564,7 +2563,7 @@ void amdgpu_vm_set_task_info(struct amdgpu_vm *vm)
+  * 0 for success, error for failure.
+  */
+ int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+-		   int32_t xcp_id, uint32_t pasid)
++		   int32_t xcp_id)
+ {
+ 	struct amdgpu_bo *root_bo;
+ 	struct amdgpu_bo_vm *root;
+@@ -2639,26 +2638,12 @@ int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 	if (r)
+ 		dev_dbg(adev->dev, "Failed to create task info for VM\n");
+ 
+-	/* Store new PASID in XArray (if non-zero) */
+-	if (pasid != 0) {
+-		r = xa_err(xa_store_irq(&adev->vm_manager.pasids, pasid, vm, GFP_KERNEL));
+-		if (r < 0)
+-			goto error_free_root;
+-
+-		vm->pasid = pasid;
+-	}
+-
+ 	amdgpu_bo_unreserve(vm->root.bo);
+ 	amdgpu_bo_unref(&root_bo);
+ 
+ 	return 0;
+ 
+ error_free_root:
+-	/* If PASID was partially set, erase it from XArray before failing */
+-	if (vm->pasid != 0) {
+-		xa_erase_irq(&adev->vm_manager.pasids, vm->pasid);
+-		vm->pasid = 0;
+-	}
+ 	amdgpu_vm_pt_free_root(adev, vm);
+ 	amdgpu_bo_unreserve(vm->root.bo);
+ 	amdgpu_bo_unref(&root_bo);
+@@ -2765,11 +2750,6 @@ void amdgpu_vm_fini(struct amdgpu_device *adev, struct amdgpu_vm *vm)
+ 
+ 	root = amdgpu_bo_ref(vm->root.bo);
+ 	amdgpu_bo_reserve(root, true);
+-	/* Remove PASID mapping before destroying VM */
+-	if (vm->pasid != 0) {
+-		xa_erase_irq(&adev->vm_manager.pasids, vm->pasid);
+-		vm->pasid = 0;
+-	}
+ 	dma_fence_wait(vm->last_unlocked, false);
+ 	dma_fence_put(vm->last_unlocked);
+ 	dma_fence_wait(vm->last_tlb_flush, false);
+@@ -2865,8 +2845,6 @@ void amdgpu_vm_manager_init(struct amdgpu_device *adev)
+ #else
+ 	adev->vm_manager.vm_update_mode = 0;
+ #endif
+-
+-	xa_init_flags(&adev->vm_manager.pasids, XA_FLAGS_LOCK_IRQ);
+ }
+ 
+ /**
+@@ -2878,9 +2856,6 @@ void amdgpu_vm_manager_init(struct amdgpu_device *adev)
+  */
+ void amdgpu_vm_manager_fini(struct amdgpu_device *adev)
+ {
+-	WARN_ON(!xa_empty(&adev->vm_manager.pasids));
+-	xa_destroy(&adev->vm_manager.pasids);
+-
+ 	amdgpu_vmid_mgr_fini(adev);
+ 	amdgpu_pasid_mgr_cleanup();
+ }
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
+index 5822836fa4a3..2f8234560764 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
+@@ -481,10 +481,6 @@ struct amdgpu_vm_manager {
+ 	 */
+ 	int					vm_update_mode;
+ 
+-	/* PASID to VM mapping, will be used in interrupt context to
+-	 * look up VM of a page fault
+-	 */
+-	struct xarray				pasids;
+ 	/* Global registration of recent page fault information */
+ 	struct amdgpu_vm_fault_info	fault_info;
+ };
+@@ -502,7 +498,7 @@ void amdgpu_vm_manager_init(struct amdgpu_device *adev);
+ void amdgpu_vm_manager_fini(struct amdgpu_device *adev);
+ 
+ long amdgpu_vm_wait_idle(struct amdgpu_vm *vm, long timeout);
+-int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm, int32_t xcp_id, uint32_t pasid);
++int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm, int32_t xcp_id);
+ int amdgpu_vm_make_compute(struct amdgpu_device *adev, struct amdgpu_vm *vm);
+ void amdgpu_vm_fini(struct amdgpu_device *adev, struct amdgpu_vm *vm);
+ int amdgpu_vm_lock_pd(struct amdgpu_vm *vm, struct drm_exec *exec,
+-- 
+2.55.0
+

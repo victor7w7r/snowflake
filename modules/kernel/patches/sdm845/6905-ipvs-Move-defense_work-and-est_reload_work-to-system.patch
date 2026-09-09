@@ -1,0 +1,70 @@
+From 0a33bdce34c68f1d158d2ee3c9dfd011bef5c290 Mon Sep 17 00:00:00 2001
+From: Ismael Luceno <iluceno@suse.de>
+Date: Thu, 2 Jul 2026 12:10:50 +0200
+Subject: [PATCH 06905/15333] ipvs: Move defense_work and est_reload_work to
+ system_dfl_long_wq
+
+Under synflood conditions binding these handlers to system_long_wq may
+pin them to a saturated CPU.
+
+We've observed improved throughtput on a DPDK/VPP application with this
+change, which we attribute to the reduced context switching.
+
+Neither handler has per-CPU data dependencies nor cache locality
+requirements that would prevent this change.
+
+Signed-off-by: Ismael Luceno <iluceno@suse.de>
+Acked-by: Julian Anastasov <ja@ssi.bg>
+Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ net/netfilter/ipvs/ip_vs_ctl.c | 6 +++---
+ net/netfilter/ipvs/ip_vs_est.c | 2 +-
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/net/netfilter/ipvs/ip_vs_ctl.c b/net/netfilter/ipvs/ip_vs_ctl.c
+index bcf40b8c41cf..d7e669efab4d 100644
+--- a/net/netfilter/ipvs/ip_vs_ctl.c
++++ b/net/netfilter/ipvs/ip_vs_ctl.c
+@@ -235,7 +235,7 @@ static void defense_work_handler(struct work_struct *work)
+ 	update_defense_level(ipvs);
+ 	if (atomic_read(&ipvs->dropentry))
+ 		ip_vs_random_dropentry(ipvs);
+-	queue_delayed_work(system_long_wq, &ipvs->defense_work,
++	queue_delayed_work(system_dfl_long_wq, &ipvs->defense_work,
+ 			   DEFENSE_TIMER_PERIOD);
+ }
+ #endif
+@@ -290,7 +290,7 @@ static void est_reload_work_handler(struct work_struct *work)
+ 	atomic_set(&ipvs->est_genid_done, genid);
+ 
+ 	if (repeat)
+-		queue_delayed_work(system_long_wq, &ipvs->est_reload_work,
++		queue_delayed_work(system_dfl_long_wq, &ipvs->est_reload_work,
+ 				   delay);
+ 
+ unlock:
+@@ -5126,7 +5126,7 @@ static int __net_init ip_vs_control_net_init_sysctl(struct netns_ipvs *ipvs)
+ 		goto err;
+ 
+ 	/* Schedule defense work */
+-	queue_delayed_work(system_long_wq, &ipvs->defense_work,
++	queue_delayed_work(system_dfl_long_wq, &ipvs->defense_work,
+ 			   DEFENSE_TIMER_PERIOD);
+ 
+ 	return 0;
+diff --git a/net/netfilter/ipvs/ip_vs_est.c b/net/netfilter/ipvs/ip_vs_est.c
+index ab09f5182951..78964aa861e9 100644
+--- a/net/netfilter/ipvs/ip_vs_est.c
++++ b/net/netfilter/ipvs/ip_vs_est.c
+@@ -243,7 +243,7 @@ void ip_vs_est_reload_start(struct netns_ipvs *ipvs, bool restart)
+ 	/* Bump the kthread configuration genid if stopping is requested */
+ 	if (restart)
+ 		atomic_inc(&ipvs->est_genid);
+-	queue_delayed_work(system_long_wq, &ipvs->est_reload_work, 0);
++	queue_delayed_work(system_dfl_long_wq, &ipvs->est_reload_work, 0);
+ }
+ 
+ /* Start kthread task with current configuration */
+-- 
+2.55.0
+

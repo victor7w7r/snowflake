@@ -1,0 +1,57 @@
+From 531ce288b6dd43c1ce90e0b501c209783f0e0ab2 Mon Sep 17 00:00:00 2001
+From: Vinayak Katoch <vinayak.katoch@oss.qualcomm.com>
+Date: Fri, 19 Jun 2026 15:20:08 +0530
+Subject: [PATCH 03219/15333] arm64: dts: qcom: sm8250: Add memory-region for
+ audio PD
+
+Reserve memory region for audio PD dynamic loading and remote heap
+requirements. Add the required VMID list for memory ownership
+transfers.
+
+Signed-off-by: Vinayak Katoch <vinayak.katoch@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260619-sm8250-audio-v1-1-8a76e033e209@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ arch/arm64/boot/dts/qcom/sm8250.dtsi | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250.dtsi b/arch/arm64/boot/dts/qcom/sm8250.dtsi
+index 271778f16895..afdd3378f0ab 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8250.dtsi
+@@ -10,6 +10,7 @@
+ #include <dt-bindings/clock/qcom,gpucc-sm8250.h>
+ #include <dt-bindings/clock/qcom,rpmh.h>
+ #include <dt-bindings/dma/qcom-gpi.h>
++#include <dt-bindings/firmware/qcom,scm.h>
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/interconnect/qcom,osm-l3.h>
+ #include <dt-bindings/interconnect/qcom,sm8250.h>
+@@ -863,6 +864,14 @@ cdsp_secure_heap: memory@8bf00000 {
+ 			reg = <0x0 0x8bf00000 0x0 0x4600000>;
+ 			no-map;
+ 		};
++
++		adsp_rpc_remote_heap_mem: adsp-rpc-remote-heap {
++			compatible = "shared-dma-pool";
++			alloc-ranges = <0x0 0x80000000 0x0 0x80000000>;
++			reusable;
++			alignment = <0x0 0x400000>;
++			size = <0x0 0x800000>;
++		};
+ 	};
+ 
+ 	smem {
+@@ -6084,6 +6093,9 @@ fastrpc {
+ 					compatible = "qcom,fastrpc";
+ 					qcom,glink-channels = "fastrpcglink-apps-dsp";
+ 					label = "adsp";
++					memory-region = <&adsp_rpc_remote_heap_mem>;
++					qcom,vmids = <QCOM_SCM_VMID_LPASS
++						      QCOM_SCM_VMID_ADSP_HEAP>;
+ 					qcom,non-secure-domain;
+ 					#address-cells = <1>;
+ 					#size-cells = <0>;
+-- 
+2.55.0
+

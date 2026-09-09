@@ -1,0 +1,59 @@
+From 357997831d0ba7c4210a84c38bca531c6a63a6d6 Mon Sep 17 00:00:00 2001
+From: Maxime Chevallier <maxime.chevallier@bootlin.com>
+Date: Sat, 18 Jul 2026 16:38:47 +0200
+Subject: [PATCH 06331/15333] net: stmmac: Simplify ioctl handling
+
+Now that timestamping is controlled through an NDO, we can simply
+call phylink_mii_ioctl() to handle ioctls.
+
+The only functional difference is that phylink_mii_ioctl() ->
+phy_mii_ioctl() can handle SIOCSHWTSTAMP, but this no longer happens
+as this ioctl is not longer dispatched to the ndo_eth_ioctl().
+
+Signed-off-by: Maxime Chevallier <maxime.chevallier@bootlin.com>
+Reviewed-by: Vadim Fedorenko <vadim.fedorenko@linux.dev>
+Link: https://patch.msgid.link/20260718143848.677531-1-maxime.chevallier@bootlin.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ .../net/ethernet/stmicro/stmmac/stmmac_main.c   | 17 +++--------------
+ 1 file changed, 3 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+index 2a0d7eff88d3..562d20830b94 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
+@@ -6371,28 +6371,17 @@ static irqreturn_t stmmac_msi_intr_rx(int irq, void *data)
+  *  @rq: An IOCTL specific structure, that can contain a pointer to
+  *  a proprietary structure used to pass information to the driver.
+  *  @cmd: IOCTL command
+- *  Description:
+- *  Currently it supports the phy_mii_ioctl(...) and HW time stamping.
++ *  Description: Forward the PHY ioctls to phylink
++ *  Return: Zero on success or negative error code.
+  */
+ static int stmmac_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+ {
+ 	struct stmmac_priv *priv = netdev_priv (dev);
+-	int ret = -EOPNOTSUPP;
+ 
+ 	if (!netif_running(dev))
+ 		return -EINVAL;
+ 
+-	switch (cmd) {
+-	case SIOCGMIIPHY:
+-	case SIOCGMIIREG:
+-	case SIOCSMIIREG:
+-		ret = phylink_mii_ioctl(priv->phylink, rq, cmd);
+-		break;
+-	default:
+-		break;
+-	}
+-
+-	return ret;
++	return phylink_mii_ioctl(priv->phylink, rq, cmd);
+ }
+ 
+ static int stmmac_setup_tc_block_cb(enum tc_setup_type type, void *type_data,
+-- 
+2.55.0
+

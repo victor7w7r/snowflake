@@ -1,0 +1,75 @@
+From 9141eda9eec76b538bb64e89185034ec61d341ca Mon Sep 17 00:00:00 2001
+From: "Kiryl Shutsemau (Meta)" <kas@kernel.org>
+Date: Mon, 29 Jun 2026 16:07:16 +0100
+Subject: [PATCH 09776/15333] firmware: arm_sdei: add SDEI_EVENT_SIGNAL support
+
+Add sdei_event_signal(), a thin wrapper over the SDEI_EVENT_SIGNAL call
+(DEN0054) that makes the software-signalled event (event 0) pending on a
+target PE -- delivered NMI-like even when that PE has interrupts masked.
+It takes no locks, so it is safe to call from NMI / crash context.
+
+Signed-off-by: Kiryl Shutsemau (Meta) <kas@kernel.org>
+Reviewed-by: Douglas Anderson <dianders@chromium.org>
+Tested-by: Yin Fengwei <fengwei_yin@linux.alibaba.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ drivers/firmware/arm_sdei.c   | 12 ++++++++++++
+ include/linux/arm_sdei.h      |  6 ++++++
+ include/uapi/linux/arm_sdei.h |  1 +
+ 3 files changed, 19 insertions(+)
+
+diff --git a/drivers/firmware/arm_sdei.c b/drivers/firmware/arm_sdei.c
+index c161cf263547..e8dd2f0f3919 100644
+--- a/drivers/firmware/arm_sdei.c
++++ b/drivers/firmware/arm_sdei.c
+@@ -339,6 +339,18 @@ static void _ipi_unmask_cpu(void *ignored)
+ 	sdei_unmask_local_cpu();
+ }
+ 
++/*
++ * Signal the software-signalled event (event 0) to @mpidr. Does nothing
++ * but the SMC -- no locks, no event lookup -- so it is safe from NMI /
++ * crash context (e.g. the cross-CPU NMI service).
++ */
++int sdei_event_signal(u32 event_num, u64 mpidr)
++{
++	return invoke_sdei_fn(SDEI_1_0_FN_SDEI_EVENT_SIGNAL, event_num,
++			      mpidr, 0, 0, 0, NULL);
++}
++NOKPROBE_SYMBOL(sdei_event_signal);
++
+ /*
+  * Was SDEI firmware probed and is it usable?  Lets optional consumers skip
+  * registering an event -- and the warning a failed registration emits -- on
+diff --git a/include/linux/arm_sdei.h b/include/linux/arm_sdei.h
+index b07113eeeff7..b9dc21c241be 100644
+--- a/include/linux/arm_sdei.h
++++ b/include/linux/arm_sdei.h
+@@ -37,6 +37,12 @@ int sdei_event_unregister(u32 event_num);
+ int sdei_event_enable(u32 event_num);
+ int sdei_event_disable(u32 event_num);
+ 
++/*
++ * Signal the software-signalled event (event 0) to another PE, NMI-like.
++ * @mpidr is the target's MPIDR affinity.
++ */
++int sdei_event_signal(u32 event_num, u64 mpidr);
++
+ /* Was SDEI firmware probed and usable? */
+ bool sdei_is_present(void);
+ 
+diff --git a/include/uapi/linux/arm_sdei.h b/include/uapi/linux/arm_sdei.h
+index af0630ba5437..22eb61612673 100644
+--- a/include/uapi/linux/arm_sdei.h
++++ b/include/uapi/linux/arm_sdei.h
+@@ -22,6 +22,7 @@
+ #define SDEI_1_0_FN_SDEI_PE_UNMASK			SDEI_1_0_FN(0x0C)
+ #define SDEI_1_0_FN_SDEI_INTERRUPT_BIND			SDEI_1_0_FN(0x0D)
+ #define SDEI_1_0_FN_SDEI_INTERRUPT_RELEASE		SDEI_1_0_FN(0x0E)
++#define SDEI_1_0_FN_SDEI_EVENT_SIGNAL			SDEI_1_0_FN(0x0F)
+ #define SDEI_1_0_FN_SDEI_PRIVATE_RESET			SDEI_1_0_FN(0x11)
+ #define SDEI_1_0_FN_SDEI_SHARED_RESET			SDEI_1_0_FN(0x12)
+ 
+-- 
+2.55.0
+

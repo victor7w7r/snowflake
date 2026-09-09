@@ -1,0 +1,121 @@
+From b10c63dcf27a8dcb5468f2b4a360d07fe93029a0 Mon Sep 17 00:00:00 2001
+From: Mike Snitzer <snitzer@hammerspace.com>
+Date: Mon, 6 Jul 2026 12:05:48 -0400
+Subject: [PATCH 14499/15333] NFS/localio: remove dead FLUSH_SYNC handling from
+ nfs_local_commit
+
+nfs_local_commit() is reached only through nfs_initiate_commit(), and every
+path that supplies its "how" argument has already cleared FLUSH_SYNC:
+__nfs_commit_inode() strips it (how &= ~FLUSH_SYNC) before dispatch and does
+its own waiting via wait_on_commit(), while the O_DIRECT path passes how=0.
+filelayout issues its DS commit with a NULL localio, so it never enters
+nfs_local_commit() at all.  The FLUSH_SYNC branch has therefore been dead
+since it was introduced with commit 70ba381e1a43 ("nfs: add LOCALIO
+support").
+
+Remove the never-taken FLUSH_SYNC branch along with the completion plumbing
+it was the sole user of: the struct nfs_local_fsync_ctx::done member, its
+initialization, and the complete() call in nfs_local_fsync_work().  With the
+branch gone the "how" parameter is unused, so drop it from nfs_local_commit()
+and its callers.  No functional change.
+
+Assisted-by: Claude:claude-opus-4-8
+Signed-off-by: Mike Snitzer <snitzer@kernel.org>
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ fs/nfs/internal.h |  4 ++--
+ fs/nfs/localio.c  | 15 ++-------------
+ fs/nfs/write.c    |  2 +-
+ 3 files changed, 5 insertions(+), 16 deletions(-)
+
+diff --git a/fs/nfs/internal.h b/fs/nfs/internal.h
+index 864fa092bcea..9ddf0192a0b9 100644
+--- a/fs/nfs/internal.h
++++ b/fs/nfs/internal.h
+@@ -480,7 +480,7 @@ extern int nfs_local_doio(struct nfs_client *,
+ 			  const struct rpc_call_ops *);
+ extern int nfs_local_commit(struct nfsd_file *,
+ 			    struct nfs_commit_data *,
+-			    const struct rpc_call_ops *, int);
++			    const struct rpc_call_ops *);
+ extern bool nfs_server_is_local(const struct nfs_client *clp);
+ 
+ #else /* CONFIG_NFS_LOCALIO */
+@@ -502,7 +502,7 @@ static inline int nfs_local_doio(struct nfs_client *clp,
+ }
+ static inline int nfs_local_commit(struct nfsd_file *localio,
+ 				struct nfs_commit_data *data,
+-				const struct rpc_call_ops *call_ops, int how)
++				const struct rpc_call_ops *call_ops)
+ {
+ 	return -EINVAL;
+ }
+diff --git a/fs/nfs/localio.c b/fs/nfs/localio.c
+index d3e480888eb1..acbc2bddcf81 100644
+--- a/fs/nfs/localio.c
++++ b/fs/nfs/localio.c
+@@ -52,7 +52,6 @@ struct nfs_local_fsync_ctx {
+ 	struct nfsd_file	*localio;
+ 	struct nfs_commit_data	*data;
+ 	struct work_struct	work;
+-	struct completion	*done;
+ };
+ 
+ static bool localio_enabled __read_mostly = true;
+@@ -1100,8 +1099,6 @@ nfs_local_fsync_work(struct work_struct *work)
+ 	status = nfs_local_run_commit(nfs_to->nfsd_file_file(ctx->localio),
+ 				      ctx->data);
+ 	nfs_local_commit_done(ctx->data, status);
+-	if (ctx->done != NULL)
+-		complete(ctx->done);
+ 	nfs_local_fsync_ctx_free(ctx);
+ 
+ 	current->flags = old_flags;
+@@ -1117,14 +1114,13 @@ nfs_local_fsync_ctx_alloc(struct nfs_commit_data *data,
+ 		ctx->localio = localio;
+ 		ctx->data = data;
+ 		INIT_WORK(&ctx->work, nfs_local_fsync_work);
+-		ctx->done = NULL;
+ 	}
+ 	return ctx;
+ }
+ 
+ int nfs_local_commit(struct nfsd_file *localio,
+ 		     struct nfs_commit_data *data,
+-		     const struct rpc_call_ops *call_ops, int how)
++		     const struct rpc_call_ops *call_ops)
+ {
+ 	struct nfs_local_fsync_ctx *ctx;
+ 
+@@ -1136,14 +1132,7 @@ int nfs_local_commit(struct nfsd_file *localio,
+ 	}
+ 
+ 	nfs_local_init_commit(data, call_ops);
+-
+-	if (how & FLUSH_SYNC) {
+-		DECLARE_COMPLETION_ONSTACK(done);
+-		ctx->done = &done;
+-		queue_work(nfslocaliod_workqueue, &ctx->work);
+-		wait_for_completion(&done);
+-	} else
+-		queue_work(nfslocaliod_workqueue, &ctx->work);
++	queue_work(nfslocaliod_workqueue, &ctx->work);
+ 
+ 	return 0;
+ }
+diff --git a/fs/nfs/write.c b/fs/nfs/write.c
+index ec4e0d6c829c..623e7ef1f73d 100644
+--- a/fs/nfs/write.c
++++ b/fs/nfs/write.c
+@@ -1665,7 +1665,7 @@ int nfs_initiate_commit(struct rpc_clnt *clnt, struct nfs_commit_data *data,
+ 	dprintk("NFS: initiated commit call\n");
+ 
+ 	if (localio)
+-		return nfs_local_commit(localio, data, call_ops, how);
++		return nfs_local_commit(localio, data, call_ops);
+ 
+ 	task = rpc_run_task(&task_setup_data);
+ 	if (IS_ERR(task))
+-- 
+2.55.0
+

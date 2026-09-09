@@ -1,0 +1,73 @@
+From af137873866bce94a076001bde5a81a0a18eedb5 Mon Sep 17 00:00:00 2001
+From: Brian Masney <bmasney@redhat.com>
+Date: Tue, 5 May 2026 20:49:00 -0400
+Subject: [PATCH 01271/15333] clk: imx: scu: use clk_determine_rate_noop()
+
+Drop the driver-specific empty determine_rate() function and use the new
+shared clk_determine_rate_noop() helper.
+
+Acked-by: Abel Vesa <abel.vesa@oss.qualcomm.com>
+Reviewed-by: Peng Fan <peng.fan@nxp.com>
+Signed-off-by: Brian Masney <bmasney@redhat.com>
+---
+ drivers/clk/imx/clk-scu.c | 23 +++--------------------
+ 1 file changed, 3 insertions(+), 20 deletions(-)
+
+diff --git a/drivers/clk/imx/clk-scu.c b/drivers/clk/imx/clk-scu.c
+index 658b6d94de9b..44220e9c5c2a 100644
+--- a/drivers/clk/imx/clk-scu.c
++++ b/drivers/clk/imx/clk-scu.c
+@@ -262,23 +262,6 @@ static unsigned long clk_scu_recalc_rate(struct clk_hw *hw,
+ 	return le32_to_cpu(msg.data.resp.rate);
+ }
+ 
+-/*
+- * clk_scu_determine_rate - Returns the closest rate for a SCU clock
+- * @hw: clock to round rate for
+- * @req: clock rate request
+- *
+- * Returns 0 on success, a negative error on failure
+- */
+-static int clk_scu_determine_rate(struct clk_hw *hw,
+-				  struct clk_rate_request *req)
+-{
+-	/*
+-	 * Assume we support all the requested rate and let the SCU firmware
+-	 * to handle the left work
+-	 */
+-	return 0;
+-}
+-
+ static int clk_scu_atf_set_cpu_rate(struct clk_hw *hw, unsigned long rate,
+ 				    unsigned long parent_rate)
+ {
+@@ -436,7 +419,7 @@ static void clk_scu_unprepare(struct clk_hw *hw)
+ 
+ static const struct clk_ops clk_scu_ops = {
+ 	.recalc_rate = clk_scu_recalc_rate,
+-	.determine_rate = clk_scu_determine_rate,
++	.determine_rate = clk_determine_rate_noop,
+ 	.set_rate = clk_scu_set_rate,
+ 	.get_parent = clk_scu_get_parent,
+ 	.set_parent = clk_scu_set_parent,
+@@ -446,7 +429,7 @@ static const struct clk_ops clk_scu_ops = {
+ 
+ static const struct clk_ops clk_scu_cpu_ops = {
+ 	.recalc_rate = clk_scu_recalc_rate,
+-	.determine_rate = clk_scu_determine_rate,
++	.determine_rate = clk_determine_rate_noop,
+ 	.set_rate = clk_scu_atf_set_cpu_rate,
+ 	.prepare = clk_scu_prepare,
+ 	.unprepare = clk_scu_unprepare,
+@@ -454,7 +437,7 @@ static const struct clk_ops clk_scu_cpu_ops = {
+ 
+ static const struct clk_ops clk_scu_pi_ops = {
+ 	.recalc_rate = clk_scu_recalc_rate,
+-	.determine_rate = clk_scu_determine_rate,
++	.determine_rate = clk_determine_rate_noop,
+ 	.set_rate    = clk_scu_set_rate,
+ };
+ 
+-- 
+2.55.0
+

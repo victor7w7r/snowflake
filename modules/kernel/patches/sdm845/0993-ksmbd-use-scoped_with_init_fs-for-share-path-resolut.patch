@@ -1,0 +1,47 @@
+From 385668603ac3f43bf77bab507ee0df9259679c6d Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Mon, 1 Jun 2026 15:56:46 +0200
+Subject: [PATCH 00993/15333] ksmbd: use scoped_with_init_fs() for share path
+ resolution
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use scoped_with_init_fs() to temporarily override current->fs for
+the kern_path() call in share_config_request() so the share path
+lookup happens in init's filesystem context.
+
+All ksmbd paths ← SMB command handlers ← handle_ksmbd_work() ← workqueue
+← ksmbd_conn_handler_loop() ← kthread
+
+Link: https://patch.msgid.link/20260601-work-kthread-nullfs-v4-13-77ee053060e0@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/smb/server/mgmt/share_config.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/fs/smb/server/mgmt/share_config.c b/fs/smb/server/mgmt/share_config.c
+index 6f97f8d39657..e00aee155935 100644
+--- a/fs/smb/server/mgmt/share_config.c
++++ b/fs/smb/server/mgmt/share_config.c
+@@ -9,6 +9,7 @@
+ #include <linux/rwsem.h>
+ #include <linux/parser.h>
+ #include <linux/namei.h>
++#include <linux/fs_struct.h>
+ #include <linux/sched.h>
+ #include <linux/mm.h>
+ 
+@@ -193,7 +194,8 @@ static struct ksmbd_share_config *share_config_request(struct ksmbd_work *work,
+ 				goto out;
+ 			}
+ 
+-			ret = kern_path(share->path, 0, &share->vfs_path);
++			scoped_with_init_fs()
++				ret = kern_path(share->path, 0, &share->vfs_path);
+ 			ksmbd_revert_fsids(work);
+ 			if (ret) {
+ 				ksmbd_debug(SMB, "failed to access '%s'\n",
+-- 
+2.55.0
+

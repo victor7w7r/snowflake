@@ -1,0 +1,38 @@
+From 492a53506ab27d59e9c1a1ac32adac954607b512 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 16 Jul 2026 17:39:08 +0700
+Subject: [PATCH 07820/15333] ASoC: ti: omap-hdmi: Use dev_err_probe() for
+ error handling
+
+Replace dev_err() with dev_err_probe() when reporting
+devm_snd_soc_register_card() failures. This suppresses
+unnecessary log messages for deferred probe errors.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Acked-by: Jarkko Nikula <jarkko.nikula@bitmer.com>
+Link: https://patch.msgid.link/20260716103911.77652-8-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/ti/omap-hdmi.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/sound/soc/ti/omap-hdmi.c b/sound/soc/ti/omap-hdmi.c
+index e60f5b483fc5..1e3a9711e70c 100644
+--- a/sound/soc/ti/omap-hdmi.c
++++ b/sound/soc/ti/omap-hdmi.c
+@@ -375,10 +375,8 @@ static int omap_hdmi_audio_probe(struct platform_device *pdev)
+ 	card->dev = dev;
+ 
+ 	ret = devm_snd_soc_register_card(dev, card);
+-	if (ret) {
+-		dev_err(dev, "snd_soc_register_card failed (%d)\n", ret);
+-		return ret;
+-	}
++	if (ret)
++		return dev_err_probe(dev, ret, "snd_soc_register_card() failed\n");
+ 
+ 	ad->card = card;
+ 	snd_soc_card_set_drvdata(card, ad);
+-- 
+2.55.0
+

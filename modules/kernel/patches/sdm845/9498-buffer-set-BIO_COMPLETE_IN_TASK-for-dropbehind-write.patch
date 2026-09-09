@@ -1,0 +1,40 @@
+From a2c924c240e74dc2dd14ff763245dc86b93db714 Mon Sep 17 00:00:00 2001
+From: Tal Zussman <tz2294@columbia.edu>
+Date: Thu, 30 Jul 2026 02:57:54 -0400
+Subject: [PATCH 09498/15333] buffer: set BIO_COMPLETE_IN_TASK for dropbehind
+ writeback
+
+Set BIO_COMPLETE_IN_TASK in __bh_submit() for write bios when the folio
+has dropbehind set, so that buffer_head writeback completions get
+deferred to task context where folio_end_dropbehind() can safely
+invalidate folios.
+
+Read completions are not deferred since dropbehind invalidation for
+reads is handled synchronously by the reader.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Tal Zussman <tz2294@columbia.edu>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260730-blk-dontcache-v7-4-3e8e6850068d@columbia.edu
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ fs/buffer.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/fs/buffer.c b/fs/buffer.c
+index 9af5f061a1f8..6f099847240e 100644
+--- a/fs/buffer.c
++++ b/fs/buffer.c
+@@ -1203,6 +1203,9 @@ static void __bh_submit(struct buffer_head *bh, blk_opf_t opf,
+ 
+ 	bio = bio_alloc(bh->b_bdev, 1, opf, GFP_NOIO);
+ 
++	if (folio_test_dropbehind(bh->b_folio) && op_is_write(opf))
++		bio_set_flag(bio, BIO_COMPLETE_IN_TASK);
++
+ 	if (IS_ENABLED(CONFIG_FS_ENCRYPTION))
+ 		buffer_set_crypto_ctx(bio, bh, GFP_NOIO);
+ 
+-- 
+2.55.0
+

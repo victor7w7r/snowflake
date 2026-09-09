@@ -1,0 +1,54 @@
+From 347c1481c122aa78af7a41500af9ad04d11e57b1 Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Sun, 7 Jun 2026 22:00:34 -0700
+Subject: [PATCH 13267/15333] nfc: pn533: fix memcpy overflow warning
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+error: call to ‘__read_overflow2_field’ declared with attribute warning:
+detected read beyond size of field (2nd parameter); maybe use
+struct_group()? [-Werror=attribute-warning]
+
+As suggested, add a struct_group and memcpy that.
+
+Also replace 9 with sizeof for clarify.
+
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Link: https://patch.msgid.link/20260608050034.5679-1-rosenp@gmail.com
+Signed-off-by: David Heidelberg <david@ixit.cz>
+---
+ drivers/nfc/pn533/pn533.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/nfc/pn533/pn533.c b/drivers/nfc/pn533/pn533.c
+index d7bdbc82e2ba..4e721a8dfd8b 100644
+--- a/drivers/nfc/pn533/pn533.c
++++ b/drivers/nfc/pn533/pn533.c
+@@ -740,8 +740,10 @@ static int pn533_target_found_type_a(struct nfc_target *nfc_tgt, u8 *tgt_data,
+ 
+ struct pn533_target_felica {
+ 	u8 pol_res;
+-	u8 opcode;
+-	u8 nfcid2[NFC_NFCID2_MAXSIZE];
++	struct_group(sensf_res,
++		u8 opcode;
++		u8 nfcid2[NFC_NFCID2_MAXSIZE];
++	);
+ 	u8 pad[8];
+ 	/* optional */
+ 	u8 syst_code[];
+@@ -778,8 +780,8 @@ static int pn533_target_found_felica(struct nfc_target *nfc_tgt, u8 *tgt_data,
+ 	else
+ 		nfc_tgt->supported_protocols = NFC_PROTO_FELICA_MASK;
+ 
+-	memcpy(nfc_tgt->sensf_res, &tgt_felica->opcode, 9);
+-	nfc_tgt->sensf_res_len = 9;
++	memcpy(nfc_tgt->sensf_res, &tgt_felica->sensf_res, sizeof(tgt_felica->sensf_res));
++	nfc_tgt->sensf_res_len = sizeof(tgt_felica->sensf_res);
+ 
+ 	memcpy(nfc_tgt->nfcid2, tgt_felica->nfcid2, NFC_NFCID2_MAXSIZE);
+ 	nfc_tgt->nfcid2_len = NFC_NFCID2_MAXSIZE;
+-- 
+2.55.0
+

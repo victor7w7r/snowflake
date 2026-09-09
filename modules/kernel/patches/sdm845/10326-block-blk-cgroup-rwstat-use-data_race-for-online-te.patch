@@ -1,0 +1,50 @@
+From 3be7ad35f10e8e19f618f67ddca0bc0e247f6505 Mon Sep 17 00:00:00 2001
+From: Tao Cui <cuitao@kylinos.cn>
+Date: Mon, 3 Aug 2026 21:34:00 +0800
+Subject: [PATCH 10326/15333] block/blk-cgroup-rwstat: use data_race() for
+ online test
+
+blkg_rwstat_recursive_sum() reads pos_blkg->online without the queue
+lock that its doc comment requires, since blkcg_print_blkgs() stopped
+holding it in 56cc24f59c14.  Concurrent blkg_create/destroy flips
+->online, tripping KCSAN.  The race is harmless (RCU-protected, stale
+online only causes minor stat noise).  Use data_race() to annotate
+the intentional lockless read.
+
+Also update the stale doc comment that still requires the queue lock.
+
+Reviewed-by: Yu Kuai <yukuai@fygo.io>
+Signed-off-by: Tao Cui <cuitao@kylinos.cn>
+Acked-by: Tejun Heo <tj@kernel.org>
+Link: https://patch.msgid.link/20260803133400.137906-1-cui.tao@linux.dev
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ block/blk-cgroup-rwstat.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/block/blk-cgroup-rwstat.c b/block/blk-cgroup-rwstat.c
+index aae910713814..2e9bf081cce2 100644
+--- a/block/blk-cgroup-rwstat.c
++++ b/block/blk-cgroup-rwstat.c
+@@ -88,8 +88,7 @@ EXPORT_SYMBOL_GPL(blkg_prfill_rwstat);
+  * @sum: blkg_rwstat_sample structure containing the results
+  *
+  * Collect the blkg_rwstat specified by @blkg, @pol and @off and all its
+- * online descendants and their aux counts.  The caller must be holding the
+- * queue lock for online tests.
++ * online descendants and their aux counts.
+  *
+  * If @pol is NULL, blkg_rwstat is at @off bytes into @blkg; otherwise, it
+  * is at @off bytes into @blkg's blkg_policy_data of the policy.
+@@ -107,7 +106,7 @@ void blkg_rwstat_recursive_sum(struct blkcg_gq *blkg, struct blkcg_policy *pol,
+ 	blkg_for_each_descendant_pre(pos_blkg, pos_css, blkg) {
+ 		struct blkg_rwstat *rwstat;
+ 
+-		if (!pos_blkg->online)
++		if (!data_race(pos_blkg->online))
+ 			continue;
+ 
+ 		if (pol) {
+-- 
+2.55.0
+

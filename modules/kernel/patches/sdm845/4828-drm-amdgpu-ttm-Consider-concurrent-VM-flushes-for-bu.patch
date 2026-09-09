@@ -1,0 +1,63 @@
+From a8171229bc836607fbc225d323ebc4d14489cfbb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Sat, 11 Jul 2026 13:49:58 +0200
+Subject: [PATCH 04828/15333] drm/amdgpu/ttm: Consider concurrent VM flushes
+ for buffer entities
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Allow using multiple SDMA schedulers only on GPUs where
+we are allowed to do concurrent VM flushes.
+This consideration is necessary because all GART windows
+are mapped in VMID 0 (the kernel VMID) so each buffer
+entity would flush VMID 0 concurrently.
+
+Practically this means that we can't use multiple SDMA
+engines for TTM on GFX6-8 and Navi 1x.
+
+Fixes: 01c836788b37 ("drm/amdgpu: pass all the sdma scheds to amdgpu_mman")
+Fixes: e4029f7a9474 ("drm/amdgpu: only use working sdma schedulers for ttm")
+Cc: Pierre-Eric Pelloux-Prayer <pierre-eric.pelloux-prayer@amd.com>
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c | 20 +++++++++++++++-----
+ 1 file changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
+index b10b0878df37..7920675af1d1 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
+@@ -2684,12 +2684,22 @@ void amdgpu_sdma_set_buffer_funcs_scheds(struct amdgpu_device *adev,
+ 		return;
+ 	}
+ 
+-	/* Navi1x's workaround requires us to limit to a single SDMA sched
+-	 * for ttm.
+-	 */
+ 	hub = &adev->vmhub[AMDGPU_GFXHUB(0)];
+-	adev->mman.num_buffer_funcs_scheds = hub->sdma_invalidation_workaround ?
+-		1 : n;
++
++	/*
++	 * Allow using multiple SDMA schedulers only on GPUs where
++	 * we are allowed to do concurrent VM flushes.
++	 * This consideration is necessary because all GART windows
++	 * are mapped in VMID 0 (the kernel VMID) so each buffer
++	 * entity would flush VMID 0 concurrently.
++	 *
++	 * Also consider the SDMA invalidation workaround on
++	 * Navi 1x GPUs, which also prevents us from using
++	 * multiple SDMA engines on VMID 0 at the same time.
++	 */
++	adev->mman.num_buffer_funcs_scheds =
++		(adev->vm_manager.concurrent_flush &&
++		 !hub->sdma_invalidation_workaround) ? n : 1;
+ }
+ 
+ #if defined(CONFIG_DEBUG_FS)
+-- 
+2.55.0
+

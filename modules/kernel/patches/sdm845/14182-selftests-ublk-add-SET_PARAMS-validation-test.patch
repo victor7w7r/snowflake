@@ -1,0 +1,157 @@
+From 007af5e5cc822aed3a0909534ffb810f7816ed1f Mon Sep 17 00:00:00 2001
+From: Yao Sang <sangyao@kylinos.cn>
+Date: Fri, 14 Aug 2026 10:32:26 +0800
+Subject: [PATCH 14182/15333] selftests: ublk: add SET_PARAMS validation test
+
+Add test_params_01.sh for SET_PARAMS. The test checks valid basic
+parameters and several invalid parameter cases.
+
+Also cover zoned parameters, including a non-power-of-2 zone size. This
+case must fail in SET_PARAMS instead of being accepted and rejected later
+when the device is started.
+
+Signed-off-by: Yao Sang <sangyao@kylinos.cn>
+Link: https://patch.msgid.link/20260814023226.354288-4-sangyao@kylinos.cn
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ tools/testing/selftests/ublk/Makefile         |   2 +
+ .../testing/selftests/ublk/test_params_01.sh  | 114 ++++++++++++++++++
+ 2 files changed, 116 insertions(+)
+ create mode 100755 tools/testing/selftests/ublk/test_params_01.sh
+
+diff --git a/tools/testing/selftests/ublk/Makefile b/tools/testing/selftests/ublk/Makefile
+index a3cec7b35db7..5daf36c6c36c 100644
+--- a/tools/testing/selftests/ublk/Makefile
++++ b/tools/testing/selftests/ublk/Makefile
+@@ -55,6 +55,8 @@ TEST_PROGS += test_stripe_06.sh
+ TEST_PROGS += test_part_01.sh
+ TEST_PROGS += test_part_02.sh
+ 
++TEST_PROGS += test_params_01.sh
++
+ TEST_PROGS += test_shmemzc_01.sh
+ TEST_PROGS += test_shmemzc_02.sh
+ TEST_PROGS += test_shmemzc_03.sh
+diff --git a/tools/testing/selftests/ublk/test_params_01.sh b/tools/testing/selftests/ublk/test_params_01.sh
+new file mode 100755
+index 000000000000..928e72b1035d
+--- /dev/null
++++ b/tools/testing/selftests/ublk/test_params_01.sh
+@@ -0,0 +1,114 @@
++#!/bin/bash
++# SPDX-License-Identifier: GPL-2.0
++
++. "$(cd "$(dirname "$0")" && pwd)"/test_common.sh
++
++ERR_CODE=0
++
++run_set_params_success()
++{
++	local name=$1
++
++	shift
++
++	echo "$name"
++	if ! "$UBLK_PROG" set_params -q 1 -d 2 "$@"; then
++		echo "$name: SET_PARAMS check failed"
++		return 1
++	fi
++}
++
++run_set_params_failure()
++{
++	local name=$1
++
++	shift
++
++	echo "$name"
++	if "$UBLK_PROG" set_params -q 1 -d 2 "$@"; then
++		echo "$name: SET_PARAMS succeeded unexpectedly"
++		return 1
++	fi
++}
++
++run_zoned_set_params_success()
++{
++	local name=$1
++
++	shift
++
++	echo "$name"
++	if ! "$UBLK_PROG" set_params -q 1 -d 2 -u --zoned "$@"; then
++		echo "$name: SET_PARAMS check failed"
++		return 1
++	fi
++}
++
++run_zoned_set_params_failure()
++{
++	local name=$1
++
++	shift
++
++	echo "$name"
++	if "$UBLK_PROG" set_params -q 1 -d 2 -u --zoned "$@"; then
++		echo "$name: SET_PARAMS succeeded unexpectedly"
++		return 1
++	fi
++}
++
++_prep_test "params" "SET_PARAMS validation"
++
++if [ ! -c /dev/ublk-control ]; then
++	_cleanup_test
++	_show_result $TID $UBLK_SKIP_CODE
++fi
++
++run_set_params_success "valid basic params" ||
++	ERR_CODE=1
++
++run_set_params_failure "missing basic params" \
++	--param_types none ||
++	ERR_CODE=1
++
++run_set_params_failure "logical block larger than physical block" \
++	--logical_bs_shift 12 --physical_bs_shift 9 ||
++	ERR_CODE=1
++
++run_set_params_failure "too large max sectors" \
++	--max_sectors 2049 ||
++	ERR_CODE=1
++
++if _have_feature "ZONED" && _have_feature "USER_COPY"; then
++	run_zoned_set_params_success "valid zoned params" \
++		--param_types basic,zoned ||
++		ERR_CODE=1
++
++	run_zoned_set_params_failure "missing zoned params" ||
++		ERR_CODE=1
++
++	run_zoned_set_params_failure "non-power-of-2 zone size" \
++		--param_types basic,zoned \
++		--chunk_sectors 96 --dev_sectors $((96 * 16)) ||
++		ERR_CODE=1
++
++	run_zoned_set_params_failure "zero max zone append" \
++		--param_types basic,zoned \
++		--max_zone_append_sectors 0 ||
++		ERR_CODE=1
++
++	run_zoned_set_params_failure "too many open zones" \
++		--param_types basic,zoned \
++		--dev_sectors $((128 * 4)) --max_open_zones 5 ||
++		ERR_CODE=1
++
++	run_zoned_set_params_failure "too many active zones" \
++		--param_types basic,zoned \
++		--dev_sectors $((128 * 4)) --max_active_zones 5 ||
++		ERR_CODE=1
++else
++	echo "zoned ublk feature unavailable, skip zoned SET_PARAMS cases"
++fi
++
++_cleanup_test
++_show_result $TID $ERR_CODE
+-- 
+2.55.0
+

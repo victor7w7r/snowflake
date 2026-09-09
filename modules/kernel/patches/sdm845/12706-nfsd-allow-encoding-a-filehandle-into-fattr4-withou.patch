@@ -1,0 +1,221 @@
+From b809950fbd3801afa7b04089c4c8a8676bc6cd01 Mon Sep 17 00:00:00 2001
+From: Jeff Layton <jlayton@kernel.org>
+Date: Tue, 16 Jun 2026 07:58:58 -0400
+Subject: [PATCH 12706/15333] nfsd: allow encoding a filehandle into fattr4
+ without a svc_fh
+
+The current fattr4 encoder requires a svc_fh in order to encode the
+filehandle. This is not available in a CB_NOTIFY callback. Add a new
+"fhandle" field to struct nfsd4_fattr_args and copy the filehandle into
+there from the svc_fh. CB_NOTIFY will populate it via other means.
+
+A filehandle composed this way may still need a MAC appended on signed
+exports, so generalize fh_append_mac() to operate on a bare knfsd_fh
+(plus its maximum size and net) rather than a svc_fh.
+
+The FSID attribute shares the same attrmask gate as the filehandle, so
+do the same for it: add fsid_source_fh() which takes a bare knfsd_fh and
+its svc_export, and have the FSID encoder use args->fhandle and
+args->exp. fsid_source() becomes a wrapper for the v2/v3 callers. The
+now-unused svc_fh pointer is dropped from struct nfsd4_fattr_args.
+
+Signed-off-by: Jeff Layton <jlayton@kernel.org>
+Link: https://patch.msgid.link/20260616-dir-deleg-v7-15-6cbc7eac0ade@kernel.org
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ fs/nfsd/nfs4xdr.c | 37 ++++++++++++++++++++-----------------
+ fs/nfsd/nfsfh.c   | 30 ++++++++++++++++++------------
+ fs/nfsd/nfsfh.h   |  3 +++
+ 3 files changed, 41 insertions(+), 29 deletions(-)
+
+diff --git a/fs/nfsd/nfs4xdr.c b/fs/nfsd/nfs4xdr.c
+index 692c615c3d49..7af22a8dd3b2 100644
+--- a/fs/nfsd/nfs4xdr.c
++++ b/fs/nfsd/nfs4xdr.c
+@@ -2719,7 +2719,7 @@ nfsd4_decode_compound(struct nfsd4_compoundargs *argp)
+ }
+ 
+ static __be32 nfsd4_encode_nfs_fh4(struct xdr_stream *xdr,
+-				   struct knfsd_fh *fh_handle)
++				   const struct knfsd_fh *fh_handle)
+ {
+ 	return nfsd4_encode_opaque(xdr, fh_handle->fh_raw, fh_handle->fh_size);
+ }
+@@ -3159,9 +3159,9 @@ nfsd4_encode_bitmap4(struct xdr_stream *xdr, u32 bmval0, u32 bmval1, u32 bmval2)
+ 
+ struct nfsd4_fattr_args {
+ 	struct svc_rqst		*rqstp;
+-	struct svc_fh		*fhp;
+ 	struct svc_export	*exp;
+ 	struct dentry		*dentry;
++	struct knfsd_fh		fhandle;
+ 	struct kstat		stat;
+ 	struct kstatfs		statfs;
+ 	struct nfs4_acl		*acl;
+@@ -3309,7 +3309,7 @@ static __be32 nfsd4_encode_fattr4_fsid(struct xdr_stream *xdr,
+ 		xdr_encode_hyper(p, NFS4_REFERRAL_FSID_MINOR);
+ 		return nfs_ok;
+ 	}
+-	switch (fsid_source(args->fhp)) {
++	switch (fsid_source_fh(&args->fhandle, args->exp)) {
+ 	case FSIDSOURCE_FSID:
+ 		p = xdr_encode_hyper(p, (u64)args->exp->ex_fsid);
+ 		xdr_encode_hyper(p, (u64)0);
+@@ -3406,7 +3406,7 @@ static __be32 nfsd4_encode_fattr4_homogeneous(struct xdr_stream *xdr,
+ static __be32 nfsd4_encode_fattr4_filehandle(struct xdr_stream *xdr,
+ 					     const struct nfsd4_fattr_args *args)
+ {
+-	return nfsd4_encode_nfs_fh4(xdr, &args->fhp->fh_handle);
++	return nfsd4_encode_nfs_fh4(xdr, &args->fhandle);
+ }
+ 
+ static __be32 nfsd4_encode_fattr4_fileid(struct xdr_stream *xdr,
+@@ -4019,19 +4019,22 @@ nfsd4_encode_fattr4(struct svc_rqst *rqstp, struct xdr_stream *xdr,
+ 		if (err)
+ 			goto out_nfserr;
+ 	}
+-	if ((attrmask[0] & (FATTR4_WORD0_FILEHANDLE | FATTR4_WORD0_FSID)) &&
+-	    !fhp) {
+-		tempfh = kmalloc_obj(struct svc_fh);
+-		status = nfserr_jukebox;
+-		if (!tempfh)
+-			goto out;
+-		fh_init(tempfh, NFS4_FHSIZE);
+-		status = fh_compose(tempfh, exp, dentry, NULL);
+-		if (status)
+-			goto out;
+-		args.fhp = tempfh;
+-	} else
+-		args.fhp = fhp;
++
++	if ((attrmask[0] & (FATTR4_WORD0_FILEHANDLE | FATTR4_WORD0_FSID))) {
++		if (!fhp) {
++			tempfh = kmalloc_obj(struct svc_fh);
++			status = nfserr_jukebox;
++			if (!tempfh)
++				goto out;
++			fh_init(tempfh, NFS4_FHSIZE);
++			status = fh_compose(tempfh, exp, dentry, NULL);
++			if (status)
++				goto out;
++			fhp = tempfh;
++		}
++		fh_copy_shallow(&args.fhandle, &fhp->fh_handle);
++	}
++
+ 	if (attrmask[0] & (FATTR4_WORD0_CASE_INSENSITIVE |
+ 			   FATTR4_WORD0_CASE_PRESERVING)) {
+ 		/*
+diff --git a/fs/nfsd/nfsfh.c b/fs/nfsd/nfsfh.c
+index ab53de1c280d..8b1a95e1d058 100644
+--- a/fs/nfsd/nfsfh.c
++++ b/fs/nfsd/nfsfh.c
+@@ -142,16 +142,15 @@ static inline __be32 check_pseudo_root(struct dentry *dentry,
+ /* Size of a file handle MAC, in 4-octet words */
+ #define FH_MAC_WORDS (sizeof(__le64) / 4)
+ 
+-static bool fh_append_mac(struct svc_fh *fhp, struct net *net)
++bool fh_append_mac(struct knfsd_fh *fh, int fh_maxsize, struct net *net)
+ {
+ 	struct nfsd_net *nn = net_generic(net, nfsd_net_id);
+-	struct knfsd_fh *fh = &fhp->fh_handle;
+ 	siphash_key_t *fh_key = nn->fh_key;
+ 	__le64 hash;
+ 
+ 	if (!fh_key)
+ 		goto out_no_key;
+-	if (fh->fh_size + sizeof(hash) > fhp->fh_maxsize)
++	if (fh->fh_size + sizeof(hash) > fh_maxsize)
+ 		goto out_no_space;
+ 
+ 	hash = cpu_to_le64(siphash(&fh->fh_raw, fh->fh_size, fh_key));
+@@ -165,7 +164,7 @@ static bool fh_append_mac(struct svc_fh *fhp, struct net *net)
+ 
+ out_no_space:
+ 	pr_warn_ratelimited("NFSD: unable to sign filehandles, fh_size %zu would be greater than fh_maxsize %d.\n",
+-			    fh->fh_size + sizeof(hash), fhp->fh_maxsize);
++			    fh->fh_size + sizeof(hash), fh_maxsize);
+ 	return false;
+ }
+ 
+@@ -564,7 +563,8 @@ static void _fh_update(struct svc_fh *fhp, struct svc_export *exp,
+ 		fhp->fh_handle.fh_size += maxsize * 4;
+ 
+ 		if (exp->ex_flags & NFSEXP_SIGN_FH)
+-			if (!fh_append_mac(fhp, exp->cd->net))
++			if (!fh_append_mac(&fhp->fh_handle, fhp->fh_maxsize,
++					   exp->cd->net))
+ 				fhp->fh_handle.fh_fileid_type = FILEID_INVALID;
+ 	} else {
+ 		fhp->fh_handle.fh_fileid_type = FILEID_ROOT;
+@@ -894,19 +894,20 @@ char * SVCFH_fmt(struct svc_fh *fhp)
+ 	return buf;
+ }
+ 
+-enum fsid_source fsid_source(const struct svc_fh *fhp)
++enum fsid_source fsid_source_fh(const struct knfsd_fh *fh,
++				struct svc_export *exp)
+ {
+-	if (fhp->fh_handle.fh_version != 1)
++	if (fh->fh_version != 1)
+ 		return FSIDSOURCE_DEV;
+-	switch(fhp->fh_handle.fh_fsid_type) {
++	switch (fh->fh_fsid_type) {
+ 	case FSID_DEV:
+ 	case FSID_ENCODE_DEV:
+ 	case FSID_MAJOR_MINOR:
+-		if (exp_sb(fhp->fh_export)->s_type->fs_flags & FS_REQUIRES_DEV)
++		if (exp_sb(exp)->s_type->fs_flags & FS_REQUIRES_DEV)
+ 			return FSIDSOURCE_DEV;
+ 		break;
+ 	case FSID_NUM:
+-		if (fhp->fh_export->ex_flags & NFSEXP_FSID)
++		if (exp->ex_flags & NFSEXP_FSID)
+ 			return FSIDSOURCE_FSID;
+ 		break;
+ 	default:
+@@ -915,13 +916,18 @@ enum fsid_source fsid_source(const struct svc_fh *fhp)
+ 	/* either a UUID type filehandle, or the filehandle doesn't
+ 	 * match the export.
+ 	 */
+-	if (fhp->fh_export->ex_flags & NFSEXP_FSID)
++	if (exp->ex_flags & NFSEXP_FSID)
+ 		return FSIDSOURCE_FSID;
+-	if (fhp->fh_export->ex_uuid)
++	if (exp->ex_uuid)
+ 		return FSIDSOURCE_UUID;
+ 	return FSIDSOURCE_DEV;
+ }
+ 
++enum fsid_source fsid_source(const struct svc_fh *fhp)
++{
++	return fsid_source_fh(&fhp->fh_handle, fhp->fh_export);
++}
++
+ /**
+  * nfsd4_change_attribute - Generate an NFSv4 change_attribute value
+  * @stat: inode attributes
+diff --git a/fs/nfsd/nfsfh.h b/fs/nfsd/nfsfh.h
+index 5ef7191f8ad8..cdeb5eea65a8 100644
+--- a/fs/nfsd/nfsfh.h
++++ b/fs/nfsd/nfsfh.h
+@@ -131,6 +131,8 @@ enum fsid_source {
+ 	FSIDSOURCE_FSID,
+ 	FSIDSOURCE_UUID,
+ };
++extern enum fsid_source fsid_source_fh(const struct knfsd_fh *fh,
++				       struct svc_export *exp);
+ extern enum fsid_source fsid_source(const struct svc_fh *fhp);
+ 
+ 
+@@ -226,6 +228,7 @@ __be32	fh_getattr(const struct svc_fh *fhp, struct kstat *stat);
+ __be32	fh_compose(struct svc_fh *, struct svc_export *, struct dentry *, struct svc_fh *);
+ __be32	fh_update(struct svc_fh *);
+ void	fh_put(struct svc_fh *);
++bool	fh_append_mac(struct knfsd_fh *fh, int fh_maxsize, struct net *net);
+ 
+ static __inline__ struct svc_fh *
+ fh_copy(struct svc_fh *dst, const struct svc_fh *src)
+-- 
+2.55.0
+

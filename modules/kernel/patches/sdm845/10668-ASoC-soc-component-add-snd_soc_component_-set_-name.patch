@@ -1,0 +1,61 @@
+From f6cfdd246c256f3f87f50254cd6e105c7568ae57 Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Thu, 23 Jul 2026 06:34:31 +0000
+Subject: [PATCH 10668/15333] ASoC: soc-component: add
+ snd_soc_component_{set_}name()
+
+struct snd_soc_component will be capsuled soon, its member will not be
+able to access from non soc-component.c.
+
+Add snd_soc_component_{set_}name() to access name.
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/87se5arz7s.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/soc-component.h |  4 ++++
+ sound/soc/soc-component.c     | 12 ++++++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/include/sound/soc-component.h b/include/sound/soc-component.h
+index 874559458bd5..a13d5c98e0f3 100644
+--- a/include/sound/soc-component.h
++++ b/include/sound/soc-component.h
+@@ -284,6 +284,10 @@ static inline int snd_soc_component_cache_sync(
+ }
+ 
+ struct snd_soc_component *snd_soc_component_alloc(struct device *dev);
++
++void snd_soc_component_set_name(struct snd_soc_component *component, const char *name);
++const char *snd_soc_component_name(struct snd_soc_component *component);
++
+ void snd_soc_component_set_aux(struct snd_soc_component *component,
+ 			       struct snd_soc_aux_dev *aux);
+ int snd_soc_component_init(struct snd_soc_component *component);
+diff --git a/sound/soc/soc-component.c b/sound/soc/soc-component.c
+index 60531e9f9f9a..5131e2bf3a10 100644
+--- a/sound/soc/soc-component.c
++++ b/sound/soc/soc-component.c
+@@ -42,6 +42,18 @@ struct snd_soc_component *snd_soc_component_alloc(struct device *dev)
+ }
+ EXPORT_SYMBOL_GPL(snd_soc_component_alloc);
+ 
++void snd_soc_component_set_name(struct snd_soc_component *component, const char *name)
++{
++	component->name = name;
++}
++EXPORT_SYMBOL_GPL(snd_soc_component_set_name);
++
++const char *snd_soc_component_name(struct snd_soc_component *component)
++{
++	return component->name;
++}
++EXPORT_SYMBOL_GPL(snd_soc_component_name);
++
+ /*
+  * We might want to check substream by using list.
+  * In such case, we can update these macros.
+-- 
+2.55.0
+

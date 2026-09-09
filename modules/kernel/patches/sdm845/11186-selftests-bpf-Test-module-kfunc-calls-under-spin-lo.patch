@@ -1,0 +1,102 @@
+From bca83aa31f15275b8ac4fc3fb7659f5d70492902 Mon Sep 17 00:00:00 2001
+From: Kaitao Cheng <chengkaitao@kylinos.cn>
+Date: Wed, 5 Aug 2026 23:33:40 +0800
+Subject: [PATCH 11186/15333] selftests/bpf: Test module kfunc calls under spin
+ lock
+
+The verifier uses kfunc registration flags to decide whether a kfunc may
+be called while a BPF program holds a bpf_spin_lock.
+
+Mark bpf_testmod_test_mod_kfunc() as KF_SPINLOCK_SAFE and verify that it
+can be called while holding a bpf_spin_lock. Also attempt to call the
+unmarked bpf_kfunc_trigger_ctx_check() under the lock and verify that the
+program is rejected.
+
+Signed-off-by: Kaitao Cheng <chengkaitao@kylinos.cn>
+Acked-by: Leon Hwang <leon.hwang@linux.dev>
+Link: https://lore.kernel.org/bpf/20260805153340.34776-4-kaitao.cheng@linux.dev
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ tools/testing/selftests/bpf/prog_tests/kfunc_call.c  |  2 ++
+ tools/testing/selftests/bpf/progs/kfunc_call_fail.c  | 12 ++++++++++++
+ tools/testing/selftests/bpf/progs/kfunc_call_test.c  | 12 ++++++++++++
+ tools/testing/selftests/bpf/test_kmods/bpf_testmod.c |  2 +-
+ 4 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/kfunc_call.c b/tools/testing/selftests/bpf/prog_tests/kfunc_call.c
+index 7af5560f2a08..2b39cc1b09f9 100644
+--- a/tools/testing/selftests/bpf/prog_tests/kfunc_call.c
++++ b/tools/testing/selftests/bpf/prog_tests/kfunc_call.c
+@@ -71,8 +71,10 @@ static struct kfunc_test_params kfunc_tests[] = {
+ 	TC_FAIL(kfunc_call_test_get_mem_fail_not_const, 0, "is not a const"),
+ 	TC_FAIL(kfunc_call_test_mem_acquire_fail, 0, "acquire kernel function does not return PTR_TO_BTF_ID"),
+ 	TC_FAIL(kfunc_call_test_pointer_arg_type_mismatch, 0, "R1 expected pointer to ctx, but got scalar"),
++	TC_FAIL(kfunc_call_test_spin_lock_unsafe, 0, "function calls are not allowed while holding a lock"),
+ 
+ 	/* success cases */
++	TC_TEST(kfunc_call_test_spin_lock_safe, 0),
+ 	TC_TEST(kfunc_call_test1, 12),
+ 	TC_TEST(kfunc_call_test2, 3),
+ 	TC_TEST(kfunc_call_test4, -1234),
+diff --git a/tools/testing/selftests/bpf/progs/kfunc_call_fail.c b/tools/testing/selftests/bpf/progs/kfunc_call_fail.c
+index 64b6a0b0ab1c..7e93f7fb1329 100644
+--- a/tools/testing/selftests/bpf/progs/kfunc_call_fail.c
++++ b/tools/testing/selftests/bpf/progs/kfunc_call_fail.c
+@@ -4,6 +4,18 @@
+ #include <bpf/bpf_helpers.h>
+ #include "../test_kmods/bpf_testmod_kfunc.h"
+ 
++static struct bpf_spin_lock kfunc_call_lock SEC(".data.A");
++
++SEC("?tc")
++int kfunc_call_test_spin_lock_unsafe(struct __sk_buff *skb)
++{
++	bpf_spin_lock(&kfunc_call_lock);
++	bpf_kfunc_trigger_ctx_check();
++	bpf_spin_unlock(&kfunc_call_lock);
++
++	return 0;
++}
++
+ struct syscall_test_args {
+ 	__u8 data[16];
+ 	size_t size;
+diff --git a/tools/testing/selftests/bpf/progs/kfunc_call_test.c b/tools/testing/selftests/bpf/progs/kfunc_call_test.c
+index 5edc51564f71..8e6560c31e78 100644
+--- a/tools/testing/selftests/bpf/progs/kfunc_call_test.c
++++ b/tools/testing/selftests/bpf/progs/kfunc_call_test.c
+@@ -5,6 +5,18 @@
+ #include "bpf_misc.h"
+ #include "../test_kmods/bpf_testmod_kfunc.h"
+ 
++static struct bpf_spin_lock kfunc_call_lock SEC(".data.A");
++
++SEC("tc")
++int kfunc_call_test_spin_lock_safe(struct __sk_buff *skb)
++{
++	bpf_spin_lock(&kfunc_call_lock);
++	bpf_testmod_test_mod_kfunc(42);
++	bpf_spin_unlock(&kfunc_call_lock);
++
++	return 0;
++}
++
+ SEC("tc")
+ int kfunc_call_test5(struct __sk_buff *skb)
+ {
+diff --git a/tools/testing/selftests/bpf/test_kmods/bpf_testmod.c b/tools/testing/selftests/bpf/test_kmods/bpf_testmod.c
+index eb0f9b5e18d8..0585794606ed 100644
+--- a/tools/testing/selftests/bpf/test_kmods/bpf_testmod.c
++++ b/tools/testing/selftests/bpf/test_kmods/bpf_testmod.c
+@@ -1384,7 +1384,7 @@ __bpf_kfunc void bpf_kfunc_trigger_ctx_check(void)
+ }
+ 
+ BTF_KFUNCS_START(bpf_testmod_check_kfunc_ids)
+-BTF_ID_FLAGS(func, bpf_testmod_test_mod_kfunc)
++BTF_ID_FLAGS(func, bpf_testmod_test_mod_kfunc, KF_SPINLOCK_SAFE)
+ BTF_ID_FLAGS(func, bpf_kfunc_call_test1)
+ BTF_ID_FLAGS(func, bpf_kfunc_call_test2)
+ BTF_ID_FLAGS(func, bpf_kfunc_call_test3)
+-- 
+2.55.0
+

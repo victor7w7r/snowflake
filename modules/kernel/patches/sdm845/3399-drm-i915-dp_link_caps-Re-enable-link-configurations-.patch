@@ -1,0 +1,130 @@
+From ae40784fa03ae3170ae3264cf3fa010c2b57f0d5 Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Wed, 1 Jul 2026 18:31:38 +0300
+Subject: [PATCH 03399/15333] drm/i915/dp_link_caps: Re-enable link
+ configurations after sink caps change
+
+Re-enable link configurations after sink capabilities change or the link
+got reset before updating the link capabilities (due to an RX_CAP_CHANGED
+HPD IRQ for the currently connected sink, or a new sink getting
+connected).
+
+This makes resetting the link explicitly by calling
+intel_dp_link_caps_reset() subsequently redundant; keep the existing
+behavior wrt. this for now, adding only a TODO: to remove the explicit
+reset.
+
+While at it add documentation for intel_dp_link_caps_update().
+
+Reviewed-by: Suraj Kandpal <suraj.kandpal@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260701153204.4124150-10-imre.deak@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_dp.c       |  8 +++-
+ .../gpu/drm/i915/display/intel_dp_link_caps.c | 37 +++++++++++++++++--
+ .../gpu/drm/i915/display/intel_dp_link_caps.h |  3 +-
+ 3 files changed, 43 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+index 64090a106847..6e855131d1de 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
++++ b/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -701,7 +701,8 @@ static bool intel_dp_set_common_link_params(struct intel_dp *intel_dp)
+ 	intel_dp_get_common_rates(intel_dp, common_rates, &num_common_rates);
+ 	if (intel_dp_link_caps_update(intel_dp->link.caps,
+ 				      common_rates, num_common_rates,
+-				      intel_dp_get_max_common_lane_count(intel_dp)))
++				      intel_dp_get_max_common_lane_count(intel_dp),
++				      intel_dp->reset_link_params))
+ 		params_changed = true;
+ 
+ 	return params_changed;
+@@ -3613,6 +3614,11 @@ void intel_dp_set_link_params(struct intel_dp *intel_dp,
+ 
+ void intel_dp_reset_link_params(struct intel_dp *intel_dp)
+ {
++	/*
++	 * TODO: Remove the following reset of link capabilities, as
++	 * this isn't needed after intel_dp_link_caps_update(reset=true)
++	 * was called.
++	 */
+ 	intel_dp_link_caps_reset(intel_dp->link.caps);
+ 	intel_dp->link.mst_probed_lane_count = 0;
+ 	intel_dp->link.mst_probed_rate = 0;
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+index 667d2e55cea1..de520bd423d5 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+@@ -709,14 +709,42 @@ static int link_config_cmp_by_lane_rate(const void *a, const void *b, const void
+ 	return lce_a->link_rate_idx - lce_b->link_rate_idx;
+ }
+ 
+-/* Return %true if the supported link parameters have changed. */
++/**
++ * intel_dp_link_caps_update - rebuild the supported link configuration state
++ * @link_caps: link capabilities state
++ * @rates: supported common link rates
++ * @num_rates: number of entries in @rates
++ * @max_lane_count: supported maximum lane count
++ * @reset: reset limits and disabled configs
++ *
++ * Rebuild the supported link configuration state from @rates and
++ * @max_lane_count.
++ *
++ * If @reset is %true, reset the maximum link limits to the maximum
++ * supported rate and lane count, and re-enable all configurations.
++ *
++ * This function is called regularly, at least after a sink is connected,
++ * but it may also be called later whenever the sink capabilities may have
++ * changed, for example in response to HPD IRQ / RX_CAP_CHANGED signaling.
++ *
++ * In the Intel driver this function is currently called whenever the
++ * connector detect handler runs, after reading the sink capabilities. This
++ * may change if those capabilities are cached until the sink is
++ * disconnected, or until RX_CAP_CHANGED is signaled. In any case, this
++ * function should be called whenever the sink capabilities were read out
++ * and may have changed.
++ *
++ * Returns:
++ * - %true if the link capabilities have changed, %false otherwise.
++ */
+ bool intel_dp_link_caps_update(struct intel_dp_link_caps *link_caps,
+-			       const int *rates, int num_rates, int max_lane_count)
++			       const int *rates, int num_rates, int max_lane_count,
++			       bool reset)
+ {
+ 	struct intel_dp *intel_dp = link_caps->dp;
+ 	struct intel_display *display = to_intel_display(intel_dp);
+ 	struct intel_dp_link_config_entry *lce;
+-	bool link_params_changed = false;
++	bool link_params_changed = reset;
+ 	int num_common_lane_configs;
+ 	int i;
+ 	int j;
+@@ -778,6 +806,9 @@ bool intel_dp_link_caps_update(struct intel_dp_link_caps *link_caps,
+ 	       link_config_cmp_by_lane_rate, NULL,
+ 	       link_caps);
+ 
++	if (link_params_changed)
++		reset_max_link_limits_reenable_all(link_caps);
++
+ 	return link_params_changed;
+ }
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+index 79aca74ad9ee..dcbde890809b 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+@@ -147,7 +147,8 @@ bool intel_dp_link_caps_set_max_limits(struct intel_dp_link_caps *link_caps,
+ void intel_dp_link_caps_reset_max_limits(struct intel_dp_link_caps *link_caps);
+ 
+ bool intel_dp_link_caps_update(struct intel_dp_link_caps *link_caps,
+-			       const int *rates, int num_rates, int max_lane_count);
++			       const int *rates, int num_rates, int max_lane_count,
++			       bool reset);
+ void intel_dp_link_caps_reset(struct intel_dp_link_caps *link_caps);
+ 
+ void intel_dp_link_caps_debugfs_add(struct intel_connector *connector);
+-- 
+2.55.0
+

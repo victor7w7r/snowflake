@@ -1,0 +1,103 @@
+From 8b47740b3ae0faa29a8dd39a02021590f1c9728a Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Tue, 30 Jun 2026 14:01:54 -0700
+Subject: [PATCH 03360/15333] KVM: SVM: Make kvm_x86_ops.vcpu_precreate() hook
+ fully AVIC specific
+
+In anticipation of deferring all per-VM AVIC initialization until a vCPU
+is first created, move SVM's kvm_x86_ops.vcpu_precreate() hook into avic.c
+as avic_vcpu_precreate() and nullify the hook if AVIC is disabled (and
+WARN if the hook is somehow invoked without AVIC enabled).
+
+Reviewed-by: Naveen N Rao (AMD) <naveen@kernel.org>
+Link: https://patch.msgid.link/20260630210156.457151-2-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/svm/avic.c | 13 +++++++++----
+ arch/x86/kvm/svm/svm.c  |  8 ++------
+ arch/x86/kvm/svm/svm.h  |  2 +-
+ 3 files changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/arch/x86/kvm/svm/avic.c b/arch/x86/kvm/svm/avic.c
+index 58e493a80cb0..4a0a2dbd1687 100644
+--- a/arch/x86/kvm/svm/avic.c
++++ b/arch/x86/kvm/svm/avic.c
+@@ -293,13 +293,10 @@ static int avic_get_physical_id_table_order(struct kvm *kvm)
+ 	return get_order((__avic_get_max_physical_id(kvm, NULL) + 1) * sizeof(u64));
+ }
+ 
+-int avic_alloc_physical_id_table(struct kvm *kvm)
++static int avic_alloc_physical_id_table(struct kvm *kvm)
+ {
+ 	struct kvm_svm *kvm_svm = to_kvm_svm(kvm);
+ 
+-	if (!irqchip_in_kernel(kvm) || !enable_apicv)
+-		return 0;
+-
+ 	if (kvm_svm->avic_physical_id_table)
+ 		return 0;
+ 
+@@ -311,6 +308,14 @@ int avic_alloc_physical_id_table(struct kvm *kvm)
+ 	return 0;
+ }
+ 
++int avic_vcpu_precreate(struct kvm *kvm)
++{
++	if (!irqchip_in_kernel(kvm) || WARN_ON_ONCE(!enable_apicv))
++		return 0;
++
++	return avic_alloc_physical_id_table(kvm);
++}
++
+ void avic_vm_destroy(struct kvm *kvm)
+ {
+ 	unsigned long flags;
+diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c
+index ef69a51ab27f..a7d141f7e76c 100644
+--- a/arch/x86/kvm/svm/svm.c
++++ b/arch/x86/kvm/svm/svm.c
+@@ -1306,11 +1306,6 @@ void svm_switch_vmcb(struct vcpu_svm *svm, struct kvm_vmcb_info *target_vmcb)
+ 	svm->vmcb = target_vmcb->ptr;
+ }
+ 
+-static int svm_vcpu_precreate(struct kvm *kvm)
+-{
+-	return avic_alloc_physical_id_table(kvm);
+-}
+-
+ static int svm_vcpu_create(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_svm *svm;
+@@ -5333,7 +5328,7 @@ struct kvm_x86_ops svm_x86_ops __initdata = {
+ 	.emergency_disable_virtualization_cpu = svm_emergency_disable_virtualization_cpu,
+ 	.has_emulated_msr = svm_has_emulated_msr,
+ 
+-	.vcpu_precreate = svm_vcpu_precreate,
++	.vcpu_precreate = avic_vcpu_precreate,
+ 	.vcpu_create = svm_vcpu_create,
+ 	.vcpu_free = svm_vcpu_free,
+ 	.vcpu_reset = svm_vcpu_reset,
+@@ -5712,6 +5707,7 @@ static __init int svm_hardware_setup(void)
+ 	enable_apicv = avic_hardware_setup();
+ 	if (!enable_apicv) {
+ 		enable_ipiv = false;
++		svm_x86_ops.vcpu_precreate = NULL;
+ 		svm_x86_ops.vcpu_blocking = NULL;
+ 		svm_x86_ops.vcpu_unblocking = NULL;
+ 		svm_x86_ops.vcpu_get_apicv_inhibit_reasons = NULL;
+diff --git a/arch/x86/kvm/svm/svm.h b/arch/x86/kvm/svm/svm.h
+index 716be21fba33..3c5459374969 100644
+--- a/arch/x86/kvm/svm/svm.h
++++ b/arch/x86/kvm/svm/svm.h
+@@ -945,7 +945,7 @@ extern struct kvm_x86_nested_ops svm_nested_ops;
+ 
+ bool __init avic_hardware_setup(void);
+ void avic_hardware_unsetup(void);
+-int avic_alloc_physical_id_table(struct kvm *kvm);
++int avic_vcpu_precreate(struct kvm *kvm);
+ void avic_vm_destroy(struct kvm *kvm);
+ int avic_vm_init(struct kvm *kvm);
+ void avic_init_vmcb(struct vcpu_svm *svm, struct vmcb *vmcb);
+-- 
+2.55.0
+

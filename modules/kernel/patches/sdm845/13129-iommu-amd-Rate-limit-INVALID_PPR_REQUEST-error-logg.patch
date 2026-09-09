@@ -1,0 +1,42 @@
+From abdbd786c5c7f45afb4b65a3603af059104bf5b4 Mon Sep 17 00:00:00 2001
+From: Vasant Hegde <vasant.hegde@amd.com>
+Date: Tue, 11 Aug 2026 04:08:59 +0000
+Subject: [PATCH 13129/15333] iommu/amd: Rate limit INVALID_PPR_REQUEST error
+ logging
+
+The amd_iommu_report_ppr_err() function logs an error message for every
+INVALID_PPR_REQUEST event. Under certain fault conditions, a misbehaving
+or malicious device can flood the IOMMU event log with PPR faults, causing
+the kernel log to be overwhelmed with repeated error messages.
+
+Switch from dev_err() to dev_err_ratelimited() to suppress duplicate
+messages when INVALID_PPR_REQUEST events occur at a high rate.
+
+Signed-off-by: Vasant Hegde <vasant.hegde@amd.com>
+Reviewed-by: Ankit Soni <Ankit.Soni@amd.com>
+Signed-off-by: Joerg Roedel <joerg.roedel@amd.com>
+---
+ drivers/iommu/amd/iommu.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/iommu/amd/iommu.c b/drivers/iommu/amd/iommu.c
+index 4372d3908e67..17df9b28ebaf 100644
+--- a/drivers/iommu/amd/iommu.c
++++ b/drivers/iommu/amd/iommu.c
+@@ -913,9 +913,10 @@ static void amd_iommu_report_ppr_err(struct amd_iommu *iommu, volatile u32 *even
+ 	u32 pasid = PPR_PASID(*((u64 *)event));
+ 	int tag = event[1] & 0x03FF;
+ 
+-	dev_err(dev, "Event logged [INVALID_PPR_REQUEST device=%04x:%02x:%02x.%x pasid=0x%05x address=0x%llx flags=0x%04x tag=0x%03x]\n",
+-		iommu->pci_seg->id, PCI_BUS_NUM(devid), PCI_SLOT(devid), PCI_FUNC(devid),
+-		pasid, address, flags, tag);
++	dev_err_ratelimited(dev, "Event logged [INVALID_PPR_REQUEST device=%04x:%02x:%02x.%x "
++			    "pasid=0x%05x address=0x%llx flags=0x%04x tag=0x%03x]\n",
++			    iommu->pci_seg->id, PCI_BUS_NUM(devid), PCI_SLOT(devid),
++			    PCI_FUNC(devid), pasid, address, flags, tag);
+ 
+ 	/* Skip COMPLETE_PPR_REQUEST response if RX=1 */
+ 	if (flags & EVENT_FLAG_PPR_RX)
+-- 
+2.55.0
+

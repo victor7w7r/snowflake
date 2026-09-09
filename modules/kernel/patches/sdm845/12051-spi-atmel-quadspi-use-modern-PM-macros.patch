@@ -1,0 +1,74 @@
+From c4a452dd40aa6c8e30925eb734c1027bd07e9931 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:25 +0800
+Subject: [PATCH 12051/15333] spi: atmel-quadspi: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use __maybe_unused.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-2-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/atmel-quadspi.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/spi/atmel-quadspi.c b/drivers/spi/atmel-quadspi.c
+index 98369091eef7..ec19fa0180f0 100644
+--- a/drivers/spi/atmel-quadspi.c
++++ b/drivers/spi/atmel-quadspi.c
+@@ -1578,7 +1578,7 @@ static void atmel_qspi_remove(struct platform_device *pdev)
+ 	}
+ }
+ 
+-static int __maybe_unused atmel_qspi_suspend(struct device *dev)
++static int atmel_qspi_suspend(struct device *dev)
+ {
+ 	struct spi_controller *ctrl = dev_get_drvdata(dev);
+ 	struct atmel_qspi *aq = spi_controller_get_devdata(ctrl);
+@@ -1605,7 +1605,7 @@ static int __maybe_unused atmel_qspi_suspend(struct device *dev)
+ 	return 0;
+ }
+ 
+-static int __maybe_unused atmel_qspi_resume(struct device *dev)
++static int atmel_qspi_resume(struct device *dev)
+ {
+ 	struct spi_controller *ctrl = dev_get_drvdata(dev);
+ 	struct atmel_qspi *aq = spi_controller_get_devdata(ctrl);
+@@ -1637,7 +1637,7 @@ static int __maybe_unused atmel_qspi_resume(struct device *dev)
+ 	return 0;
+ }
+ 
+-static int __maybe_unused atmel_qspi_runtime_suspend(struct device *dev)
++static int atmel_qspi_runtime_suspend(struct device *dev)
+ {
+ 	struct spi_controller *ctrl = dev_get_drvdata(dev);
+ 	struct atmel_qspi *aq = spi_controller_get_devdata(ctrl);
+@@ -1648,7 +1648,7 @@ static int __maybe_unused atmel_qspi_runtime_suspend(struct device *dev)
+ 	return 0;
+ }
+ 
+-static int __maybe_unused atmel_qspi_runtime_resume(struct device *dev)
++static int atmel_qspi_runtime_resume(struct device *dev)
+ {
+ 	struct spi_controller *ctrl = dev_get_drvdata(dev);
+ 	struct atmel_qspi *aq = spi_controller_get_devdata(ctrl);
+@@ -1665,10 +1665,10 @@ static int __maybe_unused atmel_qspi_runtime_resume(struct device *dev)
+ 	return ret;
+ }
+ 
+-static const struct dev_pm_ops __maybe_unused atmel_qspi_pm_ops = {
+-	SET_SYSTEM_SLEEP_PM_OPS(atmel_qspi_suspend, atmel_qspi_resume)
+-	SET_RUNTIME_PM_OPS(atmel_qspi_runtime_suspend,
+-			   atmel_qspi_runtime_resume, NULL)
++static const struct dev_pm_ops atmel_qspi_pm_ops = {
++	SYSTEM_SLEEP_PM_OPS(atmel_qspi_suspend, atmel_qspi_resume)
++	RUNTIME_PM_OPS(atmel_qspi_runtime_suspend,
++		       atmel_qspi_runtime_resume, NULL)
+ };
+ 
+ static const struct atmel_qspi_caps atmel_sama5d2_qspi_caps = {};
+-- 
+2.55.0
+

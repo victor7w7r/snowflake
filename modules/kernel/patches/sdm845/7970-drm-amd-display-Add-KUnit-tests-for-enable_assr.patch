@@ -1,0 +1,220 @@
+From 354bfcbd0591bf3691ff2b4c0b9c00681e5c38bf Mon Sep 17 00:00:00 2001
+From: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Date: Tue, 14 Jul 2026 10:03:48 -0400
+Subject: [PATCH 07970/15333] drm/amd/display: Add KUnit tests for enable_assr
+
+Expose enable_assr() for KUnit and cover the "DTM TA not initialized"
+path and the full command-build path, using the SR-IOV VF early-return
+to bypass psp_dtm_invoke()'s firmware submit.
+
+Reviewed-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Fangzhi Zuo <jerry.zuo@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../amd/display/amdgpu_dm/amdgpu_dm_hdcp.c    |   4 +-
+ .../amd/display/amdgpu_dm/amdgpu_dm_hdcp.h    |   1 +
+ .../amdgpu_dm/tests/amdgpu_dm_hdcp_test.c     | 138 ++++++++++++++++++
+ 3 files changed, 142 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.c
+index e704b6b7fc0b..7115cc0c7746 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.c
+@@ -570,7 +570,8 @@ void hdcp_destroy(struct kobject *kobj, struct hdcp_workqueue *hdcp_work)
+ }
+ EXPORT_IF_KUNIT(hdcp_destroy);
+ 
+-static bool enable_assr(void *handle, struct dc_link *link)
++STATIC_IFN_KUNIT
++bool enable_assr(void *handle, struct dc_link *link)
+ {
+ 	struct hdcp_workqueue *hdcp_work = handle;
+ 	struct mod_hdcp hdcp = hdcp_work->hdcp;
+@@ -603,6 +604,7 @@ static bool enable_assr(void *handle, struct dc_link *link)
+ 
+ 	return true;
+ }
++EXPORT_IF_KUNIT(enable_assr);
+ 
+ static void update_config(void *handle, struct cp_psp_stream_config *config)
+ {
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.h
+index a2b08bec58b5..b8ba2888a2ef 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_hdcp.h
+@@ -123,6 +123,7 @@ void hdcp_remove_display(struct hdcp_workqueue *hdcp_work, unsigned int link_ind
+ 			 struct amdgpu_dm_connector *aconnector);
+ uint8_t *psp_get_srm(struct psp_context *psp, uint32_t *srm_version, uint32_t *srm_size);
+ int psp_set_srm(struct psp_context *psp, u8 *srm, uint32_t srm_size, uint32_t *srm_version);
++bool enable_assr(void *handle, struct dc_link *link);
+ #endif
+ 
+ #endif /* AMDGPU_DM_AMDGPU_DM_HDCP_H_ */
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_hdcp_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_hdcp_test.c
+index 5eace7fa4100..1580562727cd 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_hdcp_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_hdcp_test.c
+@@ -14,6 +14,8 @@
+ #include "amdgpu.h"
+ #include "amdgpu_dm.h"
+ #include "amdgpu_dm_hdcp.h"
++#include "amdgpu_dm_kunit_test_helpers.h"
++#include "hdcp_psp.h"
+ 
+ static void dummy_work_fn(struct work_struct *work) {}
+ 
+@@ -1446,6 +1448,138 @@ static void dm_test_hdcp_reset_display_clears_all_state(struct kunit *test)
+  * hdcp_reset_display().
+  */
+ 
++/* Tests for enable_assr() */
++
++/**
++ * alloc_test_workqueue_for_assr - workqueue wired to a psp for enable_assr()
++ * @test: KUnit test context for managed allocation
++ * @adev: amdgpu device whose drm_device backs psp->adev (for drm_info())
++ *
++ * Allocates a minimal hdcp_workqueue and a psp_context connected through
++ * hdcp.config.psp.handle, matching the dereference chain enable_assr()
++ * performs. The psp is left with dtm_context.context.initialized == false
++ * (from kzalloc) so enable_assr() takes the "DTM TA not initialized" path.
++ */
++static struct hdcp_workqueue *alloc_test_workqueue_for_assr(struct kunit *test,
++							    struct amdgpu_device *adev)
++{
++	struct hdcp_workqueue *work;
++	struct psp_context *psp;
++
++	work = kunit_kzalloc(test, sizeof(*work), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, work);
++
++	psp = kunit_kzalloc(test, sizeof(*psp), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, psp);
++
++	psp->adev = adev;
++	work->hdcp.config.psp.handle = psp;
++
++	return work;
++}
++
++/**
++ * dm_test_enable_assr_uninitialized_dtm_returns_false - DTM TA not initialized
++ * @test: KUnit test context
++ *
++ * When the DTM TA context is not initialized, enable_assr() must take the
++ * early-return path, emit the informational message and return false
++ * without invoking the (real) firmware path.
++ */
++static void dm_test_enable_assr_uninitialized_dtm_returns_false(struct kunit *test)
++{
++	struct amdgpu_device *adev = dm_kunit_alloc_adev(test);
++	struct hdcp_workqueue *work = alloc_test_workqueue_for_assr(test, adev);
++	struct dc_link *link;
++	bool ret;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++
++	/* kzalloc leaves dtm_context.context.initialized == false */
++	ret = enable_assr(work, link);
++
++	KUNIT_EXPECT_FALSE(test, ret);
++}
++
++/**
++ * dm_test_enable_assr_uninitialized_dtm_ignores_link - link untouched on failure
++ * @test: KUnit test context
++ *
++ * On the "DTM TA not initialized" path enable_assr() returns before reading
++ * any field of @link, so a NULL link must be tolerated and the call must
++ * still return false.
++ */
++static void dm_test_enable_assr_uninitialized_dtm_ignores_link(struct kunit *test)
++{
++	struct amdgpu_device *adev = dm_kunit_alloc_adev(test);
++	struct hdcp_workqueue *work = alloc_test_workqueue_for_assr(test, adev);
++	bool ret;
++
++	/* link is not dereferenced before the initialized check. */
++	ret = enable_assr(work, NULL);
++
++	KUNIT_EXPECT_FALSE(test, ret);
++}
++
++/**
++ * dm_test_enable_assr_initialized_builds_command_and_fails - full body, invoke bypassed
++ * @test: KUnit test context
++ *
++ * With the DTM TA marked initialized and a valid shared buffer, enable_assr()
++ * runs its full body: it acquires the DTM mutex, clears the shared command,
++ * fills in the ASSR-enable command from @link and pre-sets the status to
++ * GENERIC_FAILURE before invoking the TA.
++ *
++ * psp_dtm_invoke() is prevented from touching real firmware by marking the
++ * device as an SR-IOV virtual function, which makes it return early without
++ * modifying the shared status. The status therefore stays GENERIC_FAILURE, so
++ * enable_assr() must return false. Inspecting the shared command afterwards
++ * proves the body executed and consumed @link.
++ */
++static void dm_test_enable_assr_initialized_builds_command_and_fails(struct kunit *test)
++{
++	struct amdgpu_device *adev = dm_kunit_alloc_adev(test);
++	struct hdcp_workqueue *work = alloc_test_workqueue_for_assr(test, adev);
++	struct psp_context *psp = work->hdcp.config.psp.handle;
++	struct ta_dtm_shared_memory *dtm_cmd;
++	struct dc_link *link;
++	bool ret;
++
++	dtm_cmd = kunit_kzalloc(test, sizeof(*dtm_cmd), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, dtm_cmd);
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++	link->link_enc_hw_inst = 3;
++
++	/* Wire up an "initialized" DTM TA with a real shared buffer. */
++	psp->dtm_context.context.initialized = true;
++	psp->dtm_context.context.mem_context.shared_buf = (uint8_t *)dtm_cmd;
++	mutex_init(&psp->dtm_context.mutex);
++
++	/*
++	 * Force the SR-IOV VF early-return in psp_dtm_invoke() so no GPU
++	 * command is submitted; the shared status is left untouched.
++	 */
++	adev->virt.caps |= AMDGPU_SRIOV_CAPS_IS_VF;
++
++	ret = enable_assr(work, link);
++
++	/* Status was never advanced to SUCCESS, so the call must fail. */
++	KUNIT_EXPECT_FALSE(test, ret);
++	/* The command body must have populated the shared buffer. */
++	KUNIT_EXPECT_EQ(test, dtm_cmd->cmd_id, TA_DTM_COMMAND__TOPOLOGY_ASSR_ENABLE);
++	KUNIT_EXPECT_EQ(test,
++			dtm_cmd->dtm_in_message.topology_assr_enable.display_topology_dig_be_index,
++			link->link_enc_hw_inst);
++	KUNIT_EXPECT_EQ(test, dtm_cmd->dtm_status, TA_DTM_STATUS__GENERIC_FAILURE);
++	/* The DTM mutex must be released after the guard scope exits. */
++	KUNIT_EXPECT_FALSE(test, mutex_is_locked(&psp->dtm_context.mutex));
++}
++
++/* End of tests for enable_assr() */
++
+ static struct kunit_case dm_hdcp_test_cases[] = {
+ 	/* hdcp_get_content_protection_from_status() */
+ 	KUNIT_CASE(dm_test_hdcp_get_cp_disabled_returns_desired),
+@@ -1507,6 +1641,10 @@ static struct kunit_case dm_hdcp_test_cases[] = {
+ 	KUNIT_CASE(dm_test_hdcp_remove_display_enabled_resets_cp),
+ 	KUNIT_CASE(dm_test_hdcp_remove_display_null_state_clears_connector),
+ 	KUNIT_CASE(dm_test_hdcp_reset_display_clears_all_state),
++	/* enable_assr() */
++	KUNIT_CASE(dm_test_enable_assr_uninitialized_dtm_returns_false),
++	KUNIT_CASE(dm_test_enable_assr_uninitialized_dtm_ignores_link),
++	KUNIT_CASE(dm_test_enable_assr_initialized_builds_command_and_fails),
+ 	{}
+ };
+ 
+-- 
+2.55.0
+

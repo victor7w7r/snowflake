@@ -1,0 +1,57 @@
+From 41fda7804af4931df056f74f91661edf7f696777 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 16 Jun 2026 16:08:32 +0200
+Subject: [PATCH 00965/15333] super: make fs_holder_ops private
+
+Now that filesystems open and claim their block devices through
+fs_bdev_file_open_by_{dev,path}(), nothing outside fs/super.c references
+fs_holder_ops. Make it static and drop its declaration from blkdev.h.
+
+Reviewed-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260616-work-super-bdev_holder_global-v2-16-7df6b864028e@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/super.c             | 3 +--
+ include/linux/blkdev.h | 7 -------
+ 2 files changed, 1 insertion(+), 9 deletions(-)
+
+diff --git a/fs/super.c b/fs/super.c
+index a83f58755cf8..2d0a07861bfc 100644
+--- a/fs/super.c
++++ b/fs/super.c
+@@ -1624,13 +1624,12 @@ static int fs_bdev_thaw(struct block_device *bdev)
+ 	return error;
+ }
+ 
+-const struct blk_holder_ops fs_holder_ops = {
++static const struct blk_holder_ops fs_holder_ops = {
+ 	.mark_dead		= fs_bdev_mark_dead,
+ 	.sync			= fs_bdev_sync,
+ 	.freeze			= fs_bdev_freeze,
+ 	.thaw			= fs_bdev_thaw,
+ };
+-EXPORT_SYMBOL_GPL(fs_holder_ops);
+ 
+ static struct super_dev *super_dev_lookup(dev_t dev, struct super_block *sb)
+ {
+diff --git a/include/linux/blkdev.h b/include/linux/blkdev.h
+index 9e395d95067e..dbb549cdfb77 100644
+--- a/include/linux/blkdev.h
++++ b/include/linux/blkdev.h
+@@ -1768,13 +1768,6 @@ struct blk_holder_ops {
+ 		__releases(&bdev->bd_holder_lock);
+ };
+ 
+-/*
+- * For filesystems using @fs_holder_ops, the @holder argument passed to
+- * helpers used to open and claim block devices via
+- * bd_prepare_to_claim() must point to a superblock.
+- */
+-extern const struct blk_holder_ops fs_holder_ops;
+-
+ /*
+  * Return the correct open flags for blkdev_get_by_* for super block flags
+  * as stored in sb->s_flags.
+-- 
+2.55.0
+

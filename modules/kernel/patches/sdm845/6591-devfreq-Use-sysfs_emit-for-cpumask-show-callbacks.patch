@@ -1,0 +1,46 @@
+From b4b58c39e85f703f18b05a2bf26e51fbca846b7c Mon Sep 17 00:00:00 2001
+From: Yury Norov <ynorov@nvidia.com>
+Date: Thu, 2 Jul 2026 11:47:18 -0400
+Subject: [PATCH 06591/15333] devfreq: Use sysfs_emit() for cpumask show
+ callbacks
+
+These callbacks are sysfs show paths. Use sysfs_emit() and
+cpumask_pr_args() to emit the masks.
+
+This prepares for removing cpumap_print_to_pagebuf().
+
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ drivers/devfreq/event/rockchip-dfi.c | 2 +-
+ drivers/devfreq/hisi_uncore_freq.c   | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/devfreq/event/rockchip-dfi.c b/drivers/devfreq/event/rockchip-dfi.c
+index 5e6e7e900bda..255aee1bdd91 100644
+--- a/drivers/devfreq/event/rockchip-dfi.c
++++ b/drivers/devfreq/event/rockchip-dfi.c
+@@ -354,7 +354,7 @@ static ssize_t ddr_perf_cpumask_show(struct device *dev,
+ 	struct pmu *pmu = dev_get_drvdata(dev);
+ 	struct rockchip_dfi *dfi = container_of(pmu, struct rockchip_dfi, pmu);
+ 
+-	return cpumap_print_to_pagebuf(true, buf, cpumask_of(dfi->cpu));
++	return sysfs_emit(buf, "%*pbl\n", cpumask_pr_args(cpumask_of(dfi->cpu)));
+ }
+ 
+ static struct device_attribute ddr_perf_cpumask_attr =
+diff --git a/drivers/devfreq/hisi_uncore_freq.c b/drivers/devfreq/hisi_uncore_freq.c
+index bef718d6ae35..e1f64b723082 100644
+--- a/drivers/devfreq/hisi_uncore_freq.c
++++ b/drivers/devfreq/hisi_uncore_freq.c
+@@ -540,7 +540,7 @@ static ssize_t related_cpus_show(struct device *dev,
+ {
+ 	struct hisi_uncore_freq *uncore = dev_get_drvdata(dev->parent);
+ 
+-	return cpumap_print_to_pagebuf(true, buf, &uncore->related_cpus);
++	return sysfs_emit(buf, "%*pbl\n", cpumask_pr_args(&uncore->related_cpus));
+ }
+ 
+ static DEVICE_ATTR_RO(related_cpus);
+-- 
+2.55.0
+

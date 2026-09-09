@@ -1,0 +1,76 @@
+From 917d558b151cad5b05991e5eaee22efab33525ca Mon Sep 17 00:00:00 2001
+From: Dapeng Mi <dapeng1.mi@linux.intel.com>
+Date: Fri, 17 Jul 2026 16:03:41 +0800
+Subject: [PATCH 12615/15333] perf/x86: Optimize ACR handling in
+ match_prev_assignment()
+
+match_prev_assignment() currently forces a mismatch for ACR events, so
+ACR counter indices are reprogrammed on every scheduling pass. That
+causes avoidable overhead because disable and enable paths must touch
+multiple MSRs.
+
+The previous ACR assignment is already cached in acr_cfg_b[]. Use that
+state to compare the newly computed ACR counter indices in hwc->config1
+against the cached value in acr_cfg_b[hwc->idx]. If they match, skip
+unnecessary disable and enable work.
+
+Also tighten is_acr_self_reload_event() so it first verifies the event
+is an ACR event before testing for the self-reload case.
+
+Signed-off-by: Dapeng Mi <dapeng1.mi@linux.intel.com>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Reviewed-by: Thomas Falcon <thomas.falcon@intel.com>
+Reviewed-by: Zide Chen <zide.chen@intel.com>
+Link: https://patch.msgid.link/20260717080342.1879573-8-dapeng1.mi@linux.intel.com
+---
+ arch/x86/events/core.c       | 13 ++++++++++++-
+ arch/x86/events/perf_event.h |  2 +-
+ 2 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/events/core.c b/arch/x86/events/core.c
+index 143a6e735d9e..8b3ea0adb965 100644
+--- a/arch/x86/events/core.c
++++ b/arch/x86/events/core.c
+@@ -1297,6 +1297,17 @@ int x86_perf_rdpmc_index(struct perf_event *event)
+ 	return event->hw.event_base_rdpmc;
+ }
+ 
++static inline bool acr_match_prev_indices(struct perf_event *event,
++					  struct cpu_hw_events *cpuc)
++{
++	struct hw_perf_event *hwc = &event->hw;
++
++	if (!is_acr_event_group(event))
++		return true;
++	/* ACR counter indices don't change. */
++	return hwc->config1 == cpuc->acr_cfg_b[hwc->idx];
++}
++
+ static inline int match_prev_assignment(struct perf_event *event,
+ 					struct cpu_hw_events *cpuc,
+ 					int i)
+@@ -1306,7 +1317,7 @@ static inline int match_prev_assignment(struct perf_event *event,
+ 	return hwc->idx == cpuc->assign[i] &&
+ 	       hwc->last_cpu == smp_processor_id() &&
+ 	       hwc->last_tag == cpuc->tags[i] &&
+-	       !is_acr_event_group(event);
++	       acr_match_prev_indices(event, cpuc);
+ }
+ 
+ static void x86_pmu_start(struct perf_event *event, int flags);
+diff --git a/arch/x86/events/perf_event.h b/arch/x86/events/perf_event.h
+index cc9cfaae4f01..fa381110f7a7 100644
+--- a/arch/x86/events/perf_event.h
++++ b/arch/x86/events/perf_event.h
+@@ -141,7 +141,7 @@ static inline bool is_acr_self_reload_event(struct perf_event *event)
+ {
+ 	struct hw_perf_event *hwc = &event->hw;
+ 
+-	if (hwc->idx < 0)
++	if (hwc->idx < 0 || !is_acr_event_group(event))
+ 		return false;
+ 
+ 	return test_bit(hwc->idx, (unsigned long *)&hwc->config1);
+-- 
+2.55.0
+

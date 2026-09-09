@@ -1,0 +1,65 @@
+From 727dc02ec6b9c1c30c99d51a4db965f0bb27b12f Mon Sep 17 00:00:00 2001
+From: Sami Tolvanen <samitolvanen@google.com>
+Date: Thu, 11 Jun 2026 22:17:22 +0000
+Subject: [PATCH 04199/15333] rust: drm: gpuvm: implement Send and Sync for
+ GpuVaAlloc and GpuVmBo
+
+Moving a GpuVaAlloc or GpuVmBo between threads currently forces drivers
+to write their own unsafe Send and Sync impls. Provide the markers in
+the abstraction instead.
+
+GpuVaAlloc wraps only uninitialised memory and exposes none of it.
+GpuVmBo hands out the driver data and GEM object by shared reference and
+drops them in its deferred put; the DriverGpuVm trait already guarantees
+both are Send + Sync, so both impls are unconditional.
+
+Signed-off-by: Sami Tolvanen <samitolvanen@google.com>
+Link: https://patch.msgid.link/20260611-gpuvm-sync-send-v4-2-6c7f4ab2778a@google.com
+Signed-off-by: Alice Ryhl <aliceryhl@google.com>
+---
+ rust/kernel/drm/gpuvm/va.rs    | 8 ++++++++
+ rust/kernel/drm/gpuvm/vm_bo.rs | 9 +++++++++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/rust/kernel/drm/gpuvm/va.rs b/rust/kernel/drm/gpuvm/va.rs
+index 0b09fe44ab39..b108ec7aa1bc 100644
+--- a/rust/kernel/drm/gpuvm/va.rs
++++ b/rust/kernel/drm/gpuvm/va.rs
+@@ -104,6 +104,14 @@ pub fn vm_bo(&self) -> &GpuVmBo<T> {
+ /// The memory is zeroed.
+ pub struct GpuVaAlloc<T: DriverGpuVm>(KBox<MaybeUninit<GpuVa<T>>>);
+ 
++// SAFETY: A `GpuVaAlloc` is an owned, uninitialised allocation with no live `T::VaData` and no
++// thread-bound state.
++unsafe impl<T: DriverGpuVm> Send for GpuVaAlloc<T> {}
++
++// SAFETY: A `GpuVaAlloc` has no `&self` method that reaches its contents, so a shared
++// `&GpuVaAlloc` cannot access the allocation.
++unsafe impl<T: DriverGpuVm> Sync for GpuVaAlloc<T> {}
++
+ impl<T: DriverGpuVm> GpuVaAlloc<T> {
+     /// Pre-allocate a [`GpuVa`] object.
+     pub fn new(flags: AllocFlags) -> Result<GpuVaAlloc<T>, AllocError> {
+diff --git a/rust/kernel/drm/gpuvm/vm_bo.rs b/rust/kernel/drm/gpuvm/vm_bo.rs
+index c064ac63897b..a30f838c11b8 100644
+--- a/rust/kernel/drm/gpuvm/vm_bo.rs
++++ b/rust/kernel/drm/gpuvm/vm_bo.rs
+@@ -19,6 +19,15 @@ pub struct GpuVmBo<T: DriverGpuVm> {
+     data: T::VmBoData,
+ }
+ 
++// SAFETY: It is safe to send a `GpuVmBo<T>` to another thread: dropping it there drops
++// `T::VmBoData` and the GEM `T::Object`, both `Send` by the `DriverGpuVm` bounds.
++unsafe impl<T: DriverGpuVm> Send for GpuVmBo<T> {}
++
++// SAFETY: It is safe to share a `&GpuVmBo<T>` between threads: it effectively shares
++// `&T::VmBoData` and the GEM `&T::Object` (both `Sync`), and any thread may upgrade to an
++// `ARef` and ultimately drop them (both `Send`), per the `DriverGpuVm` bounds.
++unsafe impl<T: DriverGpuVm> Sync for GpuVmBo<T> {}
++
+ // SAFETY: By type invariants, the allocation is managed by the refcount in `self.inner`.
+ unsafe impl<T: DriverGpuVm> AlwaysRefCounted for GpuVmBo<T> {
+     fn inc_ref(&self) {
+-- 
+2.55.0
+

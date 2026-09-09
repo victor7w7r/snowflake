@@ -1,0 +1,179 @@
+From 53fa9d8d97ee77befedbd4ca9cebd7b9a658dc40 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Fri, 17 Jul 2026 16:00:18 +0800
+Subject: [PATCH 07238/15333] crypto: drivers - Remove redundant
+ dev_err()/dev_err_probe()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() automatically logs
+detailed error messages on failure. Remove the now-redundant
+driver-specific dev_err() and dev_err_probe() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ drivers/crypto/atmel-aes.c  | 4 +---
+ drivers/crypto/atmel-sha.c  | 4 +---
+ drivers/crypto/atmel-tdes.c | 4 +---
+ drivers/crypto/img-hash.c   | 4 +---
+ drivers/crypto/mxs-dcp.c    | 8 ++------
+ drivers/crypto/omap-aes.c   | 4 +---
+ drivers/crypto/omap-des.c   | 4 +---
+ drivers/crypto/omap-sham.c  | 5 +----
+ drivers/crypto/sahara.c     | 3 +--
+ 9 files changed, 10 insertions(+), 30 deletions(-)
+
+diff --git a/drivers/crypto/atmel-aes.c b/drivers/crypto/atmel-aes.c
+index b393689400b4..1bf00df864e8 100644
+--- a/drivers/crypto/atmel-aes.c
++++ b/drivers/crypto/atmel-aes.c
+@@ -2369,10 +2369,8 @@ static int atmel_aes_probe(struct platform_device *pdev)
+ 
+ 	err = devm_request_irq(&pdev->dev, aes_dd->irq, atmel_aes_irq,
+ 			       IRQF_SHARED, "atmel-aes", aes_dd);
+-	if (err) {
+-		dev_err(dev, "unable to request aes irq.\n");
++	if (err)
+ 		goto err_tasklet_kill;
+-	}
+ 
+ 	/* Initializing the clock */
+ 	aes_dd->iclk = devm_clk_get_prepared(&pdev->dev, "aes_clk");
+diff --git a/drivers/crypto/atmel-sha.c b/drivers/crypto/atmel-sha.c
+index 8e3b8efa8109..e856309bd02b 100644
+--- a/drivers/crypto/atmel-sha.c
++++ b/drivers/crypto/atmel-sha.c
+@@ -2605,10 +2605,8 @@ static int atmel_sha_probe(struct platform_device *pdev)
+ 
+ 	err = devm_request_irq(&pdev->dev, sha_dd->irq, atmel_sha_irq,
+ 			       IRQF_SHARED, "atmel-sha", sha_dd);
+-	if (err) {
+-		dev_err(dev, "unable to request sha irq.\n");
++	if (err)
+ 		goto err_tasklet_kill;
+-	}
+ 
+ 	/* Initializing the clock */
+ 	sha_dd->iclk = devm_clk_get_prepared(&pdev->dev, "sha_clk");
+diff --git a/drivers/crypto/atmel-tdes.c b/drivers/crypto/atmel-tdes.c
+index 208910d0d08d..1a00e7224644 100644
+--- a/drivers/crypto/atmel-tdes.c
++++ b/drivers/crypto/atmel-tdes.c
+@@ -968,10 +968,8 @@ static int atmel_tdes_probe(struct platform_device *pdev)
+ 
+ 	err = devm_request_irq(&pdev->dev, tdes_dd->irq, atmel_tdes_irq,
+ 			       IRQF_SHARED, "atmel-tdes", tdes_dd);
+-	if (err) {
+-		dev_err(dev, "unable to request tdes irq.\n");
++	if (err)
+ 		goto err_tasklet_kill;
+-	}
+ 
+ 	/* Initializing the clock */
+ 	tdes_dd->iclk = devm_clk_get(&pdev->dev, "tdes_clk");
+diff --git a/drivers/crypto/img-hash.c b/drivers/crypto/img-hash.c
+index c0467185ee42..62e03677079a 100644
+--- a/drivers/crypto/img-hash.c
++++ b/drivers/crypto/img-hash.c
+@@ -967,10 +967,8 @@ static int img_hash_probe(struct platform_device *pdev)
+ 
+ 	err = devm_request_irq(dev, irq, img_irq_handler, 0,
+ 			       dev_name(dev), hdev);
+-	if (err) {
+-		dev_err(dev, "unable to request irq\n");
++	if (err)
+ 		goto res_err;
+-	}
+ 	dev_dbg(dev, "using IRQ channel %d\n", irq);
+ 
+ 	hdev->hash_clk = devm_clk_get_enabled(&pdev->dev, "hash");
+diff --git a/drivers/crypto/mxs-dcp.c b/drivers/crypto/mxs-dcp.c
+index 595b2fd84667..c75a06999787 100644
+--- a/drivers/crypto/mxs-dcp.c
++++ b/drivers/crypto/mxs-dcp.c
+@@ -1085,17 +1085,13 @@ static int mxs_dcp_probe(struct platform_device *pdev)
+ 
+ 	ret = devm_request_irq(dev, dcp_vmi_irq, mxs_dcp_irq, 0,
+ 			       "dcp-vmi-irq", sdcp);
+-	if (ret) {
+-		dev_err(dev, "Failed to claim DCP VMI IRQ!\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	ret = devm_request_irq(dev, dcp_irq, mxs_dcp_irq, 0,
+ 			       "dcp-irq", sdcp);
+-	if (ret) {
+-		dev_err(dev, "Failed to claim DCP IRQ!\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	/* Allocate coherent helper block. */
+ 	sdcp->coh = devm_kzalloc(dev, sizeof(*sdcp->coh) + DCP_ALIGNMENT,
+diff --git a/drivers/crypto/omap-aes.c b/drivers/crypto/omap-aes.c
+index a5fce216de34..d40074e5a142 100644
+--- a/drivers/crypto/omap-aes.c
++++ b/drivers/crypto/omap-aes.c
+@@ -1114,10 +1114,8 @@ static int omap_aes_probe(struct platform_device *pdev)
+ 
+ 		err = devm_request_irq(dev, irq, omap_aes_irq, 0,
+ 				dev_name(dev), dd);
+-		if (err) {
+-			dev_err(dev, "Unable to grab omap-aes IRQ\n");
++		if (err)
+ 			goto err_irq;
+-		}
+ 	}
+ 
+ 	spin_lock_init(&dd->lock);
+diff --git a/drivers/crypto/omap-des.c b/drivers/crypto/omap-des.c
+index dfaf831dd8ec..3b7104cb4487 100644
+--- a/drivers/crypto/omap-des.c
++++ b/drivers/crypto/omap-des.c
+@@ -1017,10 +1017,8 @@ static int omap_des_probe(struct platform_device *pdev)
+ 
+ 		err = devm_request_irq(dev, irq, omap_des_irq, 0,
+ 				dev_name(dev), dd);
+-		if (err) {
+-			dev_err(dev, "Unable to grab omap-des IRQ\n");
++		if (err)
+ 			goto err_irq;
+-		}
+ 	}
+ 
+ 
+diff --git a/drivers/crypto/omap-sham.c b/drivers/crypto/omap-sham.c
+index e8e111bd438a..6d2dd0b88f15 100644
+--- a/drivers/crypto/omap-sham.c
++++ b/drivers/crypto/omap-sham.c
+@@ -2024,11 +2024,8 @@ static int omap_sham_probe(struct platform_device *pdev)
+ 
+ 	err = devm_request_irq(dev, dd->irq, dd->pdata->intr_hdlr,
+ 			       IRQF_TRIGGER_NONE, dev_name(dev), dd);
+-	if (err) {
+-		dev_err(dev, "unable to request irq %d, err = %d\n",
+-			dd->irq, err);
++	if (err)
+ 		goto data_err;
+-	}
+ 
+ 	dma_cap_zero(mask);
+ 	dma_cap_set(DMA_SLAVE, mask);
+diff --git a/drivers/crypto/sahara.c b/drivers/crypto/sahara.c
+index 533080b0cddc..d586f1315de1 100644
+--- a/drivers/crypto/sahara.c
++++ b/drivers/crypto/sahara.c
+@@ -1305,8 +1305,7 @@ static int sahara_probe(struct platform_device *pdev)
+ 	err = devm_request_irq(&pdev->dev, irq, sahara_irq_handler,
+ 			       0, dev_name(&pdev->dev), dev);
+ 	if (err)
+-		return dev_err_probe(&pdev->dev, err,
+-				     "failed to request irq\n");
++		return err;
+ 
+ 	/* clocks */
+ 	dev->clk_ipg = devm_clk_get_enabled(&pdev->dev, "ipg");
+-- 
+2.55.0
+

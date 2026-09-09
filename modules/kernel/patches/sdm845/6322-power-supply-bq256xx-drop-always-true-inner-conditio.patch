@@ -1,0 +1,43 @@
+From 39a4e68035ba6a11f94105056fc3906df1a5b3ea Mon Sep 17 00:00:00 2001
+From: Anas Khan <anxkhn28@gmail.com>
+Date: Fri, 3 Jul 2026 01:15:47 +0530
+Subject: [PATCH 06322/15333] power: supply: bq256xx: drop always-true inner
+ condition
+
+In bq256xx_array_parse() the inner "if (val < array[i])" repeats the
+second half of the enclosing "if (val > array[i - 1] && val < array[i])",
+so it is always true and the "else return i" arm is dead code. The
+function performs a round-down table lookup, so returning i - 1 for a
+value that falls strictly between two entries is the intended result.
+Collapse the redundant branch into a single "return i - 1;"; no
+functional change.
+
+Signed-off-by: Anas Khan <anxkhn28@gmail.com>
+Link: https://patch.msgid.link/20260702194547.65209-1-anxkhn28@gmail.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/bq256xx_charger.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/power/supply/bq256xx_charger.c b/drivers/power/supply/bq256xx_charger.c
+index 4ea89b7897c8..ba88cf90e730 100644
+--- a/drivers/power/supply/bq256xx_charger.c
++++ b/drivers/power/supply/bq256xx_charger.c
+@@ -347,12 +347,8 @@ static int bq256xx_array_parse(int array_size, int val, const int array[])
+ 		if (val == array[i])
+ 			return i;
+ 
+-		if (val > array[i - 1] && val < array[i]) {
+-			if (val < array[i])
+-				return i - 1;
+-			else
+-				return i;
+-		}
++		if (val > array[i - 1] && val < array[i])
++			return i - 1;
+ 	}
+ 	return -EINVAL;
+ }
+-- 
+2.55.0
+

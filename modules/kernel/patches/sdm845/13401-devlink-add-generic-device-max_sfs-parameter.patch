@@ -1,0 +1,83 @@
+From 26ba30221c03364d6ed9910be8da4c1fd871b07b Mon Sep 17 00:00:00 2001
+From: Nikolay Aleksandrov <nikolay@nvidia.com>
+Date: Thu, 6 Aug 2026 10:30:36 +0300
+Subject: [PATCH 13401/15333] devlink: add generic device max_sfs parameter
+
+Add a new generic devlink device parameter (max_sfs) to control if and
+how many light-weight NIC subfunctions can be created. Subfunctions are
+a light-weight network functions backed by an underlying PCI function.
+Their lifecycle can already be managed by devlink, but currently users
+cannot enable them in the device. They can be enabled/disabled only via
+external vendor tools. This parameter allows subfunctions to be enabled
+(>0) or disabled (0) via devlink. A subsequent patch will add support
+for max_sfs to the mlx5 driver.
+
+Signed-off-by: Nikolay Aleksandrov <nikolay@nvidia.com>
+Reviewed-by: David Ahern <dsahern@kernel.org>
+Reviewed-by: Jiri Pirko <jiri@nvidia.com>
+Reviewed-by: Aleksandr Loktionov <aleksandr.loktionov@intel.com>
+Reviewed-by: Alexander Lobakin <aleksander.lobakin@intel.com>
+Signed-off-by: Tariq Toukan <tariqt@nvidia.com>
+Link: https://patch.msgid.link/20260806073037.3001886-2-tariqt@nvidia.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ Documentation/networking/devlink/devlink-params.rst | 6 ++++++
+ include/net/devlink.h                               | 4 ++++
+ net/devlink/param.c                                 | 5 +++++
+ 3 files changed, 15 insertions(+)
+
+diff --git a/Documentation/networking/devlink/devlink-params.rst b/Documentation/networking/devlink/devlink-params.rst
+index ca19ee3e63c8..13eb8aa84c38 100644
+--- a/Documentation/networking/devlink/devlink-params.rst
++++ b/Documentation/networking/devlink/devlink-params.rst
+@@ -165,3 +165,9 @@ own name.
+      - u32
+      - Controls the maximum number of MAC address filters that can be assigned
+        to a Virtual Function (VF).
++   * - ``max_sfs``
++     - u32
++     - The maximum number of subfunctions which can be created on the device.
++       Modifying this parameter may require a device restart and PCI bus
++       rescanning because the BAR layout may change. A value of 0 disables
++       subfunction creation.
+diff --git a/include/net/devlink.h b/include/net/devlink.h
+index 4830aba4087a..7abd23376319 100644
+--- a/include/net/devlink.h
++++ b/include/net/devlink.h
+@@ -554,6 +554,7 @@ enum devlink_param_generic_id {
+ 	DEVLINK_PARAM_GENERIC_ID_TOTAL_VFS,
+ 	DEVLINK_PARAM_GENERIC_ID_NUM_DOORBELLS,
+ 	DEVLINK_PARAM_GENERIC_ID_MAX_MAC_PER_VF,
++	DEVLINK_PARAM_GENERIC_ID_MAX_SFS,
+ 
+ 	/* add new param generic ids above here*/
+ 	__DEVLINK_PARAM_GENERIC_ID_MAX,
+@@ -627,6 +628,9 @@ enum devlink_param_generic_id {
+ #define DEVLINK_PARAM_GENERIC_MAX_MAC_PER_VF_NAME "max_mac_per_vf"
+ #define DEVLINK_PARAM_GENERIC_MAX_MAC_PER_VF_TYPE DEVLINK_PARAM_TYPE_U32
+ 
++#define DEVLINK_PARAM_GENERIC_MAX_SFS_NAME "max_sfs"
++#define DEVLINK_PARAM_GENERIC_MAX_SFS_TYPE DEVLINK_PARAM_TYPE_U32
++
+ #define DEVLINK_PARAM_GENERIC(_id, _cmodes, _get, _set, _validate)	\
+ {									\
+ 	.id = DEVLINK_PARAM_GENERIC_ID_##_id,				\
+diff --git a/net/devlink/param.c b/net/devlink/param.c
+index 1cc562a6ebfd..8ca0f3ed646c 100644
+--- a/net/devlink/param.c
++++ b/net/devlink/param.c
+@@ -117,6 +117,11 @@ static const struct devlink_param devlink_param_generic[] = {
+ 		.name = DEVLINK_PARAM_GENERIC_MAX_MAC_PER_VF_NAME,
+ 		.type = DEVLINK_PARAM_GENERIC_MAX_MAC_PER_VF_TYPE,
+ 	},
++	{
++		.id = DEVLINK_PARAM_GENERIC_ID_MAX_SFS,
++		.name = DEVLINK_PARAM_GENERIC_MAX_SFS_NAME,
++		.type = DEVLINK_PARAM_GENERIC_MAX_SFS_TYPE,
++	},
+ };
+ 
+ static int devlink_param_generic_verify(const struct devlink_param *param)
+-- 
+2.55.0
+

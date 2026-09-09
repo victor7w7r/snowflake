@@ -1,0 +1,38 @@
+From f5f762fc93d0b81d30b815a2f96320909ad10eb3 Mon Sep 17 00:00:00 2001
+From: Josh Poimboeuf <jpoimboe@kernel.org>
+Date: Sun, 2 Aug 2026 20:24:26 -0700
+Subject: [PATCH 09897/15333] objtool/klp: Skip hidden directories when finding
+ objects
+
+klp-build's find_objects() scans the whole tree for vmlinux.o and .ko
+files, pruning only klp-tmp/ and .git/.  Development tools can leave
+other dot-directories in the tree.  Kernel objects never live under
+hidden directories, so prune them all.
+
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Cc: live-patching@vger.kernel.org
+Link: https://patch.msgid.link/6c8eaa9feb17e3811f4ef7733fd7288b7f489183.1785727106.git.jpoimboe@kernel.org
+---
+ scripts/livepatch/klp-build | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/livepatch/klp-build b/scripts/livepatch/klp-build
+index c4a7acf8edc3..a8c103ce7763 100755
+--- a/scripts/livepatch/klp-build
++++ b/scripts/livepatch/klp-build
+@@ -575,8 +575,9 @@ find_objects() {
+ 	local opts=("$@")
+ 
+ 	# Find root-level vmlinux.o and non-root-level .ko files,
+-	# excluding klp-tmp/ and .git/
+-	find "$PWD" \( -path "$TMP_DIR" -o -path "$PWD/.git" -o -regex "$PWD/[^/][^/]*\.ko" \) -prune -o \
++	# excluding klp-tmp/ and hidden directories.
++	find "$PWD" -mindepth 1 \
++		    \( -path "$TMP_DIR" -o -name ".*" -o -regex "$PWD/[^/][^/]*\.ko" \) -prune -o \
+ 		    -type f "${opts[@]}"				\
+ 		    \( -name "*.ko" -o -path "$PWD/vmlinux.o" \)	\
+ 		    -printf '%P\n'
+-- 
+2.55.0
+

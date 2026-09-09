@@ -1,0 +1,43 @@
+From eec908b5c0d33961f1ed893d3aedf6d684870001 Mon Sep 17 00:00:00 2001
+From: Mohammad Shahid <mdshahid03@gmail.com>
+Date: Sat, 4 Jul 2026 16:40:57 +0530
+Subject: [PATCH 14808/15333] ntfs: mft: use kmemdup() instead of kmalloc() and
+ memcpy()
+
+Use kmemdup() instead of a separate kmalloc() and memcpy()
+pair, simplifying the code while preserving the existing
+behavior.
+
+This issue was reported by memdup.cocci.
+
+Signed-off-by: Mohammad Shahid <mdshahid03@gmail.com>
+Reviewed-by: Hyunchul Lee <hyc.lee@gmail.com>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/ntfs/mft.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/fs/ntfs/mft.c b/fs/ntfs/mft.c
+index fd20d7abd6f5..f95e433885a0 100644
+--- a/fs/ntfs/mft.c
++++ b/fs/ntfs/mft.c
+@@ -2420,7 +2420,7 @@ int ntfs_mft_record_alloc(struct ntfs_volume *vol, const int mode,
+ 		 * record.
+ 		 */
+ 
+-		(*ni)->mrec = kmalloc(vol->mft_record_size, GFP_NOFS);
++		(*ni)->mrec = kmemdup(m, vol->mft_record_size, GFP_NOFS);
+ 		if (!(*ni)->mrec) {
+ 			folio_unlock(folio);
+ 			kunmap_local(m);
+@@ -2429,7 +2429,6 @@ int ntfs_mft_record_alloc(struct ntfs_volume *vol, const int mode,
+ 			goto undo_mftbmp_alloc;
+ 		}
+ 
+-		memcpy((*ni)->mrec, m, vol->mft_record_size);
+ 		post_read_mst_fixup((struct ntfs_record *)(*ni)->mrec, vol->mft_record_size);
+ 		ntfs_mft_mark_dirty(folio);
+ 		folio_unlock(folio);
+-- 
+2.55.0
+

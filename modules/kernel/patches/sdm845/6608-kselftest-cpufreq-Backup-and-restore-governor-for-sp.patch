@@ -1,0 +1,144 @@
+From 4763f0db60a538c29d882fb6ab9e9371fbeb697c Mon Sep 17 00:00:00 2001
+From: Yiwei Lin <s921975628@gmail.com>
+Date: Wed, 8 Jul 2026 00:36:47 +0800
+Subject: [PATCH 06608/15333] kselftest: cpufreq: Backup and restore governor
+ for sptests
+
+After executing cpufreq sptest, the system governor
+will be overwritten with the governor switched
+during the test. Restore this setting to maintain
+consistency before and after the test.
+
+Signed-off-by: Yiwei Lin <s921975628@gmail.com>
+Acked-by: Viresh Kumar <viresh.kumar@linaro.org>
+Link: https://patch.msgid.link/20260707163647.6646-1-s921975628@gmail.com
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ tools/testing/selftests/cpufreq/governor.sh   | 21 +++++++++++++++++++
+ .../selftests/cpufreq/special-tests.sh        | 14 +++++++++++++
+ 2 files changed, 35 insertions(+)
+
+diff --git a/tools/testing/selftests/cpufreq/governor.sh b/tools/testing/selftests/cpufreq/governor.sh
+index 212ef1cf43d5..cf59e63f8e14 100755
+--- a/tools/testing/selftests/cpufreq/governor.sh
++++ b/tools/testing/selftests/cpufreq/governor.sh
+@@ -16,6 +16,12 @@ source cpufreq.sh
+ CUR_GOV=
+ CUR_FREQ=
+ 
++# Per-policy backup, keyed by policy so multiple policies can be saved at once
++# (backup_governor/restore_governor also keep CUR_GOV/CUR_FREQ for callers that
++# read them directly).
++declare -A SAVED_GOVERNORS
++declare -A SAVED_FREQS
++
+ # Find governor's directory path
+ # $1: policy, $2: governor
+ find_gov_directory()
+@@ -39,11 +45,13 @@ find_current_governor()
+ backup_governor()
+ {
+ 	CUR_GOV=$(find_current_governor $1)
++	SAVED_GOVERNORS[$1]=$CUR_GOV
+ 
+ 	printf "Governor backup done for $1: $CUR_GOV\n"
+ 
+ 	if [ $CUR_GOV == "userspace" ]; then
+ 		CUR_FREQ=$(find_current_freq $1)
++		SAVED_FREQS[$1]=$CUR_FREQ
+ 		printf "Governor frequency backup done for $1: $CUR_FREQ\n"
+ 	fi
+ 
+@@ -53,11 +61,13 @@ backup_governor()
+ # $1: policy
+ restore_governor()
+ {
++	CUR_GOV=${SAVED_GOVERNORS[$1]}
+ 	__switch_governor $1 $CUR_GOV
+ 
+ 	printf "Governor restored for $1 to $CUR_GOV\n"
+ 
+ 	if [ $CUR_GOV == "userspace" ]; then
++		CUR_FREQ=${SAVED_FREQS[$1]}
+ 		set_cpu_frequency $1 $CUR_FREQ
+ 		printf "Governor frequency restored for $1: $CUR_FREQ\n"
+ 	fi
+@@ -65,6 +75,17 @@ restore_governor()
+ 	printf "\n"
+ }
+ 
++# Save/restore governors for every policy at once
++save_all_governors()
++{
++	for_each_policy backup_governor
++}
++
++restore_all_governors()
++{
++	for_each_policy restore_governor
++}
++
+ # param:
+ # $1: policy, $2: governor
+ __switch_governor()
+diff --git a/tools/testing/selftests/cpufreq/special-tests.sh b/tools/testing/selftests/cpufreq/special-tests.sh
+index f45eb525f3b1..e87ed7c8e5e5 100755
+--- a/tools/testing/selftests/cpufreq/special-tests.sh
++++ b/tools/testing/selftests/cpufreq/special-tests.sh
+@@ -40,7 +40,9 @@ simple_lockdep()
+ {
+ 	printf "** Test: Running ${FUNCNAME[0]} **\n"
+ 
++	save_all_governors
+ 	for_each_policy __simple_lockdep
++	restore_all_governors
+ }
+ 
+ # Test 2
+@@ -56,7 +58,10 @@ concurrent_lockdep()
+ {
+ 	printf "** Test: Running ${FUNCNAME[0]} **\n"
+ 
++	save_all_governors
+ 	for_each_policy_concurrent __concurrent_lockdep
++	wait
++	restore_all_governors
+ }
+ 
+ # Test 3
+@@ -68,17 +73,23 @@ quick_shuffle()
+ 		echo ondemand | tee $CPUFREQROOT/policy*/scaling_governor &
+ 		echo userspace | tee $CPUFREQROOT/policy*/scaling_governor &
+ 	done
++	wait
+ }
+ 
+ governor_race()
+ {
+ 	printf "** Test: Running ${FUNCNAME[0]} **\n"
+ 
++	save_all_governors
++
+ 	# run 8 concurrent instances
+ 	for I in `seq 8`
+ 	do
+ 		quick_shuffle &
+ 	done
++	wait
++
++	restore_all_governors
+ }
+ 
+ # Test 4
+@@ -112,5 +123,8 @@ hotplug_with_updates_cpu()
+ 
+ hotplug_with_updates()
+ {
++	save_all_governors
+ 	for_each_non_boot_cpu hotplug_with_updates_cpu
++	wait
++	restore_all_governors
+ }
+-- 
+2.55.0
+

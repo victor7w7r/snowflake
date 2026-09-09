@@ -1,0 +1,136 @@
+From 7108a3708c3310df62c95bea11065bcd7804ec37 Mon Sep 17 00:00:00 2001
+From: Abel Vesa <abel.vesa@oss.qualcomm.com>
+Date: Fri, 24 Jul 2026 11:23:54 +0300
+Subject: [PATCH 08312/15333] arm64: dts: qcom: eliza-evk: Add support for USB
+ and SD card
+
+Even though the EVK comes with 3 Type-C ports, the Eliza EVK only has
+one USB controller and a single set of PHYs, which are connected to
+the port marked as JUSB.
+
+Also, the EVK comes with an SD card slot.
+
+So describe the PMIC GLINK node, the connector graph, the PHYs and repeater
+supplies and enable the USB controller.
+
+Also enable the second SD host controller, describe the card detect GPIO
+and the board specific supplies.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Abel Vesa <abel.vesa@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260724-dts-qcom-eliza-cqs-evk-enable-usb-sdcard-v3-1-eadf9da69226@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ arch/arm64/boot/dts/qcom/eliza-evk.dtsi | 92 +++++++++++++++++++++++++
+ 1 file changed, 92 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/eliza-evk.dtsi b/arch/arm64/boot/dts/qcom/eliza-evk.dtsi
+index e47b24f8b827..2fc945658300 100644
+--- a/arch/arm64/boot/dts/qcom/eliza-evk.dtsi
++++ b/arch/arm64/boot/dts/qcom/eliza-evk.dtsi
+@@ -11,6 +11,70 @@ aliases {
+ 	chosen {
+ 		stdout-path = "serial0:115200n8";
+ 	};
++
++	pmic-glink {
++		compatible = "qcom,eliza-pmic-glink",
++			     "qcom,sm8550-pmic-glink",
++			     "qcom,pmic-glink";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		orientation-gpios = <&tlmm 122 GPIO_ACTIVE_HIGH>;
++
++		connector@0 {
++			compatible = "usb-c-connector";
++			reg = <0>;
++
++			power-role = "dual";
++			data-role = "dual";
++
++			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				port@0 {
++					reg = <0>;
++
++					pmic_glink_hs_in: endpoint {
++						remote-endpoint = <&usb_dwc3_hs>;
++					};
++				};
++
++				port@1 {
++					reg = <1>;
++
++					pmic_glink_ss_in: endpoint {
++						remote-endpoint = <&usb_dp_qmpphy_out>;
++					};
++				};
++			};
++		};
++	};
++};
++
++&pm7550ba_eusb2_repeater {
++	vdd18-supply = <&vreg_l7b>;
++	vdd3-supply = <&vreg_l17b>;
++};
++
++&sdhc_2 {
++	vmmc-supply = <&vreg_l13b>;
++	vqmmc-supply = <&vreg_l23b>;
++
++	cd-gpios = <&tlmm 58 GPIO_ACTIVE_LOW>;
++
++	pinctrl-0 = <&sdc2_default>, <&sd_cd>;
++	pinctrl-1 = <&sdc2_sleep>, <&sd_cd>;
++	pinctrl-names = "default", "sleep";
++
++	status = "okay";
++};
++
++&tlmm {
++	sd_cd: sd-cd-state {
++		pins = "gpio58";
++		function = "gpio";
++		bias-pull-up;
++	};
+ };
+ 
+ &uart13 {
+@@ -18,3 +82,31 @@ &uart13 {
+ 
+ 	status = "okay";
+ };
++
++&usb {
++	status = "okay";
++};
++
++&usb_dp_qmpphy {
++	vdda-phy-supply = <&vreg_l3g>;
++	vdda-pll-supply = <&vreg_l7k>;
++
++	status = "okay";
++};
++
++&usb_dp_qmpphy_out {
++	remote-endpoint = <&pmic_glink_ss_in>;
++};
++
++&usb_dwc3_hs {
++	remote-endpoint = <&pmic_glink_hs_in>;
++};
++
++&usb_hsphy {
++	vdd-supply = <&vreg_l7k>;
++	vdda12-supply = <&vreg_l4b>;
++
++	phys = <&pm7550ba_eusb2_repeater>;
++
++	status = "okay";
++};
+-- 
+2.55.0
+

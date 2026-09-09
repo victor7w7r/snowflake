@@ -1,0 +1,96 @@
+From 7050ee33c2db8e96bdbcd97f49a7ffa1d9b3ce1a Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Thu, 23 Jul 2026 06:34:57 +0000
+Subject: [PATCH 10675/15333] ASoC: soc-core: makes
+ snd_soc_component_initialize() / snd_soc_add_component() local
+
+No one is calling snd_soc_component_initialize() / snd_soc_add_component()
+calling from driver. Makes them local functions.
+
+It renames
+	- snd_soc_add_component()
+	+ snd_soc_component_add()
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/87ik66rz73.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/soc.h  |  6 ------
+ sound/soc/soc-core.c | 18 ++++++++----------
+ 2 files changed, 8 insertions(+), 16 deletions(-)
+
+diff --git a/include/sound/soc.h b/include/sound/soc.h
+index cb0de41e2ada..f46b2bc2a022 100644
+--- a/include/sound/soc.h
++++ b/include/sound/soc.h
+@@ -447,12 +447,6 @@ static inline int snd_soc_resume(struct device *dev)
+ }
+ #endif
+ int snd_soc_poweroff(struct device *dev);
+-int snd_soc_component_initialize(struct snd_soc_component *component,
+-				 const struct snd_soc_component_driver *driver,
+-				 struct device *dev);
+-int snd_soc_add_component(struct snd_soc_component *component,
+-			  struct snd_soc_dai_driver *dai_drv,
+-			  int num_dai);
+ int snd_soc_register_component_c(struct snd_soc_component *component,
+ 			 const struct snd_soc_component_driver *component_driver,
+ 			 struct snd_soc_dai_driver *dai_drv, int num_dai);
+diff --git a/sound/soc/soc-core.c b/sound/soc/soc-core.c
+index c4c99944d4b6..ec23ba261897 100644
+--- a/sound/soc/soc-core.c
++++ b/sound/soc/soc-core.c
+@@ -2707,9 +2707,9 @@ static void snd_soc_del_component_unlocked(struct snd_soc_component *component)
+ 	list_del(&component->list);
+ }
+ 
+-int snd_soc_component_initialize(struct snd_soc_component *component,
+-				 const struct snd_soc_component_driver *driver,
+-				 struct device *dev)
++static int soc_component_initialize(struct snd_soc_component *component,
++				    const struct snd_soc_component_driver *driver,
++				    struct device *dev)
+ {
+ 	component->dapm = snd_soc_dapm_alloc(dev);
+ 	if (!component->dapm)
+@@ -2735,11 +2735,10 @@ int snd_soc_component_initialize(struct snd_soc_component *component,
+ 
+ 	return 0;
+ }
+-EXPORT_SYMBOL_GPL(snd_soc_component_initialize);
+ 
+-int snd_soc_add_component(struct snd_soc_component *component,
+-			  struct snd_soc_dai_driver *dai_drv,
+-			  int num_dai)
++static int soc_component_add(struct snd_soc_component *component,
++			     struct snd_soc_dai_driver *dai_drv,
++			     int num_dai)
+ {
+ 	struct snd_soc_card *card, *c;
+ 	int ret;
+@@ -2778,7 +2777,6 @@ int snd_soc_add_component(struct snd_soc_component *component,
+ 
+ 	return ret;
+ }
+-EXPORT_SYMBOL_GPL(snd_soc_add_component);
+ 
+ int snd_soc_register_component_c(struct snd_soc_component *component,
+ 			const struct snd_soc_component_driver *component_driver,
+@@ -2787,11 +2785,11 @@ int snd_soc_register_component_c(struct snd_soc_component *component,
+ {
+ 	int ret;
+ 
+-	ret = snd_soc_component_initialize(component, component_driver, component->dev);
++	ret = soc_component_initialize(component, component_driver, component->dev);
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	return snd_soc_add_component(component, dai_drv, num_dai);
++	return soc_component_add(component, dai_drv, num_dai);
+ }
+ EXPORT_SYMBOL_GPL(snd_soc_register_component_c);
+ 
+-- 
+2.55.0
+

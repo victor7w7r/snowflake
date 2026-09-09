@@ -1,0 +1,93 @@
+From 21b3263b90e8006d488894e8a71c8debf45f6b88 Mon Sep 17 00:00:00 2001
+From: Emmanuel Grumbach <emmanuel.grumbach@intel.com>
+Date: Tue, 14 Jul 2026 17:02:10 +0300
+Subject: [PATCH 04963/15333] wifi: iwlwifi: mvm: validate monitor notif
+ link_id
+
+MONITOR_NOTIF link_id is firmware-provided. Validate link_id range
+with IWL_FW_CHECK before vif lookup. Payload length is already
+checked by RX_HANDLER.
+Use iwl_mvm_rcu_dereference_vif_id which does all we need which allows
+us to drop iwl_mvm_get_vif_by_macid.
+
+Assisted-by: GitHubCopilot:gpt-5.3-codex
+Signed-off-by: Emmanuel Grumbach <emmanuel.grumbach@intel.com>
+Link: https://patch.msgid.link/20260714165826.7601d05649a4.I237f58a007af761468057c9c09039953a3bb37da@changeid
+Signed-off-by: Miri Korenblit <miriam.rachel.korenblit@intel.com>
+---
+ drivers/net/wireless/intel/iwlwifi/mvm/mvm.h  |  1 -
+ drivers/net/wireless/intel/iwlwifi/mvm/ops.c  |  4 +--
+ .../net/wireless/intel/iwlwifi/mvm/utils.c    | 30 -------------------
+ 3 files changed, 2 insertions(+), 33 deletions(-)
+
+diff --git a/drivers/net/wireless/intel/iwlwifi/mvm/mvm.h b/drivers/net/wireless/intel/iwlwifi/mvm/mvm.h
+index 4420005ef69e..979b39314981 100644
+--- a/drivers/net/wireless/intel/iwlwifi/mvm/mvm.h
++++ b/drivers/net/wireless/intel/iwlwifi/mvm/mvm.h
+@@ -2405,7 +2405,6 @@ void iwl_mvm_sync_rx_queues_internal(struct iwl_mvm *mvm,
+ 				     bool sync,
+ 				     const void *data, u32 size);
+ struct ieee80211_vif *iwl_mvm_get_bss_vif(struct iwl_mvm *mvm);
+-struct ieee80211_vif *iwl_mvm_get_vif_by_macid(struct iwl_mvm *mvm, u32 macid);
+ bool iwl_mvm_is_vif_assoc(struct iwl_mvm *mvm);
+ 
+ #define MVM_TCM_PERIOD_MSEC 500
+diff --git a/drivers/net/wireless/intel/iwlwifi/mvm/ops.c b/drivers/net/wireless/intel/iwlwifi/mvm/ops.c
+index 2297392db955..f43895c2f3c6 100644
+--- a/drivers/net/wireless/intel/iwlwifi/mvm/ops.c
++++ b/drivers/net/wireless/intel/iwlwifi/mvm/ops.c
+@@ -155,8 +155,8 @@ static void iwl_mvm_rx_monitor_notif(struct iwl_mvm *mvm,
+ 	if (notif->type != cpu_to_le32(IWL_DP_MON_NOTIF_TYPE_EXT_CCA))
+ 		return;
+ 
+-	/* FIXME: should fetch the link and not the vif */
+-	vif = iwl_mvm_get_vif_by_macid(mvm, notif->link_id);
++	/* mac_id = link_id since we don't support MLO */
++	vif = iwl_mvm_rcu_dereference_vif_id(mvm, notif->link_id, false);
+ 	if (!vif || vif->type != NL80211_IFTYPE_STATION)
+ 		return;
+ 
+diff --git a/drivers/net/wireless/intel/iwlwifi/mvm/utils.c b/drivers/net/wireless/intel/iwlwifi/mvm/utils.c
+index 7eae10982869..2fd4a9961145 100644
+--- a/drivers/net/wireless/intel/iwlwifi/mvm/utils.c
++++ b/drivers/net/wireless/intel/iwlwifi/mvm/utils.c
+@@ -689,36 +689,6 @@ struct ieee80211_vif *iwl_mvm_get_bss_vif(struct iwl_mvm *mvm)
+ 	return bss_iter_data.vif;
+ }
+ 
+-struct iwl_bss_find_iter_data {
+-	struct ieee80211_vif *vif;
+-	u32 macid;
+-};
+-
+-static void iwl_mvm_bss_find_iface_iterator(void *_data, u8 *mac,
+-					    struct ieee80211_vif *vif)
+-{
+-	struct iwl_bss_find_iter_data *data = _data;
+-	struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(vif);
+-
+-	if (mvmvif->id == data->macid)
+-		data->vif = vif;
+-}
+-
+-struct ieee80211_vif *iwl_mvm_get_vif_by_macid(struct iwl_mvm *mvm, u32 macid)
+-{
+-	struct iwl_bss_find_iter_data data = {
+-		.macid = macid,
+-	};
+-
+-	lockdep_assert_held(&mvm->mutex);
+-
+-	ieee80211_iterate_active_interfaces_atomic(
+-		mvm->hw, IEEE80211_IFACE_ITER_NORMAL,
+-		iwl_mvm_bss_find_iface_iterator, &data);
+-
+-	return data.vif;
+-}
+-
+ struct iwl_sta_iter_data {
+ 	bool assoc;
+ };
+-- 
+2.55.0
+

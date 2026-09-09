@@ -1,0 +1,70 @@
+From 659f52ff0ca6c5c927d06e5dad0b7f7082757ec8 Mon Sep 17 00:00:00 2001
+From: Giovanni Cabiddu <giovanni.cabiddu@intel.com>
+Date: Wed, 5 Aug 2026 14:19:24 -0700
+Subject: [PATCH 14087/15333] crypto: iaa - avoid counting fallback
+ decompression bytes
+
+When decompression falls back to deflate-generic after an analytics
+error, the request no longer completes through IAA.
+
+Move decompression byte accounting into the successful IAA completion
+path in both the synchronous and asynchronous flows so decomp_bytes only
+reflects bytes actually processed by IAA.
+
+Signed-off-by: Giovanni Cabiddu <giovanni.cabiddu@intel.com>
+Signed-off-by: Vinicius Costa Gomes <vinicius.gomes@intel.com>
+Reviewed-by: Dave Jiang <dave.jiang@intel.com>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ drivers/crypto/intel/iaa/iaa_crypto_main.c | 16 +++++++++-------
+ 1 file changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/crypto/intel/iaa/iaa_crypto_main.c b/drivers/crypto/intel/iaa/iaa_crypto_main.c
+index 904d9413ba18..9505ca23e6f3 100644
+--- a/drivers/crypto/intel/iaa/iaa_crypto_main.c
++++ b/drivers/crypto/intel/iaa/iaa_crypto_main.c
+@@ -1071,15 +1071,17 @@ static void iaa_desc_complete(struct idxd_desc *idxd_desc,
+ 		}
+ 	} else {
+ 		ctx->req->dlen = idxd_desc->iax_completion->output_size;
++
++		if (!ctx->compress) {
++			update_total_decomp_bytes_in(ctx->req->slen);
++			update_wq_decomp_bytes(iaa_wq->wq, ctx->req->slen);
++		}
+ 	}
+ 
+ 	/* Update stats */
+ 	if (ctx->compress) {
+ 		update_total_comp_bytes_out(ctx->req->dlen);
+ 		update_wq_comp_bytes(iaa_wq->wq, ctx->req->dlen);
+-	} else {
+-		update_total_decomp_bytes_in(ctx->req->slen);
+-		update_wq_decomp_bytes(iaa_wq->wq, ctx->req->slen);
+ 	}
+ 
+ 	if (ctx->compress && compression_ctx->verify_compress) {
+@@ -1462,16 +1464,16 @@ static int iaa_decompress(struct crypto_tfm *tfm, struct acomp_req *req,
+ 		}
+ 	} else {
+ 		req->dlen = idxd_desc->iax_completion->output_size;
++
++		/* Update stats */
++		update_total_decomp_bytes_in(slen);
++		update_wq_decomp_bytes(wq, slen);
+ 	}
+ 
+ 	*dlen = req->dlen;
+ 
+ 	if (!ctx->async_mode)
+ 		idxd_free_desc(wq, idxd_desc);
+-
+-	/* Update stats */
+-	update_total_decomp_bytes_in(slen);
+-	update_wq_decomp_bytes(wq, slen);
+ out:
+ 	return ret;
+ err:
+-- 
+2.55.0
+

@@ -1,0 +1,37 @@
+From 649e5ef83671009bb89d683f54b16615adf94bf0 Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Wed, 22 Jul 2026 12:16:19 +0800
+Subject: [PATCH 06930/15333] iommu/msm: Limit the per-master Machine ID list
+
+The OF translation path appends each unique stream ID from an IOMMU
+specifier to the fixed mids array in the per-master object. It currently
+has no capacity check before storing at mids[num_mids] and incrementing
+num_mids.
+
+Return -ENOSPC when the array is full rather than writing the next ID
+beyond it.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Reviewed-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ drivers/iommu/msm_iommu.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/iommu/msm_iommu.c b/drivers/iommu/msm_iommu.c
+index 708baeb29c03..038f6ed797ea 100644
+--- a/drivers/iommu/msm_iommu.c
++++ b/drivers/iommu/msm_iommu.c
+@@ -622,6 +622,9 @@ static int insert_iommu_master(struct device *dev,
+ 			return 0;
+ 		}
+ 
++	if (master->num_mids >= MAX_NUM_MIDS)
++		return -ENOSPC;
++
+ 	master->mids[master->num_mids++] = spec->args[0];
+ 	return 0;
+ }
+-- 
+2.55.0
+

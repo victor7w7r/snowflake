@@ -1,0 +1,40 @@
+From bff44d253f4b65789ffe56f2ad1a56d7fdc0a24e Mon Sep 17 00:00:00 2001
+From: Damien Le Moal <dlemoal@kernel.org>
+Date: Thu, 25 Jun 2026 09:48:02 +0900
+Subject: [PATCH 02551/15333] ata: libata-scsi: support reporting options 2 in
+ REPORT SUPPORTED OPERATION CODES
+
+Add support for the reporting options value 2 of the in REPORT SUPPORTED
+OPERATION CODES command in ata_scsi_report_supported_opcodes(). With this
+reporting option, the specified opcode to check must have a service
+action. Use ata_scsi_supported_cmd_has_sa() to check for this and fill the
+command reply buffer using the one command format based on the command
+support.
+
+Signed-off-by: Damien Le Moal <dlemoal@kernel.org>
+Reviewed-by: Hannes Reinecke <hare@kernel.org>
+---
+ drivers/ata/libata-scsi.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/ata/libata-scsi.c b/drivers/ata/libata-scsi.c
+index 39323d39fd75..265236b0493d 100644
+--- a/drivers/ata/libata-scsi.c
++++ b/drivers/ata/libata-scsi.c
+@@ -3777,6 +3777,13 @@ static unsigned int ata_scsi_report_supported_opcodes(struct ata_device *dev,
+ 			return 0;
+ 		}
+ 		break;
++	case 2:
++		/* One command format, must have sa. */
++		if (!ata_scsi_supported_cmd_use_sa(cdb[3])) {
++			ata_scsi_set_invalid_field(dev, cmd, 3, 0xff);
++			return 0;
++		}
++		fallthrough;
+ 	case 3:
+ 		/* One command format */
+ 		sa = get_unaligned_be16(&cdb[4]);
+-- 
+2.55.0
+

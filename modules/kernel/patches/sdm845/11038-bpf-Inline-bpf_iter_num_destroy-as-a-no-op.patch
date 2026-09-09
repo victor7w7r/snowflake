@@ -1,0 +1,52 @@
+From 39f047682fe3ccc272dbebb6d1ecba8fc1e0d8b4 Mon Sep 17 00:00:00 2001
+From: Puranjay Mohan <puranjay@kernel.org>
+Date: Tue, 4 Aug 2026 06:45:56 -0700
+Subject: [PATCH 11038/15333] bpf: Inline bpf_iter_num_destroy() as a no-op
+
+Once destroy() returns the stack slot is no longer tracked as iterator
+state, so zeroing it is dead work. Make the kfunc a no-op and inline the
+call to a single BPF_JA 0 (the fixup can't drop the instruction outright,
+so emit a nop; the JITs elide it).
+
+Suggested-by: Andrii Nakryiko <andrii@kernel.org>
+Signed-off-by: Puranjay Mohan <puranjay@kernel.org>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Link: https://lore.kernel.org/bpf/20260804134601.2305303-5-puranjay@kernel.org
+---
+ kernel/bpf/bpf_iter.c | 4 +---
+ kernel/bpf/verifier.c | 4 ++++
+ 2 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/kernel/bpf/bpf_iter.c b/kernel/bpf/bpf_iter.c
+index d19f1b2861d2..14a5fdfa0421 100644
+--- a/kernel/bpf/bpf_iter.c
++++ b/kernel/bpf/bpf_iter.c
+@@ -818,9 +818,7 @@ __bpf_kfunc int *bpf_iter_num_next(struct bpf_iter_num* it)
+ 
+ __bpf_kfunc void bpf_iter_num_destroy(struct bpf_iter_num *it)
+ {
+-	struct bpf_iter_num_kern *s = (void *)it;
+-
+-	s->cur = s->end = 0;
++	/* no-op */
+ }
+ 
+ __bpf_kfunc_end_defs();
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 80c3cb654b89..4db151e24355 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -20047,6 +20047,10 @@ int bpf_fixup_kfunc_call(struct bpf_verifier_env *env, struct bpf_insn *insn,
+ 		insn_buf[i++] = BPF_ST_MEM(BPF_DW, BPF_REG_1, 0, 0);
+ 		insn_buf[i++] = BPF_MOV64_IMM(BPF_REG_0, 0);
+ 		*cnt = i;
++	} else if (desc->func_id == special_kfunc_list[KF_bpf_iter_num_destroy]) {
++		/* bpf_iter_num_destroy() is a no-op; emit a nop to drop the call */
++		insn_buf[0] = BPF_JMP_A(0);
++		*cnt = 1;
+ 	}
+ 
+ 	if (env->insn_aux_data[insn_idx].arg_prog) {
+-- 
+2.55.0
+

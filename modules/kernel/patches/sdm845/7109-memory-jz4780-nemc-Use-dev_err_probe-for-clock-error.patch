@@ -1,0 +1,39 @@
+From 96aa6902ff2bf81b9b8e0fa228494595dc2374a9 Mon Sep 17 00:00:00 2001
+From: Miles Krause <mileskrause5200@gmail.com>
+Date: Sat, 11 Jul 2026 22:56:14 -0400
+Subject: [PATCH 07109/15333] memory: jz4780-nemc: Use dev_err_probe() for
+ clock error
+
+Use dev_err_probe() to simplify clock acquisition error handling and
+avoid logging probe deferral as an error.
+
+No functional change.
+
+Signed-off-by: Miles Krause <mileskrause5200@gmail.com>
+Link: https://patch.msgid.link/20260711-jz4780-nemc-dev-err-probe-v1-1-afb6f6a82752@gmail.com
+Signed-off-by: Krzysztof Kozlowski <krzk@kernel.org>
+---
+ drivers/memory/jz4780-nemc.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/memory/jz4780-nemc.c b/drivers/memory/jz4780-nemc.c
+index 1a8161514d03..1bf17057cbf5 100644
+--- a/drivers/memory/jz4780-nemc.c
++++ b/drivers/memory/jz4780-nemc.c
+@@ -313,10 +313,9 @@ static int jz4780_nemc_probe(struct platform_device *pdev)
+ 	writel(0, nemc->base + NEMC_NFCSR);
+ 
+ 	nemc->clk = devm_clk_get(dev, NULL);
+-	if (IS_ERR(nemc->clk)) {
+-		dev_err(dev, "failed to get clock\n");
+-		return PTR_ERR(nemc->clk);
+-	}
++	if (IS_ERR(nemc->clk))
++		return dev_err_probe(dev, PTR_ERR(nemc->clk),
++				     "failed to get clock\n");
+ 
+ 	ret = clk_prepare_enable(nemc->clk);
+ 	if (ret) {
+-- 
+2.55.0
+

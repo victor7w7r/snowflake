@@ -1,0 +1,50 @@
+From a47ab1b9c0827f5bd6717abb3f9e3f4f6eb5e00c Mon Sep 17 00:00:00 2001
+From: Miri Korenblit <miriam.rachel.korenblit@intel.com>
+Date: Fri, 17 Jul 2026 17:31:12 +0300
+Subject: [PATCH 05777/15333] wifi: iwlwifi: mld: move BIOS reading code to
+ where it belongs
+
+We have a dedicated function to fetch all the BIOS tables when the opmode
+starts, and yet we read a couple of tables directly from
+iwl_op_mode_mld_start, which is already a large function that does
+multiple things.
+Move the reading of the sgom, puncturing, and RFI enablement to the
+dedicated iwl_mld_get_bios_tables.
+
+Link: https://patch.msgid.link/20260717172958.b19a33e0b507.I73f6b5e6a81d0f411f12589ceb30afa655c0a16b@changeid
+Signed-off-by: Miri Korenblit <miriam.rachel.korenblit@intel.com>
+---
+ drivers/net/wireless/intel/iwlwifi/mld/mld.c        | 2 --
+ drivers/net/wireless/intel/iwlwifi/mld/regulatory.c | 3 +++
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/wireless/intel/iwlwifi/mld/mld.c b/drivers/net/wireless/intel/iwlwifi/mld/mld.c
+index 7c49d0441fdf..6e991fb99ff3 100644
+--- a/drivers/net/wireless/intel/iwlwifi/mld/mld.c
++++ b/drivers/net/wireless/intel/iwlwifi/mld/mld.c
+@@ -419,8 +419,6 @@ iwl_op_mode_mld_start(struct iwl_trans *trans, const struct iwl_rf_cfg *cfg,
+ 	iwl_mld_construct_fw_runtime(mld, trans, fw, dbgfs_dir);
+ 
+ 	iwl_mld_get_bios_tables(mld);
+-	iwl_uefi_get_sgom_table(trans, &mld->fwrt);
+-	iwl_uefi_get_puncturing(&mld->fwrt);
+ 
+ 	iwl_mld_hw_set_regulatory(mld);
+ 
+diff --git a/drivers/net/wireless/intel/iwlwifi/mld/regulatory.c b/drivers/net/wireless/intel/iwlwifi/mld/regulatory.c
+index be311f6c3d9f..ad899ce5c64a 100644
+--- a/drivers/net/wireless/intel/iwlwifi/mld/regulatory.c
++++ b/drivers/net/wireless/intel/iwlwifi/mld/regulatory.c
+@@ -84,6 +84,9 @@ void iwl_mld_get_bios_tables(struct iwl_mld *mld)
+ 	iwl_uefi_get_uneb_table(mld->trans, &mld->fwrt);
+ 
+ 	iwl_bios_get_phy_filters(&mld->fwrt);
++
++	iwl_uefi_get_sgom_table(mld->trans, &mld->fwrt);
++	iwl_uefi_get_puncturing(&mld->fwrt);
+ }
+ 
+ static int iwl_mld_geo_sar_init(struct iwl_mld *mld)
+-- 
+2.55.0
+

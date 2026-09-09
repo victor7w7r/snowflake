@@ -1,0 +1,105 @@
+From b72fdc651056cf66714e841bd6cc59907ab1858c Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Wed, 5 Aug 2026 07:52:31 -0700
+Subject: [PATCH 13034/15333] workqueue: account nr_active by the backing pool
+
+pwq_tryinc_nr_active() and pwq_dec_nr_active() choose between the shared
+per-node nr_active and the plain per-pwq one by testing
+wq_node_nr_active() for NULL.
+
+Test the backing pool with is_percpu_pool() instead, so the accounting
+follows the pool that runs the work rather than the workqueue type.
+
+No functional change.
+
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ kernel/workqueue.c | 26 ++++++++++++++++----------
+ 1 file changed, 16 insertions(+), 10 deletions(-)
+
+diff --git a/kernel/workqueue.c b/kernel/workqueue.c
+index b96090c85bca..7b20d459d644 100644
+--- a/kernel/workqueue.c
++++ b/kernel/workqueue.c
+@@ -1615,9 +1615,8 @@ static bool is_percpu_pool(struct worker_pool *pool)
+  * @wq: workqueue of interest
+  * @node: NUMA node, can be %NUMA_NO_NODE
+  *
+- * Determine wq_node_nr_active to use for @wq on @node. Returns:
+- *
+- * - %NULL for per-cpu workqueues as they don't need to use shared nr_active.
++ * Determine wq_node_nr_active to use for @wq on @node. @wq must be unbound.
++ * Returns:
+  *
+  * - node_nr_active[nr_node_ids] if @node is %NUMA_NO_NODE.
+  *
+@@ -1626,7 +1625,7 @@ static bool is_percpu_pool(struct worker_pool *pool)
+ static struct wq_node_nr_active *wq_node_nr_active(struct workqueue_struct *wq,
+ 						   int node)
+ {
+-	if (!(wq->flags & WQ_UNBOUND))
++	if (WARN_ON_ONCE(!(wq->flags & WQ_UNBOUND)))
+ 		return NULL;
+ 
+ 	if (node == NUMA_NO_NODE)
+@@ -1782,13 +1781,16 @@ static bool pwq_tryinc_nr_active(struct pool_workqueue *pwq, bool fill)
+ {
+ 	struct workqueue_struct *wq = pwq->wq;
+ 	struct worker_pool *pool = pwq->pool;
+-	struct wq_node_nr_active *nna = wq_node_nr_active(wq, pool->node);
++	struct wq_node_nr_active *nna;
+ 	bool obtained = false;
+ 
+ 	lockdep_assert_held(&pool->lock);
+ 
+-	if (!nna) {
+-		/* BH or per-cpu workqueue, pwq->nr_active is sufficient */
++	/*
++	 * A concurrency-managed per-cpu pool accounts nr_active per pwq, so
++	 * pwq->nr_active against wq->max_active is sufficient.
++	 */
++	if (is_percpu_pool(pool)) {
+ 		obtained = pwq->nr_active < READ_ONCE(wq->max_active);
+ 		goto out;
+ 	}
+@@ -1796,6 +1798,8 @@ static bool pwq_tryinc_nr_active(struct pool_workqueue *pwq, bool fill)
+ 	if (unlikely(pwq->plugged))
+ 		return false;
+ 
++	nna = wq_node_nr_active(wq, pool->node);
++
+ 	/*
+ 	 * Unbound workqueue uses per-node shared nr_active $nna. If @pwq is
+ 	 * already waiting on $nna, pwq_dec_nr_active() will maintain the
+@@ -2013,7 +2017,7 @@ static void node_activate_pending_pwq(struct wq_node_nr_active *nna,
+ static void pwq_dec_nr_active(struct pool_workqueue *pwq)
+ {
+ 	struct worker_pool *pool = pwq->pool;
+-	struct wq_node_nr_active *nna = wq_node_nr_active(pwq->wq, pool->node);
++	struct wq_node_nr_active *nna;
+ 
+ 	lockdep_assert_held(&pool->lock);
+ 
+@@ -2024,14 +2028,16 @@ static void pwq_dec_nr_active(struct pool_workqueue *pwq)
+ 	pwq->nr_active--;
+ 
+ 	/*
+-	 * For a percpu workqueue, it's simple. Just need to kick the first
++	 * A concurrency-managed per-cpu pool only needs to kick the first
+ 	 * inactive work item on @pwq itself.
+ 	 */
+-	if (!nna) {
++	if (is_percpu_pool(pool)) {
+ 		pwq_activate_first_inactive(pwq, false);
+ 		return;
+ 	}
+ 
++	nna = wq_node_nr_active(pwq->wq, pool->node);
++
+ 	/*
+ 	 * If @pwq is for an unbound workqueue, it's more complicated because
+ 	 * multiple pwqs and pools may be sharing the nr_active count. When a
+-- 
+2.55.0
+

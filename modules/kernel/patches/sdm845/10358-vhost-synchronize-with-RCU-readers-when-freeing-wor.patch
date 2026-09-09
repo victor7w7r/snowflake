@@ -1,0 +1,61 @@
+From 0088c10f7cb7adc585c1d3f47f4dc46b3b14ba02 Mon Sep 17 00:00:00 2001
+From: Andrey Drobyshev <andrey.drobyshev@virtuozzo.com>
+Date: Mon, 20 Jul 2026 13:22:40 +0300
+Subject: [PATCH 10358/15333] vhost: synchronize with RCU readers when freeing
+ workers
+
+vhost_vq_work_queue() only holds the RCU read lock while it dereferences
+vq->worker and queues work on it.  vhost_workers_free() however clears
+the vq->worker pointers and immediately frees the workers, without
+waiting for a grace period.  A caller that fetched the worker right
+before the pointer was cleared can therefore still be queueing work on
+it while it is freed.  And even when the queueing itself wins the race,
+the work is never run, so its VHOST_WORK_QUEUED bit stays set and all
+future attempts to queue it are silently skipped.
+
+None of the current callers can actually hit this: net and scsi stop
+their virtqueues before the workers are freed, and vsock unhashes the
+device and does synchronize_rcu() of its own in vhost_vsock_dev_release()
+before the workers go away.  But the upcoming VHOST_RESET_OWNER support
+in vhost-vsock keeps the device hashed while its workers are freed, so
+the lockless send/cancel paths become able to race with the teardown.
+
+Fix this by clearing the vq->worker pointers, waiting for a grace
+period, and then flushing the workers so any work the last readers
+queued runs before the workers are freed.
+
+Fixes: 228a27cf78af ("vhost: Allow worker switching while work is queueing")
+Suggested-by: Stefano Garzarella <sgarzare@redhat.com>
+Signed-off-by: Andrey Drobyshev <andrey.drobyshev@virtuozzo.com>
+Reviewed-by: Stefano Garzarella <sgarzare@redhat.com>
+Message-ID: <20260720102241.371610-5-andrey.drobyshev@virtuozzo.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+---
+ drivers/vhost/vhost.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/drivers/vhost/vhost.c b/drivers/vhost/vhost.c
+index 269efad90369..1be9c0c53bed 100644
+--- a/drivers/vhost/vhost.c
++++ b/drivers/vhost/vhost.c
+@@ -729,6 +729,17 @@ static void vhost_workers_free(struct vhost_dev *dev)
+ 
+ 	for (i = 0; i < dev->nvqs; i++)
+ 		rcu_assign_pointer(dev->vqs[i]->worker, NULL);
++
++	/*
++	 * vhost_vq_work_queue() reads vq->worker under rcu_read_lock(), so a
++	 * reader that fetched a worker before we cleared the pointers above
++	 * may still be queueing work on it.  Wait for those readers to
++	 * finish, then flush so any work they queued runs (clearing
++	 * VHOST_WORK_QUEUED) before the workers are freed.
++	 */
++	synchronize_rcu();
++	vhost_dev_flush(dev);
++
+ 	/*
+ 	 * Free the default worker we created and cleanup workers userspace
+ 	 * created but couldn't clean up (it forgot or crashed).
+-- 
+2.55.0
+

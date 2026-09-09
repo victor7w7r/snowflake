@@ -1,0 +1,137 @@
+From 3914dc880317a7fb77f0b18907f3b29913884340 Mon Sep 17 00:00:00 2001
+From: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Date: Sat, 25 Jul 2026 01:54:41 -0700
+Subject: [PATCH 12142/15333] Bluetooth: coredump: Introduce and apply
+ hci_devcd_state_name()
+
+Introduce hci_devcd_state_name() to describe the devcoredump state by a
+string name instead of a plain number, for several reasons:
+
+1) Applying it in coredump.c makes the devcoredump state in log messages
+   more readable than a plain number.
+2) Transport drivers may need to show the devcoredump state name too.
+3) In future, the universal state name could be notified to userspace
+   via uevent, allowing a universal application (e.g. a daemon) to be
+   developed to save the coredump, which is otherwise discarded by the
+   device coredump core after 5 minutes (DEVCD_TIMEOUT); see
+   nxp_coredump_notify().
+
+Also drop a trailing space from two bt_dev_dbg() format strings while
+applying it in coredump.c.
+
+Signed-off-by: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ include/net/bluetooth/coredump.h |  7 +++++
+ net/bluetooth/coredump.c         | 45 +++++++++++++++++++++++++++-----
+ 2 files changed, 45 insertions(+), 7 deletions(-)
+
+diff --git a/include/net/bluetooth/coredump.h b/include/net/bluetooth/coredump.h
+index 72f51b587a04..ab85a6adfffd 100644
+--- a/include/net/bluetooth/coredump.h
++++ b/include/net/bluetooth/coredump.h
+@@ -60,6 +60,8 @@ struct hci_devcoredump {
+ 
+ #ifdef CONFIG_DEV_COREDUMP
+ 
++const char *hci_devcd_state_name(enum devcoredump_state state);
++
+ void hci_devcd_reset(struct hci_dev *hdev);
+ void hci_devcd_rx(struct work_struct *work);
+ void hci_devcd_timeout(struct work_struct *work);
+@@ -74,6 +76,11 @@ int hci_devcd_abort(struct hci_dev *hdev);
+ 
+ #else
+ 
++static inline const char *hci_devcd_state_name(enum devcoredump_state state)
++{
++	return "";
++}
++
+ static inline void hci_devcd_reset(struct hci_dev *hdev) {}
+ static inline void hci_devcd_rx(struct work_struct *work) {}
+ static inline void hci_devcd_timeout(struct work_struct *work) {}
+diff --git a/net/bluetooth/coredump.c b/net/bluetooth/coredump.c
+index c0f027fab583..913bbba559f8 100644
+--- a/net/bluetooth/coredump.c
++++ b/net/bluetooth/coredump.c
+@@ -30,8 +30,9 @@ struct hci_devcoredump_skb_pattern {
+ 
+ #define DBG_UNEXPECTED_STATE() \
+ 	bt_dev_dbg(hdev, \
+-		   "Unexpected packet (%d) for state (%d). ", \
+-		   hci_dmp_cb(skb)->pkt_type, hdev->dump.state)
++		   "Unexpected packet (%d) for state %s.", \
++		   hci_dmp_cb(skb)->pkt_type, \
++		   hci_devcd_state_name(hdev->dump.state))
+ 
+ #define MAX_DEVCOREDUMP_HDR_SIZE	512	/* bytes */
+ 
+@@ -50,8 +51,9 @@ static int hci_devcd_update_hdr_state(char *buf, size_t size, int state)
+ /* Call with hci_dev_lock only. */
+ static int hci_devcd_update_state(struct hci_dev *hdev, int state)
+ {
+-	bt_dev_dbg(hdev, "Updating devcoredump state from %d to %d.",
+-		   hdev->dump.state, state);
++	bt_dev_dbg(hdev, "Updating devcoredump state from %s to %s.",
++		   hci_devcd_state_name(hdev->dump.state),
++		   hci_devcd_state_name(state));
+ 
+ 	hdev->dump.state = state;
+ 
+@@ -245,7 +247,7 @@ static void hci_devcd_dump(struct hci_dev *hdev)
+ 	struct sk_buff *skb;
+ 	u32 size;
+ 
+-	bt_dev_dbg(hdev, "state %d", hdev->dump.state);
++	bt_dev_dbg(hdev, "state %s", hci_devcd_state_name(hdev->dump.state));
+ 
+ 	size = hdev->dump.tail - hdev->dump.head;
+ 
+@@ -368,8 +370,9 @@ void hci_devcd_rx(struct work_struct *work)
+ 			break;
+ 
+ 		default:
+-			bt_dev_dbg(hdev, "Unknown packet (%d) for state (%d). ",
+-				   hci_dmp_cb(skb)->pkt_type, hdev->dump.state);
++			bt_dev_dbg(hdev, "Unknown packet (%d) for state %s.",
++				   hci_dmp_cb(skb)->pkt_type,
++				   hci_devcd_state_name(hdev->dump.state));
+ 			break;
+ 		}
+ 
+@@ -549,3 +552,31 @@ int hci_devcd_abort(struct hci_dev *hdev)
+ 	return 0;
+ }
+ EXPORT_SYMBOL(hci_devcd_abort);
++
++const char *hci_devcd_state_name(enum devcoredump_state state)
++{
++	const char *state_name = "Unknown";
++
++	switch (state) {
++	case HCI_DEVCOREDUMP_IDLE:
++		state_name = "IDLE";
++		break;
++	case HCI_DEVCOREDUMP_ACTIVE:
++		state_name = "ACTIVE";
++		break;
++	case HCI_DEVCOREDUMP_DONE:
++		state_name = "DONE";
++		break;
++	case HCI_DEVCOREDUMP_ABORT:
++		state_name = "ABORT";
++		break;
++	case HCI_DEVCOREDUMP_TIMEOUT:
++		state_name = "TIMEOUT";
++		break;
++	default:
++		break;
++	}
++
++	return state_name;
++}
++EXPORT_SYMBOL(hci_devcd_state_name);
+-- 
+2.55.0
+

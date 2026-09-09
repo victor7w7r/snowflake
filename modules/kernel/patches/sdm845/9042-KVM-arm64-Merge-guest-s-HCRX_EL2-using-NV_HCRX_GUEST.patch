@@ -1,0 +1,72 @@
+From 4422d8b7502db1b910c519763135a99836efb5e5 Mon Sep 17 00:00:00 2001
+From: Marc Zyngier <maz@kernel.org>
+Date: Thu, 30 Jul 2026 08:09:56 +0100
+Subject: [PATCH 09042/15333] KVM: arm64: Merge guest's HCRX_EL2 using
+ NV_HCRX_GUEST_EXCLUDE
+
+The way we merge the guest-provided HCRX_EL2 value with the host's
+is bonkers. We try to make it look like the FGT registers by using
+positive and negative polarities for traps, but most of these bits
+are not strictly about trapping, as they actively change the way
+some architectural state is managed.
+
+It would be far better to deal with these bits like we do for
+HCR_EL2, by enumerating the list of bits we don't allow the guest
+to override. This is simplified by the fact that HCRX_EL2 only
+affects EL1, and not EL2.
+
+Re-jig the HCRX_EL2 handling with a macro that list the bits excluded
+from the merge (TMEA, PTTWI, EnIDCP128).
+
+Reviewed-by: Yuan Yao <yaoyuan@linux.alibaba.com>
+Signed-off-by: Marc Zyngier <maz@kernel.org>
+Reviewed-by: Joey Gouly <joey.gouly@arm.com>
+Link: https://patch.msgid.link/20260730071022.296811-4-maz@kernel.org
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/hyp/include/hyp/switch.h | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/kvm/hyp/include/hyp/switch.h b/arch/arm64/kvm/hyp/include/hyp/switch.h
+index 18131e395e24..0903e08f4b6a 100644
+--- a/arch/arm64/kvm/hyp/include/hyp/switch.h
++++ b/arch/arm64/kvm/hyp/include/hyp/switch.h
+@@ -325,6 +325,24 @@ static inline void __deactivate_traps_mpam(void)
+ 		write_sysreg_s(MPAMHCR_HOST_FLAGS, SYS_MPAMHCR_EL2);
+ }
+ 
++/*
++ * Just like for HCR_EL2, we can't let the guest mess with some of the
++ * basics we rely on in HCRX_EL2. However, the major difference is that
++ * HCRX_EL2 only affects EL1, and never EL2 (sudden outburst of sanity, I
++ * guess). So it is always the guest inflicting it on its own guestx.
++ *
++ * Things we don't want to let the guest control are:
++ *
++ * - TMEA: That's for us to decide how an SEA is routed, not the guest.
++ *
++ * - PTTWI: Similarly, it is for us to decide whether Reduced Coherency for
++ *   the PTW is a thing. It really isn't.
++ *
++ * - EnIDCP128: We don't allow IMPDEF sysregs -- full stop.
++ */
++#define NV_HCRX_GUEST_EXCLUDE	(HCRX_EL2_TMEA	    | HCRX_EL2_PTTWI | \
++				 HCRX_EL2_EnIDCP128)
++
+ static inline void __activate_traps_common(struct kvm_vcpu *vcpu)
+ {
+ 	struct kvm_cpu_context *hctxt = host_data_ptr(host_ctxt);
+@@ -350,8 +368,8 @@ static inline void __activate_traps_common(struct kvm_vcpu *vcpu)
+ 		u64 hcrx = vcpu->arch.hcrx_el2;
+ 		if (is_nested_ctxt(vcpu)) {
+ 			u64 val = __vcpu_sys_reg(vcpu, HCRX_EL2);
+-			hcrx |= val & __HCRX_EL2_MASK;
+-			hcrx &= ~(~val & __HCRX_EL2_nMASK);
++			hcrx |= (val & ~NV_HCRX_GUEST_EXCLUDE);
++			hcrx &= ~(~val & ~NV_HCRX_GUEST_EXCLUDE);
+ 		}
+ 
+ 		ctxt_sys_reg(hctxt, HCRX_EL2) = read_sysreg_s(SYS_HCRX_EL2);
+-- 
+2.55.0
+

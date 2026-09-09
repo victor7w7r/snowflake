@@ -1,0 +1,46 @@
+From cd5102479d29842bc6e730401ec6e53a045a2994 Mon Sep 17 00:00:00 2001
+From: Juergen Gross <jgross@suse.com>
+Date: Mon, 29 Jun 2026 08:05:20 +0200
+Subject: [PATCH 02274/15333] hwmon: Stop using 32-bit MSR interfaces
+
+The 32-bit MSR interface rdmsr() is planned to be removed. Use the
+related 64-bit variant instead.
+
+Signed-off-by: Juergen Gross <jgross@suse.com>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Acked-by: Guenter Roeck <linux@roeck-us.net>
+Link: https://patch.msgid.link/20260629060526.3638272-30-jgross@suse.com
+---
+ drivers/hwmon/hwmon-vid.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/hwmon/hwmon-vid.c b/drivers/hwmon/hwmon-vid.c
+index 2df4956296ed..dee42c163d92 100644
+--- a/drivers/hwmon/hwmon-vid.c
++++ b/drivers/hwmon/hwmon-vid.c
+@@ -237,16 +237,17 @@ static struct vrm_model vrm_models[] = {
+  */
+ static u8 get_via_model_d_vrm(void)
+ {
+-	unsigned int vid, brand, __maybe_unused dummy;
++	u64 msr;
++	unsigned int vid, brand;
+ 	static const char *brands[4] = {
+ 		"C7-M", "C7", "Eden", "C7-D"
+ 	};
+ 
+-	rdmsr(0x198, dummy, vid);
+-	vid &= 0xff;
++	rdmsrq(0x198, msr);
++	vid = (msr >> 32) & 0xff;
+ 
+-	rdmsr(0x1154, brand, dummy);
+-	brand = ((brand >> 4) ^ (brand >> 2)) & 0x03;
++	rdmsrq(0x1154, msr);
++	brand = ((msr >> 4) ^ (msr >> 2)) & 0x03;
+ 
+ 	if (vid > 0x3f) {
+ 		pr_info("Using %d-bit VID table for VIA %s CPU\n",
+-- 
+2.55.0
+

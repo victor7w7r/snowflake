@@ -1,0 +1,62 @@
+From 2b28e5befef171218253ac83c864bb2ecbf09643 Mon Sep 17 00:00:00 2001
+From: Jagadeesh Kona <jagadeesh.kona@oss.qualcomm.com>
+Date: Sat, 1 Aug 2026 00:42:46 +0530
+Subject: [PATCH 12833/15333] clk: qcom: gpucc-hawi: Add Qualcomm Maili SoC
+ support
+
+Maili gpucc is a derivative of Hawi gpucc with pll0 configuration change.
+Hence, reuse the Hawi graphics clock controller and extend it for Qualcomm
+Maili SoC.
+
+Signed-off-by: Jagadeesh Kona <jagadeesh.kona@oss.qualcomm.com>
+Reviewed-by: Abel Vesa <abel.vesa@oss.qualcomm.com>
+Reviewed-by: Taniya Das <taniya.das@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260801-maili_gpucc-v1-2-9d8c37bded69@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ drivers/clk/qcom/gpucc-hawi.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/drivers/clk/qcom/gpucc-hawi.c b/drivers/clk/qcom/gpucc-hawi.c
+index 30b3ffb0638f..3deb7edf7810 100644
+--- a/drivers/clk/qcom/gpucc-hawi.c
++++ b/drivers/clk/qcom/gpucc-hawi.c
+@@ -49,6 +49,18 @@ static const struct alpha_pll_config gpu_cc_pll0_config = {
+ 	.user_ctl_hi_val = 0x00000002,
+ };
+ 
++/* 788.0 MHz Configuration */
++static const struct alpha_pll_config gpu_cc_pll0_config_maili = {
++	.l = 0x29,
++	.cal_l = 0x42,
++	.alpha = 0xaaa,
++	.config_ctl_val = 0xa5c400e7,
++	.config_ctl_hi_val = 0x0a806160,
++	.config_ctl_hi1_val = 0xf51dea20,
++	.user_ctl_val = 0x00000000,
++	.user_ctl_hi_val = 0x00000002,
++};
++
+ static struct clk_alpha_pll gpu_cc_pll0 = {
+ 	.offset = 0x0,
+ 	.config = &gpu_cc_pll0_config,
+@@ -438,12 +450,16 @@ static const struct qcom_cc_desc gpu_cc_hawi_desc = {
+ 
+ static const struct of_device_id gpu_cc_hawi_match_table[] = {
+ 	{ .compatible = "qcom,hawi-gpucc" },
++	{ .compatible = "qcom,maili-gpucc" },
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, gpu_cc_hawi_match_table);
+ 
+ static int gpu_cc_hawi_probe(struct platform_device *pdev)
+ {
++	if (device_is_compatible(&pdev->dev, "qcom,maili-gpucc"))
++		gpu_cc_pll0.config = &gpu_cc_pll0_config_maili;
++
+ 	return qcom_cc_probe(pdev, &gpu_cc_hawi_desc);
+ }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,208 @@
+From 1e5f641dfa9998ca4a36018a6de9876eaff3db00 Mon Sep 17 00:00:00 2001
+From: Jeff Layton <jlayton@kernel.org>
+Date: Fri, 17 Jul 2026 07:08:57 -0400
+Subject: [PATCH 12772/15333] nfsd: count NFSv4 callback operations per netns
+
+The NFS server tracks per-operation call counts for the forward channel
+(proc4ops) but keeps no statistics for the NFSv4 backchannel (callback)
+operations it sends to clients.
+
+Add a per-netns array of percpu counters for callback operations, indexed
+by RFC 8881 callback opcode (OP_CB_GETATTR..OP_CB_OFFLOAD), and bump the
+relevant counter in nfsd4_run_cb(), which is hit exactly once per callback
+that is actually queued.
+
+CB_GETATTR is sent when a GETATTR conflicts with an outstanding write
+delegation, which is roughly what the dedicated wdeleg_getattr counter
+tracked. The two are not identical: the old counter incremented on every
+such conflict, whereas the CB_GETATTR counter only counts callbacks that
+are actually queued, so concurrent conflicts that coalesce onto an
+already in-flight CB_GETATTR are now counted once rather than once per
+conflict. Report the procfs "wdeleg_getattr" line from the CB_GETATTR
+counter and drop the now-redundant NFSD_STATS_WDELEG_GETATTR counter, its
+helper, and its increment site.
+
+Assisted-by: LLM
+Signed-off-by: Jeff Layton <jlayton@kernel.org>
+Link: https://patch.msgid.link/20260717-exportd-netlink-v7-5-b7ce17b83b60@kernel.org
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ fs/nfsd/netns.h        | 12 +++++++++++-
+ fs/nfsd/nfs4callback.c | 22 +++++++++++++++++++++-
+ fs/nfsd/nfs4state.c    |  2 --
+ fs/nfsd/nfsctl.c       | 14 ++++++++++++++
+ fs/nfsd/stats.c        |  2 +-
+ fs/nfsd/stats.h        |  5 +++--
+ 6 files changed, 50 insertions(+), 7 deletions(-)
+
+diff --git a/fs/nfsd/netns.h b/fs/nfsd/netns.h
+index a7bd7b67fa4f..71eebfea020d 100644
+--- a/fs/nfsd/netns.h
++++ b/fs/nfsd/netns.h
+@@ -53,11 +53,16 @@ enum {
+ 	NFSD_STATS_FIRST_NFS4_OP,	/* count of individual nfsv4 operations */
+ 	NFSD_STATS_LAST_NFS4_OP = NFSD_STATS_FIRST_NFS4_OP + LAST_NFS4_OP,
+ #define NFSD_STATS_NFS4_OP(op)	(NFSD_STATS_FIRST_NFS4_OP + (op))
+-	NFSD_STATS_WDELEG_GETATTR,	/* count of getattr conflict with wdeleg */
+ #endif
+ 	NFSD_STATS_COUNTERS_NUM
+ };
+ 
++/*
++ * Per-netns NFSv4 callback (backchannel) per-operation counters, indexed
++ * directly by RFC 8881 callback opcode (OP_CB_GETATTR..OP_CB_OFFLOAD).
++ */
++#define NFSD_STATS_CB_OPS_NUM	(OP_CB_OFFLOAD + 1)
++
+ /*
+  * Represents a nfsd "container". With respect to nfsv4 state tracking, the
+  * fields of interest are the *_id_hashtbls and the *_name_tree. These track
+@@ -200,6 +205,11 @@ struct nfsd_net {
+ 	/* Per-netns stats counters */
+ 	struct percpu_counter    counter[NFSD_STATS_COUNTERS_NUM];
+ 
++#ifdef CONFIG_NFSD_V4
++	/* Per-netns NFSv4 callback (backchannel) per-operation counters */
++	struct percpu_counter    cb_counter[NFSD_STATS_CB_OPS_NUM];
++#endif
++
+ 	/* sunrpc svc stats */
+ 	struct svc_stat          nfsd_svcstats;
+ 
+diff --git a/fs/nfsd/nfs4callback.c b/fs/nfsd/nfs4callback.c
+index 71dcb448fa0a..a901bbe67e03 100644
+--- a/fs/nfsd/nfs4callback.c
++++ b/fs/nfsd/nfs4callback.c
+@@ -39,6 +39,7 @@
+ #include "nfsd.h"
+ #include "state.h"
+ #include "netns.h"
++#include "stats.h"
+ #include "trace.h"
+ #include "xdr4cb.h"
+ #include "xdr4.h"
+@@ -1921,12 +1922,31 @@ void nfsd4_init_cb(struct nfsd4_callback *cb, struct nfs4_client *clp,
+ bool nfsd4_run_cb(struct nfsd4_callback *cb)
+ {
+ 	struct nfs4_client *clp = cb->cb_clp;
++	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
++	const struct nfsd4_callback_ops *ops = cb->cb_ops;
++	u32 minorversion = clp->cl_minorversion;
+ 	bool queued;
+ 
+ 	nfsd41_cb_inflight_begin(clp);
+ 	queued = nfsd4_queue_cb(cb);
+-	if (!queued)
++	if (queued) {
++		if (ops) {
++			nfsd_stats_cb_op_inc(nn, ops->opcode);
++			/*
++			 * Minorversion > 0 callbacks prepend a CB_SEQUENCE op
++			 * (see encode_cb_sequence4args()); count it like the
++			 * forechannel counts SEQUENCE, so it isn't perpetually
++			 * reported as zero.  CB_NULL probes (ops == NULL) carry
++			 * no CB_SEQUENCE -- and on 4.1+ they are dropped without
++			 * sending any RPC (see nfsd4_run_cb_work()) -- so they
++			 * must not be counted here.
++			 */
++			if (minorversion > 0)
++				nfsd_stats_cb_op_inc(nn, OP_CB_SEQUENCE);
++		}
++	} else {
+ 		nfsd41_cb_inflight_end(clp);
++	}
+ 	return queued;
+ }
+ 
+diff --git a/fs/nfsd/nfs4state.c b/fs/nfsd/nfs4state.c
+index 19810419f457..18e17232cf94 100644
+--- a/fs/nfsd/nfs4state.c
++++ b/fs/nfsd/nfs4state.c
+@@ -10122,7 +10122,6 @@ __be32
+ nfsd4_deleg_getattr_conflict(struct svc_rqst *rqstp, struct dentry *dentry,
+ 			     struct nfs4_delegation **pdp)
+ {
+-	struct nfsd_net *nn = net_generic(SVC_NET(rqstp), nfsd_net_id);
+ 	struct nfsd_thread_local_info *ntli = rqstp->rq_private;
+ 	struct file_lock_context *ctx;
+ 	struct nfs4_delegation *dp = NULL;
+@@ -10162,7 +10161,6 @@ nfsd4_deleg_getattr_conflict(struct svc_rqst *rqstp, struct dentry *dentry,
+ 		return 0;
+ 	}
+ 
+-	nfsd_stats_wdeleg_getattr_inc(nn);
+ 	refcount_inc(&dp->dl_stid.sc_count);
+ 	ncf = &dp->dl_cb_fattr;
+ 	nfs4_cb_getattr(&dp->dl_cb_fattr);
+diff --git a/fs/nfsd/nfsctl.c b/fs/nfsd/nfsctl.c
+index 7731051105c9..93e18426039d 100644
+--- a/fs/nfsd/nfsctl.c
++++ b/fs/nfsd/nfsctl.c
+@@ -2736,6 +2736,13 @@ static __net_init int nfsd_net_init(struct net *net)
+ 	if (retval)
+ 		goto out_repcache_error;
+ 
++#ifdef CONFIG_NFSD_V4
++	retval = percpu_counter_init_many(nn->cb_counter, 0, GFP_KERNEL,
++					  NFSD_STATS_CB_OPS_NUM);
++	if (retval)
++		goto out_cb_counter_error;
++#endif
++
+ 	memset(&nn->nfsd_svcstats, 0, sizeof(nn->nfsd_svcstats));
+ 	nn->nfsd_svcstats.program = &nfsd_programs[0];
+ 	retval = svc_stat_alloc_counts(&nn->nfsd_svcstats);
+@@ -2764,6 +2771,10 @@ static __net_init int nfsd_net_init(struct net *net)
+ out_svcstats_error:
+ 	svc_stat_free_counts(&nn->nfsd_svcstats);
+ out_proc_error:
++#ifdef CONFIG_NFSD_V4
++	percpu_counter_destroy_many(nn->cb_counter, NFSD_STATS_CB_OPS_NUM);
++out_cb_counter_error:
++#endif
+ 	percpu_counter_destroy_many(nn->counter, NFSD_STATS_COUNTERS_NUM);
+ out_repcache_error:
+ 	nfsd_idmap_shutdown(net);
+@@ -2804,6 +2815,9 @@ static __net_exit void nfsd_net_exit(struct net *net)
+ 	nfsd_net_cb_shutdown(nn);
+ 	nfsd_proc_stat_shutdown(net);
+ 	svc_stat_free_counts(&nn->nfsd_svcstats);
++#ifdef CONFIG_NFSD_V4
++	percpu_counter_destroy_many(nn->cb_counter, NFSD_STATS_CB_OPS_NUM);
++#endif
+ 	percpu_counter_destroy_many(nn->counter, NFSD_STATS_COUNTERS_NUM);
+ 	nfsd_idmap_shutdown(net);
+ 	nfsd_export_shutdown(net);
+diff --git a/fs/nfsd/stats.c b/fs/nfsd/stats.c
+index 9a03e097cfe5..f16559813292 100644
+--- a/fs/nfsd/stats.c
++++ b/fs/nfsd/stats.c
+@@ -65,7 +65,7 @@ static int nfsd_show(struct seq_file *seq, void *v)
+ 			   percpu_counter_sum_positive(&nn->counter[NFSD_STATS_NFS4_OP(i)]));
+ 	}
+ 	seq_printf(seq, "\nwdeleg_getattr %lld",
+-		percpu_counter_sum_positive(&nn->counter[NFSD_STATS_WDELEG_GETATTR]));
++		percpu_counter_sum_positive(&nn->cb_counter[OP_CB_GETATTR]));
+ 
+ 	seq_putc(seq, '\n');
+ #endif
+diff --git a/fs/nfsd/stats.h b/fs/nfsd/stats.h
+index c8d7e3934c33..aabfbb1a9c71 100644
+--- a/fs/nfsd/stats.h
++++ b/fs/nfsd/stats.h
+@@ -131,9 +131,10 @@ static inline void nfsd_stats_drc_mem_usage_sub(struct nfsd_net *nn, s64 amount)
+ }
+ 
+ #ifdef CONFIG_NFSD_V4
+-static inline void nfsd_stats_wdeleg_getattr_inc(struct nfsd_net *nn)
++static inline void nfsd_stats_cb_op_inc(struct nfsd_net *nn, u32 opcode)
+ {
+-	percpu_counter_inc(&nn->counter[NFSD_STATS_WDELEG_GETATTR]);
++	if (opcode >= OP_CB_GETATTR && opcode <= OP_CB_OFFLOAD)
++		percpu_counter_inc(&nn->cb_counter[opcode]);
+ }
+ #endif
+ #endif /* _NFSD_STATS_H */
+-- 
+2.55.0
+

@@ -1,0 +1,38 @@
+From 5ab289f5eabcda3b78c4083d6415711a13466436 Mon Sep 17 00:00:00 2001
+From: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Date: Tue, 28 Jul 2026 16:07:16 +0200
+Subject: [PATCH 12207/15333] ACPI/APMT: use platform_device_set_fwnode()
+
+Platform devices using the split approach of calling
+platform_device_alloc() and platform_device_add() must not assign the
+firmware nodes manually but use the provided
+platform_device_set_fwnode() function which additionally makes sure we
+track the reference count of the firmware node correctly.
+
+Replace the manual assignment of the firmware node with a call to
+platform_device_set_fwnode().
+
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Acked-by: Sudeep Holla <sudeep.holla@kernel.org>
+Link: https://patch.msgid.link/20260728-acpi-arm64-pdev-set-fwnode-v1-1-b5aff9b2235a@oss.qualcomm.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/acpi/arm64/apmt.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/acpi/arm64/apmt.c b/drivers/acpi/arm64/apmt.c
+index bb010f6164e5..c927e4f08ec2 100644
+--- a/drivers/acpi/arm64/apmt.c
++++ b/drivers/acpi/arm64/apmt.c
+@@ -99,7 +99,7 @@ static int __init apmt_add_platform_device(struct acpi_apmt_node *node,
+ 	if (ret)
+ 		goto dev_put;
+ 
+-	pdev->dev.fwnode = fwnode;
++	platform_device_set_fwnode(pdev, fwnode);
+ 
+ 	ret = platform_device_add(pdev);
+ 
+-- 
+2.55.0
+

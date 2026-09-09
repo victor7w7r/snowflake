@@ -1,0 +1,46 @@
+From 76a770c30bcdb0447247c578e0283336a20b6990 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Wed, 15 Jul 2026 16:55:24 +0700
+Subject: [PATCH 08242/15333] ASoC: sunxi: sun50i-codec-analog: Improve probe
+ error handling
+
+Drop the redundant error message after devm_platform_ioremap_resource(),
+which already reports failures, and use dev_err_probe() for regmap
+initialization errors.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Chen-Yu Tsai <wens@kernel.org>
+Link: https://patch.msgid.link/20260715095525.40668-6-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sunxi/sun50i-codec-analog.c | 11 ++++-------
+ 1 file changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/sound/soc/sunxi/sun50i-codec-analog.c b/sound/soc/sunxi/sun50i-codec-analog.c
+index 9f5b067a8ccc..50c0dee8c433 100644
+--- a/sound/soc/sunxi/sun50i-codec-analog.c
++++ b/sound/soc/sunxi/sun50i-codec-analog.c
+@@ -551,16 +551,13 @@ static int sun50i_codec_analog_probe(struct platform_device *pdev)
+ 	bool enable;
+ 
+ 	base = devm_platform_ioremap_resource(pdev, 0);
+-	if (IS_ERR(base)) {
+-		dev_err(&pdev->dev, "Failed to map the registers\n");
++	if (IS_ERR(base))
+ 		return PTR_ERR(base);
+-	}
+ 
+ 	regmap = sun8i_adda_pr_regmap_init(&pdev->dev, base);
+-	if (IS_ERR(regmap)) {
+-		dev_err(&pdev->dev, "Failed to create regmap\n");
+-		return PTR_ERR(regmap);
+-	}
++	if (IS_ERR(regmap))
++		return dev_err_probe(&pdev->dev, PTR_ERR(regmap),
++				     "Failed to create regmap\n");
+ 
+ 	enable = device_property_read_bool(&pdev->dev,
+ 					   "allwinner,internal-bias-resistor");
+-- 
+2.55.0
+

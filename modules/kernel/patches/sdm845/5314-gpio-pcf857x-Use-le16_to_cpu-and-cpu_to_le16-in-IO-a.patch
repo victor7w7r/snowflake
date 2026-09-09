@@ -1,0 +1,62 @@
+From fbd35c8cc6c6e817385f2bfa07fa4227370a3010 Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Wed, 15 Jul 2026 18:39:44 +0200
+Subject: [PATCH 05314/15333] gpio: pcf857x: Use le16_to_cpu() and
+ cpu_to_le16() in IO accessors
+
+16-bit expander data is an __le16, use le16_to_cpu() to read it.
+In the similar way use cpu_to_le16() to write __le16 value.
+
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Fixes: and Cc: stable?
+Link: https://patch.msgid.link/20260715163944.1300616-1-andriy.shevchenko@linux.intel.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/gpio/gpio-pcf857x.c | 13 ++++++++-----
+ 1 file changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpio/gpio-pcf857x.c b/drivers/gpio/gpio-pcf857x.c
+index 4196916c4f94..c1f5e10a3c20 100644
+--- a/drivers/gpio/gpio-pcf857x.c
++++ b/drivers/gpio/gpio-pcf857x.c
+@@ -18,6 +18,8 @@
+ #include <linux/slab.h>
+ #include <linux/spinlock.h>
+ 
++#include <asm/byteorder.h>
++
+ static const struct i2c_device_id pcf857x_id[] = {
+ 	{ .name = "pcf8574", .driver_data = 8 },
+ 	{ .name = "pcf8574a", .driver_data = 8 },
+@@ -96,22 +98,23 @@ static int i2c_read_le8(struct i2c_client *client)
+ 
+ static int i2c_write_le16(struct i2c_client *client, unsigned int word)
+ {
+-	u8 buf[2] = { word & 0xff, word >> 8, };
++	__le16 buf = cpu_to_le16(word);
+ 	int status;
+ 
+-	status = i2c_master_send(client, buf, 2);
++	status = i2c_master_send(client, (char *)&buf, sizeof(buf));
+ 	return (status < 0) ? status : 0;
+ }
+ 
+ static int i2c_read_le16(struct i2c_client *client)
+ {
+-	u8 buf[2];
++	__le16 buf;
+ 	int status;
+ 
+-	status = i2c_master_recv(client, buf, 2);
++	status = i2c_master_recv(client, (char *)&buf, sizeof(buf));
+ 	if (status < 0)
+ 		return status;
+-	return (buf[1] << 8) | buf[0];
++
++	return le16_to_cpu(buf);
+ }
+ 
+ /*-------------------------------------------------------------------------*/
+-- 
+2.55.0
+

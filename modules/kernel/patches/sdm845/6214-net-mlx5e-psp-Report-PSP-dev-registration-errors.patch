@@ -1,0 +1,111 @@
+From 676fe97d57df18c8ce00b42c4881e8d848e23a54 Mon Sep 17 00:00:00 2001
+From: Cosmin Ratiu <cratiu@nvidia.com>
+Date: Tue, 7 Jul 2026 16:08:58 +0300
+Subject: [PATCH 06214/15333] net/mlx5e: psp: Report PSP dev registration
+ errors
+
+mlx5e_psp_register() was forced to eat PSP dev registration errors as
+the caller was not propagating them. Change this so PSP dev registration
+failures get reported back to the caller instead.
+
+After the recent changes in the series, PSP dev registration failures
+will just leave some data structs in priv->psp (mostly counters), with
+no steering rules and no means to configure them. There's no point
+actively cleaning those up on failure, as they'll get removed during
+profile->cleanup.
+
+Signed-off-by: Cosmin Ratiu <cratiu@nvidia.com>
+Signed-off-by: Tariq Toukan <tariqt@nvidia.com>
+Link: https://patch.msgid.link/20260707130858.969928-16-tariqt@nvidia.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c | 8 +++++---
+ drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.h | 4 ++--
+ drivers/net/ethernet/mellanox/mlx5/core/en_main.c      | 8 +++++++-
+ 3 files changed, 14 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
+index b3521c3861f6..73b232379263 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
+@@ -1028,14 +1028,14 @@ void mlx5e_psp_unregister(struct mlx5e_priv *priv)
+ 	psp->psd = NULL;
+ }
+ 
+-void mlx5e_psp_register(struct mlx5e_priv *priv)
++int mlx5e_psp_register(struct mlx5e_priv *priv)
+ {
+ 	struct mlx5e_psp *psp = priv->psp;
+ 	struct psp_dev *psd;
+ 
+ 	/* FW Caps missing */
+ 	if (!priv->psp)
+-		return;
++		return 0;
+ 
+ 	psp->caps.assoc_drv_spc = sizeof(u32);
+ 	psp->caps.versions = 1 << PSP_VERSION_HDR0_AES_GCM_128;
+@@ -1047,9 +1047,11 @@ void mlx5e_psp_register(struct mlx5e_priv *priv)
+ 	if (IS_ERR(psd)) {
+ 		mlx5_core_err(priv->mdev, "PSP failed to register due to %pe\n",
+ 			      psd);
+-		return;
++		return PTR_ERR(psd);
+ 	}
+ 	psp->psd = psd;
++
++	return 0;
+ }
+ 
+ int mlx5e_psp_init(struct mlx5e_priv *priv)
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.h b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.h
+index 57fffcf4a62c..3f441e7dd55a 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.h
+@@ -45,7 +45,7 @@ static inline bool mlx5_is_psp_device(struct mlx5_core_dev *mdev)
+ 
+ void mlx5_accel_psp_fs_cleanup_rx_tables(struct mlx5e_priv *priv);
+ void mlx5_accel_psp_fs_cleanup_tx_tables(struct mlx5e_priv *priv);
+-void mlx5e_psp_register(struct mlx5e_priv *priv);
++int mlx5e_psp_register(struct mlx5e_priv *priv);
+ void mlx5e_psp_unregister(struct mlx5e_priv *priv);
+ int mlx5e_psp_init(struct mlx5e_priv *priv);
+ void mlx5e_psp_cleanup(struct mlx5e_priv *priv);
+@@ -57,7 +57,7 @@ static inline bool mlx5_is_psp_device(struct mlx5_core_dev *mdev)
+ 	return false;
+ }
+ 
+-static inline void mlx5e_psp_register(struct mlx5e_priv *priv) { }
++static inline int mlx5e_psp_register(struct mlx5e_priv *priv) { return 0; }
+ static inline void mlx5e_psp_unregister(struct mlx5e_priv *priv) { }
+ static inline int mlx5e_psp_init(struct mlx5e_priv *priv) { return 0; }
+ static inline void mlx5e_psp_cleanup(struct mlx5e_priv *priv) { }
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_main.c b/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
+index c9bcb8738f17..43471c6e6385 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_main.c
+@@ -6201,7 +6201,9 @@ static int mlx5e_nic_enable(struct mlx5e_priv *priv)
+ 
+ 	mlx5e_fs_init_l2_addr(priv->fs, netdev);
+ 	mlx5e_ipsec_init(priv);
+-	mlx5e_psp_register(priv);
++	err = mlx5e_psp_register(priv);
++	if (err)
++		goto out_ipsec_cleanup;
+ 
+ 	err = mlx5e_macsec_init(priv);
+ 	if (err)
+@@ -6239,6 +6241,10 @@ static int mlx5e_nic_enable(struct mlx5e_priv *priv)
+ 	rtnl_unlock();
+ 
+ 	return 0;
++
++out_ipsec_cleanup:
++	mlx5e_ipsec_cleanup(priv);
++	return err;
+ }
+ 
+ static void mlx5e_nic_disable(struct mlx5e_priv *priv)
+-- 
+2.55.0
+

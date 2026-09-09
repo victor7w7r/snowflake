@@ -1,0 +1,130 @@
+From 6e03e0b1abc2338bd815a861c054434c6806a7b7 Mon Sep 17 00:00:00 2001
+From: "Stanley.Yang" <Stanley.Yang@amd.com>
+Date: Fri, 26 Jun 2026 14:04:53 +0800
+Subject: [PATCH 01869/15333] drm/amdgpu/ras: Resum RAS IP hw init during nps
+ dynamic switch
+
+On an XGMI reset-on-init (NPS memory patition mode switch), RAS
+IP hw fini, sw fini is called but hw init is skipped due to
+RAS IP block is not included in hwinit mask, so need call
+RAS IP hw init during XGMI reset-on-init.
+
+Signed-off-by: Stanley.Yang <Stanley.Yang@amd.com>
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c       | 14 +++++++++++-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h       |  1 +
+ drivers/gpu/drm/amd/amdgpu/amdgpu_xgmi.c      | 10 +++++++++
+ .../gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c  | 22 +++++++++++++++++++
+ .../gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h  |  1 +
+ 5 files changed, 47 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+index 58dd8f29734e..5fb493dd9705 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+@@ -3846,7 +3846,14 @@ int amdgpu_ras_init_badpage_info(struct amdgpu_device *adev)
+ 	if (!con || amdgpu_sriov_vf(adev))
+ 		return 0;
+ 
+-	if (amdgpu_uniras_enabled(adev))
++	/*
++	 * For the reset-on-init path (e.g. an NPS memory partition,
++	 * switch) the RAS IP block hw_init has not been enabled and
++	 * the amdgpu_uniras_enabled return false, check amdgpu ras
++	 * context uniras_enabled flag, eeprom init will be called
++	 * during RAS IP block hw_init.
++	 */
++	if (amdgpu_uniras_enabled(adev) || con->uniras_enabled)
+ 		return 0;
+ 
+ 	control = &con->eeprom_control;
+@@ -5841,3 +5848,8 @@ void amdgpu_ras_post_reset(struct amdgpu_device *adev,
+ 			amdgpu_ras_mgr_post_reset(tmp_adev);
+ 	}
+ }
++
++void amdgpu_ras_resume_after_reset(struct amdgpu_device *adev)
++{
++	amdgpu_ras_mgr_resume_after_reset(adev);
++}
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
+index a86ab65aa2f0..ad24c7cf8936 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
+@@ -1045,4 +1045,5 @@ void amdgpu_ras_pre_reset(struct amdgpu_device *adev,
+ 					  struct list_head *device_list);
+ void amdgpu_ras_post_reset(struct amdgpu_device *adev,
+ 					  struct list_head *device_list);
++void amdgpu_ras_resume_after_reset(struct amdgpu_device *adev);
+ #endif
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_xgmi.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_xgmi.c
+index e63d05c477a0..fe1b5b47f609 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_xgmi.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_xgmi.c
+@@ -1663,6 +1663,16 @@ static void amdgpu_xgmi_reset_on_init_work(struct work_struct *work)
+ 		if (r && r != -EHWPOISON)
+ 			dev_err(tmp_adev->dev,
+ 				"error during bad page data initialization");
++
++		/*
++		 * For the reset-on-init path (e.g. an NPS memory partition
++		 * switch) the RAS IP block hw_init was skipped under the
++		 * minimal init level, so uniras was never enabled. Bring it
++		 * up now that the reset domain has been unlocked. This is a
++		 * no-op for any other reset path where RAS is already
++		 * initialized, and for non-uniras devices.
++		 */
++		amdgpu_ras_resume_after_reset(tmp_adev);
+ 	}
+ }
+ 
+diff --git a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c
+index 5b389a92118a..60412da69b2b 100644
+--- a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c
++++ b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c
+@@ -465,6 +465,28 @@ static int amdgpu_ras_mgr_hw_fini(struct amdgpu_ip_block *ip_block)
+ 	return 0;
+ }
+ 
++int amdgpu_ras_mgr_resume_after_reset(struct amdgpu_device *adev)
++{
++	struct amdgpu_ras *con = amdgpu_ras_get_context(adev);
++	struct amdgpu_ras_mgr *ras_mgr = amdgpu_ras_mgr_get_context(adev);
++	struct amdgpu_ip_block *ip_block;
++
++	if (!con || !con->uniras_enabled)
++		return 0;
++
++	if (!ras_mgr || !ras_mgr->ras_core)
++		return -EINVAL;
++
++	if (ras_mgr->ras_is_ready)
++		return 0;
++
++	ip_block = amdgpu_device_ip_get_ip_block(adev, AMD_IP_BLOCK_TYPE_RAS);
++	if (!ip_block)
++		return -EINVAL;
++
++	return amdgpu_ras_mgr_hw_init(ip_block);
++}
++
+ struct amdgpu_ras_mgr *amdgpu_ras_mgr_get_context(struct amdgpu_device *adev)
+ {
+ 	if (!adev || !adev->psp.ras_context.ras)
+diff --git a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h
+index 4f44a917d48b..3f80b9f1f0ac 100644
+--- a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h
++++ b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h
+@@ -82,6 +82,7 @@ int amdgpu_ras_mgr_handle_ras_cmd(struct amdgpu_device *adev,
+ 		void *output, uint32_t out_size);
+ int amdgpu_ras_mgr_pre_reset(struct amdgpu_device *adev);
+ int amdgpu_ras_mgr_post_reset(struct amdgpu_device *adev);
++int amdgpu_ras_mgr_resume_after_reset(struct amdgpu_device *adev);
+ int amdgpu_ras_mgr_lookup_bad_pages_in_a_row(struct amdgpu_device *adev,
+ 		uint64_t addr, uint64_t *nps_page_addr, uint32_t max_page_count);
+ #endif
+-- 
+2.55.0
+

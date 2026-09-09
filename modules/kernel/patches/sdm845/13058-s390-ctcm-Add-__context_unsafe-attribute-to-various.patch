@@ -1,0 +1,181 @@
+From 4d422c526fcf1c45ad15d83f976ea5a881cb5ce1 Mon Sep 17 00:00:00 2001
+From: Heiko Carstens <hca@linux.ibm.com>
+Date: Wed, 5 Aug 2026 16:50:31 +0200
+Subject: [PATCH 13058/15333] s390/ctcm: Add __context_unsafe() attribute to
+ various functions
+
+Disable context analysis for various functions to get rid of context
+analysis compile time warnings using clang caused by conditional
+locking like e.g.:
+
+drivers/s390/net/ctcm_fsms.c:1457:8:
+  warning: spinlock 'arg->cdev->ccwlock' is not held on every path through here
+drivers/s390/net/ctcm_fsms.c:1459:4:
+  warning: releasing spinlock 'arg->cdev->ccwlock' that was not held
+
+Use __context_unsafe() to provide a short comment why context analysis is
+disabled for each function. Each of those functions already contains a
+comment that the (previous) sparse context analysis warnings due to
+conditional locking should be ignored.
+
+Remove those comments everywhere and use the __context_unsafe() attribute
+instead.
+
+Signed-off-by: Heiko Carstens <hca@linux.ibm.com>
+Acked-by: Alexandra Winter <wintera@linux.ibm.com>
+Reviewed-by: Simon Horman <horms@kernel.org>
+Link: https://patch.msgid.link/20260805145032.1409325-2-hca@linux.ibm.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/s390/net/ctcm_fsms.c | 20 +++++++-------------
+ drivers/s390/net/ctcm_mpc.c  |  6 ++----
+ 2 files changed, 9 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/s390/net/ctcm_fsms.c b/drivers/s390/net/ctcm_fsms.c
+index bf917f426453..84fd394d3525 100644
+--- a/drivers/s390/net/ctcm_fsms.c
++++ b/drivers/s390/net/ctcm_fsms.c
+@@ -545,6 +545,7 @@ static void chx_rxidle(fsm_instance *fi, int event, void *arg)
+  * arg		Generic pointer, casted from channel * upon call.
+  */
+ static void ctcm_chx_setmode(fsm_instance *fi, int event, void *arg)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct channel *ch = arg;
+ 	int rc;
+@@ -563,8 +564,6 @@ static void ctcm_chx_setmode(fsm_instance *fi, int event, void *arg)
+ 
+ 	if (event == CTC_EVENT_TIMER)	/* only for timer not yet locked */
+ 		spin_lock_irqsave(get_ccwdev_lock(ch->cdev), saveflags);
+-			/* Such conditional locking is undeterministic in
+-			 * static view. => ignore sparse warnings here. */
+ 
+ 	rc = ccw_device_start(ch->cdev, &ch->ccw[6], 0, 0xff, 0);
+ 	if (event == CTC_EVENT_TIMER)	/* see above comments */
+@@ -648,6 +647,7 @@ static void ctcm_chx_start(fsm_instance *fi, int event, void *arg)
+  * arg		Generic pointer, casted from channel * upon call.
+  */
+ static void ctcm_chx_haltio(fsm_instance *fi, int event, void *arg)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct channel *ch = arg;
+ 	unsigned long saveflags = 0;
+@@ -662,15 +662,12 @@ static void ctcm_chx_haltio(fsm_instance *fi, int event, void *arg)
+ 
+ 	if (event == CTC_EVENT_STOP)	/* only for STOP not yet locked */
+ 		spin_lock_irqsave(get_ccwdev_lock(ch->cdev), saveflags);
+-			/* Such conditional locking is undeterministic in
+-			 * static view. => ignore sparse warnings here. */
+ 	oldstate = fsm_getstate(fi);
+ 	fsm_newstate(fi, CTC_STATE_TERM);
+ 	rc = ccw_device_halt(ch->cdev, 0);
+ 
+ 	if (event == CTC_EVENT_STOP)
+ 		spin_unlock_irqrestore(get_ccwdev_lock(ch->cdev), saveflags);
+-			/* see remark above about conditional locking */
+ 
+ 	if (rc != 0 && rc != -EBUSY) {
+ 		fsm_deltimer(&ch->timer);
+@@ -824,6 +821,7 @@ static void ctcm_chx_setuperr(fsm_instance *fi, int event, void *arg)
+  * arg		Generic pointer, casted from channel * upon call.
+  */
+ static void ctcm_chx_restart(fsm_instance *fi, int event, void *arg)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct channel *ch = arg;
+ 	struct net_device *dev = ch->netdev;
+@@ -842,9 +840,6 @@ static void ctcm_chx_restart(fsm_instance *fi, int event, void *arg)
+ 	fsm_newstate(fi, CTC_STATE_STARTWAIT);
+ 	if (event == CTC_EVENT_TIMER)	/* only for timer not yet locked */
+ 		spin_lock_irqsave(get_ccwdev_lock(ch->cdev), saveflags);
+-			/* Such conditional locking is a known problem for
+-			 * sparse because its undeterministic in static view.
+-			 * Warnings should be ignored here. */
+ 	rc = ccw_device_halt(ch->cdev, 0);
+ 	if (event == CTC_EVENT_TIMER)
+ 		spin_unlock_irqrestore(get_ccwdev_lock(ch->cdev), saveflags);
+@@ -999,6 +994,7 @@ static void ctcm_chx_txiniterr(fsm_instance *fi, int event, void *arg)
+  * arg		Generic pointer, casted from channel * upon call.
+  */
+ static void ctcm_chx_txretry(fsm_instance *fi, int event, void *arg)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct channel *ch = arg;
+ 	struct net_device *dev = ch->netdev;
+@@ -1042,9 +1038,6 @@ static void ctcm_chx_txretry(fsm_instance *fi, int event, void *arg)
+ 		fsm_addtimer(&ch->timer, 1000, CTC_EVENT_TIMER, ch);
+ 		if (event == CTC_EVENT_TIMER) /* for TIMER not yet locked */
+ 			spin_lock_irqsave(get_ccwdev_lock(ch->cdev), saveflags);
+-			/* Such conditional locking is a known problem for
+-			 * sparse because its undeterministic in static view.
+-			 * Warnings should be ignored here. */
+ 		if (do_debug_ccw)
+ 			ctcmpc_dumpit((char *)&ch->ccw[3],
+ 					sizeof(struct ccw1) * 3);
+@@ -1383,6 +1376,7 @@ static void ctcmpc_chx_txdone(fsm_instance *fi, int event, void *arg)
+  * arg		Generic pointer, casted from channel * upon call.
+  */
+ static void ctcmpc_chx_rx(fsm_instance *fi, int event, void *arg)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct channel		*ch = arg;
+ 	struct net_device	*dev = ch->netdev;
+@@ -1462,7 +1456,7 @@ static void ctcmpc_chx_rx(fsm_instance *fi, int event, void *arg)
+ 			spin_lock_irqsave(
+ 				get_ccwdev_lock(ch->cdev), saveflags);
+ 		rc = ccw_device_start(ch->cdev, &ch->ccw[0], 0, 0xff, 0);
+-		if (dolock) /* see remark about conditional locking */
++		if (dolock)
+ 			spin_unlock_irqrestore(
+ 				get_ccwdev_lock(ch->cdev), saveflags);
+ 		if (rc != 0)
+@@ -1539,6 +1533,7 @@ static void ctcmpc_chx_firstio(fsm_instance *fi, int event, void *arg)
+  * arg		Generic pointer, casted from channel * upon call.
+  */
+ void ctcmpc_chx_rxidle(fsm_instance *fi, int event, void *arg)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct channel *ch = arg;
+ 	struct net_device *dev = ch->netdev;
+@@ -1566,7 +1561,6 @@ void ctcmpc_chx_rxidle(fsm_instance *fi, int event, void *arg)
+ 		ch->ccw[1].count = ch->max_bufsize;
+ 		CTCM_CCW_DUMP((char *)&ch->ccw[0], sizeof(struct ccw1) * 3);
+ 		if (event == CTC_EVENT_START)
+-			/* see remark about conditional locking */
+ 			spin_lock_irqsave(get_ccwdev_lock(ch->cdev), saveflags);
+ 		rc = ccw_device_start(ch->cdev, &ch->ccw[0], 0, 0xff, 0);
+ 		if (event == CTC_EVENT_START)
+diff --git a/drivers/s390/net/ctcm_mpc.c b/drivers/s390/net/ctcm_mpc.c
+index aeb102537e7f..08e36685e578 100644
+--- a/drivers/s390/net/ctcm_mpc.c
++++ b/drivers/s390/net/ctcm_mpc.c
+@@ -1647,6 +1647,7 @@ static int mpc_validate_xid(struct mpcg_info *mpcginfo)
+  * CTCM_PROTO_MPC only
+  */
+ static void mpc_action_side_xid(fsm_instance *fsm, void *arg, int side)
++__context_unsafe(/* Conditional locking */)
+ {
+ 	struct channel *ch = arg;
+ 	int rc = 0;
+@@ -1774,9 +1775,6 @@ static void mpc_action_side_xid(fsm_instance *fsm, void *arg, int side)
+ 	CTCM_D3_DUMP((char *)ch->xid_id, 4);
+ 
+ 	if (!in_hardirq()) {
+-			 /* Such conditional locking is a known problem for
+-			  * sparse because its static undeterministic.
+-			  * Warnings should be ignored here. */
+ 		spin_lock_irqsave(get_ccwdev_lock(ch->cdev), saveflags);
+ 		gotlock = 1;
+ 	}
+@@ -1784,7 +1782,7 @@ static void mpc_action_side_xid(fsm_instance *fsm, void *arg, int side)
+ 	fsm_addtimer(&ch->timer, 5000 , CTC_EVENT_TIMER, ch);
+ 	rc = ccw_device_start(ch->cdev, &ch->ccw[8], 0, 0xff, 0);
+ 
+-	if (gotlock)	/* see remark above about conditional locking */
++	if (gotlock)
+ 		spin_unlock_irqrestore(get_ccwdev_lock(ch->cdev), saveflags);
+ 
+ 	if (rc != 0) {
+-- 
+2.55.0
+

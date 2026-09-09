@@ -1,0 +1,288 @@
+From b79feed6f0aa80af1da417803e14d2d3594de177 Mon Sep 17 00:00:00 2001
+From: Jeff Layton <jlayton@kernel.org>
+Date: Tue, 16 Jun 2026 07:58:52 -0400
+Subject: [PATCH 12700/15333] nfsd: add data structures for handling CB_NOTIFY
+
+Add the data structures, allocation helpers, and callback operations
+needed for directory delegation CB_NOTIFY support:
+
+- struct nfsd_notify_event: carries fsnotify events for CB_NOTIFY
+- struct nfsd4_cb_notify: per-delegation state for notification handling
+- Union dl_cb_fattr with dl_cb_notify in nfs4_delegation since a
+  delegation is either a regular file delegation or a directory
+  delegation, never both
+
+Refactor alloc_init_deleg() into a common __alloc_init_deleg() base
+with a pluggable sc_free callback, and add alloc_init_dir_deleg() which
+allocates the page array and notify4 buffer needed for CB_NOTIFY
+encoding.
+
+Add skeleton nfsd4_cb_notify_ops with done/release handlers that will
+be filled in when the notification path is wired up.
+
+Signed-off-by: Jeff Layton <jlayton@kernel.org>
+Link: https://patch.msgid.link/20260616-dir-deleg-v7-9-6cbc7eac0ade@kernel.org
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ fs/nfsd/nfs4state.c | 121 +++++++++++++++++++++++++++++++++++++++-----
+ fs/nfsd/state.h     |  47 ++++++++++++++++-
+ 2 files changed, 152 insertions(+), 16 deletions(-)
+
+diff --git a/fs/nfsd/nfs4state.c b/fs/nfsd/nfs4state.c
+index 47af5729a86f..2d82cdd96e12 100644
+--- a/fs/nfsd/nfs4state.c
++++ b/fs/nfsd/nfs4state.c
+@@ -126,6 +126,7 @@ static void free_session(struct nfsd4_session *);
+ static const struct nfsd4_callback_ops nfsd4_cb_recall_ops;
+ static const struct nfsd4_callback_ops nfsd4_cb_notify_lock_ops;
+ static const struct nfsd4_callback_ops nfsd4_cb_getattr_ops;
++static const struct nfsd4_callback_ops nfsd4_cb_notify_ops;
+ 
+ static struct workqueue_struct *laundry_wq;
+ 
+@@ -1123,29 +1124,31 @@ static void block_delegations(struct knfsd_fh *fh)
+ }
+ 
+ static struct nfs4_delegation *
+-alloc_init_deleg(struct nfs4_client *clp, struct nfs4_file *fp,
+-		 struct nfs4_clnt_odstate *odstate, u32 dl_type)
++__alloc_init_deleg(struct nfs4_client *clp, struct nfs4_file *fp,
++		   struct nfs4_clnt_odstate *odstate, u32 dl_type,
++		   void (*sc_free)(struct nfs4_stid *))
+ {
+ 	struct nfs4_delegation *dp;
+ 	struct nfs4_stid *stid;
+ 	long n;
+ 
+-	dprintk("NFSD alloc_init_deleg\n");
++	if (delegation_blocked(&fp->fi_fhandle))
++		return NULL;
++
+ 	n = atomic_long_inc_return(&num_delegations);
+ 	if (n < 0 || n > max_delegations)
+ 		goto out_dec;
+-	if (delegation_blocked(&fp->fi_fhandle))
+-		goto out_dec;
+-	stid = nfs4_alloc_stid(clp, deleg_slab, nfs4_free_deleg);
++
++	stid = nfs4_alloc_stid(clp, deleg_slab, sc_free);
+ 	if (stid == NULL)
+ 		goto out_dec;
+-	dp = delegstateid(stid);
+ 
+ 	/*
+ 	 * delegation seqid's are never incremented.  The 4.1 special
+ 	 * meaning of seqid 0 isn't meaningful, really, but let's avoid
+-	 * 0 anyway just for consistency and use 1:
++	 * 0 anyway just for consistency and use 1.
+ 	 */
++	dp = delegstateid(stid);
+ 	dp->dl_stid.sc_stateid.si_generation = 1;
+ 	INIT_LIST_HEAD(&dp->dl_perfile);
+ 	INIT_LIST_HEAD(&dp->dl_perclnt);
+@@ -1155,19 +1158,79 @@ alloc_init_deleg(struct nfs4_client *clp, struct nfs4_file *fp,
+ 	dp->dl_type = dl_type;
+ 	dp->dl_retries = 1;
+ 	dp->dl_recalled = false;
+-	nfsd4_init_cb(&dp->dl_recall, dp->dl_stid.sc_client,
+-		      &nfsd4_cb_recall_ops, NFSPROC4_CLNT_CB_RECALL);
+-	nfsd4_init_cb(&dp->dl_cb_fattr.ncf_getattr, dp->dl_stid.sc_client,
+-			&nfsd4_cb_getattr_ops, NFSPROC4_CLNT_CB_GETATTR);
+-	dp->dl_cb_fattr.ncf_file_modified = false;
+ 	get_nfs4_file(fp);
+ 	dp->dl_stid.sc_file = fp;
++	nfsd4_init_cb(&dp->dl_recall, dp->dl_stid.sc_client,
++		      &nfsd4_cb_recall_ops, NFSPROC4_CLNT_CB_RECALL);
+ 	return dp;
+ out_dec:
+ 	atomic_long_dec(&num_delegations);
+ 	return NULL;
+ }
+ 
++static struct nfs4_delegation *
++alloc_init_deleg(struct nfs4_client *clp, struct nfs4_file *fp,
++		 struct nfs4_clnt_odstate *odstate, u32 dl_type)
++{
++	struct nfs4_delegation *dp;
++
++	dp = __alloc_init_deleg(clp, fp, odstate, dl_type, nfs4_free_deleg);
++	if (!dp)
++		return NULL;
++
++	nfsd4_init_cb(&dp->dl_cb_fattr.ncf_getattr, dp->dl_stid.sc_client,
++			&nfsd4_cb_getattr_ops, NFSPROC4_CLNT_CB_GETATTR);
++	dp->dl_cb_fattr.ncf_file_modified = false;
++	return dp;
++}
++
++static void nfs4_free_dir_deleg(struct nfs4_stid *stid)
++{
++	struct nfs4_delegation	*dp = delegstateid(stid);
++	struct nfsd4_cb_notify *ncn = &dp->dl_cb_notify;
++	int i;
++
++	for (i = 0; i < ncn->ncn_evt_cnt; ++i)
++		nfsd_notify_event_put(ncn->ncn_evt[i]);
++	kfree(ncn->ncn_nf);
++	for (i = 0; i < NOTIFY4_PAGE_ARRAY_SIZE; i++) {
++		if (!ncn->ncn_pages[i])
++			break;
++		put_page(ncn->ncn_pages[i]);
++	}
++	nfs4_free_deleg(stid);
++}
++
++static struct nfs4_delegation *
++alloc_init_dir_deleg(struct nfs4_client *clp, struct nfs4_file *fp)
++{
++	struct nfs4_delegation *dp;
++	struct nfsd4_cb_notify *ncn;
++	int npages;
++
++	dp = __alloc_init_deleg(clp, fp, NULL, NFS4_OPEN_DELEGATE_READ, nfs4_free_dir_deleg);
++	if (!dp)
++		return NULL;
++
++	ncn = &dp->dl_cb_notify;
++
++	npages = alloc_pages_bulk(GFP_KERNEL, NOTIFY4_PAGE_ARRAY_SIZE, ncn->ncn_pages);
++	if (npages != NOTIFY4_PAGE_ARRAY_SIZE) {
++		nfs4_put_stid(&dp->dl_stid);
++		return NULL;
++	}
++
++	ncn->ncn_nf = kcalloc(NOTIFY4_EVENT_QUEUE_SIZE, sizeof(*ncn->ncn_nf), GFP_KERNEL);
++	if (!ncn->ncn_nf) {
++		nfs4_put_stid(&dp->dl_stid);
++		return NULL;
++	}
++	spin_lock_init(&ncn->ncn_lock);
++	nfsd4_init_cb(&ncn->ncn_cb, dp->dl_stid.sc_client,
++			&nfsd4_cb_notify_ops, NFSPROC4_CLNT_CB_NOTIFY);
++	return dp;
++}
++
+ void
+ nfs4_put_stid(struct nfs4_stid *s)
+ {
+@@ -3422,6 +3485,30 @@ nfsd4_cb_getattr_release(struct nfsd4_callback *cb)
+ 	nfs4_put_stid(&dp->dl_stid);
+ }
+ 
++static int
++nfsd4_cb_notify_done(struct nfsd4_callback *cb,
++				struct rpc_task *task)
++{
++	switch (task->tk_status) {
++	case -NFS4ERR_DELAY:
++		rpc_delay(task, 2 * HZ);
++		return 0;
++	default:
++		return 1;
++	}
++}
++
++static void
++nfsd4_cb_notify_release(struct nfsd4_callback *cb)
++{
++	struct nfsd4_cb_notify *ncn =
++			container_of(cb, struct nfsd4_cb_notify, ncn_cb);
++	struct nfs4_delegation *dp =
++			container_of(ncn, struct nfs4_delegation, dl_cb_notify);
++
++	nfs4_put_stid(&dp->dl_stid);
++}
++
+ static const struct nfsd4_callback_ops nfsd4_cb_recall_any_ops = {
+ 	.done		= nfsd4_cb_recall_any_done,
+ 	.release	= nfsd4_cb_recall_any_release,
+@@ -3434,6 +3521,12 @@ static const struct nfsd4_callback_ops nfsd4_cb_getattr_ops = {
+ 	.opcode		= OP_CB_GETATTR,
+ };
+ 
++static const struct nfsd4_callback_ops nfsd4_cb_notify_ops = {
++	.done		= nfsd4_cb_notify_done,
++	.release	= nfsd4_cb_notify_release,
++	.opcode		= OP_CB_NOTIFY,
++};
++
+ static void nfs4_cb_getattr(struct nfs4_cb_fattr *ncf)
+ {
+ 	struct nfs4_delegation *dp =
+@@ -9810,7 +9903,7 @@ nfsd_get_dir_deleg(struct nfsd4_compound_state *cstate,
+ 
+ 	/* Try to set up the lease */
+ 	status = -ENOMEM;
+-	dp = alloc_init_deleg(clp, fp, NULL, NFS4_OPEN_DELEGATE_READ);
++	dp = alloc_init_dir_deleg(clp, fp);
+ 	if (!dp)
+ 		goto out_delegees;
+ 	if (cstate->current_fh.fh_export)
+diff --git a/fs/nfsd/state.h b/fs/nfsd/state.h
+index 4fca0537ca8b..ac9dd798ea22 100644
+--- a/fs/nfsd/state.h
++++ b/fs/nfsd/state.h
+@@ -197,6 +197,45 @@ struct nfs4_cb_fattr {
+ #define NOTIFY4_EVENT_QUEUE_SIZE	3
+ #define NOTIFY4_PAGE_ARRAY_SIZE		1
+ 
++struct nfsd_notify_event {
++	refcount_t	ne_ref;		// refcount
++	u32		ne_mask;	// FS_* mask from fsnotify callback
++	struct dentry	*ne_dentry;	// dentry reference to target
++	u32		ne_namelen;	// length of ne_name
++	char		ne_name[];	// name of dentry being changed
++};
++
++static inline struct nfsd_notify_event *nfsd_notify_event_get(struct nfsd_notify_event *ne)
++{
++	refcount_inc(&ne->ne_ref);
++	return ne;
++}
++
++static inline void nfsd_notify_event_put(struct nfsd_notify_event *ne)
++{
++	if (refcount_dec_and_test(&ne->ne_ref)) {
++		dput(ne->ne_dentry);
++		kfree(ne);
++	}
++}
++
++/*
++ * Represents a directory delegation. The callback is for handling CB_NOTIFYs.
++ * As notifications from fsnotify come in, allocate a new event, take the ncn_lock,
++ * and add it to the ncn_evt queue. The CB_NOTIFY prepare handler will take the
++ * lock, clean out the list and process it.
++ */
++struct nfsd4_cb_notify {
++	spinlock_t			ncn_lock;	// protects the evt queue and count
++	int				ncn_evt_cnt;	// count of events in ncn_evt
++	int				ncn_nf_cnt;	// count of valid entries in ncn_nf
++	struct nfsd_notify_event	*ncn_evt[NOTIFY4_EVENT_QUEUE_SIZE]; // list of events
++	struct page			*ncn_pages[NOTIFY4_PAGE_ARRAY_SIZE]; // for encoding
++	struct notify4			*ncn_nf;	// array of notify4's to be sent
++	bool				ncn_encode_err;	// did encoding fail?
++	struct nfsd4_callback		ncn_cb;		// notify4 callback
++};
++
+ /*
+  * Represents a delegation stateid. The nfs4_client holds references to these
+  * and they are put when it is being destroyed or when the delegation is
+@@ -233,8 +272,12 @@ struct nfs4_delegation {
+ 	bool			dl_written;
+ 	bool			dl_setattr;
+ 
+-	/* for CB_GETATTR */
+-	struct nfs4_cb_fattr    dl_cb_fattr;
++	union {
++		/* for CB_GETATTR */
++		struct nfs4_cb_fattr    dl_cb_fattr;
++		/* for CB_NOTIFY */
++		struct nfsd4_cb_notify	dl_cb_notify;
++	};
+ 
+ 	/* For delegated timestamps */
+ 	struct timespec64	dl_atime;
+-- 
+2.55.0
+

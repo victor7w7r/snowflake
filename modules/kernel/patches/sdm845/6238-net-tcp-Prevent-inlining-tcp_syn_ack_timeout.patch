@@ -1,0 +1,33 @@
+From d05338c1290e8c6bc2f70fe7ad39f4ab61c8410a Mon Sep 17 00:00:00 2001
+From: Emil Tsalapatis <emil@etsalapatis.com>
+Date: Wed, 8 Jul 2026 14:08:37 -0400
+Subject: [PATCH 06238/15333] net/tcp: Prevent inlining tcp_syn_ack_timeout()
+
+The tcp_syn_ack_timeout() function gets inlined by Clang,
+preventing tracing. Since the call is not in the fast
+path, prevent it from being inlined.
+
+Signed-off-by: Emil Tsalapatis <emil@etsalapatis.com>
+Reviewed-by: Eric Dumazet <edumazet@google.com>
+Link: https://patch.msgid.link/20260708180837.9507-1-emil@etsalapatis.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/ipv4/tcp_timer.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/net/ipv4/tcp_timer.c b/net/ipv4/tcp_timer.c
+index bf171b5e1eb3..f7215d53bbda 100644
+--- a/net/ipv4/tcp_timer.c
++++ b/net/ipv4/tcp_timer.c
+@@ -748,7 +748,7 @@ static void tcp_write_timer(struct timer_list *t)
+ 	sock_put(sk);
+ }
+ 
+-void tcp_syn_ack_timeout(const struct request_sock *req)
++noinline_for_tracing void tcp_syn_ack_timeout(const struct request_sock *req)
+ {
+ 	struct net *net = read_pnet(&inet_rsk(req)->ireq_net);
+ 
+-- 
+2.55.0
+

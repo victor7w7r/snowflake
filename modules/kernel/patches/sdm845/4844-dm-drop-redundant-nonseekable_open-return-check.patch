@@ -1,0 +1,36 @@
+From 0729a9b4ee5a4c30e4c3641bc8fc6d164e8617b4 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 3 Jul 2026 09:09:18 +0700
+Subject: [PATCH 04844/15333] dm: drop redundant nonseekable_open() return
+ check
+
+nonseekable_open() never fails, so the error check is unnecessary.
+Remove the dead error handling path.
+
+Signed-off-by: Bui Duc Phuc <phucduc.bui@gmail.com>
+Signed-off-by: Mikulas Patocka <mpatocka@redhat.com>
+---
+ drivers/md/dm-ioctl.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/drivers/md/dm-ioctl.c b/drivers/md/dm-ioctl.c
+index d77e9971c28c..daae22cf9639 100644
+--- a/drivers/md/dm-ioctl.c
++++ b/drivers/md/dm-ioctl.c
+@@ -2269,12 +2269,9 @@ static long dm_compat_ctl_ioctl(struct file *file, uint command, ulong u)
+ 
+ static int dm_open(struct inode *inode, struct file *filp)
+ {
+-	int r;
+ 	struct dm_file *priv;
+ 
+-	r = nonseekable_open(inode, filp);
+-	if (unlikely(r))
+-		return r;
++	nonseekable_open(inode, filp);
+ 
+ 	priv = filp->private_data = kmalloc_obj(struct dm_file);
+ 	if (!priv)
+-- 
+2.55.0
+

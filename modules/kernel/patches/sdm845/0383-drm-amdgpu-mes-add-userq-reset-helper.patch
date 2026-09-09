@@ -1,0 +1,67 @@
+From b83490ad9845a7f9c1e91e9c076249bcfb745cfe Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Thu, 30 Apr 2026 12:00:26 -0400
+Subject: [PATCH 00383/15333] drm/amdgpu/mes: add userq reset helper
+
+Implement a userq reset helper using the doorbell
+index.
+
+Reviewed-by: Jesse Zhang <jesse.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c | 23 +++++++++++++++++++++++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h |  4 ++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+index e3972673fd64..34e040b7fb49 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+@@ -439,6 +439,29 @@ int amdgpu_mes_reset_legacy_queue(struct amdgpu_device *adev,
+ 	return r;
+ }
+ 
++int amdgpu_mes_reset_user_queue(struct amdgpu_device *adev,
++				int queue_type,
++				unsigned int doorbell_index,
++				unsigned int xcc_id)
++{
++	struct mes_reset_queue_input queue_input;
++	int r;
++
++	memset(&queue_input, 0, sizeof(queue_input));
++
++	queue_input.xcc_id = xcc_id;
++	queue_input.queue_type = queue_type;
++	queue_input.doorbell_offset = doorbell_index;
++
++	amdgpu_mes_lock(&adev->mes);
++	r = adev->mes.funcs->reset_hw_queue(&adev->mes, &queue_input);
++	amdgpu_mes_unlock(&adev->mes);
++	if (r)
++		dev_err(adev->dev, "failed to reset user queue\n");
++
++	return r;
++}
++
+ int amdgpu_mes_get_hung_queue_db_array_size(struct amdgpu_device *adev)
+ {
+ 	return adev->mes.hung_queue_db_array_size;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
+index fdd06a17520a..07c144c8e3b6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
+@@ -459,6 +459,10 @@ int amdgpu_mes_reset_legacy_queue(struct amdgpu_device *adev,
+ 				  unsigned int vmid,
+ 				  bool use_mmio,
+ 				  uint32_t xcc_id);
++int amdgpu_mes_reset_user_queue(struct amdgpu_device *adev,
++				int queue_type,
++				unsigned int doorbell_index,
++				unsigned int xcc_id);
+ 
+ int amdgpu_mes_get_hung_queue_db_array_size(struct amdgpu_device *adev);
+ int amdgpu_mes_detect_and_reset_hung_queues(struct amdgpu_device *adev,
+-- 
+2.55.0
+

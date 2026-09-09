@@ -1,0 +1,66 @@
+From 90311787f483a12541baddb9f57c26c2878e73b3 Mon Sep 17 00:00:00 2001
+From: Carlos Song <carlos.song@nxp.com>
+Date: Thu, 16 Jul 2026 15:19:57 +0800
+Subject: [PATCH 07762/15333] i2c: imx-lpi2c: reset controller in probe stage
+
+Reset I2C controller in probe stage to avoid unexpected LPI2C controller
+state left from previous stages and hang system boot.
+
+Per the LPI2C reference manual, section 7.1.4 "Controller Control (MCR)"
+and 7.1.20 Target Control (SCR), the RST bit (bit 1) description states:
+
+  "The reset takes effect immediately and remains asserted until negated
+  by software. There is no minimum delay required before clearing the
+  software reset."
+
+Therefore, it is safe to write 0 to MCR and SCR immediately after
+asserting the RST bit without any additional delay.
+
+Signed-off-by: Carlos Song <carlos.song@nxp.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Signed-off-by: Andi Shyti <andi.shyti@kernel.org>
+Link: https://lore.kernel.org/r/20260716071957.2670263-3-carlos.song@oss.nxp.com
+---
+ drivers/i2c/busses/i2c-imx-lpi2c.c | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/i2c/busses/i2c-imx-lpi2c.c b/drivers/i2c/busses/i2c-imx-lpi2c.c
+index 0081354d91e1..e1a4338bc51e 100644
+--- a/drivers/i2c/busses/i2c-imx-lpi2c.c
++++ b/drivers/i2c/busses/i2c-imx-lpi2c.c
+@@ -1510,11 +1510,6 @@ static int lpi2c_imx_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		lpi2c_imx->bitrate = I2C_MAX_STANDARD_MODE_FREQ;
+ 
+-	ret = devm_request_irq(&pdev->dev, lpi2c_imx->irq, lpi2c_imx_isr, IRQF_NO_SUSPEND,
+-			       pdev->name, lpi2c_imx);
+-	if (ret)
+-		return ret;
+-
+ 	i2c_set_adapdata(&lpi2c_imx->adapter, lpi2c_imx);
+ 	platform_set_drvdata(pdev, lpi2c_imx);
+ 
+@@ -1550,6 +1545,20 @@ static int lpi2c_imx_probe(struct platform_device *pdev)
+ 	pm_runtime_set_active(&pdev->dev);
+ 	pm_runtime_enable(&pdev->dev);
+ 
++	/*
++	 * Reset all internal controller registers of both Master and Target
++	 * to avoid effects of previous status.
++	 */
++	writel(MCR_RST, lpi2c_imx->base + LPI2C_MCR);
++	writel(SCR_RST, lpi2c_imx->base + LPI2C_SCR);
++	writel(0, lpi2c_imx->base + LPI2C_MCR);
++	writel(0, lpi2c_imx->base + LPI2C_SCR);
++
++	ret = devm_request_irq(&pdev->dev, lpi2c_imx->irq, lpi2c_imx_isr, IRQF_NO_SUSPEND,
++			       pdev->name, lpi2c_imx);
++	if (ret)
++		goto rpm_disable;
++
+ 	temp = readl(lpi2c_imx->base + LPI2C_PARAM);
+ 	lpi2c_imx->txfifosize = 1 << (temp & 0x0f);
+ 	lpi2c_imx->rxfifosize = 1 << ((temp >> 8) & 0x0f);
+-- 
+2.55.0
+

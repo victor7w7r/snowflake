@@ -1,0 +1,82 @@
+From 230149760cdbc89d450fc7c3aa270811a60ea6d2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Tue, 23 Jun 2026 00:35:59 +0300
+Subject: [PATCH 00782/15333] drm/modes: Add DRM_MODE_MATCH_TIMINGS_VRR
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a new mode matching flag DRM_MODE_MATCH_TIMINGS_VRR. This is
+identical to DRM_MODE_MATCH_TIMINGS, except it requires the vsync
+pulse to remain anchored to the end of vtotal, as opposed to the
+start of the frame. VRR capable hardware can therefore treat
+matching modes as just variants of the same mode with a different
+vblank lengths.
+
+Reviewed-by: Suraj Kandpal <suraj.kandpal@intel.com>
+Acked-by: Maarten Lankhorst <maarten.lankhorst@linux.intel.com>
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20260622213602.7244-3-ville.syrjala@linux.intel.com
+Tested-by: Vidya Srinivas <vidya.srinivas@intel.com>
+Acked-by: Jani Nikula <jani.nikula@intel.com>
+---
+ drivers/gpu/drm/drm_modes.c | 23 +++++++++++++++++++++++
+ include/drm/drm_modes.h     |  1 +
+ 2 files changed, 24 insertions(+)
+
+diff --git a/drivers/gpu/drm/drm_modes.c b/drivers/gpu/drm/drm_modes.c
+index 3f8e025fd6d9..e1eed13a8e94 100644
+--- a/drivers/gpu/drm/drm_modes.c
++++ b/drivers/gpu/drm/drm_modes.c
+@@ -1469,6 +1469,25 @@ struct drm_display_mode *drm_mode_duplicate(struct drm_device *dev,
+ }
+ EXPORT_SYMBOL(drm_mode_duplicate);
+ 
++static bool drm_mode_match_timings_vrr(const struct drm_display_mode *mode1,
++				       const struct drm_display_mode *mode2)
++{
++	int mode1_vsync_start_offset = mode1->vtotal - mode1->vsync_start;
++	int mode1_vsync_end_offset = mode1->vtotal - mode1->vsync_end;
++	int mode2_vsync_start_offset = mode2->vtotal - mode2->vsync_start;
++	int mode2_vsync_end_offset = mode2->vtotal - mode2->vsync_end;
++
++	return mode1->hdisplay == mode2->hdisplay &&
++		mode1->hsync_start == mode2->hsync_start &&
++		mode1->hsync_end == mode2->hsync_end &&
++		mode1->htotal == mode2->htotal &&
++		mode1->hskew == mode2->hskew &&
++		mode1->vdisplay == mode2->vdisplay &&
++		mode1_vsync_start_offset == mode2_vsync_start_offset &&
++		mode1_vsync_end_offset == mode2_vsync_end_offset &&
++		mode1->vscan == mode2->vscan;
++}
++
+ static bool drm_mode_match_timings(const struct drm_display_mode *mode1,
+ 				   const struct drm_display_mode *mode2)
+ {
+@@ -1538,6 +1557,10 @@ bool drm_mode_match(const struct drm_display_mode *mode1,
+ 	if (!mode1 || !mode2)
+ 		return false;
+ 
++	if (match_flags & DRM_MODE_MATCH_TIMINGS_VRR &&
++	    !drm_mode_match_timings_vrr(mode1, mode2))
++		return false;
++
+ 	if (match_flags & DRM_MODE_MATCH_TIMINGS &&
+ 	    !drm_mode_match_timings(mode1, mode2))
+ 		return false;
+diff --git a/include/drm/drm_modes.h b/include/drm/drm_modes.h
+index b9bb92e4b029..6e3eccc3c349 100644
+--- a/include/drm/drm_modes.h
++++ b/include/drm/drm_modes.h
+@@ -193,6 +193,7 @@ enum drm_mode_status {
+ #define DRM_MODE_MATCH_FLAGS (1 << 2)
+ #define DRM_MODE_MATCH_3D_FLAGS (1 << 3)
+ #define DRM_MODE_MATCH_ASPECT_RATIO (1 << 4)
++#define DRM_MODE_MATCH_TIMINGS_VRR (1 << 5)
+ 
+ /**
+  * struct drm_display_mode - DRM kernel-internal display mode structure
+-- 
+2.55.0
+

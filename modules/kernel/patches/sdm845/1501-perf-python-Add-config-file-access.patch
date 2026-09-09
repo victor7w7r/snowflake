@@ -1,0 +1,66 @@
+From 44a4bf577d51f3d6fd8279a25ec11e542bc23ea5 Mon Sep 17 00:00:00 2001
+From: Ian Rogers <irogers@google.com>
+Date: Mon, 15 Jun 2026 18:15:39 -0700
+Subject: [PATCH 01501/15333] perf python: Add config file access
+
+Add perf.config_get(name) to expose the perf configuration system.
+
+Assisted-by: Gemini:gemini-3.1-pro-preview
+Signed-off-by: Ian Rogers <irogers@google.com>
+Cc: Adrian Hunter <adrian.hunter@intel.com>
+Cc: Alice Rogers <alice.mei.rogers@gmail.com>
+Cc: Dapeng Mi <dapeng1.mi@linux.intel.com>
+Cc: Ingo Molnar <mingo@redhat.com>
+Cc: James Clark <james.clark@linaro.org>
+Cc: Leo Yan <leo.yan@linux.dev>
+Cc: Namhyung Kim <namhyung@kernel.org>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Thomas Richter <tmricht@linux.ibm.com>
+Signed-off-by: Arnaldo Carvalho de Melo <acme@redhat.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/util/python.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/tools/perf/util/python.c b/tools/perf/util/python.c
+index c5f567c15cc7..3a9f4e35d0bb 100644
+--- a/tools/perf/util/python.c
++++ b/tools/perf/util/python.c
+@@ -17,6 +17,7 @@
+ #include "build-id.h"
+ #include "callchain.h"
+ #include "comm.h"
++#include "config.h"
+ #include "counts.h"
+ #include "data.h"
+ #include "debug.h"
+@@ -3993,7 +3994,26 @@ static PyObject *pyrf__syscall_id(PyObject *self, PyObject *args, PyObject *kwar
+ 	return PyLong_FromLong(id);
+ }
+ 
++static PyObject *pyrf__config_get(PyObject *self, PyObject *args)
++{
++	const char *config_name, *val;
++
++	if (!PyArg_ParseTuple(args, "s", &config_name))
++		return NULL;
++
++	val = perf_config_get(config_name);
++	if (!val)
++		Py_RETURN_NONE;
++	return PyUnicode_FromString(val);
++}
++
+ static PyMethodDef perf__methods[] = {
++	{
++		.ml_name  = "config_get",
++		.ml_meth  = (PyCFunction) pyrf__config_get,
++		.ml_flags = METH_VARARGS,
++		.ml_doc	  = PyDoc_STR("Get a perf config value.")
++	},
+ 	{
+ 		.ml_name  = "metrics",
+ 		.ml_meth  = (PyCFunction) pyrf__metrics,
+-- 
+2.55.0
+

@@ -1,0 +1,52 @@
+From 918787e8f569d225c968af2c783962ae069b8ac8 Mon Sep 17 00:00:00 2001
+From: Amery Hung <ameryhung@gmail.com>
+Date: Wed, 15 Jul 2026 10:21:26 -0700
+Subject: [PATCH 05666/15333] bpf: Disable raw mode for bloom filter map_peek
+
+For a bloom filter, the value argument of bpf_map_peek_elem() is always
+an input. Therefore, the verifier should not allow passing uninitialized
+stack memory to it to avoid information leak.
+
+bpf_map_peek_elem() tags its value argument ARG_PTR_TO_MAP_VALUE |
+MEM_UNINIT, telling the verifier the callee fills the buffer. This holds
+for queue/stack maps, but not for a bloom filter, which reads the buffer
+as an input to test set membership and never writes it.
+
+As a result, a program can pass an uninitialized stack buffer to
+bpf_map_peek_elem() on a bloom filter. The verifier accepts it and marks
+the buffer initialized on return, letting the program read back leftover
+kernel stack memory. Bloom maps require CAP_BPF to create, so this is a
+CAP_BPF-gated stack infoleak that bypasses the boundary CAP_BPF is meant
+to enforce (arbitrary kernel reads are gated behind CAP_PERFMON).
+
+Signed-off-by: Amery Hung <ameryhung@gmail.com>
+Acked-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Link: https://patch.msgid.link/20260715172127.2416388-2-ameryhung@gmail.com
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ kernel/bpf/verifier.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 62d46b4c9962..828a220647d6 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -8418,6 +8418,15 @@ static int check_func_arg(struct bpf_verifier_env *env, u32 arg,
+ 			verifier_bug(env, "invalid map_ptr to access map->value");
+ 			return -EFAULT;
+ 		}
++
++		/*
++		 * Disable raw mode for bpf_map_peek_elem() on a bloom filter. The helper reads
++		 * the value buffer as an input rather than filling it.
++		 */
++		if (meta->func_id == BPF_FUNC_map_peek_elem &&
++		    meta->map.ptr->map_type == BPF_MAP_TYPE_BLOOM_FILTER)
++			meta->arg_raw_mem.regno = 0;
++
+ 		err = check_helper_mem_access(env, reg, argno, meta->map.ptr->value_size,
+ 					      arg_type & MEM_WRITE ? BPF_WRITE : BPF_READ,
+ 					      false, meta);
+-- 
+2.55.0
+

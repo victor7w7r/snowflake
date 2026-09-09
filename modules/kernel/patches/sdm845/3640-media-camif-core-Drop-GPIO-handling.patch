@@ -1,0 +1,98 @@
+From 07d4abbe766aafb4c75c788db172d2d69f9d7612 Mon Sep 17 00:00:00 2001
+From: Linus Walleij <linusw@kernel.org>
+Date: Mon, 25 May 2026 09:55:42 +0200
+Subject: [PATCH 03640/15333] media: camif-core: Drop GPIO handling
+
+The driver and platform data refers to the legacy GPIO API,
+doesn't really use it, and also calls some GPIO-related functions
+passed as platform data.
+
+This platform data is not used anywhere in the kernel.
+
+I'm not outright deleting the driver, just deleting the bogus
+GPIO handling. If outoftree developers want to fix up the
+driver the GPIOs should be defined in some kind of firmware
+node and be obtained using the gpiod_get*() APIs directly
+in the driver, but I don't even know what these GPIOs are
+since they are hidden in platform data that is not in the
+mainline kernel, so what can I do.
+
+Signed-off-by: Linus Walleij <linusw@kernel.org>
+Reviewed-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+---
+ drivers/media/platform/samsung/s3c-camif/camif-core.c | 10 ++--------
+ include/media/drv-intf/s3c_camif.h                    |  2 --
+ 2 files changed, 2 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/media/platform/samsung/s3c-camif/camif-core.c b/drivers/media/platform/samsung/s3c-camif/camif-core.c
+index 221e3c447f36..14eedd1ceb27 100644
+--- a/drivers/media/platform/samsung/s3c-camif/camif-core.c
++++ b/drivers/media/platform/samsung/s3c-camif/camif-core.c
+@@ -12,7 +12,6 @@
+ #include <linux/delay.h>
+ #include <linux/device.h>
+ #include <linux/errno.h>
+-#include <linux/gpio.h>
+ #include <linux/i2c.h>
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+@@ -412,7 +411,7 @@ static int s3c_camif_probe(struct platform_device *pdev)
+ 
+ 	camif->dev = dev;
+ 
+-	if (!pdata || !pdata->gpio_get || !pdata->gpio_put) {
++	if (!pdata) {
+ 		dev_err(dev, "wrong platform data\n");
+ 		return -EINVAL;
+ 	}
+@@ -429,9 +428,7 @@ static int s3c_camif_probe(struct platform_device *pdev)
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	ret = pdata->gpio_get();
+-	if (ret < 0)
+-		return ret;
++	/* FIXME: get GPIOs here */
+ 
+ 	ret = s3c_camif_create_subdev(camif);
+ 	if (ret < 0)
+@@ -504,14 +501,12 @@ static int s3c_camif_probe(struct platform_device *pdev)
+ err_clk:
+ 	s3c_camif_unregister_subdev(camif);
+ err_sd:
+-	pdata->gpio_put();
+ 	return ret;
+ }
+ 
+ static void s3c_camif_remove(struct platform_device *pdev)
+ {
+ 	struct camif_dev *camif = platform_get_drvdata(pdev);
+-	struct s3c_camif_plat_data *pdata = &camif->pdata;
+ 
+ 	media_device_unregister(&camif->media_dev);
+ 	media_device_cleanup(&camif->media_dev);
+@@ -521,7 +516,6 @@ static void s3c_camif_remove(struct platform_device *pdev)
+ 	pm_runtime_disable(&pdev->dev);
+ 	camif_clk_put(camif);
+ 	s3c_camif_unregister_subdev(camif);
+-	pdata->gpio_put();
+ }
+ 
+ static int s3c_camif_runtime_resume(struct device *dev)
+diff --git a/include/media/drv-intf/s3c_camif.h b/include/media/drv-intf/s3c_camif.h
+index f746851a5ce6..00d83620ea5f 100644
+--- a/include/media/drv-intf/s3c_camif.h
++++ b/include/media/drv-intf/s3c_camif.h
+@@ -31,8 +31,6 @@ struct s3c_camif_sensor_info {
+ 
+ struct s3c_camif_plat_data {
+ 	struct s3c_camif_sensor_info sensor;
+-	int (*gpio_get)(void);
+-	int (*gpio_put)(void);
+ };
+ 
+ #endif /* MEDIA_S3C_CAMIF_ */
+-- 
+2.55.0
+

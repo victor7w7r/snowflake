@@ -1,0 +1,83 @@
+From 9813e158d13d51d20d9257879bf79da7abcc9107 Mon Sep 17 00:00:00 2001
+From: Leandro Ribeiro <leandro.ribeiro@collabora.com>
+Date: Tue, 26 May 2026 15:16:59 -0300
+Subject: [PATCH 04493/15333] drm/drm_blend: allow blend mode property without
+ PREMULTI
+
+Some hardware only supports the COVERAGE blend mode and lacks PREMULTI
+support entirely. DRM currently requires that PREMULTI is present when
+creating a blend mode property, which prevents such drivers from being
+properly upstreamed.
+
+Remove this restriction and allow drivers to create a blend mode
+property without PREMULTI, enabling support for hardware that
+implements only COVERAGE blend mode.
+
+This does not introduce a regression, as no existing upstream drivers
+expose only COVERAGE. However, userspace that wants to support such kind
+of hardware in the future will have to check the supported blend modes
+instead of assuming PREMULTI is always supported.
+
+Signed-off-by: Leandro Ribeiro <leandro.ribeiro@collabora.com>
+Acked-by: Pekka Paalanen <pekka.paalanen@collabora.com>
+Reviewed-by: Daniel Stone <daniels@collabora.com>
+Link: https://patch.msgid.link/20260526181700.25310-2-leandro.ribeiro@collabora.com
+Signed-off-by: Daniel Stone <daniels@collabora.com>
+---
+ drivers/gpu/drm/drm_blend.c | 20 ++++++++++++++------
+ 1 file changed, 14 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/drm_blend.c b/drivers/gpu/drm/drm_blend.c
+index 2f0d1ba285be..d17ae964fb21 100644
+--- a/drivers/gpu/drm/drm_blend.c
++++ b/drivers/gpu/drm/drm_blend.c
+@@ -563,10 +563,10 @@ EXPORT_SYMBOL(drm_atomic_normalize_zpos);
+ /**
+  * drm_plane_create_blend_mode_property - create a new blend mode property
+  * @plane: drm plane
+- * @supported_modes: bitmask of supported modes, must include
+- *		     BIT(DRM_MODE_BLEND_PREMULTI). Current DRM assumption is
+- *		     that alpha is premultiplied, and old userspace can break if
+- *		     the property defaults to anything else.
++ * @supported_modes: bitmask of supported modes. When
++ *		     BIT(DRM_MODE_BLEND_PREMULTI) is included, it will be used
++ *		     as the default. Otherwise, the default will fallback to one
++ *		     of the supported modes.
+  *
+  * This creates a new property describing the blend mode.
+  *
+@@ -599,13 +599,14 @@ int drm_plane_create_blend_mode_property(struct drm_plane *plane,
+ 		{ DRM_MODE_BLEND_PREMULTI, "Pre-multiplied" },
+ 		{ DRM_MODE_BLEND_COVERAGE, "Coverage" },
+ 	};
++	unsigned int default_mode;
+ 	unsigned int valid_mode_mask = BIT(DRM_MODE_BLEND_PIXEL_NONE) |
+ 				       BIT(DRM_MODE_BLEND_PREMULTI)   |
+ 				       BIT(DRM_MODE_BLEND_COVERAGE);
+ 	int i;
+ 
+ 	if (WARN_ON((supported_modes & ~valid_mode_mask) ||
+-		    ((supported_modes & BIT(DRM_MODE_BLEND_PREMULTI)) == 0)))
++		    (supported_modes == 0)))
+ 		return -EINVAL;
+ 
+ 	prop = drm_property_create(dev, DRM_MODE_PROP_ENUM,
+@@ -630,7 +631,14 @@ int drm_plane_create_blend_mode_property(struct drm_plane *plane,
+ 		}
+ 	}
+ 
+-	drm_object_attach_property(&plane->base, prop, DRM_MODE_BLEND_PREMULTI);
++	if (supported_modes & BIT(DRM_MODE_BLEND_PREMULTI))
++		default_mode = DRM_MODE_BLEND_PREMULTI;
++	else if (supported_modes & BIT(DRM_MODE_BLEND_COVERAGE))
++		default_mode = DRM_MODE_BLEND_COVERAGE;
++	else
++		default_mode = DRM_MODE_BLEND_PIXEL_NONE;
++
++	drm_object_attach_property(&plane->base, prop, default_mode);
+ 	plane->blend_mode_property = prop;
+ 
+ 	return 0;
+-- 
+2.55.0
+

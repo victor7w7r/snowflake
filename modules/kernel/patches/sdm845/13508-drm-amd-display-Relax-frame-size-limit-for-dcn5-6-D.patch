@@ -1,0 +1,67 @@
+From d03d1ac2b00896618aecdd3cd56e8e08ce731edd Mon Sep 17 00:00:00 2001
+From: Ivan Lipski <ivan.lipski@amd.com>
+Date: Fri, 7 Aug 2026 23:29:58 -0400
+Subject: [PATCH 13508/15333] drm/amd/display: Relax frame size limit for
+ dcn5/6 DML core funcs files
+
+[Why]
+During compilation with  allmodconfig with KASAN, there appears a Werror:
+
+  dml2_core_dcn5_funcs_mode_programming.c:11:13: error: stack frame size
+  (2400) exceeds limit (2048) in 'dcn5_mode_programming'
+  [-Werror,-Wframe-larger-than]
+
+The dcn5/dcn6 dml2_core_*_funcs_mode_{programming,support} files were
+split out of dml2_core_dcn4_calcs.o, which carries a relaxed
+-Wframe-larger-than limit via $(frame_warn_flag) (2056 normally, or
+4096 for clang + KASAN/KCSAN + COMPILE_TEST). The split-out files were
+never added to the per-file CFLAGS override list, so they inherited the
+strict global default of 2048. This is why these files trip the frame
+size warning under KASAN while the larger dml2_core_dcn4_calcs.o does
+not.
+
+[How]
+Apply the same $(frame_warn_flag) and CFLAGS_REMOVE handling used for
+dml2_core_dcn4_calcs.o to the split-out files:
+ - dml2_core_dcn5_funcs_mode_programming.o
+ - dml2_core_dcn5_funcs_mode_support.o
+ - dml2_core_dcn6_funcs_mode_programming.o
+ - dml2_core_dcn6_funcs_mode_support.o
+
+Fixes: 7f7d7ea1fa51 ("drm/amd/display: Add new sources for DCN6")
+Reviewed-by: Dillon Varone <dillon.varone@amd.com>
+Signed-off-by: Ivan Lipski <ivan.lipski@amd.com>
+Reported-by: Mark Brown <broonie@kernel.org>
+Acked-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/display/dc/dml2_0/Makefile | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/dml2_0/Makefile b/drivers/gpu/drm/amd/display/dc/dml2_0/Makefile
+index 35d697872a9a..5388bf094fbc 100644
+--- a/drivers/gpu/drm/amd/display/dc/dml2_0/Makefile
++++ b/drivers/gpu/drm/amd/display/dc/dml2_0/Makefile
+@@ -75,11 +75,19 @@ $(foreach obj,$(DML2_RELATIVE_O_FILES),$(eval CFLAGS_REMOVE_$(AMDDALPATH)/$(obj)
+ CFLAGS_$(AMDDALPATH)/dc/dml2_0/display_mode_core.o := $(dml2_ccflags) $(frame_warn_flag)
+ CFLAGS_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.o := $(dml2_ccflags) $(frame_warn_flag)
+ CFLAGS_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_utils.o := $(dml2_ccflags) $(frame_warn_flag)
++CFLAGS_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn5_funcs_mode_programming.o := $(dml2_ccflags) $(frame_warn_flag)
++CFLAGS_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn5_funcs_mode_support.o := $(dml2_ccflags) $(frame_warn_flag)
++CFLAGS_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn6_funcs_mode_programming.o := $(dml2_ccflags) $(frame_warn_flag)
++CFLAGS_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn6_funcs_mode_support.o := $(dml2_ccflags) $(frame_warn_flag)
+ CFLAGS_$(AMDDALPATH)/dc/dml2_0/dml2_wrapper.o := $(dml2_rcflags)
+ CFLAGS_$(AMDDALPATH)/dc/dml2_0/dml21/dml21_wrapper.o := $(dml2_rcflags)
+ CFLAGS_REMOVE_$(AMDDALPATH)/dc/dml2_0/display_mode_core.o := $(dml2_rcflags)
+ CFLAGS_REMOVE_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.o := $(dml2_rcflags)
+ CFLAGS_REMOVE_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_utils.o := $(dml2_rcflags)
++CFLAGS_REMOVE_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn5_funcs_mode_programming.o := $(dml2_rcflags)
++CFLAGS_REMOVE_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn5_funcs_mode_support.o := $(dml2_rcflags)
++CFLAGS_REMOVE_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn6_funcs_mode_programming.o := $(dml2_rcflags)
++CFLAGS_REMOVE_$(AMDDALPATH)/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn6_funcs_mode_support.o := $(dml2_rcflags)
+ CFLAGS_REMOVE_$(AMDDALPATH)/dc/dml2_0/dml2_wrapper.o := $(dml2_ccflags)
+ CFLAGS_REMOVE_$(AMDDALPATH)/dc/dml2_0/dml21/dml21_wrapper.o := $(dml2_ccflags)
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,45 @@
+From 1ae37d355114a94eb88c418e22e3e9a9e241b393 Mon Sep 17 00:00:00 2001
+From: Arnd Bergmann <arnd@arndb.de>
+Date: Wed, 29 Jul 2026 10:46:44 +0100
+Subject: [PATCH 09257/15333] nvmem: airoha: add ARM64 dependency
+
+The driver already depends on HAVE_ARM_SMCCC and ARCH_AIROHA, but both
+are available for 32-bit and 64-bit targets. However, the smccc invocation
+fails on thumb2 builds with clang:
+
+drivers/nvmem/airoha-smc-efuses.c:38:2: error: write to reserved register 'R7'
+   38 |         arm_smccc_1_1_invoke(AIROHA_SMC_EFUSE_FID,
+      |         ^
+note: (skipping 1 expansions in backtrace; use -fmacro-backtrace-limit=0 to see all)
+arch/arm/include/asm/opcodes.h:215:2: note: expanded from macro '__inst_arm_thumb32'
+  215 |         __inst_thumb32(thumb_opcode)
+      |         ^
+
+Since the driver is only used on the 64-bit an7581 soc, avoid this
+problem with a stricter dependency.
+
+Fixes: b7846af2e6ca ("nvmem: airoha: Add support for SMC eFUSE")
+Signed-off-by: Arnd Bergmann <arnd@arndb.de>
+Reviewed-by: Christian Marangi <ansuelsmth@gmail.com>
+Signed-off-by: Srinivas Kandagatla <srini@kernel.org>
+Link: https://patch.msgid.link/20260729094647.111468-12-srini@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/nvmem/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/nvmem/Kconfig b/drivers/nvmem/Kconfig
+index b0044c4c63c6..c36c2a4c2a0b 100644
+--- a/drivers/nvmem/Kconfig
++++ b/drivers/nvmem/Kconfig
+@@ -117,6 +117,7 @@ endif # NVMEM_SYSFS
+ 
+ config NVMEM_AIROHA_SMC_EFUSES
+ 	tristate "Airoha SMC eFuse support"
++	depends on ARM64
+ 	depends on ARCH_AIROHA || COMPILE_TEST
+ 	depends on HAVE_ARM_SMCCC
+ 	default ARCH_AIROHA
+-- 
+2.55.0
+

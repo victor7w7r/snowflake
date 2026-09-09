@@ -1,0 +1,58 @@
+From 26373c71945544bceed6e08eede8100c97be74fa Mon Sep 17 00:00:00 2001
+From: Mario Limonciello <mario.limonciello@amd.com>
+Date: Mon, 22 Jun 2026 09:19:14 -0700
+Subject: [PATCH 01801/15333] drm/amdgpu: don't free standalone ip_discovery
+ sysfs in sysfs_fini
+
+The standalone_mode ip_discovery sysfs hierarchy is tied to the PCI
+device lifetime and tracked in early_ip_discovery_list. It is torn down
+only by amdgpu_discovery_sysfs_early_fini() on driver unbind, which is
+why amdgpu_discovery_fini() already guards its teardown with
+!standalone_mode.
+
+Commit 7de02fe95312 ("drm/amdgpu: clean up discovery and preempt sysfs
+entries on shutdown") added an unconditional amdgpu_discovery_sysfs_fini()
+call in amdgpu_device_sys_interface_fini(), which runs during
+amdgpu_device_fini_hw() on every unbind/reload. On reload this freed the
+PCI-device-owned ip_top via kobject_put()->ip_disc_release()->kfree(),
+leaving a dangling pointer in early_ip_discovery_list. The subsequent
+amdgpu_discovery_sysfs_early_fini() then dereferenced and put the freed
+object, causing a use-after-free and double-free, and prematurely
+destroyed the sysfs that was meant to persist across reloads.
+
+Make amdgpu_discovery_sysfs_fini() skip standalone_mode objects so the
+invariant is centralized at the teardown site and the new call site
+cannot free the PCI-device-owned ip_top. Teardown of standalone sysfs
+remains the sole responsibility of amdgpu_discovery_sysfs_early_fini().
+
+Fixes: 7de02fe95312 ("drm/amdgpu: clean up discovery and preempt sysfs entries on shutdown")
+Acked-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Mario Limonciello <mario.limonciello@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c
+index e0cf6848ab7c..5605bc42ffc1 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c
+@@ -1489,6 +1489,15 @@ void amdgpu_discovery_sysfs_fini(struct amdgpu_device *adev)
+ 	if (!ip_top)
+ 		return;
+ 
++	/*
++	 * In standalone mode the sysfs hierarchy is tied to the PCI device
++	 * lifetime and is torn down by amdgpu_discovery_sysfs_early_fini().
++	 * Freeing it here would leave a dangling pointer in the early
++	 * discovery list, causing a use-after-free on driver unbind.
++	 */
++	if (ip_top->standalone_mode)
++		return;
++
+ 	adev->discovery.ip_top = NULL;
+ 	die_kset = &ip_top->die_kset;
+ 	spin_lock(&die_kset->list_lock);
+-- 
+2.55.0
+

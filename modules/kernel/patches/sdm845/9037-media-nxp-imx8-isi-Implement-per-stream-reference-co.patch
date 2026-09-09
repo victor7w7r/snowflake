@@ -1,0 +1,227 @@
+From 2be91091797df756d3b7b6ab5cb64295d2cdadb3 Mon Sep 17 00:00:00 2001
+From: Guoniu Zhou <guoniu.zhou@oss.nxp.com>
+Date: Tue, 28 Jul 2026 14:58:57 +0800
+Subject: [PATCH 09037/15333] media: nxp: imx8-isi: Implement per-stream
+ reference counting for multiplexed streams
+
+The ISI crossbar needs to properly enable multiple streams from different
+virtual channels on the same input pad. Currently only the first stream
+gets enabled in hardware, subsequent streams are silently ignored.
+
+The driver uses a single enable_count per input to track the input state.
+When enable_count is non-zero, the code assumes the input is already active
+and skips calling v4l2_subdev_enable_streams() for additional streams:
+
+  Call 1: enable_streams(stream 0)
+    -> enable_count == 0, enable gasket and stream 0 in hardware
+    -> enable_count = 1
+
+  Call 2: enable_streams(stream 1)
+    -> enable_count == 1, skip hardware enable
+    -> enable_count = 2
+    -> stream 1 never gets enabled
+
+Similarly on disable, when enable_count reaches zero, ALL streams are
+disabled regardless of which streams are actually still active.
+
+Implement per-stream state tracking by storing the input index and stream
+mask in the mxc_isi_pipe structure. On enable, record which input and
+stream the pipe is receiving. On disable, clear the pipe's record and
+check if any other pipe is still using the same input stream before
+actually disabling it.
+
+Signed-off-by: Guoniu Zhou <guoniu.zhou@oss.nxp.com>
+Reviewed-by: Laurent Pinchart <laurent.pinchart@ideasonboard.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260728-isi-v5-2-1d22ab91602a@oss.nxp.com
+Signed-off-by: Laurent Pinchart <laurent.pinchart@ideasonboard.com>
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+---
+ .../platform/nxp/imx8-isi/imx8-isi-core.h     | 10 ++-
+ .../platform/nxp/imx8-isi/imx8-isi-crossbar.c | 90 ++++++++++++++-----
+ .../platform/nxp/imx8-isi/imx8-isi-pipe.c     |  1 +
+ 3 files changed, 78 insertions(+), 23 deletions(-)
+
+diff --git a/drivers/media/platform/nxp/imx8-isi/imx8-isi-core.h b/drivers/media/platform/nxp/imx8-isi/imx8-isi-core.h
+index 9bb4d430d15e..58b47335afc7 100644
+--- a/drivers/media/platform/nxp/imx8-isi/imx8-isi-core.h
++++ b/drivers/media/platform/nxp/imx8-isi/imx8-isi-core.h
+@@ -186,7 +186,7 @@ struct mxc_isi_dma_buffer {
+ };
+ 
+ struct mxc_isi_input {
+-	unsigned int			enable_count;
++	u64				enabled_streams;
+ };
+ 
+ struct mxc_isi_crossbar {
+@@ -259,6 +259,14 @@ struct mxc_isi_pipe {
+ 	u8				acquired_res;
+ 	u8				chained_res;
+ 	bool				chained;
++
++	unsigned int			input;
++	/*
++	 * Stream on the connected crossbar input, expressed as a bitmask. Zero
++	 * when the pipeline is disabled, a single bit set when the pipeline is
++	 * enabled (as each pipeline processes a single stream).
++	 */
++	u64				input_stream;
+ };
+ 
+ struct mxc_isi_m2m {
+diff --git a/drivers/media/platform/nxp/imx8-isi/imx8-isi-crossbar.c b/drivers/media/platform/nxp/imx8-isi/imx8-isi-crossbar.c
+index 9db9c6e55c2c..7bb1335f2110 100644
+--- a/drivers/media/platform/nxp/imx8-isi/imx8-isi-crossbar.c
++++ b/drivers/media/platform/nxp/imx8-isi/imx8-isi-crossbar.c
+@@ -330,11 +330,32 @@ static int mxc_isi_crossbar_set_routing(struct v4l2_subdev *sd,
+ 	return __mxc_isi_crossbar_set_routing(sd, state, routing);
+ }
+ 
++/*
++ * Check if a stream on a sink pad is in used by any of the ISI pipelines. The
++ * sink_streams argument is a bitmask that must have a single bit set (enforced
++ * by mxc_isi_crossbar_xlate_streams() translating the single stream mask of the
++ * pipeline to a single stream on the crossbar input side).
++ */
++static bool mxc_isi_crossbar_stream_in_use(const struct mxc_isi_crossbar *xbar,
++					   unsigned int sink_pad, u64 sink_streams)
++{
++	for (unsigned int i = 0; i < xbar->isi->pdata->num_channels; ++i) {
++		const struct mxc_isi_pipe *pipe = &xbar->isi->pipes[i];
++
++		if (pipe->input == sink_pad &&
++		    pipe->input_stream == sink_streams)
++			return true;
++	}
++
++	return false;
++}
++
+ static int mxc_isi_crossbar_enable_streams(struct v4l2_subdev *sd,
+ 					   struct v4l2_subdev_state *state,
+ 					   u32 pad, u64 streams_mask)
+ {
+ 	struct mxc_isi_crossbar *xbar = to_isi_crossbar(sd);
++	struct mxc_isi_pipe *pipe = &xbar->isi->pipes[pad - xbar->num_sinks];
+ 	struct v4l2_subdev *remote_sd;
+ 	struct mxc_isi_input *input;
+ 	u64 sink_streams;
+@@ -351,29 +372,44 @@ static int mxc_isi_crossbar_enable_streams(struct v4l2_subdev *sd,
+ 	input = &xbar->inputs[sink_pad];
+ 
+ 	/*
+-	 * TODO: Track per-stream enable counts to support multiplexed
+-	 * streams.
++	 * Check if any other pipe already receives the same input stream.
++	 * If so, just record this pipe's usage and return.
+ 	 */
+-	if (!input->enable_count) {
++	if (mxc_isi_crossbar_stream_in_use(xbar, sink_pad, sink_streams)) {
++		pipe->input = sink_pad;
++		pipe->input_stream = sink_streams;
++		return 0;
++	}
++
++	/* Enable the gasket when the first stream is enabled for this input. */
++	if (!input->enabled_streams) {
+ 		ret = mxc_isi_crossbar_gasket_enable(xbar, state, remote_sd,
+ 						     remote_pad, sink_pad);
+ 		if (ret)
+ 			return ret;
++	}
+ 
+-		ret = v4l2_subdev_enable_streams(remote_sd, remote_pad,
+-						 sink_streams);
+-		if (ret) {
+-			dev_err(xbar->isi->dev,
+-				"failed to enable streams 0x%llx on '%s':%u: %d\n",
+-				sink_streams, remote_sd->name, remote_pad, ret);
+-			mxc_isi_crossbar_gasket_disable(xbar, sink_pad);
+-			return ret;
+-		}
++	ret = v4l2_subdev_enable_streams(remote_sd, remote_pad, sink_streams);
++	if (ret) {
++		dev_err(xbar->isi->dev,
++			"failed to enable streams 0x%llx on '%s':%u: %d\n",
++			sink_streams, remote_sd->name, remote_pad, ret);
++		goto err_gasket_disable;
+ 	}
+ 
+-	input->enable_count++;
++	input->enabled_streams |= sink_streams;
++
++	/* Record the input and stream for this pipe. */
++	pipe->input = sink_pad;
++	pipe->input_stream = sink_streams;
+ 
+ 	return 0;
++
++err_gasket_disable:
++	if (!input->enabled_streams)
++		mxc_isi_crossbar_gasket_disable(xbar, sink_pad);
++
++	return ret;
+ }
+ 
+ static int mxc_isi_crossbar_disable_streams(struct v4l2_subdev *sd,
+@@ -381,6 +417,7 @@ static int mxc_isi_crossbar_disable_streams(struct v4l2_subdev *sd,
+ 					    u32 pad, u64 streams_mask)
+ {
+ 	struct mxc_isi_crossbar *xbar = to_isi_crossbar(sd);
++	struct mxc_isi_pipe *pipe = &xbar->isi->pipes[pad - xbar->num_sinks];
+ 	struct v4l2_subdev *remote_sd;
+ 	struct mxc_isi_input *input;
+ 	u64 sink_streams;
+@@ -396,18 +433,27 @@ static int mxc_isi_crossbar_disable_streams(struct v4l2_subdev *sd,
+ 
+ 	input = &xbar->inputs[sink_pad];
+ 
+-	input->enable_count--;
++	/* Clear the input and stream for this pipe. */
++	pipe->input = UINT_MAX;
++	pipe->input_stream = 0;
+ 
+-	if (!input->enable_count) {
+-		ret = v4l2_subdev_disable_streams(remote_sd, remote_pad,
+-						  sink_streams);
+-		if (ret)
+-			dev_err(xbar->isi->dev,
+-				"failed to disable streams 0x%llx on '%s':%u: %d\n",
+-				sink_streams, remote_sd->name, remote_pad, ret);
++	/*
++	 * Check if any other pipe receives the same input stream. If so we
++	 * can't disable it yet, so return immediately.
++	 */
++	if (mxc_isi_crossbar_stream_in_use(xbar, sink_pad, sink_streams))
++		return 0;
+ 
++	ret = v4l2_subdev_disable_streams(remote_sd, remote_pad, sink_streams);
++	if (ret)
++		dev_err(xbar->isi->dev,
++			"failed to disable streams 0x%llx on '%s':%u: %d\n",
++			sink_streams, remote_sd->name, remote_pad, ret);
++
++	input->enabled_streams &= ~sink_streams;
++
++	if (!input->enabled_streams)
+ 		mxc_isi_crossbar_gasket_disable(xbar, sink_pad);
+-	}
+ 
+ 	return ret;
+ }
+diff --git a/drivers/media/platform/nxp/imx8-isi/imx8-isi-pipe.c b/drivers/media/platform/nxp/imx8-isi/imx8-isi-pipe.c
+index 16085f23bc0b..c0ec59856374 100644
+--- a/drivers/media/platform/nxp/imx8-isi/imx8-isi-pipe.c
++++ b/drivers/media/platform/nxp/imx8-isi/imx8-isi-pipe.c
+@@ -816,6 +816,7 @@ int mxc_isi_pipe_init(struct mxc_isi_dev *isi, unsigned int id)
+ 	pipe->acquired_res = 0;
+ 	pipe->chained_res = 0;
+ 	pipe->chained = false;
++	pipe->input = UINT_MAX;
+ 
+ 	sd = &pipe->sd;
+ 	v4l2_subdev_init(sd, &mxc_isi_pipe_subdev_ops);
+-- 
+2.55.0
+

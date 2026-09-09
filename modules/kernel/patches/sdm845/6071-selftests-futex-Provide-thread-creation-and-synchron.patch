@@ -1,0 +1,168 @@
+From 6c4a1b972643d72bd26f674677df8b5a6a3fe94f Mon Sep 17 00:00:00 2001
+From: Yuwen Chen <ywen.chen@foxmail.com>
+Date: Mon, 18 May 2026 10:16:40 +0800
+Subject: [PATCH 06071/15333] selftests/futex: Provide thread creation and
+ synchronization helpers
+
+There are timing issues in the use of threads in some selftests for futexes
+as the tests rely on timed waits to ensure that the other test thread[s]
+reached the lock wait function in the kernel.
+
+That "works" on halfways idle systems, but fails under load which results
+in tests failing.
+
+Provide a set of helper functions to create test threads and to wait for
+them to reach the lock wait by monitoring /proc/$PID/wchan.
+
+[ tglx: Fixup coding style, move the timeout into the helper, adapt to test
+  	harness changes and massage change log ]
+
+Signed-off-by: Yuwen Chen <ywen.chen@foxmail.com>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/tencent_4C90BE98BBC48B38B9FBC6A95C45CF49F309@qq.com
+---
+ .../selftests/futex/functional/Makefile       |   3 +-
+ .../selftests/futex/include/futex_thread.h    | 117 ++++++++++++++++++
+ 2 files changed, 119 insertions(+), 1 deletion(-)
+ create mode 100644 tools/testing/selftests/futex/include/futex_thread.h
+
+diff --git a/tools/testing/selftests/futex/functional/Makefile b/tools/testing/selftests/futex/functional/Makefile
+index d59faf76a2aa..a03bd5acba50 100644
+--- a/tools/testing/selftests/futex/functional/Makefile
++++ b/tools/testing/selftests/futex/functional/Makefile
+@@ -11,7 +11,8 @@ endif
+ 
+ LOCAL_HDRS := \
+ 	../include/futextest.h \
+-	../include/atomic.h
++	../include/atomic.h \
++	../include/futex_thread.h
+ TEST_GEN_PROGS := \
+ 	futex_wait_timeout \
+ 	futex_wait_wouldblock \
+diff --git a/tools/testing/selftests/futex/include/futex_thread.h b/tools/testing/selftests/futex/include/futex_thread.h
+new file mode 100644
+index 000000000000..a90882960264
+--- /dev/null
++++ b/tools/testing/selftests/futex/include/futex_thread.h
+@@ -0,0 +1,117 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++
++#ifndef _FUTEX_THREAD_H
++#define _FUTEX_THREAD_H
++#include <errno.h>
++#include <pthread.h>
++#include <stdio.h>
++#include <string.h>
++#include <unistd.h>
++
++#include "kselftest_harness.h"
++
++#define USEC_PER_SEC		1000000L
++#define WAIT_FOR_THREAD_SECS	1
++#define WAIT_FOR_THREAD_USECS	(WAIT_FOR_THREAD_SECS * USEC_PER_SEC)
++#define WAIT_THREAD_RETRIES	100
++
++struct futex_thread {
++	pthread_t		thread;
++	pthread_barrier_t	barrier;
++	pid_t			tid;
++	int			(*threadfn)(void *arg);
++	void			*arg;
++	int			retval;
++};
++
++static inline int __wait_for_thread(FILE *fp, struct __test_metadata *_metadata)
++{
++	unsigned int sleep_time_us = WAIT_FOR_THREAD_USECS / WAIT_THREAD_RETRIES;
++	char buf[80] = "";
++
++	for (int i = 0; i < WAIT_THREAD_RETRIES; i++) {
++		if (!fgets(buf, sizeof(buf), fp))
++			return EIO;
++		if (!strncmp(buf, "futex", 5))
++			return 0;
++		usleep(sleep_time_us);
++		rewind(fp);
++	}
++
++	TH_LOG("/proc/$PID/wchan contains \"%s\". Trying to continue.", buf);
++	return 0;
++}
++
++static void *__futex_thread_fn(void *arg)
++{
++	struct futex_thread *t = arg;
++
++	t->tid = gettid();
++	pthread_barrier_wait(&t->barrier);
++	t->retval = t->threadfn(t->arg);
++	return NULL;
++}
++
++/**
++ * futex_wait_for_thread - Wait for the child thread to sleep in the futex context
++ * @t:          Thread handle.
++ * @_metadata:	Test metadata for TH_LOG() context
++ */
++static inline int futex_wait_for_thread(struct futex_thread *t, struct __test_metadata *_metadata)
++{
++	char fname[80];
++	FILE *fp;
++	int res;
++
++	snprintf(fname, sizeof(fname), "/proc/%d/wchan", t->tid);
++	fp = fopen(fname, "r");
++	if (!fp) {
++		/* If /proc/... is not available, sleep */
++		if (errno != ENOENT)
++			return errno;
++		TH_LOG("/proc/$PID/wchan not accessible, continue with sleep()");
++		sleep(WAIT_FOR_THREAD_SECS);
++		return 0;
++	}
++
++	res = __wait_for_thread(fp, _metadata);
++	fclose(fp);
++	return res;
++}
++
++/**
++ * futex_thread_create - Create a new thread for testing.
++ * @t:        The handle of the newly created thread.
++ * @threadfn: The new thread starts execution by invoking threadfn
++ * @arg:      The parameters passed to threadfn.
++ */
++static inline int futex_thread_create(struct futex_thread *t, int (*threadfn)(void *), void *arg)
++{
++	pthread_barrier_init(&t->barrier, NULL, 2);
++
++	t->tid = 0;
++	t->threadfn = threadfn;
++	t->arg = arg;
++
++	if (pthread_create(&t->thread, NULL, __futex_thread_fn, t) < 0) {
++		int ret = errno;
++		pthread_barrier_destroy(&t->barrier);
++		return ret;
++	}
++
++	pthread_barrier_wait(&t->barrier);
++	return 0;
++}
++
++/**
++ * futex_thread_destroy - Wait for and reclaim the resources of the thread.
++ * @t:      Thread handle.
++ */
++static inline int futex_thread_destroy(struct futex_thread *t)
++{
++	pthread_join(t->thread, NULL);
++	pthread_barrier_destroy(&t->barrier);
++	return t->retval;
++}
++
++#endif
+-- 
+2.55.0
+

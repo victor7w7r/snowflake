@@ -1,0 +1,46 @@
+From a25d644890c17115482d1d16ad0675fe0f14554e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Wed, 17 Jun 2026 21:14:23 +0200
+Subject: [PATCH 01742/15333] drm/amdgpu/gfx8: Stop CP and RLC during reset
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The only case when they may not go idle is when we are dealing
+with a GPU hang, in which case we should just forcibly disable
+these even when they aren't idle.
+
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c | 12 +++++-------
+ 1 file changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
+index 8ae9ab0fb886..c383035073a4 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
+@@ -4868,14 +4868,12 @@ static int gfx_v8_0_hw_fini(struct amdgpu_ip_block *ip_block)
+ 	}
+ 
+ 	amdgpu_gfx_rlc_enter_safe_mode(adev, 0);
+-	if (!gfx_v8_0_wait_for_idle(ip_block))
+-		gfx_v8_0_cp_enable(adev, false);
+-	else
++	if (!amdgpu_in_reset(adev) && gfx_v8_0_wait_for_idle(ip_block))
+ 		pr_err("cp is busy, skip halt cp\n");
+-	if (!gfx_v8_0_wait_for_rlc_idle(adev))
+-		adev->gfx.rlc.funcs->stop(adev);
+-	else
+-		pr_err("rlc is busy, skip halt rlc\n");
++	if (!amdgpu_in_reset(adev) && gfx_v8_0_wait_for_rlc_idle(adev))
++		pr_err("rlc is busy\n");
++	gfx_v8_0_cp_enable(adev, false);
++	adev->gfx.rlc.funcs->stop(adev);
+ 	amdgpu_gfx_rlc_exit_safe_mode(adev, 0);
+ 
+ 	return 0;
+-- 
+2.55.0
+

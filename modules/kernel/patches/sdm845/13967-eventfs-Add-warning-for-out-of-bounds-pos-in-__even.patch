@@ -1,0 +1,54 @@
+From 43a17abc83c6402bffac80a6dd434f8555f457e8 Mon Sep 17 00:00:00 2001
+From: Steven Rostedt <rostedt@goodmis.org>
+Date: Mon, 10 Aug 2026 17:59:28 -0400
+Subject: [PATCH 13967/15333] eventfs: Add warning for out of bounds pos in
+ __eventfs_iterate()
+
+Sashiko has complained about out of bounds issues if ctx->pos isn't what
+is expected in __eventfs_iterate()[1]. This would be an issue if the logic
+that calls __eventfs_iterate() didn't already prevent the code from going
+out of bounds.
+
+The issue Sashiko brings up is if a user uses lseek64() to put in a
+position like 0x100000000 which will overflow the integer used to iterate
+the files. This should never be an issue because both tracefs and eventfs
+uses the default "maxbytes" for its superblock "s_maxbytes" field which is
+defined as:
+
+  fs/super.c:     s->s_maxbytes = MAX_NON_LFS;
+  include/linux/fs.h:#define      MAX_NON_LFS     ((1UL<<31) - 1)
+
+Where MAX_NON_LFS turns into 0x7fffffff.
+
+Testing this with code to try to pass 0x100000000 to lseek64() to a
+eventfs directory returns -EINVAL.
+
+But relying on logic for the integrity of a function is not very robust.
+Add a WARN_ON_ONCE() in case the ctx->pos is out of the expected range.
+
+[1] https://sashiko.dev/#/patchset/20260810160708.3460a2fd%40gandalf.local.home
+
+Link: https://patch.msgid.link/20260810175928.5f4d9d5c@gandalf.local.home
+Signed-off-by: Steven Rostedt <rostedt@goodmis.org>
+---
+ fs/tracefs/event_inode.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/fs/tracefs/event_inode.c b/fs/tracefs/event_inode.c
+index 39c7a34531e8..96a561970fcc 100644
+--- a/fs/tracefs/event_inode.c
++++ b/fs/tracefs/event_inode.c
+@@ -584,6 +584,10 @@ static int eventfs_iterate(struct file *file, struct dir_context *ctx)
+ 	if (!(ti->flags & TRACEFS_EVENT_INODE))
+ 		return -EINVAL;
+ 
++	/* Logic should prevent ctx->pos from going out of range */
++	if (WARN_ON_ONCE(ctx->pos < 2 || ctx->pos > 0x7fffffffULL))
++		return -EINVAL;
++
+ 	c = ctx->pos - 2;
+ 
+ 	guard(srcu)(&eventfs_srcu);
+-- 
+2.55.0
+

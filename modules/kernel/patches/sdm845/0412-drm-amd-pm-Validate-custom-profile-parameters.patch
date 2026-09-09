@@ -1,0 +1,155 @@
+From 921926a12e18fc13483062dd57aa3295aa8a82c3 Mon Sep 17 00:00:00 2001
+From: Lijo Lazar <lijo.lazar@amd.com>
+Date: Tue, 19 May 2026 16:46:34 +0530
+Subject: [PATCH 00412/15333] drm/amd/pm: Validate custom profile parameters
+
+Add helpers to validate custom profile params against
+negative/out-of-range values. Use the helpers to validate user passed
+params.
+
+Signed-off-by: Lijo Lazar <lijo.lazar@amd.com>
+Assisted-by: Claude Sonnet (Cursor AI)
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c      |  7 ++++---
+ drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c        |  7 ++++---
+ .../gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c    |  7 ++++---
+ drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c   |  7 ++++---
+ drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c   |  7 ++++---
+ drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c   |  7 ++++---
+ drivers/gpu/drm/amd/pm/swsmu/smu_cmn.h                 | 10 ++++++++++
+ 7 files changed, 34 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c
+index 54d3dba7d354..06898eaa96b8 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c
+@@ -1466,9 +1466,10 @@ static int arcturus_set_power_profile_mode(struct smu_context *smu,
+ 				return -ENOMEM;
+ 		}
+ 		if (custom_params && custom_params_max_idx) {
+-			if (custom_params_max_idx != ARCTURUS_CUSTOM_PARAMS_COUNT)
+-				return -EINVAL;
+-			if (custom_params[0] >= ARCTURUS_CUSTOM_PARAMS_CLOCK_COUNT)
++			if (!smu_cmn_custom_params_count_valid(custom_params_max_idx,
++							       ARCTURUS_CUSTOM_PARAMS_COUNT) ||
++			    !smu_cmn_custom_params_clock_valid(custom_params[0],
++							       ARCTURUS_CUSTOM_PARAMS_CLOCK_COUNT))
+ 				return -EINVAL;
+ 			idx = custom_params[0] * ARCTURUS_CUSTOM_PARAMS_COUNT;
+ 			smu->custom_profile_params[idx] = 1;
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
+index cd0457e13f54..7e7b082fce19 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
+@@ -1843,9 +1843,10 @@ static int navi10_set_power_profile_mode(struct smu_context *smu,
+ 				return -ENOMEM;
+ 		}
+ 		if (custom_params && custom_params_max_idx) {
+-			if (custom_params_max_idx != NAVI10_CUSTOM_PARAMS_COUNT)
+-				return -EINVAL;
+-			if (custom_params[0] >= NAVI10_CUSTOM_PARAMS_CLOCKS_COUNT)
++			if (!smu_cmn_custom_params_count_valid(custom_params_max_idx,
++							       NAVI10_CUSTOM_PARAMS_COUNT) ||
++			    !smu_cmn_custom_params_clock_valid(custom_params[0],
++							       NAVI10_CUSTOM_PARAMS_CLOCKS_COUNT))
+ 				return -EINVAL;
+ 			idx = custom_params[0] * NAVI10_CUSTOM_PARAMS_COUNT;
+ 			smu->custom_profile_params[idx] = 1;
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c
+index f799e489b481..0ac789058d12 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c
+@@ -1755,9 +1755,10 @@ static int sienna_cichlid_set_power_profile_mode(struct smu_context *smu,
+ 				return -ENOMEM;
+ 		}
+ 		if (custom_params && custom_params_max_idx) {
+-			if (custom_params_max_idx != SIENNA_CICHLID_CUSTOM_PARAMS_COUNT)
+-				return -EINVAL;
+-			if (custom_params[0] >= SIENNA_CICHLID_CUSTOM_PARAMS_CLOCK_COUNT)
++			if (!smu_cmn_custom_params_count_valid(custom_params_max_idx,
++							       SIENNA_CICHLID_CUSTOM_PARAMS_COUNT) ||
++			    !smu_cmn_custom_params_clock_valid(custom_params[0],
++							       SIENNA_CICHLID_CUSTOM_PARAMS_CLOCK_COUNT))
+ 				return -EINVAL;
+ 			idx = custom_params[0] * SIENNA_CICHLID_CUSTOM_PARAMS_COUNT;
+ 			smu->custom_profile_params[idx] = 1;
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c
+index 7f8d4bb47d02..4e1d6a8da8e8 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c
+@@ -2616,9 +2616,10 @@ static int smu_v13_0_0_set_power_profile_mode(struct smu_context *smu,
+ 				return -ENOMEM;
+ 		}
+ 		if (custom_params && custom_params_max_idx) {
+-			if (custom_params_max_idx != SMU_13_0_0_CUSTOM_PARAMS_COUNT)
+-				return -EINVAL;
+-			if (custom_params[0] >= SMU_13_0_0_CUSTOM_PARAMS_CLOCK_COUNT)
++			if (!smu_cmn_custom_params_count_valid(custom_params_max_idx,
++							       SMU_13_0_0_CUSTOM_PARAMS_COUNT) ||
++			    !smu_cmn_custom_params_clock_valid(custom_params[0],
++							       SMU_13_0_0_CUSTOM_PARAMS_CLOCK_COUNT))
+ 				return -EINVAL;
+ 			idx = custom_params[0] * SMU_13_0_0_CUSTOM_PARAMS_COUNT;
+ 			smu->custom_profile_params[idx] = 1;
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c
+index 0f774b0920ce..81d4ba8013e8 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c
+@@ -2573,9 +2573,10 @@ static int smu_v13_0_7_set_power_profile_mode(struct smu_context *smu,
+ 				return -ENOMEM;
+ 		}
+ 		if (custom_params && custom_params_max_idx) {
+-			if (custom_params_max_idx != SMU_13_0_7_CUSTOM_PARAMS_COUNT)
+-				return -EINVAL;
+-			if (custom_params[0] >= SMU_13_0_7_CUSTOM_PARAMS_CLOCK_COUNT)
++			if (!smu_cmn_custom_params_count_valid(custom_params_max_idx,
++							       SMU_13_0_7_CUSTOM_PARAMS_COUNT) ||
++			    !smu_cmn_custom_params_clock_valid(custom_params[0],
++							       SMU_13_0_7_CUSTOM_PARAMS_CLOCK_COUNT))
+ 				return -EINVAL;
+ 			idx = custom_params[0] * SMU_13_0_7_CUSTOM_PARAMS_COUNT;
+ 			smu->custom_profile_params[idx] = 1;
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
+index fdc1456b885c..1bb418f17025 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
+@@ -1828,9 +1828,10 @@ static int smu_v14_0_2_set_power_profile_mode(struct smu_context *smu,
+ 				return -ENOMEM;
+ 		}
+ 		if (custom_params && custom_params_max_idx) {
+-			if (custom_params_max_idx != SMU_14_0_2_CUSTOM_PARAMS_COUNT)
+-				return -EINVAL;
+-			if (custom_params[0] >= SMU_14_0_2_CUSTOM_PARAMS_CLOCK_COUNT)
++			if (!smu_cmn_custom_params_count_valid(custom_params_max_idx,
++							       SMU_14_0_2_CUSTOM_PARAMS_COUNT) ||
++			    !smu_cmn_custom_params_clock_valid(custom_params[0],
++							       SMU_14_0_2_CUSTOM_PARAMS_CLOCK_COUNT))
+ 				return -EINVAL;
+ 			idx = custom_params[0] * SMU_14_0_2_CUSTOM_PARAMS_COUNT;
+ 			smu->custom_profile_params[idx] = 1;
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu_cmn.h b/drivers/gpu/drm/amd/pm/swsmu/smu_cmn.h
+index 0e119965ce13..5b7f64b94179 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu_cmn.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu_cmn.h
+@@ -113,6 +113,16 @@ static inline int pcie_gen_to_speed(uint32_t gen)
+ 	return ((gen == 0) ? link_speed[0] : link_speed[gen - 1]);
+ }
+ 
++static inline bool smu_cmn_custom_params_count_valid(u32 max_idx, u32 params_count)
++{
++	return max_idx == params_count;
++}
++
++static inline bool smu_cmn_custom_params_clock_valid(long clock_idx, long clock_count)
++{
++	return clock_idx >= 0 && clock_idx < clock_count;
++}
++
+ int smu_cmn_send_smc_msg_with_param(struct smu_context *smu,
+ 				    enum smu_message_type msg,
+ 				    uint32_t param,
+-- 
+2.55.0
+

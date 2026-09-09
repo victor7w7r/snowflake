@@ -1,0 +1,105 @@
+From f4418e64e61a54dd473e9a1208e1f88c871a719e Mon Sep 17 00:00:00 2001
+From: Kuniyuki Iwashima <kuniyu@google.com>
+Date: Fri, 31 Jul 2026 22:43:40 +0000
+Subject: [PATCH 11117/15333] pfcp: Protect pfcp_net.pfcp_dev_list with mutex.
+
+struct pfcp_dev.net is the netns where the backend pfcp socket
+resides.
+
+struct pfcp_dev is linked to the pfcp_net.pfcp_dev_list of
+the socket's netns.
+
+During netns dismantle or module unload, pfcp_net_exit_rtnl()
+iterates the list and queues devices for destruction regardless
+of the devices' netns.
+
+Thus, once RTNL is removed, the list can be modified concurrently
+from different netns due to device removal.
+
+Let's protect it with per-netns mutex.
+
+Signed-off-by: Kuniyuki Iwashima <kuniyu@google.com>
+Reviewed-by: Simon Horman <horms@kernel.org>
+Link: https://patch.msgid.link/20260731224406.2444121-2-kuniyu@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/pfcp.c | 26 ++++++++++++++++++++++++--
+ 1 file changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/pfcp.c b/drivers/net/pfcp.c
+index d8e4d60f5834..45f9c5d3cb20 100644
+--- a/drivers/net/pfcp.c
++++ b/drivers/net/pfcp.c
+@@ -29,6 +29,7 @@ static unsigned int pfcp_net_id __read_mostly;
+ 
+ struct pfcp_net {
+ 	struct list_head	pfcp_dev_list;
++	struct mutex		lock;
+ };
+ 
+ static void
+@@ -209,7 +210,10 @@ static int pfcp_newlink(struct net_device *dev,
+ 	}
+ 
+ 	pn = net_generic(link_net, pfcp_net_id);
++
++	mutex_lock(&pn->lock);
+ 	list_add(&pfcp->list, &pn->pfcp_dev_list);
++	mutex_unlock(&pn->lock);
+ 
+ 	netdev_dbg(dev, "registered new PFCP interface\n");
+ 
+@@ -223,7 +227,7 @@ static int pfcp_newlink(struct net_device *dev,
+ 	return err;
+ }
+ 
+-static void pfcp_dellink(struct net_device *dev, struct list_head *head)
++static void __pfcp_dellink(struct net_device *dev, struct list_head *head)
+ {
+ 	struct pfcp_dev *pfcp = netdev_priv(dev);
+ 
+@@ -231,6 +235,18 @@ static void pfcp_dellink(struct net_device *dev, struct list_head *head)
+ 	unregister_netdevice_queue(dev, head);
+ }
+ 
++static void pfcp_dellink(struct net_device *dev, struct list_head *head)
++{
++	struct pfcp_dev *pfcp = netdev_priv(dev);
++	struct pfcp_net *pn;
++
++	pn = net_generic(pfcp->net, pfcp_net_id);
++
++	mutex_lock(&pn->lock);
++	__pfcp_dellink(dev, head);
++	mutex_unlock(&pn->lock);
++}
++
+ static struct rtnl_link_ops pfcp_link_ops __read_mostly = {
+ 	.kind		= "pfcp",
+ 	.priv_size	= sizeof(struct pfcp_dev),
+@@ -244,6 +260,8 @@ static int __net_init pfcp_net_init(struct net *net)
+ 	struct pfcp_net *pn = net_generic(net, pfcp_net_id);
+ 
+ 	INIT_LIST_HEAD(&pn->pfcp_dev_list);
++	mutex_init(&pn->lock);
++
+ 	return 0;
+ }
+ 
+@@ -253,8 +271,12 @@ static void __net_exit pfcp_net_exit_rtnl(struct net *net,
+ 	struct pfcp_net *pn = net_generic(net, pfcp_net_id);
+ 	struct pfcp_dev *pfcp, *pfcp_next;
+ 
++	mutex_lock(&pn->lock);
++
+ 	list_for_each_entry_safe(pfcp, pfcp_next, &pn->pfcp_dev_list, list)
+-		pfcp_dellink(pfcp->dev, dev_to_kill);
++		__pfcp_dellink(pfcp->dev, dev_to_kill);
++
++	mutex_unlock(&pn->lock);
+ }
+ 
+ static struct pernet_operations pfcp_net_ops = {
+-- 
+2.55.0
+

@@ -1,0 +1,168 @@
+From 738b78ee4bfa5e290f155be1e946bc2ae5660dfd Mon Sep 17 00:00:00 2001
+From: "Masami Hiramatsu (Google)" <mhiramat@kernel.org>
+Date: Thu, 2 Jul 2026 21:12:41 +0900
+Subject: [PATCH 04436/15333] tracing/probes: Add $current variable support
+
+Since we can use the BTF to cast value to a structure pointer type,
+it is useful to introduce "$current" special variable support to
+fetcharg.
+
+User can define a fetcharg to access current task_struct properties
+using BTF info. e.g.
+
+  $current->cpus_ptr
+
+Link: https://lore.kernel.org/all/178271366709.1176915.15320906169981578568.stgit@devnote2/
+
+Signed-off-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+---
+ Documentation/trace/fprobetrace.rst |  1 +
+ Documentation/trace/kprobetrace.rst |  1 +
+ kernel/trace/trace.c                |  4 ++--
+ kernel/trace/trace_probe.c          | 37 ++++++++++++++++++++++++++++-
+ kernel/trace/trace_probe.h          |  1 +
+ kernel/trace/trace_probe_tmpl.h     |  3 +++
+ 6 files changed, 44 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/trace/fprobetrace.rst b/Documentation/trace/fprobetrace.rst
+index 290a9e6f7491..3392cab016b3 100644
+--- a/Documentation/trace/fprobetrace.rst
++++ b/Documentation/trace/fprobetrace.rst
+@@ -50,6 +50,7 @@ Synopsis of fprobe-events
+   $argN         : Fetch the Nth function argument. (N >= 1) (\*2)
+   $retval       : Fetch return value.(\*3)
+   $comm         : Fetch current task comm.
++  $current      : Fetch the address of the current task_struct.
+   +|-[u]OFFS(FETCHARG) : Fetch memory at FETCHARG +|- OFFS address.(\*4)(\*5)
+   \IMM          : Store an immediate value to the argument.
+   NAME=FETCHARG : Set NAME as the argument name of FETCHARG.
+diff --git a/Documentation/trace/kprobetrace.rst b/Documentation/trace/kprobetrace.rst
+index a62707e6a9f2..81e4fe38791d 100644
+--- a/Documentation/trace/kprobetrace.rst
++++ b/Documentation/trace/kprobetrace.rst
+@@ -53,6 +53,7 @@ Synopsis of kprobe_events
+   $argN		: Fetch the Nth function argument. (N >= 1) (\*1)
+   $retval	: Fetch return value.(\*2)
+   $comm		: Fetch current task comm.
++  $current      : Fetch the address of the current task_struct.
+   +|-[u]OFFS(FETCHARG) : Fetch memory at FETCHARG +|- OFFS address.(\*3)(\*4)
+   \IMM		: Store an immediate value to the argument.
+   NAME=FETCHARG : Set NAME as the argument name of FETCHARG.
+diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
+index 5670c4b91dc0..2b0b4f9acb2e 100644
+--- a/kernel/trace/trace.c
++++ b/kernel/trace/trace.c
+@@ -4320,13 +4320,13 @@ static const char readme_msg[] =
+ 	"\t     args: <name>=fetcharg[:type]\n"
+ 	"\t fetcharg: (%<register>|$<efield>), @<address>, @<symbol>[+|-<offset>],\n"
+ #ifdef CONFIG_HAVE_FUNCTION_ARG_ACCESS_API
+-	"\t           $stack<index>, $stack, $retval, $comm, $arg<N>,\n"
++	"\t           $stack<index>, $stack, $retval, $comm, $arg<N>, $current\n"
+ #ifdef CONFIG_PROBE_EVENTS_BTF_ARGS
+ 	"\t           [(structname[,field])]<argname>[->field[->field|.field...]],\n"
+ 	"\t           [(structname[,field])](fetcharg)->field[->field|.field...],\n"
+ #endif
+ #else
+-	"\t           $stack<index>, $stack, $retval, $comm,\n"
++	"\t           $stack<index>, $stack, $retval, $comm, $current\n"
+ #endif
+ 	"\t           +|-[u]<offset>(<fetcharg>), \\imm-value, \\\"imm-string\"\n"
+ 	"\t     kernel return probes support: $retval, $arg<N>, $comm\n"
+diff --git a/kernel/trace/trace_probe.c b/kernel/trace/trace_probe.c
+index fd006b415c68..999dec84275d 100644
+--- a/kernel/trace/trace_probe.c
++++ b/kernel/trace/trace_probe.c
+@@ -692,7 +692,9 @@ static int parse_btf_arg(char *varname,
+ 	int i, is_ptr, ret;
+ 	u32 tid;
+ 
+-	if (!ctx->funcname && !(ctx->flags & TPARG_FL_TEVENT))
++	/* Note: field is not separated at this point, so check prefix. */
++	if (!str_has_prefix(varname, "$current") &&
++	    !ctx->funcname && !(ctx->flags & TPARG_FL_TEVENT))
+ 		return -EINVAL;
+ 
+ 	is_ptr = split_next_field(varname, &field, ctx);
+@@ -705,6 +707,20 @@ static int parse_btf_arg(char *varname,
+ 		return -EOPNOTSUPP;
+ 	}
+ 
++	if (!strcmp(varname, "$current")) {
++		code->op = FETCH_OP_CURRENT;
++		/* If no typecast is specified for $current, use task_struct by default */
++		ret = bpf_find_btf_id("task_struct", BTF_KIND_STRUCT, &ctx->struct_btf);
++		if (ret < 0) {
++			trace_probe_log_err(ctx->offset, NO_BTF_ENTRY);
++			return -ENOENT;
++		}
++		tid = (u32)ret;
++		type = ctx->last_struct =
++			btf_type_skip_modifiers(ctx->struct_btf, tid, NULL);
++		goto found_type;
++	}
++
+ 	if (ctx->flags & TPARG_FL_RETURN && !strcmp(varname, "$retval")) {
+ 		code->op = FETCH_OP_RETVAL;
+ 		/* Check whether the function return type is not void, even with typecast. */
+@@ -761,6 +777,7 @@ static int parse_btf_arg(char *varname,
+ 
+ found:
+ 	type = btf_type_skip_modifiers(ctx->btf, tid, NULL);
++found_type:
+ 	if (!type) {
+ 		trace_probe_log_err(ctx->offset, BAD_BTF_TID);
+ 		return -EINVAL;
+@@ -1270,6 +1287,24 @@ static int parse_probe_vars(char *orig_arg, const struct fetch_type *t,
+ 		return 0;
+ 	}
+ 
++	/* $current returns the address of the current task_struct. */
++	if (str_has_prefix(arg, "current")) {
++		/* $current is only supported by kernel probe. */
++		if (!(ctx->flags & TPARG_FL_KERNEL)) {
++			err = TP_ERR_BAD_VAR;
++			goto inval;
++		}
++		arg += strlen("current");
++		if (*arg == '-' && IS_ENABLED(CONFIG_PROBE_EVENTS_BTF_ARGS))
++			return parse_btf_arg(orig_arg, pcode, end, ctx);
++
++		if (*arg != '\0')
++			goto inval;
++
++		code->op = FETCH_OP_CURRENT;
++		return 0;
++	}
++
+ #ifdef CONFIG_HAVE_FUNCTION_ARG_ACCESS_API
+ 	len = str_has_prefix(arg, "arg");
+ 	if (len) {
+diff --git a/kernel/trace/trace_probe.h b/kernel/trace/trace_probe.h
+index 6a0859e00bf4..195096f5b8b1 100644
+--- a/kernel/trace/trace_probe.h
++++ b/kernel/trace/trace_probe.h
+@@ -92,6 +92,7 @@ typedef int (*print_type_func_t)(struct trace_seq *, void *, void *);
+ 	FETCH_OP(RETVAL, none),		/* Return value */		\
+ 	FETCH_OP(IMM, imm),		/* Immediate: .immediate */	\
+ 	FETCH_OP(COMM, none),		/* Current comm */		\
++	FETCH_OP(CURRENT, none),	/* Current task_struct address */\
+ 	FETCH_OP(ARG, param),		/* Argument: .param = index */	\
+ 	FETCH_OP(FOFFS, imm),		/* File offset: .immediate */	\
+ 	FETCH_OP(IMMSTR, string),	/* Allocated string: .data */	\
+diff --git a/kernel/trace/trace_probe_tmpl.h b/kernel/trace/trace_probe_tmpl.h
+index 51436f19083b..d0e9662cde00 100644
+--- a/kernel/trace/trace_probe_tmpl.h
++++ b/kernel/trace/trace_probe_tmpl.h
+@@ -112,6 +112,9 @@ process_common_fetch_insn(struct fetch_insn *code, unsigned long *val)
+ 	case FETCH_OP_IMMSTR:
+ 		*val = (unsigned long)code->data;
+ 		break;
++	case FETCH_OP_CURRENT:
++		*val = (unsigned long)current;
++		break;
+ 	default:
+ 		return -EILSEQ;
+ 	}
+-- 
+2.55.0
+

@@ -1,0 +1,66 @@
+From 43e7ae814c981f0ecdc365746a752a094415a8b7 Mon Sep 17 00:00:00 2001
+From: Kartik Rajput <kkartik@nvidia.com>
+Date: Thu, 14 May 2026 10:42:52 +0530
+Subject: [PATCH 09541/15333] soc/tegra: fuse: Do not use fuse data as entropy
+ source
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Fuse values are static and device-unique but not secret. Using them as an
+entropy source weakens the overall randomness pool because the data is
+constant and externally observable over the device’s lifetime.
+
+Stop feeding fuse data into the kernel’s randomness subsystem.
+
+Signed-off-by: Kartik Rajput <kkartik@nvidia.com>
+Signed-off-by: Thierry Reding <treding@nvidia.com>
+---
+ drivers/soc/tegra/fuse/fuse-tegra30.c | 24 ------------------------
+ 1 file changed, 24 deletions(-)
+
+diff --git a/drivers/soc/tegra/fuse/fuse-tegra30.c b/drivers/soc/tegra/fuse/fuse-tegra30.c
+index 524fa1b0cd3d..2fad8b13a3b9 100644
+--- a/drivers/soc/tegra/fuse/fuse-tegra30.c
++++ b/drivers/soc/tegra/fuse/fuse-tegra30.c
+@@ -64,28 +64,6 @@ static u32 tegra30_fuse_read(struct tegra_fuse *fuse, unsigned int offset)
+ 	return value;
+ }
+ 
+-static void __init tegra30_fuse_add_randomness(void)
+-{
+-	u32 randomness[12];
+-
+-	randomness[0] = tegra_sku_info.sku_id;
+-	randomness[1] = tegra_read_straps();
+-	randomness[2] = tegra_read_chipid();
+-	randomness[3] = tegra_sku_info.cpu_process_id << 16;
+-	randomness[3] |= tegra_sku_info.soc_process_id;
+-	randomness[4] = tegra_sku_info.cpu_speedo_id << 16;
+-	randomness[4] |= tegra_sku_info.soc_speedo_id;
+-	randomness[5] = tegra_fuse_read_early(FUSE_VENDOR_CODE);
+-	randomness[6] = tegra_fuse_read_early(FUSE_FAB_CODE);
+-	randomness[7] = tegra_fuse_read_early(FUSE_LOT_CODE_0);
+-	randomness[8] = tegra_fuse_read_early(FUSE_LOT_CODE_1);
+-	randomness[9] = tegra_fuse_read_early(FUSE_WAFER_ID);
+-	randomness[10] = tegra_fuse_read_early(FUSE_X_COORDINATE);
+-	randomness[11] = tegra_fuse_read_early(FUSE_Y_COORDINATE);
+-
+-	add_device_randomness(randomness, sizeof(randomness));
+-}
+-
+ static void __init tegra30_fuse_init(struct tegra_fuse *fuse)
+ {
+ 	fuse->read_early = tegra30_fuse_read_early;
+@@ -95,8 +73,6 @@ static void __init tegra30_fuse_init(struct tegra_fuse *fuse)
+ 
+ 	if (fuse->soc->speedo_init)
+ 		fuse->soc->speedo_init(&tegra_sku_info);
+-
+-	tegra30_fuse_add_randomness();
+ }
+ #endif
+ 
+-- 
+2.55.0
+

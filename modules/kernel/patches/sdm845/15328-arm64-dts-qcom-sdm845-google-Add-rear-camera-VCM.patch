@@ -1,0 +1,78 @@
+From 1156ba3e3bdc2ffd2d808b1e66b4deaaffa2bf71 Mon Sep 17 00:00:00 2001
+From: David Heidelberg <david@ixit.cz>
+Date: Wed, 2 Sep 2026 15:39:38 +0200
+Subject: [PATCH 15328/15333] arm64: dts: qcom: sdm845-google: Add rear camera
+ VCM
+
+The rear IMX363 module on blueline and crosshatch carries an Onsemi
+LC898219XI voice coil motor on CCI master 0. The downstream firmware
+update code addresses it at write address 0xE4 (7-bit 0x72) and checks
+register 0xF0 for the 0xA5 chip ID, matching the lc89821x driver.
+
+The LC898219XI is a single supply part: its only rail, VDD, feeds the
+logic, the hall sensor and the OUT1/OUT2 coil driver. On this board that
+rail is CAM_VANA0, the GPIO16-switched 2.8 V supply the sensor already
+uses as vana. Downstream talks to the VCM right after the sensor power-up
+with no actuator rail enabled, and on hardware the chip only acknowledges
+and tracks focus targets once that rail is up, so share the regulator.
+Link the lens to the sensor with lens-focus so the subdev notifier binds
+them.
+
+The VCM driver talks on CCI0 as soon as the lens subdev is opened, which
+can happen before the sensor is powered. The IMX363 I/O pads and the
+VD6281 colour sensor on the same bus are fed from LVS1 and clamp SDA/SCL
+when it is off, so keep LVS1 always on for now.
+
+The module also has an LC898123F40 OIS controller at 0x3e and the VCM
+EEPROM at 0x73; neither has a mainline driver, so only note them.
+
+Signed-off-by: David Heidelberg <david@ixit.cz>
+---
+ .../boot/dts/qcom/sdm845-google-common.dtsi     | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sdm845-google-common.dtsi b/arch/arm64/boot/dts/qcom/sdm845-google-common.dtsi
+index 552293955eca..ef6d23d39c72 100644
+--- a/arch/arm64/boot/dts/qcom/sdm845-google-common.dtsi
++++ b/arch/arm64/boot/dts/qcom/sdm845-google-common.dtsi
+@@ -387,6 +387,12 @@ vreg_l28a_3p0: ldo28 {
+ 		vreg_lvs1_1p8: lvs1 {
+ 			regulator-min-microvolt = <1800000>;
+ 			regulator-max-microvolt = <1800000>;
++			/*
++			 * Camera I/O rail. The IMX363 and the VD6281 colour sensor
++			 * share CCI0 with the VCM and clamp the bus when this rail
++			 * is off, so keep it on until the bus users are sequenced.
++			 */
++			regulator-always-on;
+ 		};
+ 	};
+ 
+@@ -503,6 +509,8 @@ rear_cam: camera@1a {
+ 		rotation = <90>;
+ 		orientation = <MEDIA_ORIENTATION_BACK>;
+ 
++		lens-focus = <&rear_cam_vcm>;
++
+ 		port {
+ 			cam_rear_endpoint: endpoint {
+ 				data-lanes = <1 2 3 4>;
+@@ -511,6 +519,15 @@ cam_rear_endpoint: endpoint {
+ 			};
+ 		};
+ 	};
++
++	/* OIS controller (Onsemi LC898123F40) @3e, VCM EEPROM @73 */
++
++	rear_cam_vcm: camera-lens@72 {
++		compatible = "onnn,lc898219xi";
++		reg = <0x72>;
++
++		vdd-supply = <&camera_rear_avdd>;
++	};
+ };
+ 
+ &cci_i2c1 {
+-- 
+2.55.0
+

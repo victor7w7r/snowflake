@@ -1,0 +1,78 @@
+From abdbd8329281f40afd381346410d6d43604af82c Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Fri, 3 Jul 2026 13:13:21 +0900
+Subject: [PATCH 02252/15333] mm: numa_memblks: set numa_nodes_parsed in
+ numa_add_memblk()
+
+Every existing numa_add_memblk() caller separately marks the new node in
+numa_nodes_parsed with node_set().  Set the node in numa_add_memblk() itself
+on a successful add, so this no longer depends on each caller.
+
+numa_add_memblk_to() now returns -EINVAL for an out-of-range node id, so a
+zero return implies @nid was valid.  No caller passes an invalid one, so
+existing callers are unaffected.
+
+The per-caller node_set() calls are removed in later patches.
+
+No functional change.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Link: https://patch.msgid.link/20260703041329.2797584-2-ekffu200098@gmail.com
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+---
+ mm/numa_memblks.c | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/mm/numa_memblks.c b/mm/numa_memblks.c
+index 3c3c4eac3514..844c71d6d4c0 100644
+--- a/mm/numa_memblks.c
++++ b/mm/numa_memblks.c
+@@ -135,13 +135,20 @@ EXPORT_SYMBOL(__node_distance);
+ static int __init numa_add_memblk_to(int nid, u64 start, u64 end,
+ 				     struct numa_meminfo *mi)
+ {
++	/* whine about and ignore invalid nid */
++	if (nid < 0 || nid >= MAX_NUMNODES) {
++		pr_warn("Warning: invalid memblk node id %d [mem %#010Lx-%#010Lx]\n",
++			nid, start, end - 1);
++		return -EINVAL;
++	}
++
+ 	/* ignore zero length blks */
+ 	if (start == end)
+ 		return 0;
+ 
+-	/* whine about and ignore invalid blks */
+-	if (start > end || nid < 0 || nid >= MAX_NUMNODES) {
+-		pr_warn("Warning: invalid memblk node %d [mem %#010Lx-%#010Lx]\n",
++	/* whine about and ignore invalid ranges */
++	if (start > end) {
++		pr_warn("Warning: invalid memblk range for node %d [mem %#010Lx-%#010Lx]\n",
+ 			nid, start, end - 1);
+ 		return 0;
+ 	}
+@@ -193,13 +200,20 @@ static void __init numa_move_tail_memblk(struct numa_meminfo *dst, int idx,
+  * @end: End address of the new memblk
+  *
+  * Add a new memblk to the default numa_meminfo.
++ * On success @nid is also set in numa_nodes_parsed.
+  *
+  * RETURNS:
+  * 0 on success, -errno on failure.
+  */
+ int __init numa_add_memblk(int nid, u64 start, u64 end)
+ {
+-	return numa_add_memblk_to(nid, start, end, &numa_meminfo);
++	int ret;
++
++	ret = numa_add_memblk_to(nid, start, end, &numa_meminfo);
++	if (!ret)
++		node_set(nid, numa_nodes_parsed);
++
++	return ret;
+ }
+ 
+ /**
+-- 
+2.55.0
+

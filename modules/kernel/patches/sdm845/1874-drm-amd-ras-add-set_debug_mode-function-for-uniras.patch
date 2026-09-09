@@ -1,0 +1,213 @@
+From d4af96bef22de297a7c301bebd6625a7f0152b87 Mon Sep 17 00:00:00 2001
+From: Ce Sun <cesun102@amd.com>
+Date: Mon, 22 Jun 2026 12:48:07 +0800
+Subject: [PATCH 01874/15333] drm/amd/ras: add set_debug_mode function for
+ uniras
+
+add set_debug_mode function for uniras
+
+v2:
+1.Add validation for mp1->ip_func and mp1->ip_func->set_debug_mode
+2.Return -ENOTSUPP error code if the callback is missing
+
+Signed-off-by: Ce Sun <cesun102@amd.com>
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c  | 10 ++++++++++
+ .../gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h  |  1 +
+ .../amd/ras/ras_mgr/amdgpu_ras_mp1_v13_0.c    | 14 ++++++++++++++
+ drivers/gpu/drm/amd/ras/rascore/ras.h         |  3 +++
+ drivers/gpu/drm/amd/ras/rascore/ras_core.c    |  5 +++++
+ drivers/gpu/drm/amd/ras/rascore/ras_mp1.c     | 19 ++++++++++++++++++-
+ drivers/gpu/drm/amd/ras/rascore/ras_mp1.h     |  3 +++
+ .../gpu/drm/amd/ras/rascore/ras_mp1_v13_0.c   | 13 +++++++++++++
+ 8 files changed, 67 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c
+index 60412da69b2b..b62bbb5ea292 100644
+--- a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c
++++ b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c
+@@ -795,3 +795,13 @@ int amdgpu_ras_mgr_lookup_bad_pages_in_a_row(struct amdgpu_device *adev,
+ 	return ras_core_convert_soc_pa_to_cur_nps_pages(ras_mgr->ras_core,
+ 			addr, nps_page_addr, max_page_count);
+ }
++
++int amdgpu_ras_mgr_set_debug_mode(struct amdgpu_device *adev, bool enable)
++{
++	struct amdgpu_ras_mgr *ras_mgr = amdgpu_ras_mgr_get_context(adev);
++
++	if (!ras_mgr || !ras_mgr->ras_core || !ras_mgr->ras_is_ready)
++		return false;
++
++	return ras_core_set_debug_mode(ras_mgr->ras_core, enable);
++}
+diff --git a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h
+index 3f80b9f1f0ac..a20bb8fdce87 100644
+--- a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h
++++ b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h
+@@ -85,4 +85,5 @@ int amdgpu_ras_mgr_post_reset(struct amdgpu_device *adev);
+ int amdgpu_ras_mgr_resume_after_reset(struct amdgpu_device *adev);
+ int amdgpu_ras_mgr_lookup_bad_pages_in_a_row(struct amdgpu_device *adev,
+ 		uint64_t addr, uint64_t *nps_page_addr, uint32_t max_page_count);
++int amdgpu_ras_mgr_set_debug_mode(struct amdgpu_device *adev, bool enable);
+ #endif
+diff --git a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mp1_v13_0.c b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mp1_v13_0.c
+index 2098f24d4940..3c4575a5d902 100644
+--- a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mp1_v13_0.c
++++ b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mp1_v13_0.c
+@@ -24,6 +24,7 @@
+ #include "amdgpu_smu.h"
+ #include "amdgpu_reset.h"
+ #include "amdgpu_ras_mp1_v13_0.h"
++#include "smu13_driver_if_v13_0_6.h"
+ 
+ #define RAS_MP1_MSG_QueryValidMcaCeCount  0x3A
+ #define RAS_MP1_MSG_McaBankCeDumpDW       0x3B
+@@ -131,10 +132,23 @@ static int mp1_v13_0_get_ras_enabled_mask(struct ras_core_context *ras_core,
+ 	return ret;
+ }
+ 
++static int mp1_v13_0_set_debug_mode(struct ras_core_context *ras_core, bool enable)
++{
++	struct amdgpu_device *adev = (struct amdgpu_device *)ras_core->dev;
++	int ret;
++	u32 smu_msg = SMU_MSG_ClearMcaOnRead;
++
++	ret = amdgpu_smu_ras_send_msg(adev, smu_msg,
++			enable ? 0 : ClearMcaOnRead_UE_FLAG_MASK |
++			ClearMcaOnRead_CE_POLL_MASK, NULL);
++	return ret;
++}
++
+ const struct ras_mp1_sys_func amdgpu_ras_mp1_sys_func_v13_0 = {
+ 	.mp1_get_valid_bank_count = mp1_v13_0_get_valid_bank_count,
+ 	.mp1_dump_valid_bank = mp1_v13_0_dump_valid_bank,
+ 	.mp1_send_eeprom_msg = mp1_v13_0_eeprom_send_msg,
+ 	.mp1_get_ras_enabled_mask = mp1_v13_0_get_ras_enabled_mask,
++	.mp1_set_debug_mode = mp1_v13_0_set_debug_mode,
+ };
+ 
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras.h b/drivers/gpu/drm/amd/ras/rascore/ras.h
+index 5869bad978b0..878dfdfcb18a 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras.h
++++ b/drivers/gpu/drm/amd/ras/rascore/ras.h
+@@ -167,6 +167,7 @@ struct ras_mp1_sys_func {
+ 			enum ras_fw_eeprom_cmd index, uint32_t param, uint32_t *read_arg);
+ 	int (*mp1_get_ras_enabled_mask)(struct ras_core_context *ras_core,
+ 			uint64_t *enabled_mask);
++	int (*mp1_set_debug_mode)(struct ras_core_context *ras_core, bool enable);
+ };
+ 
+ struct ras_eeprom_sys_func {
+@@ -400,4 +401,6 @@ int ras_core_get_device_system_info(struct ras_core_context *ras_core,
+ int ras_core_convert_soc_pa_to_cur_nps_pages(struct ras_core_context *ras_core,
+ 		uint64_t soc_pa, uint64_t *page_pfn, uint32_t max_pages);
+ int ras_core_check_address_sanity(struct ras_core_context *ras_core, uint64_t addr);
++
++int ras_core_set_debug_mode(struct ras_core_context *ras_core, bool enable);
+ #endif
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras_core.c b/drivers/gpu/drm/amd/ras/rascore/ras_core.c
+index 2346918c7736..c63a358b7e57 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras_core.c
++++ b/drivers/gpu/drm/amd/ras/rascore/ras_core.c
+@@ -151,6 +151,11 @@ bool ras_core_gpu_is_rma(struct ras_core_context *ras_core)
+ 	return ras_core->is_rma;
+ }
+ 
++int ras_core_set_debug_mode(struct ras_core_context *ras_core, bool enable)
++{
++	return ras_mp1_set_debug_mode(ras_core, enable);
++}
++
+ static int ras_core_seqno_fifo_write(struct ras_core_context *ras_core,
+ 		enum ras_seqno_fifo fifo_type, uint64_t seqno)
+ {
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras_mp1.c b/drivers/gpu/drm/amd/ras/rascore/ras_mp1.c
+index f3321df85021..26af09f3574a 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras_mp1.c
++++ b/drivers/gpu/drm/amd/ras/rascore/ras_mp1.c
+@@ -59,9 +59,20 @@ int ras_mp1_dump_bank(struct ras_core_context *ras_core,
+ 	return mp1->ip_func->dump_valid_bank(ras_core, type, idx, reg_idx, val);
+ }
+ 
++int ras_mp1_set_debug_mode(struct ras_core_context *ras_core, bool enable)
++{
++	struct ras_mp1 *mp1 = &ras_core->ras_mp1;
++
++	if (!mp1->ip_func || !mp1->ip_func->set_debug_mode)
++		return -EOPNOTSUPP;
++
++	return mp1->ip_func->set_debug_mode(ras_core, enable);
++}
++
+ int ras_mp1_hw_init(struct ras_core_context *ras_core)
+ {
+ 	struct ras_mp1 *mp1 = &ras_core->ras_mp1;
++	int ret = 0;
+ 
+ 	mp1->mp1_ip_version = ras_core->config->mp1_ip_version;
+ 	mp1->sys_func = ras_core->config->mp1_cfg.mp1_sys_fn;
+@@ -71,8 +82,14 @@ int ras_mp1_hw_init(struct ras_core_context *ras_core)
+ 	}
+ 
+ 	mp1->ip_func = ras_mp1_get_ip_funcs(ras_core, mp1->mp1_ip_version);
++	if (!mp1->ip_func)
++		return -EINVAL;
++
++	ret = ras_mp1_set_debug_mode(ras_core, false);
++	if (ret)
++		return -EINVAL;
+ 
+-	return mp1->ip_func ? RAS_CORE_OK : -EINVAL;
++	return ret;
+ }
+ 
+ int ras_mp1_hw_fini(struct ras_core_context *ras_core)
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras_mp1.h b/drivers/gpu/drm/amd/ras/rascore/ras_mp1.h
+index de1d08286f41..5bc7c1b7fdab 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras_mp1.h
++++ b/drivers/gpu/drm/amd/ras/rascore/ras_mp1.h
+@@ -31,6 +31,7 @@ struct ras_mp1_ip_func {
+ 			enum ras_err_type type, u32 *count);
+ 	int (*dump_valid_bank)(struct ras_core_context *ras_core,
+ 		enum ras_err_type type, u32 idx, u32 reg_idx, u64 *val);
++	int (*set_debug_mode)(struct ras_core_context *ras_core, bool enable);
+ };
+ 
+ struct ras_mp1 {
+@@ -47,4 +48,6 @@ int ras_mp1_get_bank_count(struct ras_core_context *ras_core,
+ 
+ int ras_mp1_dump_bank(struct ras_core_context *ras_core,
+ 		u32 ecc_type, u32 idx, u32 reg_idx, u64 *val);
++
++int ras_mp1_set_debug_mode(struct ras_core_context *ras_core, bool enable);
+ #endif
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras_mp1_v13_0.c b/drivers/gpu/drm/amd/ras/rascore/ras_mp1_v13_0.c
+index 310d39fc816b..1fcfc1995ad3 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras_mp1_v13_0.c
++++ b/drivers/gpu/drm/amd/ras/rascore/ras_mp1_v13_0.c
+@@ -99,7 +99,20 @@ static int mp1_v13_0_dump_bank(struct ras_core_context *ras_core,
+ 	return sys_func->mp1_dump_valid_bank(ras_core, msg, idx, reg_idx, val);
+ }
+ 
++static int mp1_v13_0_set_debug_mode(struct ras_core_context *ras_core, bool enable)
++{
++	struct ras_mp1 *mp1 = &ras_core->ras_mp1;
++	const struct ras_mp1_sys_func *sys_func = mp1->sys_func;
++
++	if (!sys_func || !sys_func->mp1_set_debug_mode)
++		return -RAS_CORE_NOT_SUPPORTED;
++
++	return sys_func->mp1_set_debug_mode(ras_core, enable);
++}
++
++
+ const struct ras_mp1_ip_func mp1_ras_func_v13_0 = {
+ 	.get_valid_bank_count = mp1_v13_0_get_bank_count,
+ 	.dump_valid_bank = mp1_v13_0_dump_bank,
++	.set_debug_mode = mp1_v13_0_set_debug_mode,
+ };
+-- 
+2.55.0
+

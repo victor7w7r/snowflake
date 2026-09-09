@@ -1,0 +1,104 @@
+From 6f3328acabc4b78de2545bc4b4d2c8c7a4988624 Mon Sep 17 00:00:00 2001
+From: Koichiro Den <den@valinux.co.jp>
+Date: Tue, 21 Jul 2026 15:28:12 +0900
+Subject: [PATCH 06168/15333] dmaengine: dw-edma-pcie: Factor out descriptor
+ block address lookup
+
+Add an optional physical address override to struct dw_edma_block and
+use a helper to compute descriptor block addresses.
+
+No functional change intended. Existing Synopsys EDDA and AMD (Xilinx)
+MDB/CPM6 block descriptors leave the override unset, so the helper still
+returns the same values as before.
+
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Signed-off-by: Koichiro Den <den@valinux.co.jp>
+Link: https://patch.msgid.link/20260721062815.4117887-12-den@valinux.co.jp
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dw-edma/dw-edma-pcie.c | 34 +++++++++++++++++++-----------
+ 1 file changed, 22 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/dma/dw-edma/dw-edma-pcie.c b/drivers/dma/dw-edma/dw-edma-pcie.c
+index 4b2757c1eda2..6da890a4ad28 100644
+--- a/drivers/dma/dw-edma/dw-edma-pcie.c
++++ b/drivers/dma/dw-edma/dw-edma-pcie.c
+@@ -55,6 +55,8 @@
+ struct dw_edma_block {
+ 	enum pci_barno			bar;
+ 	off_t				off;
++	u64				paddr;
++	bool				paddr_valid;
+ 	size_t				sz;
+ };
+ 
+@@ -375,6 +377,18 @@ static u64 dw_edma_get_phys_addr(struct pci_dev *pdev,
+ 	return pci_bus_address(pdev, bar);
+ }
+ 
++static u64 dw_edma_get_block_addr(struct pci_dev *pdev,
++				  const struct dw_edma_pcie_match_data *match,
++				  struct dw_edma_pcie_data *pdata,
++				  const struct dw_edma_block *block)
++{
++	if (block->paddr_valid)
++		return block->paddr;
++
++	return dw_edma_get_phys_addr(pdev, match, pdata, block->bar) +
++	       block->off;
++}
++
+ static int dw_edma_pcie_probe(struct pci_dev *pdev,
+ 			      const struct pci_device_id *pid)
+ {
+@@ -479,9 +493,8 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
+ 			return -ENOMEM;
+ 
+ 		ll_region->vaddr.io += ll_block->off;
+-		ll_region->paddr = dw_edma_get_phys_addr(pdev, match,
+-							 dma_data, ll_block->bar);
+-		ll_region->paddr += ll_block->off;
++		ll_region->paddr = dw_edma_get_block_addr(pdev, match, dma_data,
++							  ll_block);
+ 		ll_region->sz = ll_block->sz;
+ 
+ 		dt_region->vaddr.io = pcim_iomap_table(pdev)[dt_block->bar];
+@@ -489,9 +502,8 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
+ 			return -ENOMEM;
+ 
+ 		dt_region->vaddr.io += dt_block->off;
+-		dt_region->paddr = dw_edma_get_phys_addr(pdev, match,
+-							 dma_data, dt_block->bar);
+-		dt_region->paddr += dt_block->off;
++		dt_region->paddr = dw_edma_get_block_addr(pdev, match, dma_data,
++							  dt_block);
+ 		dt_region->sz = dt_block->sz;
+ 	}
+ 
+@@ -506,9 +518,8 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
+ 			return -ENOMEM;
+ 
+ 		ll_region->vaddr.io += ll_block->off;
+-		ll_region->paddr = dw_edma_get_phys_addr(pdev, match,
+-							 dma_data, ll_block->bar);
+-		ll_region->paddr += ll_block->off;
++		ll_region->paddr = dw_edma_get_block_addr(pdev, match, dma_data,
++							  ll_block);
+ 		ll_region->sz = ll_block->sz;
+ 
+ 		dt_region->vaddr.io = pcim_iomap_table(pdev)[dt_block->bar];
+@@ -516,9 +527,8 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
+ 			return -ENOMEM;
+ 
+ 		dt_region->vaddr.io += dt_block->off;
+-		dt_region->paddr = dw_edma_get_phys_addr(pdev, match,
+-							 dma_data, dt_block->bar);
+-		dt_region->paddr += dt_block->off;
++		dt_region->paddr = dw_edma_get_block_addr(pdev, match, dma_data,
++							  dt_block);
+ 		dt_region->sz = dt_block->sz;
+ 	}
+ 
+-- 
+2.55.0
+

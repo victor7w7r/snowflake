@@ -1,0 +1,55 @@
+From 9405601fb7649dc1d52e785c1b5717d7e9129613 Mon Sep 17 00:00:00 2001
+From: Chen Changcheng <chenchangcheng@kylinos.cn>
+Date: Mon, 27 Jul 2026 09:34:59 +0800
+Subject: [PATCH 10199/15333] HID: corsair: fix use-after-free by reordering
+ remove sequence
+
+The corsair_remove() function currently frees the k90 driver data before
+calling hid_hw_stop().  Since hid_hw_stop() stops HID I/O, the event
+callback corsair_event() can still be invoked between the kfree() and
+hid_hw_stop(), and will dereference the freed drvdata->k90 pointer to
+write record_led.brightness.
+
+Reorder the remove sequence so that hid_hw_stop() is called first.
+Once hid_hw_stop() completes, the HID device is disconnected and no
+URBs are active, so corsair_event() cannot fire anymore.  The driver
+data is freed only afterwards.
+
+Additionally, set drvdata->k90 to NULL after kfree() as a defensive
+measure, matching the existing pattern in the error path of
+k90_init_macro_functions().
+
+Signed-off-by: Chen Changcheng <chenchangcheng@kylinos.cn>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ drivers/hid/hid-corsair.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/hid/hid-corsair.c b/drivers/hid/hid-corsair.c
+index 21cd8b12a757..ac12877a6db7 100644
+--- a/drivers/hid/hid-corsair.c
++++ b/drivers/hid/hid-corsair.c
+@@ -545,6 +545,7 @@ static void k90_cleanup_macro_functions(struct hid_device *dev)
+ 		kfree(k90->record_led.cdev.name);
+ 
+ 		kfree(k90);
++		drvdata->k90 = NULL;
+ 	}
+ }
+ 
+@@ -596,10 +597,10 @@ static int corsair_probe(struct hid_device *dev, const struct hid_device_id *id)
+ 
+ static void corsair_remove(struct hid_device *dev)
+ {
++	hid_hw_stop(dev);
++
+ 	k90_cleanup_macro_functions(dev);
+ 	k90_cleanup_backlight(dev);
+-
+-	hid_hw_stop(dev);
+ }
+ 
+ static int corsair_event(struct hid_device *dev, struct hid_field *field,
+-- 
+2.55.0
+

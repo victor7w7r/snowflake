@@ -1,0 +1,106 @@
+From fc9ff915b1fb6f6f826953d1bef3087d7a489d65 Mon Sep 17 00:00:00 2001
+From: Vincent Cloutier <vincent@cloutier.co>
+Date: Sun, 26 Jul 2026 21:13:04 -0400
+Subject: [PATCH 07439/15333] power: supply: max17042_battery: Retry failed
+ MAX17055 initialization
+
+MAX17055 initialization can fail on register I/O. Propagate the ModelCfg
+Refresh command error and retry MAX17055 failures every 10 seconds so a
+transient startup error does not become permanent. Report failures for the
+other gauges without changing their one-shot behavior.
+
+Notify consumers whenever initialization succeeds, including on the first
+attempt. The core registration notification is deferred and can observe
+-EAGAIN while asynchronous gauge initialization is still running, so a new
+notification is needed when driver-backed properties become available.
+
+Assisted-by: OpenCode:gpt-5.6-sol
+Signed-off-by: Vincent Cloutier <vincent@cloutier.co>
+Link: https://patch.msgid.link/20260727011319.621794-7-vincent.cloutier@icloud.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/max17042_battery.c | 37 +++++++++++++++++--------
+ 1 file changed, 26 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/power/supply/max17042_battery.c b/drivers/power/supply/max17042_battery.c
+index f59dec8864ef..e44795d54b43 100644
+--- a/drivers/power/supply/max17042_battery.c
++++ b/drivers/power/supply/max17042_battery.c
+@@ -63,6 +63,8 @@
+ #define MAX17042_RESISTANCE_LSB		1 / 4096 /* Ω */
+ #define MAX17042_TEMPERATURE_LSB	1 / 256 /* °C */
+ 
++#define MAX17055_INIT_RETRY_DELAY_MS	10000
++
+ struct max17042_chip {
+ 	struct device *dev;
+ 	struct regmap *regmap;
+@@ -848,13 +850,13 @@ static inline void max17042_override_por_values(struct max17042_chip *chip)
+ 		max17042_override_por(map, MAX17055_ModelCfg, config->model_cfg);
+ }
+ 
+-static void max17055_init_chip(struct max17042_chip *chip)
++static int max17055_init_chip(struct max17042_chip *chip)
+ {
+ 	max17042_override_por_values(chip);
+ 
+-	regmap_write_bits(chip->regmap, MAX17055_ModelCfg,
+-			  MAX17055_MODELCFG_REFRESH_BIT,
+-			  MAX17055_MODELCFG_REFRESH_BIT);
++	return regmap_write_bits(chip->regmap, MAX17055_ModelCfg,
++				 MAX17055_MODELCFG_REFRESH_BIT,
++				 MAX17055_MODELCFG_REFRESH_BIT);
+ }
+ 
+ static int max17042_init_chip(struct max17042_chip *chip)
+@@ -862,10 +864,13 @@ static int max17042_init_chip(struct max17042_chip *chip)
+ 	struct regmap *map = chip->regmap;
+ 	int ret;
+ 
+-	if (chip->chip_type == MAXIM_DEVICE_TYPE_MAX17055)
+-		max17055_init_chip(chip);
+-	else
++	if (chip->chip_type == MAXIM_DEVICE_TYPE_MAX17055) {
++		ret = max17055_init_chip(chip);
++		if (ret)
++			return ret;
++	} else {
+ 		max17042_override_por_values(chip);
++	}
+ 
+ 	/* After Power up, the MAX17042 requires 500mS in order
+ 	 * to perform signal debouncing and initial SOC reporting
+@@ -997,16 +1002,26 @@ static void max17042_init_worker(struct work_struct *work)
+ {
+ 	struct max17042_chip *chip = container_of(to_delayed_work(work),
+ 				struct max17042_chip, work);
+-	int ret;
++	int ret = 0;
+ 
+ 	/* Initialize registers according to values from config_data */
+-	if (chip->enable_por_init && chip->config_data) {
++	if (chip->enable_por_init && chip->config_data)
+ 		ret = max17042_init_chip(chip);
+-		if (ret)
+-			return;
++
++	if (ret) {
++		if (chip->chip_type == MAXIM_DEVICE_TYPE_MAX17055) {
++			dev_warn_ratelimited(chip->dev,
++				"initialization failed: %d, retrying\n", ret);
++			schedule_delayed_work(&chip->work,
++				msecs_to_jiffies(MAX17055_INIT_RETRY_DELAY_MS));
++		} else {
++			dev_err(chip->dev, "initialization failed: %d\n", ret);
++		}
++		return;
+ 	}
+ 
+ 	WRITE_ONCE(chip->init_complete, true);
++	power_supply_changed(chip->battery);
+ }
+ 
+ #ifdef CONFIG_OF
+-- 
+2.55.0
+

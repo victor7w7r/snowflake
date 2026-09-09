@@ -1,0 +1,54 @@
+From fac9275820a32748144fe08f8b92493bb85b63e0 Mon Sep 17 00:00:00 2001
+From: Dave Jiang <dave.jiang@intel.com>
+Date: Wed, 15 Jul 2026 08:51:26 -0700
+Subject: [PATCH 06958/15333] cxl: Deny Features commands on the RAW mailbox
+ path
+
+The RAW mailbox command path allows user to issue arbitrary opcodes
+to the device. The FWCTL interface was introduced to support the
+CXL Features commands where access control is provided depends on
+what the CEL indicates.
+
+Add the Features commands to cxl_disabled_raw_commands[] to ensure
+that all Features commands are only accessible through the FWCTL
+interface.
+
+The cxl_raw_allow_all debugfs override knob bypasses the disabled list
+if the user is aware of the risks and wants to use the RAW path for
+Features commands.
+
+Reviewed-by: Alison Schofield <alison.schofield@intel.com>
+Link: https://patch.msgid.link/20260715155126.1629178-1-dave.jiang@intel.com
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/cxl/core/mbox.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/cxl/core/mbox.c b/drivers/cxl/core/mbox.c
+index 7c6c5b7450a5..6dea70a1ff95 100644
+--- a/drivers/cxl/core/mbox.c
++++ b/drivers/cxl/core/mbox.c
+@@ -91,6 +91,10 @@ static struct cxl_mem_command cxl_mem_commands[CXL_MEM_COMMAND_ID_MAX] = {
+  *
+  * CXL_MBOX_OP_[GET_,INJECT_,CLEAR_]POISON: These commands require kernel
+  * driver orchestration for safety.
++ *
++ * CXL_MBOX_OP_[GET_SUPPORTED_FEATURES,GET_FEATURE,SET_FEATURE]: Features are
++ * accessed through the fwctl ABI, which applies scope-based access control.
++ * The RAW path would bypass those checks, so it is not permitted here.
+  */
+ static u16 cxl_disabled_raw_commands[] = {
+ 	CXL_MBOX_OP_ACTIVATE_FW,
+@@ -102,6 +106,9 @@ static u16 cxl_disabled_raw_commands[] = {
+ 	CXL_MBOX_OP_GET_POISON,
+ 	CXL_MBOX_OP_INJECT_POISON,
+ 	CXL_MBOX_OP_CLEAR_POISON,
++	CXL_MBOX_OP_GET_SUPPORTED_FEATURES,
++	CXL_MBOX_OP_GET_FEATURE,
++	CXL_MBOX_OP_SET_FEATURE,
+ };
+ 
+ /*
+-- 
+2.55.0
+

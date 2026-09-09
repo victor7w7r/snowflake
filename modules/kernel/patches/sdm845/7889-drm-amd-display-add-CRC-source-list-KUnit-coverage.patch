@@ -1,0 +1,81 @@
+From e3a1ebae264959212d36df0487e47843a802ca54 Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Mon, 6 Jul 2026 20:54:22 -0600
+Subject: [PATCH 07889/15333] drm/amd/display: add CRC source list KUnit
+ coverage
+
+[WHAT]
+Expose amdgpu_dm_crtc_get_crc_sources() for KUnit and add a test that
+verifies the returned static source-name list and its count. This is the
+accessor used by the debugfs CRC control interface.
+
+Assisted-by: Copilot:Claude-Opus-4.8 GPT-5.5
+Reviewed-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Wayne Lin <wayne.lin@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../drm/amd/display/amdgpu_dm/amdgpu_dm_crc.c |  1 +
+ .../amdgpu_dm/tests/amdgpu_dm_crc_test.c      | 26 +++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crc.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crc.c
+index bd7444b05d6d..282b8ff0eaad 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crc.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crc.c
+@@ -152,6 +152,7 @@ const char *const *amdgpu_dm_crtc_get_crc_sources(struct drm_crtc *crtc,
+ 	*count = ARRAY_SIZE(pipe_crc_sources);
+ 	return pipe_crc_sources;
+ }
++EXPORT_IF_KUNIT(amdgpu_dm_crtc_get_crc_sources);
+ 
+ #ifdef CONFIG_DRM_AMD_SECURE_DISPLAY
+ static void update_phy_id_mapping(struct amdgpu_device *adev)
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_crc_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_crc_test.c
+index a6fd3a6fd803..88f7a15853e8 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_crc_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_crc_test.c
+@@ -95,6 +95,30 @@ static void dm_test_is_valid_crc_source(struct kunit *test)
+ 	KUNIT_EXPECT_FALSE(test, amdgpu_dm_is_valid_crc_source(AMDGPU_DM_PIPE_CRC_SOURCE_INVALID));
+ }
+ 
++/**
++ * dm_test_crtc_get_crc_sources() - Test available CRC source strings.
++ * @test: KUnit test context.
++ *
++ * Verifies that amdgpu_dm_crtc_get_crc_sources() returns the static source
++ * list and reports all debugfs source names.
++ */
++static void dm_test_crtc_get_crc_sources(struct kunit *test)
++{
++	const char *const *sources;
++	size_t count = 0;
++
++	sources = amdgpu_dm_crtc_get_crc_sources(NULL, &count);
++
++	KUNIT_ASSERT_NOT_NULL(test, sources);
++	KUNIT_EXPECT_EQ(test, count, 6);
++	KUNIT_EXPECT_STREQ(test, sources[0], "none");
++	KUNIT_EXPECT_STREQ(test, sources[1], "crtc");
++	KUNIT_EXPECT_STREQ(test, sources[2], "crtc dither");
++	KUNIT_EXPECT_STREQ(test, sources[3], "dprx");
++	KUNIT_EXPECT_STREQ(test, sources[4], "dprx dither");
++	KUNIT_EXPECT_STREQ(test, sources[5], "auto");
++}
++
+ /**
+  * dm_test_need_dp_aux() - Test dm_need_dp_aux().
+  * @test: KUnit test context.
+@@ -222,6 +246,8 @@ static struct kunit_case dm_crc_test_cases[] = {
+ 	KUNIT_CASE(dm_test_need_crc_dither),
+ 	/* amdgpu_dm_is_valid_crc_source() */
+ 	KUNIT_CASE(dm_test_is_valid_crc_source),
++	/* amdgpu_dm_crtc_get_crc_sources() */
++	KUNIT_CASE(dm_test_crtc_get_crc_sources),
+ 	/* dm_need_dp_aux() */
+ 	KUNIT_CASE(dm_test_need_dp_aux),
+ 	/* dm_crc_source_should_start_dprx() */
+-- 
+2.55.0
+

@@ -1,0 +1,48 @@
+From 642f8aa04c0bf6f6399acde52c0c15235180d204 Mon Sep 17 00:00:00 2001
+From: Uday Khare <udaykhare77@gmail.com>
+Date: Mon, 20 Jul 2026 17:18:31 +0530
+Subject: [PATCH 08227/15333] media: i2c: mt9t112: fix incorrect PTR_ERR() call
+ on non-error pointer
+
+In mt9t112_probe(), the clock error check after devm_v4l2_sensor_clk_get()
+calls PTR_ERR(priv->clk) unconditionally, before testing IS_ERR().
+
+On a successful lookup, priv->clk is a valid pointer and calling PTR_ERR()
+on it is incorrect API usage.  While the comparison against -ENOENT happens
+to be harmless in practice (valid kernel pointers never fall in the error
+range), this is still a violation of the IS_ERR()/PTR_ERR() contract that
+can mislead readers.
+
+Restructure the check to guard PTR_ERR() inside IS_ERR(), using the
+simpler != -ENOENT form to avoid an unnecessary else clause.
+
+Signed-off-by: Uday Khare <udaykhare77@gmail.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/i2c/mt9t112.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/media/i2c/mt9t112.c b/drivers/media/i2c/mt9t112.c
+index bd2268154ca7..b3a6c6d76632 100644
+--- a/drivers/media/i2c/mt9t112.c
++++ b/drivers/media/i2c/mt9t112.c
+@@ -1079,11 +1079,12 @@ static int mt9t112_probe(struct i2c_client *client)
+ 	v4l2_i2c_subdev_init(&priv->subdev, client, &mt9t112_subdev_ops);
+ 
+ 	priv->clk = devm_v4l2_sensor_clk_get(&client->dev, "extclk");
+-	if (PTR_ERR(priv->clk) == -ENOENT)
++	if (IS_ERR(priv->clk)) {
++		if (PTR_ERR(priv->clk) != -ENOENT)
++			return dev_err_probe(&client->dev, PTR_ERR(priv->clk),
++					     "Unable to get clock \"extclk\"\n");
+ 		priv->clk = NULL;
+-	else if (IS_ERR(priv->clk))
+-		return dev_err_probe(&client->dev, PTR_ERR(priv->clk),
+-				     "Unable to get clock \"extclk\"\n");
++	}
+ 
+ 	priv->standby_gpio = devm_gpiod_get_optional(&client->dev, "standby",
+ 						     GPIOD_OUT_HIGH);
+-- 
+2.55.0
+

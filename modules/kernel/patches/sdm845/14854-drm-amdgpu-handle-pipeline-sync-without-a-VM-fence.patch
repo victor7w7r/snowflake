@@ -1,0 +1,128 @@
+From 0e4ef0ead600e367b4dd431daa97a345a5ff8a86 Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Fri, 14 Aug 2026 11:39:16 -0400
+Subject: [PATCH 14854/15333] drm/amdgpu: handle pipeline sync without a VM
+ fence
+
+If we end up emitting a VM fence keep pipeline sync
+associated with that fence.  If not, emit them as
+part of the IB fence.
+
+v2: fix need_pipe_sync handling
+v3: simplify the function
+
+Cc: David Rosca <david.rosca@amd.com>
+Fixes: cb1e657ccac8 ("drm/amdgpu: handle GDS and SPM without a VM fence")
+Reviewed-by: David Rosca <david.rosca@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c |  6 +++++-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c | 27 +++++++++++++-------------
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h |  2 +-
+ 3 files changed, 19 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c
+index da4dc489e80b..360e6f00cb7c 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c
+@@ -222,7 +222,7 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned int num_ibs,
+ 		vm_af = job->hw_vm_fence;
+ 		/* VM sequence */
+ 		vm_af->ib_wptr = ring->wptr;
+-		amdgpu_vm_flush(ring, job, need_pipe_sync, &emit_spm_needed,
++		amdgpu_vm_flush(ring, job, &need_pipe_sync, &emit_spm_needed,
+ 				&emit_gds_needed);
+ 		vm_af->ib_dw_size =
+ 			amdgpu_ring_get_dw_distance(ring, vm_af->ib_wptr, ring->wptr);
+@@ -235,6 +235,10 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned int num_ibs,
+ 	if (ring->funcs->insert_start)
+ 		ring->funcs->insert_start(ring);
+ 
++	/* this may have been handled by amdgpu_vm_flush */
++	if (need_pipe_sync)
++		amdgpu_ring_emit_pipeline_sync(ring);
++
+ 	if (emit_spm_needed)
+ 		adev->gfx.rlc.funcs->update_spm_vmid(adev, ring->xcc_id, ring, job->vmid);
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
+index 71050a86bcc3..f6c5de63eae6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
+@@ -772,7 +772,7 @@ bool amdgpu_vm_need_pipeline_sync(struct amdgpu_ring *ring,
+  * Emit a VM flush when it is necessary.
+  */
+ void amdgpu_vm_flush(struct amdgpu_ring *ring, struct amdgpu_job *job,
+-		     bool need_pipe_sync, bool *emit_spm_needed,
++		     bool *need_pipe_sync, bool *emit_spm_needed,
+ 		     bool *emit_gds_needed)
+ {
+ 	struct amdgpu_device *adev = ring->adev;
+@@ -827,8 +827,7 @@ void amdgpu_vm_flush(struct amdgpu_ring *ring, struct amdgpu_job *job,
+ 	if (gds_switch_needed && emit_fence)
+ 		*emit_gds_needed = false;
+ 
+-	if (!vm_flush_needed && !gds_switch_needed && !need_pipe_sync &&
+-	    !cleaner_shader_needed && !spm_update_needed)
++	if (!emit_fence)
+ 		return;
+ 
+ 	amdgpu_ring_ib_begin(ring);
+@@ -847,8 +846,10 @@ void amdgpu_vm_flush(struct amdgpu_ring *ring, struct amdgpu_job *job,
+ 		patch = amdgpu_ring_init_cond_exec(ring,
+ 						   ring->cond_exe_gpu_addr);
+ 
+-	if (need_pipe_sync)
++	if (*need_pipe_sync) {
+ 		amdgpu_ring_emit_pipeline_sync(ring);
++		*need_pipe_sync = false;
++	}
+ 
+ 	if (cleaner_shader_needed)
+ 		ring->funcs->emit_cleaner_shader(ring);
+@@ -861,21 +862,19 @@ void amdgpu_vm_flush(struct amdgpu_ring *ring, struct amdgpu_job *job,
+ 	if (pasid_mapping_needed)
+ 		amdgpu_gmc_emit_pasid_mapping(ring, job->vmid, job->pasid);
+ 
+-	if (emit_fence) {
+-		if (spm_update_needed)
+-			adev->gfx.rlc.funcs->update_spm_vmid(adev, ring->xcc_id, ring, job->vmid);
++	if (spm_update_needed)
++		adev->gfx.rlc.funcs->update_spm_vmid(adev, ring->xcc_id, ring, job->vmid);
+ 
+-		if (gds_switch_needed)
+-			amdgpu_ring_emit_gds_switch(ring, job->vmid, job->gds_base,
++	if (gds_switch_needed)
++		amdgpu_ring_emit_gds_switch(ring, job->vmid, job->gds_base,
+ 						    job->gds_size, job->gws_base,
+ 						    job->gws_size, job->oa_base,
+ 						    job->oa_size);
+ 
+-		amdgpu_fence_emit(ring, job->hw_vm_fence, 0);
+-		fence = &job->hw_vm_fence->base;
+-		/* get a ref for the job */
+-		dma_fence_get(fence);
+-	}
++	amdgpu_fence_emit(ring, job->hw_vm_fence, 0);
++	fence = &job->hw_vm_fence->base;
++	/* get a ref for the job */
++	dma_fence_get(fence);
+ 
+ 	if (vm_flush_needed) {
+ 		mutex_lock(&id_mgr->lock);
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
+index 7f2ba728e3ed..d32183cd9e0f 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
+@@ -512,7 +512,7 @@ int amdgpu_vm_validate(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 		       int (*callback)(void *p, struct amdgpu_bo *bo),
+ 		       void *param);
+ void amdgpu_vm_flush(struct amdgpu_ring *ring, struct amdgpu_job *job,
+-		     bool need_pipe_sync, bool *emit_spm_needed,
++		     bool *need_pipe_sync, bool *emit_spm_needed,
+ 		     bool *emit_gds_needed);
+ int amdgpu_vm_update_pdes(struct amdgpu_device *adev,
+ 			  struct amdgpu_vm *vm, bool immediate);
+-- 
+2.55.0
+

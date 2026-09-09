@@ -1,0 +1,52 @@
+From 9c50e37ca7498550d6af26345902f56381bfd101 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 21 Jul 2026 16:13:48 +0200
+Subject: [PATCH 09950/15333] exec: release the replaced file with
+ do_close_execat()
+
+When the format search stages an interpreter exec_binprm() swaps it
+in and releases the file it replaces. Dropping the write denial the
+open took is done manually ahead of both release paths. The one path
+that keeps the file silently relies on it not being called.
+
+Let's just use do_close_execat() on the two paths that release the file
+and drop the denial explicitly on the one that does not.
+
+No functional change.
+
+Link: https://patch.msgid.link/20260721-work-bpf-binfmt_misc-ptinterp-v2-6-e57866e4ae0f@kernel.org
+Reviewed-by: Farid Zakaria <farid.m.zakaria@gmail.com>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/exec.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/fs/exec.c b/fs/exec.c
+index 41e1684d999c..061e0f9fb4ef 100644
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1735,15 +1735,17 @@ static int exec_binprm(struct linux_binprm *bprm)
+ 		bprm->file = bprm->interpreter;
+ 		bprm->interpreter = NULL;
+ 
+-		exe_file_allow_write_access(exec);
+ 		if (unlikely(bprm->have_execfd)) {
+ 			if (bprm->executable) {
+-				fput(exec);
++				do_close_execat(exec);
+ 				return -ENOEXEC;
+ 			}
++			/* Only the reference is kept, for AT_EXECFD. */
++			exe_file_allow_write_access(exec);
+ 			bprm->executable = exec;
+-		} else
+-			fput(exec);
++		} else {
++			do_close_execat(exec);
++		}
+ 	}
+ 
+ 	audit_bprm(bprm);
+-- 
+2.55.0
+

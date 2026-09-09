@@ -1,0 +1,73 @@
+From f38ab0d7f5493f78d4d18f6b9c0f51ab7b3f51c5 Mon Sep 17 00:00:00 2001
+From: "Aneesh Kumar K.V (Arm)" <aneesh.kumar@kernel.org>
+Date: Fri, 17 Jul 2026 23:34:24 +0530
+Subject: [PATCH 08993/15333] s390: Expose protected virtualization through
+ cc_platform_has()
+
+Protected virtualization guests use memory encryption, so advertise that to
+the rest of the kernel through cc_platform_has(CC_ATTR_MEM_ENCRYPT).
+
+s390 already forces DMA mappings to be unencrypted for protected
+virtualization guests through force_dma_unencrypted(). Add
+ARCH_HAS_CC_PLATFORM and provide the matching cc_platform_has()
+implementation
+
+Cc: Halil Pasic <pasic@linux.ibm.com>
+Cc: Matthew Rosato <mjrosato@linux.ibm.com>
+Cc: Jaehoon Kim <jhkim@linux.ibm.com>
+Tested-by: Jaehoon Kim <jhkim@linux.ibm.com>
+Signed-off-by: Aneesh Kumar K.V (Arm) <aneesh.kumar@kernel.org>
+Link: https://lore.kernel.org/r/20260717180442.110954-7-aneesh.kumar@kernel.org
+Signed-off-by: Marek Szyprowski <m.szyprowski@samsung.com>
+---
+ arch/s390/Kconfig   |  1 +
+ arch/s390/mm/init.c | 14 ++++++++++++++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/arch/s390/Kconfig b/arch/s390/Kconfig
+index 84404e6778d5..ab1bf55d197a 100644
+--- a/arch/s390/Kconfig
++++ b/arch/s390/Kconfig
+@@ -84,6 +84,7 @@ config S390
+ 	select ARCH_ENABLE_SPLIT_PMD_PTLOCK if PGTABLE_LEVELS > 2
+ 	select ARCH_ENABLE_THP_MIGRATION if TRANSPARENT_HUGEPAGE
+ 	select ARCH_HAS_CC_CAN_LINK
++	select ARCH_HAS_CC_PLATFORM
+ 	select ARCH_HAS_CPU_FINALIZE_INIT
+ 	select ARCH_HAS_CURRENT_STACK_POINTER
+ 	select ARCH_HAS_DEBUG_VIRTUAL
+diff --git a/arch/s390/mm/init.c b/arch/s390/mm/init.c
+index f07168a0d3dd..c29326c44af0 100644
+--- a/arch/s390/mm/init.c
++++ b/arch/s390/mm/init.c
+@@ -50,6 +50,7 @@
+ #include <linux/virtio_anchor.h>
+ #include <linux/virtio_config.h>
+ #include <linux/execmem.h>
++#include <linux/cc_platform.h>
+ 
+ pgd_t swapper_pg_dir[PTRS_PER_PGD] __section(".bss..swapper_pg_dir");
+ pgd_t invalid_pg_dir[PTRS_PER_PGD] __section(".bss..invalid_pg_dir");
+@@ -142,6 +143,19 @@ bool force_dma_unencrypted(struct device *dev)
+ 	return is_prot_virt_guest();
+ }
+ 
++
++bool cc_platform_has(enum cc_attr attr)
++{
++	switch (attr) {
++	case CC_ATTR_MEM_ENCRYPT:
++		return is_prot_virt_guest();
++
++	default:
++		return false;
++	}
++}
++EXPORT_SYMBOL_GPL(cc_platform_has);
++
+ /* protected virtualization */
+ static void __init pv_init(void)
+ {
+-- 
+2.55.0
+

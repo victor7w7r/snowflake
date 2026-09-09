@@ -1,0 +1,63 @@
+From 862de1b7ff9a3ad4151ebca050a4f44d8be83f9f Mon Sep 17 00:00:00 2001
+From: Frank Li <Frank.Li@nxp.com>
+Date: Wed, 8 Jul 2026 15:39:51 -0400
+Subject: [PATCH 07018/15333] dt-bindings: display: imx: Add deprecated
+ property display and display0
+
+Add deprecated property display and display0 to allow old platform lx1021a
+(>10 years) to put display timing under dcu node.
+
+Following patch rename display@0 to display0 and mode0 to timing0. Fix
+below CHECK_DTBS warnings:
+arch/arm/boot/dts/nxp/ls/ls1021a-iot.dtb: dcu@2ce0000 (fsl,ls1021a-dcu): 'display', 'display@0' do not match any of the regexes: '^pinctrl-[0-9]+$'
+        from schema $id: http://devicetree.org/schemas/display/fsl,ls1021a-dcu.yaml
+
+Acked-by: Rob Herring (Arm) <robh@kernel.org>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+---
+ .../bindings/display/fsl,ls1021a-dcu.yaml     | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/display/fsl,ls1021a-dcu.yaml b/Documentation/devicetree/bindings/display/fsl,ls1021a-dcu.yaml
+index 72d14babe993..6ac5ababbe00 100644
+--- a/Documentation/devicetree/bindings/display/fsl,ls1021a-dcu.yaml
++++ b/Documentation/devicetree/bindings/display/fsl,ls1021a-dcu.yaml
+@@ -45,6 +45,15 @@ properties:
+     $ref: /schemas/types.yaml#/definitions/phandle
+     description: The phandle to the timing controller node.
+ 
++  display:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description: phandle to display panel
++    deprecated: true
++
++  display0:
++    $ref: panel/panel-common.yaml#
++    deprecated: true
++
+ required:
+   - compatible
+   - reg
+@@ -53,6 +62,19 @@ required:
+ 
+ additionalProperties: false
+ 
++allOf:
++  - if:
++      not:
++        properties:
++          compatible:
++            contains:
++              enum:
++                - fsl,ls1021a-dcu
++    then:
++      properties:
++        display: false
++        display0: false
++
+ examples:
+   - |
+     display-controller@2ce0000 {
+-- 
+2.55.0
+

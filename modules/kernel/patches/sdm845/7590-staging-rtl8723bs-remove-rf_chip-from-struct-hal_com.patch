@@ -1,0 +1,100 @@
+From bbe3a0f030b5b59739e7b17985a98fd77fe6fa37 Mon Sep 17 00:00:00 2001
+From: Nikolay Kulikov <nikolayof23@gmail.com>
+Date: Fri, 17 Jul 2026 21:52:07 +0300
+Subject: [PATCH 07590/15333] staging: rtl8723bs: remove 'rf_chip' from struct
+ hal_com_data
+
+The 'rf_chip' field is set to only one value (RF_6052), which makes any
+conditions with this field predictable.
+
+Remove it and the associated static functions (_ReadRFType() and
+_InitRFType()), since they simply set a value in the field and will be
+empty without it.
+
+Signed-off-by: Nikolay Kulikov <nikolayof23@gmail.com>
+Link: https://patch.msgid.link/20260717185407.56513-9-nikolayof23@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ .../staging/rtl8723bs/hal/rtl8723b_phycfg.c    |  2 --
+ drivers/staging/rtl8723bs/hal/sdio_halinit.c   | 18 ------------------
+ drivers/staging/rtl8723bs/include/hal_data.h   |  1 -
+ 3 files changed, 21 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/hal/rtl8723b_phycfg.c b/drivers/staging/rtl8723bs/hal/rtl8723b_phycfg.c
+index f6ad3c8b7aa3..737e2a818c18 100644
+--- a/drivers/staging/rtl8723bs/hal/rtl8723b_phycfg.c
++++ b/drivers/staging/rtl8723bs/hal/rtl8723b_phycfg.c
+@@ -649,8 +649,6 @@ static void phy_SwChnl8723B(struct adapter *padapter)
+ 	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);
+ 	u8 channelToSW = pHalData->CurrentChannel;
+ 
+-	if (pHalData->rf_chip == RF_PSEUDO_11N)
+-		return;
+ 	pHalData->RfRegChnlVal[0] = ((pHalData->RfRegChnlVal[0] & 0xfffff00) | channelToSW);
+ 	PHY_SetRFReg(padapter, RF_PATH_A, RF_CHNLBW, 0x3FF, pHalData->RfRegChnlVal[0]);
+ 	PHY_SetRFReg(padapter, RF_PATH_B, RF_CHNLBW, 0x3FF, pHalData->RfRegChnlVal[0]);
+diff --git a/drivers/staging/rtl8723bs/hal/sdio_halinit.c b/drivers/staging/rtl8723bs/hal/sdio_halinit.c
+index e11d0add8c02..57d2925642e7 100644
+--- a/drivers/staging/rtl8723bs/hal/sdio_halinit.c
++++ b/drivers/staging/rtl8723bs/hal/sdio_halinit.c
+@@ -533,13 +533,6 @@ static void _InitInterrupt(struct adapter *padapter)
+ 	InitInterrupt8723BSdio(padapter);
+ }
+ 
+-static void _InitRFType(struct adapter *padapter)
+-{
+-	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);
+-
+-	pHalData->rf_chip	= RF_6052;
+-}
+-
+ static void _RfPowerSave(struct adapter *padapter)
+ {
+ /* YJ, TODO */
+@@ -643,9 +636,6 @@ u32 rtl8723bs_hal_init(struct adapter *padapter)
+ 	/*  HW GPIO pin. Before PHY_RFConfig8192C. */
+ 	HalDetectPwrDownMode(padapter);
+ 
+-	/*  Set RF type for BB/RF configuration */
+-	_InitRFType(padapter);
+-
+ 	/*  Save target channel */
+ 	/*  <Roger_Notes> Current Channel will be updated again later. */
+ 	pHalData->CurrentChannel = 6;
+@@ -976,13 +966,6 @@ static void _EfuseCellSel(struct adapter *padapter)
+ 	rtw_write32(padapter, EFUSE_TEST, value32);
+ }
+ 
+-static void _ReadRFType(struct adapter *Adapter)
+-{
+-	struct hal_com_data *pHalData = GET_HAL_DATA(Adapter);
+-
+-	pHalData->rf_chip = RF_6052;
+-}
+-
+ static void Hal_EfuseParseMACAddr_8723BS(
+ 	struct adapter *padapter, u8 *hwinfo, bool AutoLoadFail
+ )
+@@ -1080,7 +1063,6 @@ static s32 _ReadAdapterInfo8723BS(struct adapter *padapter)
+ 	rtw_write8(padapter, 0x4e, val8);
+ 
+ 	_EfuseCellSel(padapter);
+-	_ReadRFType(padapter);
+ 	_ReadPROMContent(padapter);
+ 
+ 	if (!padapter->hw_init_completed) {
+diff --git a/drivers/staging/rtl8723bs/include/hal_data.h b/drivers/staging/rtl8723bs/include/hal_data.h
+index 3f37d91ebf23..6c8664b59d2f 100644
+--- a/drivers/staging/rtl8723bs/include/hal_data.h
++++ b/drivers/staging/rtl8723bs/include/hal_data.h
+@@ -157,7 +157,6 @@ struct hal_com_data {
+ 	u32 ReceiveConfig;
+ 
+ 	/* rf_ctrl */
+-	u8 rf_chip;
+ 	u8 PackageType;
+ 
+ 	/*  EEPROM setting. */
+-- 
+2.55.0
+

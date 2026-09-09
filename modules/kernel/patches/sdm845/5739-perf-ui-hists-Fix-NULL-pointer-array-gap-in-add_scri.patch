@@ -1,0 +1,70 @@
+From 5bc1647216b68c17d03665739ea18bba8447f3ce Mon Sep 17 00:00:00 2001
+From: Ian Rogers <irogers@google.com>
+Date: Thu, 16 Jul 2026 00:23:47 -0700
+Subject: [PATCH 05739/15333] perf ui hists: Fix NULL pointer array gap in
+ add_script_opt()
+
+In add_script_opt(), the function unconditionally increments the optstr
+and act pointers for a second optional 'time' popup action before
+attempting to invoke add_script_opt_2(). If the first add_script_opt_2()
+call failed (for example, due to an asprintf allocation failure), this
+leaves a NULL pointer gap in the options array at the prior index. When
+ui__popup_menu() is later displayed, it dereferences this gap and
+crashes.
+
+Fix it by avoiding unconditional pointer increments. Only advance the
+optstr and act pointers if the first script addition actually succeeded,
+and safely attach the time parameter to the correct assigned action.
+
+Assisted-by: Antigravity:gemini-3.5-flash
+Signed-off-by: Ian Rogers <irogers@google.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/ui/browsers/hists.c | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/tools/perf/ui/browsers/hists.c b/tools/perf/ui/browsers/hists.c
+index 9a3844dc3246..b6002724bc3a 100644
+--- a/tools/perf/ui/browsers/hists.c
++++ b/tools/perf/ui/browsers/hists.c
+@@ -2811,7 +2811,7 @@ add_script_opt(struct hist_browser *browser,
+ 	       struct popup_action *act, char **optstr,
+ 	       struct thread *thread, struct symbol *sym)
+ {
+-	int n, j;
++	int n, j, ret;
+ 	struct hist_entry *he;
+ 
+ 	n = add_script_opt_2(act, optstr, thread, sym, "");
+@@ -2819,17 +2819,24 @@ add_script_opt(struct hist_browser *browser,
+ 	he = hist_browser__selected_entry(browser);
+ 	if (sort_order && strstr(sort_order, "time")) {
+ 		char tstr[128];
++		struct popup_action *time_act = act;
++		char **time_optstr = optstr;
+ 
+-		optstr++;
+-		act++;
++		if (n > 0) {
++			time_optstr++;
++			time_act++;
++		}
+ 		j = sprintf(tstr, " in ");
+ 		j += timestamp__scnprintf_usec(he->time, tstr + j,
+ 					       sizeof tstr - j);
+ 		j += sprintf(tstr + j, "-");
+ 		timestamp__scnprintf_usec(he->time + symbol_conf.time_quantum,
+ 				          tstr + j, sizeof tstr - j);
+-		n += add_script_opt_2(act, optstr, thread, sym, tstr);
+-		act->time = he->time;
++		ret = add_script_opt_2(time_act, time_optstr, thread, sym, tstr);
++		if (ret > 0) {
++			time_act->time = he->time;
++			n += ret;
++		}
+ 	}
+ 	return n;
+ }
+-- 
+2.55.0
+

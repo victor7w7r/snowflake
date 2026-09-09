@@ -1,0 +1,130 @@
+From 69139a62a918987418a8e53470117df83904a1bb Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 16 Jun 2026 16:08:30 +0200
+Subject: [PATCH 00963/15333] erofs: open via dedicated fs bdev helpers
+
+Route opens through fs_bdev_file_open_by_path() so each external device
+is registered against the correct superblock, and convert the matching
+releases.
+
+Gao Xiang: I think typical immutable filesystems don't need .shutdown()
+and .remove_bdev() for the following reasons:
+
+  - blk_mark_disk_dead() sets GD_DEAD in advance of fs_bdev_mark_dead()
+    so that the following bios will fail immediately; block_device
+    references are still valid so it seems overkill to handle dead
+    blockdevs in the deep filesystem I/O submission path.
+
+  - Immutable filesystems like EROFS don't have write paths and journals,
+    so they don't need to block writes (i.e., new dirty pages), metadata
+    changes, and abort journals.
+
+  - The comment above loop_change_fd() documents a valid read-only use
+    case we need to support anyway, but it calls disk_force_media_change()
+    which will call fs_bdev_mark_dead() later: we don't want loop_change_fd()
+    shutdowns the active filesystems and return -EIO unconditionally.
+
+Currently I think the default behavior (shrink_dcache_sb + evict_inodes)
+in fs_bdev_mark_dead() is enough for immutable filesystems, tried to
+document in the commit here for later reference.
+
+Signed-off-by: Gao Xiang <hsiangkao@linux.alibaba.com>
+Link: https://patch.msgid.link/20260616-work-super-bdev_holder_global-v2-14-7df6b864028e@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/erofs/super.c | 35 +++++++++++++++++++++++------------
+ 1 file changed, 23 insertions(+), 12 deletions(-)
+
+diff --git a/fs/erofs/super.c b/fs/erofs/super.c
+index 86fa5c6a0c70..febeb69998e1 100644
+--- a/fs/erofs/super.c
++++ b/fs/erofs/super.c
+@@ -147,8 +147,8 @@ static int erofs_init_device(struct erofs_buf *buf, struct super_block *sb,
+ 	if (!sbi->devs->flatdev) {
+ 		file = erofs_is_fileio_mode(sbi) ?
+ 				filp_open(dif->path, O_RDONLY | O_LARGEFILE, 0) :
+-				bdev_file_open_by_path(dif->path,
+-						BLK_OPEN_READ, sb->s_type, NULL);
++				fs_bdev_file_open_by_path(dif->path,
++						BLK_OPEN_READ, sb->s_type, sb);
+ 		if (IS_ERR(file)) {
+ 			if (file == ERR_PTR(-ENOTBLK))
+ 				return -EINVAL;
+@@ -799,28 +799,34 @@ static int erofs_fc_reconfigure(struct fs_context *fc)
+ 
+ static int erofs_release_device_info(int id, void *ptr, void *data)
+ {
++	struct super_block *sb = data;
+ 	struct erofs_device_info *dif = ptr;
+ 
+ 	fs_put_dax(dif->dax_dev, NULL);
+-	if (dif->file)
+-		fput(dif->file);
++	if (dif->file) {
++		if (S_ISBLK(file_inode(dif->file)->i_mode))
++			fs_bdev_file_release(dif->file, sb);
++		else
++			fput(dif->file);
++	}
+ 	kfree(dif->path);
+ 	kfree(dif);
+ 	return 0;
+ }
+ 
+-static void erofs_free_dev_context(struct erofs_dev_context *devs)
++static void erofs_free_dev_context(struct erofs_dev_context *devs,
++				   struct super_block *sb)
+ {
+ 	if (!devs)
+ 		return;
+-	idr_for_each(&devs->tree, &erofs_release_device_info, NULL);
++	idr_for_each(&devs->tree, &erofs_release_device_info, sb);
+ 	idr_destroy(&devs->tree);
+ 	kfree(devs);
+ }
+ 
+-static void erofs_sb_free(struct erofs_sb_info *sbi)
++static void erofs_sb_free(struct erofs_sb_info *sbi, struct super_block *sb)
+ {
+-	erofs_free_dev_context(sbi->devs);
++	erofs_free_dev_context(sbi->devs, sb);
+ 	kfree_sensitive(sbi->domain_id);
+ 	if (sbi->dif0.file)
+ 		fput(sbi->dif0.file);
+@@ -832,8 +838,13 @@ static void erofs_fc_free(struct fs_context *fc)
+ {
+ 	struct erofs_sb_info *sbi = fc->s_fs_info;
+ 
+-	if (sbi) /* free here if an error occurs before transferring to sb */
+-		erofs_sb_free(sbi);
++	/*
++	 * Freed here only if an error occurs before the sb is set up; at that
++	 * point no block-backed device has been claimed (that happens in
++	 * fill_super), so the NULL sb never reaches fs_bdev_file_release().
++	 */
++	if (sbi)
++		erofs_sb_free(sbi, NULL);
+ }
+ 
+ static const struct fs_context_operations erofs_context_ops = {
+@@ -887,7 +898,7 @@ static void erofs_kill_sb(struct super_block *sb)
+ 		kill_block_super(sb);
+ 	erofs_drop_internal_inodes(sbi);
+ 	fs_put_dax(sbi->dif0.dax_dev, NULL);
+-	erofs_sb_free(sbi);
++	erofs_sb_free(sbi, sb);
+ 	sb->s_fs_info = NULL;
+ }
+ 
+@@ -899,7 +910,7 @@ static void erofs_put_super(struct super_block *sb)
+ 	erofs_shrinker_unregister(sb);
+ 	erofs_xattr_prefixes_cleanup(sb);
+ 	erofs_drop_internal_inodes(sbi);
+-	erofs_free_dev_context(sbi->devs);
++	erofs_free_dev_context(sbi->devs, sb);
+ 	sbi->devs = NULL;
+ }
+ 
+-- 
+2.55.0
+

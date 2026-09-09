@@ -1,0 +1,65 @@
+From bf7e3686b708683efe6b7ee79ae4c83a875dbc6f Mon Sep 17 00:00:00 2001
+From: Yury Norov <ynorov@nvidia.com>
+Date: Wed, 8 Jul 2026 22:03:11 -0400
+Subject: [PATCH 06605/15333] bitmap: Return size when no zero area is found
+
+Return the bitmap size, rather than size + 1, when
+bitmap_find_next_zero_area_off() cannot find a suitable area. This
+matches the conventional find_bit() failure sentinel and still lets
+callers detect failure with an out-of-range check.
+
+Document the public failure contract as a value greater than or equal
+to the bitmap size, without requiring callers to depend on the exact
+sentinel.
+
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ include/linux/bitmap.h |  3 +++
+ lib/bitmap.c           | 10 ++++------
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/include/linux/bitmap.h b/include/linux/bitmap.h
+index a967e1f7542b..7df1573a409c 100644
+--- a/include/linux/bitmap.h
++++ b/include/linux/bitmap.h
+@@ -209,6 +209,9 @@ unsigned long bitmap_find_next_zero_area_off(unsigned long *map,
+  * The @align_mask should be one less than a power of 2; the effect is that
+  * the bit offset of all zero areas this function finds is multiples of that
+  * power of 2. A @align_mask of 0 means no alignment is required.
++ *
++ * Return: The bit offset of the found area or a value >= @size
++ * if no area is found.
+  */
+ static __always_inline
+ unsigned long bitmap_find_next_zero_area(unsigned long *map,
+diff --git a/lib/bitmap.c b/lib/bitmap.c
+index b464d843f4eb..ed685127a107 100644
+--- a/lib/bitmap.c
++++ b/lib/bitmap.c
+@@ -424,6 +424,9 @@ EXPORT_SYMBOL(__bitmap_clear);
+  * The @align_mask should be one less than a power of 2; the effect is that
+  * the bit offset of all zero areas this function finds plus @align_offset
+  * is multiple of that power of 2.
++ *
++ * Return: The bit offset of the found area or a value greater than or equal
++ * to @size if no area is found.
+  */
+ unsigned long bitmap_find_next_zero_area_off(unsigned long *map,
+ 					     unsigned long size,
+@@ -448,12 +451,7 @@ unsigned long bitmap_find_next_zero_area_off(unsigned long *map,
+ 		start = i;
+ 	}
+ 
+-	/*
+-	 * Here, returning size + 1 is to maintain consistency
+-	 * with the old version, where the return value is always
+-	 * greater than size when no zero areas are found.
+-	 */
+-	return size + 1;
++	return size;
+ }
+ EXPORT_SYMBOL(bitmap_find_next_zero_area_off);
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,119 @@
+From 3002812cbedb09a359e0865670d7ae6267b1dd6f Mon Sep 17 00:00:00 2001
+From: Johannes Berg <johannes.berg@intel.com>
+Date: Wed, 15 Jul 2026 21:11:25 +0300
+Subject: [PATCH 06253/15333] wifi: cfg80211: improve multi-BSSID profile
+ continuation parser
+
+The previous change from John Walker fixed the loop iteration,
+but the code is written in a bad way. Pass the pointers needed
+for the iteration to the function instead.
+
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+Signed-off-by: Miri Korenblit <miriam.rachel.korenblit@intel.com>
+Link: https://patch.msgid.link/20260715211048.04877081fd0a.I48f0135ba83dcc5f0b736b61f8f9e86ecc72583f@changeid
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ net/wireless/scan.c | 49 +++++++++++++++++++++------------------------
+ 1 file changed, 23 insertions(+), 26 deletions(-)
+
+diff --git a/net/wireless/scan.c b/net/wireless/scan.c
+index 05b7dc6b766c..e62b7dd2b7c2 100644
+--- a/net/wireless/scan.c
++++ b/net/wireless/scan.c
+@@ -2403,12 +2403,11 @@ cfg80211_inform_single_bss_data(struct wiphy *wiphy,
+ 	return NULL;
+ }
+ 
+-static const struct element
+-*cfg80211_get_profile_continuation(const u8 *ie, size_t ielen,
+-				   const struct element *mbssid_elem,
+-				   const struct element *sub_elem)
++static bool cfg80211_iter_profile_continuation(const u8 *ie, size_t ielen,
++					       const struct element **mbssid,
++					       const struct element **sub_elem)
+ {
+-	const u8 *mbssid_end = mbssid_elem->data + mbssid_elem->datalen;
++	const u8 *mbssid_end = (*mbssid)->data + (*mbssid)->datalen;
+ 	const struct element *next_mbssid;
+ 	const struct element *next_sub;
+ 
+@@ -2420,30 +2419,34 @@ static const struct element
+ 	 * If it is not the last subelement in current MBSSID IE or there isn't
+ 	 * a next MBSSID IE - profile is complete.
+ 	*/
+-	if ((sub_elem->data + sub_elem->datalen < mbssid_end - 1) ||
++	if (((*sub_elem)->data + (*sub_elem)->datalen < mbssid_end - 1) ||
+ 	    !next_mbssid)
+-		return NULL;
++		return false;
+ 
+-	/* For any length error, just return NULL */
++	/* For any length error, just return false to stop iteration */
+ 
+ 	if (next_mbssid->datalen < 4)
+-		return NULL;
++		return false;
+ 
+ 	next_sub = (void *)&next_mbssid->data[1];
+ 
+ 	if (next_mbssid->data + next_mbssid->datalen <
+ 	    next_sub->data + next_sub->datalen)
+-		return NULL;
++		return false;
+ 
+ 	if (next_sub->id != 0 || next_sub->datalen < 2)
+-		return NULL;
++		return false;
+ 
+ 	/*
+ 	 * Check if the first element in the next sub element is a start
+ 	 * of a new profile
+ 	 */
+-	return next_sub->data[0] == WLAN_EID_NON_TX_BSSID_CAP ?
+-	       NULL : next_mbssid;
++	if (next_sub->data[0] == WLAN_EID_NON_TX_BSSID_CAP)
++		return false;
++
++	*mbssid = next_mbssid;
++	*sub_elem = next_sub;
++	return true;
+ }
+ 
+ size_t cfg80211_merge_profile(const u8 *ie, size_t ielen,
+@@ -2452,26 +2455,20 @@ size_t cfg80211_merge_profile(const u8 *ie, size_t ielen,
+ 			      u8 *merged_ie, size_t max_copy_len)
+ {
+ 	size_t copied_len = sub_elem->datalen;
+-	const struct element *next_mbssid;
+ 
+ 	if (sub_elem->datalen > max_copy_len)
+ 		return 0;
+ 
+ 	memcpy(merged_ie, sub_elem->data, sub_elem->datalen);
+ 
+-	while ((next_mbssid = cfg80211_get_profile_continuation(ie, ielen,
+-								mbssid_elem,
+-								sub_elem))) {
+-		const struct element *next_sub = (void *)&next_mbssid->data[1];
+-
+-		if (copied_len + next_sub->datalen > max_copy_len)
++	while (cfg80211_iter_profile_continuation(ie, ielen,
++						  &mbssid_elem,
++						  &sub_elem)) {
++		if (copied_len + sub_elem->datalen > max_copy_len)
+ 			break;
+-		memcpy(merged_ie + copied_len, next_sub->data,
+-		       next_sub->datalen);
+-		copied_len += next_sub->datalen;
+-
+-		mbssid_elem = next_mbssid;
+-		sub_elem = next_sub;
++		memcpy(merged_ie + copied_len, sub_elem->data,
++		       sub_elem->datalen);
++		copied_len += sub_elem->datalen;
+ 	}
+ 
+ 	return copied_len;
+-- 
+2.55.0
+

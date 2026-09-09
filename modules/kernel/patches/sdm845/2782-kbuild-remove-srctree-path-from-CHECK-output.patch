@@ -1,0 +1,46 @@
+From fba1a1acb42c0bb4fd0da01faf7bbdb7cd3c979c Mon Sep 17 00:00:00 2001
+From: Ben Dooks <ben.dooks@codethink.co.uk>
+Date: Mon, 22 Jun 2026 14:26:53 +0100
+Subject: [PATCH 02782/15333] kbuild: remove srctree path from CHECK output
+
+The build does not put the full kernel path in when
+building outputs, so do the same when the check is
+run to make the output more consistent.
+
+turn the following:
+  CC      arch/riscv/lib/delay.o
+  CHECK   /home/ben/linux/arch/riscv/lib/delay.c
+
+into:
+  CC      arch/riscv/lib/delay.o
+  CHECK   arch/riscv/lib/delay.c
+
+Signed-off-by: Ben Dooks <ben.dooks@codethink.co.uk>
+Acked-by: Nathan Chancellor <nathan@kernel.org>
+Link: https://patch.msgid.link/20260622132653.446868-1-ben.dooks@codethink.co.uk
+[nsc: Fixed typo in subject line]
+Signed-off-by: Nicolas Schier <nsc@kernel.org>
+---
+ scripts/Makefile.build | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/Makefile.build b/scripts/Makefile.build
+index 911745743246..d432693e5367 100644
+--- a/scripts/Makefile.build
++++ b/scripts/Makefile.build
+@@ -159,10 +159,10 @@ targets += $(targets-for-builtin) $(targets-for-modules)
+ 
+ # Linus' kernel sanity checking tool
+ ifeq ($(KBUILD_CHECKSRC),1)
+-  quiet_cmd_checksrc       = CHECK   $<
++  quiet_cmd_checksrc       = CHECK   $(patsubst $(srctree)/%,%,$<)
+         cmd_checksrc       = $(CHECK) $(CHECKFLAGS) $(c_flags) $<
+ else ifeq ($(KBUILD_CHECKSRC),2)
+-  quiet_cmd_force_checksrc = CHECK   $<
++  quiet_cmd_force_checksrc = CHECK   $(patsubst $(srctree)/%,%,$<)
+         cmd_force_checksrc = $(CHECK) $(CHECKFLAGS) $(c_flags) $<
+ endif
+ 
+-- 
+2.55.0
+

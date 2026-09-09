@@ -1,0 +1,160 @@
+From 220b9c3ad727b9a723360e950b3c67990210bb51 Mon Sep 17 00:00:00 2001
+From: Tao Zhou <tao.zhou1@amd.com>
+Date: Mon, 27 Jul 2026 15:39:13 +0800
+Subject: [PATCH 11445/15333] drm/amd/ras: add get_die_id for uniras umc v12
+
+For legacy ras eeprom format(only existed on nps1 system), die id
+(node instance) is not stored, we get it from mca address and
+physical address (pa) here, and now we can calculate pa in any
+nps mode for legacy ras eeprom data as well.
+It only applies to num_umc == 16 / UMC_VRAM_TYPE_HBM parts.
+
+Also factor out __ras_umc_eeprom_rec2nps_addr() so the die id can
+be passed in.
+
+Signed-off-by: Tao Zhou <tao.zhou1@amd.com>
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/ras/core/ras_umc.c       | 42 +++++++++++++++++---
+ drivers/gpu/drm/amd/ras/core/ras_umc.h       |  1 +
+ drivers/gpu/drm/amd/ras/core/ras_umc_v12_0.c | 31 +++++++++++++++
+ 3 files changed, 69 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/ras/core/ras_umc.c b/drivers/gpu/drm/amd/ras/core/ras_umc.c
+index 918accd91410..bb8d36500fca 100644
+--- a/drivers/gpu/drm/amd/ras/core/ras_umc.c
++++ b/drivers/gpu/drm/amd/ras/core/ras_umc.c
+@@ -328,8 +328,9 @@ int ras_umc_ma2pa(struct ras_core_context *ras_core,
+ 	return ret;
+ }
+ 
+-static int ras_umc_eeprom_rec2nps_addr(struct ras_core_context *ras_core,
+-	struct eeprom_umc_record *record, uint64_t *pa, uint32_t nps)
++static int __ras_umc_eeprom_rec2nps_addr(struct ras_core_context *ras_core,
++	struct eeprom_umc_record *record, uint64_t *pa,
++	uint32_t nps, uint32_t die_id)
+ {
+ 	struct device_system_info dev_info = {0};
+ 	struct umc_mca_addr addr_in;
+@@ -345,7 +346,7 @@ static int ras_umc_eeprom_rec2nps_addr(struct ras_core_context *ras_core,
+ 	addr_in.err_addr = record->address;
+ 	addr_in.ch_inst = record->mem_channel;
+ 	addr_in.umc_inst = record->mcumc_id;
+-	addr_in.node_inst = UMC_INV_AID_NODE;
++	addr_in.node_inst = die_id;
+ 	addr_in.socket_id = dev_info.socket_id;
+ 
+ 	ret = ras_umc_ma2pa(ras_core, &addr_in, &addr_out, nps);
+@@ -363,6 +364,36 @@ static int ras_umc_eeprom_rec2nps_addr(struct ras_core_context *ras_core,
+ 	return ret;
+ }
+ 
++static int ras_umc_eeprom_rec2nps_addr(struct ras_core_context *ras_core,
++		struct eeprom_umc_record *record, uint64_t *pa, uint32_t nps)
++{
++	return __ras_umc_eeprom_rec2nps_addr(ras_core, record, pa, nps,
++			UMC_INV_AID_NODE);
++}
++
++/* For legacy eeprom data format, the scope of channel index is
++ * limited to umc instance, and die id is not stored, have to
++ * get it from PA
++ */
++static int ras_umc_eeprom_rec2nps_addr_legacy(struct ras_core_context *ras_core,
++		struct eeprom_umc_record *record, uint64_t *pa, uint32_t nps)
++{
++	uint32_t die_id;
++
++	/* the die id is derived from an NPS1-mode PA(legacy-format EEPROMs
++	 * only ever existed on NPS1 systems)
++	 */
++	if (ras_core->ras_umc.ip_func && ras_core->ras_umc.ip_func->get_die_id) {
++		die_id = ras_core->ras_umc.ip_func->get_die_id(record->address,
++			RAS_PFN_TO_ADDR(EEPROM_RECORD_UMC_ADDR_PFN(record)));
++	} else {
++		RAS_DEV_ERR(ras_core->dev, "get_die_id is not supported!\n");
++		return -EOPNOTSUPP;
++	}
++
++	return __ras_umc_eeprom_rec2nps_addr(ras_core, record, pa, nps, die_id);
++}
++
+ static int ras_umc_eeprom_rec2nps_rec(struct ras_core_context *ras_core,
+ 	struct eeprom_umc_record *record, uint32_t nps)
+ {
+@@ -387,8 +418,9 @@ static int ras_umc_eeprom_rec2nps_rec(struct ras_core_context *ras_core,
+ 		/* old eeprom data format, the scope of channel index is
+ 		 * limited to umc instance
+ 		 */
+-		/* TODO */
+-		ret = -EOPNOTSUPP;
++		ret = ras_umc_eeprom_rec2nps_addr_legacy(ras_core, record, &pa, nps);
++		if (!ret)
++			record->cur_nps_retired_row_pfn = RAS_ADDR_TO_PFN(pa);
+ 	}
+ 
+ 	record->cur_nps = nps;
+diff --git a/drivers/gpu/drm/amd/ras/core/ras_umc.h b/drivers/gpu/drm/amd/ras/core/ras_umc.h
+index ebc6cff7694d..9c81d146d3aa 100644
+--- a/drivers/gpu/drm/amd/ras/core/ras_umc.h
++++ b/drivers/gpu/drm/amd/ras/core/ras_umc.h
+@@ -135,6 +135,7 @@ struct ras_umc_ip_func {
+ 		uint32_t nps);
+ 	uint64_t (*nps_pa_to_row_pa)(struct ras_core_context *ras_core,
+ 		uint64_t pa, enum umc_memory_partition_mode nps, bool zero_pfn_ok);
++	uint32_t (*get_die_id)(uint64_t mca_addr, uint64_t pa);
+ };
+ 
+ struct eeprom_store_record {
+diff --git a/drivers/gpu/drm/amd/ras/core/ras_umc_v12_0.c b/drivers/gpu/drm/amd/ras/core/ras_umc_v12_0.c
+index 930adf39e4f5..ccdbc5c4bab1 100644
+--- a/drivers/gpu/drm/amd/ras/core/ras_umc_v12_0.c
++++ b/drivers/gpu/drm/amd/ras/core/ras_umc_v12_0.c
+@@ -489,6 +489,36 @@ static void umc_v12_0_mca_ipid_parse(struct ras_core_context *ras_core, uint64_t
+ 		*sid = ACA_IPID_2_SOCKET_ID(ipid);
+ }
+ 
++/* part of DF address conversion algorithm, defined by HW,
++ * only eeprom v1 and v2 format(save_nps and CH_IDX_V2 are unset) use it,
++ * and the following conditions should be met when using it:
++ * nps mode: nps1
++ * umc number: 16
++ * hbm type: UMC_VRAM_TYPE_HBM
++ */
++static uint32_t umc_v12_0_get_die_id(uint64_t mca_addr, uint64_t pa)
++{
++	uint32_t die = 0;
++
++	/* we only calculate die id for nps1 mode(save_nps == ch_idx_v2 == 0) */
++	die += (((pa >> 12) & 0x1ULL) ^
++			((pa >> 20) & 0x1ULL) ^
++			((pa >> 27) & 0x1ULL) ^
++			((pa >> 34) & 0x1ULL) ^
++			((pa >> 41) & 0x1ULL));
++
++	/* the original PA_C4 and PA_R13 may be cleared in retired_page, so
++	 * get them from mca_addr.
++	 */
++	die += ((((pa >> 13) & 0x1ULL) ^
++			((mca_addr >> 5) & 0x1ULL) ^
++			((pa >> 28) & 0x1ULL) ^
++			((mca_addr >> 23) & 0x1ULL) ^
++			((pa >> 42) & 0x1ULL)) << 1);
++
++	return die;
++}
++
+ const struct ras_umc_ip_func ras_umc_func_v12_0 = {
+ 	.bank_to_eeprom_record = umc_v12_0_bank_to_eeprom_record,
+ 	.eeprom_record_to_nps_pages = umc_v12_0_eeprom_record_to_nps_pages,
+@@ -497,5 +527,6 @@ const struct ras_umc_ip_func ras_umc_func_v12_0 = {
+ 	.mca_ipid_parse = umc_v12_0_mca_ipid_parse,
+ 	.ma2pa = umc_v12_0_ma2pa,
+ 	.nps_pa_to_row_pa = umc_v12_0_nps_pa_to_row_pa,
++	.get_die_id = umc_v12_0_get_die_id,
+ };
+ 
+-- 
+2.55.0
+

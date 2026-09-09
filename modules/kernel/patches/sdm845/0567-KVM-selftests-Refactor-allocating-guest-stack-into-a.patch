@@ -1,0 +1,94 @@
+From 3280efa75cf799ff30dd8e32e0e713905d9362f0 Mon Sep 17 00:00:00 2001
+From: Yosry Ahmed <yosry@kernel.org>
+Date: Tue, 9 Jun 2026 17:30:26 -0700
+Subject: [PATCH 00567/15333] KVM: selftests: Refactor allocating guest stack
+ into a helper
+
+In preparation for reusing the logic to allocate stacks for nested
+guests, refactoring allocating a guest stack and aligning RSP into a
+helper.
+
+No functional change intended.
+
+Signed-off-by: Yosry Ahmed <yosry@kernel.org>
+Link: https://patch.msgid.link/20260610003030.2957261-2-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ .../testing/selftests/kvm/lib/x86/processor.c | 45 ++++++++++---------
+ 1 file changed, 25 insertions(+), 20 deletions(-)
+
+diff --git a/tools/testing/selftests/kvm/lib/x86/processor.c b/tools/testing/selftests/kvm/lib/x86/processor.c
+index 4ca48de7a926..9393bb580a58 100644
+--- a/tools/testing/selftests/kvm/lib/x86/processor.c
++++ b/tools/testing/selftests/kvm/lib/x86/processor.c
+@@ -778,6 +778,30 @@ void assert_on_unhandled_exception(struct kvm_vcpu *vcpu)
+ 		REPORT_GUEST_ASSERT(uc);
+ }
+ 
++static gva_t vm_alloc_stack(struct kvm_vm *vm, int nr_pages)
++{
++	int size = nr_pages * getpagesize();
++	gva_t stack_gva;
++
++	stack_gva = __vm_alloc(vm, size, DEFAULT_GUEST_STACK_VADDR_MIN, MEM_REGION_DATA);
++	stack_gva += size;
++
++	/*
++	 * Align stack to match calling sequence requirements in section "The
++	 * Stack Frame" of the System V ABI AMD64 Architecture Processor
++	 * Supplement, which requires the value (%rsp + 8) to be a multiple of
++	 * 16 when control is transferred to the function entry point.
++	 *
++	 * If this code is ever used to launch a vCPU with 32-bit entry point it
++	 * may need to subtract 4 bytes instead of 8 bytes.
++	 */
++	TEST_ASSERT(IS_ALIGNED(stack_gva, PAGE_SIZE),
++		    "__vm_alloc() did not provide a page-aligned address");
++	stack_gva -= 8;
++
++	return stack_gva;
++}
++
+ void kvm_arch_vm_post_create(struct kvm_vm *vm, unsigned int nr_vcpus)
+ {
+ 	int r;
+@@ -820,27 +844,8 @@ struct kvm_vcpu *vm_arch_vcpu_add(struct kvm_vm *vm, u32 vcpu_id)
+ {
+ 	struct kvm_mp_state mp_state;
+ 	struct kvm_regs regs;
+-	gva_t stack_gva;
+ 	struct kvm_vcpu *vcpu;
+ 
+-	stack_gva = __vm_alloc(vm, DEFAULT_STACK_PGS * getpagesize(),
+-			       DEFAULT_GUEST_STACK_VADDR_MIN, MEM_REGION_DATA);
+-
+-	stack_gva += DEFAULT_STACK_PGS * getpagesize();
+-
+-	/*
+-	 * Align stack to match calling sequence requirements in section "The
+-	 * Stack Frame" of the System V ABI AMD64 Architecture Processor
+-	 * Supplement, which requires the value (%rsp + 8) to be a multiple of
+-	 * 16 when control is transferred to the function entry point.
+-	 *
+-	 * If this code is ever used to launch a vCPU with 32-bit entry point it
+-	 * may need to subtract 4 bytes instead of 8 bytes.
+-	 */
+-	TEST_ASSERT(IS_ALIGNED(stack_gva, PAGE_SIZE),
+-		    "__vm_alloc() did not provide a page-aligned address");
+-	stack_gva -= 8;
+-
+ 	vcpu = __vm_vcpu_add(vm, vcpu_id);
+ 	vcpu_init_cpuid(vcpu, kvm_get_supported_cpuid());
+ 	vcpu_init_sregs(vm, vcpu);
+@@ -849,7 +854,7 @@ struct kvm_vcpu *vm_arch_vcpu_add(struct kvm_vm *vm, u32 vcpu_id)
+ 	/* Setup guest general purpose registers */
+ 	vcpu_regs_get(vcpu, &regs);
+ 	regs.rflags = regs.rflags | X86_EFLAGS_FIXED;
+-	regs.rsp = stack_gva;
++	regs.rsp = vm_alloc_stack(vm, DEFAULT_STACK_PGS);
+ 	vcpu_regs_set(vcpu, &regs);
+ 
+ 	/* Setup the MP state */
+-- 
+2.55.0
+

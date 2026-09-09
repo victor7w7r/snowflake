@@ -1,0 +1,57 @@
+From 6bb3493175d8002126c9d4fc84624e42db17d6d1 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Thu, 23 Jul 2026 17:47:55 -0700
+Subject: [PATCH 07834/15333] KVM: nVMX: Use CLASS(kvm_vcpu_map_local_readonly)
+ for MSR bitmap merging
+
+Convert the kvm_vcpu_map_readonly() usage in nVMX's MSR bitmap merging to
+the new CLASS(kvm_vcpu_map_local_readonly) implementation, to eliminate the
+last of the open-coded on-stack "struct kvm_host_map" declarations (in x86,
+PPC still has one more to convert).
+
+No functional change intended.
+
+Link: https://patch.msgid.link/20260724004757.131420-5-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/vmx/nested.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/nested.c b/arch/x86/kvm/vmx/nested.c
+index 57e02c3fa182..579203923267 100644
+--- a/arch/x86/kvm/vmx/nested.c
++++ b/arch/x86/kvm/vmx/nested.c
+@@ -701,7 +701,6 @@ static inline bool nested_vmx_prepare_msr_bitmap(struct kvm_vcpu *vcpu,
+ 	int msr;
+ 	unsigned long *msr_bitmap_l1;
+ 	unsigned long *msr_bitmap_l0 = vmx->nested.vmcs02.msr_bitmap;
+-	struct kvm_host_map map;
+ 
+ 	/* Nothing to do if the MSR bitmap is not in use.  */
+ 	if (!cpu_has_vmx_msr_bitmap() ||
+@@ -724,10 +723,11 @@ static inline bool nested_vmx_prepare_msr_bitmap(struct kvm_vcpu *vcpu,
+ 			return true;
+ 	}
+ 
+-	if (kvm_vcpu_map_readonly(vcpu, gpa_to_gfn(vmcs12->msr_bitmap), &map))
++	CLASS(kvm_vcpu_map_local_readonly, m)(vcpu, gpa_to_gfn(vmcs12->msr_bitmap));
++	if (m.ret)
+ 		return false;
+ 
+-	msr_bitmap_l1 = (unsigned long *)map.hva;
++	msr_bitmap_l1 = (unsigned long *)m.map.hva;
+ 
+ 	/*
+ 	 * To keep the control flow simple, pay eight 8-byte writes (sixteen
+@@ -807,8 +807,6 @@ static inline bool nested_vmx_prepare_msr_bitmap(struct kvm_vcpu *vcpu,
+ 
+ 	nested_vmx_merge_pmu_msr_bitmaps(vcpu, msr_bitmap_l1, msr_bitmap_l0);
+ 
+-	kvm_vcpu_unmap(vcpu, &map);
+-
+ 	vmx->nested.force_msr_bitmap_recalc = false;
+ 
+ 	return true;
+-- 
+2.55.0
+

@@ -1,0 +1,75 @@
+From 43be21ec2efdeb53d5e46ae77b3f7ce91539a5d9 Mon Sep 17 00:00:00 2001
+From: Simon Schippers <simon.schippers@tu-dortmund.de>
+Date: Mon, 3 Aug 2026 20:36:40 +0200
+Subject: [PATCH 12270/15333] ptr_ring: move free-space check into separate
+ helper
+
+This patch moves the check for available free space for a new entry into
+a separate function. Existing callers that only check for a non-zero
+return value are unaffected. __ptr_ring_produce() now returns -EINVAL
+for a zero-size ring and -ENOSPC when full, whereas before both cases
+returned -ENOSPC. The new helper allows callers to determine in advance
+whether a single subsequent __ptr_ring_produce() call will succeed. This
+information can, for example, be used to temporarily stop producing until
+__ptr_ring_check_produce() indicates that space is available again.
+
+The return values are documented above the helper, as a caller that waits
+for space must distinguish the transient -ENOSPC from the permanent
+-EINVAL.
+
+Co-developed-by: Tim Gebauer <tim.gebauer@tu-dortmund.de>
+Signed-off-by: Tim Gebauer <tim.gebauer@tu-dortmund.de>
+Signed-off-by: Simon Schippers <simon.schippers@tu-dortmund.de>
+Link: https://patch.msgid.link/20260803183641.96882-5-simon.schippers@tu-dortmund.de
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ include/linux/ptr_ring.h | 26 ++++++++++++++++++++++++--
+ 1 file changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/ptr_ring.h b/include/linux/ptr_ring.h
+index d2c3629bbe45..631c43fde440 100644
+--- a/include/linux/ptr_ring.h
++++ b/include/linux/ptr_ring.h
+@@ -96,6 +96,26 @@ static inline bool ptr_ring_full_bh(struct ptr_ring *r)
+ 	return ret;
+ }
+ 
++/* Report whether the next __ptr_ring_produce() has room for one entry:
++ * 0 means the single slot at r->queue[r->producer] is free, -ENOSPC means
++ * the ring is full, which is transient, and -EINVAL means r->size is 0,
++ * which is permanent. A caller that stops producing and waits for space
++ * must therefore do so only for -ENOSPC.
++ *
++ * Note: callers invoking this in a loop must use a compiler barrier,
++ * for example cpu_relax(). Callers must hold producer_lock.
++ */
++static inline int __ptr_ring_check_produce(struct ptr_ring *r)
++{
++	if (unlikely(!r->size))
++		return -EINVAL;
++
++	if (data_race(r->queue[r->producer]))
++		return -ENOSPC;
++
++	return 0;
++}
++
+ /* Note: callers invoking this in a loop must use a compiler barrier,
+  * for example cpu_relax(). Callers must hold producer_lock.
+  * Callers are responsible for making sure pointer that is being queued
+@@ -103,8 +123,10 @@ static inline bool ptr_ring_full_bh(struct ptr_ring *r)
+  */
+ static inline int __ptr_ring_produce(struct ptr_ring *r, void *ptr)
+ {
+-	if (unlikely(!r->size) || data_race(r->queue[r->producer]))
+-		return -ENOSPC;
++	int ret = __ptr_ring_check_produce(r);
++
++	if (ret)
++		return ret;
+ 
+ 	/* Make sure the pointer we are storing points to a valid data. */
+ 	/* Pairs with the dependency ordering in __ptr_ring_consume. */
+-- 
+2.55.0
+

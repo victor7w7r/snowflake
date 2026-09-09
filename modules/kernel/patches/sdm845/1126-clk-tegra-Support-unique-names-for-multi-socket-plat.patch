@@ -1,0 +1,47 @@
+From ff29670735e0d9ac683529e316b8d4dcd09177ac Mon Sep 17 00:00:00 2001
+From: Jon Hunter <jonathanh@nvidia.com>
+Date: Tue, 2 Jun 2026 09:43:34 +0100
+Subject: [PATCH 01126/15333] clk: tegra: Support unique names for multi-socket
+ platforms
+
+On multi-socket platforms each socket has its own BPMP which exposes the
+same clock names. Fix this by using the NUMA ID as a prefix for the
+clock names on multi-socket platforms.
+
+Use 'sizeof(info->name)' in the strscpy() and snprintf() functions to
+future proof against anyone changing the size of the 'name' array.
+
+Co-developed-by: Timo Alho <talho@nvidia.com>
+Signed-off-by: Timo Alho <talho@nvidia.com>
+Signed-off-by: Jon Hunter <jonathanh@nvidia.com>
+Reviewed-by: Brian Masney <bmasney@redhat.com>
+Reviewed-by: Thierry Reding <treding@nvidia.com>
+Signed-off-by: Brian Masney <bmasney@redhat.com>
+---
+ drivers/clk/tegra/clk-bpmp.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/clk/tegra/clk-bpmp.c b/drivers/clk/tegra/clk-bpmp.c
+index f6d2b934228b..067a8555c4e7 100644
+--- a/drivers/clk/tegra/clk-bpmp.c
++++ b/drivers/clk/tegra/clk-bpmp.c
+@@ -367,7 +367,15 @@ static int tegra_bpmp_clk_get_info(struct tegra_bpmp *bpmp, unsigned int id,
+ 	if (err < 0)
+ 		return err;
+ 
+-	strscpy(info->name, response.name, MRQ_CLK_NAME_MAXLEN);
++	if (dev_to_node(bpmp->dev) == NUMA_NO_NODE) {
++		strscpy(info->name, response.name, sizeof(info->name));
++	} else {
++		err = snprintf(info->name, sizeof(info->name), "%d-%s",
++			       dev_to_node(bpmp->dev), response.name);
++		if (WARN_ON(err >= sizeof(info->name)))
++			return -E2BIG;
++	}
++
+ 	info->num_parents = response.num_parents;
+ 
+ 	for (i = 0; i < info->num_parents; i++)
+-- 
+2.55.0
+

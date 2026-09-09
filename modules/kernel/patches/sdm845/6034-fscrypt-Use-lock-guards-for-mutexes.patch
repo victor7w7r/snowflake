@@ -1,0 +1,111 @@
+From 7ad194058d99bd30b0b7bf14ee150cc9c22cc7e8 Mon Sep 17 00:00:00 2001
+From: Eric Biggers <ebiggers@kernel.org>
+Date: Thu, 18 Jun 2026 18:48:52 +0000
+Subject: [PATCH 06034/15333] fscrypt: Use lock guards for mutexes
+
+Replace all remaining calls to mutex_lock() and mutex_unlock() in
+fs/crypto/ with lock guards.  No functional change.
+
+Link: https://patch.msgid.link/20260618184852.3469301-1-ebiggers@kernel.org
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+---
+ fs/crypto/crypto.c   | 13 ++++---------
+ fs/crypto/keyring.c  |  3 +--
+ fs/crypto/keysetup.c | 23 +++++++++++------------
+ 3 files changed, 16 insertions(+), 23 deletions(-)
+
+diff --git a/fs/crypto/crypto.c b/fs/crypto/crypto.c
+index 570a2231c945..10097a3251f5 100644
+--- a/fs/crypto/crypto.c
++++ b/fs/crypto/crypto.c
+@@ -323,7 +323,6 @@ EXPORT_SYMBOL(fscrypt_decrypt_block_inplace);
+  */
+ int fscrypt_initialize(struct super_block *sb)
+ {
+-	int err = 0;
+ 	mempool_t *pool;
+ 
+ 	/* pairs with smp_store_release() below */
+@@ -334,20 +333,16 @@ int fscrypt_initialize(struct super_block *sb)
+ 	if (!sb->s_cop->needs_bounce_pages)
+ 		return 0;
+ 
+-	mutex_lock(&fscrypt_init_mutex);
++	guard(mutex)(&fscrypt_init_mutex);
+ 	if (fscrypt_bounce_page_pool)
+-		goto out_unlock;
++		return 0;
+ 
+-	err = -ENOMEM;
+ 	pool = mempool_create_page_pool(num_prealloc_crypto_pages, 0);
+ 	if (!pool)
+-		goto out_unlock;
++		return -ENOMEM;
+ 	/* pairs with smp_load_acquire() above */
+ 	smp_store_release(&fscrypt_bounce_page_pool, pool);
+-	err = 0;
+-out_unlock:
+-	mutex_unlock(&fscrypt_init_mutex);
+-	return err;
++	return 0;
+ }
+ 
+ void fscrypt_msg(const struct inode *inode, const char *level,
+diff --git a/fs/crypto/keyring.c b/fs/crypto/keyring.c
+index 38b73e703073..16bc348213ca 100644
+--- a/fs/crypto/keyring.c
++++ b/fs/crypto/keyring.c
+@@ -497,7 +497,7 @@ static int do_add_master_key(struct super_block *sb,
+ 	struct fscrypt_master_key *mk;
+ 	int err;
+ 
+-	mutex_lock(&fscrypt_add_key_mutex); /* serialize find + link */
++	guard(mutex)(&fscrypt_add_key_mutex); /* serialize find + link */
+ 
+ 	mk = fscrypt_find_master_key(sb, mk_spec);
+ 	if (!mk) {
+@@ -524,7 +524,6 @@ static int do_add_master_key(struct super_block *sb,
+ 		}
+ 		fscrypt_put_master_key(mk);
+ 	}
+-	mutex_unlock(&fscrypt_add_key_mutex);
+ 	return err;
+ }
+ 
+diff --git a/fs/crypto/keysetup.c b/fs/crypto/keysetup.c
+index f905f9f94bdd..281b5a8b0bcd 100644
+--- a/fs/crypto/keysetup.c
++++ b/fs/crypto/keysetup.c
+@@ -349,18 +349,17 @@ static int fscrypt_setup_iv_ino_lblk_32_key(struct fscrypt_inode_info *ci,
+ 
+ 	/* pairs with smp_store_release() below */
+ 	if (!smp_load_acquire(&mk->mk_ino_hash_key_initialized)) {
+-
+-		mutex_lock(&fscrypt_mode_key_setup_mutex);
+-
+-		if (mk->mk_ino_hash_key_initialized)
+-			goto unlock;
+-
+-		fscrypt_derive_siphash_key(mk, HKDF_CONTEXT_INODE_HASH_KEY,
+-					   NULL, 0, &mk->mk_ino_hash_key);
+-		/* pairs with smp_load_acquire() above */
+-		smp_store_release(&mk->mk_ino_hash_key_initialized, true);
+-unlock:
+-		mutex_unlock(&fscrypt_mode_key_setup_mutex);
++		guard(mutex)(&fscrypt_mode_key_setup_mutex);
++
++		if (!mk->mk_ino_hash_key_initialized) {
++			fscrypt_derive_siphash_key(mk,
++						   HKDF_CONTEXT_INODE_HASH_KEY,
++						   NULL, 0,
++						   &mk->mk_ino_hash_key);
++			/* pairs with smp_load_acquire() above */
++			smp_store_release(&mk->mk_ino_hash_key_initialized,
++					  true);
++		}
+ 	}
+ 
+ 	/*
+-- 
+2.55.0
+

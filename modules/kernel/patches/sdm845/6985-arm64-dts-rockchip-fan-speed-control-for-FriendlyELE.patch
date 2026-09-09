@@ -1,0 +1,69 @@
+From 3bbe67c4de2aa8b0c042f92ad8c7462e8699cc37 Mon Sep 17 00:00:00 2001
+From: Vsevolod Kozlov <zaba@mm.st>
+Date: Sat, 4 Jul 2026 15:46:52 +0300
+Subject: [PATCH 06985/15333] arm64: dts: rockchip: fan speed control for
+ FriendlyELEC CM3588 NAS
+
+The FriendlyELEC CM3588 NAS kit is often supplied with a case and a fan.
+Enable control of the speed of the fan using the trip points and cooling
+maps from rk3588-nanopc-t6.dtsi as a reference.
+
+Signed-off-by: Vsevolod Kozlov <zaba@mm.st>
+Link: https://patch.msgid.link/akkAvJap-MtbKp8B@Vsevolods-MacBook-Pro.local
+Signed-off-by: Heiko Stuebner <heiko@sntech.de>
+---
+ .../rk3588-friendlyelec-cm3588-nas.dts        | 31 +++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/rockchip/rk3588-friendlyelec-cm3588-nas.dts b/arch/arm64/boot/dts/rockchip/rk3588-friendlyelec-cm3588-nas.dts
+index 0dce96ca8c28..f4c34da61c4d 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3588-friendlyelec-cm3588-nas.dts
++++ b/arch/arm64/boot/dts/rockchip/rk3588-friendlyelec-cm3588-nas.dts
+@@ -12,6 +12,7 @@
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/pinctrl/rockchip.h>
+ #include <dt-bindings/soc/rockchip,vop2.h>
++#include <dt-bindings/thermal/thermal.h>
+ #include <dt-bindings/usb/pd.h>
+ #include "rk3588-friendlyelec-cm3588.dtsi"
+ 
+@@ -457,6 +458,36 @@ &i2c8 {
+ 	status = "okay";
+ };
+ 
++&package_thermal {
++	polling-delay = <1000>;
++
++	trips {
++		package_warm: package-warm {
++			temperature = <55000>;
++			hysteresis = <2000>;
++			type = "active";
++		};
++
++		package_hot: package-hot {
++			temperature = <65000>;
++			hysteresis = <2000>;
++			type = "active";
++		};
++	};
++
++	cooling-maps {
++		map0 {
++			trip = <&package_warm>;
++			cooling-device = <&fan THERMAL_NO_LIMIT 1>;
++		};
++
++		map1 {
++			trip = <&package_hot>;
++			cooling-device = <&fan 2 THERMAL_NO_LIMIT>;
++		};
++	};
++};
++
+ &pcie2x1l0 {
+ 	/* 2. M.2 socket, CON14: pcie30phy port0 lane1, @fe170000 */
+ 	max-link-speed = <3>;
+-- 
+2.55.0
+

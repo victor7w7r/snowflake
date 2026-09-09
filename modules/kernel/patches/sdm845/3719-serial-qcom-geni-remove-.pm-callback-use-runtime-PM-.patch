@@ -1,0 +1,128 @@
+From 3d71f8d7eeb374d0eb84c64c6ffd68bdcc0d42d4 Mon Sep 17 00:00:00 2001
+From: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Date: Fri, 10 Jul 2026 14:51:32 +0530
+Subject: [PATCH 03719/15333] serial: qcom-geni: remove .pm callback, use
+ runtime PM in startup/shutdown
+
+The driver currently relies on qcom_geni_serial_pm() through the
+uart_ops.pm callback to manage runtime PM references. However, the
+callback has a void return type, so failures from
+pm_runtime_resume_and_get() cannot be propagated to the caller.
+
+As a result, startup() may continue and access hardware even when the
+runtime PM resume operation failed, leading to register accesses while
+the device is not powered.
+
+Move runtime PM acquisition to qcom_geni_serial_startup() and release it
+to qcom_geni_serial_shutdown(). Since startup() can return an error, PM
+resume failures are now detected and propagated before any hardware
+initialization is performed. The startup/shutdown pair also provides a
+natural place to balance runtime PM references for normal port usage.
+
+During probe, uart_add_one_port() may configure the port before any user
+opens the TTY, meaning startup() has not yet been called. To keep the
+hardware powered during port registration, wrap uart_add_one_port() with
+PM_RUNTIME_ACQUIRE_IF_ENABLED() and PM_RUNTIME_ACQUIRE_ERR(). This
+ensures the device is resumed for the duration of registration and that
+the runtime PM reference is automatically released afterwards.
+
+By moving runtime PM handling out of uart_ops.pm, resume failures are no
+longer silently ignored and all hardware accesses are guaranteed to
+occur while the device is powered.
+
+Signed-off-by: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260710-remove_uart_change_state-v1-1-8e8468da22a1@oss.qualcomm.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/qcom_geni_serial.c | 37 +++++++++++++--------------
+ 1 file changed, 18 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/tty/serial/qcom_geni_serial.c b/drivers/tty/serial/qcom_geni_serial.c
+index e037af56a159..53d221447557 100644
+--- a/drivers/tty/serial/qcom_geni_serial.c
++++ b/drivers/tty/serial/qcom_geni_serial.c
+@@ -1173,6 +1173,8 @@ static void qcom_geni_serial_shutdown(struct uart_port *uport)
+ 
+ 	qcom_geni_serial_cancel_tx_cmd(uport);
+ 	uart_port_unlock_irq(uport);
++
++	pm_runtime_put_sync(uport->dev);
+ }
+ 
+ static void qcom_geni_serial_flush_buffer(struct uart_port *uport)
+@@ -1246,10 +1248,18 @@ static int qcom_geni_serial_startup(struct uart_port *uport)
+ 	struct qcom_geni_serial_port *port = to_dev_port(uport);
+ 	struct tty_port *tport = &uport->state->port;
+ 
++	ret = pm_runtime_resume_and_get(uport->dev);
++	if (ret < 0) {
++		dev_err(uport->dev, "Failed to resume and get %d\n", ret);
++		return ret;
++	}
++
+ 	if (!port->setup) {
+ 		ret = qcom_geni_serial_port_setup(uport);
+-		if (ret)
++		if (ret) {
++			pm_runtime_put_sync(uport->dev);
+ 			return ret;
++		}
+ 	}
+ 
+ 	/*
+@@ -1731,22 +1741,6 @@ static int geni_serial_resource_init(struct uart_port *uport)
+ 	return 0;
+ }
+ 
+-static void qcom_geni_serial_pm(struct uart_port *uport,
+-		unsigned int new_state, unsigned int old_state)
+-{
+-
+-	/* If we've never been called, treat it as off */
+-	if (old_state == UART_PM_STATE_UNDEFINED)
+-		old_state = UART_PM_STATE_OFF;
+-
+-	if (new_state == UART_PM_STATE_ON && old_state == UART_PM_STATE_OFF)
+-		pm_runtime_resume_and_get(uport->dev);
+-	else if (new_state == UART_PM_STATE_OFF &&
+-		 old_state == UART_PM_STATE_ON)
+-		pm_runtime_put_sync(uport->dev);
+-
+-}
+-
+ /**
+  * qcom_geni_rs485_config - Configure RS485 settings for the UART port
+  * @uport: Pointer to the UART port structure
+@@ -1785,7 +1779,6 @@ static const struct uart_ops qcom_geni_console_pops = {
+ 	.poll_put_char	= qcom_geni_serial_poll_put_char,
+ 	.poll_init = qcom_geni_serial_poll_init,
+ #endif
+-	.pm = qcom_geni_serial_pm,
+ };
+ 
+ static const struct uart_ops qcom_geni_uart_pops = {
+@@ -1802,7 +1795,6 @@ static const struct uart_ops qcom_geni_uart_pops = {
+ 	.type = qcom_geni_serial_get_type,
+ 	.set_mctrl = qcom_geni_serial_set_mctrl,
+ 	.get_mctrl = qcom_geni_serial_get_mctrl,
+-	.pm = qcom_geni_serial_pm,
+ };
+ 
+ static int qcom_geni_serial_probe(struct platform_device *pdev)
+@@ -1936,6 +1928,13 @@ static int qcom_geni_serial_probe(struct platform_device *pdev)
+ 
+ 	devm_pm_runtime_enable(port->se.dev);
+ 
++	PM_RUNTIME_ACQUIRE_IF_ENABLED(uport->dev, pm);
++	ret = PM_RUNTIME_ACQUIRE_ERR(&pm);
++	if (ret < 0) {
++		dev_err(uport->dev, "Failed to resume and get %d\n", ret);
++		goto error;
++	}
++
+ 	ret = uart_add_one_port(drv, uport);
+ 	if (ret)
+ 		goto error;
+-- 
+2.55.0
+

@@ -1,0 +1,71 @@
+From 6e85378a38cebf9b437bc2b5c22dc1ba58161bd2 Mon Sep 17 00:00:00 2001
+From: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Date: Thu, 21 May 2026 14:16:48 -0400
+Subject: [PATCH 03721/15333] serial: core: add uart_iotype_mmio/io helper
+ functions
+
+To help simplify code that check on the io type mode of the port.
+
+Signed-off-by: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Link: https://patch.msgid.link/20260521-tty-upio-v3-2-bf74567994a0@dimonoff.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/serial_core.c | 28 ++++++++++++++++++++++++++++
+ include/linux/serial_core.h      |  4 ++++
+ 2 files changed, 32 insertions(+)
+
+diff --git a/drivers/tty/serial/serial_core.c b/drivers/tty/serial/serial_core.c
+index 965ba0335a36..d82f3ff44532 100644
+--- a/drivers/tty/serial/serial_core.c
++++ b/drivers/tty/serial/serial_core.c
+@@ -1963,6 +1963,34 @@ static const char *uart_type(struct uart_port *port)
+ 	return str;
+ }
+ 
++bool uart_iotype_mmio(enum uart_iotype iotype)
++{
++	switch (iotype) {
++	case UPIO_MEM:
++	case UPIO_MEM32:
++	case UPIO_AU:
++	case UPIO_TSI:
++	case UPIO_MEM32BE:
++	case UPIO_MEM16:
++		return true;
++	default:
++		return false;
++	}
++}
++EXPORT_SYMBOL_GPL(uart_iotype_mmio);
++
++bool uart_iotype_io(enum uart_iotype iotype)
++{
++	switch (iotype) {
++	case UPIO_PORT:
++	case UPIO_HUB6:
++		return true;
++	default:
++		return false;
++	}
++}
++EXPORT_SYMBOL_GPL(uart_iotype_io);
++
+ #ifdef CONFIG_PROC_FS
+ 
+ static void uart_line_info(struct seq_file *m, struct uart_state *state)
+diff --git a/include/linux/serial_core.h b/include/linux/serial_core.h
+index bdc214386e4a..3cfde1af12fe 100644
+--- a/include/linux/serial_core.h
++++ b/include/linux/serial_core.h
+@@ -1338,4 +1338,8 @@ static inline int uart_handle_break(struct uart_port *port)
+ 					 !((cflag) & CLOCAL))
+ 
+ int uart_get_rs485_mode(struct uart_port *port);
++
++bool uart_iotype_mmio(enum uart_iotype iotype);
++bool uart_iotype_io(enum uart_iotype iotype);
++
+ #endif /* LINUX_SERIAL_CORE_H */
+-- 
+2.55.0
+

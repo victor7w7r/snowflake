@@ -1,0 +1,94 @@
+From 27766611309ab34f36153cc79830d3ab88880977 Mon Sep 17 00:00:00 2001
+From: "Pratyush Yadav (Google)" <pratyush@kernel.org>
+Date: Sat, 1 Aug 2026 10:48:28 +0200
+Subject: [PATCH 10485/15333] memblock: always include KHO headers
+
+In a coming commit, memblock will start using kho_scratch_overlap()
+without a compile guard. The compile guard for the function is in
+kexec_handover.h and provides a stub when CONFIG_KEXEC_HANDOVER is
+disabled.
+
+Since in memblock the call will exist unconditionally, always include
+the KHO headers.
+
+Including these headers unconditionally breaks memblock test
+compilation. Add stubs to fix that.
+
+Signed-off-by: Pratyush Yadav (Google) <pratyush@kernel.org>
+Link: https://patch.msgid.link/20260801084833.1897543-20-pratyush@kernel.org
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+---
+ mm/memblock.c                                   |  2 --
+ tools/testing/memblock/linux/kexec_handover.h   |  9 +++++++++
+ tools/testing/memblock/linux/kho/abi/memblock.h | 10 ++++++++++
+ tools/testing/memblock/linux/libfdt.h           |  9 +++++++++
+ 4 files changed, 28 insertions(+), 2 deletions(-)
+ create mode 100644 tools/testing/memblock/linux/kexec_handover.h
+ create mode 100644 tools/testing/memblock/linux/kho/abi/memblock.h
+ create mode 100644 tools/testing/memblock/linux/libfdt.h
+
+diff --git a/mm/memblock.c b/mm/memblock.c
+index 8b2e551435ae..ea735bcd4dd1 100644
+--- a/mm/memblock.c
++++ b/mm/memblock.c
+@@ -19,11 +19,9 @@
+ #include <linux/mutex.h>
+ #include <linux/string_helpers.h>
+ 
+-#ifdef CONFIG_KEXEC_HANDOVER
+ #include <linux/libfdt.h>
+ #include <linux/kexec_handover.h>
+ #include <linux/kho/abi/memblock.h>
+-#endif /* CONFIG_KEXEC_HANDOVER */
+ 
+ #include <asm/sections.h>
+ #include <linux/io.h>
+diff --git a/tools/testing/memblock/linux/kexec_handover.h b/tools/testing/memblock/linux/kexec_handover.h
+new file mode 100644
+index 000000000000..bdfd9445b1fd
+--- /dev/null
++++ b/tools/testing/memblock/linux/kexec_handover.h
+@@ -0,0 +1,9 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef LINUX_KEXEC_HANDOVER_H
++#define LINUX_KEXEC_HANDOVER_H
++
++/*
++ * Header stub to avoid test build breakage; we don't need to actually implement
++ * any KHO functions as they are not used in the tests.
++ */
++#endif /* LINUX_KEXEC_HANDOVER_H */
+diff --git a/tools/testing/memblock/linux/kho/abi/memblock.h b/tools/testing/memblock/linux/kho/abi/memblock.h
+new file mode 100644
+index 000000000000..71cf6982a2b9
+--- /dev/null
++++ b/tools/testing/memblock/linux/kho/abi/memblock.h
+@@ -0,0 +1,10 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++
++#ifndef _LINUX_KHO_ABI_MEMBLOCK_H
++#define _LINUX_KHO_ABI_MEMBLOCK_H
++
++/*
++ * Header stub to avoid test build breakage; we don't need to actually define
++ * any ABI as they are not used in the tests.
++ */
++#endif /* _LINUX_KHO_ABI_MEMBLOCK_H */
+diff --git a/tools/testing/memblock/linux/libfdt.h b/tools/testing/memblock/linux/libfdt.h
+new file mode 100644
+index 000000000000..6137b788fe8d
+--- /dev/null
++++ b/tools/testing/memblock/linux/libfdt.h
+@@ -0,0 +1,9 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _INCLUDE_LIBFDT_H_
++#define _INCLUDE_LIBFDT_H_
++
++/*
++ * Header stub to avoid test build breakage; we don't need to actually implement
++ * any FDT functions as they are not used in the tests.
++ */
++#endif /* _INCLUDE_LIBFDT_H_ */
+-- 
+2.55.0
+

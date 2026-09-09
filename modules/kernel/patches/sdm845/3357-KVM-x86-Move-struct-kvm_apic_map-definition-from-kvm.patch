@@ -1,0 +1,122 @@
+From c3d35340a3379d6567bfad6559f1f77acf7769fb Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Thu, 25 Jun 2026 15:04:49 -0700
+Subject: [PATCH 03357/15333] KVM: x86: Move "struct kvm_apic_map" definition
+ from kvm_host.h => lapic.h
+
+Move the definition of "struct kvm_apic_map", a.k.a. the optimized local
+APIC map, to lapic.h, as it is very nearly an implementation details that's
+internal to KVM's local APIC emulation (KVM also uses the map to do quick
+lookups when a vCPU is yielding to a different vCPU).
+
+No functional change intended.
+
+Suggested-by: Kai Huang <kai.huang@intel.com>
+Reviewed-by: Kai Huang <kai.huang@intel.com>
+Link: https://patch.msgid.link/20260625220450.3354415-9-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/include/asm/kvm_host.h | 35 ++-------------------------------
+ arch/x86/kvm/lapic.h            | 33 +++++++++++++++++++++++++++++++
+ 2 files changed, 35 insertions(+), 33 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index c7d53d46763b..90efc3c90b41 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -244,6 +244,8 @@ enum x86_intercept_stage;
+ struct kvm_kernel_irqfd;
+ struct kvm_kernel_irq_routing_entry;
+ 
++struct kvm_apic_map;
++
+ struct kvm_x86_msr_filter;
+ struct kvm_x86_pmu_event_filter;
+ 
+@@ -1122,39 +1124,6 @@ struct kvm_arch_memory_slot {
+ 	unsigned short *gfn_write_track;
+ };
+ 
+-/*
+- * Track the mode of the optimized logical map, as the rules for decoding the
+- * destination vary per mode.  Enabling the optimized logical map requires all
+- * software-enabled local APIs to be in the same mode, each addressable APIC to
+- * be mapped to only one MDA, and each MDA to map to at most one APIC.
+- */
+-enum kvm_apic_logical_mode {
+-	/* All local APICs are software disabled. */
+-	KVM_APIC_MODE_SW_DISABLED,
+-	/* All software enabled local APICs in xAPIC cluster addressing mode. */
+-	KVM_APIC_MODE_XAPIC_CLUSTER,
+-	/* All software enabled local APICs in xAPIC flat addressing mode. */
+-	KVM_APIC_MODE_XAPIC_FLAT,
+-	/* All software enabled local APICs in x2APIC mode. */
+-	KVM_APIC_MODE_X2APIC,
+-	/*
+-	 * Optimized map disabled, e.g. not all local APICs in the same logical
+-	 * mode, same logical ID assigned to multiple APICs, etc.
+-	 */
+-	KVM_APIC_MODE_MAP_DISABLED,
+-};
+-
+-struct kvm_apic_map {
+-	struct rcu_head rcu;
+-	enum kvm_apic_logical_mode logical_mode;
+-	u32 max_apic_id;
+-	union {
+-		struct kvm_lapic *xapic_flat_map[8];
+-		struct kvm_lapic *xapic_cluster_map[16][4];
+-	};
+-	struct kvm_lapic *phys_map[];
+-};
+-
+ /* Hyper-V synthetic debugger (SynDbg)*/
+ struct kvm_hv_syndbg {
+ 	struct {
+diff --git a/arch/x86/kvm/lapic.h b/arch/x86/kvm/lapic.h
+index 58dbb94f980d..bd1098c89d99 100644
+--- a/arch/x86/kvm/lapic.h
++++ b/arch/x86/kvm/lapic.h
+@@ -32,6 +32,39 @@ enum lapic_mode {
+ 	LAPIC_MODE_X2APIC = MSR_IA32_APICBASE_ENABLE | X2APIC_ENABLE,
+ };
+ 
++/*
++ * Track the mode of the optimized logical map, as the rules for decoding the
++ * destination vary per mode.  Enabling the optimized logical map requires all
++ * software-enabled local APIs to be in the same mode, each addressable APIC to
++ * be mapped to only one MDA, and each MDA to map to at most one APIC.
++ */
++enum kvm_apic_logical_mode {
++	/* All local APICs are software disabled. */
++	KVM_APIC_MODE_SW_DISABLED,
++	/* All software enabled local APICs in xAPIC cluster addressing mode. */
++	KVM_APIC_MODE_XAPIC_CLUSTER,
++	/* All software enabled local APICs in xAPIC flat addressing mode. */
++	KVM_APIC_MODE_XAPIC_FLAT,
++	/* All software enabled local APICs in x2APIC mode. */
++	KVM_APIC_MODE_X2APIC,
++	/*
++	 * Optimized map disabled, e.g. not all local APICs in the same logical
++	 * mode, same logical ID assigned to multiple APICs, etc.
++	 */
++	KVM_APIC_MODE_MAP_DISABLED,
++};
++
++struct kvm_apic_map {
++	struct rcu_head rcu;
++	enum kvm_apic_logical_mode logical_mode;
++	u32 max_apic_id;
++	union {
++		struct kvm_lapic *xapic_flat_map[8];
++		struct kvm_lapic *xapic_cluster_map[16][4];
++	};
++	struct kvm_lapic *phys_map[];
++};
++
+ enum lapic_lvt_entry {
+ 	LVT_TIMER,
+ 	LVT_THERMAL_MONITOR,
+-- 
+2.55.0
+

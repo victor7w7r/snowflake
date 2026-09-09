@@ -1,0 +1,37 @@
+From 36eea3468c2c87bba132def3bf6ebf05c3c4b9c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig=20=28The=20Capable=20Hub=29?=
+ <u.kleine-koenig@baylibre.com>
+Date: Thu, 18 Jun 2026 12:14:51 +0200
+Subject: [PATCH 07283/15333] thunderbolt: Assert that a service driver has a
+ probe callback
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+tb_service_probe() calls the driver's probe function unconditionally.
+Check at driver register time that this callback is valid to prevent a
+NULL pointer exception.
+
+Signed-off-by: Uwe Kleine-König (The Capable Hub) <u.kleine-koenig@baylibre.com>
+Signed-off-by: Mika Westerberg <mika.westerberg@linux.intel.com>
+---
+ drivers/thunderbolt/xdomain.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/thunderbolt/xdomain.c b/drivers/thunderbolt/xdomain.c
+index 86b2f7474670..05442df0e99c 100644
+--- a/drivers/thunderbolt/xdomain.c
++++ b/drivers/thunderbolt/xdomain.c
+@@ -968,6 +968,9 @@ tb_xdp_schedule_request(struct tb *tb, const struct tb_xdp_header *hdr,
+  */
+ int tb_register_service_driver(struct tb_service_driver *drv)
+ {
++	if (!drv->probe)
++		return -EINVAL;
++
+ 	drv->driver.bus = &tb_bus_type;
+ 	return driver_register(&drv->driver);
+ }
+-- 
+2.55.0
+

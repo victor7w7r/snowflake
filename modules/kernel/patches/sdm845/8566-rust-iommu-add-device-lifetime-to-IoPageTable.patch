@@ -1,0 +1,118 @@
+From 233f147985c887588c95ad85543e51c726fe2de9 Mon Sep 17 00:00:00 2001
+From: Deborah Brouwer <deborah.brouwer@collabora.com>
+Date: Fri, 3 Jul 2026 17:28:44 -0700
+Subject: [PATCH 08566/15333] rust: iommu: add device lifetime to IoPageTable
+
+Currently, using a raw IoPageTable is unsafe because the returned
+IoPageTable is not tied to the device driver binding lifetime.
+
+Since device drivers now receive a lifetime parameter <'bound>
+representing the interval during which a device driver is bound to its bus
+device, add a lifetime parameter to IoPageTable. This ensures that
+the returned IoPageTable cannot outlive the bus device binding.
+
+Also remove the option to create a page table as a device resource since
+currently Devres is not compatible with resources that have a lifetime
+parameter. This option can be restored once the lifetime-aware
+wrapper for devres is available and if a use-case appears for it.
+
+Suggested-by: Boris Brezillon <boris.brezillon@collabora.com>
+Signed-off-by: Deborah Brouwer <deborah.brouwer@collabora.com>
+Reviewed-by: Danilo Krummrich <dakr@kernel.org>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Acked-by: Joerg Roedel <joerg.roedel@amd.com>
+Link: https://patch.msgid.link/20260703-pgtable_lt_b4-v3-1-e738e1f513a4@collabora.com
+Signed-off-by: Alice Ryhl <aliceryhl@google.com>
+---
+ rust/kernel/iommu/pgtable.rs | 32 +++++++++-----------------------
+ 1 file changed, 9 insertions(+), 23 deletions(-)
+
+diff --git a/rust/kernel/iommu/pgtable.rs b/rust/kernel/iommu/pgtable.rs
+index c88e38fd938a..f5f2706d72fb 100644
+--- a/rust/kernel/iommu/pgtable.rs
++++ b/rust/kernel/iommu/pgtable.rs
+@@ -16,7 +16,6 @@
+         Bound,
+         Device, //
+     },
+-    devres::Devres,
+     error::to_result,
+     io::PhysAddr,
+     prelude::*, //
+@@ -59,15 +58,16 @@ pub struct Config {
+ /// # Invariants
+ ///
+ /// The pointer references a valid io page table.
+-pub struct IoPageTable<F: IoPageTableFmt> {
++pub struct IoPageTable<'a, F: IoPageTableFmt> {
+     ptr: NonNull<bindings::io_pgtable_ops>,
++    _dev: PhantomData<&'a Device<Bound>>,
+     _marker: PhantomData<F>,
+ }
+ 
+ // SAFETY: `struct io_pgtable_ops` is not restricted to a single thread.
+-unsafe impl<F: IoPageTableFmt> Send for IoPageTable<F> {}
++unsafe impl<F: IoPageTableFmt> Send for IoPageTable<'_, F> {}
+ // SAFETY: `struct io_pgtable_ops` may be accessed concurrently.
+-unsafe impl<F: IoPageTableFmt> Sync for IoPageTable<F> {}
++unsafe impl<F: IoPageTableFmt> Sync for IoPageTable<'_, F> {}
+ 
+ /// The format used by this page table.
+ pub trait IoPageTableFmt: 'static {
+@@ -75,25 +75,10 @@ pub trait IoPageTableFmt: 'static {
+     const FORMAT: io_pgtable_fmt;
+ }
+ 
+-impl<F: IoPageTableFmt> IoPageTable<F> {
+-    /// Create a new `IoPageTable` as a device resource.
+-    #[inline]
+-    pub fn new(
+-        dev: &Device<Bound>,
+-        config: Config,
+-    ) -> impl PinInit<Devres<IoPageTable<F>>, Error> + '_ {
+-        // SAFETY: Devres ensures that the value is dropped during device unbind.
+-        Devres::new(dev, unsafe { Self::new_raw(dev, config) })
+-    }
+-
++impl<'a, F: IoPageTableFmt> IoPageTable<'a, F> {
+     /// Create a new `IoPageTable`.
+-    ///
+-    /// # Safety
+-    ///
+-    /// If successful, then the returned `IoPageTable` must be dropped before the device is
+-    /// unbound.
+     #[inline]
+-    pub unsafe fn new_raw(dev: &Device<Bound>, config: Config) -> Result<IoPageTable<F>> {
++    pub fn new(dev: &'a Device<Bound>, config: Config) -> Result<IoPageTable<'a, F>> {
+         let mut raw_cfg = bindings::io_pgtable_cfg {
+             quirks: config.quirks,
+             pgsize_bitmap: config.pgsize_bitmap,
+@@ -118,6 +103,7 @@ pub unsafe fn new_raw(dev: &Device<Bound>, config: Config) -> Result<IoPageTable
+         // INVARIANT: We successfully created a valid page table.
+         Ok(IoPageTable {
+             ptr: NonNull::new(ops).ok_or(ENOMEM)?,
++            _dev: PhantomData,
+             _marker: PhantomData,
+         })
+     }
+@@ -240,7 +226,7 @@ extern "C" fn rust_tlb_flush_walk_noop(
+ ) {
+ }
+ 
+-impl<F: IoPageTableFmt> Drop for IoPageTable<F> {
++impl<F: IoPageTableFmt> Drop for IoPageTable<'_, F> {
+     fn drop(&mut self) {
+         // SAFETY: The caller of `Self::ttbr()` promised that the page table is not live when this
+         // destructor runs.
+@@ -255,7 +241,7 @@ impl IoPageTableFmt for ARM64LPAES1 {
+     const FORMAT: io_pgtable_fmt = bindings::io_pgtable_fmt_ARM_64_LPAE_S1 as io_pgtable_fmt;
+ }
+ 
+-impl IoPageTable<ARM64LPAES1> {
++impl IoPageTable<'_, ARM64LPAES1> {
+     /// Access the `ttbr` field of the configuration.
+     ///
+     /// This is the physical address of the page table, which may be passed to the device that
+-- 
+2.55.0
+

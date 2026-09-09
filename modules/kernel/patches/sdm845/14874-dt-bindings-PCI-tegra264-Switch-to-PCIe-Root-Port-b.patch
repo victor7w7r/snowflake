@@ -1,0 +1,96 @@
+From 0771da4fb5ef57945fc9c929f60756023e120873 Mon Sep 17 00:00:00 2001
+From: Thierry Reding <treding@nvidia.com>
+Date: Fri, 14 Aug 2026 17:38:56 +0200
+Subject: [PATCH 14874/15333] dt-bindings: PCI: tegra264: Switch to PCIe Root
+ Port bindings
+
+Switch to using the PCIe Root Port bindings in preparation for using the
+standard WAKE# handling.
+
+Signed-off-by: Thierry Reding <treding@nvidia.com>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@oss.qualcomm.com>
+Signed-off-by: Bjorn Helgaas <bhelgaas@google.com>
+Reviewed-by: Rob Herring (Arm) <robh@kernel.org>
+Link: https://patch.msgid.link/20260814-tegra264-pcie-v10-2-05d08c592b05@nvidia.com
+---
+ .../bindings/pci/nvidia,tegra264-pcie.yaml    | 40 +++++++++++++++----
+ 1 file changed, 32 insertions(+), 8 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/pci/nvidia,tegra264-pcie.yaml b/Documentation/devicetree/bindings/pci/nvidia,tegra264-pcie.yaml
+index acb677d477fb..f0114defc04e 100644
+--- a/Documentation/devicetree/bindings/pci/nvidia,tegra264-pcie.yaml
++++ b/Documentation/devicetree/bindings/pci/nvidia,tegra264-pcie.yaml
+@@ -52,12 +52,11 @@ properties:
+           - description: PCIe controller ID
+             maximum: 5
+ 
+-required:
+-  - interrupt-map
+-  - interrupt-map-mask
+-  - iommu-map
+-  - msi-map
+-  - nvidia,bpmp
++patternProperties:
++  '^pcie@':
++    type: object
++    $ref: /schemas/pci/pci-pci-bridge.yaml#
++    unevaluatedProperties: false
+ 
+ allOf:
+   - $ref: /schemas/pci/pci-host-bridge.yaml#
+@@ -96,6 +95,13 @@ allOf:
+               - const: xpl
+               - const: ecam
+ 
++required:
++  - interrupt-map
++  - interrupt-map-mask
++  - iommu-map
++  - msi-map
++  - nvidia,bpmp
++
+ unevaluatedProperties: false
+ 
+ examples:
+@@ -130,9 +136,18 @@ examples:
+         ranges = <0x81000000 0x00 0x84000000 0xd0 0x84000000 0x00 0x00200000>,
+                  <0x82000000 0x00 0x20000000 0x00 0x20000000 0x00 0x08000000>,
+                  <0xc3000000 0xd0 0xc0000000 0xd0 0xc0000000 0x07 0xc0000000>;
+-        bus-range = <0x0 0xff>;
+ 
+         nvidia,bpmp = <&bpmp 0>;
++
++        pcie@0 {
++          device_type = "pci";
++          compatible = "pciclass,0604";
++          reg = <0x0 0x0 0x0 0x0 0x0>;
++          bus-range = <0x01 0xff>;
++          #address-cells = <3>;
++          #size-cells = <2>;
++          ranges;
++        };
+       };
+     };
+ 
+@@ -167,8 +182,17 @@ examples:
+         ranges = <0x81000000 0x00 0x84000000 0xa8 0x84000000 0x00 0x00200000>,
+                  <0x82000000 0x00 0x28000000 0x00 0x28000000 0x00 0x08000000>,
+                  <0xc3000000 0xa8 0xc0000000 0xa8 0xc0000000 0x07 0xc0000000>;
+-        bus-range = <0x00 0xff>;
+ 
+         nvidia,bpmp = <&bpmp 1>;
++
++        pcie@0 {
++          device_type = "pci";
++          compatible = "pciclass,0604";
++          reg = <0x0 0x0 0x0 0x0 0x0>;
++          bus-range = <0x01 0xff>;
++          #address-cells = <3>;
++          #size-cells = <2>;
++          ranges;
++        };
+       };
+     };
+-- 
+2.55.0
+

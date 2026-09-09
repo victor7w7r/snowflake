@@ -1,0 +1,38 @@
+From 9c8ef28c0ccac3749ac4669309b6af26099098c3 Mon Sep 17 00:00:00 2001
+From: Jori Koolstra <jkoolstra@xs4all.nl>
+Date: Tue, 30 Jun 2026 12:53:43 +0200
+Subject: [PATCH 01663/15333] hpfs: drop redundant S_IFDIR from mkdir
+
+vfs_mkdir() now sets the S_IFDIR type bit in the mode it passes to
+->mkdir(), so OR-ing S_IFDIR into the mode again in hpfs_mkdir() is
+redundant. Drop it.
+
+Assisted-by: LLM
+Signed-off-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Link: https://patch.msgid.link/20260630105400.68459-15-jkoolstra@xs4all.nl
+Reviewed-by: NeilBrown <neil@brown.name>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/hpfs/namei.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/fs/hpfs/namei.c b/fs/hpfs/namei.c
+index 353e13a615f5..b57dee5a0660 100644
+--- a/fs/hpfs/namei.c
++++ b/fs/hpfs/namei.c
+@@ -105,10 +105,10 @@ static struct dentry *hpfs_mkdir(struct mnt_idmap *idmap, struct inode *dir,
+ 
+ 	if (!uid_eq(result->i_uid, current_fsuid()) ||
+ 	    !gid_eq(result->i_gid, current_fsgid()) ||
+-	    result->i_mode != (mode | S_IFDIR)) {
++	    result->i_mode != mode) {
+ 		result->i_uid = current_fsuid();
+ 		result->i_gid = current_fsgid();
+-		result->i_mode = mode | S_IFDIR;
++		result->i_mode = mode;
+ 		hpfs_write_inode_nolock(result);
+ 	}
+ 	hpfs_update_directory_times(dir);
+-- 
+2.55.0
+

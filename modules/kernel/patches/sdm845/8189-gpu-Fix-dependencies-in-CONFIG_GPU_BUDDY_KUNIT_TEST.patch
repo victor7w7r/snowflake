@@ -1,0 +1,50 @@
+From 8fe3fc37564920ae315d2b8780025f280859a530 Mon Sep 17 00:00:00 2001
+From: Krzysztof Niemiec <krzysztof.niemiec@intel.com>
+Date: Wed, 29 Jul 2026 11:18:16 +0200
+Subject: [PATCH 08189/15333] gpu: Fix dependencies in
+ CONFIG_GPU_BUDDY_KUNIT_TEST
+
+CONFIG_GPU_BUDDY is currently not selectable by the user, mirroring
+how CONFIG_DRM_BUDDY does it - the idea is for a driver that makes use
+of it to include a "select GPU_BUDDY" line in its kconfig.
+CONFIG_DRM_BUDDY is also selected when building with
+CONFIG_DRM_KUNIT_TEST, as it can be thought of as building a mock
+"driver" running the tests, that makes use of the buddy functionality.
+
+CONFIG_GPU_BUDDY_KUNIT_TEST doesn't follow that logic, requiring
+GPU_BUDDY to be selected already instead of selecting it itself. This
+requires building the test kernel with another driver that uses
+DRM_BUDDY, as this is currently the only kconfig option that selects
+GPU_BUDDY. That shouldn't be required to run unit tests for a module
+now completely independent from DRM, let alone any specific driver.
+
+Fix the dependency declaration in CONFIG_GPU_BUDDY_KUNIT_TEST to make it
+work as intended, mirroring the setup in CONFIG_DRM_KUNIT_TEST.
+
+Signed-off-by: Krzysztof Niemiec <krzysztof.niemiec@intel.com>
+Reviewed-by: Sebastian Brzezinka <sebastian.brzezinka@intel.com>
+Reviewed-by: Andi Shyti <andi.shyti@linux.intel.com>
+Reviewed-by: Krzysztof Karas <krzysztof.karas@intel.com>
+Link: https://patch.msgid.link/20260729091816.27860-3-krzysztof.niemiec@intel.com
+Signed-off-by: Maarten Lankhorst <dev@lankhorst.se>
+---
+ drivers/gpu/Kconfig | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/Kconfig b/drivers/gpu/Kconfig
+index ebb2ad4b7ea0..3bcf08260d73 100644
+--- a/drivers/gpu/Kconfig
++++ b/drivers/gpu/Kconfig
+@@ -7,7 +7,8 @@ config GPU_BUDDY
+ 
+ config GPU_BUDDY_KUNIT_TEST
+        tristate "KUnit tests for GPU buddy allocator" if !KUNIT_ALL_TESTS
+-       depends on GPU_BUDDY && KUNIT
++       depends on KUNIT
++       select GPU_BUDDY
+        default KUNIT_ALL_TESTS
+        help
+          KUnit tests for the GPU buddy allocator.
+-- 
+2.55.0
+

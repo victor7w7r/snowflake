@@ -1,0 +1,33 @@
+From c97bdbf862c6ddd201a58ccf26b3a84519e20431 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 6 Aug 2026 12:21:33 +0700
+Subject: [PATCH 13733/15333] ASoC: rockchip: rockchip_sai: Propagate
+ -EPROBE_DEFER from IRQ lookup
+
+Return -EPROBE_DEFER from platform_get_irq_optional() so the driver is
+re-probed when the interrupt resource becomes available instead of
+continuing probe without an IRQ.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260806052136.21034-12-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/rockchip/rockchip_sai.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/sound/soc/rockchip/rockchip_sai.c b/sound/soc/rockchip/rockchip_sai.c
+index 585e89f61f0d..522b4f4f6a7a 100644
+--- a/sound/soc/rockchip/rockchip_sai.c
++++ b/sound/soc/rockchip/rockchip_sai.c
+@@ -1428,6 +1428,8 @@ static int rockchip_sai_probe(struct platform_device *pdev)
+ 				     "Failed to initialize regmap\n");
+ 
+ 	irq = platform_get_irq_optional(pdev, 0);
++	if (irq == -EPROBE_DEFER)
++		return irq;
+ 	if (irq > 0) {
+ 		ret = devm_request_irq(&pdev->dev, irq, rockchip_sai_isr,
+ 				       IRQF_SHARED, node->name, sai);
+-- 
+2.55.0
+

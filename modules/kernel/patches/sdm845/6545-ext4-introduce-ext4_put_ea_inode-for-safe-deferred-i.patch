@@ -1,0 +1,241 @@
+From 4f48af3dc75545f6c874e7d195aeff009c7453ba Mon Sep 17 00:00:00 2001
+From: Yun Zhou <yun.zhou@windriver.com>
+Date: Fri, 10 Jul 2026 11:08:49 +0800
+Subject: [PATCH 06545/15333] ext4: introduce ext4_put_ea_inode() for safe
+ deferred iput
+
+Calling iput() on EA inodes while holding xattr_sem or a jbd2 handle
+can trigger write_inode_now() -> ext4_writepages() -> s_writepages_rwsem,
+creating a lock ordering issue during mount (!SB_ACTIVE).
+
+Add ext4_put_ea_inode() which uses iput_if_not_last() as a fast path.
+If this is not the last reference, it is dropped immediately.  If this
+is the last reference, the inode is linked onto a per-sb lock-free llist
+via i_ea_iput_node (embedded in ext4_inode_info, sharing space with the
+unused xattr_sem of EA inodes via a union) and a delayed worker
+(1 jiffie) performs the final iput() in a clean context.  This avoids
+per-iput memory allocation.
+
+Flush points ensure all pending EA inode evictions complete before
+dependent resources become unavailable:
+- ext4_put_super / failed_mount9: before quota shutdown
+- failed_mount_wq: before freeing xattr caches
+- failed_mount3a: before freeing shrinker (journal replay case)
+- ext4_sync_fs: before remount-ro, freeze, or sync completes
+
+Initialization is placed before journal loading since fast commit
+replay may trigger evictions that call ext4_put_ea_inode().
+
+Also moves init_rwsem(xattr_sem) from init_once to ext4_alloc_inode to
+handle slab object reuse after the union field has been overwritten.
+
+Signed-off-by: Yun Zhou <yun.zhou@windriver.com>
+Suggested-by: Jan Kara <jack@suse.cz>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260710030851.2791589-3-yun.zhou@windriver.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/ext4.h  | 13 ++++++++++-
+ fs/ext4/super.c | 19 +++++++++++++++-
+ fs/ext4/xattr.c | 60 +++++++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext4/xattr.h |  2 ++
+ 4 files changed, 92 insertions(+), 2 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 5bad1b5bbccf..ed1d525894f7 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1070,8 +1070,14 @@ struct ext4_inode_info {
+ 	 * between readers of EAs and writers of regular file data, so
+ 	 * instead we synchronize on xattr_sem when reading or changing
+ 	 * EAs.
++	 *
++	 * EA inodes (EXT4_EA_INODE_FL) do not use xattr_sem; they reuse
++	 * the space for deferred iput linkage.
+ 	 */
+-	struct rw_semaphore xattr_sem;
++	union {
++		struct rw_semaphore xattr_sem;
++		struct llist_node i_ea_iput_node;
++	};
+ 
+ 	/*
+ 	 * Inodes with EXT4_STATE_ORPHAN_FILE use i_orphan_idx. Otherwise
+@@ -1770,6 +1776,11 @@ struct ext4_sb_info {
+ 	struct ext4_es_stats s_es_stats;
+ 	struct mb_cache *s_ea_block_cache;
+ 	struct mb_cache *s_ea_inode_cache;
++
++	/* Deferred iput for EA inodes to avoid lock ordering issues */
++	struct llist_head s_ea_inode_to_free;
++	struct delayed_work s_ea_inode_work;
++
+ 	spinlock_t s_es_lock ____cacheline_aligned_in_smp;
+ 
+ 	/* Journal triggers for checksum computation */
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index f0a99c1e270f..6c18b5adffca 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -1303,6 +1303,8 @@ static void ext4_put_super(struct super_block *sb)
+ 			 &sb->s_uuid);
+ 
+ 	ext4_unregister_li_request(sb);
++	/* Drain deferred EA inode iputs while quota is still active. */
++	flush_delayed_work(&sbi->s_ea_inode_work);
+ 	ext4_quotas_off(sb, EXT4_MAXQUOTAS);
+ 
+ 	destroy_workqueue(sbi->rsv_conversion_wq);
+@@ -1423,6 +1425,13 @@ static struct inode *ext4_alloc_inode(struct super_block *sb)
+ 	memset(&ei->i_dquot, 0, sizeof(ei->i_dquot));
+ #endif
+ 	ei->jinode = NULL;
++	/*
++	 * Reinitialize xattr_sem every allocation because EA inodes
++	 * share this space with i_ea_iput_node (via union) which may
++	 * have overwritten the semaphore when the slab object was
++	 * previously used as an EA inode.
++	 */
++	init_rwsem(&ei->xattr_sem);
+ 	INIT_LIST_HEAD(&ei->i_rsv_conversion_list);
+ 	spin_lock_init(&ei->i_completed_io_lock);
+ 	ei->i_sync_tid = 0;
+@@ -1488,7 +1497,6 @@ static void init_once(void *foo)
+ 	struct ext4_inode_info *ei = foo;
+ 
+ 	INIT_LIST_HEAD(&ei->i_orphan);
+-	init_rwsem(&ei->xattr_sem);
+ 	init_rwsem(&ei->i_data_sem);
+ 	inode_init_once(&ei->vfs_inode);
+ 	ext4_fc_init_inode(&ei->vfs_inode);
+@@ -5500,6 +5508,8 @@ static int __ext4_fill_super(struct fs_context *fc, struct super_block *sb)
+ 			  ext4_has_feature_orphan_present(sb) ||
+ 			  ext4_has_feature_journal_needs_recovery(sb));
+ 
++	ext4_init_ea_inode_work(sbi);
++
+ 	if (ext4_has_feature_mmp(sb) && !sb_rdonly(sb)) {
+ 		err = ext4_multi_mount_protect(sb, le64_to_cpu(es->s_mmp_block));
+ 		if (err)
+@@ -5750,6 +5760,8 @@ static int __ext4_fill_super(struct fs_context *fc, struct super_block *sb)
+ 	return 0;
+ 
+ failed_mount9:
++	/* Drain deferred EA inode iputs before quota shutdown */
++	flush_delayed_work(&sbi->s_ea_inode_work);
+ 	ext4_quotas_off(sb, EXT4_MAXQUOTAS);
+ failed_mount8: __maybe_unused
+ 	ext4_release_orphan_info(sb);
+@@ -5770,6 +5782,8 @@ failed_mount8: __maybe_unused
+ 	if (EXT4_SB(sb)->rsv_conversion_wq)
+ 		destroy_workqueue(EXT4_SB(sb)->rsv_conversion_wq);
+ failed_mount_wq:
++	/* Drain deferred EA inode iputs before freeing structures */
++	flush_delayed_work(&sbi->s_ea_inode_work);
+ 	ext4_xattr_destroy_cache(sbi->s_ea_inode_cache);
+ 	sbi->s_ea_inode_cache = NULL;
+ 
+@@ -5780,6 +5794,8 @@ failed_mount8: __maybe_unused
+ 		ext4_journal_destroy(sbi, sbi->s_journal);
+ 	}
+ failed_mount3a:
++	/* Drain deferred EA inode iputs from journal replay */
++	flush_delayed_work(&sbi->s_ea_inode_work);
+ 	ext4_es_unregister_shrinker(sbi);
+ failed_mount3:
+ 	/* flush s_sb_upd_work before sbi destroy */
+@@ -6450,6 +6466,7 @@ static int ext4_sync_fs(struct super_block *sb, int wait)
+ 
+ 	trace_ext4_sync_fs(sb, wait);
+ 	flush_workqueue(sbi->rsv_conversion_wq);
++	flush_delayed_work(&sbi->s_ea_inode_work);
+ 	/*
+ 	 * Writeback quota in non-journalled quota case - journalled quota has
+ 	 * no dirty dquots
+diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+index 508628b9626f..f716bf61aae9 100644
+--- a/fs/ext4/xattr.c
++++ b/fs/ext4/xattr.c
+@@ -3026,6 +3026,66 @@ void ext4_xattr_inode_array_free(struct ext4_xattr_inode_array *ea_inode_array)
+ 	kfree(ea_inode_array);
+ }
+ 
++
++/*
++ * Worker function for deferred EA inode iput.  Processes all inodes queued
++ * on s_ea_inode_to_free in a context free of xattr_sem/jbd2 handle locks.
++ */
++static void ext4_ea_inode_work(struct work_struct *work)
++{
++	struct ext4_sb_info *sbi = container_of(to_delayed_work(work),
++						struct ext4_sb_info,
++						s_ea_inode_work);
++	struct llist_node *node = llist_del_all(&sbi->s_ea_inode_to_free);
++
++	while (node) {
++		struct ext4_inode_info *ei = container_of(node,
++					struct ext4_inode_info, i_ea_iput_node);
++		node = node->next;
++		iput(&ei->vfs_inode);
++	}
++}
++
++/*
++ * Release a VFS reference on an EA inode.  Must be used instead of iput()
++ * in any context where xattr_sem or a jbd2 handle is held.
++ *
++ * If this is not the last reference, drops it immediately via
++ * iput_if_not_last() with no further action needed.
++ *
++ * If this is the last reference, the inode is linked onto a per-sb
++ * llist via i_ea_iput_node (embedded in ext4_inode_info, sharing space
++ * with the unused xattr_sem) and a delayed worker performs the final
++ * iput() in a clean context.
++ *
++ * Note: while an inode is on s_ea_inode_to_free, the unconsumed i_count
++ * reference (still 1) keeps it in the inode cache, so any concurrent
++ * iget() bumps i_count to >= 2 and iput_if_not_last() will succeed.
++ * Nobody will add the inode a second time until ext4_ea_inode_work()
++ * drops that reference via iput().
++ */
++void ext4_put_ea_inode(struct inode *inode)
++{
++	if (!inode)
++		return;
++	WARN_ON_ONCE(!(EXT4_I(inode)->i_flags & EXT4_EA_INODE_FL));
++	if (iput_if_not_last(inode))
++		return;
++	llist_add(&EXT4_I(inode)->i_ea_iput_node,
++		  &EXT4_SB(inode->i_sb)->s_ea_inode_to_free);
++	/*
++	 * Use a short delay to allow multiple EA inodes to accumulate,
++	 * reducing workqueue wakeups when several are released together.
++	 */
++	schedule_delayed_work(&EXT4_SB(inode->i_sb)->s_ea_inode_work, 1);
++}
++
++void ext4_init_ea_inode_work(struct ext4_sb_info *sbi)
++{
++	init_llist_head(&sbi->s_ea_inode_to_free);
++	INIT_DELAYED_WORK(&sbi->s_ea_inode_work, ext4_ea_inode_work);
++}
++
+ /*
+  * ext4_xattr_block_cache_insert()
+  *
+diff --git a/fs/ext4/xattr.h b/fs/ext4/xattr.h
+index 1fedf44d4fb6..2ff4b6eccd40 100644
+--- a/fs/ext4/xattr.h
++++ b/fs/ext4/xattr.h
+@@ -190,6 +190,8 @@ extern int ext4_xattr_delete_inode(handle_t *handle, struct inode *inode,
+ 				   struct ext4_xattr_inode_array **array,
+ 				   int extra_credits);
+ extern void ext4_xattr_inode_array_free(struct ext4_xattr_inode_array *array);
++extern void ext4_init_ea_inode_work(struct ext4_sb_info *sbi);
++extern void ext4_put_ea_inode(struct inode *inode);
+ 
+ extern int ext4_expand_extra_isize_ea(struct inode *inode, int new_extra_isize,
+ 			    struct ext4_inode *raw_inode, handle_t *handle);
+-- 
+2.55.0
+

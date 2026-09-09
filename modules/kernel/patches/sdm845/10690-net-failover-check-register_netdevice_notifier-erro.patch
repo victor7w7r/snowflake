@@ -1,0 +1,42 @@
+From d13bb65dd2dd0cbfeb8a7aeca9a4afd526eab3ee Mon Sep 17 00:00:00 2001
+From: Minhong He <heminhong@kylinos.cn>
+Date: Fri, 31 Jul 2026 11:03:38 +0800
+Subject: [PATCH 10690/15333] net: failover: check
+ register_netdevice_notifier() error in failover_init()
+
+failover_init() ignores register_netdevice_notifier() errors and always
+returns success, which can leave the failover module loaded without its
+netdev notifier registered.
+
+Return the notifier registration result directly so module initialization
+fails when registration fails.
+
+This is a future looking check, register_netdevice_notifier()
+only fails on double registration or if the registered notifier
+itself returns an error.
+
+Signed-off-by: Minhong He <heminhong@kylinos.cn>
+Link: https://patch.msgid.link/20260731030338.82508-1-heminhong@kylinos.cn
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/core/failover.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/net/core/failover.c b/net/core/failover.c
+index e43c59cd6868..4c3894a02cb7 100644
+--- a/net/core/failover.c
++++ b/net/core/failover.c
+@@ -302,9 +302,7 @@ EXPORT_SYMBOL_GPL(failover_unregister);
+ static __init int
+ failover_init(void)
+ {
+-	register_netdevice_notifier(&failover_notifier);
+-
+-	return 0;
++	return register_netdevice_notifier(&failover_notifier);
+ }
+ module_init(failover_init);
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,37 @@
+From d059966c0c7d24c9a8b8e577432209d53a9ebfe0 Mon Sep 17 00:00:00 2001
+From: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Date: Sat, 25 Apr 2026 21:30:38 -0700
+Subject: [PATCH 03990/15333] firmware_loader: builtin: ignore 0-size firmware
+
+Currently, the builtin firmware loader allows 0-size firmware to be
+returned successfully to drivers. This differs from all other loading
+mechanisms (filesystem, sysfs fallback) which reject 0-byte files, and
+forces drivers to add boilerplate size checks.
+
+Modify firmware_request_builtin() to reject 0-size firmware. This will
+also result in firmware loader falling back to other mechanisms if an
+empty built-in firmware is present.
+
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Link: https://patch.msgid.link/20260426043041.649202-1-dmitry.torokhov@gmail.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/base/firmware_loader/builtin/main.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/base/firmware_loader/builtin/main.c b/drivers/base/firmware_loader/builtin/main.c
+index d36befebb1b9..1dcebe8e7f8e 100644
+--- a/drivers/base/firmware_loader/builtin/main.c
++++ b/drivers/base/firmware_loader/builtin/main.c
+@@ -53,6 +53,8 @@ bool firmware_request_builtin(struct firmware *fw, const char *name)
+ 
+ 	for (b_fw = __start_builtin_fw; b_fw != __end_builtin_fw; b_fw++) {
+ 		if (strcmp(name, b_fw->name) == 0) {
++			if (b_fw->size == 0)
++				return false;
+ 			fw->size = b_fw->size;
+ 			fw->data = b_fw->data;
+ 			return true;
+-- 
+2.55.0
+

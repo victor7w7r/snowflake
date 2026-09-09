@@ -1,0 +1,333 @@
+From 991d67e8456a65c627fc42e52cdd845f7c7b2919 Mon Sep 17 00:00:00 2001
+From: Ce Sun <cesun102@amd.com>
+Date: Fri, 3 Apr 2026 10:21:37 +0800
+Subject: [PATCH 01911/15333] drm/amdgpu: remove interface for updating umc
+ v12_0 ecc
+
+Retire the interface to update umc v12_0 ecc status and
+its related code,since this interface is no longer needed.
+
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Ce Sun <cesun102@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c | 32 ---------
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h |  2 -
+ drivers/gpu/drm/amd/amdgpu/amdgpu_umc.c | 55 ---------------
+ drivers/gpu/drm/amd/amdgpu/amdgpu_umc.h | 11 ---
+ drivers/gpu/drm/amd/amdgpu/umc_v12_0.c  | 92 -------------------------
+ drivers/gpu/drm/amd/amdgpu/umc_v12_0.h  |  3 -
+ 6 files changed, 195 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+index 78c2d4394708..5c28244f1b34 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+@@ -3410,35 +3410,6 @@ static void amdgpu_ras_validate_threshold(struct amdgpu_device *adev,
+ 	}
+ }
+ 
+-static void amdgpu_ras_ecc_log_init(struct ras_ecc_log_info *ecc_log)
+-{
+-	mutex_init(&ecc_log->lock);
+-
+-	INIT_RADIX_TREE(&ecc_log->de_page_tree, GFP_KERNEL);
+-	ecc_log->de_queried_count = 0;
+-	ecc_log->consumption_q_count = 0;
+-}
+-
+-static void amdgpu_ras_ecc_log_fini(struct ras_ecc_log_info *ecc_log)
+-{
+-	struct radix_tree_iter iter;
+-	void __rcu **slot;
+-	struct ras_ecc_err *ecc_err;
+-
+-	mutex_lock(&ecc_log->lock);
+-	radix_tree_for_each_slot(slot, &ecc_log->de_page_tree, &iter, 0) {
+-		ecc_err = radix_tree_deref_slot(slot);
+-		kfree(ecc_err->err_pages.pfn);
+-		kfree(ecc_err);
+-		radix_tree_iter_delete(&ecc_log->de_page_tree, &iter, slot);
+-	}
+-	mutex_unlock(&ecc_log->lock);
+-
+-	mutex_destroy(&ecc_log->lock);
+-	ecc_log->de_queried_count = 0;
+-	ecc_log->consumption_q_count = 0;
+-}
+-
+ int amdgpu_ras_init_badpage_info(struct amdgpu_device *adev)
+ {
+ 	struct amdgpu_ras *con = amdgpu_ras_get_context(adev);
+@@ -3542,7 +3513,6 @@ int amdgpu_ras_recovery_init(struct amdgpu_device *adev, bool init_bp_info)
+ 	mutex_init(&con->page_rsv_lock);
+ 	mutex_init(&con->page_retirement_lock);
+ 
+-	amdgpu_ras_ecc_log_init(&con->umc_ecc_log);
+ #ifdef CONFIG_X86_MCE_AMD
+ 	if ((adev->asic_type == CHIP_ALDEBARAN) &&
+ 	    (adev->gmc.xgmi.connected_to_cpu))
+@@ -3582,8 +3552,6 @@ static int amdgpu_ras_recovery_fini(struct amdgpu_device *adev)
+ 
+ 	cancel_work_sync(&con->recovery_work);
+ 
+-	amdgpu_ras_ecc_log_fini(&con->umc_ecc_log);
+-
+ 	mutex_lock(&con->recovery_lock);
+ 	con->eh_data = NULL;
+ 	kfree(data->bps);
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
+index 255ce167d1cd..a44aed7f169e 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
+@@ -483,8 +483,6 @@ struct ras_ecc_err {
+ struct ras_ecc_log_info {
+ 	struct mutex lock;
+ 	struct radix_tree_root de_page_tree;
+-	uint64_t de_queried_count;
+-	uint64_t consumption_q_count;
+ };
+ 
+ struct ras_critical_region {
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_umc.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_umc.c
+index 254aacc7138b..e760dc0fc5e6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_umc.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_umc.c
+@@ -502,34 +502,6 @@ int amdgpu_umc_loop_channels(struct amdgpu_device *adev,
+ 	return 0;
+ }
+ 
+-int amdgpu_umc_update_ecc_status(struct amdgpu_device *adev,
+-				uint64_t status, uint64_t ipid, uint64_t addr)
+-{
+-	if (adev->umc.ras->update_ecc_status)
+-		return adev->umc.ras->update_ecc_status(adev,
+-					status, ipid, addr);
+-	return 0;
+-}
+-
+-int amdgpu_umc_logs_ecc_err(struct amdgpu_device *adev,
+-		struct radix_tree_root *ecc_tree, struct ras_ecc_err *ecc_err)
+-{
+-	struct amdgpu_ras *con = amdgpu_ras_get_context(adev);
+-	struct ras_ecc_log_info *ecc_log;
+-	int ret;
+-
+-	ecc_log = &con->umc_ecc_log;
+-
+-	mutex_lock(&ecc_log->lock);
+-	ret = radix_tree_insert(ecc_tree, ecc_err->pa_pfn, ecc_err);
+-	if (!ret)
+-		radix_tree_tag_set(ecc_tree,
+-			ecc_err->pa_pfn, UMC_ECC_NEW_DETECTED_TAG);
+-	mutex_unlock(&ecc_log->lock);
+-
+-	return ret;
+-}
+-
+ int amdgpu_umc_pages_in_a_row(struct amdgpu_device *adev,
+ 			struct ras_err_data *err_data, uint64_t pa_addr)
+ {
+@@ -578,33 +550,6 @@ int amdgpu_umc_lookup_bad_pages_in_a_row(struct amdgpu_device *adev,
+ 	return ret;
+ }
+ 
+-int amdgpu_umc_mca_to_addr(struct amdgpu_device *adev,
+-			uint64_t err_addr, uint32_t ch, uint32_t umc,
+-			uint32_t node, uint32_t socket,
+-			struct ta_ras_query_address_output *addr_out, bool dump_addr)
+-{
+-	struct ta_ras_query_address_input addr_in;
+-	int ret;
+-
+-	memset(&addr_in, 0, sizeof(addr_in));
+-	addr_in.ma.err_addr = err_addr;
+-	addr_in.ma.ch_inst = ch;
+-	addr_in.ma.umc_inst = umc;
+-	addr_in.ma.node_inst = node;
+-	addr_in.ma.socket_id = socket;
+-
+-	if (adev->umc.ras && adev->umc.ras->convert_ras_err_addr) {
+-		ret = adev->umc.ras->convert_ras_err_addr(adev, NULL, &addr_in,
+-				addr_out, dump_addr);
+-		if (ret)
+-			return ret;
+-	} else {
+-		return 0;
+-	}
+-
+-	return 0;
+-}
+-
+ int amdgpu_umc_pa2mca(struct amdgpu_device *adev,
+ 		uint64_t pa, uint64_t *mca, enum amdgpu_memory_partition nps)
+ {
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_umc.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_umc.h
+index 8494a55ebf76..f65f3e082c64 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_umc.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_umc.h
+@@ -103,8 +103,6 @@ struct amdgpu_umc_ras {
+ 					void *ras_error_status);
+ 	bool (*check_ecc_err_status)(struct amdgpu_device *adev,
+ 			enum amdgpu_mca_error_type type, void *ras_error_status);
+-	int (*update_ecc_status)(struct amdgpu_device *adev,
+-			uint64_t status, uint64_t ipid, uint64_t addr);
+ 	int (*convert_ras_err_addr)(struct amdgpu_device *adev,
+ 			struct ras_err_data *err_data,
+ 			struct ta_ras_query_address_input *addr_in,
+@@ -179,21 +177,12 @@ int amdgpu_umc_page_retirement_mca(struct amdgpu_device *adev,
+ int amdgpu_umc_loop_channels(struct amdgpu_device *adev,
+ 			umc_func func, void *data);
+ 
+-int amdgpu_umc_update_ecc_status(struct amdgpu_device *adev,
+-				uint64_t status, uint64_t ipid, uint64_t addr);
+-int amdgpu_umc_logs_ecc_err(struct amdgpu_device *adev,
+-		struct radix_tree_root *ecc_tree, struct ras_ecc_err *ecc_err);
+-
+ void amdgpu_umc_handle_bad_pages(struct amdgpu_device *adev,
+ 			void *ras_error_status);
+ int amdgpu_umc_pages_in_a_row(struct amdgpu_device *adev,
+ 			struct ras_err_data *err_data, uint64_t pa_addr);
+ int amdgpu_umc_lookup_bad_pages_in_a_row(struct amdgpu_device *adev,
+ 			uint64_t pa_addr, uint64_t *pfns, int len);
+-int amdgpu_umc_mca_to_addr(struct amdgpu_device *adev,
+-			uint64_t err_addr, uint32_t ch, uint32_t umc,
+-			uint32_t node, uint32_t socket,
+-			struct ta_ras_query_address_output *addr_out, bool dump_addr);
+ int amdgpu_umc_pa2mca(struct amdgpu_device *adev,
+ 		uint64_t pa, uint64_t *mca, enum amdgpu_memory_partition nps);
+ #endif
+diff --git a/drivers/gpu/drm/amd/amdgpu/umc_v12_0.c b/drivers/gpu/drm/amd/amdgpu/umc_v12_0.c
+index d39e74f6ce03..ebceb933481e 100644
+--- a/drivers/gpu/drm/amd/amdgpu/umc_v12_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/umc_v12_0.c
+@@ -29,7 +29,6 @@
+ #include "mp/mp_13_0_6_sh_mask.h"
+ 
+ #define MAX_ECC_NUM_PER_RETIREMENT  32
+-#define DELAYED_TIME_FOR_GPU_RESET  1000  //ms
+ 
+ bool umc_v12_0_is_deferred_error(struct amdgpu_device *adev, uint64_t mc_umc_status)
+ {
+@@ -292,96 +291,6 @@ static bool umc_v12_0_check_ecc_err_status(struct amdgpu_device *adev,
+ 	return false;
+ }
+ 
+-static int umc_v12_0_update_ecc_status(struct amdgpu_device *adev,
+-			uint64_t status, uint64_t ipid, uint64_t addr)
+-{
+-	struct amdgpu_ras *con = amdgpu_ras_get_context(adev);
+-	uint16_t hwid, mcatype;
+-	uint64_t page_pfn[UMC_V12_0_BAD_PAGE_NUM_PER_CHANNEL];
+-	uint64_t err_addr, pa_addr = 0;
+-	struct ras_ecc_err *ecc_err;
+-	struct ta_ras_query_address_output addr_out;
+-	uint32_t shift_bit = adev->umc.flip_bits.flip_bits_in_pa[2];
+-	int count, ret, i;
+-
+-	hwid = REG_GET_FIELD(ipid, MCMP1_IPIDT0, HardwareID);
+-	mcatype = REG_GET_FIELD(ipid, MCMP1_IPIDT0, McaType);
+-
+-	/* The IP block decode of consumption is SMU */
+-	if (hwid != MCA_UMC_HWID_V12_0 || mcatype != MCA_UMC_MCATYPE_V12_0) {
+-		con->umc_ecc_log.consumption_q_count++;
+-		return 0;
+-	}
+-
+-	if (!status)
+-		return 0;
+-
+-	if (!umc_v12_0_is_deferred_error(adev, status))
+-		return 0;
+-
+-	err_addr = REG_GET_FIELD(addr,
+-				MCA_UMC_UMC0_MCUMC_ADDRT0, ErrorAddr);
+-
+-	dev_dbg(adev->dev,
+-		"UMC:IPID:0x%llx, socket:%llu, aid:%llu, inst:%llu, ch:%llu, err_addr:0x%llx\n",
+-		ipid,
+-		MCA_IPID_2_SOCKET_ID(ipid),
+-		MCA_IPID_2_DIE_ID(ipid),
+-		MCA_IPID_2_UMC_INST(ipid),
+-		MCA_IPID_2_UMC_CH(ipid),
+-		err_addr);
+-
+-	ret = amdgpu_umc_mca_to_addr(adev,
+-			err_addr, MCA_IPID_2_UMC_CH(ipid),
+-			MCA_IPID_2_UMC_INST(ipid), MCA_IPID_2_DIE_ID(ipid),
+-			MCA_IPID_2_SOCKET_ID(ipid), &addr_out, true);
+-	if (ret)
+-		return ret;
+-
+-	ecc_err = kzalloc_obj(*ecc_err);
+-	if (!ecc_err)
+-		return -ENOMEM;
+-
+-	pa_addr = addr_out.pa.pa;
+-	ecc_err->status = status;
+-	ecc_err->ipid = ipid;
+-	ecc_err->addr = addr;
+-	ecc_err->pa_pfn = pa_addr >> AMDGPU_GPU_PAGE_SHIFT;
+-	ecc_err->channel_idx = addr_out.pa.channel_idx;
+-
+-	/* If converted pa_pfn is 0, use pa C4 pfn. */
+-	if (!ecc_err->pa_pfn)
+-		ecc_err->pa_pfn = BIT_ULL(shift_bit) >> AMDGPU_GPU_PAGE_SHIFT;
+-
+-	ret = amdgpu_umc_logs_ecc_err(adev, &con->umc_ecc_log.de_page_tree, ecc_err);
+-	if (ret) {
+-		if (ret == -EEXIST)
+-			con->umc_ecc_log.de_queried_count++;
+-		else
+-			dev_err(adev->dev, "Fail to log ecc error! ret:%d\n", ret);
+-
+-		kfree(ecc_err);
+-		return ret;
+-	}
+-
+-	con->umc_ecc_log.de_queried_count++;
+-
+-	memset(page_pfn, 0, sizeof(page_pfn));
+-	count = amdgpu_umc_lookup_bad_pages_in_a_row(adev,
+-				pa_addr,
+-				page_pfn, ARRAY_SIZE(page_pfn));
+-	if (count <= 0) {
+-		dev_warn(adev->dev, "Fail to convert error address! count:%d\n", count);
+-		return 0;
+-	}
+-
+-	/* Reserve memory */
+-	for (i = 0; i < count; i++)
+-		amdgpu_ras_reserve_page(adev, page_pfn[i]);
+-
+-	return 0;
+-}
+-
+ static int umc_v12_0_fill_error_record(struct amdgpu_device *adev,
+ 				struct ras_ecc_err *ecc_err, void *ras_error_status)
+ {
+@@ -484,7 +393,6 @@ struct amdgpu_umc_ras umc_v12_0_ras = {
+ 	},
+ 	.ecc_info_query_ras_error_address = umc_v12_0_query_ras_ecc_err_addr,
+ 	.check_ecc_err_status = umc_v12_0_check_ecc_err_status,
+-	.update_ecc_status = umc_v12_0_update_ecc_status,
+ 	.convert_ras_err_addr = umc_v12_0_convert_error_address,
+ 	.get_die_id_from_pa = umc_v12_0_get_die_id,
+ 	.get_retire_flip_bits = umc_v12_0_get_retire_flip_bits,
+diff --git a/drivers/gpu/drm/amd/amdgpu/umc_v12_0.h b/drivers/gpu/drm/amd/amdgpu/umc_v12_0.h
+index d470775be308..9d9e84d8d3bb 100644
+--- a/drivers/gpu/drm/amd/amdgpu/umc_v12_0.h
++++ b/drivers/gpu/drm/amd/amdgpu/umc_v12_0.h
+@@ -50,9 +50,6 @@
+ /* row bits in MCA address */
+ #define UMC_V12_0_MA_R0_BIT 10
+ 
+-#define MCA_UMC_HWID_V12_0     0x96
+-#define MCA_UMC_MCATYPE_V12_0  0x0
+-
+ #define MCA_IPID_LO_2_UMC_CH(_ipid_lo) (((((_ipid_lo) >> 20) & 0x1) * 4) + \
+ 			(((_ipid_lo) >> 12) & 0xF))
+ #define MCA_IPID_LO_2_UMC_INST(_ipid_lo) (((_ipid_lo) >> 21) & 0x7)
+-- 
+2.55.0
+

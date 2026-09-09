@@ -1,0 +1,47 @@
+From f8e0c305995fa2931e77a6e669e8362458ae4eba Mon Sep 17 00:00:00 2001
+From: "Harry Yoo (Oracle)" <harry@kernel.org>
+Date: Wed, 29 Jul 2026 17:20:11 +0900
+Subject: [PATCH 09451/15333] mm/slab: use call_rcu() in unknown context if
+ irqs are enabled
+
+call_rcu() disables IRQs with local_irq_save() to protect its per-cpu
+data structures. Therefore, if IRQs are not disabled, they cannot be
+corrupted by reentrance into call_rcu(). So fall back to the deferred
+path only when !allow_spin && irqs_disabled().
+
+The RCU subsystem does not guarantee this contractually, and this
+optimization relies on RCU's implementation details. Ideally, it should
+be removed once call_rcu_nolock() is supported by the RCU subsystem.
+
+Link: https://lore.kernel.org/linux-mm/CAADnVQKRVD5ZSnEKbZZU7w86gHbGHUug2pvzpgZTngNS+fg4rw@mail.gmail.com
+Suggested-by: Alexei Starovoitov <ast@kernel.org>
+Signed-off-by: Harry Yoo (Oracle) <harry@kernel.org>
+Link: https://patch.msgid.link/20260729-kfree_rcu_nolock-v5-3-a28cdcda9673@kernel.org
+Reviewed-by: Shengming Hu <hu.shengming@zte.com.cn>
+Signed-off-by: Vlastimil Babka (SUSE) <vbabka@kernel.org>
+---
+ mm/slub.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/mm/slub.c b/mm/slub.c
+index 325f3818cd6f..31f94bdad3b0 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -6132,8 +6132,12 @@ bool __kfree_rcu_sheaf(struct kmem_cache *s, void *obj, unsigned int free_flags)
+ 	if (likely(rcu_sheaf->size < s->sheaf_capacity)) {
+ 		rcu_sheaf = NULL;
+ 	} else {
+-		if (unlikely(!allow_spin)) {
+-			/* call_rcu() cannot be called in an unknown context */
++		/*
++		 * With !allow_spin, we might have interrupted call_rcu()'s
++		 * IRQ-disabled critical section. If IRQs are not disabled,
++		 * we know that's not the case.
++		 */
++		if (unlikely(!allow_spin && irqs_disabled())) {
+ 			rcu_sheaf->size--;
+ 			local_unlock(&s->cpu_sheaves->lock);
+ 			goto fail;
+-- 
+2.55.0
+

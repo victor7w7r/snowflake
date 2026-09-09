@@ -1,0 +1,81 @@
+From 661102bb87e43b7e476f3a2ff34e916b800b5627 Mon Sep 17 00:00:00 2001
+From: Yu Kuai <yukuai@fygo.io>
+Date: Mon, 3 Aug 2026 03:50:38 +0800
+Subject: [PATCH 11780/15333] md/raid5: split reshape bios before bitmap
+ accounting
+
+RAID5 maps array sectors through different geometries before and after the
+reshape position. During llbitmap reshape, md core cannot account one bio
+against both geometries as a single bitmap range, because the old and new
+bitmap mappings can cover different chunks.
+
+Split bios that cross reshape_position before md_account_bio(), so the
+bitmap only sees ranges that belong to one side of the reshape boundary.
+
+mddev_bio_split_at_reshape_offset() uses bio_submit_split_bioset(), which
+submits the remainder immediately and returns the front split bio. If that
+front bio later has to wait for reshape, md_handle_request() must not retry
+the original bio pointer, because after the split that pointer is the
+already-submitted remainder. Track whether the split happened, clear the
+temporary BLK_STS_RESOURCE status after the internal clone completion, and
+resubmit the front bio directly after the reshape wait. Keep the old
+return-false retry path for unsplit bios, where md_handle_request() still
+owns the same bio.
+
+Tested-by: Mykola Marzhan <mykola@meshstor.io>
+Link: https://patch.msgid.link/20260802195038.164272-30-yukuai@kernel.org
+Signed-off-by: Yu Kuai <yukuai@fygo.io>
+---
+ drivers/md/raid5.c | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/drivers/md/raid5.c b/drivers/md/raid5.c
+index 5176de5b5956..b91545ce090d 100644
+--- a/drivers/md/raid5.c
++++ b/drivers/md/raid5.c
+@@ -6221,9 +6221,11 @@ static bool raid5_make_request(struct mddev *mddev, struct bio * bi)
+ 	struct r5conf *conf = mddev->private;
+ 	const int rw = bio_data_dir(bi);
+ 	struct stripe_request_ctx *ctx;
++	struct bio *front_bio;
+ 	sector_t logical_sector;
+ 	enum stripe_result res;
+ 	int s, stripe_cnt;
++	bool split = false;
+ 	bool on_wq;
+ 
+ 	if (unlikely(bi->bi_opf & REQ_PREFLUSH)) {
+@@ -6257,6 +6259,18 @@ static bool raid5_make_request(struct mddev *mddev, struct bio * bi)
+ 		return true;
+ 	}
+ 
++	front_bio = bi;
++	bi = mddev_bio_split_at_reshape_offset(mddev, bi, NULL,
++					       &conf->bio_split);
++	if (!bi) {
++		if (rw == WRITE)
++			md_write_end(mddev);
++		return true;
++	}
++	if (bi != front_bio)
++		split = true;
++	front_bio = bi;
++
+ 	logical_sector = bi->bi_iter.bi_sector & ~((sector_t)RAID5_STRIPE_SECTORS(conf)-1);
+ 	bi->bi_next = NULL;
+ 
+@@ -6348,6 +6362,11 @@ static bool raid5_make_request(struct mddev *mddev, struct bio * bi)
+ 		bio_endio(bi);
+ 
+ 		wait_for_completion(&done);
++		front_bio->bi_status = BLK_STS_OK;
++		if (split) {
++			submit_bio_noacct(front_bio);
++			return true;
++		}
+ 		return false;
+ 	}
+ 
+-- 
+2.55.0
+

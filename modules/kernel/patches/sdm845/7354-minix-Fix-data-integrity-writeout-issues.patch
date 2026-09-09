@@ -1,0 +1,201 @@
+From 84af7c3b3462eeef41c4c44dcc41d0701e4e2143 Mon Sep 17 00:00:00 2001
+From: Jan Kara <jack@suse.cz>
+Date: Mon, 27 Jul 2026 12:49:34 +0200
+Subject: [PATCH 07354/15333] minix: Fix data integrity writeout issues
+
+Minix could fail to properly write out inode on fsync(2) due to races
+with WB_SYNC_NONE writeback. Several racing fsyncs could also result in
+some fsync returning earlier than all metadata buffers were properly
+persisted. Furthermore DIRSYNC handling missed writing inode related
+metadata.
+
+Fix all these issues by using new .sync_inode_metadata method which
+makes sure all inode related metadata is written to disk during any
+WB_SYNC_ALL writeback.
+
+Signed-off-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260727104923.3828017-36-jack@suse.cz
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/minix/dir.c   |  2 +-
+ fs/minix/file.c  |  9 +--------
+ fs/minix/inode.c | 52 ++++++++++++++++++++++++++++++++----------------
+ fs/minix/minix.h |  1 -
+ 4 files changed, 37 insertions(+), 27 deletions(-)
+
+diff --git a/fs/minix/dir.c b/fs/minix/dir.c
+index 361d26d87d2e..2ca16f849d5a 100644
+--- a/fs/minix/dir.c
++++ b/fs/minix/dir.c
+@@ -23,7 +23,7 @@ const struct file_operations minix_dir_operations = {
+ 	.llseek		= generic_file_llseek,
+ 	.read		= generic_read_dir,
+ 	.iterate_shared	= minix_readdir,
+-	.fsync		= minix_fsync,
++	.fsync		= simple_fsync,
+ };
+ 
+ /*
+diff --git a/fs/minix/file.c b/fs/minix/file.c
+index 86e5943cd2ff..02aabbdb5dea 100644
+--- a/fs/minix/file.c
++++ b/fs/minix/file.c
+@@ -10,13 +10,6 @@
+ #include <linux/buffer_head.h>
+ #include "minix.h"
+ 
+-int minix_fsync(struct file *file, loff_t start, loff_t end, int datasync)
+-{
+-	return mmb_fsync(file,
+-			&minix_i(file->f_mapping->host)->i_metadata_bhs,
+-			start, end, datasync);
+-}
+-
+ /*
+  * We have mostly NULLs here: the current defaults are OK for
+  * the minix filesystem.
+@@ -26,7 +19,7 @@ const struct file_operations minix_file_operations = {
+ 	.read_iter	= generic_file_read_iter,
+ 	.write_iter	= generic_file_write_iter,
+ 	.mmap_prepare	= generic_file_mmap_prepare,
+-	.fsync		= minix_fsync,
++	.fsync		= simple_fsync,
+ 	.splice_read	= filemap_splice_read,
+ };
+ 
+diff --git a/fs/minix/inode.c b/fs/minix/inode.c
+index c30cc590698d..daf83e4ff25c 100644
+--- a/fs/minix/inode.c
++++ b/fs/minix/inode.c
+@@ -24,6 +24,8 @@
+ 
+ static int minix_write_inode(struct inode *inode,
+ 		struct writeback_control *wbc);
++static int minix_sync_inode_metadata(struct inode *inode,
++				     struct writeback_control *wbc);
+ static int minix_statfs(struct dentry *dentry, struct kstatfs *buf);
+ 
+ void __minix_error_inode(struct inode *inode, const char *function,
+@@ -128,6 +130,7 @@ static const struct super_operations minix_sops = {
+ 	.alloc_inode	= minix_alloc_inode,
+ 	.free_inode	= minix_free_in_core_inode,
+ 	.write_inode	= minix_write_inode,
++	.sync_inode_metadata = minix_sync_inode_metadata,
+ 	.evict_inode	= minix_evict_inode,
+ 	.put_super	= minix_put_super,
+ 	.statfs		= minix_statfs,
+@@ -630,7 +633,7 @@ struct inode *minix_iget(struct super_block *sb, unsigned long ino)
+ /*
+  * The minix V1 function to synchronize an inode.
+  */
+-static struct buffer_head * V1_minix_update_inode(struct inode * inode)
++static int V1_minix_update_inode(struct inode * inode)
+ {
+ 	struct buffer_head * bh;
+ 	struct minix_inode * raw_inode;
+@@ -639,7 +642,7 @@ static struct buffer_head * V1_minix_update_inode(struct inode * inode)
+ 
+ 	raw_inode = minix_V1_raw_inode(inode->i_sb, inode->i_ino, &bh);
+ 	if (!raw_inode)
+-		return NULL;
++		return -EIO;
+ 	raw_inode->i_mode = inode->i_mode;
+ 	raw_inode->i_uid = fs_high2lowuid(i_uid_read(inode));
+ 	raw_inode->i_gid = fs_high2lowgid(i_gid_read(inode));
+@@ -651,13 +654,15 @@ static struct buffer_head * V1_minix_update_inode(struct inode * inode)
+ 	else for (i = 0; i < 9; i++)
+ 		raw_inode->i_zone[i] = minix_inode->u.i1_data[i];
+ 	mark_buffer_dirty(bh);
+-	return bh;
++	brelse(bh);
++	set_inode_metadata_writeback(inode);
++	return 0;
+ }
+ 
+ /*
+  * The minix V2 function to synchronize an inode.
+  */
+-static struct buffer_head * V2_minix_update_inode(struct inode * inode)
++static int V2_minix_update_inode(struct inode * inode)
+ {
+ 	struct buffer_head * bh;
+ 	struct minix2_inode * raw_inode;
+@@ -666,7 +671,7 @@ static struct buffer_head * V2_minix_update_inode(struct inode * inode)
+ 
+ 	raw_inode = minix_V2_raw_inode(inode->i_sb, inode->i_ino, &bh);
+ 	if (!raw_inode)
+-		return NULL;
++		return -EIO;
+ 	raw_inode->i_mode = inode->i_mode;
+ 	raw_inode->i_uid = fs_high2lowuid(i_uid_read(inode));
+ 	raw_inode->i_gid = fs_high2lowgid(i_gid_read(inode));
+@@ -680,29 +685,42 @@ static struct buffer_head * V2_minix_update_inode(struct inode * inode)
+ 	else for (i = 0; i < 10; i++)
+ 		raw_inode->i_zone[i] = minix_inode->u.i2_data[i];
+ 	mark_buffer_dirty(bh);
+-	return bh;
++	brelse(bh);
++	set_inode_metadata_writeback(inode);
++	return 0;
+ }
+ 
+ static int minix_write_inode(struct inode *inode, struct writeback_control *wbc)
++{
++	if (INODE_VERSION(inode) == MINIX_V1)
++		return V1_minix_update_inode(inode);
++	return V2_minix_update_inode(inode);
++}
++
++static int minix_sync_inode_metadata(struct inode *inode,
++				     struct writeback_control *wbc)
+ {
+ 	int err = 0;
+ 	struct buffer_head *bh;
++	void *raw_inode;
+ 
+ 	if (INODE_VERSION(inode) == MINIX_V1)
+-		bh = V1_minix_update_inode(inode);
++		raw_inode = minix_V1_raw_inode(inode->i_sb, inode->i_ino, &bh);
+ 	else
+-		bh = V2_minix_update_inode(inode);
+-	if (!bh)
++		raw_inode = minix_V2_raw_inode(inode->i_sb, inode->i_ino, &bh);
++	if (!raw_inode)
+ 		return -EIO;
+-	if (wbc->sync_mode == WB_SYNC_ALL && buffer_dirty(bh)) {
+-		sync_dirty_buffer(bh);
+-		if (buffer_req(bh) && !buffer_uptodate(bh)) {
+-			printk("IO error syncing minix inode [%s:%08llx]\n",
+-				inode->i_sb->s_id, inode->i_ino);
+-			err = -EIO;
+-		}
++	err = mmb_sync(&minix_i(inode)->i_metadata_bhs);
++	if (err)
++		goto out;
++	sync_dirty_buffer(bh);
++	if (buffer_write_io_error(bh)) {
++		printk("IO error syncing minix inode [%s:%08llx]\n",
++			inode->i_sb->s_id, inode->i_ino);
++		err = -EIO;
+ 	}
+-	brelse (bh);
++out:
++	brelse(bh);
+ 	return err;
+ }
+ 
+diff --git a/fs/minix/minix.h b/fs/minix/minix.h
+index 9e52d4302f0d..78722ce22e1e 100644
+--- a/fs/minix/minix.h
++++ b/fs/minix/minix.h
+@@ -59,7 +59,6 @@ int minix_getattr(struct mnt_idmap *, const struct path *,
+ 		struct kstat *, u32, unsigned int);
+ int minix_prepare_chunk(struct folio *folio, loff_t pos, unsigned len);
+ struct mapping_metadata_bhs *minix_get_metadata_bhs(struct inode *inode);
+-int minix_fsync(struct file *file, loff_t start, loff_t end, int datasync);
+ 
+ extern void V1_minix_truncate(struct inode *);
+ extern void V2_minix_truncate(struct inode *);
+-- 
+2.55.0
+

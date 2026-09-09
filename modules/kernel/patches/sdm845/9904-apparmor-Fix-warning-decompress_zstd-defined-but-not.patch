@@ -1,0 +1,84 @@
+From efede141dc86279e663ac8c28f61c19cf7e36c84 Mon Sep 17 00:00:00 2001
+From: John Johansen <john.johansen@canonical.com>
+Date: Sun, 2 Aug 2026 23:16:21 -0700
+Subject: [PATCH 09904/15333] apparmor: Fix warning: 'decompress_zstd' defined
+ but not used
+
+decompress_zstd() is used in two cases:
+
+- CONFIG SECURITY_APPARMOR_COMPRESSED_POLICY: which allows for
+  compressed policy to be loaded
+- CONFIG_SECURITY_APPARMOR_EXPORT_BINARY: which allows introspecting
+  loaded policy, that is stored in compressed form until it is needed.
+
+When neither of these are selected there is no need for decpress_zstd(),
+which results in the decompressed_zstd defined but not used message.
+Only define decmpress_zstd() if either of those config options are
+enabled. The stub routine is not needed because all calling code is
+gated by one of those config options.
+
+Fixes: 1c5f27e845e84 ("apparmor: Fix build failure when ZSTD_DECOMPRESS is not enabled")
+Signed-off-by: John Johansen <john.johansen@canonical.com>
+---
+ security/apparmor/apparmorfs.c | 16 ++++++----------
+ 1 file changed, 6 insertions(+), 10 deletions(-)
+
+diff --git a/security/apparmor/apparmorfs.c b/security/apparmor/apparmorfs.c
+index 2ae7404526d1..eaee8dc300fa 100644
+--- a/security/apparmor/apparmorfs.c
++++ b/security/apparmor/apparmorfs.c
+@@ -484,7 +484,8 @@ static struct aa_loaddata *aa_simple_write_to_buffer(const char __user *userbuf,
+ 	return data;
+ }
+ 
+-#ifdef CONFIG_SECURITY_APPARMOR_COMPRESSED_POLICY
++#if defined(CONFIG_SECURITY_APPARMOR_COMPRESSED_POLICY) || \
++    defined(CONFIG_SECURITY_APPARMOR_EXPORT_BINARY)
+ static int decompress_zstd(char *src, size_t slen, char *dst, size_t dlen)
+ {
+ 	if (slen < dlen) {
+@@ -519,7 +520,10 @@ static int decompress_zstd(char *src, size_t slen, char *dst, size_t dlen)
+ 	memcpy(dst, src, slen);
+ 	return 0;
+ }
++#endif
++
+ 
++#ifdef CONFIG_SECURITY_APPARMOR_COMPRESSED_POLICY
+ /**
+  * aa_get_data_from_compressed - common routine for getting compressed policy
+  * from user and get both compressed and uncompressed version.
+@@ -531,7 +535,6 @@ static int decompress_zstd(char *src, size_t slen, char *dst, size_t dlen)
+  * Returns: kernel buffer containing copy of user buffer data or an
+  *          ERR_PTR on failure.
+  */
+-
+ static struct aa_loaddata *aa_get_data_from_compressed(const char __user *userbuf,
+ 						  size_t buffer_size,
+ 						  loff_t *pos,
+@@ -583,14 +586,6 @@ static struct aa_loaddata *aa_get_data_from_compressed(const char __user *userbu
+ 
+ }
+ #else
+-static int decompress_zstd(char *src __always_unused,
+-			   size_t slen __always_unused,
+-			   char *dst __always_unused,
+-			   size_t dlen __always_unused)
+-{
+-	return -EINVAL;
+-}
+-
+ static struct aa_loaddata *aa_get_data_from_compressed(const char __user *userbuf __always_unused,
+ 						  size_t buffer_size __always_unused,
+ 						  loff_t *pos __always_unused,
+@@ -599,6 +594,7 @@ static struct aa_loaddata *aa_get_data_from_compressed(const char __user *userbu
+ 	return ERR_PTR(-EINVAL);
+ }
+ #endif /* CONFIG_SECURITY_APPARMOR_COMPRESSED_POLICY */
++
+ struct aa_user_hdr {
+ 	uint8_t version;
+ 	uint8_t compress_level;
+-- 
+2.55.0
+

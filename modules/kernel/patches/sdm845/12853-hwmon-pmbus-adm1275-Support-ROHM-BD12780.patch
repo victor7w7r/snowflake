@@ -1,0 +1,170 @@
+From 5a419373bc1c77185e99a5c7306d81121269b2ef Mon Sep 17 00:00:00 2001
+From: Matti Vaittinen <mazziesaccount@gmail.com>
+Date: Fri, 26 Jun 2026 10:24:55 +0300
+Subject: [PATCH 12853/15333] hwmon: (pmbus/adm1275) Support ROHM BD12780
+
+ROHM BD12780 and BD12780A are hot-swap controllers. They are largely
+similar to Analog Devices ADM1278. Besides the ID registers and some
+added functionality, the BD12780 and BD12780A mark PMON_CONFIG bits
+[15:14] as reserved. Hence TSFILT setting must be omitted on these ICs.
+
+The BD12780 has 3 pins usable for configuring the I2C address. The
+BD12780A lists the ADDR3-pin as "not connect".
+
+Support ROHM BD12780 and BD12780A controllers.
+
+Signed-off-by: Matti Vaittinen <mazziesaccount@gmail.com>
+Link: https://lore.kernel.org/r/e1e6e6218c08b562311356ef9c57378d32c26b08.1782458224.git.mazziesaccount@gmail.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/hwmon/pmbus/Kconfig   |  2 +-
+ drivers/hwmon/pmbus/adm1275.c | 55 ++++++++++++++++++++++++++++++-----
+ 2 files changed, 48 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/hwmon/pmbus/Kconfig b/drivers/hwmon/pmbus/Kconfig
+index 68fadd8fe589..5e3a84416083 100644
+--- a/drivers/hwmon/pmbus/Kconfig
++++ b/drivers/hwmon/pmbus/Kconfig
+@@ -52,7 +52,7 @@ config SENSORS_ADM1275
+ 	help
+ 	  If you say yes here you get hardware monitoring support for Analog
+ 	  Devices ADM1075, ADM1272, ADM1273, ADM1275, ADM1276, ADM1278, ADM1281,
+-	  ADM1293, ADM1294 and SQ24905C Hot-Swap Controller and
++	  ADM1293, ADM1294, ROHM BD12780, and SQ24905C Hot-Swap Controller and
+ 	  Digital Power Monitors.
+ 
+ 	  This driver can also be built as a module. If so, the module will
+diff --git a/drivers/hwmon/pmbus/adm1275.c b/drivers/hwmon/pmbus/adm1275.c
+index 0a8b32218573..eecb00371afa 100644
+--- a/drivers/hwmon/pmbus/adm1275.c
++++ b/drivers/hwmon/pmbus/adm1275.c
+@@ -19,7 +19,7 @@
+ #include "pmbus.h"
+ 
+ enum chips { adm1075, adm1272, adm1273, adm1275, adm1276, adm1278, adm1281,
+-	 adm1293, adm1294, sq24905c };
++	 adm1293, adm1294, bd12780, sq24905c };
+ 
+ #define ADM1275_MFR_STATUS_IOUT_WARN2	BIT(0)
+ #define ADM1293_MFR_STATUS_VAUX_UV_WARN	BIT(5)
+@@ -47,6 +47,8 @@ enum chips { adm1075, adm1272, adm1273, adm1275, adm1276, adm1278, adm1281,
+ #define ADM1278_VOUT_EN			BIT(1)
+ 
+ #define ADM1278_PMON_DEFCONFIG		(ADM1278_VOUT_EN | ADM1278_TEMP1_EN | ADM1278_TSFILT)
++/* The BD12780 data sheets mark TSFILT bit as reserved. */
++#define BD12780_PMON_DEFCONFIG		(ADM1278_VOUT_EN | ADM1278_TEMP1_EN)
+ 
+ #define ADM1293_IRANGE_25		0
+ #define ADM1293_IRANGE_50		BIT(6)
+@@ -487,6 +489,7 @@ static const struct i2c_device_id adm1275_id[] = {
+ 	{ .name = "adm1281", .driver_data = adm1281 },
+ 	{ .name = "adm1293", .driver_data = adm1293 },
+ 	{ .name = "adm1294", .driver_data = adm1294 },
++	{ .name = "bd12780", .driver_data = bd12780 },
+ 	{ .name = "mc09c", .driver_data = sq24905c },
+ 	{ }
+ };
+@@ -494,12 +497,13 @@ MODULE_DEVICE_TABLE(i2c, adm1275_id);
+ 
+ /* Enable VOUT & TEMP1 if not enabled (disabled by default) */
+ static int adm1275_enable_vout_temp(struct adm1275_data *data,
+-				    struct i2c_client *client, int config)
++				    struct i2c_client *client, int config,
++				    u16 defconfig)
+ {
+ 	int ret;
+ 
+-	if ((config & ADM1278_PMON_DEFCONFIG) != ADM1278_PMON_DEFCONFIG) {
+-		config |= ADM1278_PMON_DEFCONFIG;
++	if ((config & defconfig) != defconfig) {
++		config |= defconfig;
+ 		ret = adm1275_write_pmon_config(data, client, config);
+ 		if (ret < 0) {
+ 			dev_err(&client->dev, "Failed to enable VOUT/TEMP1 monitoring\n");
+@@ -535,7 +539,8 @@ static int adm1275_probe(struct i2c_client *client)
+ 		return ret;
+ 	}
+ 	if ((ret != 3 || strncmp(block_buffer, "ADI", 3)) &&
+-	    (ret != 2 || strncmp(block_buffer, "SY", 2))) {
++	    (ret != 2 || strncmp(block_buffer, "SY", 2)) &&
++	    (ret != 4 || strncmp(block_buffer, "ROHM", 4))) {
+ 		dev_err(&client->dev, "Unsupported Manufacturer ID\n");
+ 		return -ENODEV;
+ 	}
+@@ -562,7 +567,7 @@ static int adm1275_probe(struct i2c_client *client)
+ 	if (mid->driver_data == adm1272 || mid->driver_data == adm1273 ||
+ 	    mid->driver_data == adm1278 || mid->driver_data == adm1281 ||
+ 	    mid->driver_data == adm1293 || mid->driver_data == adm1294 ||
+-	    mid->driver_data == sq24905c)
++	    mid->driver_data == bd12780 || mid->driver_data == sq24905c)
+ 		config_read_fn = i2c_smbus_read_word_data;
+ 	else
+ 		config_read_fn = i2c_smbus_read_byte_data;
+@@ -666,7 +671,8 @@ static int adm1275_probe(struct i2c_client *client)
+ 			PMBUS_HAVE_VOUT | PMBUS_HAVE_STATUS_VOUT |
+ 			PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP;
+ 
+-		ret = adm1275_enable_vout_temp(data, client, config);
++		ret = adm1275_enable_vout_temp(data, client, config,
++					       ADM1278_PMON_DEFCONFIG);
+ 		if (ret)
+ 			return ret;
+ 
+@@ -728,13 +734,45 @@ static int adm1275_probe(struct i2c_client *client)
+ 			PMBUS_HAVE_VOUT | PMBUS_HAVE_STATUS_VOUT |
+ 			PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP;
+ 
+-		ret = adm1275_enable_vout_temp(data, client, config);
++		ret = adm1275_enable_vout_temp(data, client, config,
++					       ADM1278_PMON_DEFCONFIG);
+ 		if (ret)
+ 			return ret;
+ 
+ 		if (config & ADM1278_VIN_EN)
+ 			info->func[0] |= PMBUS_HAVE_VIN;
+ 		break;
++
++	/*
++	 * The BD12780 is almost functionally identical with the adm1278 above.
++	 * Only differences visible to the driver are lack of TSFILT bits and
++	 * different identification register contents.
++	 */
++	case bd12780:
++		data->have_vout = true;
++		data->have_pin_max = true;
++		data->have_temp_max = true;
++		data->have_power_sampling = true;
++
++		coefficients = adm1278_coefficients;
++		vindex = 0;
++		cindex = 1;
++		pindex = 2;
++		tindex = 3;
++
++		info->func[0] |= PMBUS_HAVE_PIN | PMBUS_HAVE_STATUS_INPUT |
++			PMBUS_HAVE_VOUT | PMBUS_HAVE_STATUS_VOUT |
++			PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP;
++
++		ret = adm1275_enable_vout_temp(data, client, config,
++					       BD12780_PMON_DEFCONFIG);
++		if (ret)
++			return ret;
++
++		if (config & ADM1278_VIN_EN)
++			info->func[0] |= PMBUS_HAVE_VIN;
++
++		break;
+ 	case adm1293:
+ 	case adm1294:
+ 		data->have_iout_min = true;
+@@ -880,6 +918,7 @@ static const struct of_device_id adm1275_of_match[] = {
+ 	{ .compatible = "adi,adm1281", },
+ 	{ .compatible = "adi,adm1293", },
+ 	{ .compatible = "adi,adm1294", },
++	{ .compatible = "rohm,bd12780", },
+ 	{ .compatible = "silergy,mc09c", },
+ 	{ }
+ };
+-- 
+2.55.0
+

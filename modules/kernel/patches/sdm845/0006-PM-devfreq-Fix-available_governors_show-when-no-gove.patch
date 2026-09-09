@@ -1,0 +1,47 @@
+From b9199c0e7d908765de1dec6ecaec00952dd2b84c Mon Sep 17 00:00:00 2001
+From: Yaxiong Tian <tianyaxiong@kylinos.cn>
+Date: Wed, 1 Apr 2026 11:30:55 +0800
+Subject: [PATCH 00006/15333] PM / devfreq: Fix available_governors_show() when
+ no governor is set
+
+Since devfreq_remove_governor() may clear the device's current governor
+in certain situations, while governors actually exist independently of
+the device, directly returning EINVAL in this case is inaccurate.
+
+To fix this issue, remove this check and use df->governor for validity
+verification in the following code.
+
+Fixes: 483d557ee9a3 ("PM / devfreq: Clean up the devfreq instance name in sysfs attr")
+Signed-off-by: Yaxiong Tian <tianyaxiong@kylinos.cn>
+Reviewed-by: Jie Zhan <zhanjie9@hisilicon.com>
+Signed-off-by: Chanwoo Choi <cw00.choi@samsung.com>
+Link: https://patchwork.kernel.org/project/linux-pm/patch/20260401033055.67608-1-tianyaxiong@kylinos.cn/
+---
+ drivers/devfreq/devfreq.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/drivers/devfreq/devfreq.c b/drivers/devfreq/devfreq.c
+index 994984f7b6e1..2977b07be939 100644
+--- a/drivers/devfreq/devfreq.c
++++ b/drivers/devfreq/devfreq.c
+@@ -1468,16 +1468,13 @@ static ssize_t available_governors_show(struct device *d,
+ 	struct devfreq *df = to_devfreq(d);
+ 	ssize_t count = 0;
+ 
+-	if (!df->governor)
+-		return -EINVAL;
+-
+ 	mutex_lock(&devfreq_list_lock);
+ 
+ 	/*
+ 	 * The devfreq with immutable governor (e.g., passive) shows
+ 	 * only own governor.
+ 	 */
+-	if (IS_SUPPORTED_FLAG(df->governor->flags, IMMUTABLE)) {
++	if (df->governor && IS_SUPPORTED_FLAG(df->governor->flags, IMMUTABLE)) {
+ 		count = scnprintf(&buf[count], DEVFREQ_NAME_LEN,
+ 				  "%s ", df->governor->name);
+ 	/*
+-- 
+2.55.0
+

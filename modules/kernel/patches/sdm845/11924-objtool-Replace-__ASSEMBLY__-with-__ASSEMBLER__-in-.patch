@@ -1,0 +1,86 @@
+From 6e5716b187faf50e5d33f0986ea25827cbdaa294 Mon Sep 17 00:00:00 2001
+From: Thomas Huth <thuth@redhat.com>
+Date: Fri, 19 Jun 2026 17:57:33 +0200
+Subject: [PATCH 11924/15333] objtool: Replace __ASSEMBLY__ with __ASSEMBLER__
+ in header files
+
+While the GCC and Clang compilers already define __ASSEMBLER__
+automatically when compiling assembly code, __ASSEMBLY__ is a
+macro that only gets defined by the Makefiles in the kernel.
+This can be very confusing when switching between userspace
+and kernelspace coding, or when dealing with uapi headers that
+rather should use __ASSEMBLER__ instead. So let's standardize now
+on the __ASSEMBLER__ macro that is provided by the compilers.
+
+This is a completely mechanical patch (done with a simple "sed -i"
+statement).
+
+Signed-off-by: Thomas Huth <thuth@redhat.com>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Link: https://patch.msgid.link/20260619155733.58852-1-thuth@redhat.com
+---
+ include/linux/objtool.h       | 8 ++++----
+ include/linux/objtool_types.h | 4 ++--
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/include/linux/objtool.h b/include/linux/objtool.h
+index 9a00e701454c..af2e68e496e5 100644
+--- a/include/linux/objtool.h
++++ b/include/linux/objtool.h
+@@ -7,7 +7,7 @@
+ 
+ #ifdef CONFIG_OBJTOOL
+ 
+-#ifndef __ASSEMBLY__
++#ifndef __ASSEMBLER__
+ 
+ #define UNWIND_HINT(type, sp_reg, sp_offset, signal)		\
+ 	"987: \n\t"						\
+@@ -53,7 +53,7 @@
+ 
+ #define __ASM_BREF(label)	label ## b
+ 
+-#else /* __ASSEMBLY__ */
++#else /* __ASSEMBLER__ */
+ 
+ /*
+  * In asm, there are two kinds of code: normal C-type callable functions and
+@@ -102,11 +102,11 @@
+ #endif
+ .endm
+ 
+-#endif /* __ASSEMBLY__ */
++#endif /* __ASSEMBLER__ */
+ 
+ #else /* !CONFIG_OBJTOOL */
+ 
+-#ifndef __ASSEMBLY__
++#ifndef __ASSEMBLER__
+ 
+ #define UNWIND_HINT(type, sp_reg, sp_offset, signal) "\n\t"
+ #define STACK_FRAME_NON_STANDARD(func)
+diff --git a/include/linux/objtool_types.h b/include/linux/objtool_types.h
+index c6def4049b1a..c24e9ea39269 100644
+--- a/include/linux/objtool_types.h
++++ b/include/linux/objtool_types.h
+@@ -2,7 +2,7 @@
+ #ifndef _LINUX_OBJTOOL_TYPES_H
+ #define _LINUX_OBJTOOL_TYPES_H
+ 
+-#ifndef __ASSEMBLY__
++#ifndef __ASSEMBLER__
+ 
+ #include <linux/types.h>
+ 
+@@ -18,7 +18,7 @@ struct unwind_hint {
+ 	u8		signal;
+ };
+ 
+-#endif /* __ASSEMBLY__ */
++#endif /* __ASSEMBLER__ */
+ 
+ /*
+  * UNWIND_HINT_TYPE_UNDEFINED: A blind spot in ORC coverage which can result in
+-- 
+2.55.0
+

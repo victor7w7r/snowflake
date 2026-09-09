@@ -1,0 +1,130 @@
+From 0252ad169c5eb8d9cfd2ee646a7cd055865e1f12 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Mon, 10 Aug 2026 15:37:06 +0200
+Subject: [PATCH 12829/15333] ALSA: seq: Use RCU for the UMP client output
+ substream
+
+The UMP sequencer client protects its output rawmidi file (out_rfile)
+with an rwlock (output_lock).  seq_ump_process_event(), the port's
+event_input callback, reads out_rfile.output under read_lock on every
+delivered UMP event, while the open/close paths (serialized by
+ump->open_mutex) publish and clear out_rfile under write_lock.
+
+Output is opened/closed only on the subscribe/use lifecycle while
+delivery happens per event, so this is another read-mostly hot path.
+Convert it to RCU and drop the rwlock.  out_rfile is an embedded struct
+rather than a pointer, so instead of restructuring it, add an
+RCU-protected shadow of the substream (out_substream) for the reader;
+out_rfile itself becomes writer-only state accessed solely under
+open_mutex.  The reader now runs lock-free under rcu_read_lock() via
+rcu_dereference(), and open publishes the substream with
+rcu_assign_pointer().
+
+On close the substream is cleared with rcu_assign_pointer(NULL) and the
+rawmidi is released only after synchronize_rcu(), so no reader in the
+delivery path can still be writing to the substream when
+snd_rawmidi_kernel_release() runs.
+
+Dropping write_lock_irqsave() from the writers is safe: they run in
+process context under open_mutex, and the sole atomic reader now uses
+RCU, which is IRQ-safe.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260810133711.42483-6-tiwai@suse.de
+---
+ sound/core/seq/seq_ump_client.c | 38 +++++++++++++++++++--------------
+ 1 file changed, 22 insertions(+), 16 deletions(-)
+
+diff --git a/sound/core/seq/seq_ump_client.c b/sound/core/seq/seq_ump_client.c
+index ccd93599b493..4c1e81db376f 100644
+--- a/sound/core/seq/seq_ump_client.c
++++ b/sound/core/seq/seq_ump_client.c
+@@ -37,8 +37,11 @@ struct seq_ump_client {
+ 	struct snd_ump_endpoint *ump;	/* assigned endpoint */
+ 	int seq_client;			/* sequencer client id */
+ 	int opened[2];			/* current opens for each direction */
+-	rwlock_t output_lock;		/* protects out_rfile output access */
+ 	struct snd_rawmidi_file out_rfile; /* rawmidi for output */
++	/* RCU-protected shadow of out_rfile.output for the delivery hot path;
++	 * out_rfile itself is only touched by open/close under open_mutex
++	 */
++	struct snd_rawmidi_substream __rcu *out_substream;
+ 	struct seq_ump_input_buffer input; /* input parser context */
+ 	void *ump_info[SNDRV_UMP_MAX_BLOCKS + 1]; /* shadow of seq client ump_info */
+ 	struct work_struct group_notify_work; /* FB change notification */
+@@ -89,8 +92,8 @@ static int seq_ump_process_event(struct snd_seq_event *ev, int direct,
+ 	unsigned char type;
+ 	int len;
+ 
+-	guard(read_lock_irqsave)(&client->output_lock);
+-	substream = client->out_rfile.output;
++	guard(rcu)();
++	substream = rcu_dereference(client->out_substream);
+ 	if (!substream)
+ 		return -ENODEV;
+ 	if (!snd_seq_ev_is_ump(ev))
+@@ -108,19 +111,22 @@ static int seq_ump_process_event(struct snd_seq_event *ev, int direct,
+ static int seq_ump_client_open(struct seq_ump_client *client, int dir)
+ {
+ 	struct snd_ump_endpoint *ump = client->ump;
+-	struct snd_rawmidi_file rfile = {};
+ 	int err;
+ 
+ 	guard(mutex)(&ump->open_mutex);
+ 	if (dir == STR_OUT && !client->opened[dir]) {
++		/* out_rfile is only accessed under open_mutex; the delivery
++		 * path reads out_substream via RCU, so open into out_rfile
++		 * directly and publish the substream afterwards
++		 */
+ 		err = snd_rawmidi_kernel_open(&ump->core, 0,
+ 					      SNDRV_RAWMIDI_LFLG_OUTPUT |
+ 					      SNDRV_RAWMIDI_LFLG_APPEND,
+-					      &rfile);
++					      &client->out_rfile);
+ 		if (err < 0)
+ 			return err;
+-		scoped_guard(write_lock_irqsave, &client->output_lock)
+-			client->out_rfile = rfile;
++		rcu_assign_pointer(client->out_substream,
++				   client->out_rfile.output);
+ 	}
+ 	client->opened[dir]++;
+ 	return 0;
+@@ -130,17 +136,18 @@ static int seq_ump_client_open(struct seq_ump_client *client, int dir)
+ static int seq_ump_client_close(struct seq_ump_client *client, int dir)
+ {
+ 	struct snd_ump_endpoint *ump = client->ump;
+-	struct snd_rawmidi_file rfile = {};
+ 
+ 	guard(mutex)(&ump->open_mutex);
+ 	if (!--client->opened[dir]) {
+-		if (dir == STR_OUT) {
+-			scoped_guard(write_lock_irqsave, &client->output_lock) {
+-				rfile = client->out_rfile;
+-				client->out_rfile = (struct snd_rawmidi_file){};
+-			}
+-			if (rfile.rmidi)
+-				snd_rawmidi_kernel_release(&rfile);
++		if (dir == STR_OUT && client->out_rfile.rmidi) {
++			rcu_assign_pointer(client->out_substream, NULL);
++			/* wait for a grace period so that no reader in the
++			 * delivery path is still writing to the substream
++			 * before it is released
++			 */
++			synchronize_rcu();
++			snd_rawmidi_kernel_release(&client->out_rfile);
++			client->out_rfile = (struct snd_rawmidi_file){};
+ 		}
+ 	}
+ 	return 0;
+@@ -480,7 +487,6 @@ static int snd_seq_ump_probe(struct snd_seq_device *dev)
+ 
+ 	INIT_WORK(&client->group_notify_work, handle_group_notify);
+ 	client->ump = ump;
+-	rwlock_init(&client->output_lock);
+ 
+ 	client->seq_client =
+ 		snd_seq_create_kernel_client(card, ump->core.device,
+-- 
+2.55.0
+

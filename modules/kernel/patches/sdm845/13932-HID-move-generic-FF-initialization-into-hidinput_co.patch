@@ -1,0 +1,136 @@
+From 2636afdf4a466c4ea6adc52967a3187dd7ec7072 Mon Sep 17 00:00:00 2001
+From: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Date: Mon, 3 Aug 2026 11:46:37 -0700
+Subject: [PATCH 13932/15333] HID: move generic FF initialization into
+ hidinput_connect()
+
+Generic force-feedback initialization (pidff) currently happens in
+hid_connect() after hidinput_connect() has already registered the input
+devices. This is racy as the device is live and visible to userspace
+before FF support is fully set up.
+
+Move the call to hdev->ff_init() into hidinput_connect(), ensuring it
+runs before input_register_device() is called. This closes the race
+window for standard PID-capable devices.
+
+The initialization now also checks (connect_mask & HID_CONNECT_FF) and
+!hid_has_ff_input() to avoid conflicts with custom FF implementations
+and respect driver opt-outs.
+
+Assisted-by: Gemini:gemini-3.1-pro
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ drivers/hid/hid-core.c  | 21 ++-------------------
+ drivers/hid/hid-input.c | 21 +++++++++++++++++++--
+ include/linux/hid.h     |  2 +-
+ 3 files changed, 22 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/hid/hid-core.c b/drivers/hid/hid-core.c
+index f26a499a99bd..e5762d20bb1b 100644
+--- a/drivers/hid/hid-core.c
++++ b/drivers/hid/hid-core.c
+@@ -2280,18 +2280,6 @@ static const BIN_ATTR_RO(report_descriptor, HID_MAX_DESCRIPTOR_SIZE);
+ 
+ static const DEVICE_ATTR_RO(country);
+ 
+-static bool hid_has_ff_input(struct hid_device *hdev)
+-{
+-	struct hid_input *hidinput;
+-
+-	list_for_each_entry(hidinput, &hdev->inputs, list) {
+-		if (test_bit(EV_FF, hidinput->input->evbit))
+-			return true;
+-	}
+-
+-	return false;
+-}
+-
+ int hid_connect(struct hid_device *hdev, unsigned int connect_mask)
+ {
+ 	static const char *types[] = { "Device", "Pointer", "Mouse", "Device",
+@@ -2317,8 +2305,8 @@ int hid_connect(struct hid_device *hdev, unsigned int connect_mask)
+ 	if (hid_hiddev(hdev))
+ 		connect_mask |= HID_CONNECT_HIDDEV_FORCE;
+ 
+-	if ((connect_mask & HID_CONNECT_HIDINPUT) && !hidinput_connect(hdev,
+-				connect_mask & HID_CONNECT_HIDINPUT_FORCE))
++	if ((connect_mask & HID_CONNECT_HIDINPUT) &&
++	    !hidinput_connect(hdev, connect_mask))
+ 		hdev->claimed |= HID_CLAIMED_INPUT;
+ 
+ 	if ((connect_mask & HID_CONNECT_HIDDEV) && hdev->hiddev_connect &&
+@@ -2340,11 +2328,6 @@ int hid_connect(struct hid_device *hdev, unsigned int connect_mask)
+ 
+ 	hid_process_ordering(hdev);
+ 
+-	if ((hdev->claimed & HID_CLAIMED_INPUT) &&
+-			(connect_mask & HID_CONNECT_FF) && hdev->ff_init &&
+-			!hid_has_ff_input(hdev))
+-		hdev->ff_init(hdev);
+-
+ 	len = 0;
+ 	if (hdev->claimed & HID_CLAIMED_INPUT)
+ 		len += sprintf(buf + len, "input");
+diff --git a/drivers/hid/hid-input.c b/drivers/hid/hid-input.c
+index b55cbe7f6e20..4c5996644303 100644
+--- a/drivers/hid/hid-input.c
++++ b/drivers/hid/hid-input.c
+@@ -2326,7 +2326,19 @@ static inline void hidinput_configure_usages(struct hid_input *hidinput,
+  * Read all reports and initialize the absolute field values.
+  */
+ 
+-int hidinput_connect(struct hid_device *hid, unsigned int force)
++static bool hid_has_ff_input(struct hid_device *hdev)
++{
++	struct hid_input *hidinput;
++
++	list_for_each_entry(hidinput, &hdev->inputs, list) {
++		if (test_bit(EV_FF, hidinput->input->evbit))
++			return true;
++	}
++
++	return false;
++}
++
++int hidinput_connect(struct hid_device *hid, unsigned int connect_mask)
+ {
+ 	struct hid_driver *drv = hid->driver;
+ 	struct hid_report *report;
+@@ -2339,7 +2351,7 @@ int hidinput_connect(struct hid_device *hid, unsigned int force)
+ 
+ 	hid->status &= ~HID_STAT_DUP_DETECTED;
+ 
+-	if (!force) {
++	if (!(connect_mask & HID_CONNECT_HIDINPUT_FORCE)) {
+ 		for (i = 0; i < hid->maxcollection; i++) {
+ 			struct hid_collection *col = &hid->collection[i];
+ 			if (col->type == HID_COLLECTION_APPLICATION ||
+@@ -2405,6 +2417,11 @@ int hidinput_connect(struct hid_device *hid, unsigned int force)
+ 			continue;
+ 		}
+ 
++		if (list_is_first(&hidinput->list, &hid->inputs) &&
++		    (connect_mask & HID_CONNECT_FF) && hid->ff_init &&
++		    !hid_has_ff_input(hid))
++			hid->ff_init(hid);
++
+ 		if (input_register_device(hidinput->input))
+ 			goto out_unwind;
+ 		hidinput->registered = true;
+diff --git a/include/linux/hid.h b/include/linux/hid.h
+index 51b21f98037b..0d046c13eda4 100644
+--- a/include/linux/hid.h
++++ b/include/linux/hid.h
+@@ -1023,7 +1023,7 @@ extern void hid_unregister_driver(struct hid_driver *);
+ 
+ extern void hidinput_hid_event(struct hid_device *, struct hid_field *, struct hid_usage *, __s32);
+ extern void hidinput_report_event(struct hid_device *hid, struct hid_report *report);
+-extern int hidinput_connect(struct hid_device *hid, unsigned int force);
++extern int hidinput_connect(struct hid_device *hid, unsigned int connect_mask);
+ extern void hidinput_disconnect(struct hid_device *);
+ void hidinput_reset_resume(struct hid_device *hid);
+ 
+-- 
+2.55.0
+

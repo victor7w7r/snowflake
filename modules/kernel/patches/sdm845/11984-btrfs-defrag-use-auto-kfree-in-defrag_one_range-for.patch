@@ -1,0 +1,52 @@
+From d5b675c30a287ed0de093919aa69d80d578b3679 Mon Sep 17 00:00:00 2001
+From: Filipe Manana <fdmanana@suse.com>
+Date: Wed, 24 Jun 2026 18:09:22 +0100
+Subject: [PATCH 11984/15333] btrfs: defrag: use auto kfree in
+ defrag_one_range() for folios array
+
+Use AUTO_KFREE() for the folios array, avoiding two kfree() calls, one of
+them in a very specific error path.
+
+Reviewed-by: Qu Wenruo <wqu@suse.com>
+Signed-off-by: Filipe Manana <fdmanana@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/defrag.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/fs/btrfs/defrag.c b/fs/btrfs/defrag.c
+index ad1d04d8f165..e454b59d6477 100644
+--- a/fs/btrfs/defrag.c
++++ b/fs/btrfs/defrag.c
+@@ -1169,7 +1169,7 @@ static int defrag_one_range(struct btrfs_inode *inode, u64 start, u32 len,
+ 	struct defrag_target_range *entry;
+ 	struct defrag_target_range *tmp;
+ 	LIST_HEAD(target_list);
+-	struct folio **folios;
++	struct folio AUTO_KFREE(*folios);
+ 	const u32 sectorsize = inode->root->fs_info->sectorsize;
+ 	u64 cur = start;
+ 	const unsigned int nr_pages = ((start + len - 1) >> PAGE_SHIFT) -
+@@ -1196,10 +1196,8 @@ static int defrag_one_range(struct btrfs_inode *inode, u64 start, u32 len,
+ 	 * range or the extent lock.
+ 	 */
+ 	ret = btrfs_delalloc_reserve_space(inode, &data_reserved, start, len);
+-	if (ret < 0) {
+-		kfree(folios);
++	if (ret < 0)
+ 		return ret;
+-	}
+ 
+ 	/* Prepare all pages */
+ 	for (int i = 0; cur < start + len && i < nr_pages; i++) {
+@@ -1251,7 +1249,6 @@ static int defrag_one_range(struct btrfs_inode *inode, u64 start, u32 len,
+ 		folio_unlock(folios[i]);
+ 		folio_put(folios[i]);
+ 	}
+-	kfree(folios);
+ 	btrfs_delalloc_release_extents(inode, len);
+ 	if (last_defrag_end < start + len)
+ 		btrfs_delalloc_release_space(inode, data_reserved, last_defrag_end,
+-- 
+2.55.0
+

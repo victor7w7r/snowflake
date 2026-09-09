@@ -1,0 +1,83 @@
+From 6f9fb3cf9333684e57983bb50d165715b49b8ae9 Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Tue, 14 Jul 2026 18:13:43 -0700
+Subject: [PATCH 05732/15333] ata: pata_pxa: use devm_platform_ioremap_resource
+
+Replace the open-coded platform_get_resource() plus devm_ioremap()
+sequences for the CMD and CTL ports with devm_platform_ioremap_resource(),
+which fetches the resource, requests the region and maps it in one call.
+Switch the error checks to IS_ERR()/PTR_ERR() accordingly and drop the
+now-unused cmd_res and ctl_res variables.
+
+The DMA port keeps using devm_ioremap() as its resource is
+IORESOURCE_DMA. The CMD (res 0) and CTL (res 1) MEM resources are
+disjoint in the ATA task-file layout, so the added region reservation
+in devm_ioremap_resource() does not introduce overlap failures.
+
+Built for ARM (drivers/ata/pata_pxa.o) with LLVM=1.
+
+Assisted-by: opencode:hy3-free
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Signed-off-by: Damien Le Moal <dlemoal@kernel.org>
+---
+ drivers/ata/pata_pxa.c | 30 ++++++------------------------
+ 1 file changed, 6 insertions(+), 24 deletions(-)
+
+diff --git a/drivers/ata/pata_pxa.c b/drivers/ata/pata_pxa.c
+index 9f63bdfb8576..c816997dc0a9 100644
+--- a/drivers/ata/pata_pxa.c
++++ b/drivers/ata/pata_pxa.c
+@@ -161,8 +161,6 @@ static int pxa_ata_probe(struct platform_device *pdev)
+ 	struct ata_host *host;
+ 	struct ata_port *ap;
+ 	struct pata_pxa_data *data;
+-	struct resource *cmd_res;
+-	struct resource *ctl_res;
+ 	struct resource *dma_res;
+ 	struct pata_pxa_pdata *pdata = dev_get_platdata(&pdev->dev);
+ 	struct dma_slave_config	config;
+@@ -181,20 +179,6 @@ static int pxa_ata_probe(struct platform_device *pdev)
+ 		return -EINVAL;
+ 	}
+ 
+-	/*
+-	 * CMD port base address
+-	 */
+-	cmd_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+-	if (unlikely(cmd_res == NULL))
+-		return -EINVAL;
+-
+-	/*
+-	 * CTL port base address
+-	 */
+-	ctl_res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+-	if (unlikely(ctl_res == NULL))
+-		return -EINVAL;
+-
+ 	/*
+ 	 * DMA port base address
+ 	 */
+@@ -221,14 +205,12 @@ static int pxa_ata_probe(struct platform_device *pdev)
+ 	ap->pio_mask	= ATA_PIO4;
+ 	ap->mwdma_mask	= ATA_MWDMA2;
+ 
+-	ap->ioaddr.cmd_addr	= devm_ioremap(&pdev->dev, cmd_res->start,
+-						resource_size(cmd_res));
+-	if (!ap->ioaddr.cmd_addr)
+-		return -ENOMEM;
+-	ap->ioaddr.ctl_addr	= devm_ioremap(&pdev->dev, ctl_res->start,
+-						resource_size(ctl_res));
+-	if (!ap->ioaddr.ctl_addr)
+-		return -ENOMEM;
++	ap->ioaddr.cmd_addr	= devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(ap->ioaddr.cmd_addr))
++		return PTR_ERR(ap->ioaddr.cmd_addr);
++	ap->ioaddr.ctl_addr	= devm_platform_ioremap_resource(pdev, 1);
++	if (IS_ERR(ap->ioaddr.ctl_addr))
++		return PTR_ERR(ap->ioaddr.ctl_addr);
+ 	ap->ioaddr.bmdma_addr	= devm_ioremap(&pdev->dev, dma_res->start,
+ 						resource_size(dma_res));
+ 	if (!ap->ioaddr.bmdma_addr)
+-- 
+2.55.0
+

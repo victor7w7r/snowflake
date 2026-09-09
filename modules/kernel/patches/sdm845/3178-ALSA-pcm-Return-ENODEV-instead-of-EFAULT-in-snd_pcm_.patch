@@ -1,0 +1,37 @@
+From a0a47b0ae2d8f24db465a3e3d69e237e69cd7d09 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Tue, 7 Jul 2026 15:45:06 +0700
+Subject: [PATCH 03178/15333] ALSA: pcm: Return -ENODEV instead of -EFAULT in
+ snd_pcm_open()
+
+When try_module_get() fails in snd_pcm_open(), the owning module is going
+away and the device is no longer usable, so -EFAULT ("bad address") is the
+wrong error. Return -ENODEV, matching the other unavailable-device paths
+in this function(the NULL pcm check and the card->shutdown check).
+This changes the errno reported to userspace on this rare race.
+No other behaviour changes.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260707084506.718583-7-phucduc.bui@gmail.com
+---
+ sound/core/pcm_native.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sound/core/pcm_native.c b/sound/core/pcm_native.c
+index 3462cd5275a2..4fe5fab8d096 100644
+--- a/sound/core/pcm_native.c
++++ b/sound/core/pcm_native.c
+@@ -2913,7 +2913,7 @@ static int snd_pcm_open(struct file *file, struct snd_pcm *pcm, int stream)
+ 	if (err < 0)
+ 		goto __error1;
+ 	if (!try_module_get(pcm->card->module)) {
+-		err = -EFAULT;
++		err = -ENODEV;
+ 		goto __error2;
+ 	}
+ 	init_waitqueue_entry(&wait, current);
+-- 
+2.55.0
+

@@ -1,0 +1,110 @@
+From 15b8b49933507c9f437af51c2da626dc5840ef26 Mon Sep 17 00:00:00 2001
+From: Sanjay Chitroda <sanjayembeddedse@gmail.com>
+Date: Fri, 10 Jul 2026 10:55:23 +0530
+Subject: [PATCH 04666/15333] media: i2c: gc0310: Use
+ devm_v4l2_sensor_clk_get()
+
+Several camera sensor drivers access the "clock-frequency" property
+directly to retrieve the external clock rate or handle the external
+clock manually in the driver. While this is valid on a subset of ACPI
+platforms, implementing this logic directly in drivers is deprecated
+and can lead to inconsistent behaviour across drivers.
+
+This driver supports ACPI platforms only. It currently retrieves the
+external clock rate from the "clock-frequency" property and fails
+probing if the rate does not match the expected value, which is the
+correct policy for ACPI platforms.
+
+Switch to using the devm_v4l2_sensor_clk_get() helper to standardise
+clock handling. This preserves the existing behaviour on ACPI
+platforms that specify a clock-frequency property without providing
+a clock. On platforms that provide a clock, the helper will program
+the clock to the rate specified by clock-frequency, which is also
+consistent with the driver's expectations.
+
+Reviewed-by: Hans de Goede <johannes.goede@oss.qualcomm.com>
+Signed-off-by: Sanjay Chitroda <sanjayembeddedse@gmail.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/i2c/gc0310.c | 30 ++++++++++++++----------------
+ 1 file changed, 14 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/media/i2c/gc0310.c b/drivers/media/i2c/gc0310.c
+index 7af4d66f42a0..754e82ad50ae 100644
+--- a/drivers/media/i2c/gc0310.c
++++ b/drivers/media/i2c/gc0310.c
+@@ -6,6 +6,7 @@
+  * Copyright (c) 2023-2025 Hans de Goede <hansg@kernel.org>
+  */
+ 
++#include <linux/clk.h>
+ #include <linux/delay.h>
+ #include <linux/errno.h>
+ #include <linux/gpio/consumer.h>
+@@ -84,6 +85,8 @@
+ #define to_gc0310_sensor(x) container_of(x, struct gc0310_device, sd)
+ 
+ struct gc0310_device {
++	struct clk *clk;
++
+ 	struct v4l2_subdev sd;
+ 	struct media_pad pad;
+ 
+@@ -635,7 +638,6 @@ static int gc0310_check_hwcfg(struct device *dev)
+ 	};
+ 	struct fwnode_handle *ep_fwnode;
+ 	unsigned long link_freq_bitmap;
+-	u32 mclk;
+ 	int ret;
+ 
+ 	/*
+@@ -647,21 +649,6 @@ static int gc0310_check_hwcfg(struct device *dev)
+ 		return dev_err_probe(dev, -EPROBE_DEFER,
+ 				     "waiting for fwnode graph endpoint\n");
+ 
+-	ret = fwnode_property_read_u32(dev_fwnode(dev), "clock-frequency",
+-				       &mclk);
+-	if (ret) {
+-		fwnode_handle_put(ep_fwnode);
+-		return dev_err_probe(dev, ret,
+-				     "reading clock-frequency property\n");
+-	}
+-
+-	if (mclk != GC0310_MCLK_FREQ) {
+-		fwnode_handle_put(ep_fwnode);
+-		return dev_err_probe(dev, -EINVAL,
+-				     "external clock %u is not supported\n",
+-				     mclk);
+-	}
+-
+ 	ret = v4l2_fwnode_endpoint_alloc_parse(ep_fwnode, &bus_cfg);
+ 	fwnode_handle_put(ep_fwnode);
+ 	if (ret)
+@@ -685,6 +672,7 @@ static int gc0310_check_hwcfg(struct device *dev)
+ static int gc0310_probe(struct i2c_client *client)
+ {
+ 	struct gc0310_device *sensor;
++	unsigned long freq;
+ 	int ret;
+ 
+ 	ret = gc0310_check_hwcfg(&client->dev);
+@@ -695,6 +683,16 @@ static int gc0310_probe(struct i2c_client *client)
+ 	if (!sensor)
+ 		return -ENOMEM;
+ 
++	sensor->clk = devm_v4l2_sensor_clk_get(&client->dev, NULL);
++	if (IS_ERR(sensor->clk))
++		return dev_err_probe(&client->dev, PTR_ERR(sensor->clk),
++				     "failed to get clock\n");
++
++	freq = clk_get_rate(sensor->clk);
++	if (freq != GC0310_MCLK_FREQ)
++		return dev_err_probe(&client->dev, -EINVAL,
++				     "external clock %lu is not supported\n", freq);
++
+ 	sensor->reset = devm_gpiod_get(&client->dev, "reset", GPIOD_OUT_HIGH);
+ 	if (IS_ERR(sensor->reset)) {
+ 		return dev_err_probe(&client->dev, PTR_ERR(sensor->reset),
+-- 
+2.55.0
+

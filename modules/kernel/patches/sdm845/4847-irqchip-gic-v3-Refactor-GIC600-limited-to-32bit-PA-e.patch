@@ -1,0 +1,70 @@
+From ee83126141801f5109b6ea39afe64f7c9a29015a Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marek.vasut+renesas@mailbox.org>
+Date: Tue, 7 Jul 2026 22:35:41 +0200
+Subject: [PATCH 04847/15333] irqchip/gic-v3: Refactor GIC600 limited to 32bit
+ PA erratum handling
+
+The GIC600 implementation is now known to be used on multiple 64-bit
+SoCs, where it has address width for AXI or APB interface configured
+to 32 bit, and it can access only the first 4GiB of physical address
+space.
+
+Rework the handling of the quirk to work around this limitation such
+that new entries can be added purely as new compatible strings, with
+no need to add additional functions or new its_quirk array entries.
+
+Suggested-by: Marc Zyngier <maz@kernel.org>
+Signed-off-by: Marek Vasut <marek.vasut+renesas@mailbox.org>
+Signed-off-by: Manivannan Sadhasivam <mani@kernel.org>
+Signed-off-by: Bjorn Helgaas <bhelgaas@google.com>
+Acked-by: Marc Zyngier <maz@kernel.org>
+Link: https://patch.msgid.link/20260707203743.88299-4-marek.vasut+renesas@mailbox.org
+---
+ drivers/irqchip/irq-gic-v3-its.c | 19 ++++++++++++-------
+ 1 file changed, 12 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/irqchip/irq-gic-v3-its.c b/drivers/irqchip/irq-gic-v3-its.c
+index b57d81ad33a0..6409d37d7871 100644
+--- a/drivers/irqchip/irq-gic-v3-its.c
++++ b/drivers/irqchip/irq-gic-v3-its.c
+@@ -4890,10 +4890,17 @@ static bool __maybe_unused its_enable_quirk_hip09_162100801(void *data)
+ 	return true;
+ }
+ 
+-static bool __maybe_unused its_enable_rk3568002(void *data)
++static const char * const dma_32bit_impaired_platforms[] = {
++#ifdef CONFIG_ROCKCHIP_ERRATUM_3568002
++	"rockchip,rk3566",
++	"rockchip,rk3568",
++#endif
++	NULL,
++};
++
++static bool its_enable_dma32(void *data)
+ {
+-	if (!of_machine_is_compatible("rockchip,rk3566") &&
+-	    !of_machine_is_compatible("rockchip,rk3568"))
++	if (!of_machine_compatible_match(dma_32bit_impaired_platforms))
+ 		return false;
+ 
+ 	gfp_flags_quirk |= GFP_DMA32;
+@@ -4968,14 +4975,12 @@ static const struct gic_quirk its_quirks[] = {
+ 		.property = "dma-noncoherent",
+ 		.init   = its_set_non_coherent,
+ 	},
+-#ifdef CONFIG_ROCKCHIP_ERRATUM_3568002
+ 	{
+-		.desc   = "ITS: Rockchip erratum RK3568002",
++		.desc   = "ITS: Broken GIC600 integration limited to 32bit PA",
+ 		.iidr   = 0x0201743b,
+ 		.mask   = 0xffffffff,
+-		.init   = its_enable_rk3568002,
++		.init   = its_enable_dma32,
+ 	},
+-#endif
+ 	{
+ 	}
+ };
+-- 
+2.55.0
+

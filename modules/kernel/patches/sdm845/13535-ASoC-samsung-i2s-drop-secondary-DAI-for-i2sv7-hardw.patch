@@ -1,0 +1,78 @@
+From 4fc945d8fdfcbe8d484a7ca840ea891b56145eda Mon Sep 17 00:00:00 2001
+From: Marek Szyprowski <m.szyprowski@samsung.com>
+Date: Wed, 12 Aug 2026 09:44:37 +0200
+Subject: [PATCH 13535/15333] ASoC: samsung: i2s: drop secondary DAI for i2sv7
+ hardware variant
+
+Commit 9167f260477b ("ASoC: soc-generic-dmaengine: Handle DMA channel
+request failures correctly") started reporting DMA channel request
+failures during probe instead of silently ignoring them. This exposed a
+bug in the Samsung I2S driver: it always registered a second DAI and its
+associated "tx-sec" DMA channel, even for hardware variants that don't
+actually support it, such as i2sv7 used on Exynos5433. As a result,
+sound card probing on Exynos5433-based boards started failing, whereas
+previously it worked only because the channel request failure was
+ignored.
+
+Drop the QUIRK_SEC_DAI flag from i2sv7, since this variant does not have
+a secondary DAI and register "Secondary Playback" DAPM route only for
+variants with such interface.
+
+Signed-off-by: Marek Szyprowski <m.szyprowski@samsung.com>
+Link: https://patch.msgid.link/20260812074438.3225001-1-m.szyprowski@samsung.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/samsung/i2s.c | 23 +++++++++++++++++++----
+ 1 file changed, 19 insertions(+), 4 deletions(-)
+
+diff --git a/sound/soc/samsung/i2s.c b/sound/soc/samsung/i2s.c
+index 81d5dd36a246..3e76cb81462f 100644
+--- a/sound/soc/samsung/i2s.c
++++ b/sound/soc/samsung/i2s.c
+@@ -1116,15 +1116,31 @@ static const struct snd_soc_dapm_widget samsung_i2s_widgets[] = {
+ 
+ static const struct snd_soc_dapm_route samsung_i2s_dapm_routes[] = {
+ 	{ "Playback Mixer", NULL, "Primary Playback" },
+-	{ "Playback Mixer", NULL, "Secondary Playback" },
+-
+ 	{ "Mixer DAI TX", NULL, "Playback Mixer" },
+ 	{ "Primary Capture", NULL, "Mixer DAI RX" },
+ };
+ 
++static const struct snd_soc_dapm_route samsung_i2s_dapm_routes_sec_play[] = {
++	{ "Playback Mixer", NULL, "Secondary Playback" },
++};
++
++static int samsung_i2s_component_probe(struct snd_soc_component *component)
++{
++	struct samsung_i2s_priv *priv = snd_soc_component_get_drvdata(component);
++
++	if (priv->quirks & QUIRK_SEC_DAI)
++		snd_soc_dapm_add_routes(snd_soc_component_to_dapm(component),
++					samsung_i2s_dapm_routes_sec_play,
++					ARRAY_SIZE(samsung_i2s_dapm_routes_sec_play));
++
++	return 0;
++}
++
+ static const struct snd_soc_component_driver samsung_i2s_component = {
+ 	.name = "samsung-i2s",
+ 
++	.probe = samsung_i2s_component_probe,
++
+ 	.dapm_widgets = samsung_i2s_widgets,
+ 	.num_dapm_widgets = ARRAY_SIZE(samsung_i2s_widgets),
+ 
+@@ -1650,8 +1666,7 @@ static const struct samsung_i2s_dai_data i2sv6_dai_type __maybe_unused = {
+ };
+ 
+ static const struct samsung_i2s_dai_data i2sv7_dai_type __maybe_unused = {
+-	.quirks = QUIRK_PRI_6CHAN | QUIRK_SEC_DAI | QUIRK_NEED_RSTCLR |
+-			QUIRK_SUPPORTS_TDM,
++	.quirks = QUIRK_PRI_6CHAN | QUIRK_NEED_RSTCLR | QUIRK_SUPPORTS_TDM,
+ 	.pcm_rates = SNDRV_PCM_RATE_8000_192000,
+ 	.i2s_variant_regs = &i2sv7_regs,
+ };
+-- 
+2.55.0
+

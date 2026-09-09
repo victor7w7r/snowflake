@@ -1,0 +1,63 @@
+From c6decf13bf900324041fc117199ac793fc883f14 Mon Sep 17 00:00:00 2001
+From: Viacheslav Dubeyko <slava@dubeyko.com>
+Date: Mon, 6 Jul 2026 15:18:05 -0700
+Subject: [PATCH 04477/15333] hfs: fix error code when writing beyond volume
+ capacity
+
+Likewise HFS+, HFS has the same issue of returning
+the -ENOSPC error code instead of -EFBIG in the case
+if there is the effort to write beyond 8TiB.
+
+The root cause is that hfs_fill_super() sets s_maxbytes
+as MAX_LFS_FILESIZE. VFS therefore considers the write
+position valid and calls into the filesystem. Because HFS
+does not support holes, cont_write_begin() zero-fills
+the entire intermediate range from the current end-of-file
+to the target offset. On a small test volume this exhausts
+free space long before any block-number overflow is detected,
+producing -ENOSPC instead of -EFBIG.
+
+This patch fixes the issue by adding a bounds check
+at the top of hfs_write_begin(). If the requested write
+position is at or beyond the actual capacity of the volume
+in bytes, return -EFBIG immediately before cont_write_begin()
+is entered and before any zero-fill I/O is attempted.
+
+cc: John Paul Adrian Glaubitz <glaubitz@physik.fu-berlin.de>
+cc: Yangtao Li <frank.li@vivo.com>
+cc: linux-fsdevel@vger.kernel.org
+Signed-off-by: Viacheslav Dubeyko <slava@dubeyko.com>
+Link: https://lore.kernel.org/r/20260706221804.140295-2-slava@dubeyko.com
+Signed-off-by: Viacheslav Dubeyko <slava@dubeyko.com>
+---
+ fs/hfs/inode.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/fs/hfs/inode.c b/fs/hfs/inode.c
+index c9e75c2e576a..2aef3c36a150 100644
+--- a/fs/hfs/inode.c
++++ b/fs/hfs/inode.c
+@@ -49,11 +49,19 @@ int hfs_write_begin(const struct kiocb *iocb, struct address_space *mapping,
+ 		    loff_t pos, unsigned int len, struct folio **foliop,
+ 		    void **fsdata)
+ {
++	struct inode *inode = mapping->host;
++	struct hfs_sb_info *sbi = HFS_SB(inode->i_sb);
++	loff_t total_capacity;
+ 	int ret;
+ 
++	total_capacity = (loff_t)sbi->fs_ablocks * sbi->alloc_blksz;
++
++	if (pos >= total_capacity)
++		return -EFBIG;
++
+ 	ret = cont_write_begin(iocb, mapping, pos, len, foliop, fsdata,
+ 				hfs_get_block,
+-				&HFS_I(mapping->host)->phys_size);
++				&HFS_I(inode)->phys_size);
+ 	if (unlikely(ret))
+ 		hfs_write_failed(mapping, pos + len);
+ 
+-- 
+2.55.0
+

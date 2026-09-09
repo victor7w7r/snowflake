@@ -1,0 +1,77 @@
+From c5b962b6023d3299cc9988e32288d5f2aeb206f1 Mon Sep 17 00:00:00 2001
+From: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Date: Wed, 20 May 2026 22:13:20 -0700
+Subject: [PATCH 03877/15333] pinctrl: renesas: gpio: support software nodes
+ for function GPIOs
+
+This patch extends the sh-pfc GPIO driver to support software-node-based
+configuration for the secondary 'function' GPIO chip.
+
+While the primary GPIO chip typically uses the firmware node attached to
+the parent platform device, the secondary chip should target a specific
+child node to avoid ambiguity when defining GPIO hogs or properties.
+
+Update gpio_function_setup() to look for a child node named 'functions',
+but only when the parent is a software node. This ensures the behavior
+is restricted to legacy platforms being migrated to software nodes.
+
+Assisted-by: Gemini:gemini-3.1-pro
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Reviewed-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Signed-off-by: Linus Walleij <linusw@kernel.org>
+---
+ drivers/pinctrl/renesas/gpio.c | 28 +++++++++++++++++++++++++---
+ 1 file changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/pinctrl/renesas/gpio.c b/drivers/pinctrl/renesas/gpio.c
+index 4e59dadb7364..b49a3e14da91 100644
+--- a/drivers/pinctrl/renesas/gpio.c
++++ b/drivers/pinctrl/renesas/gpio.c
+@@ -271,18 +271,40 @@ static int gpio_function_request(struct gpio_chip *gc, unsigned offset)
+ 	return ret;
+ }
+ 
++static void sh_pfc_fwnode_put(void *data)
++{
++	fwnode_handle_put(data);
++}
++
+ static int gpio_function_setup(struct sh_pfc_chip *chip)
+ {
+ 	struct sh_pfc *pfc = chip->pfc;
+ 	struct gpio_chip *gc = &chip->gpio_chip;
++	struct fwnode_handle *fwnode = dev_fwnode(pfc->dev);
+ 
+ 	gc->request = gpio_function_request;
+ 
++	if (is_software_node(fwnode)) {
++		fwnode = fwnode_get_named_child_node(fwnode, "functions");
++		if (fwnode) {
++			int ret;
++
++			ret = devm_add_action_or_reset(pfc->dev,
++						       sh_pfc_fwnode_put,
++						       fwnode);
++			if (ret)
++				return ret;
++
++			gc->fwnode = fwnode;
++		}
++	}
++
+ 	/*
+-	 * Explicitly mask the parent's fwnode to prevent gpiolib from
+-	 * reusing it for function GPIOs.
++	 * If we did not find 'functions' node, explicitly mask the parent's
++	 * fwnode to prevent gpiolib from reusing it for function GPIOs.
+ 	 */
+-	gc->fwnode = ERR_PTR(-ENODEV);
++	if (!gc->fwnode)
++		gc->fwnode = ERR_PTR(-ENODEV);
+ 
+ 	gc->label = pfc->info->name;
+ 	gc->owner = THIS_MODULE;
+-- 
+2.55.0
+

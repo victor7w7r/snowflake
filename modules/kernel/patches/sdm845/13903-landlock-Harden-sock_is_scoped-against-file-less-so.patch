@@ -1,0 +1,56 @@
+From 07dca8ef89fc92b89ce36d9727547b10d8e840d6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Micka=C3=ABl=20Sala=C3=BCn?= <mic@digikod.net>
+Date: Fri, 3 Jul 2026 17:27:48 +0200
+Subject: [PATCH 13903/15333] landlock: Harden sock_is_scoped() against
+ file-less sockets
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+sock_is_scoped() dereferences other->sk_socket->file->f_cred to read the
+peer's Landlock domain when evaluating
+LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET, without first checking that the
+peer has a backing socket and file.  hook_unix_find() performs the same
+dereference for LANDLOCK_ACCESS_FS_RESOLVE_UNIX and does guard it.
+Guard it here too and treat a peer with no backing file, such as a
+kernel socket created by sock_create_kern(), as unscoped.
+
+This is defensive hardening, not a fix for a reachable bug.  The
+unix_stream_connect() and unix_may_send() hooks run with the peer held
+under unix_state_lock() and only after the AF_UNIX core has excluded
+SOCK_DEAD, and no in-tree code binds a file-less AF_UNIX socket to an
+abstract address, so other->sk_socket->file is always valid at these
+call sites today.
+
+Cc: Günther Noack <gnoack@google.com>
+Link: https://patch.msgid.link/20260703152750.2022878-1-mic@digikod.net
+Signed-off-by: Mickaël Salaün <mic@digikod.net>
+---
+ security/landlock/task.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/security/landlock/task.c b/security/landlock/task.c
+index 360d226d0f51..55522a601367 100644
+--- a/security/landlock/task.c
++++ b/security/landlock/task.c
+@@ -242,6 +242,17 @@ static bool sock_is_scoped(struct sock *const other,
+ 
+ 	/* The credentials will not change. */
+ 	lockdep_assert_held(&unix_sk(other)->lock);
++
++	/*
++	 * A live kernel socket (e.g. from sock_create_kern()) has no backing
++	 * file, hence no Landlock domain, so treat it as unscoped.  The
++	 * sk_socket check only guards that dereference; sk_socket is NULL
++	 * solely for a dead peer, which the caller already excludes under the
++	 * held lock, so no separate SOCK_DEAD check is needed.
++	 */
++	if (unlikely(!other->sk_socket || !other->sk_socket->file))
++		return false;
++
+ 	dom_other = landlock_cred(other->sk_socket->file->f_cred)->domain;
+ 	return domain_is_scoped(domain, dom_other,
+ 				LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET);
+-- 
+2.55.0
+

@@ -1,0 +1,104 @@
+From df34ecc52526480a1a4bb78bc75bfb009c6076a4 Mon Sep 17 00:00:00 2001
+From: Rubin Du <rubind@nvidia.com>
+Date: Tue, 9 Jun 2026 16:28:52 -0700
+Subject: [PATCH 05595/15333] vfio: selftests: Add memcpy chunking to
+ vfio_pci_driver_memcpy()
+
+Add a chunking loop to vfio_pci_driver_memcpy() so that it breaks up
+large memcpy requests into max_memcpy_size-sized chunks. This allows
+callers to request any size without worrying about per-driver limits.
+The memcpy_start()/memcpy_wait() semantics are unchanged.
+
+Update the test to use 4x max_memcpy_size so it exercises the new
+chunking path (4 iterations) while keeping execution fast for drivers
+with small DMA transfer sizes.
+
+Reviewed-by: David Matlack <dmatlack@google.com>
+Signed-off-by: Alex Williamson <alex.williamson@nvidia.com>
+Signed-off-by: Rubin Du <rubind@nvidia.com>
+Link: https://lore.kernel.org/r/20260609232855.3808971-2-rubind@nvidia.com
+Signed-off-by: Alex Williamson <alex@shazbot.org>
+---
+ .../selftests/vfio/lib/vfio_pci_driver.c       | 18 ++++++++++++++++--
+ .../selftests/vfio/vfio_pci_driver_test.c      | 18 ++++++++++--------
+ 2 files changed, 26 insertions(+), 10 deletions(-)
+
+diff --git a/tools/testing/selftests/vfio/lib/vfio_pci_driver.c b/tools/testing/selftests/vfio/lib/vfio_pci_driver.c
+index 6827f4a6febe..e6c5b9c703f4 100644
+--- a/tools/testing/selftests/vfio/lib/vfio_pci_driver.c
++++ b/tools/testing/selftests/vfio/lib/vfio_pci_driver.c
+@@ -106,7 +106,21 @@ int vfio_pci_driver_memcpy_wait(struct vfio_pci_device *device)
+ int vfio_pci_driver_memcpy(struct vfio_pci_device *device,
+ 			   iova_t src, iova_t dst, u64 size)
+ {
+-	vfio_pci_driver_memcpy_start(device, src, dst, size, 1);
++	struct vfio_pci_driver *driver = &device->driver;
++	u64 offset = 0;
++
++	while (offset < size) {
++		u64 chunk = min(size - offset, driver->max_memcpy_size);
++		int ret;
++
++		vfio_pci_driver_memcpy_start(device, src + offset,
++					     dst + offset, chunk, 1);
++		ret = vfio_pci_driver_memcpy_wait(device);
++		if (ret)
++			return ret;
++
++		offset += chunk;
++	}
+ 
+-	return vfio_pci_driver_memcpy_wait(device);
++	return 0;
+ }
+diff --git a/tools/testing/selftests/vfio/vfio_pci_driver_test.c b/tools/testing/selftests/vfio/vfio_pci_driver_test.c
+index afa0480ddd9b..44aa90ee113a 100644
+--- a/tools/testing/selftests/vfio/vfio_pci_driver_test.c
++++ b/tools/testing/selftests/vfio/vfio_pci_driver_test.c
+@@ -89,12 +89,12 @@ FIXTURE_SETUP(vfio_pci_driver_test)
+ 	self->msi_fd = self->device->msi_eventfds[driver->msi];
+ 
+ 	/*
+-	 * Use the maximum size supported by the device for memcpy operations,
+-	 * slimmed down to fit into the memcpy region (divided by 2 so src and
+-	 * dst regions do not overlap).
++	 * Use 4x the driver's max_memcpy_size to exercise the chunking
++	 * logic in vfio_pci_driver_memcpy(). Cap to half the memcpy
++	 * region so src and dst do not overlap.
+ 	 */
+-	self->size = self->device->driver.max_memcpy_size;
+-	self->size = min(self->size, self->memcpy_region.size / 2);
++	self->size = min_t(u64, driver->max_memcpy_size * 4,
++			   self->memcpy_region.size / 2);
+ 
+ 	self->src = self->memcpy_region.vaddr;
+ 	self->dst = self->src + self->size;
+@@ -211,6 +211,7 @@ TEST_F_TIMEOUT(vfio_pci_driver_test, memcpy_storm, 60)
+ {
+ 	struct vfio_pci_driver *driver = &self->device->driver;
+ 	u64 total_size;
++	u64 size;
+ 	u64 count;
+ 
+ 	fcntl_set_nonblock(self->msi_fd);
+@@ -221,13 +222,14 @@ TEST_F_TIMEOUT(vfio_pci_driver_test, memcpy_storm, 60)
+ 	 * will take too long.
+ 	 */
+ 	total_size = 250UL * SZ_1G;
+-	count = min(total_size / self->size, driver->max_memcpy_count);
++	size = min(driver->max_memcpy_size, self->memcpy_region.size / 2);
++	count = min(total_size / size, driver->max_memcpy_count);
+ 
+-	printf("Kicking off %lu memcpys of size 0x%lx\n", count, self->size);
++	printf("Kicking off %lu memcpys of size 0x%lx\n", count, size);
+ 	vfio_pci_driver_memcpy_start(self->device,
+ 				     self->src_iova,
+ 				     self->dst_iova,
+-				     self->size, count);
++				     size, count);
+ 
+ 	ASSERT_EQ(0, vfio_pci_driver_memcpy_wait(self->device));
+ 	ASSERT_NO_MSI(self->msi_fd);
+-- 
+2.55.0
+

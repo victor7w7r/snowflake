@@ -1,0 +1,89 @@
+From 62ed180231f419e2367e243fbfbc4ce83eb59d56 Mon Sep 17 00:00:00 2001
+From: Marc Zyngier <maz@kernel.org>
+Date: Thu, 30 Jul 2026 08:10:16 +0100
+Subject: [PATCH 09062/15333] KVM: arm64: Add NVHCR_EL2 context switching
+
+Since NVHCR_EL2 represents the HCR_EL2 state of the EL1 guest, it
+must be dealt with in some particular way:
+
+- for a guest in hyp context (an L1 by definition), NVHCR_EL2 directly
+  reflects HCR_EL2 as read and written by the guest itself. It must
+  therefore be eagerly synced back with the emulation code which only
+  knows about HCR_EL2. This is unconditional if NV3 is available on
+  the host.
+
+- For an L2 guest, NVHCR_EL2 is controlled by the L1 guest, and we
+  just context switch it like any other EL1 register. Yes, EL1, as
+  that's where this thing runs from the PoV of L1. This is conditioned
+  on the guest using NV3.
+
+Reviewed-by: Joey Gouly <joey.gouly@arm.com>
+Reviewed-by: Yuan Yao <yaoyuan@linux.alibaba.com>
+Signed-off-by: Marc Zyngier <maz@kernel.org>
+Link: https://patch.msgid.link/20260730071022.296811-24-maz@kernel.org
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/hyp/include/hyp/sysreg-sr.h | 11 +++++++++++
+ arch/arm64/kvm/hyp/vhe/switch.c            | 10 ++++++++--
+ 2 files changed, 19 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/kvm/hyp/include/hyp/sysreg-sr.h b/arch/arm64/kvm/hyp/include/hyp/sysreg-sr.h
+index a17cbe7582de..c382848d3194 100644
+--- a/arch/arm64/kvm/hyp/include/hyp/sysreg-sr.h
++++ b/arch/arm64/kvm/hyp/include/hyp/sysreg-sr.h
+@@ -172,6 +172,10 @@ static inline void __sysreg_save_el1_state(struct kvm_cpu_context *ctxt)
+ 
+ 	if (ctxt_has_sctlr2(ctxt))
+ 		ctxt_sys_reg(ctxt, SCTLR2_EL1) = read_sysreg_el1(SYS_SCTLR2);
++
++	/* Retrieve L2's HCR_EL2, and save it for future use */
++	if (is_nested_nv3_ctxt(ctxt_to_vcpu(ctxt)))
++		ctxt_sys_reg(ctxt, NVHCR_EL2) = read_sysreg_s(SYS_NVHCR_EL2);
+ }
+ 
+ static inline void __sysreg_save_el2_return_state(struct kvm_cpu_context *ctxt)
+@@ -285,6 +289,13 @@ static inline void __sysreg_restore_el1_state(struct kvm_cpu_context *ctxt,
+ 
+ 	if (ctxt_has_sctlr2(ctxt))
+ 		write_sysreg_el1(ctxt_sys_reg(ctxt, SCTLR2_EL1), SYS_SCTLR2);
++
++	/*
++	 * Publish the L2 view of HCR_EL2 to the HW if L1 is using NV3.
++	 * Otherwise, the data is already in place in the L1's own VNCR.
++	 */
++	if (is_nested_nv3_ctxt(ctxt_to_vcpu(ctxt)))
++		write_sysreg_s(ctxt_sys_reg(ctxt, NVHCR_EL2), SYS_NVHCR_EL2);
+ }
+ 
+ /* Read the VCPU state's PSTATE, but translate (v)EL2 to EL1. */
+diff --git a/arch/arm64/kvm/hyp/vhe/switch.c b/arch/arm64/kvm/hyp/vhe/switch.c
+index e5a51dc3cbe5..cbda9e087db3 100644
+--- a/arch/arm64/kvm/hyp/vhe/switch.c
++++ b/arch/arm64/kvm/hyp/vhe/switch.c
+@@ -71,7 +71,10 @@ static u64 __compute_hcr(struct kvm_vcpu *vcpu)
+ 			hcr |= HCR_NV1;
+ 
+ 		/* Publish the guest's view of HCR_EL2 to the HW */
+-		__vcpu_assign_sys_reg(vcpu, NVHCR_EL2, __vcpu_sys_reg(vcpu, HCR_EL2));
++		if (cpus_have_final_cap(ARM64_HAS_NV3) && vcpu_el2_e2h_is_set(vcpu))
++			write_sysreg_s(__vcpu_sys_reg(vcpu, HCR_EL2), SYS_NVHCR_EL2);
++		else
++			__vcpu_assign_sys_reg(vcpu, NVHCR_EL2, __vcpu_sys_reg(vcpu, HCR_EL2));
+ 
+ 		/*
+ 		 * Nothing in HCR_EL2 should impact running in hypervisor
+@@ -567,7 +570,10 @@ static void fixup_nv_guest_exit(struct kvm_vcpu *vcpu)
+ 		*vcpu_cpsr(vcpu) |= mode;
+ 
+ 		/* Publish the latest HCR_EL2 to the emulation */
+-		hcr = __vcpu_sys_reg(vcpu, NVHCR_EL2);
++		hcr = (cpus_have_final_cap(ARM64_HAS_NV3) &&
++		       vcpu_el2_e2h_is_set(vcpu)) ?
++			read_sysreg_s(SYS_NVHCR_EL2) :
++			__vcpu_sys_reg(vcpu, NVHCR_EL2);
+ 
+ 		__vcpu_assign_sys_reg(vcpu, HCR_EL2, hcr);
+ 	}
+-- 
+2.55.0
+

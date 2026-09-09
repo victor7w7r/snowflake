@@ -1,0 +1,81 @@
+From df1fd5d8ab403c264b364abe187ce94b2fa7b96f Mon Sep 17 00:00:00 2001
+From: Charles Keepax <ckeepax@opensource.cirrus.com>
+Date: Wed, 5 Aug 2026 13:42:03 +0100
+Subject: [PATCH 11257/15333] ASoC: SDCA: Add missing destroy for HID device
+
+The SDCA code is currently missing a cleanup for HID devices when the
+drivers are unbound. Add the missing HID cleanup as part of the IRQ
+cleanup to mirror when the HID device is created.
+
+Signed-off-by: Charles Keepax <ckeepax@opensource.cirrus.com>
+Reviewed-by: Pierre-Louis Bossart <pierre-louis.bossart@linux.dev>
+Link: https://patch.msgid.link/20260805124205.4152543-7-ckeepax@opensource.cirrus.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/sdca_hid.h         |  5 +++++
+ sound/soc/sdca/sdca_hid.c        | 12 ++++++++++++
+ sound/soc/sdca/sdca_interrupts.c |  2 ++
+ 3 files changed, 19 insertions(+)
+
+diff --git a/include/sound/sdca_hid.h b/include/sound/sdca_hid.h
+index 83d1c7768133..848081df3e4e 100644
+--- a/include/sound/sdca_hid.h
++++ b/include/sound/sdca_hid.h
+@@ -17,6 +17,7 @@ struct sdca_interrupt;
+ #if IS_ENABLED(CONFIG_SND_SOC_SDCA_HID)
+ 
+ int sdca_add_hid_device(struct sdca_interrupt *interrupt);
++void sdca_destroy_hid_device(struct sdca_interrupt *interrupt);
+ int sdca_hid_process_report(struct sdca_interrupt *interrupt);
+ 
+ #else
+@@ -26,6 +27,10 @@ static inline int sdca_add_hid_device(struct sdca_interrupt *interrupt)
+ 	return 0;
+ }
+ 
++static inline void sdca_destroy_hid_device(struct sdca_interrupt *interrupt)
++{
++}
++
+ static inline int sdca_hid_process_report(struct sdca_interrupt *interrupt)
+ {
+ 	return 0;
+diff --git a/sound/soc/sdca/sdca_hid.c b/sound/soc/sdca/sdca_hid.c
+index 5000d73657b4..514f895bd90d 100644
+--- a/sound/soc/sdca/sdca_hid.c
++++ b/sound/soc/sdca/sdca_hid.c
+@@ -122,6 +122,18 @@ int sdca_add_hid_device(struct sdca_interrupt *interrupt)
+ }
+ EXPORT_SYMBOL_NS(sdca_add_hid_device, "SND_SOC_SDCA");
+ 
++/**
++ * sdca_destroy_hid_device - destroy the HID device
++ * @interrupt: Pointer to the SDCA interrupt information structure.
++ */
++void sdca_destroy_hid_device(struct sdca_interrupt *interrupt)
++{
++	struct hid_device *hid = interrupt->priv;
++
++	hid_destroy_device(hid);
++}
++EXPORT_SYMBOL_NS(sdca_destroy_hid_device, "SND_SOC_SDCA");
++
+ /**
+  * sdca_hid_process_report - read a HID event from the device and report
+  * @interrupt: Pointer to the SDCA interrupt information structure.
+diff --git a/sound/soc/sdca/sdca_interrupts.c b/sound/soc/sdca/sdca_interrupts.c
+index 71037189a057..7aebc721a847 100644
+--- a/sound/soc/sdca/sdca_interrupts.c
++++ b/sound/soc/sdca/sdca_interrupts.c
+@@ -487,6 +487,8 @@ int sdca_irq_populate_early(struct device *dev, struct regmap *regmap,
+ 				}
+ 				break;
+ 			case SDCA_CTL_TYPE_S(HIDE, HIDTX_CURRENTOWNER):
++				interrupt->free_priv = sdca_destroy_hid_device;
++
+ 				ret = sdca_add_hid_device(interrupt);
+ 				if (ret)
+ 					return ret;
+-- 
+2.55.0
+

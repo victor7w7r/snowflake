@@ -1,0 +1,66 @@
+From df1705f289ba27ef951a87f20d41a109e7d3f40c Mon Sep 17 00:00:00 2001
+From: Pablo Neira Ayuso <pablo@netfilter.org>
+Date: Tue, 28 Jul 2026 18:30:37 +0200
+Subject: [PATCH 09416/15333] netfilter: flowtable: consolidate flowtable
+ device check
+
+Check that device belongs to the flowtable right after the flowtable
+discovery path. This is a preparation patch to obtain the dst entry
+from the .fill_forward_path in tunnels.
+
+No functional changes are intended.
+
+Acked-by: Lorenzo Bianconi <lorenzo@kernel.org>
+Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ net/netfilter/nf_flow_table_path.c | 15 +++++++++------
+ 1 file changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/net/netfilter/nf_flow_table_path.c b/net/netfilter/nf_flow_table_path.c
+index 261bb44d08eb..8f04a4487897 100644
+--- a/net/netfilter/nf_flow_table_path.c
++++ b/net/netfilter/nf_flow_table_path.c
+@@ -90,9 +90,12 @@ struct nft_forward_info {
+ 	enum flow_offload_xmit_type xmit_type;
+ };
+ 
++static bool nft_flowtable_find_dev(const struct net_device *dev,
++				   struct nft_flowtable *ft);
++
+ static int nft_dev_path_info(const struct net_device_path_stack *stack,
+ 			     struct nft_forward_info *info,
+-			     unsigned char *ha, struct nf_flowtable *flowtable)
++			     unsigned char *ha, struct nft_flowtable *ft)
+ {
+ 	const struct net_device_path *path;
+ 	int i;
+@@ -178,10 +181,13 @@ static int nft_dev_path_info(const struct net_device_path_stack *stack,
+ 		}
+ 	}
+ 
+-	if (nf_flowtable_hw_offload(flowtable) &&
++	if (nf_flowtable_hw_offload(&ft->data) &&
+ 	    nft_is_valid_ether_device(info->dev))
+ 		info->xmit_type = FLOW_OFFLOAD_XMIT_DIRECT;
+ 
++	if (!nft_flowtable_find_dev(info->dev, ft))
++		return -1;
++
+ 	return 0;
+ }
+ 
+@@ -253,10 +259,7 @@ static int nft_dev_forward_path(const struct nft_pktinfo *pkt,
+ 	int i;
+ 
+ 	if (nft_dev_fill_forward_path(dst, ct, dir, ha, &stack) < 0 ||
+-	    nft_dev_path_info(&stack, &info, ha, &ft->data) < 0)
+-		return -ENOENT;
+-
+-	if (!nft_flowtable_find_dev(info.dev, ft))
++	    nft_dev_path_info(&stack, &info, ha, ft) < 0)
+ 		return -ENOENT;
+ 
+ 	route->tuple[!dir].in.ifindex = info.dev->ifindex;
+-- 
+2.55.0
+

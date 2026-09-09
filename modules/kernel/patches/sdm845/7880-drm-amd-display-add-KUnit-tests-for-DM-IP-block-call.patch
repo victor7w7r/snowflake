@@ -1,0 +1,214 @@
+From 02b3e22145af04b2f3538051bc6a57b7af9a9025 Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Mon, 6 Jul 2026 19:23:04 -0600
+Subject: [PATCH 07880/15333] drm/amd/display: add KUnit tests for DM IP-block
+ callbacks
+
+[WHAT]
+Add KUnit coverage for the simple amdgpu_dm IP-block callbacks
+(is_idle, wait_for_idle, soft_reset, set_clockgating_state,
+set_powergating_state and the bandwidth_update display hook) by
+asserting their placeholder return values. Also add the shared test
+include block used by the amdgpu_dm test suite.
+
+Assisted-by: Copilot:Claude-Opus-4.8
+Reviewed-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Wayne Lin <wayne.lin@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c | 22 ++++--
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h |  9 +++
+ .../display/amdgpu_dm/tests/amdgpu_dm_test.c  | 73 +++++++++++++++++++
+ 3 files changed, 96 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+index b1b107907066..07c1e12fa02a 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -224,23 +224,26 @@ static int dm_crtc_get_scanoutpos(struct amdgpu_device *adev, int crtc,
+ 	return 0;
+ }
+ 
+-static bool dm_is_idle(struct amdgpu_ip_block *ip_block)
++STATIC_IFN_KUNIT bool dm_is_idle(struct amdgpu_ip_block *ip_block)
+ {
+ 	/* XXX todo */
+ 	return true;
+ }
++EXPORT_IF_KUNIT(dm_is_idle);
+ 
+-static int dm_wait_for_idle(struct amdgpu_ip_block *ip_block)
++STATIC_IFN_KUNIT int dm_wait_for_idle(struct amdgpu_ip_block *ip_block)
+ {
+ 	/* XXX todo */
+ 	return 0;
+ }
++EXPORT_IF_KUNIT(dm_wait_for_idle);
+ 
+-static int dm_soft_reset(struct amdgpu_ip_block *ip_block)
++STATIC_IFN_KUNIT int dm_soft_reset(struct amdgpu_ip_block *ip_block)
+ {
+ 	/* XXX todo */
+ 	return 0;
+ }
++EXPORT_IF_KUNIT(dm_soft_reset);
+ 
+ STATIC_IFN_KUNIT bool is_dc_timing_adjust_needed(struct dm_crtc_state *old_state,
+ 						 struct dm_crtc_state *new_state)
+@@ -310,17 +313,19 @@ static inline bool update_planes_and_stream_adapter(struct dc *dc,
+ 					   stream_update);
+ }
+ 
+-static int dm_set_clockgating_state(struct amdgpu_ip_block *ip_block,
+-		  enum amd_clockgating_state state)
++STATIC_IFN_KUNIT int dm_set_clockgating_state(struct amdgpu_ip_block *ip_block,
++					      enum amd_clockgating_state state)
+ {
+ 	return 0;
+ }
++EXPORT_IF_KUNIT(dm_set_clockgating_state);
+ 
+-static int dm_set_powergating_state(struct amdgpu_ip_block *ip_block,
+-		  enum amd_powergating_state state)
++STATIC_IFN_KUNIT int dm_set_powergating_state(struct amdgpu_ip_block *ip_block,
++					      enum amd_powergating_state state)
+ {
+ 	return 0;
+ }
++EXPORT_IF_KUNIT(dm_set_powergating_state);
+ 
+ /* Prototypes of private functions */
+ static int dm_early_init(struct amdgpu_ip_block *ip_block);
+@@ -2797,10 +2802,11 @@ static void amdgpu_dm_destroy_drm_device(struct amdgpu_display_manager *dm)
+  *
+  * Calculate and program the display watermarks and line buffer allocation.
+  */
+-static void dm_bandwidth_update(struct amdgpu_device *adev)
++STATIC_IFN_KUNIT void dm_bandwidth_update(struct amdgpu_device *adev)
+ {
+ 	/* TODO: implement later */
+ }
++EXPORT_IF_KUNIT(dm_bandwidth_update);
+ 
+ static const struct amdgpu_display_funcs dm_display_funcs = {
+ 	.bandwidth_update = dm_bandwidth_update, /* called unconditionally */
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+index f396803d1485..9b8e39fbce57 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+@@ -1140,6 +1140,15 @@ void amdgpu_dm_apply_delay_after_dpcd_poweroff(struct amdgpu_device *adev,
+ 											   struct dc_sink *sink);
+ 
+ #if IS_ENABLED(CONFIG_DRM_AMD_DC_KUNIT_TEST)
++struct amdgpu_ip_block;
++bool dm_is_idle(struct amdgpu_ip_block *ip_block);
++int dm_wait_for_idle(struct amdgpu_ip_block *ip_block);
++int dm_soft_reset(struct amdgpu_ip_block *ip_block);
++int dm_set_clockgating_state(struct amdgpu_ip_block *ip_block,
++			     enum amd_clockgating_state state);
++int dm_set_powergating_state(struct amdgpu_ip_block *ip_block,
++			     enum amd_powergating_state state);
++void dm_bandwidth_update(struct amdgpu_device *adev);
+ int dm_plane_layer_index_cmp(const void *a, const void *b);
+ int fill_plane_color_attributes(const struct drm_plane_state *plane_state,
+ 				const enum surface_pixel_format format,
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c
+index 0b29bf0a7d04..d4e37580316f 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c
+@@ -6,10 +6,76 @@
+  */
+ 
+ #include <kunit/test.h>
++#include <linux/pci.h>
++#include <drm/drm_atomic.h>
++#include <drm/drm_connector.h>
++#include <drm/drm_crtc.h>
++#include <drm/drm_modes.h>
++#include <drm/drm_writeback.h>
+ 
+ #include "dc.h"
++#include "inc/core_types.h"
++#include "amd_shared.h"
++#include "amdgpu.h"
+ #include "amdgpu_mode.h"
+ #include "amdgpu_dm.h"
++#include "amdgpu_dm_kunit_test_helpers.h"
++
++/* Tests for simple DM callbacks */
++
++/**
++ * dm_test_is_idle - Test placeholder idle callback returns true
++ * @test: The KUnit test context
++ */
++static void dm_test_is_idle(struct kunit *test)
++{
++	KUNIT_EXPECT_TRUE(test, dm_is_idle(NULL));
++}
++
++/**
++ * dm_test_wait_for_idle - Test placeholder wait-for-idle callback returns success
++ * @test: The KUnit test context
++ */
++static void dm_test_wait_for_idle(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, dm_wait_for_idle(NULL), 0);
++}
++
++/**
++ * dm_test_soft_reset - Test placeholder soft-reset callback returns success
++ * @test: The KUnit test context
++ */
++static void dm_test_soft_reset(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, dm_soft_reset(NULL), 0);
++}
++
++/**
++ * dm_test_set_clockgating_state - Test placeholder clockgating callback returns success
++ * @test: The KUnit test context
++ */
++static void dm_test_set_clockgating_state(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, dm_set_clockgating_state(NULL, AMD_CG_STATE_GATE), 0);
++}
++
++/**
++ * dm_test_set_powergating_state - Test placeholder powergating callback returns success
++ * @test: The KUnit test context
++ */
++static void dm_test_set_powergating_state(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, dm_set_powergating_state(NULL, AMD_PG_STATE_GATE), 0);
++}
++
++/**
++ * dm_test_bandwidth_update - Test placeholder bandwidth update is callable
++ * @test: The KUnit test context
++ */
++static void dm_test_bandwidth_update(struct kunit *test)
++{
++	dm_bandwidth_update(NULL);
++}
+ 
+ /* Tests for dm_plane_layer_index_cmp() */
+ 
+@@ -884,6 +950,13 @@ static void dm_test_master_stream_defaults_to_first(struct kunit *test)
+ }
+ 
+ static struct kunit_case amdgpu_dm_tests[] = {
++	/* Simple DM callbacks */
++	KUNIT_CASE(dm_test_is_idle),
++	KUNIT_CASE(dm_test_wait_for_idle),
++	KUNIT_CASE(dm_test_soft_reset),
++	KUNIT_CASE(dm_test_set_clockgating_state),
++	KUNIT_CASE(dm_test_set_powergating_state),
++	KUNIT_CASE(dm_test_bandwidth_update),
+ 	/* dm_plane_layer_index_cmp */
+ 	KUNIT_CASE(dm_test_plane_layer_index_cmp_equal),
+ 	KUNIT_CASE(dm_test_plane_layer_index_cmp_descending),
+-- 
+2.55.0
+

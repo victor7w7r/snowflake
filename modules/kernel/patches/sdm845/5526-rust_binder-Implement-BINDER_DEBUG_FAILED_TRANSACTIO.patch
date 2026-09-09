@@ -1,0 +1,75 @@
+From c61f3ad2213cfb1d9f383d3b083fb7f1472cc657 Mon Sep 17 00:00:00 2001
+From: Jahnavi MN <jahnavimn@google.com>
+Date: Thu, 16 Jul 2026 08:37:47 +0000
+Subject: [PATCH 05526/15333] rust_binder: Implement
+ BINDER_DEBUG_FAILED_TRANSACTION
+
+This adds dynamic debug logs for:
+- Failed replies, target process deaths, and error code deliveries.
+- Detailed transaction failure diagnostics (including sender/receiver
+  PIDs, TIDs, transaction IDs, buffer sizes, and error codes).
+
+Reviewed-by: Carlos Llamas <cmllamas@google.com>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Signed-off-by: Jahnavi MN <jahnavimn@google.com>
+Link: https://patch.msgid.link/20260716-rust_binder_debug_mask-v4-5-3d7436c2d2f2@google.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/android/binder/thread.rs      | 21 ++++++++++++++++-----
+ drivers/android/binder/transaction.rs |  8 ++++++++
+ 2 files changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/android/binder/thread.rs b/drivers/android/binder/thread.rs
+index 9f0178a13d6f..38b90c79c057 100644
+--- a/drivers/android/binder/thread.rs
++++ b/drivers/android/binder/thread.rs
+@@ -1275,11 +1275,22 @@ fn transaction(self: &Arc<Self>, cmd: u32, reader: &mut UserSliceReader) -> Resu
+                     }
+                 }
+ 
+-                pr_warn!(
+-                    "{}:{} transaction to {} failed: {err:?}",
+-                    info.from_pid,
+-                    info.from_tid,
+-                    info.to_pid
++                binder_debug!(
++                    FailedTransaction,
++                    "transaction {} to {}:{} failed {:?}, code {} size {}-{}",
++                    if info.is_reply {
++                        "reply"
++                    } else if info.is_oneway() {
++                        "async"
++                    } else {
++                        "call"
++                    },
++                    info.to_pid,
++                    info.to_tid,
++                    err,
++                    info.code,
++                    info.data_size,
++                    info.offsets_size
+                 );
+             }
+         }
+diff --git a/drivers/android/binder/transaction.rs b/drivers/android/binder/transaction.rs
+index afef5b46eac2..069c792d2200 100644
+--- a/drivers/android/binder/transaction.rs
++++ b/drivers/android/binder/transaction.rs
+@@ -404,6 +404,14 @@ fn do_work(
+         } else {
+             // On failure to process the list, we send a reply back to the sender and ignore the
+             // transaction on the recipient.
++            binder_debug!(
++                FailedTransaction,
++                "transaction {} to {} failed, fd fixups failed, size {}-{}",
++                self.debug_id,
++                self.to.task.pid(),
++                self.data_size,
++                self.offsets_size
++            );
+             return Ok(true);
+         };
+ 
+-- 
+2.55.0
+

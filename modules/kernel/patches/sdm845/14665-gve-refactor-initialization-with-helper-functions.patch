@@ -1,0 +1,200 @@
+From 94afe5cebcd2bc32d774bfe603a8259680e9e870 Mon Sep 17 00:00:00 2001
+From: Harshitha Ramamurthy <hramamurthy@google.com>
+Date: Fri, 14 Aug 2026 02:13:52 +0000
+Subject: [PATCH 14665/15333] gve: refactor initialization with helper
+ functions
+
+In the interest of commonizing code, refactor gve_probe()
+and gve_init_priv() with a few helper functions that can
+be expanded and utilized in upcoming patches that add the
+mailbox ABI to the driver. The helper functions are:
+
+- gve_set_num_ntfy_blks()
+- gve_set_num_queues()
+
+Reorder code to combine lines that accomplish a similar objective
+like setting defaults. Move setting HW-GRO and UDP GSO support out
+of an Adminq method into gve_init_priv().
+
+These changes are just code movement, no functional change.
+
+Reviewed-by: Willem de Bruijn <willemb@google.com>
+Reviewed-by: Jordan Rhee <jordanrhee@google.com>
+Signed-off-by: Harshitha Ramamurthy <hramamurthy@google.com>
+Reviewed-by: Przemek Kitszel <przemyslaw.kitszel@intel.com>
+Link: https://patch.msgid.link/20260814021406.3044324-3-hramamurthy@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/google/gve/gve_adminq.c | 49 ++++++++++++++---
+ drivers/net/ethernet/google/gve/gve_adminq.h |  2 +
+ drivers/net/ethernet/google/gve/gve_main.c   | 58 +++++++-------------
+ 3 files changed, 62 insertions(+), 47 deletions(-)
+
+diff --git a/drivers/net/ethernet/google/gve/gve_adminq.c b/drivers/net/ethernet/google/gve/gve_adminq.c
+index 70ffed8b52c3..fe0dedfb25d7 100644
+--- a/drivers/net/ethernet/google/gve/gve_adminq.c
++++ b/drivers/net/ethernet/google/gve/gve_adminq.c
+@@ -1117,14 +1117,6 @@ int gve_adminq_describe_device(struct gve_priv *priv)
+ 
+ 	gve_set_default_rss_sizes(priv);
+ 
+-	/* DQO supports HW-GRO and UDP_GSO */
+-	if (gve_is_dqo(priv)) {
+-		u64 additional_features = NETIF_F_GRO_HW | NETIF_F_GSO_UDP_L4;
+-
+-		priv->dev->hw_features |= additional_features;
+-		priv->dev->features |= additional_features;
+-	}
+-
+ 	priv->max_registered_pages =
+ 				be64_to_cpu(descriptor->max_registered_pages);
+ 	mtu = be16_to_cpu(descriptor->mtu);
+@@ -1600,3 +1592,44 @@ int gve_adminq_query_rss_config(struct gve_priv *priv, struct ethtool_rxfh_param
+ 	dma_pool_free(priv->adminq_pool, descriptor, descriptor_bus);
+ 	return err;
+ }
++
++int gve_set_num_ntfy_blks(struct gve_priv *priv)
++{
++	int num_ntfy;
++
++	num_ntfy = pci_msix_vec_count(priv->pdev);
++	if (num_ntfy <= 0) {
++		dev_err(&priv->pdev->dev,
++			"could not count MSI-x vectors: err=%d\n", num_ntfy);
++		return num_ntfy;
++	} else if (num_ntfy < GVE_MIN_MSIX) {
++		dev_err(&priv->pdev->dev, "gve needs at least %d MSI-x vectors, but only has %d\n",
++			GVE_MIN_MSIX, num_ntfy);
++		return -EINVAL;
++	}
++
++	/* gvnic has one Notification Block per MSI-x vector, except for the
++	 * management vector
++	 */
++	priv->num_ntfy_blks = (num_ntfy - 1) & ~0x1;
++	priv->mgmt_msix_idx = priv->num_ntfy_blks;
++
++	return 0;
++}
++
++void gve_set_num_queues(struct gve_priv *priv)
++{
++	priv->tx_cfg.max_queues =
++		min_t(int, priv->tx_cfg.max_queues, priv->num_ntfy_blks / 2);
++	priv->rx_cfg.max_queues =
++		min_t(int, priv->rx_cfg.max_queues, priv->num_ntfy_blks / 2);
++
++	priv->tx_cfg.num_queues = priv->tx_cfg.max_queues;
++	priv->rx_cfg.num_queues = priv->rx_cfg.max_queues;
++	if (priv->default_num_queues > 0) {
++		priv->tx_cfg.num_queues = min_t(int, priv->default_num_queues,
++						priv->tx_cfg.num_queues);
++		priv->rx_cfg.num_queues = min_t(int, priv->default_num_queues,
++						priv->rx_cfg.num_queues);
++	}
++}
+diff --git a/drivers/net/ethernet/google/gve/gve_adminq.h b/drivers/net/ethernet/google/gve/gve_adminq.h
+index 8e80f36116ec..82b52424a63f 100644
+--- a/drivers/net/ethernet/google/gve/gve_adminq.h
++++ b/drivers/net/ethernet/google/gve/gve_adminq.h
+@@ -656,5 +656,7 @@ int gve_adminq_report_nic_ts(struct gve_priv *priv,
+ struct gve_ptype_lut;
+ int gve_adminq_get_ptype_map_dqo(struct gve_priv *priv,
+ 				 struct gve_ptype_lut *ptype_lut);
++int gve_set_num_ntfy_blks(struct gve_priv *priv);
++void gve_set_num_queues(struct gve_priv *priv);
+ 
+ #endif /* _GVE_ADMINQ_H */
+diff --git a/drivers/net/ethernet/google/gve/gve_main.c b/drivers/net/ethernet/google/gve/gve_main.c
+index 30bf6df4ebc5..37e6205e2eef 100644
+--- a/drivers/net/ethernet/google/gve/gve_main.c
++++ b/drivers/net/ethernet/google/gve/gve_main.c
+@@ -2400,7 +2400,6 @@ static const struct xdp_metadata_ops gve_xdp_metadata_ops = {
+ 
+ static int gve_init_priv(struct gve_priv *priv, bool skip_describe_device)
+ {
+-	int num_ntfy;
+ 	int err;
+ 
+ 	/* Set up the adminq */
+@@ -2431,57 +2430,38 @@ static int gve_init_priv(struct gve_priv *priv, bool skip_describe_device)
+ 			"Could not get device information: err=%d\n", err);
+ 		goto err;
+ 	}
+-	priv->dev->mtu = priv->dev->max_mtu;
+-	num_ntfy = pci_msix_vec_count(priv->pdev);
+-	if (num_ntfy <= 0) {
++
++	err = gve_set_num_ntfy_blks(priv);
++	if (err) {
+ 		dev_err(&priv->pdev->dev,
+-			"could not count MSI-x vectors: err=%d\n", num_ntfy);
+-		err = num_ntfy;
++			"Could not setup notify blocks: err=%d\n", err);
+ 		goto err;
+-	} else if (num_ntfy < GVE_MIN_MSIX) {
+-		dev_err(&priv->pdev->dev, "gve needs at least %d MSI-x vectors, but only has %d\n",
+-			GVE_MIN_MSIX, num_ntfy);
+-		err = -EINVAL;
+-		goto err;
+-	}
+-
+-	/* Big TCP is only supported on DQO */
+-	if (!gve_is_gqi(priv))
+-		netif_set_tso_max_size(priv->dev, GVE_DQO_TX_MAX);
+-
+-	priv->rx_copybreak = GVE_DEFAULT_RX_COPYBREAK;
+-	/* gvnic has one Notification Block per MSI-x vector, except for the
+-	 * management vector
+-	 */
+-	priv->num_ntfy_blks = (num_ntfy - 1) & ~0x1;
+-	priv->mgmt_msix_idx = priv->num_ntfy_blks;
+-	priv->numa_node = dev_to_node(&priv->pdev->dev);
+-
+-	priv->tx_cfg.max_queues =
+-		min_t(int, priv->tx_cfg.max_queues, priv->num_ntfy_blks / 2);
+-	priv->rx_cfg.max_queues =
+-		min_t(int, priv->rx_cfg.max_queues, priv->num_ntfy_blks / 2);
+-
+-	priv->tx_cfg.num_queues = priv->tx_cfg.max_queues;
+-	priv->rx_cfg.num_queues = priv->rx_cfg.max_queues;
+-	if (priv->default_num_queues > 0) {
+-		priv->tx_cfg.num_queues = min_t(int, priv->default_num_queues,
+-						priv->tx_cfg.num_queues);
+-		priv->rx_cfg.num_queues = min_t(int, priv->default_num_queues,
+-						priv->rx_cfg.num_queues);
+ 	}
+-	priv->tx_cfg.num_xdp_queues = 0;
+ 
++	gve_set_num_queues(priv);
+ 	dev_info(&priv->pdev->dev, "TX queues %d, RX queues %d\n",
+ 		 priv->tx_cfg.num_queues, priv->rx_cfg.num_queues);
+ 	dev_info(&priv->pdev->dev, "Max TX queues %d, Max RX queues %d\n",
+ 		 priv->tx_cfg.max_queues, priv->rx_cfg.max_queues);
+ 
+-	if (!gve_is_gqi(priv)) {
++	if (gve_is_dqo(priv)) {
++		/* DQO supports HW-GRO and UDP_GSO */
++		u64 additional_features = NETIF_F_GRO_HW | NETIF_F_GSO_UDP_L4;
++
++		priv->dev->hw_features |= additional_features;
++		priv->dev->features |= additional_features;
++
+ 		priv->tx_coalesce_usecs = GVE_TX_IRQ_RATELIMIT_US_DQO;
+ 		priv->rx_coalesce_usecs = GVE_RX_IRQ_RATELIMIT_US_DQO;
++
++		/* Big TCP is only supported on DQO */
++		netif_set_tso_max_size(priv->dev, GVE_DQO_TX_MAX);
+ 	}
+ 
++	priv->dev->mtu = priv->dev->max_mtu;
++	priv->numa_node = dev_to_node(&priv->pdev->dev);
++	priv->tx_cfg.num_xdp_queues = 0;
++	priv->rx_copybreak = GVE_DEFAULT_RX_COPYBREAK;
+ 	priv->ts_config.tx_type = HWTSTAMP_TX_OFF;
+ 	priv->ts_config.rx_filter = HWTSTAMP_FILTER_NONE;
+ 
+-- 
+2.55.0
+

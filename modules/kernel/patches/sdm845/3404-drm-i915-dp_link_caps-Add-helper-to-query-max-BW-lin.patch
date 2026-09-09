@@ -1,0 +1,65 @@
+From 9791229bc23d4b8c9532e3e2794528297c966b44 Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Wed, 1 Jul 2026 18:31:42 +0300
+Subject: [PATCH 03404/15333] drm/i915/dp_link_caps: Add helper to query max BW
+ link configuration
+
+Add a helper to query the link configuration among the currently allowed
+configurations with the maximum link BW.
+
+This will be used by follow-up changes to unify the max BW link config
+query during mode validation and TBT BW calculation.
+
+Reviewed-by: Luca Coelho <luciano.coelho@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260701153204.4124150-14-imre.deak@intel.com
+---
+ .../gpu/drm/i915/display/intel_dp_link_caps.c   | 17 +++++++++++++++++
+ .../gpu/drm/i915/display/intel_dp_link_caps.h   |  3 +++
+ 2 files changed, 20 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+index d00bb8047de2..c209c8a93523 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+@@ -550,6 +550,23 @@ bool intel_dp_link_caps_get_max_config(struct intel_dp_link_caps *link_caps,
+ 	return true;
+ }
+ 
++/**
++ * intel_dp_link_caps_get_max_bw_config - get maximum BW link configuration
++ * @link_caps: link capabilities state
++ * @max_config: returned maximum link configuration
++ *
++ * Return the maximum BW link configuration among the currently
++ * allowed configurations.
++ */
++void intel_dp_link_caps_get_max_bw_config(struct intel_dp_link_caps *link_caps,
++					  struct intel_dp_link_config *max_config)
++{
++	if (!intel_dp_link_caps_get_max_config(link_caps,
++					       bw_desc_config_order().key, INTEL_DP_LINK_CAPS_FILTER_ALL,
++					       max_config))
++		*max_config = INTEL_DP_LINK_CONFIG_NULL;
++}
++
+ static int find_config_idx(struct intel_dp_link_caps *link_caps,
+ 			   struct intel_dp_link_caps_filter filter,
+ 			   const struct intel_dp_link_config *link_config)
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+index 6dd2ce64e24e..667bd70b2396 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+@@ -146,6 +146,9 @@ bool intel_dp_link_caps_get_max_config(struct intel_dp_link_caps *link_caps,
+ 				       struct intel_dp_link_caps_filter filter,
+ 				       struct intel_dp_link_config *max_config);
+ 
++void intel_dp_link_caps_get_max_bw_config(struct intel_dp_link_caps *link_caps,
++					  struct intel_dp_link_config *max_config);
++
+ void intel_dp_link_caps_get_max_limits(struct intel_dp_link_caps *link_caps,
+ 				       struct intel_dp_link_config *max_link_limits);
+ bool intel_dp_link_caps_set_max_limits(struct intel_dp_link_caps *link_caps,
+-- 
+2.55.0
+

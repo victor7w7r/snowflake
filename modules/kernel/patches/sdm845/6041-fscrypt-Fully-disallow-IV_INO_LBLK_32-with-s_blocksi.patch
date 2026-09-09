@@ -1,0 +1,94 @@
+From b69664873f4af302c7867aa7478e818549932614 Mon Sep 17 00:00:00 2001
+From: Eric Biggers <ebiggers@kernel.org>
+Date: Sun, 12 Jul 2026 22:36:55 -0400
+Subject: [PATCH 06041/15333] fscrypt: Fully disallow IV_INO_LBLK_32 with
+ s_blocksize != PAGE_SIZE
+
+FSCRYPT_POLICY_FLAG_IV_INO_LBLK_32 with s_blocksize != PAGE_SIZE works
+only with the fs-layer implementation of file contents encryption, not
+blk-crypto.  This is a problem for standardizing on blk-crypto.
+
+Fortunately, no one should be using this combination anyway.  It doesn't
+make sense because the entire point of IV_INO_LBLK_32 is to support
+inline encryption hardware that is limited to 32-bit DUNs.
+
+Thus, fully disallow IV_INO_LBLK_32 with s_blocksize != PAGE_SIZE.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Link: https://patch.msgid.link/20260713023708.9245-5-ebiggers@kernel.org
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+---
+ Documentation/filesystems/fscrypt.rst |  3 +++
+ fs/crypto/inline_crypt.c              | 13 -------------
+ fs/crypto/policy.c                    | 17 +++++++++++++++++
+ 3 files changed, 20 insertions(+), 13 deletions(-)
+
+diff --git a/Documentation/filesystems/fscrypt.rst b/Documentation/filesystems/fscrypt.rst
+index c0dd35f1af12..92b8f311e211 100644
+--- a/Documentation/filesystems/fscrypt.rst
++++ b/Documentation/filesystems/fscrypt.rst
+@@ -336,6 +336,9 @@ per I/O request and may have only a small number of keyslots.  This
+ format results in some level of IV reuse, so it should only be used
+ when necessary due to hardware limitations.
+ 
++IV_INO_LBLK_32 is supported only when the filesystem block size is
++equal to the page size.
++
+ Key identifiers
+ ---------------
+ 
+diff --git a/fs/crypto/inline_crypt.c b/fs/crypto/inline_crypt.c
+index 013f2bdc6f23..118e29ccb1d7 100644
+--- a/fs/crypto/inline_crypt.c
++++ b/fs/crypto/inline_crypt.c
+@@ -104,19 +104,6 @@ int fscrypt_select_encryption_impl(struct fscrypt_inode_info *ci,
+ 	if (!(sb->s_flags & SB_INLINECRYPT))
+ 		return 0;
+ 
+-	/*
+-	 * When a page contains multiple logically contiguous filesystem blocks,
+-	 * some filesystem code only calls fscrypt_mergeable_bio() for the first
+-	 * block in the page. This is fine for most of fscrypt's IV generation
+-	 * strategies, where contiguous blocks imply contiguous IVs. But it
+-	 * doesn't work with IV_INO_LBLK_32. For now, simply exclude
+-	 * IV_INO_LBLK_32 with blocksize != PAGE_SIZE from inline encryption.
+-	 */
+-	if ((fscrypt_policy_flags(&ci->ci_policy) &
+-	     FSCRYPT_POLICY_FLAG_IV_INO_LBLK_32) &&
+-	    sb->s_blocksize != PAGE_SIZE)
+-		return 0;
+-
+ 	/*
+ 	 * On all the filesystem's block devices, blk-crypto must support the
+ 	 * crypto configuration that the file would use.
+diff --git a/fs/crypto/policy.c b/fs/crypto/policy.c
+index f40fb5924e75..a7322dba7557 100644
+--- a/fs/crypto/policy.c
++++ b/fs/crypto/policy.c
+@@ -177,6 +177,23 @@ static bool supported_iv_ino_lblk_policy(const struct fscrypt_policy_v2 *policy,
+ 			     type, sb->s_id);
+ 		return false;
+ 	}
++
++	/*
++	 * IV_INO_LBLK_32 isn't compatible with inline encryption when
++	 * s_blocksize != PAGE_SIZE.  In that case the DUN can wrap around in
++	 * the middle of a page, but sometimes fscrypt_mergeable_bio() is called
++	 * only for the first block per page.  Since IV_INO_LBLK_32 exists only
++	 * to support inline encryption hardware that is limited to 32-bit DUNs,
++	 * just disallow IV_INO_LBLK_32 with s_blocksize != PAGE_SIZE entirely.
++	 */
++	if ((policy->flags & FSCRYPT_POLICY_FLAG_IV_INO_LBLK_32) &&
++	    sb->s_blocksize != PAGE_SIZE) {
++		fscrypt_warn(inode,
++			     "Can't use %s policy on filesystem '%s' with block size != PAGE_SIZE",
++			     type, sb->s_id);
++		return false;
++	}
++
+ 	return true;
+ }
+ 
+-- 
+2.55.0
+

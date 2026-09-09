@@ -1,0 +1,150 @@
+From 6dcbb4b1320fa91fee349462a52bb69135f2e45e Mon Sep 17 00:00:00 2001
+From: Zhi Wang <zhiw@nvidia.com>
+Date: Wed, 22 Jul 2026 10:39:13 +0300
+Subject: [PATCH 06853/15333] gpu: nova-core: reserve vGPU WPR2 heap
+
+GSP-RM needs a larger WPR2 heap when booting in vGPU mode. The heap size
+is firmware-dependent, so it should come from the generated firmware
+bindings instead of being open-coded in nova-core.
+
+Pass the detected vGPU state into the framebuffer layout calculation. Keep
+baremetal boots on the existing heap sizing path, and use the 570.144
+vGPU default heap binding only when vGPU is enabled. The same state match
+also sets the VF partition count, so disabled and invalid 0/1-VF states do
+not enter the vGPU heap path.
+
+Cc: Alexandre Courbot <acourbot@nvidia.com>
+Signed-off-by: Zhi Wang <zhiw@nvidia.com>
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Link: https://patch.msgid.link/20260722073913.1807677-7-zhiw@nvidia.com
+[ Use checked arithmetic to calculate wpr2_heap_addr. - Danilo ]
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/gpu/nova-core/fb.rs                   | 31 +++++++++++++++----
+ drivers/gpu/nova-core/gsp/boot.rs             |  2 +-
+ drivers/gpu/nova-core/gsp/fw.rs               |  5 +++
+ .../gpu/nova-core/gsp/fw/r570_144/bindings.rs |  1 +
+ drivers/gpu/nova-core/vgpu.rs                 |  1 -
+ 5 files changed, 32 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/fb.rs b/drivers/gpu/nova-core/fb.rs
+index 273cff752fae..365db7abf7db 100644
+--- a/drivers/gpu/nova-core/fb.rs
++++ b/drivers/gpu/nova-core/fb.rs
+@@ -23,7 +23,8 @@
+     firmware::gsp::GspFirmware,
+     gpu::Chipset,
+     gsp,
+-    num::FromSafeCast, //
++    num::FromSafeCast,
++    vgpu::VgpuState, //
+ };
+ 
+ mod hal;
+@@ -171,7 +172,12 @@ pub(crate) struct FbLayout {
+ 
+ impl FbLayout {
+     /// Computes the FB layout for `chipset` required to run the `gsp_fw` GSP firmware.
+-    pub(crate) fn new(chipset: Chipset, bar: Bar0<'_>, gsp_fw: &GspFirmware) -> Result<Self> {
++    pub(crate) fn new(
++        chipset: Chipset,
++        bar: Bar0<'_>,
++        gsp_fw: &GspFirmware,
++        vgpu_state: VgpuState,
++    ) -> Result<Self> {
+         let hal = hal::fb_hal(chipset);
+ 
+         let fb = {
+@@ -234,11 +240,24 @@ pub(crate) fn new(chipset: Chipset, bar: Bar0<'_>, gsp_fw: &GspFirmware) -> Resu
+             FbRange(elf_addr..elf_addr + elf_size)
+         };
+ 
++        let (vf_partition_count, wpr2_heap_size) = match vgpu_state {
++            VgpuState::Disabled => (
++                0,
++                gsp::LibosParams::from_chipset(chipset).wpr_heap_size(chipset, fb.end)?,
++            ),
++            VgpuState::Enabled { total_vfs } => (
++                u8::try_from(total_vfs.get()).map_err(|_| EINVAL)?,
++                gsp::LibosParams::vgpu_wpr_heap_size(),
++            ),
++        };
++
+         let wpr2_heap = {
+             const WPR2_HEAP_DOWN_ALIGN: Alignment = Alignment::new::<SZ_1M>();
+-            let wpr2_heap_size =
+-                gsp::LibosParams::from_chipset(chipset).wpr_heap_size(chipset, fb.end)?;
+-            let wpr2_heap_addr = (elf.start - wpr2_heap_size).align_down(WPR2_HEAP_DOWN_ALIGN);
++            let wpr2_heap_addr = elf
++                .start
++                .checked_sub(wpr2_heap_size)
++                .ok_or(EOVERFLOW)?
++                .align_down(WPR2_HEAP_DOWN_ALIGN);
+ 
+             FbRange(wpr2_heap_addr..(elf.start).align_down(WPR2_HEAP_DOWN_ALIGN))
+         };
+@@ -265,7 +284,7 @@ pub(crate) fn new(chipset: Chipset, bar: Bar0<'_>, gsp_fw: &GspFirmware) -> Resu
+             wpr2_heap,
+             wpr2,
+             heap,
+-            vf_partition_count: 0,
++            vf_partition_count,
+             pmu_reserved_size: hal.pmu_reserved_size(),
+         })
+     }
+diff --git a/drivers/gpu/nova-core/gsp/boot.rs b/drivers/gpu/nova-core/gsp/boot.rs
+index a2e8342e7760..727b8ae4bcb7 100644
+--- a/drivers/gpu/nova-core/gsp/boot.rs
++++ b/drivers/gpu/nova-core/gsp/boot.rs
+@@ -50,7 +50,7 @@ pub(crate) fn boot(
+ 
+         let gsp_fw = KBox::pin_init(GspFirmware::new(dev, chipset, FIRMWARE_VERSION), GFP_KERNEL)?;
+ 
+-        let fb_layout = FbLayout::new(chipset, bar, &gsp_fw)?;
++        let fb_layout = FbLayout::new(chipset, bar, &gsp_fw, ctx.vgpu.state())?;
+         dev_dbg!(dev, "{:#x?}\n", fb_layout);
+ 
+         let wpr_meta = Coherent::init(dev, GFP_KERNEL, GspFwWprMeta::new(&gsp_fw, &fb_layout))?;
+diff --git a/drivers/gpu/nova-core/gsp/fw.rs b/drivers/gpu/nova-core/gsp/fw.rs
+index 166b0c69edb7..6e8e7d822ef1 100644
+--- a/drivers/gpu/nova-core/gsp/fw.rs
++++ b/drivers/gpu/nova-core/gsp/fw.rs
+@@ -132,6 +132,11 @@ pub(crate) fn from_chipset(chipset: Chipset) -> &'static LibosParams {
+         }
+     }
+ 
++    /// Returns the WPR heap size to reserve when vGPU is enabled.
++    pub(crate) fn vgpu_wpr_heap_size() -> u64 {
++        u64::from(bindings::GSP_FW_HEAP_SIZE_VGPU_DEFAULT)
++    }
++
+     /// Returns the amount of memory (in bytes) to allocate for the WPR heap for a framebuffer size
+     /// of `fb_size` (in bytes) for `chipset`.
+     pub(crate) fn wpr_heap_size(&self, chipset: Chipset, fb_size: u64) -> Result<u64> {
+diff --git a/drivers/gpu/nova-core/gsp/fw/r570_144/bindings.rs b/drivers/gpu/nova-core/gsp/fw/r570_144/bindings.rs
+index ea350f9b2cc4..afe3e007f088 100644
+--- a/drivers/gpu/nova-core/gsp/fw/r570_144/bindings.rs
++++ b/drivers/gpu/nova-core/gsp/fw/r570_144/bindings.rs
+@@ -40,6 +40,7 @@ fn fmt(&self, fmt: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+ pub const GSP_FW_HEAP_PARAM_BASE_RM_SIZE_GH100: u32 = 14680064;
+ pub const GSP_FW_HEAP_PARAM_SIZE_PER_GB_FB: u32 = 98304;
+ pub const GSP_FW_HEAP_PARAM_CLIENT_ALLOC_SIZE: u32 = 100663296;
++pub const GSP_FW_HEAP_SIZE_VGPU_DEFAULT: u32 = 609222656;
+ pub const GSP_FW_HEAP_SIZE_OVERRIDE_LIBOS2_MIN_MB: u32 = 64;
+ pub const GSP_FW_HEAP_SIZE_OVERRIDE_LIBOS2_MAX_MB: u32 = 256;
+ pub const GSP_FW_HEAP_SIZE_OVERRIDE_LIBOS3_BAREMETAL_MIN_MB: u32 = 88;
+diff --git a/drivers/gpu/nova-core/vgpu.rs b/drivers/gpu/nova-core/vgpu.rs
+index 5359847e2eb9..6b7e045acea8 100644
+--- a/drivers/gpu/nova-core/vgpu.rs
++++ b/drivers/gpu/nova-core/vgpu.rs
+@@ -26,7 +26,6 @@ pub(crate) enum VgpuState {
+     /// vGPU mode is enabled for this boot.
+     Enabled {
+         /// Total number of SR-IOV VFs supported by this device.
+-        #[expect(dead_code)]
+         total_vfs: NonZero<u16>,
+     },
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,78 @@
+From 5ff53ce9a4771140336929ded9d16178cad05d95 Mon Sep 17 00:00:00 2001
+From: Ciunas Bennett <ciunas@linux.ibm.com>
+Date: Fri, 24 Jul 2026 12:39:58 +0200
+Subject: [PATCH 08580/15333] KVM: s390: Add tracepoint for DIAG 9c directed
+ yield operations
+
+Add a new tracepoint, kvm_s390_diag_9c, to provide visibility into
+directed yield operations. The tracepoint records:
+
+  - Source vCPU context via the standard vCPU tracepoint fields
+  - Target vCPU ID
+  - Target physical CPU number
+  - Operation result (done, ignored, or yield forwarded)
+
+This improves observability of vCPU scheduling behaviour and helps
+diagnose performance issues related to directed yields in virtualised
+s390 environments.
+
+Signed-off-by: Ciunas Bennett <ciunas@linux.ibm.com>
+Reviewed-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+Signed-off-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+---
+ arch/s390/kvm/diag.c  |  1 +
+ arch/s390/kvm/trace.h | 26 ++++++++++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/arch/s390/kvm/diag.c b/arch/s390/kvm/diag.c
+index 85c84421b510..031ab6e5d6c4 100644
+--- a/arch/s390/kvm/diag.c
++++ b/arch/s390/kvm/diag.c
+@@ -228,6 +228,7 @@ static int __diag_time_slice_end_directed(struct kvm_vcpu *vcpu)
+ out:
+ 	VCPU_EVENT(vcpu, 5, "diag time slice end directed to %d: %s", tid,
+ 		   result);
++	trace_kvm_s390_diag_9c(vcpu, tid, tcpu_cpu, result);
+ 	return 0;
+ }
+ 
+diff --git a/arch/s390/kvm/trace.h b/arch/s390/kvm/trace.h
+index aa419eb6a0c8..dd2685c7df5b 100644
+--- a/arch/s390/kvm/trace.h
++++ b/arch/s390/kvm/trace.h
+@@ -283,6 +283,32 @@ TRACE_EVENT(kvm_s390_handle_diag,
+ 			   __print_symbolic(__entry->code, diagnose_codes))
+ 	);
+ 
++TRACE_EVENT(kvm_s390_diag_9c,
++	    TP_PROTO(VCPU_PROTO_COMMON, int target_vcpu, int target_cpu,
++		     const char *result),
++	    TP_ARGS(VCPU_ARGS_COMMON, target_vcpu, target_cpu, result),
++
++	    TP_STRUCT__entry(
++		    VCPU_FIELD_COMMON
++		    __field(int, target_vcpu)
++		    __field(int, target_cpu)
++		    __string(result, result)
++		    ),
++
++	    TP_fast_assign(
++		    VCPU_ASSIGN_COMMON
++		    __entry->target_vcpu = target_vcpu;
++		    __entry->target_cpu = target_cpu;
++		    __assign_str(result);
++		    ),
++
++	    VCPU_TP_PRINTK(
++		       "diag=9c target_vcpu=%d target_pcpu=%d result=%s",
++		       __entry->target_vcpu,
++		       __entry->target_cpu,
++		       __get_str(result))
++	);
++
+ TRACE_EVENT(kvm_s390_handle_lctl,
+ 	    TP_PROTO(VCPU_PROTO_COMMON, int g, int reg1, int reg3, u64 addr),
+ 	    TP_ARGS(VCPU_ARGS_COMMON, g, reg1, reg3, addr),
+-- 
+2.55.0
+

@@ -1,0 +1,52 @@
+From 2d837b9961ec7ce46d1f1241a88d2b1f57e87f5a Mon Sep 17 00:00:00 2001
+From: Pavel Begunkov <asml.silence@gmail.com>
+Date: Fri, 7 Aug 2026 14:19:26 +0100
+Subject: [PATCH 14196/15333] io_uring/zcrx: don't reload skb_shinfo
+
+Keep skb_shinfo in a local variable so that it doesn't reload it on
+every iteration of the loop.
+
+Signed-off-by: Pavel Begunkov <asml.silence@gmail.com>
+Link: https://patch.msgid.link/1e4c864a5ea639803c866aea70b8d5bf558f189f.1786108672.git.asml.silence@gmail.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ io_uring/zcrx.c | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/io_uring/zcrx.c b/io_uring/zcrx.c
+index 0ddb5e46eda9..e41f3a4e2c0d 100644
+--- a/io_uring/zcrx.c
++++ b/io_uring/zcrx.c
+@@ -1692,6 +1692,7 @@ io_zcrx_recv_skb(read_descriptor_t *desc, struct sk_buff *skb,
+ 	struct io_kiocb *req = args->req;
+ 	struct sk_buff *frag_iter;
+ 	unsigned start, start_off = offset;
++	struct skb_shared_info *shi;
+ 	int i, ret = 0;
+ 
+ 	len = min_t(size_t, len, desc->count);
+@@ -1727,17 +1728,15 @@ io_zcrx_recv_skb(read_descriptor_t *desc, struct sk_buff *skb,
+ 	}
+ 
+ 	start = skb_headlen(skb);
++	shi = skb_shinfo(skb);
+ 
+-	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+-		const skb_frag_t *frag;
+-		unsigned frag_end;
++	for (i = 0; i < shi->nr_frags; i++) {
++		const skb_frag_t *frag = &shi->frags[i];
++		unsigned frag_end = start + skb_frag_size(frag);
+ 
+ 		if (WARN_ON(start > offset + len))
+ 			return -EFAULT;
+ 
+-		frag = &skb_shinfo(skb)->frags[i];
+-		frag_end = start + skb_frag_size(frag);
+-
+ 		if (offset < frag_end) {
+ 			unsigned copy = min(frag_end - offset, len);
+ 			unsigned frag_off = offset - start;
+-- 
+2.55.0
+

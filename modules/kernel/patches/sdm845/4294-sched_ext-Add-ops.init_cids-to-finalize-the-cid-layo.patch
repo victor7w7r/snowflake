@@ -1,0 +1,430 @@
+From 874fdc0e86e4d32539026c8e9b3999c0523c96d4 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Mon, 13 Jul 2026 22:18:42 -1000
+Subject: [PATCH 04294/15333] sched_ext: Add ops.init_cids() to finalize the
+ cid layout before init
+
+A cid-form scheduler that calls scx_bpf_cid_override() to install a custom
+cid layout can only do so from ops.init(). Enable-path setup that depends on
+the cid layout thus has to run after ops.init(), and ops.init() itself can't
+use anything derived from the final layout, which turned out to be too
+restrictive.
+
+Add an ops.init_cids() callback dedicated to finalizing the cid layout. It
+runs before the rest of the enable-path setup, so the final layout is in
+effect for everything that follows including ops.init(), which now runs
+after the arena pool and cmask scratch allocations.
+
+scx_bpf_cid_override() is restricted to ops.init_cids() at load time. It
+sits in a kfunc set gated by SCX_KF_ALLOW_INIT_CIDS, a flag set only on the
+init_cids op, so the verifier rejects a call from any other context. The
+runtime root-only check is dropped as ops.init_cids() only runs during root
+enable.
+
+The qmap demo moves its override into a dedicated qmap_init_cids() and,
+while at it, introduces an enum for the cid override modes instead of
+hard-coded integers.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/cid.c         | 25 ++++++++-----------
+ kernel/sched/ext/cid.h         |  2 +-
+ kernel/sched/ext/ext.c         | 41 +++++++++++++++++++++++--------
+ kernel/sched/ext/internal.h    | 16 ++++++++++---
+ tools/sched_ext/scx_qmap.bpf.c | 44 +++++++++++++++++++++-------------
+ tools/sched_ext/scx_qmap.c     | 12 +++++-----
+ tools/sched_ext/scx_qmap.h     |  8 +++++++
+ 7 files changed, 96 insertions(+), 52 deletions(-)
+
+diff --git a/kernel/sched/ext/cid.c b/kernel/sched/ext/cid.c
+index f31113b080e9..b0ec4d76f855 100644
+--- a/kernel/sched/ext/cid.c
++++ b/kernel/sched/ext/cid.c
+@@ -13,10 +13,10 @@
+ /*
+  * cid tables.
+  *
+- * Pointers are published once on first enable and never revoked. The default
+- * mapping is populated before ops.init() runs; scx_bpf_cid_override() commits
+- * before it returns. As long as the BPF scheduler only uses the tables from
+- * those points onward, it sees a consistent view.
++ * Pointers are allocated on first enable and never freed. During root enable,
++ * the default mapping is populated and then ops.init_cids() is called which can
++ * use scx_bpf_cid_override() to change the mapping. The mapping stays stable
++ * until the root is disabled.
+  */
+ s16 *scx_cid_to_cpu_tbl;
+ s16 *scx_cpu_to_cid_tbl;
+@@ -282,7 +282,7 @@ __bpf_kfunc_start_defs();
+  * @cpu_to_cid__sz: must be nr_cpu_ids * sizeof(s32) bytes
+  * @aux: implicit BPF argument to access bpf_prog_aux hidden from BPF progs
+  *
+- * May only be called from ops.init() of the root scheduler. Replace the
++ * May only be called from ops.init_cids() of the root scheduler. Replace the
+  * topology-probed cid mapping with the caller-provided one. Each possible cpu
+  * must map to a unique cid in [0, num_possible_cpus()). Topo info is cleared.
+  * On invalid input, trigger scx_error() to abort the scheduler.
+@@ -309,11 +309,6 @@ __bpf_kfunc void scx_bpf_cid_override(const s32 *cpu_to_cid, u32 cpu_to_cid__sz,
+ 		return;
+ 	}
+ 
+-	if (scx_parent(sch)) {
+-		scx_error(sch, "scx_bpf_cid_override() only allowed from root sched");
+-		return;
+-	}
+-
+ 	if (cpu_to_cid__sz != nr_cpu_ids * sizeof(s32)) {
+ 		scx_error(sch, "scx_bpf_cid_override: expected %zu bytes, got %u",
+ 			  nr_cpu_ids * sizeof(s32), cpu_to_cid__sz);
+@@ -645,13 +640,13 @@ __bpf_kfunc void scx_bpf_cid_topo(s32 cid, struct scx_cid_topo *out__uninit,
+ 
+ __bpf_kfunc_end_defs();
+ 
+-BTF_KFUNCS_START(scx_kfunc_ids_init)
++BTF_KFUNCS_START(scx_kfunc_ids_init_cids)
+ BTF_ID_FLAGS(func, scx_bpf_cid_override, KF_IMPLICIT_ARGS | KF_SLEEPABLE)
+-BTF_KFUNCS_END(scx_kfunc_ids_init)
++BTF_KFUNCS_END(scx_kfunc_ids_init_cids)
+ 
+-static const struct btf_kfunc_id_set scx_kfunc_set_init = {
++static const struct btf_kfunc_id_set scx_kfunc_set_init_cids = {
+ 	.owner	= THIS_MODULE,
+-	.set	= &scx_kfunc_ids_init,
++	.set	= &scx_kfunc_ids_init_cids,
+ 	.filter	= scx_kfunc_context_filter,
+ };
+ 
+@@ -668,7 +663,7 @@ static const struct btf_kfunc_id_set scx_kfunc_set_cid = {
+ 
+ int scx_cid_kfunc_init(void)
+ {
+-	return register_btf_kfunc_id_set(BPF_PROG_TYPE_STRUCT_OPS, &scx_kfunc_set_init) ?:
++	return register_btf_kfunc_id_set(BPF_PROG_TYPE_STRUCT_OPS, &scx_kfunc_set_init_cids) ?:
+ 		register_btf_kfunc_id_set(BPF_PROG_TYPE_STRUCT_OPS, &scx_kfunc_set_cid) ?:
+ 		register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING, &scx_kfunc_set_cid) ?:
+ 		register_btf_kfunc_id_set(BPF_PROG_TYPE_SYSCALL, &scx_kfunc_set_cid);
+diff --git a/kernel/sched/ext/cid.h b/kernel/sched/ext/cid.h
+index 54b10df32fd5..cd0d4b9f1088 100644
+--- a/kernel/sched/ext/cid.h
++++ b/kernel/sched/ext/cid.h
+@@ -51,7 +51,7 @@ struct scx_sched;
+ extern s16 *scx_cid_to_cpu_tbl;
+ extern s16 *scx_cpu_to_cid_tbl;
+ extern struct scx_cid_topo *scx_cid_topo;
+-extern struct btf_id_set8 scx_kfunc_ids_init;
++extern struct btf_id_set8 scx_kfunc_ids_init_cids;
+ 
+ void scx_cmask_clear(struct scx_cmask *m);
+ void scx_cmask_fill(struct scx_cmask *m);
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index ab0b6f15e318..434bec61642d 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -6725,15 +6725,19 @@ static void scx_root_enable_workfn(struct kthread_work *work)
+ 
+ 	scx_idle_enable(ops);
+ 
+-	if (sch->ops.init) {
+-		ret = SCX_CALL_OP_RET(sch, init, NULL);
++	/*
++	 * A cid-form scheduler finalizes its cid layout in ops.init_cids(),
++	 * which may call scx_bpf_cid_override(). Run it before ops.init() so
++	 * the final layout is in effect.
++	 */
++	if (sch->is_cid_type && sch->ops_cid.init_cids) {
++		ret = SCX_CALL_OP_RET(sch, init_cids, NULL);
+ 		if (ret) {
+-			ret = scx_ops_sanitize_err(sch, "init", ret);
++			ret = scx_ops_sanitize_err(sch, "init_cids", ret);
+ 			cpus_read_unlock();
+-			scx_error(sch, "ops.init() failed (%d)", ret);
++			scx_error(sch, "ops.init_cids() failed (%d)", ret);
+ 			goto err_disable;
+ 		}
+-		sch->exit_info->flags |= SCX_EFLAG_INITIALIZED;
+ 	}
+ 
+ 	ret = scx_arena_pool_init(sch);
+@@ -6748,6 +6752,17 @@ static void scx_root_enable_workfn(struct kthread_work *work)
+ 		goto err_disable;
+ 	}
+ 
++	if (sch->ops.init) {
++		ret = SCX_CALL_OP_RET(sch, init, NULL);
++		if (ret) {
++			ret = scx_ops_sanitize_err(sch, "init", ret);
++			cpus_read_unlock();
++			scx_error(sch, "ops.init() failed (%d)", ret);
++			goto err_disable;
++		}
++		sch->exit_info->flags |= SCX_EFLAG_INITIALIZED;
++	}
++
+ 	for (i = SCX_OPI_CPU_HOTPLUG_BEGIN; i < SCX_OPI_CPU_HOTPLUG_END; i++)
+ 		if (((void (**)(void))ops)[i])
+ 			set_bit(i, sch->has_op);
+@@ -7184,6 +7199,7 @@ static int bpf_scx_check_member(const struct btf_type *t,
+ #endif
+ 	case offsetof(struct sched_ext_ops, cpu_online):
+ 	case offsetof(struct sched_ext_ops, cpu_offline):
++	case offsetof(struct sched_ext_ops, init_cids):
+ 	case offsetof(struct sched_ext_ops, init):
+ 	case offsetof(struct sched_ext_ops, exit):
+ 	case offsetof(struct sched_ext_ops, sub_attach):
+@@ -7342,6 +7358,7 @@ static s32 sched_ext_ops__sub_attach(struct scx_sub_attach_args *args) { return
+ static void sched_ext_ops__sub_detach(struct scx_sub_detach_args *args) {}
+ static void sched_ext_ops__cpu_online(s32 cpu) {}
+ static void sched_ext_ops__cpu_offline(s32 cpu) {}
++static s32 sched_ext_ops__init_cids(void) { return -EINVAL; }
+ static s32 sched_ext_ops__init(void) { return -EINVAL; }
+ static void sched_ext_ops__exit(struct scx_exit_info *info) {}
+ static void sched_ext_ops__dump(struct scx_dump_ctx *ctx) {}
+@@ -7383,6 +7400,7 @@ static struct sched_ext_ops __bpf_ops_sched_ext_ops = {
+ 	.sub_detach		= sched_ext_ops__sub_detach,
+ 	.cpu_online		= sched_ext_ops__cpu_online,
+ 	.cpu_offline		= sched_ext_ops__cpu_offline,
++	.init_cids		= sched_ext_ops__init_cids,
+ 	.init			= sched_ext_ops__init,
+ 	.exit			= sched_ext_ops__exit,
+ 	.dump			= sched_ext_ops__dump,
+@@ -7445,6 +7463,7 @@ static struct sched_ext_ops_cid __bpf_ops_sched_ext_ops_cid = {
+ 	.sub_detach		= sched_ext_ops__sub_detach,
+ 	.cid_online		= sched_ext_ops__cpu_online,
+ 	.cid_offline		= sched_ext_ops__cpu_offline,
++	.init_cids		= sched_ext_ops__init_cids,
+ 	.init			= sched_ext_ops__init,
+ 	.exit			= sched_ext_ops__exit,
+ 	.dump			= sched_ext_ops__dump,
+@@ -9703,7 +9722,7 @@ BTF_KFUNCS_END(scx_kfunc_ids_cpu_only)
+  */
+ enum scx_kf_allow_flags {
+ 	SCX_KF_ALLOW_UNLOCKED		= 1 << 0,
+-	SCX_KF_ALLOW_INIT		= 1 << 1,
++	SCX_KF_ALLOW_INIT_CIDS		= 1 << 1,
+ 	SCX_KF_ALLOW_CPU_RELEASE	= 1 << 2,
+ 	SCX_KF_ALLOW_DISPATCH		= 1 << 3,
+ 	SCX_KF_ALLOW_ENQUEUE		= 1 << 4,
+@@ -9735,7 +9754,8 @@ static const u32 scx_kf_allow_flags[] = {
+ 	[SCX_OP_IDX(sub_detach)]	= SCX_KF_ALLOW_UNLOCKED,
+ 	[SCX_OP_IDX(cpu_online)]	= SCX_KF_ALLOW_UNLOCKED,
+ 	[SCX_OP_IDX(cpu_offline)]	= SCX_KF_ALLOW_UNLOCKED,
+-	[SCX_OP_IDX(init)]		= SCX_KF_ALLOW_UNLOCKED | SCX_KF_ALLOW_INIT,
++	[SCX_OP_IDX(init_cids)]		= SCX_KF_ALLOW_UNLOCKED | SCX_KF_ALLOW_INIT_CIDS,
++	[SCX_OP_IDX(init)]		= SCX_KF_ALLOW_UNLOCKED,
+ 	[SCX_OP_IDX(exit)]		= SCX_KF_ALLOW_UNLOCKED,
+ };
+ 
+@@ -9750,7 +9770,7 @@ static const u32 scx_kf_allow_flags[] = {
+ int scx_kfunc_context_filter(const struct bpf_prog *prog, u32 kfunc_id)
+ {
+ 	bool in_unlocked = btf_id_set8_contains(&scx_kfunc_ids_unlocked, kfunc_id);
+-	bool in_init = btf_id_set8_contains(&scx_kfunc_ids_init, kfunc_id);
++	bool in_init_cids = btf_id_set8_contains(&scx_kfunc_ids_init_cids, kfunc_id);
+ 	bool in_select_cpu = btf_id_set8_contains(&scx_kfunc_ids_select_cpu, kfunc_id);
+ 	bool in_enqueue = btf_id_set8_contains(&scx_kfunc_ids_enqueue_dispatch, kfunc_id);
+ 	bool in_dispatch = btf_id_set8_contains(&scx_kfunc_ids_dispatch, kfunc_id);
+@@ -9761,7 +9781,7 @@ int scx_kfunc_context_filter(const struct bpf_prog *prog, u32 kfunc_id)
+ 	u32 moff, flags;
+ 
+ 	/* Not an SCX kfunc - allow. */
+-	if (!(in_unlocked || in_init || in_select_cpu || in_enqueue || in_dispatch ||
++	if (!(in_unlocked || in_init_cids || in_select_cpu || in_enqueue || in_dispatch ||
+ 	      in_cpu_release || in_idle || in_any))
+ 		return 0;
+ 
+@@ -9813,7 +9833,7 @@ int scx_kfunc_context_filter(const struct bpf_prog *prog, u32 kfunc_id)
+ 
+ 	if ((flags & SCX_KF_ALLOW_UNLOCKED) && in_unlocked)
+ 		return 0;
+-	if ((flags & SCX_KF_ALLOW_INIT) && in_init)
++	if ((flags & SCX_KF_ALLOW_INIT_CIDS) && in_init_cids)
+ 		return 0;
+ 	if ((flags & SCX_KF_ALLOW_CPU_RELEASE) && in_cpu_release)
+ 		return 0;
+@@ -9869,6 +9889,7 @@ static int __init scx_init(void)
+ 	CID_OFFSET_MATCH(dump_task, dump_task);
+ 	CID_OFFSET_MATCH(sub_attach, sub_attach);
+ 	CID_OFFSET_MATCH(sub_detach, sub_detach);
++	CID_OFFSET_MATCH(init_cids, init_cids);
+ 	CID_OFFSET_MATCH(init, init);
+ 	CID_OFFSET_MATCH(exit, exit);
+ #ifdef CONFIG_EXT_GROUP_SCHED
+diff --git a/kernel/sched/ext/internal.h b/kernel/sched/ext/internal.h
+index 2777e50ef6f6..902244dc27ff 100644
+--- a/kernel/sched/ext/internal.h
++++ b/kernel/sched/ext/internal.h
+@@ -780,9 +780,18 @@ struct sched_ext_ops {
+ 	void (*cpu_offline)(s32 cpu);
+ 
+ 	/*
+-	 * All CPU hotplug ops must come before ops.init().
++	 * All CPU hotplug ops must come before ops.init_cids().
+ 	 */
+ 
++	/**
++	 * @init_cids: Finalize the cid layout (cid-form only)
++	 *
++	 * Runs after the default cid layout is built, before ops.init(). A
++	 * cid-form scheduler may call scx_bpf_cid_override() here for a custom
++	 * layout. Ignored for cpu-form schedulers.
++	 */
++	s32 (*init_cids)(void);
++
+ 	/**
+ 	 * @init: Initialize the BPF scheduler
+ 	 */
+@@ -958,6 +967,7 @@ struct sched_ext_ops_cid {
+ 	void (*sub_detach)(struct scx_sub_detach_args *args);
+ 	void (*cid_online)(s32 cid);
+ 	void (*cid_offline)(s32 cid);
++	s32 (*init_cids)(void);
+ 	s32 (*init)(void);
+ 	void (*exit)(struct scx_exit_info *info);
+ 
+@@ -982,8 +992,8 @@ enum scx_opi {
+ 	SCX_OPI_NORMAL_BEGIN		= 0,
+ 	SCX_OPI_NORMAL_END		= SCX_OP_IDX(cpu_online),
+ 	SCX_OPI_CPU_HOTPLUG_BEGIN	= SCX_OP_IDX(cpu_online),
+-	SCX_OPI_CPU_HOTPLUG_END		= SCX_OP_IDX(init),
+-	SCX_OPI_END			= SCX_OP_IDX(init),
++	SCX_OPI_CPU_HOTPLUG_END		= SCX_OP_IDX(init_cids),
++	SCX_OPI_END			= SCX_OP_IDX(init_cids),
+ };
+ 
+ /*
+diff --git a/tools/sched_ext/scx_qmap.bpf.c b/tools/sched_ext/scx_qmap.bpf.c
+index fd9a82a67627..2df7c53992dc 100644
+--- a/tools/sched_ext/scx_qmap.bpf.c
++++ b/tools/sched_ext/scx_qmap.bpf.c
+@@ -54,13 +54,9 @@ const volatile u32 max_tasks;
+ 
+ /*
+  * Optional cid-override test harness. When cid_override_mode is non-zero,
+- * qmap_init() calls scx_bpf_cid_override() with the caller-supplied
+- * cpu_to_cid array to exercise the kfunc's acceptance and error paths.
+- *
+- *   0 = disabled
+- *   1 = valid reverse mapping
+- *   2 = invalid: duplicate cid assignment
+- *   3 = invalid: out-of-range cid
++ * qmap_init_cids() calls scx_bpf_cid_override() with the caller-supplied
++ * cpu_to_cid array to exercise the kfunc's acceptance and error paths. See enum
++ * qmap_cid_override for the modes.
+  */
+ const volatile u32 cid_override_mode;
+ /*
+@@ -1067,6 +1063,29 @@ static int lowpri_timerfn(void *map, int *key, struct bpf_timer *timer)
+ 	return 0;
+ }
+ 
++/*
++ * Custom cid layout for the cid-override test. On invalid input the kfunc
++ * scx_error()s and aborts the scheduler.
++ */
++s32 BPF_STRUCT_OPS_SLEEPABLE(qmap_init_cids)
++{
++	u32 nr_cpu_ids = scx_bpf_nr_cpu_ids();
++
++	if (!cid_override_mode)
++		return 0;
++
++	/* bound the count so the verifier accepts cpu_to_cid's mem/len pair */
++	if (nr_cpu_ids > SCX_QMAP_MAX_CPUS) {
++		scx_bpf_error("nr_cpu_ids=%u exceeds SCX_QMAP_MAX_CPUS=%d",
++			      nr_cpu_ids, SCX_QMAP_MAX_CPUS);
++		return -EINVAL;
++	}
++
++	scx_bpf_cid_override((const s32 *)cid_override_cpu_to_cid,
++			     nr_cpu_ids * sizeof(s32));
++	return 0;
++}
++
+ s32 BPF_STRUCT_OPS_SLEEPABLE(qmap_init)
+ {
+ 	u8 __arena *slab;
+@@ -1089,16 +1108,6 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(qmap_init)
+ 		return -EINVAL;
+ 	}
+ 
+-	/*
+-	 * cid-override test hook. Must run before anything that reads the
+-	 * cid space (scx_bpf_nr_cids, cmask_init, etc.). On invalid input,
+-	 * the kfunc calls scx_error() which aborts the scheduler.
+-	 */
+-	if (cid_override_mode) {
+-		scx_bpf_cid_override((const s32 *)cid_override_cpu_to_cid,
+-				     nr_cpu_ids * sizeof(s32));
+-	}
+-
+ 	/*
+ 	 * Allocate the task_ctx slab in arena and thread the entire slab onto
+ 	 * the free list. max_tasks is set by userspace before load. Each entry
+@@ -1235,6 +1244,7 @@ SCX_OPS_CID_DEFINE(qmap_ops,
+ 	       .cgroup_set_bandwidth	= (void *)qmap_cgroup_set_bandwidth,
+ 	       .sub_attach		= (void *)qmap_sub_attach,
+ 	       .sub_detach		= (void *)qmap_sub_detach,
++	       .init_cids		= (void *)qmap_init_cids,
+ 	       .init			= (void *)qmap_init,
+ 	       .exit			= (void *)qmap_exit,
+ 	       .timeout_ms		= 5000U,
+diff --git a/tools/sched_ext/scx_qmap.c b/tools/sched_ext/scx_qmap.c
+index f1eaebcab5dc..c0b5cab579d6 100644
+--- a/tools/sched_ext/scx_qmap.c
++++ b/tools/sched_ext/scx_qmap.c
+@@ -157,11 +157,11 @@ int main(int argc, char **argv)
+ 			u32 mode, i;
+ 
+ 			if (!strcmp(optarg, "shuffle"))
+-				mode = 1;
++				mode = QMAP_CID_OVR_SHUFFLE;
+ 			else if (!strcmp(optarg, "bad-dup"))
+-				mode = 2;
++				mode = QMAP_CID_OVR_BAD_DUP;
+ 			else if (!strcmp(optarg, "bad-range"))
+-				mode = 3;
++				mode = QMAP_CID_OVR_BAD_RANGE;
+ 			else {
+ 				fprintf(stderr, "unknown cid-override mode '%s'\n", optarg);
+ 				return 1;
+@@ -170,14 +170,14 @@ int main(int argc, char **argv)
+ 
+ 			/* shuffle: reversed cpu_to_cid, bad-dup: dup cid 0, bad-range: identity */
+ 			for (i = 0; i < nr_cpus; i++) {
+-				if (mode == 1)
++				if (mode == QMAP_CID_OVR_SHUFFLE)
+ 					skel->bss->cid_override_cpu_to_cid[i] = nr_cpus - 1 - i;
+ 				else
+ 					skel->bss->cid_override_cpu_to_cid[i] = i;
+ 			}
+-			if (mode == 2 && nr_cpus >= 2)
++			if (mode == QMAP_CID_OVR_BAD_DUP && nr_cpus >= 2)
+ 				skel->bss->cid_override_cpu_to_cid[1] = 0;
+-			if (mode == 3)
++			if (mode == QMAP_CID_OVR_BAD_RANGE)
+ 				skel->bss->cid_override_cpu_to_cid[0] = (s32)nr_cpus;
+ 			break;
+ 		}
+diff --git a/tools/sched_ext/scx_qmap.h b/tools/sched_ext/scx_qmap.h
+index 808237540f5c..3bcc3579839d 100644
+--- a/tools/sched_ext/scx_qmap.h
++++ b/tools/sched_ext/scx_qmap.h
+@@ -27,6 +27,14 @@
+  */
+ #define SCX_QMAP_MAX_CPUS	1024
+ 
++/* -C cid-override test modes. Selects cid_override_mode in scx_qmap.bpf.c. */
++enum qmap_cid_override {
++	QMAP_CID_OVR_OFF	= 0,	/* disabled */
++	QMAP_CID_OVR_SHUFFLE	= 1,	/* valid reversed cpu->cid mapping */
++	QMAP_CID_OVR_BAD_DUP	= 2,	/* invalid: duplicate cid assignment */
++	QMAP_CID_OVR_BAD_RANGE	= 3,	/* invalid: out-of-range cid */
++};
++
+ struct cpu_ctx {
+ 	u64 dsp_idx;		/* dispatch index */
+ 	u64 dsp_cnt;		/* remaining count */
+-- 
+2.55.0
+

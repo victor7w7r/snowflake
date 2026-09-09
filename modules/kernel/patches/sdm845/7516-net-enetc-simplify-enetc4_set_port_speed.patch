@@ -1,0 +1,75 @@
+From c969fbc01d9ea95623e82eac396d8838bba4da07 Mon Sep 17 00:00:00 2001
+From: Wei Fang <wei.fang@nxp.com>
+Date: Mon, 20 Jul 2026 09:43:08 +0800
+Subject: [PATCH 07516/15333] net: enetc: simplify enetc4_set_port_speed()
+
+Since phylink may pass SPEED_UNKNOWN to mac_link_up, handle it
+explicitly by defaulting to SPEED_10, then replace the switch statement
+with a direct call to PCR_PSPEED_VAL(). Also update PCR_PSPEED_VAL() to
+use FIELD_PREP() for proper field masking instead of an open-coded shift.
+
+Signed-off-by: Wei Fang <wei.fang@nxp.com>
+Reviewed-by: Maxime Chevallier <maxime.chevallier@bootlin.com>
+Link: https://patch.msgid.link/20260720014317.1059359-7-wei.fang@oss.nxp.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ .../net/ethernet/freescale/enetc/enetc4_hw.h  |  2 +-
+ .../net/ethernet/freescale/enetc/enetc4_pf.c  | 25 +++++++------------
+ 2 files changed, 10 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/net/ethernet/freescale/enetc/enetc4_hw.h b/drivers/net/ethernet/freescale/enetc/enetc4_hw.h
+index 6a8f2ed56017..dea1fd0b8175 100644
+--- a/drivers/net/ethernet/freescale/enetc/enetc4_hw.h
++++ b/drivers/net/ethernet/freescale/enetc/enetc4_hw.h
+@@ -148,7 +148,7 @@
+ #define  PCR_L2DOSE			BIT(4)
+ #define  PCR_TIMER_CS			BIT(8)
+ #define  PCR_PSPEED			GENMASK(29, 16)
+-#define  PCR_PSPEED_VAL(speed)		(((speed) / 10 - 1) << 16)
++#define  PCR_PSPEED_VAL(s)		FIELD_PREP(PCR_PSPEED, ((s) / 10 - 1))
+ 
+ /* Port MAC address register 0/1 */
+ #define ENETC4_PMAR0			0x4020
+diff --git a/drivers/net/ethernet/freescale/enetc/enetc4_pf.c b/drivers/net/ethernet/freescale/enetc/enetc4_pf.c
+index b966637572a7..f24269a48c26 100644
+--- a/drivers/net/ethernet/freescale/enetc/enetc4_pf.c
++++ b/drivers/net/ethernet/freescale/enetc/enetc4_pf.c
+@@ -628,26 +628,19 @@ static void enetc4_set_port_speed(struct enetc_ndev_priv *priv, int speed)
+ 	u32 old_speed = priv->speed;
+ 	u32 val;
+ 
++	/* If the speed is unknown, use the minimum value */
++	if (speed == SPEED_UNKNOWN) {
++		speed = SPEED_10;
++		dev_warn(priv->dev, "Speed unknown, default is 10Mbps\n");
++	}
++
+ 	if (speed == old_speed)
+ 		return;
+ 
+-	val = enetc_port_rd(&priv->si->hw, ENETC4_PCR);
+-	val &= ~PCR_PSPEED;
+-
+-	switch (speed) {
+-	case SPEED_100:
+-	case SPEED_1000:
+-	case SPEED_2500:
+-	case SPEED_10000:
+-		val |= (PCR_PSPEED & PCR_PSPEED_VAL(speed));
+-		break;
+-	case SPEED_10:
+-	default:
+-		val |= (PCR_PSPEED & PCR_PSPEED_VAL(SPEED_10));
+-	}
+-
+-	priv->speed = speed;
++	val = enetc_port_rd(&priv->si->hw, ENETC4_PCR) & (~PCR_PSPEED);
++	val |= PCR_PSPEED_VAL(speed);
+ 	enetc_port_wr(&priv->si->hw, ENETC4_PCR, val);
++	priv->speed = speed;
+ }
+ 
+ static void enetc4_set_rgmii_mac(struct enetc_pf *pf, int speed, int duplex)
+-- 
+2.55.0
+

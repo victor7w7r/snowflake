@@ -1,0 +1,111 @@
+From 99c46385edb155cfd2919b4a44d97f9ea811639e Mon Sep 17 00:00:00 2001
+From: Frank Li <Frank.Li@nxp.com>
+Date: Mon, 13 Jul 2026 13:03:19 -0400
+Subject: [PATCH 04395/15333] dmaengine: dw-edma: Move control field update of
+ DMA link to the last step
+
+The control field in a DMA link list entry must be updated as the final
+step because it includes the CB bit, which indicates whether the entry is
+ready. Add dma_wmb() to ensure the correct memory write ordering.
+
+Currently the driver does not update DMA link entries while the DMA is
+running, so no visible failure occurs. However, fixing the ordering now
+prepares the driver for supporting link entry updates during DMA operation.
+
+Tested-by: Koichiro Den <den@valinux.co.jp>
+Tested-By: Devendra Verma <devendra.verma@amd.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260713-edma_ll-v7-1-6fb7498c901e@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dw-edma/dw-edma-v0-core.c | 10 ++++++----
+ drivers/dma/dw-edma/dw-hdma-v0-core.c | 10 ++++++----
+ 2 files changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/dma/dw-edma/dw-edma-v0-core.c b/drivers/dma/dw-edma/dw-edma-v0-core.c
+index cfdd6463252e..ee5c3c317557 100644
+--- a/drivers/dma/dw-edma/dw-edma-v0-core.c
++++ b/drivers/dma/dw-edma/dw-edma-v0-core.c
+@@ -284,17 +284,18 @@ static void dw_edma_v0_write_ll_data(struct dw_edma_chunk *chunk, int i,
+ 	if (chunk->chan->dw->chip->flags & DW_EDMA_CHIP_LOCAL) {
+ 		struct dw_edma_v0_lli *lli = chunk->ll_region.vaddr.mem + ofs;
+ 
+-		lli->control = control;
+ 		lli->transfer_size = size;
+ 		lli->sar.reg = sar;
+ 		lli->dar.reg = dar;
++		dma_wmb();
++		lli->control = control;
+ 	} else {
+ 		struct dw_edma_v0_lli __iomem *lli = chunk->ll_region.vaddr.io + ofs;
+ 
+-		writel(control, &lli->control);
+ 		writel(size, &lli->transfer_size);
+ 		writeq(sar, &lli->sar.reg);
+ 		writeq(dar, &lli->dar.reg);
++		writel(control, &lli->control);
+ 	}
+ }
+ 
+@@ -306,13 +307,14 @@ static void dw_edma_v0_write_ll_link(struct dw_edma_chunk *chunk,
+ 	if (chunk->chan->dw->chip->flags & DW_EDMA_CHIP_LOCAL) {
+ 		struct dw_edma_v0_llp *llp = chunk->ll_region.vaddr.mem + ofs;
+ 
+-		llp->control = control;
+ 		llp->llp.reg = pointer;
++		dma_wmb();
++		llp->control = control;
+ 	} else {
+ 		struct dw_edma_v0_llp __iomem *llp = chunk->ll_region.vaddr.io + ofs;
+ 
+-		writel(control, &llp->control);
+ 		writeq(pointer, &llp->llp.reg);
++		writel(control, &llp->control);
+ 	}
+ }
+ 
+diff --git a/drivers/dma/dw-edma/dw-hdma-v0-core.c b/drivers/dma/dw-edma/dw-hdma-v0-core.c
+index 632abb8b481c..1201f1ab5f35 100644
+--- a/drivers/dma/dw-edma/dw-hdma-v0-core.c
++++ b/drivers/dma/dw-edma/dw-hdma-v0-core.c
+@@ -160,17 +160,18 @@ static void dw_hdma_v0_write_ll_data(struct dw_edma_chunk *chunk, int i,
+ 	if (chunk->chan->dw->chip->flags & DW_EDMA_CHIP_LOCAL) {
+ 		struct dw_hdma_v0_lli *lli = chunk->ll_region.vaddr.mem + ofs;
+ 
+-		lli->control = control;
+ 		lli->transfer_size = size;
+ 		lli->sar.reg = sar;
+ 		lli->dar.reg = dar;
++		dma_wmb();
++		lli->control = control;
+ 	} else {
+ 		struct dw_hdma_v0_lli __iomem *lli = chunk->ll_region.vaddr.io + ofs;
+ 
+-		writel(control, &lli->control);
+ 		writel(size, &lli->transfer_size);
+ 		writeq(sar, &lli->sar.reg);
+ 		writeq(dar, &lli->dar.reg);
++		writel(control, &lli->control);
+ 	}
+ }
+ 
+@@ -182,13 +183,14 @@ static void dw_hdma_v0_write_ll_link(struct dw_edma_chunk *chunk,
+ 	if (chunk->chan->dw->chip->flags & DW_EDMA_CHIP_LOCAL) {
+ 		struct dw_hdma_v0_llp *llp = chunk->ll_region.vaddr.mem + ofs;
+ 
+-		llp->control = control;
+ 		llp->llp.reg = pointer;
++		dma_wmb();
++		llp->control = control;
+ 	} else {
+ 		struct dw_hdma_v0_llp __iomem *llp = chunk->ll_region.vaddr.io + ofs;
+ 
+-		writel(control, &llp->control);
+ 		writeq(pointer, &llp->llp.reg);
++		writel(control, &llp->control);
+ 	}
+ }
+ 
+-- 
+2.55.0
+

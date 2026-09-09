@@ -1,0 +1,47 @@
+From 3a6dcbe36aafee331c33c9b3340756c519104103 Mon Sep 17 00:00:00 2001
+From: Mihail Antsev <mihail.antcev@gmail.com>
+Date: Sun, 26 Jul 2026 14:54:48 +0200
+Subject: [PATCH 08229/15333] media: ipu-bridge: Add upside-down sensor DMI
+ quirk for Samsung Galaxy Book5 Pro 360
+
+The Samsung Galaxy Book5 Pro 360 (960QHA) has an upside-down mounted
+OV02E10 sensor. The 180 degree rotation is reported in neither the SSDB
+nor the _PLD for the sensor (both report a rotation of 0 degrees), so
+the image is rendered upside-down in userspace.
+
+Add a DMI quirk entry for this laptop so that the sensor fwnode gets a
+"rotation" property of 180 and userspace (e.g. libcamera) can
+compensate.
+
+Tested on the Galaxy Book5 Pro 360: with the sensor reporting
+V4L2_CID_CAMERA_SENSOR_ROTATION = 180 (verified with an equivalent
+local sensor-driver quirk), libcamera renders the image upright.
+
+Signed-off-by: Mihail Antsev <mihail.antcev@gmail.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/pci/intel/ipu-bridge.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/media/pci/intel/ipu-bridge.c b/drivers/media/pci/intel/ipu-bridge.c
+index 42a309e7218e..20cb133de826 100644
+--- a/drivers/media/pci/intel/ipu-bridge.c
++++ b/drivers/media/pci/intel/ipu-bridge.c
+@@ -182,6 +182,14 @@ static const struct dmi_system_id upside_down_sensor_dmi_ids[] = {
+ 		},
+ 		.driver_data = "SONY471A",
+ 	},
++	{
++		/* Samsung Galaxy Book5 Pro 360 */
++		.matches = {
++			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "SAMSUNG ELECTRONICS CO., LTD."),
++			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "960QHA"),
++		},
++		.driver_data = "OVTI02E1",
++	},
+ 	{} /* Terminating entry */
+ };
+ 
+-- 
+2.55.0
+

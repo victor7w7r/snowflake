@@ -1,0 +1,39 @@
+From 51d28339bfefe1ed603820669534440465f5dc46 Mon Sep 17 00:00:00 2001
+From: Francois Dugast <francois.dugast@intel.com>
+Date: Fri, 22 May 2026 11:25:29 +0200
+Subject: [PATCH 00061/15333] gpu/buddy: Remove redundant condition in
+ alloc_from_freetree() error path
+
+The err_undo label in alloc_from_freetree() is only reachable via a
+goto from inside the `while (tmp != order)` loop, which means tmp is
+guaranteed to differ from order at that point. The surrounding
+`if (tmp != order)` guard was therefore always true and can be dropped
+without any behavioral change.
+
+Reviewed-by: Matthew Auld <matthew.auld@intel.com>
+Link: https://lore.kernel.org/r/20260522092600.32818-3-francois.dugast@intel.com
+Signed-off-by: Francois Dugast <francois.dugast@intel.com>
+---
+ drivers/gpu/buddy.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/buddy.c b/drivers/gpu/buddy.c
+index dac2027bb64a..9f6696f47f89 100644
+--- a/drivers/gpu/buddy.c
++++ b/drivers/gpu/buddy.c
+@@ -849,10 +849,8 @@ alloc_from_freetree(struct gpu_buddy *mm,
+ 	return block;
+ 
+ err_undo:
+-	if (tmp != order) {
+-		rbtree_remove(mm, block);
+-		__gpu_buddy_free(mm, block, false);
+-	}
++	rbtree_remove(mm, block);
++	__gpu_buddy_free(mm, block, false);
+ 	return ERR_PTR(err);
+ }
+ 
+-- 
+2.55.0
+

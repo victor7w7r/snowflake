@@ -1,0 +1,53 @@
+From 2db054a5efa5f1a99aac4d714726b2b743b4720a Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 15:59:55 +0200
+Subject: [PATCH 12809/15333] ASoC: wm2000: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-24-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/wm2000.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/sound/soc/codecs/wm2000.c b/sound/soc/codecs/wm2000.c
+index 897b0acac5f3..41c8cfb346c6 100644
+--- a/sound/soc/codecs/wm2000.c
++++ b/sound/soc/codecs/wm2000.c
+@@ -796,7 +796,7 @@ static int wm2000_i2c_probe(struct i2c_client *i2c)
+ 	struct wm2000_priv *wm2000;
+ 	struct wm2000_platform_data *pdata;
+ 	const char *filename;
+-	const struct firmware *fw = NULL;
++	const struct firmware *fw __free(firmware) = NULL;
+ 	int ret, i;
+ 	unsigned int reg;
+ 	u16 id;
+@@ -814,7 +814,7 @@ static int wm2000_i2c_probe(struct i2c_client *i2c)
+ 		ret = PTR_ERR(wm2000->regmap);
+ 		dev_err(&i2c->dev, "Failed to allocate register map: %d\n",
+ 			ret);
+-		goto out;
++		return ret;
+ 	}
+ 
+ 	for (i = 0; i < WM2000_NUM_SUPPLIES; i++)
+@@ -908,9 +908,6 @@ static int wm2000_i2c_probe(struct i2c_client *i2c)
+ 
+ err_supplies:
+ 	regulator_bulk_disable(WM2000_NUM_SUPPLIES, wm2000->supplies);
+-
+-out:
+-	release_firmware(fw);
+ 	return ret;
+ }
+ 
+-- 
+2.55.0
+

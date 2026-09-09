@@ -1,0 +1,53 @@
+From 8393e0bf593be4fe51ee8d8e3aff53d076e02baf Mon Sep 17 00:00:00 2001
+From: Ville Saarinen <wiza@saarinenkoti.fi>
+Date: Sun, 9 Aug 2026 10:15:04 +0000
+Subject: [PATCH 13357/15333] ASoC: amd: acp-config: force SoundWire probe on
+ HP OmniBook X Flip 14
+
+The BIOS on the HP OmniBook X Flip 14-kc0xxx (board 8EA1, Strix Point,
+ACP 7.2) reports acp-audio-config-flag = FLAG_AMD_LEGACY_ONLY_DMIC. That
+binds the legacy ACP driver and registers a PDM-only card, so the
+SoundWire links are never scanned: the two TAS2783 speaker amplifiers on
+link 0 and the RT712-VB jack codec on link 1 do not enumerate and the
+machine ends up with no usable playback path at all.
+
+Add a DMI entry for the board so the flag is overridden to 0 and
+snd_pci_ps probes instead.
+
+Developed with AI assistance. The assistant read the board's ACP
+configuration flag out of the running system, identified the flag
+override as the fix and drafted the DMI entry.
+
+All hardware measurements quoted above were run by the submitter on the
+affected machine. The submitter has reviewed the change, understands it
+and takes responsibility for it.
+
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Ville Saarinen <wiza@saarinenkoti.fi>
+Link: https://patch.msgid.link/20260809101439.4798-2-wiza@saarinenkoti.fi
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/amd/acp-config.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/sound/soc/amd/acp-config.c b/sound/soc/amd/acp-config.c
+index 88e4230d66c3..4ce8573d4ca0 100644
+--- a/sound/soc/amd/acp-config.c
++++ b/sound/soc/amd/acp-config.c
+@@ -63,6 +63,13 @@ static const struct dmi_system_id acp70_acpi_flag_override_table[] = {
+ 			DMI_MATCH(DMI_PRODUCT_NAME, "Vivobook 18 M1807GA"),
+ 		},
+ 	},
++	{
++		/* HP OmniBook X Flip 14-kc0xxx (Strix Point, ACP 7.2) */
++		.matches = {
++			DMI_MATCH(DMI_BOARD_VENDOR, "HP"),
++			DMI_MATCH(DMI_BOARD_NAME, "8EA1"),
++		},
++	},
+ 	{}
+ };
+ 
+-- 
+2.55.0
+

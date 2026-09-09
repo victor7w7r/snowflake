@@ -1,0 +1,67 @@
+From e34be29ecd47f5dcc27a90bf1563ae1da96555a7 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Tue, 30 Jun 2026 15:56:15 -0700
+Subject: [PATCH 03345/15333] KVM: Move nVMX's lockdep logic for vcpu->mutex to
+ a common helper
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Extract nVMX's lockdep assertion that a vCPU is locked or otherwise
+unreachable into a common helper, as KVM x86 is about to gain another user,
+but there is nothing x86-specific about the logic, i.e. the assertion may
+be useful for other architectures.
+
+No functional change intended.
+
+Reviewed-by: Philippe Mathieu-Daudé <philmd@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260630225619.511632-9-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/vmx/nested.h | 6 ++----
+ include/linux/kvm_host.h  | 6 ++++++
+ 2 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/nested.h b/arch/x86/kvm/vmx/nested.h
+index 6d6cd5904ddf..c6de848bd9ce 100644
+--- a/arch/x86/kvm/vmx/nested.h
++++ b/arch/x86/kvm/vmx/nested.h
+@@ -57,16 +57,14 @@ bool nested_vmx_check_io_bitmaps(struct kvm_vcpu *vcpu, unsigned int port,
+ 
+ static inline struct vmcs12 *get_vmcs12(struct kvm_vcpu *vcpu)
+ {
+-	lockdep_assert_once(lockdep_is_held(&vcpu->mutex) ||
+-			    !refcount_read(&vcpu->kvm->users_count));
++	kvm_lockdep_assert_vcpu_is_locked_or_unreachable(vcpu);
+ 
+ 	return to_vmx(vcpu)->nested.cached_vmcs12;
+ }
+ 
+ static inline struct vmcs12 *get_shadow_vmcs12(struct kvm_vcpu *vcpu)
+ {
+-	lockdep_assert_once(lockdep_is_held(&vcpu->mutex) ||
+-			    !refcount_read(&vcpu->kvm->users_count));
++	kvm_lockdep_assert_vcpu_is_locked_or_unreachable(vcpu);
+ 
+ 	return to_vmx(vcpu)->nested.cached_shadow_vmcs12;
+ }
+diff --git a/include/linux/kvm_host.h b/include/linux/kvm_host.h
+index ab8cfaec82d3..b10814f99a50 100644
+--- a/include/linux/kvm_host.h
++++ b/include/linux/kvm_host.h
+@@ -989,6 +989,12 @@ static inline struct kvm_io_bus *kvm_get_bus(struct kvm *kvm, enum kvm_bus idx)
+ 					 lockdep_is_held(&kvm->slots_lock));
+ }
+ 
++static inline void kvm_lockdep_assert_vcpu_is_locked_or_unreachable(struct kvm_vcpu *vcpu)
++{
++	lockdep_assert_once(lockdep_is_held(&vcpu->mutex) ||
++			    !refcount_read(&vcpu->kvm->users_count));
++}
++
+ static inline struct kvm_vcpu *kvm_get_vcpu(struct kvm *kvm, int i)
+ {
+ 	int num_vcpus = atomic_read(&kvm->online_vcpus);
+-- 
+2.55.0
+

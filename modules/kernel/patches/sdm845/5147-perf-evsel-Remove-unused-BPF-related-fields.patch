@@ -1,0 +1,77 @@
+From 8f216bc1f73c40fa6c993233dce4840ec0b363be Mon Sep 17 00:00:00 2001
+From: Namhyung Kim <namhyung@kernel.org>
+Date: Fri, 10 Jul 2026 17:04:17 -0700
+Subject: [PATCH 05147/15333] perf evsel: Remove unused BPF related fields
+
+IIUC bpf_fd and bpf_obj fields are not used anymore.  It seems like
+leftover from 3d6dfae889174340 ("perf parse-events: Remove BPF event
+support").
+
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/util/evsel.c | 21 ---------------------
+ tools/perf/util/evsel.h |  2 --
+ 2 files changed, 23 deletions(-)
+
+diff --git a/tools/perf/util/evsel.c b/tools/perf/util/evsel.c
+index 32cbacfae475..a5b0687a3a79 100644
+--- a/tools/perf/util/evsel.c
++++ b/tools/perf/util/evsel.c
+@@ -455,8 +455,6 @@ static void evsel__init(struct evsel *evsel,
+ 	evsel->scale	   = 1.0;
+ 	evsel->max_events  = ULONG_MAX;
+ 	evsel->evlist	   = NULL;
+-	evsel->bpf_obj	   = NULL;
+-	evsel->bpf_fd	   = -1;
+ 	INIT_LIST_HEAD(&evsel->config_terms);
+ 	INIT_LIST_HEAD(&evsel->bpf_counter_list);
+ 	INIT_LIST_HEAD(&evsel->bpf_filters);
+@@ -540,10 +538,6 @@ struct evsel *evsel__clone(struct evsel *orig)
+ 	BUG_ON(orig->priv);
+ 	BUG_ON(orig->per_pkg_mask);
+ 
+-	/* cannot handle BPF objects for now */
+-	if (orig->bpf_obj)
+-		return NULL;
+-
+ 	evsel = evsel__new(&orig->core.attr);
+ 	if (evsel == NULL)
+ 		return NULL;
+@@ -3079,21 +3073,6 @@ static int evsel__open_cpu(struct evsel *evsel, struct perf_cpu_map *cpus,
+ 			/* Debug message used by test scripts */
+ 			pr_debug2_peo(" = %d\n", fd);
+ 
+-			if (evsel->bpf_fd >= 0) {
+-				int evt_fd = fd;
+-				int bpf_fd = evsel->bpf_fd;
+-
+-				err = ioctl(evt_fd,
+-					    PERF_EVENT_IOC_SET_BPF,
+-					    bpf_fd);
+-				if (err && errno != EEXIST) {
+-					pr_err("failed to attach bpf fd %d: %m\n",
+-					       bpf_fd);
+-					err = -EINVAL;
+-					goto out_close;
+-				}
+-			}
+-
+ 			set_rlimit = NO_CHANGE;
+ 
+ 			/*
+diff --git a/tools/perf/util/evsel.h b/tools/perf/util/evsel.h
+index 6b0c08958616..27af0c4f294e 100644
+--- a/tools/perf/util/evsel.h
++++ b/tools/perf/util/evsel.h
+@@ -94,8 +94,6 @@ struct evsel {
+ 		bool			skippable;
+ 		bool			retire_lat;
+ 		bool			dont_regroup;
+-		int			bpf_fd;
+-		struct bpf_object	*bpf_obj;
+ 		struct list_head	config_terms;
+ 		u64			alternate_hw_config;
+ 	};
+-- 
+2.55.0
+

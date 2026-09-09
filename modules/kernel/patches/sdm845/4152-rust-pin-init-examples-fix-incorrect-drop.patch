@@ -1,0 +1,43 @@
+From 554d1afffc391f938ca58ab74b82238ac2d29c37 Mon Sep 17 00:00:00 2001
+From: Gary Guo <gary@garyguo.net>
+Date: Fri, 10 Jul 2026 17:20:32 +0100
+Subject: [PATCH 04152/15333] rust: pin-init: examples: fix incorrect drop
+
+Remove the drop and associated clippy allow. The warning reported by Clippy
+here is genuine; the binding created is `Pin<&mut T>` so dropping it does
+nothing. `stack_pin_init` created bindings are only dropped at the end of
+scope.
+
+Reviewed-by: Benno Lossin <lossin@kernel.org>
+Link: https://patch.msgid.link/20260710-pin-init-sync-v1-2-8fa16cde87ae@garyguo.net
+Signed-off-by: Gary Guo <gary@garyguo.net>
+---
+ rust/pin-init/examples/mutex.rs | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/rust/pin-init/examples/mutex.rs b/rust/pin-init/examples/mutex.rs
+index 35ecb5f68dc3..882f3e23f5dd 100644
+--- a/rust/pin-init/examples/mutex.rs
++++ b/rust/pin-init/examples/mutex.rs
+@@ -91,7 +91,7 @@ pub fn new(val: impl PinInit<T>) -> impl PinInit<Self> {
+     pub fn lock(&self) -> Pin<CMutexGuard<'_, T>> {
+         let mut sguard = self.spin_lock.acquire();
+         if self.locked.get() {
+-            stack_pin_init!(let wait_entry = WaitEntry::insert_new(&self.wait_list));
++            stack_pin_init!(let _wait_entry = WaitEntry::insert_new(&self.wait_list));
+             // println!("wait list length: {}", self.wait_list.size());
+             while self.locked.get() {
+                 drop(sguard);
+@@ -99,9 +99,6 @@ pub fn lock(&self) -> Pin<CMutexGuard<'_, T>> {
+                 thread::park();
+                 sguard = self.spin_lock.acquire();
+             }
+-            // This does have an effect, as the ListHead inside wait_entry implements Drop!
+-            #[expect(clippy::drop_non_drop)]
+-            drop(wait_entry);
+         }
+         self.locked.set(true);
+         unsafe {
+-- 
+2.55.0
+

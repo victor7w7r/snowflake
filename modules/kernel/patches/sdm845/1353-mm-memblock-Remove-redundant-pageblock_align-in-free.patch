@@ -1,0 +1,41 @@
+From a5d67c54d414ee707333ce179d4492e99122e5b6 Mon Sep 17 00:00:00 2001
+From: Zhen Ni <zhen.ni@easystack.cn>
+Date: Fri, 12 Jun 2026 11:11:05 +0800
+Subject: [PATCH 01353/15333] mm/memblock: Remove redundant pageblock_align()
+ in free_unused_memmap()
+
+The assignment `prev_end = pageblock_align(end)` is redundant because
+`prev_end` was already aligned to pageblock oundaries inside the loop.
+Since pageblock_align() is a pure function, calling it again with the
+same input produces the same result.
+
+This line was added in commit f921f53e089a ("memblock: align freed
+memory map on pageblock boundaries with SPARSEMEM"). Remove it to
+simplify the code.
+
+Signed-off-by: Zhen Ni <zhen.ni@easystack.cn>
+Link: https://patch.msgid.link/20260612031105.3350181-1-zhen.ni@easystack.cn
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+---
+ mm/memblock.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/mm/memblock.c b/mm/memblock.c
+index 6349c48154f4..43e036f3e11a 100644
+--- a/mm/memblock.c
++++ b/mm/memblock.c
+@@ -2224,10 +2224,8 @@ static void __init free_unused_memmap(void)
+ 	}
+ 
+ #ifdef CONFIG_SPARSEMEM
+-	if (!IS_ALIGNED(prev_end, PAGES_PER_SECTION)) {
+-		prev_end = pageblock_align(end);
++	if (!IS_ALIGNED(prev_end, PAGES_PER_SECTION))
+ 		free_memmap(prev_end, ALIGN(prev_end, PAGES_PER_SECTION));
+-	}
+ #endif
+ }
+ 
+-- 
+2.55.0
+

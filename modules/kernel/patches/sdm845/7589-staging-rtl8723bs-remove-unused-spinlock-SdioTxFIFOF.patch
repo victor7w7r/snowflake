@@ -1,0 +1,68 @@
+From e9b50a2821bbfb5395cc2b9f90e2af45a3137f19 Mon Sep 17 00:00:00 2001
+From: Nikolay Kulikov <nikolayof23@gmail.com>
+Date: Fri, 17 Jul 2026 21:52:06 +0300
+Subject: [PATCH 07589/15333] staging: rtl8723bs: remove unused spinlock
+ 'SdioTxFIFOFreePageLock'
+
+Remove the 'SdioTxFIFOFreePageLock' spinlock from the struct
+hal_com_data, since the only operation performed on it is
+initialization, while the locking and unlocking calls are commented out.
+
+Signed-off-by: Nikolay Kulikov <nikolayof23@gmail.com>
+Link: https://patch.msgid.link/20260717185407.56513-8-nikolayof23@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/hal/hal_sdio.c       | 4 ----
+ drivers/staging/rtl8723bs/hal/rtl8723bs_xmit.c | 1 -
+ drivers/staging/rtl8723bs/include/hal_data.h   | 1 -
+ 3 files changed, 6 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/hal/hal_sdio.c b/drivers/staging/rtl8723bs/hal/hal_sdio.c
+index 1bd165a4573f..7cead9664c99 100644
+--- a/drivers/staging/rtl8723bs/hal/hal_sdio.c
++++ b/drivers/staging/rtl8723bs/hal/hal_sdio.c
+@@ -39,8 +39,6 @@ void rtw_hal_sdio_update_tx_freepage(
+ 	u8 RequiredPublicFreePgNum = 0;
+ 	/* _irqL irql; */
+ 
+-	/* spin_lock_bh(&pHalData->SdioTxFIFOFreePageLock); */
+-
+ 	DedicatedPgNum = pHalData->SdioTxFIFOFreePage[PageIdx];
+ 	if (RequiredPageNum <= DedicatedPgNum) {
+ 		pHalData->SdioTxFIFOFreePage[PageIdx] -= RequiredPageNum;
+@@ -49,8 +47,6 @@ void rtw_hal_sdio_update_tx_freepage(
+ 		RequiredPublicFreePgNum = RequiredPageNum - DedicatedPgNum;
+ 		pHalData->SdioTxFIFOFreePage[PUBLIC_QUEUE_IDX] -= RequiredPublicFreePgNum;
+ 	}
+-
+-	/* spin_unlock_bh(&pHalData->SdioTxFIFOFreePageLock); */
+ }
+ 
+ void rtw_hal_set_sdio_tx_max_length(
+diff --git a/drivers/staging/rtl8723bs/hal/rtl8723bs_xmit.c b/drivers/staging/rtl8723bs/hal/rtl8723bs_xmit.c
+index 6110172858eb..7f55448d544e 100644
+--- a/drivers/staging/rtl8723bs/hal/rtl8723bs_xmit.c
++++ b/drivers/staging/rtl8723bs/hal/rtl8723bs_xmit.c
+@@ -529,7 +529,6 @@ s32 rtl8723bs_init_xmit_priv(struct adapter *padapter)
+ 
+ 	phal = GET_HAL_DATA(padapter);
+ 
+-	spin_lock_init(&phal->SdioTxFIFOFreePageLock);
+ 	init_completion(&xmitpriv->SdioXmitStart);
+ 	init_completion(&xmitpriv->SdioXmitTerminate);
+ 
+diff --git a/drivers/staging/rtl8723bs/include/hal_data.h b/drivers/staging/rtl8723bs/include/hal_data.h
+index 8ec45ba0dd34..3f37d91ebf23 100644
+--- a/drivers/staging/rtl8723bs/include/hal_data.h
++++ b/drivers/staging/rtl8723bs/include/hal_data.h
+@@ -255,7 +255,6 @@ struct hal_com_data {
+ 	/*  SDIO Tx FIFO related. */
+ 	/*  HIQ, MID, LOW, PUB free pages; padapter->xmitpriv.free_txpg */
+ 	u8 	SdioTxFIFOFreePage[SDIO_TX_FREE_PG_QUEUE];
+-	spinlock_t		SdioTxFIFOFreePageLock;
+ 	u8 	SdioTxOQTMaxFreeSpace;
+ 	u8 	SdioTxOQTFreeSpace;
+ 
+-- 
+2.55.0
+

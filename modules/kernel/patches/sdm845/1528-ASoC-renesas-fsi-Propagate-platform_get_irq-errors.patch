@@ -1,0 +1,57 @@
+From 3848617c64ac5bf71e02f437e1974720d78843ca Mon Sep 17 00:00:00 2001
+From: Narasimharao Vadlamudi <ahmisaranrao@gmail.com>
+Date: Tue, 30 Jun 2026 22:43:33 +0530
+Subject: [PATCH 01528/15333] ASoC: renesas: fsi: Propagate platform_get_irq()
+ errors
+
+platform_get_irq() returns a positive IRQ number on success and a
+negative error code on failure. It no longer returns zero. The driver
+currently stores the return value in an unsigned int and returns -ENODEV
+for all failures, which loses useful errors such as -EPROBE_DEFER.
+
+Store the IRQ in an int and return the error from platform_get_irq()
+directly.
+
+Acked-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Reviewed-by: Geert Uytterhoeven <geert+renesas@glider.be>
+Signed-off-by: Narasimharao Vadlamudi <ahmisaranrao@gmail.com>
+Link: https://patch.msgid.link/20260630171333.36396-1-ahmisaranrao@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/renesas/fsi.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/sound/soc/renesas/fsi.c b/sound/soc/renesas/fsi.c
+index ae86014c3819..6be6587e1095 100644
+--- a/sound/soc/renesas/fsi.c
++++ b/sound/soc/renesas/fsi.c
+@@ -1992,7 +1992,7 @@ static int fsi_probe(struct platform_device *pdev)
+ 	const struct fsi_core *core;
+ 	struct fsi_priv *fsi;
+ 	struct resource *res;
+-	unsigned int irq;
++	int irq;
+ 	int ret;
+ 
+ 	memset(&info, 0, sizeof(info));
+@@ -2007,12 +2007,15 @@ static int fsi_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+-	irq = platform_get_irq(pdev, 0);
+-	if (!res || (int)irq <= 0) {
++	if (!res) {
+ 		dev_err(&pdev->dev, "Not enough FSI platform resources.\n");
+ 		return -ENODEV;
+ 	}
+ 
++	irq = platform_get_irq(pdev, 0);
++	if (irq < 0)
++		return irq;
++
+ 	master = devm_kzalloc(&pdev->dev, sizeof(*master), GFP_KERNEL);
+ 	if (!master)
+ 		return -ENOMEM;
+-- 
+2.55.0
+

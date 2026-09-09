@@ -1,0 +1,82 @@
+From 380e3f23bb9b394dba6fc8d6b5ef70cbd67f0081 Mon Sep 17 00:00:00 2001
+From: Arnaldo Carvalho de Melo <acme@redhat.com>
+Date: Tue, 11 Aug 2026 15:28:54 -0300
+Subject: [PATCH 13490/15333] tools build: Only probe the compiler at parse
+ time when it is installed
+
+Two parse-time probes still invoke $(CC) unconditionally:
+
+- LP64 in tools/scripts/Makefile.arch, probing with
+  $(CC) -E -x c, pulled in twice by tools/perf/Makefile.perf;
+- CC_NO_CLANG in tools/scripts/Makefile.include, probing with
+  $(CC) -dM -E -x c /dev/null.
+
+In the corner case where gcc is not yet installed, the very setup the
+install-build-deps target, added in the next patch of this series, is
+meant for, these probes make even targets that never compile parse-time
+spew errors like:
+
+    /bin/sh: 1: gcc: not found
+    /bin/sh: 1: gcc: not found
+    /bin/sh: 1: gcc: not found
+
+Guard both probes with 'command -v' using the first word of CC so a
+missing compiler is handled silently with the same result as a failing
+probe (CC_NO_CLANG and LP64 unset/0), and with no behavior change when
+the compiler is installed.
+
+Only the first word is consulted because CC may carry arguments such as
+'ccache gcc', and shell implementations differ in how 'command -v'
+handles multiple words (dash only checks the first, bash any of them),
+so validating the whole CC value would silently disable both probes on
+some make SHELLs.
+
+Assisted-by: opencode:deepseek-v4-flash-free
+Signed-off-by: Arnaldo Carvalho de Melo <acme@redhat.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/scripts/Makefile.arch    | 8 +++++++-
+ tools/scripts/Makefile.include | 8 +++++++-
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/tools/scripts/Makefile.arch b/tools/scripts/Makefile.arch
+index eabfe9f411d9..ed5f008d400e 100644
+--- a/tools/scripts/Makefile.arch
++++ b/tools/scripts/Makefile.arch
+@@ -38,7 +38,13 @@ ifeq ($(ARCH),loongarch64)
+        SRCARCH := loongarch
+ endif
+ 
+-LP64 := $(shell echo __LP64__ | ${CC} ${CFLAGS} -E -x c - | tail -n 1)
++# Probe for __LP64__ only when the compiler is installed: this runs at
++# parse time for every target, including ones that never compile, e.g.
++# install-build-deps, and would otherwise spew "gcc: not found" when the
++# compiler is not yet installed. Only the first word of CC is consulted,
++# as CC may carry arguments, e.g. 'ccache gcc'. When the guard fails it
++# prints nothing, leaving LP64 unset, as if the probe had failed.
++LP64 := $(shell if command -v $(firstword ${CC}) >/dev/null 2>&1; then echo __LP64__ | ${CC} ${CFLAGS} -E -x c -; fi | tail -n 1)
+ ifeq ($(LP64), 1)
+   IS_64_BIT := 1
+ else
+diff --git a/tools/scripts/Makefile.include b/tools/scripts/Makefile.include
+index 46a3872b8762..378387f62960 100644
+--- a/tools/scripts/Makefile.include
++++ b/tools/scripts/Makefile.include
+@@ -98,7 +98,13 @@ else
+   $(call allow-override,LLVM_STRIP,llvm-strip)
+ endif
+ 
+-CC_NO_CLANG := $(shell $(CC) -dM -E -x c /dev/null | grep -Fq "__clang__"; echo $$?)
++# The CC_NO_CLANG probe also runs at parse time for targets that never
++# compile, so guard it with 'command -v': when the compiler is not yet
++# installed, e.g. the first install-build-deps run, it would otherwise
++# spew "gcc: not found". Only the first word of CC is consulted, as CC
++# may carry arguments, e.g. 'ccache gcc'. A missing compiler leaves
++# CC_NO_CLANG at 1, as if the probe had failed.
++CC_NO_CLANG := $(shell if command -v $(firstword $(CC)) >/dev/null 2>&1; then $(CC) -dM -E -x c /dev/null; fi | grep -Fq "__clang__"; echo $$?)
+ 
+ # Some tools require bpftool
+ SYSTEM_BPFTOOL	?= bpftool
+-- 
+2.55.0
+

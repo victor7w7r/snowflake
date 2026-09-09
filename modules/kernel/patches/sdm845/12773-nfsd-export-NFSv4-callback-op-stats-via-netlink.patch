@@ -1,0 +1,116 @@
+From 46db3c8a1be96a354758b44b1d4fbb4b70d09a20 Mon Sep 17 00:00:00 2001
+From: Jeff Layton <jlayton@kernel.org>
+Date: Fri, 17 Jul 2026 07:08:58 -0400
+Subject: [PATCH 12773/15333] nfsd: export NFSv4 callback op stats via netlink
+
+Add a proc4cb-ops nested attribute to the server-stats netlink dump,
+reusing the existing server-proc-entry (op/count) layout. The dump
+gains a callback section that emits one entry per callback opcode
+(OP_CB_GETATTR..OP_CB_OFFLOAD) from the per-netns callback counters,
+paged across messages like the other per-operation sections.
+
+This lets nfsstat report NFSv4 backchannel operation counts over
+netlink, including CB_GETATTR which corresponds to the procfs
+wdeleg_getattr line.
+
+Assisted-by: LLM
+Signed-off-by: Jeff Layton <jlayton@kernel.org>
+Link: https://patch.msgid.link/20260717-exportd-netlink-v7-6-b7ce17b83b60@kernel.org
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ Documentation/netlink/specs/nfsd.yaml |  6 ++++++
+ fs/nfsd/nfsctl.c                      | 27 +++++++++++++++++++++++++++
+ include/uapi/linux/nfsd_netlink.h     |  1 +
+ 3 files changed, 34 insertions(+)
+
+diff --git a/Documentation/netlink/specs/nfsd.yaml b/Documentation/netlink/specs/nfsd.yaml
+index 2a89d355ee7b..642268819c6f 100644
+--- a/Documentation/netlink/specs/nfsd.yaml
++++ b/Documentation/netlink/specs/nfsd.yaml
+@@ -410,6 +410,11 @@ attribute-sets:
+         type: nest
+         nested-attributes: server-proc-entry
+         multi-attr: true
++      -
++        name: proc4cb-ops
++        type: nest
++        nested-attributes: server-proc-entry
++        multi-attr: true
+ 
+ operations:
+   list:
+@@ -621,6 +626,7 @@ operations:
+             - proc3-ops
+             - proc4-ops
+             - proc4ops-ops
++            - proc4cb-ops
+ 
+ mcast-groups:
+   list:
+diff --git a/fs/nfsd/nfsctl.c b/fs/nfsd/nfsctl.c
+index 93e18426039d..adb032b7311a 100644
+--- a/fs/nfsd/nfsctl.c
++++ b/fs/nfsd/nfsctl.c
+@@ -2451,6 +2451,29 @@ static int nfsd_nl_server_stats_nfs4ops(struct sk_buff *skb,
+ 
+ 	return 0;
+ }
++
++/*
++ * Emit NFSv4 callback (backchannel) per-operation counts, resuming at *idx,
++ * which counts from OP_CB_GETATTR. Same return convention as
++ * nfsd_nl_server_stats_proc().
++ */
++static int nfsd_nl_server_stats_cbops(struct sk_buff *skb,
++				      struct nfsd_net *nn, int *idx)
++{
++	int op;
++
++	for (op = OP_CB_GETATTR + *idx; op <= OP_CB_OFFLOAD; op++, (*idx)++) {
++		u64 cnt = percpu_counter_sum_positive(&nn->cb_counter[op]);
++
++		if (!cnt)
++			continue;
++		if (nfsd_nl_put_proc_entry(skb, NFSD_A_SERVER_STATS_PROC4CB_OPS,
++					   op, cnt))
++			return -EMSGSIZE;
++	}
++
++	return 0;
++}
+ #endif
+ 
+ /* Sections of the server-stats dump, emitted in order across messages. */
+@@ -2459,6 +2482,7 @@ enum {
+ 	NFSD_SERVER_STATS_PROC2,
+ 	NFSD_SERVER_STATS_PROC3,
+ 	NFSD_SERVER_STATS_PROC4,
++	NFSD_SERVER_STATS_PROC4CB,
+ 	NFSD_SERVER_STATS_PROC4OPS,
+ 	NFSD_SERVER_STATS_DONE,
+ };
+@@ -2527,6 +2551,9 @@ int nfsd_nl_server_stats_get_dumpit(struct sk_buff *skb,
+ 					NFSD_A_SERVER_STATS_PROC4_OPS, &idx);
+ 			break;
+ #ifdef CONFIG_NFSD_V4
++		case NFSD_SERVER_STATS_PROC4CB:
++			ret = nfsd_nl_server_stats_cbops(skb, nn, &idx);
++			break;
+ 		case NFSD_SERVER_STATS_PROC4OPS:
+ 			ret = nfsd_nl_server_stats_nfs4ops(skb, nn, &idx);
+ 			break;
+diff --git a/include/uapi/linux/nfsd_netlink.h b/include/uapi/linux/nfsd_netlink.h
+index 3d076d173b1d..87da1d0bb21e 100644
+--- a/include/uapi/linux/nfsd_netlink.h
++++ b/include/uapi/linux/nfsd_netlink.h
+@@ -254,6 +254,7 @@ enum {
+ 	NFSD_A_SERVER_STATS_PROC3_OPS,
+ 	NFSD_A_SERVER_STATS_PROC4_OPS,
+ 	NFSD_A_SERVER_STATS_PROC4OPS_OPS,
++	NFSD_A_SERVER_STATS_PROC4CB_OPS,
+ 
+ 	__NFSD_A_SERVER_STATS_MAX,
+ 	NFSD_A_SERVER_STATS_MAX = (__NFSD_A_SERVER_STATS_MAX - 1)
+-- 
+2.55.0
+

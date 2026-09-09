@@ -1,0 +1,51 @@
+From 466a751e17f4cc0c740f6cc8139bae5ba65e8a15 Mon Sep 17 00:00:00 2001
+From: Sean Paul <seanpaul@google.com>
+Date: Thu, 28 May 2026 19:07:46 -0400
+Subject: [PATCH 00088/15333] drm/i915/color: Fix step discontinuity in
+ Post-CSC Gamma LUT
+
+Fix a step discontinuity in the Post-CSC Gamma LUT when SDR dimming
+is active by clamping Segment 2 to the last user-provided LUT entry
+value instead of hardcoding it to 1.0 (1 << 24).
+
+Link: https://lore.kernel.org/intel-gfx/20260521180143.2143262-1-sean@poorly.run/ #v1
+Link: https://lore.kernel.org/intel-gfx/20260525135730.1122696-1-sean@poorly.run/ #v2
+
+Changes in v2:
+- Split out into separate patches for pre/post csc fixes
+- Dropped loop bounds fix in favor of [1]
+Changes in v3:
+- None
+
+[1]- https://lore.kernel.org/r/20260519075245.383864-1-pranay.samala@intel.com
+
+Signed-off-by: Sean Paul <seanpaul@google.com>
+Reviewed-by: Uma Shankar <uma.shankar@intel.com>
+Reviewed-by: Chaitanya Kumar Borah <chaitanya.kumar.borah@intel.com>
+Signed-off-by: Uma Shankar <uma.shankar@intel.com>
+Link: https://patch.msgid.link/20260528230817.2455072-1-sean@poorly.run
+---
+ drivers/gpu/drm/i915/display/intel_color.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_color.c b/drivers/gpu/drm/i915/display/intel_color.c
+index 7ef870cd9a16..7185f3628dcf 100644
+--- a/drivers/gpu/drm/i915/display/intel_color.c
++++ b/drivers/gpu/drm/i915/display/intel_color.c
+@@ -4038,11 +4038,11 @@ xelpd_program_plane_post_csc_lut(struct intel_dsb *dsb,
+ 						   lut_val);
+ 			}
+ 
+-			/* Segment 2 */
++			/* Segment 2 - clamp to the last LUT value to prevent step discontinuity */
+ 			do {
+ 				intel_de_write_dsb(display, dsb,
+ 						   PLANE_POST_CSC_GAMC_DATA_ENH(pipe, plane, 0),
+-						   (1 << 24));
++						   lut_val);
+ 			} while (i++ < 34);
+ 		} else {
+ 			/*TODO: Add for segment 0 */
+-- 
+2.55.0
+

@@ -1,0 +1,41 @@
+From 8955fbad8aad32d7e81fc75d23918e0e2cf6c5ef Mon Sep 17 00:00:00 2001
+From: Pei Xiao <xiaopei01@kylinos.cn>
+Date: Mon, 20 Jul 2026 14:08:43 +0800
+Subject: [PATCH 07804/15333] spi: spacemit: fix dangling TX DMA descriptor on
+ RX prep failure
+
+In k1_spi_dma_one(), the TX DMA descriptor is submitted via
+dmaengine_submit() before the RX descriptor is prepared.  If
+k1_spi_dma_prep() fails for RX, the function jumps to the fallback
+path without terminating the already-submitted TX descriptor.
+
+So terminate the TX channel with dmaengine_terminate_sync() when RX
+descriptor preparation fails.
+
+Fixes: efcd8b9d1111 ("spi: spacemit: introduce SpacemiT K1 SPI controller driver")
+Signed-off-by: Pei Xiao <xiaopei01@kylinos.cn>
+Link: https://patch.msgid.link/b402223ebff226782afd4c7da7db4ce34807f604.1784527556.git.xiaopei01@kylinos.cn
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-spacemit-k1.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/spi/spi-spacemit-k1.c b/drivers/spi/spi-spacemit-k1.c
+index 215fe66d27b4..cd2955949c5c 100644
+--- a/drivers/spi/spi-spacemit-k1.c
++++ b/drivers/spi/spi-spacemit-k1.c
+@@ -289,8 +289,10 @@ static int k1_spi_dma_one(struct spi_controller *host, struct spi_device *spi,
+ 
+ 	/* Prepare the RX descriptor and submit it */
+ 	desc = k1_spi_dma_prep(drv_data, transfer, false);
+-	if (!desc)
++	if (!desc) {
++		dmaengine_terminate_sync(host->dma_tx);
+ 		goto fallback;
++	}
+ 
+ 	/* When RX is complete we also know TX has completed */
+ 	desc->callback = k1_spi_dma_callback;
+-- 
+2.55.0
+

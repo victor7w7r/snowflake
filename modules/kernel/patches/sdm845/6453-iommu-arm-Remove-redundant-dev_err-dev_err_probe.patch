@@ -1,0 +1,66 @@
+From 13a86292681dfdfe9835f440afc345778c9c1363 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Tue, 14 Jul 2026 21:32:43 +0800
+Subject: [PATCH 06453/15333] iommu: arm: Remove redundant
+ dev_err()/dev_err_probe()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() and devm_request_threaded_irq()
+automatically log detailed error messages on failure. Remove
+the now-redundant driver-specific dev_err() and dev_err_probe() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Reviewed-by: Robin Murphy <robin.murphy@arm.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ drivers/iommu/arm/arm-smmu/arm-smmu.c   | 9 ++-------
+ drivers/iommu/arm/arm-smmu/qcom_iommu.c | 4 +---
+ 2 files changed, 3 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/iommu/arm/arm-smmu/arm-smmu.c b/drivers/iommu/arm/arm-smmu/arm-smmu.c
+index 0bd21d206eb3..889a0966d36c 100644
+--- a/drivers/iommu/arm/arm-smmu/arm-smmu.c
++++ b/drivers/iommu/arm/arm-smmu/arm-smmu.c
+@@ -865,11 +865,8 @@ static int arm_smmu_init_domain_context(struct arm_smmu_domain *smmu_domain,
+ 		ret = devm_request_irq(smmu->dev, irq, context_fault, IRQF_SHARED,
+ 				       "arm-smmu-context-fault", smmu_domain);
+ 
+-	if (ret < 0) {
+-		dev_err(smmu->dev, "failed to request context IRQ %d (%u)\n",
+-			cfg->irptndx, irq);
++	if (ret < 0)
+ 		cfg->irptndx = ARM_SMMU_INVALID_IRPTNDX;
+-	}
+ 
+ 	mutex_unlock(&smmu_domain->init_mutex);
+ 
+@@ -2219,9 +2216,7 @@ static int arm_smmu_device_probe(struct platform_device *pdev)
+ 		err = devm_request_irq(dev, irq, global_fault, IRQF_SHARED,
+ 				       "arm-smmu global fault", smmu);
+ 		if (err)
+-			return dev_err_probe(dev, err,
+-					"failed to request global IRQ %d (%u)\n",
+-					i, irq);
++			return err;
+ 	}
+ 
+ 	platform_set_drvdata(pdev, smmu);
+diff --git a/drivers/iommu/arm/arm-smmu/qcom_iommu.c b/drivers/iommu/arm/arm-smmu/qcom_iommu.c
+index 5a9f8b39a99c..21d18ce67b98 100644
+--- a/drivers/iommu/arm/arm-smmu/qcom_iommu.c
++++ b/drivers/iommu/arm/arm-smmu/qcom_iommu.c
+@@ -717,10 +717,8 @@ static int qcom_iommu_ctx_probe(struct platform_device *pdev)
+ 			       IRQF_SHARED,
+ 			       "qcom-iommu-fault",
+ 			       ctx);
+-	if (ret) {
+-		dev_err(dev, "failed to request IRQ %u\n", irq);
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	ret = get_asid(dev->of_node);
+ 	if (ret < 0) {
+-- 
+2.55.0
+

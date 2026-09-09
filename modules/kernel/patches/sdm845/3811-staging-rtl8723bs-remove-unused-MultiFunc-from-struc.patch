@@ -1,0 +1,99 @@
+From 1fd634db2e431c7b34d6673351de1804ef003612 Mon Sep 17 00:00:00 2001
+From: Nikolay Kulikov <nikolayof23@gmail.com>
+Date: Thu, 9 Jul 2026 21:15:11 +0300
+Subject: [PATCH 03811/15333] staging: rtl8723bs: remove unused 'MultiFunc'
+ from struct hal_com_data
+
+This field is set during initialization but never used, so remove it and
+related macros and enum.
+
+Signed-off-by: Nikolay Kulikov <nikolayof23@gmail.com>
+Link: https://patch.msgid.link/20260709182627.16327-5-nikolayof23@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c |  7 -------
+ drivers/staging/rtl8723bs/include/hal_com_reg.h   |  2 --
+ drivers/staging/rtl8723bs/include/hal_data.h      | 12 ------------
+ drivers/staging/rtl8723bs/include/rtl8723b_hal.h  |  5 -----
+ 4 files changed, 26 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c b/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c
+index b5e5993926e5..ecd66f090a50 100644
+--- a/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c
++++ b/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c
+@@ -828,13 +828,6 @@ static void ReadChipVersion8723B(struct adapter *padapter)
+ 
+ 	value32 = rtw_read32(padapter, REG_SYS_CFG);
+ 	pHalData->chip_normal = ((value32 & RTL_ID) ? false : true);
+-
+-	/*  For multi-function consideration. Added by Roger, 2010.10.06. */
+-	pHalData->MultiFunc = RT_MULTI_FUNC_NONE;
+-	value32 = rtw_read32(padapter, REG_MULTI_FUNC_CTRL);
+-	pHalData->MultiFunc |= ((value32 & WL_FUNC_EN) ? RT_MULTI_FUNC_WIFI : 0);
+-	pHalData->MultiFunc |= ((value32 & BT_FUNC_EN) ? RT_MULTI_FUNC_BT : 0);
+-	pHalData->MultiFunc |= ((value32 & GPS_FUNC_EN) ? RT_MULTI_FUNC_GPS : 0);
+ }
+ 
+ void rtl8723b_read_chip_version(struct adapter *padapter)
+diff --git a/drivers/staging/rtl8723bs/include/hal_com_reg.h b/drivers/staging/rtl8723bs/include/hal_com_reg.h
+index 5b23a6ae6a15..4671fdfff916 100644
+--- a/drivers/staging/rtl8723bs/include/hal_com_reg.h
++++ b/drivers/staging/rtl8723bs/include/hal_com_reg.h
+@@ -589,8 +589,6 @@
+ #define C2H_EVT_FW_CLOSE		0xFF	/*  Set by FW indicating that FW had set the C2H command message and it's not yet read by driver. */
+ 
+ /* 2REG_MULTI_FUNC_CTRL(For RTL8723 Only) */
+-#define WL_FUNC_EN				BIT(2)	/*  WiFi function enable */
+ #define BT_FUNC_EN				BIT(18)	/*  BT function enable */
+-#define GPS_FUNC_EN			BIT(22)	/*  GPS function enable */
+ 
+ #endif /* __HAL_COMMON_H__ */
+diff --git a/drivers/staging/rtl8723bs/include/hal_data.h b/drivers/staging/rtl8723bs/include/hal_data.h
+index fc6e1af24b9a..c93b21822ea7 100644
+--- a/drivers/staging/rtl8723bs/include/hal_data.h
++++ b/drivers/staging/rtl8723bs/include/hal_data.h
+@@ -12,16 +12,6 @@
+ 
+ #include <hal_sdio.h>
+ 
+-/*  */
+-/*  <Roger_Notes> For RTL8723 WiFi/BT/GPS multi-function configuration. 2010.10.06. */
+-/*  */
+-enum rt_multi_func {
+-	RT_MULTI_FUNC_NONE	= 0x00,
+-	RT_MULTI_FUNC_WIFI	= 0x01,
+-	RT_MULTI_FUNC_BT		= 0x02,
+-	RT_MULTI_FUNC_GPS	= 0x04,
+-};
+-
+ enum rt_ampdu_burst {
+ 	RT_AMPDU_BURST_NONE	= 0,
+ 	RT_AMPDU_BURST_92D	= 1,
+@@ -149,8 +139,6 @@ struct dm_priv {
+ 
+ 
+ struct hal_com_data {
+-	enum rt_multi_func MultiFunc; /*  For multi-function consideration. */
+-
+ 	u16 FirmwareVersion;
+ 	u16 FirmwareVersionRev;
+ 	u16 FirmwareSubVersion;
+diff --git a/drivers/staging/rtl8723bs/include/rtl8723b_hal.h b/drivers/staging/rtl8723bs/include/rtl8723b_hal.h
+index aa7676828371..259ba63ba4bc 100644
+--- a/drivers/staging/rtl8723bs/include/rtl8723b_hal.h
++++ b/drivers/staging/rtl8723bs/include/rtl8723b_hal.h
+@@ -193,11 +193,6 @@ enum { /* tag_Package_Definition */
+ 	PACKAGE_TFBGA79
+ };
+ 
+-#define INCLUDE_MULTI_FUNC_BT(_Adapter)  \
+-	(GET_HAL_DATA(_Adapter)->MultiFunc & RT_MULTI_FUNC_BT)
+-#define INCLUDE_MULTI_FUNC_GPS(_Adapter) \
+-	(GET_HAL_DATA(_Adapter)->MultiFunc & RT_MULTI_FUNC_GPS)
+-
+ /*  rtl8723a_hal_init.c */
+ s32 rtl8723b_FirmwareDownload(struct adapter *padapter, bool  bUsedWoWLANFw);
+ void rtl8723b_FirmwareSelfReset(struct adapter *padapter);
+-- 
+2.55.0
+

@@ -1,0 +1,37 @@
+From 4e2c0821509fed754e8c31d5053d152fbb3484a5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Sat, 11 Jul 2026 13:21:08 +0200
+Subject: [PATCH 04802/15333] drm/amdgpu: Reserve space for IB contents in
+ devcoredumps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Currently the contents of IBs are abruptly cut off and don't
+show the full contents. This patch makes sure to reserve
+space for those contents too so they may be printed.
+
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Acked-by: Christian König <christian.koenig@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_dev_coredump.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_dev_coredump.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_dev_coredump.c
+index aaf091b7f9d0..39b2a4c0e011 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_dev_coredump.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_dev_coredump.c
+@@ -235,6 +235,9 @@ amdgpu_devcoredump_print_ibs(struct drm_printer *p,
+ 			drm_printf(p, "\nIB #%d 0x%llx %d dw\n", i,
+ 				   coredump->ibs[i].gpu_addr,
+ 				   coredump->ibs[i].ib_size_dw);
++
++			for (int j = 0; j < coredump->ibs[i].ib_size_dw; j++)
++				drm_printf(p, "0xffffffff\n");
+ 		}
+ 		return;
+ 	}
+-- 
+2.55.0
+

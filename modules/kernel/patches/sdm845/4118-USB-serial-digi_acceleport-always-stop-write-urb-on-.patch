@@ -1,0 +1,49 @@
+From 5d17fbd6296db34d84aef771c87387c86eae7d2b Mon Sep 17 00:00:00 2001
+From: Johan Hovold <johan@kernel.org>
+Date: Tue, 23 Jun 2026 17:08:18 +0200
+Subject: [PATCH 04118/15333] USB: serial: digi_acceleport: always stop write
+ urb on close
+
+Explicitly stop the write urb on close() also if the device is being
+unbound instead of relying on core to do it after returning.
+
+Note that the dp_write_urb_in_use flag is cleared by the completion
+handler.
+
+Signed-off-by: Johan Hovold <johan@kernel.org>
+---
+ drivers/usb/serial/digi_acceleport.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/usb/serial/digi_acceleport.c b/drivers/usb/serial/digi_acceleport.c
+index b14a8c33d11d..1b858b0cc84b 100644
+--- a/drivers/usb/serial/digi_acceleport.c
++++ b/drivers/usb/serial/digi_acceleport.c
+@@ -1128,7 +1128,6 @@ static void digi_close(struct usb_serial_port *port)
+ 	usb_kill_urb(port->read_urb);
+ 
+ 	mutex_lock(&port->serial->disc_mutex);
+-	/* if disconnected, just clear flags */
+ 	if (port->serial->disconnected)
+ 		goto exit;
+ 
+@@ -1174,14 +1173,11 @@ static void digi_close(struct usb_serial_port *port)
+ 			TASK_INTERRUPTIBLE);
+ 	schedule_timeout(DIGI_CLOSE_TIMEOUT);
+ 	finish_wait(&priv->dp_flush_wait, &wait);
++exit:
++	mutex_unlock(&port->serial->disc_mutex);
+ 
+ 	/* shutdown any outstanding bulk writes */
+ 	usb_kill_urb(port->write_urb);
+-exit:
+-	spin_lock_irq(&priv->dp_port_lock);
+-	priv->dp_write_urb_in_use = 0;
+-	spin_unlock_irq(&priv->dp_port_lock);
+-	mutex_unlock(&port->serial->disc_mutex);
+ }
+ 
+ 
+-- 
+2.55.0
+

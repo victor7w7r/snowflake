@@ -1,0 +1,38 @@
+From dc15652b92a8772a6d6a07b1d18ea88cf0b826d3 Mon Sep 17 00:00:00 2001
+From: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Date: Thu, 30 Jul 2026 15:22:41 +0300
+Subject: [PATCH 09542/15333] ASoC: SOF: Intel: hda-stream: clear
+ hstream->running flag in hw_params
+
+During hw_params call we make sure that the host DMA is stopped but the
+hstream->running flag is not explicitly cleared at the same time.
+
+If the host DMA fails to stop during previous use then the flag is left
+set and on next start the host DMA will be left disabled since the
+trigger:STOP will skip the DMA enable.
+
+Signed-off-by: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Link: https://patch.msgid.link/20260730122241.30541-1-peter.ujfalusi@linux.intel.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/intel/hda-stream.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/sound/soc/sof/intel/hda-stream.c b/sound/soc/sof/intel/hda-stream.c
+index 0778002e2bd6..c95230487a1b 100644
+--- a/sound/soc/sof/intel/hda-stream.c
++++ b/sound/soc/sof/intel/hda-stream.c
+@@ -613,6 +613,9 @@ int hda_dsp_stream_hw_params(struct snd_sof_dev *sdev,
+ 		return ret;
+ 	}
+ 
++	/* Host DMA is not running */
++	hstream->running = false;
++
+ 	snd_sof_dsp_update_bits(sdev, HDA_DSP_HDA_BAR,
+ 				sd_offset + SOF_HDA_ADSP_REG_SD_STS,
+ 				SOF_HDA_CL_DMA_SD_INT_MASK,
+-- 
+2.55.0
+

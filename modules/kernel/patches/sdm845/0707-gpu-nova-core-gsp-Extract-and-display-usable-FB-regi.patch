@@ -1,0 +1,179 @@
+From 917e43d72e164795af907d90a43183bdb392da56 Mon Sep 17 00:00:00 2001
+From: Joel Fernandes <joelagnelf@nvidia.com>
+Date: Wed, 17 Jun 2026 22:24:45 +0900
+Subject: [PATCH 00707/15333] gpu: nova-core: gsp: Extract and display usable
+ FB regions from GSP
+
+Add usable_fb_regions() to GspStaticConfigInfo to extract the usable FB
+regions from GSP's fbRegionInfoParams. Usable regions are those that are
+not reserved or protected.
+
+The extracted regions are stored in GetGspStaticInfoReply and exposed
+for use by the memory subsystem.
+
+Display the regions and their total size upon device probe.
+
+[acourbot: expose all regions as a KVec, display usable regions and
+total usable VRAM.]
+
+Signed-off-by: Joel Fernandes <joelagnelf@nvidia.com>
+Reviewed-by: Eliot Courtney <ecourtney@nvidia.com>
+Reviewed-by: Danilo Krummrich <dakr@kernel.org>
+Link: https://patch.msgid.link/20260617-boot-vram-v3-3-20b9ec5fe9f2@nvidia.com
+[acourbot: replace dev_info!() with dev_dbg!().]
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/gpu.rs             | 18 ++++++++++-
+ drivers/gpu/nova-core/gsp/commands.rs    | 13 ++++++--
+ drivers/gpu/nova-core/gsp/fw/commands.rs | 40 +++++++++++++++++++++++-
+ 3 files changed, 67 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/gpu.rs b/drivers/gpu/nova-core/gpu.rs
+index a34114d3afcb..4d76be429e75 100644
+--- a/drivers/gpu/nova-core/gpu.rs
++++ b/drivers/gpu/nova-core/gpu.rs
+@@ -9,7 +9,8 @@
+     io::Io,
+     num::Bounded,
+     pci,
+-    prelude::*, //
++    prelude::*,
++    sizes::SizeConstants, //
+ };
+ 
+ use crate::{
+@@ -377,6 +378,21 @@ pub(crate) fn new(
+                     Err(e) => dev_warn!(pdev, "GPU name unavailable: {:?}\n", e),
+                 }
+ 
++                if !info.usable_fb_regions.is_empty() {
++                    dev_dbg!(pdev, "Usable FB regions:\n");
++                    for region in &info.usable_fb_regions {
++                        dev_dbg!(pdev, "  - {:#x?}\n", region);
++                    }
++
++                    dev_dbg!(
++                        pdev,
++                        "Total usable VRAM: {} MiB\n",
++                        info.usable_fb_regions.iter().fold(0u64, |res, region| res
++                            .saturating_add(region.end - region.start))
++                            / u64::SZ_1M
++                    );
++                }
++
+                 info
+             }
+         })
+diff --git a/drivers/gpu/nova-core/gsp/commands.rs b/drivers/gpu/nova-core/gsp/commands.rs
+index f84de9f4f045..86a3747cd31c 100644
+--- a/drivers/gpu/nova-core/gsp/commands.rs
++++ b/drivers/gpu/nova-core/gsp/commands.rs
+@@ -5,6 +5,7 @@
+     array,
+     convert::Infallible,
+     ffi::FromBytesUntilNulError,
++    ops::Range,
+     str::Utf8Error, //
+ };
+ 
+@@ -191,22 +192,30 @@ fn init(&self) -> impl Init<Self::Command, Self::InitError> {
+     }
+ }
+ 
+-/// The reply from the GSP to the [`GetGspInfo`] command.
++/// The reply from the GSP to the [`GetGspStaticInfo`] command.
+ pub(crate) struct GetGspStaticInfoReply {
+     gpu_name: [u8; 64],
++    /// Usable FB (VRAM) regions for driver memory allocation.
++    pub(crate) usable_fb_regions: KVec<Range<u64>>,
+ }
+ 
+ impl MessageFromGsp for GetGspStaticInfoReply {
+     const FUNCTION: MsgFunction = MsgFunction::GetGspStaticInfo;
+     type Message = fw::commands::GspStaticConfigInfo;
+-    type InitError = Infallible;
++    type InitError = Error;
+ 
+     fn read(
+         msg: &Self::Message,
+         _sbuffer: &mut SBufferIter<array::IntoIter<&[u8], 2>>,
+     ) -> Result<Self, Self::InitError> {
++        let mut usable_fb_regions = KVec::new();
++        for region in msg.usable_fb_regions() {
++            usable_fb_regions.push(region, GFP_KERNEL)?;
++        }
++
+         Ok(GetGspStaticInfoReply {
+             gpu_name: msg.gpu_name_str(),
++            usable_fb_regions,
+         })
+     }
+ }
+diff --git a/drivers/gpu/nova-core/gsp/fw/commands.rs b/drivers/gpu/nova-core/gsp/fw/commands.rs
+index 7bcc41fc7fa0..ebdc12bcd4e3 100644
+--- a/drivers/gpu/nova-core/gsp/fw/commands.rs
++++ b/drivers/gpu/nova-core/gsp/fw/commands.rs
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0
+ // SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ 
++use core::ops::Range;
++
+ use kernel::{
+     device,
+     pci,
+@@ -13,7 +15,8 @@
+ 
+ use crate::{
+     gpu::Chipset,
+-    gsp::GSP_PAGE_SIZE, //
++    gsp::GSP_PAGE_SIZE,
++    num::IntoSafeCast, //
+ };
+ 
+ use super::bindings;
+@@ -129,6 +132,41 @@ impl GspStaticConfigInfo {
+     pub(crate) fn gpu_name_str(&self) -> [u8; 64] {
+         self.0.gpuNameString
+     }
++
++    /// Returns an iterator over valid FB regions from GSP firmware data.
++    fn fb_regions(
++        &self,
++    ) -> impl Iterator<Item = &bindings::NV2080_CTRL_CMD_FB_GET_FB_REGION_FB_REGION_INFO> {
++        let fb_info = &self.0.fbRegionInfoParams;
++        fb_info
++            .fbRegion
++            .iter()
++            .take(fb_info.numFBRegions.into_safe_cast())
++            .filter(|reg| reg.limit >= reg.base)
++    }
++
++    /// Iterates over usable FB regions from GSP firmware data.
++    ///
++    /// Each yielded region is a [`Range<u64>`] suitable for driver memory allocation.
++    /// Usable regions are those that satisfy all the following properties:
++    /// - Are not reserved for firmware internal use.
++    /// - Are not protected (hardware-enforced access restrictions).
++    /// - Support compression (can use GPU memory compression for bandwidth).
++    /// - Support ISO (isochronous memory for display requiring guaranteed bandwidth).
++    pub(crate) fn usable_fb_regions(&self) -> impl Iterator<Item = Range<u64>> + '_ {
++        self.fb_regions().filter_map(|reg| {
++            // Filter: not reserved, not protected, supports compression and ISO.
++            if reg.reserved == 0
++                && reg.bProtected == 0
++                && reg.supportCompressed != 0
++                && reg.supportISO != 0
++            {
++                reg.limit.checked_add(1).map(|end| reg.base..end)
++            } else {
++                None
++            }
++        })
++    }
+ }
+ 
+ // SAFETY: Padding is explicit and will not contain uninitialized data.
+-- 
+2.55.0
+

@@ -1,0 +1,58 @@
+From a40498ebe1b456a2f5e9e1c4182c636786963505 Mon Sep 17 00:00:00 2001
+From: Markus Stockhausen <markus.stockhausen@gmx.de>
+Date: Tue, 14 Jul 2026 18:29:14 +0200
+Subject: [PATCH 08284/15333] i2c: algo: bit: Allow to skip bit test
+
+An I2C bus can make use of shared resources. E.g. two GPIO based buses
+that share a single SCL line. To synchronize access to the bus the driver
+might use locking with the help of i2c_lock_operations(). While this
+works for normal transfers it is not available during initialization.
+
+Especially if i2c-algo-bit module is loaded with parameter bit_test
+it will issue some basic sanity checks that will access the bus without
+locking. This might interfere badly with concurrent transfers. Even
+if these are well synchronized via locks.
+
+Allow the consumer of an algorithm to override if the bit_test is allowed
+or not. For this add a new boolean attribute named skip_bit_test to
+i2c_algo_bit_data. If set the test is not run.
+
+Signed-off-by: Markus Stockhausen <markus.stockhausen@gmx.de>
+Reviewed-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Reviewed-by: Wolfram Sang <wsa+renesas@sang-engineering.com>
+Tested-by: Wolfram Sang <wsa+renesas@sang-engineering.com>
+Signed-off-by: Andi Shyti <andi.shyti@kernel.org>
+Link: https://lore.kernel.org/r/20260714162915.3018703-2-markus.stockhausen@gmx.de
+---
+ drivers/i2c/algos/i2c-algo-bit.c | 2 +-
+ include/linux/i2c-algo-bit.h     | 1 +
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/i2c/algos/i2c-algo-bit.c b/drivers/i2c/algos/i2c-algo-bit.c
+index d1d9a6c1a1e2..7ca565cbff5b 100644
+--- a/drivers/i2c/algos/i2c-algo-bit.c
++++ b/drivers/i2c/algos/i2c-algo-bit.c
+@@ -639,7 +639,7 @@ static int __i2c_bit_add_bus(struct i2c_adapter *adap,
+ 	struct i2c_algo_bit_data *bit_adap = adap->algo_data;
+ 	int ret;
+ 
+-	if (bit_test) {
++	if (bit_test && !bit_adap->skip_bit_test) {
+ 		ret = test_bus(adap);
+ 		if (bit_test >= 2 && ret < 0)
+ 			return -ENODEV;
+diff --git a/include/linux/i2c-algo-bit.h b/include/linux/i2c-algo-bit.h
+index 7fd5575a368f..c4c43aec1e67 100644
+--- a/include/linux/i2c-algo-bit.h
++++ b/include/linux/i2c-algo-bit.h
+@@ -34,6 +34,7 @@ struct i2c_algo_bit_data {
+ 				   maximum 50 us for SMBus */
+ 	int timeout;		/* in jiffies */
+ 	bool can_do_atomic;	/* callbacks don't sleep, we can be atomic */
++	bool skip_bit_test;	/* override bit_test module parameter */
+ };
+ 
+ int i2c_bit_add_bus(struct i2c_adapter *);
+-- 
+2.55.0
+

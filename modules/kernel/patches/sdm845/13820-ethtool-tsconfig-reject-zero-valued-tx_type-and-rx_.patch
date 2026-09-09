@@ -1,0 +1,61 @@
+From 77e80af7d2d4dc223716c90e9fc043bc66a8335f Mon Sep 17 00:00:00 2001
+From: Jakub Kicinski <kuba@kernel.org>
+Date: Wed, 12 Aug 2026 09:22:30 -0700
+Subject: [PATCH 13820/15333] ethtool: tsconfig: reject zero-valued tx_type and
+ rx_filter bitsets
+
+The ffs()/fls() guard in ethnl_set_tsconfig() was meant to enforce
+that the user selects exactly one tx_type (and one rx_filter)
+at a time (off / none are explicit types with non-zero values).
+However, both ffs(0) and fls(0) return 0, so the guard passes
+a zero-valued bitset through.
+
+The subsequent ffs(req_tx_type) - 1 would produce -1, if user selected
+no bit. net_hwtstamp_validate() catches the invalid -1 downstream,
+but returns a generic error (-ERANGE) without telling the user
+what went wrong. Return -EINVAL + extack instead.
+
+Replace the ffs()/fls() comparison with a hweight32() == 1 check.
+
+Reviewed-by: Andrew Lunn <andrew@lunn.ch>
+Reviewed-by: Joe Damato <joe@dama.to>
+Reviewed-by: Vadim Fedorenko <vadim.fedorenko@linux.dev>
+Link: https://patch.msgid.link/20260812162230.1837788-1-kuba@kernel.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/ethtool/tsconfig.c | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/net/ethtool/tsconfig.c b/net/ethtool/tsconfig.c
+index 24b64862011f..6be3aa5d4bc1 100644
+--- a/net/ethtool/tsconfig.c
++++ b/net/ethtool/tsconfig.c
+@@ -359,8 +359,10 @@ static int ethnl_set_tsconfig(struct ethnl_req_info *req_base,
+ 		if (ret < 0)
+ 			goto err_free_hwprov;
+ 
+-		/* Select only one tx type at a time */
+-		if (ffs(req_tx_type) != fls(req_tx_type)) {
++		/* Select exactly one tx type at a time */
++		if (hweight32(req_tx_type) != 1) {
++			NL_SET_BAD_ATTR(info->extack,
++					tb[ETHTOOL_A_TSCONFIG_TX_TYPES]);
+ 			ret = -EINVAL;
+ 			goto err_free_hwprov;
+ 		}
+@@ -380,8 +382,10 @@ static int ethnl_set_tsconfig(struct ethnl_req_info *req_base,
+ 		if (ret < 0)
+ 			goto err_free_hwprov;
+ 
+-		/* Select only one rx filter at a time */
+-		if (ffs(req_rx_filter) != fls(req_rx_filter)) {
++		/* Select exactly one rx filter at a time */
++		if (hweight32(req_rx_filter) != 1) {
++			NL_SET_BAD_ATTR(info->extack,
++					tb[ETHTOOL_A_TSCONFIG_RX_FILTERS]);
+ 			ret = -EINVAL;
+ 			goto err_free_hwprov;
+ 		}
+-- 
+2.55.0
+

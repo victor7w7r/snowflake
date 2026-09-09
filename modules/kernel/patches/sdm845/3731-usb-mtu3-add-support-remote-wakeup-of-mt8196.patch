@@ -1,0 +1,70 @@
+From b106bebc8dae8dd91b9578bc035c151a8ee8a651 Mon Sep 17 00:00:00 2001
+From: Chunfeng Yun <chunfeng.yun@mediatek.com>
+Date: Mon, 13 Apr 2026 20:17:26 +0800
+Subject: [PATCH 03731/15333] usb: mtu3: add support remote wakeup of mt8196
+
+There are three USB controllers on mt8196, each controller's wakeup
+control is different, add some specific versions for them.
+
+Reviewed-by: AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>
+Signed-off-by: Chunfeng Yun <chunfeng.yun@mediatek.com>
+Link: https://patch.msgid.link/20260413121727.4702-2-chunfeng.yun@mediatek.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/usb/mtu3/mtu3_host.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/drivers/usb/mtu3/mtu3_host.c b/drivers/usb/mtu3/mtu3_host.c
+index 7c657ea2dabd..8138b3f3096a 100644
+--- a/drivers/usb/mtu3/mtu3_host.c
++++ b/drivers/usb/mtu3/mtu3_host.c
+@@ -46,6 +46,14 @@
+ #define WC1_IS_P_95		BIT(12)
+ #define WC1_IS_EN_P0_95		BIT(6)
+ 
++/* mt8196 */
++#define PERI_WK_CTRL0_8196	0x08
++#define WC0_IS_EN_P0_96		BIT(0)
++#define WC0_IS_EN_P1_96		BIT(7)
++
++#define PERI_WK_CTRL1_8196	0x10
++#define WC1_IS_EN_P2_96		BIT(0)
++
+ /* mt2712 etc */
+ #define PERI_SSUSB_SPM_CTRL	0x0
+ #define SSC_IP_SLEEP_EN	BIT(4)
+@@ -59,6 +67,9 @@ enum ssusb_uwk_vers {
+ 	SSUSB_UWK_V1_3,		/* mt8195 IP0 */
+ 	SSUSB_UWK_V1_5 = 105,	/* mt8195 IP2 */
+ 	SSUSB_UWK_V1_6,		/* mt8195 IP3 */
++	SSUSB_UWK_V1_7, 	/* mt8196 IP0 */
++	SSUSB_UWK_V1_8, 	/* mt8196 IP1 */
++	SSUSB_UWK_V1_9, 	/* mt8196 IP2 */
+ };
+ 
+ /*
+@@ -100,6 +111,21 @@ static void ssusb_wakeup_ip_sleep_set(struct ssusb_mtk *ssusb, bool enable)
+ 		msk = WC0_IS_EN_P3_95 | WC0_IS_C_95(0x7) | WC0_IS_P_95;
+ 		val = enable ? (WC0_IS_EN_P3_95 | WC0_IS_C_95(0x1)) : 0;
+ 		break;
++	case SSUSB_UWK_V1_7:
++		reg = ssusb->uwk_reg_base + PERI_WK_CTRL0_8196;
++		msk = WC0_IS_EN_P0_96;
++		val = enable ? msk : 0;
++		break;
++	case SSUSB_UWK_V1_8:
++		reg = ssusb->uwk_reg_base + PERI_WK_CTRL0_8196;
++		msk = WC0_IS_EN_P1_96;
++		val = enable ? msk : 0;
++		break;
++	case SSUSB_UWK_V1_9:
++		reg = ssusb->uwk_reg_base + PERI_WK_CTRL1_8196;
++		msk = WC1_IS_EN_P2_96;
++		val = enable ? msk : 0;
++		break;
+ 	case SSUSB_UWK_V2:
+ 		reg = ssusb->uwk_reg_base + PERI_SSUSB_SPM_CTRL;
+ 		msk = SSC_IP_SLEEP_EN | SSC_SPM_INT_EN;
+-- 
+2.55.0
+

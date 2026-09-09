@@ -1,0 +1,77 @@
+From 1a87048a4c686e5da6af137f8e1218c40e3b59ad Mon Sep 17 00:00:00 2001
+From: Daniele Palmas <dnlplm@gmail.com>
+Date: Fri, 24 Jul 2026 16:28:18 +0200
+Subject: [PATCH 08486/15333] net: wwan: add exclusive open mode capability to
+ AT and QCDM ports
+
+Add exclusive open mode capability to AT and QCDM ports to improve
+compatibility with user-space tools using the Qualcomm diagnostic
+device (e.g. libqcdm).
+
+Signed-off-by: Daniele Palmas <dnlplm@gmail.com>
+Reviewed-by: Loic Poulain <loic.poulain@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260724142909.3270824-3-dnlplm@gmail.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/wwan/wwan_core.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/drivers/net/wwan/wwan_core.c b/drivers/net/wwan/wwan_core.c
+index 8168239e52c3..ffbcf11e4e68 100644
+--- a/drivers/net/wwan/wwan_core.c
++++ b/drivers/net/wwan/wwan_core.c
+@@ -42,6 +42,7 @@ static struct dentry *wwan_debugfs_dir;
+ 
+ /* WWAN port flags */
+ #define WWAN_PORT_TX_OFF	0
++#define WWAN_PORT_EXCLUSIVE	1
+ 
+ /**
+  * struct wwan_device - The structure that defines a WWAN device
+@@ -748,6 +749,12 @@ static int wwan_port_op_start(struct wwan_port *port)
+ 		goto out_unlock;
+ 	}
+ 
++	if (test_bit(WWAN_PORT_EXCLUSIVE, &port->flags) &&
++	    !capable(CAP_SYS_ADMIN)) {
++		ret = -EBUSY;
++		goto out_unlock;
++	}
++
+ 	/* If port is already started, don't start again */
+ 	if (!port->start_count)
+ 		ret = port->ops->start(port);
+@@ -769,6 +776,7 @@ static void wwan_port_op_stop(struct wwan_port *port)
+ 		if (port->ops)
+ 			port->ops->stop(port);
+ 		skb_queue_purge(&port->rxq);
++		clear_bit(WWAN_PORT_EXCLUSIVE, &port->flags);
+ 	}
+ 	mutex_unlock(&port->ops_lock);
+ }
+@@ -1031,6 +1039,22 @@ static long wwan_port_fops_at_ioctl(struct wwan_port *port, unsigned int cmd,
+ 		break;
+ 	}
+ 
++	case TIOCEXCL:
++		set_bit(WWAN_PORT_EXCLUSIVE, &port->flags);
++		break;
++
++	case TIOCNXCL:
++		clear_bit(WWAN_PORT_EXCLUSIVE, &port->flags);
++		break;
++
++	case TIOCGEXCL:
++	{
++		int excl = test_bit(WWAN_PORT_EXCLUSIVE, &port->flags);
++
++		ret = put_user(excl, (int __user *)arg);
++		break;
++	}
++
+ 	default:
+ 		ret = -ENOIOCTLCMD;
+ 	}
+-- 
+2.55.0
+

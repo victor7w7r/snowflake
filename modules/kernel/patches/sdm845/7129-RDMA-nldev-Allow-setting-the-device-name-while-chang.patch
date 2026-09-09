@@ -1,0 +1,107 @@
+From 601f3fd97dec0525f1fca9887ca16574f81588b7 Mon Sep 17 00:00:00 2001
+From: Jiri Pirko <jiri@nvidia.com>
+Date: Thu, 16 Jul 2026 15:23:06 +0200
+Subject: [PATCH 07129/15333] RDMA/nldev: Allow setting the device name while
+ changing net namespace
+
+Accept RDMA_NLDEV_ATTR_DEV_NAME together with RDMA_NLDEV_NET_NS_FD so a
+netlink move can rename the device in the destination namespace. Keep the
+name semantics aligned with the existing RDMA rename path.
+
+Signed-off-by: Jiri Pirko <jiri@nvidia.com>
+Link: https://patch.msgid.link/20260716132316.1495242-6-jiri@resnulli.us
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/core/device.c |  6 ++++++
+ drivers/infiniband/core/nldev.c  | 27 ++++++++++++++++++---------
+ include/uapi/rdma/rdma_netlink.h |  5 ++++-
+ 3 files changed, 28 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/infiniband/core/device.c b/drivers/infiniband/core/device.c
+index f91e75211d52..14fcdc07f6e3 100644
+--- a/drivers/infiniband/core/device.c
++++ b/drivers/infiniband/core/device.c
+@@ -1901,6 +1901,9 @@ int ib_device_set_netns_put(struct sk_buff *skb,
+ 		if (ret == -EEXIST)
+ 			NL_SET_ERR_MSG(extack,
+ 				       "Device name already exists in the target net namespace");
++		else if (ret == -EINVAL && name)
++			NL_SET_ERR_MSG(extack,
++				       "Unable to use requested device name in the target net namespace");
+ 		goto ns_err;
+ 	}
+ 
+@@ -1931,6 +1934,9 @@ int ib_device_set_netns_put(struct sk_buff *skb,
+ 	if (ret == -EEXIST)
+ 		NL_SET_ERR_MSG(extack,
+ 			       "Device name already exists in the target net namespace");
++	else if (ret == -EINVAL && name)
++		NL_SET_ERR_MSG(extack,
++			       "Unable to use requested device name in the target net namespace");
+ 
+ 	put_net(net);
+ 	return ret;
+diff --git a/drivers/infiniband/core/nldev.c b/drivers/infiniband/core/nldev.c
+index 0251695ff3ba..a4014a230639 100644
+--- a/drivers/infiniband/core/nldev.c
++++ b/drivers/infiniband/core/nldev.c
+@@ -1186,6 +1186,24 @@ static int nldev_set_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 	if (!device)
+ 		return -EINVAL;
+ 
++	if (tb[RDMA_NLDEV_NET_NS_FD]) {
++		char name[IB_DEVICE_NAME_MAX] = {};
++		u32 ns_fd;
++
++		if (tb[RDMA_NLDEV_ATTR_DEV_NAME]) {
++			nla_strscpy(name, tb[RDMA_NLDEV_ATTR_DEV_NAME],
++				    IB_DEVICE_NAME_MAX);
++			if (strlen(name) == 0) {
++				err = -EINVAL;
++				goto done;
++			}
++		}
++		ns_fd = nla_get_u32(tb[RDMA_NLDEV_NET_NS_FD]);
++		err = ib_device_set_netns_put(skb, device, ns_fd,
++					      name[0] ? name : NULL, extack);
++		goto put_done;
++	}
++
+ 	if (tb[RDMA_NLDEV_ATTR_DEV_NAME]) {
+ 		char name[IB_DEVICE_NAME_MAX] = {};
+ 
+@@ -1199,15 +1217,6 @@ static int nldev_set_doit(struct sk_buff *skb, struct nlmsghdr *nlh,
+ 		goto done;
+ 	}
+ 
+-	if (tb[RDMA_NLDEV_NET_NS_FD]) {
+-		u32 ns_fd;
+-
+-		ns_fd = nla_get_u32(tb[RDMA_NLDEV_NET_NS_FD]);
+-		err = ib_device_set_netns_put(skb, device, ns_fd, NULL,
+-					      extack);
+-		goto put_done;
+-	}
+-
+ 	if (tb[RDMA_NLDEV_ATTR_DEV_DIM]) {
+ 		u8 use_dim;
+ 
+diff --git a/include/uapi/rdma/rdma_netlink.h b/include/uapi/rdma/rdma_netlink.h
+index 3af946ecbac3..ee11c3bbbae2 100644
+--- a/include/uapi/rdma/rdma_netlink.h
++++ b/include/uapi/rdma/rdma_netlink.h
+@@ -516,7 +516,10 @@ enum rdma_nldev_attr {
+ 	RDMA_NLDEV_ATTR_DEV_PROTOCOL,		/* string */
+ 
+ 	/*
+-	 * File descriptor handle of the net namespace object
++	 * File descriptor handle of the net namespace object. May be combined
++	 * with RDMA_NLDEV_ATTR_DEV_NAME (a literal device name) to also rename
++	 * the device in the destination namespace; the move fails with -EEXIST
++	 * if that name is already taken there.
+ 	 */
+ 	RDMA_NLDEV_NET_NS_FD,			/* u32 */
+ 	/*
+-- 
+2.55.0
+

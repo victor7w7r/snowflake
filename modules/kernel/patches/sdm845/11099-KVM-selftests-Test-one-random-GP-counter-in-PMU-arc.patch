@@ -1,0 +1,117 @@
+From a53d1602e3bfe7baf63aaa28c1ffafb0c8db49ae Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Tue, 4 Aug 2026 14:00:45 -0700
+Subject: [PATCH 11099/15333] KVM: selftests: Test one random GP counter in PMU
+ arch events testcase
+
+To significantly reduce the PMU counter test's runtime, without sacrificing
+test coverage in the aggregate, test a random GP counter in the arch events
+testcase instead of testing every possible GP counter.  Testing every PMC
+in every run of the test significantly increases the runtime of the test,
+without providing an equivalent increase in validation coverage, as the
+odds of a KVM having a bug that only affected a subset of counters and only
+when testing all other counters are extremely low.
+
+Opportunistically clean up kvm_random_u64_in_range() to eliminate
+unnecessary newlines.
+
+Link: https://patch.msgid.link/20260804210046.3413149-2-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ .../testing/selftests/kvm/include/test_util.h |  4 ++--
+ tools/testing/selftests/kvm/lib/test_util.c   | 22 +++++++++++++++----
+ .../selftests/kvm/x86/pmu_counters_test.c     | 18 +++++++--------
+ 3 files changed, 28 insertions(+), 16 deletions(-)
+
+diff --git a/tools/testing/selftests/kvm/include/test_util.h b/tools/testing/selftests/kvm/include/test_util.h
+index d64c8a228207..6aa152adcbe4 100644
+--- a/tools/testing/selftests/kvm/include/test_util.h
++++ b/tools/testing/selftests/kvm/include/test_util.h
+@@ -134,8 +134,8 @@ static inline u64 kvm_random_u64(struct kvm_random_state *state)
+ 	return ((u64)kvm_random_u32(state) << 32) | kvm_random_u32(state);
+ }
+ 
+-u64 kvm_random_u64_in_range(struct kvm_random_state *state, u64 min,
+-			    u64 max);
++u32 kvm_random_u32_in_range(struct kvm_random_state *state, u32 min, u32 max);
++u64 kvm_random_u64_in_range(struct kvm_random_state *state, u64 min, u64 max);
+ 
+ enum vm_mem_backing_src_type {
+ 	VM_MEM_SRC_ANONYMOUS,
+diff --git a/tools/testing/selftests/kvm/lib/test_util.c b/tools/testing/selftests/kvm/lib/test_util.c
+index 6b00ab11f3c0..4dff72f6bd34 100644
+--- a/tools/testing/selftests/kvm/lib/test_util.c
++++ b/tools/testing/selftests/kvm/lib/test_util.c
+@@ -43,12 +43,26 @@ u32 kvm_random_u32(struct kvm_random_state *state)
+ 	return state->seed;
+ }
+ 
++/* Returns a random u32 in the inclusive range [min, max] */
++u32 kvm_random_u32_in_range(struct kvm_random_state *state, u32 min, u32 max)
++{
++	u32 value, range;
++
++	TEST_ASSERT(min <= max, "PEBKAC, min = 0x%x, max = 0x%x", min, max);
++
++	value = kvm_random_u32(state);
++
++	range = max - min;
++	if (range == UINT_MAX)
++		return value;
++
++	return min + (value % (range + 1));
++}
++
+ /* Returns a random u64 in the inclusive range [min, max] */
+-u64 kvm_random_u64_in_range(struct kvm_random_state *state, u64 min,
+-			    u64 max)
++u64 kvm_random_u64_in_range(struct kvm_random_state *state, u64 min, u64 max)
+ {
+-	u64 value;
+-	u64 range;
++	u64 value, range;
+ 
+ 	TEST_ASSERT(min <= max, "PEBKAC, min = 0x%lx, max = 0x%lx", min, max);
+ 
+diff --git a/tools/testing/selftests/kvm/x86/pmu_counters_test.c b/tools/testing/selftests/kvm/x86/pmu_counters_test.c
+index dc6afac3aa91..8abf17cc9469 100644
+--- a/tools/testing/selftests/kvm/x86/pmu_counters_test.c
++++ b/tools/testing/selftests/kvm/x86/pmu_counters_test.c
+@@ -273,6 +273,7 @@ static void guest_test_arch_event(u8 idx)
+ 	struct kvm_x86_pmu_feature gp_event, fixed_event;
+ 	u32 base_pmc_msr;
+ 	unsigned int i;
++	u64 eventsel;
+ 
+ 	/* The host side shouldn't invoke this without a guest PMU. */
+ 	GUEST_ASSERT(pmu_version);
+@@ -287,19 +288,16 @@ static void guest_test_arch_event(u8 idx)
+ 	GUEST_ASSERT_EQ(idx, gp_event.f.bit);
+ 
+ 	GUEST_ASSERT(nr_gp_counters);
++	i = kvm_random_u32_in_range(&kvm_rng, 0, nr_gp_counters - 1);
+ 
+-	for (i = 0; i < nr_gp_counters; i++) {
+-		u64 eventsel = ARCH_PERFMON_EVENTSEL_OS |
+-				    ARCH_PERFMON_EVENTSEL_ENABLE |
+-				    intel_pmu_arch_events[idx];
++	eventsel = ARCH_PERFMON_EVENTSEL_OS | ARCH_PERFMON_EVENTSEL_ENABLE |
++		   intel_pmu_arch_events[idx];
+ 
+-		wrmsr(MSR_P6_EVNTSEL0 + i, 0);
+-		if (guest_has_perf_global_ctrl)
+-			wrmsr(MSR_CORE_PERF_GLOBAL_CTRL, BIT_ULL(i));
++	wrmsr(MSR_P6_EVNTSEL0 + i, 0);
++	if (guest_has_perf_global_ctrl)
++		wrmsr(MSR_CORE_PERF_GLOBAL_CTRL, BIT_ULL(i));
+ 
+-		__guest_test_arch_event(idx, i, base_pmc_msr + i,
+-					MSR_P6_EVNTSEL0 + i, eventsel);
+-	}
++	__guest_test_arch_event(idx, i, base_pmc_msr + i, MSR_P6_EVNTSEL0 + i, eventsel);
+ 
+ 	if (!guest_has_perf_global_ctrl)
+ 		return;
+-- 
+2.55.0
+

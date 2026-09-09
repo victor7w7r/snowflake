@@ -1,0 +1,61 @@
+From 7a4b7122a623e3d57fc15cf843a9d45fbd72c6ab Mon Sep 17 00:00:00 2001
+From: Johan Hovold <johan@kernel.org>
+Date: Thu, 16 Jul 2026 15:24:48 +0200
+Subject: [PATCH 05757/15333] drm/vc4: hdmi: take i2c adapter module reference
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The i2c subsystem currently blocks during adapter deregistration
+whenever there are consumers holding a reference.
+
+Switch to using of_get_i2c_adapter_by_node() which also takes a
+reference to the adapter module so that an attempt to unload the module
+while in use fails gracefully instead of blocking uninterruptibly.
+
+Signed-off-by: Johan Hovold <johan@kernel.org>
+Link: https://patch.msgid.link/20260716132448.1565278-1-johan@kernel.org
+Reviewed-by: Maíra Canal <mcanal@igalia.com>
+Signed-off-by: Maíra Canal <mcanal@igalia.com>
+---
+ drivers/gpu/drm/vc4/vc4_hdmi.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/vc4/vc4_hdmi.c b/drivers/gpu/drm/vc4/vc4_hdmi.c
+index 74dce4be0c00..17c8635c5afa 100644
+--- a/drivers/gpu/drm/vc4/vc4_hdmi.c
++++ b/drivers/gpu/drm/vc4/vc4_hdmi.c
+@@ -3208,11 +3208,11 @@ static int vc4_hdmi_runtime_resume(struct device *dev)
+ 	return ret;
+ }
+ 
+-static void vc4_hdmi_put_ddc_device(void *ptr)
++static void vc4_hdmi_put_ddc(void *ptr)
+ {
+ 	struct vc4_hdmi *vc4_hdmi = ptr;
+ 
+-	put_device(&vc4_hdmi->ddc->dev);
++	i2c_put_adapter(vc4_hdmi->ddc);
+ }
+ 
+ static int vc4_hdmi_bind(struct device *dev, struct device *master, void *data)
+@@ -3266,14 +3266,14 @@ static int vc4_hdmi_bind(struct device *dev, struct device *master, void *data)
+ 		return -ENODEV;
+ 	}
+ 
+-	vc4_hdmi->ddc = of_find_i2c_adapter_by_node(ddc_node);
++	vc4_hdmi->ddc = of_get_i2c_adapter_by_node(ddc_node);
+ 	of_node_put(ddc_node);
+ 	if (!vc4_hdmi->ddc) {
+ 		drm_err(drm, "Failed to get ddc i2c adapter by node\n");
+ 		return -EPROBE_DEFER;
+ 	}
+ 
+-	ret = devm_add_action_or_reset(dev, vc4_hdmi_put_ddc_device, vc4_hdmi);
++	ret = devm_add_action_or_reset(dev, vc4_hdmi_put_ddc, vc4_hdmi);
+ 	if (ret)
+ 		return ret;
+ 
+-- 
+2.55.0
+

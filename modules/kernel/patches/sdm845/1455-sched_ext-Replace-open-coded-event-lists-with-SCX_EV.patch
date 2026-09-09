@@ -1,0 +1,151 @@
+From b164760d7a648451f6621f11e3c1d3125f00305c Mon Sep 17 00:00:00 2001
+From: Cheng-Yang Chou <yphbchou0911@gmail.com>
+Date: Tue, 30 Jun 2026 22:06:23 +0800
+Subject: [PATCH 01455/15333] sched_ext: Replace open-coded event lists with
+ SCX_EVENTS_LIST
+
+Three sites enumerate every scx_event_stats field by name:
+scx_read_events(), scx_attr_events_show(), and scx_dump_state().
+Adding a new SCX_EV_* event requires three separate manual edits.
+Missing any one silently drops counts or omits the field from
+diagnostic output with no compile-time indication.
+
+SCX_EVENTS_LIST(SCX_EVENT) in internal.h becomes the single
+authoritative list of event names, so all three sites stay in sync.
+
+No functional changes.
+
+Signed-off-by: Cheng-Yang Chou <yphbchou0911@gmail.com>
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ kernel/sched/ext/ext.c      | 61 ++++++-------------------------------
+ kernel/sched/ext/internal.h | 15 +++++++++
+ 2 files changed, 25 insertions(+), 51 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 9c9cb9d08bca..0c51f9826a77 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -1004,16 +1004,6 @@ static struct task_struct *scx_task_iter_next_locked(struct scx_task_iter *iter)
+ 	trace_sched_ext_event(#name, cnt);					\
+ } while(0)
+ 
+-/**
+- * scx_agg_event - Aggregate an event counter 'kind' from 'src_e' to 'dst_e'
+- * @dst_e: destination event stats
+- * @src_e: source event stats
+- * @kind: a kind of event to be aggregated
+- */
+-#define scx_agg_event(dst_e, src_e, kind) do {					\
+-	(dst_e)->kind += READ_ONCE((src_e)->kind);				\
+-} while(0)
+-
+ /**
+  * scx_dump_event - Dump an event 'kind' in 'events' to 's'
+  * @s: output seq_buf
+@@ -4989,19 +4979,9 @@ static ssize_t scx_attr_events_show(struct kobject *kobj,
+ 	int at = 0;
+ 
+ 	scx_read_events(sch, &events);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_SELECT_CPU_FALLBACK);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_DISPATCH_LOCAL_DSQ_OFFLINE);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_DISPATCH_KEEP_LAST);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_ENQ_SKIP_EXITING);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_ENQ_SKIP_MIGRATION_DISABLED);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_REENQ_IMMED);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_REENQ_LOCAL_REPEAT);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_REFILL_SLICE_DFL);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_BYPASS_DURATION);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_BYPASS_DISPATCH);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_BYPASS_ACTIVATE);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_INSERT_NOT_OWNED);
+-	at += scx_attr_event_show(buf, at, &events, SCX_EV_SUB_BYPASS_DISPATCH);
++#define SCX_EVENT(name)	at += scx_attr_event_show(buf, at, &events, name)
++	SCX_EVENTS_LIST(SCX_EVENT);
++#undef SCX_EVENT
+ 	return at;
+ }
+ SCX_ATTR(events);
+@@ -6651,19 +6631,9 @@ static void scx_dump_state(struct scx_sched *sch, struct scx_exit_info *ei,
+ 	dump_line(&s, "--------------");
+ 
+ 	scx_read_events(sch, &events);
+-	scx_dump_event(s, &events, SCX_EV_SELECT_CPU_FALLBACK);
+-	scx_dump_event(s, &events, SCX_EV_DISPATCH_LOCAL_DSQ_OFFLINE);
+-	scx_dump_event(s, &events, SCX_EV_DISPATCH_KEEP_LAST);
+-	scx_dump_event(s, &events, SCX_EV_ENQ_SKIP_EXITING);
+-	scx_dump_event(s, &events, SCX_EV_ENQ_SKIP_MIGRATION_DISABLED);
+-	scx_dump_event(s, &events, SCX_EV_REENQ_IMMED);
+-	scx_dump_event(s, &events, SCX_EV_REENQ_LOCAL_REPEAT);
+-	scx_dump_event(s, &events, SCX_EV_REFILL_SLICE_DFL);
+-	scx_dump_event(s, &events, SCX_EV_BYPASS_DURATION);
+-	scx_dump_event(s, &events, SCX_EV_BYPASS_DISPATCH);
+-	scx_dump_event(s, &events, SCX_EV_BYPASS_ACTIVATE);
+-	scx_dump_event(s, &events, SCX_EV_INSERT_NOT_OWNED);
+-	scx_dump_event(s, &events, SCX_EV_SUB_BYPASS_DISPATCH);
++#define SCX_EVENT(name)	scx_dump_event(s, &events, name)
++	SCX_EVENTS_LIST(SCX_EVENT);
++#undef SCX_EVENT
+ 
+ 	if (seq_buf_has_overflowed(&s) && dump_len >= sizeof(trunc_marker))
+ 		memcpy(ei->dump + dump_len - sizeof(trunc_marker),
+@@ -10333,26 +10303,15 @@ __bpf_kfunc u64 scx_bpf_now(void)
+ 
+ static void scx_read_events(struct scx_sched *sch, struct scx_event_stats *events)
+ {
+-	struct scx_event_stats *e_cpu;
+ 	int cpu;
+ 
+ 	/* Aggregate per-CPU event counters into @events. */
+ 	memset(events, 0, sizeof(*events));
+ 	for_each_possible_cpu(cpu) {
+-		e_cpu = &per_cpu_ptr(sch->pcpu, cpu)->event_stats;
+-		scx_agg_event(events, e_cpu, SCX_EV_SELECT_CPU_FALLBACK);
+-		scx_agg_event(events, e_cpu, SCX_EV_DISPATCH_LOCAL_DSQ_OFFLINE);
+-		scx_agg_event(events, e_cpu, SCX_EV_DISPATCH_KEEP_LAST);
+-		scx_agg_event(events, e_cpu, SCX_EV_ENQ_SKIP_EXITING);
+-		scx_agg_event(events, e_cpu, SCX_EV_ENQ_SKIP_MIGRATION_DISABLED);
+-		scx_agg_event(events, e_cpu, SCX_EV_REENQ_IMMED);
+-		scx_agg_event(events, e_cpu, SCX_EV_REENQ_LOCAL_REPEAT);
+-		scx_agg_event(events, e_cpu, SCX_EV_REFILL_SLICE_DFL);
+-		scx_agg_event(events, e_cpu, SCX_EV_BYPASS_DURATION);
+-		scx_agg_event(events, e_cpu, SCX_EV_BYPASS_DISPATCH);
+-		scx_agg_event(events, e_cpu, SCX_EV_BYPASS_ACTIVATE);
+-		scx_agg_event(events, e_cpu, SCX_EV_INSERT_NOT_OWNED);
+-		scx_agg_event(events, e_cpu, SCX_EV_SUB_BYPASS_DISPATCH);
++		struct scx_event_stats *e_cpu = &per_cpu_ptr(sch->pcpu, cpu)->event_stats;
++#define SCX_EVENT(name)	events->name += READ_ONCE(e_cpu->name)
++		SCX_EVENTS_LIST(SCX_EVENT);
++#undef SCX_EVENT
+ 	}
+ }
+ 
+diff --git a/kernel/sched/ext/internal.h b/kernel/sched/ext/internal.h
+index 75522a5f28f4..0256931a379a 100644
+--- a/kernel/sched/ext/internal.h
++++ b/kernel/sched/ext/internal.h
+@@ -1051,6 +1051,21 @@ struct scx_event_stats {
+ 	s64		SCX_EV_SUB_BYPASS_DISPATCH;
+ };
+ 
++#define SCX_EVENTS_LIST(SCX_EVENT)					\
++	SCX_EVENT(SCX_EV_SELECT_CPU_FALLBACK);				\
++	SCX_EVENT(SCX_EV_DISPATCH_LOCAL_DSQ_OFFLINE);			\
++	SCX_EVENT(SCX_EV_DISPATCH_KEEP_LAST);				\
++	SCX_EVENT(SCX_EV_ENQ_SKIP_EXITING);				\
++	SCX_EVENT(SCX_EV_ENQ_SKIP_MIGRATION_DISABLED);			\
++	SCX_EVENT(SCX_EV_REENQ_IMMED);					\
++	SCX_EVENT(SCX_EV_REENQ_LOCAL_REPEAT);				\
++	SCX_EVENT(SCX_EV_REFILL_SLICE_DFL);				\
++	SCX_EVENT(SCX_EV_BYPASS_DURATION);				\
++	SCX_EVENT(SCX_EV_BYPASS_DISPATCH);				\
++	SCX_EVENT(SCX_EV_BYPASS_ACTIVATE);				\
++	SCX_EVENT(SCX_EV_INSERT_NOT_OWNED);				\
++	SCX_EVENT(SCX_EV_SUB_BYPASS_DISPATCH)
++
+ struct scx_sched;
+ 
+ enum scx_sched_pcpu_flags {
+-- 
+2.55.0
+

@@ -1,0 +1,42 @@
+From bd00d2c4a1b2a1e7ad3060d3d606fb4c9db6a064 Mon Sep 17 00:00:00 2001
+From: Frank Li <Frank.Li@nxp.com>
+Date: Thu, 21 May 2026 11:32:52 -0400
+Subject: [PATCH 01424/15333] nvmet: pci-epf: Remove unnecessary
+ dmaengine_terminate_sync() on each DMA transfer
+
+dmaengine_terminate_sync() cancels all pending requests. Calling it for
+every DMA transfer is unnecessary and counterproductive. This function is
+generally intended for cleanup paths such as module removal, device close,
+or unbind operations.
+
+Remove the redundant calls for success path and keep it only at error path.
+
+Tested-by: Niklas Cassel <cassel@kernel.org>
+Reviewed-by: Damien Le Moal <dlemoal@kernel.org>
+Acked-by: Manivannan Sadhasivam <mani@kernel.org>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260521-dma_prep_config-v7-6-1f73f4899883@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/nvme/target/pci-epf.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/nvme/target/pci-epf.c b/drivers/nvme/target/pci-epf.c
+index 4e9db96ebfec..2afe8f4d0e46 100644
+--- a/drivers/nvme/target/pci-epf.c
++++ b/drivers/nvme/target/pci-epf.c
+@@ -420,10 +420,9 @@ static int nvmet_pci_epf_dma_transfer(struct nvmet_pci_epf *nvme_epf,
+ 	if (dma_sync_wait(chan, cookie) != DMA_COMPLETE) {
+ 		dev_err(dev, "DMA transfer failed\n");
+ 		ret = -EIO;
++		dmaengine_terminate_sync(chan);
+ 	}
+ 
+-	dmaengine_terminate_sync(chan);
+-
+ unmap:
+ 	dma_unmap_single(dma_dev, dma_addr, seg->length, dir);
+ 
+-- 
+2.55.0
+

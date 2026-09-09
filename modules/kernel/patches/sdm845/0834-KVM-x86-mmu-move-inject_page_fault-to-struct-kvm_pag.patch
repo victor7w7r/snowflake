@@ -1,0 +1,131 @@
+From cb6d93b80c13d77a2d42569c96187e592dda2e28 Mon Sep 17 00:00:00 2001
+From: Paolo Bonzini <pbonzini@redhat.com>
+Date: Sun, 5 Apr 2026 08:55:13 +0200
+Subject: [PATCH 00834/15333] KVM: x86/mmu: move inject_page_fault to struct
+ kvm_pagewalk
+
+Injection of page faults is also part of accesses to guest
+page tables; in particular, __kvm_inject_emulated_page_fault()
+calls it on walk_mmu.  Move it to struct kvm_pagewalk as
+part of converting walk_mmu to a struct kvm_pagewalk.
+
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/kvm_host.h | 6 +++---
+ arch/x86/kvm/mmu/mmu.c          | 8 +++-----
+ arch/x86/kvm/svm/nested.c       | 2 +-
+ arch/x86/kvm/vmx/nested.c       | 2 +-
+ arch/x86/kvm/x86.c              | 4 ++--
+ 5 files changed, 10 insertions(+), 12 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 4ddfe9debf18..7e397b5d93ce 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -519,6 +519,9 @@ struct kvm_page_fault;
+ struct kvm_pagewalk {
+ 	unsigned long (*get_guest_pgd)(struct kvm_vcpu *vcpu);
+ 	u64 (*get_pdptr)(struct kvm_vcpu *vcpu, int index);
++	void (*inject_page_fault)(struct kvm_vcpu *vcpu,
++				  struct x86_exception *fault,
++				  bool from_hardware);
+ 	gpa_t (*gva_to_gpa)(struct kvm_vcpu *vcpu, struct kvm_pagewalk *w,
+ 			    gpa_t gva_or_gpa, u64 access,
+ 			    struct x86_exception *exception);
+@@ -528,9 +531,6 @@ struct kvm_mmu {
+ 	struct kvm_pagewalk w;
+ 
+ 	int (*page_fault)(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault);
+-	void (*inject_page_fault)(struct kvm_vcpu *vcpu,
+-				  struct x86_exception *fault,
+-				  bool from_hardware);
+ 	int (*sync_spte)(struct kvm_vcpu *vcpu,
+ 			 struct kvm_mmu_page *sp, int i);
+ 	struct kvm_mmu_root_info root;
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index ac9e1e95335a..ffc8acefd5c9 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -5969,8 +5969,8 @@ static void init_kvm_tdp_mmu(struct kvm_vcpu *vcpu,
+ 	context->root_role.word = root_role.word;
+ 	context->page_fault = kvm_tdp_page_fault;
+ 	context->sync_spte = NULL;
+-	context->inject_page_fault = kvm_inject_page_fault;
+ 
++	context->w.inject_page_fault = kvm_inject_page_fault;
+ 	context->w.get_pdptr = kvm_pdptr_read;
+ 	context->w.get_guest_pgd = get_guest_cr3;
+ 
+@@ -6121,10 +6121,9 @@ static void init_kvm_softmmu(struct kvm_vcpu *vcpu,
+ 
+ 	kvm_init_shadow_mmu(vcpu, cpu_role);
+ 
++	context->w.inject_page_fault = kvm_inject_page_fault;
+ 	context->w.get_pdptr         = kvm_pdptr_read;
+ 	context->w.get_guest_pgd     = get_guest_cr3;
+-
+-	context->inject_page_fault = kvm_inject_page_fault;
+ }
+ 
+ static void init_kvm_nested_mmu(struct kvm_vcpu *vcpu,
+@@ -6136,8 +6135,7 @@ static void init_kvm_nested_mmu(struct kvm_vcpu *vcpu,
+ 		return;
+ 
+ 	g_context->cpu_role.as_u64   = new_mode.as_u64;
+-	g_context->inject_page_fault = kvm_inject_page_fault;
+-
++	g_context->w.inject_page_fault = kvm_inject_page_fault;
+ 	g_context->w.get_pdptr         = kvm_pdptr_read;
+ 	g_context->w.get_guest_pgd     = get_guest_cr3;
+ 
+diff --git a/arch/x86/kvm/svm/nested.c b/arch/x86/kvm/svm/nested.c
+index 6634d6390f77..55eace8aa2c8 100644
+--- a/arch/x86/kvm/svm/nested.c
++++ b/arch/x86/kvm/svm/nested.c
+@@ -117,7 +117,7 @@ static void nested_svm_init_mmu_context(struct kvm_vcpu *vcpu)
+ 	vcpu->arch.mmu->w.get_guest_pgd     = nested_svm_get_tdp_cr3;
+ 	vcpu->arch.mmu->w.get_pdptr       = nested_svm_get_tdp_pdptr;
+ 
+-	vcpu->arch.mmu->inject_page_fault = nested_svm_inject_npf_exit;
++	vcpu->arch.mmu->w.inject_page_fault = nested_svm_inject_npf_exit;
+ 	vcpu->arch.walk_mmu              = &vcpu->arch.nested_mmu;
+ }
+ 
+diff --git a/arch/x86/kvm/vmx/nested.c b/arch/x86/kvm/vmx/nested.c
+index ef54c444413e..466f838a05bc 100644
+--- a/arch/x86/kvm/vmx/nested.c
++++ b/arch/x86/kvm/vmx/nested.c
+@@ -515,7 +515,7 @@ static void nested_ept_init_mmu_context(struct kvm_vcpu *vcpu)
+ 	vcpu->arch.mmu->w.get_guest_pgd     = nested_ept_get_eptp;
+ 	vcpu->arch.mmu->w.get_pdptr       = kvm_pdptr_read;
+ 
+-	vcpu->arch.mmu->inject_page_fault = nested_ept_inject_page_fault;
++	vcpu->arch.mmu->w.inject_page_fault = nested_ept_inject_page_fault;
+ 
+ 	vcpu->arch.walk_mmu              = &vcpu->arch.nested_mmu;
+ }
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index bf0a65c76f71..484ed409e420 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -597,7 +597,7 @@ void __kvm_inject_emulated_page_fault(struct kvm_vcpu *vcpu,
+ 		kvm_mmu_invalidate_addr(vcpu, fault_mmu, fault->address,
+ 					KVM_MMU_ROOT_CURRENT);
+ 
+-	fault_mmu->inject_page_fault(vcpu, fault, from_hardware);
++	fault_mmu->w.inject_page_fault(vcpu, fault, from_hardware);
+ }
+ EXPORT_SYMBOL_FOR_KVM_INTERNAL(__kvm_inject_emulated_page_fault);
+ 
+@@ -10619,7 +10619,7 @@ void kvm_fixup_and_inject_pf_error(struct kvm_vcpu *vcpu, gva_t gva, u16 error_c
+ 		fault.address = gva;
+ 		fault.async_page_fault = false;
+ 	}
+-	vcpu->arch.walk_mmu->inject_page_fault(vcpu, &fault, true);
++	vcpu->arch.walk_mmu->w.inject_page_fault(vcpu, &fault, true);
+ }
+ EXPORT_SYMBOL_FOR_KVM_INTERNAL(kvm_fixup_and_inject_pf_error);
+ 
+-- 
+2.55.0
+

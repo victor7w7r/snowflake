@@ -1,0 +1,37 @@
+From aadb7d1f2ca0f5c4c945cca808f9a15b6a42289c Mon Sep 17 00:00:00 2001
+From: Zhipeng Wang <zhipeng.wang_1@nxp.com>
+Date: Thu, 23 Jul 2026 11:05:24 +0900
+Subject: [PATCH 07280/15333] clk: imx: imx8qxp: add soft dependency on SCU
+ power domain driver
+
+The i.MX8QXP SCU clock driver manually attaches power domains to each
+clock device via of_genpd_add_device() in imx_clk_scu_attach_pd().
+If the SCU power domain provider has not probed yet, the attachment
+fails silently with a pr_warn() and the clock device is registered
+without a power domain.
+
+When both drivers are built as modules, there is no implicit
+dependency to guarantee load order. Add MODULE_SOFTDEP("pre:
+scu_pd") so that modprobe loads the SCU power domain module
+before the clock module.
+
+Signed-off-by: Zhipeng Wang <zhipeng.wang_1@nxp.com>
+Reviewed-by: Peng Fan <peng.fan@nxp.com>
+Reviewed-by: Brian Masney <bmasney@redhat.com>
+Signed-off-by: Ulf Hansson <ulfh@kernel.org>
+---
+ drivers/clk/imx/clk-imx8qxp.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/clk/imx/clk-imx8qxp.c b/drivers/clk/imx/clk-imx8qxp.c
+index c781425a005e..17302ee628b7 100644
+--- a/drivers/clk/imx/clk-imx8qxp.c
++++ b/drivers/clk/imx/clk-imx8qxp.c
+@@ -373,3 +373,4 @@ module_exit(imx8qxp_clk_exit);
+ MODULE_AUTHOR("Aisheng Dong <aisheng.dong@nxp.com>");
+ MODULE_DESCRIPTION("NXP i.MX8QXP clock driver");
+ MODULE_LICENSE("GPL v2");
++MODULE_SOFTDEP("pre: scu_pd");
+-- 
+2.55.0
+

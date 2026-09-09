@@ -1,0 +1,170 @@
+From 893f39dadaa172c0f869e5b138f2cfdd851df781 Mon Sep 17 00:00:00 2001
+From: Danilo Krummrich <dakr@kernel.org>
+Date: Sun, 28 Jun 2026 16:53:23 +0200
+Subject: [PATCH 04054/15333] rust: faux: add Device type with AsBusDevice
+ support
+
+Add a faux::Device type that wraps struct faux_device and implements
+AsBusDevice, enabling faux devices to be used as parent devices for
+subsystems that require a bus device, such as DRM.
+
+Update Registration to return &faux::Device<Bound> via AsRef.
+
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Tested-by: Deborah Brouwer <deborah.brouwer@collabora.com>
+Link: https://patch.msgid.link/20260628145406.2107056-4-dakr@kernel.org
+[ Drop redundant 'struct device' invariant; implied by valid
+  struct faux_device. - Danilo ]
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/kernel/drm/gem/shmem.rs     | 11 +++--
+ rust/kernel/faux.rs              | 69 +++++++++++++++++++++++++++-----
+ samples/rust/rust_driver_faux.rs |  3 +-
+ 3 files changed, 68 insertions(+), 15 deletions(-)
+
+diff --git a/rust/kernel/drm/gem/shmem.rs b/rust/kernel/drm/gem/shmem.rs
+index 3ee19ef6264e..52de59b14dad 100644
+--- a/rust/kernel/drm/gem/shmem.rs
++++ b/rust/kernel/drm/gem/shmem.rs
+@@ -692,10 +692,12 @@ impl drm::Driver for KunitDriver {
+     fn create_drm_dev() -> Result<(faux::Registration, UnregisteredDevice<KunitDriver>)> {
+         // Create a faux DRM device so we can test gem object creation.
+         let data = try_pin_init!(KunitData {});
+-        let dev = faux::Registration::new(c"Kunit", None)?;
+-        let drm = UnregisteredDevice::new(dev.as_ref(), data)?;
++        let reg = faux::Registration::new(c"Kunit", None)?;
++        let fdev = reg.as_ref();
++        let dev = fdev.as_ref();
++        let drm = UnregisteredDevice::new(dev, data)?;
+ 
+-        Ok((dev, drm))
++        Ok((reg, drm))
+     }
+ 
+     #[test]
+@@ -755,7 +757,8 @@ fn vmap_io() -> Result {
+     #[test]
+     fn fail_sg_table_on_wrong_dev() -> Result {
+         let (_dev, drm) = create_drm_dev()?;
+-        let wrong_dev = faux::Registration::new(c"EvilKunit", None)?;
++        let reg = faux::Registration::new(c"EvilKunit", None)?;
++        let wrong_dev = reg.as_ref();
+ 
+         let obj = Object::<KunitObject, _>::new(&drm, PAGE_SIZE, ObjectConfig::default(), ())?;
+ 
+diff --git a/rust/kernel/faux.rs b/rust/kernel/faux.rs
+index 36c92ae2943c..cd4198fbb232 100644
+--- a/rust/kernel/faux.rs
++++ b/rust/kernel/faux.rs
+@@ -9,15 +9,63 @@
+ use crate::{
+     bindings,
+     device,
+-    prelude::*, //
++    prelude::*,
++    types::Opaque, //
+ };
+-use core::ptr::{
+-    addr_of_mut,
+-    null,
+-    null_mut,
+-    NonNull, //
++use core::{
++    marker::PhantomData,
++    ptr::{
++        null,
++        null_mut,
++        NonNull, //
++    },
+ };
+ 
++/// A faux device.
++///
++/// A faux device is a virtual device backed by the faux bus, primarily used for scenarios where a
++/// real hardware device is not available or for testing.
++///
++/// # Invariants
++///
++/// The underlying `struct faux_device` is valid.
++#[repr(transparent)]
++pub struct Device<Ctx: device::DeviceContext = device::Normal>(
++    Opaque<bindings::faux_device>,
++    PhantomData<Ctx>,
++);
++
++impl<Ctx: device::DeviceContext> Device<Ctx> {
++    #[inline]
++    fn as_raw(&self) -> *mut bindings::faux_device {
++        self.0.get()
++    }
++
++    /// # Safety
++    ///
++    /// `ptr` must be a valid pointer to a `struct faux_device`.
++    #[inline]
++    unsafe fn from_raw<'a>(ptr: *mut bindings::faux_device) -> &'a Self {
++        // SAFETY: `Device` is a transparent wrapper of `Opaque<bindings::faux_device>`.
++        unsafe { &*ptr.cast() }
++    }
++}
++
++impl<Ctx: device::DeviceContext> AsRef<device::Device<Ctx>> for Device<Ctx> {
++    #[inline]
++    fn as_ref(&self) -> &device::Device<Ctx> {
++        // SAFETY: By the type invariant of `Self`, `self.as_raw()` is a pointer to a valid
++        // `struct faux_device`. `dev` points to a valid `struct device`.
++        unsafe { device::Device::from_raw(&raw mut (*self.as_raw()).dev) }
++    }
++}
++
++// SAFETY: `faux::Device` is a transparent wrapper of `struct faux_device`.
++// The offset is guaranteed to point to a valid device field inside `faux::Device`.
++unsafe impl<Ctx: device::DeviceContext> device::AsBusDevice<Ctx> for Device<Ctx> {
++    const OFFSET: usize = core::mem::offset_of!(bindings::faux_device, dev);
++}
++
+ /// The registration of a faux device.
+ ///
+ /// This type represents the registration of a [`struct faux_device`]. When an instance of this type
+@@ -60,10 +108,11 @@ fn as_raw(&self) -> *mut bindings::faux_device {
+     }
+ }
+ 
+-impl AsRef<device::Device<device::Bound>> for Registration {
+-    fn as_ref(&self) -> &device::Device<device::Bound> {
++impl AsRef<Device<device::Bound>> for Registration {
++    #[inline]
++    fn as_ref(&self) -> &Device<device::Bound> {
+         // SAFETY:
+-        // - The underlying `device` in `faux_device` is guaranteed by the C API to be a valid
++        // - The underlying `struct faux_device` is guaranteed by the C API to be a valid
+         //   initialized `device`.
+         // - `faux_match()` always returns 1, and probe runs synchronously
+         //   (PROBE_FORCE_SYNCHRONOUS).
+@@ -71,7 +120,7 @@ fn as_ref(&self) -> &device::Device<device::Bound> {
+         //   sysfs.
+         // - `mem::forget(Registration)` is not a problem; if the `Registration` is leaked, the faux
+         //   device stays bound forever.
+-        unsafe { device::Device::from_raw(addr_of_mut!((*self.as_raw()).dev)) }
++        unsafe { Device::from_raw(self.as_raw()) }
+     }
+ }
+ 
+diff --git a/samples/rust/rust_driver_faux.rs b/samples/rust/rust_driver_faux.rs
+index 99876c8e3743..27b6d3e2bb44 100644
+--- a/samples/rust/rust_driver_faux.rs
++++ b/samples/rust/rust_driver_faux.rs
+@@ -25,8 +25,9 @@ fn init(_module: &'static ThisModule) -> Result<Self> {
+         pr_info!("Initialising Rust Faux Device Sample\n");
+ 
+         let reg = faux::Registration::new(c"rust-faux-sample-device", None)?;
++        let fdev = reg.as_ref();
+ 
+-        dev_info!(reg, "Hello from faux device!\n");
++        dev_info!(fdev, "Hello from faux device!\n");
+ 
+         Ok(Self { _reg: reg })
+     }
+-- 
+2.55.0
+

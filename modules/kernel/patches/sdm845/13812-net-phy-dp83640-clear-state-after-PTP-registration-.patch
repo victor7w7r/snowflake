@@ -1,0 +1,41 @@
+From e8b166c1f0a53312bd50355ea4db77b2a6728e0f Mon Sep 17 00:00:00 2001
+From: Xuanqiang Luo <luoxuanqiang@kylinos.cn>
+Date: Tue, 11 Aug 2026 23:13:44 +0800
+Subject: [PATCH 13812/15333] net: phy: dp83640: clear state after PTP
+ registration failure
+
+dp83640_probe() publishes its per-PHY state through phydev before
+registering the PTP clock. If registration fails, the private data is
+freed while phydev->mii_ts and phydev->priv still point to it, and
+default_timestamp remains set.
+
+Clear the published PHY state and reset the PTP clock pointer before
+freeing the private data.
+
+Cc: stable+noautosel@kernel.org # untested fix to a driver init path
+Reviewed-by: Andrew Lunn <andrew@lunn.ch>
+Signed-off-by: Xuanqiang Luo <luoxuanqiang@kylinos.cn>
+Link: https://patch.msgid.link/20260811151345.73582-4-xuanqiang.luo@linux.dev
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/phy/dp83640.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/net/phy/dp83640.c b/drivers/net/phy/dp83640.c
+index ba39d30b7470..7aa5cf0a7bb0 100644
+--- a/drivers/net/phy/dp83640.c
++++ b/drivers/net/phy/dp83640.c
+@@ -1449,6 +1449,10 @@ static int dp83640_probe(struct phy_device *phydev)
+ 
+ no_register:
+ 	clock->chosen = NULL;
++	clock->ptp_clock = NULL;
++	phydev->default_timestamp = false;
++	phydev->mii_ts = NULL;
++	phydev->priv = NULL;
+ 	kfree(dp83640);
+ no_memory:
+ 	dp83640_clock_put(clock);
+-- 
+2.55.0
+

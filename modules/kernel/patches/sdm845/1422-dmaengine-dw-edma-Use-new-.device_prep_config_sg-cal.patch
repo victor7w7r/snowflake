@@ -1,0 +1,63 @@
+From bfb66d8098dbbaaada3ab877eda21cd447115c95 Mon Sep 17 00:00:00 2001
+From: Frank Li <Frank.Li@nxp.com>
+Date: Thu, 21 May 2026 11:32:50 -0400
+Subject: [PATCH 01422/15333] dmaengine: dw-edma: Use new
+ .device_prep_config_sg() callback
+
+Use the new .device_prep_config_sg() callback to combine configuration and
+descriptor preparation.
+
+No functional changes.
+
+Tested-by: Niklas Cassel <cassel@kernel.org>
+Reviewed-by: Damien Le Moal <dlemoal@kernel.org>
+Reviewed-by: Manivannan Sadhasivam <mani@kernel.org>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260521-dma_prep_config-v7-4-1f73f4899883@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dw-edma/dw-edma-core.c | 14 +++++++++-----
+ 1 file changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/dma/dw-edma/dw-edma-core.c b/drivers/dma/dw-edma/dw-edma-core.c
+index 89a4c498a17b..8c192d63113c 100644
+--- a/drivers/dma/dw-edma/dw-edma-core.c
++++ b/drivers/dma/dw-edma/dw-edma-core.c
+@@ -577,10 +577,11 @@ dw_edma_device_transfer(struct dw_edma_transfer *xfer)
+ }
+ 
+ static struct dma_async_tx_descriptor *
+-dw_edma_device_prep_slave_sg(struct dma_chan *dchan, struct scatterlist *sgl,
+-			     unsigned int len,
+-			     enum dma_transfer_direction direction,
+-			     unsigned long flags, void *context)
++dw_edma_device_prep_config_sg(struct dma_chan *dchan, struct scatterlist *sgl,
++			      unsigned int len,
++			      enum dma_transfer_direction direction,
++			      unsigned long flags,
++			      struct dma_slave_config *config)
+ {
+ 	struct dw_edma_transfer xfer;
+ 
+@@ -591,6 +592,9 @@ dw_edma_device_prep_slave_sg(struct dma_chan *dchan, struct scatterlist *sgl,
+ 	xfer.flags = flags;
+ 	xfer.type = EDMA_XFER_SCATTER_GATHER;
+ 
++	if (config && dw_edma_device_config(dchan, config))
++		return NULL;
++
+ 	return dw_edma_device_transfer(&xfer);
+ }
+ 
+@@ -970,7 +974,7 @@ static int dw_edma_channel_setup(struct dw_edma *dw, u32 wr_alloc, u32 rd_alloc)
+ 	dma->device_terminate_all = dw_edma_device_terminate_all;
+ 	dma->device_issue_pending = dw_edma_device_issue_pending;
+ 	dma->device_tx_status = dw_edma_device_tx_status;
+-	dma->device_prep_slave_sg = dw_edma_device_prep_slave_sg;
++	dma->device_prep_config_sg = dw_edma_device_prep_config_sg;
+ 	dma->device_prep_dma_cyclic = dw_edma_device_prep_dma_cyclic;
+ 	dma->device_prep_interleaved_dma = dw_edma_device_prep_interleaved_dma;
+ 
+-- 
+2.55.0
+

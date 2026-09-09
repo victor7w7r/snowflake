@@ -1,0 +1,52 @@
+From ede0f99cef53ae142ec9f54c705e4b1e48355fd3 Mon Sep 17 00:00:00 2001
+From: Johan Hovold <johan@kernel.org>
+Date: Thu, 9 Jul 2026 10:27:13 +0200
+Subject: [PATCH 06275/15333] net: mvneta: bm: fix device reference leak on
+ failed lookup
+
+Make sure to drop the reference taken to the buffer manager device when
+attempting to look up its driver data before the driver has been bound.
+
+Note that holding a reference to a device does not prevent its driver
+data from going away.
+
+Cc: stable+noautosel@kernel.org # untested fix to unlikely error path
+Cc: Gregory CLEMENT <gregory.clement@bootlin.com>
+Signed-off-by: Johan Hovold <johan@kernel.org>
+Reviewed-by: Harshitha Ramamurthy <hramamurthy@google.com>
+Link: https://patch.msgid.link/20260709082713.829446-1-johan@kernel.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/marvell/mvneta_bm.c | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/marvell/mvneta_bm.c b/drivers/net/ethernet/marvell/mvneta_bm.c
+index e0c693c0a910..d6d76fbf27b6 100644
+--- a/drivers/net/ethernet/marvell/mvneta_bm.c
++++ b/drivers/net/ethernet/marvell/mvneta_bm.c
+@@ -397,9 +397,20 @@ static void mvneta_bm_put_sram(struct mvneta_bm *priv)
+ 
+ struct mvneta_bm *mvneta_bm_get(struct device_node *node)
+ {
+-	struct platform_device *pdev = of_find_device_by_node(node);
++	struct platform_device *pdev;
++	struct mvneta_bm *priv;
++
++	pdev = of_find_device_by_node(node);
++	if (!pdev)
++		return NULL;
++
++	priv = platform_get_drvdata(pdev);
++	if (!priv) {
++		platform_device_put(pdev);
++		return NULL;
++	}
+ 
+-	return pdev ? platform_get_drvdata(pdev) : NULL;
++	return priv;
+ }
+ EXPORT_SYMBOL_GPL(mvneta_bm_get);
+ 
+-- 
+2.55.0
+

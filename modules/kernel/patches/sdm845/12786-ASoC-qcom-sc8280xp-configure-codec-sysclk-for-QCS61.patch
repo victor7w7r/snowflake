@@ -1,0 +1,43 @@
+From 530e344e4b7ebaef88b845c3a2413a114f517d79 Mon Sep 17 00:00:00 2001
+From: Le Qi <le.qi@oss.qualcomm.com>
+Date: Mon, 10 Aug 2026 11:10:32 +0800
+Subject: [PATCH 12786/15333] ASoC: qcom: sc8280xp: configure codec sysclk for
+ QCS615
+
+Continuous high-amplitude noise could occur in the DA7213 microphone
+capture path after a Bluetooth out-of-range/reset event followed by
+reconnection. The noise was present in both the raw ALSA capture and
+PipeWire input, confirming that it originated before Bluetooth
+encoding.
+
+The codec already obtains and enables MCLK through its DT clock and
+bias-level handling. However, the machine driver did not explicitly
+configure the codec sysclk during hw_params(). Enable
+codec_sysclk_set for QCS615 so that the DA7213 clock source and rate
+are configured before the codec power-up sequence.
+
+Verified on QCS615 Talos with repeated Bluetooth disconnect and
+reconnect cycles. The noise was no longer reproducible.
+
+Signed-off-by: Le Qi <le.qi@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260810031032.2001053-1-le.qi@oss.qualcomm.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/qcom/sc8280xp.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/sound/soc/qcom/sc8280xp.c b/sound/soc/qcom/sc8280xp.c
+index 597c0d887d2f..913ae81be424 100644
+--- a/sound/soc/qcom/sc8280xp.c
++++ b/sound/soc/qcom/sc8280xp.c
+@@ -462,6 +462,7 @@ static const struct qcom_snd_soc_common qcs615_priv_data = {
+ 	.driver_name = "qcs615",
+ 	.dapm_widgets = sc8280xp_dapm_widgets,
+ 	.num_dapm_widgets = ARRAY_SIZE(sc8280xp_dapm_widgets),
++	.codec_sysclk_set = true,
+ };
+ 
+ static const struct qcom_snd_soc_common qcm6490_priv_data = {
+-- 
+2.55.0
+

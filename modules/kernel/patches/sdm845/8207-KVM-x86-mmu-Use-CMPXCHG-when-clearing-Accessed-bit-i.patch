@@ -1,0 +1,91 @@
+From fb25ee778aae357da2c1a8dc1d240b6061482454 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Mon, 27 Jul 2026 17:22:36 -0700
+Subject: [PATCH 08207/15333] KVM: x86/mmu: Use CMPXCHG when clearing Accessed
+ bit in the shadow MMU
+
+Use CMPXCHG instead of clear_bit(), which currently emits a LOCK BTR since
+the to-be-cleared bit isn't a compile-time constant, when aging SPTEs in
+the shadow MMU to align with the approach taken by the TDP MMU, and because
+using CMPXCHG is far more robust against bugs in KVM.  E.g. if the SPTE is
+somehow no longer an SPTE due to a KVM bug, CMPXCHG will fail gracefully,
+whereas clear_bit() would potentially corrupt/clobber memory.
+
+Clearing the Accessed bit without atomically ensuring the SPTE is still the
+old SPTE is "fine", as holding the rmap's lock ensures zapping the old SPTE
+can't fully complete, which in turn ensures a new, different SPTE can't be
+installed.  But that chain of logic isn't exactly obvious, and there's zero
+reason to avoid CMPXCHG as its cost on modern hardware is within ~1-2 uops
+of LOCK BTR (and may even be cheaper on some microarchitectures).  Doing a
+64-bit CMPXCHG on 32-bit kernels does require a more expensive CMPXCHG8B,
+but 32-bit KVM is all but dead at this point.
+
+Cc: James Houghton <jthoughton@google.com>
+Reviewed-by: Kai Huang <kai.huang@intel.com>
+Reviewed-by: James Houghton <jthoughton@google.com>
+Link: https://patch.msgid.link/20260728002236.869865-3-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/mmu/mmu.c | 27 ++++++++++++++-------------
+ 1 file changed, 14 insertions(+), 13 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c
+index 440db8891f21..71beb169d78d 100644
+--- a/arch/x86/kvm/mmu/mmu.c
++++ b/arch/x86/kvm/mmu/mmu.c
+@@ -1718,11 +1718,11 @@ static bool kvm_rmap_age_gfn_range(struct kvm *kvm,
+ 	struct kvm_rmap_head *rmap_head;
+ 	struct rmap_iterator iter;
+ 	unsigned long rmap_val;
++	u64 old_spte, new_spte;
+ 	bool young = false;
+ 	u64 *sptep;
+ 	gfn_t gfn;
+ 	int level;
+-	u64 spte;
+ 
+ 	for (level = PG_LEVEL_4K; level <= KVM_MAX_HUGEPAGE_LEVEL; level++) {
+ 		for (gfn = range->start; gfn < range->end;
+@@ -1730,8 +1730,8 @@ static bool kvm_rmap_age_gfn_range(struct kvm *kvm,
+ 			rmap_head = gfn_to_rmap(gfn, level, range->slot);
+ 			rmap_val = kvm_rmap_lock_readonly(rmap_head);
+ 
+-			for_each_rmap_spte_lockless(rmap_val, &iter, sptep, spte) {
+-				if (!is_accessed_spte(spte))
++			for_each_rmap_spte_lockless(rmap_val, &iter, sptep, old_spte) {
++				if (!is_accessed_spte(old_spte))
+ 					continue;
+ 
+ 				if (test_only) {
+@@ -1739,17 +1739,18 @@ static bool kvm_rmap_age_gfn_range(struct kvm *kvm,
+ 					return true;
+ 				}
+ 
+-				if (spte_ad_enabled(spte))
+-					clear_bit((ffs(shadow_accessed_mask) - 1),
+-						  (unsigned long *)sptep);
++				if (spte_ad_enabled(old_spte))
++					new_spte = old_spte & ~shadow_accessed_mask;
+ 				else
+-					/*
+-					 * If the following cmpxchg fails, the
+-					 * spte is being concurrently modified
+-					 * and should most likely stay young.
+-					 */
+-					cmpxchg64(sptep, spte,
+-					      mark_spte_for_access_track(spte));
++					new_spte = mark_spte_for_access_track(old_spte);
++
++				/*
++				 * Don't bother retrying if the CMPXCHG fails,
++				 * i.e. if another CPU modified the SPTE.  The
++				 * SPTE is either being zapped or is likely
++				 * still in-use, i.e. is still young.
++				 */
++				cmpxchg64(sptep, old_spte, new_spte);
+ 				young = true;
+ 			}
+ 
+-- 
+2.55.0
+

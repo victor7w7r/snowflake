@@ -1,0 +1,45 @@
+From cd856d1ef1b62baef990c22d98d10b4aec681db1 Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Tue, 16 Jun 2026 05:09:36 -0700
+Subject: [PATCH 03378/15333] efi/runtime-wrappers: handle queue_work() failure
+ with goto exit
+
+Convert the queue_work() failure path in __efi_queue_work() to a
+goto exit instead of falling through to the wait and the
+WARN_ON_ONCE(status == EFI_ABORTED) below it. A failed queue_work()
+leaves the status at its initial EFI_ABORTED, so that warning would
+fire even though no call ran; it is meant for a completed call that
+returned EFI_ABORTED.
+
+No change for the common (successful enqueue) path. This also prepares
+__efi_queue_work() for the timeout handling added later.
+
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Signed-off-by: Ard Biesheuvel <ardb@kernel.org>
+---
+ drivers/firmware/efi/runtime-wrappers.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/firmware/efi/runtime-wrappers.c b/drivers/firmware/efi/runtime-wrappers.c
+index a1e46ab00366..13857e5291b9 100644
+--- a/drivers/firmware/efi/runtime-wrappers.c
++++ b/drivers/firmware/efi/runtime-wrappers.c
+@@ -351,10 +351,12 @@ static efi_status_t __efi_queue_work(enum efi_rts_ids id,
+ 	 * queue_work() returns 0 if work was already on queue,
+ 	 * _ideally_ this should never happen.
+ 	 */
+-	if (queue_work(efi_rts_wq, &efi_rts_work.work))
+-		wait_for_completion(&efi_rts_work.efi_rts_comp);
+-	else
++	if (!queue_work(efi_rts_wq, &efi_rts_work.work)) {
+ 		pr_err("Failed to queue work to efi_rts_wq.\n");
++		goto exit;
++	}
++
++	wait_for_completion(&efi_rts_work.efi_rts_comp);
+ 
+ 	WARN_ON_ONCE(efi_rts_work.status == EFI_ABORTED);
+ exit:
+-- 
+2.55.0
+

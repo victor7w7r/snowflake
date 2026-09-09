@@ -1,0 +1,34 @@
+From e6e3cc72f46aa328a806603f1ed56c99c9faa654 Mon Sep 17 00:00:00 2001
+From: Jori Koolstra <jkoolstra@xs4all.nl>
+Date: Tue, 30 Jun 2026 12:53:35 +0200
+Subject: [PATCH 01655/15333] btrfs: drop redundant S_IFDIR from mkdir
+
+vfs_mkdir() now sets the S_IFDIR type bit in the mode it passes to
+->mkdir(), so OR-ing S_IFDIR into the mode again in btrfs_mkdir() is
+redundant. Drop it.
+
+Assisted-by: LLM
+Signed-off-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Link: https://patch.msgid.link/20260630105400.68459-7-jkoolstra@xs4all.nl
+Reviewed-by: NeilBrown <neil@brown.name>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/btrfs/inode.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/btrfs/inode.c b/fs/btrfs/inode.c
+index 272598f6ae77..c19f75cc3e7c 100644
+--- a/fs/btrfs/inode.c
++++ b/fs/btrfs/inode.c
+@@ -6936,7 +6936,7 @@ static struct dentry *btrfs_mkdir(struct mnt_idmap *idmap, struct inode *dir,
+ 	inode = new_inode(dir->i_sb);
+ 	if (!inode)
+ 		return ERR_PTR(-ENOMEM);
+-	inode_init_owner(idmap, inode, dir, S_IFDIR | mode);
++	inode_init_owner(idmap, inode, dir, mode);
+ 	inode->i_op = &btrfs_dir_inode_operations;
+ 	inode->i_fop = &btrfs_dir_file_operations;
+ 	return ERR_PTR(btrfs_create_common(dir, dentry, inode));
+-- 
+2.55.0
+

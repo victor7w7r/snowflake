@@ -1,0 +1,50 @@
+From 50133489c33764219a505ddb7e9b42cc6d8bfafa Mon Sep 17 00:00:00 2001
+From: Yudistira Putra <pyudistira519@gmail.com>
+Date: Thu, 2 Jul 2026 21:12:39 +0900
+Subject: [PATCH 02078/15333] tracing/probes: make file offset error message
+ probe-agnostic
+
+The shared probe argument parser rejects file offsets for kernel probes.
+This path is used outside the kprobe event parser too, but the diagnostic
+currently says "with kprobe" even when emitted from another probe path.
+
+Make the diagnostic probe-agnostic.
+
+Link: https://lore.kernel.org/all/20260622160032.99834-1-pyudistira519@gmail.com/
+
+Signed-off-by: Yudistira Putra <pyudistira519@gmail.com>
+Signed-off-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+---
+ kernel/trace/trace_probe.c | 2 +-
+ kernel/trace/trace_probe.h | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/trace/trace_probe.c b/kernel/trace/trace_probe.c
+index d17cfee77d9c..9a58c0789ac5 100644
+--- a/kernel/trace/trace_probe.c
++++ b/kernel/trace/trace_probe.c
+@@ -1230,7 +1230,7 @@ parse_probe_arg(char *arg, const struct fetch_type *type,
+ 			code->op = FETCH_OP_IMM;
+ 			code->immediate = param;
+ 		} else if (arg[1] == '+') {
+-			/* kprobes don't support file offsets */
++			/* Kernel probes do not support file offsets */
+ 			if (ctx->flags & TPARG_FL_KERNEL) {
+ 				trace_probe_log_err(ctx->offset, FILE_ON_KPROBE);
+ 				return -EINVAL;
+diff --git a/kernel/trace/trace_probe.h b/kernel/trace/trace_probe.h
+index 0f09f7aaf93f..43e6954c14c5 100644
+--- a/kernel/trace/trace_probe.h
++++ b/kernel/trace/trace_probe.h
+@@ -516,7 +516,7 @@ extern int traceprobe_define_arg_fields(struct trace_event_call *event_call,
+ 	C(BAD_MEM_ADDR,		"Invalid memory address"),		\
+ 	C(BAD_IMM,		"Invalid immediate value"),		\
+ 	C(IMMSTR_NO_CLOSE,	"String is not closed with '\"'"),	\
+-	C(FILE_ON_KPROBE,	"File offset is not available with kprobe"), \
++	C(FILE_ON_KPROBE,	"File offset is not available for kernel probes"), \
+ 	C(BAD_FILE_OFFS,	"Invalid file offset value"),		\
+ 	C(SYM_ON_UPROBE,	"Symbol is not available with uprobe"),	\
+ 	C(TOO_MANY_OPS,		"Dereference is too much nested"), 	\
+-- 
+2.55.0
+

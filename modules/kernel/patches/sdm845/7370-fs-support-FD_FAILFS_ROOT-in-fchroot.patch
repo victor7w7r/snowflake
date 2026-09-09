@@ -1,0 +1,151 @@
+From b1221afa31cc2daf6b83d72e45827cffb4e86aff Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Fri, 24 Jul 2026 15:41:20 +0200
+Subject: [PATCH 07370/15333] fs: support FD_FAILFS_ROOT in fchroot()
+
+Allow a process to move its root directory into failfs via
+fchroot(FD_FAILFS_ROOT). From that point on every absolute path lookup
+and every absolute symlink fails with EOPNOTSUPP. Combined with
+fchdir(FD_FAILFS_ROOT) this leaves the process with lookups anchored
+at explicit directory file descriptors only. It is the fs_struct
+equivalent of RESOLVE_BENEATH. This allows taks to drop their filesystem
+state completely.
+
+Callers with CAP_SYS_CHROOT in their user namespace may always do
+this, mirroring chroot(2). Unprivileged callers are subject to three
+requirements (which may be loosened later):
+
+(1) no_new_privs must be set
+
+    After entering failfs suid binaries on regular mounts remain
+    reachable via inherited directory file descriptors or the working
+    directory. A setuid program executing with an unusable root
+    directory might be tricked by this. I'm not 100% convinced that this
+    is needed but it feels more secure initially and it also forces more
+    no_new_privs on userspace. So win-win imo.
+
+(2) The caller must not already be chrooted.
+
+    The root directory is what confines .. resolution. The failfs root
+    can never be reached by walking up a real mount tree. A task whose
+    root is failfs has no .. barrier left below the top of its mount
+    tree. A .. walk from any real directory fd it still holds climbs
+    to the mount-namespace root. Which is kinda the point if you want to
+    do fd-based lookup only. If failfs prevented you from doing that
+    then it doesn't make a lot of sense.
+
+    A task that a privileged manager chrooted into a subtree could use
+    chroot()ing into failfs as a way to allow for an inherited fd to
+    resolve it again.
+
+    So reject already-chrooted callers closing that issue without losing
+    anything for the intended self-sandboxing use case.
+
+(3) The caller must not share its fs_struct.
+
+    Requirement (1) is checked on the calling thread, but the root
+    lives in the fs_struct which may be shared via CLONE_FS. A sibling
+    thread without no_new_privs could then execute a setuid binary with
+    the failfs root and defeat (1). setns() to a mount or user namespace
+    refuses a shared fs_struct for the same kind of reason, so do the
+    same here and require fs->users == 1. no_new_privs is inherited
+    across clone() and can never be cleared, so any CLONE_FS child
+    created afterwards carries it too and the guarantee holds.
+
+Privileged callers (CAP_SYS_CHROOT) are not subject to these
+requirements and may share the fs_struct. They can already chroot and
+exec a setuid binary today, so failfs hands them nothing new.
+
+Backing out is currently hard, but that is a property of the current
+implementation and not a promise. current_chrooted() treats a failfs
+root as chrooted so for now the task cannot create user namespaces to
+regain CAP_SYS_CHROOT and chroot()/fchroot() back out require
+CAP_SYS_CHROOT. This is not guaranteed though. current_chrooted() may
+change, or an unprivileged no_new_privs task could be allowed to chroot
+to a real directory, either of which would loosen this. So don't treat
+it as a permanent one-way door.
+
+The remaining way out today is setns() to a mount namespace file
+descriptor which requires CAP_SYS_ADMIN over the target namespace plus
+CAP_SYS_CHROOT and CAP_SYS_ADMIN in the caller's user namespace and
+resets both root and working directory. A task that closes or never had
+such file descriptors and restricts *chdir()/*chroot()/setns() via
+seccomp currently cannot get back out.
+
+Link: https://patch.msgid.link/20260724-work-failfs-v2-4-485dabbae185@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/open.c | 47 ++++++++++++++++++++++++++++++++---------------
+ 1 file changed, 32 insertions(+), 15 deletions(-)
+
+diff --git a/fs/open.c b/fs/open.c
+index c57f641f2e29..6b1c14e684a9 100644
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -620,31 +620,48 @@ SYSCALL_DEFINE1(chroot, const char __user *, filename)
+ 
+ SYSCALL_DEFINE2(fchroot, int, fd, unsigned int, flags)
+ {
++	struct path path;
+ 	int error;
+ 
+ 	if (flags)
+ 		return -EINVAL;
+ 
+-	CLASS(fd_raw, f)(fd);
+-	if (fd_empty(f))
+-		return -EBADF;
++	if (fd == FD_FAILFS_ROOT) {
++		if (!ns_capable(current_user_ns(), CAP_SYS_CHROOT)) {
++			if (!task_no_new_privs(current))
++				return -EPERM;
++			/* A shared fs_struct lets a sibling exec setuid past the check above. */
++			if (current->fs->users != 1)
++				return -EINVAL;
++			/* Moving the root to failfs lifts the old root's ".." barrier. */
++			if (current_chrooted())
++				return -EPERM;
++		}
++		failfs_get_root(&path);
++	} else {
++		CLASS(fd_raw, f)(fd);
++		if (fd_empty(f))
++			return -EBADF;
+ 
+-	if (!d_can_lookup(fd_file(f)->f_path.dentry))
+-		return -ENOTDIR;
++		if (!d_can_lookup(fd_file(f)->f_path.dentry))
++			return -ENOTDIR;
+ 
+-	error = file_permission(fd_file(f), MAY_EXEC | MAY_CHDIR);
+-	if (error)
+-		return error;
++		error = file_permission(fd_file(f), MAY_EXEC | MAY_CHDIR);
++		if (error)
++			return error;
+ 
+-	if (!ns_capable(current_user_ns(), CAP_SYS_CHROOT))
+-		return -EPERM;
++		if (!ns_capable(current_user_ns(), CAP_SYS_CHROOT))
++			return -EPERM;
+ 
+-	error = security_path_chroot(&fd_file(f)->f_path);
+-	if (error)
+-		return error;
++		path = fd_file(f)->f_path;
++		path_get(&path);
++	}
+ 
+-	set_fs_root(current->fs, &fd_file(f)->f_path);
+-	return 0;
++	error = security_path_chroot(&path);
++	if (!error)
++		set_fs_root(current->fs, &path);
++	path_put(&path);
++	return error;
+ }
+ 
+ int chmod_common(const struct path *path, umode_t mode)
+-- 
+2.55.0
+

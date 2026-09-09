@@ -1,0 +1,152 @@
+From 6d479f0f1b4bc34d7a747ea2b283fa229c1b7520 Mon Sep 17 00:00:00 2001
+From: Guenter Roeck <linux@roeck-us.net>
+Date: Tue, 28 Jul 2026 15:44:27 -0700
+Subject: [PATCH 12906/15333] hwmon: (pmbus) Let PMBus drivers report the
+ supported PMBus revision
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Some PMBus chips do not support the PMBUS_REVISION command. Knowing
+the PMBUs revision supported by a chip is relevant for PMBUs core
+functionality, so add support for letting chip drivers report the PMBUs
+revision.
+
+Use the new capability to report the PMBus revision supported by MAX20830.
+
+While at it, add definitions for PMBUs revisons 1.3.1 and 1.4.
+
+Cc: Nuno Sá <nuno.sa@analog.com>
+Cc: Alexis Czezar Torreno <alexisczezar.torreno@analog.com>
+Reviewed-by: Nuno Sá <nuno.sa@analog.com>
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/hwmon/pmbus/max20830.c   |  2 ++
+ drivers/hwmon/pmbus/pmbus.h      | 20 +++++++++++++----
+ drivers/hwmon/pmbus/pmbus_core.c | 38 ++++++++++++++++++++++----------
+ 3 files changed, 44 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/hwmon/pmbus/max20830.c b/drivers/hwmon/pmbus/max20830.c
+index e3470118fd36..d43ee6438b26 100644
+--- a/drivers/hwmon/pmbus/max20830.c
++++ b/drivers/hwmon/pmbus/max20830.c
+@@ -23,6 +23,8 @@ static struct pmbus_driver_info max20830_info = {
+ 		PMBUS_HAVE_TEMP |
+ 		PMBUS_HAVE_STATUS_VOUT | PMBUS_HAVE_STATUS_IOUT |
+ 		PMBUS_HAVE_STATUS_INPUT | PMBUS_HAVE_STATUS_TEMP,
++	.have_pmbus_revision = true,
++	.pmbus_revision = PMBUS_REV_13,
+ };
+ 
+ static int max20830_probe(struct i2c_client *client)
+diff --git a/drivers/hwmon/pmbus/pmbus.h b/drivers/hwmon/pmbus/pmbus.h
+index 23e3eda58870..1af247de9075 100644
+--- a/drivers/hwmon/pmbus/pmbus.h
++++ b/drivers/hwmon/pmbus/pmbus.h
+@@ -420,10 +420,12 @@ enum pmbus_data_format { linear = 0, ieee754, direct, vid };
+ enum vrm_version { vr11 = 0, vr12, vr13, imvp9, amd625mv, nvidia195mv };
+ 
+ /* PMBus revision identifiers */
+-#define PMBUS_REV_10 0x00	/* PMBus revision 1.0 */
+-#define PMBUS_REV_11 0x11	/* PMBus revision 1.1 */
+-#define PMBUS_REV_12 0x22	/* PMBus revision 1.2 */
+-#define PMBUS_REV_13 0x33	/* PMBus revision 1.3 */
++#define PMBUS_REV_10	0x00	/* PMBus revision 1.0 */
++#define PMBUS_REV_11	0x11	/* PMBus revision 1.1 */
++#define PMBUS_REV_12	0x22	/* PMBus revision 1.2 */
++#define PMBUS_REV_13	0x33	/* PMBus revision 1.3 */
++#define PMBUS_REV_131	0x44	/* PMBus revision 1.3.1 */
++#define PMBUS_REV_14	0x55	/* PMBus revision 1.4 */
+ 
+ /* Operation type flags for pmbus_update_ts */
+ #define PMBUS_OP_WRITE		BIT(0)
+@@ -488,6 +490,16 @@ struct pmbus_driver_info {
+ 	int access_delay;		/* in microseconds */
+ 	int write_delay;		/* in microseconds */
+ 	int page_change_delay;		/* in microseconds */
++
++	/*
++	 * Some chips do not support the PMBUS_REVISION command.
++	 * Drivers for such chips can report the supported PMBus revision here.
++	 *
++	 * Drivers must set have_pmbus_revision to true and provide the
++	 * supported PMBus version in pmbus_revision.
++	 */
++	bool have_pmbus_revision;	/* true if pmbus_revision is valid */
++	u8 pmbus_revision;		/* PMBus revision */
+ };
+ 
+ /* Regulator ops */
+diff --git a/drivers/hwmon/pmbus/pmbus_core.c b/drivers/hwmon/pmbus/pmbus_core.c
+index 20d04dd713cc..884d6e6148d5 100644
+--- a/drivers/hwmon/pmbus/pmbus_core.c
++++ b/drivers/hwmon/pmbus/pmbus_core.c
+@@ -96,7 +96,8 @@ struct pmbus_data {
+ 
+ 	u32 flags;		/* from platform data */
+ 
+-	u8 revision;	/* The PMBus revision the device is compliant with */
++	bool have_pmbus_revision;
++	u8 revision;		/* The PMBus revision the device is compliant with */
+ 
+ 	int exponent[PMBUS_PAGES];
+ 				/* linear mode: exponent for output voltages */
+@@ -2847,9 +2848,16 @@ static int pmbus_init_common(struct i2c_client *client, struct pmbus_data *data,
+ 	if (!(data->flags & PMBUS_NO_WRITE_PROTECT))
+ 		pmbus_init_wp(client, data);
+ 
+-	ret = i2c_smbus_read_byte_data(client, PMBUS_REVISION);
+-	if (ret >= 0)
+-		data->revision = ret;
++	if (info->have_pmbus_revision) {
++		data->have_pmbus_revision = true;
++		data->revision = info->pmbus_revision;
++	} else {
++		ret = i2c_smbus_read_byte_data(client, PMBUS_REVISION);
++		if (ret >= 0) {
++			data->have_pmbus_revision = true;
++			data->revision = ret;
++		}
++	}
+ 
+ 	if (data->info->pages)
+ 		pmbus_clear_faults(client);
+@@ -3539,6 +3547,17 @@ static int pmbus_debugfs_get(void *data, u64 *val)
+ DEFINE_DEBUGFS_ATTRIBUTE(pmbus_debugfs_ops, pmbus_debugfs_get, NULL,
+ 			 "0x%02llx\n");
+ 
++static int pmbus_debugfs_get_revision(void *data, u64 *val)
++{
++	struct pmbus_data *pdata = data;
++
++	*val = pdata->revision;
++
++	return 0;
++}
++DEFINE_DEBUGFS_ATTRIBUTE(pmbus_debugfs_revision_ops, pmbus_debugfs_get_revision, NULL,
++			 "0x%02llx\n");
++
+ static int pmbus_debugfs_get_status(void *data, u64 *val)
+ {
+ 	struct pmbus_debugfs_entry *entry = data;
+@@ -3694,14 +3713,9 @@ static void pmbus_init_debugfs(struct i2c_client *client,
+ 				    &entries[idx++],
+ 				    &pmbus_debugfs_ops);
+ 	}
+-	if (pmbus_check_byte_register(client, 0, PMBUS_REVISION)) {
+-		entries[idx].client = client;
+-		entries[idx].page = 0;
+-		entries[idx].reg = PMBUS_REVISION;
+-		debugfs_create_file("pmbus_revision", 0444, debugfs,
+-				    &entries[idx++],
+-				    &pmbus_debugfs_ops);
+-	}
++	if (data->have_pmbus_revision)
++		debugfs_create_file("pmbus_revision", 0444, debugfs, data,
++				    &pmbus_debugfs_revision_ops);
+ 
+ 	for (i = 0; i < ARRAY_SIZE(pmbus_debugfs_block_data); i++) {
+ 		const struct pmbus_debugfs_data *d = &pmbus_debugfs_block_data[i];
+-- 
+2.55.0
+

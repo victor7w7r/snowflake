@@ -1,0 +1,169 @@
+From 03ebe91b0f61536eeef834e3c08bbd83dc33b7c0 Mon Sep 17 00:00:00 2001
+From: Alice Mikityanska <alice@isovalent.com>
+Date: Fri, 10 Jul 2026 16:42:41 +0300
+Subject: [PATCH 06423/15333] geneve: Enable BIG TCP packets
+
+From: Daniel Borkmann <daniel@iogearbox.net>
+
+In Cilium we do support BIG TCP, but so far the latter has only been
+enabled for direct routing use-cases. A lot of users rely on Cilium
+with vxlan/geneve tunneling though. The underlying kernel infra for
+tunneling has not been supporting BIG TCP up to this point.
+
+Given we do now, bump tso_max_size for geneve netdevs up to GSO_MAX_SIZE
+to allow the admin to use BIG TCP with geneve tunnels.
+
+BIG TCP on geneve disabled:
+
+  Standard MTU:
+
+    # netperf -H 10.1.0.2 -t TCP_STREAM -l60
+    MIGRATED TCP STREAM TEST from 0.0.0.0 (0.0.0.0) port 0 AF_INET to 10.1.0.2 () port 0 AF_INET : demo
+    Recv   Send    Send
+    Socket Socket  Message  Elapsed
+    Size   Size    Size     Time     Throughput
+    bytes  bytes   bytes    secs.    10^6bits/sec
+
+    131072  16384  16384    30.00    37391.34
+
+  8k MTU:
+
+    # netperf -H 10.1.0.2 -t TCP_STREAM -l60
+    MIGRATED TCP STREAM TEST from 0.0.0.0 (0.0.0.0) port 0 AF_INET to 10.1.0.2 () port 0 AF_INET : demo
+    Recv   Send    Send
+    Socket Socket  Message  Elapsed
+    Size   Size    Size     Time     Throughput
+    bytes  bytes   bytes    secs.    10^6bits/sec
+
+    262144  32768  32768    60.00    58030.19
+
+BIG TCP on geneve enabled:
+
+  Standard MTU:
+
+    # netperf -H 10.1.0.2 -t TCP_STREAM -l60
+    MIGRATED TCP STREAM TEST from 0.0.0.0 (0.0.0.0) port 0 AF_INET to 10.1.0.2 () port 0 AF_INET : demo
+    Recv   Send    Send
+    Socket Socket  Message  Elapsed
+    Size   Size    Size     Time     Throughput
+    bytes  bytes   bytes    secs.    10^6bits/sec
+
+    131072  16384  16384    30.00    40891.57
+
+  8k MTU:
+
+    # netperf -H 10.1.0.2 -t TCP_STREAM -l60
+    MIGRATED TCP STREAM TEST from 0.0.0.0 (0.0.0.0) port 0 AF_INET to 10.1.0.2 () port 0 AF_INET : demo
+    Recv   Send    Send
+    Socket Socket  Message  Elapsed
+    Size   Size    Size     Time     Throughput
+    bytes  bytes   bytes    secs.    10^6bits/sec
+
+    262144  32768  32768    60.00    61458.39
+
+Example receive side:
+
+  swapper       0 [008]  3682.509996: net:netif_receive_skb: dev=geneve0 skbaddr=0xffff8f3b0a781800 len=129492
+        ffffffff8cfe3aaa __netif_receive_skb_core.constprop.0+0x6ca ([kernel.kallsyms])
+        ffffffff8cfe3aaa __netif_receive_skb_core.constprop.0+0x6ca ([kernel.kallsyms])
+        ffffffff8cfe47dd __netif_receive_skb_list_core+0xed ([kernel.kallsyms])
+        ffffffff8cfe4e52 netif_receive_skb_list_internal+0x1d2 ([kernel.kallsyms])
+        ffffffff8cfe573c napi_complete_done+0x7c ([kernel.kallsyms])
+        ffffffff8d046c23 gro_cell_poll+0x83 ([kernel.kallsyms])
+        ffffffff8cfe586d __napi_poll+0x2d ([kernel.kallsyms])
+        ffffffff8cfe5f8d net_rx_action+0x20d ([kernel.kallsyms])
+        ffffffff8c35d252 handle_softirqs+0xe2 ([kernel.kallsyms])
+        ffffffff8c35d556 __irq_exit_rcu+0xd6 ([kernel.kallsyms])
+        ffffffff8c35d81e irq_exit_rcu+0xe ([kernel.kallsyms])
+        ffffffff8d2602b8 common_interrupt+0x98 ([kernel.kallsyms])
+        ffffffff8c000da7 asm_common_interrupt+0x27 ([kernel.kallsyms])
+        ffffffff8d2645c5 cpuidle_enter_state+0xd5 ([kernel.kallsyms])
+        ffffffff8cf6358e cpuidle_enter+0x2e ([kernel.kallsyms])
+        ffffffff8c3ba932 call_cpuidle+0x22 ([kernel.kallsyms])
+        ffffffff8c3bfb5e do_idle+0x1ce ([kernel.kallsyms])
+        ffffffff8c3bfd79 cpu_startup_entry+0x29 ([kernel.kallsyms])
+        ffffffff8c30a6c2 start_secondary+0x112 ([kernel.kallsyms])
+        ffffffff8c2c142d common_startup_64+0x13e ([kernel.kallsyms])
+
+Example transmit side:
+
+  swapper       0 [002]  3403.688687: net:net_dev_xmit: dev=enp10s0f0np0 skbaddr=0xffff8af31d104ae8 len=129556 rc=0
+        ffffffffa75e19c3 dev_hard_start_xmit+0x173 ([kernel.kallsyms])
+        ffffffffa75e19c3 dev_hard_start_xmit+0x173 ([kernel.kallsyms])
+        ffffffffa7653823 sch_direct_xmit+0x143 ([kernel.kallsyms])
+        ffffffffa75e2780 __dev_queue_xmit+0xc70 ([kernel.kallsyms])
+        ffffffffa76a1205 ip_finish_output2+0x265 ([kernel.kallsyms])
+        ffffffffa76a1577 __ip_finish_output+0x87 ([kernel.kallsyms])
+        ffffffffa76a165b ip_finish_output+0x2b ([kernel.kallsyms])
+        ffffffffa76a179e ip_output+0x5e ([kernel.kallsyms])
+        ffffffffa76a19d5 ip_local_out+0x35 ([kernel.kallsyms])
+        ffffffffa770d0e5 iptunnel_xmit+0x185 ([kernel.kallsyms])
+        ffffffffc179634e nf_nat_used_tuple_new.cold+0x1129 ([kernel.kallsyms])
+        ffffffffc179d3e0 geneve_xmit+0x920 ([kernel.kallsyms])
+        ffffffffa75e18af dev_hard_start_xmit+0x5f ([kernel.kallsyms])
+        ffffffffa75e1d3f __dev_queue_xmit+0x22f ([kernel.kallsyms])
+        ffffffffa76a1205 ip_finish_output2+0x265 ([kernel.kallsyms])
+        ffffffffa76a1577 __ip_finish_output+0x87 ([kernel.kallsyms])
+        ffffffffa76a165b ip_finish_output+0x2b ([kernel.kallsyms])
+        ffffffffa76a179e ip_output+0x5e ([kernel.kallsyms])
+        ffffffffa76a1de2 __ip_queue_xmit+0x1b2 ([kernel.kallsyms])
+        ffffffffa76a2135 ip_queue_xmit+0x15 ([kernel.kallsyms])
+        ffffffffa76c70a2 __tcp_transmit_skb+0x522 ([kernel.kallsyms])
+        ffffffffa76c931a tcp_write_xmit+0x65a ([kernel.kallsyms])
+        ffffffffa76ca3b9 __tcp_push_pending_frames+0x39 ([kernel.kallsyms])
+        ffffffffa76c1fb6 tcp_rcv_established+0x276 ([kernel.kallsyms])
+        ffffffffa76d3957 tcp_v4_do_rcv+0x157 ([kernel.kallsyms])
+        ffffffffa76d6053 tcp_v4_rcv+0x1243 ([kernel.kallsyms])
+        ffffffffa769b8ea ip_protocol_deliver_rcu+0x2a ([kernel.kallsyms])
+        ffffffffa769bab7 ip_local_deliver_finish+0x77 ([kernel.kallsyms])
+        ffffffffa769bb4d ip_local_deliver+0x6d ([kernel.kallsyms])
+        ffffffffa769abe7 ip_sublist_rcv_finish+0x37 ([kernel.kallsyms])
+        ffffffffa769b713 ip_sublist_rcv+0x173 ([kernel.kallsyms])
+        ffffffffa769bde2 ip_list_rcv+0x102 ([kernel.kallsyms])
+        ffffffffa75e4868 __netif_receive_skb_list_core+0x178 ([kernel.kallsyms])
+        ffffffffa75e4e52 netif_receive_skb_list_internal+0x1d2 ([kernel.kallsyms])
+        ffffffffa75e573c napi_complete_done+0x7c ([kernel.kallsyms])
+        ffffffffa7646c23 gro_cell_poll+0x83 ([kernel.kallsyms])
+        ffffffffa75e586d __napi_poll+0x2d ([kernel.kallsyms])
+        ffffffffa75e5f8d net_rx_action+0x20d ([kernel.kallsyms])
+        ffffffffa695d252 handle_softirqs+0xe2 ([kernel.kallsyms])
+        ffffffffa695d556 __irq_exit_rcu+0xd6 ([kernel.kallsyms])
+        ffffffffa695d81e irq_exit_rcu+0xe ([kernel.kallsyms])
+        ffffffffa78602b8 common_interrupt+0x98 ([kernel.kallsyms])
+        ffffffffa6600da7 asm_common_interrupt+0x27 ([kernel.kallsyms])
+        ffffffffa78645c5 cpuidle_enter_state+0xd5 ([kernel.kallsyms])
+        ffffffffa756358e cpuidle_enter+0x2e ([kernel.kallsyms])
+        ffffffffa69ba932 call_cpuidle+0x22 ([kernel.kallsyms])
+        ffffffffa69bfb5e do_idle+0x1ce ([kernel.kallsyms])
+        ffffffffa69bfd79 cpu_startup_entry+0x29 ([kernel.kallsyms])
+        ffffffffa690a6c2 start_secondary+0x112 ([kernel.kallsyms])
+        ffffffffa68c142d common_startup_64+0x13e ([kernel.kallsyms])
+
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Co-developed-by: Alice Mikityanska <alice@isovalent.com>
+Signed-off-by: Alice Mikityanska <alice@isovalent.com>
+Cc: Nikolay Aleksandrov <razor@blackwall.org>
+Reviewed-by: Willem de Bruijn <willemb@google.com>
+Link: https://patch.msgid.link/20260710134242.216538-9-alice.kernel@fastmail.im
+Reviewed-by: Nikolay Aleksandrov <razor@blackwall.org>
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/geneve.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/net/geneve.c b/drivers/net/geneve.c
+index 011bf9d833ca..a1639ad53077 100644
+--- a/drivers/net/geneve.c
++++ b/drivers/net/geneve.c
+@@ -1745,6 +1745,8 @@ static void geneve_setup(struct net_device *dev)
+ 	dev->max_mtu = IP_MAX_MTU - GENEVE_BASE_HLEN - dev->hard_header_len;
+ 
+ 	netif_keep_dst(dev);
++	netif_set_tso_max_size(dev, GSO_MAX_SIZE);
++
+ 	dev->priv_flags &= ~IFF_TX_SKB_SHARING;
+ 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE | IFF_NO_QUEUE;
+ 	dev->lltx = true;
+-- 
+2.55.0
+

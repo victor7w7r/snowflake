@@ -1,0 +1,56 @@
+From 0108f362e410693f056da2569f8adf2c9705393d Mon Sep 17 00:00:00 2001
+From: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Date: Wed, 1 Jul 2026 12:58:33 +0200
+Subject: [PATCH 01984/15333] dt-bindings: sram: qcom,imem: Narrow allowed
+ reboot modes
+
+Only few Qualcomm IMEM devices actually provide interface for setting
+reboot modes, but top-level schema allows "reboot-mode" child for
+everyone.  Narrow this to specific compatibles.
+
+syscon-reboot-mode schema allows arbitrary "mode-.* properties but only
+a subset actually makes sense and is valid.  Provide negative look-ahead
+pattern to disallow any modes not supported by the device, which
+tightens the binding even more.
+
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260701105832.197036-2-krzysztof.kozlowski@oss.qualcomm.com
+Signed-off-by: Rob Herring (Arm) <robh@kernel.org>
+---
+ .../devicetree/bindings/sram/qcom,imem.yaml   | 20 +++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/sram/qcom,imem.yaml b/Documentation/devicetree/bindings/sram/qcom,imem.yaml
+index c63026904061..eaa8ef367ff4 100644
+--- a/Documentation/devicetree/bindings/sram/qcom,imem.yaml
++++ b/Documentation/devicetree/bindings/sram/qcom,imem.yaml
+@@ -89,6 +89,26 @@ required:
+   - compatible
+   - reg
+ 
++allOf:
++  - if:
++      properties:
++        compatible:
++          contains:
++            enum:
++              - qcom,apq8064-imem
++              - qcom,msm8226-imem
++              - qcom,msm8974-imem
++    then:
++      properties:
++        reboot-mode:
++          patternProperties:
++            # Negative look-ahead to disallow unsupported modes. The '$' has to be
++            # part of lookahead group to work, instead of trailing outside of ().
++            "^mode-(?!(bootloader$|normal$|recovery$))": false
++    else:
++      properties:
++        reboot-mode: false
++
+ additionalProperties: false
+ 
+ examples:
+-- 
+2.55.0
+

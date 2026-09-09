@@ -1,0 +1,62 @@
+From de0dab22cbf6943d0f12f3b1e2eb1bbdd807f039 Mon Sep 17 00:00:00 2001
+From: Jean-Michel Hautbois <jeanmichel.hautbois@yoseli.org>
+Date: Wed, 17 Jun 2026 21:17:16 +0200
+Subject: [PATCH 13122/15333] m68k: coldfire/5441x: register mcf-rcm-reset
+ platform device
+
+Add SoC-level registration of the mcf-rcm-reset platform device so the
+power_on_reason sysfs attribute is created on every MCF5441x board
+without per-board boilerplate.
+
+Signed-off-by: Jean-Michel Hautbois <jeanmichel.hautbois@yoseli.org>
+Signed-off-by: Greg Ungerer <gerg@linux-m68k.org>
+---
+ arch/m68k/coldfire/m5441x.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/arch/m68k/coldfire/m5441x.c b/arch/m68k/coldfire/m5441x.c
+index 5b5e09ecf487..ad3d0021578f 100644
+--- a/arch/m68k/coldfire/m5441x.c
++++ b/arch/m68k/coldfire/m5441x.c
+@@ -11,6 +11,7 @@
+ #include <linux/init.h>
+ #include <linux/io.h>
+ #include <linux/clk.h>
++#include <linux/platform_device.h>
+ #include <asm/machdep.h>
+ #include <asm/coldfire.h>
+ #include <asm/mcfsim.h>
+@@ -242,6 +243,30 @@ static void __init m5441x_fec_init(void)
+ 	mcf_write8(0x03, MCFGPIO_PAR_FEC);
+ }
+ 
++/*
++ * Reset Controller Module status register. Exposed to userspace as
++ * /sys/devices/platform/mcf-rcm-reset/power_on_reason by the mcf-rcm-reset
++ * driver (drivers/power/reset/mcf-rcm-reset.c).
++ */
++static struct resource m5441x_rcm_resource[] = {
++	{
++		.start	= MCF_RSR,
++		.end	= MCF_RSR,
++		.flags	= IORESOURCE_MEM,
++	},
++};
++
++static int __init m5441x_rcm_init(void)
++{
++	struct platform_device *pdev;
++
++	pdev = platform_device_register_simple("mcf-rcm-reset", -1,
++					       m5441x_rcm_resource,
++					       ARRAY_SIZE(m5441x_rcm_resource));
++	return PTR_ERR_OR_ZERO(pdev);
++}
++arch_initcall(m5441x_rcm_init);
++
+ void __init config_BSP(char *commandp, int size)
+ {
+ 	m5441x_clk_init();
+-- 
+2.55.0
+

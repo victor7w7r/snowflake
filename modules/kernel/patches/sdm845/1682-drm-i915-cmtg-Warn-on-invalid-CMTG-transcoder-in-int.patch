@@ -1,0 +1,43 @@
+From c2408fda34d67b99a72727a5e9a128a379e28557 Mon Sep 17 00:00:00 2001
+From: Animesh Manna <animesh.manna@intel.com>
+Date: Mon, 29 Jun 2026 23:32:36 +0530
+Subject: [PATCH 01682/15333] drm/i915/cmtg: Warn on invalid CMTG transcoder in
+ intel_cmtg_disable()
+
+intel_cmtg_disable() indexes the per-transcoder register array using the
+CMTG transcoder returned by to_cmtg_transcoder(), which is only valid for
+TRANSCODER_A/B. The callers are now gated by intel_cmtg_is_allowed(), so
+reaching this function with an invalid CMTG transcoder should never
+happen.
+
+Add a drm_WARN_ON() that bails out early in that case, both to document
+the invariant and to guard against the out-of-bounds register access
+(trans_offsets[-1]) should a future caller get it wrong.
+
+v2:
+- Add an in-function INVALID_TRANSCODER drm_WARN_ON check. (Suraj)
+
+Signed-off-by: Animesh Manna <animesh.manna@intel.com>
+Reviewed-by: Suraj Kandpal <suraj.kandpal@intel.com>
+Link: https://patch.msgid.link/20260629180236.1353704-3-animesh.manna@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_cmtg.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_cmtg.c b/drivers/gpu/drm/i915/display/intel_cmtg.c
+index 6da28c185080..c8e0f90af910 100644
+--- a/drivers/gpu/drm/i915/display/intel_cmtg.c
++++ b/drivers/gpu/drm/i915/display/intel_cmtg.c
+@@ -183,6 +183,9 @@ void intel_cmtg_disable(const struct intel_crtc_state *crtc_state)
+ 	if (!crtc->cmtg.enabled)
+ 		return;
+ 
++	if (drm_WARN_ON(display->drm, cmtg_transcoder == INVALID_TRANSCODER))
++		return;
++
+ 	crtc->cmtg.enabled = false;
+ 	intel_de_rmw(display, TRANS_VRR_CTL(display, cmtg_transcoder),
+ 		     VRR_CTL_VRR_ENABLE | VRR_CTL_FLIP_LINE_EN, 0);
+-- 
+2.55.0
+

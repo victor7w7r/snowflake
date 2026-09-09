@@ -1,0 +1,42 @@
+From 8afb928301700aedc9a19e9f42a0be55ee03234a Mon Sep 17 00:00:00 2001
+From: Daniel Baluta <daniel.baluta@nxp.com>
+Date: Mon, 17 Aug 2026 15:35:39 +0300
+Subject: [PATCH 14688/15333] media: iris: Guard the QCOM_UBWC_CONFIG select
+ with QCOM_SMEM
+
+QCOM_UBWC_CONFIG is about to depend on QCOM_SMEM. Guard the
+VIDEO_QCOM_IRIS select with 'if ARCH_QCOM && QCOM_SMEM', and add
+'depends on QCOM_SMEM || QCOM_SMEM=n' so a built-in driver is never
+selected against a missing or modular SMEM.
+
+Fixes: c43207553867 ("media: iris: retrieve UBWC platform configuration")
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Daniel Baluta <daniel.baluta@nxp.com>
+Tested-by: Nathan Chancellor <nathan@kernel.org> # build
+Reviewed-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Signed-off-by: Arnd Bergmann <arnd@arndb.de>
+---
+ drivers/media/platform/qcom/iris/Kconfig | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/qcom/iris/Kconfig b/drivers/media/platform/qcom/iris/Kconfig
+index 388c9bbc8136..0996213e71e7 100644
+--- a/drivers/media/platform/qcom/iris/Kconfig
++++ b/drivers/media/platform/qcom/iris/Kconfig
+@@ -2,11 +2,12 @@ config VIDEO_QCOM_IRIS
+ 	tristate "Qualcomm iris V4L2 decoder driver"
+ 	depends on VIDEO_DEV
+ 	depends on ARCH_QCOM || COMPILE_TEST
++	depends on QCOM_SMEM || QCOM_SMEM=n
+ 	select V4L2_MEM2MEM_DEV
+ 	select QCOM_MDT_LOADER
+ 	select QCOM_SCM
+ 	select QCOM_PAS
+-	select QCOM_UBWC_CONFIG
++	select QCOM_UBWC_CONFIG if ARCH_QCOM && QCOM_SMEM
+ 	select VIDEOBUF2_DMA_CONTIG
+ 	help
+ 	  This is a V4L2 driver for Qualcomm iris video accelerator
+-- 
+2.55.0
+

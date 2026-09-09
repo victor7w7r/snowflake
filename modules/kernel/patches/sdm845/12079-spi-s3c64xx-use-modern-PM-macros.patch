@@ -1,0 +1,70 @@
+From 1c892a2f00a74c69d4e3b6fdf4ae4aa4eee48f1a Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:53 +0800
+Subject: [PATCH 12079/15333] spi: s3c64xx: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use #ifdef guards.
+
+This has the advantage of always compiling these functions in,
+independently of any Kconfig option. Thanks to that, bugs and other
+regressions are subsequently easier to catch.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-30-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-s3c64xx.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/spi/spi-s3c64xx.c b/drivers/spi/spi-s3c64xx.c
+index 28c56b06fa99..8d4120cf9df1 100644
+--- a/drivers/spi/spi-s3c64xx.c
++++ b/drivers/spi/spi-s3c64xx.c
+@@ -1408,7 +1408,6 @@ static void s3c64xx_spi_remove(struct platform_device *pdev)
+ 	pm_runtime_set_suspended(&pdev->dev);
+ }
+ 
+-#ifdef CONFIG_PM_SLEEP
+ static int s3c64xx_spi_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+@@ -1444,9 +1443,7 @@ static int s3c64xx_spi_resume(struct device *dev)
+ 
+ 	return spi_controller_resume(host);
+ }
+-#endif /* CONFIG_PM_SLEEP */
+ 
+-#ifdef CONFIG_PM
+ static int s3c64xx_spi_runtime_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+@@ -1494,12 +1491,11 @@ static int s3c64xx_spi_runtime_resume(struct device *dev)
+ 
+ 	return ret;
+ }
+-#endif /* CONFIG_PM */
+ 
+ static const struct dev_pm_ops s3c64xx_spi_pm = {
+-	SET_SYSTEM_SLEEP_PM_OPS(s3c64xx_spi_suspend, s3c64xx_spi_resume)
+-	SET_RUNTIME_PM_OPS(s3c64xx_spi_runtime_suspend,
+-			   s3c64xx_spi_runtime_resume, NULL)
++	SYSTEM_SLEEP_PM_OPS(s3c64xx_spi_suspend, s3c64xx_spi_resume)
++	RUNTIME_PM_OPS(s3c64xx_spi_runtime_suspend,
++		       s3c64xx_spi_runtime_resume, NULL)
+ };
+ 
+ static const struct s3c64xx_spi_port_config s3c6410_spi_port_config = {
+@@ -1655,7 +1651,7 @@ MODULE_DEVICE_TABLE(of, s3c64xx_spi_dt_match);
+ static struct platform_driver s3c64xx_spi_driver = {
+ 	.driver = {
+ 		.name	= "s3c64xx-spi",
+-		.pm = &s3c64xx_spi_pm,
++		.pm = pm_ptr(&s3c64xx_spi_pm),
+ 		.of_match_table = of_match_ptr(s3c64xx_spi_dt_match),
+ 	},
+ 	.probe = s3c64xx_spi_probe,
+-- 
+2.55.0
+

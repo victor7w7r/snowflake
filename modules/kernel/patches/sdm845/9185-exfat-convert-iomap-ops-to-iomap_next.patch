@@ -1,0 +1,52 @@
+From d14541b3d8acbf0587e502c9dbad649f84598094 Mon Sep 17 00:00:00 2001
+From: Joanne Koong <joannelkoong@gmail.com>
+Date: Wed, 29 Jul 2026 12:27:34 -0700
+Subject: [PATCH 09185/15333] exfat: convert iomap ops to ->iomap_next()
+
+Convert exfat iomap_ops to the new ->iomap_next() callback. Each
+callback is generated with the DEFINE_IOMAP_ITER_NEXT() and
+DEFINE_IOMAP_ITER_NEXT_END() macros, which wrap the iomap_iter_next()
+helper to finish the previous mapping if needed and produce the next
+one. No functional changes are intended.
+
+Acked-by: Namjae Jeon <linkinjeon@kernel.org>
+Signed-off-by: Joanne Koong <joannelkoong@gmail.com>
+Link: https://patch.msgid.link/20260729192737.3190206-20-joannelkoong@gmail.com
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/exfat/iomap.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/fs/exfat/iomap.c b/fs/exfat/iomap.c
+index 1aac38e63fe6..b6dd396aa60a 100644
+--- a/fs/exfat/iomap.c
++++ b/fs/exfat/iomap.c
+@@ -151,8 +151,10 @@ static int exfat_write_iomap_begin(struct inode *inode, loff_t offset, loff_t le
+ 	return __exfat_iomap_begin(inode, offset, length, flags, iomap, true);
+ }
+ 
++static DEFINE_IOMAP_ITER_NEXT(exfat_iomap_next, exfat_iomap_begin);
++
+ const struct iomap_ops exfat_iomap_ops = {
+-	.iomap_begin = exfat_iomap_begin,
++	.iomap_next = exfat_iomap_next,
+ };
+ 
+ /*
+@@ -186,9 +188,11 @@ static int exfat_write_iomap_end(struct inode *inode, loff_t pos, loff_t length,
+ 	return written;
+ }
+ 
++static DEFINE_IOMAP_ITER_NEXT_END(exfat_write_iomap_next,
++		exfat_write_iomap_begin, exfat_write_iomap_end);
++
+ const struct iomap_ops exfat_write_iomap_ops = {
+-	.iomap_begin	= exfat_write_iomap_begin,
+-	.iomap_end	= exfat_write_iomap_end,
++	.iomap_next	= exfat_write_iomap_next,
+ };
+ 
+ /*
+-- 
+2.55.0
+

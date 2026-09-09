@@ -1,0 +1,167 @@
+From bb38d4571964ccc223892e9600e7d9a5cbf43414 Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Tue, 30 Jun 2026 21:27:09 -0700
+Subject: [PATCH 07253/15333] fs/resctrl: Communicate resource group deleted
+ error via last_cmd_status
+
+User space expects last_cmd_status to contain additional information if any
+resctrl command fails.
+
+A resctrl command may be blocked on the rdtgroup_mutex waiting for another
+command to finish and find that once the mutex is available that the resource
+group has since been deleted.
+
+In this scenario the command will fail while last_cmd_status contains either
+"ok" if the last_cmd_status buffer is empty or an outdated error from
+a previous command failure if last_cmd_status buffer has content.
+
+Include clearing of last_cmd_status buffer as part of rdtgroup_kn_lock_live()
+that is used to obtain access and needed locking to a resource group before
+attempting a command on the group.
+
+With the last_cmd_status buffer ready, provide an appropriate message to user
+space if the resource group has been deleted.
+
+No last_cmd_status treatment is needed for the remaining failure of
+rdtgroup_kn_lock_live() encountering a non-existent resource group since that
+could only occur during an attempt to obtain a resource group lock on a file
+in info/ which is an invalid usage.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Tested-by: Babu Moger <babu.moger@amd.com>
+Link: https://patch.msgid.link/9982141ec6f3ec18e0c53d7feabb19651583cf0e.1782857711.git.reinette.chatre@intel.com
+---
+ fs/resctrl/ctrlmondata.c |  3 ---
+ fs/resctrl/monitor.c     |  2 --
+ fs/resctrl/rdtgroup.c    | 20 +++++++++++---------
+ 3 files changed, 11 insertions(+), 14 deletions(-)
+
+diff --git a/fs/resctrl/ctrlmondata.c b/fs/resctrl/ctrlmondata.c
+index 8d5a8b1e659a..18ec9f564b5a 100644
+--- a/fs/resctrl/ctrlmondata.c
++++ b/fs/resctrl/ctrlmondata.c
+@@ -317,7 +317,6 @@ ssize_t rdtgroup_schemata_write(struct kernfs_open_file *of,
+ 		rdtgroup_kn_unlock(of->kn);
+ 		return -ENOENT;
+ 	}
+-	rdt_last_cmd_clear();
+ 
+ 	/* Valid input requires a trailing newline */
+ 	if (nbytes == 0 || buf[nbytes - 1] != '\n') {
+@@ -434,7 +433,6 @@ int rdtgroup_schemata_show(struct kernfs_open_file *of,
+ 			}
+ 		} else if (rdtgrp->mode == RDT_MODE_PSEUDO_LOCKED) {
+ 			if (!rdtgrp->plr->d) {
+-				rdt_last_cmd_clear();
+ 				rdt_last_cmd_puts("Cache domain offline\n");
+ 				ret = -ENODEV;
+ 			} else {
+@@ -475,7 +473,6 @@ ssize_t rdtgroup_mba_mbps_event_write(struct kernfs_open_file *of,
+ 		rdtgroup_kn_unlock(of->kn);
+ 		return -ENOENT;
+ 	}
+-	rdt_last_cmd_clear();
+ 
+ 	/* Valid input requires a trailing newline */
+ 	if (nbytes == 0 || buf[nbytes - 1] != '\n') {
+diff --git a/fs/resctrl/monitor.c b/fs/resctrl/monitor.c
+index b50da2b02594..73413cb128ea 100644
+--- a/fs/resctrl/monitor.c
++++ b/fs/resctrl/monitor.c
+@@ -1696,7 +1696,6 @@ int mbm_L3_assignments_show(struct kernfs_open_file *of, struct seq_file *s, voi
+ 		goto out_unlock;
+ 	}
+ 
+-	rdt_last_cmd_clear();
+ 	if (!resctrl_arch_mbm_cntr_assign_enabled(r)) {
+ 		rdt_last_cmd_puts("mbm_event counter assignment mode is not enabled\n");
+ 		ret = -EINVAL;
+@@ -1836,7 +1835,6 @@ ssize_t mbm_L3_assignments_write(struct kernfs_open_file *of, char *buf,
+ 		rdtgroup_kn_unlock(of->kn);
+ 		return -ENOENT;
+ 	}
+-	rdt_last_cmd_clear();
+ 
+ 	/* Valid input requires a trailing newline */
+ 	if (nbytes == 0 || buf[nbytes - 1] != '\n') {
+diff --git a/fs/resctrl/rdtgroup.c b/fs/resctrl/rdtgroup.c
+index 72347d11f0da..08d58c4e9acb 100644
+--- a/fs/resctrl/rdtgroup.c
++++ b/fs/resctrl/rdtgroup.c
+@@ -359,7 +359,6 @@ static int rdtgroup_cpus_show(struct kernfs_open_file *of,
+ 	if (rdtgrp) {
+ 		if (rdtgrp->mode == RDT_MODE_PSEUDO_LOCKED) {
+ 			if (!rdtgrp->plr->d) {
+-				rdt_last_cmd_clear();
+ 				rdt_last_cmd_puts("Cache domain offline\n");
+ 				ret = -ENODEV;
+ 			} else {
+@@ -522,8 +521,6 @@ static ssize_t rdtgroup_cpus_write(struct kernfs_open_file *of,
+ 		goto out_unlock;
+ 	}
+ 
+-	rdt_last_cmd_clear();
+-
+ 	if (!buf) {
+ 		rdt_last_cmd_printf("%s: Invalid input\n",
+ 				    is_cpu_list(of) ? "cpus_list" : "cpus");
+@@ -788,7 +785,6 @@ static ssize_t rdtgroup_tasks_write(struct kernfs_open_file *of,
+ 		rdtgroup_kn_unlock(of->kn);
+ 		return -ENOENT;
+ 	}
+-	rdt_last_cmd_clear();
+ 
+ 	if (rdtgrp->mode == RDT_MODE_PSEUDO_LOCKED ||
+ 	    rdtgrp->mode == RDT_MODE_PSEUDO_LOCKSETUP) {
+@@ -1529,7 +1525,6 @@ static ssize_t rdtgroup_mode_write(struct kernfs_open_file *of,
+ 		return -ENOENT;
+ 	}
+ 
+-	rdt_last_cmd_clear();
+ 	/* Valid input requires a trailing newline */
+ 	if (nbytes == 0 || buf[nbytes - 1] != '\n') {
+ 		rdt_last_cmd_puts("mode: Invalid input\n");
+@@ -1666,7 +1661,6 @@ static int rdtgroup_size_show(struct kernfs_open_file *of,
+ 
+ 	if (rdtgrp->mode == RDT_MODE_PSEUDO_LOCKED) {
+ 		if (!rdtgrp->plr->d) {
+-			rdt_last_cmd_clear();
+ 			rdt_last_cmd_puts("Cache domain offline\n");
+ 			ret = -ENODEV;
+ 		} else {
+@@ -2726,10 +2720,20 @@ struct rdtgroup *rdtgroup_kn_lock_live(struct kernfs_node *kn)
+ 
+ 	cpus_read_lock();
+ 	mutex_lock(&rdtgroup_mutex);
++	rdt_last_cmd_clear();
+ 
+ 	/* Was this group deleted while we waited? */
+-	if (rdtgrp->flags & RDT_DELETED)
++	if (rdtgrp->flags & RDT_DELETED) {
++		/*
++		 * It is safe to dereference kn to obtain the resource group's
++		 * name because one extra reference to kn is obtained
++		 * during resource group creation that will be released by
++		 * rdtgroup_remove() called by rdtgroup_kn_put().
++		 */
++		rdt_last_cmd_printf("Resource group %s deleted. No commands possible.\n",
++				    rdt_kn_name(rdtgrp->kn));
+ 		return NULL;
++	}
+ 
+ 	return rdtgrp;
+ }
+@@ -3943,8 +3947,6 @@ static int mkdir_rdt_prepare(struct kernfs_node *parent_kn,
+ 		goto out_unlock;
+ 	}
+ 
+-	rdt_last_cmd_clear();
+-
+ 	/*
+ 	 * Check that the parent directory for a monitor group is a "mon_groups"
+ 	 * directory.
+-- 
+2.55.0
+

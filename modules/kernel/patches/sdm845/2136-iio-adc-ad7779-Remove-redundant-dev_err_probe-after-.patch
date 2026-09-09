@@ -1,0 +1,35 @@
+From 220c2ad6f3ac4b32654404965991617c1cfe7861 Mon Sep 17 00:00:00 2001
+From: Moksh Panicker <mokshpanicker.7@gmail.com>
+Date: Thu, 2 Jul 2026 11:46:49 +0000
+Subject: [PATCH 02136/15333] iio: adc: ad7779: Remove redundant
+ dev_err_probe() after devm_request_irq()
+
+devm_request_irq() already prints an error message on failure via the
+IRQ core, so wrapping its return value in dev_err_probe() results in a
+duplicate error message. Return the error directly instead.
+
+Suggested-by: Joshua Crofts <joshua.crofts1@gmail.com>
+Signed-off-by: Moksh Panicker <mokshpanicker.7@gmail.com>
+Reviewed-by: Joshua Crofts <joshua.crofts1@gmail.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/adc/ad7779.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/iio/adc/ad7779.c b/drivers/iio/adc/ad7779.c
+index 5e2e1c31748b..87e0139c0f13 100644
+--- a/drivers/iio/adc/ad7779.c
++++ b/drivers/iio/adc/ad7779.c
+@@ -842,8 +842,7 @@ static int ad7779_setup_without_backend(struct ad7779_state *st, struct iio_dev
+ 			       IRQF_NO_THREAD | IRQF_NO_AUTOEN, indio_dev->name,
+ 			       st->trig);
+ 	if (ret)
+-		return dev_err_probe(dev, ret, "request IRQ %d failed\n",
+-				     st->spi->irq);
++		return ret;
+ 
+ 	ret = devm_iio_trigger_register(dev, st->trig);
+ 	if (ret)
+-- 
+2.55.0
+

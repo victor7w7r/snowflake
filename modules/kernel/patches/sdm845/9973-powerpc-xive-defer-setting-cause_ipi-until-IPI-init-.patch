@@ -1,0 +1,60 @@
+From 37d401c9c4b89c3c193726e177493ef06c657f40 Mon Sep 17 00:00:00 2001
+From: Gou Hao <gouhao@uniontech.com>
+Date: Mon, 27 Jul 2026 18:42:14 +0800
+Subject: [PATCH 09973/15333] powerpc/xive: defer setting cause_ipi until IPI
+ init succeeds
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+xive_smp_probe() currently assigns smp_ops->cause_ipi = xive_cause_ipi
+before calling xive_init_ipis() and xive_setup_cpu_ipi().  If either
+call fails, the platform probe handler returns early but cause_ipi
+remains pointing to xive_cause_ipi -- which accesses per-cpu IPI data
+(xc->ipi_data) that was never properly initialized, leading to
+a WARN and a crash.
+
+Move the cause_ipi assignment to after both calls succeed, so that
+smp_ops->cause_ipi is only set when the IPI subsystem is fully
+initialized.
+
+Signed-off-by: Gou Hao <gouhao@uniontech.com>
+Suggested-by: Cédric Le Goater <clg@kaod.org>
+Reviewed-by: jiazhenyuan <jiazhenyuan@uniontech.com>
+Reviewed-by: Cédric Le Goater <clg@kaod.org>
+Signed-off-by: Madhavan Srinivasan <maddy@linux.ibm.com>
+Link: https://patch.msgid.link/20260727104215.184786-5-gouhao@uniontech.com
+---
+ arch/powerpc/sysdev/xive/common.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/arch/powerpc/sysdev/xive/common.c b/arch/powerpc/sysdev/xive/common.c
+index bbe7c85274ea..8ae088632337 100644
+--- a/arch/powerpc/sysdev/xive/common.c
++++ b/arch/powerpc/sysdev/xive/common.c
+@@ -1269,15 +1269,19 @@ int __init xive_smp_probe(void)
+ {
+ 	int ret;
+ 
+-	smp_ops->cause_ipi = xive_cause_ipi;
+-
+ 	/* Register the IPI */
+ 	ret = xive_init_ipis();
+ 	if (ret < 0)
+ 		return ret;
+ 
+ 	/* Allocate and setup IPI for the boot CPU */
+-	return xive_setup_cpu_ipi(smp_processor_id());
++	ret = xive_setup_cpu_ipi(smp_processor_id());
++	if (ret < 0)
++		return ret;
++
++	smp_ops->cause_ipi = xive_cause_ipi;
++
++	return 0;
+ }
+ 
+ #endif /* CONFIG_SMP */
+-- 
+2.55.0
+

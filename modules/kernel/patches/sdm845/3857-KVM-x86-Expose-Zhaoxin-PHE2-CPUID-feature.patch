@@ -1,0 +1,64 @@
+From 54db9aaacc2af382fbceab7e83d45391c58240e3 Mon Sep 17 00:00:00 2001
+From: Ewan Hai-oc <ewanhai-oc@zhaoxin.com>
+Date: Wed, 10 Jun 2026 10:35:11 +0800
+Subject: [PATCH 03857/15333] KVM: x86: Expose Zhaoxin PHE2 CPUID feature
+
+Advertise the Zhaoxin PadLock Hash Engine v2 to guests via CPUID
+0xC0000001 EDX bits 25 (PHE2) and 26 (PHE2_EN). PHE2 extends the
+PadLock hash family with SHA-384 and SHA-512 support per FIPS 180-3,
+complementing the existing PHE feature (SHA-1 and SHA-256).
+
+Two unprivileged instructions are exposed, documented in the Zhaoxin
+PadLock Instruction Reference, chapter 3 ("Hash Engine"):
+
+  - REP XSHA384 (encoding F3 0F A6 D8, subsection 3.3)
+  - REP XSHA512 (encoding F3 0F A6 E0, subsection 3.4)
+
+Both consume software-padded 128-byte blocks (RCX = block count, RSI =
+input, RDI = state) and produce hash output in the state buffer.
+
+Both instructions are unprivileged (no CPL restriction) and available
+in all CPU modes, with no associated MSR control. The PHE2 and PHE2_EN
+bits are redundant by hardware design (set or cleared together) and
+both serve purely as CPUID-level feature-presence reporting flags
+requiring no KVM emulation. Both bits are advertised because different
+software may probe either one when checking for PHE2 availability.
+
+Reviewed-by: Binbin Wu <binbin.wu@linux.intel.com>
+Signed-off-by: Ewan Hai <ewanhai-oc@zhaoxin.com>
+Link: https://patch.msgid.link/20260610023512.3690734-5-ewanhai-oc@zhaoxin.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/include/asm/cpufeatures.h | 2 ++
+ arch/x86/kvm/cpuid.c               | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
+index 55bf3510884a..baf6d13fe705 100644
+--- a/arch/x86/include/asm/cpufeatures.h
++++ b/arch/x86/include/asm/cpufeatures.h
+@@ -152,6 +152,8 @@
+ #define X86_FEATURE_PMM_EN		( 5*32+13) /* "pmm_en" PMM enabled */
+ #define X86_FEATURE_RNG2		( 5*32+22) /* "rng2" RNG v2 */
+ #define X86_FEATURE_RNG2_EN		( 5*32+23) /* "rng2_en" RNG2 enabled */
++#define X86_FEATURE_PHE2		( 5*32+25) /* "phe2" PadLock Hash Engine v2 */
++#define X86_FEATURE_PHE2_EN		( 5*32+26) /* "phe2_en" PHE2 enabled */
+ 
+ /* More extended AMD flags: CPUID level 0x80000001, ECX, word 6 */
+ #define X86_FEATURE_LAHF_LM		( 6*32+ 0) /* "lahf_lm" LAHF/SAHF in long mode */
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c
+index 37aa3e64e40b..9313262bafc0 100644
+--- a/arch/x86/kvm/cpuid.c
++++ b/arch/x86/kvm/cpuid.c
+@@ -1289,6 +1289,8 @@ void kvm_initialize_cpu_caps(void)
+ 		F(PMM_EN),
+ 		F(RNG2),
+ 		F(RNG2_EN),
++		F(PHE2),
++		F(PHE2_EN),
+ 	);
+ 
+ 	/*
+-- 
+2.55.0
+

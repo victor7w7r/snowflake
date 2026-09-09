@@ -1,0 +1,44 @@
+From 0d2d656dfeb6d143bdfd42c6e16bb3e27f847186 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Micha=C5=82=20Miros=C5=82aw?= <mirq-linux@rere.qmqm.pl>
+Date: Thu, 2 Jul 2026 18:24:40 +0200
+Subject: [PATCH 04824/15333] drm/amd/pm/smu7: return error on message send
+ failure
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Michał Mirosław <mirq-linux@rere.qmqm.pl>
+Reviewed-by: George Zhang <george.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/pm/powerplay/smumgr/smu7_smumgr.c    | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/powerplay/smumgr/smu7_smumgr.c b/drivers/gpu/drm/amd/pm/powerplay/smumgr/smu7_smumgr.c
+index 2c190f599ff8..45504ac3a31d 100644
+--- a/drivers/gpu/drm/amd/pm/powerplay/smumgr/smu7_smumgr.c
++++ b/drivers/gpu/drm/amd/pm/powerplay/smumgr/smu7_smumgr.c
+@@ -141,12 +141,16 @@ int smu7_send_msg_to_smc(struct pp_hwmgr *hwmgr, uint16_t msg)
+ 
+ 	ret = PHM_READ_FIELD(hwmgr->device, SMC_RESP_0, SMC_RESP);
+ 
+-	if (ret == 0xFE)
++	switch (ret) {
++	case 1:
++		return 0;
++	case 0xFE:
+ 		dev_dbg(adev->dev, "SMU message %#x was not supported\n", msg);
+-	else if (ret != 1)
++		return -EOPNOTSUPP;
++	default:
+ 		dev_info(adev->dev, "SMU message %#x failed: response is %d\n", msg, ret);
+-
+-	return 0;
++		return ret != 0xFFFF ? -EIO : -ENXIO;
++	}
+ }
+ 
+ int smu7_send_msg_to_smc_with_parameter(struct pp_hwmgr *hwmgr, uint16_t msg, uint32_t parameter)
+-- 
+2.55.0
+

@@ -1,0 +1,67 @@
+From 4c2128c1a399318859d9eea0b74613d90f4bcb66 Mon Sep 17 00:00:00 2001
+From: Xingui Yang <yangxingui@huawei.com>
+Date: Tue, 11 Aug 2026 12:03:33 +0800
+Subject: [PATCH 13870/15333] scsi: libsas: Add sas_ex_phy_to_dev() helper
+
+Add sas_ex_phy_to_dev() to return any device type attached to an
+expander phy, and refactor sas_ex_to_ata() to use it.
+
+No functional changes intended.
+
+Signed-off-by: Xingui Yang <yangxingui@huawei.com>
+Reviewed-by: John Garry <john.g.garry@oracle.com>
+Link: https://patch.msgid.link/20260811040334.4184911-2-yangxingui@huawei.com
+Signed-off-by: Martin K. Petersen (Oracle) <mkp@kernel.org>
+---
+ drivers/scsi/libsas/sas_expander.c | 13 +++++++++----
+ drivers/scsi/libsas/sas_internal.h |  1 +
+ 2 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/scsi/libsas/sas_expander.c b/drivers/scsi/libsas/sas_expander.c
+index f471ab464a78..a5c5327cd0dd 100644
+--- a/drivers/scsi/libsas/sas_expander.c
++++ b/drivers/scsi/libsas/sas_expander.c
+@@ -345,11 +345,10 @@ static void sas_set_ex_phy(struct domain_device *dev, int phy_id,
+ 		 SAS_ADDR(phy->attached_sas_addr), type);
+ }
+ 
+-/* check if we have an existing attached ata device on this expander phy */
+-struct domain_device *sas_ex_to_ata(struct domain_device *ex_dev, int phy_id)
++/* Return the domain device attached to an expander phy */
++struct domain_device *sas_ex_phy_to_dev(struct domain_device *ex_dev, int phy_id)
+ {
+ 	struct ex_phy *ex_phy = &ex_dev->ex_dev.ex_phy[phy_id];
+-	struct domain_device *dev;
+ 	struct sas_rphy *rphy;
+ 
+ 	if (!ex_phy->port)
+@@ -359,7 +358,13 @@ struct domain_device *sas_ex_to_ata(struct domain_device *ex_dev, int phy_id)
+ 	if (!rphy)
+ 		return NULL;
+ 
+-	dev = sas_find_dev_by_rphy(rphy);
++	return sas_find_dev_by_rphy(rphy);
++}
++
++/* Check if we have an existing attached ata device on this expander phy */
++struct domain_device *sas_ex_to_ata(struct domain_device *ex_dev, int phy_id)
++{
++	struct domain_device *dev = sas_ex_phy_to_dev(ex_dev, phy_id);
+ 
+ 	if (dev && dev_is_sata(dev))
+ 		return dev;
+diff --git a/drivers/scsi/libsas/sas_internal.h b/drivers/scsi/libsas/sas_internal.h
+index 7dce0f587149..f5c75ab10dc4 100644
+--- a/drivers/scsi/libsas/sas_internal.h
++++ b/drivers/scsi/libsas/sas_internal.h
+@@ -91,6 +91,7 @@ int sas_smp_get_phy_events(struct sas_phy *phy);
+ 
+ void sas_device_set_phy(struct domain_device *dev, struct sas_port *port);
+ struct domain_device *sas_find_dev_by_rphy(struct sas_rphy *rphy);
++struct domain_device *sas_ex_phy_to_dev(struct domain_device *ex_dev, int phy_id);
+ struct domain_device *sas_ex_to_ata(struct domain_device *ex_dev, int phy_id);
+ int sas_ex_phy_discover(struct domain_device *dev, int single);
+ int sas_get_report_phy_sata(struct domain_device *dev, int phy_id,
+-- 
+2.55.0
+

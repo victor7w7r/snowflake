@@ -1,0 +1,90 @@
+From 028d8df0a1e376c6a87409302d9b6131ea4374f6 Mon Sep 17 00:00:00 2001
+From: Will Deacon <will@kernel.org>
+Date: Thu, 13 Aug 2026 14:17:16 +0100
+Subject: [PATCH 14878/15333] KVM: arm64: Avoid mismatched accesses to 'struct
+ kvm_nvhe_init_params'
+
+When running with hVHE enabled, ___kvm_hyp_init() calls
+__kvm_init_el2_state() on the CPU initialisation path during onlining
+and resume from suspend.
+
+In order to avoid clobbering the link register across this call, it is
+stashed away in the 'tmp' member of 'struct kvm_nvhe_init_params',
+however this save/restore operation is performed with the stage-1 MMU
+disabled at EL2 and therefore gives rise to coherency problems because
+the field is not aligned or padded to the CWG. For example, a cacheable
+write to a physically-adjacent structure sharing the same cacheline
+could lead to an eviction and subsequent write-back, overwriting the
+saved LR while the incoming CPU is executing __kvm_init_el2_state().
+
+Save the lr in far_el2 and remove the 'tmp' member from
+'struct kvm_nvhe_init_params' altogether.
+
+Cc: Oliver Upton <oupton@kernel.org>
+Cc: Marc Zyngier <maz@kernel.org>
+Fixes: afa9b48f327c ("KVM: arm64: Shave a few bytes from the EL2 idmap code")
+Signed-off-by: Will Deacon <will@kernel.org>
+Reviewed-by: Marc Zyngier <maz@kernel.org>
+Link: https://patch.msgid.link/20260813131717.5885-1-will@kernel.org
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/include/asm/kvm_asm.h   |  1 -
+ arch/arm64/kernel/asm-offsets.c    |  1 -
+ arch/arm64/kvm/hyp/nvhe/hyp-init.S | 11 +++++++----
+ 3 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/arch/arm64/include/asm/kvm_asm.h b/arch/arm64/include/asm/kvm_asm.h
+index 043495f7fc78..dae9b1d34c8a 100644
+--- a/arch/arm64/include/asm/kvm_asm.h
++++ b/arch/arm64/include/asm/kvm_asm.h
+@@ -214,7 +214,6 @@ struct kvm_nvhe_init_params {
+ 	unsigned long hcr_el2;
+ 	unsigned long vttbr;
+ 	unsigned long vtcr;
+-	unsigned long tmp;
+ };
+ 
+ /*
+diff --git a/arch/arm64/kernel/asm-offsets.c b/arch/arm64/kernel/asm-offsets.c
+index b6367ff3a49c..9c853ed3ceab 100644
+--- a/arch/arm64/kernel/asm-offsets.c
++++ b/arch/arm64/kernel/asm-offsets.c
+@@ -124,7 +124,6 @@ int main(void)
+   DEFINE(NVHE_INIT_HCR_EL2,	offsetof(struct kvm_nvhe_init_params, hcr_el2));
+   DEFINE(NVHE_INIT_VTTBR,	offsetof(struct kvm_nvhe_init_params, vttbr));
+   DEFINE(NVHE_INIT_VTCR,	offsetof(struct kvm_nvhe_init_params, vtcr));
+-  DEFINE(NVHE_INIT_TMP,		offsetof(struct kvm_nvhe_init_params, tmp));
+ #endif
+ #ifdef CONFIG_CPU_PM
+   DEFINE(CPU_CTX_SP,		offsetof(struct cpu_suspend_ctx, sp));
+diff --git a/arch/arm64/kvm/hyp/nvhe/hyp-init.S b/arch/arm64/kvm/hyp/nvhe/hyp-init.S
+index 89cb553be1e5..0b3e0b28dfc7 100644
+--- a/arch/arm64/kvm/hyp/nvhe/hyp-init.S
++++ b/arch/arm64/kvm/hyp/nvhe/hyp-init.S
+@@ -106,16 +106,19 @@ SYM_CODE_START_LOCAL(___kvm_hyp_init)
+ 	and	x2, x1, x2
+ 	cbz	x2, 1f
+ 
+-	// hVHE: Replay the EL2 setup to account for the E2H bit
+-	// TPIDR_EL2 is used to preserve x0 across the macro maze...
++	/*
++	 * hVHE: Replay the EL2 setup to account for the E2H bit
++	 * TPIDR_EL2 and FAR_EL2 are used to preserve x0 and LR across
++	 * the macro maze...
++	 */
+ 	isb
+ 	msr	tpidr_el2, x0
+-	str	lr, [x0, #NVHE_INIT_TMP]
++	msr	far_el2, lr
+ 
+ 	bl	__kvm_init_el2_state
+ 
++	mrs	lr, far_el2
+ 	mrs	x0, tpidr_el2
+-	ldr	lr, [x0, #NVHE_INIT_TMP]
+ 
+ 1:
+ 	ldr	x1, [x0, #NVHE_INIT_TPIDR_EL2]
+-- 
+2.55.0
+

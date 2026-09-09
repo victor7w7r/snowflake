@@ -1,0 +1,51 @@
+From 058d979d4f418510279383e508ebc0795ab956f2 Mon Sep 17 00:00:00 2001
+From: Fabio Estevam <festevam@nabladev.com>
+Date: Fri, 24 Jul 2026 17:33:20 -0300
+Subject: [PATCH 07706/15333] wifi: mwifiex: Remove WQ_HIGHPRI from main
+ workqueue
+
+The MWIFIEX_WORK_QUEUE handles command and event processing, including
+the commands used for scheduled scans.
+
+Running this work on the high-priority worker pool can interfere with
+latency-sensitive workloads. On an i.MX8MP-based audio system using an
+88W8997, background scheduled scans caused audible glitches in USB
+audio playback.
+
+Remove WQ_HIGHPRI from the main workqueue so that command and scan
+processing use the normal-priority worker pool.
+
+Leave the RX and host MLME workqueues unchanged.
+
+Signed-off-by: Fabio Estevam <festevam@nabladev.com>
+Link: https://patch.msgid.link/20260724203320.78793-2-festevam@gmail.com
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ drivers/net/wireless/marvell/mwifiex/main.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/wireless/marvell/mwifiex/main.c b/drivers/net/wireless/marvell/mwifiex/main.c
+index a8eab6b1e63b..c8df3edff675 100644
+--- a/drivers/net/wireless/marvell/mwifiex/main.c
++++ b/drivers/net/wireless/marvell/mwifiex/main.c
+@@ -1550,7 +1550,7 @@ mwifiex_reinit_sw(struct mwifiex_adapter *adapter)
+ 
+ 	adapter->workqueue =
+ 		alloc_workqueue("MWIFIEX_WORK_QUEUE",
+-				WQ_HIGHPRI | WQ_MEM_RECLAIM | WQ_UNBOUND, 0);
++				WQ_MEM_RECLAIM | WQ_UNBOUND, 0);
+ 	if (!adapter->workqueue)
+ 		goto err_kmalloc;
+ 
+@@ -1716,7 +1716,7 @@ mwifiex_add_card(void *card, struct completion *fw_done,
+ 
+ 	adapter->workqueue =
+ 		alloc_workqueue("MWIFIEX_WORK_QUEUE",
+-				WQ_HIGHPRI | WQ_MEM_RECLAIM | WQ_UNBOUND, 0);
++				WQ_MEM_RECLAIM | WQ_UNBOUND, 0);
+ 	if (!adapter->workqueue)
+ 		goto err_kmalloc;
+ 
+-- 
+2.55.0
+

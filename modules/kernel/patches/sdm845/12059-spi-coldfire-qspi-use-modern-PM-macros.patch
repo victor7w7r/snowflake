@@ -1,0 +1,67 @@
+From 7975bfcf50dd90e36bb32996a14ffdeb2ca22208 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:33 +0800
+Subject: [PATCH 12059/15333] spi: coldfire-qspi: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use #ifdef guards.
+
+This has the advantage of always compiling these functions in,
+independently of any Kconfig option. Thanks to that, bugs and other
+regressions are subsequently easier to catch.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-10-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-coldfire-qspi.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/spi/spi-coldfire-qspi.c b/drivers/spi/spi-coldfire-qspi.c
+index 3b175c1da36b..3c8290e08b6d 100644
+--- a/drivers/spi/spi-coldfire-qspi.c
++++ b/drivers/spi/spi-coldfire-qspi.c
+@@ -437,7 +437,6 @@ static void mcfqspi_remove(struct platform_device *pdev)
+ 	mcfqspi_cs_teardown(mcfqspi);
+ }
+ 
+-#ifdef CONFIG_PM_SLEEP
+ static int mcfqspi_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+@@ -462,9 +461,7 @@ static int mcfqspi_resume(struct device *dev)
+ 
+ 	return spi_controller_resume(host);
+ }
+-#endif
+ 
+-#ifdef CONFIG_PM
+ static int mcfqspi_runtime_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+@@ -484,17 +481,16 @@ static int mcfqspi_runtime_resume(struct device *dev)
+ 
+ 	return 0;
+ }
+-#endif
+ 
+ static const struct dev_pm_ops mcfqspi_pm = {
+-	SET_SYSTEM_SLEEP_PM_OPS(mcfqspi_suspend, mcfqspi_resume)
+-	SET_RUNTIME_PM_OPS(mcfqspi_runtime_suspend, mcfqspi_runtime_resume,
+-			NULL)
++	SYSTEM_SLEEP_PM_OPS(mcfqspi_suspend, mcfqspi_resume)
++	RUNTIME_PM_OPS(mcfqspi_runtime_suspend, mcfqspi_runtime_resume,
++		       NULL)
+ };
+ 
+ static struct platform_driver mcfqspi_driver = {
+ 	.driver.name	= DRIVER_NAME,
+-	.driver.pm	= &mcfqspi_pm,
++	.driver.pm	= pm_ptr(&mcfqspi_pm),
+ 	.probe		= mcfqspi_probe,
+ 	.remove		= mcfqspi_remove,
+ };
+-- 
+2.55.0
+

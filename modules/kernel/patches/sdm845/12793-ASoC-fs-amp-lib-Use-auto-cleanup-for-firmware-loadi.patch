@@ -1,0 +1,43 @@
+From aec8a1e14a80abbcf895b4780d68831d86cfcb88 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 15:59:39 +0200
+Subject: [PATCH 12793/15333] ASoC: fs-amp-lib: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Cc: Nick Li <nick.li@foursemi.com>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-8-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/fs-amp-lib.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/sound/soc/codecs/fs-amp-lib.c b/sound/soc/codecs/fs-amp-lib.c
+index c8f56617e370..a562c72fc524 100644
+--- a/sound/soc/codecs/fs-amp-lib.c
++++ b/sound/soc/codecs/fs-amp-lib.c
+@@ -221,7 +221,7 @@ static void fs_print_firmware_info(struct fs_amp_lib *amp_lib)
+ 
+ int fs_amp_load_firmware(struct fs_amp_lib *amp_lib, const char *name)
+ {
+-	const struct firmware *cont;
++	const struct firmware *cont __free(firmware) = NULL;
+ 	struct fs_fwm_header *hdr;
+ 	int ret;
+ 
+@@ -237,7 +237,6 @@ int fs_amp_load_firmware(struct fs_amp_lib *amp_lib, const char *name)
+ 	dev_info(amp_lib->dev, "Loading %s - size: %zu\n", name, cont->size);
+ 
+ 	hdr = devm_kmemdup(amp_lib->dev, cont->data, cont->size, GFP_KERNEL);
+-	release_firmware(cont);
+ 	if (!hdr)
+ 		return -ENOMEM;
+ 
+-- 
+2.55.0
+

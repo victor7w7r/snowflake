@@ -1,0 +1,63 @@
+From 556488b08638aad240bdb524cebf22fa7569843c Mon Sep 17 00:00:00 2001
+From: Zhu Lingshan <lingshan.zhu@amd.com>
+Date: Thu, 13 Aug 2026 17:36:53 +0800
+Subject: [PATCH 14846/15333] drm/amdgpu: validate rptr and wptr of a userq
+
+rptr and wptr of a userq are 8 bytes aligned, and may
+not placed on a page boundary.
+
+This commit checks whether rptr and wptr are 8 bytes
+aligned, and expectes 8 bytes when validates rptr/wptr VA.
+
+With above changes, this commit fixes an regression
+in amdgpu_userq_input_va_validate, where
+end_addr is caculated by:
+check_add_overflow(start_addr, expected_size - 1, &end_addr).
+Wptr and rptr are very likely not to be page aligned,
+when validating rptr and wptr, if they are located in the last
+mapped page(or only one page is mapped)
+and expected_size is PAGE_SIZE, end_addr will exceed the last
+mapped page, means (end_addr >> AMDGPU_GPU_PAGE_SHIFT) > va_map->last,
+and causing an -EINVAL, even it is a valid VA.
+
+Signed-off-by: Zhu Lingshan <lingshan.zhu@amd.com>
+Acked-by: Alex Deucher <alexander.deucher@amd.com>
+Fixes: c0122bf2ccb1 ("drm/amdgpu: fix userq VA validation for sub-page buffers")
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
+index 04639f894903..17cc48d87c4d 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
+@@ -702,10 +702,10 @@ amdgpu_userq_create(struct drm_file *filp, union drm_amdgpu_userq *args)
+ 					   args->in.queue_size,
+ 					   &queue->userq_vas.va.queue_rb) ||
+ 	    amdgpu_userq_input_va_validate(adev, queue, args->in.rptr_va,
+-					   AMDGPU_GPU_PAGE_SIZE,
++					   sizeof(u64),
+ 					   &queue->userq_vas.va.rptr) ||
+ 	    amdgpu_userq_input_va_validate(adev, queue, args->in.wptr_va,
+-					   AMDGPU_GPU_PAGE_SIZE,
++					   sizeof(u64),
+ 					   &queue->userq_vas.va.wptr)) {
+ 		r = -EINVAL;
+ 		amdgpu_bo_unreserve(fpriv->vm.root.bo);
+@@ -850,6 +850,12 @@ static int amdgpu_userq_input_args_validate(struct drm_device *dev,
+ 			drm_file_err(filp, "invalidate userq queue rptr or wptr\n");
+ 			return -EINVAL;
+ 		}
++
++		if (!IS_ALIGNED(args->in.wptr_va, sizeof(u64)) ||
++		    !IS_ALIGNED(args->in.rptr_va, sizeof(u64))) {
++			drm_file_err(filp, "user queue rptr or wptr is not 8-byte aligned\n");
++			return -EINVAL;
++		}
+ 		break;
+ 	case AMDGPU_USERQ_OP_FREE:
+ 		if (args->in.ip_type ||
+-- 
+2.55.0
+

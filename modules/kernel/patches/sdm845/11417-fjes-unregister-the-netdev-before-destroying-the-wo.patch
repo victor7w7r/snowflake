@@ -1,0 +1,54 @@
+From f2473fbfc3fd8d07142069bcd68316e26cdad59e Mon Sep 17 00:00:00 2001
+From: Fan Wu <fanwu01@zju.edu.cn>
+Date: Wed, 5 Aug 2026 01:14:09 +0000
+Subject: [PATCH 11417/15333] fjes: unregister the netdev before destroying the
+ workqueues
+
+fjes_remove() destroys the driver workqueues before unregistering the
+netdev. The interrupt handler queues work on them, but the IRQ is only
+freed from fjes_close() under unregister_netdev(), so an interrupt in that
+window can queue work once the workqueues are gone.
+
+Unregister the netdev first so fjes_close() frees the IRQ and cancels the
+workers before the workqueues are destroyed. force_close_task, which the
+workers arm on the system workqueue, is handled in the next patch.
+
+This issue was found by an in-house static analysis tool.
+
+Cc: stable+noautosel@kernel.org # untested fix to a driver init path race
+Signed-off-by: Fan Wu <fanwu01@zju.edu.cn>
+Reviewed-by: Simon Horman <horms@kernel.org>
+Link: https://patch.msgid.link/20260805011410.414431-1-fanwu01@zju.edu.cn
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/fjes/fjes_main.c | 9 +++------
+ 1 file changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/net/fjes/fjes_main.c b/drivers/net/fjes/fjes_main.c
+index 1f0f38980549..cddabc9653b9 100644
+--- a/drivers/net/fjes/fjes_main.c
++++ b/drivers/net/fjes/fjes_main.c
+@@ -1394,17 +1394,14 @@ static void fjes_remove(struct platform_device *plat_dev)
+ 
+ 	fjes_dbg_adapter_exit(adapter);
+ 
+-	cancel_delayed_work_sync(&adapter->interrupt_watch_task);
+-	cancel_work_sync(&adapter->unshare_watch_task);
+-	cancel_work_sync(&adapter->raise_intr_rxdata_task);
+-	cancel_work_sync(&adapter->tx_stall_task);
++	/* Unregister first: .ndo_stop frees the IRQ and cancels the workers. */
++	unregister_netdev(netdev);
++
+ 	if (adapter->control_wq)
+ 		destroy_workqueue(adapter->control_wq);
+ 	if (adapter->txrx_wq)
+ 		destroy_workqueue(adapter->txrx_wq);
+ 
+-	unregister_netdev(netdev);
+-
+ 	fjes_hw_exit(hw);
+ 
+ 	netif_napi_del(&adapter->napi);
+-- 
+2.55.0
+

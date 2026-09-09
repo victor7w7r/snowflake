@@ -1,0 +1,93 @@
+From c87b4ba09702762ea69187561bd4d76ae602f8bd Mon Sep 17 00:00:00 2001
+From: Sudip Mukherjee <sudip.mukherjee@sifive.com>
+Date: Mon, 3 Aug 2026 05:40:34 -0700
+Subject: [PATCH 10521/15333] spi: dw: Introduce spi_frf and STD_SPI
+
+The DW APB SSI controllers of v4.x and newer and DW AHB SSI controllers
+supports enhanced SPI modes which can be defined from SPI_FRF of
+DW_SPI_CTRLR0 register. Without enhanced mode, these controllers will
+work in the standard spi mode.
+
+Signed-off-by: Sudip Mukherjee <sudip.mukherjee@sifive.com>
+Co-developed-by: Changhuang Liang <changhuang.liang@starfivetech.com>
+Signed-off-by: Changhuang Liang <changhuang.liang@starfivetech.com>
+Link: https://patch.msgid.link/20260803124044.156998-2-changhuang.liang@starfivetech.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-dw-core.c | 13 ++++++++++++-
+ drivers/spi/spi-dw.h      |  7 +++++++
+ 2 files changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/spi/spi-dw-core.c b/drivers/spi/spi-dw-core.c
+index ad8aad958c76..2c52209c9095 100644
+--- a/drivers/spi/spi-dw-core.c
++++ b/drivers/spi/spi-dw-core.c
+@@ -330,6 +330,16 @@ void dw_spi_update_config(struct dw_spi *dws, struct spi_device *spi,
+ 		/* CTRLR0[11:10] Transfer Mode */
+ 		cr0 |= FIELD_PREP(DW_HSSI_CTRLR0_TMOD_MASK, cfg->tmode);
+ 
++	if (dw_spi_ver_is_ge(dws, HSSI, 103A)) {
++		cr0 &= ~DW_HSSI_CTRLR0_SPI_FRF_MASK;
++		cr0 |= FIELD_PREP(DW_HSSI_CTRLR0_SPI_FRF_MASK,
++				  cfg->spi_frf);
++	} else if (dw_spi_ver_is_ge(dws, PSSI, 400A)) {
++		cr0 &= ~DW_PSSI_CTRLR0_SPI_FRF_MASK;
++		cr0 |= FIELD_PREP(DW_PSSI_CTRLR0_SPI_FRF_MASK,
++				  cfg->spi_frf);
++	}
++
+ 	dw_writel(dws, DW_SPI_CTRLR0, cr0);
+ 
+ 	if (spi_controller_is_target(dws->ctlr))
+@@ -422,6 +432,7 @@ static int dw_spi_transfer_one(struct spi_controller *ctlr,
+ 		.tmode = DW_SPI_CTRLR0_TMOD_TR,
+ 		.dfs = transfer->bits_per_word,
+ 		.freq = transfer->speed_hz,
++		.spi_frf = DW_SPI_CTRLR0_SPI_FRF_STD_SPI,
+ 	};
+ 	int ret;
+ 
+@@ -677,7 +688,7 @@ static void dw_spi_stop_mem_op(struct dw_spi *dws, struct spi_device *spi)
+ static int dw_spi_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *op)
+ {
+ 	struct dw_spi *dws = spi_controller_get_devdata(mem->spi->controller);
+-	struct dw_spi_cfg cfg;
++	struct dw_spi_cfg cfg = {0};
+ 	unsigned long flags;
+ 	int ret;
+ 
+diff --git a/drivers/spi/spi-dw.h b/drivers/spi/spi-dw.h
+index 2f2debc64e73..19cf1b1a5d4f 100644
+--- a/drivers/spi/spi-dw.h
++++ b/drivers/spi/spi-dw.h
+@@ -17,6 +17,9 @@
+ 
+ /* Synopsys DW SSI component versions (FourCC sequence) */
+ #define DW_HSSI_102A			0x3130322a
++#define DW_HSSI_103A			0x3130332a
++#define DW_HSSI_200A			0x3230302a
++#define DW_PSSI_400A			0x3430302a
+ 
+ /* DW SSI IP-core ID and version check helpers */
+ #define dw_spi_ip_is(_dws, _ip) \
+@@ -94,6 +97,9 @@
+ #define DW_HSSI_CTRLR0_TMOD_MASK		GENMASK(11, 10)
+ #define DW_HSSI_CTRLR0_SRL			BIT(13)
+ #define DW_HSSI_CTRLR0_MST			BIT(31)
++#define DW_HSSI_CTRLR0_SPI_FRF_MASK		GENMASK(23, 22)
++#define DW_PSSI_CTRLR0_SPI_FRF_MASK		GENMASK(22, 21)
++#define DW_SPI_CTRLR0_SPI_FRF_STD_SPI		0x0
+ 
+ /* Bit fields in CTRLR1 */
+ #define DW_SPI_NDF_MASK				GENMASK(15, 0)
+@@ -135,6 +141,7 @@ struct dw_spi_cfg {
+ 	u8 dfs;
+ 	u32 ndf;
+ 	u32 freq;
++	u8 spi_frf;
+ };
+ 
+ struct dw_spi;
+-- 
+2.55.0
+

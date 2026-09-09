@@ -1,0 +1,256 @@
+From 6887c03bf2600beaa1a24e0a8c00053c236c1071 Mon Sep 17 00:00:00 2001
+From: Justin Suess <utilityemal77@gmail.com>
+Date: Sun, 9 Aug 2026 17:24:59 -0400
+Subject: [PATCH 14106/15333] landlock: Add LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a landlock_restrict_self(2) flag to set the no_new_privs attribute
+of the calling thread only after enforcement of the ruleset:
+no_new_privs is set if and only if the call succeeds.  This removes the
+need for a prior prctl(2) PR_SET_NO_NEW_PRIVS call and guarantees that
+a failed enforcement leaves the attribute unchanged.
+
+Because no_new_privs is set by the call itself, the no_new_privs /
+CAP_SYS_ADMIN requirement of landlock_restrict_self(2) is fulfilled by
+construction, and the related EPERM check is skipped.
+
+Unlike LANDLOCK_RESTRICT_SELF_LOG_SUBDOMAINS_OFF, this flag always
+requires a valid ruleset: with a ruleset_fd of -1, such a call would be
+nothing more than a Landlock-flavored prctl(2) PR_SET_NO_NEW_PRIVS, and
+there is no valid use case for setting no_new_privs (possibly with
+LANDLOCK_RESTRICT_SELF_TSYNC) without also enforcing Landlock
+restrictions.  Rejecting these calls also keeps the option of giving
+them a meaning later.
+
+The attribute is only set past the last point of failure, just before
+committing the new credentials.  When combined with
+LANDLOCK_RESTRICT_SELF_TSYNC, no_new_privs is set on the sibling threads
+as well, in their commit phase, with the same ordering.
+
+Bump the Landlock ABI version to 11, and include the minimal related
+test changes to keep the tests bisectable.
+
+Cc: Mickaël Salaün <mic@digikod.net>
+Signed-off-by: Justin Suess <utilityemal77@gmail.com>
+Link: https://patch.msgid.link/20260809212459.2427878-1-utilityemal77@gmail.com
+Signed-off-by: Mickaël Salaün <mic@digikod.net>
+---
+ include/uapi/linux/landlock.h                | 13 ++++++++++
+ security/landlock/limits.h                   |  2 +-
+ security/landlock/syscalls.c                 | 27 +++++++++++++++-----
+ security/landlock/tsync.c                    |  8 ++++--
+ security/landlock/tsync.h                    |  4 ++-
+ tools/testing/selftests/landlock/base_test.c | 12 +++++++--
+ 6 files changed, 53 insertions(+), 13 deletions(-)
+
+diff --git a/include/uapi/linux/landlock.h b/include/uapi/linux/landlock.h
+index 27ae3f39cafb..cceda3b3b961 100644
+--- a/include/uapi/linux/landlock.h
++++ b/include/uapi/linux/landlock.h
+@@ -191,12 +191,25 @@ struct landlock_ruleset_attr {
+  *
+  *     If the calling thread is running with no_new_privs, this operation
+  *     enables no_new_privs on the sibling threads as well.
++ *
++ * The following flag ties the no_new_privs attribute to the ruleset
++ * enforcement:
++ *
++ * %LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS
++ *     Sets the no_new_privs attribute of the calling thread only once the
++ *     enforcement of the ruleset succeeded: no_new_privs is set if and only
++ *     if sys_landlock_restrict_self() succeeds.  This removes the need for a
++ *     prior :manpage:`prctl(2)` ``PR_SET_NO_NEW_PRIVS`` call (or
++ *     %CAP_SYS_ADMIN use).  This flag requires a ruleset.  When
++ *     combined with %LANDLOCK_RESTRICT_SELF_TSYNC, no_new_privs is set on the
++ *     sibling threads as well.
+  */
+ /* clang-format off */
+ #define LANDLOCK_RESTRICT_SELF_LOG_SAME_EXEC_OFF		(1U << 0)
+ #define LANDLOCK_RESTRICT_SELF_LOG_NEW_EXEC_ON			(1U << 1)
+ #define LANDLOCK_RESTRICT_SELF_LOG_SUBDOMAINS_OFF		(1U << 2)
+ #define LANDLOCK_RESTRICT_SELF_TSYNC				(1U << 3)
++#define LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS			(1U << 4)
+ /* clang-format on */
+ 
+ /**
+diff --git a/security/landlock/limits.h b/security/landlock/limits.h
+index 08d5f2f6d321..1a7c5fb8f6fd 100644
+--- a/security/landlock/limits.h
++++ b/security/landlock/limits.h
+@@ -34,7 +34,7 @@
+ #define LANDLOCK_NUM_ACCESS_MAX \
+ 	MAX(MAX(LANDLOCK_NUM_ACCESS_FS, LANDLOCK_NUM_ACCESS_NET), LANDLOCK_NUM_SCOPE)
+ 
+-#define LANDLOCK_LAST_RESTRICT_SELF	LANDLOCK_RESTRICT_SELF_TSYNC
++#define LANDLOCK_LAST_RESTRICT_SELF	LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS
+ #define LANDLOCK_MASK_RESTRICT_SELF	((LANDLOCK_LAST_RESTRICT_SELF << 1) - 1)
+ 
+ /* clang-format on */
+diff --git a/security/landlock/syscalls.c b/security/landlock/syscalls.c
+index e3ef7b980c82..e5f65a1c35ff 100644
+--- a/security/landlock/syscalls.c
++++ b/security/landlock/syscalls.c
+@@ -169,7 +169,7 @@ static const struct file_operations ruleset_fops = {
+  * If the change involves a fix that requires userspace awareness, also update
+  * the errata documentation in Documentation/userspace-api/landlock.rst .
+  */
+-const int landlock_abi_version = 10;
++const int landlock_abi_version = 11;
+ 
+ /**
+  * sys_landlock_create_ruleset - Create a new ruleset
+@@ -502,21 +502,28 @@ SYSCALL_DEFINE4(landlock_add_rule, const int, ruleset_fd,
+  *         - %LANDLOCK_RESTRICT_SELF_LOG_NEW_EXEC_ON
+  *         - %LANDLOCK_RESTRICT_SELF_LOG_SUBDOMAINS_OFF
+  *         - %LANDLOCK_RESTRICT_SELF_TSYNC
++ *         - %LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS
+  *
+  * This system call enforces a Landlock ruleset on the current thread.
+  * Enforcing a ruleset requires that the task has %CAP_SYS_ADMIN in its
+  * namespace or is running with no_new_privs.  This avoids scenarios where
+  * unprivileged tasks can affect the behavior of privileged children.
+  *
++ * With %LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS, the no_new_privs attribute of the
++ * calling thread is set only once the enforcement of the ruleset succeeded,
++ * which fulfills the above requirement: no_new_privs is set if and only if the
++ * call succeeds.
++ *
+  * Return: 0 on success, or -errno on failure.  Possible returned errors are:
+  *
+  * - %EOPNOTSUPP: Landlock is supported by the kernel but disabled at boot time;
+  * - %EINVAL: @flags contains an unknown bit.
+  * - %EBADF: @ruleset_fd is not a file descriptor for the current thread;
+  * - %EBADFD: @ruleset_fd is not a ruleset file descriptor;
+- * - %EPERM: @ruleset_fd has no read access to the underlying ruleset, or the
+- *   current thread is not running with no_new_privs, or it doesn't have
+- *   %CAP_SYS_ADMIN in its namespace.
++ * - %EPERM: @ruleset_fd has no read access to the underlying ruleset, or
++ *   %LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS is not set while the current thread
++ *   is not running with no_new_privs and doesn't have %CAP_SYS_ADMIN in its
++ *   namespace.
+  * - %E2BIG: The maximum number of stacked rulesets is reached for the current
+  *   thread.
+  *
+@@ -541,9 +548,11 @@ SYSCALL_DEFINE2(landlock_restrict_self, const int, ruleset_fd, const __u32,
+ 
+ 	/*
+ 	 * Similar checks as for seccomp(2), except that an -EPERM may be
+-	 * returned.
++	 * returned.  LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS fulfills this
++	 * requirement.
+ 	 */
+-	if (!task_no_new_privs(current) &&
++	if (!(flags & LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS) &&
++	    !task_no_new_privs(current) &&
+ 	    !ns_capable_noaudit(current_user_ns(), CAP_SYS_ADMIN))
+ 		return -EPERM;
+ 
+@@ -620,12 +629,16 @@ SYSCALL_DEFINE2(landlock_restrict_self, const int, ruleset_fd, const __u32,
+ 
+ 	if (flags & LANDLOCK_RESTRICT_SELF_TSYNC) {
+ 		const int err = landlock_restrict_sibling_threads(
+-			current_cred(), new_cred);
++			current_cred(), new_cred, flags);
+ 		if (err) {
+ 			abort_creds(new_cred);
+ 			return err;
+ 		}
+ 	}
+ 
++	/* Sets no_new_privs past the last point of failure. */
++	if (flags & LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS)
++		task_set_no_new_privs(current);
++
+ 	return commit_creds(new_cred);
+ }
+diff --git a/security/landlock/tsync.c b/security/landlock/tsync.c
+index c5730bbd9ed3..0b71e158c3f5 100644
+--- a/security/landlock/tsync.c
++++ b/security/landlock/tsync.c
+@@ -17,6 +17,7 @@
+ #include <linux/sched/task.h>
+ #include <linux/slab.h>
+ #include <linux/task_work.h>
++#include <uapi/linux/landlock.h>
+ 
+ #include "cred.h"
+ #include "tsync.h"
+@@ -466,7 +467,8 @@ static void cancel_tsync_works(const struct tsync_works *works,
+  * restrict_sibling_threads - enables a Landlock policy for all sibling threads
+  */
+ int landlock_restrict_sibling_threads(const struct cred *old_cred,
+-				      const struct cred *new_cred)
++				      const struct cred *new_cred,
++				      const u32 restrict_flags)
+ {
+ 	int err;
+ 	struct tsync_shared_context shared_ctx;
+@@ -481,7 +483,9 @@ int landlock_restrict_sibling_threads(const struct cred *old_cred,
+ 	init_completion(&shared_ctx.all_finished);
+ 	shared_ctx.old_cred = old_cred;
+ 	shared_ctx.new_cred = new_cred;
+-	shared_ctx.set_no_new_privs = task_no_new_privs(current);
++	shared_ctx.set_no_new_privs =
++		(restrict_flags & LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS) ||
++		task_no_new_privs(current);
+ 
+ 	/*
+ 	 * Serialize concurrent TSYNC operations to prevent deadlocks when
+diff --git a/security/landlock/tsync.h b/security/landlock/tsync.h
+index ef86bb61c2f6..2ae4f938ca00 100644
+--- a/security/landlock/tsync.h
++++ b/security/landlock/tsync.h
+@@ -9,8 +9,10 @@
+ #define _SECURITY_LANDLOCK_TSYNC_H
+ 
+ #include <linux/cred.h>
++#include <linux/types.h>
+ 
+ int landlock_restrict_sibling_threads(const struct cred *old_cred,
+-				      const struct cred *new_cred);
++				      const struct cred *new_cred,
++				      u32 restrict_flags);
+ 
+ #endif /* _SECURITY_LANDLOCK_TSYNC_H */
+diff --git a/tools/testing/selftests/landlock/base_test.c b/tools/testing/selftests/landlock/base_test.c
+index f3c126d5c003..288d6bc19232 100644
+--- a/tools/testing/selftests/landlock/base_test.c
++++ b/tools/testing/selftests/landlock/base_test.c
+@@ -76,7 +76,7 @@ TEST(abi_version)
+ 	const struct landlock_ruleset_attr ruleset_attr = {
+ 		.handled_access_fs = LANDLOCK_ACCESS_FS_READ_FILE,
+ 	};
+-	ASSERT_EQ(10, landlock_create_ruleset(NULL, 0,
++	ASSERT_EQ(11, landlock_create_ruleset(NULL, 0,
+ 					      LANDLOCK_CREATE_RULESET_VERSION));
+ 
+ 	ASSERT_EQ(-1, landlock_create_ruleset(&ruleset_attr, 0,
+@@ -265,6 +265,14 @@ TEST(restrict_self_checks_ordering)
+ 	ASSERT_EQ(EPERM, errno);
+ 	ASSERT_EQ(-1, landlock_restrict_self(ruleset_fd, 0));
+ 	ASSERT_EQ(EPERM, errno);
++	/*
++	 * LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS fulfills the no_new_privs /
++	 * CAP_SYS_ADMIN requirement but requires a ruleset, so the FD is
++	 * checked next.
++	 */
++	ASSERT_EQ(-1, landlock_restrict_self(
++			      -1, LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS));
++	ASSERT_EQ(EBADF, errno);
+ 
+ 	ASSERT_EQ(0, prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0));
+ 
+@@ -310,7 +318,7 @@ TEST(restrict_self_fd_logging_flags)
+ 
+ TEST(restrict_self_logging_flags)
+ {
+-	const __u32 last_flag = LANDLOCK_RESTRICT_SELF_TSYNC;
++	const __u32 last_flag = LANDLOCK_RESTRICT_SELF_NO_NEW_PRIVS;
+ 
+ 	/* Tests invalid flag combinations. */
+ 
+-- 
+2.55.0
+

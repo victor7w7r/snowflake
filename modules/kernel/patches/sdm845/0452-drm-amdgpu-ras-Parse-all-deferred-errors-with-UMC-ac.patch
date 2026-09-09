@@ -1,0 +1,60 @@
+From 6b3453ec5c3ae499ee87093b4cf2c8e76513e2d3 Mon Sep 17 00:00:00 2001
+From: Ce Sun <cesun102@amd.com>
+Date: Wed, 3 Jun 2026 10:45:48 +0800
+Subject: [PATCH 00452/15333] drm/amdgpu/ras: Parse all deferred errors with
+ UMC aca handle
+
+We should only increase the deferred errors in UMC block
+
+Signed-off-by: Ce Sun <cesun102@amd.com>
+Reviewed-by: Tao Zhou <tao.zhou1@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/ras/rascore/ras_aca_v1_0.c | 13 ++++++-------
+ 1 file changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras_aca_v1_0.c b/drivers/gpu/drm/amd/ras/rascore/ras_aca_v1_0.c
+index 210fbd8851a6..840610538c1f 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras_aca_v1_0.c
++++ b/drivers/gpu/drm/amd/ras/rascore/ras_aca_v1_0.c
+@@ -213,7 +213,7 @@ static int aca_parse_umc_bank(struct ras_core_context *ras_core,
+ 	struct aca_bank_reg *bank = (struct aca_bank_reg *)data;
+ 	struct aca_bank_ecc *ecc = (struct aca_bank_ecc *)buf;
+ 	struct aca_ecc_info bank_info;
+-	uint32_t ext_error_code;
++	uint32_t ext_error_code, misc0_errcnt;
+ 	uint64_t status0;
+ 
+ 	status0 = bank->regs[ACA_REG_IDX__STATUS];
+@@ -228,15 +228,14 @@ static int aca_parse_umc_bank(struct ras_core_context *ras_core,
+ 	ecc->bank_info.addr = bank->regs[ACA_REG_IDX__ADDR];
+ 
+ 	ext_error_code = ACA_REG_STATUS_ERRORCODEEXT(status0);
++	misc0_errcnt = ACA_REG_MISC0_ERRCNT(bank->regs[ACA_REG_IDX__MISC0]);
+ 
+ 	if (aca_check_umc_de(ras_core, status0))
+-		ecc->de_count = 1;
++		ecc->de_count = misc0_errcnt ? misc0_errcnt : 1;
+ 	else if (aca_check_umc_ue(ras_core, status0))
+-		ecc->ue_count = ext_error_code ?
+-			1 : ACA_REG_MISC0_ERRCNT(bank->regs[ACA_REG_IDX__MISC0]);
++		ecc->ue_count = ext_error_code ? 1 : misc0_errcnt;
+ 	else if (aca_check_umc_ce(ras_core, status0))
+-		ecc->ce_count = ext_error_code ?
+-			1 : ACA_REG_MISC0_ERRCNT(bank->regs[ACA_REG_IDX__MISC0]);
++		ecc->ce_count = ext_error_code ? 1 : misc0_errcnt;
+ 
+ 	return 0;
+ }
+@@ -266,7 +265,7 @@ static int aca_parse_bank_default(struct ras_core_context *ras_core,
+ 	ecc->bank_info.addr = bank->regs[ACA_REG_IDX__ADDR];
+ 
+ 	if (aca_check_bank_is_de(ras_core, status)) {
+-		ecc->de_count = 1;
++		ecc->de_count = 0;
+ 	} else {
+ 		if (bank->ecc_type == RAS_ERR_TYPE__UE)
+ 			ecc->ue_count = 1;
+-- 
+2.55.0
+

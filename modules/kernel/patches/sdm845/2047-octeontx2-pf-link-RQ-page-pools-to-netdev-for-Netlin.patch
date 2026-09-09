@@ -1,0 +1,53 @@
+From 49c5ad3cd51885fe9883cc641a0b5a5c3a99dbbe Mon Sep 17 00:00:00 2001
+From: Ratheesh Kannoth <rkannoth@marvell.com>
+Date: Tue, 30 Jun 2026 07:08:14 +0530
+Subject: [PATCH 02047/15333] octeontx2-pf: link RQ page pools to netdev for
+ Netlink stats
+
+page_pool_create() only registers pools with the netdev Netlink
+interface when pp_params.netdev is set. Set netdev in page pool
+params.
+
+Signed-off-by: Ratheesh Kannoth <rkannoth@marvell.com>
+Link: https://patch.msgid.link/20260630013814.3657831-1-rkannoth@marvell.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/ethernet/marvell/octeontx2/nic/cn20k.c       | 1 +
+ drivers/net/ethernet/marvell/octeontx2/nic/otx2_common.c | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/marvell/octeontx2/nic/cn20k.c b/drivers/net/ethernet/marvell/octeontx2/nic/cn20k.c
+index dbf173196608..8e41431c7f9c 100644
+--- a/drivers/net/ethernet/marvell/octeontx2/nic/cn20k.c
++++ b/drivers/net/ethernet/marvell/octeontx2/nic/cn20k.c
+@@ -656,6 +656,7 @@ static int cn20k_pool_aq_init(struct otx2_nic *pfvf, u16 pool_id,
+ 	pp_params.nid = NUMA_NO_NODE;
+ 	pp_params.dev = pfvf->dev;
+ 	pp_params.dma_dir = DMA_FROM_DEVICE;
++	pp_params.netdev = pfvf->netdev;
+ 	pool->page_pool = page_pool_create(&pp_params);
+ 	if (IS_ERR(pool->page_pool)) {
+ 		netdev_err(pfvf->netdev, "Creation of page pool failed\n");
+diff --git a/drivers/net/ethernet/marvell/octeontx2/nic/otx2_common.c b/drivers/net/ethernet/marvell/octeontx2/nic/otx2_common.c
+index 3d253132a17f..ca73a94db794 100644
+--- a/drivers/net/ethernet/marvell/octeontx2/nic/otx2_common.c
++++ b/drivers/net/ethernet/marvell/octeontx2/nic/otx2_common.c
+@@ -1035,7 +1035,6 @@ int otx2_sq_init(struct otx2_nic *pfvf, u16 qidx, u16 sqb_aura)
+ 	if (qidx > pfvf->hw.xdp_queues)
+ 		otx2_attach_xsk_buff(pfvf, sq, (qidx - pfvf->hw.xdp_queues));
+ 
+-
+ 	chan_offset = qidx % pfvf->hw.tx_chan_cnt;
+ 	err = pfvf->hw_ops->sq_aq_init(pfvf, qidx, chan_offset, sqb_aura);
+ 	if (err) {
+@@ -1517,6 +1516,7 @@ int otx2_pool_aq_init(struct otx2_nic *pfvf, u16 pool_id,
+ 		pp_params.nid = NUMA_NO_NODE;
+ 		pp_params.dev = pfvf->dev;
+ 		pp_params.dma_dir = DMA_FROM_DEVICE;
++		pp_params.netdev = pfvf->netdev;
+ 		pool->page_pool = page_pool_create(&pp_params);
+ 		if (IS_ERR(pool->page_pool)) {
+ 			netdev_err(pfvf->netdev, "Creation of page pool failed\n");
+-- 
+2.55.0
+

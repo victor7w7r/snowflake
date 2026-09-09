@@ -1,0 +1,41 @@
+From f438ba7a4c3efa627dc91a132c4653725723a6bc Mon Sep 17 00:00:00 2001
+From: Daniel Borkmann <daniel@iogearbox.net>
+Date: Fri, 14 Aug 2026 23:52:56 +0200
+Subject: [PATCH 14371/15333] bpf: Treat a fault prone PTR_TO_MEM as a pointer
+ type mismatch
+
+reg_type_mismatch_ok() enumerates the pointer types which must not
+silently share a BPF_LDX with a different one, since the type recorded
+for the insn drives a rewrite in bpf_convert_ctx_accesses().
+
+f2362a57aeff ("bpf: allow void* cast using bpf_rdonly_cast()") added
+PTR_TO_MEM | MEM_RDONLY | PTR_UNTRUSTED as another type in need of one,
+namely the BPF_PROBE_MEM rewrite, but did not add it there. Fix it by
+adding the missing case to reg_type_mismatch_ok(), so that a PTR_TO_MEM
+which may fault on deref is not mismatch ok anymore. The triage in
+save_aux_ptr_type() then merges them.
+
+Fixes: f2362a57aeff ("bpf: allow void* cast using bpf_rdonly_cast()")
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Acked-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://lore.kernel.org/bpf/20260814215301.709827-2-daniel@iogearbox.net
+---
+ kernel/bpf/verifier.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 9ec23a9c6592..ad3310b55b02 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -17815,6 +17815,8 @@ static bool reg_type_mismatch_ok(enum bpf_reg_type type)
+ 	case PTR_TO_BTF_ID:
+ 	case PTR_TO_ARENA:
+ 		return false;
++	case PTR_TO_MEM:
++		return !bpf_may_fault_on_deref(type);
+ 	default:
+ 		return true;
+ 	}
+-- 
+2.55.0
+

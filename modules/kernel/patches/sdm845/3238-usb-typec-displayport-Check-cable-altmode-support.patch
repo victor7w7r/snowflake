@@ -1,0 +1,49 @@
+From ef14df36701cca2d272c18450d12de9d141e5beb Mon Sep 17 00:00:00 2001
+From: Andrei Kuchynski <akuchynski@chromium.org>
+Date: Fri, 26 Jun 2026 14:27:02 +0000
+Subject: [PATCH 03238/15333] usb: typec: displayport: Check cable altmode
+ support
+
+Update the probe function to utilize the new
+typec_cable_altmode_unsupported() helper. If the cable doesn't support
+DisplayPort altmode, don't initialize altmode_ops and prevent altmode
+from being activated.
+A captive cable shouldn't be checked; it may not provide discoverable
+capability information, but it is inherently designed to support the
+device's requirements.
+
+Signed-off-by: Andrei Kuchynski <akuchynski@chromium.org>
+Reviewed-by: Benson Leung <bleung@chromium.org>
+Reviewed-by: Heikki Krogerus <heikki.krogerus@linux.intel.com>
+Link: https://patch.msgid.link/20260626142702.1941182-4-akuchynski@chromium.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/usb/typec/altmodes/displayport.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/usb/typec/altmodes/displayport.c b/drivers/usb/typec/altmodes/displayport.c
+index 2a553cfcf61d..51c92dd887ab 100644
+--- a/drivers/usb/typec/altmodes/displayport.c
++++ b/drivers/usb/typec/altmodes/displayport.c
+@@ -803,7 +803,6 @@ int dp_altmode_probe(struct typec_altmode *alt)
+ 	dp->alt = alt;
+ 
+ 	alt->desc = "DisplayPort";
+-	typec_altmode_set_ops(alt, &dp_altmode_ops);
+ 
+ 	if (plug) {
+ 		plug->desc = "Displayport";
+@@ -824,6 +823,10 @@ int dp_altmode_probe(struct typec_altmode *alt)
+ 	if (plug)
+ 		typec_altmode_set_drvdata(plug, dp);
+ 
++	if ((alt->vdo & DP_CAP_RECEPTACLE) && typec_cable_altmode_unsupported(alt))
++		return 0;
++
++	typec_altmode_set_ops(alt, &dp_altmode_ops);
+ 	if (!alt->mode_selection) {
+ 		dp->state = plug ? DP_STATE_ENTER_PRIME : DP_STATE_ENTER;
+ 		schedule_work(&dp->work);
+-- 
+2.55.0
+

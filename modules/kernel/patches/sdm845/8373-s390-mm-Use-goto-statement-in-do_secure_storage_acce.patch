@@ -1,0 +1,47 @@
+From e462200886fb56cc318700b2fbbb2206ac28a656 Mon Sep 17 00:00:00 2001
+From: Heiko Carstens <hca@linux.ibm.com>
+Date: Mon, 20 Jul 2026 10:58:33 +0200
+Subject: [PATCH 08373/15333] s390/mm: Use goto statement in
+ do_secure_storage_access()
+
+Make do_secure_storage_access() look more like the do_exception()
+by using a goto statement to get rid of an extra open coded
+mmap_read_unlock() call.
+
+Just cosmetic, no functional change.
+
+Signed-off-by: Heiko Carstens <hca@linux.ibm.com>
+Reviewed-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+Signed-off-by: Vasily Gorbik <gor@linux.ibm.com>
+---
+ arch/s390/mm/fault.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/arch/s390/mm/fault.c b/arch/s390/mm/fault.c
+index 2a9b9fb30d09..666fe8e99480 100644
+--- a/arch/s390/mm/fault.c
++++ b/arch/s390/mm/fault.c
+@@ -453,10 +453,8 @@ void do_secure_storage_access(struct pt_regs *regs)
+ 		if (!vma)
+ 			return handle_fault_error_nolock(regs, SEGV_MAPERR);
+ 		folio = folio_walk_start(&fw, vma, addr, 0);
+-		if (!folio) {
+-			mmap_read_unlock(mm);
+-			return;
+-		}
++		if (!folio)
++			goto out;
+ 		/* arch_make_folio_accessible() needs a raised refcount. */
+ 		folio_get(folio);
+ 		rc = arch_make_folio_accessible(folio);
+@@ -464,6 +462,7 @@ void do_secure_storage_access(struct pt_regs *regs)
+ 		folio_walk_end(&fw, vma);
+ 		if (rc)
+ 			return handle_fault_error(regs, SEGV_ACCERR);
++out:
+ 		mmap_read_unlock(mm);
+ 	}
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,36 @@
+From 252ae40ba91c5da3a792bba7e3dc46b106dec86c Mon Sep 17 00:00:00 2001
+From: Tiezhu Yang <yangtiezhu@loongson.cn>
+Date: Mon, 17 Aug 2026 22:07:24 +0800
+Subject: [PATCH 14462/15333] LoongArch: BPF: Remove dead move_imm() call in
+ BPF_NEG path
+
+The BPF_NEG operation is a unary operator that performs `dst = -dst`.
+The current code unconditionally executes a move_imm() call before the
+subtraction, generating useless JITted instructions to load data into
+the temporary register `t1`. This `t1` register is never used anywhere
+else in the entire BPF_NEG path.
+
+Remove this dead `move_imm()` call to avoid useless instructions.
+
+Acked-by: Hengqi Chen <hengqi.chen@gmail.com>
+Signed-off-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Signed-off-by: Huacai Chen <chenhuacai@loongson.cn>
+---
+ arch/loongarch/net/bpf_jit.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/arch/loongarch/net/bpf_jit.c b/arch/loongarch/net/bpf_jit.c
+index f9ba7b961b04..a5e902eb646c 100644
+--- a/arch/loongarch/net/bpf_jit.c
++++ b/arch/loongarch/net/bpf_jit.c
+@@ -869,7 +869,6 @@ static int build_insn(const struct bpf_insn *insn, struct jit_ctx *ctx, bool ext
+ 	/* dst = -dst */
+ 	case BPF_ALU | BPF_NEG:
+ 	case BPF_ALU64 | BPF_NEG:
+-		move_imm(ctx, t1, imm, is32);
+ 		emit_insn(ctx, subd, dst, LOONGARCH_GPR_ZERO, dst);
+ 		emit_zext_32(ctx, dst, is32);
+ 		break;
+-- 
+2.55.0
+

@@ -1,0 +1,147 @@
+From 08d31d42b054eae62ff57bfd88b639f111b2b8fa Mon Sep 17 00:00:00 2001
+From: Armin Wolf <W_Armin@gmx.de>
+Date: Mon, 20 Jul 2026 15:19:20 +0200
+Subject: [PATCH 07303/15333] platform/x86: dell-smbios: Pass device to
+ callbacks
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The WMI SMBIOS backend needs to access the its driver state container
+when performing SMBIOS calls. Pass the device associated with a given
+backend to the callback function to allow the WMI backend to retrieve
+said state container in a more straightforward manner.
+
+Signed-off-by: Armin Wolf <W_Armin@gmx.de>
+Link: https://patch.msgid.link/20260720131921.368000-3-W_Armin@gmx.de
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/x86/dell/dell-smbios-base.c |  6 +++---
+ drivers/platform/x86/dell/dell-smbios-smm.c  |  8 ++++----
+ drivers/platform/x86/dell/dell-smbios-wmi.c  | 10 ++--------
+ drivers/platform/x86/dell/dell-smbios.h      |  4 +++-
+ 4 files changed, 12 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/platform/x86/dell/dell-smbios-base.c b/drivers/platform/x86/dell/dell-smbios-base.c
+index 4b7c54b76228..d8c55ec6acd4 100644
+--- a/drivers/platform/x86/dell/dell-smbios-base.c
++++ b/drivers/platform/x86/dell/dell-smbios-base.c
+@@ -40,7 +40,7 @@ struct smbios_device {
+ 	struct list_head list;
+ 	struct device *device;
+ 	int priority;
+-	int (*call_fn)(struct calling_interface_buffer *arg);
++	smbios_callback_fn_t call_fn;
+ };
+ 
+ struct smbios_call {
+@@ -146,7 +146,7 @@ int dell_smbios_error(int value)
+ }
+ EXPORT_SYMBOL_GPL(dell_smbios_error);
+ 
+-int dell_smbios_register_device(struct device *d, int priority, void *call_fn)
++int dell_smbios_register_device(struct device *d, int priority, smbios_callback_fn_t call_fn)
+ {
+ 	struct smbios_device *priv;
+ 
+@@ -312,7 +312,7 @@ int dell_smbios_call(struct calling_interface_buffer *buffer)
+ 		goto out_smbios_call;
+ 	}
+ 
+-	ret = selected->call_fn(buffer);
++	ret = selected->call_fn(selected->device, buffer);
+ 
+ out_smbios_call:
+ 	mutex_unlock(&smbios_mutex);
+diff --git a/drivers/platform/x86/dell/dell-smbios-smm.c b/drivers/platform/x86/dell/dell-smbios-smm.c
+index 7055e2c40f34..fc4a674c692e 100644
+--- a/drivers/platform/x86/dell/dell-smbios-smm.c
++++ b/drivers/platform/x86/dell/dell-smbios-smm.c
+@@ -49,7 +49,7 @@ static void find_cmd_address(const struct dmi_header *dm, void *dummy)
+ 	}
+ }
+ 
+-static int dell_smbios_smm_call(struct calling_interface_buffer *input)
++static int dell_smbios_smm_call(struct device *dev, struct calling_interface_buffer *input)
+ {
+ 	struct smi_cmd command;
+ 	size_t size;
+@@ -70,7 +70,7 @@ static int dell_smbios_smm_call(struct calling_interface_buffer *input)
+ }
+ 
+ /* When enabled this indicates that SMM won't work */
+-static bool test_wsmt_enabled(void)
++static bool test_wsmt_enabled(struct device *dev)
+ {
+ 	struct calling_interface_token *wsmt;
+ 
+@@ -88,7 +88,7 @@ static bool test_wsmt_enabled(void)
+ 	memset(buffer, 0, sizeof(struct calling_interface_buffer));
+ 	buffer->input[0] = wsmt->location;
+ 	buffer->output[0] = 99;
+-	dell_smbios_smm_call(buffer);
++	dell_smbios_smm_call(dev, buffer);
+ 	if (buffer->output[0] == 99)
+ 		return true;
+ 
+@@ -109,7 +109,7 @@ int init_dell_smbios_smm(void)
+ 
+ 	dmi_walk(find_cmd_address, NULL);
+ 
+-	if (test_wsmt_enabled()) {
++	if (test_wsmt_enabled(&platform_device->dev)) {
+ 		pr_debug("Disabling due to WSMT enabled\n");
+ 		ret = -ENODEV;
+ 		goto fail_wsmt;
+diff --git a/drivers/platform/x86/dell/dell-smbios-wmi.c b/drivers/platform/x86/dell/dell-smbios-wmi.c
+index 231fc90878bc..2108de4e48a3 100644
+--- a/drivers/platform/x86/dell/dell-smbios-wmi.c
++++ b/drivers/platform/x86/dell/dell-smbios-wmi.c
+@@ -83,19 +83,13 @@ static int run_smbios_call(struct wmi_device *wdev)
+ 	return 0;
+ }
+ 
+-static int dell_smbios_wmi_call(struct calling_interface_buffer *buffer)
++static int dell_smbios_wmi_call(struct device *dev, struct calling_interface_buffer *buffer)
+ {
+-	struct wmi_smbios_priv *priv;
++	struct wmi_smbios_priv *priv = dev_get_drvdata(dev);
+ 	size_t difference;
+ 	size_t size;
+ 	int ret;
+ 
+-	guard(rwsem_read)(&list_lock);
+-
+-	priv = get_first_smbios_priv();
+-	if (!priv)
+-		return -ENODEV;
+-
+ 	size = sizeof(struct calling_interface_buffer);
+ 	difference = priv->req_buf_size - sizeof(u64) - size;
+ 
+diff --git a/drivers/platform/x86/dell/dell-smbios.h b/drivers/platform/x86/dell/dell-smbios.h
+index f421b8533a9e..1e64803bc00d 100644
+--- a/drivers/platform/x86/dell/dell-smbios.h
++++ b/drivers/platform/x86/dell/dell-smbios.h
+@@ -47,6 +47,8 @@
+ 
+ struct notifier_block;
+ 
++typedef int (*smbios_callback_fn_t)(struct device *dev, struct calling_interface_buffer *buffer);
++
+ struct calling_interface_token {
+ 	u16 tokenID;
+ 	u16 location;
+@@ -64,7 +66,7 @@ struct calling_interface_structure {
+ 	struct calling_interface_token tokens[];
+ } __packed;
+ 
+-int dell_smbios_register_device(struct device *d, int priority, void *call_fn);
++int dell_smbios_register_device(struct device *d, int priority, smbios_callback_fn_t call_fn);
+ void dell_smbios_unregister_device(struct device *d);
+ 
+ int dell_smbios_error(int value);
+-- 
+2.55.0
+

@@ -1,0 +1,40 @@
+From 31d9b5bc1abb5b0dc58e47c75f947d9706577aa9 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 16 Jul 2026 17:39:10 +0700
+Subject: [PATCH 07822/15333] ASoC: ti: omap-twl4030: Use dev_err_probe() for
+ error handling
+
+Replace dev_err() with dev_err_probe() when reporting
+devm_snd_soc_register_card() failures. This suppresses
+unnecessary log messages for deferred probe errors.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Acked-by: Jarkko Nikula <jarkko.nikula@bitmer.com>
+Link: https://patch.msgid.link/20260716103911.77652-10-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/ti/omap-twl4030.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/sound/soc/ti/omap-twl4030.c b/sound/soc/ti/omap-twl4030.c
+index 2a80e44035d7..576f4d3615e8 100644
+--- a/sound/soc/ti/omap-twl4030.c
++++ b/sound/soc/ti/omap-twl4030.c
+@@ -306,11 +306,9 @@ static int omap_twl4030_probe(struct platform_device *pdev)
+ 
+ 	snd_soc_card_set_drvdata(card, priv);
+ 	ret = devm_snd_soc_register_card(&pdev->dev, card);
+-	if (ret) {
+-		dev_err(&pdev->dev, "devm_snd_soc_register_card() failed: %d\n",
+-			ret);
+-		return ret;
+-	}
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret,
++				     "devm_snd_soc_register_card() failed\n");
+ 
+ 	return 0;
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,100 @@
+From 0764fd10406f38bf6d86077a43301f0c35cc88f4 Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Tue, 16 Jun 2026 23:08:02 +0800
+Subject: [PATCH 05561/15333] misc: rp1: do not put borrowed OF node
+
+dev_of_node() returns the device's OF node without taking a new
+reference. rp1_probe() stores that borrowed pointer in rp1_node, but
+drops it with of_node_put() on both success and failure paths.
+
+Dropping a reference that was never acquired can underflow the node's
+refcount and leave later users with a stale OF node. Remove the
+of_node_put() calls and keep rp1_node as a borrowed pointer.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Reviewed-by: Andrea della Porta <andrea.porta@suse.com>
+Link: https://patch.msgid.link/20260616150802.52050-1-pengpeng@iscas.ac.cn
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/misc/rp1/rp1_pci.c | 20 ++++++++------------
+ 1 file changed, 8 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/misc/rp1/rp1_pci.c b/drivers/misc/rp1/rp1_pci.c
+index a1f20d88be5d..0e87633fe4f8 100644
+--- a/drivers/misc/rp1/rp1_pci.c
++++ b/drivers/misc/rp1/rp1_pci.c
+@@ -194,13 +194,13 @@ static int rp1_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 	if (!rp1_node) {
+ 		dev_err(dev, "Missing of_node for device\n");
+ 		err = -EINVAL;
+-		goto err_put_node;
++		goto err_out;
+ 	}
+ 
+ 	rp1 = devm_kzalloc(&pdev->dev, sizeof(*rp1), GFP_KERNEL);
+ 	if (!rp1) {
+ 		err = -ENOMEM;
+-		goto err_put_node;
++		goto err_out;
+ 	}
+ 
+ 	rp1->pdev = pdev;
+@@ -209,21 +209,21 @@ static int rp1_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 		dev_err(&pdev->dev,
+ 			"Not initialized - is the firmware running?\n");
+ 		err = -EINVAL;
+-		goto err_put_node;
++		goto err_out;
+ 	}
+ 
+ 	err = pcim_enable_device(pdev);
+ 	if (err < 0) {
+ 		err = dev_err_probe(&pdev->dev, err,
+ 				    "Enabling PCI device has failed");
+-		goto err_put_node;
++		goto err_out;
+ 	}
+ 
+ 	rp1->bar1 = pcim_iomap(pdev, 1, 0);
+ 	if (!rp1->bar1) {
+ 		dev_err(&pdev->dev, "Cannot map PCI BAR\n");
+ 		err = -EIO;
+-		goto err_put_node;
++		goto err_out;
+ 	}
+ 
+ 	pci_set_master(pdev);
+@@ -233,11 +233,11 @@ static int rp1_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 	if (err < 0) {
+ 		err = dev_err_probe(&pdev->dev, err,
+ 				    "Failed to allocate MSI-X vectors\n");
+-		goto err_put_node;
++		goto err_out;
+ 	} else if (err != RP1_INT_END) {
+ 		dev_err(&pdev->dev, "Cannot allocate enough interrupts\n");
+ 		err = -EINVAL;
+-		goto err_put_node;
++		goto err_out;
+ 	}
+ 
+ 	pci_set_drvdata(pdev, rp1);
+@@ -270,15 +270,11 @@ static int rp1_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 		goto err_unregister_interrupts;
+ 	}
+ 
+-	of_node_put(rp1_node);
+-
+ 	return 0;
+ 
+ err_unregister_interrupts:
+ 	rp1_unregister_interrupts(pdev);
+-err_put_node:
+-	of_node_put(rp1_node);
+-
++err_out:
+ 	return err;
+ }
+ 
+-- 
+2.55.0
+

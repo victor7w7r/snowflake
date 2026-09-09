@@ -1,0 +1,80 @@
+From 5e5e94d87dea92cc2e2fadaf3be84771509a86ca Mon Sep 17 00:00:00 2001
+From: Daniel Borkmann <daniel@iogearbox.net>
+Date: Wed, 8 Jul 2026 23:15:35 +0200
+Subject: [PATCH 03373/15333] bpf: Give vmlinux BTF init its own mutex
+
+bpf_get_btf_vmlinux() serializes the lazy vmlinux BTF parse with
+bpf_verifier_lock, the same mutex bpf_check() holds across the whole
+verification of an unprivileged program (if enabled; it's disabled
+by default). The latter can potentially stall the mutex holder for
+a long time (e.g. via userfaultfd), and therefore block first-time
+bpf_get_btf_vmlinux() caller from any context, including privileged
+program loads.
+
+Give the vmlinux BTF initialization a dedicated btf_vmlinux_lock so
+it is independent of the unprivileged verification mutex. The parse
+only needs mutual exclusion against itself.
+
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Link: https://lore.kernel.org/bpf/20260708211537.371874-3-daniel@iogearbox.net
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ kernel/bpf/btf.c      | 2 +-
+ kernel/bpf/verifier.c | 7 ++++---
+ 2 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
+index dff5c0d91641..8c04c340f499 100644
+--- a/kernel/bpf/btf.c
++++ b/kernel/bpf/btf.c
+@@ -6451,7 +6451,7 @@ struct btf *btf_parse_vmlinux(void)
+ 	if (IS_ERR(btf))
+ 		goto err_out;
+ 
+-	/* btf_parse_vmlinux() runs under bpf_verifier_lock */
++	/* btf_parse_vmlinux() runs under btf_vmlinux_lock */
+ 	bpf_ctx_convert.t = btf_type_by_id(btf, bpf_ctx_convert_btf_id[0]);
+ 	err = btf_alloc_id(btf);
+ 	if (err) {
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 9217e0f87cb5..40e20dfa3212 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -324,6 +324,7 @@ static const char *btf_type_name(const struct btf *btf, u32 id)
+ }
+ 
+ static DEFINE_MUTEX(bpf_verifier_lock);
++static DEFINE_MUTEX(btf_vmlinux_lock);
+ static DEFINE_MUTEX(bpf_percpu_ma_lock);
+ 
+ __printf(2, 3) static void verbose(void *private_data, const char *fmt, ...)
+@@ -19563,7 +19564,7 @@ struct btf *bpf_get_btf_vmlinux(void)
+ 	struct btf *btf = smp_load_acquire(&btf_vmlinux);
+ 
+ 	if (!btf && IS_ENABLED(CONFIG_DEBUG_INFO_BTF)) {
+-		mutex_lock(&bpf_verifier_lock);
++		mutex_lock(&btf_vmlinux_lock);
+ 		btf = btf_vmlinux;
+ 		if (!btf) {
+ 			btf = btf_parse_vmlinux();
+@@ -19575,7 +19576,7 @@ struct btf *bpf_get_btf_vmlinux(void)
+ 			 */
+ 			smp_store_release(&btf_vmlinux, btf);
+ 		}
+-		mutex_unlock(&bpf_verifier_lock);
++		mutex_unlock(&btf_vmlinux_lock);
+ 	}
+ 	return btf;
+ }
+@@ -20089,7 +20090,7 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr,
+ 
+ 	bpf_get_btf_vmlinux();
+ 
+-	/* grab the mutex to protect few globals used by verifier */
++	/* Serialize verification of unprivileged programs. */
+ 	if (!is_priv)
+ 		mutex_lock(&bpf_verifier_lock);
+ 
+-- 
+2.55.0
+

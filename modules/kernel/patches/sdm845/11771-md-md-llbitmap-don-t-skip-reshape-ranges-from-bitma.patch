@@ -1,0 +1,39 @@
+From 44aa6154e17e8831a1168e600deaff7dcb052a18 Mon Sep 17 00:00:00 2001
+From: Yu Kuai <yukuai@fygo.io>
+Date: Mon, 3 Aug 2026 03:50:29 +0800
+Subject: [PATCH 11771/15333] md/md-llbitmap: don't skip reshape ranges from
+ bitmap state
+
+Reshape progress is tracked by array metadata rather than llbitmap.
+Do not let llbitmap skip_sync_blocks() suppress reshape ranges based on
+stale bitmap state before the corresponding checkpoint is persisted.
+
+Tested-by: Mykola Marzhan <mykola@meshstor.io>
+Link: https://patch.msgid.link/20260802195038.164272-21-yukuai@kernel.org
+Signed-off-by: Yu Kuai <yukuai@fygo.io>
+---
+ drivers/md/md-llbitmap.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/md/md-llbitmap.c b/drivers/md/md-llbitmap.c
+index 1283ad737692..a609e8d44901 100644
+--- a/drivers/md/md-llbitmap.c
++++ b/drivers/md/md-llbitmap.c
+@@ -1707,6 +1707,14 @@ static sector_t llbitmap_skip_sync_blocks(struct mddev *mddev, sector_t offset)
+ 		return 0;
+ 	c = llbitmap_read(llbitmap, p);
+ 
++	/*
++	 * Reshape progress is tracked by array metadata rather than llbitmap.
++	 * Skipping reshape ranges from stale bitmap state can lose data after a
++	 * restart before the corresponding bits are checkpointed to disk.
++	 */
++	if (test_bit(MD_RECOVERY_RESHAPE, &mddev->recovery))
++		return 0;
++
+ 	/* always skip unwritten blocks */
+ 	if (c == BitUnwritten)
+ 		return blocks;
+-- 
+2.55.0
+

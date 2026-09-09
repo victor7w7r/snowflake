@@ -1,0 +1,44 @@
+From 571464f543f681f7b6f0014adc9fb18a120785e9 Mon Sep 17 00:00:00 2001
+From: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Date: Wed, 1 Jul 2026 15:25:05 +0530
+Subject: [PATCH 02333/15333] ASoC: SOF: amd: refactor SW1 I2S error reason
+ clear in acp_irq_handler
+
+Replace the open-coded pci_rev comparison with a switch statement for
+clearing ACP_SW1_I2S_ERROR_REASON. This makes the per-platform control
+explicit and easier to extend.
+
+Signed-off-by: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Link: https://patch.msgid.link/20260701095759.1012929-5-Vijendar.Mukunda@amd.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/amd/acp.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/sound/soc/sof/amd/acp.c b/sound/soc/sof/amd/acp.c
+index f7b22f9979f6..1f0fc052ea1a 100644
+--- a/sound/soc/sof/amd/acp.c
++++ b/sound/soc/sof/amd/acp.c
+@@ -540,8 +540,17 @@ static irqreturn_t acp_irq_handler(int irq, void *dev_id)
+ 		snd_sof_dsp_write(sdev, ACP_DSP_BAR, desc->ext_intr_stat, ACP_ERROR_IRQ_MASK);
+ 		snd_sof_dsp_write(sdev, ACP_DSP_BAR, desc->acp_sw0_i2s_err_reason, 0);
+ 		/* ACP_SW1_I2S_ERROR_REASON is newly added register from rmb platform onwards */
+-		if (adata->pci_rev >= ACP_RMB_PCI_ID)
++		switch (adata->pci_rev) {
++		case ACP_RMB_PCI_ID:
++		case ACP63_PCI_ID:
++		case ACP70_PCI_ID:
++		case ACP71_PCI_ID:
++		case ACP72_PCI_ID:
+ 			snd_sof_dsp_write(sdev, ACP_DSP_BAR, ACP_SW1_I2S_ERROR_REASON, 0);
++			break;
++		default:
++			break;
++		}
+ 		snd_sof_dsp_write(sdev, ACP_DSP_BAR, desc->acp_error_stat, 0);
+ 		irq_flag = 1;
+ 	}
+-- 
+2.55.0
+

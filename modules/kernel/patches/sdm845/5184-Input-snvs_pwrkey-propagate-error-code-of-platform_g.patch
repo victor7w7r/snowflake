@@ -1,0 +1,34 @@
+From 7ef54727f5a2deef5c59623f0685056b2e8a1676 Mon Sep 17 00:00:00 2001
+From: Joy Zou <joy.zou@nxp.com>
+Date: Wed, 15 Jul 2026 17:33:52 +0800
+Subject: [PATCH 05184/15333] Input: snvs_pwrkey - propagate error code of
+ platform_get_irq()
+
+Hardcoding -EINVAL discards the actual error code, which breaks probe
+deferral (-EPROBE_DEFER) and loses critical diagnostic information
+needed for proper kernel error handling.
+
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Signed-off-by: Joy Zou <joy.zou@nxp.com>
+Link: https://patch.msgid.link/20260715-b4-pwrkey-v5-2-07e7353c319e@oss.nxp.com
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+---
+ drivers/input/keyboard/snvs_pwrkey.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/input/keyboard/snvs_pwrkey.c b/drivers/input/keyboard/snvs_pwrkey.c
+index 8cc6863d26ed..d58bbbe9fd58 100644
+--- a/drivers/input/keyboard/snvs_pwrkey.c
++++ b/drivers/input/keyboard/snvs_pwrkey.c
+@@ -148,7 +148,7 @@ static int imx_snvs_pwrkey_probe(struct platform_device *pdev)
+ 
+ 	pdata->irq = platform_get_irq(pdev, 0);
+ 	if (pdata->irq < 0)
+-		return -EINVAL;
++		return pdata->irq;
+ 
+ 	error = of_property_read_u32(np, "power-off-time-sec", &val);
+ 	if (!error) {
+-- 
+2.55.0
+

@@ -1,0 +1,44 @@
+From 19183c0ef0d73ff3ca7caf8a205edcea922f8c24 Mon Sep 17 00:00:00 2001
+From: Georgios Androutsopoulos <georgeandrout13@gmail.com>
+Date: Tue, 16 Jun 2026 13:09:56 -0400
+Subject: [PATCH 09261/15333] rust_binder: add ownership assertion to
+ Node::add_death
+
+The `// SAFETY:` comment in NodeDeath::set_cleared assumes that a
+NodeDeath is never inserted into the death list of any Node other than
+its owner. However, this invariant is not enforced by the safe function
+Node::add_death, which inserts NodeDeath into the death list without
+checking that death.node == self, leaving a risk for future code that
+may miss this implicit invariant and cause undefined behavior.
+
+Add an assertion to make this precondition explicit and catch potential
+violations early.
+
+Link: https://github.com/Rust-for-Linux/linux/issues/1237
+
+Signed-off-by: Georgios Androutsopoulos <georgeandrout13@gmail.com>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Link: https://patch.msgid.link/20260616170956.2580772-1-georgeandrout13@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/android/binder/node.rs | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/android/binder/node.rs b/drivers/android/binder/node.rs
+index b74ef32b0d94..0a82af14cda3 100644
+--- a/drivers/android/binder/node.rs
++++ b/drivers/android/binder/node.rs
+@@ -335,6 +335,10 @@ pub(crate) fn add_death(
+         death: ListArc<DTRWrap<NodeDeath>, 1>,
+         guard: &mut Guard<'_, ProcessInner, SpinLockBackend>,
+     ) {
++        assert!(
++            core::ptr::eq(self, &**death.node),
++            "attempt to add NodeDeath to the wrong death list"
++        );
+         self.inner.access_mut(guard).death_list.push_back(death);
+     }
+ 
+-- 
+2.55.0
+

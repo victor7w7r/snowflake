@@ -1,0 +1,55 @@
+From a2595ed13816812cc4307a5834a584e0d06975a3 Mon Sep 17 00:00:00 2001
+From: Danilo Krummrich <dakr@kernel.org>
+Date: Thu, 13 Aug 2026 09:00:49 +0000
+Subject: [PATCH 13660/15333] rust: kernel: add `LocalModule` fallback for
+ `#[vtable]` `impl`s
+
+Like commit 98f256e27262 ("rust: doctest: add LocalModule fallback
+for #[vtable] ThisModule"), add another `LocalModule` struct with a
+null-pointer `ModuleMetadata` `impl` for the `kernel` crate, so that
+`crate::LocalModule` (auto-inserted by `#[vtable]`) resolves correctly
+when there is no `module!` macro.
+
+This will be needed by DRM to use `#[vtable]` `impl` blocks in KUnit
+tests within the `kernel` crate [1].
+
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+Link: https://lore.kernel.org/rust-for-linux/DKNAS52KYWLD.M15VEC6U0F6R@kernel.org/ [1]
+[ Created commit out of the diff in the link above. Fixed the
+  `clippy::undocumented_unsafe_blocks` lint by wrapping with a block
+  like in the other commit too. Added `#[allow(dead_code)]` until we
+  actually (and unconditionally, i.e. KUnit tests may be not enabled)
+  use it. - Miguel ]
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ rust/kernel/lib.rs | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/rust/kernel/lib.rs b/rust/kernel/lib.rs
+index 2e175dcb145a..59144e1e3d36 100644
+--- a/rust/kernel/lib.rs
++++ b/rust/kernel/lib.rs
+@@ -152,6 +152,20 @@
+ /// Prefix to appear before log messages printed from within the `kernel` crate.
+ const __LOG_PREFIX: &[u8] = b"rust_kernel\0";
+ 
++/// Dummy module type for `#[vtable]` `impl` blocks within the `kernel` crate (e.g. KUnit tests).
++// The `allow` is needed since it may be unused (e.g. KUnit tests may be disabled).
++#[allow(dead_code)]
++struct LocalModule;
++
++impl ModuleMetadata for LocalModule {
++    const NAME: &'static str::CStr = c"rust_kernel";
++
++    const THIS_MODULE: ThisModule = {
++        // SAFETY: `try_module_get`/`module_put` handle null module pointers gracefully.
++        unsafe { ThisModule::from_ptr(core::ptr::null_mut()) }
++    };
++}
++
+ #[cfg(not(testlib))]
+ #[panic_handler]
+ fn panic(info: &core::panic::PanicInfo<'_>) -> ! {
+-- 
+2.55.0
+

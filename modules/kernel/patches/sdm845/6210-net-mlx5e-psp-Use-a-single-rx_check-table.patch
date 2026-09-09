@@ -1,0 +1,142 @@
+From 92be057b8048229695f2d582a789ca5543233f4c Mon Sep 17 00:00:00 2001
+From: Cosmin Ratiu <cratiu@nvidia.com>
+Date: Tue, 7 Jul 2026 16:08:54 +0300
+Subject: [PATCH 06210/15333] net/mlx5e: psp: Use a single rx_check table
+
+PSP uses a check steering table per IP version, but the PSP rules are
+IP-version agnostic, so there's no point duplicating these in HW.
+
+This commit makes the rx check steering table independent of the IP
+version, with the final table added in the previous patch responsible
+for directing packets to the corresponding UDP TIRs (or the TTC table
+itself for non-UDP traffic).
+
+Signed-off-by: Cosmin Ratiu <cratiu@nvidia.com>
+Reviewed-by: Dragos Tatulea <dtatulea@nvidia.com>
+Signed-off-by: Tariq Toukan <tariqt@nvidia.com>
+Link: https://patch.msgid.link/20260707130858.969928-12-tariqt@nvidia.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ .../mellanox/mlx5/core/en_accel/psp.c         | 34 +++++++------------
+ 1 file changed, 12 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
+index c45241025b16..48bc59045dfe 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en_accel/psp.c
+@@ -43,7 +43,6 @@ struct mlx5e_psp_rx_decrypt_table {
+ 	struct mlx5_flow_group *miss_group;
+ 	struct mlx5_flow_handle *miss_rule;
+ 	struct mlx5_modify_hdr *rx_modify_hdr;
+-	struct mlx5e_psp_rx_check_table check;
+ 	struct mlx5_flow_handle *rule;
+ };
+ 
+@@ -69,6 +68,7 @@ struct mlx5e_psp_fs {
+ 	struct mlx5e_flow_steering *fs;
+ 	struct mlx5e_psp_rx *rx_fs;
+ 
++	struct mlx5e_psp_rx_check_table check;
+ 	struct mlx5e_psp_rx_table rx;
+ };
+ 
+@@ -267,8 +267,7 @@ static int accel_psp_fs_rx_ft_create(struct mlx5e_psp_fs *fs,
+ }
+ 
+ static
+-void accel_psp_fs_rx_check_ft_destroy(struct mlx5e_psp_fs *fs,
+-				      struct mlx5e_psp_rx_check_table *check)
++void accel_psp_fs_rx_check_ft_destroy(struct mlx5e_psp_rx_check_table *check)
+ {
+ 	accel_psp_fs_del_flow_rule(&check->bad_rule);
+ 	accel_psp_fs_del_flow_rule(&check->err_rule);
+@@ -402,13 +401,12 @@ int accel_psp_fs_rx_check_ft_create(struct mlx5e_psp_fs *fs,
+ 	goto out_spec;
+ 
+ out_err:
+-	accel_psp_fs_rx_check_ft_destroy(fs, check);
++	accel_psp_fs_rx_check_ft_destroy(check);
+ out_spec:
+ 	kfree(spec);
+ 	return err;
+ }
+ 
+-
+ static void
+ accel_psp_fs_rx_decrypt_ft_destroy(struct mlx5e_psp_fs *fs,
+ 				   struct mlx5e_psp_rx_decrypt_table *decrypt)
+@@ -511,7 +509,7 @@ accel_psp_fs_rx_decrypt_ft_create(struct mlx5e_psp_fs *fs,
+ 			  MLX5_FLOW_CONTEXT_ACTION_MOD_HDR;
+ 	flow_act.modify_hdr = modify_hdr;
+ 	dest.type = MLX5_FLOW_DESTINATION_TYPE_FLOW_TABLE;
+-	dest.ft = decrypt->check.ft;
++	dest.ft = fs->check.ft;
+ 	rule = mlx5_add_flow_rules(decrypt->ft, spec, &flow_act, &dest, 1);
+ 	if (IS_ERR(rule)) {
+ 		err = PTR_ERR(rule);
+@@ -541,8 +539,6 @@ static int accel_psp_fs_rx_destroy(struct mlx5e_psp_fs *fs,
+ 
+ 	accel_psp_fs_rx_decrypt_ft_destroy(fs, decrypt);
+ 
+-	accel_psp_fs_rx_check_ft_destroy(fs, &decrypt->check);
+-
+ 	return 0;
+ }
+ 
+@@ -552,24 +548,11 @@ static int accel_psp_fs_rx_create(struct mlx5e_psp_fs *fs, enum accel_fs_psp_typ
+ 	struct mlx5e_psp_rx_decrypt_table *decrypt;
+ 	struct mlx5e_psp_rx *rx_fs = fs->rx_fs;
+ 	struct mlx5_flow_destination dest = {};
+-	int err;
+ 
+ 	decrypt = &rx_fs->decrypt[type];
+ 
+-	err = accel_psp_fs_rx_check_ft_create(fs, &decrypt->check);
+-	if (err)
+-		return err;
+-
+ 	dest = mlx5_ttc_get_default_dest(ttc, fs_psp2tt(type));
+-	err = accel_psp_fs_rx_decrypt_ft_create(fs, decrypt, &dest);
+-	if (err)
+-		goto out_err_ft;
+-
+-	return 0;
+-
+-out_err_ft:
+-	accel_psp_fs_rx_check_ft_destroy(fs, &decrypt->check);
+-	return err;
++	return accel_psp_fs_rx_decrypt_ft_create(fs, decrypt, &dest);
+ }
+ 
+ static void accel_psp_fs_rx_cleanup(struct mlx5e_psp_fs *fs)
+@@ -654,6 +637,7 @@ void mlx5_accel_psp_fs_cleanup_rx_tables(struct mlx5e_priv *priv)
+ 		/* remove FT */
+ 		accel_psp_fs_rx_destroy(fs, i);
+ 	}
++	accel_psp_fs_rx_check_ft_destroy(&fs->check);
+ 	accel_psp_fs_rx_ft_destroy(&priv->psp->fs->rx);
+ }
+ 
+@@ -673,6 +657,10 @@ int mlx5_accel_psp_fs_init_rx_tables(struct mlx5e_priv *priv)
+ 	if (err)
+ 		return err;
+ 
++	err = accel_psp_fs_rx_check_ft_create(fs, &fs->check);
++	if (err)
++		goto err_ft;
++
+ 	for (i = 0; i < ACCEL_FS_PSP_NUM_TYPES; i++) {
+ 		struct mlx5e_psp_rx_decrypt_table *decrypt;
+ 		struct mlx5_flow_destination dest = {};
+@@ -696,6 +684,8 @@ int mlx5_accel_psp_fs_init_rx_tables(struct mlx5e_priv *priv)
+ 		mlx5_ttc_fwd_default_dest(ttc, fs_psp2tt(i));
+ 		accel_psp_fs_rx_destroy(fs, i);
+ 	}
++	accel_psp_fs_rx_check_ft_destroy(&fs->check);
++err_ft:
+ 	accel_psp_fs_rx_ft_destroy(&fs->rx);
+ 
+ 	return err;
+-- 
+2.55.0
+

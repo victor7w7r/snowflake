@@ -1,0 +1,45 @@
+From 584dfca970a256fb4af0121017862a9259cc019e Mon Sep 17 00:00:00 2001
+From: Christian Marangi <ansuelsmth@gmail.com>
+Date: Wed, 8 Jul 2026 10:40:44 +0200
+Subject: [PATCH 07724/15333] clk: en7523: reset PCIE HB on init for AN7581
+
+It was reported that PCIE HB should be reset for AN7581 or some instability
+or link training issue will be present on warm boot scenario.
+
+Reset PCIE HB on clk HW init to handle warm boot problem with PCIe.
+
+Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
+Reviewed-by: Brian Masney <bmasney@redhat.com>
+Signed-off-by: Brian Masney <bmasney@redhat.com>
+---
+ drivers/clk/clk-en7523.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/clk/clk-en7523.c b/drivers/clk/clk-en7523.c
+index 1ab0e2eca5d3..c450d89bfa96 100644
+--- a/drivers/clk/clk-en7523.c
++++ b/drivers/clk/clk-en7523.c
+@@ -57,6 +57,7 @@
+ 
+ #define REG_RST_CTRL2			0x830
+ #define REG_RST_CTRL1			0x834
++#define   REG_PCIE_HB_RST		BIT(29)
+ #define EN751221_REG_RST_DMT		0x84
+ #define EN751221_REG_RST_USB		0xec
+ 
+@@ -853,6 +854,12 @@ static int en7581_clk_hw_init(struct platform_device *pdev,
+ 	val = readl(base + REG_NP_SCU_PCIC);
+ 	writel(val | 3, base + REG_NP_SCU_PCIC);
+ 
++	val = readl(base + REG_RST_CTRL1);
++	val |= REG_PCIE_HB_RST;
++	writel(val, base + REG_RST_CTRL1);
++	val &= ~REG_PCIE_HB_RST;
++	writel(val, base + REG_RST_CTRL1);
++
+ 	return en7581_reset_register(&pdev->dev, base, en7581_rst_map,
+ 				     ARRAY_SIZE(en7581_rst_map),
+ 				     en7581_rst_ofs);
+-- 
+2.55.0
+

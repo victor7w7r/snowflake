@@ -1,0 +1,112 @@
+From e9f88aa0b16cc95e9c69d5d9fc02fe506c6a0df3 Mon Sep 17 00:00:00 2001
+From: Marc Zyngier <maz@kernel.org>
+Date: Wed, 29 Jul 2026 14:18:20 +0100
+Subject: [PATCH 09017/15333] KVM: arm64: Add host and hypervisor vCPU lookup
+ primitives
+
+The nVHE hypervisor repeatedly resolves a host vCPU into the EL2
+address space and validates that the loaded hyp vCPU matches it, with
+that logic open-coded in each handler.
+
+Add __get_host_hyp_vcpus() and the get_host_hyp_vcpus() macro, which
+translate the host vCPU into the hypervisor's address space and, when
+pKVM is enabled, also return the loaded hyp vCPU if it matches. If pKVM
+is enabled but the loaded hyp vCPU does not correspond to the requested
+host vCPU, both the host and hyp vCPU are returned as NULL. Convert
+handle___kvm_vcpu_run() to use it.
+
+No functional change intended.
+
+Reviewed-by: Vincent Donnefort <vdonnefort@google.com>
+Signed-off-by: Marc Zyngier <maz@kernel.org>
+Co-developed-by: Fuad Tabba <fuad.tabba@linux.dev>
+Signed-off-by: Fuad Tabba <fuad.tabba@linux.dev>
+Link: https://patch.msgid.link/20260729131823.2021516-6-fuad.tabba@linux.dev
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/hyp/nvhe/hyp-main.c | 50 ++++++++++++++++++++++--------
+ 1 file changed, 37 insertions(+), 13 deletions(-)
+
+diff --git a/arch/arm64/kvm/hyp/nvhe/hyp-main.c b/arch/arm64/kvm/hyp/nvhe/hyp-main.c
+index 104026ee70e8..f859c8aca544 100644
+--- a/arch/arm64/kvm/hyp/nvhe/hyp-main.c
++++ b/arch/arm64/kvm/hyp/nvhe/hyp-main.c
+@@ -220,14 +220,45 @@ static void handle___pkvm_vcpu_put(struct kvm_cpu_context *host_ctxt)
+ 		pkvm_put_hyp_vcpu(hyp_vcpu);
+ }
+ 
++static struct kvm_vcpu *__get_host_hyp_vcpus(struct kvm_vcpu *arg,
++					     struct pkvm_hyp_vcpu **hyp_vcpup)
++{
++	struct kvm_vcpu *host_vcpu = kern_hyp_va(arg);
++	struct pkvm_hyp_vcpu *hyp_vcpu = NULL;
++
++	if (unlikely(is_protected_kvm_enabled())) {
++		hyp_vcpu = pkvm_get_loaded_hyp_vcpu();
++
++		if (!hyp_vcpu || hyp_vcpu->host_vcpu != host_vcpu) {
++			hyp_vcpu = NULL;
++			host_vcpu = NULL;
++		}
++	}
++
++	*hyp_vcpup = hyp_vcpu;
++	return host_vcpu;
++}
++
++#define get_host_hyp_vcpus(ctxt, regnr, hyp_vcpup)			\
++	({								\
++		DECLARE_REG(struct kvm_vcpu *, __vcpu, ctxt, regnr);	\
++		__get_host_hyp_vcpus(__vcpu, hyp_vcpup);		\
++	})
++
+ static void handle___kvm_vcpu_run(struct kvm_cpu_context *host_ctxt)
+ {
+-	DECLARE_REG(struct kvm_vcpu *, host_vcpu, host_ctxt, 1);
++	struct pkvm_hyp_vcpu *hyp_vcpu;
++	struct kvm_vcpu *host_vcpu;
+ 	int ret;
+ 
+-	if (unlikely(is_protected_kvm_enabled())) {
+-		struct pkvm_hyp_vcpu *hyp_vcpu = pkvm_get_loaded_hyp_vcpu();
++	host_vcpu = get_host_hyp_vcpus(host_ctxt, 1, &hyp_vcpu);
++
++	if (!host_vcpu) {
++		ret = -EINVAL;
++		goto out;
++	}
+ 
++	if (unlikely(hyp_vcpu)) {
+ 		/*
+ 		 * KVM (and pKVM) doesn't support SME guests for now, and
+ 		 * ensures that SME features aren't enabled in pstate when
+@@ -239,23 +270,16 @@ static void handle___kvm_vcpu_run(struct kvm_cpu_context *host_ctxt)
+ 			goto out;
+ 		}
+ 
+-		if (!hyp_vcpu) {
+-			ret = -EINVAL;
+-			goto out;
+-		}
+-
+ 		flush_hyp_vcpu(hyp_vcpu);
+ 
+ 		ret = __kvm_vcpu_run(&hyp_vcpu->vcpu);
+ 
+ 		sync_hyp_vcpu(hyp_vcpu);
+ 	} else {
+-		struct kvm_vcpu *vcpu = kern_hyp_va(host_vcpu);
+-
+ 		/* The host is fully trusted, run its vCPU directly. */
+-		fpsimd_lazy_switch_to_guest(vcpu);
+-		ret = __kvm_vcpu_run(vcpu);
+-		fpsimd_lazy_switch_to_host(vcpu);
++		fpsimd_lazy_switch_to_guest(host_vcpu);
++		ret = __kvm_vcpu_run(host_vcpu);
++		fpsimd_lazy_switch_to_host(host_vcpu);
+ 	}
+ out:
+ 	cpu_reg(host_ctxt, 1) =  ret;
+-- 
+2.55.0
+

@@ -1,0 +1,66 @@
+From eeaf1a44be8354c197107535727db9e1fa53472f Mon Sep 17 00:00:00 2001
+From: Richard Zhu <hongxing.zhu@nxp.com>
+Date: Tue, 30 Jun 2026 10:30:06 +0800
+Subject: [PATCH 01478/15333] arm64: dts: imx943-evk: add PCIe root port node
+ and according properties
+
+Since describing the PCIe PERST# property under Host Bridge node is now
+deprecated, it is recommended to add it to the Root Port node, so creating
+the root port node and add the reset-gpios property in root port.
+
+Move the regulator to root port nodes as well, because that the PCI pwrctrl
+framework had been integrated into pci-imx6 driver.
+
+The backward compatibility is not a concern since i.MX94 is a newly
+introduced platform that is still under active development.
+
+Signed-off-by: Richard Zhu <hongxing.zhu@nxp.com>
+Reviewed-by: Sherry Sun <sherry.sun@nxp.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+---
+ arch/arm64/boot/dts/freescale/imx943-evk.dts | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/freescale/imx943-evk.dts b/arch/arm64/boot/dts/freescale/imx943-evk.dts
+index 7cfd42468950..674410e541cb 100644
+--- a/arch/arm64/boot/dts/freescale/imx943-evk.dts
++++ b/arch/arm64/boot/dts/freescale/imx943-evk.dts
+@@ -1034,12 +1034,15 @@ &pcie0 {
+ 		 <&pcie_ref_clk>;
+ 	clock-names = "pcie", "pcie_bus", "pcie_phy", "pcie_aux",
+ 		      "ref", "extref";
+-	reset-gpio = <&pcal6416_i2c3_u46 3 GPIO_ACTIVE_LOW>;
+-	vpcie3v3aux-supply = <&reg_m2_wlan>;
+ 	supports-clkreq;
+ 	status = "okay";
+ };
+ 
++&pcie0_port0 {
++	reset-gpios = <&pcal6416_i2c3_u46 3 GPIO_ACTIVE_LOW>;
++	vpcie3v3aux-supply = <&reg_m2_wlan>;
++};
++
+ &pcie0_ep {
+ 	pinctrl-0 = <&pinctrl_pcie0>;
+ 	pinctrl-names = "default";
+@@ -1058,12 +1061,15 @@ &pcie1 {
+ 		 <&pcie_ref_clk>;
+ 	clock-names = "pcie", "pcie_bus", "pcie_phy", "pcie_aux",
+ 		      "ref", "extref";
+-	reset-gpio = <&pcal6416_i2c3_u46 1 GPIO_ACTIVE_LOW>;
+-	vpcie3v3aux-supply = <&reg_slot_pwr>;
+ 	supports-clkreq;
+ 	status = "okay";
+ };
+ 
++&pcie1_port0 {
++	reset-gpios = <&pcal6416_i2c3_u46 1 GPIO_ACTIVE_LOW>;
++	vpcie3v3aux-supply = <&reg_slot_pwr>;
++};
++
+ &pcie1_ep {
+ 	pinctrl-0 = <&pinctrl_pcie1>;
+ 	pinctrl-names = "default";
+-- 
+2.55.0
+

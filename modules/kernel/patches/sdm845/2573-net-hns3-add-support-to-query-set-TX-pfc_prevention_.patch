@@ -1,0 +1,382 @@
+From d7261cdb9550733b9003123eabb986d80fa9155d Mon Sep 17 00:00:00 2001
+From: Hao Chen <chenhao418@huawei.com>
+Date: Tue, 30 Jun 2026 21:40:43 +0800
+Subject: [PATCH 02573/15333] net: hns3: add support to query/set TX
+ pfc_prevention_tout for ethtool with RX prevention disabled
+
+Add ethtool support to query and configure the PFC (Priority Flow Control)
+storm prevention timeout. When TX continuously sends PFC frames, the peer
+end is suppressed from sending packets. If this persists, a PFC frame storm
+may occur.
+
+This feature allows configuring a timeout to prevent such storms.
+
+Signed-off-by: Hao Chen <chenhao418@huawei.com>
+Signed-off-by: Jijie Shao <shaojijie@huawei.com>
+Link: https://patch.msgid.link/20260630134043.1532431-1-shaojijie@huawei.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/ethernet/hisilicon/hns3/hnae3.h   |  14 ++
+ .../hns3/hns3_common/hclge_comm_cmd.h         |   3 +
+ .../ethernet/hisilicon/hns3/hns3_ethtool.c    |  12 ++
+ .../hisilicon/hns3/hns3pf/hclge_cmd.h         |   9 +
+ .../hisilicon/hns3/hns3pf/hclge_main.c        | 172 ++++++++++++++++++
+ .../hisilicon/hns3/hns3pf/hclge_main.h        |   7 +
+ 6 files changed, 217 insertions(+)
+
+diff --git a/drivers/net/ethernet/hisilicon/hns3/hnae3.h b/drivers/net/ethernet/hisilicon/hns3/hnae3.h
+index a8798eecd9fb..4286af9239b0 100644
+--- a/drivers/net/ethernet/hisilicon/hns3/hnae3.h
++++ b/drivers/net/ethernet/hisilicon/hns3/hnae3.h
+@@ -602,6 +602,10 @@ typedef int (*read_func)(struct seq_file *s, void *data);
+  *   Config wake on lan
+  * dbg_get_read_func
+  *   Return the read func for debugfs seq file
++ * set_pfc_prevention_tout
++ *   Set PFC storm prevention timeout
++ * get_pfc_prevention_tout
++ *   Get PFC storm prevention timeout
+  */
+ struct hnae3_ae_ops {
+ 	int (*init_ae_dev)(struct hnae3_ae_dev *ae_dev);
+@@ -810,6 +814,8 @@ struct hnae3_ae_ops {
+ 	int (*hwtstamp_set)(struct hnae3_handle *handle,
+ 			    struct kernel_hwtstamp_config *config,
+ 			    struct netlink_ext_ack *extack);
++	int (*set_pfc_prevention_tout)(struct hnae3_handle *handle, u16 times);
++	int (*get_pfc_prevention_tout)(struct hnae3_handle *handle, u16 *times);
+ };
+ 
+ struct hnae3_dcb_ops {
+@@ -891,6 +897,14 @@ struct hnae3_roce_private_info {
+ 	unsigned long state;
+ };
+ 
++struct hnae3_pfc_storm_para {
++	u32 dir;
++	u32 enable;
++	u32 period_ms;
++	u32 times;
++	u32 recovery_period_ms;
++};
++
+ #define HNAE3_SUPPORT_APP_LOOPBACK    BIT(0)
+ #define HNAE3_SUPPORT_PHY_LOOPBACK    BIT(1)
+ #define HNAE3_SUPPORT_SERDES_SERIAL_LOOPBACK	BIT(2)
+diff --git a/drivers/net/ethernet/hisilicon/hns3/hns3_common/hclge_comm_cmd.h b/drivers/net/ethernet/hisilicon/hns3/hns3_common/hclge_comm_cmd.h
+index 2c2a2f1e0d7a..6dde07dde1e8 100644
+--- a/drivers/net/ethernet/hisilicon/hns3/hns3_common/hclge_comm_cmd.h
++++ b/drivers/net/ethernet/hisilicon/hns3/hns3_common/hclge_comm_cmd.h
+@@ -314,6 +314,9 @@ enum hclge_opcode_type {
+ 
+ 	/* Query link diagnosis info command */
+ 	HCLGE_OPC_QUERY_LINK_DIAGNOSIS	= 0x702A,
++
++	/* Config pause storm param command */
++	HCLGE_OPC_CFG_PAUSE_STORM_PARA = 0x7019,
+ };
+ 
+ enum hclge_comm_cmd_return_status {
+diff --git a/drivers/net/ethernet/hisilicon/hns3/hns3_ethtool.c b/drivers/net/ethernet/hisilicon/hns3/hns3_ethtool.c
+index 442f15476af3..e7318f236315 100644
+--- a/drivers/net/ethernet/hisilicon/hns3/hns3_ethtool.c
++++ b/drivers/net/ethernet/hisilicon/hns3/hns3_ethtool.c
+@@ -1895,6 +1895,12 @@ static int hns3_get_tunable(struct net_device *netdev,
+ 	case ETHTOOL_TX_COPYBREAK_BUF_SIZE:
+ 		*(u32 *)data = h->kinfo.tx_spare_buf_size;
+ 		break;
++	case ETHTOOL_PFC_PREVENTION_TOUT:
++		if (!h->ae_algo->ops->get_pfc_prevention_tout)
++			return -EOPNOTSUPP;
++
++		ret = h->ae_algo->ops->get_pfc_prevention_tout(h, (u16 *)data);
++		break;
+ 	default:
+ 		ret = -EOPNOTSUPP;
+ 		break;
+@@ -2020,6 +2026,12 @@ static int hns3_set_tunable(struct net_device *netdev,
+ 			netdev_info(netdev, "the active tx spare buf size is %u, due to page order\n",
+ 				    priv->ring->tx_spare->len);
+ 
++		break;
++	case ETHTOOL_PFC_PREVENTION_TOUT:
++		if (!h->ae_algo->ops->set_pfc_prevention_tout)
++			return -EOPNOTSUPP;
++
++		ret = h->ae_algo->ops->set_pfc_prevention_tout(h, *(u16 *)data);
+ 		break;
+ 	default:
+ 		ret = -EOPNOTSUPP;
+diff --git a/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_cmd.h b/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_cmd.h
+index 4ce92ddefcde..1c029dc32ab8 100644
+--- a/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_cmd.h
++++ b/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_cmd.h
+@@ -890,6 +890,15 @@ struct hclge_query_wol_supported_cmd {
+ 	u8 rsv[20];
+ };
+ 
++struct hclge_pfc_storm_para_cmd {
++	__le32 dir;
++	__le32 enable;
++	__le32 period_ms;
++	__le32 times;
++	__le32 recovery_period_ms;
++	__le32 rsv;
++};
++
+ struct hclge_hw;
+ int hclge_cmd_send(struct hclge_hw *hw, struct hclge_desc *desc, int num);
+ #endif
+diff --git a/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_main.c b/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_main.c
+index fc8587c80813..a08d8a35aef9 100644
+--- a/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_main.c
++++ b/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_main.c
+@@ -3524,6 +3524,122 @@ static int hclge_set_vf_link_state(struct hnae3_handle *handle, int vf,
+ 	return ret;
+ }
+ 
++static int hclge_set_pfc_storm_para(struct hclge_dev *hdev,
++				    struct hnae3_pfc_storm_para *para)
++{
++	struct hclge_pfc_storm_para_cmd *para_cmd;
++	struct hclge_desc desc;
++	int ret;
++
++	if (hdev->ae_dev->dev_version < HNAE3_DEVICE_VERSION_V3)
++		return -EOPNOTSUPP;
++
++	hclge_cmd_setup_basic_desc(&desc, HCLGE_OPC_CFG_PAUSE_STORM_PARA,
++				   false);
++	para_cmd = (struct hclge_pfc_storm_para_cmd *)desc.data;
++	para_cmd->dir = cpu_to_le32(para->dir);
++	para_cmd->enable = cpu_to_le32(para->enable);
++	para_cmd->period_ms = cpu_to_le32(para->period_ms);
++	para_cmd->times = cpu_to_le32(para->times);
++	para_cmd->recovery_period_ms = cpu_to_le32(para->recovery_period_ms);
++
++	ret = hclge_cmd_send(&hdev->hw, &desc, 1);
++	if (ret)
++		dev_err(&hdev->pdev->dev,
++			"failed to set pfc storm para, ret = %d\n", ret);
++	return ret;
++}
++
++static int hclge_get_pfc_storm_para(struct hclge_dev *hdev,
++				    struct hnae3_pfc_storm_para *para)
++{
++	struct hclge_pfc_storm_para_cmd *para_cmd;
++	struct hclge_desc desc;
++	int ret;
++
++	if (hdev->ae_dev->dev_version < HNAE3_DEVICE_VERSION_V3)
++		return -EOPNOTSUPP;
++
++	hclge_cmd_setup_basic_desc(&desc, HCLGE_OPC_CFG_PAUSE_STORM_PARA, true);
++	para_cmd = (struct hclge_pfc_storm_para_cmd *)desc.data;
++	para_cmd->dir = cpu_to_le32(para->dir);
++	ret = hclge_cmd_send(&hdev->hw, &desc, 1);
++	if (ret) {
++		dev_err(&hdev->pdev->dev,
++			"failed to get pfc storm para, ret = %d\n", ret);
++		return ret;
++	}
++
++	para->enable = le32_to_cpu(para_cmd->enable);
++	para->period_ms = le32_to_cpu(para_cmd->period_ms);
++	para->times = le32_to_cpu(para_cmd->times);
++	para->recovery_period_ms = le32_to_cpu(para_cmd->recovery_period_ms);
++
++	return 0;
++}
++
++static int hclge_enable_pfc_storm_prevent(struct hclge_dev *hdev,
++					  int dir, bool enable)
++{
++	struct hnae3_pfc_storm_para para = {0};
++	int ret;
++
++	para.dir = dir;
++	ret = hclge_get_pfc_storm_para(hdev, &para);
++	if (ret)
++		return ret;
++
++	para.enable = enable;
++	return hclge_set_pfc_storm_para(hdev, &para);
++}
++
++static int hclge_set_pfc_prevention_tout(struct hnae3_handle *h, u16 times)
++{
++	struct hclge_vport *vport = hclge_get_vport(h);
++	struct hclge_dev *hdev = vport->back;
++	struct hnae3_pfc_storm_para para;
++	int ret;
++
++	if (times > HCLGE_MAX_PFC_PREVENTION_TOUT) {
++		dev_err(&hdev->pdev->dev,
++			"times %u should be no more than %u!\n",
++			times, HCLGE_MAX_PFC_PREVENTION_TOUT);
++		return -EINVAL;
++	}
++
++	para.dir = HCLGE_DIR_TX;
++	ret = hclge_get_pfc_storm_para(hdev, &para);
++	if (ret)
++		return ret;
++
++	para.enable = times ? 1 : 0;
++	para.times = (u32)times;
++	ret = hclge_set_pfc_storm_para(hdev, &para);
++	if (ret)
++		return ret;
++
++	hdev->pfc_prevention_tout = times;
++
++	return 0;
++}
++
++static int hclge_get_pfc_prevention_tout(struct hnae3_handle *h, u16 *times)
++{
++	struct hclge_vport *vport = hclge_get_vport(h);
++	struct hclge_dev *hdev = vport->back;
++	struct hnae3_pfc_storm_para para;
++	int ret;
++
++	para.dir = HCLGE_DIR_TX;
++	ret = hclge_get_pfc_storm_para(hdev, &para);
++	if (ret)
++		return ret;
++
++	*times = para.enable ? (u16)para.times : 0;
++
++	return 0;
++}
++
+ static void hclge_set_reset_pending(struct hclge_dev *hdev,
+ 				    enum hnae3_reset_type reset_type)
+ {
+@@ -4317,6 +4433,26 @@ static int hclge_reset_prepare(struct hclge_dev *hdev)
+ 	return hclge_reset_prepare_wait(hdev);
+ }
+ 
++static void hclge_restore_pfc_storm_prevention_tout(struct hclge_dev *hdev)
++{
++	struct hnae3_handle *handle = &hdev->vport[0].nic;
++	int ret;
++
++	ret = hclge_enable_pfc_storm_prevent(hdev, HCLGE_DIR_RX, false);
++	if (ret == -EOPNOTSUPP)
++		return;
++	else if (ret)
++		dev_warn(&hdev->pdev->dev,
++			 "failed to disable rx pfc storm prevent, ret = %d\n",
++			 ret);
++
++	ret = hclge_set_pfc_prevention_tout(handle, hdev->pfc_prevention_tout);
++	if (ret)
++		dev_warn(&hdev->pdev->dev,
++			 "failed to set tx pfc storm prevent, ret = %d\n",
++			 ret);
++}
++
+ static int hclge_reset_rebuild(struct hclge_dev *hdev)
+ {
+ 	int ret;
+@@ -9278,6 +9414,32 @@ static int hclge_init_wol(struct hclge_dev *hdev)
+ 	return hclge_update_wol(hdev);
+ }
+ 
++static void hclge_init_pfc_prevention_tout(struct hclge_dev *hdev)
++{
++	struct hnae3_handle *handle = &hdev->vport[0].nic;
++	u16 times;
++	int ret;
++
++	ret = hclge_enable_pfc_storm_prevent(hdev, HCLGE_DIR_RX, false);
++	if (ret == -EOPNOTSUPP)
++		return;
++	else if (ret)
++		dev_warn(&hdev->pdev->dev,
++			 "failed to disable rx pfc storm prevent, ret = %d\n",
++			 ret);
++
++	ret = hclge_get_pfc_prevention_tout(handle, &times);
++	if (ret) {
++		dev_warn(&hdev->pdev->dev,
++			 "failed to get tx pfc prevention timeout, ret = %d\n",
++			 ret);
++		times = HCLGE_DEFAULT_PFC_PREVENTION_TOUT;
++	}
++
++	hdev->pfc_prevention_tout = times;
++	hdev->pfc_prevention_tout_default = times;
++}
++
+ static void hclge_get_wol(struct hnae3_handle *handle,
+ 			  struct ethtool_wolinfo *wol)
+ {
+@@ -9547,6 +9709,8 @@ static int hclge_init_ae_dev(struct hnae3_ae_dev *ae_dev)
+ 		dev_warn(&pdev->dev,
+ 			 "failed to wake on lan init, ret = %d\n", ret);
+ 
++	hclge_init_pfc_prevention_tout(hdev);
++
+ 	ret = hclge_devlink_init(hdev);
+ 	if (ret)
+ 		goto err_ptp_uninit;
+@@ -9946,6 +10110,8 @@ static int hclge_reset_ae_dev(struct hnae3_ae_dev *ae_dev)
+ 		dev_warn(&pdev->dev,
+ 			 "failed to update wol config, ret = %d\n", ret);
+ 
++	hclge_restore_pfc_storm_prevention_tout(hdev);
++
+ 	dev_info(&pdev->dev, "Reset done, %s driver initialization finished.\n",
+ 		 HCLGE_DRIVER_NAME);
+ 
+@@ -9977,6 +10143,10 @@ static void hclge_uninit_ae_dev(struct hnae3_ae_dev *ae_dev)
+ 	hclge_config_nic_hw_error(hdev, false);
+ 	hclge_config_rocee_ras_interrupt(hdev, false);
+ 
++	/* Restore hw default values for the next initialization */
++	hclge_set_pfc_prevention_tout(&hdev->vport->nic,
++				      hdev->pfc_prevention_tout_default);
++
+ 	hclge_comm_cmd_uninit(hdev->ae_dev, &hdev->hw.hw);
+ 	hclge_misc_irq_uninit(hdev);
+ 	hclge_devlink_uninit(hdev);
+@@ -10539,6 +10709,8 @@ static const struct hnae3_ae_ops hclge_ops = {
+ 	.set_wol = hclge_set_wol,
+ 	.hwtstamp_get = hclge_ptp_get_cfg,
+ 	.hwtstamp_set = hclge_ptp_set_cfg,
++	.set_pfc_prevention_tout = hclge_set_pfc_prevention_tout,
++	.get_pfc_prevention_tout = hclge_get_pfc_prevention_tout,
+ };
+ 
+ static struct hnae3_ae_algo ae_algo = {
+diff --git a/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_main.h b/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_main.h
+index 7419481422c3..0cee8947f6b4 100644
+--- a/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_main.h
++++ b/drivers/net/ethernet/hisilicon/hns3/hns3pf/hclge_main.h
+@@ -346,6 +346,11 @@ enum hclge_link_fail_code {
+ #define HCLGE_LINK_STATUS_DOWN 0
+ #define HCLGE_LINK_STATUS_UP   1
+ 
++#define HCLGE_DIR_RX 0
++#define HCLGE_DIR_TX 1
++#define HCLGE_MAX_PFC_PREVENTION_TOUT		2000
++#define HCLGE_DEFAULT_PFC_PREVENTION_TOUT	1000
++
+ #define HCLGE_PG_NUM		4
+ #define HCLGE_SCH_MODE_SP	0
+ #define HCLGE_SCH_MODE_DWRR	1
+@@ -898,6 +903,8 @@ struct hclge_dev {
+ 	u16 vf_rss_size_max;		/* HW defined VF max RSS task queue */
+ 	u16 pf_rss_size_max;		/* HW defined PF max RSS task queue */
+ 	u32 tx_spare_buf_size;		/* HW defined TX spare buffer size */
++	u16 pfc_prevention_tout;	/* User config, restored after reset */
++	u16 pfc_prevention_tout_default; /* HW default, to avoid stale state */
+ 
+ 	u16 fdir_pf_filter_count; /* Num of guaranteed filters for this PF */
+ 	u16 num_alloc_vport;		/* Num vports this driver supports */
+-- 
+2.55.0
+

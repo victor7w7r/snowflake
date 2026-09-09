@@ -1,0 +1,137 @@
+From 57d12209790d3f006cd215d073780f3162d507c4 Mon Sep 17 00:00:00 2001
+From: Radu Rendec <radu@rendec.net>
+Date: Sun, 5 Jul 2026 17:09:50 -0400
+Subject: [PATCH 02987/15333] genirq: Remove unnecessary NULL check of the
+ kstat_irqs field
+
+The kstat_irqs field of struct irq_desc is used to store a per-cpu count
+of interrupt events. It is initialized in init_desc(), along with all
+the other fields in struct irq_desc that need explicit initialization,
+and therefore it's always available (non-NULL) for any valid interrupt
+descriptor (with a caveat - see below).
+
+When CONFIG_SPARSE_IRQ is enabled, all interrupt descriptors are always
+allocated dynamically via alloc_desc(), which calls init_desc(), so in
+that case kstat_irqs is guaranteed to be non-NULL before a valid struct
+irq_desc pointer is even returned.
+
+By contrast, when CONFIG_SPARSE_IRQ is disabled, interrupt descriptors
+are allocated statically in the irq_desc[] array, and kstat_irqs is
+initialized implicitly to NULL. The per-cpu pointer is initialized only
+later, for all descriptors, via start_kernel() -> early_irq_init() ->
+init_desc().
+
+The kstat_irqs field is used mostly for printing interrupt statistics
+(i.e. reading /proc/interrupts), and that cannot happen until much
+later, when user-space is fully initialized. So, there is no concern
+with that use case.
+
+The list below includes all functions where the NULL check is removed,
+along with a list of all possible call chains and/or a brief explanation
+of why it's safe to remove the NULL check in that case.
+
+  * irq_desc_kstat_cpu() [include/linux/irqdesc.h]
+    - All direct call sites use it for printing IRQ statistics.
+
+    - Indirect call site: per_cpu_count_show() - also used for printing
+      interruptstatistics.
+
+  * kstat_irqs_cpu() [kernel/irq/irqdesc.c]
+    - Called by sun3_int7() and sun3_int5() [arch/m68k/sun3/sun3ints.c]
+      These are interrupt handlers and cannot be called until their
+      corresponding interrupts are initialized in sun3_init_IRQ(). The
+      call chain leading to that is:
+        start_kernel() -> init_IRQ() [arch/m68k/kernel/ints.c] ->
+        mach_init_IRQ = sun3_init_IRQ()
+      The init_IRQ() call happens right *after* the early_irq_init() call,
+      which means the descriptors are already fully initialized by the
+      time the interrupt handlers are even registered.
+
+    - Called by show_interrupts() [arch/s390/kernel/irq.c] - used for
+      printing interrupt statistics.
+
+  * kstat_irqs() [kernel/irq/irqdesc.c]
+      The only possible call chain is via fs/proc/stat.c:
+      stat_open() -> show_stat() -> show_all_irqs() -> kstat_irqs_usr() ->
+      kstat_irqs()
+      It is used for printing interrupt statistics.
+
+  * kstat_snapshot_irqs()
+      The only possible call chain is via kernel/watchdog.c:
+        watchdog_timer_fn() -> is_softlockup() -> start_counting_irqs() ->
+        kstat_snapshot_irqs()
+      The watchdog timer cannot fire early, before early_irq_init().
+
+  * kstat_get_irq_since_snapshot()
+      The only possible call chain is via kernel/watchdog.c:
+        watchdog_timer_fn() -> report_cpu_status() -> print_irq_counts() ->
+        kstat_get_irq_since_snapshot()
+      The watchdog timer cannot fire early, before early_irq_init().
+
+Signed-off-by: Radu Rendec <radu@rendec.net>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/20260705210951.2717741-2-radu@rendec.net
+---
+ include/linux/irqdesc.h |  2 +-
+ kernel/irq/irqdesc.c    | 11 ++++-------
+ 2 files changed, 5 insertions(+), 8 deletions(-)
+
+diff --git a/include/linux/irqdesc.h b/include/linux/irqdesc.h
+index 8080db17c1b1..779d6023c5c2 100644
+--- a/include/linux/irqdesc.h
++++ b/include/linux/irqdesc.h
+@@ -146,7 +146,7 @@ extern struct irq_desc irq_desc[NR_IRQS];
+ static inline unsigned int irq_desc_kstat_cpu(struct irq_desc *desc,
+ 					      unsigned int cpu)
+ {
+-	return desc->kstat_irqs ? per_cpu(desc->kstat_irqs->cnt, cpu) : 0;
++	return per_cpu(desc->kstat_irqs->cnt, cpu);
+ }
+ 
+ static inline struct irq_desc *irq_data_to_desc(struct irq_data *data)
+diff --git a/kernel/irq/irqdesc.c b/kernel/irq/irqdesc.c
+index 80ef4e27dcf4..3a818f07a101 100644
+--- a/kernel/irq/irqdesc.c
++++ b/kernel/irq/irqdesc.c
+@@ -1004,7 +1004,7 @@ unsigned int kstat_irqs_cpu(unsigned int irq, int cpu)
+ {
+ 	struct irq_desc *desc = irq_to_desc(irq);
+ 
+-	return desc && desc->kstat_irqs ? per_cpu(desc->kstat_irqs->cnt, cpu) : 0;
++	return desc ? irq_desc_kstat_cpu(desc, cpu) : 0;
+ }
+ 
+ static unsigned int kstat_irqs_desc(struct irq_desc *desc, const struct cpumask *cpumask)
+@@ -1026,7 +1026,7 @@ static unsigned int kstat_irqs(unsigned int irq)
+ {
+ 	struct irq_desc *desc = irq_to_desc(irq);
+ 
+-	if (!desc || !desc->kstat_irqs)
++	if (!desc)
+ 		return 0;
+ 	return kstat_irqs_desc(desc, cpu_possible_mask);
+ }
+@@ -1038,18 +1038,15 @@ void kstat_snapshot_irqs(void)
+ 	struct irq_desc *desc;
+ 	unsigned int irq;
+ 
+-	for_each_irq_desc(irq, desc) {
+-		if (!desc->kstat_irqs)
+-			continue;
++	for_each_irq_desc(irq, desc)
+ 		this_cpu_write(desc->kstat_irqs->ref, this_cpu_read(desc->kstat_irqs->cnt));
+-	}
+ }
+ 
+ unsigned int kstat_get_irq_since_snapshot(unsigned int irq)
+ {
+ 	struct irq_desc *desc = irq_to_desc(irq);
+ 
+-	if (!desc || !desc->kstat_irqs)
++	if (!desc)
+ 		return 0;
+ 	return this_cpu_read(desc->kstat_irqs->cnt) - this_cpu_read(desc->kstat_irqs->ref);
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,90 @@
+From d6ae9f9b9bd373461442f17ef157ed9ee850a413 Mon Sep 17 00:00:00 2001
+From: Andrei Kuchynski <akuchynski@chromium.org>
+Date: Mon, 8 Jun 2026 21:15:17 +0000
+Subject: [PATCH 06747/15333] platform/chrome: cros_ec_proto: Introduce
+ cros_ec_read_features helper
+
+Extract the EC feature-reading logic from cros_ec_check_features() into
+cros_ec_read_features() helper function.
+
+Currently, cros_ec_check_features() swallows command transfer errors. By
+isolating the transaction logic into an explicit helper that returns the
+actual transfer error code, subsequent callers (such as the cros_ec_dev
+driver during device probing) can catch a read error.
+
+Signed-off-by: Andrei Kuchynski <akuchynski@chromium.org>
+Acked-by: Tzung-Bi Shih <tzungbi@kernel.org>
+Link: https://patch.msgid.link/20260608211518.2214740-2-akuchynski@chromium.org
+Signed-off-by: Lee Jones <lee@kernel.org>
+---
+ drivers/platform/chrome/cros_ec_proto.c     | 30 +++++++++++++++------
+ include/linux/platform_data/cros_ec_proto.h |  2 ++
+ 2 files changed, 24 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/platform/chrome/cros_ec_proto.c b/drivers/platform/chrome/cros_ec_proto.c
+index 1d8d9168ec1a..724d1313f6b2 100644
+--- a/drivers/platform/chrome/cros_ec_proto.c
++++ b/drivers/platform/chrome/cros_ec_proto.c
+@@ -946,6 +946,27 @@ u32 cros_ec_get_host_event(struct cros_ec_device *ec_dev)
+ }
+ EXPORT_SYMBOL(cros_ec_get_host_event);
+ 
++/**
++ * cros_ec_read_features() - Read EC features
++ *
++ * @ec: EC device.
++ *
++ * Return: >= 0 on success, negative error number on failure.
++ */
++int cros_ec_read_features(struct cros_ec_dev *ec)
++{
++	int ret = cros_ec_cmd(ec->ec_dev, 0, EC_CMD_GET_FEATURES + ec->cmd_offset,
++			      NULL, 0, &ec->features, sizeof(ec->features));
++
++	if (ret < 0) {
++		dev_warn(ec->dev, "cannot get EC features: %d\n", ret);
++		memset(&ec->features, 0, sizeof(ec->features));
++	}
++
++	return ret;
++}
++EXPORT_SYMBOL_GPL(cros_ec_read_features);
++
+ /**
+  * cros_ec_check_features() - Test for the presence of EC features
+  *
+@@ -960,17 +981,10 @@ EXPORT_SYMBOL(cros_ec_get_host_event);
+ bool cros_ec_check_features(struct cros_ec_dev *ec, int feature)
+ {
+ 	struct ec_response_get_features *features = &ec->features;
+-	int ret;
+ 
+ 	if (features->flags[0] == -1U && features->flags[1] == -1U) {
+ 		/* features bitmap not read yet */
+-		ret = cros_ec_cmd(ec->ec_dev, 0, EC_CMD_GET_FEATURES + ec->cmd_offset,
+-				  NULL, 0, features, sizeof(*features));
+-		if (ret < 0) {
+-			dev_warn(ec->dev, "cannot get EC features: %d\n", ret);
+-			memset(features, 0, sizeof(*features));
+-		}
+-
++		cros_ec_read_features(ec);
+ 		dev_dbg(ec->dev, "EC features %08x %08x\n",
+ 			features->flags[0], features->flags[1]);
+ 	}
+diff --git a/include/linux/platform_data/cros_ec_proto.h b/include/linux/platform_data/cros_ec_proto.h
+index 6ed1c4c5ce2e..a1ccecf5e1f8 100644
+--- a/include/linux/platform_data/cros_ec_proto.h
++++ b/include/linux/platform_data/cros_ec_proto.h
+@@ -271,6 +271,8 @@ int cros_ec_get_next_event(struct cros_ec_device *ec_dev,
+ 
+ u32 cros_ec_get_host_event(struct cros_ec_device *ec_dev);
+ 
++int cros_ec_read_features(struct cros_ec_dev *ec);
++
+ bool cros_ec_check_features(struct cros_ec_dev *ec, int feature);
+ 
+ int cros_ec_get_sensor_count(struct cros_ec_dev *ec);
+-- 
+2.55.0
+

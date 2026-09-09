@@ -1,0 +1,35 @@
+From 79a883d53960fb2eaf02f72a37182078b4fc938e Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Wed, 12 Aug 2026 15:43:11 +0700
+Subject: [PATCH 13537/15333] ASoC: pxa: Drop redundant probe error messages
+
+devm_platform_ioremap_resource() does not report the error itself,
+but the error is already reported deeper in the call chain,
+so the dev_err() calls are redundant and can be removed.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260812084311.29188-1-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/pxa/pxa2xx-ac97-lib.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/sound/soc/pxa/pxa2xx-ac97-lib.c b/sound/soc/pxa/pxa2xx-ac97-lib.c
+index d9c3935636da..d7f720431afb 100644
+--- a/sound/soc/pxa/pxa2xx-ac97-lib.c
++++ b/sound/soc/pxa/pxa2xx-ac97-lib.c
+@@ -316,10 +316,8 @@ int pxa2xx_ac97_hw_probe(struct platform_device *dev)
+ 	int irq;
+ 
+ 	ac97_reg_base = devm_platform_ioremap_resource(dev, 0);
+-	if (IS_ERR(ac97_reg_base)) {
+-		dev_err(&dev->dev, "Missing MMIO resource\n");
++	if (IS_ERR(ac97_reg_base))
+ 		return PTR_ERR(ac97_reg_base);
+-	}
+ 
+ 	if (cpu_is_pxa27x()) {
+ 		/* Assert reset using GPIOD_OUT_HIGH, because reset is GPIO_ACTIVE_LOW */
+-- 
+2.55.0
+

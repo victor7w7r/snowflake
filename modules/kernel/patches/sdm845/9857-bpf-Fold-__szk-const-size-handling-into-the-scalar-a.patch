@@ -1,0 +1,166 @@
+From f16e80c2c45175664ec6b0aaad6914fadbda395d Mon Sep 17 00:00:00 2001
+From: Amery Hung <ameryhung@gmail.com>
+Date: Sat, 1 Aug 2026 00:46:25 -0700
+Subject: [PATCH 09857/15333] bpf: Fold __szk const size handling into the
+ scalar arg path
+
+To align helper and kfunc pointer to memory argument handling, move
+kfunc constant memorry size argument handling to the kfunc scalar
+section. In addition, factor out constant scalar argument handling.
+
+The constant size argument (__szk) of a kfunc memory/size pair was
+recorded into meta->arg_constant by a dedicated block in the
+KF_ARG_PTR_TO_MEM_SIZE case, duplicating the "only one constant
+argument" and "must be a known constant" checks already in the generic
+scalar argument handling. That block also did an explicit i++ to skip
+the size argument.
+
+This also fixes a precision gap: the old dedicated block did not mark
+the size register precise, relying on check_mem_size_reg() for that. But
+check_mem_size_reg() is skipped when the buffer is a nullable arg passed
+as NULL (e.g. bpf_dynptr_slice(_rdwr) with a NULL buffer), so in that
+case the __szk value was recorded and used for regs[R0].mem_size without
+marking it precise. Routing the size through the scalar path marks it
+precise in all cases.
+
+Signed-off-by: Amery Hung <ameryhung@gmail.com>
+Reviewed-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://lore.kernel.org/bpf/20260801074633.1595644-11-ameryhung@gmail.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ include/linux/bpf_verifier.h | 11 +++---
+ kernel/bpf/verifier.c        | 66 +++++++++++++++++-------------------
+ 2 files changed, 39 insertions(+), 38 deletions(-)
+
+diff --git a/include/linux/bpf_verifier.h b/include/linux/bpf_verifier.h
+index bb0d43814e90..b54c1a5c9b11 100644
+--- a/include/linux/bpf_verifier.h
++++ b/include/linux/bpf_verifier.h
+@@ -1479,6 +1479,12 @@ struct ret_mem_desc {
+ 	bool found;
+ };
+ 
++/* A constant scalar argument; Populated by process_const_arg() */
++struct arg_constant_desc {
++	u64 value;
++	bool found;
++};
++
+ struct bpf_call_arg_meta {
+ 	/* Common */
+ 	struct btf *btf;
+@@ -1496,10 +1502,7 @@ struct bpf_call_arg_meta {
+ 	u32 kfunc_flags;
+ 	const struct btf_type *func_proto;
+ 	const char *func_name;
+-	struct {
+-		u64 value;
+-		bool found;
+-	} arg_constant;
++	struct arg_constant_desc arg_constant;
+ 
+ 	/* arg_{btf,btf_id,owning_ref} are used by kfunc-specific handling,
+ 	 * generally to pass info about user-defined local kptr types to later
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 89e72d0a2c46..6fc22a4e38b2 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -6995,6 +6995,35 @@ static int process_const_alloc_mem_size(struct bpf_verifier_env *env, struct bpf
+ 	return 0;
+ }
+ 
++static int process_const_arg(struct bpf_verifier_env *env, struct bpf_reg_state *reg,
++			     argno_t argno, struct bpf_call_arg_meta *meta)
++{
++	int regno = reg_from_argno(argno);
++	int err;
++
++	if (meta->arg_constant.found) {
++		verifier_bug(env, "only one constant argument permitted");
++		return -EFAULT;
++	}
++
++	if (!tnum_is_const(reg->var_off)) {
++		verbose(env, "%s must be a known constant\n", reg_arg_name(env, argno));
++		return -EINVAL;
++	}
++
++	if (regno >= 0)
++		err = mark_chain_precision(env, regno);
++	else
++		err = mark_stack_arg_precision(env, arg_idx_from_argno(argno));
++	if (err < 0)
++		return err;
++
++	meta->arg_constant.found = true;
++	meta->arg_constant.value = reg->var_off.value;
++
++	return 0;
++}
++
+ enum {
+ 	PROCESS_SPIN_LOCK = (1 << 0),
+ 	PROCESS_RES_LOCK  = (1 << 1),
+@@ -12054,24 +12083,11 @@ static int check_kfunc_args(struct bpf_verifier_env *env, struct bpf_call_arg_me
+ 				return -EINVAL;
+ 			}
+ 
+-			if (is_kfunc_arg_constant(meta->btf, &args[i])) {
+-				if (meta->arg_constant.found) {
+-					verifier_bug(env, "only one constant argument permitted");
+-					return -EFAULT;
+-				}
+-				if (!tnum_is_const(reg->var_off)) {
+-					verbose(env, "%s must be a known constant\n",
+-						reg_arg_name(env, argno));
+-					return -EINVAL;
+-				}
+-				if (regno >= 0)
+-					ret = mark_chain_precision(env, regno);
+-				else
+-					ret = mark_stack_arg_precision(env, i);
++			if (is_kfunc_arg_constant(meta->btf, &args[i]) ||
++			    is_kfunc_arg_const_mem_size(meta->btf, &args[i], reg)) {
++				ret = process_const_arg(env, reg, argno, meta);
+ 				if (ret < 0)
+ 					return ret;
+-				meta->arg_constant.found = true;
+-				meta->arg_constant.value = reg->var_off.value;
+ 			} else if (is_kfunc_arg_scalar_with_name(btf, &args[i], "rdonly_buf_size")) {
+ 				meta->r0_rdonly = true;
+ 				is_ret_buf_sz = true;
+@@ -12393,7 +12409,6 @@ static int check_kfunc_args(struct bpf_verifier_env *env, struct bpf_call_arg_me
+ 			struct bpf_reg_state *buff_reg = reg;
+ 			const struct btf_param *buff_arg = &args[i];
+ 			struct bpf_reg_state *size_reg = get_func_arg_reg(caller, regs, i + 1);
+-			const struct btf_param *size_arg = &args[i + 1];
+ 			argno_t next_argno = argno_from_arg(i + 2);
+ 
+ 			if (!bpf_register_is_null(buff_reg) || !is_kfunc_arg_nullable(meta->btf, buff_arg)) {
+@@ -12406,23 +12421,6 @@ static int check_kfunc_args(struct bpf_verifier_env *env, struct bpf_call_arg_me
+ 					return ret;
+ 				}
+ 			}
+-
+-			if (is_kfunc_arg_const_mem_size(meta->btf, size_arg, size_reg)) {
+-				if (meta->arg_constant.found) {
+-					verifier_bug(env, "only one constant argument permitted");
+-					return -EFAULT;
+-				}
+-				if (!tnum_is_const(size_reg->var_off)) {
+-					verbose(env, "%s must be a known constant\n",
+-						reg_arg_name(env, next_argno));
+-					return -EINVAL;
+-				}
+-				meta->arg_constant.found = true;
+-				meta->arg_constant.value = size_reg->var_off.value;
+-			}
+-
+-			/* Skip next '__sz' or '__szk' argument */
+-			i++;
+ 			break;
+ 		}
+ 		case KF_ARG_PTR_TO_CALLBACK:
+-- 
+2.55.0
+

@@ -1,0 +1,83 @@
+From 3ca485a067c650ca8d6d146faae41d130d7324aa Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Fri, 10 Jul 2026 11:33:24 +0200
+Subject: [PATCH 09935/15333] binfmt_misc: include what is used
+
+The include list still reflects code that left this file years ago:
+nothing here uses sched/mm.h, pagemap.h, namei.h, syscalls.h or
+anything from fs/internal.h anymore, mount.h and the bm_fs_type
+forward declaration lost their last user when the pinned bm_mnt
+machinery was removed. Drop all of that and instead spell out the
+headers the file actually relies on but so far pulled in
+transitively: bitops, bits, bug, cleanup, cred, kstrtox, printk,
+refcount, string and user_namespace. With that nothing needs the
+kernel.h grab bag anymore, so it goes too, and the list is sorted
+alphabetically.
+
+Link: https://patch.msgid.link/20260710-work-binfmt_misc-locking-v3-23-a162f7cb58d6@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/binfmt_misc.c | 34 +++++++++++++++++-----------------
+ 1 file changed, 17 insertions(+), 17 deletions(-)
+
+diff --git a/fs/binfmt_misc.c b/fs/binfmt_misc.c
+index c6d7ba459737..62dbf99ca667 100644
+--- a/fs/binfmt_misc.c
++++ b/fs/binfmt_misc.c
+@@ -10,27 +10,29 @@
+ 
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+-#include <linux/kernel.h>
+-#include <linux/module.h>
+-#include <linux/init.h>
+-#include <linux/sched/mm.h>
+-#include <linux/magic.h>
+ #include <linux/binfmts.h>
+-#include <linux/slab.h>
++#include <linux/bitops.h>
++#include <linux/bits.h>
++#include <linux/bug.h>
++#include <linux/cleanup.h>
++#include <linux/cred.h>
+ #include <linux/ctype.h>
+-#include <linux/string_helpers.h>
+ #include <linux/file.h>
+-#include <linux/pagemap.h>
+-#include <linux/namei.h>
+-#include <linux/mount.h>
++#include <linux/fs.h>
++#include <linux/fs_context.h>
++#include <linux/init.h>
++#include <linux/kstrtox.h>
++#include <linux/magic.h>
++#include <linux/module.h>
++#include <linux/printk.h>
+ #include <linux/rculist.h>
++#include <linux/refcount.h>
+ #include <linux/seq_file.h>
+-#include <linux/fs_context.h>
+-#include <linux/syscalls.h>
+-#include <linux/fs.h>
++#include <linux/slab.h>
++#include <linux/string.h>
++#include <linux/string_helpers.h>
+ #include <linux/uaccess.h>
+-
+-#include "internal.h"
++#include <linux/user_namespace.h>
+ 
+ /* Entry status and match type bit numbers. */
+ enum binfmt_misc_entry_bits {
+@@ -62,8 +64,6 @@ struct binfmt_misc_entry {
+ 	char buf[];			/* register string, fields point in here */
+ };
+ 
+-static struct file_system_type bm_fs_type;
+-
+ /*
+  * Max length of the register string.  Determined by:
+  *  - 7 delimiters
+-- 
+2.55.0
+

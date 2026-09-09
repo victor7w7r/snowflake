@@ -1,0 +1,90 @@
+From 71a25f259384c09abd4782fc8ed32f0472646674 Mon Sep 17 00:00:00 2001
+From: Konstantin Komarov <almaz.alexandrovich@paragon-software.com>
+Date: Thu, 2 Jul 2026 13:03:30 +0200
+Subject: [PATCH 06920/15333] ntfs3: fix boundary check in ntfs_dir_count()
+
+ntfs_dir_emit() skips index entries whose fname does not fit in e->size,
+but ntfs_dir_count() still accepted them via de_get_fname() alone.
+dir_is_empty() can then disagree with readdir: a malformed directory
+appears empty in ls while rmdir fails with ENOTEMPTY.
+
+Factor the fname/key bounds check into de_fname_fits() and use it from
+ntfs_dir_emit() and de_countable_fname() so count/readdir share the same
+entry acceptance rules.
+
+Signed-off-by: Xixin Liu <liuxixin@kylinos.cn>
+Signed-off-by: Konstantin Komarov <almaz.alexandrovich@paragon-software.com>
+---
+ fs/ntfs3/dir.c | 32 +++++++++++++++++++++++++-------
+ 1 file changed, 25 insertions(+), 7 deletions(-)
+
+diff --git a/fs/ntfs3/dir.c b/fs/ntfs3/dir.c
+index 2816490993ec..62482c2352ad 100644
+--- a/fs/ntfs3/dir.c
++++ b/fs/ntfs3/dir.c
+@@ -273,6 +273,12 @@ struct inode *dir_search_u(struct inode *dir, const struct cpu_str *uni,
+ 	return err == -ENOENT ? NULL : err ? ERR_PTR(err) : inode;
+ }
+ 
++static inline bool de_fname_fits(const struct NTFS_DE *e, u32 e_size,
++				 const struct ATTR_FILE_NAME *fname)
++{
++	return sizeof(struct NTFS_DE) + fname_full_size(fname) <= e_size;
++}
++
+ /*
+  * returns false if 'ctx' if full
+  */
+@@ -305,9 +311,7 @@ static inline bool ntfs_dir_emit(struct ntfs_sb_info *sbi,
+ 	if (sbi->options->nohidden && (fname->dup.fa & FILE_ATTRIBUTE_HIDDEN))
+ 		return true;
+ 
+-	if (sizeof(struct NTFS_DE) + offsetof(struct ATTR_FILE_NAME, name) +
+-		    fname->name_len * sizeof(short) >
+-	    le16_to_cpu(e->size))
++	if (!de_fname_fits(e, le16_to_cpu(e->size), fname))
+ 		return true;
+ 
+ 	name_len = ntfs_utf16_to_nls(sbi, fname->name, fname->name_len, name,
+@@ -576,6 +580,23 @@ static int ntfs_readdir(struct file *file, struct dir_context *ctx)
+ 	return err;
+ }
+ 
++/*
++ * Return fname when @e passes the same checks as ntfs_dir_emit() before
++ * exposing an entry (valid key, non-DOS, fname fits in e->size).
++ */
++static inline const struct ATTR_FILE_NAME *
++de_countable_fname(const struct NTFS_DE *e, u32 e_size)
++{
++	const struct ATTR_FILE_NAME *fname;
++
++	fname = de_get_fname(e);
++	if (!fname || fname->type == FILE_NAME_DOS ||
++	    !de_fname_fits(e, e_size, fname))
++		return NULL;
++
++	return fname;
++}
++
+ static int ntfs_dir_count(struct inode *dir, bool *is_empty, size_t *dirs,
+ 			  size_t *files)
+ {
+@@ -615,13 +636,10 @@ static int ntfs_dir_count(struct inode *dir, bool *is_empty, size_t *dirs,
+ 			if (de_is_last(e))
+ 				break;
+ 
+-			fname = de_get_fname(e);
++			fname = de_countable_fname(e, e_size);
+ 			if (!fname)
+ 				continue;
+ 
+-			if (fname->type == FILE_NAME_DOS)
+-				continue;
+-
+ 			if (is_empty) {
+ 				*is_empty = false;
+ 				if (!dirs && !files)
+-- 
+2.55.0
+

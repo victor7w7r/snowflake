@@ -1,0 +1,176 @@
+From 78d99c2c5eee0f6cd1adfe33dd0c266baac50fb8 Mon Sep 17 00:00:00 2001
+From: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Date: Wed, 1 Jul 2026 15:25:06 +0530
+Subject: [PATCH 02334/15333] ASoC: SOF: amd: add ACP7x probe and remove
+
+Add amd_sof_acp7x_probe() and amd_sof_acp7x_remove() for ACP7.B/7.F.
+Wire probe and remove into sof_acp7x_ops_init().
+
+Signed-off-by: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Link: https://patch.msgid.link/20260701095759.1012929-6-Vijendar.Mukunda@amd.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/amd/acp.c   | 102 ++++++++++++++++++++++++++++++++++++++
+ sound/soc/sof/amd/acp.h   |   4 ++
+ sound/soc/sof/amd/acp7x.c |   2 +
+ 3 files changed, 108 insertions(+)
+
+diff --git a/sound/soc/sof/amd/acp.c b/sound/soc/sof/amd/acp.c
+index 1f0fc052ea1a..b2c319857ad8 100644
+--- a/sound/soc/sof/amd/acp.c
++++ b/sound/soc/sof/amd/acp.c
+@@ -12,6 +12,7 @@
+  * Hardware interface for generic AMD ACP processor
+  */
+ 
++#include <linux/acpi.h>
+ #include <linux/io.h>
+ #include <linux/module.h>
+ #include <linux/pci.h>
+@@ -1030,6 +1031,107 @@ void amd_sof_acp_remove(struct snd_sof_dev *sdev)
+ }
+ EXPORT_SYMBOL_NS(amd_sof_acp_remove, "SND_SOC_SOF_AMD_COMMON");
+ 
++int amd_sof_acp7x_probe(struct snd_sof_dev *sdev)
++{
++	struct pci_dev *pci = to_pci_dev(sdev->dev);
++	struct acp_dev_data *adata;
++	const struct sof_amd_acp_desc *chip;
++	const union acpi_object *obj;
++	struct acpi_device *adev;
++	unsigned int addr;
++	int ret;
++
++	chip = get_chip_info(sdev->pdata);
++	if (!chip) {
++		dev_err(sdev->dev, "no such device supported, chip id:%x\n", pci->device);
++		return -EIO;
++	}
++	adata = devm_kzalloc(sdev->dev, sizeof(struct acp_dev_data), GFP_KERNEL);
++	if (!adata)
++		return -ENOMEM;
++
++	adata->dev = sdev;
++	adata->dmic_dev = platform_device_register_data(sdev->dev, "dmic-codec",
++							PLATFORM_DEVID_NONE, NULL, 0);
++	if (IS_ERR(adata->dmic_dev)) {
++		dev_err(sdev->dev, "failed to register platform for dmic codec\n");
++		return PTR_ERR(adata->dmic_dev);
++	}
++
++	addr = pci_resource_start(pci, ACP_DSP_BAR);
++	sdev->bar[ACP_DSP_BAR] = devm_ioremap(sdev->dev, addr, pci_resource_len(pci, ACP_DSP_BAR));
++	if (!sdev->bar[ACP_DSP_BAR]) {
++		dev_err(sdev->dev, "ioremap error\n");
++		ret = -ENXIO;
++		goto unregister_dev;
++	}
++
++	pci_set_master(pci);
++	adata->addr = addr;
++	adata->reg_range = chip->reg_end_addr - chip->reg_start_addr;
++	adata->pci_rev = pci->revision;
++	mutex_init(&adata->acp_lock);
++	sdev->pdata->hw_pdata = adata;
++
++	ret = acp_init(sdev);
++	if (ret < 0)
++		goto unregister_dev;
++
++	adev = ACPI_COMPANION(&pci->dev);
++
++	if (adev) {
++		if (!acpi_dev_get_property(adev, "acp-sof-signed-firmware-image",
++					   ACPI_TYPE_INTEGER, &obj))
++			adata->acp_sof_signed_firmware_image = obj->integer.value;
++	}
++
++	sdev->dsp_box.offset = 0;
++	sdev->dsp_box.size = BOX_SIZE_512;
++
++	sdev->host_box.offset = sdev->dsp_box.offset + sdev->dsp_box.size;
++	sdev->host_box.size = BOX_SIZE_512;
++
++	sdev->debug_box.offset = sdev->host_box.offset + sdev->host_box.size;
++	sdev->debug_box.size = BOX_SIZE_1024;
++
++	if (adata->acp_sof_signed_firmware_image) {
++		adata->fw_code_bin = devm_kasprintf(sdev->dev, GFP_KERNEL,
++						    "sof-%s-code.bin", chip->name);
++		if (!adata->fw_code_bin) {
++			ret = -ENOMEM;
++			goto unregister_dev;
++		}
++		adata->fw_data_bin = devm_kasprintf(sdev->dev, GFP_KERNEL,
++						    "sof-%s-data.bin", chip->name);
++		if (!adata->fw_data_bin) {
++			ret = -ENOMEM;
++			goto unregister_dev;
++		}
++	}
++
++	adata->enable_fw_debug = enable_fw_debug;
++	acp_memory_init(sdev);
++	acp_dsp_stream_init(sdev);
++
++	return 0;
++
++unregister_dev:
++	platform_device_unregister(adata->dmic_dev);
++	return ret;
++}
++EXPORT_SYMBOL_NS(amd_sof_acp7x_probe, "SND_SOC_SOF_AMD_COMMON");
++
++void amd_sof_acp7x_remove(struct snd_sof_dev *sdev)
++{
++	struct acp_dev_data *adata = sdev->pdata->hw_pdata;
++
++	if (adata->dmic_dev)
++		platform_device_unregister(adata->dmic_dev);
++
++	acp_reset(sdev);
++}
++EXPORT_SYMBOL_NS(amd_sof_acp7x_remove, "SND_SOC_SOF_AMD_COMMON");
++
+ MODULE_LICENSE("Dual BSD/GPL");
+ MODULE_DESCRIPTION("AMD ACP sof driver");
+ MODULE_IMPORT_NS("SOUNDWIRE_AMD_INIT");
+diff --git a/sound/soc/sof/amd/acp.h b/sound/soc/sof/amd/acp.h
+index 063aa41dd237..46b946132de8 100644
+--- a/sound/soc/sof/amd/acp.h
++++ b/sound/soc/sof/amd/acp.h
+@@ -277,6 +277,7 @@ struct acp_dev_data {
+ 	/* acp70_sdw1_wake_event flag set to true when wake irq asserted for SW1 instance */
+ 	bool acp70_sdw1_wake_event;
+ 	unsigned int pci_rev;
++	int acp_sof_signed_firmware_image;
+ };
+ 
+ void memcpy_to_scratch(struct snd_sof_dev *sdev, u32 offset, unsigned int *src, size_t bytes);
+@@ -353,6 +354,9 @@ int sof_acp70_ops_init(struct snd_sof_dev *sdev);
+ extern struct snd_sof_dsp_ops sof_acp7x_ops;
+ int sof_acp7x_ops_init(struct snd_sof_dev *sdev);
+ 
++int amd_sof_acp7x_probe(struct snd_sof_dev *sdev);
++void amd_sof_acp7x_remove(struct snd_sof_dev *sdev);
++
+ struct snd_soc_acpi_mach *amd_sof_machine_select(struct snd_sof_dev *sdev);
+ /* Machine configuration */
+ int snd_amd_acp_find_config(struct pci_dev *pci);
+diff --git a/sound/soc/sof/amd/acp7x.c b/sound/soc/sof/amd/acp7x.c
+index 87c70014d777..3366e1b638af 100644
+--- a/sound/soc/sof/amd/acp7x.c
++++ b/sound/soc/sof/amd/acp7x.c
+@@ -137,6 +137,8 @@ int sof_acp7x_ops_init(struct snd_sof_dev *sdev)
+ 
+ 	sof_acp7x_ops.drv = acp7x_sof_dai;
+ 	sof_acp7x_ops.num_drv = ARRAY_SIZE(acp7x_sof_dai);
++	sof_acp7x_ops.probe = amd_sof_acp7x_probe;
++	sof_acp7x_ops.remove = amd_sof_acp7x_remove;
+ 
+ 	return 0;
+ }
+-- 
+2.55.0
+

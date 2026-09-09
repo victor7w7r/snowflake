@@ -1,0 +1,55 @@
+From 8a28e1519baf1a9052f19f4b6a6928c06021d95c Mon Sep 17 00:00:00 2001
+From: Jesse Zhang <Jesse.Zhang@amd.com>
+Date: Fri, 31 Jul 2026 12:36:25 +0800
+Subject: [PATCH 11319/15333] drm/amdgpu/userq: mark a queue unmapped after a
+ per-queue reset
+
+mes_userq_reset() unmaps the queue via the low-level mes_userq_unmap()
+(REMOVE_QUEUE) but does not update queue->state, so the queue still looks
+MAPPED. The destroy path then issues a second, redundant REMOVE_QUEUE for
+the already-removed queue; for gfx that unmap waits on an EOP that never
+arrives, times out (-110) and escalates to a full GPU reset.
+
+Mark the queue UNMAPPED on a successful reset-path unmap so destroy skips
+the redundant REMOVE_QUEUE.
+
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Jesse Zhang <Jesse.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/mes_userqueue.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c b/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
+index 639e4a37f872..b5816f9a8ffd 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
+@@ -26,6 +26,7 @@
+ #include "amdgpu_gfx.h"
+ #include "mes_userqueue.h"
+ #include "amdgpu_userq_fence.h"
++#include "amdgpu_trace.h"
+ 
+ #define AMDGPU_USERQ_PROC_CTX_SZ PAGE_SIZE
+ #define AMDGPU_USERQ_GANG_CTX_SZ PAGE_SIZE
+@@ -205,7 +206,16 @@ int mes_userq_reset(struct amdgpu_usermode_queue *queue)
+ 	amdgpu_mes_unlock(&adev->mes);
+ 	if (r)
+ 		return r;
+-	return mes_userq_unmap(queue);
++
++	/* mes_userq_unmap() does not update queue->state; mark it UNMAPPED so the
++	 * destroy path does not issue a second REMOVE_QUEUE for the removed queue.
++	 */
++	r = mes_userq_unmap(queue);
++	if (!r) {
++		trace_amdgpu_userq_state_changed(queue, AMDGPU_USERQ_STATE_UNMAPPED);
++		queue->state = AMDGPU_USERQ_STATE_UNMAPPED;
++	}
++	return r;
+ }
+ 
+ int mes_userq_reset_queue(struct amdgpu_device *adev,
+-- 
+2.55.0
+

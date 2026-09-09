@@ -1,0 +1,41 @@
+From 38f5745f49e446bf0fa3fcfa2d1a58538591ed77 Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Thu, 18 Jun 2026 01:39:19 +0900
+Subject: [PATCH 05749/15333] arch_numa: remove redundant nodemask clears in
+ numa_init()
+
+numa_init() clears numa_nodes_parsed, node_possible_map and
+node_online_map, then calls numa_memblks_init(), which clears the same
+nodemasks. Nothing uses them in between.
+
+These clears have been redundant since commit 767507654c22 ("arch_numa:
+switch over to numa_memblks") made numa_init() use numa_memblks_init().
+
+No functional change.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Reviewed-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Link: https://patch.msgid.link/20260617163919.2544899-1-ekffu200098@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/base/arch_numa.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/drivers/base/arch_numa.c b/drivers/base/arch_numa.c
+index c99f2ab105e5..442ea239bba7 100644
+--- a/drivers/base/arch_numa.c
++++ b/drivers/base/arch_numa.c
+@@ -231,10 +231,6 @@ static int __init numa_init(int (*init_func)(void))
+ {
+ 	int ret;
+ 
+-	nodes_clear(numa_nodes_parsed);
+-	nodes_clear(node_possible_map);
+-	nodes_clear(node_online_map);
+-
+ 	ret = numa_memblks_init(init_func, /* memblock_force_top_down */ false);
+ 	if (ret < 0)
+ 		goto out_free_distance;
+-- 
+2.55.0
+

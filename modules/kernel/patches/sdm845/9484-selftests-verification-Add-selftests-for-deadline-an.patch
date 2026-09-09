@@ -1,0 +1,90 @@
+From 984b5a36fd12d1849511a45fda32036fe2b0d004 Mon Sep 17 00:00:00 2001
+From: Gabriele Monaco <gmonaco@redhat.com>
+Date: Thu, 23 Jul 2026 09:45:34 +0200
+Subject: [PATCH 09484/15333] selftests/verification: Add selftests for
+ deadline and stall monitors
+
+Add selftests to verify deadline monitors don't fail under expected
+conditions and the stall monitor report violations only when expected.
+
+Reviewed-by: Nam Cao <namcao@linutronix.de>
+Link: https://lore.kernel.org/r/20260723074534.43521-18-gmonaco@redhat.com
+Signed-off-by: Gabriele Monaco <gmonaco@redhat.com>
+---
+ .../verification/test.d/rv_deadline.tc        | 23 +++++++++++++
+ .../selftests/verification/test.d/rv_stall.tc | 33 +++++++++++++++++++
+ 2 files changed, 56 insertions(+)
+ create mode 100644 tools/testing/selftests/verification/test.d/rv_deadline.tc
+ create mode 100644 tools/testing/selftests/verification/test.d/rv_stall.tc
+
+diff --git a/tools/testing/selftests/verification/test.d/rv_deadline.tc b/tools/testing/selftests/verification/test.d/rv_deadline.tc
+new file mode 100644
+index 000000000000..fc95267dbb82
+--- /dev/null
++++ b/tools/testing/selftests/verification/test.d/rv_deadline.tc
+@@ -0,0 +1,23 @@
++#!/bin/sh
++# SPDX-License-Identifier: GPL-2.0-or-later
++# description: Test deadline monitors trigger no reaction
++# requires: available_reactors deadline:monitor printk:reactor stress-ng:program
++
++load() { # returns true if there was a reaction
++	local lines_before
++	lines_before=$(dmesg | wc -l)
++	stress-ng --cpu 2 --sched deadline --sched-period 100000000 \
++		--sched-deadline 100000000 --sched-runtime 20000000 -t 5 &
++	stress-ng --cpu 2 --sched rr --sched-prio 50 --cyclic 1 \
++		--cyclic-policy rr --cyclic-prio 50 -t 5 &
++	wait
++	dmesg | tail -n +$((lines_before + 1)) | grep -q "rv: monitor [a-z]\+ does not allow event"
++}
++
++echo 1 > monitors/deadline/enable
++echo printk > monitors/deadline/reactors
++
++! load || false
++
++echo nop > monitors/deadline/reactors
++echo 0 > monitors/deadline/enable
+diff --git a/tools/testing/selftests/verification/test.d/rv_stall.tc b/tools/testing/selftests/verification/test.d/rv_stall.tc
+new file mode 100644
+index 000000000000..515a10263ca1
+--- /dev/null
++++ b/tools/testing/selftests/verification/test.d/rv_stall.tc
+@@ -0,0 +1,33 @@
++#!/bin/sh
++# SPDX-License-Identifier: GPL-2.0-or-later
++# description: Test stall monitor
++# requires: available_reactors stall:monitor printk:reactor stress-ng:program
++
++THRESHOLD=/sys/module/stall/parameters/threshold_jiffies
++ORIG_THRESHOLD=$(cat $THRESHOLD)
++trap 'echo $ORIG_THRESHOLD > $THRESHOLD' EXIT
++
++load() { # returns true if there was a reaction
++	local lines_before cpu
++	cpu=$(($(nproc) - 1))
++	lines_before=$(dmesg | wc -l)
++	stress-ng --cpu 1 --taskset "$cpu" --sched rr --sched-prio 1 -t 3 &
++	stress-ng --cpu 5 --taskset "$cpu" -t 3 &
++	wait
++	dmesg | tail -n +$((lines_before + 1)) | grep -q "rv: monitor stall does not allow event"
++}
++
++echo 5000 > $THRESHOLD
++echo 1 > monitors/stall/enable
++echo printk > monitors/stall/reactors
++
++! load || false
++
++echo 0 > monitors/stall/enable
++echo 70 > $THRESHOLD
++echo 1 > monitors/stall/enable
++
++load
++
++echo nop > monitors/stall/reactors
++echo 0 > monitors/stall/enable
+-- 
+2.55.0
+

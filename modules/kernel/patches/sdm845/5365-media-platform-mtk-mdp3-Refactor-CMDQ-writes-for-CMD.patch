@@ -1,0 +1,72 @@
+From 307673410774d5708232d05a977f047c03e2a4bb Mon Sep 17 00:00:00 2001
+From: Jason-JH Lin <jason-jh.lin@mediatek.com>
+Date: Wed, 25 Mar 2026 11:57:41 +0800
+Subject: [PATCH 05365/15333] media: platform: mtk-mdp3: Refactor CMDQ writes
+ for CMDQ API change
+
+Update CMDQ register writes to use subsys-aware APIs,
+cmdq_pkt_write_subsys() and cmdq_pkt_write_mask_subsys().
+This conforms to recent CMDQ API changes that split access by
+subsys ID support.
+
+Since all current MDP SoCs support subsys ID, and future MDP
+deployments will not run on SoCs without subsys ID, only
+subsys-specific API calls are needed. No logic for non-subsys ID
+hardware is required.
+
+Signed-off-by: Jason-JH Lin <jason-jh.lin@mediatek.com>
+Reviewed-by: AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>
+Signed-off-by: Nicolas Dufresne <nicolas.dufresne@collabora.com>
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+---
+ drivers/media/platform/mediatek/mdp3/mtk-mdp3-cmdq.c | 4 ++--
+ drivers/media/platform/mediatek/mdp3/mtk-mdp3-comp.h | 6 +++---
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/media/platform/mediatek/mdp3/mtk-mdp3-cmdq.c b/drivers/media/platform/mediatek/mdp3/mtk-mdp3-cmdq.c
+index d30a05782ab9..8dff981f6720 100644
+--- a/drivers/media/platform/mediatek/mdp3/mtk-mdp3-cmdq.c
++++ b/drivers/media/platform/mediatek/mdp3/mtk-mdp3-cmdq.c
+@@ -321,7 +321,7 @@ static int mdp_path_config_subfrm(struct mdp_cmdq_cmd *cmd,
+ 	/* Enable mux settings */
+ 	for (index = 0; index < ctrl->num_sets; index++) {
+ 		set = &ctrl->sets[index];
+-		cmdq_pkt_write(&cmd->pkt, set->subsys_id, set->reg, set->value);
++		cmdq_pkt_write_subsys(&cmd->pkt, set->subsys_id, set->reg, set->reg, set->value);
+ 	}
+ 	/* Config sub-frame information */
+ 	for (index = (num_comp - 1); index >= 0; index--) {
+@@ -376,7 +376,7 @@ static int mdp_path_config_subfrm(struct mdp_cmdq_cmd *cmd,
+ 	/* Disable mux settings */
+ 	for (index = 0; index < ctrl->num_sets; index++) {
+ 		set = &ctrl->sets[index];
+-		cmdq_pkt_write(&cmd->pkt, set->subsys_id, set->reg, 0);
++		cmdq_pkt_write_subsys(&cmd->pkt, set->subsys_id, set->reg, set->reg, 0);
+ 	}
+ 
+ 	return 0;
+diff --git a/drivers/media/platform/mediatek/mdp3/mtk-mdp3-comp.h b/drivers/media/platform/mediatek/mdp3/mtk-mdp3-comp.h
+index 681906c16419..c6fc180950f2 100644
+--- a/drivers/media/platform/mediatek/mdp3/mtk-mdp3-comp.h
++++ b/drivers/media/platform/mediatek/mdp3/mtk-mdp3-comp.h
+@@ -12,14 +12,14 @@
+ #define MM_REG_WRITE_MASK(cmd, id, base, ofst, val, mask)	\
+ do {								\
+ 	typeof(mask) (m) = (mask);				\
+-	cmdq_pkt_write_mask(&((cmd)->pkt), id, (base) + (ofst),	\
+-			    (val),				\
++	cmdq_pkt_write_mask_subsys(&((cmd)->pkt), (id), (base),	\
++				   (base) + (ofst), (val),	\
+ 		(((m) & (ofst##_MASK)) == (ofst##_MASK)) ?	\
+ 			(0xffffffff) : (m));			\
+ } while (0)
+ 
+ #define MM_REG_WRITE(cmd, id, base, ofst, val)			\
+-	cmdq_pkt_write(&((cmd)->pkt), id, (base) + (ofst), (val))
++	cmdq_pkt_write_subsys(&((cmd)->pkt), (id), (base), (base) + (ofst), (val))
+ 
+ #define MM_REG_WAIT(cmd, evt)					\
+ do {								\
+-- 
+2.55.0
+

@@ -1,0 +1,69 @@
+From 7830e96d001c86c3dd34a2434277d86bba14c8c6 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 21 Jul 2026 16:13:43 +0200
+Subject: [PATCH 09945/15333] binfmt_misc: require an absolute interpreter path
+ with 'C'
+
+A 'C' entry computes the credentials from the matched binary instead of
+from the interpreter. So a set*id binary hands its credentials to
+whatever the entry names as its interpreter.
+
+Without 'F' that interpreter is not opened until the exec happens and
+open_exec() resolves the path relative to the current working directory.
+
+The working directory at that point belongs to whoever runs the binary
+not to whoever registered the entry. So :x:M::\x7fELF::interp:C lets
+every user who execs a matching set*id binary from a directory they
+control run their own interp with that binary's credentials.
+
+A relative interpreter has no sensible use here to begin with. The
+registering task cannot know what the working directory will be. Make
+the register string reject the combination at registration time.
+
+This does refuse register strings that used to be accepted. The 'F' flag
+covers the case where the interpreter really is meant to be resolved in
+the registrant's context, and it resolves it once, at registration.
+
+Link: https://patch.msgid.link/20260721-work-bpf-binfmt_misc-ptinterp-v2-1-e57866e4ae0f@kernel.org
+Reviewed-by: Farid Zakaria <farid.m.zakaria@gmail.com>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ Documentation/admin-guide/binfmt-misc.rst | 4 ++++
+ fs/binfmt_misc.c                          | 6 ++++++
+ 2 files changed, 10 insertions(+)
+
+diff --git a/Documentation/admin-guide/binfmt-misc.rst b/Documentation/admin-guide/binfmt-misc.rst
+index 85bbf4845f99..557c8eadb9df 100644
+--- a/Documentation/admin-guide/binfmt-misc.rst
++++ b/Documentation/admin-guide/binfmt-misc.rst
+@@ -98,6 +98,10 @@ There are some restrictions:
+  - the magic must reside in the first 128 bytes of the file, i.e.
+    offset+size(magic) has to be less than 128
+  - the interpreter string may not exceed 127 characters
++ - an interpreter used with ``C`` but without ``F`` has to be named by an
++   absolute path. It is opened when the binary is executed, so a relative
++   one would be resolved against the working directory of whoever runs
++   the binary
+ 
+ 
+ bpf-backed handlers
+diff --git a/fs/binfmt_misc.c b/fs/binfmt_misc.c
+index c3064f2557ca..70a18623a22b 100644
+--- a/fs/binfmt_misc.c
++++ b/fs/binfmt_misc.c
+@@ -683,6 +683,12 @@ static struct binfmt_misc_entry *create_entry(const char __user *buffer,
+ 			 MISC_FMT_CREDENTIALS | MISC_FMT_OPEN_FILE)))
+ 		return ERR_PTR(-EINVAL);
+ 
++	/* Non-F opens the interp at exec against the caller's cwd; require absolute. */
++	if ((e->flags & MISC_FMT_CREDENTIALS) &&
++	    !(e->flags & MISC_FMT_OPEN_FILE) &&
++	    e->interpreter[0] != '/')
++		return ERR_PTR(-EINVAL);
++
+ 	return no_free_ptr(e);
+ }
+ 
+-- 
+2.55.0
+

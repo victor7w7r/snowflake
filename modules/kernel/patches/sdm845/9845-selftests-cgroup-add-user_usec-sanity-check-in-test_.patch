@@ -1,0 +1,38 @@
+From 77bc7e952f660a7bab9741fe352f960f3675a650 Mon Sep 17 00:00:00 2001
+From: Shaojie Sun <sunshaojie@kylinos.cn>
+Date: Thu, 30 Jul 2026 21:07:17 +0800
+Subject: [PATCH 09845/15333] selftests/cgroup: add user_usec sanity check in
+ test_cpucg_nice
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In test_cpucg_nice, after the child process exits, user_usec is
+read from cpu.stat but the value is not checked. Add a sanity check
+to ensure user_usec > 0, analogous to test_cpucg_stats(), so that
+the test fails early if CPU usage wasn't properly accounted.
+
+Signed-off-by: Shaojie Sun <sunshaojie@kylinos.cn>
+Reviewed-by: Michal Koutný <mkoutny@suse.com>
+Acked-by: Tao Cui <cuitao@kylinos.cn>
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ tools/testing/selftests/cgroup/test_cpu.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tools/testing/selftests/cgroup/test_cpu.c b/tools/testing/selftests/cgroup/test_cpu.c
+index a5eccfcabef5..f9f7017d9299 100644
+--- a/tools/testing/selftests/cgroup/test_cpu.c
++++ b/tools/testing/selftests/cgroup/test_cpu.c
+@@ -291,6 +291,8 @@ static int test_cpucg_nice(const char *root)
+ 
+ 		user_usec = cg_read_key_long(cpucg, "cpu.stat", "user_usec");
+ 		nice_usec = cg_read_key_long(cpucg, "cpu.stat", "nice_usec");
++		if (user_usec <= 0)
++			goto cleanup;
+ 		if (!values_close_report(nice_usec, expected_nice_usec, 1))
+ 			goto cleanup;
+ 
+-- 
+2.55.0
+

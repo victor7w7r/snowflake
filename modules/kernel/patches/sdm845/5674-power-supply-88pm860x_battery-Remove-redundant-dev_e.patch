@@ -1,0 +1,48 @@
+From 098e2181f76fbcdd1592c1878a812bc9dbadc669 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Thu, 9 Jul 2026 11:33:41 +0800
+Subject: [PATCH 05674/15333] power: supply: 88pm860x_battery: Remove redundant
+ dev_err()/dev_err_probe()
+
+The devm_request_threaded_irq() and devm_request_irq() now automatically
+log detailed error messages on failure. This eliminates the need for
+driver-specific dev_err() and dev_err_probe() calls that previously
+printed generic messages.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://patch.msgid.link/20260709033428.362970-3-panchuang@vivo.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/88pm860x_battery.c | 10 ++--------
+ 1 file changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/power/supply/88pm860x_battery.c b/drivers/power/supply/88pm860x_battery.c
+index edae1e843c51..8d93c7a6a5f0 100644
+--- a/drivers/power/supply/88pm860x_battery.c
++++ b/drivers/power/supply/88pm860x_battery.c
+@@ -959,20 +959,14 @@ static int pm860x_battery_probe(struct platform_device *pdev)
+ 	ret = devm_request_threaded_irq(chip->dev, info->irq_cc, NULL,
+ 					pm860x_coulomb_handler, IRQF_ONESHOT,
+ 					"coulomb", info);
+-	if (ret < 0) {
+-		dev_err(chip->dev, "Failed to request IRQ: #%d: %d\n",
+-			info->irq_cc, ret);
++	if (ret < 0)
+ 		return ret;
+-	}
+ 
+ 	ret = devm_request_threaded_irq(chip->dev, info->irq_batt, NULL,
+ 					pm860x_batt_handler,
+ 					IRQF_ONESHOT, "battery", info);
+-	if (ret < 0) {
+-		dev_err(chip->dev, "Failed to request IRQ: #%d: %d\n",
+-			info->irq_batt, ret);
++	if (ret < 0)
+ 		return ret;
+-	}
+ 
+ 
+ 	return 0;
+-- 
+2.55.0
+

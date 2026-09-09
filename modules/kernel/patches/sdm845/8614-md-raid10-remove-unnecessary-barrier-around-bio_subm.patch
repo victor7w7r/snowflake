@@ -1,0 +1,52 @@
+From addb977450a662e1961d272b6ebfcb477d115044 Mon Sep 17 00:00:00 2001
+From: Abd-Alrhman Masalkhi <abd.masalkhi@gmail.com>
+Date: Fri, 10 Jul 2026 10:15:18 +0000
+Subject: [PATCH 08614/15333] md/raid10: remove unnecessary barrier around
+ bio_submit_split_bioset()
+
+raid10_write_request() drops the barrier before calling
+bio_submit_split_bioset() and reacquires it afterwards. This is no
+longer necessary because the split bio cannot re-enter
+raid10_write_request() while the barrier is held.
+
+The allow_barrier()/wait_barrier() pair was introduced by commit
+e820d55cb99d ("md: fix raid10 hang issue caused by barrier") when
+submit_flushes() called md_handle_request() directly, allowing re-entry
+into raid10_write_request(). Since v5.2, submit_flushes() has instead
+gone through submit_bio(), eliminating that recursion. submit_flushes()
+was later removed entirely by commit b75197e86e6d ("md: Remove flush
+handling").
+
+Currently, raid10_write_request() is only entered from the bio
+submission path, so the split bio submitted by bio_submit_split_bioset()
+cannot recurse back into wait_barrier().
+
+Remove the redundant allow_barrier()/wait_barrier() pair around
+bio_submit_split_bioset().
+
+Signed-off-by: Abd-Alrhman Masalkhi <abd.masalkhi@gmail.com>
+Reviewed-by: Yu Kuai <yukuai@fygo.io>
+Link: https://patch.msgid.link/20260710101521.1714-5-abd.masalkhi@gmail.com
+Signed-off-by: Yu Kuai <yukuai@fygo.io>
+---
+ drivers/md/raid10.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/drivers/md/raid10.c b/drivers/md/raid10.c
+index d08a4ad76115..3e45013d9607 100644
+--- a/drivers/md/raid10.c
++++ b/drivers/md/raid10.c
+@@ -1443,10 +1443,8 @@ static bool raid10_write_request(struct mddev *mddev, struct bio *bio,
+ 		if (atomic)
+ 			goto err_handle;
+ 
+-		allow_barrier(conf);
+ 		bio = bio_submit_split_bioset(bio, r10_bio->sectors,
+ 					      &conf->bio_split);
+-		wait_barrier(conf);
+ 		if (!bio) {
+ 			set_bit(R10BIO_Returned, &r10_bio->state);
+ 			goto err_handle;
+-- 
+2.55.0
+

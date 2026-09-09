@@ -1,0 +1,151 @@
+From 137b56559511588ecb97d5c17c28980d736ca44c Mon Sep 17 00:00:00 2001
+From: Alexander Chechik <alexander.chechik@amd.com>
+Date: Mon, 22 Jun 2026 11:36:12 -0400
+Subject: [PATCH 07983/15333] drm/amd/display: enforce UCLK pstate support in
+ mode_support
+
+[Why]
+mode_support does not require UCLK pstate today, so later PMO optimization
+stages can push a plane's VActive latency-hiding margin below zero without
+rechecking that the config still supports UCLK pstate. This can blank the
+display on high-bandwidth configs.
+
+[How]
+Plumb the PMO-selected per-plane pstate method into mode_support and fail
+the config only when UCLK pstate is required (method != na) but not
+supported. For planes committed to a vactive method, require a non-negative
+VActive latency-hiding margin, and skip the check when all streams are
+blanked. No-op the PMO DCN42 pstate test (returning false only on the
+initial candidate so the optimize/FAMS2 stage-3 setup still runs), since
+reserved time is guaranteed by the override and the vactive margin is now
+enforced in core mode_support.
+
+Reviewed-by: Dillon Varone <dillon.varone@amd.com>
+Signed-off-by: Alexander Chechik <alexander.chechik@amd.com>
+Signed-off-by: Matthew Stewart <matthew.stewart2@amd.com>
+Signed-off-by: Fangzhi Zuo <jerry.zuo@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../dml21/src/dml2_core/dml2_core_dcn4.c      |  8 +++++
+ .../src/dml2_core/dml2_core_dcn4_calcs.c      | 18 +++++++++++
+ .../dml21/src/dml2_pmo/dml2_pmo_dcn42.c       | 32 ++++++-------------
+ 3 files changed, 36 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4.c b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4.c
+index 727b01ca18bf..45f1bf5e14bf 100644
+--- a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4.c
++++ b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4.c
+@@ -554,6 +554,14 @@ bool core_dcn4_mode_support(struct dml2_core_mode_support_in_out *in_out)
+ 	l->mode_support_ex_params.min_clk_index = in_out->min_clk_index;
+ 	l->mode_support_ex_params.out_evaluation_info = &in_out->mode_support_result.cfg_support_info.clean_me_up.support_info;
+ 
++	for (i = 0; i < l->svp_expanded_display_cfg.num_planes; i++) {
++		if (i < in_out->display_cfg->display_config.num_planes)
++			core->clean_me_up.mode_lib.ms.uclk_pstate_switch_modes[i] =
++				in_out->display_cfg->stage3.pstate_switch_modes[i];
++		else
++			core->clean_me_up.mode_lib.ms.uclk_pstate_switch_modes[i] = dml2_pstate_method_na;
++	}
++
+ 	result = dml2_core_calcs_mode_support_ex(&l->mode_support_ex_params);
+ 
+ 	in_out->mode_support_result.cfg_support_info.is_supported = result;
+diff --git a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.c b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.c
+index 110ab26a6a39..da9a1c4e2bdc 100644
+--- a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.c
++++ b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.c
+@@ -9637,6 +9637,22 @@ static bool dml_core_mode_support(struct dml2_core_calcs_mode_support_ex *in_out
+ 	DML_LOG_VERBOSE("DML::%s: ROBSupport = %u\n", __func__, mode_lib->ms.support.ROBSupport);
+ #endif
+ 
++	mode_lib->ms.support.global_dram_clock_change_support_required = false;
++
++	if (!display_cfg->overrides.all_streams_blanked) {
++		for (k = 0; k < mode_lib->ms.num_active_planes; k++) {
++			if (mode_lib->ms.uclk_pstate_switch_modes[k] == dml2_pstate_method_na)
++				continue;
++
++			mode_lib->ms.support.global_dram_clock_change_support_required = true;
++
++			if ((mode_lib->ms.uclk_pstate_switch_modes[k] == dml2_pstate_method_vactive ||
++					mode_lib->ms.uclk_pstate_switch_modes[k] == dml2_pstate_method_fw_vactive_drr) &&
++					mode_lib->ms.VActiveLatencyHidingMargin[k] < 0)
++				mode_lib->ms.support.global_dram_clock_change_supported = false;
++		}
++	}
++
+ 	/*Mode Support, Voltage State and SOC Configuration*/
+ 	{
+ 		if (mode_lib->ms.support.ScaleRatioAndTapsSupport
+@@ -9683,6 +9699,8 @@ static bool dml_core_mode_support(struct dml2_core_calcs_mode_support_ex *in_out
+ 			&& mode_lib->ms.support.DCCMetaBufferSizeNotExceeded
+ 			&& !mode_lib->ms.support.ExceededMALLSize
+ 			&& mode_lib->ms.support.g6_temp_read_support
++			&& (mode_lib->ms.support.global_dram_clock_change_supported
++				|| !mode_lib->ms.support.global_dram_clock_change_support_required)
+ 			&& ((!display_cfg->hostvm_enable && !s->ImmediateFlipRequired) || mode_lib->ms.support.ImmediateFlipSupport)) {
+ 			DML_LOG_VERBOSE("DML::%s: mode is supported\n", __func__);
+ 			mode_lib->ms.support.ModeSupport = true;
+diff --git a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_pmo/dml2_pmo_dcn42.c b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_pmo/dml2_pmo_dcn42.c
+index 790aef95caa6..57a6a7d5b740 100644
+--- a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_pmo/dml2_pmo_dcn42.c
++++ b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_pmo/dml2_pmo_dcn42.c
+@@ -13,8 +13,6 @@
+  * configurations, ensuring p-state watermark support in the blank period only.
+  */
+ 
+-static const double MIN_VACTIVE_MARGIN_PCT = 0.25; // We need more than non-zero margin because DET buffer granularity can alter vactive latency hiding
+-
+ static const struct dml2_pmo_pstate_strategy dcn42_strategy_list_1_display[] = {
+ 	// VBlank only
+ 	{
+@@ -179,7 +177,7 @@ bool pmo_dcn42_init_for_pstate_support(struct dml2_pmo_init_for_pstate_support_i
+ 
+ 	// Figure out which streams can do vactive, and also build up implicit SVP and FAMS2 meta
+ 	for (stream_index = 0; stream_index < display_config->display_config.num_streams; stream_index++) {
+-		if (dcn4_get_vactive_pstate_margin(display_config, s->pmo_dcn4.stream_plane_mask[stream_index]) >= (int)(MIN_VACTIVE_MARGIN_PCT * pmo->soc_bb->power_management_parameters.dram_clk_change_blackout_us))
++		if (dcn4_get_vactive_pstate_margin(display_config, s->pmo_dcn4.stream_plane_mask[stream_index]) >= 0)
+ 			dcn42_set_bit_in_bitfield(&s->pmo_dcn4.stream_vactive_capability_mask, stream_index);
+ 	}
+ 
+@@ -259,27 +257,17 @@ bool pmo_dcn42_fams2_optimize_for_pstate_support(struct dml2_pmo_optimize_for_ps
+ 
+ bool pmo_dcn42_test_for_pstate_support(struct dml2_pmo_test_for_pstate_support_in_out *in_out)
+ {
+-	const struct dml2_pmo_scratch *s = &in_out->instance->scratch;
+-	bool p_state_supported = true;
+-	unsigned int stream_index;
+-
+-	if (s->pmo_dcn4.cur_pstate_candidate < 0)
++	/* Return false on the initial candidate (cur_pstate_candidate == -1) so the
++	 * optimization phase runs at least one optimize iteration; otherwise the
++	 * FAMS2/stage-3 setup in the optimize callback is skipped.
++	 */
++	if (in_out->instance->scratch.pmo_dcn4.cur_pstate_candidate < 0)
+ 		return false;
+ 
+-	for (stream_index = 0; stream_index < in_out->base_display_config->display_config.num_streams; stream_index++) {
+-		if (s->pmo_dcn4.pstate_strategy_candidates[s->pmo_dcn4.cur_pstate_candidate].per_stream_pstate_method[stream_index] == dml2_pstate_method_vactive) {
+-			if (dcn4_get_minimum_reserved_time_us_for_planes(in_out->base_display_config, s->pmo_dcn4.stream_plane_mask[stream_index]) < (int)in_out->instance->soc_bb->power_management_parameters.dram_clk_change_blackout_us ||
+-			    dcn4_get_vactive_pstate_margin(in_out->base_display_config, s->pmo_dcn4.stream_plane_mask[stream_index]) < (int)(MIN_VACTIVE_MARGIN_PCT * in_out->instance->soc_bb->power_management_parameters.dram_clk_change_blackout_us)) {
+-				p_state_supported = false;
+-				break;
+-			}
+-		} else {
+-			p_state_supported = false;
+-			break;
+-		}
+-	}
+-
+-	return p_state_supported;
++	/* No-op: reserved time is guaranteed by the override and vactive p-state
++	 * margin is now enforced in core mode support.
++	 */
++	return true;
+ }
+ 
+ bool pmo_dcn42_initialize(struct dml2_pmo_initialize_in_out *in_out)
+-- 
+2.55.0
+

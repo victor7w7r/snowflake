@@ -1,0 +1,119 @@
+From 01e9e84a43a1b4e9f67b5bd36be3d127d773a223 Mon Sep 17 00:00:00 2001
+From: Xu Yang <xu.yang_2@nxp.com>
+Date: Fri, 31 Jul 2026 16:11:22 +0800
+Subject: [PATCH 11385/15333] phy: fsl-imx8mq-usb: add control register regmap
+
+The CR port is a simple 16-bit data/address parallel port that is
+accessed through 32-bit MMIO registers for on-chip access to the
+control registers inside the USB 3.0 femtoPHY. Add control register
+regmap and export these registers by debugfs to help PHY's diagnostic.
+
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Signed-off-by: Xu Yang <xu.yang_2@nxp.com>
+Link: https://patch.msgid.link/20260731-imx8mp-usb-phy-improvement-v8-4-2ec8d6b3854d@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/phy/freescale/Kconfig              |  1 +
+ drivers/phy/freescale/phy-fsl-imx8mq-usb.c | 27 +++++++++++++++++++++-
+ 2 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/phy/freescale/Kconfig b/drivers/phy/freescale/Kconfig
+index 5bf3864fbe64..7e027755dd8e 100644
+--- a/drivers/phy/freescale/Kconfig
++++ b/drivers/phy/freescale/Kconfig
+@@ -7,6 +7,7 @@ config PHY_FSL_IMX8MQ_USB
+ 	depends on OF && HAS_IOMEM
+ 	depends on TYPEC || TYPEC=n
+ 	select GENERIC_PHY
++	select REGMAP_MMIO
+ 	default ARCH_MXC && ARM64
+ 
+ config PHY_MIXEL_LVDS_PHY
+diff --git a/drivers/phy/freescale/phy-fsl-imx8mq-usb.c b/drivers/phy/freescale/phy-fsl-imx8mq-usb.c
+index 42de2cff4d5f..e03f9dafd69e 100644
+--- a/drivers/phy/freescale/phy-fsl-imx8mq-usb.c
++++ b/drivers/phy/freescale/phy-fsl-imx8mq-usb.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0+
+-/* Copyright (c) 2017 NXP. */
++/* Copyright 2017-2026 NXP. */
+ 
+ #include <linux/bitfield.h>
+ #include <linux/clk.h>
+@@ -11,6 +11,7 @@
+ #include <linux/platform_device.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/regulator/consumer.h>
++#include <linux/regmap.h>
+ #include <linux/usb/typec_mux.h>
+ 
+ #define PHY_CTRL0			0x0
+@@ -56,6 +57,8 @@
+ #define PHY_CTRL6_ALT_CLK_EN		BIT(1)
+ #define PHY_CTRL6_ALT_CLK_SEL		BIT(0)
+ 
++#define PHY_CRCTL			0x30
++
+ #define PHY_TUNE_DEFAULT		0xffffffff
+ 
+ #define TCA_CLK_RST			0x00
+@@ -119,6 +122,7 @@ struct imx8mq_usb_phy {
+ 	void __iomem *base;
+ 	struct regulator *vbus;
+ 	struct tca_blk *tca;
++	struct regmap *cr_regmap;
+ 	u32 pcs_tx_swing_full;
+ 	u32 pcs_tx_deemph_3p5db;
+ 	u32 tx_vref_tune;
+@@ -667,6 +671,14 @@ static const struct of_device_id imx8mq_usb_phy_of_match[] = {
+ };
+ MODULE_DEVICE_TABLE(of, imx8mq_usb_phy_of_match);
+ 
++static const struct regmap_config imx_cr_regmap_config = {
++	.name = "cr",
++	.reg_bits = 32,
++	.val_bits = 32,
++	.reg_stride = 4,
++	.max_register = 0x7,
++};
++
+ static int imx8mq_usb_phy_probe(struct platform_device *pdev)
+ {
+ 	struct phy_provider *phy_provider;
+@@ -696,6 +708,13 @@ static int imx8mq_usb_phy_probe(struct platform_device *pdev)
+ 	if (IS_ERR(imx_phy->base))
+ 		return PTR_ERR(imx_phy->base);
+ 
++	imx_phy->cr_regmap = devm_regmap_init_mmio(dev, imx_phy->base + PHY_CRCTL,
++						   &imx_cr_regmap_config);
++	if (IS_ERR(imx_phy->cr_regmap)) {
++		dev_warn(dev, "Fail to init debug register regmap\n");
++		imx_phy->cr_regmap = NULL;
++	}
++
+ 	imx_phy->vbus = devm_regulator_get(dev, "vbus");
+ 	if (IS_ERR(imx_phy->vbus))
+ 		return dev_err_probe(dev, PTR_ERR(imx_phy->vbus), "failed to get vbus\n");
+@@ -757,6 +776,9 @@ static int imx8mq_usb_phy_runtime_suspend(struct device *dev)
+ {
+ 	struct imx8mq_usb_phy *imx_phy = dev_get_drvdata(dev);
+ 
++	if (imx_phy->cr_regmap)
++		regcache_cache_only(imx_phy->cr_regmap, true);
++
+ 	clk_disable_unprepare(imx_phy->alt_clk);
+ 	clk_disable_unprepare(imx_phy->clk);
+ 
+@@ -778,6 +800,9 @@ static int imx8mq_usb_phy_runtime_resume(struct device *dev)
+ 		return ret;
+ 	}
+ 
++	if (imx_phy->cr_regmap)
++		regcache_cache_only(imx_phy->cr_regmap, false);
++
+ 	return 0;
+ }
+ 
+-- 
+2.55.0
+

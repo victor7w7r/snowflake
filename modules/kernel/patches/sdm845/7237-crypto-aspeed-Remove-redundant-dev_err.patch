@@ -1,0 +1,53 @@
+From 9d3c82be49130081392efc7fd769e7301675abcf Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Fri, 17 Jul 2026 16:00:17 +0800
+Subject: [PATCH 07237/15333] crypto: aspeed - Remove redundant dev_err()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() automatically logs
+detailed error messages on failure. Remove the now-redundant
+driver-specific dev_err() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Reviewed-by: Andrew Jeffery <andrew@codeconstruct.com.au>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ drivers/crypto/aspeed/aspeed-acry.c | 4 +---
+ drivers/crypto/aspeed/aspeed-hace.c | 4 +---
+ 2 files changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/crypto/aspeed/aspeed-acry.c b/drivers/crypto/aspeed/aspeed-acry.c
+index 301612556a76..97327ba2c24b 100644
+--- a/drivers/crypto/aspeed/aspeed-acry.c
++++ b/drivers/crypto/aspeed/aspeed-acry.c
+@@ -732,10 +732,8 @@ static int aspeed_acry_probe(struct platform_device *pdev)
+ 
+ 	rc = devm_request_irq(dev, acry_dev->irq, aspeed_acry_irq, 0,
+ 			      dev_name(dev), acry_dev);
+-	if (rc) {
+-		dev_err(dev, "Failed to request irq.\n");
++	if (rc)
+ 		return rc;
+-	}
+ 
+ 	acry_dev->clk = devm_clk_get_enabled(dev, NULL);
+ 	if (IS_ERR(acry_dev->clk)) {
+diff --git a/drivers/crypto/aspeed/aspeed-hace.c b/drivers/crypto/aspeed/aspeed-hace.c
+index 1f9afa002ae8..6555d7b2afe5 100644
+--- a/drivers/crypto/aspeed/aspeed-hace.c
++++ b/drivers/crypto/aspeed/aspeed-hace.c
+@@ -131,10 +131,8 @@ static int aspeed_hace_probe(struct platform_device *pdev)
+ 
+ 	rc = devm_request_irq(&pdev->dev, hace_dev->irq, aspeed_hace_irq, 0,
+ 			      dev_name(&pdev->dev), hace_dev);
+-	if (rc) {
+-		dev_err(&pdev->dev, "Failed to request interrupt\n");
++	if (rc)
+ 		return rc;
+-	}
+ 
+ 	/* Get clk and enable it */
+ 	hace_dev->clk = devm_clk_get(&pdev->dev, NULL);
+-- 
+2.55.0
+

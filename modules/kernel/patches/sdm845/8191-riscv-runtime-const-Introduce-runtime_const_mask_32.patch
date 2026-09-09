@@ -1,0 +1,131 @@
+From e412c77541c7926ff61baec712616837a2c6887f Mon Sep 17 00:00:00 2001
+From: K Prateek Nayak <kprateek.nayak@amd.com>
+Date: Tue, 28 Jul 2026 05:25:37 +0000
+Subject: [PATCH 08191/15333] riscv/runtime-const: Introduce
+ runtime_const_mask_32()
+
+Futex hash computation requires a mask operation with read-only after
+init data that will be converted to a runtime constant in the subsequent
+commit.
+
+Introduce runtime_const_mask_32 to further optimize the mask operation
+in the futex hash computation hot path. Since all the current use-cases
+are of the form GENMASK(n, 0), with n > 0, following sequence:
+
+  srli a0, a1, imm
+  slli a0, a0, imm
+
+is used for RISC-V where imm = (31 - width) to improve instruction
+density and performance.
+
+"The RISC-V Instruction Set Manual, Volume I - Unprivileged
+Architecture" [1] Sec. 2.4.1 "Integer Register-Immediate Instructions"
+notes the immediate shift for SRLI and SLLI are 5 bits wide starting at
+bit #10. __runtime_fixup_shift() is reused to patch the immediate shifts
+for the two instructions.
+
+If a future use case arises that needs to tackle arbitrary mask,
+consider using:
+
+  lui   a0, 0x12346       # upper; +0x800 then >>12 for correct rounding
+  addi  a0, a0, 0x678     # lower 12 bits
+
+to patch the 32-bit mask in the asm block and return "__ret & (val)"
+from runtime_const_mask_32() which allows compiler to further optimize
+the logical and operation. __runtime_fixup_ptr() already patches a
+lui + addi sequence which can be reused when the need arises.
+
+A possible implementation for this alternate scheme can be found at [2].
+
+Suggested-by: Samuel Holland <samuel.holland@sifive.com>
+Suggested-by: Charlie Jenkins <thecharlesjenkins@gmail.com>
+Assisted-by: Claude:claude-sonnet-4-5
+Signed-off-by: K Prateek Nayak <kprateek.nayak@amd.com>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Reviewed-by: Charlie Jenkins <thecharlesjenkins@gmail.com>
+Tested-by: Charlie Jenkins <thecharlesjenkins@gmail.com>
+Link: https://docs.riscv.org/reference/isa/_attachments/riscv-unprivileged.pdf [1]
+Link: https://lore.kernel.org/lkml/20260430094730.31624-6-kprateek.nayak@amd.com/ [2]
+Link: https://patch.msgid.link/20260728052540.4728-6-kprateek.nayak@amd.com
+---
+ arch/riscv/include/asm/asm.h           |  1 +
+ arch/riscv/include/asm/runtime-const.h | 44 ++++++++++++++++++++++++++
+ 2 files changed, 45 insertions(+)
+
+diff --git a/arch/riscv/include/asm/asm.h b/arch/riscv/include/asm/asm.h
+index e9e8ba83e632..b8bf842d4c13 100644
+--- a/arch/riscv/include/asm/asm.h
++++ b/arch/riscv/include/asm/asm.h
+@@ -34,6 +34,7 @@
+ #define SZREG		__REG_SEL(8, 4)
+ #define LGREG		__REG_SEL(3, 2)
+ #define SRLI		__REG_SEL(srliw, srli)
++#define SLLI		__REG_SEL(slliw, slli)
+ 
+ #if __SIZEOF_POINTER__ == 8
+ #ifdef __ASSEMBLER__
+diff --git a/arch/riscv/include/asm/runtime-const.h b/arch/riscv/include/asm/runtime-const.h
+index 1ce02605d2e4..a472ebbf0971 100644
+--- a/arch/riscv/include/asm/runtime-const.h
++++ b/arch/riscv/include/asm/runtime-const.h
+@@ -159,6 +159,23 @@
+ 	__ret;							\
+ })
+ 
++#define runtime_const_mask_32(val, sym)				\
++({								\
++	u32 __ret;						\
++	asm_inline(".option push\n\t"				\
++		".option norvc\n\t"				\
++		"1:\t"						\
++		SLLI " %[__ret],%[__val],12\n\t"		\
++		SRLI " %[__ret],%[__ret],12\n\t"		\
++		".option pop\n\t"				\
++		".pushsection runtime_mask_" #sym ",\"a\"\n\t"	\
++		".long 1b - .\n\t"				\
++		".popsection"					\
++		: [__ret] "=r" (__ret)				\
++		: [__val] "r" (val));				\
++	__ret;							\
++})
++
+ #define runtime_const_init(type, sym) do {			\
+ 	extern s32 __start_runtime_##type##_##sym[];		\
+ 	extern s32 __stop_runtime_##type##_##sym[];		\
+@@ -262,6 +279,33 @@ static inline void __runtime_fixup_shift(void *where, unsigned long val)
+ 	mutex_unlock(&text_mutex);
+ }
+ 
++static inline void __runtime_fixup_mask(void *where, unsigned long val)
++{
++	unsigned int width = (val) ? __fls(val) + 1 : 0;
++
++	/*
++	 * XXX: Current implementation only supports patching masks of
++	 * form GENMASK(width, 0) (width >= 0) using a SRLI + SLLI
++	 * sequence instead of LUI + ADDI + AND sequence to improve
++	 * performance, density, and covers all the current use-cases.
++	 *
++	 * When the need arises to support any generic mask, and this
++	 * BUG_ON() is tripped, consider using a:
++	 *
++	 *   lui  %[__ret], #imm16
++	 *   addi %[__ret], #imm16
++	 *
++	 * sequence to load the 32bit const mask, and perform a logical
++	 * and outside the asm block before returning the result. Fixup
++	 * can simply reuse the existing __runtime_fixup_32() to patch
++	 * the LUI + ADDI sequence.
++	 */
++	BUG_ON(!val || width > 31 || (GENMASK(width - 1, 0) != val));
++
++	__runtime_fixup_shift(where, 32 - width);
++	__runtime_fixup_shift(where + 4, 32 - width);
++}
++
+ static inline void runtime_const_fixup(void (*fn)(void *, unsigned long),
+ 				       unsigned long val, s32 *start, s32 *end)
+ {
+-- 
+2.55.0
+

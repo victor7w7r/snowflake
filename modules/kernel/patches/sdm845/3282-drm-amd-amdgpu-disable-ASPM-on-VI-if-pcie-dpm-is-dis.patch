@@ -1,0 +1,33 @@
+From 873a8d6b3c0a386408c891e4ff1c684fa11783e1 Mon Sep 17 00:00:00 2001
+From: Kenneth Feng <kenneth.feng@amd.com>
+Date: Thu, 25 Jun 2026 17:48:22 +0800
+Subject: [PATCH 03282/15333] drm/amd/amdgpu: disable ASPM on VI if pcie dpm is
+ disabled
+
+Disable ASPM on VI if PCIE dpm is disabled.
+
+Closes: https://gitlab.freedesktop.org/drm/amd/-/work_items/5370
+Signed-off-by: Kenneth Feng <kenneth.feng@amd.com>
+Reviewed-by: Yang Wang <kevinyang.wang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_device.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
+index 78c96c7102e4..631c49f568db 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
+@@ -1334,7 +1334,8 @@ static bool amdgpu_device_aspm_support_quirk(struct amdgpu_device *adev)
+ 	 * It's unclear if this is a platform-specific or GPU-specific issue.
+ 	 * Disable ASPM on SI for the time being.
+ 	 */
+-	if (adev->family == AMDGPU_FAMILY_SI)
++	if (adev->family == AMDGPU_FAMILY_SI ||
++		(!(adev->pm.pp_feature & PP_PCIE_DPM_MASK) && adev->family == AMDGPU_FAMILY_VI))
+ 		return true;
+ 
+ #if IS_ENABLED(CONFIG_X86)
+-- 
+2.55.0
+

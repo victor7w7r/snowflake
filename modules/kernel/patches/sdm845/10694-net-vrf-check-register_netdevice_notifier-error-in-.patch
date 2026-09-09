@@ -1,0 +1,42 @@
+From ac072a89cba261fc1f7dd31b633d15c460323699 Mon Sep 17 00:00:00 2001
+From: Minhong He <heminhong@kylinos.cn>
+Date: Mon, 3 Aug 2026 17:00:02 +0800
+Subject: [PATCH 10694/15333] net: vrf: check register_netdevice_notifier()
+ error in vrf_init_module()
+
+vrf_init_module() ignores register_netdevice_notifier() errors and
+continues module initialization, which can leave VRF loaded without its
+netdev notifier registered.
+
+Check the error and fail module initialization early.
+
+This is a future looking check, register_netdevice_notifier()
+only fails on double registration or if the registered notifier
+itself returns an error.
+
+Signed-off-by: Minhong He <heminhong@kylinos.cn>
+Reviewed-by: David Ahern <dsahern@kernel.org>
+Link: https://patch.msgid.link/20260803090002.142453-1-heminhong@kylinos.cn
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/vrf.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/vrf.c b/drivers/net/vrf.c
+index 46209917ae4d..a0557a3a7026 100644
+--- a/drivers/net/vrf.c
++++ b/drivers/net/vrf.c
+@@ -1932,7 +1932,9 @@ static int __init vrf_init_module(void)
+ {
+ 	int rc;
+ 
+-	register_netdevice_notifier(&vrf_notifier_block);
++	rc = register_netdevice_notifier(&vrf_notifier_block);
++	if (rc < 0)
++		return rc;
+ 
+ 	rc = register_pernet_subsys(&vrf_net_ops);
+ 	if (rc < 0)
+-- 
+2.55.0
+

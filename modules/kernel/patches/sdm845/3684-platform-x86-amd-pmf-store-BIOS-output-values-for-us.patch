@@ -1,0 +1,97 @@
+From 1983d7dee5db2bd17bf99ac22bddeebbc5f3e38c Mon Sep 17 00:00:00 2001
+From: Shyam Sundar S K <Shyam-sundar.S-k@amd.com>
+Date: Tue, 9 Jun 2026 13:40:39 +0530
+Subject: [PATCH 03684/15333] platform/x86/amd/pmf: store BIOS output values
+ for user-space metrics via util IOCTL
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a bios_output[] to amd_pmf_dev struct and store the latest values for
+BIOS output policies when applying PMF policies. This enables the AMD PMF
+util layer to expose these BIOS outputs alongside selected thermal and
+power metrics to user space via /dev/amdpmf_interface and a new IOCTL,
+supporting real-time monitoring tools such as SystemDeck.
+
+Co-developed-by: Sanket Goswami <Sanket.Goswami@amd.com>
+Signed-off-by: Sanket Goswami <Sanket.Goswami@amd.com>
+Signed-off-by: Shyam Sundar S K <Shyam-sundar.S-k@amd.com>
+Link: https://patch.msgid.link/20260609081044.2416731-3-Shyam-sundar.S-k@amd.com
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/x86/amd/pmf/pmf.h    |  2 ++
+ drivers/platform/x86/amd/pmf/tee-if.c | 13 +++++++++++--
+ include/uapi/linux/amd-pmf.h          |  1 +
+ 3 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/platform/x86/amd/pmf/pmf.h b/drivers/platform/x86/amd/pmf/pmf.h
+index 6f61076a9386..ffe74ebc46f8 100644
+--- a/drivers/platform/x86/amd/pmf/pmf.h
++++ b/drivers/platform/x86/amd/pmf/pmf.h
+@@ -130,6 +130,7 @@ struct cookie_header {
+ #define GET_CMD		true
+ 
+ #define METRICS_TABLE_ID	7
++#define BIOS_OUTPUT_MAX		10
+ 
+ typedef void (*apmf_event_handler_t)(acpi_handle handle, u32 event, void *data);
+ 
+@@ -442,6 +443,7 @@ struct amd_pmf_dev {
+ 	struct pmf_cbi_ring_buffer cbi_buf;
+ 	struct mutex cbi_mutex;		     /* Protects ring buffer access */
+ 	struct mutex metrics_mutex;
++	u32 bios_output[BIOS_OUTPUT_MAX];
+ };
+ 
+ struct apmf_sps_prop_granular_v2 {
+diff --git a/drivers/platform/x86/amd/pmf/tee-if.c b/drivers/platform/x86/amd/pmf/tee-if.c
+index 7ccd93f506b2..3fe79f0f37c5 100644
+--- a/drivers/platform/x86/amd/pmf/tee-if.c
++++ b/drivers/platform/x86/amd/pmf/tee-if.c
+@@ -8,7 +8,9 @@
+  * Author: Shyam Sundar S K <Shyam-sundar.S-k@amd.com>
+  */
+ 
++#include <linux/array_size.h>
+ #include <linux/debugfs.h>
++#include <linux/dev_printk.h>
+ #include <linux/tee_drv.h>
+ #include <linux/uuid.h>
+ #include "pmf.h"
+@@ -97,11 +99,18 @@ static int amd_pmf_get_bios_output_idx(u32 action_idx)
+ 
+ static void amd_pmf_update_bios_output(struct amd_pmf_dev *pdev, struct ta_pmf_action *action)
+ {
+-	u32 bios_idx;
++	int bios_idx;
++	int ret;
+ 
+ 	bios_idx = amd_pmf_get_bios_output_idx(action->action_index);
++	if (bios_idx < 0 || bios_idx >= ARRAY_SIZE(pdev->bios_output)) {
++		dev_warn(pdev->dev, "BIOS output index %d out of bounds\n", bios_idx);
++		return;
++	}
+ 
+-	amd_pmf_smartpc_apply_bios_output(pdev, action->value, BIT(bios_idx), bios_idx);
++	ret = amd_pmf_smartpc_apply_bios_output(pdev, action->value, BIT(bios_idx), bios_idx);
++	if (!ret)
++		pdev->bios_output[bios_idx] = action->value;
+ }
+ 
+ static void amd_pmf_apply_policies(struct amd_pmf_dev *dev, struct ta_pmf_enact_result *out)
+diff --git a/include/uapi/linux/amd-pmf.h b/include/uapi/linux/amd-pmf.h
+index bbbd39b2ce15..90bc2970665d 100644
+--- a/include/uapi/linux/amd-pmf.h
++++ b/include/uapi/linux/amd-pmf.h
+@@ -66,6 +66,7 @@ struct amd_pmf_info {
+ 
+ 	/* BIOS parameters */
+ 	__u32 bios_input[AMD_PMF_BIOS_PARAMS_MAX];
++	__u32 bios_output[AMD_PMF_BIOS_PARAMS_MAX];
+ };
+ 
+ #endif /* _UAPI_LINUX_AMD_PMF_H */
+-- 
+2.55.0
+

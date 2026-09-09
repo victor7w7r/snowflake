@@ -1,0 +1,46 @@
+From 8177480d9976dd0a19a4ebc10921de30e834d33a Mon Sep 17 00:00:00 2001
+From: Aaron Fan <aaronfan404@gmail.com>
+Date: Sun, 2 Aug 2026 01:57:27 -0400
+Subject: [PATCH 09911/15333] ALSA: hda/realtek: Add quirk for LG gram 16
+ (16Z90TR)
+
+The LG gram 16 (16Z90TR, SSID 1854:0554) drives its internal speakers
+through Samsung-style smart amplifiers on an ALC298. Nothing initialises
+them, so the internal speakers are silent after a cold boot, while
+headphones, HDMI and the microphones work.
+
+A warm reset leaves the amps initialised, which masks the problem:
+rebooting gives working speakers, a cold boot does not, with a
+bit-identical kernel log in both cases. Dumping the codec's processing
+coefficients in the two states shows the difference confined to COEF
+0x22/0x23/0x25/0x26. COEF 0x22, the amp select register written by
+alc298_samsung_v2_init_amps(), reads 0x39 when the speakers work and
+0x00 after a cold boot. 0x39 is the second entry of
+alc298_samsung_v2_amp_desc_tbl[], so two amps are in use.
+
+Verified with hda_model=alc298-samsung-amp-v2-2-amps, which selects the
+same fixup: the internal speakers work from a cold boot and COEF 0x22
+reads 0x39.
+
+Signed-off-by: Aaron Fan <aaronfan404@gmail.com>
+Link: https://patch.msgid.link/20260802055818.7389-1-aaronfan404@gmail.com
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/hda/codecs/realtek/alc269.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index 27c19cdeb6eb..72cb193ddf61 100644
+--- a/sound/hda/codecs/realtek/alc269.c
++++ b/sound/hda/codecs/realtek/alc269.c
+@@ -8123,6 +8123,7 @@ static const struct hda_quirk alc269_fixup_tbl[] = {
+ 	SND_PCI_QUIRK(0x1854, 0x0489, "LG gram 16 (16Z90R-A)", ALC298_FIXUP_SAMSUNG_AMP_V2_4_AMPS),
+ 	SND_PCI_QUIRK(0x1854, 0x048a, "LG gram 17 (17ZD90R)", ALC298_FIXUP_SAMSUNG_AMP_V2_4_AMPS),
+ 	SND_PCI_QUIRK(0x1854, 0x0490, "LG Gram Style 14 (14Z90RS)", ALC298_FIXUP_LG_GRAM_STYLE_14),
++	SND_PCI_QUIRK(0x1854, 0x0554, "LG gram 16 (16Z90TR)", ALC298_FIXUP_SAMSUNG_AMP_V2_2_AMPS),
+ 	SND_PCI_QUIRK(0x19e5, 0x3204, "Huawei MACH-WX9", ALC256_FIXUP_HUAWEI_MACH_WX9_PINS),
+ 	SND_PCI_QUIRK(0x19e5, 0x320f, "Huawei WRT-WX9 ", ALC256_FIXUP_ASUS_MIC_NO_PRESENCE),
+ 	SND_PCI_QUIRK(0x19e5, 0x3212, "Huawei KLV-WX9 ", ALC256_FIXUP_ACER_HEADSET_MIC),
+-- 
+2.55.0
+

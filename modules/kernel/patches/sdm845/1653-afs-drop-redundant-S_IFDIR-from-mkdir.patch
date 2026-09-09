@@ -1,0 +1,34 @@
+From b16f5529c63735ee29e9982c37b26b18d48f0696 Mon Sep 17 00:00:00 2001
+From: Jori Koolstra <jkoolstra@xs4all.nl>
+Date: Tue, 30 Jun 2026 12:53:33 +0200
+Subject: [PATCH 01653/15333] afs: drop redundant S_IFDIR from mkdir
+
+vfs_mkdir() now sets the S_IFDIR type bit in the mode it passes to
+->mkdir(), so OR-ing S_IFDIR into the mode again in afs_mkdir() is
+redundant. Drop it.
+
+Assisted-by: LLM
+Signed-off-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Link: https://patch.msgid.link/20260630105400.68459-5-jkoolstra@xs4all.nl
+Reviewed-by: NeilBrown <neil@brown.name>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/afs/dir.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/afs/dir.c b/fs/afs/dir.c
+index 498b99ccdf0e..3bff8731e67a 100644
+--- a/fs/afs/dir.c
++++ b/fs/afs/dir.c
+@@ -1323,7 +1323,7 @@ static struct dentry *afs_mkdir(struct mnt_idmap *idmap, struct inode *dir,
+ 	op->file[0].modification = true;
+ 	op->file[0].update_ctime = true;
+ 	op->dentry	= dentry;
+-	op->create.mode	= S_IFDIR | mode;
++	op->create.mode	= mode;
+ 	op->create.reason = afs_edit_dir_for_mkdir;
+ 	op->mtime	= current_time(dir);
+ 	op->ops		= &afs_mkdir_operation;
+-- 
+2.55.0
+

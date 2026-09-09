@@ -1,0 +1,179 @@
+From 457daba18e209fefeb3b88b1a2868c70704950ba Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Fri, 24 Jul 2026 09:09:28 -1000
+Subject: [PATCH 07041/15333] tools/sched_ext: Don't restart over a pending
+ exit request
+
+The tools restart when the kernel exits the scheduler with
+SCX_ECODE_ACT_RESTART. The restart decision doesn't consult exit_req, so an
+exit request arriving while the restart condition persists is ignored and
+the tool reloads in a tight loop. Test exit_req before restarting.
+
+scx_userland needs more: its main loop never watches the kernel-side exit
+and exit_req doubles as the stats printer's stop signal, set by the teardown
+and reset on each restart. Add the missing UEI_EXITED() test and give the
+printer its own stop flag so that exit_req only means an exit request and
+stays latched like in the other tools.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ tools/sched_ext/scx_central.c  |  2 +-
+ tools/sched_ext/scx_cpu0.c     |  2 +-
+ tools/sched_ext/scx_flatcg.c   |  2 +-
+ tools/sched_ext/scx_pair.c     |  2 +-
+ tools/sched_ext/scx_qmap.c     |  2 +-
+ tools/sched_ext/scx_sdt.c      |  2 +-
+ tools/sched_ext/scx_simple.c   |  2 +-
+ tools/sched_ext/scx_userland.c | 11 ++++++-----
+ 8 files changed, 13 insertions(+), 12 deletions(-)
+
+diff --git a/tools/sched_ext/scx_central.c b/tools/sched_ext/scx_central.c
+index 4a72df39500d..e1acaed4ec31 100644
+--- a/tools/sched_ext/scx_central.c
++++ b/tools/sched_ext/scx_central.c
+@@ -120,7 +120,7 @@ int main(int argc, char **argv)
+ 	ecode = UEI_REPORT(skel, uei);
+ 	scx_central__destroy(skel);
+ 
+-	if (UEI_ECODE_RESTART(ecode))
++	if (!exit_req && UEI_ECODE_RESTART(ecode))
+ 		goto restart;
+ 	return 0;
+ }
+diff --git a/tools/sched_ext/scx_cpu0.c b/tools/sched_ext/scx_cpu0.c
+index 84a47aee2f95..1c2b507b8b34 100644
+--- a/tools/sched_ext/scx_cpu0.c
++++ b/tools/sched_ext/scx_cpu0.c
+@@ -99,7 +99,7 @@ int main(int argc, char **argv)
+ 	ecode = UEI_REPORT(skel, uei);
+ 	scx_cpu0__destroy(skel);
+ 
+-	if (UEI_ECODE_RESTART(ecode))
++	if (!exit_req && UEI_ECODE_RESTART(ecode))
+ 		goto restart;
+ 	return 0;
+ }
+diff --git a/tools/sched_ext/scx_flatcg.c b/tools/sched_ext/scx_flatcg.c
+index 7799782b76d1..a223bff3746a 100644
+--- a/tools/sched_ext/scx_flatcg.c
++++ b/tools/sched_ext/scx_flatcg.c
+@@ -233,7 +233,7 @@ int main(int argc, char **argv)
+ 	ecode = UEI_REPORT(skel, uei);
+ 	scx_flatcg__destroy(skel);
+ 
+-	if (UEI_ECODE_RESTART(ecode))
++	if (!exit_req && UEI_ECODE_RESTART(ecode))
+ 		goto restart;
+ 	return 0;
+ }
+diff --git a/tools/sched_ext/scx_pair.c b/tools/sched_ext/scx_pair.c
+index 41b136d43a55..00f595b58f97 100644
+--- a/tools/sched_ext/scx_pair.c
++++ b/tools/sched_ext/scx_pair.c
+@@ -190,7 +190,7 @@ int main(int argc, char **argv)
+ 	ecode = UEI_REPORT(skel, uei);
+ 	scx_pair__destroy(skel);
+ 
+-	if (UEI_ECODE_RESTART(ecode))
++	if (!exit_req && UEI_ECODE_RESTART(ecode))
+ 		goto restart;
+ 	return 0;
+ }
+diff --git a/tools/sched_ext/scx_qmap.c b/tools/sched_ext/scx_qmap.c
+index 27ffda1c519e..3f54796e48be 100644
+--- a/tools/sched_ext/scx_qmap.c
++++ b/tools/sched_ext/scx_qmap.c
+@@ -465,7 +465,7 @@ int main(int argc, char **argv)
+ 	ecode = UEI_REPORT(skel, uei);
+ 	scx_qmap__destroy(skel);
+ 
+-	if (UEI_ECODE_RESTART(ecode))
++	if (!exit_req && UEI_ECODE_RESTART(ecode))
+ 		goto restart;
+ 	return 0;
+ }
+diff --git a/tools/sched_ext/scx_sdt.c b/tools/sched_ext/scx_sdt.c
+index ef197b266a36..2f93a00de548 100644
+--- a/tools/sched_ext/scx_sdt.c
++++ b/tools/sched_ext/scx_sdt.c
+@@ -96,7 +96,7 @@ int main(int argc, char **argv)
+ 	ecode = UEI_REPORT(skel, uei);
+ 	scx_sdt__destroy(skel);
+ 
+-	if (UEI_ECODE_RESTART(ecode))
++	if (!exit_req && UEI_ECODE_RESTART(ecode))
+ 		goto restart;
+ 	return 0;
+ }
+diff --git a/tools/sched_ext/scx_simple.c b/tools/sched_ext/scx_simple.c
+index 34f9785335b7..b7589a83f28a 100644
+--- a/tools/sched_ext/scx_simple.c
++++ b/tools/sched_ext/scx_simple.c
+@@ -104,7 +104,7 @@ int main(int argc, char **argv)
+ 	ecode = UEI_REPORT(skel, uei);
+ 	scx_simple__destroy(skel);
+ 
+-	if (UEI_ECODE_RESTART(ecode))
++	if (!exit_req && UEI_ECODE_RESTART(ecode))
+ 		goto restart;
+ 	return 0;
+ }
+diff --git a/tools/sched_ext/scx_userland.c b/tools/sched_ext/scx_userland.c
+index 192b79c7e4aa..b16b6db5f365 100644
+--- a/tools/sched_ext/scx_userland.c
++++ b/tools/sched_ext/scx_userland.c
+@@ -52,6 +52,7 @@ static __u32 batch_size = 8;
+ 
+ static bool verbose;
+ static volatile int exit_req;
++static volatile int stats_stop;
+ static int enqueued_fd, dispatched_fd;
+ 
+ static pthread_t stats_printer;
+@@ -286,7 +287,7 @@ static void dispatch_batch(void)
+ 
+ static void *run_stats_printer(void *arg)
+ {
+-	while (!exit_req) {
++	while (!stats_stop) {
+ 		__u64 nr_failed_enqueues, nr_kernel_enqueues, nr_user_enqueues, total;
+ 
+ 		nr_failed_enqueues = skel->bss->nr_failed_enqueues;
+@@ -374,7 +375,7 @@ static void pre_bootstrap(int argc, char **argv)
+ 
+ static void bootstrap(char *comm)
+ {
+-	exit_req = 0;
++	stats_stop = 0;
+ 	min_vruntime = 0.0;
+ 	__atomic_store_n(&nr_vruntime_enqueues, 0, __ATOMIC_RELAXED);
+ 	__atomic_store_n(&nr_vruntime_dispatches, 0, __ATOMIC_RELAXED);
+@@ -404,7 +405,7 @@ static void bootstrap(char *comm)
+ 
+ static void sched_main_loop(void)
+ {
+-	while (!exit_req) {
++	while (!exit_req && !UEI_EXITED(skel, uei)) {
+ 		/*
+ 		 * Perform the following work in the main user space scheduler
+ 		 * loop:
+@@ -434,13 +435,13 @@ int main(int argc, char **argv)
+ 	bootstrap(argv[0]);
+ 	sched_main_loop();
+ 
+-	exit_req = 1;
++	stats_stop = 1;
+ 	bpf_link__destroy(ops_link);
+ 	pthread_join(stats_printer, NULL);
+ 	ecode = UEI_REPORT(skel, uei);
+ 	scx_userland__destroy(skel);
+ 
+-	if (UEI_ECODE_RESTART(ecode))
++	if (!exit_req && UEI_ECODE_RESTART(ecode))
+ 		goto restart;
+ 	return 0;
+ }
+-- 
+2.55.0
+

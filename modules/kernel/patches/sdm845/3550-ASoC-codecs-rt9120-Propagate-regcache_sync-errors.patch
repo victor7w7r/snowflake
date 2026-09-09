@@ -1,0 +1,48 @@
+From aeb606a6437dfed9a98a6c2b056f9086a881f210 Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Sat, 4 Jul 2026 11:55:48 +0800
+Subject: [PATCH 03550/15333] ASoC: codecs: rt9120: Propagate regcache_sync()
+ errors
+
+regcache_sync() can fail while replaying cached register state after
+runtime resume. rt9120_runtime_resume() currently ignores that failure
+and returns success.
+
+Propagate the error, restore cache-only/dirty state, and power the
+device back down on sync failure.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Link: https://patch.msgid.link/20260704035548.67713-1-pengpeng@iscas.ac.cn
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/rt9120.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/sound/soc/codecs/rt9120.c b/sound/soc/codecs/rt9120.c
+index 97f56af25577..e51cd4a31894 100644
+--- a/sound/soc/codecs/rt9120.c
++++ b/sound/soc/codecs/rt9120.c
+@@ -606,12 +606,19 @@ static int rt9120_runtime_suspend(struct device *dev)
+ static int rt9120_runtime_resume(struct device *dev)
+ {
+ 	struct rt9120_data *data = dev_get_drvdata(dev);
++	int ret;
+ 
+ 	if (data->pwdnn_gpio) {
+ 		gpiod_set_value(data->pwdnn_gpio, 1);
+ 		msleep(RT9120_CHIPON_WAITMS);
+ 		regcache_cache_only(data->regmap, false);
+-		regcache_sync(data->regmap);
++		ret = regcache_sync(data->regmap);
++		if (ret) {
++			regcache_cache_only(data->regmap, true);
++			regcache_mark_dirty(data->regmap);
++			gpiod_set_value(data->pwdnn_gpio, 0);
++			return ret;
++		}
+ 	}
+ 
+ 	return 0;
+-- 
+2.55.0
+

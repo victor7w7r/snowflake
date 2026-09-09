@@ -1,0 +1,198 @@
+From 8461050861aeea29138dd25d5fb78c6f643c708c Mon Sep 17 00:00:00 2001
+From: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Date: Mon, 6 Jul 2026 11:35:25 +0200
+Subject: [PATCH 07108/15333] arm64: dts: amd: seattle: Remove useless xgbe
+ DTSI include
+
+The "amd-seattle-xgbe-b.dtsi" file is included exactly once, so paste the
+contents directly in proper DTSI.  No functional impact.
+
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260706093523.274093-4-krzysztof.kozlowski@oss.qualcomm.com
+Signed-off-by: Krzysztof Kozlowski <krzk@kernel.org>
+---
+ .../boot/dts/amd/amd-overdrive-rev-b0.dts     | 78 ++++++++++++++++-
+ .../boot/dts/amd/amd-seattle-xgbe-b.dtsi      | 84 -------------------
+ 2 files changed, 77 insertions(+), 85 deletions(-)
+ delete mode 100644 arch/arm64/boot/dts/amd/amd-seattle-xgbe-b.dtsi
+
+diff --git a/arch/arm64/boot/dts/amd/amd-overdrive-rev-b0.dts b/arch/arm64/boot/dts/amd/amd-overdrive-rev-b0.dts
+index 8862adae44e9..0860fc7a6927 100644
+--- a/arch/arm64/boot/dts/amd/amd-overdrive-rev-b0.dts
++++ b/arch/arm64/boot/dts/amd/amd-overdrive-rev-b0.dts
+@@ -71,5 +71,81 @@ sdcard0: mmc@0 {
+ };
+ 
+ &smb0 {
+-	/include/ "amd-seattle-xgbe-b.dtsi"
++	xgmac0: ethernet@e0700000 {
++		compatible = "amd,xgbe-seattle-v1a";
++		reg = <0 0xe0700000 0 0x80000>,
++		      <0 0xe0780000 0 0x80000>,
++		      <0 0xe1240800 0 0x00400>, /* SERDES RX/TX0 */
++		      <0 0xe1250000 0 0x00060>, /* SERDES IR 1/2 */
++		      <0 0xe12500f8 0 0x00004>; /* SERDES IR 2/2 */
++		interrupts = <0 325 4>,
++			     <0 346 1>, <0 347 1>, <0 348 1>, <0 349 1>,
++			     <0 323 4>;
++		amd,per-channel-interrupt;
++		amd,speed-set = <0>;
++		amd,serdes-blwc = <1>, <1>, <0>;
++		amd,serdes-cdr-rate = <2>, <2>, <7>;
++		amd,serdes-pq-skew = <10>, <10>, <18>;
++		amd,serdes-tx-amp = <0>, <0>, <0>;
++		amd,serdes-dfe-tap-config = <3>, <3>, <3>;
++		amd,serdes-dfe-tap-enable = <0>, <0>, <7>;
++		mac-address = [ 02 A1 A2 A3 A4 A5 ];
++		clocks = <&xgmacclk0_dma_250mhz>, <&xgmacclk0_ptp_250mhz>;
++		clock-names = "dma_clk", "ptp_clk";
++		phy-mode = "xgmii";
++		iommus = <&xgmac0_smmu 0x00 0x17>; /* 0-7, 16-23 */
++		dma-coherent;
++	};
++
++	xgmac1: ethernet@e0900000 {
++		compatible = "amd,xgbe-seattle-v1a";
++		reg = <0 0xe0900000 0 0x80000>,
++		      <0 0xe0980000 0 0x80000>,
++		      <0 0xe1240c00 0 0x00400>, /* SERDES RX/TX1 */
++		      <0 0xe1250080 0 0x00060>, /* SERDES IR 1/2 */
++		      <0 0xe12500fc 0 0x00004>; /* SERDES IR 2/2 */
++		interrupts = <0 324 4>,
++			     <0 341 1>, <0 342 1>, <0 343 1>, <0 344 1>,
++			     <0 322 4>;
++		amd,per-channel-interrupt;
++		amd,speed-set = <0>;
++		amd,serdes-blwc = <1>, <1>, <0>;
++		amd,serdes-cdr-rate = <2>, <2>, <7>;
++		amd,serdes-pq-skew = <10>, <10>, <18>;
++		amd,serdes-tx-amp = <0>, <0>, <0>;
++		amd,serdes-dfe-tap-config = <3>, <3>, <3>;
++		amd,serdes-dfe-tap-enable = <0>, <0>, <7>;
++		mac-address = [ 02 B1 B2 B3 B4 B5 ];
++		clocks = <&xgmacclk1_dma_250mhz>, <&xgmacclk1_ptp_250mhz>;
++		clock-names = "dma_clk", "ptp_clk";
++		phy-mode = "xgmii";
++		iommus = <&xgmac1_smmu 0x00 0x17>; /* 0-7, 16-23 */
++		dma-coherent;
++	};
++
++	xgmac0_smmu: iommu@e0600000 {
++		 compatible = "arm,mmu-401";
++		 reg = <0 0xe0600000 0 0x10000>;
++		 #global-interrupts = <1>;
++		 interrupts = /* Uses combined intr for both
++			       * global and context
++			       */
++			      <0 336 4>,
++			      <0 336 4>;
++		#iommu-cells = <2>;
++		dma-coherent;
++	 };
++
++	 xgmac1_smmu: iommu@e0800000 {
++		 compatible = "arm,mmu-401";
++		 reg = <0 0xe0800000 0 0x10000>;
++		 #global-interrupts = <1>;
++		 interrupts = /* Uses combined intr for both
++			       * global and context
++			       */
++			      <0 335 4>,
++			      <0 335 4>;
++		#iommu-cells = <2>;
++		dma-coherent;
++	 };
+ };
+diff --git a/arch/arm64/boot/dts/amd/amd-seattle-xgbe-b.dtsi b/arch/arm64/boot/dts/amd/amd-seattle-xgbe-b.dtsi
+deleted file mode 100644
+index 18b0c2dd1b2d..000000000000
+--- a/arch/arm64/boot/dts/amd/amd-seattle-xgbe-b.dtsi
++++ /dev/null
+@@ -1,84 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0
+-/*
+- * DTS file for AMD Seattle XGBE (RevB)
+- *
+- * Copyright (C) 2015 Advanced Micro Devices, Inc.
+- */
+-
+-	xgmac0: ethernet@e0700000 {
+-		compatible = "amd,xgbe-seattle-v1a";
+-		reg = <0 0xe0700000 0 0x80000>,
+-		      <0 0xe0780000 0 0x80000>,
+-		      <0 0xe1240800 0 0x00400>, /* SERDES RX/TX0 */
+-		      <0 0xe1250000 0 0x00060>, /* SERDES IR 1/2 */
+-		      <0 0xe12500f8 0 0x00004>; /* SERDES IR 2/2 */
+-		interrupts = <0 325 4>,
+-			     <0 346 1>, <0 347 1>, <0 348 1>, <0 349 1>,
+-			     <0 323 4>;
+-		amd,per-channel-interrupt;
+-		amd,speed-set = <0>;
+-		amd,serdes-blwc = <1>, <1>, <0>;
+-		amd,serdes-cdr-rate = <2>, <2>, <7>;
+-		amd,serdes-pq-skew = <10>, <10>, <18>;
+-		amd,serdes-tx-amp = <0>, <0>, <0>;
+-		amd,serdes-dfe-tap-config = <3>, <3>, <3>;
+-		amd,serdes-dfe-tap-enable = <0>, <0>, <7>;
+-		mac-address = [ 02 A1 A2 A3 A4 A5 ];
+-		clocks = <&xgmacclk0_dma_250mhz>, <&xgmacclk0_ptp_250mhz>;
+-		clock-names = "dma_clk", "ptp_clk";
+-		phy-mode = "xgmii";
+-		iommus = <&xgmac0_smmu 0x00 0x17>; /* 0-7, 16-23 */
+-		dma-coherent;
+-	};
+-
+-	xgmac1: ethernet@e0900000 {
+-		compatible = "amd,xgbe-seattle-v1a";
+-		reg = <0 0xe0900000 0 0x80000>,
+-		      <0 0xe0980000 0 0x80000>,
+-		      <0 0xe1240c00 0 0x00400>, /* SERDES RX/TX1 */
+-		      <0 0xe1250080 0 0x00060>, /* SERDES IR 1/2 */
+-		      <0 0xe12500fc 0 0x00004>; /* SERDES IR 2/2 */
+-		interrupts = <0 324 4>,
+-			     <0 341 1>, <0 342 1>, <0 343 1>, <0 344 1>,
+-			     <0 322 4>;
+-		amd,per-channel-interrupt;
+-		amd,speed-set = <0>;
+-		amd,serdes-blwc = <1>, <1>, <0>;
+-		amd,serdes-cdr-rate = <2>, <2>, <7>;
+-		amd,serdes-pq-skew = <10>, <10>, <18>;
+-		amd,serdes-tx-amp = <0>, <0>, <0>;
+-		amd,serdes-dfe-tap-config = <3>, <3>, <3>;
+-		amd,serdes-dfe-tap-enable = <0>, <0>, <7>;
+-		mac-address = [ 02 B1 B2 B3 B4 B5 ];
+-		clocks = <&xgmacclk1_dma_250mhz>, <&xgmacclk1_ptp_250mhz>;
+-		clock-names = "dma_clk", "ptp_clk";
+-		phy-mode = "xgmii";
+-		iommus = <&xgmac1_smmu 0x00 0x17>; /* 0-7, 16-23 */
+-		dma-coherent;
+-	};
+-
+-	xgmac0_smmu: iommu@e0600000 {
+-		 compatible = "arm,mmu-401";
+-		 reg = <0 0xe0600000 0 0x10000>;
+-		 #global-interrupts = <1>;
+-		 interrupts = /* Uses combined intr for both
+-			       * global and context
+-			       */
+-			      <0 336 4>,
+-			      <0 336 4>;
+-		#iommu-cells = <2>;
+-		dma-coherent;
+-	 };
+-
+-	 xgmac1_smmu: iommu@e0800000 {
+-		 compatible = "arm,mmu-401";
+-		 reg = <0 0xe0800000 0 0x10000>;
+-		 #global-interrupts = <1>;
+-		 interrupts = /* Uses combined intr for both
+-			       * global and context
+-			       */
+-			      <0 335 4>,
+-			      <0 335 4>;
+-		#iommu-cells = <2>;
+-		dma-coherent;
+-	 };
+-- 
+2.55.0
+

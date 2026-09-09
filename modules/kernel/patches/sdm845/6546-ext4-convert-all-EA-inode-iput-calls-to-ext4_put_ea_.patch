@@ -1,0 +1,174 @@
+From a54778243e88f2a941e145e5afa43bd1619c0a66 Mon Sep 17 00:00:00 2001
+From: Yun Zhou <yun.zhou@windriver.com>
+Date: Fri, 10 Jul 2026 11:08:50 +0800
+Subject: [PATCH 06546/15333] ext4: convert all EA inode iput() calls to
+ ext4_put_ea_inode()
+
+Convert all iput() calls on EA inodes in xattr code paths to use
+ext4_put_ea_inode().  This establishes a uniform rule: every EA inode
+reference release in ext4 xattr code goes through ext4_put_ea_inode(),
+eliminating the need to analyze each call site individually for lock
+safety.
+
+Converted sites:
+
+- ext4_xattr_inode_get() read path
+- ext4_xattr_inode_inc_ref_all() main loop and cleanup path
+- ext4_xattr_inode_dec_ref_all() error paths
+- ext4_xattr_inode_create() error path
+- ext4_xattr_inode_cache_find() mismatch path
+- ext4_xattr_inode_lookup_create() out_err
+- ext4_xattr_set_entry() old_ea_inode
+- ext4_xattr_block_set() new block path, cleanup, and tmp_inode
+- ext4_xattr_ibody_set() error and success paths
+- ext4_xattr_delete_inode() quota loop
+
+For most of these, iput_if_not_last() will succeed (the EA inode has
+other references) making the overhead a single atomic operation.
+
+Signed-off-by: Yun Zhou <yun.zhou@windriver.com>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Tested-by: syzbot@syzkaller.appspotmail.com
+Link: https://patch.msgid.link/20260710030851.2791589-4-yun.zhou@windriver.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/xattr.c | 30 +++++++++++++++---------------
+ 1 file changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+index f716bf61aae9..a511a267504d 100644
+--- a/fs/ext4/xattr.c
++++ b/fs/ext4/xattr.c
+@@ -567,7 +567,7 @@ ext4_xattr_inode_get(struct inode *inode, struct ext4_xattr_entry *entry,
+ 					ea_inode->i_ino, true /* reusable */);
+ 	}
+ out:
+-	iput(ea_inode);
++	ext4_put_ea_inode(ea_inode);
+ 	return err;
+ }
+ 
+@@ -1104,10 +1104,10 @@ static int ext4_xattr_inode_inc_ref_all(handle_t *handle, struct inode *parent,
+ 		err = ext4_xattr_inode_inc_ref(handle, ea_inode);
+ 		if (err) {
+ 			ext4_warning_inode(ea_inode, "inc ref error %d", err);
+-			iput(ea_inode);
++			ext4_put_ea_inode(ea_inode);
+ 			goto cleanup;
+ 		}
+-		iput(ea_inode);
++		ext4_put_ea_inode(ea_inode);
+ 	}
+ 	return 0;
+ 
+@@ -1133,7 +1133,7 @@ static int ext4_xattr_inode_inc_ref_all(handle_t *handle, struct inode *parent,
+ 		if (err)
+ 			ext4_warning_inode(ea_inode, "cleanup dec ref error %d",
+ 					   err);
+-		iput(ea_inode);
++		ext4_put_ea_inode(ea_inode);
+ 	}
+ 	return saved_err;
+ }
+@@ -1201,7 +1201,7 @@ ext4_xattr_inode_dec_ref_all(handle_t *handle, struct inode *parent,
+ 		if (err) {
+ 			ext4_warning_inode(ea_inode,
+ 					   "Expand inode array err=%d", err);
+-			iput(ea_inode);
++			ext4_put_ea_inode(ea_inode);
+ 			continue;
+ 		}
+ 
+@@ -1505,7 +1505,7 @@ static struct inode *ext4_xattr_inode_create(handle_t *handle,
+ 			if (ext4_xattr_inode_dec_ref(handle, ea_inode))
+ 				ext4_warning_inode(ea_inode,
+ 					"cleanup dec ref error %d", err);
+-			iput(ea_inode);
++			ext4_put_ea_inode(ea_inode);
+ 			return ERR_PTR(err);
+ 		}
+ 
+@@ -1564,7 +1564,7 @@ ext4_xattr_inode_cache_find(struct inode *inode, const void *value,
+ 			kvfree(ea_data);
+ 			return ea_inode;
+ 		}
+-		iput(ea_inode);
++		ext4_put_ea_inode(ea_inode);
+ 	next_entry:
+ 		ce = mb_cache_entry_find_next(ea_inode_cache, ce);
+ 	}
+@@ -1615,7 +1615,7 @@ static struct inode *ext4_xattr_inode_lookup_create(handle_t *handle,
+ 				      ea_inode->i_ino, true /* reusable */);
+ 	return ea_inode;
+ out_err:
+-	iput(ea_inode);
++	ext4_put_ea_inode(ea_inode);
+ 	ext4_xattr_inode_free_quota(inode, NULL, value_len);
+ 	return ERR_PTR(err);
+ }
+@@ -1848,7 +1848,7 @@ static int ext4_xattr_set_entry(struct ext4_xattr_info *i,
+ 
+ 	ret = 0;
+ out:
+-	iput(old_ea_inode);
++	ext4_put_ea_inode(old_ea_inode);
+ 	return ret;
+ }
+ 
+@@ -2010,7 +2010,7 @@ ext4_xattr_block_set(handle_t *handle, struct inode *inode,
+ 				old_ea_inode_quota = le32_to_cpu(
+ 						s->here->e_value_size);
+ 			}
+-			iput(tmp_inode);
++			ext4_put_ea_inode(tmp_inode);
+ 
+ 			s->here->e_value_inum = 0;
+ 			s->here->e_value_size = 0;
+@@ -2150,7 +2150,7 @@ ext4_xattr_block_set(handle_t *handle, struct inode *inode,
+ 					ext4_warning_inode(ea_inode,
+ 							   "dec ref error=%d",
+ 							   error);
+-				iput(ea_inode);
++				ext4_put_ea_inode(ea_inode);
+ 				ea_inode = NULL;
+ 			}
+ 
+@@ -2203,7 +2203,7 @@ ext4_xattr_block_set(handle_t *handle, struct inode *inode,
+ 			ext4_xattr_inode_free_quota(inode, ea_inode,
+ 						    i_size_read(ea_inode));
+ 		}
+-		iput(ea_inode);
++		ext4_put_ea_inode(ea_inode);
+ 	}
+ 	if (ce)
+ 		mb_cache_entry_put(ea_block_cache, ce);
+@@ -2285,7 +2285,7 @@ int ext4_xattr_ibody_set(handle_t *handle, struct inode *inode,
+ 
+ 			ext4_xattr_inode_free_quota(inode, ea_inode,
+ 						    i_size_read(ea_inode));
+-			iput(ea_inode);
++			ext4_put_ea_inode(ea_inode);
+ 		}
+ 		return error;
+ 	}
+@@ -2297,7 +2297,7 @@ int ext4_xattr_ibody_set(handle_t *handle, struct inode *inode,
+ 		header->h_magic = cpu_to_le32(0);
+ 		ext4_clear_inode_state(inode, EXT4_STATE_XATTR);
+ 	}
+-	iput(ea_inode);
++	ext4_put_ea_inode(ea_inode);
+ 	return 0;
+ }
+ 
+@@ -2987,7 +2987,7 @@ int ext4_xattr_delete_inode(handle_t *handle, struct inode *inode,
+ 					continue;
+ 				ext4_xattr_inode_free_quota(inode, ea_inode,
+ 					      le32_to_cpu(entry->e_value_size));
+-				iput(ea_inode);
++				ext4_put_ea_inode(ea_inode);
+ 			}
+ 
+ 		}
+-- 
+2.55.0
+

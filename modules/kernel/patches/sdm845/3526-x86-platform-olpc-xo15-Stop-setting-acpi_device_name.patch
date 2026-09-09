@@ -1,0 +1,53 @@
+From 14deb40886e3f98b335eff9da598c3ead98b9225 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Mon, 6 Jul 2026 14:26:23 +0200
+Subject: [PATCH 03526/15333] x86/platform/olpc: xo15: Stop setting
+ acpi_device_name/class()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The driver sets acpi_device_name() and acpi_device_class() which are
+never read afterward, so make it stop doing that and drop the symbols
+defined specifically for this purpose.
+
+No intentional functional impact.
+
+This will facilitate the removal of device_name and device_class from
+struct acpi_device_pnp in the future.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/2866696.mvXUDI8C0e@rafael.j.wysocki
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ arch/x86/platform/olpc/olpc-xo15-sci.c | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/arch/x86/platform/olpc/olpc-xo15-sci.c b/arch/x86/platform/olpc/olpc-xo15-sci.c
+index e486109e88c8..75ed6ceb9df3 100644
+--- a/arch/x86/platform/olpc/olpc-xo15-sci.c
++++ b/arch/x86/platform/olpc/olpc-xo15-sci.c
+@@ -18,8 +18,6 @@
+ 
+ #define DRV_NAME			"olpc-xo15-sci"
+ #define PFX				DRV_NAME ": "
+-#define XO15_SCI_CLASS			DRV_NAME
+-#define XO15_SCI_DEVICE_NAME		"OLPC XO-1.5 SCI"
+ 
+ static unsigned long			xo15_sci_gpe;
+ static bool				lid_wake_on_close;
+@@ -148,9 +146,6 @@ static int xo15_sci_probe(struct platform_device *pdev)
+ 	if (!device)
+ 		return -ENODEV;
+ 
+-	strscpy(acpi_device_name(device), XO15_SCI_DEVICE_NAME);
+-	strscpy(acpi_device_class(device), XO15_SCI_CLASS);
+-
+ 	/* Get GPE bit assignment (EC events). */
+ 	status = acpi_evaluate_integer(device->handle, "_GPE", NULL, &tmp);
+ 	if (ACPI_FAILURE(status))
+-- 
+2.55.0
+

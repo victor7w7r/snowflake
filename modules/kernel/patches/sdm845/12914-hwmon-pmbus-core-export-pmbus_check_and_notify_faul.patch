@@ -1,0 +1,71 @@
+From bf69cb41979b1be20ddfaf37279fafc6f15e3e19 Mon Sep 17 00:00:00 2001
+From: Vincent Jardin <vjardin@free.fr>
+Date: Thu, 30 Jul 2026 17:43:59 +0200
+Subject: [PATCH 12914/15333] hwmon: (pmbus/core) export
+ pmbus_check_and_notify_faults()
+
+Factor of pmbus_fault_handler() into an exported helper so
+drivers can notify sequence from a polling work item on boards
+for which the chip's SMBALERT# pin is not wired to the
+CPU. The interrupt handler becomes a thin wrapper.
+
+Like the SMBALERT# path, the helper notifies and then clears the
+latched faults unconditionally, so a polling caller inherits exactly
+the interrupt semantics.
+
+Signed-off-by: Vincent Jardin <vjardin@free.fr>
+Link: https://lore.kernel.org/r/20260730-mpq8646_v0-v7-1-e7c7ad768d5d@free.fr
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/hwmon/pmbus/pmbus.h      |  1 +
+ drivers/hwmon/pmbus/pmbus_core.c | 14 +++++++++++---
+ 2 files changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/hwmon/pmbus/pmbus.h b/drivers/hwmon/pmbus/pmbus.h
+index 1af247de9075..5fe2c415eada 100644
+--- a/drivers/hwmon/pmbus/pmbus.h
++++ b/drivers/hwmon/pmbus/pmbus.h
+@@ -572,6 +572,7 @@ int pmbus_write_byte_data(struct i2c_client *client, int page, u8 reg,
+ int pmbus_update_byte_data(struct i2c_client *client, int page, u8 reg,
+ 			   u8 mask, u8 value);
+ void pmbus_clear_faults(struct i2c_client *client);
++void pmbus_check_and_notify_faults(struct i2c_client *client);
+ bool pmbus_check_byte_register(struct i2c_client *client, int page, int reg);
+ bool pmbus_check_word_register(struct i2c_client *client, int page, int reg);
+ int pmbus_do_probe(struct i2c_client *client, struct pmbus_driver_info *info);
+diff --git a/drivers/hwmon/pmbus/pmbus_core.c b/drivers/hwmon/pmbus/pmbus_core.c
+index 884d6e6148d5..6991c7f8d125 100644
+--- a/drivers/hwmon/pmbus/pmbus_core.c
++++ b/drivers/hwmon/pmbus/pmbus_core.c
+@@ -3461,10 +3461,9 @@ static int pmbus_write_smbalert_mask(struct i2c_client *client, u8 page, u8 reg,
+ 	return ret;
+ }
+ 
+-static irqreturn_t pmbus_fault_handler(int irq, void *pdata)
++void pmbus_check_and_notify_faults(struct i2c_client *client)
+ {
+-	struct pmbus_data *data = pdata;
+-	struct i2c_client *client = to_i2c_client(data->dev);
++	struct pmbus_data *data = i2c_get_clientdata(client);
+ 	int i, status, event;
+ 
+ 	guard(pmbus_lock)(client);
+@@ -3477,6 +3476,15 @@ static irqreturn_t pmbus_fault_handler(int irq, void *pdata)
+ 	}
+ 
+ 	pmbus_clear_faults(client);
++}
++EXPORT_SYMBOL_NS_GPL(pmbus_check_and_notify_faults, "PMBUS");
++
++static irqreturn_t pmbus_fault_handler(int irq, void *pdata)
++{
++	struct pmbus_data *data = pdata;
++	struct i2c_client *client = to_i2c_client(data->dev);
++
++	pmbus_check_and_notify_faults(client);
+ 
+ 	return IRQ_HANDLED;
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,53 @@
+From 08d50f151747c12c41589e850c86232370fb427c Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Thu, 18 Jun 2026 16:11:25 +0200
+Subject: [PATCH 01631/15333] i2c: k1: Use generic definitions for bus
+ frequencies
+
+Since we have generic definitions for bus frequencies, let's use them.
+
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Reviewed-by: Troy Mitchell <troy.mitchell@linux.spacemit.com>
+Signed-off-by: Andi Shyti <andi.shyti@kernel.org>
+Link: https://lore.kernel.org/r/20260618141125.3241048-1-andriy.shevchenko@linux.intel.com
+---
+ drivers/i2c/busses/i2c-k1.c | 11 ++++-------
+ 1 file changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/i2c/busses/i2c-k1.c b/drivers/i2c/busses/i2c-k1.c
+index 7cf5c05a20d2..c2d090f6ba80 100644
+--- a/drivers/i2c/busses/i2c-k1.c
++++ b/drivers/i2c/busses/i2c-k1.c
+@@ -108,9 +108,6 @@
+ /* i2c bus recover timeout: us */
+ #define SPACEMIT_I2C_BUS_BUSY_TIMEOUT		100000
+ 
+-#define SPACEMIT_I2C_MAX_STANDARD_MODE_FREQ	100000	/* Hz */
+-#define SPACEMIT_I2C_MAX_FAST_MODE_FREQ		400000	/* Hz */
+-
+ #define SPACEMIT_SR_ERR	(SPACEMIT_SR_BED | SPACEMIT_SR_RXOV | SPACEMIT_SR_ALD)
+ 
+ #define SPACEMIT_BUS_RESET_CLK_CNT_MAX		9
+@@ -836,15 +833,15 @@ static int spacemit_i2c_probe(struct platform_device *pdev)
+ 	of_property_read_u32(of_node, "clock-frequency", &i2c->clock_freq);
+ 
+ 	/* For now, this driver doesn't support high-speed. */
+-	if (i2c->clock_freq > SPACEMIT_I2C_MAX_STANDARD_MODE_FREQ &&
+-	    i2c->clock_freq <= SPACEMIT_I2C_MAX_FAST_MODE_FREQ) {
++	if (i2c->clock_freq > I2C_MAX_STANDARD_MODE_FREQ &&
++	    i2c->clock_freq <= I2C_MAX_FAST_MODE_FREQ) {
+ 		i2c->mode = SPACEMIT_MODE_FAST;
+-	} else if (i2c->clock_freq && i2c->clock_freq <= SPACEMIT_I2C_MAX_STANDARD_MODE_FREQ) {
++	} else if (i2c->clock_freq && i2c->clock_freq <= I2C_MAX_STANDARD_MODE_FREQ) {
+ 		i2c->mode = SPACEMIT_MODE_STANDARD;
+ 	} else {
+ 		dev_info(dev, "clock-frequency not set or out of range, using fast mode\n");
+ 		i2c->mode = SPACEMIT_MODE_FAST;
+-		i2c->clock_freq = SPACEMIT_I2C_MAX_FAST_MODE_FREQ;
++		i2c->clock_freq = I2C_MAX_FAST_MODE_FREQ;
+ 	}
+ 
+ 	i2c->dev = &pdev->dev;
+-- 
+2.55.0
+

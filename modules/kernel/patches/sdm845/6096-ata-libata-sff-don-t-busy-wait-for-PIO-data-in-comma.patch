@@ -1,0 +1,97 @@
+From 4a2e5409472e8a0e3e2817e149c55c1d5f803742 Mon Sep 17 00:00:00 2001
+From: Richard Weinberger <richard@nod.at>
+Date: Fri, 17 Jul 2026 11:04:04 +0200
+Subject: [PATCH 06096/15333] ata: libata-sff: don't busy-wait for PIO data-in
+ command completion
+
+Unlike PIO data-out, the PIO data-in protocol raises no completion
+interrupt, the last interrupt announces the final data block, and once
+the host has drained it from the data register the ending status must
+be obtained synchronously.  ata_sff_hsm_move() does this by spinning
+in ata_wait_idle() for up to 10ms.
+
+Usually this is not a big deal unless the device is slow.  In my case
+it's a CF card which keeps BSY asserted for multiple milliseconds(!)
+after the final data block.  Since the waiting happens in the
+interrupt handler, under the port lock with interrupts disabled, the
+CPU is hogged for milliseconds on every read command.
+
+To improve the situation, bound the inline wait to ~100us.  If the
+device is still busy after that, mark the command ATA_TFLAG_POLLING,
+so the interrupt handler won't race for it, and obtain the ending
+status via ata_sff_pio_task(), which sleeps between status checks
+instead of spinning with the lock held.
+
+Since ata_sff_pio_task() may now finish a data-in command, it must
+wait for both BSY and DRQ to clear at HSM_ST_LAST, matching what
+ata_wait_idle() enforced.
+
+Signed-off-by: Richard Weinberger <richard@nod.at>
+Signed-off-by: Damien Le Moal <dlemoal@kernel.org>
+---
+ drivers/ata/libata-sff.c | 24 +++++++++++++++++-------
+ 1 file changed, 17 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/ata/libata-sff.c b/drivers/ata/libata-sff.c
+index 734e7c88439a..976e4e160494 100644
+--- a/drivers/ata/libata-sff.c
++++ b/drivers/ata/libata-sff.c
+@@ -1114,8 +1114,14 @@ int ata_sff_hsm_move(struct ata_port *ap, struct ata_queued_cmd *qc,
+ 
+ 			if (ap->hsm_task_state == HSM_ST_LAST &&
+ 			    (!(qc->tf.flags & ATA_TFLAG_WRITE))) {
+-				/* all data read */
+-				status = ata_wait_idle(ap);
++				status = ata_sff_busy_wait(ap,
++						ATA_BUSY | ATA_DRQ, 10);
++				if (status != 0xff &&
++				    (status & (ATA_BUSY | ATA_DRQ))) {
++					qc->tf.flags |= ATA_TFLAG_POLLING;
++					ata_sff_queue_pio_task(link, 0);
++					return 0;
++				}
+ 				goto fsm_start;
+ 			}
+ 		}
+@@ -1213,7 +1219,7 @@ static void ata_sff_pio_task(struct work_struct *work)
+ 		container_of(work, struct ata_port, sff_pio_task.work);
+ 	struct ata_link *link = ap->sff_pio_task_link;
+ 	struct ata_queued_cmd *qc;
+-	u8 status;
++	u8 status, wait_mask;
+ 	int poll_next;
+ 
+ 	spin_lock_irq(ap->lock);
+@@ -1229,6 +1235,10 @@ static void ata_sff_pio_task(struct work_struct *work)
+ fsm_start:
+ 	WARN_ON_ONCE(ap->hsm_task_state == HSM_ST_IDLE);
+ 
++	wait_mask = ATA_BUSY;
++	if (ap->hsm_task_state == HSM_ST_LAST)
++		wait_mask |= ATA_DRQ;
++
+ 	/*
+ 	 * This is purely heuristic.  This is a fast path.
+ 	 * Sometimes when we enter, BSY will be cleared in
+@@ -1236,14 +1246,14 @@ static void ata_sff_pio_task(struct work_struct *work)
+ 	 * or something.  Snooze for a couple msecs, then
+ 	 * chk-status again.  If still busy, queue delayed work.
+ 	 */
+-	status = ata_sff_busy_wait(ap, ATA_BUSY, 5);
+-	if (status & ATA_BUSY) {
++	status = ata_sff_busy_wait(ap, wait_mask, 5);
++	if (status & wait_mask) {
+ 		spin_unlock_irq(ap->lock);
+ 		ata_msleep(ap, 2);
+ 		spin_lock_irq(ap->lock);
+ 
+-		status = ata_sff_busy_wait(ap, ATA_BUSY, 10);
+-		if (status & ATA_BUSY) {
++		status = ata_sff_busy_wait(ap, wait_mask, 10);
++		if (status & wait_mask) {
+ 			ata_sff_queue_pio_task(link, ATA_SHORT_PAUSE);
+ 			goto out_unlock;
+ 		}
+-- 
+2.55.0
+

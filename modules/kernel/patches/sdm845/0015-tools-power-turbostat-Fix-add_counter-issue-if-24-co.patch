@@ -1,0 +1,67 @@
+From 993912732cceb22b68f6261e2a0112b1c4a3d457 Mon Sep 17 00:00:00 2001
+From: Len Brown <len.brown@intel.com>
+Date: Sun, 3 May 2026 14:17:54 -0400
+Subject: [PATCH 00015/15333] tools/power turbostat: Fix add_counter issue if >
+ 24 counters.
+
+We allocate space for added counters ahead of time,
+and we arbitrarily chose 24 added counters of each type.
+If a future code flow hits this limit and continues,
+and then removes counters, we do a phantom increment
+and lose track of the number of added counters.
+
+Increment the count only if there is no error.
+
+Fixes: 388e9c8134be6b ("tools/power turbostat: Make extensible via the --add parameter")
+Assisted-by: Claude: Claude Sonnet 4.6
+Signed-off-by: Len Brown <len.brown@intel.com>
+---
+ tools/power/x86/turbostat/turbostat.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/tools/power/x86/turbostat/turbostat.c b/tools/power/x86/turbostat/turbostat.c
+index f158c60c2c45..c3e190d91a8d 100644
+--- a/tools/power/x86/turbostat/turbostat.c
++++ b/tools/power/x86/turbostat/turbostat.c
+@@ -10673,10 +10673,11 @@ int add_counter(unsigned int msr_num, char *path, char *name,
+ 				fprintf(stderr, "%s: %s FOUND\n", __func__, name);
+ 			break;
+ 		}
+-		if (sys.added_thread_counters++ >= MAX_ADDED_THREAD_COUNTERS) {
++		if (sys.added_thread_counters >= MAX_ADDED_THREAD_COUNTERS) {
+ 			warnx("ignoring thread counter %s", name);
+ 			return -1;
+ 		}
++		sys.added_thread_counters++;
+ 		break;
+ 	case SCOPE_CORE:
+ 		msrp = find_msrp_by_name(sys.cp, name);
+@@ -10685,10 +10686,11 @@ int add_counter(unsigned int msr_num, char *path, char *name,
+ 				fprintf(stderr, "%s: %s FOUND\n", __func__, name);
+ 			break;
+ 		}
+-		if (sys.added_core_counters++ >= MAX_ADDED_CORE_COUNTERS) {
++		if (sys.added_core_counters >= MAX_ADDED_CORE_COUNTERS) {
+ 			warnx("ignoring core counter %s", name);
+ 			return -1;
+ 		}
++		sys.added_core_counters++;
+ 		break;
+ 	case SCOPE_PACKAGE:
+ 		msrp = find_msrp_by_name(sys.pp, name);
+@@ -10697,10 +10699,11 @@ int add_counter(unsigned int msr_num, char *path, char *name,
+ 				fprintf(stderr, "%s: %s FOUND\n", __func__, name);
+ 			break;
+ 		}
+-		if (sys.added_package_counters++ >= MAX_ADDED_PACKAGE_COUNTERS) {
++		if (sys.added_package_counters >= MAX_ADDED_PACKAGE_COUNTERS) {
+ 			warnx("ignoring package counter %s", name);
+ 			return -1;
+ 		}
++		sys.added_package_counters++;
+ 		break;
+ 	default:
+ 		warnx("ignoring counter %s with unknown scope", name);
+-- 
+2.55.0
+

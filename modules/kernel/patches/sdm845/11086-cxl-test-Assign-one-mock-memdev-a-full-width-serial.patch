@@ -1,0 +1,66 @@
+From 94d84e3d89594f6ad6dc5ed5bed05956bf146149 Mon Sep 17 00:00:00 2001
+From: Alison Schofield <alison.schofield@intel.com>
+Date: Fri, 24 Jul 2026 13:37:19 -0700
+Subject: [PATCH 11086/15333] cxl/test: Assign one mock memdev a full-width
+ serial number
+
+Mock memdev serial numbers have historically been derived from
+pdev->id, leaving them single-digit. As a result they never exercised
+either the decimal-vs-hex security-key lookup or unsigned formatting
+of large serial numbers.
+
+Give one mock memdev a full-width serial with bit 63 set. This mirrors
+real hardware (for example, Montage devices) and provides a test
+device that exposes both the hexadecimal-vs-decimal and signed-vs-
+unsigned formatting differences.
+
+pdev->id 7 is unused by the auto-region topology so the larger serial
+does not affect existing tests.
+
+This enables adding a new test case to cxl-security.sh that verify
+auto-unlock using a mock device whose serial exposes both formatting
+differences.
+
+Signed-off-by: Alison Schofield <alison.schofield@intel.com>
+Link: https://patch.msgid.link/3e569a748fce4424b8622032fbffc298d92153b9.1784924949.git.alison.schofield@intel.com
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ tools/testing/cxl/test/mem.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/tools/testing/cxl/test/mem.c b/tools/testing/cxl/test/mem.c
+index a7da279aa3ef..7b756000a1a6 100644
+--- a/tools/testing/cxl/test/mem.c
++++ b/tools/testing/cxl/test/mem.c
+@@ -1713,6 +1713,7 @@ static int cxl_mock_mem_probe(struct platform_device *pdev)
+ 	struct cxl_mockmem_data *mdata;
+ 	struct cxl_mailbox *cxl_mbox;
+ 	struct cxl_dpa_info range_info = { 0 };
++	u64 serial;
+ 	int rc;
+ 
+ 	/* Increase async probe race window */
+@@ -1739,7 +1740,19 @@ static int cxl_mock_mem_probe(struct platform_device *pdev)
+ 	if (rc)
+ 		return rc;
+ 
+-	mds = cxl_memdev_state_create(dev, pdev->id + 1, 0);
++	/*
++	 * Mock serials have historically been derived from pdev->id and stayed
++	 * single-digit, so they never exercised either decimal-vs-hex key
++	 * lookup or unsigned formatting. Give one mock device a full-width
++	 * serial with bit 63 set, matching real hardware such as Montage CXL
++	 * devices. pdev->id 7 is unused by the auto-region topology.
++	 */
++	if (pdev->id == 7)
++		serial = 0x8a34567890abcdef;
++	else
++		serial = pdev->id + 1;
++
++	mds = cxl_memdev_state_create(dev, serial, 0);
+ 	if (IS_ERR(mds))
+ 		return PTR_ERR(mds);
+ 
+-- 
+2.55.0
+

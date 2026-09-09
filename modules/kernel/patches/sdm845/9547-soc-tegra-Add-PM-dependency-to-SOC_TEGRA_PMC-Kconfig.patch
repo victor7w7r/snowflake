@@ -1,0 +1,66 @@
+From 97ffe9cb67ccafb4644f820ef68662217b76c224 Mon Sep 17 00:00:00 2001
+From: Sasha Levin <sashal@kernel.org>
+Date: Sat, 25 Apr 2026 20:03:04 -0400
+Subject: [PATCH 09547/15333] soc/tegra: Add PM dependency to SOC_TEGRA_PMC
+ Kconfig
+
+kconfiglint reports:
+
+  K006: config SOC_TEGRA_PMC selects PM_GENERIC_DOMAINS which depends on PM,
+        but SOC_TEGRA_PMC does not depend on PM
+
+SOC_TEGRA_PMC is an internal bool symbol (no prompt) that is selected by
+ARCH_TEGRA_*_SOC options to enable the Power Management Controller driver.
+It was originally introduced in commit 5e7d4c652941 ("soc/tegra: Implement
+Tegra186 PMC support") as a bare `bool` with no
+selects of its own.
+
+Over time, additional selects were added:
+- Commit 5098e2b95e8e ("soc/tegra: pmc: Select GENERIC_PINCONF") added
+  select GENERIC_PINCONF
+- Commit 28dbe8231066 ("soc/tegra: pmc: Select IRQ_DOMAIN_HIERARCHY") added
+  select IRQ_DOMAIN_HIERARCHY
+- Commit f880ee9e9688 ("soc/tegra: pmc: Add core power domain") added select PM_OPP and select PM_GENERIC_DOMAINS to
+  support core power domain voltage scaling
+
+PM_GENERIC_DOMAINS is defined in kernel/power/Kconfig as:
+
+  config PM_GENERIC_DOMAINS
+      bool
+      depends on PM
+
+When commit f880ee9e9688 ("soc/tegra: pmc: Add core power domain") added
+the select, it did not add a corresponding `depends on PM` to
+SOC_TEGRA_PMC. This was not a functional problem because all callers of
+SOC_TEGRA_PMC are inside `if ARCH_TEGRA` blocks, and both the ARM32
+definition (arch/arm/mach-tegra/Kconfig) and the ARM64 definition
+(arch/arm64/Kconfig.platforms) of ARCH_TEGRA select PM. Thus PM is always
+enabled when SOC_TEGRA_PMC is selected in practice.
+
+However, the dependency chain is implicit rather than explicit. Add
+`depends on PM` to SOC_TEGRA_PMC to make the requirement explicit and
+prevent a theoretical misconfiguration if SOC_TEGRA_PMC were ever selected
+outside the ARCH_TEGRA context.
+
+Assisted-by: Claude:claude-opus-4-6 kconfiglint
+Signed-off-by: Sasha Levin <sashal@kernel.org>
+Signed-off-by: Thierry Reding <treding@nvidia.com>
+---
+ drivers/soc/tegra/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/soc/tegra/Kconfig b/drivers/soc/tegra/Kconfig
+index 073346c1542b..8b6fdb9ad1ea 100644
+--- a/drivers/soc/tegra/Kconfig
++++ b/drivers/soc/tegra/Kconfig
+@@ -171,6 +171,7 @@ config SOC_TEGRA_FLOWCTRL
+ 
+ config SOC_TEGRA_PMC
+ 	bool
++	depends on PM
+ 	select GENERIC_PINCONF
+ 	select IRQ_DOMAIN_HIERARCHY
+ 	select PM_OPP
+-- 
+2.55.0
+

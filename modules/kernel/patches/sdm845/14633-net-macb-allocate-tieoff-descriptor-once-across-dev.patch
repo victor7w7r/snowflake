@@ -1,0 +1,182 @@
+From 5262eab9462adffd73a84409dee0cbf57fe31da3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Th=C3=A9o=20Lebrun?= <theo.lebrun@bootlin.com>
+Date: Wed, 12 Aug 2026 10:03:20 +0200
+Subject: [PATCH 14633/15333] net: macb: allocate tieoff descriptor once across
+ device lifetime
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The tieoff descriptor is a RX DMA descriptor ring of size one. It gets
+configured onto queues for Wake-on-LAN during system-wide suspend when
+hardware does not support disabling individual queues
+(MACB_CAPS_QUEUE_DISABLE).
+
+MACB/GEM driver allocates it alongside the main RX ring
+inside macb_alloc() at open. Free is done by macb_free() at close.
+
+Change to allocate once at probe and free on probe failure or device
+removal. This makes the tieoff descriptor lifetime much longer,
+avoiding repeating coherent buffer allocation on each open/close cycle.
+
+Main benefit: we dissociate its lifetime from the main ring's lifetime.
+That way there is less work to be doing on resources (re)alloc. This
+currently happens on close/open, but will soon also happen on context
+swap operations (set_ringparam, change_mtu, set_channels, etc).
+
+Reviewed-by: Nicolai Buchwitz <nb@tipi-net.de>
+Signed-off-by: Théo Lebrun <theo.lebrun@bootlin.com>
+Link: https://patch.msgid.link/20260812-macb-context-v9-6-7ddbf5f715e0@bootlin.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/cadence/macb_main.c | 75 +++++++++++++-----------
+ 1 file changed, 41 insertions(+), 34 deletions(-)
+
+diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
+index b138b94ea0d8..af351d30adab 100644
+--- a/drivers/net/ethernet/cadence/macb_main.c
++++ b/drivers/net/ethernet/cadence/macb_main.c
+@@ -2655,12 +2655,6 @@ static void macb_free(struct macb *bp)
+ 	unsigned int q;
+ 	size_t size;
+ 
+-	if (bp->rx_ring_tieoff) {
+-		dma_free_coherent(dev, macb_dma_desc_get_size(bp),
+-				  bp->rx_ring_tieoff, bp->rx_ring_tieoff_dma);
+-		bp->rx_ring_tieoff = NULL;
+-	}
+-
+ 	bp->macbgem_ops.mog_free_rx_buffers(bp);
+ 
+ 	size = bp->num_queues * macb_tx_ring_size_per_queue(bp);
+@@ -2775,16 +2769,6 @@ static int macb_alloc(struct macb *bp)
+ 	if (bp->macbgem_ops.mog_alloc_rx_buffers(bp))
+ 		goto out_err;
+ 
+-	/* Required for tie off descriptor for PM cases */
+-	if (!(bp->caps & MACB_CAPS_QUEUE_DISABLE)) {
+-		bp->rx_ring_tieoff = dma_alloc_coherent(&bp->pdev->dev,
+-							macb_dma_desc_get_size(bp),
+-							&bp->rx_ring_tieoff_dma,
+-							GFP_KERNEL);
+-		if (!bp->rx_ring_tieoff)
+-			goto out_err;
+-	}
+-
+ 	return 0;
+ 
+ out_err:
+@@ -2792,19 +2776,6 @@ static int macb_alloc(struct macb *bp)
+ 	return -ENOMEM;
+ }
+ 
+-static void macb_init_tieoff(struct macb *bp)
+-{
+-	struct macb_dma_desc *desc = bp->rx_ring_tieoff;
+-
+-	if (bp->caps & MACB_CAPS_QUEUE_DISABLE)
+-		return;
+-	/* Setup a wrapping descriptor with no free slots
+-	 * (WRAP and USED) to tie off/disable unused RX queues.
+-	 */
+-	macb_set_addr(bp, desc, MACB_BIT(RX_WRAP) | MACB_BIT(RX_USED));
+-	desc->ctrl = 0;
+-}
+-
+ static void gem_init_rx_ring(struct macb_queue *queue)
+ {
+ 	queue->rx_tail = 0;
+@@ -2832,8 +2803,6 @@ static void gem_init_rings(struct macb *bp)
+ 
+ 		gem_init_rx_ring(queue);
+ 	}
+-
+-	macb_init_tieoff(bp);
+ }
+ 
+ static void macb_init_rings(struct macb *bp)
+@@ -2851,8 +2820,6 @@ static void macb_init_rings(struct macb *bp)
+ 	bp->queues[0].tx_head = 0;
+ 	bp->queues[0].tx_tail = 0;
+ 	desc->ctrl |= MACB_BIT(TX_WRAP);
+-
+-	macb_init_tieoff(bp);
+ }
+ 
+ static void macb_reset_hw(struct macb *bp)
+@@ -5537,6 +5504,38 @@ static int eyeq5_init(struct platform_device *pdev)
+ 	return ret;
+ }
+ 
++static int macb_alloc_tieoff(struct macb *bp)
++{
++	/* Tieoff is a workaround in case HW cannot disable queues, for PM. */
++	if (bp->caps & MACB_CAPS_QUEUE_DISABLE)
++		return 0;
++
++	bp->rx_ring_tieoff = dma_alloc_coherent(&bp->pdev->dev,
++						macb_dma_desc_get_size(bp),
++						&bp->rx_ring_tieoff_dma,
++						GFP_KERNEL);
++	if (!bp->rx_ring_tieoff)
++		return -ENOMEM;
++
++	macb_set_addr(bp, bp->rx_ring_tieoff,
++		      MACB_BIT(RX_WRAP) | MACB_BIT(RX_USED));
++
++	bp->rx_ring_tieoff->ctrl = 0;
++
++	return 0;
++}
++
++static void macb_free_tieoff(struct macb *bp)
++{
++	if (!bp->rx_ring_tieoff)
++		return;
++
++	dma_free_coherent(&bp->pdev->dev, macb_dma_desc_get_size(bp),
++			  bp->rx_ring_tieoff,
++			  bp->rx_ring_tieoff_dma);
++	bp->rx_ring_tieoff = NULL;
++}
++
+ static const struct macb_usrio_config mpfs_usrio = {
+ 	.tsu_source = 0,
+ };
+@@ -5946,10 +5945,14 @@ static int macb_probe(struct platform_device *pdev)
+ 
+ 	netif_carrier_off(netdev);
+ 
++	err = macb_alloc_tieoff(bp);
++	if (err)
++		goto err_out_unregister_mdio;
++
+ 	err = register_netdev(netdev);
+ 	if (err) {
+ 		dev_err(&pdev->dev, "Cannot register net device, aborting.\n");
+-		goto err_out_unregister_mdio;
++		goto err_out_free_tieoff;
+ 	}
+ 
+ 	INIT_WORK(&bp->hresp_err_bh_work, macb_hresp_error_task);
+@@ -5963,6 +5966,9 @@ static int macb_probe(struct platform_device *pdev)
+ 
+ 	return 0;
+ 
++err_out_free_tieoff:
++	macb_free_tieoff(bp);
++
+ err_out_unregister_mdio:
+ 	mdiobus_unregister(bp->mii_bus);
+ 	mdiobus_free(bp->mii_bus);
+@@ -5992,6 +5998,7 @@ static void macb_remove(struct platform_device *pdev)
+ 	if (netdev) {
+ 		bp = netdev_priv(netdev);
+ 		unregister_netdev(netdev);
++		macb_free_tieoff(bp);
+ 		phy_exit(bp->phy);
+ 		mdiobus_unregister(bp->mii_bus);
+ 		mdiobus_free(bp->mii_bus);
+-- 
+2.55.0
+

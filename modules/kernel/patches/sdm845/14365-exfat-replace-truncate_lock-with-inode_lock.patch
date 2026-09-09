@@ -1,0 +1,85 @@
+From 490529f668016c401d3da688104d15d3fc2c4fca Mon Sep 17 00:00:00 2001
+From: Chi Zhiling <chizhiling@kylinos.cn>
+Date: Mon, 17 Aug 2026 14:20:33 +0800
+Subject: [PATCH 14365/15333] exfat: replace truncate_lock with inode_lock
+
+Remove the per-inode truncate_lock and rely on inode_lock instead.
+exfat_setattr() truncates under inode_lock (held exclusively by the
+VFS callers), and exfat_aop_bmap() now takes inode_lock shared to
+exclude a concurrent truncate, providing the same mutual exclusion
+with a single lock.
+
+Signed-off-by: Chi Zhiling <chizhiling@kylinos.cn>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/exfat/exfat_fs.h | 2 --
+ fs/exfat/file.c     | 2 --
+ fs/exfat/inode.c    | 5 ++---
+ fs/exfat/super.c    | 1 -
+ 4 files changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/fs/exfat/exfat_fs.h b/fs/exfat/exfat_fs.h
+index fa30ab9d8564..a9131fe03302 100644
+--- a/fs/exfat/exfat_fs.h
++++ b/fs/exfat/exfat_fs.h
+@@ -298,8 +298,6 @@ struct exfat_inode_info {
+ 	loff_t zeroed_size;
+ 	/* hash by i_location */
+ 	struct hlist_node i_hash_fat;
+-	/* protect bmap against truncate */
+-	struct rw_semaphore truncate_lock;
+ 	struct inode vfs_inode;
+ 	/* File creation time */
+ 	struct timespec64 i_crtime;
+diff --git a/fs/exfat/file.c b/fs/exfat/file.c
+index 1c1524caaaf7..a2a9ee1a2004 100644
+--- a/fs/exfat/file.c
++++ b/fs/exfat/file.c
+@@ -413,7 +413,6 @@ int exfat_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+ 		 * about to be freed.
+ 		 */
+ 		inode_dio_wait(inode);
+-		down_write(&EXFAT_I(inode)->truncate_lock);
+ 		truncate_setsize(inode, attr->ia_size);
+ 
+ 		/*
+@@ -421,7 +420,6 @@ int exfat_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+ 		 * is already written by it, so mark_inode_dirty() is unneeded.
+ 		 */
+ 		exfat_truncate(inode);
+-		up_write(&EXFAT_I(inode)->truncate_lock);
+ 	} else
+ 		mark_inode_dirty(inode);
+ 
+diff --git a/fs/exfat/inode.c b/fs/exfat/inode.c
+index 89826aea5e1e..ccd13630187e 100644
+--- a/fs/exfat/inode.c
++++ b/fs/exfat/inode.c
+@@ -291,10 +291,9 @@ static sector_t exfat_aop_bmap(struct address_space *mapping, sector_t block)
+ {
+ 	sector_t blocknr;
+ 
+-	/* exfat_get_cluster() assumes the requested blocknr isn't truncated. */
+-	down_read(&EXFAT_I(mapping->host)->truncate_lock);
++	inode_lock_shared(mapping->host);
+ 	blocknr = iomap_bmap(mapping, block, &exfat_iomap_ops);
+-	up_read(&EXFAT_I(mapping->host)->truncate_lock);
++	inode_unlock_shared(mapping->host);
+ 	return blocknr;
+ }
+ 
+diff --git a/fs/exfat/super.c b/fs/exfat/super.c
+index 388db271c6bf..a9ea36ba2693 100644
+--- a/fs/exfat/super.c
++++ b/fs/exfat/super.c
+@@ -195,7 +195,6 @@ static struct inode *exfat_alloc_inode(struct super_block *sb)
+ 	if (!ei)
+ 		return NULL;
+ 
+-	init_rwsem(&ei->truncate_lock);
+ 	return &ei->vfs_inode;
+ }
+ 
+-- 
+2.55.0
+

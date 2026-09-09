@@ -1,0 +1,138 @@
+From 346630e46b387ad6db7b3b254ba6f6d513d64d14 Mon Sep 17 00:00:00 2001
+From: Ivan Vecera <ivecera@redhat.com>
+Date: Fri, 7 Aug 2026 11:59:25 +0200
+Subject: [PATCH 13156/15333] dpll: zl3073x: update all DPLL channels on
+ ref_sync_set
+
+zl3073x_dpll_input_pin_ref_sync_set() excludes the sync source from
+automatic reference selection by setting its priority to NONE, but
+currently only does this on the single DPLL channel whose pin_priv
+was passed to the callback.
+
+Since input pins are registered with every DPLL channel, the datasheet
+recommends covering all channels to prevent the sync source from
+remaining a selectable candidate on the other channels. This is
+a preparation for the following patch which changes the DPLL core to
+invoke pin-level set callbacks only through the pin owner's reference
+instead of iterating over all registered DPLL devices.
+
+Replace the single-channel priority write with a list_for_each_entry()
+loop over all DPLL channels. Each channel's lock is acquired
+individually for its read-modify-write sequence. The guard(mutex) is
+replaced with explicit mutex_lock/mutex_unlock to allow releasing the
+owner's lock before iterating, avoiding nested locking of the same
+mutex class. A change notification is sent for the sync pin if any
+channel's priority was actually modified.
+
+Signed-off-by: Ivan Vecera <ivecera@redhat.com>
+Reviewed-by: Petr Oros <poros@redhat.com>
+Link: https://patch.msgid.link/20260807095926.386923-2-ivecera@redhat.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/dpll/zl3073x/dpll.c | 58 ++++++++++++++++++++++++++++++-------
+ 1 file changed, 48 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/dpll/zl3073x/dpll.c b/drivers/dpll/zl3073x/dpll.c
+index 0488ae6ac486..83bd3027dbaa 100644
+--- a/drivers/dpll/zl3073x/dpll.c
++++ b/drivers/dpll/zl3073x/dpll.c
+@@ -263,9 +263,10 @@ zl3073x_dpll_input_pin_ref_sync_set(const struct dpll_pin *dpll_pin,
+ 	u8 mode, ref_id, sync_ref_id;
+ 	struct zl3073x_chan chan;
+ 	struct zl3073x_ref ref;
++	bool sync_ntf = false;
+ 	int rc;
+ 
+-	guard(mutex)(&zldpll->lock);
++	mutex_lock(&zldpll->lock);
+ 
+ 	ref_id = zl3073x_input_pin_ref_get(pin->id);
+ 	sync_ref_id = zl3073x_input_pin_ref_get(sync_pin->id);
+@@ -285,17 +286,20 @@ zl3073x_dpll_input_pin_ref_sync_set(const struct dpll_pin *dpll_pin,
+ 		if (sync_freq > 8000) {
+ 			NL_SET_ERR_MSG(extack,
+ 				       "sync frequency must be 8 kHz or less");
+-			return -EINVAL;
++			rc = -EINVAL;
++			goto unlock;
+ 		}
+ 		if (ref_freq < 1000) {
+ 			NL_SET_ERR_MSG(extack,
+ 				       "clock frequency must be 1 kHz or more");
+-			return -EINVAL;
++			rc = -EINVAL;
++			goto unlock;
+ 		}
+ 		if (ref_freq <= sync_freq) {
+ 			NL_SET_ERR_MSG(extack,
+ 				       "clock frequency must be higher than sync frequency");
+-			return -EINVAL;
++			rc = -EINVAL;
++			goto unlock;
+ 		}
+ 
+ 		zl3073x_ref_sync_pair_set(&ref, sync_ref_id);
+@@ -308,20 +312,54 @@ zl3073x_dpll_input_pin_ref_sync_set(const struct dpll_pin *dpll_pin,
+ 
+ 	rc = zl3073x_ref_state_set(zldev, ref_id, &ref);
+ 	if (rc)
+-		return rc;
++		goto unlock;
+ 
+-	/* Exclude sync source from automatic reference selection by setting
+-	 * its priority to NONE. On disconnect the priority is left as NONE
+-	 * and the user must explicitly make the pin selectable again.
++	/* All code paths accessing per-channel reference priorities are
++	 * serialized by the subsystem dpll_lock, so it is safe to release
++	 * our lock here before iterating over the other channels.
+ 	 */
+-	if (state == DPLL_PIN_STATE_CONNECTED) {
++	mutex_unlock(&zldpll->lock);
++
++	if (state != DPLL_PIN_STATE_CONNECTED)
++		return 0;
++
++	/* The datasheet recommends excluding the sync source from automatic
++	 * reference selection by setting its priority to NONE on all DPLL
++	 * channels. This is advisory - the ref sync pair is already
++	 * configured, so a failure here is not fatal. On disconnect the
++	 * priority is left as NONE and the user must explicitly make the
++	 * pin selectable again.
++	 */
++	list_for_each_entry(zldpll, &zldev->dplls, list) {
++		u8 prio;
++
++		mutex_lock(&zldpll->lock);
++
+ 		chan = *zl3073x_chan_state_get(zldev, zldpll->id);
++		prio = zl3073x_chan_ref_prio_get(&chan, sync_ref_id);
++		if (prio == ZL_DPLL_REF_PRIO_NONE) {
++			mutex_unlock(&zldpll->lock);
++			continue; /* Ref is already non-selectable */
++		}
++
+ 		zl3073x_chan_ref_prio_set(&chan, sync_ref_id,
+ 					  ZL_DPLL_REF_PRIO_NONE);
+-		return zl3073x_chan_state_set(zldev, zldpll->id, &chan);
++		if (zl3073x_chan_state_set(zldev, zldpll->id, &chan))
++			dev_warn(zldev->dev,
++				 "Failed to set ref prio on DPLL%u\n",
++				 zldpll->id);
++		else
++			sync_ntf = true;
++
++		mutex_unlock(&zldpll->lock);
+ 	}
++	if (sync_ntf)
++		__dpll_pin_change_ntf(sync_pin->dpll_pin);
+ 
+ 	return 0;
++unlock:
++	mutex_unlock(&zldpll->lock);
++	return rc;
+ }
+ 
+ static int
+-- 
+2.55.0
+

@@ -1,0 +1,73 @@
+From af842aea58d86e8c5b471821f18282c6b7747881 Mon Sep 17 00:00:00 2001
+From: Xu Lu <luxu.kernel@bytedance.com>
+Date: Fri, 7 Aug 2026 19:24:29 -0600
+Subject: [PATCH 12285/15333] riscv: mm: Use ASID in update_mmu_cache()
+
+Only flush TLB entries for the specified mm in update_mmu_cache_range().
+
+Signed-off-by: Xu Lu <luxu.kernel@bytedance.com>
+Link: https://patch.msgid.link/20260715132009.10634-2-luxu.kernel@bytedance.com
+Signed-off-by: Paul Walmsley <pjw@kernel.org>
+---
+ arch/riscv/include/asm/pgtable.h  | 4 +++-
+ arch/riscv/include/asm/tlbflush.h | 5 +++++
+ arch/riscv/mm/tlbflush.c          | 5 -----
+ 3 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/arch/riscv/include/asm/pgtable.h b/arch/riscv/include/asm/pgtable.h
+index 5d5756bda82e..9926556099ae 100644
+--- a/arch/riscv/include/asm/pgtable.h
++++ b/arch/riscv/include/asm/pgtable.h
+@@ -568,6 +568,8 @@ static inline void update_mmu_cache_range(struct vm_fault *vmf,
+ 		struct vm_area_struct *vma, unsigned long address,
+ 		pte_t *ptep, unsigned int nr)
+ {
++	unsigned long asid = get_mm_asid(vma->vm_mm);
++
+ 	/*
+ 	 * Svvptc guarantees that the new valid pte will be visible within
+ 	 * a bounded timeframe, so when the uarch does not cache invalid
+@@ -584,7 +586,7 @@ static inline void update_mmu_cache_range(struct vm_fault *vmf,
+ 	 * the extra traps reduce performance.  So, eagerly SFENCE.VMA.
+ 	 */
+ 	while (nr--)
+-		local_flush_tlb_page(address + nr * PAGE_SIZE);
++		local_flush_tlb_page_asid(address + nr * PAGE_SIZE, asid);
+ 
+ }
+ #define update_mmu_cache(vma, addr, ptep) \
+diff --git a/arch/riscv/include/asm/tlbflush.h b/arch/riscv/include/asm/tlbflush.h
+index eed0abc40514..7c2cd5cc92d3 100644
+--- a/arch/riscv/include/asm/tlbflush.h
++++ b/arch/riscv/include/asm/tlbflush.h
+@@ -15,6 +15,11 @@
+ #define FLUSH_TLB_NO_ASID       ((unsigned long)-1)
+ 
+ #ifdef CONFIG_MMU
++static inline unsigned long get_mm_asid(struct mm_struct *mm)
++{
++	return mm ? cntx2asid(atomic_long_read(&mm->context.id)) : FLUSH_TLB_NO_ASID;
++}
++
+ static inline void local_flush_tlb_all(void)
+ {
+ 	__asm__ __volatile__ ("sfence.vma" : : : "memory");
+diff --git a/arch/riscv/mm/tlbflush.c b/arch/riscv/mm/tlbflush.c
+index 8404530ec00f..73c226f719c7 100644
+--- a/arch/riscv/mm/tlbflush.c
++++ b/arch/riscv/mm/tlbflush.c
+@@ -110,11 +110,6 @@ static void __ipi_flush_tlb_range_asid(void *info)
+ 	local_flush_tlb_range_asid(d->start, d->size, d->stride, d->asid);
+ }
+ 
+-static inline unsigned long get_mm_asid(struct mm_struct *mm)
+-{
+-	return mm ? cntx2asid(atomic_long_read(&mm->context.id)) : FLUSH_TLB_NO_ASID;
+-}
+-
+ static void __flush_tlb_range(struct mm_struct *mm,
+ 			      const struct cpumask *cmask,
+ 			      unsigned long start, unsigned long size,
+-- 
+2.55.0
+

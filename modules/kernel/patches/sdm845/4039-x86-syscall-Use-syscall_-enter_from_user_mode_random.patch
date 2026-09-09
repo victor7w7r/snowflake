@@ -1,0 +1,122 @@
+From 9d311796e2ce75b3aaded2719a01d7e248c3a24f Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@kernel.org>
+Date: Tue, 7 Jul 2026 21:06:27 +0200
+Subject: [PATCH 04039/15333] x86/syscall: Use
+ [syscall_]enter_from_user_mode_randomize_stack()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+These functions integrate the stack randomization.
+
+syscall_enter_from_user_mode_randomize_stack() has the advantage that the
+randomization happens early right after enter_from_user_mode().
+
+In both cases also the overhead of get/put_cpu_var() in
+add_random_kstack_offset() is avoided.
+
+No functional change.
+
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Tested-by: Mukesh Kumar Chaurasiya (IBM) <mkchauras@gmail.com>
+Reviewed-by: Radu Rendec <radu@rendec.net>
+Reviewed-by: Jinjie Ruan <ruanjinjie@huawei.com>
+Reviewed-by: Philippe Mathieu-Daudé <philmd@oss.qualcomm.com>
+Reviewed-by: Mukesh Kumar Chaurasiya (IBM) <mkchauras@gmail.com>
+Link: https://patch.msgid.link/20260707190254.079478122@kernel.org
+---
+ arch/x86/entry/syscall_32.c         | 19 +++++--------------
+ arch/x86/entry/syscall_64.c         |  3 +--
+ arch/x86/include/asm/entry-common.h |  1 -
+ 3 files changed, 6 insertions(+), 17 deletions(-)
+
+diff --git a/arch/x86/entry/syscall_32.c b/arch/x86/entry/syscall_32.c
+index 31b9492fe851..2b13f1c842b8 100644
+--- a/arch/x86/entry/syscall_32.c
++++ b/arch/x86/entry/syscall_32.c
+@@ -142,10 +142,9 @@ __visible noinstr void do_int80_emulation(struct pt_regs *regs)
+ 	 * int80_is_external() below which calls into the APIC driver.
+ 	 * Identical for soft and external interrupts.
+ 	 */
+-	enter_from_user_mode(regs);
++	enter_from_user_mode_randomize_stack(regs);
+ 
+ 	instrumentation_begin();
+-	add_random_kstack_offset();
+ 
+ 	/* Validate that this is a soft interrupt to the extent possible */
+ 	if (unlikely(int80_is_external()))
+@@ -210,11 +209,9 @@ DEFINE_FREDENTRY_RAW(int80_emulation)
+ {
+ 	int nr;
+ 
+-	enter_from_user_mode(regs);
++	enter_from_user_mode_randomize_stack(regs);
+ 
+ 	instrumentation_begin();
+-	add_random_kstack_offset();
+-
+ 	/*
+ 	 * FRED pushed 0 into regs::orig_ax and regs::ax contains the
+ 	 * syscall number.
+@@ -252,10 +249,10 @@ __visible noinstr void do_int80_syscall_32(struct pt_regs *regs)
+ 	 * orig_ax, the int return value truncates it. This matches
+ 	 * the semantics of syscall_get_nr().
+ 	 */
+-	nr = syscall_enter_from_user_mode(regs, nr);
++	nr = syscall_enter_from_user_mode_randomize_stack(regs, nr);
++
+ 	instrumentation_begin();
+ 
+-	add_random_kstack_offset();
+ 	do_syscall_32_irqs_on(regs, nr);
+ 
+ 	instrumentation_end();
+@@ -268,15 +265,9 @@ static noinstr bool __do_fast_syscall_32(struct pt_regs *regs)
+ 	int nr = syscall_32_enter(regs);
+ 	int res;
+ 
+-	/*
+-	 * This cannot use syscall_enter_from_user_mode() as it has to
+-	 * fetch EBP before invoking any of the syscall entry work
+-	 * functions.
+-	 */
+-	enter_from_user_mode(regs);
++	enter_from_user_mode_randomize_stack(regs);
+ 
+ 	instrumentation_begin();
+-	add_random_kstack_offset();
+ 	local_irq_enable();
+ 	/* Fetch EBP from where the vDSO stashed it. */
+ 	if (IS_ENABLED(CONFIG_X86_64)) {
+diff --git a/arch/x86/entry/syscall_64.c b/arch/x86/entry/syscall_64.c
+index 71f032504e73..0acd7e99e8e0 100644
+--- a/arch/x86/entry/syscall_64.c
++++ b/arch/x86/entry/syscall_64.c
+@@ -86,10 +86,9 @@ static __always_inline bool do_syscall_x32(struct pt_regs *regs, int nr)
+ /* Returns true to return using SYSRET, or false to use IRET */
+ __visible noinstr bool do_syscall_64(struct pt_regs *regs, int nr)
+ {
+-	nr = syscall_enter_from_user_mode(regs, nr);
++	nr = syscall_enter_from_user_mode_randomize_stack(regs, nr);
+ 
+ 	instrumentation_begin();
+-	add_random_kstack_offset();
+ 
+ 	if (!do_syscall_x64(regs, nr) && !do_syscall_x32(regs, nr) && nr != -1) {
+ 		/* Invalid system call, but still a system call. */
+diff --git a/arch/x86/include/asm/entry-common.h b/arch/x86/include/asm/entry-common.h
+index eca24b5e07f4..3fed46bd9685 100644
+--- a/arch/x86/include/asm/entry-common.h
++++ b/arch/x86/include/asm/entry-common.h
+@@ -2,7 +2,6 @@
+ #ifndef _ASM_X86_ENTRY_COMMON_H
+ #define _ASM_X86_ENTRY_COMMON_H
+ 
+-#include <linux/randomize_kstack.h>
+ #include <linux/user-return-notifier.h>
+ 
+ #include <asm/nospec-branch.h>
+-- 
+2.55.0
+

@@ -1,0 +1,54 @@
+From dd5de39af5efa962f5f12c3ecf3841fca74858b5 Mon Sep 17 00:00:00 2001
+From: Xuanqiang Luo <luoxuanqiang@kylinos.cn>
+Date: Fri, 10 Jul 2026 17:05:23 +0800
+Subject: [PATCH 06283/15333] hinic3: fix use-after-free on DMA mapping failure
+
+If hinic3_tx_map_skb() fails in hinic3_send_one_skb(), the skb is freed,
+but tx_info->skb was set before the mapping attempt and is not cleared. The
+SQ producer index is rolled back, so later transmissions normally overwrite
+the entry.
+
+If the interface is brought down first, hinic3_free_txqs_res() calls
+free_all_tx_skbs(). It scans the entire tx_info array and finds the stale
+pointer. hinic3_tx_unmap_skb() then dereferences the freed skb in
+skb_shinfo(), before it is freed again.
+
+Set tx_info->skb and its WQEBB count only after DMA mapping succeeds,
+preventing the stale pointer from reaching free_all_tx_skbs().
+
+Cc: stable+noautosel@kernel.org # untested fix to unlikely driver error path
+Signed-off-by: Xuanqiang Luo <luoxuanqiang@kylinos.cn>
+Reviewed-by: Fan Gong <gongfan1@huawei.com>
+Reviewed-by: Simon Horman <horms@kernel.org>
+Link: https://patch.msgid.link/20260710090527.58354-3-xuanqiang.luo@linux.dev
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/huawei/hinic3/hinic3_tx.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/huawei/hinic3/hinic3_tx.c b/drivers/net/ethernet/huawei/hinic3/hinic3_tx.c
+index 9306bf0020ca..5739ecb08d0d 100644
+--- a/drivers/net/ethernet/huawei/hinic3/hinic3_tx.c
++++ b/drivers/net/ethernet/huawei/hinic3/hinic3_tx.c
+@@ -578,8 +578,6 @@ static netdev_tx_t hinic3_send_one_skb(struct sk_buff *skb,
+ 		*wqe_combo.task = task;
+ 
+ 	tx_info = &txq->tx_info[pi];
+-	tx_info->skb = skb;
+-	tx_info->wqebb_cnt = wqebb_cnt;
+ 
+ 	err = hinic3_tx_map_skb(netdev, skb, txq, tx_info, &wqe_combo);
+ 	if (err) {
+@@ -589,6 +587,9 @@ static netdev_tx_t hinic3_send_one_skb(struct sk_buff *skb,
+ 		goto err_drop_pkt;
+ 	}
+ 
++	tx_info->skb = skb;
++	tx_info->wqebb_cnt = wqebb_cnt;
++
+ 	netif_subqueue_sent(netdev, txq->sq->q_id, skb->len);
+ 	netif_subqueue_maybe_stop(netdev, txq->sq->q_id,
+ 				  hinic3_wq_free_wqebbs(&txq->sq->wq),
+-- 
+2.55.0
+

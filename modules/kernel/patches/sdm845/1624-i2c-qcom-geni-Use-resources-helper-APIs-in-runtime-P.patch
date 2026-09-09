@@ -1,0 +1,82 @@
+From e441365d09030377d5bbb219c4bf974ef9960851 Mon Sep 17 00:00:00 2001
+From: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Date: Wed, 17 Jun 2026 10:20:18 +0530
+Subject: [PATCH 01624/15333] i2c: qcom-geni: Use resources helper APIs in
+ runtime PM functions
+
+To manage GENI serial engine resources during runtime power management,
+drivers currently need to call functions for ICC, clock, and
+SE resource operations in both suspend and resume paths, resulting in
+code duplication across drivers.
+
+The new geni_se_resources_activate() and geni_se_resources_deactivate()
+helper APIs addresses this issue by providing a streamlined method to
+enable or disable all resources based, thereby eliminating redundancy
+across drivers.
+
+Signed-off-by: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Acked-by: Viken Dadhaniya <viken.dadhaniya@oss.qualcomm.com>
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Tested-by: Mattijs Korpershoek <mkorpershoek@kernel.org>
+Signed-off-by: Andi Shyti <andi.shyti@kernel.org>
+Link: https://lore.kernel.org/r/20260617-enable-i2c-on-sa8255p-v7-4-ad736dbeab57@oss.qualcomm.com
+---
+ drivers/i2c/busses/i2c-qcom-geni.c | 24 ++++--------------------
+ 1 file changed, 4 insertions(+), 20 deletions(-)
+
+diff --git a/drivers/i2c/busses/i2c-qcom-geni.c b/drivers/i2c/busses/i2c-qcom-geni.c
+index a7672b6c2bc0..8f8b74c4e88a 100644
+--- a/drivers/i2c/busses/i2c-qcom-geni.c
++++ b/drivers/i2c/busses/i2c-qcom-geni.c
+@@ -1172,15 +1172,14 @@ static int __maybe_unused geni_i2c_runtime_suspend(struct device *dev)
+ 	struct geni_i2c_dev *gi2c = dev_get_drvdata(dev);
+ 
+ 	disable_irq(gi2c->irq);
+-	ret = geni_se_resources_off(&gi2c->se);
++
++	ret = geni_se_resources_deactivate(&gi2c->se);
+ 	if (ret) {
+ 		enable_irq(gi2c->irq);
+ 		return ret;
+ 	}
+ 
+-	clk_disable_unprepare(gi2c->se.core_clk);
+-
+-	return geni_icc_disable(&gi2c->se);
++	return 0;
+ }
+ 
+ static int __maybe_unused geni_i2c_runtime_resume(struct device *dev)
+@@ -1188,28 +1187,13 @@ static int __maybe_unused geni_i2c_runtime_resume(struct device *dev)
+ 	int ret;
+ 	struct geni_i2c_dev *gi2c = dev_get_drvdata(dev);
+ 
+-	ret = geni_icc_enable(&gi2c->se);
++	ret = geni_se_resources_activate(&gi2c->se);
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = clk_prepare_enable(gi2c->se.core_clk);
+-	if (ret)
+-		goto out_icc_disable;
+-
+-	ret = geni_se_resources_on(&gi2c->se);
+-	if (ret)
+-		goto out_clk_disable;
+-
+ 	enable_irq(gi2c->irq);
+ 
+ 	return 0;
+-
+-out_clk_disable:
+-	clk_disable_unprepare(gi2c->se.core_clk);
+-out_icc_disable:
+-	geni_icc_disable(&gi2c->se);
+-
+-	return ret;
+ }
+ 
+ static int __maybe_unused geni_i2c_suspend_noirq(struct device *dev)
+-- 
+2.55.0
+

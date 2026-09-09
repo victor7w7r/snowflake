@@ -1,0 +1,39 @@
+From d59676b3ebadc44d6d87b0c6133f169dad9192a2 Mon Sep 17 00:00:00 2001
+From: Thorsten Blum <thorsten.blum@linux.dev>
+Date: Sun, 17 May 2026 19:23:53 +0200
+Subject: [PATCH 00126/15333] dma-buf: heaps: use max3 in dma_heap_ioctl
+
+Replace two nested max() calls with a single max3() in dma_heap_ioctl().
+
+Reviewed-by: T.J. Mercier <tjmercier@google.com>
+Signed-off-by: Thorsten Blum <thorsten.blum@linux.dev>
+Signed-off-by: Sumit Semwal <sumit.semwal@linaro.org>
+Link: https://patch.msgid.link/20260517172352.3615-2-thorsten.blum@linux.dev
+---
+ drivers/dma-buf/dma-heap.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/dma-buf/dma-heap.c b/drivers/dma-buf/dma-heap.c
+index a76bf3f8b071..3937dd41bb0f 100644
+--- a/drivers/dma-buf/dma-heap.c
++++ b/drivers/dma-buf/dma-heap.c
+@@ -13,6 +13,7 @@
+ #include <linux/err.h>
+ #include <linux/export.h>
+ #include <linux/list.h>
++#include <linux/minmax.h>
+ #include <linux/nospec.h>
+ #include <linux/syscalls.h>
+ #include <linux/uaccess.h>
+@@ -154,7 +155,7 @@ static long dma_heap_ioctl(struct file *file, unsigned int ucmd,
+ 		in_size = 0;
+ 	if ((ucmd & kcmd & IOC_OUT) == 0)
+ 		out_size = 0;
+-	ksize = max(max(in_size, out_size), drv_size);
++	ksize = max3(in_size, out_size, drv_size);
+ 
+ 	/* If necessary, allocate buffer for ioctl argument */
+ 	if (ksize > sizeof(stack_kdata)) {
+-- 
+2.55.0
+

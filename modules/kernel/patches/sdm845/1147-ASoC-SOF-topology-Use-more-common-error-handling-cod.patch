@@ -1,0 +1,54 @@
+From a33e6fa400d174e7970d4efc30dd2e10911281ab Mon Sep 17 00:00:00 2001
+From: Markus Elfring <elfring@users.sourceforge.net>
+Date: Wed, 17 Jun 2026 09:33:45 +0200
+Subject: [PATCH 01147/15333] ASoC: SOF: topology: Use more common error
+ handling code in sof_link_load()
+
+Use an additional label so that a bit of exception handling can be better
+reused at the end of this function implementation.
+
+This issue was detected by using the Coccinelle software.
+
+Signed-off-by: Markus Elfring <elfring@users.sourceforge.net>
+Link: https://patch.msgid.link/40b93192-68d2-4de1-845b-9c9ba994a75b@web.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/topology.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/sound/soc/sof/topology.c b/sound/soc/sof/topology.c
+index 42a2d90bb705..f709935593ef 100644
+--- a/sound/soc/sof/topology.c
++++ b/sound/soc/sof/topology.c
+@@ -1943,8 +1943,7 @@ static int sof_link_load(struct snd_soc_component *scomp, int index, struct snd_
+ 			       private->array, le32_to_cpu(private->size));
+ 	if (ret < 0) {
+ 		dev_err(scomp->dev, "Failed tp parse common DAI link tokens\n");
+-		kfree(slink);
+-		return ret;
++		goto free_slink;
+ 	}
+ 
+ 	token_list = tplg_ops ? tplg_ops->token_list : NULL;
+@@ -2013,8 +2012,8 @@ static int sof_link_load(struct snd_soc_component *scomp, int index, struct snd_
+ 	/* allocate memory for tuples array */
+ 	slink->tuples = kzalloc_objs(*slink->tuples, num_tuples);
+ 	if (!slink->tuples) {
+-		kfree(slink);
+-		return -ENOMEM;
++		ret = -ENOMEM;
++		goto free_slink;
+ 	}
+ 
+ 	if (token_list[SOF_DAI_LINK_TOKENS].tokens) {
+@@ -2070,6 +2069,7 @@ static int sof_link_load(struct snd_soc_component *scomp, int index, struct snd_
+ 
+ err:
+ 	kfree(slink->tuples);
++free_slink:
+ 	kfree(slink);
+ 
+ 	return ret;
+-- 
+2.55.0
+

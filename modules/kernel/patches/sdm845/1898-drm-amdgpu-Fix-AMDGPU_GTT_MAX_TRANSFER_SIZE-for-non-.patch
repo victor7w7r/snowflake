@@ -1,0 +1,152 @@
+From 27213b776a666d3030de5acc3cd75278197b0494 Mon Sep 17 00:00:00 2001
+From: Donet Tom <donettom@linux.ibm.com>
+Date: Thu, 25 Jun 2026 13:22:06 +0530
+Subject: [PATCH 01898/15333] drm/amdgpu: Fix AMDGPU_GTT_MAX_TRANSFER_SIZE for
+ non-4K systems
+
+Running RCCL unit tests on a system with a 64K PAGE_SIZE triggers
+the following warning and causes the test to terminate on latest
+upstream kernel:
+
+WARNING: drivers/gpu/drm/amd/amdgpu/amdgpu_object.c:1335 at
+amdgpu_bo_release_notify+0x1bc/0x280 [amdgpu],
+CPU#18: rccl-UnitTests/33151
+
+Call trace:
+amdgpu_bo_release_notify
+ttm_bo_release
+amdgpu_gem_object_free
+drm_gem_object_free
+amdgpu_bo_unref
+amdgpu_bo_create
+amdgpu_bo_create_user
+amdgpu_gem_object_create
+amdgpu_amdkfd_gpuvm_alloc_memory_of_gpu
+kfd_ioctl_alloc_memory_of_gpu
+kfd_ioctl
+sys_ioctl
+
+The warning is triggered because
+amdgpu_ttm_next_clear_entity() returns NULL when a clear buffer
+operation is requested. This happens because the GART window
+allocation for the default_entity, clear_entity and move_entity
+fails during initialization.
+
+Commit [1] introduced separate GART windows for the
+default_entity, clear_entity and move_entity of each SDMA
+instance. Their sizes are derived from
+AMDGPU_GTT_MAX_TRANSFER_SIZE, which is currently defined as 1024
+pages. This implicitly assumes a 4K PAGE_SIZE, where 1024 pages
+correspond to a 4MB transfer. On a 64K PAGE_SIZE system, however,
+the same value expands to 64MB.
+
+The default_entity and clear_entity each allocate one
+AMDGPU_GTT_MAX_TRANSFER_SIZE GART window, while the move_entity
+allocates two such windows. This results in 16MB of GART space
+per SDMA instance on a 4K PAGE_SIZE system, but 256MB per SDMA
+instance on a 64K PAGE_SIZE system.
+
+On an MI210 system with five SDMA instances and a 512MB GART
+aperture, the total GART space required becomes 1.25GB,
+exceeding the available GART aperture. Consequently, GART window
+allocation fails, amdgpu_ttm_next_clear_entity() returns NULL,
+and the above warning is triggered.
+
+Redefine AMDGPU_GTT_MAX_TRANSFER_SIZE in bytes instead of page
+units. Where a page count is required, convert it using
+PAGE_SHIFT. This preserves the existing 4MB transfer size across
+all PAGE_SIZE configurations while keeping GART window
+allocations within the available GART aperture.
+
+[1] https://lore.kernel.org/all/20260408100327.1372-3-pierre-eric.pelloux-prayer@amd.com/#t
+
+Closes: https://gitlab.freedesktop.org/drm/amd/-/work_items/5435
+Fixes: 897ee11ec020 ("drm/amdgpu: create multiple clear/move ttm entities")
+Signed-off-by: Donet Tom <donettom@linux.ibm.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c  | 10 ++++++----
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.h  |  2 +-
+ drivers/gpu/drm/amd/amdkfd/kfd_migrate.c |  2 +-
+ 3 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
+index 00b5317f77f8..025625e7e800 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
+@@ -208,9 +208,10 @@ static int amdgpu_ttm_map_buffer(struct amdgpu_ttm_buffer_entity *entity,
+ 	void *cpu_addr;
+ 	uint64_t flags;
+ 	int r;
++	const u64 GTT_MAX_PAGES = (AMDGPU_GTT_MAX_TRANSFER_SIZE >> PAGE_SHIFT);
+ 
+ 	BUG_ON(adev->mman.buffer_funcs->copy_max_bytes <
+-	       AMDGPU_GTT_MAX_TRANSFER_SIZE * 8);
++	       GTT_MAX_PAGES * AMDGPU_GPU_PAGES_IN_CPU_PAGE * 8);
+ 
+ 	if (WARN_ON(mem->mem_type == AMDGPU_PL_PREEMPT))
+ 		return -EINVAL;
+@@ -230,7 +231,7 @@ static int amdgpu_ttm_map_buffer(struct amdgpu_ttm_buffer_entity *entity,
+ 	offset = mm_cur->start & ~PAGE_MASK;
+ 
+ 	num_pages = PFN_UP(*size + offset);
+-	num_pages = min_t(uint32_t, num_pages, AMDGPU_GTT_MAX_TRANSFER_SIZE);
++	num_pages = min_t(uint32_t, num_pages, GTT_MAX_PAGES);
+ 
+ 	*size = min(*size, (uint64_t)num_pages * PAGE_SIZE - offset);
+ 
+@@ -2033,6 +2034,7 @@ static int amdgpu_ttm_buffer_entity_init(struct amdgpu_gtt_mgr *mgr,
+ 					 u32 num_gart_windows)
+ {
+ 	int i, r, num_pages;
++	const u64 GTT_MAX_PAGES = (AMDGPU_GTT_MAX_TRANSFER_SIZE >> PAGE_SHIFT);
+ 
+ 	r = drm_sched_entity_init(&entity->base, prio, scheds, num_schedulers, NULL);
+ 	if (r)
+@@ -2045,7 +2047,7 @@ static int amdgpu_ttm_buffer_entity_init(struct amdgpu_gtt_mgr *mgr,
+ 	if (num_gart_windows == 0)
+ 		return 0;
+ 
+-	num_pages = num_gart_windows * AMDGPU_GTT_MAX_TRANSFER_SIZE;
++	num_pages = num_gart_windows * GTT_MAX_PAGES;
+ 	r = amdgpu_gtt_mgr_alloc_entries(mgr, &entity->gart_node, num_pages,
+ 					 DRM_MM_INSERT_BEST);
+ 	if (r) {
+@@ -2056,7 +2058,7 @@ static int amdgpu_ttm_buffer_entity_init(struct amdgpu_gtt_mgr *mgr,
+ 	for (i = 0; i < num_gart_windows; i++) {
+ 		entity->gart_window_offs[i] =
+ 			amdgpu_gtt_node_to_byte_offset(&entity->gart_node) +
+-				i * AMDGPU_GTT_MAX_TRANSFER_SIZE * PAGE_SIZE;
++				i * GTT_MAX_PAGES * PAGE_SIZE;
+ 	}
+ 
+ 	return 0;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.h
+index 00acec7226f5..ff9e2e346609 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.h
+@@ -39,7 +39,7 @@
+ #define AMDGPU_PL_MMIO_REMAP	(TTM_PL_PRIV + 5)
+ #define __AMDGPU_PL_NUM	(TTM_PL_PRIV + 6)
+ 
+-#define AMDGPU_GTT_MAX_TRANSFER_SIZE	1024
++#define AMDGPU_GTT_MAX_TRANSFER_SIZE	(1ULL << 22)
+ 
+ extern const struct attribute_group amdgpu_vram_mgr_attr_group;
+ extern const struct attribute_group amdgpu_gtt_mgr_attr_group;
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_migrate.c b/drivers/gpu/drm/amd/amdkfd/kfd_migrate.c
+index 226e76ae0be7..7cd236c1ff75 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_migrate.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_migrate.c
+@@ -128,7 +128,7 @@ svm_migrate_copy_memory_gart(struct amdgpu_device *adev, dma_addr_t *sys,
+ 			     enum MIGRATION_COPY_DIR direction,
+ 			     struct dma_fence **mfence)
+ {
+-	const u64 GTT_MAX_PAGES = AMDGPU_GTT_MAX_TRANSFER_SIZE;
++	const u64 GTT_MAX_PAGES = (AMDGPU_GTT_MAX_TRANSFER_SIZE >> PAGE_SHIFT);
+ 	struct amdgpu_ring *ring;
+ 	struct amdgpu_ttm_buffer_entity *entity;
+ 	u64 gart_s, gart_d;
+-- 
+2.55.0
+

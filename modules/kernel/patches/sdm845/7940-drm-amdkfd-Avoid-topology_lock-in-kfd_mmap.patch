@@ -1,0 +1,76 @@
+From 2c381b75fae81fc34b27fe9965466e904b7e4663 Mon Sep 17 00:00:00 2001
+From: Philip Yang <Philip.Yang@amd.com>
+Date: Sun, 21 Jun 2026 11:46:37 -0400
+Subject: [PATCH 07940/15333] drm/amdkfd: Avoid topology_lock in kfd_mmap
+
+Use process-local GPU lookup in kfd_mmap() instead of kfd_device_by_id(),
+so mmap path does not take topology_lock while holding mmap_lock.
+
+Lockdep warning: possible circular locking dependency detected.
+Chain:
+  &topology_lock -> &root->kernfs_rwsem -> &mm->mmap_lock
+
+Backtrace #0 (&topology_lock):
+  down_read+0x8b/0x490
+  kfd_device_by_id+0x1d/0xf0 [amdgpu]
+  kfd_mmap+0x11e/0x750 [amdgpu]
+  __mmap_region+0x101f/0x25e0
+  mmap_region+0x228/0x2e0
+  do_mmap+0x9f2/0x1070
+  vm_mmap_pgoff+0x25d/0x430
+
+Backtrace #1 (&root->kernfs_rwsem):
+  down_write+0x80/0x200
+  kernfs_add_one+0x30/0x6a0
+  kernfs_create_dir_ns+0xd2/0x160
+  sysfs_create_dir_ns+0x12c/0x2a0
+  kobject_add_internal+0x280/0x8e0
+  kfd_topology_update_sysfs+0xb85/0x1970 [amdgpu]
+
+Backtrace #2 (&mm->mmap_lock):
+  down_read_killable+0x8e/0x510
+  lock_mm_and_find_vma+0x299/0xb00
+  do_user_addr_fault+0x3fc/0xf80
+  exc_page_fault+0x73/0x110
+  filldir64+0x1aa/0x610
+  kernfs_fop_readdir+0x3c2/0x810
+
+Signed-off-by: Philip Yang <Philip.Yang@amd.com>
+Reviewed-by: Felix Kuehling <felix.kuehling@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdkfd/kfd_chardev.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
+index dd7a7a18466d..309510e23315 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
+@@ -3722,10 +3722,10 @@ static int kfd_mmio_mmap(struct kfd_node *dev, struct kfd_process *process,
+ 				vma->vm_page_prot);
+ }
+ 
+-
+ static int kfd_mmap(struct file *filep, struct vm_area_struct *vma)
+ {
+ 	struct kfd_process *process;
++	struct kfd_process_device *pdd;
+ 	struct kfd_node *dev = NULL;
+ 	unsigned long mmap_offset;
+ 	unsigned int gpu_id;
+@@ -3739,8 +3739,10 @@ static int kfd_mmap(struct file *filep, struct vm_area_struct *vma)
+ 
+ 	mmap_offset = vma->vm_pgoff << PAGE_SHIFT;
+ 	gpu_id = KFD_MMAP_GET_GPU_ID(mmap_offset);
+-	if (gpu_id)
+-		dev = kfd_device_by_id(gpu_id);
++
++	pdd = kfd_process_device_data_by_id(process, gpu_id);
++	if (pdd)
++		dev = pdd->dev;
+ 
+ 	switch (mmap_offset & KFD_MMAP_TYPE_MASK) {
+ 	case KFD_MMAP_TYPE_DOORBELL:
+-- 
+2.55.0
+

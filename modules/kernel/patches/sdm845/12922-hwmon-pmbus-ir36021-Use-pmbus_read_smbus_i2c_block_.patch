@@ -1,0 +1,58 @@
+From 84f3d13ca48ecd971d8f94ec5a6e4a39ef0296e1 Mon Sep 17 00:00:00 2001
+From: Guenter Roeck <linux@roeck-us.net>
+Date: Sat, 1 Aug 2026 19:09:29 -0700
+Subject: [PATCH 12922/15333] hwmon: (pmbus/ir36021) Use
+ pmbus_read_smbus_i2c_block_data for block commands
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The driver uses i2c_smbus_read_i2c_block_data() for PMBus block commands.
+Use pmbus_read_smbus_i2c_block_data() instead to enable the driver to work
+with I2C controllers which do not support i2c_smbus_read_i2c_block_data().
+
+Drop the functionality check to get an explicit error message if the
+required SMBus commands are not supported.
+
+Reviewed-by: Nuno Sá <nuno.sa@analog.com>
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/hwmon/pmbus/ir36021.c | 22 +++++++---------------
+ 1 file changed, 7 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/hwmon/pmbus/ir36021.c b/drivers/hwmon/pmbus/ir36021.c
+index 0dce4c3f666f..58d8c4aac0d1 100644
+--- a/drivers/hwmon/pmbus/ir36021.c
++++ b/drivers/hwmon/pmbus/ir36021.c
+@@ -31,21 +31,13 @@ static int ir36021_probe(struct i2c_client *client)
+ 	u8 buf[I2C_SMBUS_BLOCK_MAX];
+ 	int ret;
+ 
+-	if (!i2c_check_functionality(client->adapter,
+-				     I2C_FUNC_SMBUS_READ_BYTE_DATA
+-				     | I2C_FUNC_SMBUS_READ_WORD_DATA
+-				     | I2C_FUNC_SMBUS_READ_BLOCK_DATA))
+-		return -ENODEV;
+-
+-	ret = i2c_smbus_read_i2c_block_data(client, PMBUS_MFR_MODEL, 2, buf);
+-	if (ret < 0) {
+-		dev_err(&client->dev, "Failed to read PMBUS_MFR_MODEL\n");
+-		return ret;
+-	}
+-	if (ret != 2 || buf[0] != 0x01 || buf[1] != 0x2d) {
+-		dev_err(&client->dev, "MFR_MODEL unrecognised\n");
+-		return -ENODEV;
+-	}
++	ret = pmbus_read_smbus_i2c_block_data(client, PMBUS_MFR_MODEL, buf);
++	if (ret < 0)
++		return dev_err_probe(&client->dev, ret,
++				     "Failed to read PMBUS_MFR_MODEL\n");
++	if (ret != 1 || buf[0] != 0x2d)
++		return dev_err_probe(&client->dev, -ENODEV,
++				     "MFR_MODEL unrecognised\n");
+ 
+ 	return pmbus_do_probe(client, &ir36021_info);
+ }
+-- 
+2.55.0
+

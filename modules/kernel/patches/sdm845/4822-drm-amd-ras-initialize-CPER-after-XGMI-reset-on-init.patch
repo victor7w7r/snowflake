@@ -1,0 +1,140 @@
+From ac4827324c3b6780baed39b0e80cec1de60cb077 Mon Sep 17 00:00:00 2001
+From: Xiang Liu <xiang.liu@amd.com>
+Date: Tue, 14 Jul 2026 17:51:05 +0800
+Subject: [PATCH 04822/15333] drm/amd/ras: initialize CPER after XGMI reset on
+ init
+
+The XGMI reset-on-init path can run while the device is still at the
+minimal init level, such as during an NPS memory partition switch. In
+that flow the normal RAS IP block hw_init is skipped, so unified RAS
+is not enabled when the early CPER initialization is attempted, leaving
+CPER disabled for the rest of the device's lifetime.
+
+Resume RAS after the XGMI reset-on-init completes. Once the RAS manager
+resume succeeds, the RAS resume wrapper performs deferred CPER
+initialization, keeping the path a no-op for devices where CPER was
+already initialized.
+
+Keep the deferred CPER retry and its debugfs registration together in
+the CPER helper. The normal debugfs ring walk skips the CPER ring until
+CPER is enabled, so the ring debugfs entry is created either by the
+deferred helper when debugfs is already available or by the normal
+debugfs walk.
+
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Xiang Liu <xiang.liu@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_cper.c    | 19 +++++++++++++++++++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_cper.h    |  1 +
+ drivers/gpu/drm/amd/amdgpu/amdgpu_debugfs.c |  2 ++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c     | 10 ++++++++--
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h     |  2 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_xgmi.c    |  5 ++++-
+ 6 files changed, 35 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_cper.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_cper.c
+index 6fb129025761..0af8b7be326e 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_cper.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_cper.c
+@@ -498,6 +498,25 @@ int amdgpu_cper_init(struct amdgpu_device *adev)
+ 	return 0;
+ }
+ 
++int amdgpu_cper_deferred_init(struct amdgpu_device *adev)
++{
++	int r;
++
++	if (adev->cper.enabled)
++		return 0;
++
++	r = amdgpu_cper_init(adev);
++	if (r || !adev->cper.enabled)
++		return r;
++
++#if defined(CONFIG_DEBUG_FS)
++	if (adev_to_drm(adev)->primary->debugfs_root)
++		amdgpu_debugfs_ring_init(adev, &adev->cper.ring_buf);
++#endif
++
++	return 0;
++}
++
+ int amdgpu_cper_fini(struct amdgpu_device *adev)
+ {
+ 	if (amdgpu_sriov_vf(adev))
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_cper.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_cper.h
+index d12c98077d9d..eea30be91b47 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_cper.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_cper.h
+@@ -92,6 +92,7 @@ int amdgpu_cper_generate_bp_threshold_record(struct amdgpu_device *adev);
+ void amdgpu_cper_ring_write(struct amdgpu_ring *ring,
+ 			void *src, int count);
+ int amdgpu_cper_init(struct amdgpu_device *adev);
++int amdgpu_cper_deferred_init(struct amdgpu_device *adev);
+ int amdgpu_cper_fini(struct amdgpu_device *adev);
+ 
+ #endif
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_debugfs.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_debugfs.c
+index 0455c2cd043f..deab64765388 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_debugfs.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_debugfs.c
+@@ -2178,6 +2178,8 @@ int amdgpu_debugfs_init(struct amdgpu_device *adev)
+ 
+ 		if (!ring)
+ 			continue;
++		if (ring == &adev->cper.ring_buf && !adev->cper.enabled)
++			continue;
+ 
+ 		amdgpu_debugfs_ring_init(adev, ring);
+ 	}
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+index de121539788d..24fd24e8d874 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+@@ -4990,7 +4990,13 @@ void amdgpu_ras_post_reset(struct amdgpu_device *adev,
+ 	}
+ }
+ 
+-void amdgpu_ras_resume_after_reset(struct amdgpu_device *adev)
++int amdgpu_ras_resume_after_reset(struct amdgpu_device *adev)
+ {
+-	amdgpu_ras_mgr_resume_after_reset(adev);
++	int r;
++
++	r = amdgpu_ras_mgr_resume_after_reset(adev);
++	if (r)
++		return r;
++
++	return amdgpu_cper_deferred_init(adev);
+ }
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
+index 23bff7a0f35b..c53f911d5729 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
+@@ -980,5 +980,5 @@ void amdgpu_ras_pre_reset(struct amdgpu_device *adev,
+ 					  struct list_head *device_list);
+ void amdgpu_ras_post_reset(struct amdgpu_device *adev,
+ 					  struct list_head *device_list);
+-void amdgpu_ras_resume_after_reset(struct amdgpu_device *adev);
++int amdgpu_ras_resume_after_reset(struct amdgpu_device *adev);
+ #endif
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_xgmi.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_xgmi.c
+index d2c5bb50d94a..c0f581e416f9 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_xgmi.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_xgmi.c
+@@ -1393,7 +1393,10 @@ static void amdgpu_xgmi_reset_on_init_work(struct work_struct *work)
+ 		 * no-op for any other reset path where RAS is already
+ 		 * initialized, and for non-uniras devices.
+ 		 */
+-		amdgpu_ras_resume_after_reset(tmp_adev);
++		r = amdgpu_ras_resume_after_reset(tmp_adev);
++		if (r)
++			dev_err(tmp_adev->dev,
++				"failed to resume RAS after XGMI reset-on-init\n");
+ 	}
+ }
+ 
+-- 
+2.55.0
+

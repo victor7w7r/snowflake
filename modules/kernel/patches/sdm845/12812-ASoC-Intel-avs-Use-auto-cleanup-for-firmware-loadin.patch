@@ -1,0 +1,44 @@
+From 6a052cf54fa19940e3cddd1fd63e2fac6cdb374a Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 15:59:58 +0200
+Subject: [PATCH 12812/15333] ASoC: Intel: avs: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Cc: Cezary Rojewski <cezary.rojewski@intel.com>
+Acked-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-27-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/intel/avs/topology.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/sound/soc/intel/avs/topology.c b/sound/soc/intel/avs/topology.c
+index 9033f683393c..673ac31f2fea 100644
+--- a/sound/soc/intel/avs/topology.c
++++ b/sound/soc/intel/avs/topology.c
+@@ -2222,7 +2222,7 @@ struct avs_tplg *avs_tplg_new(struct snd_soc_component *comp)
+ 
+ int avs_load_topology(struct snd_soc_component *comp, const char *filename)
+ {
+-	const struct firmware *fw;
++	const struct firmware *fw __free(firmware) = NULL;
+ 	int ret;
+ 
+ 	ret = request_firmware(&fw, filename, comp->dev);
+@@ -2235,7 +2235,6 @@ int avs_load_topology(struct snd_soc_component *comp, const char *filename)
+ 	if (ret < 0)
+ 		dev_err(comp->dev, "load topology \"%s\" failed: %d\n", filename, ret);
+ 
+-	release_firmware(fw);
+ 	return ret;
+ }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,106 @@
+From 7b1c73d0f7250773536419a7b6982b8faf9ab31b Mon Sep 17 00:00:00 2001
+From: Animesh Manna <animesh.manna@intel.com>
+Date: Tue, 16 Jun 2026 01:33:29 +0530
+Subject: [PATCH 00323/15333] drm/i915/cmtg: Program VRR fixed-rate timings for
+ CMTG transcoder
+
+Program the VRR registers of CMTG, as the VRR timing generator
+will always be enabled for NVL.
+
+Add intel_cmtg_set_vrr_timings() which mirrors the per-transcoder
+VRR VMIN/VMAX/FLIPLINE programming on the CMTG transcoder paired
+with the pipe's cpu_transcoder.
+
+Invoke it from intel_vrr_set_transcoder_timings() and from the LRR
+fastset path, right after the existing intel_vrr_set_fixed_rr_timings()
+calls, so the CMTG VRR timing registers stay in sync with the
+cpu_transcoder's.
+
+v2: Use sw state instead of reading from hardware. [Jani]
+v3: Program cmtg vrr timing registers along with vrr transcoder registers.
+v4: Reuse vrr timing programming helper.
+
+Bspec: 68989
+Reviewed-by: Uma Shankar <uma.shankar@intel.com>
+Signed-off-by: Animesh Manna <animesh.manna@intel.com>
+Link: https://patch.msgid.link/20260615200339.885190-13-animesh.manna@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_cmtg.c    | 11 +++++++++++
+ drivers/gpu/drm/i915/display/intel_cmtg.h    |  1 +
+ drivers/gpu/drm/i915/display/intel_display.c |  1 +
+ drivers/gpu/drm/i915/display/intel_vrr.c     |  2 ++
+ 4 files changed, 15 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_cmtg.c b/drivers/gpu/drm/i915/display/intel_cmtg.c
+index cb1d69c17830..c5fff66f0d9e 100644
+--- a/drivers/gpu/drm/i915/display/intel_cmtg.c
++++ b/drivers/gpu/drm/i915/display/intel_cmtg.c
+@@ -16,6 +16,7 @@
+ #include "intel_display_power.h"
+ #include "intel_display_regs.h"
+ #include "intel_display_types.h"
++#include "intel_vrr.h"
+ 
+ /**
+  * DOC: Common Primary Timing Generator (CMTG)
+@@ -247,3 +248,13 @@ void intel_cmtg_set_timings(const struct intel_crtc_state *crtc_state, enum set_
+ 	else
+ 		intel_set_transcoder_timings(crtc_state, cmtg_transcoder);
+ }
++
++void intel_cmtg_set_vrr_timings(const struct intel_crtc_state *crtc_state)
++{
++	enum transcoder cmtg_transcoder = to_cmtg_transcoder(crtc_state->cpu_transcoder);
++
++	if (!intel_cmtg_is_allowed(crtc_state))
++		return;
++
++	intel_vrr_set_fixed_rr_timings(crtc_state, cmtg_transcoder);
++}
+diff --git a/drivers/gpu/drm/i915/display/intel_cmtg.h b/drivers/gpu/drm/i915/display/intel_cmtg.h
+index e3c678019815..e64a26aa5a1c 100644
+--- a/drivers/gpu/drm/i915/display/intel_cmtg.h
++++ b/drivers/gpu/drm/i915/display/intel_cmtg.h
+@@ -16,6 +16,7 @@ enum set_timing_type {
+ 	LRR
+ };
+ 
++void intel_cmtg_set_vrr_timings(const struct intel_crtc_state *crtc_state);
+ void intel_cmtg_set_timings(const struct intel_crtc_state *crtc_state, enum set_timing_type type);
+ void intel_cmtg_set_clk_select(const struct intel_crtc_state *crtc_state);
+ void intel_cmtg_sanitize(struct intel_display *display);
+diff --git a/drivers/gpu/drm/i915/display/intel_display.c b/drivers/gpu/drm/i915/display/intel_display.c
+index 8f6acddac6a9..3eb93853da9e 100644
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -6695,6 +6695,7 @@ static void intel_pipe_fastset(const struct intel_crtc_state *old_crtc_state,
+ 		intel_set_transcoder_timings_lrr(new_crtc_state, new_crtc_state->cpu_transcoder);
+ 		intel_cmtg_set_timings(new_crtc_state, LRR);
+ 		intel_vrr_set_fixed_rr_timings(new_crtc_state, new_crtc_state->cpu_transcoder);
++		intel_cmtg_set_vrr_timings(new_crtc_state);
+ 		intel_vrr_transcoder_enable(new_crtc_state);
+ 	}
+ }
+diff --git a/drivers/gpu/drm/i915/display/intel_vrr.c b/drivers/gpu/drm/i915/display/intel_vrr.c
+index 401a12aee700..74094f4335f0 100644
+--- a/drivers/gpu/drm/i915/display/intel_vrr.c
++++ b/drivers/gpu/drm/i915/display/intel_vrr.c
+@@ -7,6 +7,7 @@
+ #include <drm/drm_print.h>
+ 
+ #include "intel_alpm.h"
++#include "intel_cmtg.h"
+ #include "intel_crtc.h"
+ #include "intel_de.h"
+ #include "intel_display_limits.h"
+@@ -647,6 +648,7 @@ void intel_vrr_set_transcoder_timings(const struct intel_crtc_state *crtc_state)
+ 	}
+ 
+ 	intel_vrr_set_fixed_rr_timings(crtc_state, cpu_transcoder);
++	intel_cmtg_set_vrr_timings(crtc_state);
+ 
+ 	if (!intel_vrr_always_use_vrr_tg(display))
+ 		intel_de_write(display, TRANS_VRR_CTL(display, cpu_transcoder),
+-- 
+2.55.0
+

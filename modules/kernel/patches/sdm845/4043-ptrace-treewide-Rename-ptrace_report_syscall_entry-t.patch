@@ -1,0 +1,414 @@
+From 622f04e97415e62bd2ab61f7a27e7a296e8467b7 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@kernel.org>
+Date: Tue, 7 Jul 2026 21:06:44 +0200
+Subject: [PATCH 04043/15333] ptrace, treewide: Rename
+ ptrace_report_syscall_entry() to ptrace_report_syscall_permit_entry()
+
+The return value of that function is boolean and tells the caller whether
+to permit the syscall processing or not.
+
+Rename the function so the purpose is clear and make the return type bool.
+
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Tested-by: Mukesh Kumar Chaurasiya (IBM) <mkchauras@gmail.com>
+Reviewed-by: Jinjie Ruan <ruanjinjie@huawei.com>
+Reviewed-by: Radu Rendec <radu@rendec.net>
+Reviewed-by: Mukesh Kumar Chaurasiya (IBM) <mkchauras@gmail.com>
+Acked-by: Oleg Nesterov <oleg@redhat.com>
+Acked-by: Magnus Lindholm <linmag7@gmail.com>
+Link: https://patch.msgid.link/20260707190254.280015701@kernel.org
+---
+ arch/alpha/kernel/ptrace.c      |  2 +-
+ arch/arc/kernel/ptrace.c        |  2 +-
+ arch/arm/kernel/ptrace.c        |  2 +-
+ arch/arm64/kernel/ptrace.c      |  2 +-
+ arch/csky/kernel/ptrace.c       |  2 +-
+ arch/hexagon/kernel/traps.c     |  2 +-
+ arch/m68k/kernel/ptrace.c       |  2 +-
+ arch/microblaze/kernel/ptrace.c |  2 +-
+ arch/mips/kernel/ptrace.c       |  2 +-
+ arch/nios2/kernel/ptrace.c      |  2 +-
+ arch/openrisc/kernel/ptrace.c   |  2 +-
+ arch/parisc/kernel/ptrace.c     | 10 ++++------
+ arch/sh/kernel/ptrace_32.c      |  2 +-
+ arch/sparc/kernel/ptrace_32.c   |  2 +-
+ arch/sparc/kernel/ptrace_64.c   |  2 +-
+ arch/um/kernel/ptrace.c         |  2 +-
+ arch/xtensa/kernel/ptrace.c     |  2 +-
+ include/asm-generic/syscall.h   |  4 ++--
+ include/linux/entry-common.h    | 25 ++++++++++++-------------
+ include/linux/ptrace.h          | 13 ++++++-------
+ 20 files changed, 40 insertions(+), 44 deletions(-)
+
+diff --git a/arch/alpha/kernel/ptrace.c b/arch/alpha/kernel/ptrace.c
+index 2870101dafc9..768b0920a9de 100644
+--- a/arch/alpha/kernel/ptrace.c
++++ b/arch/alpha/kernel/ptrace.c
+@@ -375,7 +375,7 @@ asmlinkage unsigned long syscall_trace_enter(void)
+ 	struct pt_regs *regs = current_pt_regs();
+ 
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE) &&
+-		ptrace_report_syscall_entry(regs)) {
++		!ptrace_report_syscall_permit_entry(regs)) {
+ 		syscall_set_nr(current, regs, -1);
+ 		if (regs->r19 == 0 && regs->r0 == (unsigned long)-1)
+ 			syscall_set_return_value(current, regs, -ENOSYS, 0);
+diff --git a/arch/arc/kernel/ptrace.c b/arch/arc/kernel/ptrace.c
+index cad5367b7c37..fe2b6572e919 100644
+--- a/arch/arc/kernel/ptrace.c
++++ b/arch/arc/kernel/ptrace.c
+@@ -342,7 +342,7 @@ long arch_ptrace(struct task_struct *child, long request,
+ asmlinkage int syscall_trace_enter(struct pt_regs *regs)
+ {
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE))
+-		if (ptrace_report_syscall_entry(regs))
++		if (!ptrace_report_syscall_permit_entry(regs))
+ 			return ULONG_MAX;
+ 
+ #ifdef CONFIG_HAVE_SYSCALL_TRACEPOINTS
+diff --git a/arch/arm/kernel/ptrace.c b/arch/arm/kernel/ptrace.c
+index 45076fc92a06..ed7a2a87a670 100644
+--- a/arch/arm/kernel/ptrace.c
++++ b/arch/arm/kernel/ptrace.c
+@@ -840,7 +840,7 @@ static void report_syscall(struct pt_regs *regs, enum ptrace_syscall_dir dir)
+ 
+ 	if (dir == PTRACE_SYSCALL_EXIT)
+ 		ptrace_report_syscall_exit(regs, 0);
+-	else if (ptrace_report_syscall_entry(regs))
++	else if (!ptrace_report_syscall_permit_entry(regs))
+ 		current_thread_info()->abi_syscall = -1;
+ 
+ 	regs->ARM_ip = ip;
+diff --git a/arch/arm64/kernel/ptrace.c b/arch/arm64/kernel/ptrace.c
+index 253ce5d78c5a..5709e9d3c321 100644
+--- a/arch/arm64/kernel/ptrace.c
++++ b/arch/arm64/kernel/ptrace.c
+@@ -2379,7 +2379,7 @@ static int report_syscall_entry(struct pt_regs *regs)
+ 	int regno, ret;
+ 
+ 	saved_reg = ptrace_save_reg(regs, PTRACE_SYSCALL_ENTER, &regno);
+-	ret = ptrace_report_syscall_entry(regs);
++	ret = !ptrace_report_syscall_permit_entry(regs);
+ 	if (ret)
+ 		forget_syscall(regs);
+ 	regs->regs[regno] = saved_reg;
+diff --git a/arch/csky/kernel/ptrace.c b/arch/csky/kernel/ptrace.c
+index b902358f599b..ee2867a1576e 100644
+--- a/arch/csky/kernel/ptrace.c
++++ b/arch/csky/kernel/ptrace.c
+@@ -320,7 +320,7 @@ long arch_ptrace(struct task_struct *child, long request,
+ asmlinkage int syscall_trace_enter(struct pt_regs *regs)
+ {
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE))
+-		if (ptrace_report_syscall_entry(regs))
++		if (!ptrace_report_syscall_permit_entry(regs))
+ 			return -1;
+ 
+ 	if (!seccomp_permit_syscall())
+diff --git a/arch/hexagon/kernel/traps.c b/arch/hexagon/kernel/traps.c
+index e732aa01c2ff..6fe0c1b62c1b 100644
+--- a/arch/hexagon/kernel/traps.c
++++ b/arch/hexagon/kernel/traps.c
+@@ -345,7 +345,7 @@ void do_trap0(struct pt_regs *regs)
+ 
+ 		/* allow strace to catch syscall args  */
+ 		if (unlikely(test_thread_flag(TIF_SYSCALL_TRACE) &&
+-			ptrace_report_syscall_entry(regs)))
++			!ptrace_report_syscall_permit_entry(regs)))
+ 			return;  /*  return -ENOSYS somewhere?  */
+ 
+ 		/* Interrupts should be re-enabled for syscall processing */
+diff --git a/arch/m68k/kernel/ptrace.c b/arch/m68k/kernel/ptrace.c
+index 28546d723c29..4575f6487a9a 100644
+--- a/arch/m68k/kernel/ptrace.c
++++ b/arch/m68k/kernel/ptrace.c
+@@ -279,7 +279,7 @@ asmlinkage int syscall_trace_enter(void)
+ 	int ret = 0;
+ 
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE))
+-		ret = ptrace_report_syscall_entry(task_pt_regs(current));
++		ret = !ptrace_report_syscall_permit_entry(task_pt_regs(current));
+ 
+ 	if (!seccomp_permit_syscall())
+ 		return -1;
+diff --git a/arch/microblaze/kernel/ptrace.c b/arch/microblaze/kernel/ptrace.c
+index 5234d0c1dcaa..236264e932d6 100644
+--- a/arch/microblaze/kernel/ptrace.c
++++ b/arch/microblaze/kernel/ptrace.c
+@@ -139,7 +139,7 @@ asmlinkage unsigned long do_syscall_trace_enter(struct pt_regs *regs)
+ 	secure_computing_strict(regs->r12);
+ 
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE) &&
+-	    ptrace_report_syscall_entry(regs))
++	    !ptrace_report_syscall_permit_entry(regs))
+ 		/*
+ 		 * Tracing decided this syscall should not happen.
+ 		 * We'll return a bogus call number to get an ENOSYS
+diff --git a/arch/mips/kernel/ptrace.c b/arch/mips/kernel/ptrace.c
+index af1e005b2689..5a0e298857b6 100644
+--- a/arch/mips/kernel/ptrace.c
++++ b/arch/mips/kernel/ptrace.c
+@@ -1324,7 +1324,7 @@ asmlinkage long syscall_trace_enter(struct pt_regs *regs)
+ 	user_exit();
+ 
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE)) {
+-		if (ptrace_report_syscall_entry(regs))
++		if (!ptrace_report_syscall_permit_entry(regs))
+ 			return -1;
+ 	}
+ 
+diff --git a/arch/nios2/kernel/ptrace.c b/arch/nios2/kernel/ptrace.c
+index c88f5cabc0c1..2cd7e1ecbd74 100644
+--- a/arch/nios2/kernel/ptrace.c
++++ b/arch/nios2/kernel/ptrace.c
+@@ -133,7 +133,7 @@ asmlinkage int do_syscall_trace_enter(void)
+ 	int ret = 0;
+ 
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE))
+-		ret = ptrace_report_syscall_entry(task_pt_regs(current));
++		ret = !ptrace_report_syscall_permit_entry(task_pt_regs(current));
+ 
+ 	return ret;
+ }
+diff --git a/arch/openrisc/kernel/ptrace.c b/arch/openrisc/kernel/ptrace.c
+index 552489b24855..287a9718f0c6 100644
+--- a/arch/openrisc/kernel/ptrace.c
++++ b/arch/openrisc/kernel/ptrace.c
+@@ -293,7 +293,7 @@ asmlinkage long do_syscall_trace_enter(struct pt_regs *regs)
+ 	long ret = 0;
+ 
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE) &&
+-	    ptrace_report_syscall_entry(regs))
++	    !ptrace_report_syscall_permit_entry(regs))
+ 		/*
+ 		 * Tracing decided this syscall should not happen.
+ 		 * We'll return a bogus call number to get an ENOSYS
+diff --git a/arch/parisc/kernel/ptrace.c b/arch/parisc/kernel/ptrace.c
+index ac5d077762bc..1d9e210702e1 100644
+--- a/arch/parisc/kernel/ptrace.c
++++ b/arch/parisc/kernel/ptrace.c
+@@ -326,7 +326,7 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
+ long do_syscall_trace_enter(struct pt_regs *regs)
+ {
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE)) {
+-		int rc = ptrace_report_syscall_entry(regs);
++		bool permit = ptrace_report_syscall_permit_entry(regs);
+ 
+ 		/*
+ 		 * As tracesys_next does not set %r28 to -ENOSYS
+@@ -334,12 +334,10 @@ long do_syscall_trace_enter(struct pt_regs *regs)
+ 		 */
+ 		regs->gr[28] = -ENOSYS;
+ 
+-		if (rc) {
++		if (!permit) {
+ 			/*
+-			 * A nonzero return code from
+-			 * ptrace_report_syscall_entry() tells us
+-			 * to prevent the syscall execution.  Skip
+-			 * the syscall call and the syscall restart handling.
++			 * Skip the syscall call and the syscall restart
++			 * handling.
+ 			 *
+ 			 * Note that the tracer may also just change
+ 			 * regs->gr[20] to an invalid syscall number,
+diff --git a/arch/sh/kernel/ptrace_32.c b/arch/sh/kernel/ptrace_32.c
+index 7594bd5cbb4a..8794081483fb 100644
+--- a/arch/sh/kernel/ptrace_32.c
++++ b/arch/sh/kernel/ptrace_32.c
+@@ -455,7 +455,7 @@ long arch_ptrace(struct task_struct *child, long request,
+ asmlinkage long do_syscall_trace_enter(struct pt_regs *regs)
+ {
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE) &&
+-	    ptrace_report_syscall_entry(regs)) {
++	    !ptrace_report_syscall_permit_entry(regs)) {
+ 		regs->regs[0] = -ENOSYS;
+ 		return -1;
+ 	}
+diff --git a/arch/sparc/kernel/ptrace_32.c b/arch/sparc/kernel/ptrace_32.c
+index c56333975fb1..5991b1731fee 100644
+--- a/arch/sparc/kernel/ptrace_32.c
++++ b/arch/sparc/kernel/ptrace_32.c
+@@ -441,7 +441,7 @@ asmlinkage int syscall_trace(struct pt_regs *regs, int syscall_exit_p)
+ 		if (syscall_exit_p)
+ 			ptrace_report_syscall_exit(regs, 0);
+ 		else
+-			ret = ptrace_report_syscall_entry(regs);
++			ret = !ptrace_report_syscall_permit_entry(regs);
+ 	}
+ 
+ 	return ret;
+diff --git a/arch/sparc/kernel/ptrace_64.c b/arch/sparc/kernel/ptrace_64.c
+index 9fc67fa9336f..825ddf55fece 100644
+--- a/arch/sparc/kernel/ptrace_64.c
++++ b/arch/sparc/kernel/ptrace_64.c
+@@ -1093,7 +1093,7 @@ asmlinkage int syscall_trace_enter(struct pt_regs *regs)
+ 		user_exit();
+ 
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE))
+-		ret = ptrace_report_syscall_entry(regs);
++		ret = !ptrace_report_syscall_permit_entry(regs);
+ 
+ 	if (unlikely(test_thread_flag(TIF_SYSCALL_TRACEPOINT)))
+ 		trace_sys_enter(regs, regs->u_regs[UREG_G1]);
+diff --git a/arch/um/kernel/ptrace.c b/arch/um/kernel/ptrace.c
+index fdbb37b5c399..7da0a5223aa6 100644
+--- a/arch/um/kernel/ptrace.c
++++ b/arch/um/kernel/ptrace.c
+@@ -135,7 +135,7 @@ int syscall_trace_enter(struct pt_regs *regs)
+ 	if (!test_thread_flag(TIF_SYSCALL_TRACE))
+ 		return 0;
+ 
+-	return ptrace_report_syscall_entry(regs);
++	return !ptrace_report_syscall_permit_entry(regs);
+ }
+ 
+ void syscall_trace_leave(struct pt_regs *regs)
+diff --git a/arch/xtensa/kernel/ptrace.c b/arch/xtensa/kernel/ptrace.c
+index 5c3ebb03513b..364e4fdabb00 100644
+--- a/arch/xtensa/kernel/ptrace.c
++++ b/arch/xtensa/kernel/ptrace.c
+@@ -547,7 +547,7 @@ int do_syscall_trace_enter(struct pt_regs *regs)
+ 		regs->areg[2] = -ENOSYS;
+ 
+ 	if (test_thread_flag(TIF_SYSCALL_TRACE) &&
+-	    ptrace_report_syscall_entry(regs)) {
++	    !ptrace_report_syscall_permit_entry(regs)) {
+ 		regs->areg[2] = -ENOSYS;
+ 		regs->syscall = NO_SYSCALL;
+ 		return 0;
+diff --git a/include/asm-generic/syscall.h b/include/asm-generic/syscall.h
+index c5a3ad53beec..b53bdd389948 100644
+--- a/include/asm-generic/syscall.h
++++ b/include/asm-generic/syscall.h
+@@ -58,8 +58,8 @@ void syscall_set_nr(struct task_struct *task, struct pt_regs *regs, int nr);
+  *
+  * It's only valid to call this when @task is stopped for system
+  * call exit tracing (due to %SYSCALL_WORK_SYSCALL_TRACE or
+- * %SYSCALL_WORK_SYSCALL_AUDIT), after ptrace_report_syscall_entry()
+- * returned nonzero to prevent the system call from taking place.
++ * %SYSCALL_WORK_SYSCALL_AUDIT), after ptrace_report_syscall_permit_entry()
++ * returned False to prevent the system call from taking place.
+  *
+  * This rolls back the register state in @regs so it's as if the
+  * system call instruction was a no-op.  The registers containing
+diff --git a/include/linux/entry-common.h b/include/linux/entry-common.h
+index 99c49a402a9a..07d97def7dcb 100644
+--- a/include/linux/entry-common.h
++++ b/include/linux/entry-common.h
+@@ -39,21 +39,22 @@
+ 				 SYSCALL_WORK_SYSCALL_EXIT_TRAP)
+ 
+ /**
+- * arch_ptrace_report_syscall_entry - Architecture specific ptrace_report_syscall_entry() wrapper
++ * arch_ptrace_report_syscall_permit_entry - Architecture specific wrapper for
++ *					     ptrace_report_syscall_permit_entry()
+  * @regs: Pointer to the register state at syscall entry
+  *
+- * Invoked from syscall_trace_enter() to wrap ptrace_report_syscall_entry().
++ * Invoked from syscall_trace_enter() to wrap ptrace_report_syscall_permit_entry().
+  *
+- * This allows architecture specific ptrace_report_syscall_entry()
++ * This allows architecture specific ptrace_report_syscall_permit_entry()
+  * implementations. If not defined by the architecture this falls back to
+- * to ptrace_report_syscall_entry().
++ * to ptrace_report_syscall_permit_entry().
+  */
+-static __always_inline int arch_ptrace_report_syscall_entry(struct pt_regs *regs);
++static __always_inline bool arch_ptrace_report_syscall_permit_entry(struct pt_regs *regs);
+ 
+-#ifndef arch_ptrace_report_syscall_entry
+-static __always_inline int arch_ptrace_report_syscall_entry(struct pt_regs *regs)
++#ifndef arch_ptrace_report_syscall_permit_entry
++static __always_inline bool arch_ptrace_report_syscall_permit_entry(struct pt_regs *regs)
+ {
+-	return ptrace_report_syscall_entry(regs);
++	return ptrace_report_syscall_permit_entry(regs);
+ }
+ #endif
+ 
+@@ -73,8 +74,6 @@ static inline void syscall_enter_audit(struct pt_regs *regs, long syscall)
+ static __always_inline long syscall_trace_enter(struct pt_regs *regs, unsigned long work,
+ 						long syscall)
+ {
+-	long ret = 0;
+-
+ 	/*
+ 	 * Handle Syscall User Dispatch.  This must comes first, since
+ 	 * the ABI here can be something that doesn't make sense for
+@@ -95,8 +94,8 @@ static __always_inline long syscall_trace_enter(struct pt_regs *regs, unsigned l
+ 
+ 	/* Handle ptrace */
+ 	if (work & (SYSCALL_WORK_SYSCALL_TRACE | SYSCALL_WORK_SYSCALL_EMU)) {
+-		ret = arch_ptrace_report_syscall_entry(regs);
+-		if (ret || (work & SYSCALL_WORK_SYSCALL_EMU))
++		if (!arch_ptrace_report_syscall_permit_entry(regs) ||
++		    (work & SYSCALL_WORK_SYSCALL_EMU))
+ 			return -1L;
+ 	}
+ 
+@@ -137,7 +136,7 @@ static __always_inline long syscall_trace_enter(struct pt_regs *regs, unsigned l
+  * It handles the following work items:
+  *
+  *  1) syscall_work flag dependent invocations of
+- *     ptrace_report_syscall_entry(), __seccomp_permit_syscall(), trace_sys_enter()
++ *     ptrace_report_syscall_permit_entry(), __seccomp_permit_syscall(), trace_sys_enter()
+  *  2) Invocation of audit_syscall_entry()
+  */
+ static __always_inline long syscall_enter_from_user_mode_work(struct pt_regs *regs, long syscall)
+diff --git a/include/linux/ptrace.h b/include/linux/ptrace.h
+index ef314f7a9ecc..2839d5c8eaa0 100644
+--- a/include/linux/ptrace.h
++++ b/include/linux/ptrace.h
+@@ -405,13 +405,13 @@ extern void sigaction_compat_abi(struct k_sigaction *act, struct k_sigaction *oa
+ /*
+  * ptrace report for syscall entry and exit looks identical.
+  */
+-static inline int ptrace_report_syscall(unsigned long message)
++static inline bool ptrace_report_syscall(unsigned long message)
+ {
+ 	int ptrace = current->ptrace;
+ 	int signr;
+ 
+ 	if (!(ptrace & PT_PTRACED))
+-		return 0;
++		return true;
+ 
+ 	signr = ptrace_notify(SIGTRAP | ((ptrace & PT_TRACESYSGOOD) ? 0x80 : 0),
+ 			      message);
+@@ -424,11 +424,11 @@ static inline int ptrace_report_syscall(unsigned long message)
+ 	if (signr)
+ 		send_sig(signr, current, 1);
+ 
+-	return fatal_signal_pending(current);
++	return !fatal_signal_pending(current);
+ }
+ 
+ /**
+- * ptrace_report_syscall_entry - task is about to attempt a system call
++ * ptrace_report_syscall_permit_entry - task is about to attempt a system call
+  * @regs:		user register state of current task
+  *
+  * This will be called if %SYSCALL_WORK_SYSCALL_TRACE or
+@@ -438,7 +438,7 @@ static inline int ptrace_report_syscall(unsigned long message)
+  * call number and arguments to be tried.  It is safe to block here,
+  * preventing the system call from beginning.
+  *
+- * Returns zero normally, or nonzero if the calling arch code should abort
++ * Returns True normally, or False if the calling architecture code should abort
+  * the system call.  That must prevent normal entry so no system call is
+  * made.  If @task ever returns to user mode after this, its register state
+  * is unspecified, but should be something harmless like an %ENOSYS error
+@@ -447,8 +447,7 @@ static inline int ptrace_report_syscall(unsigned long message)
+  *
+  * Called without locks, just after entering kernel mode.
+  */
+-static inline __must_check int ptrace_report_syscall_entry(
+-	struct pt_regs *regs)
++static inline __must_check bool ptrace_report_syscall_permit_entry(struct pt_regs *regs)
+ {
+ 	return ptrace_report_syscall(PTRACE_EVENTMSG_SYSCALL_ENTRY);
+ }
+-- 
+2.55.0
+

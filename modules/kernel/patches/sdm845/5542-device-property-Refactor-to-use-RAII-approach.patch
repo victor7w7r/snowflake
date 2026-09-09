@@ -1,0 +1,93 @@
+From c37ab60d55e34ed0fd050926abd602bb31a5036d Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Thu, 11 Jun 2026 22:31:07 +0200
+Subject: [PATCH 05542/15333] device property: Refactor to use RAII approach
+
+In a couple of functions code can be made cleaner with help of
+__free() macro. Refactor these to use RAII approach.
+
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/20260611203537.1786399-3-andriy.shevchenko@linux.intel.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/base/property.c | 22 ++++++++--------------
+ 1 file changed, 8 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/base/property.c b/drivers/base/property.c
+index e0f570f48bc3..b136c339ddae 100644
+--- a/drivers/base/property.c
++++ b/drivers/base/property.c
+@@ -7,10 +7,10 @@
+  *          Mika Westerberg <mika.westerberg@linux.intel.com>
+  */
+ 
++#include <linux/cleanup.h>
+ #include <linux/device.h>
+ #include <linux/err.h>
+ #include <linux/export.h>
+-#include <linux/kconfig.h>
+ #include <linux/of.h>
+ #include <linux/property.h>
+ #include <linux/phy.h>
+@@ -517,7 +517,6 @@ EXPORT_SYMBOL_GPL(fwnode_property_read_string);
+ int fwnode_property_match_string(const struct fwnode_handle *fwnode,
+ 	const char *propname, const char *string)
+ {
+-	const char **values;
+ 	int nval, ret;
+ 
+ 	nval = fwnode_property_string_array_count(fwnode, propname);
+@@ -527,20 +526,18 @@ int fwnode_property_match_string(const struct fwnode_handle *fwnode,
+ 	if (nval == 0)
+ 		return -ENODATA;
+ 
+-	values = kcalloc(nval, sizeof(*values), GFP_KERNEL);
++	const char **values __free(kfree) = kcalloc(nval, sizeof(*values), GFP_KERNEL);
+ 	if (!values)
+ 		return -ENOMEM;
+ 
+ 	ret = fwnode_property_read_string_array(fwnode, propname, values, nval);
+ 	if (ret < 0)
+-		goto out_free;
++		return ret;
+ 
+ 	ret = match_string(values, nval, string);
+ 	if (ret < 0)
+-		ret = -ENODATA;
++		return -ENODATA;
+ 
+-out_free:
+-	kfree(values);
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(fwnode_property_match_string);
+@@ -1128,8 +1125,9 @@ struct fwnode_handle *
+ fwnode_graph_get_next_endpoint(const struct fwnode_handle *fwnode,
+ 			       struct fwnode_handle *prev)
+ {
+-	struct fwnode_handle *ep, *port_parent = NULL;
+ 	const struct fwnode_handle *parent;
++	struct fwnode_handle *port_parent __free(fwnode_handle) = NULL;
++	struct fwnode_handle *ep;
+ 
+ 	/*
+ 	 * If this function is in a loop and the previous iteration returned
+@@ -1147,13 +1145,9 @@ fwnode_graph_get_next_endpoint(const struct fwnode_handle *fwnode,
+ 
+ 	ep = fwnode_call_ptr_op(parent, graph_get_next_endpoint, prev);
+ 	if (ep)
+-		goto out_put_port_parent;
+-
+-	ep = fwnode_graph_get_next_endpoint(parent->secondary, NULL);
++		return ep;
+ 
+-out_put_port_parent:
+-	fwnode_handle_put(port_parent);
+-	return ep;
++	return fwnode_graph_get_next_endpoint(parent->secondary, NULL);
+ }
+ EXPORT_SYMBOL_GPL(fwnode_graph_get_next_endpoint);
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,60 @@
+From bd0c00982166d34ed47b11ba29cd8bf2950cc2e2 Mon Sep 17 00:00:00 2001
+From: David Weber <weber.aulendorf@gmail.com>
+Date: Thu, 30 Jul 2026 05:32:00 +0200
+Subject: [PATCH 11458/15333] drm/amd/display: allow self-refresh exit while
+ entry is blocked
+
+amdgpu_dm_crtc_set_static_screen_optimze() maps sso_enable to the
+Replay and PSR1 vsync events. allow_sr_entry is an entry gate, but the
+helper currently applies it to both directions.
+
+A non-fast update clears allow_sr_entry. During a modeset, a separate
+hardware-programming event keeps self-refresh blocked while the stream
+is reprogrammed. If vblank is enabled before the entry delay expires,
+the ISM calls the helper with sso_enable false. The early return drops
+the disable request, so the vsync events are not set.
+
+After enough fast commits, allow_sr_entry becomes true and the
+hardware-programming event can be cleared. Since the vblank reference
+remains held, there is no further zero-to-one vblank transition to
+restore the missing vsync events. Replay or PSR1 can then become active
+while vblank is still enabled.
+
+Gate only requests that enable static-screen optimization. Always
+process disable requests so a vblank requestor keeps Replay and PSR1
+blocked.
+
+On a Phoenix system, repeated SDDM-to-VT handoffs produced stuck flips
+followed by flip_done and commit-wait timeouts. The timeout was not
+observed with this change applied.
+
+Fixes: 3c108046e1d6 ("drm/amd/display: Add power module on Linux")
+Assisted-by: Codex:gpt-5.6-sol
+Assisted-by: Claude:opus-5
+Signed-off-by: David Weber <weber.aulendorf@gmail.com>
+Reviewed-by: Leo Li <sunpeng.li@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c
+index 82a30097072e..46d85457c77b 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c
+@@ -125,7 +125,11 @@ void amdgpu_dm_crtc_set_static_screen_optimze(
+ 	struct dc_link *link = stream->link;
+ 	bool set_vsync_event = !sso_enable;
+ 
+-	if (!allow_sr_entry)
++	/*
++	 * allow_sr_entry gates only entry. A disable request must still set
++	 * the vsync events to force Replay and PSR1 out and keep them blocked.
++	 */
++	if (sso_enable && !allow_sr_entry)
+ 		return;
+ 
+ 	amdgpu_dm_replay_set_event(dm, stream,
+-- 
+2.55.0
+

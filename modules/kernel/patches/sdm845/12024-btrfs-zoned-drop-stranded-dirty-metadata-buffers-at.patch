@@ -1,0 +1,50 @@
+From 7636e0b45c1d358388fe66728299bb5d45d544aa Mon Sep 17 00:00:00 2001
+From: Johannes Thumshirn <johannes.thumshirn@wdc.com>
+Date: Thu, 23 Jul 2026 17:54:27 +0200
+Subject: [PATCH 12024/15333] btrfs: zoned: drop stranded dirty metadata
+ buffers at unmount
+
+On a zoned filesystem a freed tree block is kept dirty and flagged
+EXTENT_BUFFER_ZONED_ZEROOUT so a later writeback zeroes it out and
+advances the zone write pointer. Unsynced tree-log updates (e.g. from
+rename or link) leave such buffers behind when the log is freed at
+commit, and across log generations they can end up ahead of the write
+pointer behind a hole, so btree_writepages() can never write them.
+During normal operation the space is later reclaimed by a zone reset; at
+unmount it is not, and the buffers survive to the final iput() of the
+btree inode, which hangs in folio_wait_writeback() once the endio
+workqueues are stopped.
+
+They cannot be written back from where they are freed (free_log_tree(),
+inside the committing transaction) without deadlocking against that
+commit, and they are stale anyway, not referenced by the committed
+superblock. Drop their dirty state in close_ctree(), before
+btrfs_stop_all_workers().
+
+Signed-off-by: Johannes Thumshirn <johannes.thumshirn@wdc.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/disk-io.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/fs/btrfs/disk-io.c b/fs/btrfs/disk-io.c
+index 6cf147242506..a8e2c15f6823 100644
+--- a/fs/btrfs/disk-io.c
++++ b/fs/btrfs/disk-io.c
+@@ -4572,6 +4572,13 @@ void __cold close_ctree(struct btrfs_fs_info *fs_info)
+ 	free_root_pointers(fs_info, true);
+ 	btrfs_free_fs_roots(fs_info);
+ 
++	/*
++	 * Drop metadata left stranded ahead of a zone write pointer while the
++	 * endio workqueues are still up, so the final iput() of the btree inode
++	 * below does not hang submitting a write that can no longer complete.
++	 */
++	btrfs_zoned_release_dirty_metadata(fs_info);
++
+ 	/*
+ 	 * We must make sure there is not any read request to
+ 	 * submit after we stop all workers.
+-- 
+2.55.0
+

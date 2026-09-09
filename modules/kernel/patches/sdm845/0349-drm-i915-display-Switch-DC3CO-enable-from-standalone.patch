@@ -1,0 +1,126 @@
+From 28750a28dac2c8a0042258ba37865319c2837068 Mon Sep 17 00:00:00 2001
+From: Dibin Moolakadan Subrahmanian <dibin.moolakadan.subrahmanian@intel.com>
+Date: Tue, 16 Jun 2026 21:51:40 +0530
+Subject: [PATCH 00349/15333] drm/i915/display: Switch DC3CO enable from
+ standalone bit to DC level encoding
+
+On platforms prior to xe3, DC3CO was controlled via a standalone enable
+bit. Starting with xe3, DC3CO is encoded as part of the existing
+DC_STATE_EN_UPTO_DC* field.
+
+No functional change, as DC3CO is not enabled on platforms prior to xe3.
+
+Changes in v2:
+- Update commit header (Uma Shankar)
+
+Changes in v3:
+- Update bit mask to reflect DC3CO (Manna Animesh)
+
+Signed-off-by: Dibin Moolakadan Subrahmanian <dibin.moolakadan.subrahmanian@intel.com>
+Reviewed-by: Uma Shankar <uma.shankar@intel.com>
+Reviewed-by: Animesh Manna <animesh.manna@intel.com>
+Signed-off-by: Animesh Manna <animesh.manna@intel.com>
+Link: https://patch.msgid.link/20260616162154.2630995-3-dibin.moolakadan.subrahmanian@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_display_power.c      | 8 ++++----
+ drivers/gpu/drm/i915/display/intel_display_power_well.c | 6 +++---
+ drivers/gpu/drm/i915/display/intel_display_regs.h       | 4 ++--
+ drivers/gpu/drm/i915/display/intel_dmc_wl.c             | 2 +-
+ 4 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_power.c b/drivers/gpu/drm/i915/display/intel_display_power.c
+index 9783257651d2..e313d719fea1 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_power.c
++++ b/drivers/gpu/drm/i915/display/intel_display_power.c
+@@ -267,7 +267,7 @@ sanitize_target_dc_state(struct intel_display *display,
+ 	static const u32 states[] = {
+ 		DC_STATE_EN_UPTO_DC6,
+ 		DC_STATE_EN_UPTO_DC5,
+-		DC_STATE_EN_DC3CO,
++		DC_STATE_EN_UPTO_DC3CO,
+ 		DC_STATE_DISABLE,
+ 	};
+ 	int i;
+@@ -341,7 +341,7 @@ void intel_display_power_set_target_dc_state(struct intel_display *display,
+ 	 * CMTG must be restored explicitly after DC6 exit. The dc3co_to_dc6
+ 	 * flag helps CMTG determine whether restoration is required.
+ 	 */
+-	if (old_target_dc_state == DC_STATE_EN_DC3CO &&
++	if (old_target_dc_state == DC_STATE_EN_UPTO_DC3CO &&
+ 	    power_domains->target_dc_state == DC_STATE_EN_UPTO_DC6)
+ 		power_domains->dc3co_to_dc6 = true;
+ 
+@@ -1022,10 +1022,10 @@ static u32 get_allowed_dc_mask(struct intel_display *display, int enable_dc)
+ 
+ 	switch (requested_dc) {
+ 	case 4:
+-		mask |= DC_STATE_EN_DC3CO | DC_STATE_EN_UPTO_DC6;
++		mask |= DC_STATE_EN_UPTO_DC3CO | DC_STATE_EN_UPTO_DC6;
+ 		break;
+ 	case 3:
+-		mask |= DC_STATE_EN_DC3CO | DC_STATE_EN_UPTO_DC5;
++		mask |= DC_STATE_EN_UPTO_DC3CO | DC_STATE_EN_UPTO_DC5;
+ 		break;
+ 	case 2:
+ 		mask |= DC_STATE_EN_UPTO_DC6;
+diff --git a/drivers/gpu/drm/i915/display/intel_display_power_well.c b/drivers/gpu/drm/i915/display/intel_display_power_well.c
+index 2f0d0a77c1a2..71ea2ecc8c88 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_power_well.c
++++ b/drivers/gpu/drm/i915/display/intel_display_power_well.c
+@@ -772,7 +772,7 @@ static u32 gen9_dc_mask(struct intel_display *display)
+ 	mask = DC_STATE_EN_UPTO_DC5;
+ 
+ 	if (DISPLAY_VER(display) >= 12)
+-		mask |= DC_STATE_EN_DC3CO | DC_STATE_EN_UPTO_DC6
++		mask |= DC_STATE_EN_UPTO_DC3CO | DC_STATE_EN_UPTO_DC6
+ 					  | DC_STATE_EN_DC9;
+ 	else if (DISPLAY_VER(display) == 11)
+ 		mask |= DC_STATE_EN_UPTO_DC6 | DC_STATE_EN_DC9;
+@@ -1022,8 +1022,8 @@ static void bxt_verify_dpio_phy_power_wells(struct intel_display *display)
+ static bool gen9_dc_off_power_well_enabled(struct intel_display *display,
+ 					   struct i915_power_well *power_well)
+ {
+-	return ((intel_de_read(display, DC_STATE_EN) & DC_STATE_EN_DC3CO) == 0 &&
+-		(intel_de_read(display, DC_STATE_EN) & DC_STATE_EN_UPTO_DC5_DC6_MASK) == 0);
++	return ((intel_de_read(display, DC_STATE_EN) & DC_STATE_EN_UPTO_DC3CO) == 0 &&
++		(intel_de_read(display, DC_STATE_EN) & DC_STATE_EN_UPTO_DC3CO_DC5_DC6_MASK) == 0);
+ }
+ 
+ static void gen9_assert_dbuf_enabled(struct intel_display *display)
+diff --git a/drivers/gpu/drm/i915/display/intel_display_regs.h b/drivers/gpu/drm/i915/display/intel_display_regs.h
+index fe851fe39222..01f6a88fd1a7 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_regs.h
++++ b/drivers/gpu/drm/i915/display/intel_display_regs.h
+@@ -3072,14 +3072,14 @@ enum skl_power_gate {
+ /* GEN9 DC */
+ #define DC_STATE_EN			_MMIO(0x45504)
+ #define  DC_STATE_DISABLE		0
+-#define  DC_STATE_EN_DC3CO		REG_BIT(30)
+ #define  DC_STATE_DC3CO_STATUS		REG_BIT(29)
+ #define  HOLD_PHY_CLKREQ_PG1_LATCH	REG_BIT(21)
+ #define  HOLD_PHY_PG1_LATCH		REG_BIT(20)
+ #define  DC_STATE_EN_UPTO_DC5		(1 << 0)
+ #define  DC_STATE_EN_DC9		(1 << 3)
+ #define  DC_STATE_EN_UPTO_DC6		(2 << 0)
+-#define  DC_STATE_EN_UPTO_DC5_DC6_MASK   0x3
++#define  DC_STATE_EN_UPTO_DC3CO	(3 << 0)
++#define  DC_STATE_EN_UPTO_DC3CO_DC5_DC6_MASK   0x3
+ 
+ #define  DC_STATE_DEBUG                  _MMIO(0x45520)
+ #define  DC_STATE_DEBUG_MASK_CORES	(1 << 0)
+diff --git a/drivers/gpu/drm/i915/display/intel_dmc_wl.c b/drivers/gpu/drm/i915/display/intel_dmc_wl.c
+index b007343721e1..ab4e0e9573df 100644
+--- a/drivers/gpu/drm/i915/display/intel_dmc_wl.c
++++ b/drivers/gpu/drm/i915/display/intel_dmc_wl.c
+@@ -267,7 +267,7 @@ static bool intel_dmc_wl_check_range(struct intel_display *display,
+ 	 * the DMC and requires a DC exit for proper access.
+ 	 */
+ 	switch (dc_state) {
+-	case DC_STATE_EN_DC3CO:
++	case DC_STATE_EN_UPTO_DC3CO:
+ 		ranges = xe3lpd_dc3co_dmc_ranges;
+ 		break;
+ 	case DC_STATE_EN_UPTO_DC5:
+-- 
+2.55.0
+

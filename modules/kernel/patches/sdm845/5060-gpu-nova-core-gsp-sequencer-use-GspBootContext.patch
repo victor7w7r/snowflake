@@ -1,0 +1,122 @@
+From d3cac8a343241a547445e8a651f1d4ecc276b828 Mon Sep 17 00:00:00 2001
+From: Alexandre Courbot <acourbot@nvidia.com>
+Date: Thu, 9 Jul 2026 15:52:54 +0900
+Subject: [PATCH 05060/15333] gpu: nova-core: gsp: sequencer: use
+ GspBootContext
+
+`GspBootContext` contains all the resources currently carried by
+`GspSequencerParams`, so replace the latter with the former for better
+integration with the boot process and less code.
+
+Reviewed-by: Eliot Courtney <ecourtney@nvidia.com>
+Link: https://patch.msgid.link/20260709-nova-bootcontext-v6-1-520cbf8b9b50@nvidia.com
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/gsp/hal/tu102.rs | 21 +++++----------
+ drivers/gpu/nova-core/gsp/sequencer.rs | 36 ++++++++++----------------
+ 2 files changed, 20 insertions(+), 37 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/gsp/hal/tu102.rs b/drivers/gpu/nova-core/gsp/hal/tu102.rs
+index ff71b45b5432..87ceb8878f01 100644
+--- a/drivers/gpu/nova-core/gsp/hal/tu102.rs
++++ b/drivers/gpu/nova-core/gsp/hal/tu102.rs
+@@ -37,10 +37,7 @@
+             GspHal,
+             UnloadBundle, //
+         },
+-        sequencer::{
+-            GspSequencer,
+-            GspSequencerParams, //
+-        },
++        sequencer::GspSequencer,
+         Gsp,
+         GspBootContext,
+         GspFwWprMeta, //
+@@ -326,16 +323,12 @@ fn boot<'a>(
+     }
+ 
+     fn post_boot(&self, gsp: &Gsp, ctx: &GspBootContext<'_>, gsp_fw: &GspFirmware) -> Result {
+-        // Create and run the GSP sequencer.
+-        let seq_params = GspSequencerParams {
+-            bootloader_app_version: gsp_fw.bootloader.app_version,
+-            libos_dma_handle: gsp.libos.dma_handle(),
+-            gsp_falcon: ctx.gsp_falcon,
+-            sec2_falcon: ctx.sec2_falcon,
+-            dev: ctx.dev(),
+-            bar: ctx.bar,
+-        };
+-        GspSequencer::run(&gsp.cmdq, seq_params)?;
++        GspSequencer::run(
++            &gsp.cmdq,
++            ctx,
++            gsp.libos.dma_handle(),
++            gsp_fw.bootloader.app_version,
++        )?;
+ 
+         Ok(())
+     }
+diff --git a/drivers/gpu/nova-core/gsp/sequencer.rs b/drivers/gpu/nova-core/gsp/sequencer.rs
+index 13983d42b12b..f55205bd61f3 100644
+--- a/drivers/gpu/nova-core/gsp/sequencer.rs
++++ b/drivers/gpu/nova-core/gsp/sequencer.rs
+@@ -31,6 +31,7 @@
+             MessageFromGsp, //
+         },
+         fw,
++        GspBootContext, //
+     },
+     num::FromSafeCast,
+     sbuffer::SBufferIter,
+@@ -335,24 +336,13 @@ fn iter(&self) -> GspSeqIter<'_> {
+     }
+ }
+ 
+-/// Parameters for running the GSP sequencer.
+-pub(crate) struct GspSequencerParams<'a> {
+-    /// Bootloader application version.
+-    pub(crate) bootloader_app_version: u32,
+-    /// LibOS DMA handle address.
+-    pub(crate) libos_dma_handle: u64,
+-    /// GSP falcon for core operations.
+-    pub(crate) gsp_falcon: &'a Falcon<'a, Gsp>,
+-    /// SEC2 falcon for core operations.
+-    pub(crate) sec2_falcon: &'a Falcon<'a, Sec2>,
+-    /// Device for logging.
+-    pub(crate) dev: &'a device::Device,
+-    /// BAR0 for register access.
+-    pub(crate) bar: Bar0<'a>,
+-}
+-
+ impl<'a> GspSequencer<'a> {
+-    pub(crate) fn run(cmdq: &Cmdq, params: GspSequencerParams<'a>) -> Result {
++    pub(crate) fn run(
++        cmdq: &Cmdq,
++        ctx: &'a GspBootContext<'_>,
++        libos_dma_handle: u64,
++        bootloader_app_version: u32,
++    ) -> Result {
+         let seq_info = loop {
+             match cmdq.receive_msg::<GspSequence>(Cmdq::RECEIVE_TIMEOUT) {
+                 Ok(seq_info) => break seq_info,
+@@ -363,12 +353,12 @@ pub(crate) fn run(cmdq: &Cmdq, params: GspSequencerParams<'a>) -> Result {
+ 
+         let sequencer = GspSequencer {
+             seq_info,
+-            bar: params.bar,
+-            sec2_falcon: params.sec2_falcon,
+-            gsp_falcon: params.gsp_falcon,
+-            libos_dma_handle: params.libos_dma_handle,
+-            bootloader_app_version: params.bootloader_app_version,
+-            dev: params.dev,
++            bar: ctx.bar,
++            sec2_falcon: ctx.sec2_falcon,
++            gsp_falcon: ctx.gsp_falcon,
++            libos_dma_handle,
++            bootloader_app_version,
++            dev: ctx.dev(),
+         };
+ 
+         dev_dbg!(sequencer.dev, "Running CPU Sequencer commands\n");
+-- 
+2.55.0
+

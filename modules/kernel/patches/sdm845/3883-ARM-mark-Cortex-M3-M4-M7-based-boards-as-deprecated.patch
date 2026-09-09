@@ -1,0 +1,154 @@
+From f70425ca424a6a7a044e79f5c1c99fb2b1b2783b Mon Sep 17 00:00:00 2001
+From: Arnd Bergmann <arnd@arndb.de>
+Date: Wed, 17 Jun 2026 12:50:39 +0200
+Subject: [PATCH 03883/15333] ARM: mark Cortex-M3/M4/M7 based boards as
+ deprecated
+
+The Cortex-M3/M4/M7 cores were designed as a replacement for the earlier
+ARM7TDMI and ARM9TDMI microarchitectures used in older microcontrollers.
+
+At the moment, Linux can run these cores either when they are integrated
+into a larger SoC, or as standalone microcontrollers. While there was
+a lot of development work going into Cortex-M support from 2011 to 2016,
+this largely stopped when it became clear that Zephyr and other RTOS
+had taken over that market. To date, the only Cortex-M based based
+microcontroller boards supported upstream are reference implementations.
+
+Schedule these for removal after the next LTS kernel, so if any users
+remain that want to update their kernels, they can stay on that
+version for a few years before having to maintain the platform support
+out of tree.
+
+Acked-by: Vladimir Zapolskiy <vz@mleia.com> # NXP LPC18xx/LPC43xx
+Acked-by: Vladimir Murzin <vladimir.murzin@arm.com> # MPS2
+Acked-by: Nicolas Ferre <nicolas.ferre@microchip.com>
+Acked-by: Frank Li <Frank.Li@nxp.com> # i.MX
+Signed-off-by: Arnd Bergmann <arnd@arndb.de>
+---
+ arch/arm/Kconfig            |  8 ++++++--
+ arch/arm/mach-at91/Kconfig  |  4 +++-
+ arch/arm/mach-imx/Kconfig   |  4 +++-
+ arch/arm/mach-stm32/Kconfig | 14 ++++++++------
+ 4 files changed, 20 insertions(+), 10 deletions(-)
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index e2bdf2591c10..5adccaed7d01 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -471,7 +471,7 @@ source "arch/arm/mach-zynq/Kconfig"
+ 
+ # ARMv7-M architecture
+ config ARCH_LPC18XX
+-	bool "NXP LPC18xx/LPC43xx"
++	bool "NXP LPC18xx/LPC43xx (DEPRECATED)"
+ 	depends on ARM_SINGLE_ARMV7M
+ 	select ARCH_HAS_RESET_CONTROLLER
+ 	select ARM_AMBA
+@@ -481,8 +481,10 @@ config ARCH_LPC18XX
+ 	  Support for NXP's LPC18xx Cortex-M3 and LPC43xx Cortex-M4
+ 	  high performance microcontrollers.
+ 
++	  This platform is scheduled for removal in early 2027
++
+ config ARCH_MPS2
+-	bool "ARM MPS2 platform"
++	bool "ARM MPS2 platform (DEPRECATED)"
+ 	depends on ARM_SINGLE_ARMV7M
+ 	select ARM_AMBA
+ 	select CLKSRC_MPS2
+@@ -493,6 +495,8 @@ config ARCH_MPS2
+ 	  Please, note that depends which Application Note is used memory map
+ 	  for the platform may vary, so adjustment of RAM base might be needed.
+ 
++	  This platform is scheduled for removal in early 2027
++
+ # Definitions to make life easier
+ config ARCH_ACORN
+ 	bool
+diff --git a/arch/arm/mach-at91/Kconfig b/arch/arm/mach-at91/Kconfig
+index c5ef27e3cd8f..cb0e3ff8e0ca 100644
+--- a/arch/arm/mach-at91/Kconfig
++++ b/arch/arm/mach-at91/Kconfig
+@@ -15,13 +15,15 @@ menuconfig ARCH_AT91
+ 
+ if ARCH_AT91
+ config SOC_SAMV7
+-	bool "SAM Cortex-M7 family" if ARM_SINGLE_ARMV7M
++	bool "SAM Cortex-M7 family (DEPRECATED)" if ARM_SINGLE_ARMV7M
+ 	select COMMON_CLK_AT91
+ 	select PINCTRL_AT91
+ 	help
+ 	  Select this if you are using an SoC from Microchip's SAME7, SAMS7 or SAMV7
+ 	  families.
+ 
++	  This platform is scheduled for removal in early 2027
++
+ config SOC_SAMA5D2
+ 	bool "SAMA5D2 family"
+ 	depends on ARCH_MULTI_V7
+diff --git a/arch/arm/mach-imx/Kconfig b/arch/arm/mach-imx/Kconfig
+index f85a5f8c0a58..3f0521c652cb 100644
+--- a/arch/arm/mach-imx/Kconfig
++++ b/arch/arm/mach-imx/Kconfig
+@@ -219,12 +219,14 @@ config SOC_IMX7ULP
+ 	  This enables support for Freescale i.MX7 Ultra Low Power processor.
+ 
+ config SOC_IMXRT
+-	bool "i.MXRT support"
++	bool "i.MXRT support (DEPRECATED)"
+ 	depends on ARM_SINGLE_ARMV7M
+ 	select ARMV7M_SYSTICK if ARM_SINGLE_ARMV7M
+ 	help
+ 	  This enables support for Freescale i.MXRT Crossover processor.
+ 
++	  This platform is scheduled for removal in early 2027
++
+ config SOC_VF610
+ 	bool "Vybrid Family VF610 support"
+ 	select ARM_GIC if ARCH_MULTI_V7
+diff --git a/arch/arm/mach-stm32/Kconfig b/arch/arm/mach-stm32/Kconfig
+index 630b992f32b1..4ac3384e397a 100644
+--- a/arch/arm/mach-stm32/Kconfig
++++ b/arch/arm/mach-stm32/Kconfig
+@@ -14,30 +14,32 @@ menuconfig ARCH_STM32
+ 	select STM32_EXTI if ARM_SINGLE_ARMV7M
+ 	select STM32_FIREWALL
+ 	help
+-	  Support for STMicroelectronics STM32 processors.
++	  Support for STMicroelectronics STM32MP1 processors using Cortex-A7
++	  cores. Note that support for the earlier Cortex-M based variants
++	  is deprecated and scheduled for removal in early 2027.
+ 
+ if ARCH_STM32
+ 
+ if ARM_SINGLE_ARMV7M
+ 
+ config MACH_STM32F429
+-	bool "STMicroelectronics STM32F429"
++	bool "STMicroelectronics STM32F429 (DEPRECATED)"
+ 	default y
+ 
+ config MACH_STM32F469
+-	bool "STMicroelectronics STM32F469"
++	bool "STMicroelectronics STM32F469 (DEPRECATED)"
+ 	default y
+ 
+ config MACH_STM32F746
+-	bool "STMicroelectronics STM32F746"
++	bool "STMicroelectronics STM32F746 (DEPRECATED)"
+ 	default y
+ 
+ config MACH_STM32F769
+-	bool "STMicroelectronics STM32F769"
++	bool "STMicroelectronics STM32F769 (DEPRECATED)"
+ 	default y
+ 
+ config MACH_STM32H743
+-	bool "STMicroelectronics STM32H743"
++	bool "STMicroelectronics STM32H743 (DEPRECATED)"
+ 	default y
+ 
+ endif # ARMv7-M
+-- 
+2.55.0
+

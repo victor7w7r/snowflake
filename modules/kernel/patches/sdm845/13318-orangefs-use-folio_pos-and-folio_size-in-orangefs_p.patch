@@ -1,0 +1,54 @@
+From 5f13fae5580a835d1d9fb22f9b87b4affb2db846 Mon Sep 17 00:00:00 2001
+From: Tal Zussman <tz2294@columbia.edu>
+Date: Sun, 9 Aug 2026 16:07:10 -0400
+Subject: [PATCH 13318/15333] orangefs: use folio_pos() and folio_size() in
+ orangefs_page_mkwrite()
+
+orangefs_page_mkwrite() records the faulted range with
+page_offset(vmf->page) and PAGE_SIZE, although the write range it sets
+is attached to the folio and the rest of the function already operates
+on folios. Use folio_pos() and folio_size() instead. This gets rid of
+two calls to page_offset(), removing two calls to compound_head().
+
+No functional change. orangefs folios are always order-0, so the values
+are identical. However, if orangefs ever enables large folios, this
+change is necessary for correctness with the current write range
+tracking scheme. Tracking only a single page of a larger folio would
+leave the rest of the folio's dirty data outside the range that gets
+written back, leading to data loss.
+
+Signed-off-by: Tal Zussman <tz2294@columbia.edu>
+Signed-off-by: Mike Marshall <hubcap@omnibond.com>
+---
+ fs/orangefs/inode.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/fs/orangefs/inode.c b/fs/orangefs/inode.c
+index 7143b64b5b25..cd3273c88e03 100644
+--- a/fs/orangefs/inode.c
++++ b/fs/orangefs/inode.c
+@@ -652,8 +652,8 @@ vm_fault_t orangefs_page_mkwrite(struct vm_fault *vmf)
+ 		wr = folio_get_private(folio);
+ 		if (uid_eq(wr->uid, current_fsuid()) &&
+ 		    gid_eq(wr->gid, current_fsgid())) {
+-			wr->pos = page_offset(vmf->page);
+-			wr->len = PAGE_SIZE;
++			wr->pos = folio_pos(folio);
++			wr->len = folio_size(folio);
+ 			goto okay;
+ 		} else {
+ 			if (orangefs_launder_folio(folio)) {
+@@ -667,8 +667,8 @@ vm_fault_t orangefs_page_mkwrite(struct vm_fault *vmf)
+ 		ret = VM_FAULT_LOCKED|VM_FAULT_RETRY;
+ 		goto out;
+ 	}
+-	wr->pos = page_offset(vmf->page);
+-	wr->len = PAGE_SIZE;
++	wr->pos = folio_pos(folio);
++	wr->len = folio_size(folio);
+ 	wr->uid = current_fsuid();
+ 	wr->gid = current_fsgid();
+ 	folio_attach_private(folio, wr);
+-- 
+2.55.0
+

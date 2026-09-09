@@ -1,0 +1,52 @@
+From adfc275b317c02cd043b0cf28b8cfb7459b041f0 Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Wed, 1 Jul 2026 13:39:09 +0800
+Subject: [PATCH 02315/15333] mtd: parsers: redboot: reject unterminated FIS
+ names
+
+RedBoot FIS partition names are stored in a fixed 16-byte field that is
+expected to be NUL-terminated. parse_redboot_partitions() used strlen()
+to size the names area and later copied the same field with strcpy(), so
+a malformed table entry without a terminator could make both operations
+read beyond the descriptor.
+
+Validate each accepted FIS name with strnlen() before adding it to the
+partition list.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
+---
+ drivers/mtd/parsers/redboot.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/mtd/parsers/redboot.c b/drivers/mtd/parsers/redboot.c
+index bf162c44eafe..120b2eab21fc 100644
+--- a/drivers/mtd/parsers/redboot.c
++++ b/drivers/mtd/parsers/redboot.c
+@@ -192,6 +192,7 @@ static int parse_redboot_partitions(struct mtd_info *master,
+ 
+ 	for (i = 0; i < numslots; i++) {
+ 		struct fis_list *new_fl, **prev;
++		size_t name_len;
+ 
+ 		if (buf[i].name[0] == 0xff) {
+ 			if (buf[i].name[1] == 0xff) {
+@@ -203,8 +204,14 @@ static int parse_redboot_partitions(struct mtd_info *master,
+ 		if (!redboot_checksum(&buf[i]))
+ 			break;
+ 
++		name_len = strnlen(buf[i].name, sizeof(buf[i].name));
++		if (name_len == sizeof(buf[i].name)) {
++			ret = -EINVAL;
++			goto out;
++		}
++
+ 		new_fl = kmalloc_obj(struct fis_list);
+-		namelen += strlen(buf[i].name) + 1;
++		namelen += name_len + 1;
+ 		if (!new_fl) {
+ 			ret = -ENOMEM;
+ 			goto out;
+-- 
+2.55.0
+

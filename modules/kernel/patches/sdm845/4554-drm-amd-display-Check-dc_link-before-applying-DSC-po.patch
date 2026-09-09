@@ -1,0 +1,56 @@
+From c96d79332efa760fd18d9be90b9162fb6acfac89 Mon Sep 17 00:00:00 2001
+From: Srinivasan Shanmugam <srinivasan.shanmugam@amd.com>
+Date: Mon, 22 Jun 2026 14:58:52 +0530
+Subject: [PATCH 04554/15333] drm/amd/display: Check dc_link before applying
+ DSC policy
+
+apply_dsc_policy_for_stream() decides whether Display Stream Compression
+(DSC) should be enabled for a display stream based on display
+capabilities, link bandwidth and user overrides.
+
+Smatch reports that apply_dsc_policy_for_stream() dereferences
+aconnector->dc_link before checking whether it is NULL.
+
+Add an early NULL check for aconnector->dc_link before the first
+dereference and remove the later redundant NULL check in the HDMI_FRL
+path.
+
+Fixes: 0e967e086e75 ("drm/amd/display: Extract connector and encoder code to amdgpu_dm_connector")
+Reported-by: Dan Carpenter <error27@gmail.com>
+Cc: Roman Li <roman.li@amd.com>
+Cc: Alex Hung <alex.hung@amd.com>
+Cc: Tom Chung <chiahsuan.chung@amd.com>
+Cc: Aurabindo Pillai <aurabindo.pillai@amd.com>
+Reviewed-by: George Zhang <george.zhang@amd.com>
+Signed-off-by: Srinivasan Shanmugam <srinivasan.shanmugam@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+index 57be01c60f7d..ab14f811a85d 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+@@ -1258,6 +1258,9 @@ static void apply_dsc_policy_for_stream(struct amdgpu_dm_connector *aconnector,
+ 		drm_connector->display_info.max_dsc_bpp;
+ 	struct dc_dsc_config_options dsc_options = {0};
+ 
++	if (!aconnector->dc_link)
++		return;
++
+ 	dc_dsc_get_default_config_option(dc, &dsc_options);
+ 	dsc_options.max_target_bpp_limit_override_x16 = max_dsc_target_bpp_limit_override * 16;
+ 
+@@ -1319,7 +1322,7 @@ static void apply_dsc_policy_for_stream(struct amdgpu_dm_connector *aconnector,
+ 							(dsc_caps->is_frl == 1) ? "HDMI FRL RX" : "DP-HDMI PCON");
+ 				}
+ 		}
+-	} else if (aconnector->dc_link && sink->sink_signal == SIGNAL_TYPE_HDMI_FRL) {
++	} else if (sink->sink_signal == SIGNAL_TYPE_HDMI_FRL) {
+ 		struct dc_dsc_policy dsc_policy = {0};
+ 
+ 		frl_verified_link_cap = dc_link_get_frl_link_cap(stream->link);
+-- 
+2.55.0
+

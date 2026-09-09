@@ -1,0 +1,68 @@
+From f13faec1d4c16b3705d1eccffb8ba6723f1102ff Mon Sep 17 00:00:00 2001
+From: Can Guo <can.guo@oss.qualcomm.com>
+Date: Thu, 25 Jun 2026 05:13:05 -0700
+Subject: [PATCH 05236/15333] scsi: ufs: core: Always run tx_eqtr POST_CHANGE
+ notify
+
+ufshcd_tx_eqtr() skips POST_CHANGE notify when __ufshcd_tx_eqtr()
+fails. That can leave variant cleanup incomplete when PRE_CHANGE saved
+temporary state that POST_CHANGE is expected to restore.
+
+Always call POST_CHANGE once PRE_CHANGE has succeeded. Keep the TX EQTR
+result as the primary return value, and only propagate POST_CHANGE failure
+when TX EQTR itself succeeded.
+
+Log PRE_CHANGE and POST_CHANGE notify failures to make variant callback
+failures visible in TX EQTR error paths.
+
+Reviewed-by: Manivannan Sadhasivam <mani@kernel.org>
+Reviewed-by: Peter Wang <peter.wang@mediatek.com>
+Signed-off-by: Can Guo <can.guo@oss.qualcomm.com>
+Reviewed-by: Bean Huo <beanhuo@micron.com>
+Reviewed-by: Bart Van Assche <bvanassche@acm.org>
+Reviewed-by: Ziqi Chen <ziqi.chen@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260625121306.1655467-4-can.guo@oss.qualcomm.com
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+---
+ drivers/ufs/core/ufs-txeq.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/ufs/core/ufs-txeq.c b/drivers/ufs/core/ufs-txeq.c
+index dda1079540f9..fa5f539632eb 100644
+--- a/drivers/ufs/core/ufs-txeq.c
++++ b/drivers/ufs/core/ufs-txeq.c
+@@ -1227,6 +1227,7 @@ static int ufshcd_tx_eqtr(struct ufs_hba *hba,
+ {
+ 	struct ufs_pa_layer_attr old_pwr_info;
+ 	unsigned int noio_flag;
++	int notify_ret;
+ 	int ret;
+ 
+ 	/*
+@@ -1256,14 +1257,19 @@ static int ufshcd_tx_eqtr(struct ufs_hba *hba,
+ 	}
+ 
+ 	ret = ufshcd_vops_tx_eqtr_notify(hba, PRE_CHANGE, pwr_mode);
+-	if (ret)
++	if (ret) {
++		dev_err(hba->dev, "TX EQTR PRE_CHANGE notify failed: %d\n", ret);
+ 		goto out_unprepare;
++	}
+ 
+ 	ret = __ufshcd_tx_eqtr(hba, params, pwr_mode);
+-	if (ret)
+-		goto out_unprepare;
+ 
+-	ret = ufshcd_vops_tx_eqtr_notify(hba, POST_CHANGE, pwr_mode);
++	notify_ret = ufshcd_vops_tx_eqtr_notify(hba, POST_CHANGE, pwr_mode);
++	if (notify_ret)
++		dev_err(hba->dev, "TX EQTR POST_CHANGE notify failed: %d\n", notify_ret);
++
++	if (!ret)
++		ret = notify_ret;
+ 
+ out_unprepare:
+ 	if (ret)
+-- 
+2.55.0
+

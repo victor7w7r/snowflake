@@ -1,0 +1,35 @@
+From 8f9e8f8e38282efffb2a52e87baf8c4c51d667bc Mon Sep 17 00:00:00 2001
+From: Inochi Amaoto <inochiama@gmail.com>
+Date: Thu, 30 Jul 2026 07:25:25 +0800
+Subject: [PATCH 08448/15333] RISC-V: KVM: Mark the reset callback of FWFT
+ extension always dirties CSR
+
+As the CSR is only flushed when the csr_dirty is set, always set the
+csr_dirty field in kvm_sbi_ext_fwft_reset() so the CSR change can take
+effect immediately. This unconditional set should be safe as all
+supported FWFT features change the CSR state currently.
+
+Signed-off-by: Inochi Amaoto <inochiama@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+Link: https://lore.kernel.org/r/20260729232527.139183-5-inochiama@gmail.com
+Signed-off-by: Anup Patel <anup@brainfault.org>
+---
+ arch/riscv/kvm/vcpu_sbi_fwft.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/riscv/kvm/vcpu_sbi_fwft.c b/arch/riscv/kvm/vcpu_sbi_fwft.c
+index 0dee2883b8c9..fb7df1201840 100644
+--- a/arch/riscv/kvm/vcpu_sbi_fwft.c
++++ b/arch/riscv/kvm/vcpu_sbi_fwft.c
+@@ -598,6 +598,8 @@ static void kvm_sbi_ext_fwft_reset(struct kvm_vcpu *vcpu)
+ 		if (feature->reset)
+ 			feature->reset(vcpu);
+ 	}
++
++	vcpu->arch.csr_dirty = true;
+ }
+ 
+ static void kvm_sbi_ext_fwft_validate(struct kvm_vcpu *vcpu)
+-- 
+2.55.0
+

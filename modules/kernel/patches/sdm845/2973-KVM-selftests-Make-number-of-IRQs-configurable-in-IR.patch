@@ -1,0 +1,61 @@
+From 38950af64a1ca9dc6a0279b6d0881e54ed3a5921 Mon Sep 17 00:00:00 2001
+From: David Matlack <dmatlack@google.com>
+Date: Fri, 26 Jun 2026 14:35:26 -0700
+Subject: [PATCH 02973/15333] KVM: selftests: Make number of IRQs configurable
+ in IRQ test
+
+Extend the eventfd IRQ test with a '-i' flag to let the user specify the
+the number of IRQs to generate (instead of hardcoding the test to always
+generate 1000 interrupts).
+
+Signed-off-by: David Matlack <dmatlack@google.com>
+Co-developed-by: Josh Hilke <jrhilke@google.com>
+Signed-off-by: Josh Hilke <jrhilke@google.com>
+[sean: massage changelog]
+Link: https://patch.msgid.link/20260626213534.3866178-14-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ tools/testing/selftests/kvm/irq_test.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/tools/testing/selftests/kvm/irq_test.c b/tools/testing/selftests/kvm/irq_test.c
+index fd03ec940362..bb20bb81e930 100644
+--- a/tools/testing/selftests/kvm/irq_test.c
++++ b/tools/testing/selftests/kvm/irq_test.c
+@@ -146,12 +146,13 @@ static const char *probe_iommu_type(void)
+ 
+ static void help(const char *name)
+ {
+-	printf("Usage: %s [-a] [-d <segment:bus:device.function>] [-e] [-h] [-t iommu_type]\n", name);
++	printf("Usage: %s [-a] [-d <segment:bus:device.function>] [-e] [-h] [-i nr_irqs] [-t iommu_type]\n", name);
+ 	printf("\n");
+ 	printf("Tests KVM interrupt routing and delivery via irqfd.\n");
+ 	printf("-a	Affine the device's host IRQ to a random physical CPU\n");
+ 	printf("-d	Use a VFIO device to send MSI-X interrupts instead of manually signaling the eventfd\n");
+ 	printf("-e	Set empty GSI routing in-between some interrupts\n");
++	printf("-i	The number of IRQs to generate during the test\n");
+ 	printf("-t	Override the IOMMU type to use (vfio_type1_iommu or iommufd)\n");
+ 	printf("\n");
+ 	exit(KSFT_FAIL);
+@@ -186,7 +187,7 @@ int main(int argc, char **argv)
+ 	struct kvm_vm *vm;
+ 	int irq, irq_cpu;
+ 
+-	while ((c = getopt(argc, argv, "ad:eht:")) != -1) {
++	while ((c = getopt(argc, argv, "ad:ehi:t:")) != -1) {
+ 		switch (c) {
+ 		case 'a':
+ 			irq_affinity = true;
+@@ -197,6 +198,9 @@ int main(int argc, char **argv)
+ 		case 'e':
+ 			set_empty_routing = true;
+ 			break;
++		case 'i':
++			nr_irqs = atoi_positive("Number of IRQs", optarg);
++			break;
+ 		case 't':
+ 			iommu_type = optarg;
+ 			break;
+-- 
+2.55.0
+

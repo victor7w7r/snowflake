@@ -1,0 +1,47 @@
+From 692a9643058cb2be676756238f778b97588ee51c Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Sun, 12 Jul 2026 15:20:03 -0700
+Subject: [PATCH 05729/15333] ata: sata_mv: Use platform_get_irq() to get
+ interrupt
+
+Extract platform_get_irq() out of the conditional block to run it
+unconditionally, replacing the direct use of irq_of_parse_and_map()
+for DT-based systems. This simplifies the probe logic and avoids the
+need for irq_dispose_mapping.
+
+Remove dead branch for platform_get_irq(). It intercepts 0 and returns
+-EINVAL, which goes to the first one.
+
+Assisted-by: Antigravity:Gemini-3.5-Flash
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Signed-off-by: Damien Le Moal <dlemoal@kernel.org>
+---
+ drivers/ata/sata_mv.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/drivers/ata/sata_mv.c b/drivers/ata/sata_mv.c
+index 41647a56a9f4..a2bf9551a600 100644
+--- a/drivers/ata/sata_mv.c
++++ b/drivers/ata/sata_mv.c
+@@ -4054,17 +4054,13 @@ static int mv_platform_probe(struct platform_device *pdev)
+ 				n_ports);
+ 			return -EINVAL;
+ 		}
+-
+-		irq = irq_of_parse_and_map(pdev->dev.of_node, 0);
+ 	} else {
+ 		mv_platform_data = dev_get_platdata(&pdev->dev);
+ 		n_ports = mv_platform_data->n_ports;
+-		irq = platform_get_irq(pdev, 0);
+ 	}
++	irq = platform_get_irq(pdev, 0);
+ 	if (irq < 0)
+ 		return irq;
+-	if (!irq)
+-		return -EINVAL;
+ 
+ 	host = ata_host_alloc_pinfo(&pdev->dev, ppi, n_ports);
+ 	hpriv = devm_kzalloc(&pdev->dev, sizeof(*hpriv), GFP_KERNEL);
+-- 
+2.55.0
+

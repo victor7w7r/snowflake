@@ -1,0 +1,69 @@
+From 88672e90a9457f99a5aa2c6f0f9cb87f19c81147 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:40 +0800
+Subject: [PATCH 12066/15333] spi: img-spfi: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use #ifdef guards.
+
+This has the advantage of always compiling these functions in,
+independently of any Kconfig option. Thanks to that, bugs and other
+regressions are subsequently easier to catch.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-17-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-img-spfi.c | 11 +++--------
+ 1 file changed, 3 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/spi/spi-img-spfi.c b/drivers/spi/spi-img-spfi.c
+index aec724e3f824..19c8250ddb64 100644
+--- a/drivers/spi/spi-img-spfi.c
++++ b/drivers/spi/spi-img-spfi.c
+@@ -677,7 +677,6 @@ static void img_spfi_remove(struct platform_device *pdev)
+ 	}
+ }
+ 
+-#ifdef CONFIG_PM
+ static int img_spfi_runtime_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+@@ -706,9 +705,7 @@ static int img_spfi_runtime_resume(struct device *dev)
+ 
+ 	return 0;
+ }
+-#endif /* CONFIG_PM */
+ 
+-#ifdef CONFIG_PM_SLEEP
+ static int img_spfi_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+@@ -730,12 +727,10 @@ static int img_spfi_resume(struct device *dev)
+ 
+ 	return spi_controller_resume(host);
+ }
+-#endif /* CONFIG_PM_SLEEP */
+ 
+ static const struct dev_pm_ops img_spfi_pm_ops = {
+-	SET_RUNTIME_PM_OPS(img_spfi_runtime_suspend, img_spfi_runtime_resume,
+-			   NULL)
+-	SET_SYSTEM_SLEEP_PM_OPS(img_spfi_suspend, img_spfi_resume)
++	RUNTIME_PM_OPS(img_spfi_runtime_suspend, img_spfi_runtime_resume, NULL)
++	SYSTEM_SLEEP_PM_OPS(img_spfi_suspend, img_spfi_resume)
+ };
+ 
+ static const struct of_device_id img_spfi_of_match[] = {
+@@ -747,7 +742,7 @@ MODULE_DEVICE_TABLE(of, img_spfi_of_match);
+ static struct platform_driver img_spfi_driver = {
+ 	.driver = {
+ 		.name = "img-spfi",
+-		.pm = &img_spfi_pm_ops,
++		.pm = pm_ptr(&img_spfi_pm_ops),
+ 		.of_match_table = of_match_ptr(img_spfi_of_match),
+ 	},
+ 	.probe = img_spfi_probe,
+-- 
+2.55.0
+

@@ -1,0 +1,46 @@
+From a9c196b3f135fe9b165c5e75b3a24eadcc22fd6a Mon Sep 17 00:00:00 2001
+From: Mario Limonciello <mario.limonciello@amd.com>
+Date: Wed, 8 Jul 2026 14:35:18 -0500
+Subject: [PATCH 04797/15333] drm/radeon: Validate VBIOS signature in VFCT path
+
+The VFCT path accepted whatever kmemdup() returned without checking
+that the copied image is a valid VBIOS. Every other radeon BIOS
+fetch path verifies the 0x55 0xaa signature before trusting the
+image; the VFCT path is the odd one out.
+
+Check the signature after copying the image and reject it (freeing
+the buffer) if it does not match, matching the amdgpu VFCT path
+which validates via check_atom_bios().
+
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Link: https://patch.msgid.link/20260708193518.702584-6-mario.limonciello@amd.com
+Signed-off-by: Mario Limonciello <mario.limonciello@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/radeon/radeon_bios.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/radeon/radeon_bios.c b/drivers/gpu/drm/radeon/radeon_bios.c
+index cc10880af096..215e47c94d29 100644
+--- a/drivers/gpu/drm/radeon/radeon_bios.c
++++ b/drivers/gpu/drm/radeon/radeon_bios.c
+@@ -676,9 +676,14 @@ static bool radeon_acpi_vfct_bios(struct radeon_device *rdev)
+ 			rdev->bios = kmemdup(&vbios->VbiosContent,
+ 					     vhdr->ImageLength,
+ 					     GFP_KERNEL);
+-			if (rdev->bios)
+-				r = true;
+ 
++			if (!rdev->bios ||
++			    rdev->bios[0] != 0x55 || rdev->bios[1] != 0xaa) {
++				kfree(rdev->bios);
++				rdev->bios = NULL;
++				goto out;
++			}
++			r = true;
+ 			goto out;
+ 		}
+ 	}
+-- 
+2.55.0
+

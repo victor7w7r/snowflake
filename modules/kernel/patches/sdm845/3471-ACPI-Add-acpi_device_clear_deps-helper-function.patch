@@ -1,0 +1,52 @@
+From deef78d3543976dc4a0d03658e0b55545d7564ad Mon Sep 17 00:00:00 2001
+From: Lorenzo Pieralisi <lpieralisi@kernel.org>
+Date: Thu, 9 Jul 2026 10:40:11 +0200
+Subject: [PATCH 03471/15333] ACPI: Add acpi_device_clear_deps() helper
+ function
+
+Code clearing device dependencies in ACPI in drivers through
+
+acpi_dev_clear_dependencies()
+
+requires annoying ifdeffery to make sure it is compiled out on
+!CONFIG_ACPI configurations.
+
+Implement a wrapper function to clear device dependencies that can be used
+in device drivers without conditional compilation.
+
+Signed-off-by: Lorenzo Pieralisi <lpieralisi@kernel.org>
+Link: https://patch.msgid.link/20260709-gic-v5-acpi-iwb-probe-deferral-v4-1-48dae790f871@kernel.org
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ include/linux/acpi.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/include/linux/acpi.h b/include/linux/acpi.h
+index 60ab50cb8930..becd1f098554 100644
+--- a/include/linux/acpi.h
++++ b/include/linux/acpi.h
+@@ -94,6 +94,12 @@ static inline void acpi_preset_companion(struct device *dev,
+ 	ACPI_COMPANION_SET(dev, acpi_find_child_device(parent, addr, false));
+ }
+ 
++static inline void acpi_device_clear_deps(struct device *dev)
++{
++	if (has_acpi_companion(dev))
++		acpi_dev_clear_dependencies(ACPI_COMPANION(dev));
++}
++
+ static inline const char *acpi_dev_name(struct acpi_device *adev)
+ {
+ 	return dev_name(&adev->dev);
+@@ -908,6 +914,8 @@ static inline void acpi_preset_companion(struct device *dev,
+ {
+ }
+ 
++static inline void acpi_device_clear_deps(struct device *dev) {}
++
+ static inline const char *acpi_dev_name(struct acpi_device *adev)
+ {
+ 	return NULL;
+-- 
+2.55.0
+

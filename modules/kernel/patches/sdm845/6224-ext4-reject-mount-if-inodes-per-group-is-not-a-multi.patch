@@ -1,0 +1,46 @@
+From a34de48f329b29dba2d407ad4168ca604d4768e1 Mon Sep 17 00:00:00 2001
+From: Baokun Li <libaokun@linux.alibaba.com>
+Date: Mon, 8 Jun 2026 19:11:50 +0800
+Subject: [PATCH 06224/15333] ext4: reject mount if inodes per group is not a
+ multiple of inodes per block
+
+If s_inodes_per_group is not a multiple of s_inodes_per_block, the
+division that computes s_itb_per_group truncates, reserving fewer blocks
+for the inode table than needed.
+
+On a crafted filesystem image, this allows __ext4_get_inode_loc() to
+compute a block offset beyond the inode table, reading unrelated data as
+an inode structure.
+
+Add the missing divisibility check alongside the existing validation in
+ext4_block_group_meta_init().
+
+Reported-by: Sashiko <sashiko-bot@kernel.org>
+Closes: https://sashiko.dev/#/patchset/20260608061112.392391-1-libaokun%40linux.alibaba.com
+Signed-off-by: Baokun Li <libaokun@linux.alibaba.com>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Reviewed-by: Zhang Yi <yi.zhang@huawei.com>
+Reviewed-by: Andreas Dilger <adilger@dilger.ca>
+Link: https://patch.msgid.link/20260608111150.827117-4-libaokun@linux.alibaba.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/super.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 229eb509905f..f0a99c1e270f 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -5310,7 +5310,8 @@ static int ext4_block_group_meta_init(struct super_block *sb, int silent)
+ 	}
+ 	if (sbi->s_inodes_per_group < sbi->s_inodes_per_block ||
+ 	    sbi->s_inodes_per_group > sb->s_blocksize * 8 ||
+-	    sbi->s_inodes_per_group & 7) {
++	    sbi->s_inodes_per_group & 7 ||
++	    sbi->s_inodes_per_group % sbi->s_inodes_per_block) {
+ 		ext4_msg(sb, KERN_ERR, "invalid inodes per group: %lu",
+ 			 sbi->s_inodes_per_group);
+ 		return -EINVAL;
+-- 
+2.55.0
+

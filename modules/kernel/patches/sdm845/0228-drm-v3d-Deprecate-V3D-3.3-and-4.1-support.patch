@@ -1,0 +1,75 @@
+From 7ffcc4fffb45ee98e7a9683e109050246dc194af Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ma=C3=ADra=20Canal?= <mcanal@igalia.com>
+Date: Sat, 6 Jun 2026 15:55:13 -0300
+Subject: [PATCH 00228/15333] drm/v3d: Deprecate V3D 3.3 and 4.1 support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+V3D 3.3 (Broadcom BCM7268) and V3D 4.1 (Broadcom BCM7278) has had no
+in-tree userspace since Mesa dropped support in 2024, on the grounds
+that those generations were no longer being tested. The situation in
+the kernel is similar: the maintainers don't have this hardware, the
+hardware is not available for purchase, and there is no known user of
+these GPUs.
+
+With no userspace left to drive it and no known users, maintaining the
+ver <= 41 code paths is a cost without a benefit, considering that these
+paths are not being exercised on real hardware.
+
+As a first step toward removal, emit a deprecation warning at probe for
+V3D versions earlier than or equal to 4.1. The hardware remains
+functional for now; this only warns. If any real user appears and
+explain its use-case, support can be retained.
+
+Schedule the removal of V3D 3.3 and 4.1 support to the next kernel
+release.
+
+Link: https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/25851
+Reviewed-by: Florian Fainelli <florian.fainelli@broadcom.com>
+Reviewed-by: Iago Toral Quiroga <itoral@igalia.com>
+Link: https://patch.msgid.link/20260606185616.694188-2-mcanal@igalia.com
+Signed-off-by: Maíra Canal <mcanal@igalia.com>
+---
+ drivers/gpu/drm/v3d/v3d_drv.c | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/v3d/v3d_drv.c b/drivers/gpu/drm/v3d/v3d_drv.c
+index 805d84435ee0..8d914dbc3315 100644
+--- a/drivers/gpu/drm/v3d/v3d_drv.c
++++ b/drivers/gpu/drm/v3d/v3d_drv.c
+@@ -4,7 +4,11 @@
+ /**
+  * DOC: Broadcom V3D Graphics Driver
+  *
+- * This driver supports the Broadcom V3D 3.3 and 4.1 OpenGL ES GPUs.
++ * This driver supports the Broadcom V3D 4.2 and 7.1 GPUs.
++ *
++ * Support for V3D 3.3 and 4.1 GPUs is deprecated and it will be removed
++ * in the next kernel release.
++ *
+  * For V3D 2.x support, see the VC4 driver.
+  *
+  * The V3D GPU includes a tiled render (composed of a bin and render
+@@ -414,6 +418,18 @@ static int v3d_platform_drm_probe(struct platform_device *pdev)
+ 	 */
+ 	WARN_ON(v3d->ver != gen);
+ 
++	/* V3D 3.3 and V3D 4.1 has had no in-tree userspace since Mesa
++	 * dropped support in 2024 (MR#25851) and they have no known users.
++	 * Due to that, support is scheduled for removal in the next release.
++	 */
++	if (v3d->ver <= V3D_GEN_41) {
++		dev_warn(dev,
++			 "V3D %u.%u support is deprecated and will be removed "
++			 "in the next kernel release. If you rely on this hardware, "
++			 "please report it to dri-devel@lists.freedesktop.org.\n",
++			 v3d->ver / 10, v3d->ver % 10);
++	}
++
+ 	v3d->cores = V3D_GET_FIELD(ident1, V3D_HUB_IDENT1_NCORES);
+ 	WARN_ON(v3d->cores > 1); /* multicore not yet implemented */
+ 
+-- 
+2.55.0
+

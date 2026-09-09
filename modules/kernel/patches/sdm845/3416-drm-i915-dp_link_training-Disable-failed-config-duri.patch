@@ -1,0 +1,165 @@
+From 55b131b3d00913cc809981cf1c7301956bf757ee Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Wed, 1 Jul 2026 18:31:54 +0300
+Subject: [PATCH 03416/15333] drm/i915/dp_link_training: Disable failed config
+ during fallback
+
+Disable the link configuration that failed training when selecting
+fallback parameters.
+
+Fallback still selects the next configuration using the existing
+fallback order, but now also removes the failed configuration from the
+allowed set. Functionally, this only affects the case where an MST <-> SST
+mode switch occurs on the same root connector: previously, a configuration
+that failed training in one mode could be reused in the other mode due
+to the differing config iteration orders.
+
+The current fallback logic also sets a temporary maximum link limit
+across the allowed configurations to constrain subsequent modesets. This
+legacy behavior is preserved for now; it will be removed once the
+fallback logic relies solely on the individually disabled configurations
+to restrict the allowed set.
+
+Reviewed-by: Luca Coelho <luciano.coelho@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260701153204.4124150-26-imre.deak@intel.com
+---
+ .../gpu/drm/i915/display/intel_dp_link_caps.c | 55 +++++++++++++++++++
+ .../gpu/drm/i915/display/intel_dp_link_caps.h |  3 +
+ .../drm/i915/display/intel_dp_link_training.c | 19 +++++++
+ 3 files changed, 77 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+index c947e6511fbc..76b7c0fc9011 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+@@ -596,6 +596,21 @@ bool intel_dp_link_caps_filter_add(struct intel_dp_link_caps *link_caps,
+ 	return true;
+ }
+ 
++static bool intel_dp_link_caps_filter_remove(struct intel_dp_link_caps *link_caps,
++					     struct intel_dp_link_caps_filter *filter,
++					     const struct intel_dp_link_config *config)
++{
++	int idx;
++
++	idx = find_config_idx(link_caps, get_allowed_config_filter(link_caps), config);
++	if (idx < 0)
++		return false;
++
++	filter->config_mask &= ~BIT(idx);
++
++	return true;
++}
++
+ static void set_max_link_limits(struct intel_dp_link_caps *link_caps,
+ 				const struct intel_dp_link_config *max_link_limits)
+ {
+@@ -618,6 +633,46 @@ static void reset_max_link_limits_reenable_all(struct intel_dp_link_caps *link_c
+ 	reset_max_link_limits(link_caps);
+ }
+ 
++/**
++ * intel_dp_link_caps_disable_config - disable a configuration
++ * @link_caps: link capabilities state
++ * @config: configuration to disable
++ *
++ * Disable the configuration identified by @config. This removes the
++ * configuration from the set of allowed configurations. The disabling
++ * shouldn't leave the remaining configuration set empty.
++ *
++ * The configuration remains disallowed until intel_dp_link_caps() with
++ * reset=%true or changed sink capabilities is called, or
++ * intel_dp_link_caps_reset() is called. Each of these happens after a
++ * new sink is connected or the currently connected sink changes its
++ * capabilities.
++ *
++ * Return:
++ * - %true  if @config was valid and the derived state was updated.
++ * - %false if @config was invalid or the remaining configuration set
++ *   would remain empty.
++ */
++bool intel_dp_link_caps_disable_config(struct intel_dp_link_caps *link_caps,
++				       const struct intel_dp_link_config *config)
++{
++	struct intel_dp_link_caps_filter enabled_configs = link_caps->enabled_configs;
++	struct intel_dp_link_config forced_params;
++
++	if (!intel_dp_link_caps_filter_remove(link_caps, &enabled_configs, config))
++		return false;
++
++	intel_dp_link_caps_get_forced_params(link_caps, &forced_params);
++
++	if (!calc_allowed_config_filter(link_caps, enabled_configs,
++					&link_caps->max_limits, &forced_params).config_mask)
++		return false;
++
++	link_caps->enabled_configs = enabled_configs;
++
++	return true;
++}
++
+ /**
+  * intel_dp_link_caps_get_max_limits - get the current maximum link limits
+  * @link_caps: link capabilities state
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+index 5c0d66006214..56c585eb5a13 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+@@ -136,6 +136,9 @@ bool intel_dp_link_caps_get_max_config(struct intel_dp_link_caps *link_caps,
+ void intel_dp_link_caps_get_max_bw_config(struct intel_dp_link_caps *link_caps,
+ 					  struct intel_dp_link_config *max_config);
+ 
++bool intel_dp_link_caps_disable_config(struct intel_dp_link_caps *link_caps,
++				       const struct intel_dp_link_config *config);
++
+ void intel_dp_link_caps_get_max_limits(struct intel_dp_link_caps *link_caps,
+ 				       struct intel_dp_link_config *max_link_limits);
+ bool intel_dp_link_caps_set_max_limits(struct intel_dp_link_caps *link_caps,
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_training.c b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+index 1c12503908d8..a592bfab5ff0 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_training.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+@@ -1894,6 +1894,10 @@ static int intel_dp_get_link_train_fallback_values(struct intel_dp *intel_dp,
+ 	struct intel_display *display = to_intel_display(intel_dp);
+ 	struct intel_dp_link_caps *link_caps = intel_dp->link.caps;
+ 	struct intel_dp_link_config max_link_limits;
++	struct intel_dp_link_config current_config = {
++		.rate = crtc_state->port_clock,
++		.lane_count = crtc_state->lane_count,
++	};
+ 	int new_link_rate;
+ 	int new_lane_count;
+ 	int err = -1;
+@@ -1920,6 +1924,13 @@ static int intel_dp_get_link_train_fallback_values(struct intel_dp *intel_dp,
+ 	intel_dp_link_caps_get_max_limits(link_caps, &max_link_limits);
+ 	intel_dp_link_caps_reset_max_limits(link_caps);
+ 
++	/*
++	 * TODO: Make fallback depend only on disabling the current config,
++	 * once max_limit no longer constrains the allowed config set. Then
++	 * disabling the current config will define the allowed configs for
++	 * the subsequent modeset, so there will be no need to select a
++	 * reduced config separately here.
++	 */
+ 	if (!reduce_link_params(intel_dp, crtc_state, &new_link_rate, &new_lane_count))
+ 		goto out_restore_max_limits;
+ 
+@@ -1933,6 +1944,14 @@ static int intel_dp_get_link_train_fallback_values(struct intel_dp *intel_dp,
+ 		goto out_restore_max_limits;
+ 	}
+ 
++	/*
++	 * Shouldn't fail: the current config was enabled, and reducing the
++	 * link parameters should still leave the fallback config allowed.
++	 */
++	if (drm_WARN_ON(display->drm,
++			!intel_dp_link_caps_disable_config(link_caps, &current_config)))
++		return -1;
++
+ 	lt_dbg(intel_dp, DP_PHY_DPRX,
+ 	       "Reducing link parameters from %dx%d to %dx%d\n",
+ 	       crtc_state->lane_count, crtc_state->port_clock,
+-- 
+2.55.0
+

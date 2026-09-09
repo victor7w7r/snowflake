@@ -1,0 +1,152 @@
+From 7a287e4615d623fade44bec48077263c7564abf6 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Mon, 10 Aug 2026 15:37:04 +0200
+Subject: [PATCH 12827/15333] ALSA: seq: Use RCU for the client table
+
+The sequencer keeps a global table of clients (clienttab[]) indexed by
+client id, protected by the global clients_lock spinlock.  The lookup
+snd_seq_client_use_ptr() reads a slot and takes a use_lock reference on
+the client, and this runs on the event delivery hot path: every
+dispatched event resolves its destination (and often source) client
+through it.  The spinlock's only job on the read side is to make the
+"pointer is non-NULL" test and the reference increment indivisible with
+respect to the writer that nulls the slot and then drains the refcount.
+
+Clients come and go rarely but delivery happens constantly, so this is
+yet another read-mostly case as the port and subscriber lists.
+Convert the table to RCU: the read side now runs lock-free under
+rcu_read_lock() and takes the use_lock reference via
+rcu_dereference(), removing contention on the single global spinlock
+from the delivery path.  The writers keep clients_lock (still needed
+to serialize slot allocation) and publish / unpublish via
+rcu_assign_pointer(); creation and destruction remain serialized at a
+higher level by register_mutex.
+
+As with the ports, the client is not freed via kfree_rcu(): its lifetime
+is governed by the use_lock refcount drained in seq_free_client1().
+list_del under the old spinlock excluded a concurrent lookup from taking
+a new reference once the slot was nulled; rcu_assign_pointer(NULL) offers
+no such exclusion, so a reader still holding the old pointer can grab a
+reference after the unpublish.  seq_free_client1() therefore calls
+synchronize_rcu() after nulling the slot and before snd_use_lock_sync():
+once the grace period elapses no new reference can appear, and the
+existing drain then frees the client safely.
+
+clienttablock[] keeps its slot-reservation role (create/free are
+serialized by register_mutex); its read on the lookup path only gates
+module autoload, so a lockless read is harmless.  Dropping the spinlock
+from the read path is safe: clients_lock is now taken only by the
+process-context writers, and the sole atomic reader uses RCU, which is
+IRQ-safe.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260810133711.42483-4-tiwai@suse.de
+---
+ sound/core/seq/seq_clientmgr.c | 43 ++++++++++++++++++++++++----------
+ 1 file changed, 30 insertions(+), 13 deletions(-)
+
+diff --git a/sound/core/seq/seq_clientmgr.c b/sound/core/seq/seq_clientmgr.c
+index b7cf14e3ddb3..d4cac594bc8f 100644
+--- a/sound/core/seq/seq_clientmgr.c
++++ b/sound/core/seq/seq_clientmgr.c
+@@ -59,7 +59,7 @@ static DEFINE_MUTEX(register_mutex);
+  * client table
+  */
+ static char clienttablock[SNDRV_SEQ_MAX_CLIENTS];
+-static struct snd_seq_client *clienttab[SNDRV_SEQ_MAX_CLIENTS];
++static struct snd_seq_client __rcu *clienttab[SNDRV_SEQ_MAX_CLIENTS];
+ static struct snd_seq_usage client_usage;
+ 
+ /*
+@@ -95,15 +95,23 @@ static inline int snd_seq_write_pool_allocated(struct snd_seq_client *client)
+ 	return snd_seq_total_cells(client->pool) > 0;
+ }
+ 
+-/* return pointer to client structure for specified id */
+-static struct snd_seq_client *clientptr(int clientid)
++/* return pointer to client structure for specified id; call under RCU read-lock */
++static struct snd_seq_client *__clientptr(int clientid)
+ {
+ 	if (clientid < 0 || clientid >= SNDRV_SEQ_MAX_CLIENTS) {
+ 		pr_debug("ALSA: seq: oops. Trying to get pointer to client %d\n",
+ 			   clientid);
+ 		return NULL;
+ 	}
+-	return clienttab[clientid];
++	return rcu_dereference_check(clienttab[clientid],
++				    lockdep_is_held(&clients_lock));
++}
++
++/* return pointer to client structure for specified id */
++static struct snd_seq_client *clientptr(int clientid)
++{
++	guard(rcu)();
++	return __clientptr(clientid);
+ }
+ 
+ static struct snd_seq_client *client_use_ptr(int clientid, bool load_module)
+@@ -115,8 +123,8 @@ static struct snd_seq_client *client_use_ptr(int clientid, bool load_module)
+ 			   clientid);
+ 		return NULL;
+ 	}
+-	scoped_guard(spinlock_irqsave, &clients_lock) {
+-		client = clientptr(clientid);
++	scoped_guard(rcu) {
++		client = __clientptr(clientid);
+ 		if (client)
+ 			return snd_seq_client_ref(client);
+ 		if (clienttablock[clientid])
+@@ -150,8 +158,8 @@ static struct snd_seq_client *client_use_ptr(int clientid, bool load_module)
+ 				snd_seq_device_load_drivers();
+ 			}
+ 		}
+-		scoped_guard(spinlock_irqsave, &clients_lock) {
+-			client = clientptr(clientid);
++		scoped_guard(rcu) {
++			client = __clientptr(clientid);
+ 			if (client)
+ 				return snd_seq_client_ref(client);
+ 		}
+@@ -223,14 +231,17 @@ static struct snd_seq_client *seq_create_client1(int client_index, int poolsize)
+ 			for (c = SNDRV_SEQ_DYNAMIC_CLIENTS_BEGIN;
+ 			     c < SNDRV_SEQ_MAX_CLIENTS;
+ 			     c++) {
+-				if (clienttab[c] || clienttablock[c])
++				if (rcu_access_pointer(clienttab[c]) || clienttablock[c])
+ 					continue;
+-				clienttab[client->number = c] = client;
++				client->number = c;
++				rcu_assign_pointer(clienttab[c], client);
+ 				return client;
+ 			}
+ 		} else {
+-			if (clienttab[client_index] == NULL && !clienttablock[client_index]) {
+-				clienttab[client->number = client_index] = client;
++			if (rcu_access_pointer(clienttab[client_index]) == NULL &&
++			    !clienttablock[client_index]) {
++				client->number = client_index;
++				rcu_assign_pointer(clienttab[client_index], client);
+ 				return client;
+ 			}
+ 		}
+@@ -248,10 +259,16 @@ static int seq_free_client1(struct snd_seq_client *client)
+ 		return 0;
+ 	scoped_guard(spinlock_irq, &clients_lock) {
+ 		clienttablock[client->number] = 1;
+-		clienttab[client->number] = NULL;
++		rcu_assign_pointer(clienttab[client->number], NULL);
+ 	}
+ 	snd_seq_delete_all_ports(client);
+ 	snd_seq_queue_client_leave(client->number);
++	/* the client has been unpublished from the table; wait for a grace
++	 * period so that lockless readers (snd_seq_client_use_ptr()) that
++	 * observed the old pointer can no longer take a new use_lock
++	 * reference, then drain the outstanding references before freeing
++	 */
++	synchronize_rcu();
+ 	snd_use_lock_sync(&client->use_lock);
+ 	if (client->pool)
+ 		snd_seq_pool_delete(&client->pool);
+-- 
+2.55.0
+

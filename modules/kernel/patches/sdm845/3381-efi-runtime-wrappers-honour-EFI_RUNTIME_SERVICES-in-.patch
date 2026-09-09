@@ -1,0 +1,75 @@
+From ccb525c984a634491bde786c559ec1c819795924 Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Tue, 16 Jun 2026 05:09:39 -0700
+Subject: [PATCH 03381/15333] efi/runtime-wrappers: honour EFI_RUNTIME_SERVICES
+ in the non-blocking paths
+
+Three wrappers call firmware directly instead of going through
+__efi_queue_work(), and none of them check whether runtime services are
+still enabled: virt_efi_set_variable_nb(),
+virt_efi_query_variable_info_nb() and virt_efi_reset_system(). Once a
+hang has cleared EFI_RUNTIME_SERVICES - or efi_recover_from_page_fault()
+has cleared it on a firmware page fault - these paths still enter the
+(possibly wedged) firmware, e.g. an EFI pstore write through the
+non-blocking SetVariable() variant, in violation of UEFI's
+non-reentrancy rules. reset_system() is reachable too: efi_reboot()
+only gates it on the static efi_rt_services_supported() mask, which does
+not track the runtime disable.
+
+Check efi_enabled(EFI_RUNTIME_SERVICES) in each before calling into
+firmware. Test it after taking efi_runtime_lock rather than before: the
+bit is only ever cleared at runtime while that lock is held, so checking
+it under the lock avoids racing with a concurrent timeout that clears the
+bit and drops the lock.
+
+Suggested-by: Ard Biesheuvel <ardb@kernel.org>
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Signed-off-by: Ard Biesheuvel <ardb@kernel.org>
+---
+ drivers/firmware/efi/runtime-wrappers.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/drivers/firmware/efi/runtime-wrappers.c b/drivers/firmware/efi/runtime-wrappers.c
+index 2ec5cbdf46d0..2b0a7caf9094 100644
+--- a/drivers/firmware/efi/runtime-wrappers.c
++++ b/drivers/firmware/efi/runtime-wrappers.c
+@@ -480,6 +480,11 @@ virt_efi_set_variable_nb(efi_char16_t *name, efi_guid_t *vendor, u32 attr,
+ 	if (down_trylock(&efi_runtime_lock))
+ 		return EFI_NOT_READY;
+ 
++	if (!efi_enabled(EFI_RUNTIME_SERVICES)) {
++		up(&efi_runtime_lock);
++		return EFI_DEVICE_ERROR;
++	}
++
+ 	efi_runtime_lock_owner = current;
+ 	status = efi_call_virt_pointer(efi.runtime, set_variable, name, vendor,
+ 				       attr, data_size, data);
+@@ -519,6 +524,11 @@ virt_efi_query_variable_info_nb(u32 attr, u64 *storage_space,
+ 	if (down_trylock(&efi_runtime_lock))
+ 		return EFI_NOT_READY;
+ 
++	if (!efi_enabled(EFI_RUNTIME_SERVICES)) {
++		up(&efi_runtime_lock);
++		return EFI_DEVICE_ERROR;
++	}
++
+ 	efi_runtime_lock_owner = current;
+ 	status = efi_call_virt_pointer(efi.runtime, query_variable_info, attr,
+ 				       storage_space, remaining_space,
+@@ -549,6 +559,12 @@ virt_efi_reset_system(int reset_type, efi_status_t status,
+ 		return;
+ 	}
+ 
++	if (!efi_enabled(EFI_RUNTIME_SERVICES)) {
++		pr_warn("EFI Runtime Services are disabled, not invoking reset_system()\n");
++		up(&efi_runtime_lock);
++		return;
++	}
++
+ 	efi_runtime_lock_owner = current;
+ 	arch_efi_call_virt_setup();
+ 	efi_rts_work.efi_rts_id = EFI_RESET_SYSTEM;
+-- 
+2.55.0
+

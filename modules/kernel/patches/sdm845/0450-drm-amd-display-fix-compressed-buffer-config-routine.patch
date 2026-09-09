@@ -1,0 +1,44 @@
+From 251a01d34b44adfa70e6591619ab96204277133b Mon Sep 17 00:00:00 2001
+From: Antonio Quartulli <antonio@mandelbit.com>
+Date: Tue, 19 May 2026 15:57:28 +0000
+Subject: [PATCH 00450/15333] drm/amd/display: fix compressed buffer config
+ routine waiting time
+
+Replace the four open-coded REG_WAIT calls with calls to
+dcn31_wait_for_det_apply() so the compressed buffer (compbuf) sizing
+path waits long enough for the DET size update to take effect, and the
+wait timing stays consistent across the driver.
+
+No functional change beyond the corrected timeout.
+
+Signed-off-by: Antonio Quartulli <antonio@mandelbit.com>
+Signed-off-by: Aurabindo Pillai <aurabindo.pillai@amd.com>
+Reviewed-by: Alex Hung <alex.hung@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/dc/hubbub/dcn31/dcn31_hubbub.c    | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/hubbub/dcn31/dcn31_hubbub.c b/drivers/gpu/drm/amd/display/dc/hubbub/dcn31/dcn31_hubbub.c
+index 79cb506be5cb..cbcd22789013 100644
+--- a/drivers/gpu/drm/amd/display/dc/hubbub/dcn31/dcn31_hubbub.c
++++ b/drivers/gpu/drm/amd/display/dc/hubbub/dcn31/dcn31_hubbub.c
+@@ -138,10 +138,10 @@ static void dcn31_program_compbuf_size(struct hubbub *hubbub, unsigned int compb
+ 
+ 	if (safe_to_increase || compbuf_size_segments <= hubbub2->compbuf_size_segments) {
+ 		if (compbuf_size_segments > hubbub2->compbuf_size_segments) {
+-			REG_WAIT(DCHUBBUB_DET0_CTRL, DET0_SIZE_CURRENT, hubbub2->det0_size, 1, 100);
+-			REG_WAIT(DCHUBBUB_DET1_CTRL, DET1_SIZE_CURRENT, hubbub2->det1_size, 1, 100);
+-			REG_WAIT(DCHUBBUB_DET2_CTRL, DET2_SIZE_CURRENT, hubbub2->det2_size, 1, 100);
+-			REG_WAIT(DCHUBBUB_DET3_CTRL, DET3_SIZE_CURRENT, hubbub2->det3_size, 1, 100);
++			dcn31_wait_for_det_apply(hubbub, 0);
++			dcn31_wait_for_det_apply(hubbub, 1);
++			dcn31_wait_for_det_apply(hubbub, 2);
++			dcn31_wait_for_det_apply(hubbub, 3);
+ 		}
+ 		/* Should never be hit, if it is we have an erroneous hw config*/
+ 		ASSERT(hubbub2->det0_size + hubbub2->det1_size + hubbub2->det2_size
+-- 
+2.55.0
+

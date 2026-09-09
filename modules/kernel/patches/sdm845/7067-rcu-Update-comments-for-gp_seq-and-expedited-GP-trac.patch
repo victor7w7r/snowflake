@@ -1,0 +1,197 @@
+From 942b3e8f3f3f51011161cb728375481ebbc84e22 Mon Sep 17 00:00:00 2001
+From: Puranjay Mohan <puranjay@kernel.org>
+Date: Wed, 24 Jun 2026 06:23:49 -0700
+Subject: [PATCH 07067/15333] rcu: Update comments for gp_seq and expedited GP
+ tracking
+
+Update documentation comments throughout the RCU callback infrastructure
+to reflect the transition from a single grace-period sequence number to
+the full struct rcu_gp_seq that tracks both normal and expedited grace
+periods.
+
+The ->gp_seq[] array documentation in rcu_segcblist.h is updated to
+describe dual (normal and expedited) GP tracking.  The
+rcu_segcblist_advance(), rcu_segcblist_accelerate(), and
+rcu_advance_cbs() comments are updated to refer to the struct rcu_gp_seq
+state (gsp) instead of the old bare grace-period sequence number (seq).
+
+Reviewed-by: Paul E. McKenney <paulmck@kernel.org>
+Signed-off-by: Puranjay Mohan <puranjay@kernel.org>
+Reviewed-by: Frederic Weisbecker <frederic@kernel.org>
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ include/linux/rcu_segcblist.h | 14 +++++++-----
+ kernel/rcu/rcu_segcblist.c    | 43 +++++++++++++++++++++++------------
+ kernel/rcu/tree.c             |  6 ++---
+ 3 files changed, 39 insertions(+), 24 deletions(-)
+
+diff --git a/include/linux/rcu_segcblist.h b/include/linux/rcu_segcblist.h
+index 137cc23b024c..08b63ecf719b 100644
+--- a/include/linux/rcu_segcblist.h
++++ b/include/linux/rcu_segcblist.h
+@@ -50,12 +50,14 @@ struct rcu_cblist {
+  * Note that RCU_WAIT_TAIL cannot be empty unless RCU_NEXT_READY_TAIL is also
+  * empty.
+  *
+- * The ->gp_seq[] array contains the grace-period number at which the
+- * corresponding segment of callbacks will be ready to invoke.  A given
+- * element of this array is meaningful only when the corresponding segment
+- * is non-empty, and it is never valid for RCU_DONE_TAIL (whose callbacks
+- * are already ready to invoke) or for RCU_NEXT_TAIL (whose callbacks have
+- * not yet been assigned a grace-period number).
++ * The ->gp_seq[] array contains the grace-period state at which the
++ * corresponding segment of callbacks will be ready to invoke.  This tracks
++ * both normal and expedited grace periods, allowing callbacks to complete
++ * when either type of GP finishes.  A given element of this array is
++ * meaningful only when the corresponding segment is non-empty, and it is
++ * never valid for RCU_DONE_TAIL (whose callbacks are already ready to
++ * invoke) or for RCU_NEXT_TAIL (whose callbacks have not yet been assigned
++ * a grace-period state).
+  */
+ #define RCU_DONE_TAIL		0	/* Also RCU_WAIT head. */
+ #define RCU_WAIT_TAIL		1	/* Also RCU_NEXT_READY head. */
+diff --git a/kernel/rcu/rcu_segcblist.c b/kernel/rcu/rcu_segcblist.c
+index cf8951d33e76..dd770006e7f8 100644
+--- a/kernel/rcu/rcu_segcblist.c
++++ b/kernel/rcu/rcu_segcblist.c
+@@ -495,7 +495,8 @@ static void rcu_segcblist_advance_compact(struct rcu_segcblist *rsclp, int i)
+ 
+ /*
+  * Advance the callbacks in the specified rcu_segcblist structure based
+- * on the current value of the grace-period counter.
++ * on the current grace-period state.  Checks both normal and expedited
++ * grace periods, advancing callbacks when either GP type completes.
+  */
+ void rcu_segcblist_advance(struct rcu_segcblist *rsclp)
+ {
+@@ -506,8 +507,10 @@ void rcu_segcblist_advance(struct rcu_segcblist *rsclp)
+ 		return;
+ 
+ 	/*
+-	 * Find all callbacks whose ->gp_seq numbers indicate that they
+-	 * are ready to invoke, and put them into the RCU_DONE_TAIL segment.
++	 * Find all callbacks whose grace periods have completed (either
++	 * normal or expedited) and put them into the RCU_DONE_TAIL segment.
++	 * We check against the current global GP state, which includes
++	 * proper memory barriers and handles special completion values.
+ 	 */
+ 	for (i = RCU_WAIT_TAIL; i < RCU_NEXT_TAIL; i++) {
+ 		if (!poll_state_synchronize_rcu_full(&rsclp->gp_seq[i]))
+@@ -534,9 +537,9 @@ void rcu_segcblist_advance(struct rcu_segcblist *rsclp)
+  * them to complete at the end of the earlier grace period.
+  *
+  * This function operates on an rcu_segcblist structure, and also the
+- * grace-period sequence number seq at which new callbacks would become
++ * grace-period state gsp at which new callbacks would become
+  * ready to invoke.  Returns true if there are callbacks that won't be
+- * ready to invoke until seq, false otherwise.
++ * ready to invoke until the grace period represented by gsp, false otherwise.
+  */
+ bool rcu_segcblist_accelerate(struct rcu_segcblist *rsclp, struct rcu_gp_seq *gsp)
+ {
+@@ -548,11 +551,11 @@ bool rcu_segcblist_accelerate(struct rcu_segcblist *rsclp, struct rcu_gp_seq *gs
+ 
+ 	/*
+ 	 * Find the segment preceding the oldest segment of callbacks
+-	 * whose ->gp_seq[] completion is at or after that passed in via
+-	 * "seq", skipping any empty segments.  This oldest segment, along
++	 * whose grace period completion is at or after that passed in via
++	 * "gsp", skipping any empty segments.  This oldest segment, along
+ 	 * with any later segments, can be merged in with any newly arrived
+-	 * callbacks in the RCU_NEXT_TAIL segment, and assigned "seq"
+-	 * as their ->gp_seq[] grace-period completion sequence number.
++	 * callbacks in the RCU_NEXT_TAIL segment, and assigned "gsp"
++	 * as their grace-period completion state.
+ 	 */
+ 	for (i = RCU_NEXT_READY_TAIL; i > RCU_DONE_TAIL; i--)
+ 		if (!rcu_segcblist_segempty(rsclp, i) &&
+@@ -561,7 +564,7 @@ bool rcu_segcblist_accelerate(struct rcu_segcblist *rsclp, struct rcu_gp_seq *gs
+ 
+ 	/*
+ 	 * If all the segments contain callbacks that correspond to
+-	 * earlier grace-period sequence numbers than "seq", leave.
++	 * earlier grace-period sequence numbers than "gsp", leave.
+ 	 * Assuming that the rcu_segcblist structure has enough
+ 	 * segments in its arrays, this can only happen if some of
+ 	 * the non-done segments contain callbacks that really are
+@@ -569,15 +572,15 @@ bool rcu_segcblist_accelerate(struct rcu_segcblist *rsclp, struct rcu_gp_seq *gs
+ 	 * out by the next call to rcu_segcblist_advance().
+ 	 *
+ 	 * Also advance to the oldest segment of callbacks whose
+-	 * ->gp_seq[] completion is at or after that passed in via "seq",
++	 * ->gp_seq[] completion is at or after that passed in via "gsp",
+ 	 * skipping any empty segments.
+ 	 *
+ 	 * Note that segment "i" (and any lower-numbered segments
+ 	 * containing older callbacks) will be unaffected, and their
+-	 * grace-period numbers remain unchanged.  For example, if i ==
++	 * grace-period states remain unchanged.  For example, if i ==
+ 	 * WAIT_TAIL, then neither WAIT_TAIL nor DONE_TAIL will be touched.
+ 	 * Instead, the CBs in NEXT_TAIL will be merged with those in
+-	 * NEXT_READY_TAIL and the grace-period number of NEXT_READY_TAIL
++	 * NEXT_READY_TAIL and the grace-period state of NEXT_READY_TAIL
+ 	 * would be updated.  NEXT_TAIL would then be empty.
+ 	 */
+ 	if (rcu_segcblist_restempty(rsclp, i) || ++i >= RCU_NEXT_TAIL)
+@@ -589,8 +592,8 @@ bool rcu_segcblist_accelerate(struct rcu_segcblist *rsclp, struct rcu_gp_seq *gs
+ 
+ 	/*
+ 	 * Merge all later callbacks, including newly arrived callbacks,
+-	 * into the segment located by the for-loop above.  Assign "seq"
+-	 * as the ->gp_seq[] value in order to correctly handle the case
++	 * into the segment located by the for-loop above.  Assign "gsp"
++	 * as the grace-period state in order to correctly handle the case
+ 	 * where there were no pending callbacks in the rcu_segcblist
+ 	 * structure other than in the RCU_NEXT_TAIL segment.
+ 	 */
+@@ -644,6 +647,10 @@ void srcu_segcblist_advance(struct rcu_segcblist *rsclp, unsigned long seq)
+ 	if (rcu_segcblist_restempty(rsclp, RCU_DONE_TAIL))
+ 		return;
+ 
++	/*
++	 * Find all callbacks whose normal GP sequence numbers indicate
++	 * that they are ready to invoke.  For SRCU, we only check norm.
++	 */
+ 	for (i = RCU_WAIT_TAIL; i < RCU_NEXT_TAIL; i++) {
+ 		if (ULONG_CMP_LT(seq, rsclp->gp_seq[i].norm))
+ 			break;
+@@ -658,6 +665,12 @@ void srcu_segcblist_advance(struct rcu_segcblist *rsclp, unsigned long seq)
+ 	rcu_segcblist_advance_compact(rsclp, i);
+ }
+ 
++/*
++ * SRCU wrapper for rcu_segcblist_accelerate() - converts SRCU's unsigned
++ * long GP sequence to rcu_gp_seq format with exp set to
++ * RCU_GET_STATE_NOT_TRACKED (since SRCU does not use expedited GPs)
++ * and calls the core rcu_segcblist_accelerate().
++ */
+ bool srcu_segcblist_accelerate(struct rcu_segcblist *rsclp, unsigned long seq)
+ {
+ 	struct rcu_gp_seq gs = { .norm = seq, .exp = RCU_GET_STATE_NOT_TRACKED };
+diff --git a/kernel/rcu/tree.c b/kernel/rcu/tree.c
+index f63ce75c5b4f..aa11e9a04830 100644
+--- a/kernel/rcu/tree.c
++++ b/kernel/rcu/tree.c
+@@ -1204,7 +1204,7 @@ static void rcu_accelerate_cbs_unlocked(struct rcu_node *rnp,
+ /*
+  * Move any callbacks whose grace period has completed to the
+  * RCU_DONE_TAIL sublist, then compact the remaining sublists and
+- * assign ->gp_seq numbers to any callbacks in the RCU_NEXT_TAIL
++ * assign ->gp_seq[] state to any callbacks in the RCU_NEXT_TAIL
+  * sublist.  This function is idempotent, so it does not hurt to
+  * invoke it repeatedly.  As long as it is not invoked -too- often...
+  * Returns true if the RCU grace-period kthread needs to be awakened.
+@@ -1221,8 +1221,8 @@ static bool rcu_advance_cbs(struct rcu_node *rnp, struct rcu_data *rdp)
+ 		return false;
+ 
+ 	/*
+-	 * Find all callbacks whose ->gp_seq numbers indicate that they
+-	 * are ready to invoke, and put them into the RCU_DONE_TAIL sublist.
++	 * Find all callbacks whose grace periods have completed (either
++	 * normal or expedited) and put them into the RCU_DONE_TAIL sublist.
+ 	 */
+ 	rcu_segcblist_advance(&rdp->cblist);
+ 
+-- 
+2.55.0
+

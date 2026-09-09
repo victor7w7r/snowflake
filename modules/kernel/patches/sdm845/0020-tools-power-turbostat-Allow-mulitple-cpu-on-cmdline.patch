@@ -1,0 +1,63 @@
+From ca3015b3f244d07b11adade000b59b23b5f44ca4 Mon Sep 17 00:00:00 2001
+From: Len Brown <len.brown@intel.com>
+Date: Tue, 28 Apr 2026 22:53:38 -0400
+Subject: [PATCH 00020/15333] tools/power turbostat: Allow mulitple --cpu on
+ cmdline
+
+If --cpu is on the cmdline more than once,
+previous invocations are forgotton (and their
+cpu_set is leaked).
+
+Allow multiple invocations of --cpu on the cmline.
+Or them together, reusing the same same cpu_set.
+
+Signed-off-by: Len Brown <len.brown@intel.com>
+---
+ tools/power/x86/turbostat/turbostat.8 |  2 +-
+ tools/power/x86/turbostat/turbostat.c | 12 +++++++-----
+ 2 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/tools/power/x86/turbostat/turbostat.8 b/tools/power/x86/turbostat/turbostat.8
+index 344ede2f8546..9b81dca7032f 100644
+--- a/tools/power/x86/turbostat/turbostat.8
++++ b/tools/power/x86/turbostat/turbostat.8
+@@ -92,7 +92,7 @@ name as necessary to disambiguate it from others is necessary.  Note that option
+ 		'%x' hex identifier of the PMT MMIO region.
+ .fi
+ .PP
+-\fB--cpu cpu-set\fP limit output to system summary plus the specified cpu-set.  If cpu-set is the string "core", then the system summary plus the first CPU in each core are printed -- eg. subsequent HT siblings are not printed.  Or if cpu-set is the string "package", then the system summary plus the first CPU in each package is printed.  Otherwise, the system summary plus the specified set of CPUs are printed.  The cpu-set is ordered from low to high, comma delimited with ".." and "-" permitted to denote a range. eg. 1,2,8,14..17,21-44
++\fB--cpu cpu-set\fP limit output to system summary plus the specified cpu-set.  If cpu-set is the string "core", then the system summary plus the first CPU in each core are printed -- eg. subsequent HT siblings are not printed.  Or if cpu-set is the string "package", then the system summary plus the first CPU in each package is printed.  Otherwise, the system summary plus the specified set of CPUs are printed.  The cpu-set is ordered from low to high, comma delimited with ".." and "-" permitted to denote a range. eg. 1,2,8,14..17,21-44  Multiple invocations of --cpu are OR'd together.
+ .PP
+ \fB--hide column\fP do not show the specified built-in columns.  May be invoked multiple times, or with a comma-separated list of column names.
+ .PP
+diff --git a/tools/power/x86/turbostat/turbostat.c b/tools/power/x86/turbostat/turbostat.c
+index e475e5f263be..02685fdd5218 100644
+--- a/tools/power/x86/turbostat/turbostat.c
++++ b/tools/power/x86/turbostat/turbostat.c
+@@ -11462,16 +11462,18 @@ void parse_cpu_command(char *optarg)
+ 	if (show_core_only || show_pkg_only)
+ 		goto error;
+ 
+-	cpu_subset = CPU_ALLOC(topo.max_cpu_num + 1);
+-	if (cpu_subset == NULL)
+-		err(3, "CPU_ALLOC");
++	if (!cpu_subset) {
++		cpu_subset = CPU_ALLOC(topo.max_cpu_num + 1);
++		if (cpu_subset == NULL)
++			err(3, "CPU_ALLOC");
+ 
+-	CPU_ZERO_S(cpu_setsize, cpu_subset);
++		CPU_ZERO_S(cpu_setsize, cpu_subset);
++	}
+ 
+ 	if (parse_cpu_str(optarg, cpu_subset, cpu_setsize))
+ 		goto error;
+ 	if (debug)
+-		print_cpu_set("cpu subsetset", cpu_subset);
++		print_cpu_set("--cpu", cpu_subset);
+ 
+ 	return;
+ 
+-- 
+2.55.0
+

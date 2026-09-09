@@ -1,0 +1,38 @@
+From 6e6a31401445556b58ab9517e256285989be73da Mon Sep 17 00:00:00 2001
+From: Hongling Zeng <zenghongling@kylinos.cn>
+Date: Wed, 29 Jul 2026 15:34:18 +0800
+Subject: [PATCH 12489/15333] xfs: check split_sectors validity before
+ bio_split call
+
+Change the split_sectors check from !split_sectors to split_sectors <= 0
+to make the error handling explicit. While bio_split_rw_at() cannot return
+a negative error code for the current GC I/O path (GC I/O doesn't use
+REQ_ATOMIC/REQ_NOWAIT flags and has proper alignment), making the check
+explicit improves code clarity and makes the intent clear.
+
+This also makes the code more robust for future maintenance if different
+I/O patterns are introduced.
+
+Signed-off-by: Hongling Zeng <zenghongling@kylinos.cn>
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Carlos Maiolino <cem@kernel.org>
+---
+ fs/xfs/xfs_zone_gc.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/xfs/xfs_zone_gc.c b/fs/xfs/xfs_zone_gc.c
+index f76a09130852..e00f4771e424 100644
+--- a/fs/xfs/xfs_zone_gc.c
++++ b/fs/xfs/xfs_zone_gc.c
+@@ -802,7 +802,7 @@ xfs_zone_gc_split_write(
+ 
+ 	split_sectors = bio_split_rw_at(&chunk->bio, lim, &nsegs,
+ 			lim->max_zone_append_sectors << SECTOR_SHIFT);
+-	if (!split_sectors)
++	if (split_sectors <= 0)
+ 		return NULL;
+ 
+ 	/* ensure the split chunk is still block size aligned */
+-- 
+2.55.0
+

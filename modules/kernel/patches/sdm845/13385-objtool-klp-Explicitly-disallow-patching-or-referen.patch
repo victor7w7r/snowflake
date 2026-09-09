@@ -1,0 +1,57 @@
+From 69f361b8a7a2f65c1bb236ea0899cdaad7267653 Mon Sep 17 00:00:00 2001
+From: Josh Poimboeuf <jpoimboe@kernel.org>
+Date: Fri, 7 Aug 2026 14:37:49 -0700
+Subject: [PATCH 13385/15333] objtool/klp: Explicitly disallow patching or
+ referencing init code/data
+
+Explicitly disallow the patching and referencing of init code/data.
+Otherwise it could potentially introduce some odd edge cases depending
+on whether the target object's init section has been freed yet (note
+that the init code still exists in the target module when doing late
+module patching).
+
+Such edge cases include sympos calculation and the patching and/or
+referencing of non-existent (init-freed) code/data.  Not to mention the
+inherent differences in behavior that occur when the init code is only
+patched *some* of the time depending on module loading order or kernel
+config.
+
+Acked-by: Joe Lawrence <joe.lawrence@redhat.com>
+Acked-by: Song Liu <song@kernel.org>
+Link: https://patch.msgid.link/516e14f84cfbffa27dc19d3dcf35097504097966.1786138493.git.jpoimboe@kernel.org
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+---
+ tools/objtool/klp-sympos.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/tools/objtool/klp-sympos.c b/tools/objtool/klp-sympos.c
+index bbfae516d339..dfca9dd74681 100644
+--- a/tools/objtool/klp-sympos.c
++++ b/tools/objtool/klp-sympos.c
+@@ -367,6 +367,11 @@ static unsigned long find_vmlinux_sympos(struct symbol *sym)
+ 	return sympos;
+ }
+ 
++static bool is_init_sym(struct symbol *sym)
++{
++	return strstarts(sym->sec->name, ".init");
++}
++
+ /*
+  * "sympos" is used by livepatch to disambiguate duplicate symbol names.
+  */
+@@ -376,6 +381,11 @@ unsigned long klp_find_sympos(struct elf *elf, struct symbol *sym)
+ 	bool has_dup = false;
+ 	struct symbol *s;
+ 
++	if (is_init_sym(sym)) {
++		ERROR("%s: can't patch or reference init code/data", sym->name);
++		return ULONG_MAX;
++	}
++
+ 	if (sym->bind != STB_LOCAL)
+ 		return 0;
+ 
+-- 
+2.55.0
+

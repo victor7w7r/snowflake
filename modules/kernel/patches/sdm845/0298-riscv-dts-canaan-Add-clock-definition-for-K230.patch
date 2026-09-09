@@ -1,0 +1,158 @@
+From 8f0a393b7d91ca66756123ac5f09b89c1696ff11 Mon Sep 17 00:00:00 2001
+From: Xukai Wang <kingxukai@zohomail.com>
+Date: Sat, 25 Apr 2026 17:29:33 +0800
+Subject: [PATCH 00298/15333] riscv: dts: canaan: Add clock definition for K230
+
+This patch describes the clock controller integrated in K230 SoC
+and replace dummy clocks with the real ones for UARTs.
+
+For k230-canmv and k230-evb, they provide an additional external
+pulse input through a pin to serve as clock source.
+
+Co-developed-by: Troy Mitchell <TroyMitchell988@gmail.com>
+Signed-off-by: Troy Mitchell <TroyMitchell988@gmail.com>
+Signed-off-by: Xukai Wang <kingxukai@zohomail.com>
+Signed-off-by: Conor Dooley <conor.dooley@microchip.com>
+---
+ arch/riscv/boot/dts/canaan/k230-canmv.dts | 11 ++++++++++
+ arch/riscv/boot/dts/canaan/k230-evb.dts   | 11 ++++++++++
+ arch/riscv/boot/dts/canaan/k230.dtsi      | 26 ++++++++++++++++-------
+ 3 files changed, 40 insertions(+), 8 deletions(-)
+
+diff --git a/arch/riscv/boot/dts/canaan/k230-canmv.dts b/arch/riscv/boot/dts/canaan/k230-canmv.dts
+index 32ba53d17c00..2ba555f6de13 100644
+--- a/arch/riscv/boot/dts/canaan/k230-canmv.dts
++++ b/arch/riscv/boot/dts/canaan/k230-canmv.dts
+@@ -21,6 +21,12 @@ ddr: memory@0 {
+ 		device_type = "memory";
+ 		reg = <0x0 0x0 0x0 0x20000000>;
+ 	};
++
++	timerx_pulse_in: clock-50000000 {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <50000000>;
++	};
+ };
+ 
+ &uart0 {
+@@ -330,3 +336,8 @@ mmc1-data-cfg {
+ 		};
+ 	};
+ };
++
++&sysclk {
++	clocks = <&osc24m>, <&timerx_pulse_in>;
++	clock-names = "osc24m", "timer-pulse-in";
++};
+diff --git a/arch/riscv/boot/dts/canaan/k230-evb.dts b/arch/riscv/boot/dts/canaan/k230-evb.dts
+index bfa53f2e2403..4246e4bba6cc 100644
+--- a/arch/riscv/boot/dts/canaan/k230-evb.dts
++++ b/arch/riscv/boot/dts/canaan/k230-evb.dts
+@@ -21,8 +21,19 @@ ddr: memory@0 {
+ 		device_type = "memory";
+ 		reg = <0x0 0x0 0x0 0x20000000>;
+ 	};
++
++	timerx_pulse_in: clock-50000000 {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <50000000>;
++	};
+ };
+ 
+ &uart0 {
+ 	status = "okay";
+ };
++
++&sysclk {
++	clocks = <&osc24m>, <&timerx_pulse_in>;
++	clock-names = "osc24m", "timer-pulse-in";
++};
+diff --git a/arch/riscv/boot/dts/canaan/k230.dtsi b/arch/riscv/boot/dts/canaan/k230.dtsi
+index a73b1926ab93..6dcb628a960b 100644
+--- a/arch/riscv/boot/dts/canaan/k230.dtsi
++++ b/arch/riscv/boot/dts/canaan/k230.dtsi
+@@ -3,6 +3,7 @@
+  * Copyright (C) 2024 Yangyu Chen <cyy@cyyself.name>
+  */
+ 
++#include <dt-bindings/clock/canaan,k230-clk.h>
+ #include <dt-bindings/interrupt-controller/irq.h>
+ #include <dt-bindings/reset/canaan,k230-rst.h>
+ #include "k230-pinctrl.h"
+@@ -57,11 +58,11 @@ l2_cache: l2-cache {
+ 		};
+ 	};
+ 
+-	apb_clk: apb-clk-clock {
++	osc24m: clock-24000000 {
+ 		compatible = "fixed-clock";
+-		clock-frequency = <50000000>;
+-		clock-output-names = "apb_clk";
+ 		#clock-cells = <0>;
++		clock-frequency = <24000000>;
++		clock-output-names = "osc24m";
+ 	};
+ 
+ 	soc {
+@@ -99,10 +100,19 @@ pinctrl: pinctrl@91105000 {
+ 			reg = <0x0 0x91105000 0x0 0x100>;
+ 		};
+ 
++		sysclk: clock-controller@91102000 {
++			compatible = "canaan,k230-clk";
++			reg = <0x0 0x91102000 0x0 0x40>,
++			      <0x0 0x91100000 0x0 0x108>;
++			clocks = <&osc24m>;
++			clock-names = "osc24m";
++			#clock-cells = <1>;
++		};
++
+ 		uart0: serial@91400000 {
+ 			compatible = "snps,dw-apb-uart";
+ 			reg = <0x0 0x91400000 0x0 0x1000>;
+-			clocks = <&apb_clk>;
++			clocks = <&sysclk K230_LS_UART0_RATE>;
+ 			interrupts = <16 IRQ_TYPE_LEVEL_HIGH>;
+ 			reg-io-width = <4>;
+ 			reg-shift = <2>;
+@@ -113,7 +123,7 @@ uart0: serial@91400000 {
+ 		uart1: serial@91401000 {
+ 			compatible = "snps,dw-apb-uart";
+ 			reg = <0x0 0x91401000 0x0 0x1000>;
+-			clocks = <&apb_clk>;
++			clocks = <&sysclk K230_LS_UART1_RATE>;
+ 			interrupts = <17 IRQ_TYPE_LEVEL_HIGH>;
+ 			reg-io-width = <4>;
+ 			reg-shift = <2>;
+@@ -124,7 +134,7 @@ uart1: serial@91401000 {
+ 		uart2: serial@91402000 {
+ 			compatible = "snps,dw-apb-uart";
+ 			reg = <0x0 0x91402000 0x0 0x1000>;
+-			clocks = <&apb_clk>;
++			clocks = <&sysclk K230_LS_UART2_RATE>;
+ 			interrupts = <18 IRQ_TYPE_LEVEL_HIGH>;
+ 			reg-io-width = <4>;
+ 			reg-shift = <2>;
+@@ -135,7 +145,7 @@ uart2: serial@91402000 {
+ 		uart3: serial@91403000 {
+ 			compatible = "snps,dw-apb-uart";
+ 			reg = <0x0 0x91403000 0x0 0x1000>;
+-			clocks = <&apb_clk>;
++			clocks = <&sysclk K230_LS_UART3_RATE>;
+ 			interrupts = <19 IRQ_TYPE_LEVEL_HIGH>;
+ 			reg-io-width = <4>;
+ 			reg-shift = <2>;
+@@ -146,7 +156,7 @@ uart3: serial@91403000 {
+ 		uart4: serial@91404000 {
+ 			compatible = "snps,dw-apb-uart";
+ 			reg = <0x0 0x91404000 0x0 0x1000>;
+-			clocks = <&apb_clk>;
++			clocks = <&sysclk K230_LS_UART4_RATE>;
+ 			interrupts = <20 IRQ_TYPE_LEVEL_HIGH>;
+ 			reg-io-width = <4>;
+ 			reg-shift = <2>;
+-- 
+2.55.0
+

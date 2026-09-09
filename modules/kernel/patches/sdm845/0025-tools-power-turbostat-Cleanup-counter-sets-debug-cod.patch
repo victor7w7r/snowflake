@@ -1,0 +1,102 @@
+From 5ab1fb5b2562eba10eda8af69356f3aaaa042b21 Mon Sep 17 00:00:00 2001
+From: Len Brown <len.brown@intel.com>
+Date: Sun, 3 May 2026 13:13:50 -0400
+Subject: [PATCH 00025/15333] tools/power turbostat: Cleanup counter sets debug
+ code
+
+When the debug "--Dump" option is used to dump counter values,
+also dump the counter sets.  Update that counter counter-set
+debug code to pass code review.
+
+Assisted-by: Claude: Claude Sonnet 4.6
+Signed-off-by: Len Brown <len.brown@intel.com>
+---
+ tools/power/x86/turbostat/turbostat.c | 33 ++++++++++++++++++++++-----
+ 1 file changed, 27 insertions(+), 6 deletions(-)
+
+diff --git a/tools/power/x86/turbostat/turbostat.c b/tools/power/x86/turbostat/turbostat.c
+index 32802e2553f0..8f35ea3466c3 100644
+--- a/tools/power/x86/turbostat/turbostat.c
++++ b/tools/power/x86/turbostat/turbostat.c
+@@ -98,6 +98,8 @@
+ 
+ #define ROUND_UP_TO_PAGE_SIZE(n) (((n) + 0x1000UL-1UL) & ~(0x1000UL-1UL))
+ 
++FILE *outf;
++
+ enum counter_scope { SCOPE_CPU, SCOPE_CORE, SCOPE_PACKAGE };
+ enum counter_type { COUNTER_ITEMS, COUNTER_CYCLES, COUNTER_SECONDS, COUNTER_USEC, COUNTER_K2M };
+ enum counter_format { FORMAT_RAW, FORMAT_DELTA, FORMAT_PERCENT, FORMAT_AVERAGE };
+@@ -292,20 +294,23 @@ enum bic_names {
+ 
+ #define bic_set_t cpu_set_t	/* implement bic_set_t using cpu_set_t */
+ 
+-void print_bic_set(char *s, bic_set_t *set)
++/*
++ * debug helper
++ */
++static void print_bic_set(const char *s, const bic_set_t *set)
+ {
+ 	int i;
+ 
+ 	assert(MAX_BIC < CPU_SETSIZE);
+ 
+-	printf("%s:", s);
++	fprintf(outf, "%s:", s);
+ 
+ 	for (i = 0; i < MAX_BIC; ++i) {
+ 
+ 		if (CPU_ISSET(i, set))
+-			printf(" %s", bic[i].name);
++			fprintf(outf, " %s", bic[i].name);
+ 	}
+-	putchar('\n');
++	fputc('\n', outf);
+ }
+ 
+ static bic_set_t bic_group_topology;
+@@ -320,6 +325,21 @@ static bic_set_t bic_group_disabled_by_default;
+ static bic_set_t bic_enabled;
+ static bic_set_t bic_present;
+ 
++static void dump_bic_sets(void)
++{
++	print_bic_set("bic_enabled", &bic_enabled);
++	print_bic_set("bic_present", &bic_present);
++	print_bic_set("bic_group_topology", &bic_group_topology);
++	print_bic_set("bic_group_thermal_pwr", &bic_group_thermal_pwr);
++	print_bic_set("bic_group_frequency", &bic_group_frequency);
++	print_bic_set("bic_group_hw_idle", &bic_group_hw_idle);
++	print_bic_set("bic_group_sw_idle", &bic_group_sw_idle);
++	print_bic_set("bic_group_idle", &bic_group_idle);
++	print_bic_set("bic_group_cache", &bic_group_cache);
++	print_bic_set("bic_group_other", &bic_group_other);
++	print_bic_set("bic_group_disabled_by_default", &bic_group_disabled_by_default);
++}
++
+ /* modify */
+ #define BIC_INIT(set) CPU_ZERO(set)
+ 
+@@ -485,7 +505,6 @@ static void bic_groups_init(void)
+ #define PCLUNL 15		/* Unlimited */
+ 
+ char *proc_stat = "/proc/stat";
+-FILE *outf;
+ int *fd_percpu;
+ int *fd_instr_count_percpu;
+ int *fd_llc_percpu;
+@@ -11714,8 +11733,10 @@ int main(int argc, char **argv)
+ 		msr_sum_record();
+ 
+ 	/* dump counters and exit */
+-	if (dump_only)
++	if (dump_only) {
++		dump_bic_sets();
+ 		return get_and_dump_counters();
++	}
+ 
+ 	/* list header and exit */
+ 	if (list_header_only) {
+-- 
+2.55.0
+

@@ -1,0 +1,32 @@
+From 6a3fe9ecc255e780e7f93dbaf4bfb94d7222c4b1 Mon Sep 17 00:00:00 2001
+From: Christoph Schlameuss <schlameuss@linux.ibm.com>
+Date: Fri, 7 Aug 2026 11:57:46 +0200
+Subject: [PATCH 12607/15333] KVM: s390: vsie: Assert crycb alignment in
+ vsie_page
+
+The crypto control block address is required to have double word
+alignment. Add a static_assert to enforce correct alignment.
+
+Signed-off-by: Christoph Schlameuss <schlameuss@linux.ibm.com>
+Reviewed-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+[borntraeger@linux.ibm.com: improve commit message]
+Signed-off-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+---
+ arch/s390/kvm/vsie.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/s390/kvm/vsie.c b/arch/s390/kvm/vsie.c
+index 7c3b5e11b301..c9392460edca 100644
+--- a/arch/s390/kvm/vsie.c
++++ b/arch/s390/kvm/vsie.c
+@@ -69,6 +69,7 @@ struct vsie_page {
+ 
+ static_assert(sizeof(struct vsie_page) == PAGE_SIZE);
+ static_assert(offsetof(struct vsie_page, mcck_info) == offsetof(struct sie_page, mcck_info));
++static_assert(IS_ALIGNED(offsetof(struct vsie_page, crycb), 8));
+ 
+ /* trigger a validity icpt for the given scb */
+ static int set_validity_icpt(struct kvm_s390_sie_block *scb,
+-- 
+2.55.0
+

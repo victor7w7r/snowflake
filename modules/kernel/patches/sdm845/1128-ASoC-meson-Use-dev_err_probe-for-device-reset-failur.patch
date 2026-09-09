@@ -1,0 +1,67 @@
+From 6ed013a581d00f84bbd0c3c60f7a108bef93fc4e Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 12 Jun 2026 09:01:12 +0700
+Subject: [PATCH 01128/15333] ASoC: meson: Use dev_err_probe() for device reset
+ failures
+
+device_reset() may return -EPROBE_DEFER. Switch to dev_err_probe() so
+probe failures are reported consistently and deferred probing is handled
+properly.
+This matches the existing pattern used in aiu_probe().
+No functional change intended.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260612020113.9557-1-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/meson/g12a-toacodec.c | 2 +-
+ sound/soc/meson/g12a-tohdmitx.c | 2 +-
+ sound/soc/meson/t9015.c         | 6 ++----
+ 3 files changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/sound/soc/meson/g12a-toacodec.c b/sound/soc/meson/g12a-toacodec.c
+index a95375b53f0a..21941ee552c5 100644
+--- a/sound/soc/meson/g12a-toacodec.c
++++ b/sound/soc/meson/g12a-toacodec.c
+@@ -312,7 +312,7 @@ static int g12a_toacodec_probe(struct platform_device *pdev)
+ 
+ 	ret = device_reset(dev);
+ 	if (ret)
+-		return ret;
++		return dev_err_probe(dev, ret, "failed to reset device\n");
+ 
+ 	regs = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(regs))
+diff --git a/sound/soc/meson/g12a-tohdmitx.c b/sound/soc/meson/g12a-tohdmitx.c
+index d541ca4acfaf..967109ca2b57 100644
+--- a/sound/soc/meson/g12a-tohdmitx.c
++++ b/sound/soc/meson/g12a-tohdmitx.c
+@@ -251,7 +251,7 @@ static int g12a_tohdmitx_probe(struct platform_device *pdev)
+ 
+ 	ret = device_reset(dev);
+ 	if (ret)
+-		return ret;
++		return dev_err_probe(dev, ret, "failed to reset device\n");
+ 
+ 	regs = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(regs))
+diff --git a/sound/soc/meson/t9015.c b/sound/soc/meson/t9015.c
+index da1a93946d67..f0b55aee5241 100644
+--- a/sound/soc/meson/t9015.c
++++ b/sound/soc/meson/t9015.c
+@@ -265,10 +265,8 @@ static int t9015_probe(struct platform_device *pdev)
+ 		return dev_err_probe(dev, PTR_ERR(priv->avdd), "failed to AVDD\n");
+ 
+ 	ret = device_reset(dev);
+-	if (ret) {
+-		dev_err(dev, "reset failed\n");
+-		return ret;
+-	}
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to reset device\n");
+ 
+ 	regs = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(regs)) {
+-- 
+2.55.0
+

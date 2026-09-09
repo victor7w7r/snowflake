@@ -1,0 +1,106 @@
+From 93a3cda16124fe0a7d80666e6dcb56c75cbedd1c Mon Sep 17 00:00:00 2001
+From: ChenXiaoSong <chenxiaosong@kylinos.cn>
+Date: Thu, 13 Aug 2026 10:40:42 +0000
+Subject: [PATCH 14431/15333] smb/server: fix use-after-free in
+ ksmbd_conn_transport_destroy()
+
+Reproducer (Link[1]):
+
+  1. Build kernel with CONFIG_KASAN=y
+  2. server: systemctl start ksmbd
+  3. client: mount -t cifs //localhost/export /mnt
+  4. client: umount /mnt
+  5. server: modprobe -r ksmbd
+
+The error message is as follows:
+
+  ==================================================================
+  BUG: KASAN: slab-use-after-free in proc_remove+0x3e/0x80
+  Read of size 8 at addr ffff88810654e098 by task modprobe/785
+  ...
+  Call Trace:
+   <TASK>
+   __dump_stack+0x19/0x30
+   dump_stack_lvl+0x49/0x60
+   print_address_description+0x7b/0x200
+   print_report+0x5b/0x70
+   kasan_report+0xed/0x130
+   __asan_report_load8_noabort+0x18/0x20
+   proc_remove+0x3e/0x80
+   ksmbd_conn_transport_destroy+0x2b/0x320 [ksmbd]
+   cleanup_module+0x33/0xe00 [ksmbd]
+   __se_sys_delete_module+0x276/0x400
+   __x64_sys_delete_module+0x5f/0x70
+   x64_sys_call+0x2675/0x3030
+   do_syscall_64+0xf0/0x3b0
+   entry_SYSCALL_64_after_hwframe+0x76/0x7e
+  RIP: 0033:0x7f5b56d2b02b
+  ...
+   </TASK>
+
+  Allocated by task 159:
+   kasan_save_track+0x2f/0x70
+   kasan_save_alloc_info+0x40/0x50
+   __kasan_slab_alloc+0x52/0x70
+   kmem_cache_alloc_noprof+0x168/0x3e0
+   __proc_create+0x20b/0x710
+   proc_create_single_data+0x78/0x150
+   ksmbd_proc_create+0x24/0x30 [ksmbd]
+   ksmbd_conn_transport_init+0x4f/0x80 [ksmbd]
+   server_ctrl_handle_work+0x64/0x2c0 [ksmbd]
+   process_scheduled_works+0x788/0xec0
+   worker_thread+0x894/0xc10
+   kthread+0x2e5/0x3c0
+   ret_from_fork+0x168/0x4f0
+   ret_from_fork_asm+0x1a/0x30
+
+  Freed by task 785:
+   kasan_save_track+0x2f/0x70
+   kasan_save_free_info+0x4a/0x60
+   __kasan_slab_free+0x47/0x70
+   kmem_cache_free+0x122/0x410
+   pde_put+0xfd/0x160
+   remove_proc_subtree+0x365/0x540
+   proc_remove+0x6a/0x80
+   ksmbd_proc_cleanup+0x1f/0x60 [ksmbd]
+   cleanup_module+0x18/0xe00 [ksmbd]
+   __se_sys_delete_module+0x276/0x400
+   __x64_sys_delete_module+0x5f/0x70
+   x64_sys_call+0x2675/0x3030
+   do_syscall_64+0xf0/0x3b0
+   entry_SYSCALL_64_after_hwframe+0x76/0x7e
+  ==================================================================
+
+Reported-by: Kyenghwan Hwang <obnred@gmail.com>
+Link[1]: https://lore.kernel.org/linux-cifs/8ea028f5-90f4-4d21-b1ac-a343f0f04d88@chenxiaosong.com/
+Signed-off-by: ChenXiaoSong <chenxiaosong@kylinos.cn>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/server.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/fs/smb/server/server.c b/fs/smb/server/server.c
+index 0ccd123ba418..d619d1f22601 100644
+--- a/fs/smb/server/server.c
++++ b/fs/smb/server/server.c
+@@ -596,11 +596,16 @@ static int ksmbd_server_shutdown(void)
+ {
+ 	WRITE_ONCE(server_conf.state, SERVER_STATE_SHUTTING_DOWN);
+ 
+-	ksmbd_proc_cleanup();
+ 	class_unregister(&ksmbd_control_class);
+ 	ksmbd_workqueue_destroy();
+ 	ksmbd_ipc_release();
+ 	ksmbd_conn_transport_destroy();
++	/*
++	 * ksmbd_conn_transport_destroy() calls delete_proc_clients() and destroys
++	 * sessions. ksmbd_session_destroy() removes each session's proc entry.
++	 * Keep the procfs tree alive until these entries have been removed.
++	 */
++	ksmbd_proc_cleanup();
+ 	ksmbd_crypto_destroy();
+ 	ksmbd_free_global_file_table();
+ 	destroy_lease_table(NULL);
+-- 
+2.55.0
+

@@ -1,0 +1,62 @@
+From 2abe1ff20151f47a0c26bc2275e42718ae40553b Mon Sep 17 00:00:00 2001
+From: Joerg Roedel <joerg.roedel@amd.com>
+Date: Tue, 30 Jun 2026 14:37:10 -0700
+Subject: [PATCH 03327/15333] KVM: SEV: Explicitly disallow NULL user address
+ for SNP_LAUNCH_UPDATE
+
+Explicitly reject a NULL userspace virtual address for the source page of
+SNP_LAUNCH_UPDATE instead of relying on the post-populate callback to do
+the check, and don't WARN on failure, as the scenario is blatantly user-
+triggerable, as reported by Sashiko.  Waiting until post-populate to check
+the address "works", but makes it unnecessarily difficult to see that KVM's
+ABI is to disallow a NULL source page for non-ZERO pages.
+
+Note, several existing VMMs pass a valid userspace address for the ZERO
+case, i.e. KVM can't *require* the userspace address to be NULL for ZERO
+pages, at least not without breaking userspace.
+
+Fixes: dee5a47cc7a4 ("KVM: SEV: Add KVM_SEV_SNP_LAUNCH_UPDATE command")
+Reported-by: Sashiko Bot <sashiko-bot@kernel.org>
+Closes: https://lore.kernel.org/all/20260611125849.9ED631F00893@smtp.kernel.org
+Signed-off-by: Joerg Roedel <joerg.roedel@amd.com>
+Co-developed-by: Sean Christopherson <seanjc@google.com>
+Reviewed-by: Ackerley Tng <ackerleytng@google.com>
+Link: https://patch.msgid.link/20260630213711.479692-2-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/svm/sev.c | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/kvm/svm/sev.c b/arch/x86/kvm/svm/sev.c
+index 74fb15551e83..621a2eaa58f2 100644
+--- a/arch/x86/kvm/svm/sev.c
++++ b/arch/x86/kvm/svm/sev.c
+@@ -2330,9 +2330,6 @@ static int sev_gmem_post_populate(struct kvm *kvm, gfn_t gfn, kvm_pfn_t pfn,
+ 	int level;
+ 	int ret;
+ 
+-	if (WARN_ON_ONCE(sev_populate_args->type != KVM_SEV_SNP_PAGE_TYPE_ZERO && !src_page))
+-		return -EINVAL;
+-
+ 	ret = snp_lookup_rmpentry((u64)pfn, &assigned, &level);
+ 	if (ret || assigned) {
+ 		pr_debug("%s: Failed to ensure GFN 0x%llx RMP entry is initial shared state, ret: %d assigned: %d\n",
+@@ -2421,10 +2418,12 @@ static int snp_launch_update(struct kvm *kvm, struct kvm_sev_cmd *argp)
+ 	     params.type != KVM_SEV_SNP_PAGE_TYPE_CPUID))
+ 		return -EINVAL;
+ 
+-	src = params.type == KVM_SEV_SNP_PAGE_TYPE_ZERO ? NULL : u64_to_user_ptr(params.uaddr);
+-
+-	if (!PAGE_ALIGNED(src))
++	if (params.type == KVM_SEV_SNP_PAGE_TYPE_ZERO)
++		src = NULL;
++	else if (!params.uaddr || !PAGE_ALIGNED(params.uaddr))
+ 		return -EINVAL;
++	else
++		src = u64_to_user_ptr(params.uaddr);
+ 
+ 	npages = params.len / PAGE_SIZE;
+ 
+-- 
+2.55.0
+

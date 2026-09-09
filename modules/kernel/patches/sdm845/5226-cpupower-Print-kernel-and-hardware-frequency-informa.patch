@@ -1,0 +1,50 @@
+From 5100bd356cd315112c4e27e66e4f0129800eabd2 Mon Sep 17 00:00:00 2001
+From: Jeremy Linton <jeremy.linton@arm.com>
+Date: Thu, 9 Jul 2026 17:13:44 -0500
+Subject: [PATCH 05226/15333] cpupower: Print kernel and hardware frequency
+ information
+
+The kernel asserted frequency from scaling_cur_freq may not always match
+the hardware reported frequency from cpuinfo_cur_freq.
+
+Print both values when they are available, and only print the unavailable
+message on x86 when the hardware frequency can't be read.
+
+Link: https://lore.kernel.org/r/20260709221344.1919794-4-jeremy.linton@arm.com
+Signed-off-by: Jeremy Linton <jeremy.linton@arm.com>
+Signed-off-by: Shuah Khan <skhan@linuxfoundation.org>
+---
+ tools/power/cpupower/utils/cpufreq-info.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/tools/power/cpupower/utils/cpufreq-info.c b/tools/power/cpupower/utils/cpufreq-info.c
+index 105f06e690cc..11629ae49f98 100644
+--- a/tools/power/cpupower/utils/cpufreq-info.c
++++ b/tools/power/cpupower/utils/cpufreq-info.c
+@@ -270,10 +270,10 @@ static int get_freq_hardware(unsigned int cpu, unsigned int human)
+ {
+ 	unsigned long freq;
+ 
+-	if (!(cpupower_cpu_info.caps & CPUPOWER_CAP_APERF))
++	freq = cpufreq_get_freq_hardware(cpu);
++	if (!(cpupower_cpu_info.caps & CPUPOWER_CAP_APERF) && !freq)
+ 		return -EINVAL;
+ 
+-	freq = cpufreq_get_freq_hardware(cpu);
+ 	printf(_("  current CPU frequency: "));
+ 	if (!freq) {
+ 		printf("Unable to call hardware\n");
+@@ -514,8 +514,8 @@ static void debug_output_one(unsigned int cpu)
+ 
+ 	get_available_governors(cpu);
+ 	get_policy(cpu);
+-	if (get_freq_hardware(cpu, 1) < 0)
+-		get_freq_kernel(cpu, 1);
++	get_freq_hardware(cpu, 1);
++	get_freq_kernel(cpu, 1);
+ 	get_boost_mode(cpu);
+ 	get_perf_cap(cpu);
+ }
+-- 
+2.55.0
+

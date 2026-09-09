@@ -1,0 +1,42 @@
+From 9605825841061bbdd2fc2a0218098373c539173e Mon Sep 17 00:00:00 2001
+From: Frank Li <Frank.Li@nxp.com>
+Date: Thu, 21 May 2026 11:32:49 -0400
+Subject: [PATCH 01421/15333] PCI: endpoint: pci-epf-test: Use
+ dmaengine_prep_config_single() to simplify code
+
+Use dmaengine_prep_config_single() to simplify code.
+
+No functional change.
+
+Tested-by: Niklas Cassel <cassel@kernel.org>
+Reviewed-by: Damien Le Moal <dlemoal@kernel.org>
+Acked-by: Manivannan Sadhasivam <mani@kernel.org>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260521-dma_prep_config-v7-3-1f73f4899883@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/pci/endpoint/functions/pci-epf-test.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/pci/endpoint/functions/pci-epf-test.c b/drivers/pci/endpoint/functions/pci-epf-test.c
+index 4802d4f80f78..d4905aa8e4c0 100644
+--- a/drivers/pci/endpoint/functions/pci-epf-test.c
++++ b/drivers/pci/endpoint/functions/pci-epf-test.c
+@@ -183,12 +183,8 @@ static int pci_epf_test_data_transfer(struct pci_epf_test *epf_test,
+ 		else
+ 			sconf.src_addr = dma_remote;
+ 
+-		if (dmaengine_slave_config(chan, &sconf)) {
+-			dev_err(dev, "DMA slave config fail\n");
+-			return -EIO;
+-		}
+-		tx = dmaengine_prep_slave_single(chan, dma_local, len, dir,
+-						 flags);
++		tx = dmaengine_prep_config_single(chan, dma_local, len,
++						  dir, flags, &sconf);
+ 	} else {
+ 		tx = dmaengine_prep_dma_memcpy(chan, dma_dst, dma_src, len,
+ 					       flags);
+-- 
+2.55.0
+

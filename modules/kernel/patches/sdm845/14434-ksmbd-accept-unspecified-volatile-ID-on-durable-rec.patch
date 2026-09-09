@@ -1,0 +1,56 @@
+From 68f3508e4c36be026f7526e753a9e1bc3ff6bfbb Mon Sep 17 00:00:00 2001
+From: Namjae Jeon <linkinjeon@kernel.org>
+Date: Sat, 15 Aug 2026 22:17:35 +0900
+Subject: [PATCH 14434/15333] ksmbd: accept unspecified volatile ID on durable
+ reconnect
+
+BVT_DurableHandleV1_Reconnect_WithBatchOplock,
+BVT_DurableHandleV1_Reconnect_WithLeaseV1,
+BVT_DurableHandleV2_Reconnect_WithBatchOplock, and
+BVT_DurableHandleV2_Reconnect_WithLeaseV1 fail to reconnect a durable
+handle when the request leaves VolatileFileId unset.
+
+A durable reconnect request may omit VolatileFileId by setting it to
+zero. Treating zero as an ID makes ksmbd reject the request whenever the
+saved volatile ID is nonzero.
+
+Only compare the saved and requested volatile IDs when the request
+contains a nonzero value. Explicit mismatches continue to be rejected.
+
+This allows SMB2 durable handle V1 and V2 reconnects that identify the
+handle through the persistent ID and reconnect context.
+
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/smb2pdu.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index bfa895414fd4..bd806dca9dcd 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -3584,7 +3584,9 @@ static int parse_durable_handle_context(struct ksmbd_work *work,
+ 				goto out;
+ 			}
+ 
+-			if (dh_info->fp->durable_volatile_id !=
++			/* A zero VolatileFileId means that the client did not specify it. */
++			if (recon_v2->dcontext.Fid.VolatileFileId &&
++			    dh_info->fp->durable_volatile_id !=
+ 			    recon_v2->dcontext.Fid.VolatileFileId) {
+ 				err = -EBADF;
+ 				ksmbd_put_durable_fd(dh_info->fp);
+@@ -3637,7 +3639,9 @@ static int parse_durable_handle_context(struct ksmbd_work *work,
+ 				goto out;
+ 			}
+ 
+-			if (dh_info->fp->durable_volatile_id !=
++			/* A zero VolatileFileId means that the client did not specify it. */
++			if (recon->Data.Fid.VolatileFileId &&
++			    dh_info->fp->durable_volatile_id !=
+ 			    recon->Data.Fid.VolatileFileId) {
+ 				err = -EBADF;
+ 				ksmbd_put_durable_fd(dh_info->fp);
+-- 
+2.55.0
+

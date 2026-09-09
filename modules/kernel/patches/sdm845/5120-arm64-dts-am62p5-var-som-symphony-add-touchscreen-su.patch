@@ -1,0 +1,61 @@
+From 1362968f1566b57366851186444ec0ad57434272 Mon Sep 17 00:00:00 2001
+From: Stefano Radaelli <stefano.r@variscite.com>
+Date: Sun, 28 Jun 2026 22:56:07 +0200
+Subject: [PATCH 05120/15333] arm64: dts: am62p5-var-som-symphony: add
+ touchscreen support
+
+Add support for the capacitive touchscreen on the Symphony carrier
+board.
+
+Describe the FT5x06 touchscreen controller, configure its interrupt,
+and mark it as a wakeup source.
+
+Signed-off-by: Stefano Radaelli <stefano.r@variscite.com>
+Link: https://patch.msgid.link/eaf0479114137e4472b4adb3df82a5bcf78405a2.1782680023.git.stefano.r@variscite.com
+Signed-off-by: Vignesh Raghavendra <vigneshr@ti.com>
+---
+ .../dts/ti/k3-am62p5-var-som-symphony.dts     | 21 +++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/ti/k3-am62p5-var-som-symphony.dts b/arch/arm64/boot/dts/ti/k3-am62p5-var-som-symphony.dts
+index 5ba4ed56755b..5c41647ff43f 100644
+--- a/arch/arm64/boot/dts/ti/k3-am62p5-var-som-symphony.dts
++++ b/arch/arm64/boot/dts/ti/k3-am62p5-var-som-symphony.dts
+@@ -293,6 +293,21 @@ &main_i2c1 {
+ 	clock-frequency = <400000>;
+ 	status = "okay";
+ 
++	/* Capacitive touch controller */
++	ft5x06_ts: touchscreen@38 {
++		compatible = "edt,edt-ft5206";
++		reg = <0x38>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pinctrl_captouch_pins>;
++		interrupt-parent = <&main_gpio1>;
++		interrupts = <16 IRQ_TYPE_EDGE_FALLING>;
++		touchscreen-size-x = <800>;
++		touchscreen-size-y = <480>;
++		touchscreen-inverted-x;
++		touchscreen-inverted-y;
++		wakeup-source;
++	};
++
+ 	rtc@68 {
+ 		compatible = "dallas,ds1337";
+ 		reg = <0x68>;
+@@ -307,6 +322,12 @@ &main_mcan0 {
+ };
+ 
+ &main_pmx0 {
++	pinctrl_captouch_pins: main-captouch-default-pins {
++		pinctrl-single,pins = <
++			AM62PX_IOPAD(0x01b8, PIN_INPUT, 7) /* (E20) SPI0_CS1.GPIO1_16 */
++		>;
++	};
++
+ 	pinctrl_extcon: main-extcon-pins {
+ 		pinctrl-single,pins = <
+ 			AM62PX_IOPAD(0x01a8, PIN_INPUT, 7) /* (F25) MCASP0_AFSX.GPIO1_12 */
+-- 
+2.55.0
+

@@ -1,0 +1,39 @@
+From ecb66a97af620135f207cddabeb7f589510640fc Mon Sep 17 00:00:00 2001
+From: Yu Kuai <yukuai@fygo.io>
+Date: Mon, 3 Aug 2026 03:50:32 +0800
+Subject: [PATCH 11774/15333] md/raid10: reject llbitmap reshape when md chunk
+ shrinks
+
+llbitmap reshape keeps one live bitmap and cannot safely make an
+existing bitmap bit cover a smaller data range.
+
+The llbitmap chunksize itself will not shrink when mddev->chunk_sectors
+stays the same or grows. However, shrinking mddev->chunk_sectors can
+shrink the effective data range covered by each bit for the RAID10
+reshape geometry. Reject that reshape while llbitmap is active.
+
+Tested-by: Mykola Marzhan <mykola@meshstor.io>
+Link: https://patch.msgid.link/20260802195038.164272-24-yukuai@kernel.org
+Signed-off-by: Yu Kuai <yukuai@fygo.io>
+---
+ drivers/md/raid10.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/md/raid10.c b/drivers/md/raid10.c
+index ed3c6fbe65f7..1c3393467667 100644
+--- a/drivers/md/raid10.c
++++ b/drivers/md/raid10.c
+@@ -4245,6 +4245,10 @@ static int raid10_check_reshape(struct mddev *mddev)
+ 
+ 	if (conf->geo.far_copies != 1 && !conf->geo.far_offset)
+ 		return -EINVAL;
++	if (mddev->bitmap_id == ID_LLBITMAP &&
++	    mddev->new_chunk_sectors &&
++	    mddev->new_chunk_sectors < mddev->chunk_sectors)
++		return -EOPNOTSUPP;
+ 
+ 	if (setup_geo(&geo, mddev, geo_start) != conf->copies)
+ 		/* mustn't change number of copies */
+-- 
+2.55.0
+

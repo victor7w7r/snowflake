@@ -1,0 +1,46 @@
+From e4213520e9769ae8fc2814e778617b49d1ac0c7f Mon Sep 17 00:00:00 2001
+From: Gal Pressman <gal@nvidia.com>
+Date: Thu, 23 Jul 2026 11:17:43 +0300
+Subject: [PATCH 07562/15333] net/mlx5e: Remove _once from PCI heuristic debug
+ print
+
+The _once rate-limiting in slow_pci_heuristic() is unnecessary because
+this function only runs during probe.
+
+Worse, it interacts poorly with dynamic debug: if the first probe
+happens before dynamic debug is enabled for this callsite, the _once
+flag is permanently consumed and the message becomes unreachable without
+reloading the module.
+Additionally, only the first probed device values were printable in case
+of multiple devices.
+
+Replace with mlx5_core_dbg() which allows enabling the print via dynamic
+debug at any time and observing it on the next probe.
+
+Signed-off-by: Gal Pressman <gal@nvidia.com>
+Reviewed-by: Alex Lazar <alazar@nvidia.com>
+Signed-off-by: Tariq Toukan <tariqt@nvidia.com>
+Link: https://patch.msgid.link/20260723081743.1868357-1-tariqt@nvidia.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/mellanox/mlx5/core/en/params.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/en/params.c b/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
+index 1f4a547917ba..5caf7820a136 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/en/params.c
+@@ -545,8 +545,8 @@ bool slow_pci_heuristic(struct mlx5_core_dev *mdev)
+ 
+ 	mlx5_port_max_linkspeed(mdev, &link_speed);
+ 	pci_bw = pcie_bandwidth_available(mdev->pdev, NULL, NULL, NULL);
+-	mlx5_core_dbg_once(mdev, "Max link speed = %d, PCI BW = %d\n",
+-			   link_speed, pci_bw);
++	mlx5_core_dbg(mdev, "Max link speed = %d, PCI BW = %d\n", link_speed,
++		      pci_bw);
+ 
+ #define MLX5E_SLOW_PCI_RATIO (2)
+ 
+-- 
+2.55.0
+

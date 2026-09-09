@@ -1,0 +1,340 @@
+From 5b4b6ef9cd941b4da02e066eea29a5578a0fa2be Mon Sep 17 00:00:00 2001
+From: Gabriele Monaco <gmonaco@redhat.com>
+Date: Thu, 23 Jul 2026 09:45:26 +0200
+Subject: [PATCH 09476/15333] verification/rvgen: Add the rvgen kunit
+ subcommand
+
+Add the rvgen kunit subcommand to patch an already generated monitor for
+kunit support. It parses the handlers and create the necessary structs
+and initialisations.
+
+The only remaining manual steps are importing the test in the runner
+and writing the test itself.
+
+Reviewed-by: Nam Cao <namcao@linutronix.de>
+Link: https://lore.kernel.org/r/20260723074534.43521-10-gmonaco@redhat.com
+Signed-off-by: Gabriele Monaco <gmonaco@redhat.com>
+---
+ tools/verification/rvgen/Makefile             |   1 +
+ tools/verification/rvgen/__main__.py          |  15 +-
+ tools/verification/rvgen/rvgen/generator.py   |   4 +-
+ tools/verification/rvgen/rvgen/kunit.py       | 194 ++++++++++++++++++
+ .../rvgen/rvgen/templates/kunit.c             |  33 +++
+ 5 files changed, 244 insertions(+), 3 deletions(-)
+ create mode 100644 tools/verification/rvgen/rvgen/kunit.py
+ create mode 100644 tools/verification/rvgen/rvgen/templates/kunit.c
+
+diff --git a/tools/verification/rvgen/Makefile b/tools/verification/rvgen/Makefile
+index 2a2b9e64ea42..48d0376a5cc4 100644
+--- a/tools/verification/rvgen/Makefile
++++ b/tools/verification/rvgen/Makefile
+@@ -23,6 +23,7 @@ install:
+ 	$(INSTALL) rvgen/dot2c.py -D -m 644 $(DESTDIR)$(PYLIB)/rvgen/dot2c.py
+ 	$(INSTALL) dot2c -D -m 755 $(DESTDIR)$(bindir)/
+ 	$(INSTALL) rvgen/dot2k.py -D -m 644 $(DESTDIR)$(PYLIB)/rvgen/dot2k.py
++	$(INSTALL) rvgen/kunit.py -D -m 644 $(DESTDIR)$(PYLIB)/rvgen/kunit.py
+ 	$(INSTALL) rvgen/container.py -D -m 644 $(DESTDIR)$(PYLIB)/rvgen/container.py
+ 	$(INSTALL) rvgen/generator.py -D -m 644 $(DESTDIR)$(PYLIB)/rvgen/generator.py
+ 	$(INSTALL) rvgen/ltl2ba.py -D -m 644 $(DESTDIR)$(PYLIB)/rvgen/ltl2ba.py
+diff --git a/tools/verification/rvgen/__main__.py b/tools/verification/rvgen/__main__.py
+index 019839ed9205..246b43fa29f1 100644
+--- a/tools/verification/rvgen/__main__.py
++++ b/tools/verification/rvgen/__main__.py
+@@ -13,6 +13,7 @@ if __name__ == '__main__':
+     from rvgen.generator import Monitor
+     from rvgen.container import Container
+     from rvgen.ltl2k import ltl2k
++    from rvgen.kunit import KUnit, KUnitError
+     from rvgen.automata import AutomataError
+     from rvgen.ltl2ba import LTLError
+     import argparse
+@@ -42,6 +43,11 @@ if __name__ == '__main__':
+     container_parser = subparsers.add_parser("container", parents=[parent_parser])
+     container_parser.add_argument('-n', "--model_name", dest="model_name", required=True)
+ 
++    kunit_parser = subparsers.add_parser("kunit", parents=[parent_parser])
++    kunit_parser.add_argument('-n', "--model_name", dest="model_name", required=True)
++    kunit_parser.add_argument('-l', "--local", dest="local", action="store_true", required=False,
++                               help="Force looking for the monitor in the current directory only")
++
+     params = parser.parse_args()
+ 
+     try:
+@@ -56,11 +62,18 @@ if __name__ == '__main__':
+             else:
+                 print("Unknown monitor class:", params.monitor_class)
+                 sys.exit(1)
+-        else:
++        elif params.subcmd == "container":
+             monitor = Container(vars(params))
++        elif params.subcmd == "kunit":
++            monitor = KUnit(vars(params))
++            monitor.print_files()
++            sys.exit(0)
+     except (AutomataError, LTLError) as e:
+         print(f"There was an error processing {params.spec}:\n{e}", file=sys.stderr)
+         sys.exit(1)
++    except KUnitError as e:
++        print(f"There was an error generating KUnit files:\n{e}", file=sys.stderr)
++        sys.exit(1)
+ 
+     print(f"Writing the monitor into the directory {monitor.name}")
+     monitor.print_files()
+diff --git a/tools/verification/rvgen/rvgen/generator.py b/tools/verification/rvgen/rvgen/generator.py
+index f1b37d34b1e9..45e2bab26cb5 100644
+--- a/tools/verification/rvgen/rvgen/generator.py
++++ b/tools/verification/rvgen/rvgen/generator.py
+@@ -22,9 +22,9 @@ class RVGenerator:
+         self.description = extra_params.get("description", self.name) or "auto-generated"
+         self.auto_patch = extra_params.get("auto_patch")
+         if self.auto_patch:
+-            self.__fill_rv_kernel_dir()
++            self._fill_rv_kernel_dir()
+ 
+-    def __fill_rv_kernel_dir(self):
++    def _fill_rv_kernel_dir(self):
+         # find the kernel tree root relative to this file's location
+         resolved_path = Path(__file__).resolve()
+         if len(resolved_path.parents) > 4:
+diff --git a/tools/verification/rvgen/rvgen/kunit.py b/tools/verification/rvgen/rvgen/kunit.py
+new file mode 100644
+index 000000000000..ed2082d7d3bc
+--- /dev/null
++++ b/tools/verification/rvgen/rvgen/kunit.py
+@@ -0,0 +1,194 @@
++#!/usr/bin/env python3
++# SPDX-License-Identifier: GPL-2.0-only
++#
++# Copyright (C) 2026-2029 Red Hat, Inc. Gabriele Monaco <gmonaco@redhat.com>
++#
++# Generator for runtime verification kunit files
++
++import re
++from pathlib import Path
++from . import generator
++
++
++class KUnitError(Exception):
++    """Exception raised for errors in KUnit generation and file handling."""
++
++
++class KUnit(generator.RVGenerator):
++    template_dir = ""
++
++    def __init__(self, extra_params={}):
++        super().__init__(extra_params)
++        self.local = extra_params.get("local", False)
++        self.kunit_c = self._read_template_file("kunit.c")
++        if not self.local:
++            self._fill_rv_kernel_dir()
++        try:
++            self.monitor_path = self.__find_monitor_c_file()
++            with open(self.monitor_path, 'r') as f:
++                self.content = f.read()
++        except OSError as e:
++            raise KUnitError(e) from e
++        self.monitor_class = self.__detect_monitor_class()
++
++    def _read_template_file(self, file):
++        if file in ("main.c", "Kconfig"):
++            return ""
++        return super()._read_template_file(file)
++
++    def __find_monitor_c_file(self) -> str:
++        """Look for the monitor file in the kernel tree or in the current folder."""
++        if not self.local:
++            path = Path(self.rv_dir) / "monitors" / self.name / f"{self.name}.c"
++            if path.exists():
++                return str(path)
++
++        path = Path(self.name) / f"{self.name}.c"
++        if path.exists():
++            return str(path)
++
++        raise FileNotFoundError(f"Could not find monitor C file for '{self.name}'")
++
++    def __extract_function_args(self, handler_name: str) -> str:
++        pattern = re.compile(
++            r'^\s*(.*?)\b' + re.escape(handler_name) + r'\(([^)]*)\)',
++            re.MULTILINE | re.DOTALL
++        )
++        match = pattern.search(self.content)
++        if not match:
++            return "/* XXX: fill handlers argument. */"
++
++        return match.group(2).strip()
++
++    def __parse_attach_handlers(self) -> list[str]:
++        """Find handlers by parsing when they are attached to tracepoints."""
++        probe_pattern = re.compile(
++            r'rv_attach_trace_probe\(.*, ([a-zA-Z0-9_]+)\)'
++        )
++        handlers = []
++        for match in probe_pattern.finditer(self.content):
++            handler = match.group(1)
++            if handler not in handlers:
++                handlers.append(handler)
++        return handlers
++
++    def __detect_monitor_class(self) -> str:
++        for c in ("da", "ha", "ltl"):
++            if f"{c}_monitor.h" in self.content:
++                return c
++        return "da"
++
++    def __fill_kunit_c(self, struct_name: str) -> str:
++        kunit_c = self.kunit_c
++        kunit_c = kunit_c.replace("%%MODEL_NAME%%", self.name)
++        kunit_c = kunit_c.replace("%%MODEL_NAME_UP%%", self.name.upper())
++        kunit_c = kunit_c.replace("%%MONITOR_CLASS%%", self.monitor_class)
++        kunit_c = kunit_c.replace("%%STRUCT_NAME%%", struct_name)
++        return kunit_c
++
++    def __fill_kunit_h(self, struct_name, prototypes) -> str:
++        return f"""/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Automatically generated by rvgen kunit.
++ * May need manual intervention for function prototypes that couldn't be
++ * found (e.g. are in another file) or variables to be exported.
++ */
++
++#ifndef __{self.name.upper()}_KUNIT_H
++#define __{self.name.upper()}_KUNIT_H
++
++#if IS_ENABLED(CONFIG_RV_MONITORS_KUNIT_TEST)
++
++#include <linux/rv.h>
++#include <rv/kunit.h>
++
++extern const struct {struct_name} {{
++\tstruct rv_kunit_mon mon;
++\t{"\n\t".join(prototypes)}
++}} {struct_name};
++#endif
++
++#endif /* __{self.name.upper()}_KUNIT_H */
++"""
++
++    def __fill_monitor_handlers(self, struct_name, assignments):
++        struct_definition = f"""#if IS_ENABLED(CONFIG_RV_MONITORS_KUNIT_TEST)
++#include <kunit/visibility.h>
++#include "{self.name}_kunit.h"
++
++const struct {struct_name} {struct_name} = {{
++\t.mon = RV_MON_OPS_INIT(),
++\t{"\n\t".join(assignments)}
++}};
++EXPORT_SYMBOL_IF_KUNIT({struct_name});
++#endif"""
++
++        if self.auto_patch:
++            try:
++                with open(self.monitor_path, 'w') as f:
++                    f.write(f"{self.content}\n{struct_definition}\n")
++            except OSError as e:
++                raise KUnitError(f"Error patching monitor file {self.monitor_path}: {e}") from e
++        else:
++            print(f"Append the following to {self.name}.c:\n")
++            print(struct_definition)
++        print("Now complete the test and add it to rv_monitors_test.c")
++
++    def print_files(self):
++
++        handlers = self.__parse_attach_handlers()
++
++        if not handlers:
++            raise KUnitError(f"No handlers found in {self.monitor_path}")
++
++        prototypes = []
++        assignments = []
++        for handler in handlers:
++            arguments = self.__extract_function_args(handler)
++
++            prototypes.append(f"void (*{handler})({arguments});")
++            assignments.append(f".{handler} = {handler},")
++
++        struct_name = f"rv_{self.name}_ops"
++
++        self.__fill_monitor_handlers(struct_name, assignments)
++
++        dir_path = Path(self.monitor_path).parent
++
++        header_file_path = dir_path / f"{self.name}_kunit.h"
++        kunit_c_file_path = dir_path / f"{self.name}_kunit.c"
++
++        use_backup = True
++        if header_file_path.exists() or kunit_c_file_path.exists():
++            try:
++                response = input("KUnit file(s) already exist. Backup? [Y/n] ")
++                if response.strip().lower() in ("n", "no"):
++                    use_backup = False
++            except EOFError:
++                print("Non-interactive session detected, backing up existing files.")
++        else:
++            use_backup = False
++
++        if use_backup:
++            for path in (header_file_path, kunit_c_file_path):
++                if path.exists():
++                    try:
++                        path.rename(path.with_suffix(path.suffix + ".bak"))
++                    except OSError as e:
++                        raise KUnitError(f"Error backing up file {path}: {e}") from e
++
++        header_content = self.__fill_kunit_h(struct_name, prototypes)
++        try:
++            with open(header_file_path, 'w') as f:
++                f.write(header_content)
++            print(f"Successfully created KUnit header file: {header_file_path}")
++        except OSError as e:
++            raise KUnitError(f"Error writing to file {header_file_path}: {e}") from e
++
++        kunit_c_content = self.__fill_kunit_c(struct_name)
++        try:
++            with open(kunit_c_file_path, 'w') as f:
++                f.write(kunit_c_content)
++            print(f"Successfully created KUnit C file: {kunit_c_file_path}")
++        except OSError as e:
++            raise KUnitError(f"Error writing to file {kunit_c_file_path}: {e}") from e
+diff --git a/tools/verification/rvgen/rvgen/templates/kunit.c b/tools/verification/rvgen/rvgen/templates/kunit.c
+new file mode 100644
+index 000000000000..62092b5cc6d4
+--- /dev/null
++++ b/tools/verification/rvgen/rvgen/templates/kunit.c
+@@ -0,0 +1,33 @@
++// SPDX-License-Identifier: GPL-2.0
++#include <linux/kernel.h>
++#include <linux/rv.h>
++#include <rv/kunit.h>
++/*
++ * XXX: include required headers, e.g.,
++ * #include <linux/sched.h>
++ */
++#include "%%MODEL_NAME%%_kunit.h"
++
++#if IS_REACHABLE(CONFIG_RV_MON_%%MODEL_NAME_UP%%)
++
++static void rv_test_%%MODEL_NAME%%(struct kunit *test)
++{
++	struct rv_kunit_ctx *ctx = test->priv;
++	/*
++	 * If you need to create task_structs with rv_kunit_alloc_mock_task()
++	 * do it BEFORE preparing the test.
++	 */
++
++	prepare_test(test, &%%STRUCT_NAME%%.mon);
++
++	/*
++	 * XXX: write the test here
++	 * e.g.
++	 * RV_KUNIT_EXPECT_REACTION_HERE(test, ctx)
++	 *	%%STRUCT_NAME%%.handle_event(args);
++	 */
++}
++
++#else
++#define rv_test_%%MODEL_NAME%% rv_test_stub
++#endif
+-- 
+2.55.0
+

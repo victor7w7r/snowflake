@@ -1,0 +1,139 @@
+From 7bb518c386536ea6d214ae9bb58de528089368bc Mon Sep 17 00:00:00 2001
+From: Randy Dunlap <rdunlap@infradead.org>
+Date: Thu, 30 Jul 2026 16:34:27 -0700
+Subject: [PATCH 09156/15333] x86/lib: checksum_64.h: Eliminate all kernel-doc
+ warnings
+
+ - correct missing function parameter names
+ - add missing function return value sections
+ - use the correct function name in comments
+
+to avoid these warnings (samples):
+
+  Warning: arch/x86/include/asm/checksum_64.h:23 No description found for return value of 'csum_fold'
+  Warning: arch/x86/include/asm/checksum_64.h:46 function parameter 'iph' not described in 'ip_fast_csum'
+  Warning: arch/x86/include/asm/checksum_64.h:46 function parameter 'ihl' not described in 'ip_fast_csum'
+  Warning: arch/x86/include/asm/checksum_64.h:46 No description found for return value of 'ip_fast_csum'
+  Warning: arch/x86/include/asm/checksum_64.h:89 expecting prototype for csum_tcpup_nofold(). Prototype was for csum_tcpudp_nofold() instead
+  Warning: arch/x86/include/asm/checksum_64.h:115 expecting prototype for csum_tcpup_magic(). Prototype was for csum_tcpudp_magic() instead
+  Warning: arch/x86/include/asm/checksum_64.h:119 No description found for return value of 'csum_tcpudp_magic'
+  Warning: arch/x86/include/asm/checksum_64.h:129 No description found for return value of 'csum_partial'
+  Warning: ./arch/x86/include/asm/checksum_64.h:175 function parameter '_saddr' not described in 'csum_ipv6_magic'
+  Warning: ./arch/x86/include/asm/checksum_64.h:175 function parameter '_daddr' not described in 'csum_ipv6_magic'
+  Warning: ./arch/x86/include/asm/checksum_64.h:175 Excess function parameter 'saddr' description in 'csum_ipv6_magic'
+  Warning: ./arch/x86/include/asm/checksum_64.h:175 Excess function parameter 'daddr' description in 'csum_ipv6_magic'
+
+Signed-off-by: Randy Dunlap <rdunlap@infradead.org>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Link: https://patch.msgid.link/20260730233429.285788-4-rdunlap@infradead.org
+---
+ arch/x86/include/asm/checksum_64.h | 29 +++++++++++++++++------------
+ 1 file changed, 17 insertions(+), 12 deletions(-)
+
+diff --git a/arch/x86/include/asm/checksum_64.h b/arch/x86/include/asm/checksum_64.h
+index 5bdfd2db2b5a..da0182a2a4ce 100644
+--- a/arch/x86/include/asm/checksum_64.h
++++ b/arch/x86/include/asm/checksum_64.h
+@@ -14,11 +14,13 @@
+ 
+ /**
+  * csum_fold - Fold and invert a 32bit checksum.
+- * sum: 32bit unfolded sum
++ * @sum: 32bit unfolded sum
+  *
+  * Fold a 32bit running checksum to 16bit and invert it. This is usually
+  * the last step before putting a checksum into a packet.
+  * Make sure not to mix with 64bit checksums.
++ *
++ * Returns: new checksum value
+  */
+ static inline __sum16 csum_fold(__wsum sum)
+ {
+@@ -40,8 +42,10 @@ static inline __sum16 csum_fold(__wsum sum)
+ 
+ /**
+  * ip_fast_csum - Compute the IPv4 header checksum efficiently.
+- * iph: ipv4 header
+- * ihl: length of header / 4
++ * @iph: ipv4 header
++ * @ihl: length of header / 4
++ *
++ * Returns: header checksum
+  */
+ static inline __sum16 ip_fast_csum(const void *iph, unsigned int ihl)
+ {
+@@ -74,14 +78,14 @@ static inline __sum16 ip_fast_csum(const void *iph, unsigned int ihl)
+ }
+ 
+ /**
+- * csum_tcpup_nofold - Compute an IPv4 pseudo header checksum.
++ * csum_tcpudp_nofold - Compute an IPv4 pseudo header checksum.
+  * @saddr: source address
+  * @daddr: destination address
+  * @len: length of packet
+  * @proto: ip protocol of packet
+  * @sum: initial sum to be added in (32bit unfolded)
+  *
+- * Returns the pseudo header checksum the input data. Result is
++ * Returns: the pseudo header checksum the input data. Result is
+  * 32bit unfolded.
+  */
+ static inline __wsum
+@@ -100,14 +104,14 @@ csum_tcpudp_nofold(__be32 saddr, __be32 daddr, __u32 len,
+ 
+ 
+ /**
+- * csum_tcpup_magic - Compute an IPv4 pseudo header checksum.
++ * csum_tcpudp_magic - Compute an IPv4 pseudo header checksum.
+  * @saddr: source address
+  * @daddr: destination address
+  * @len: length of packet
+  * @proto: ip protocol of packet
+  * @sum: initial sum to be added in (32bit unfolded)
+  *
+- * Returns the 16bit pseudo header checksum the input data already
++ * Returns: the 16bit pseudo header checksum the input data already
+  * complemented and ready to be filled in.
+  */
+ static inline __sum16 csum_tcpudp_magic(__be32 saddr, __be32 daddr,
+@@ -123,7 +127,7 @@ static inline __sum16 csum_tcpudp_magic(__be32 saddr, __be32 daddr,
+  * @len: length of buffer.
+  * @sum: initial sum to be added in (32bit unfolded)
+  *
+- * Returns the 32bit unfolded internet checksum of the buffer.
++ * Returns: the 32bit unfolded internet checksum of the buffer.
+  * Before filling it in it needs to be csum_fold()'ed.
+  * buff should be aligned to a 64bit boundary if possible.
+  */
+@@ -141,7 +145,7 @@ extern __wsum csum_partial_copy_nocheck(const void *src, void *dst, int len);
+  * @buff: buffer address.
+  * @len: length of buffer.
+  *
+- * Returns the 16bit folded/inverted checksum of the passed buffer.
++ * Returns: the 16bit folded/inverted checksum of the passed buffer.
+  * Ready to fill in.
+  */
+ extern __sum16 ip_compute_csum(const void *buff, int len);
+@@ -159,15 +163,16 @@ static inline unsigned add32_with_carry(unsigned a, unsigned b)
+ 
+ /**
+  * csum_ipv6_magic - Compute checksum of an IPv6 pseudo header.
+- * @saddr: source address
+- * @daddr: destination address
++ * @_saddr: source address
++ * @_daddr: destination address
+  * @len: length of packet
+  * @proto: protocol of packet
+  * @sum: initial sum (32bit unfolded) to be added in
+  *
+  * Computes an IPv6 pseudo header checksum. This sum is added the checksum
+  * into UDP/TCP packets and contains some link layer information.
+- * Returns the unfolded 32bit checksum.
++ *
++ * Returns: the unfolded 32bit checksum.
+  */
+ 
+ static inline __sum16 csum_ipv6_magic(
+-- 
+2.55.0
+

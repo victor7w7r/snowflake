@@ -1,0 +1,103 @@
+From 487beac7b8efb45beb6f09552bcb869184ed7140 Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Tue, 16 Jun 2026 23:08:37 +0300
+Subject: [PATCH 00802/15333] drm/i915/dp_link_caps: Add helper to get common
+ rate index
+
+Add intel_dp_link_caps_common_rate_idx() to look up supported link rates
+tracked by the link_caps module by rate. This prepares for tracking these
+capabilities internally within the link caps module.
+
+Reviewed-by: Mika Kahola <mika.kahola@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260616200849.3534628-18-imre.deak@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_dp_link_caps.c     | 9 +++++++++
+ drivers/gpu/drm/i915/display/intel_dp_link_caps.h     | 1 +
+ drivers/gpu/drm/i915/display/intel_dp_link_training.c | 5 ++---
+ drivers/gpu/drm/i915/display/intel_dp_test.c          | 7 ++++---
+ 4 files changed, 16 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+index 09b60a0cd6fb..84d9636f4adb 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+@@ -61,6 +61,15 @@ int intel_dp_common_rate(struct intel_dp *intel_dp, int index)
+ 	return intel_dp->common_rates[index];
+ }
+ 
++int intel_dp_link_caps_common_rate_idx(struct intel_dp_link_caps *link_caps, int rate)
++{
++	struct intel_dp *intel_dp = link_caps->dp;
++
++	return intel_dp_rate_index(intel_dp->common_rates,
++				   intel_dp->num_common_rates,
++				   rate);
++}
++
+ /* Theoretical max between source and sink */
+ int intel_dp_max_common_rate(struct intel_dp *intel_dp)
+ {
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+index 3413f6f76045..7d7d3d11ba3f 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+@@ -14,6 +14,7 @@ struct intel_dp_link_config;
+ int intel_dp_common_len_rate_limit(const struct intel_dp *intel_dp,
+ 				   int max_rate);
+ int intel_dp_common_rate(struct intel_dp *intel_dp, int index);
++int intel_dp_link_caps_common_rate_idx(struct intel_dp_link_caps *link_caps, int rate);
+ int intel_dp_max_common_rate(struct intel_dp *intel_dp);
+ int intel_dp_link_caps_num_common_rates(struct intel_dp_link_caps *link_caps);
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_training.c b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+index 61ada34ab9c8..ec9bd9b4c800 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_training.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+@@ -1891,9 +1891,8 @@ static int reduce_link_rate(struct intel_dp *intel_dp, int current_rate)
+ 	if (forced_params.rate)
+ 		return -1;
+ 
+-	rate_index = intel_dp_rate_index(intel_dp->common_rates,
+-					 intel_dp->num_common_rates,
+-					 current_rate);
++	rate_index = intel_dp_link_caps_common_rate_idx(link_caps,
++							current_rate);
+ 
+ 	if (rate_index <= 0)
+ 		return -1;
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_test.c b/drivers/gpu/drm/i915/display/intel_dp_test.c
+index ba44769c9cfb..da7632536dac 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_test.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_test.c
+@@ -14,6 +14,7 @@
+ #include "intel_display_regs.h"
+ #include "intel_display_types.h"
+ #include "intel_dp.h"
++#include "intel_dp_link_caps.h"
+ #include "intel_dp_link_training.h"
+ #include "intel_dp_mst.h"
+ #include "intel_dp_test.h"
+@@ -32,6 +33,7 @@ void intel_dp_test_compute_config(struct intel_dp *intel_dp,
+ 				  struct intel_crtc_state *pipe_config,
+ 				  struct link_config_limits *limits)
+ {
++	struct intel_dp_link_caps *link_caps = intel_dp->link.caps;
+ 	struct intel_display *display = to_intel_display(intel_dp);
+ 
+ 	/* For DP Compliance we override the computed bpp for the pipe */
+@@ -54,9 +56,8 @@ void intel_dp_test_compute_config(struct intel_dp *intel_dp,
+ 		 */
+ 		if (intel_dp_link_params_valid(intel_dp, intel_dp->compliance.test_link_rate,
+ 					       intel_dp->compliance.test_lane_count)) {
+-			index = intel_dp_rate_index(intel_dp->common_rates,
+-						    intel_dp->num_common_rates,
+-						    intel_dp->compliance.test_link_rate);
++			index = intel_dp_link_caps_common_rate_idx(link_caps,
++								   intel_dp->compliance.test_link_rate);
+ 			if (index >= 0) {
+ 				limits->min_rate = intel_dp->compliance.test_link_rate;
+ 				limits->max_rate = intel_dp->compliance.test_link_rate;
+-- 
+2.55.0
+

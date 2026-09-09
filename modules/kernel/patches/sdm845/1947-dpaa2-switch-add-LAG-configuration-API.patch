@@ -1,0 +1,185 @@
+From f27ad9b45b13c235a71082ef1aa9bc5080caa781 Mon Sep 17 00:00:00 2001
+From: Ioana Ciornei <ioana.ciornei@nxp.com>
+Date: Mon, 29 Jun 2026 14:23:04 +0300
+Subject: [PATCH 01947/15333] dpaa2-switch: add LAG configuration API
+
+Add the necessary APIs to configure and control the LAG support on the
+DPAA2 switch object.
+ - The dpsw_lag_set() function will be used to either verify that a LAG
+ configuration can be support or to actually apply it in HW.
+ - The dpsw_if_set_lag_state() will get used in the next patches to
+ change the per port LAG state of a specific DPSW interface.
+
+Signed-off-by: Ioana Ciornei <ioana.ciornei@nxp.com>
+Link: https://patch.msgid.link/20260629112309.154328-9-ioana.ciornei@nxp.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ .../net/ethernet/freescale/dpaa2/dpsw-cmd.h   | 18 +++++-
+ drivers/net/ethernet/freescale/dpaa2/dpsw.c   | 60 +++++++++++++++++++
+ drivers/net/ethernet/freescale/dpaa2/dpsw.h   | 30 ++++++++++
+ 3 files changed, 107 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/freescale/dpaa2/dpsw-cmd.h b/drivers/net/ethernet/freescale/dpaa2/dpsw-cmd.h
+index 397d55f2bd99..9a2055c64983 100644
+--- a/drivers/net/ethernet/freescale/dpaa2/dpsw-cmd.h
++++ b/drivers/net/ethernet/freescale/dpaa2/dpsw-cmd.h
+@@ -12,7 +12,7 @@
+ 
+ /* DPSW Version */
+ #define DPSW_VER_MAJOR		8
+-#define DPSW_VER_MINOR		9
++#define DPSW_VER_MINOR		13
+ 
+ #define DPSW_CMD_BASE_VERSION	1
+ #define DPSW_CMD_VERSION_2	2
+@@ -92,11 +92,14 @@
+ #define DPSW_CMDID_CTRL_IF_SET_POOLS        DPSW_CMD_ID(0x0A1)
+ #define DPSW_CMDID_CTRL_IF_ENABLE           DPSW_CMD_ID(0x0A2)
+ #define DPSW_CMDID_CTRL_IF_DISABLE          DPSW_CMD_ID(0x0A3)
++#define DPSW_CMDID_SET_LAG                  DPSW_CMD_V2(0x0A4)
+ #define DPSW_CMDID_CTRL_IF_SET_QUEUE        DPSW_CMD_ID(0x0A6)
+ 
+ #define DPSW_CMDID_SET_EGRESS_FLOOD         DPSW_CMD_ID(0x0AC)
+ #define DPSW_CMDID_IF_SET_LEARNING_MODE     DPSW_CMD_ID(0x0AD)
+ 
++#define DPSW_CMDID_IF_SET_LAG_STATE         DPSW_CMD_ID(0x0B0)
++
+ /* Macros for accessing command fields smaller than 1byte */
+ #define DPSW_MASK(field)        \
+ 	GENMASK(DPSW_##field##_SHIFT + DPSW_##field##_SIZE - 1, \
+@@ -552,5 +555,18 @@ struct dpsw_cmd_if_reflection {
+ 	/* only 2 bits from the LSB */
+ 	u8 filter;
+ };
++
++struct dpsw_cmd_lag {
++	u8 group_id;
++	u8 num_ifs;
++	u8 pad[6];
++	u8 if_id[DPSW_MAX_LAG_IFS];
++	u8 phase;
++};
++
++struct dpsw_cmd_if_set_lag_state {
++	__le16 if_id;
++	u8 tx_enabled;
++};
+ #pragma pack(pop)
+ #endif /* __FSL_DPSW_CMD_H */
+diff --git a/drivers/net/ethernet/freescale/dpaa2/dpsw.c b/drivers/net/ethernet/freescale/dpaa2/dpsw.c
+index ab921d75deb2..f75cbdce42ba 100644
+--- a/drivers/net/ethernet/freescale/dpaa2/dpsw.c
++++ b/drivers/net/ethernet/freescale/dpaa2/dpsw.c
+@@ -1659,3 +1659,63 @@ int dpsw_if_remove_reflection(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+ 
+ 	return mc_send_command(mc_io, &cmd);
+ }
++
++/**
++ * dpsw_lag_set() - Set LAG configuration
++ * @mc_io:	Pointer to MC portal's I/O object
++ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
++ * @token:	Token of DPSW object
++ * @cfg:	pointer to LAG configuration
++ *
++ * Return:   '0' on Success; Error code otherwise.
++ */
++int dpsw_lag_set(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
++		 const struct dpsw_lag_cfg *cfg)
++{
++	struct fsl_mc_command cmd = { 0 };
++	struct dpsw_cmd_lag *cmd_params;
++	int i = 0;
++
++	cmd.header = mc_encode_cmd_header(DPSW_CMDID_SET_LAG, cmd_flags, token);
++
++	if (cfg->num_ifs > DPSW_MAX_LAG_IFS)
++		return -EOPNOTSUPP;
++
++	cmd_params = (struct dpsw_cmd_lag *)cmd.params;
++	cmd_params->group_id = cfg->group_id;
++	cmd_params->num_ifs = cfg->num_ifs;
++	cmd_params->phase = cfg->phase;
++
++	for (i = 0; i < cfg->num_ifs; i++)
++		cmd_params->if_id[i] = cfg->if_id[i];
++
++	return mc_send_command(mc_io, &cmd);
++}
++
++/**
++ * dpsw_if_set_lag_state() - Change per port LAG state
++ * @mc_io:      Pointer to MC portal's I/O object
++ * @cmd_flags:  Command flags; one or more of 'MC_CMD_FLAG_'
++ * @token:      Token of DPSW object
++ * @if_id:      ID of the switch interface
++ * @tx_enabled: Value of the per port LAG state
++ *     - 0 if the interface will not be active as part of the LAG group
++ *     - 1 if the interface will be active in the LAG group
++ *
++ * Return:   '0' on Success; Error code otherwise.
++ */
++int dpsw_if_set_lag_state(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
++			  u16 if_id, u8 tx_enabled)
++{
++	struct dpsw_cmd_if_set_lag_state *cmd_params;
++	struct fsl_mc_command cmd = { 0 };
++
++	cmd.header = mc_encode_cmd_header(DPSW_CMDID_IF_SET_LAG_STATE,
++					  cmd_flags, token);
++
++	cmd_params = (struct dpsw_cmd_if_set_lag_state *)cmd.params;
++	cmd_params->if_id = cpu_to_le16(if_id);
++	cmd_params->tx_enabled = tx_enabled;
++
++	return mc_send_command(mc_io, &cmd);
++}
+diff --git a/drivers/net/ethernet/freescale/dpaa2/dpsw.h b/drivers/net/ethernet/freescale/dpaa2/dpsw.h
+index b90bd363f47a..89f0267de8e9 100644
+--- a/drivers/net/ethernet/freescale/dpaa2/dpsw.h
++++ b/drivers/net/ethernet/freescale/dpaa2/dpsw.h
+@@ -20,6 +20,8 @@ struct fsl_mc_io;
+ 
+ #define DPSW_MAX_IF		64
+ 
++#define DPSW_MAX_LAG_IFS	8
++
+ int dpsw_open(struct fsl_mc_io *mc_io, u32 cmd_flags, int dpsw_id, u16 *token);
+ 
+ int dpsw_close(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token);
+@@ -788,4 +790,32 @@ int dpsw_if_add_reflection(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+ 
+ int dpsw_if_remove_reflection(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+ 			      u16 if_id, const struct dpsw_reflection_cfg *cfg);
++
++/* Link Aggregation Group configuration */
++
++#define DPSW_LAG_SET_PHASE_APPLY 0
++#define DPSW_LAG_SET_PHASE_CHECK 1
++
++/**
++ * struct dpsw_lag_cfg - Configuration structure for a LAG group
++ * @group_id: Link aggregation group ID. Valid values are in the
++ * [1, DPSW_MAX_LAG_IFS] range.
++ * @num_ifs: Number of interfaces in this LAG group, valid range is
++ * [0, DPSW_MAX_LAG_IFS].
++ * @if_id: Array containing the interface IDs of the ports part of a LAG group
++ * @phase: Use DPSW_LAG_SET_PHASE_APPLY for LAG configuration processing or
++ * DPSW_LAG_SET_PHASE_CHECK for LAG configuration validation.
++ */
++struct dpsw_lag_cfg {
++	u8 group_id;
++	u8 num_ifs;
++	u8 if_id[DPSW_MAX_LAG_IFS];
++	u8 phase;
++};
++
++int dpsw_lag_set(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
++		 const struct dpsw_lag_cfg *cfg);
++
++int dpsw_if_set_lag_state(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
++			  u16 if_id, u8 tx_enabled);
+ #endif /* __FSL_DPSW_H */
+-- 
+2.55.0
+

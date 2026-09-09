@@ -1,0 +1,89 @@
+From 216c6c67f7f1292474de1a3d1ae7d1cb95514264 Mon Sep 17 00:00:00 2001
+From: Dmitry Ilvokhin <d@ilvokhin.com>
+Date: Tue, 4 Aug 2026 07:15:42 +0000
+Subject: [PATCH 11895/15333] locking: Factor out queued_spin_release()
+
+The contended_release tracepoint needs to hook queued_spin_unlock(), but
+architectures with a custom unlock define queued_spin_unlock() directly,
+leaving no single generic place to add the tracing.
+
+Introduce queued_spin_release() as the arch-overridable release
+primitive and make queued_spin_unlock() a generic wrapper around it.
+An architecture that only customizes the release can then override
+queued_spin_release() and inherit the generic wrapper.
+
+Rename the MIPS override to queued_spin_release() accordingly. x86
+paravirt overrides queued_spin_unlock() directly and is left unchanged.
+
+No functional change intended.
+
+Signed-off-by: Dmitry Ilvokhin <d@ilvokhin.com>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Acked-by: Juergen Gross <jgross@suse.com>
+Link: https://patch.msgid.link/b8daabae6469ad72cc784a911f6cc43a6d45df3a.1785778551.git.d@ilvokhin.com
+---
+ arch/mips/include/asm/spinlock.h |  6 +++---
+ include/asm-generic/qspinlock.h  | 17 ++++++++++++++---
+ 2 files changed, 17 insertions(+), 6 deletions(-)
+
+diff --git a/arch/mips/include/asm/spinlock.h b/arch/mips/include/asm/spinlock.h
+index 6ce2117e49f6..c349162f15eb 100644
+--- a/arch/mips/include/asm/spinlock.h
++++ b/arch/mips/include/asm/spinlock.h
+@@ -13,12 +13,12 @@
+ 
+ #include <asm-generic/qspinlock_types.h>
+ 
+-#define	queued_spin_unlock queued_spin_unlock
++#define	queued_spin_release queued_spin_release
+ /**
+- * queued_spin_unlock - release a queued spinlock
++ * queued_spin_release - release a queued spinlock
+  * @lock : Pointer to queued spinlock structure
+  */
+-static inline void queued_spin_unlock(struct qspinlock *lock)
++static inline void queued_spin_release(struct qspinlock *lock)
+ {
+ 	/* This could be optimised with ARCH_HAS_MMIOWB */
+ 	mmiowb();
+diff --git a/include/asm-generic/qspinlock.h b/include/asm-generic/qspinlock.h
+index bf47cca2c375..ae45289e8ec7 100644
+--- a/include/asm-generic/qspinlock.h
++++ b/include/asm-generic/qspinlock.h
+@@ -115,12 +115,12 @@ static __always_inline void queued_spin_lock(struct qspinlock *lock)
+ }
+ #endif
+ 
+-#ifndef queued_spin_unlock
++#ifndef queued_spin_release
+ /**
+- * queued_spin_unlock - release a queued spinlock
++ * queued_spin_release - release a queued spinlock
+  * @lock : Pointer to queued spinlock structure
+  */
+-static __always_inline void queued_spin_unlock(struct qspinlock *lock)
++static __always_inline void queued_spin_release(struct qspinlock *lock)
+ {
+ 	/*
+ 	 * unlock() needs release semantics:
+@@ -129,6 +129,17 @@ static __always_inline void queued_spin_unlock(struct qspinlock *lock)
+ }
+ #endif
+ 
++#ifndef queued_spin_unlock
++/**
++ * queued_spin_unlock - unlock a queued spinlock
++ * @lock : Pointer to queued spinlock structure
++ */
++static __always_inline void queued_spin_unlock(struct qspinlock *lock)
++{
++	queued_spin_release(lock);
++}
++#endif
++
+ #ifndef virt_spin_lock
+ static __always_inline bool virt_spin_lock(struct qspinlock *lock)
+ {
+-- 
+2.55.0
+

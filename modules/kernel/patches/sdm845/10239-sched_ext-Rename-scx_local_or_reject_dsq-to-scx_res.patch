@@ -1,0 +1,91 @@
+From 8b3b8522c9139c18b8dbbafbeb0c903609e5a27d Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Mon, 3 Aug 2026 11:00:31 -1000
+Subject: [PATCH 10239/15333] sched_ext: Rename scx_local_or_reject_dsq() to
+ scx_resolve_local_dsq()
+
+The following rescue execution addition gives the function a third possible
+destination, making a name that enumerates the outcomes a poor fit. Rename
+to the destination-neutral scx_resolve_local_dsq(). No functional changes.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/ext.c | 4 ++--
+ kernel/sched/ext/sub.c | 6 +++---
+ kernel/sched/ext/sub.h | 6 +++---
+ 3 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 6a3e94707c8b..8e5c7e45520e 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -1507,7 +1507,7 @@ static void scx_dispatch_enqueue(struct scx_sched *sch, struct rq *rq,
+ 	bool is_rq_owned = false;
+ 
+ 	if (dsq->id == SCX_DSQ_LOCAL) {
+-		dsq = scx_local_or_reject_dsq(sch, rq, p, &enq_flags);
++		dsq = scx_resolve_local_dsq(sch, rq, p, &enq_flags);
+ 		is_rq_owned = true;
+ 	}
+ 
+@@ -2279,7 +2279,7 @@ static void move_local_task_to_local_dsq(struct scx_sched *sch,
+ 					 struct scx_dispatch_q *src_dsq,
+ 					 struct rq *dst_rq)
+ {
+-	struct scx_dispatch_q *dst_dsq = scx_local_or_reject_dsq(sch, dst_rq, p, &enq_flags);
++	struct scx_dispatch_q *dst_dsq = scx_resolve_local_dsq(sch, dst_rq, p, &enq_flags);
+ 
+ 	/* @dsq is locked and @p is on @dst_rq */
+ 	lockdep_assert_held(&src_dsq->lock);
+diff --git a/kernel/sched/ext/sub.c b/kernel/sched/ext/sub.c
+index daf7fbd3d0c3..2ea9a690e986 100644
+--- a/kernel/sched/ext/sub.c
++++ b/kernel/sched/ext/sub.c
+@@ -230,7 +230,7 @@ void scx_init_root_caps(struct scx_sched *sch)
+ }
+ 
+ /**
+- * scx_local_or_reject_dsq - Pick the local or reject DSQ for an insert
++ * scx_resolve_local_dsq - Pick the local or reject DSQ for an insert
+  * @sch: enqueuing sub-sched
+  * @rq: rq whose local DSQ @p targets
+  * @p: task being inserted
+@@ -246,8 +246,8 @@ void scx_init_root_caps(struct scx_sched *sch)
+  * to and run by its nearest non-bypassing ancestor. If root is bypassing, it
+  * always holds all caps.
+  */
+-struct scx_dispatch_q *scx_local_or_reject_dsq(struct scx_sched *sch, struct rq *rq,
+-					       struct task_struct *p, u64 *enq_flags)
++struct scx_dispatch_q *scx_resolve_local_dsq(struct scx_sched *sch, struct rq *rq,
++					     struct task_struct *p, u64 *enq_flags)
+ {
+ 	if (!scx_has_subs())
+ 		return &rq->scx.local_dsq;
+diff --git a/kernel/sched/ext/sub.h b/kernel/sched/ext/sub.h
+index 0019b75a2560..db449559bbe8 100644
+--- a/kernel/sched/ext/sub.h
++++ b/kernel/sched/ext/sub.h
+@@ -34,8 +34,8 @@ void scx_online_ecaps(struct rq *rq);
+ void scx_offline_ecaps(struct rq *rq);
+ void scx_discard_ecaps_to_sync(s32 cpu, struct scx_sched_pcpu *pcpu);
+ void scx_discard_stale_ecaps_syncs(void);
+-struct scx_dispatch_q *scx_local_or_reject_dsq(struct scx_sched *sch, struct rq *rq,
+-					       struct task_struct *p, u64 *enq_flags);
++struct scx_dispatch_q *scx_resolve_local_dsq(struct scx_sched *sch, struct rq *rq,
++					     struct task_struct *p, u64 *enq_flags);
+ bool scx_task_reenq_on_cap_revoke(struct rq *rq, struct task_struct *p);
+ void scx_reenq_reject(struct rq *rq);
+ 
+@@ -84,7 +84,7 @@ static inline void scx_online_ecaps(struct rq *rq) {}
+ static inline void scx_offline_ecaps(struct rq *rq) {}
+ static inline void scx_discard_ecaps_to_sync(s32 cpu, struct scx_sched_pcpu *pcpu) {}
+ static inline void scx_discard_stale_ecaps_syncs(void) {}
+-static inline struct scx_dispatch_q *scx_local_or_reject_dsq(struct scx_sched *sch, struct rq *rq, struct task_struct *p, u64 *enq_flags) { return &rq->scx.local_dsq; }
++static inline struct scx_dispatch_q *scx_resolve_local_dsq(struct scx_sched *sch, struct rq *rq, struct task_struct *p, u64 *enq_flags) { return &rq->scx.local_dsq; }
+ static inline bool scx_task_reenq_on_cap_revoke(struct rq *rq, struct task_struct *p) { return false; }
+ static inline void scx_reenq_reject(struct rq *rq) {}
+ static inline void scx_dec_has_subs(struct scx_sched *sch) {}
+-- 
+2.55.0
+

@@ -1,0 +1,62 @@
+From 1aae367b1646fb68a39a4c5aa8ac2e1f1512e0af Mon Sep 17 00:00:00 2001
+From: Hongyan Xu <getshell@seu.edu.cn>
+Date: Sat, 1 Aug 2026 22:06:43 +0800
+Subject: [PATCH 11119/15333] net: phy: nxp-tja11xx: cancel registration work
+ on remove
+
+tja1102_p0_probe() schedules work to register the second port. That work
+uses the Port 0 private data and phydev. The private data is
+devm-allocated, but the driver does not wait for the pending work on
+remove.
+
+Store the Port 0 private data in phydev->priv and add a remove callback.
+The callback cancels the registration work before devres teardown frees
+the state.
+
+This issue was found by a static analysis tool.
+
+Reviewed-by: Andrew Lunn <andrew@lunn.ch>
+Signed-off-by: Hongyan Xu <getshell@seu.edu.cn>
+Link: https://patch.msgid.link/20260801140643.1871-1-getshell@seu.edu.cn
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/phy/nxp-tja11xx.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/net/phy/nxp-tja11xx.c b/drivers/net/phy/nxp-tja11xx.c
+index 3c38a8ddae2f..079d912a1357 100644
+--- a/drivers/net/phy/nxp-tja11xx.c
++++ b/drivers/net/phy/nxp-tja11xx.c
+@@ -620,6 +620,7 @@ static int tja1102_p0_probe(struct phy_device *phydev)
+ 		return -ENOMEM;
+ 
+ 	priv->phydev = phydev;
++	phydev->priv = priv;
+ 	INIT_WORK(&priv->phy_register_work, tja1102_p1_register);
+ 
+ 	ret = tja11xx_hwmon_register(phydev, priv);
+@@ -631,6 +632,13 @@ static int tja1102_p0_probe(struct phy_device *phydev)
+ 	return 0;
+ }
+ 
++static void tja1102_p0_remove(struct phy_device *phydev)
++{
++	struct tja11xx_priv *priv = phydev->priv;
++
++	cancel_work_sync(&priv->phy_register_work);
++}
++
+ static int tja1102_match_phy_device(struct phy_device *phydev, bool port0)
+ {
+ 	int ret;
+@@ -849,6 +857,7 @@ static struct phy_driver tja11xx_driver[] = {
+ 		.features       = PHY_BASIC_T1_FEATURES,
+ 		.flags          = PHY_POLL_CABLE_TEST,
+ 		.probe		= tja1102_p0_probe,
++		.remove		= tja1102_p0_remove,
+ 		.soft_reset	= tja11xx_soft_reset,
+ 		.config_aneg	= tja11xx_config_aneg,
+ 		.config_init	= tja11xx_config_init,
+-- 
+2.55.0
+

@@ -1,0 +1,35 @@
+From ff755b6007908730946c155bb0d90ebc55926da7 Mon Sep 17 00:00:00 2001
+From: Daniel Borkmann <daniel@iogearbox.net>
+Date: Wed, 8 Jul 2026 23:15:37 +0200
+Subject: [PATCH 03375/15333] bpf: Account scratch buffer in bpf_prog_calc_tag
+
+bpf_prog_calc_tag() copies the instructions into a plain vmalloc() scratch
+buffer to blind the map fds before hashing. The buffer scales with the
+program, up to ~8MB at the 1M instruction limit, and is allocated on every
+program load, but unlike the rest of the load-time scratch memory it is
+not charged to the loader's memcg. Use GFP_KERNEL_ACCOUNT to account it
+like the other allocations scoped to the verification/load.
+
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Link: https://lore.kernel.org/bpf/20260708211537.371874-5-daniel@iogearbox.net
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ kernel/bpf/core.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/bpf/core.c b/kernel/bpf/core.c
+index 6e19a030da6f..f2b6e4c888af 100644
+--- a/kernel/bpf/core.c
++++ b/kernel/bpf/core.c
+@@ -305,7 +305,7 @@ int bpf_prog_calc_tag(struct bpf_prog *fp)
+ 	bool was_ld_map;
+ 	u32 i;
+ 
+-	dst = vmalloc(size);
++	dst = __vmalloc(size, GFP_KERNEL_ACCOUNT);
+ 	if (!dst)
+ 		return -ENOMEM;
+ 
+-- 
+2.55.0
+

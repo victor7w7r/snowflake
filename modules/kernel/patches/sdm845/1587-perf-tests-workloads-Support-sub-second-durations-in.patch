@@ -1,0 +1,99 @@
+From 810d0c911796bdc8ec67d5844b070c7f48bd732a Mon Sep 17 00:00:00 2001
+From: Ian Rogers <irogers@google.com>
+Date: Mon, 22 Jun 2026 18:27:48 -0700
+Subject: [PATCH 01587/15333] perf tests workloads: Support sub-second
+ durations in noploop and thloop
+
+Currently, the noploop and thloop workloads only support sleep durations
+in integer seconds because they parse the argument using atoi() and use
+alarm() for timer signaling.
+
+To support much shorter execution times in tests (speeding up test suites
+and allowing faster retries), change the input parsing to use atof() for
+double floating-point seconds. Use ualarm() for fractional durations less
+than 1.0 seconds, and fall back to alarm() for durations of 1.0 second or
+more.
+
+Assisted-by: Antigravity:gemini-3.1-pro
+Signed-off-by: Ian Rogers <irogers@google.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/tests/workloads/noploop.c | 17 ++++++++++++++---
+ tools/perf/tests/workloads/thloop.c  | 16 +++++++++++-----
+ 2 files changed, 25 insertions(+), 8 deletions(-)
+
+diff --git a/tools/perf/tests/workloads/noploop.c b/tools/perf/tests/workloads/noploop.c
+index 656e472e6188..ca9f871e136f 100644
+--- a/tools/perf/tests/workloads/noploop.c
++++ b/tools/perf/tests/workloads/noploop.c
+@@ -15,15 +15,26 @@ static void sighandler(int sig __maybe_unused)
+ 
+ static int noploop(int argc, const char **argv)
+ {
+-	int sec = 1;
++	double sec = 1.0;
+ 
+ 	pthread_setname_np(pthread_self(), "perf-noploop");
+ 	if (argc > 0)
+-		sec = atoi(argv[0]);
++		sec = atof(argv[0]);
++
++	if (!(sec > 0.0)) {
++		fprintf(stderr, "Error: seconds (%f) must be > 0\n", sec);
++		return 1;
++	}
+ 
+ 	signal(SIGINT, sighandler);
+ 	signal(SIGALRM, sighandler);
+-	alarm(sec);
++
++	if (sec < 1.0) {
++		useconds_t usecs = (useconds_t)(sec * 1000000.0);
++
++		ualarm(usecs > 0 ? usecs : 1, 0);
++	} else
++		alarm((unsigned int)sec);
+ 
+ 	while (!done)
+ 		continue;
+diff --git a/tools/perf/tests/workloads/thloop.c b/tools/perf/tests/workloads/thloop.c
+index bd8168f883fb..c830d739489f 100644
+--- a/tools/perf/tests/workloads/thloop.c
++++ b/tools/perf/tests/workloads/thloop.c
+@@ -31,14 +31,15 @@ static void *thfunc(void *arg)
+ 
+ static int thloop(int argc, const char **argv)
+ {
+-	int nt = 2, sec = 1, err = 1;
++	int nt = 2, err = 1;
++	double sec = 1.0;
+ 	pthread_t *thread_list = NULL;
+ 
+ 	if (argc > 0)
+-		sec = atoi(argv[0]);
++		sec = atof(argv[0]);
+ 
+-	if (sec <= 0) {
+-		fprintf(stderr, "Error: seconds (%d) must be >= 1\n", sec);
++	if (!(sec > 0.0)) {
++		fprintf(stderr, "Error: seconds (%f) must be > 0\n", sec);
+ 		return 1;
+ 	}
+ 
+@@ -67,7 +68,12 @@ static int thloop(int argc, const char **argv)
+ 			goto out;
+ 		}
+ 	}
+-	alarm(sec);
++	if (sec < 1.0) {
++		useconds_t usecs = (useconds_t)(sec * 1000000.0);
++
++		ualarm(usecs > 0 ? usecs : 1, 0);
++	} else
++		alarm((unsigned int)sec);
+ 	test_loop();
+ 	err = 0;
+ out:
+-- 
+2.55.0
+

@@ -1,0 +1,88 @@
+From 0414dd7b6f8b8619c8f1595ba04edb43d405581e Mon Sep 17 00:00:00 2001
+From: HyeongJun An <sammiee5311@gmail.com>
+Date: Wed, 12 Aug 2026 23:15:06 +0900
+Subject: [PATCH 13527/15333] ALSA: seq: Drop the dead struct
+ snd_seq_event_bounce
+
+The struct describes a bounce payload of an error code followed by the
+original event and its external data.  No kernel has ever sent that.
+Before commit efc86691e4d8 ("ALSA: seq: Fix kernel heap address leak in
+bounce_error_event()") the kernel emitted no SNDRV_SEQ_EVENT_BOUNCE at
+all, and since then it sends the event record alone.
+
+Nothing has ever read it either.  Its only accessor,
+snd_seq_event_bounce_ext_data(), has had no caller for the whole git
+history, and it did not even compile until commit c7e0b5bf9fff ("[ALSA]
+Remove xxx_t typedefs: Sequencer") incidentally repaired the type name
+it referred to, three years after the git import.  Drop the accessor
+along with the struct.
+
+This removes a definition from a UAPI header.  Since no kernel ever
+produced the layout, nothing can have parsed it, but a program that
+merely names the type will need to stop.
+
+Suggested-by: Takashi Iwai <tiwai@suse.de>
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: HyeongJun An <sammiee5311@gmail.com>
+Link: https://patch.msgid.link/20260812141506.4016387-1-sammiee5311@gmail.com
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ include/sound/asequencer.h      |  3 ---
+ include/uapi/sound/asequencer.h | 10 ----------
+ sound/core/seq/seq_clientmgr.c  |  5 ++---
+ 3 files changed, 2 insertions(+), 16 deletions(-)
+
+diff --git a/include/sound/asequencer.h b/include/sound/asequencer.h
+index ddbb6bf801bb..efad366736a4 100644
+--- a/include/sound/asequencer.h
++++ b/include/sound/asequencer.h
+@@ -11,9 +11,6 @@
+ #include <sound/asound.h>
+ #include <uapi/sound/asequencer.h>
+ 
+-/* helper macro */
+-#define snd_seq_event_bounce_ext_data(ev) ((void*)((char *)(ev)->data.ext.ptr + sizeof(struct snd_seq_event_bounce)))
+-
+ /*
+  * type check macros
+  */
+diff --git a/include/uapi/sound/asequencer.h b/include/uapi/sound/asequencer.h
+index a5c41f771e05..3deba3965ca5 100644
+--- a/include/uapi/sound/asequencer.h
++++ b/include/uapi/sound/asequencer.h
+@@ -308,16 +308,6 @@ struct snd_seq_ump_event {
+ 	};
+ };
+ 
+-/*
+- * bounce event - stored as variable size data
+- */
+-struct snd_seq_event_bounce {
+-	int err;
+-	struct snd_seq_event event;
+-	/* external data follows here. */
+-};
+-
+-
+ 	/* system information */
+ struct snd_seq_system_info {
+ 	int queues;			/* maximum queues count */
+diff --git a/sound/core/seq/seq_clientmgr.c b/sound/core/seq/seq_clientmgr.c
+index 11fa7e825819..5b86e75c2658 100644
+--- a/sound/core/seq/seq_clientmgr.c
++++ b/sound/core/seq/seq_clientmgr.c
+@@ -530,9 +530,8 @@ static struct snd_seq_client *get_event_dest_client(struct snd_seq_event *event)
+  * Return the error event.
+  *
+  * If the receiver client is a user client, the original event is
+- * encapsulated in SNDRV_SEQ_EVENT_BOUNCE as variable length event.  If
+- * the original event is also variable length, the external data is
+- * copied after the event record. 
++ * encapsulated in SNDRV_SEQ_EVENT_BOUNCE as variable length event.  The
++ * external data of a variable length event is not copied along.
+  * If the receiver client is a kernel client, the original event is
+  * quoted in SNDRV_SEQ_EVENT_KERNEL_ERROR, since this requires no extra
+  * kmalloc.
+-- 
+2.55.0
+

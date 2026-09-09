@@ -1,0 +1,72 @@
+From 018fc39652914c403d660da03234c8276e388dc0 Mon Sep 17 00:00:00 2001
+From: Tyrel Datwyler <tyreld@linux.ibm.com>
+Date: Wed, 22 Jul 2026 17:01:24 -0700
+Subject: [PATCH 07194/15333] scsi: ibmvfc: initialize NVMe channel
+ configuration during driver probe
+
+Initialize the host's NVMe channel-group state during probe.
+
+Set up the NVMe channel list head, desired queue count, maximum queue
+count, protocol identifier, and enablement state alongside the existing
+SCSI channel-group initialization in ibmvfc_probe().
+
+This prepares the driver with a NVMe/FC channel group that can will be
+used by later patches for NVMe queue allocation, discovery buffers,
+target management, and IO submission.
+
+Signed-off-by: Tyrel Datwyler <tyreld@linux.ibm.com>
+Link: https://patch.msgid.link/20260723000149.969416-9-tyreld@linux.ibm.com
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+---
+ drivers/scsi/ibmvscsi/ibmvfc-core.c | 8 +++++++-
+ drivers/scsi/ibmvscsi/ibmvfc.h      | 1 +
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/scsi/ibmvscsi/ibmvfc-core.c b/drivers/scsi/ibmvscsi/ibmvfc-core.c
+index 56f4fb200a69..5b6570232df3 100644
+--- a/drivers/scsi/ibmvscsi/ibmvfc-core.c
++++ b/drivers/scsi/ibmvscsi/ibmvfc-core.c
+@@ -6347,7 +6347,8 @@ static int ibmvfc_probe(struct vio_dev *vdev, const struct vio_device_id *id)
+ 	struct device *dev = &vdev->dev;
+ 	int rc = -ENOMEM;
+ 	unsigned int online_cpus = num_online_cpus();
+-	unsigned int max_scsi_queues = min((unsigned int)IBMVFC_MAX_SCSI_QUEUES, online_cpus);
++	unsigned int max_scsi_queues = min_t(unsigned int, IBMVFC_MAX_SCSI_QUEUES, online_cpus);
++	unsigned int max_nvme_queues = min_t(unsigned int, IBMVFC_MAX_NVME_QUEUES, online_cpus);
+ 
+ 	ENTER;
+ 	shost = scsi_host_alloc(&driver_template, sizeof(*vhost));
+@@ -6367,6 +6368,7 @@ static int ibmvfc_probe(struct vio_dev *vdev, const struct vio_device_id *id)
+ 
+ 	vhost = shost_priv(shost);
+ 	INIT_LIST_HEAD(&vhost->scsi_scrqs.targets);
++	INIT_LIST_HEAD(&vhost->nvme_scrqs.targets);
+ 	INIT_LIST_HEAD(&vhost->purge);
+ 	sprintf(vhost->name, IBMVFC_NAME);
+ 	vhost->host = shost;
+@@ -6381,6 +6383,10 @@ static int ibmvfc_probe(struct vio_dev *vdev, const struct vio_device_id *id)
+ 	vhost->scsi_scrqs.protocol = IBMVFC_PROTO_SCSI;
+ 	vhost->using_channels = 0;
+ 	vhost->do_enquiry = 1;
++	vhost->nvme_enabled = mq_enabled ? nvme_enabled : 0;
++	vhost->nvme_scrqs.desired_queues = min(max_nvme_queues, nr_nvme_channels);
++	vhost->nvme_scrqs.max_queues = max_nvme_queues;
++	vhost->nvme_scrqs.protocol = IBMVFC_PROTO_NVME;
+ 	vhost->scan_timeout = 0;
+ 
+ 	strcpy(vhost->partition_name, "UNKNOWN");
+diff --git a/drivers/scsi/ibmvscsi/ibmvfc.h b/drivers/scsi/ibmvscsi/ibmvfc.h
+index f137b61ce422..01c49d81b135 100644
+--- a/drivers/scsi/ibmvscsi/ibmvfc.h
++++ b/drivers/scsi/ibmvscsi/ibmvfc.h
+@@ -970,6 +970,7 @@ struct ibmvfc_host {
+ 	struct ibmvfc_queue crq;
+ 	struct ibmvfc_queue async_crq;
+ 	struct ibmvfc_channels scsi_scrqs;
++	struct ibmvfc_channels nvme_scrqs;
+ 	struct ibmvfc_npiv_login login_info;
+ 	union ibmvfc_npiv_login_data *login_buf;
+ 	dma_addr_t login_buf_dma;
+-- 
+2.55.0
+

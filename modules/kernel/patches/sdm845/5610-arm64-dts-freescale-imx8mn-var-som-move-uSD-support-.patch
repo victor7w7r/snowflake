@@ -1,0 +1,251 @@
+From bc5217a4e354ebe0a2f52d2188ef952fd630defc Mon Sep 17 00:00:00 2001
+From: Stefano Radaelli <stefano.r@variscite.com>
+Date: Mon, 6 Jul 2026 11:34:32 +0200
+Subject: [PATCH 05610/15333] arm64: dts: freescale: imx8mn-var-som: move uSD
+ support to carrier boards
+
+The VAR-SOM-MX8MN module does not provide an onboard SD card slot.
+USDHC2 is routed to the SD card slot on the carrier boards.
+
+Move the USDHC2 node and pinctrl configuration from the SOM device tree
+to imx8mn-var-som-symphony.dts and imx8mn-rve-gateway.dts, keeping the
+SOM dtsi limited to hardware present on the module itself.
+
+Add the required off-on-delay-us property for the USDHC2 regulator on
+the Symphony carrier board.
+
+Signed-off-by: Stefano Radaelli <stefano.r@variscite.com>
+Reviewed-by: Peng Fan <peng.fan@nxp.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+---
+ .../boot/dts/freescale/imx8mn-rve-gateway.dts | 47 ++++++++++++++-
+ .../dts/freescale/imx8mn-var-som-symphony.dts | 57 +++++++++++++++++++
+ .../boot/dts/freescale/imx8mn-var-som.dtsi    | 56 ------------------
+ 3 files changed, 102 insertions(+), 58 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/freescale/imx8mn-rve-gateway.dts b/arch/arm64/boot/dts/freescale/imx8mn-rve-gateway.dts
+index ea1855171fb0..056ea2f9e963 100644
+--- a/arch/arm64/boot/dts/freescale/imx8mn-rve-gateway.dts
++++ b/arch/arm64/boot/dts/freescale/imx8mn-rve-gateway.dts
+@@ -207,8 +207,16 @@ &usbotg1 {
+ 
+ /* SD interface on expansion connector. */
+ &usdhc2 {
+-	vmmc-supply = <&reg_3p3v>;
++	assigned-clocks = <&clk IMX8MN_CLK_USDHC2>;
++	assigned-clock-rates = <200000000>;
++	pinctrl-names = "default", "state_100mhz", "state_200mhz";
++	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
++	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
++	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
+ 	cd-gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;
++	bus-width = <4>;
++	vmmc-supply = <&reg_3p3v>;
++	status = "okay";
+ };
+ 
+ &iomuxc {
+@@ -276,10 +284,45 @@ MX8MN_IOMUXC_SAI5_RXD0_GPIO3_IO21	0x00000156 /* B */
+ 		>;
+ 	};
+ 
+-	/* Override Card Detect function GPIO value (GPIO1_IO10) from SOM: */
+ 	pinctrl_usdhc2_gpio: usdhc2gpiogrp {
+ 		fsl,pins = <
+ 			MX8MN_IOMUXC_GPIO1_IO13_GPIO1_IO13	0x41
+ 		>;
+ 	};
++
++	pinctrl_usdhc2: usdhc2grp {
++		fsl,pins = <
++			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK		0x190
++			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD		0x1d0
++			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0	0x1d0
++			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1	0x1d0
++			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2	0x1d0
++			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3	0x1d0
++			MX8MN_IOMUXC_GPIO1_IO04_USDHC2_VSELECT	0x1d0
++		>;
++	};
++
++	pinctrl_usdhc2_100mhz: usdhc2-100mhzgrp {
++		fsl,pins = <
++			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK		0x194
++			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD		0x1d4
++			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0	0x1d4
++			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1	0x1d4
++			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2	0x1d4
++			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3	0x1d4
++			MX8MN_IOMUXC_GPIO1_IO04_USDHC2_VSELECT	0x1d0
++		>;
++	};
++
++	pinctrl_usdhc2_200mhz: usdhc2-200mhzgrp {
++		fsl,pins = <
++			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK		0x196
++			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD		0x1d6
++			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0	0x1d6
++			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1	0x1d6
++			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2	0x1d6
++			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3	0x1d6
++			MX8MN_IOMUXC_GPIO1_IO04_USDHC2_VSELECT	0x1d0
++		>;
++	};
+ };
+diff --git a/arch/arm64/boot/dts/freescale/imx8mn-var-som-symphony.dts b/arch/arm64/boot/dts/freescale/imx8mn-var-som-symphony.dts
+index b07e71d3adee..7308613a48b2 100644
+--- a/arch/arm64/boot/dts/freescale/imx8mn-var-som-symphony.dts
++++ b/arch/arm64/boot/dts/freescale/imx8mn-var-som-symphony.dts
+@@ -28,6 +28,7 @@ reg_usdhc2_vmmc: regulator-usdhc2-vmmc {
+ 		regulator-max-microvolt = <3300000>;
+ 		gpio = <&gpio4 22 GPIO_ACTIVE_HIGH>;
+ 		enable-active-high;
++		off-on-delay-us = <20000>;
+ 	};
+ 
+ 	gpio-keys {
+@@ -200,6 +201,20 @@ usb1_drd_sw: endpoint {
+ 	};
+ };
+ 
++/* SD */
++&usdhc2 {
++	assigned-clocks = <&clk IMX8MN_CLK_USDHC2>;
++	assigned-clock-rates = <200000000>;
++	pinctrl-names = "default", "state_100mhz", "state_200mhz";
++	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
++	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
++	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
++	cd-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
++	bus-width = <4>;
++	vmmc-supply = <&reg_usdhc2_vmmc>;
++	status = "okay";
++};
++
+ &iomuxc {
+ 	pinctrl_captouch: captouchgrp {
+ 		fsl,pins = <
+@@ -252,4 +267,46 @@ MX8MN_IOMUXC_UART4_RXD_UART4_DCE_RX	0x140
+ 			MX8MN_IOMUXC_UART4_TXD_UART4_DCE_TX	0x140
+ 		>;
+ 	};
++
++	pinctrl_usdhc2_gpio: usdhc2gpiogrp {
++		fsl,pins = <
++			MX8MN_IOMUXC_GPIO1_IO10_GPIO1_IO10	0x41
++		>;
++	};
++
++	pinctrl_usdhc2: usdhc2grp {
++		fsl,pins = <
++			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK		0x190
++			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD		0x1d0
++			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0	0x1d0
++			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1	0x1d0
++			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2	0x1d0
++			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3	0x1d0
++			MX8MN_IOMUXC_GPIO1_IO04_USDHC2_VSELECT	0x1d0
++		>;
++	};
++
++	pinctrl_usdhc2_100mhz: usdhc2-100mhzgrp {
++		fsl,pins = <
++			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK		0x194
++			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD		0x1d4
++			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0	0x1d4
++			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1	0x1d4
++			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2	0x1d4
++			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3	0x1d4
++			MX8MN_IOMUXC_GPIO1_IO04_USDHC2_VSELECT	0x1d0
++		>;
++	};
++
++	pinctrl_usdhc2_200mhz: usdhc2-200mhzgrp {
++		fsl,pins = <
++			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK		0x196
++			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD		0x1d6
++			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0	0x1d6
++			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1	0x1d6
++			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2	0x1d6
++			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3	0x1d6
++			MX8MN_IOMUXC_GPIO1_IO04_USDHC2_VSELECT	0x1d0
++		>;
++	};
+ };
+diff --git a/arch/arm64/boot/dts/freescale/imx8mn-var-som.dtsi b/arch/arm64/boot/dts/freescale/imx8mn-var-som.dtsi
+index 32f101ef2850..e1d2e2a72e1f 100644
+--- a/arch/arm64/boot/dts/freescale/imx8mn-var-som.dtsi
++++ b/arch/arm64/boot/dts/freescale/imx8mn-var-som.dtsi
+@@ -295,20 +295,6 @@ brcmf: wifi@1 {
+ 	};
+ };
+ 
+-/* SD */
+-&usdhc2 {
+-	assigned-clocks = <&clk IMX8MN_CLK_USDHC2>;
+-	assigned-clock-rates = <200000000>;
+-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+-	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
+-	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
+-	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
+-	cd-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
+-	bus-width = <4>;
+-	vmmc-supply = <&reg_usdhc2_vmmc>;
+-	status = "okay";
+-};
+-
+ /* eMMC */
+ &usdhc3 {
+ 	assigned-clocks = <&clk IMX8MN_CLK_USDHC3_ROOT>;
+@@ -454,48 +440,6 @@ MX8MN_IOMUXC_SD1_DATA3_USDHC1_DATA3	0x1d6
+ 		>;
+ 	};
+ 
+-	pinctrl_usdhc2_gpio: usdhc2gpiogrp {
+-		fsl,pins = <
+-			MX8MN_IOMUXC_GPIO1_IO10_GPIO1_IO10	0x41
+-		>;
+-	};
+-
+-	pinctrl_usdhc2: usdhc2grp {
+-		fsl,pins = <
+-			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK		0x190
+-			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD		0x1d0
+-			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0	0x1d0
+-			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1	0x1d0
+-			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2	0x1d0
+-			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3	0x1d0
+-			MX8MN_IOMUXC_GPIO1_IO04_USDHC2_VSELECT	0x1d0
+-		>;
+-	};
+-
+-	pinctrl_usdhc2_100mhz: usdhc2-100mhzgrp {
+-		fsl,pins = <
+-			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK		0x194
+-			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD		0x1d4
+-			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0	0x1d4
+-			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1	0x1d4
+-			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2	0x1d4
+-			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3	0x1d4
+-			MX8MN_IOMUXC_GPIO1_IO04_USDHC2_VSELECT	0x1d0
+-		>;
+-	};
+-
+-	pinctrl_usdhc2_200mhz: usdhc2-200mhzgrp {
+-		fsl,pins = <
+-			MX8MN_IOMUXC_SD2_CLK_USDHC2_CLK		0x196
+-			MX8MN_IOMUXC_SD2_CMD_USDHC2_CMD		0x1d6
+-			MX8MN_IOMUXC_SD2_DATA0_USDHC2_DATA0	0x1d6
+-			MX8MN_IOMUXC_SD2_DATA1_USDHC2_DATA1	0x1d6
+-			MX8MN_IOMUXC_SD2_DATA2_USDHC2_DATA2	0x1d6
+-			MX8MN_IOMUXC_SD2_DATA3_USDHC2_DATA3	0x1d6
+-			MX8MN_IOMUXC_GPIO1_IO04_USDHC2_VSELECT	0x1d0
+-		>;
+-	};
+-
+ 	pinctrl_usdhc3: usdhc3grp {
+ 		fsl,pins = <
+ 			MX8MN_IOMUXC_NAND_WE_B_USDHC3_CLK	0x190
+-- 
+2.55.0
+

@@ -1,0 +1,157 @@
+From 1f33a9688f2018aba8c9b7476f50999c10c6a921 Mon Sep 17 00:00:00 2001
+From: Lijo Lazar <lijo.lazar@amd.com>
+Date: Tue, 4 Aug 2026 14:28:12 +0530
+Subject: [PATCH 13499/15333] drm/amd/pm: Keep sub-degree precision in Q10
+ temperatures
+
+The Q10 temperatures were rounded to whole degrees before being scaled
+to millidegrees, losing sub-degree precision. Convert them while
+preserving the fractional part.
+
+Also, use the standard MILLIDEGREE_PER_DEGREE to represent
+SMU_TEMPERATURE_UNITS_PER_CENTIGRADES.
+
+Signed-off-by: Lijo Lazar <lijo.lazar@amd.com>
+Reviewed-by: Asad Kamal <asad.kamal@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h      |  2 +-
+ drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h       |  4 ++++
+ .../gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_12_ppt.c  |  9 +++------
+ .../gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c   |  9 +++------
+ .../gpu/drm/amd/pm/swsmu/smu15/smu_v15_0_8_ppt.c   | 14 ++++++++------
+ 5 files changed, 19 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h b/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
+index 00d075cb86b8..3ec65630ab99 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
+@@ -34,7 +34,7 @@
+ 
+ #define SMU_THERMAL_MINIMUM_ALERT_TEMP		0
+ #define SMU_THERMAL_MAXIMUM_ALERT_TEMP		255
+-#define SMU_TEMPERATURE_UNITS_PER_CENTIGRADES	1000
++#define SMU_TEMPERATURE_UNITS_PER_CENTIGRADES	MILLIDEGREE_PER_DEGREE
+ #define SMU_FW_NAME_LEN			0x24
+ 
+ #define SMU_DPM_USER_PROFILE_RESTORE (1 << 0)
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h
+index 238dcc468557..ffff02489c3e 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h
+@@ -58,6 +58,10 @@
+ /* Convert Q10 watts to milliwatts, preserving the fractional part */
+ #define SMUQ10_TO_MILLIWATT(x) (SMUQ10_TO_UINT(x) * MILLIWATT_PER_WATT + \
+ 				((SMUQ10_FRAC(x) * MILLIWATT_PER_WATT) >> 10))
++/* Convert Q10 degrees Celsius to millidegrees, preserving the fractional part */
++#define SMUQ10_TO_MILLICELSIUS(x) \
++	(SMUQ10_TO_UINT(x) * SMU_TEMPERATURE_UNITS_PER_CENTIGRADES + \
++	 ((SMUQ10_FRAC(x) * SMU_TEMPERATURE_UNITS_PER_CENTIGRADES) >> 10))
+ #define SMU_V13_SOFT_FREQ_ROUND(x)	((x) + 1)
+ 
+ extern const int pmfw_decoded_link_speed[5];
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_12_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_12_ppt.c
+index f0f789c4ff22..0033453f27e5 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_12_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_12_ppt.c
+@@ -437,19 +437,16 @@ int smu_v13_0_12_get_smu_metrics_data(struct smu_context *smu,
+ 		*value = SMUQ10_TO_MILLIWATT(metrics->SocketPower);
+ 		break;
+ 	case METRICS_TEMPERATURE_HOTSPOT:
+-		*value = SMUQ10_ROUND(metrics->MaxSocketTemperature) *
+-			 SMU_TEMPERATURE_UNITS_PER_CENTIGRADES;
++		*value = SMUQ10_TO_MILLICELSIUS(metrics->MaxSocketTemperature);
+ 		break;
+ 	case METRICS_TEMPERATURE_MEM:
+-		*value = SMUQ10_ROUND(metrics->MaxHbmTemperature) *
+-			 SMU_TEMPERATURE_UNITS_PER_CENTIGRADES;
++		*value = SMUQ10_TO_MILLICELSIUS(metrics->MaxHbmTemperature);
+ 		break;
+ 	/* This is the max of all VRs and not just SOC VR.
+ 	 * No need to define another data type for the same.
+ 	 */
+ 	case METRICS_TEMPERATURE_VRSOC:
+-		*value = SMUQ10_ROUND(metrics->MaxVrTemperature) *
+-			 SMU_TEMPERATURE_UNITS_PER_CENTIGRADES;
++		*value = SMUQ10_TO_MILLICELSIUS(metrics->MaxVrTemperature);
+ 		break;
+ 	default:
+ 		*value = UINT_MAX;
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c
+index fe0443a07b4c..84c02e6d9673 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c
+@@ -1306,19 +1306,16 @@ static int smu_v13_0_6_get_smu_metrics_data(struct smu_context *smu,
+ 		*value = SMUQ10_TO_MILLIWATT(GET_METRIC_FIELD(SocketPower, version));
+ 		break;
+ 	case METRICS_TEMPERATURE_HOTSPOT:
+-		*value = SMUQ10_ROUND(GET_METRIC_FIELD(MaxSocketTemperature, version)) *
+-			 SMU_TEMPERATURE_UNITS_PER_CENTIGRADES;
++		*value = SMUQ10_TO_MILLICELSIUS(GET_METRIC_FIELD(MaxSocketTemperature, version));
+ 		break;
+ 	case METRICS_TEMPERATURE_MEM:
+-		*value = SMUQ10_ROUND(GET_METRIC_FIELD(MaxHbmTemperature, version)) *
+-			 SMU_TEMPERATURE_UNITS_PER_CENTIGRADES;
++		*value = SMUQ10_TO_MILLICELSIUS(GET_METRIC_FIELD(MaxHbmTemperature, version));
+ 		break;
+ 	/* This is the max of all VRs and not just SOC VR.
+ 	 * No need to define another data type for the same.
+ 	 */
+ 	case METRICS_TEMPERATURE_VRSOC:
+-		*value = SMUQ10_ROUND(GET_METRIC_FIELD(MaxVrTemperature, version)) *
+-			 SMU_TEMPERATURE_UNITS_PER_CENTIGRADES;
++		*value = SMUQ10_TO_MILLICELSIUS(GET_METRIC_FIELD(MaxVrTemperature, version));
+ 		break;
+ 	default:
+ 		*value = UINT_MAX;
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0_8_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0_8_ppt.c
+index 92897843be24..fd3fca217e31 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0_8_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0_8_ppt.c
+@@ -58,6 +58,10 @@
+ /* Convert Q10 watts to milliwatts, preserving the fractional part */
+ #define SMUQ10_TO_MILLIWATT(x) (SMUQ10_TO_UINT(x) * MILLIWATT_PER_WATT + \
+ 				((SMUQ10_FRAC(x) * MILLIWATT_PER_WATT) >> 10))
++/* Convert Q10 degrees Celsius to millidegrees, preserving the fractional part */
++#define SMUQ10_TO_MILLICELSIUS(x) \
++	(SMUQ10_TO_UINT(x) * SMU_TEMPERATURE_UNITS_PER_CENTIGRADES + \
++	 ((SMUQ10_FRAC(x) * SMU_TEMPERATURE_UNITS_PER_CENTIGRADES) >> 10))
+ 
+ #define hbm_stack_mask_valid(umc_mask) \
+ 	(((umc_mask) & 0xF) == 0xF)
+@@ -419,8 +423,7 @@ static int smu_v15_0_8_get_smu_metrics_data(struct smu_context *smu,
+ 		*value = SMUQ10_TO_MILLIWATT(metrics->SocketPower);
+ 		break;
+ 	case METRICS_TEMPERATURE_HOTSPOT:
+-		*value = SMUQ10_ROUND(metrics->MaxSocketTemperature) *
+-			 SMU_TEMPERATURE_UNITS_PER_CENTIGRADES;
++		*value = SMUQ10_TO_MILLICELSIUS(metrics->MaxSocketTemperature);
+ 		break;
+ 	case METRICS_TEMPERATURE_MEM:
+ 	{
+@@ -438,19 +441,18 @@ static int smu_v15_0_8_get_smu_metrics_data(struct smu_context *smu,
+ 				if (!hbm_stack_mask_valid(mask))
+ 					continue;
+ 
+-				temp = SMUQ10_ROUND(metrics->HbmTemperature[stack_idx]);
++				temp = metrics->HbmTemperature[stack_idx];
+ 				if (temp > max_hbm_temp)
+ 					max_hbm_temp = temp;
+ 			}
+ 		}
+-		*value = max_hbm_temp * SMU_TEMPERATURE_UNITS_PER_CENTIGRADES;
++		*value = SMUQ10_TO_MILLICELSIUS(max_hbm_temp);
+ 		break;
+ 	}
+ 	/* This is the max of all VRs and not just SOC VR.
+ 	 */
+ 	case METRICS_TEMPERATURE_VRSOC:
+-		*value = SMUQ10_ROUND(metrics->MaxVrTemperature) *
+-			 SMU_TEMPERATURE_UNITS_PER_CENTIGRADES;
++		*value = SMUQ10_TO_MILLICELSIUS(metrics->MaxVrTemperature);
+ 		break;
+ 	default:
+ 		*value = UINT_MAX;
+-- 
+2.55.0
+

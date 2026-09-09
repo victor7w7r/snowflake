@@ -1,0 +1,43 @@
+From 1acd235bc8b8cf62da1a2b497f3e8c5cf01a2205 Mon Sep 17 00:00:00 2001
+From: Jonathan Cavitt <jonathan.cavitt@intel.com>
+Date: Wed, 1 Jul 2026 22:31:11 +0800
+Subject: [PATCH 02947/15333] drm/syncobj: Use kmalloc_objs for chains
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use kmalloc_objs instead of kmalloc_array when initializing chains in
+drm_syncobj_timeline_signal_ioctl.
+
+Concern caught by static analysis.
+
+Suggested-by: Christian König <christian.koenig@amd.com>
+Signed-off-by: Jonathan Cavitt <jonathan.cavitt@intel.com>
+Cc: Tobias Hector <Tobias.Hector@amd.com>
+Cc: Jason Ekstrand <jason@jlekstrand.net>
+Cc: Dave Airlie <airlied@redhat.com>
+Cc: Chris Wilson <chris@chris-wilson.co.uk>
+Cc: Chunming Zhou <david1.zhou@amd.com>
+Cc: Lionel Landwerlin <lionel.g.landwerlin@intel.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+Link: https://patch.msgid.link/20260701143111.1410442-1-jonathan.cavitt@intel.com
+---
+ drivers/gpu/drm/drm_syncobj.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/drm_syncobj.c b/drivers/gpu/drm/drm_syncobj.c
+index c9dbf64c0c9f..2fa170a29a62 100644
+--- a/drivers/gpu/drm/drm_syncobj.c
++++ b/drivers/gpu/drm/drm_syncobj.c
+@@ -1619,7 +1619,7 @@ drm_syncobj_timeline_signal_ioctl(struct drm_device *dev, void *data,
+ 		goto err_points;
+ 	}
+ 
+-	chains = kmalloc_array(args->count_handles, sizeof(void *), GFP_KERNEL);
++	chains = kmalloc_objs(*chains, args->count_handles, GFP_KERNEL);
+ 	if (!chains) {
+ 		ret = -ENOMEM;
+ 		goto err_points;
+-- 
+2.55.0
+

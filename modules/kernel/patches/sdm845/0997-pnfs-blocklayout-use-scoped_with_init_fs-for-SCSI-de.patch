@@ -1,0 +1,99 @@
+From ba2e078299de6d623a3df725361d8d2abd7c25bd Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Mon, 1 Jun 2026 15:56:49 +0200
+Subject: [PATCH 00997/15333] pnfs/blocklayout: use scoped_with_init_fs() for
+ SCSI device lookup
+
+bl_open_path() resolves pNFS block device paths under /dev/disk/by-id/
+via bdev_file_open_by_path() -> lookup_bdev() -> kern_path(). This
+path resolution uses current->fs->root.
+
+With kthreads now starting in nullfs, this fails when the call
+originates from writeback kworker context because current->fs->root
+points at the empty nullfs. The full callchain from kworker is:
+
+  wb_workfn                              [kworker writeback callback]
+    ...
+      nfs_writepages                     [address_space_operations.writepages]
+        nfs_do_writepage
+          nfs_pageio_add_request
+            ...
+              bl_pg_init_write           [nfs_pageio_ops.pg_init]
+                pnfs_generic_pg_init_write
+                  pnfs_update_layout
+                    nfs4_proc_layoutget  [synchronous RPC]
+                      pnfs_layout_process
+                        bl_alloc_lseg
+                          bl_alloc_extent
+                            bl_find_get_deviceid
+                              bl_alloc_deviceid_node
+                                bl_parse_deviceid
+                                  bl_parse_scsi
+                                    bl_open_path
+                                      bdev_file_open_by_path
+                                        lookup_bdev
+                                          kern_path  <- current->fs->root
+
+bl_open_path() can also be reached from userspace process context (e.g.
+open, read, write syscalls via pnfs_update_layout). In that case
+current->fs must not be overridden as the path should resolve against
+the calling process's filesystem root.
+
+Add a tsk_is_kthread() conditional in bl_open_path() to only apply
+scoped_with_init_fs() in kthread context.
+
+Link: https://patch.msgid.link/20260601-work-kthread-nullfs-v4-16-77ee053060e0@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/nfs/blocklayout/dev.c | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/fs/nfs/blocklayout/dev.c b/fs/nfs/blocklayout/dev.c
+index bb35f88501ce..368d20daf67b 100644
+--- a/fs/nfs/blocklayout/dev.c
++++ b/fs/nfs/blocklayout/dev.c
+@@ -4,6 +4,7 @@
+  */
+ #include <linux/sunrpc/svc.h>
+ #include <linux/blkdev.h>
++#include <linux/fs_struct.h>
+ #include <linux/nfs4.h>
+ #include <linux/nfs_fs.h>
+ #include <linux/nfs_xdr.h>
+@@ -363,15 +364,22 @@ static struct file *
+ bl_open_path(struct pnfs_block_volume *v, const char *prefix)
+ {
+ 	struct file *bdev_file;
+-	const char *devname;
++	const char *devname __free(kfree) = NULL;
+ 
+ 	devname = kasprintf(GFP_KERNEL, "/dev/disk/by-id/%s%*phN",
+ 			prefix, v->scsi.designator_len, v->scsi.designator);
+ 	if (!devname)
+ 		return ERR_PTR(-ENOMEM);
+ 
+-	bdev_file = bdev_file_open_by_path(devname,
+-			BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
++	if (tsk_is_kthread(current)) {
++		scoped_with_init_fs()
++			bdev_file = bdev_file_open_by_path(devname,
++					BLK_OPEN_READ | BLK_OPEN_WRITE,
++					NULL, NULL);
++	} else {
++		bdev_file = bdev_file_open_by_path(devname,
++				BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
++	}
+ 	if (IS_ERR(bdev_file)) {
+ 		dprintk("failed to open device %s (%ld)\n",
+ 			devname, PTR_ERR(bdev_file));
+@@ -380,7 +388,6 @@ bl_open_path(struct pnfs_block_volume *v, const char *prefix)
+ 			file_bdev(bdev_file)->bd_disk->disk_name);
+ 	}
+ 
+-	kfree(devname);
+ 	return bdev_file;
+ }
+ 
+-- 
+2.55.0
+

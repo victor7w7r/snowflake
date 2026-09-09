@@ -1,0 +1,45 @@
+From dbb0f5edcb62a300806ac5da67dfa432258fb45a Mon Sep 17 00:00:00 2001
+From: Tvrtko Ursulin <tvrtko.ursulin@igalia.com>
+Date: Mon, 1 Jun 2026 15:08:28 +0100
+Subject: [PATCH 00538/15333] drm/amdgpu: Clarify odd behaviour of
+ AMDGPU_CTX_OP_GET_STABLE_PSTATE
+
+AMDGPU_CTX_OP_GET_STABLE_PSTATE is an unusual uapi - it will check whether
+the context id exist, but otherwise does nothing with it. In other words,
+the uapi has historically been implemented as being able to query the
+global device state, as long as the caller supplies a random valid context
+id.
+
+Lets just document this and later figure out if it can be changed to
+either more permissive (don't check context id), or more restrictive
+(only allow queries from contexts which have overriden the performance
+state).
+
+Signed-off-by: Tvrtko Ursulin <tvrtko.ursulin@igalia.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ctx.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ctx.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ctx.c
+index 047b83ce86d3..b15ed4a534f1 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ctx.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ctx.c
+@@ -635,6 +635,14 @@ static int amdgpu_ctx_stable_pstate(struct amdgpu_device *adev,
+ 	if (!ctx)
+ 		return -EINVAL;
+ 
++	/*
++	 * The get path is odd in this uapi - it will check whether the context
++	 * id exist, but otherwise does nothing with it. In other words, the
++	 * uapi has historically been implemented as being able to query the
++	 * global device state, as long as the caller supplies a random valid
++	 * context id.
++	 */
++
+ 	if (set)
+ 		r = amdgpu_ctx_set_stable_pstate(ctx, *stable_pstate);
+ 	else
+-- 
+2.55.0
+

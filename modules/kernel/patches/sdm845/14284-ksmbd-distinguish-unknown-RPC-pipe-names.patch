@@ -1,0 +1,70 @@
+From 7c5d98b515f8cc30a4f5d7e1788b01c2bacea7ef Mon Sep 17 00:00:00 2001
+From: Namjae Jeon <linkinjeon@kernel.org>
+Date: Tue, 7 Jul 2026 22:22:04 +0900
+Subject: [PATCH 14284/15333] ksmbd: distinguish unknown RPC pipe names
+
+Unknown RPC pipe names and malformed CREATE parameters both use
+-EINVAL. Mapping that errno to STATUS_OBJECT_NAME_NOT_FOUND therefore
+also hides invalid request parameters as a missing pipe.
+
+Return -ENOENT when RPC method lookup cannot find a supported pipe and
+map only that error to STATUS_OBJECT_NAME_NOT_FOUND. Preserve
+STATUS_INVALID_PARAMETER for -EINVAL returned by request validation.
+
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/mgmt/user_session.c | 8 ++++----
+ fs/smb/server/smb2pdu.c           | 9 +++------
+ 2 files changed, 7 insertions(+), 10 deletions(-)
+
+diff --git a/fs/smb/server/mgmt/user_session.c b/fs/smb/server/mgmt/user_session.c
+index eaa044da3280..5b9bd46ff3a8 100644
+--- a/fs/smb/server/mgmt/user_session.c
++++ b/fs/smb/server/mgmt/user_session.c
+@@ -309,10 +309,10 @@ static int __rpc_method(char *rpc_name)
+ 		return KSMBD_RPC_LSARPC_METHOD_INVOKE;
+ 
+ 	if (!strcmp(rpc_name, "\\mdssvc") || !strcmp(rpc_name, "mdssvc"))
+-		return 0; /* mdssvc unsupported: quiet, expected macOS probe */
++		return -ENOENT;
+ 
+ 	pr_err("Unsupported RPC: %s\n", rpc_name);
+-	return 0;
++	return -ENOENT;
+ }
+ 
+ int ksmbd_session_rpc_open(struct ksmbd_session *sess, char *rpc_name)
+@@ -322,8 +322,8 @@ int ksmbd_session_rpc_open(struct ksmbd_session *sess, char *rpc_name)
+ 	int method, id;
+ 
+ 	method = __rpc_method(rpc_name);
+-	if (!method)
+-		return -EINVAL;
++	if (method < 0)
++		return method;
+ 
+ 	entry = kzalloc_obj(struct ksmbd_session_rpc, KSMBD_DEFAULT_GFP);
+ 	if (!entry)
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index 283527337d0c..5fdb8fec21cd 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -2640,12 +2640,9 @@ static noinline int create_smb2_pipe(struct ksmbd_work *work)
+ out:
+ 	switch (err) {
+ 	case -EINVAL:
+-		/*
+-		 * Unknown pipe name: return STATUS_OBJECT_NAME_NOT_FOUND so
+-		 * macOS clients skip it gracefully. STATUS_INVALID_PARAMETER
+-		 * causes macOS Time Machine to abort the backup immediately
+-		 * (confirmed in ksmbd issue #502 / namjaejeon/ksmbd).
+-		 */
++		rsp->hdr.Status = STATUS_INVALID_PARAMETER;
++		break;
++	case -ENOENT:
+ 		rsp->hdr.Status = STATUS_OBJECT_NAME_NOT_FOUND;
+ 		break;
+ 	case -ENOSPC:
+-- 
+2.55.0
+

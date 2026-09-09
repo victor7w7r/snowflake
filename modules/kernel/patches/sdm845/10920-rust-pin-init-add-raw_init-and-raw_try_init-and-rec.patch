@@ -1,0 +1,103 @@
+From d5492db2bf30b7e617e41d4fe3dba22475a1a354 Mon Sep 17 00:00:00 2001
+From: Gary Guo <gary@garyguo.net>
+Date: Wed, 29 Jul 2026 16:38:45 +0100
+Subject: [PATCH 10920/15333] rust: pin-init: add `raw_init` and `raw_try_init`
+ and recommend over `__init`
+
+The `__init` method is not designed to be a public API (existence of "__"
+is a hint for this); but currently there is no other API that allows raw
+initialization on pointers. Add `raw_init` and `raw_try_init` and recommend
+people to use this instead if raw pointer initialization is needed.
+
+Link: https://patch.msgid.link/20260729-merge-init-v2-3-26adf47109e7@garyguo.net
+[ Renamed from `ptr_[try_]init` to `raw_[try_]init`. - Gary ]
+Reviewed-by: Benno Lossin <lossin@kernel.org>
+Signed-off-by: Gary Guo <gary@garyguo.net>
+---
+ rust/pin-init/examples/static_init.rs |  5 +++--
+ rust/pin-init/src/lib.rs              | 32 ++++++++++++++++++++++++++-
+ 2 files changed, 34 insertions(+), 3 deletions(-)
+
+diff --git a/rust/pin-init/examples/static_init.rs b/rust/pin-init/examples/static_init.rs
+index 8e71556ffe85..8dd52313c1b8 100644
+--- a/rust/pin-init/examples/static_init.rs
++++ b/rust/pin-init/examples/static_init.rs
+@@ -59,7 +59,7 @@ fn deref(&self) -> &Self::Target {
+             println!("doing init");
+             let ptr = self.cell.get().cast::<T>();
+             match self.init.take() {
+-                Some(f) => unsafe { f.__init(ptr).unwrap() },
++                Some(f) => unsafe { pin_init::raw_init(ptr, f) },
+                 None => unsafe { core::hint::unreachable_unchecked() },
+             }
+             self.present.set(true);
+@@ -74,7 +74,8 @@ unsafe impl PinInit<CMutex<usize>> for CountInit {
+     unsafe fn __init(self, slot: *mut CMutex<usize>) -> Result<(), core::convert::Infallible> {
+         let init = CMutex::new(0);
+         std::thread::sleep(std::time::Duration::from_millis(1000));
+-        unsafe { init.__init(slot) }
++        unsafe { pin_init::raw_init(slot, init) };
++        Ok(())
+     }
+ }
+ 
+diff --git a/rust/pin-init/src/lib.rs b/rust/pin-init/src/lib.rs
+index fde53473763f..97eaef6f2958 100644
+--- a/rust/pin-init/src/lib.rs
++++ b/rust/pin-init/src/lib.rs
+@@ -917,7 +917,7 @@ pub unsafe trait PinInit<T: ?Sized, E = Infallible>: Sized {
+     ///
+     /// Same as `__init`.
+     #[inline(always)]
+-    #[cfg_attr(not(kernel), deprecated = "use `__init` instead")]
++    #[cfg_attr(not(kernel), deprecated = "use `raw_try_init` instead")]
+     unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
+         // SAFETY: Per safety requirement.
+         unsafe { self.__init(slot) }
+@@ -925,6 +925,8 @@ unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
+ 
+     /// Initializes `slot`.
+     ///
++    /// It is not recommended to call this directly. Use [`raw_init`] or [`raw_try_init`].
++    ///
+     /// # Safety
+     ///
+     /// - `slot` is a valid pointer to uninitialized memory.
+@@ -960,6 +962,34 @@ fn pin_chain<F>(self, f: F) -> ChainPinInit<Self, F, T, E>
+     }
+ }
+ 
++/// Initializes `slot` with an initializer.
++///
++/// # Safety
++///
++/// - `slot` is a valid pointer to uninitialized memory.
++/// - `slot` will not move until it is dropped, i.e. it will be pinned.
++///   If `init` implements `Init<T, E>`, this requirement is cancelled and it may be moved.
++#[inline(always)]
++pub unsafe fn raw_init<T>(slot: *mut T, init: impl PinInit<T>) {
++    // SAFETY: Per safety requirement.
++    unsafe { init.__init(slot).unwrap_or_else(|e| match e {}) }
++}
++
++/// Fallibly initializes `slot` with an initializer.
++///
++/// # Safety
++///
++/// - `slot` is a valid pointer to uninitialized memory.
++/// - the caller does not touch `slot` when `Err` is returned, they are only permitted to
++///   deallocate.
++/// - `slot` will not move until it is dropped, i.e. it will be pinned.
++///   If `init` implements `Init<T, E>`, this requirement is cancelled and it may be moved.
++#[inline(always)]
++pub unsafe fn raw_try_init<T, E>(slot: *mut T, init: impl PinInit<T, E>) -> Result<(), E> {
++    // SAFETY: Per safety requirement.
++    unsafe { init.__init(slot) }
++}
++
+ /// An initializer returned by [`PinInit::pin_chain`].
+ pub struct ChainPinInit<I, F, T: ?Sized, E>(I, F, __internal::PhantomInvariant<(E, T)>);
+ 
+-- 
+2.55.0
+

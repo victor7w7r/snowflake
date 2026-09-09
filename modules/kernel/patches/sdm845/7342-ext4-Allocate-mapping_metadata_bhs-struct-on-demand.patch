@@ -1,0 +1,218 @@
+From daca0f43a9345c62bc081fbcdf6c677d55dcf2e6 Mon Sep 17 00:00:00 2001
+From: Jan Kara <jack@suse.cz>
+Date: Mon, 27 Jul 2026 12:49:22 +0200
+Subject: [PATCH 07342/15333] ext4: Allocate mapping_metadata_bhs struct on
+ demand
+
+Currently every ext4 inode gets mapping_metadata_bhs struct although it
+is only needed when running without a journal and only for inodes where
+any metadata was dirtied. Allocate mapping_metadata_bhs struct on demand
+when dirtying the first metadata buffer for the inode.
+
+Acked-by: Theodore Ts'o <tytso@mit.edu>
+Signed-off-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260727104923.3828017-24-jack@suse.cz
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/ext4/ext4.h      | 13 ++++++++++++-
+ fs/ext4/ext4_jbd2.c | 25 +++++++++++++++++++++----
+ fs/ext4/fsync.c     | 12 ++++++++----
+ fs/ext4/inode.c     | 12 ++++++++----
+ fs/ext4/super.c     |  9 ++++++---
+ 5 files changed, 55 insertions(+), 16 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index b37c136ea3ab..64f8f63f4415 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1151,7 +1151,7 @@ struct ext4_inode_info {
+ 	struct rw_semaphore i_data_sem;
+ 	struct inode vfs_inode;
+ 	struct jbd2_inode *jinode;
+-	struct mapping_metadata_bhs i_metadata_bhs;
++	struct mapping_metadata_bhs *i_metadata_bhs;
+ 
+ 	/*
+ 	 * File creation time. Its function is same as that of
+@@ -2126,6 +2126,17 @@ static inline bool ext4_inode_orphan_tracked(struct inode *inode)
+ 		!list_empty(&EXT4_I(inode)->i_orphan);
+ }
+ 
++static inline struct mapping_metadata_bhs *ext4_i_metadata_bhs(
++							struct inode *inode)
++{
++	/*
++	 * i_metadata_bhs is set in ext4_inode_attach_mmb() using cmpxchg().
++	 * We use READ_ONCE when accessing i_metadata_bhs to make sure we get
++	 * consistent view for all accesses.
++	 */
++	return READ_ONCE(EXT4_I(inode)->i_metadata_bhs);
++}
++
+ /*
+  * Codes for operating systems
+  */
+diff --git a/fs/ext4/ext4_jbd2.c b/fs/ext4/ext4_jbd2.c
+index 9a8c225f2753..02b066299164 100644
+--- a/fs/ext4/ext4_jbd2.c
++++ b/fs/ext4/ext4_jbd2.c
+@@ -350,6 +350,21 @@ int __ext4_journal_get_create_access(const char *where, unsigned int line,
+ 	return 0;
+ }
+ 
++static void ext4_inode_attach_mmb(struct inode *inode)
++{
++	struct mapping_metadata_bhs *mmb;
++
++	/*
++	 * It's difficult to handle failure when marking buffer dirty without
++	 * leaving filesystem corrupted
++	 */
++	mmb = kmalloc_obj(*mmb, GFP_NOFS | __GFP_NOFAIL | __GFP_ACCOUNT);
++	mmb_init(mmb, &inode->i_data);
++	/* Someone swapped another mmb before us? */
++	if (cmpxchg(&EXT4_I(inode)->i_metadata_bhs, NULL, mmb))
++		kfree(mmb);
++}
++
+ int __ext4_handle_dirty_metadata(const char *where, unsigned int line,
+ 				 handle_t *handle, struct inode *inode,
+ 				 struct buffer_head *bh)
+@@ -389,11 +404,13 @@ int __ext4_handle_dirty_metadata(const char *where, unsigned int line,
+ 					 err);
+ 		}
+ 	} else {
+-		if (inode)
+-			mmb_mark_buffer_dirty(bh,
+-					      &EXT4_I(inode)->i_metadata_bhs);
+-		else
++		if (inode) {
++			if (!ext4_i_metadata_bhs(inode))
++				ext4_inode_attach_mmb(inode);
++			mmb_mark_buffer_dirty(bh, ext4_i_metadata_bhs(inode));
++		} else {
+ 			mark_buffer_dirty(bh);
++		}
+ 		if (inode && inode_needs_sync(inode)) {
+ 			sync_dirty_buffer(bh);
+ 			if (buffer_req(bh) && !buffer_uptodate(bh)) {
+diff --git a/fs/ext4/fsync.c b/fs/ext4/fsync.c
+index 924726dcc85f..b7ea4433f4be 100644
+--- a/fs/ext4/fsync.c
++++ b/fs/ext4/fsync.c
+@@ -46,6 +46,7 @@
+ static int ext4_sync_parent(struct inode *inode)
+ {
+ 	struct dentry *dentry, *next;
++	struct mapping_metadata_bhs *mmb;
+ 	int ret = 0;
+ 
+ 	if (!ext4_test_inode_state(inode, EXT4_STATE_NEWENTRY))
+@@ -68,9 +69,12 @@ static int ext4_sync_parent(struct inode *inode)
+ 		 * through ext4_evict_inode()) and so we are safe to flush
+ 		 * metadata blocks and the inode.
+ 		 */
+-		ret = mmb_sync(&EXT4_I(inode)->i_metadata_bhs);
+-		if (ret)
+-			break;
++		mmb = ext4_i_metadata_bhs(inode);
++		if (mmb) {
++			ret = mmb_sync(mmb);
++			if (ret)
++				break;
++		}
+ 		ret = sync_inode_metadata(inode, 1);
+ 		if (ret)
+ 			break;
+@@ -89,7 +93,7 @@ static int ext4_fsync_nojournal(struct file *file, loff_t start, loff_t end,
+ 	};
+ 	int ret;
+ 
+-	ret = mmb_fsync_noflush(file, &EXT4_I(inode)->i_metadata_bhs,
++	ret = mmb_fsync_noflush(file, ext4_i_metadata_bhs(inode),
+ 				start, end, datasync);
+ 	if (ret)
+ 		return ret;
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index ce99807c5f5b..e6acef486ee1 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -186,6 +186,8 @@ void ext4_evict_inode(struct inode *inode)
+ 	if (EXT4_I(inode)->i_flags & EXT4_EA_INODE_FL)
+ 		ext4_evict_ea_inode(inode);
+ 	if (inode->i_nlink) {
++		struct mapping_metadata_bhs *mmb;
++
+ 		/*
+ 		 * If there's dirty page will lead to data loss, user
+ 		 * could see stale data.
+@@ -195,9 +197,9 @@ void ext4_evict_inode(struct inode *inode)
+ 			ext4_warning_inode(inode, "data will be lost");
+ 
+ 		truncate_inode_pages_final(&inode->i_data);
+-		/* Avoid mballoc special inode which has no proper iops */
+-		if (!EXT4_SB(inode->i_sb)->s_journal)
+-			mmb_sync(&EXT4_I(inode)->i_metadata_bhs);
++		mmb = ext4_i_metadata_bhs(inode);
++		if (mmb)
++			mmb_sync(mmb);
+ 		goto no_delete;
+ 	}
+ 
+@@ -3452,6 +3454,7 @@ static bool ext4_release_folio(struct folio *folio, gfp_t wait)
+ static bool ext4_inode_datasync_dirty(struct inode *inode)
+ {
+ 	journal_t *journal = EXT4_SB(inode->i_sb)->s_journal;
++	struct mapping_metadata_bhs *mmb;
+ 
+ 	if (journal) {
+ 		if (jbd2_transaction_committed(journal,
+@@ -3462,8 +3465,9 @@ static bool ext4_inode_datasync_dirty(struct inode *inode)
+ 		return true;
+ 	}
+ 
++	mmb = ext4_i_metadata_bhs(inode);
+ 	/* Any metadata buffers to write? */
+-	if (mmb_has_buffers(&EXT4_I(inode)->i_metadata_bhs))
++	if (mmb && mmb_has_buffers(mmb))
+ 		return true;
+ 	return inode_state_read_once(inode) & I_DIRTY_DATASYNC;
+ }
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 245f67d10ded..8671fa1209dd 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -1430,7 +1430,7 @@ static struct inode *ext4_alloc_inode(struct super_block *sb)
+ 	INIT_WORK(&ei->i_rsv_conversion_work, ext4_end_io_rsv_work);
+ 	ext4_fc_init_inode(&ei->vfs_inode);
+ 	spin_lock_init(&ei->i_fc_lock);
+-	mmb_init(&ei->i_metadata_bhs, &ei->vfs_inode.i_data);
++	ei->i_metadata_bhs = NULL;
+ #ifdef CONFIG_LOCKDEP
+ 	lockdep_set_subclass(&ei->i_data_sem, I_DATA_SEM_NORMAL);
+ #endif
+@@ -1451,6 +1451,7 @@ static int ext4_drop_inode(struct inode *inode)
+ static void ext4_free_in_core_inode(struct inode *inode)
+ {
+ 	fscrypt_free_inode(inode);
++	kfree(ext4_i_metadata_bhs(inode));
+ 	if (!list_empty(&(EXT4_I(inode)->i_fc_list))) {
+ 		pr_warn("%s: inode %llu still in fc list",
+ 			__func__, inode->i_ino);
+@@ -1529,9 +1530,11 @@ static void destroy_inodecache(void)
+ 
+ void ext4_clear_inode(struct inode *inode)
+ {
++	struct mapping_metadata_bhs *mmb = ext4_i_metadata_bhs(inode);
++
+ 	ext4_fc_del(inode);
+-	if (!EXT4_SB(inode->i_sb)->s_journal)
+-		mmb_invalidate(&EXT4_I(inode)->i_metadata_bhs);
++	if (mmb)
++		mmb_invalidate(mmb);
+ 	clear_inode(inode);
+ 	ext4_discard_preallocations(inode);
+ 	/*
+-- 
+2.55.0
+

@@ -1,0 +1,64 @@
+From 11492872341100afefc2b923b4012743c78f5284 Mon Sep 17 00:00:00 2001
+From: Joshua Washington <joshwash@google.com>
+Date: Wed, 22 Jul 2026 15:16:33 -0700
+Subject: [PATCH 07695/15333] gve: use xdp_build_skb methods for XDP_PASS case
+
+Newer common methods have been introduced to construct SKBs in the
+event of XDP_PASS because many drivers replicated very similar
+functionality. Update GVE to use these common methods for copy mode and
+zero-copy mode.
+
+Reviewed-by: Harshitha Ramamurthy <hramamurthy@google.com>
+Reviewed-by: Jordan Rhee <jordanrhee@google.com>
+Signed-off-by: Joshua Washington <joshwash@google.com>
+Reviewed-by: Larysa Zaremba <larysa.zaremba@intel.com>
+Link: https://patch.msgid.link/20260722221634.186886-2-joshwash@google.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/ethernet/google/gve/gve_rx_dqo.c | 13 +++++++++----
+ 1 file changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/ethernet/google/gve/gve_rx_dqo.c b/drivers/net/ethernet/google/gve/gve_rx_dqo.c
+index 8271f731a91f..97db9f701e63 100644
+--- a/drivers/net/ethernet/google/gve/gve_rx_dqo.c
++++ b/drivers/net/ethernet/google/gve/gve_rx_dqo.c
+@@ -770,8 +770,7 @@ static int gve_rx_xsk_dqo(struct napi_struct *napi, struct gve_rx_ring *rx,
+ 	}
+ 
+ 	/* Copy the data to skb */
+-	rx->ctx.skb_head = gve_rx_copy_data(priv->dev, napi,
+-					    xdp->data, buf_len);
++	rx->ctx.skb_head = xdp_build_skb_from_zc(xdp);
+ 	if (unlikely(!rx->ctx.skb_head)) {
+ 		xsk_buff_free(xdp);
+ 		gve_free_buf_state(rx, buf_state);
+@@ -779,8 +778,6 @@ static int gve_rx_xsk_dqo(struct napi_struct *napi, struct gve_rx_ring *rx,
+ 	}
+ 	rx->ctx.skb_tail = rx->ctx.skb_head;
+ 
+-	/* Free XSK buffer and Buffer state */
+-	xsk_buff_free(xdp);
+ 	gve_free_buf_state(rx, buf_state);
+ 
+ 	/* Update Stats */
+@@ -933,9 +930,17 @@ static int gve_rx_dqo(struct napi_struct *napi, struct gve_rx_ring *rx,
+ 			return 0;
+ 		}
+ 
++		rx->ctx.skb_head = xdp_build_skb_from_buff(&gve_xdp.xdp);
++		if (unlikely(!rx->ctx.skb_head))
++			goto error;
++		rx->ctx.skb_tail = rx->ctx.skb_head;
++
++		gve_reuse_buffer(rx, buf_state);
++
+ 		u64_stats_update_begin(&rx->statss);
+ 		rx->xdp_actions[XDP_PASS]++;
+ 		u64_stats_update_end(&rx->statss);
++		return 0;
+ 	}
+ 
+ 	if (eop && buf_len <= priv->rx_copybreak &&
+-- 
+2.55.0
+

@@ -1,0 +1,65 @@
+From eb0d94ad1e606af20f8b27141f7227405f764f16 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Fri, 3 Jul 2026 13:37:57 +0200
+Subject: [PATCH 03507/15333] platform/x86: xo15-ebook: Stop setting
+ acpi_device_name/class()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The driver sets acpi_device_class() which is never read afterward, so
+make it stop doing that and drop the two symbols defined specifically
+for this purpose.
+
+Likewise, acpi_device_name() set by the driver is only used for input
+class device name initialization and the "EBook Switch" string literal
+may as well be used directly for that, so make the driver do so and
+stop setting acpi_device_name(), which allows the symbol defined
+specifically for this purpose to be dropped.
+
+No intentional functional impact.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/2731795.Lt9SDvczpP@rafael.j.wysocki
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/x86/xo15-ebook.c | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/drivers/platform/x86/xo15-ebook.c b/drivers/platform/x86/xo15-ebook.c
+index e40e385c52bd..4c3185e2ceec 100644
+--- a/drivers/platform/x86/xo15-ebook.c
++++ b/drivers/platform/x86/xo15-ebook.c
+@@ -19,13 +19,10 @@
+ 
+ #define MODULE_NAME "xo15-ebook"
+ 
+-#define XO15_EBOOK_CLASS		MODULE_NAME
+ #define XO15_EBOOK_TYPE_UNKNOWN	0x00
+ #define XO15_EBOOK_NOTIFY_STATUS	0x80
+ 
+-#define XO15_EBOOK_SUBCLASS		"ebook"
+ #define XO15_EBOOK_HID			"XO15EBK"
+-#define XO15_EBOOK_DEVICE_NAME		"EBook Switch"
+ 
+ MODULE_DESCRIPTION("OLPC XO-1.5 ebook switch driver");
+ MODULE_LICENSE("GPL");
+@@ -105,12 +102,9 @@ static int ebook_switch_probe(struct platform_device *pdev)
+ 	if (!id)
+ 		return dev_err_probe(dev, -ENODEV, "Unsupported hid\n");
+ 
+-	strscpy(acpi_device_name(device), XO15_EBOOK_DEVICE_NAME);
+-	strscpy(acpi_device_class(device), XO15_EBOOK_CLASS "/" XO15_EBOOK_SUBCLASS);
+-
+ 	snprintf(button->phys, sizeof(button->phys), "%s/button/input0", id->id);
+ 
+-	input->name = acpi_device_name(device);
++	input->name = "EBook Switch";
+ 	input->phys = button->phys;
+ 	input->id.bustype = BUS_HOST;
+ 
+-- 
+2.55.0
+

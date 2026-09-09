@@ -1,0 +1,105 @@
+From 030d3514c6bb289cd3557a74b8d560dc0a26d8f8 Mon Sep 17 00:00:00 2001
+From: Boris Burkov <boris@bur.io>
+Date: Mon, 15 Jun 2026 10:40:59 -0700
+Subject: [PATCH 11971/15333] btrfs: release extent lock per folio in readahead
+
+In Meta production, we have observed a large number of hosts running
+kernels newer than 6.13 which hit hung tasks on
+btrfs_read_folio()->lock_extents_for_read(). Looking through the history
+in this codepath reveals an interesting history.
+
+in 6.12, we merged
+commit ac325fc2aad5 ("btrfs: do not hold the extent lock for entire read")
+which holds the extent lock very narrowly while looking up the
+extent_map. However, this proved to introduce a serious race with DIO
+writes which was fixed in 6.14 with
+commit acc18e1c1d8c0 ("btrfs: fix stale page cache after race between readahead and direct IO write")
+
+That latter fix subtly changed the extent unlock point from the pre-6.12
+regime. In 6.11, each read endio unlocked the extent it finished
+reading, but in 6.14, the extent is locked/unlocked as a unit around the
+entire readahead loop, while the individual folios are still unlocked as
+the endios finish. This is mostly the same behavior, as all successful
+reads will populate the page cache, so subsequent reads won't enter
+btrfs and hit the extent lock. But in the case where the readahead
+fails, perhaps because of a memory allocation failure doing compressed
+reads, the page will not be brought up to date and a later read of an
+overlapping range *will* block on the extent lock.
+
+Why is this a problem?
+
+On sufficiently large loaded systems, I have observed that direct
+reclaim can run for minutes. Given that, consider two tasks on such a
+system reading an overlapping range of a compressed file:
+
+  Task 1 locks the whole range and starts to read. Some allocation for
+  the compressed read for folio F fails and we carry on while holding the
+  extent lock for the full range.
+
+  Task 2 wants to read F, which is not uptodate and in page cache, so it
+  blocks on the extent lock held by Task 1.
+
+  Task 1 keeps getting stuck in direct reclaim (likely, we already
+  supposed an allocation failure above)
+
+  Task 2 stays blocked on the extent lock the whole time.
+
+If you consider the effects of readahead_expand and imagine a file with
+a 128k compressed extent followed by many smaller compressed extents,
+you can imagine that the expanded window will result in subsequent reads
+hitting many extents (128k/4k = 32) per lock window in the worst case.
+
+The system likeley wouldn't be all that healthy anyway, so this is
+likely not a critical improvement, but it does alleviate this one source
+of stress and one thread's slowdown escalating to others.
+
+To bring this behavior back to the old model, we should unlock the
+extent at each loop of the readahead loop rather than in one shot at the
+end. This allows such overlapping reads to proceed as they should.
+Writes are fine because either the page has already been read and has an
+appropriate state in the page cache to be invalidated (or not uptodate)
+or it is still-to-be-read and the extent lock is still held protecting
+it.
+
+Reviewed-by: Filipe Manana <fdmanana@suse.com>
+Reviewed-by: Qu Wenruo <wqu@suse.com>
+Signed-off-by: Boris Burkov <boris@bur.io>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/extent_io.c | 17 ++++++++++++++---
+ 1 file changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/fs/btrfs/extent_io.c b/fs/btrfs/extent_io.c
+index f032f0858f40..eadd8d205411 100644
+--- a/fs/btrfs/extent_io.c
++++ b/fs/btrfs/extent_io.c
+@@ -2858,12 +2858,23 @@ void btrfs_readahead(struct readahead_control *rac)
+ 	struct fsverity_info *vi = NULL;
+ 
+ 	lock_extents_for_read(inode, start, end, &cached_state);
++	/* We don't use cached state for a bulk unlock, just free it. */
++	btrfs_free_extent_state(cached_state);
+ 	if (start < i_size_read(vfs_inode))
+ 		vi = fsverity_get_info(vfs_inode);
+-	while ((folio = readahead_folio(rac)) != NULL)
+-		btrfs_do_readpage(folio, &em_cached, &bio_ctrl, vi);
++	while ((folio = readahead_folio(rac)) != NULL) {
++		/*
++		 * Read start and end before btrfs_do_readpage(). It unlocks the
++		 * folio, so our reference might not be valid after.
++		 */
++		const u64 folio_start = folio_pos(folio);
++		const u64 folio_end = folio_start + folio_size(folio) - 1;
+ 
+-	btrfs_unlock_extent(&inode->io_tree, start, end, &cached_state);
++		btrfs_do_readpage(folio, &em_cached, &bio_ctrl, vi);
++		/* Only unlock the range we locked, even if readahead expands. */
++		if (folio_start >= start && folio_end <= end)
++			btrfs_unlock_extent(&inode->io_tree, folio_start, folio_end, NULL);
++	}
+ 
+ 	if (em_cached)
+ 		btrfs_free_extent_map(em_cached);
+-- 
+2.55.0
+

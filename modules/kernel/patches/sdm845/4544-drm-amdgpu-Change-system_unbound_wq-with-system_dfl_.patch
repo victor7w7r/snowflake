@@ -1,0 +1,46 @@
+From c52d32e6e7932c17ad9f202f6c86f5898a405b7c Mon Sep 17 00:00:00 2001
+From: Marco Crivellari <marco.crivellari@suse.com>
+Date: Tue, 7 Jul 2026 11:38:12 +0200
+Subject: [PATCH 04544/15333] drm/amdgpu: Change system_unbound_wq with
+ system_dfl_wq
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+system_wq (per-CPU) and system_unbound_wq (unbound) are the older
+workqueue name, replaced by system_{percpu|dfl}_wq.
+The new workqueues have been introduced by:
+
+  128ea9f6ccfb ("workqueue: Add system_percpu_wq and system_dfl_wq")
+
+Usage of older workqueues will now trigger a pr_warn_once() because they are
+marked as deprecated as per commit:
+
+  64d8eae3f895 ("workqueue: Add warnings and fallback if system_{unbound}_wq is used")
+
+So change the used workqueue with the newer, keeping the same behavior.
+
+Reviewed-by: Timur Kristóf <timur.kristof@gmail.com>
+Suggested-by: Tejun Heo <tj@kernel.org>
+Signed-off-by: Marco Crivellari <marco.crivellari@suse.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_irq.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_irq.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_irq.c
+index 53be764968e4..95cceed4e971 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_irq.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_irq.c
+@@ -545,7 +545,7 @@ void amdgpu_irq_delegate(struct amdgpu_device *adev,
+ 			 unsigned int num_dw)
+ {
+ 	amdgpu_ih_ring_write(adev, &adev->irq.ih_soft, entry->iv_entry, num_dw);
+-	queue_work(system_unbound_wq, &adev->irq.ih_soft_work);
++	queue_work(system_dfl_wq, &adev->irq.ih_soft_work);
+ }
+ 
+ /**
+-- 
+2.55.0
+

@@ -1,0 +1,135 @@
+From d4f8babf8e8ffb8cd75d12d1003d2a2c17a53420 Mon Sep 17 00:00:00 2001
+From: Prathima <Prathima.Lk@amd.com>
+Date: Fri, 10 Jul 2026 16:46:37 +0530
+Subject: [PATCH 05571/15333] hwmon/misc: amd-sbi: Move sbtsi register transfer
+ to core abstraction
+
+Move the I2C read/write byte operations from the sbtsi hwmon driver into
+a common sbtsi_xfer() function in tsi-core.c.
+This decouples the hwmon sensor driver from the underlying bus transport,
+preparing for I3C support in a subsequent patch.
+This patch does not introduce any functional changes. The updates are
+limited to code organization/cleanup and should not affect the runtime
+behavior of the driver
+
+Reviewed-by: Akshay Gupta <Akshay.Gupta@amd.com>
+Signed-off-by: Prathima <Prathima.Lk@amd.com>
+Acked-by: Guenter Roeck <linux@roeck-us.net>
+Link: https://patch.msgid.link/20260710111642.850022-4-Akshay.Gupta@amd.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/hwmon/sbtsi_temp.c      | 17 ++++++-----------
+ drivers/misc/amd-sbi/Makefile   |  2 +-
+ drivers/misc/amd-sbi/tsi-core.c | 30 ++++++++++++++++++++++++++++++
+ include/linux/misc/tsi.h        | 13 +++++++++++++
+ 4 files changed, 50 insertions(+), 12 deletions(-)
+ create mode 100644 drivers/misc/amd-sbi/tsi-core.c
+
+diff --git a/drivers/hwmon/sbtsi_temp.c b/drivers/hwmon/sbtsi_temp.c
+index 078f4ab25bde..d7ae986d824c 100644
+--- a/drivers/hwmon/sbtsi_temp.c
++++ b/drivers/hwmon/sbtsi_temp.c
+@@ -70,15 +70,10 @@ static int sbtsi_temp_read(struct sbtsi_data *data, u8 reg1, u8 reg2,
+ {
+ 	int ret;
+ 
+-	ret = i2c_smbus_read_byte_data(data->client, reg1);
+-	if (ret < 0)
+-		return ret;
+-	*val1 = ret;
+-	ret = i2c_smbus_read_byte_data(data->client, reg2);
+-	if (ret < 0)
+-		return ret;
+-	*val2 = ret;
+-	return 0;
++	ret = sbtsi_xfer(data, reg1, val1, true);
++	if (!ret)
++		ret = sbtsi_xfer(data, reg2, val2, true);
++	return ret;
+ }
+ 
+ /*
+@@ -89,9 +84,9 @@ static int sbtsi_temp_write(struct sbtsi_data *data, u8 reg_int, u8 reg_dec,
+ {
+ 	int ret;
+ 
+-	ret = i2c_smbus_write_byte_data(data->client, reg_int, val_int);
++	ret = sbtsi_xfer(data, reg_int, &val_int, false);
+ 	if (!ret)
+-		ret = i2c_smbus_write_byte_data(data->client, reg_dec, val_dec);
++		ret = sbtsi_xfer(data, reg_dec, &val_dec, false);
+ 	return ret;
+ }
+ 
+diff --git a/drivers/misc/amd-sbi/Makefile b/drivers/misc/amd-sbi/Makefile
+index 28f95b9e204f..ce9321f5c601 100644
+--- a/drivers/misc/amd-sbi/Makefile
++++ b/drivers/misc/amd-sbi/Makefile
+@@ -3,5 +3,5 @@ sbrmi-i2c-objs  		+= rmi-i2c.o rmi-core.o
+ sbrmi-i2c-$(CONFIG_AMD_SBRMI_HWMON)	+= rmi-hwmon.o
+ obj-$(CONFIG_AMD_SBRMI_I2C)	+= sbrmi-i2c.o
+ # SBTSI Configuration
+-sbtsi-objs	+= tsi.o
++sbtsi-objs	+= tsi.o tsi-core.o
+ obj-$(CONFIG_AMD_SBTSI)	+= sbtsi.o
+diff --git a/drivers/misc/amd-sbi/tsi-core.c b/drivers/misc/amd-sbi/tsi-core.c
+new file mode 100644
+index 000000000000..6ef1831515bb
+--- /dev/null
++++ b/drivers/misc/amd-sbi/tsi-core.c
+@@ -0,0 +1,30 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * tsi-core.c - file defining SB-TSI protocols compliant
++ *              AMD SoC device.
++ *
++ * Copyright (C) 2026 Advanced Micro Devices, Inc.
++ */
++
++#include <linux/module.h>
++#include <linux/misc/tsi.h>
++
++/* I2C transfer function */
++static int sbtsi_i2c_xfer(struct sbtsi_data *data, u8 reg, u8 *val, bool is_read)
++{
++	if (is_read) {
++		int ret = i2c_smbus_read_byte_data(data->client, reg);
++
++		if (ret < 0)
++			return ret;
++		*val = ret;
++		return 0;
++	}
++	return i2c_smbus_write_byte_data(data->client, reg, *val);
++}
++
++int sbtsi_xfer(struct sbtsi_data *data, u8 reg, u8 *val, bool is_read)
++{
++	return sbtsi_i2c_xfer(data, reg, val, is_read);
++}
++EXPORT_SYMBOL_GPL(sbtsi_xfer);
+diff --git a/include/linux/misc/tsi.h b/include/linux/misc/tsi.h
+index befdc2d14160..2d2709f1ff32 100644
+--- a/include/linux/misc/tsi.h
++++ b/include/linux/misc/tsi.h
+@@ -31,4 +31,17 @@ struct sbtsi_data {
+ #define AMD_SBTSI_ADEV		"amd-sbtsi"
+ #define AMD_SBTSI_AUX_HWMON	"temp-sensor"
+ 
++/**
++ * sbtsi_xfer - Perform a register read or write transfer on an AMD SB-TSI device.
++ *
++ * @data:    Pointer to the sbtsi_data structure containing the device context
++ * @reg:     Register address to access.
++ * @val:     Pointer to the value to read into or write from.
++ * @is_read: If true, performs a read transfer and stores the result in @val.
++ *           If false, performs a write transfer using the value in @val.
++ *
++ * Returns 0 on success, or a negative error code on failure.
++ */
++int sbtsi_xfer(struct sbtsi_data *data, u8 reg, u8 *val, bool is_read);
++
+ #endif /* _LINUX_MISC_TSI_H_ */
+-- 
+2.55.0
+

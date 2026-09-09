@@ -1,0 +1,107 @@
+From 790354f7c4f70cd4be2bd53a62d87ebd53343846 Mon Sep 17 00:00:00 2001
+From: Adrian Ng Ho Yin <adrian.ho.yin.ng@altera.com>
+Date: Wed, 8 Jul 2026 00:17:39 -0700
+Subject: [PATCH 09076/15333] i3c: master: dw: Map CCC hardware errors to I3C
+ M0/M2
+
+Map DesignWare I3C master CCC hardware errors to I3C M0/M2 error codes.
+I3C_ERROR_M2 is reported only for broadcast address-header NACK
+(RESPONSE_ERROR_IBA_NACK). Target address NACK remains -EIO.
+
+Signed-off-by: Adrian Ng Ho Yin <adrian.ho.yin.ng@altera.com>
+Signed-off-by: Tze Yee Ng <tze.yee.ng@altera.com>
+Reviewed-by: Alexandre Mergnat <amergnat@baylibre.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Tested-by: Tommaso Merciai <tommaso.merciai.xr@bp.renesas.com>
+Tested-by: Claudiu Beznea <claudiu.beznea.uj@bp.renesas.com> # on RZ/G3S
+Link: https://patch.msgid.link/05994f0479041f3d8d199babe2a4535d6dcba3bf.1783493868.git.tze.yee.ng@altera.com
+Signed-off-by: Alexandre Belloni <alexandre.belloni@bootlin.com>
+---
+ drivers/i3c/master/dw-i3c-master.c | 28 +++++++++++++++++++++++-----
+ 1 file changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/i3c/master/dw-i3c-master.c b/drivers/i3c/master/dw-i3c-master.c
+index 97b8f4d8564c..84ffcb189338 100644
+--- a/drivers/i3c/master/dw-i3c-master.c
++++ b/drivers/i3c/master/dw-i3c-master.c
+@@ -493,6 +493,7 @@ static void dw_i3c_master_end_xfer_locked(struct dw_i3c_master *master, u32 isr)
+ 			break;
+ 		case RESPONSE_ERROR_PARITY:
+ 		case RESPONSE_ERROR_IBA_NACK:
++		case RESPONSE_ERROR_ADDRESS_NACK:
+ 		case RESPONSE_ERROR_TRANSF_ABORT:
+ 		case RESPONSE_ERROR_CRC:
+ 		case RESPONSE_ERROR_FRAME:
+@@ -502,7 +503,6 @@ static void dw_i3c_master_end_xfer_locked(struct dw_i3c_master *master, u32 isr)
+ 			ret = -ENOSPC;
+ 			break;
+ 		case RESPONSE_ERROR_I2C_W_NACK_ERR:
+-		case RESPONSE_ERROR_ADDRESS_NACK:
+ 		default:
+ 			ret = -EINVAL;
+ 			break;
+@@ -708,12 +708,29 @@ static void dw_i3c_master_bus_cleanup(struct i3c_master_controller *m)
+ 	dw_i3c_master_disable(master);
+ }
+ 
++static enum i3c_error_code dw_i3c_ccc_map_err(u8 dw_err)
++{
++	switch (dw_err) {
++	case RESPONSE_ERROR_IBA_NACK:
++		return I3C_ERROR_M2;
++	case RESPONSE_ERROR_CRC:
++	case RESPONSE_ERROR_PARITY:
++	case RESPONSE_ERROR_FRAME:
++	case RESPONSE_ERROR_TRANSF_ABORT:
++		return I3C_ERROR_M0;
++	default:
++		return I3C_ERROR_UNKNOWN;
++	}
++}
++
+ static int dw_i3c_ccc_set(struct dw_i3c_master *master,
+ 			  struct i3c_ccc_cmd *ccc)
+ {
+ 	struct dw_i3c_cmd *cmd;
+ 	int ret, pos = 0;
+ 
++	ccc->err = I3C_ERROR_UNKNOWN;
++
+ 	if (ccc->id & I3C_CCC_DIRECT) {
+ 		pos = dw_i3c_master_get_addr_pos(master, ccc->dests[0].addr);
+ 		if (pos < 0)
+@@ -742,8 +759,8 @@ static int dw_i3c_ccc_set(struct dw_i3c_master *master,
+ 		dw_i3c_master_dequeue_xfer(master, xfer);
+ 
+ 	ret = xfer->ret;
+-	if (xfer->cmds[0].error == RESPONSE_ERROR_IBA_NACK)
+-		ccc->err = I3C_ERROR_M2;
++	cmd = &xfer->cmds[0];
++	ccc->err = dw_i3c_ccc_map_err(cmd->error);
+ 
+ 	return ret;
+ }
+@@ -753,6 +770,8 @@ static int dw_i3c_ccc_get(struct dw_i3c_master *master, struct i3c_ccc_cmd *ccc)
+ 	struct dw_i3c_cmd *cmd;
+ 	int ret, pos;
+ 
++	ccc->err = I3C_ERROR_UNKNOWN;
++
+ 	pos = dw_i3c_master_get_addr_pos(master, ccc->dests[0].addr);
+ 	if (pos < 0)
+ 		return pos;
+@@ -781,10 +800,9 @@ static int dw_i3c_ccc_get(struct dw_i3c_master *master, struct i3c_ccc_cmd *ccc)
+ 
+ 	ret = xfer->ret;
+ 	cmd = &xfer->cmds[0];
++	ccc->err = dw_i3c_ccc_map_err(cmd->error);
+ 	if (!ret)
+ 		ccc->dests[0].payload.actual_len = cmd->rx_len;
+-	if (cmd->error == RESPONSE_ERROR_IBA_NACK)
+-		ccc->err = I3C_ERROR_M2;
+ 
+ 	return ret;
+ }
+-- 
+2.55.0
+

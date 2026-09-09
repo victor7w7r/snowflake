@@ -1,0 +1,83 @@
+From 187ac443ed51e04dcf0df98d270863c3f54af8fc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh=20=28Schneider=20Electric=29?=
+ <thomas.weissschuh@linutronix.de>
+Date: Mon, 3 Aug 2026 12:04:46 +0200
+Subject: [PATCH 13264/15333] selftests: timers: nsleep-lat: Explicitly list
+ the tested clocks
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The test relies on the numeric values of the clockids.
+As not all clocks are meant to be tested, this requires skipping some
+clocks unconditionally, cluttering the result.
+
+Use an equivalent, explicit list instead.
+
+In addition to CLOCK_PROCESS_CPUTIME_ID, CLOCK_THREAD_CPUTIME_ID and
+CLOCK_HWSPECIFIC which were unconditionally skipped before, this also
+unconditionally skips CLOCK_MONOTONIC_RAW, CLOCK_MONOTONIC_COARSE and
+CLOCK_REALTIME_COARSE. clock_nanosleep() is not supported for those.
+
+Signed-off-by: Thomas Weißschuh (Schneider Electric) <thomas.weissschuh@linutronix.de>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Acked-by: John Stultz <jstultz@google.com>
+Link: https://patch.msgid.link/20260803-auxclock-nanosleep-prep-v2-15-910cbd485390@linutronix.de
+---
+ tools/testing/selftests/timers/nsleep-lat.c | 26 ++++++++++-----------
+ 1 file changed, 12 insertions(+), 14 deletions(-)
+
+diff --git a/tools/testing/selftests/timers/nsleep-lat.c b/tools/testing/selftests/timers/nsleep-lat.c
+index d46f17404439..af47c28f086b 100644
+--- a/tools/testing/selftests/timers/nsleep-lat.c
++++ b/tools/testing/selftests/timers/nsleep-lat.c
+@@ -29,9 +29,6 @@
+ 
+ #define UNRESONABLE_LATENCY (40 * NSEC_PER_MSEC)
+ 
+-/* CLOCK_HWSPECIFIC == CLOCK_SGI_CYCLE (Deprecated) */
+-#define CLOCK_HWSPECIFIC		10
+-
+ #define UNSUPPORTED 0xf00f
+ 
+ struct timespec timespec_add(struct timespec ts, unsigned long long ns)
+@@ -97,24 +94,25 @@ int nanosleep_lat_test(int clockid, long long ns)
+ 	return 0;
+ }
+ 
+-#define SKIPPED_CLOCK_COUNT 3
+-
+ int main(int argc, char **argv)
+ {
+ 	long long length;
+ 	int clockid, ret;
+-	int max_clocks = CLOCK_TAI + 1;
+ 
+-	ksft_print_header();
+-	ksft_set_plan(max_clocks - CLOCK_REALTIME - SKIPPED_CLOCK_COUNT);
++	static const clockid_t tested_clocks[] = {
++		CLOCK_REALTIME,
++		CLOCK_MONOTONIC,
++		CLOCK_BOOTTIME,
++		CLOCK_BOOTTIME_ALARM,
++		CLOCK_REALTIME_ALARM,
++		CLOCK_TAI,
++	};
+ 
+-	for (clockid = CLOCK_REALTIME; clockid < max_clocks; clockid++) {
++	ksft_print_header();
++	ksft_set_plan(ARRAY_SIZE(tested_clocks));
+ 
+-		/* Skip cputime clockids since nanosleep won't increment cputime */
+-		if (clockid == CLOCK_PROCESS_CPUTIME_ID ||
+-				clockid == CLOCK_THREAD_CPUTIME_ID ||
+-				clockid == CLOCK_HWSPECIFIC)
+-			continue;
++	for (size_t clock_index = 0; clock_index < ARRAY_SIZE(tested_clocks); clock_index++) {
++		clockid = tested_clocks[clock_index];
+ 
+ 		length = 10;
+ 		while (length <= (NSEC_PER_SEC * 10)) {
+-- 
+2.55.0
+

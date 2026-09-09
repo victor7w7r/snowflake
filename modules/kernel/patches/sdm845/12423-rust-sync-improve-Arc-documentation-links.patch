@@ -1,0 +1,79 @@
+From 168b4f9aa5792ebef2cb9312ca0d8c796e35d692 Mon Sep 17 00:00:00 2001
+From: Harish C S <harish.cs.ss24@gmail.com>
+Date: Sat, 11 Jul 2026 20:20:33 +0530
+Subject: [PATCH 12423/15333] rust: sync: improve `Arc` documentation links
+
+The `Arc` documentation has a few mentions that do not follow the
+surrounding style: a plain `Arc` without an intra-doc link and a
+lower-case "arc".
+
+Use intra-doc links for rustdoc references to `Arc` and spell internal
+comments consistently as `Arc`, matching nearby docs.
+
+Suggested-by: Miguel Ojeda <ojeda@kernel.org>
+Link: https://github.com/Rust-for-Linux/linux/issues/1240
+Signed-off-by: Harish C S <harish.cs.ss24@gmail.com>
+Acked-by: Boqun Feng <boqun@kernel.org>
+Link: https://patch.msgid.link/20260711145033.39649-1-harish.cs.ss24@gmail.com
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ rust/kernel/sync/arc.rs | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/rust/kernel/sync/arc.rs b/rust/kernel/sync/arc.rs
+index 7522a8604e67..8ae0fe6f19ec 100644
+--- a/rust/kernel/sync/arc.rs
++++ b/rust/kernel/sync/arc.rs
+@@ -154,7 +154,7 @@ impl<T: ?Sized> ArcInner<T> {
+     ///
+     /// # Safety
+     ///
+-    /// `ptr` must have been returned by a previous call to [`Arc::into_raw`], and the `Arc` must
++    /// `ptr` must have been returned by a previous call to [`Arc::into_raw`], and the [`Arc`] must
+     /// not yet have been destroyed.
+     unsafe fn container_of(ptr: *const T) -> NonNull<ArcInner<T>> {
+         let refcount_layout = Layout::new::<Refcount>();
+@@ -253,7 +253,7 @@ unsafe fn from_inner(inner: NonNull<ArcInner<T>>) -> Self {
+ 
+     /// Convert the [`Arc`] into a raw pointer.
+     ///
+-    /// The raw pointer has ownership of the refcount that this Arc object owned.
++    /// The raw pointer has ownership of the refcount that this [`Arc`] object owned.
+     pub fn into_raw(self) -> *const T {
+         let ptr = self.ptr.as_ptr();
+         core::mem::forget(self);
+@@ -261,7 +261,7 @@ pub fn into_raw(self) -> *const T {
+         unsafe { core::ptr::addr_of!((*ptr).data) }
+     }
+ 
+-    /// Return a raw pointer to the data in this arc.
++    /// Return a raw pointer to the data in this [`Arc`].
+     pub fn as_ptr(this: &Self) -> *const T {
+         let ptr = this.ptr.as_ptr();
+ 
+@@ -305,7 +305,7 @@ pub fn ptr_eq(this: &Self, other: &Self) -> bool {
+ 
+     /// Converts this [`Arc`] into a [`UniqueArc`], or destroys it if it is not unique.
+     ///
+-    /// When this destroys the `Arc`, it does so while properly avoiding races. This means that
++    /// When this destroys the [`Arc`], it does so while properly avoiding races. This means that
+     /// this method will never call the destructor of the value.
+     ///
+     /// # Examples
+@@ -345,11 +345,11 @@ pub fn into_unique_or_drop(this: Self) -> Option<Pin<UniqueArc<T>>> {
+ 
+         // If the refcount reaches a non-zero value, then we have destroyed this `Arc` and will
+         // return without further touching the `Arc`. If the refcount reaches zero, then there are
+-        // no other arcs, and we can create a `UniqueArc`.
++        // no other `Arc`s, and we can create a `UniqueArc`.
+         if refcount.dec_and_test() {
+             refcount.set(1);
+ 
+-            // INVARIANT: We own the only refcount to this arc, so we may create a `UniqueArc`. We
++            // INVARIANT: We own the only refcount to this `Arc`, so we may create a `UniqueArc`. We
+             // must pin the `UniqueArc` because the values was previously in an `Arc`, and they pin
+             // their values.
+             Some(Pin::from(UniqueArc {
+-- 
+2.55.0
+

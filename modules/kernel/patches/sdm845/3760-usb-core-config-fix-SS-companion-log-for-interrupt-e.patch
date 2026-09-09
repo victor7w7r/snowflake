@@ -1,0 +1,41 @@
+From 3a1c90aeb96a2ecd6c60fcb70437ea1e851a5692 Mon Sep 17 00:00:00 2001
+From: Xu Rao <raoxu@uniontech.com>
+Date: Thu, 9 Jul 2026 13:46:41 +0800
+Subject: [PATCH 03760/15333] usb: core: config: fix SS companion log for
+ interrupt endpoints
+
+usb_parse_ss_endpoint_companion() clears bmAttributes when it is
+non-zero for control or interrupt endpoints.
+
+The diagnostic message reports Control for control endpoints and Bulk
+for the other branch. However, the other branch can only be an
+interrupt endpoint because bulk endpoints are handled by the following
+else-if branch.
+
+Report the endpoint type as Interrupt instead of Bulk to avoid
+misleading descriptor diagnostics.
+
+Acked-by: Mathias Nyman <mathias.nyman@linux.intel.com>
+Signed-off-by: Xu Rao <raoxu@uniontech.com>
+Link: https://patch.msgid.link/70C90942668659F9+20260709054641.346797-1-raoxu@uniontech.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/usb/core/config.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/usb/core/config.c b/drivers/usb/core/config.c
+index 45e20c6d76c0..cd3231d21090 100644
+--- a/drivers/usb/core/config.c
++++ b/drivers/usb/core/config.c
+@@ -151,7 +151,7 @@ static void usb_parse_ss_endpoint_companion(struct device *ddev, int cfgno,
+ 			usb_endpoint_xfer_int(&ep->desc)) &&
+ 				desc->bmAttributes != 0) {
+ 		dev_notice(ddev, "%s endpoint with bmAttributes = %d in config %d interface %d altsetting %d ep 0x%X: setting to zero\n",
+-				usb_endpoint_xfer_control(&ep->desc) ? "Control" : "Bulk",
++				usb_endpoint_xfer_control(&ep->desc) ? "Control" : "Interrupt",
+ 				desc->bmAttributes,
+ 				cfgno, inum, asnum, ep->desc.bEndpointAddress);
+ 		ep->ss_ep_comp.bmAttributes = 0;
+-- 
+2.55.0
+

@@ -1,0 +1,70 @@
+From 059e41aab4c860287bbef20c8ea11cff5731883d Mon Sep 17 00:00:00 2001
+From: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Date: Thu, 18 Jun 2026 14:36:41 +0530
+Subject: [PATCH 02605/15333] spi: qcom-geni: Use resources helper APIs in
+ runtime PM functions
+
+To manage GENI serial engine resources during runtime power management,
+drivers currently need to call functions for ICC, clock, and
+SE resource operations in both suspend and resume paths, resulting in
+code duplication across drivers.
+
+The new geni_se_resources_activate() and geni_se_resources_deactivate()
+helper APIs addresses this issue by providing a streamlined method to
+enable or disable all resources based, thereby eliminating redundancy
+across drivers.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Tested-by: Mattijs Korpershoek <mkorpershoek@kernel.org>
+Link: https://patch.msgid.link/20260618-enable-spi-on-sa8255p-v4-3-f5b5067e7e1e@oss.qualcomm.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-geni-qcom.c | 19 +++++--------------
+ 1 file changed, 5 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/spi/spi-geni-qcom.c b/drivers/spi/spi-geni-qcom.c
+index 09feb6577efc..025165c4b952 100644
+--- a/drivers/spi/spi-geni-qcom.c
++++ b/drivers/spi/spi-geni-qcom.c
+@@ -1130,16 +1130,8 @@ static int __maybe_unused spi_geni_runtime_suspend(struct device *dev)
+ {
+ 	struct spi_controller *spi = dev_get_drvdata(dev);
+ 	struct spi_geni_master *mas = spi_controller_get_devdata(spi);
+-	int ret;
+-
+-	/* Drop the performance state vote */
+-	dev_pm_opp_set_rate(dev, 0);
+-
+-	ret = geni_se_resources_off(&mas->se);
+-	if (ret)
+-		return ret;
+ 
+-	return geni_icc_disable(&mas->se);
++	return geni_se_resources_deactivate(&mas->se);
+ }
+ 
+ static int __maybe_unused spi_geni_runtime_resume(struct device *dev)
+@@ -1148,15 +1140,14 @@ static int __maybe_unused spi_geni_runtime_resume(struct device *dev)
+ 	struct spi_geni_master *mas = spi_controller_get_devdata(spi);
+ 	int ret;
+ 
+-	ret = geni_icc_enable(&mas->se);
++	ret = geni_se_resources_activate(&mas->se);
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = geni_se_resources_on(&mas->se);
+-	if (ret)
+-		return ret;
++	if (mas->se.has_opp)
++		return dev_pm_opp_set_rate(mas->dev, mas->cur_sclk_hz);
+ 
+-	return dev_pm_opp_set_rate(mas->dev, mas->cur_sclk_hz);
++	return 0;
+ }
+ 
+ static int __maybe_unused spi_geni_suspend(struct device *dev)
+-- 
+2.55.0
+

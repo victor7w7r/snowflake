@@ -1,0 +1,47 @@
+From 86507b581fb74b7155954b00d79e0a7b4db17594 Mon Sep 17 00:00:00 2001
+From: Tomasz Siemek <tomasz.siemek@amd.com>
+Date: Wed, 15 Jul 2026 13:37:52 +0200
+Subject: [PATCH 07961/15333] drm/amd/display: Use current mpc pipe in set
+ output transfer func
+
+[why]
+Only the top pipe had the output transfer function programmed.
+
+[how]
+Program the current pipe from the MPC chain during fast sequence build.
+
+Reviewed-by: Martin Leung <martin.leung@amd.com>
+Reviewed-by: Alvin Lee <alvin.lee2@amd.com>
+Signed-off-by: Tomasz Siemek <tomasz.siemek@amd.com>
+Signed-off-by: Fangzhi Zuo <jerry.zuo@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/display/dc/core/dc_hw_sequencer.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/core/dc_hw_sequencer.c b/drivers/gpu/drm/amd/display/dc/core/dc_hw_sequencer.c
+index 8b54bab98283..11411fa94665 100644
+--- a/drivers/gpu/drm/amd/display/dc/core/dc_hw_sequencer.c
++++ b/drivers/gpu/drm/amd/display/dc/core/dc_hw_sequencer.c
+@@ -1111,7 +1111,7 @@ void hwss_build_fast_sequence(struct dc *dc,
+ 					(*num_steps)++;
+ 				}
+ 			}
+-			if (current_mpc_pipe->stream->update_flags.bits.out_tf) {
++			if (hws->funcs.set_output_transfer_func && current_mpc_pipe->stream->update_flags.bits.out_tf) {
+ 				struct set_output_transfer_func_params *otf_params =
+ 					&block_sequence[*num_steps].params.set_output_transfer_func_params;
+ 
+@@ -1119,7 +1119,7 @@ void hwss_build_fast_sequence(struct dc *dc,
+ 				otf_params->xfm = current_mpc_pipe->plane_res.xfm;
+ 				otf_params->mpc = dc->res_pool->mpc;
+ 				otf_params->mpcc_id = current_mpc_pipe->plane_res.hubp->inst;
+-				otf_params->is_top_pipe = resource_is_pipe_type(pipe_ctx, OPP_HEAD);
++				otf_params->is_top_pipe = resource_is_pipe_type(current_mpc_pipe, OPP_HEAD);
+ 				otf_params->stream = current_mpc_pipe->stream;
+ 				block_sequence[*num_steps].func = DPP_SET_OUTPUT_TRANSFER_FUNC;
+ 				(*num_steps)++;
+-- 
+2.55.0
+

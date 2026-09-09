@@ -1,0 +1,107 @@
+From 43c17d862977492ea7c4a21e4c8f22582c603508 Mon Sep 17 00:00:00 2001
+From: Stefano Radaelli <stefano.r@variscite.com>
+Date: Fri, 3 Jul 2026 17:27:31 +0200
+Subject: [PATCH 04194/15333] arm64: dts: freescale: imx9-var-dart-sonata: fix
+ Ethernet PHY configuration
+
+Fix the Ethernet PHY description on the DART-MX9 Sonata boards.
+
+The GPIO previously described as the PHY reset line is actually a
+board-level enable signal required by the PHY. Model it accordingly and
+remove the incorrect reset GPIO description from the PHY nodes.
+
+On i.MX91 and i.MX93 the signal is described as a fixed regulator,
+whereas the existing regulator description on i.MX95 is reused.
+
+Keeping the PHY enable asserted during boot ensures that Ethernet
+initialization completes successfully.
+
+Signed-off-by: Stefano Radaelli <stefano.r@variscite.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+---
+ .../boot/dts/freescale/imx91-var-dart-sonata.dts   | 14 +++++++++++---
+ .../boot/dts/freescale/imx93-var-dart-sonata.dts   | 14 +++++++++++---
+ .../boot/dts/freescale/imx95-var-dart-sonata.dts   |  3 ---
+ 3 files changed, 22 insertions(+), 9 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/freescale/imx91-var-dart-sonata.dts b/arch/arm64/boot/dts/freescale/imx91-var-dart-sonata.dts
+index 3f0fd321d95f..f7e32f9375f5 100644
+--- a/arch/arm64/boot/dts/freescale/imx91-var-dart-sonata.dts
++++ b/arch/arm64/boot/dts/freescale/imx91-var-dart-sonata.dts
+@@ -97,6 +97,17 @@ reg_rgb_sel: regulator-rgb-enable {
+ 		enable-active-high;
+ 	};
+ 
++	reg_phy1_supply: regulator-phy1 {
++		compatible = "regulator-fixed";
++		regulator-name = "SUPPLY_PHY1";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&pca6408_2 0 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		startup-delay-us = <10000>;
++		regulator-always-on;
++	};
++
+ 	reg_usdhc2_vmmc: regulator-vmmc-usdhc2 {
+ 		compatible = "regulator-fixed";
+ 		pinctrl-names = "default";
+@@ -139,9 +150,6 @@ mdio {
+ 		ethphy1: ethernet-phy@1 {
+ 			compatible = "ethernet-phy-ieee802.3-c22";
+ 			reg = <1>;
+-			reset-gpios = <&pca6408_2 0 GPIO_ACTIVE_LOW>;
+-			reset-assert-us = <15000>;
+-			reset-deassert-us = <100000>;
+ 
+ 			leds {
+ 				#address-cells = <1>;
+diff --git a/arch/arm64/boot/dts/freescale/imx93-var-dart-sonata.dts b/arch/arm64/boot/dts/freescale/imx93-var-dart-sonata.dts
+index 5513d3b148a2..1ca3ec8330d0 100644
+--- a/arch/arm64/boot/dts/freescale/imx93-var-dart-sonata.dts
++++ b/arch/arm64/boot/dts/freescale/imx93-var-dart-sonata.dts
+@@ -103,6 +103,17 @@ reg_vref_1v8: regulator-adc-vref {
+ 		regulator-min-microvolt = <1800000>;
+ 	};
+ 
++	reg_phy1_supply: regulator-phy1 {
++		compatible = "regulator-fixed";
++		regulator-name = "SUPPLY_PHY1";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&pca6408_2 0 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		startup-delay-us = <10000>;
++		regulator-always-on;
++	};
++
+ 	reg_usdhc2_vmmc: regulator-vmmc-usdhc2 {
+ 		compatible = "regulator-fixed";
+ 		regulator-name = "VDD_SD2_3V3";
+@@ -180,9 +191,6 @@ mdio {
+ 		ethphy1: ethernet-phy@1 {
+ 			compatible = "ethernet-phy-ieee802.3-c22";
+ 			reg = <1>;
+-			reset-assert-us = <15000>;
+-			reset-deassert-us = <100000>;
+-			reset-gpios = <&pca6408_2 0 GPIO_ACTIVE_LOW>;
+ 
+ 			leds {
+ 				#address-cells = <1>;
+diff --git a/arch/arm64/boot/dts/freescale/imx95-var-dart-sonata.dts b/arch/arm64/boot/dts/freescale/imx95-var-dart-sonata.dts
+index 7a58ad38ffb4..ccf7e77016e4 100644
+--- a/arch/arm64/boot/dts/freescale/imx95-var-dart-sonata.dts
++++ b/arch/arm64/boot/dts/freescale/imx95-var-dart-sonata.dts
+@@ -346,9 +346,6 @@ &netc_emdio {
+ 	ethphy1: ethernet-phy@1 {
+ 		compatible = "ethernet-phy-ieee802.3-c22";
+ 		reg = <1>;
+-		reset-gpios = <&pca6408_2 0 GPIO_ACTIVE_LOW>;
+-		reset-assert-us = <10000>;
+-		reset-deassert-us = <100000>;
+ 
+ 		leds {
+ 			#address-cells = <1>;
+-- 
+2.55.0
+

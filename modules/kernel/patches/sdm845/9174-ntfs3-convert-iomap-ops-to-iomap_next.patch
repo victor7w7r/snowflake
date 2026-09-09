@@ -1,0 +1,38 @@
+From 9aff0a5221e836e457de2996d4b0fcc850094588 Mon Sep 17 00:00:00 2001
+From: Joanne Koong <joannelkoong@gmail.com>
+Date: Wed, 29 Jul 2026 12:27:23 -0700
+Subject: [PATCH 09174/15333] ntfs3: convert iomap ops to ->iomap_next()
+
+Convert ntfs3 iomap_ops to the new ->iomap_next() callback. The callback is
+generated with the DEFINE_IOMAP_ITER_NEXT_END() macro, which wraps the
+iomap_iter_next() helper to finish the previous mapping if needed and
+produce the next one. No functional changes are intended.
+
+Signed-off-by: Joanne Koong <joannelkoong@gmail.com>
+Link: https://patch.msgid.link/20260729192737.3190206-9-joannelkoong@gmail.com
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/ntfs3/inode.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/fs/ntfs3/inode.c b/fs/ntfs3/inode.c
+index c43101cc064d..53031e71c8fc 100644
+--- a/fs/ntfs3/inode.c
++++ b/fs/ntfs3/inode.c
+@@ -2101,9 +2101,11 @@ const struct address_space_operations ntfs_aops_cmpr = {
+ 	.invalidate_folio = iomap_invalidate_folio,
+ };
+ 
++static DEFINE_IOMAP_ITER_NEXT_END(ntfs_iomap_next, ntfs_iomap_begin,
++				  ntfs_iomap_end);
++
+ const struct iomap_ops ntfs_iomap_ops = {
+-	.iomap_begin	= ntfs_iomap_begin,
+-	.iomap_end	= ntfs_iomap_end,
++	.iomap_next	= ntfs_iomap_next,
+ };
+ 
+ const struct iomap_write_ops ntfs_iomap_folio_ops = {
+-- 
+2.55.0
+

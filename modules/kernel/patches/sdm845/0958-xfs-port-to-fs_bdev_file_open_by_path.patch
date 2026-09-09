@@ -1,0 +1,73 @@
+From fc376d1718af5d30d922a6efdf6a6a9889f8bf03 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 16 Jun 2026 16:08:25 +0200
+Subject: [PATCH 00958/15333] xfs: port to fs_bdev_file_open_by_path()
+
+Route the log and rt device opens through fs_bdev_file_open_by_path() so
+each external device is registered against mp->m_super, and convert the
+matching releases to fs_bdev_file_release(). The data device is still
+opened and released by setup_bdev_super()/kill_block_super(); when the
+log lives on the data device the open resolves to the existing (dev, sb)
+entry so the superblock is acted on once.
+
+Reviewed-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260616-work-super-bdev_holder_global-v2-9-7df6b864028e@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/xfs/xfs_buf.c   |  2 +-
+ fs/xfs/xfs_super.c | 10 +++++-----
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/fs/xfs/xfs_buf.c b/fs/xfs/xfs_buf.c
+index 3ce12fe1c307..2eddd60aaa67 100644
+--- a/fs/xfs/xfs_buf.c
++++ b/fs/xfs/xfs_buf.c
+@@ -1615,7 +1615,7 @@ xfs_free_buftarg(
+ 	fs_put_dax(btp->bt_daxdev, btp->bt_mount);
+ 	/* the main block device is closed by kill_block_super */
+ 	if (btp->bt_bdev != btp->bt_mount->m_super->s_bdev)
+-		bdev_fput(btp->bt_file);
++		fs_bdev_file_release(btp->bt_file, btp->bt_mount->m_super);
+ 	kfree(btp);
+ }
+ 
+diff --git a/fs/xfs/xfs_super.c b/fs/xfs/xfs_super.c
+index eac7f9503805..59865855b60f 100644
+--- a/fs/xfs/xfs_super.c
++++ b/fs/xfs/xfs_super.c
+@@ -400,8 +400,8 @@ xfs_blkdev_get(
+ 	blk_mode_t		mode;
+ 
+ 	mode = sb_open_mode(mp->m_super->s_flags);
+-	*bdev_filep = bdev_file_open_by_path(name, mode,
+-			mp->m_super, &fs_holder_ops);
++	*bdev_filep = fs_bdev_file_open_by_path(name, mode,
++			mp->m_super, mp->m_super);
+ 	if (IS_ERR(*bdev_filep)) {
+ 		error = PTR_ERR(*bdev_filep);
+ 		*bdev_filep = NULL;
+@@ -526,7 +526,7 @@ xfs_open_devices(
+ 		mp->m_logdev_targp = mp->m_ddev_targp;
+ 		/* Handle won't be used, drop it */
+ 		if (logdev_file)
+-			bdev_fput(logdev_file);
++			fs_bdev_file_release(logdev_file, mp->m_super);
+ 	}
+ 
+ 	return 0;
+@@ -538,10 +538,10 @@ xfs_open_devices(
+ 	xfs_free_buftarg(mp->m_ddev_targp);
+  out_close_rtdev:
+ 	 if (rtdev_file)
+-		bdev_fput(rtdev_file);
++		fs_bdev_file_release(rtdev_file, mp->m_super);
+  out_close_logdev:
+ 	if (logdev_file)
+-		bdev_fput(logdev_file);
++		fs_bdev_file_release(logdev_file, mp->m_super);
+ 	return error;
+ }
+ 
+-- 
+2.55.0
+

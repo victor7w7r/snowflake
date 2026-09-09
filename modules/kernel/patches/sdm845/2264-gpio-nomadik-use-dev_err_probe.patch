@@ -1,0 +1,99 @@
+From 56716e37447a5bd4f9fbd6e314acacce191e313f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Th=C3=A9o=20Lebrun?= <theo.lebrun@bootlin.com>
+Date: Wed, 1 Jul 2026 18:57:01 +0200
+Subject: [PATCH 02264/15333] gpio: nomadik: use dev_err_probe()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+gpio-nomadik depends on a few resources. In one case the reset is taking
+time to show up leading to a boot log containing:
+
+[    0.544230] nomadik-gpio 1400000.gpio: failed getting reset control: -EPROBE_DEFER
+
+Fix by replacing all dev_err() calls that might be made at probe with
+dev_err_probe().
+
+On nomadik platforms, the nmk_gpio_populate_chip() log calls might
+attach their reasons to the gpio or pinctrl device depending on boot
+order.
+
+Signed-off-by: Théo Lebrun <theo.lebrun@bootlin.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Link: https://patch.msgid.link/20260701-gpio-nomadik-silent-v1-4-644d10316cef@bootlin.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/gpio/gpio-nomadik.c | 17 +++++++++--------
+ 1 file changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpio/gpio-nomadik.c b/drivers/gpio/gpio-nomadik.c
+index eba095eeb3d6..1ee46f59d708 100644
+--- a/drivers/gpio/gpio-nomadik.c
++++ b/drivers/gpio/gpio-nomadik.c
+@@ -520,21 +520,22 @@ struct nmk_gpio_chip *nmk_gpio_populate_chip(struct fwnode_handle *fwnode,
+ 
+ 	gpio_dev = bus_find_device_by_fwnode(&platform_bus_type, fwnode);
+ 	if (!gpio_dev) {
+-		dev_err(dev, "populate \"%pfwP\": device not found\n", fwnode);
+-		return ERR_PTR(-ENODEV);
++		ret = -ENODEV;
++		dev_err_probe(dev, ret, "populate \"%pfwP\": device not found\n", fwnode);
++		return ERR_PTR(ret);
+ 	}
+ 	gpio_pdev = to_platform_device(gpio_dev);
+ 
+ 	if (device_property_read_u32(gpio_dev, "gpio-bank", &id)) {
+-		dev_err(dev, "populate: gpio-bank property not found\n");
+ 		ret = -EINVAL;
++		dev_err_probe(dev, ret, "populate: gpio-bank property not found\n");
+ 		goto err_put_pdev;
+ 	}
+ 
+ #ifdef CONFIG_PINCTRL_NOMADIK
+ 	if (id >= ARRAY_SIZE(nmk_gpio_chips)) {
+-		dev_err(dev, "populate: invalid id: %u\n", id);
+ 		ret = -EINVAL;
++		dev_err_probe(dev, ret, "populate: invalid id: %u\n", id);
+ 		goto err_put_pdev;
+ 	}
+ 	/* Already populated? */
+@@ -578,7 +579,7 @@ struct nmk_gpio_chip *nmk_gpio_populate_chip(struct fwnode_handle *fwnode,
+ 	clk = clk_get_optional(gpio_dev, NULL);
+ 	if (IS_ERR(clk)) {
+ 		ret = PTR_ERR(clk);
+-		dev_err(dev, "failed getting clock: %d\n", ret);
++		dev_err_probe(dev, ret, "failed getting clock\n");
+ 		goto err_put_pdev;
+ 	}
+ 	clk_prepare(clk);
+@@ -587,8 +588,8 @@ struct nmk_gpio_chip *nmk_gpio_populate_chip(struct fwnode_handle *fwnode,
+ 	/* NOTE: do not use devm_ here! */
+ 	reset = reset_control_get_optional_shared(gpio_dev, NULL);
+ 	if (IS_ERR(reset)) {
+-		dev_err(dev, "failed getting reset control: %pe\n", reset);
+ 		ret = PTR_ERR(reset);
++		dev_err_probe(dev, ret, "failed getting reset control\n");
+ 		goto err_unprepare_clk;
+ 	}
+ 
+@@ -599,7 +600,7 @@ struct nmk_gpio_chip *nmk_gpio_populate_chip(struct fwnode_handle *fwnode,
+ 	 */
+ 	ret = reset_control_deassert(reset);
+ 	if (ret) {
+-		dev_err(dev, "failed reset deassert: %d\n", ret);
++		dev_err_probe(dev, ret, "failed reset deassert\n");
+ 		goto err_put_reset;
+ 	}
+ 
+@@ -695,7 +696,7 @@ static int nmk_gpio_probe(struct platform_device *pdev)
+ 	ret = devm_request_irq(dev, irq, nmk_gpio_irq_handler, IRQF_SHARED,
+ 			       dev_name(dev), nmk_chip);
+ 	if (ret) {
+-		dev_err(dev, "failed requesting IRQ\n");
++		dev_err_probe(dev, ret, "failed requesting IRQ\n");
+ 		return ret;
+ 	}
+ 
+-- 
+2.55.0
+

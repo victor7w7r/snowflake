@@ -1,0 +1,55 @@
+From c25a46dc6304000fffa9960cfb1f8fc296aa69a3 Mon Sep 17 00:00:00 2001
+From: Ian Rogers <irogers@google.com>
+Date: Thu, 4 Jun 2026 23:24:18 -0700
+Subject: [PATCH 03894/15333] perf clang-format: Prioritize Python.h and expand
+ other categories
+
+This commit updates the .clang-format rules for the perf tools.
+It prioritizes Python.h sorting and expands the regex lists for C
+standard library and OS specific headers.
+
+- Prioritize Python.h by sorting it first (Priority -1), ensuring it
+  is sorted before even the main header (Priority 0).
+- Keep other header priorities (1 and 2) to maintain their relative
+  order.
+- Sanity check and complete "C Standard Library Headers" up to C23
+  (added stdbit.h, stdckdint.h).
+- Sanity check and complete "OS/System-Specific Headers" based on
+  actual usage in tools/perf (added asm-generic, uapi, and various
+  flat POSIX/system headers).
+
+Signed-off-by: Ian Rogers <irogers@google.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/.clang-format | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/tools/perf/.clang-format b/tools/perf/.clang-format
+index 902b2f7456f6..e4cff363a603 100644
+--- a/tools/perf/.clang-format
++++ b/tools/perf/.clang-format
+@@ -2,15 +2,18 @@ BasedOnStyle: InheritParentConfig
+ SortIncludes: true
+ IncludeBlocks: Regroup
+ IncludeCategories:
++  # Python.h must be first
++  - Regex:           '^<Python\.h>'
++    Priority:        -1
+   # Implicitly the corresponding header for the C file has Priority 0
+   # C Standard Library Headers
+-  - Regex:           '^<(assert|complex|ctype|errno|fenv|float|inttypes|iso646|limits|locale|math|setjmp|signal|stdalign|stdarg|stdatomic|stdbool|stddef|stdint|stdio|stdlib|stdnoreturn|string|tgmath|threads|time|uchar|wchar|wctype)\.h>'
++  - Regex:           '^<(assert|complex|ctype|errno|fenv|float|inttypes|iso646|limits|locale|math|setjmp|signal|stdalign|stdarg|stdatomic|stdbit|stdbool|stdckdint|stddef|stdint|stdio|stdlib|stdnoreturn|string|tgmath|threads|time|uchar|wchar|wctype)\.h>'
+     Priority:        1
+   # OS/System-Specific Headers (directories)
+-  - Regex:           '^<(sys|linux|asm|arpa|net|netinet|x86_64|machine)/.*>'
++  - Regex:           '^<(arpa|asm|asm-generic|linux|machine|net|netinet|sys|uapi|x86_64)/.*>'
+     Priority:        2
+   # OS/System-Specific Headers (POSIX/System flat headers)
+-  - Regex:           '^<(unistd|pthread|fcntl|dirent|dlfcn|poll|sched|semaphore|spawn|syslog|termios|pwd|grp|netdb|sysexits|err|paths|pty|utmp|resolv|ifaddrs|elf|libelf|gelf)\.h>'
++  - Regex:           '^<(aio|byteswap|dirent|dlfcn|elf|endian|err|execinfo|fcntl|features|fnmatch|ftw|gelf|getopt|grp|ifaddrs|libelf|libgen|malloc|memory|mntent|netdb|numa|numaif|paths|poll|pthread|pty|pwd|regex|resolv|sched|semaphore|spawn|strings|syscall|sysexits|syslog|termios|unistd|utmp|x86intrin)\.h>'
+     Priority:        2
+   # Third-Party Library Headers
+   - Regex:           '^<.*>'
+-- 
+2.55.0
+

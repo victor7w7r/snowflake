@@ -1,0 +1,51 @@
+From d6a1bc7c9b4ce71674a633242251d8a804ced82d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Tue, 12 May 2026 00:41:11 +0300
+Subject: [PATCH 04415/15333] drm/i915: Throw away the BIOS fb if has the wrong
+ depth/bpp
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Respect the user's choice of depth/bpp for the fbdev framebuffer
+and throw out the fb we inherited from the BIOS if it doesn't
+match.
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Reviewed-by: Jani Nikula <jani.nikula@intel.com>
+Link: https://patch.msgid.link/20260511214122.8468-4-ville.syrjala@linux.intel.com
+Signed-off-by: Maarten Lankhorst <dev@lankhorst.se>
+---
+ drivers/gpu/drm/i915/display/intel_fbdev.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_fbdev.c b/drivers/gpu/drm/i915/display/intel_fbdev.c
+index bc267776106e..db0e36dd8722 100644
+--- a/drivers/gpu/drm/i915/display/intel_fbdev.c
++++ b/drivers/gpu/drm/i915/display/intel_fbdev.c
+@@ -268,6 +268,8 @@ static bool bios_fb_ok(const struct intel_framebuffer *fb,
+ 	struct intel_display *display = to_intel_display(fb->base.dev);
+ 	int width = fb->base.width;
+ 	int height = fb->base.height;
++	int depth = fb->base.format->depth;
++	int bpp = fb->base.format->cpp[0] * 8;
+ 
+ 	if (sizes->fb_width > width || sizes->fb_height > height) {
+ 		drm_dbg_kms(display->drm,
+@@ -276,6 +278,13 @@ static bool bios_fb_ok(const struct intel_framebuffer *fb,
+ 		return false;
+ 	}
+ 
++	if (sizes->surface_depth != depth || sizes->surface_bpp != bpp) {
++		drm_dbg_kms(display->drm,
++			    "BIOS fb using wrong depth/bpp (%d/%d), we require (%d/%d), releasing it\n",
++			    depth, bpp, sizes->surface_depth, sizes->surface_bpp);
++		return false;
++	}
++
+ 	return true;
+ }
+ 
+-- 
+2.55.0
+

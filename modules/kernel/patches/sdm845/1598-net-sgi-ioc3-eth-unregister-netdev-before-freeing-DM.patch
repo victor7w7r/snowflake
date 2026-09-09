@@ -1,0 +1,52 @@
+From 18a28f3e107e7f621527b6d5a5fb061489f54a53 Mon Sep 17 00:00:00 2001
+From: Xu Rao <raoxu@uniontech.com>
+Date: Mon, 29 Jun 2026 16:50:53 +0800
+Subject: [PATCH 01598/15333] net: sgi: ioc3-eth: unregister netdev before
+ freeing DMA rings
+
+ioc3eth_remove() frees the coherent RX and TX descriptor rings before
+unregistering the netdev. If the interface is running,
+unregister_netdev() invokes ioc3_close() through ndo_stop.
+
+ioc3_close() stops the device and then calls ioc3_free_rx_bufs() and
+ioc3_clean_tx_ring(). Both cleanup functions access descriptors in the
+rings, so the current ordering causes CPU accesses to freed coherent
+memory. Until ioc3_stop() disables RX and TX DMA, the device may also
+continue using the freed ring addresses.
+
+Unregister the netdev before releasing the rings. This lets the core
+close a running interface and quiesce the device while the rings are
+still valid. Keep the explicit timer deletion because ndo_stop is not
+called when the interface is already down.
+
+Cc: <stable+noautosel@kernel.org> # untested fix for ancient HW
+Signed-off-by: Xu Rao <raoxu@uniontech.com>
+Reviewed-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+Link: https://patch.msgid.link/40CD736C4911C181+20260629085053.964383-1-raoxu@uniontech.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/sgi/ioc3-eth.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/sgi/ioc3-eth.c b/drivers/net/ethernet/sgi/ioc3-eth.c
+index 39731069d99e..b35f692b1a0e 100644
+--- a/drivers/net/ethernet/sgi/ioc3-eth.c
++++ b/drivers/net/ethernet/sgi/ioc3-eth.c
+@@ -967,11 +967,12 @@ static void ioc3eth_remove(struct platform_device *pdev)
+ 	struct net_device *dev = platform_get_drvdata(pdev);
+ 	struct ioc3_private *ip = netdev_priv(dev);
+ 
++	unregister_netdev(dev);
++	timer_delete_sync(&ip->ioc3_timer);
++
+ 	dma_free_coherent(ip->dma_dev, RX_RING_SIZE, ip->rxr, ip->rxr_dma);
+ 	dma_free_coherent(ip->dma_dev, TX_RING_SIZE + SZ_16K - 1, ip->tx_ring, ip->txr_dma);
+ 
+-	unregister_netdev(dev);
+-	timer_delete_sync(&ip->ioc3_timer);
+ 	free_netdev(dev);
+ }
+ 
+-- 
+2.55.0
+

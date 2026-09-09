@@ -1,0 +1,39 @@
+From 71b7987ec001a60dff689e56f4b041cfc4222c6b Mon Sep 17 00:00:00 2001
+From: Sven Eckelmann <sven@narfation.org>
+Date: Wed, 10 Jun 2026 23:16:18 +0200
+Subject: [PATCH 00903/15333] batman-adv: tp_meter: simplify unordered ack
+ calculation
+
+When batadv_tp_ack_unordered() goes through the list of unacked sequence
+numbers and checks for now closed gaps, it is first calculating a delta of
+the sequence numbers which could be acked. Just to revert this calculation
+in the next steps to the sequence number which would be ackable.
+
+Skip the delta step and directly work with the sequence numbers.
+
+Signed-off-by: Sven Eckelmann <sven@narfation.org>
+---
+ net/batman-adv/tp_meter.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/net/batman-adv/tp_meter.c b/net/batman-adv/tp_meter.c
+index c2eea7dbc488..b7fee6e55f03 100644
+--- a/net/batman-adv/tp_meter.c
++++ b/net/batman-adv/tp_meter.c
+@@ -1493,10 +1493,10 @@ static void batadv_tp_ack_unordered(struct batadv_tp_receiver *tp_vars)
+ 		if (batadv_seq_before(tp_vars->last_recv, un->seqno))
+ 			break;
+ 
+-		to_ack = un->seqno + un->len - tp_vars->last_recv;
++		to_ack = un->seqno + un->len;
+ 
+-		if (batadv_seq_before(tp_vars->last_recv, un->seqno + un->len))
+-			tp_vars->last_recv += to_ack;
++		if (batadv_seq_before(tp_vars->last_recv, to_ack))
++			tp_vars->last_recv = to_ack;
+ 
+ 		list_del(&un->list);
+ 		kfree(un);
+-- 
+2.55.0
+

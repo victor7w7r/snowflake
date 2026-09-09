@@ -1,0 +1,42 @@
+From 903cc6e45401d7f3821758901f229b0b59e4f27c Mon Sep 17 00:00:00 2001
+From: Thorsten Blum <thorsten.blum@linux.dev>
+Date: Tue, 21 Jul 2026 17:53:46 +0200
+Subject: [PATCH 09225/15333] powerpc/pseries: Avoid strlen() in
+ do_{remove,update}_property()
+
+Check only the first byte instead of scanning the entire string with
+strlen().
+
+Signed-off-by: Thorsten Blum <thorsten.blum@linux.dev>
+Reviewed-by: Christophe Leroy (CS GROUP) <chleroy@kernel.org>
+Signed-off-by: Madhavan Srinivasan <maddy@linux.ibm.com>
+Link: https://patch.msgid.link/20260721155346.121975-4-thorsten.blum@linux.dev
+---
+ arch/powerpc/platforms/pseries/reconfig.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/powerpc/platforms/pseries/reconfig.c b/arch/powerpc/platforms/pseries/reconfig.c
+index 7faebcffc9df..18e3f1a036e3 100644
+--- a/arch/powerpc/platforms/pseries/reconfig.c
++++ b/arch/powerpc/platforms/pseries/reconfig.c
+@@ -307,7 +307,7 @@ static int do_remove_property(char *buf, size_t bufsize)
+ 	if (tmp)
+ 		*tmp = '\0';
+ 
+-	if (strlen(buf) == 0)
++	if (*buf == '\0')
+ 		return -EINVAL;
+ 
+ 	return of_remove_property(np, of_find_property(np, buf, NULL));
+@@ -330,7 +330,7 @@ static int do_update_property(char *buf, size_t bufsize)
+ 	if (!next_prop)
+ 		return -EINVAL;
+ 
+-	if (!strlen(name))
++	if (*name == '\0')
+ 		return -ENODEV;
+ 
+ 	newprop = new_property(name, length, value, NULL);
+-- 
+2.55.0
+

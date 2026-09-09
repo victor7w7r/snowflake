@@ -1,0 +1,100 @@
+From ffd02a377a442c960bfc2151eaf7f8c04a5ea0ee Mon Sep 17 00:00:00 2001
+From: Padhia Luo <lcj20010426@gmail.com>
+Date: Thu, 30 Jul 2026 15:14:53 +0800
+Subject: [PATCH 08615/15333] ALSA: hda/realtek: Fix speaker mute LED on Lenovo
+ ThinkBook 14 G8+ IPH
+
+On the ThinkBook 14 G8+ IPH (SSID 17aa:393e, ALC287) the F1 speaker mute
+LED never lights up, while the F4 mic mute LED works.
+
+Both LEDs are platform LEDs registered by lenovo-wmi-hotkey-utilities and
+default to the audio-mute / audio-micmute triggers, so the speaker LED only
+follows a control carrying SNDRV_CTL_ELEM_ACCESS_SPK_LED. No control on
+this machine has that flag set, so snd_ctl_led never attaches anything and
+/sys/class/sound/ctl-led/speaker/card0/list stays empty. The mic LED is
+unaffected because MIC_LED is set from the SOF topology on the DMIC
+control, which does not go through the codec fixups at all.
+
+The pin configuration of this machine matches the ThinkPad pin quirk that
+selects ALC285_FIXUP_THINKPAD_HEADSET_JACK - pin_config_match() masks out
+the sequence/association nibbles, so 0x14=0x90170120 still matches the
+0x90170110 in the table. That fixup chains into ALC269_FIXUP_THINKPAD_ACPI,
+but hda_fixup_thinkpad_acpi() returns early because is_thinkpad() is false:
+a ThinkBook exposes neither LEN0068/LEN0268 nor IBM0068. Therefore
+snd_hda_gen_add_mute_led_cdev() is never called and spec->vmaster_mute_led
+stays 0.
+
+The vendor fallback SND_PCI_QUIRK_VENDOR(0x17aa, "Lenovo XPAD",
+ALC269_FIXUP_LENOVO_XPAD_ACPI) would have handled this correctly - the
+machine does expose LHK2019 and VPC2004, so is_ideapad() is true - but it
+never runs: the pin quirk has already set codec->fixup_id, and
+snd_hda_pick_fixup() returns immediately in that case.
+
+Add an SSID quirk selecting a fixup that keeps everything the machine
+currently gets (headset jack handling plus the X1 Gen7 DAC routing) and
+additionally runs the ideapad ACPI setup. It chains into
+ALC287_FIXUP_LENOVO_YOGA_PRO7, which already combines
+alc285_fixup_thinkpad_x1_gen7 with ALC269_FIXUP_LENOVO_XPAD_ACPI, so the
+resulting chain differs from the current one only by the added ideapad step
+and cannot regress the analog output or the headset jack.
+
+Tested on 7.1.5 on the affected machine: the speaker LED group is now
+populated at probe time without any userspace help, and the F1 LED
+follows the mute state.  Compared against a boot with the previous fixup
+selection, the mixer control list (names and numids) and the registered
+jack input devices are identical.
+
+Note that the underlying mismatch is not specific to this SSID. Any Lenovo
+non-ThinkPad whose pins collide with a ThinkPad pin quirk loses its mute
+LED the same way. Letting hda_fixup_thinkpad_acpi() fall back to the
+ideapad check would cover the whole class at once, but that touches a
+helper shared with every ThinkPad, so this patch only fixes the machine
+that was actually tested.
+
+Signed-off-by: Padhia Luo <lcj20010426@gmail.com>
+Link: https://patch.msgid.link/20260730071453.19636-1-lcj20010426@gmail.com
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/hda/codecs/realtek/alc269.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index 327f89b59639..f7877127e0e4 100644
+--- a/sound/hda/codecs/realtek/alc269.c
++++ b/sound/hda/codecs/realtek/alc269.c
+@@ -4178,6 +4178,7 @@ enum {
+ 	ALC298_FIXUP_LENOVO_C940_DUET7,
+ 	ALC287_FIXUP_LENOVO_YOGA_BOOK_9I,
+ 	ALC287_FIXUP_LENOVO_YOGA_PRO7,
++	ALC287_FIXUP_LENOVO_XPAD_HEADSET_JACK,
+ 	ALC287_FIXUP_13S_GEN2_SPEAKERS,
+ 	ALC256_FIXUP_SET_COEF_DEFAULTS,
+ 	ALC256_FIXUP_SYSTEM76_MIC_NO_PRESENCE,
+@@ -6269,6 +6270,16 @@ static const struct hda_fixup alc269_fixups[] = {
+ 		.chained = true,
+ 		.chain_id = ALC269_FIXUP_LENOVO_XPAD_ACPI,
+ 	},
++	[ALC287_FIXUP_LENOVO_XPAD_HEADSET_JACK] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc_fixup_headset_jack,
++		.chained = true,
++		/* Same as ALC285_FIXUP_THINKPAD_HEADSET_JACK, except that the
++		 * mute LEDs are driven through ideapad_laptop rather than
++		 * thinkpad_acpi.
++		 */
++		.chain_id = ALC287_FIXUP_LENOVO_YOGA_PRO7,
++	},
+ 	[ALC623_FIXUP_LENOVO_THINKSTATION_P340] = {
+ 		.type = HDA_FIXUP_FUNC,
+ 		.v.func = alc_fixup_no_shutup,
+@@ -8068,6 +8079,7 @@ static const struct hda_quirk alc269_fixup_tbl[] = {
+ 	SND_PCI_QUIRK(0x17aa, 0x392b, "Thinkbook 13x Gen 5", ALC287_FIXUP_MG_RTKC_CSAMP_CS35L41_I2C_THINKPAD),
+ 	HDA_CODEC_QUIRK(0x17aa, 0x3938, "Legion Pro 7 16AFR10H", ALC287_FIXUP_LENOVO_LEGION_AW88399),
+ 	HDA_CODEC_QUIRK(0x17aa, 0x3939, "Legion Pro 7 16AFR10H", ALC287_FIXUP_LENOVO_LEGION_AW88399),
++	SND_PCI_QUIRK(0x17aa, 0x393e, "Lenovo ThinkBook 14 G8+ IPH", ALC287_FIXUP_LENOVO_XPAD_HEADSET_JACK),
+ 	HDA_CODEC_QUIRK(0x17aa, 0x394c, "Lenovo Yoga Slim 7 14AGP11", ALC287_FIXUP_YOGA9_14IAP7_BASS_SPK_PIN),
+ 	SND_PCI_QUIRK(0x17aa, 0x3977, "IdeaPad S210", ALC283_FIXUP_INT_MIC),
+ 	SND_PCI_QUIRK(0x17aa, 0x3978, "Lenovo B50-70", ALC269_FIXUP_DMIC_THINKPAD_ACPI),
+-- 
+2.55.0
+

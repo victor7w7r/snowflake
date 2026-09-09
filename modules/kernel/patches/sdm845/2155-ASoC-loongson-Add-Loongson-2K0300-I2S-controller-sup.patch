@@ -1,0 +1,127 @@
+From 41ab1f8a0edaa98d59162fbe801c1f162fc6cf9a Mon Sep 17 00:00:00 2001
+From: Binbin Zhou <zhoubinbin@loongson.cn>
+Date: Fri, 26 Jun 2026 10:27:05 +0800
+Subject: [PATCH 02155/15333] ASoC: loongson: Add Loongson-2K0300 I2S
+ controller support
+
+The Loongson-2K0300 I2S interface differs significantly from the
+Loongson-2K1000. Although both utilize external DMA controllers, the
+Loongson-2K0300 does not require additional registers for routing
+configuration.
+
+Due to hardware design flaw, an extra controller reset sequence is
+required during probe.
+
+Signed-off-by: Binbin Zhou <zhoubinbin@loongson.cn>
+Link: https://patch.msgid.link/4d3caa62d4275e1495505387198408f4d30d453c.1782439646.git.zhoubinbin@loongson.cn
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/loongson/loongson_i2s_plat.c | 42 +++++++++++++++++++++-----
+ 1 file changed, 35 insertions(+), 7 deletions(-)
+
+diff --git a/sound/soc/loongson/loongson_i2s_plat.c b/sound/soc/loongson/loongson_i2s_plat.c
+index ac054b6ce632..82d95c6644ef 100644
+--- a/sound/soc/loongson/loongson_i2s_plat.c
++++ b/sound/soc/loongson/loongson_i2s_plat.c
+@@ -2,7 +2,7 @@
+ //
+ // Loongson I2S controller master mode dirver(platform device)
+ //
+-// Copyright (C) 2023-2024 Loongson Technology Corporation Limited
++// Copyright (C) 2023-2026 Loongson Technology Corporation Limited
+ //
+ // Author: Yingkun Meng <mengyingkun@loongson.cn>
+ //         Binbin Zhou <zhoubinbin@loongson.cn>
+@@ -21,6 +21,7 @@
+ #include "loongson_i2s.h"
+ #include "loongson_dma.h"
+ 
++/* Loongson-2K1000 APBDMA routing */
+ #define LOONGSON_I2S_RX_DMA_OFFSET	21
+ #define LOONGSON_I2S_TX_DMA_OFFSET	18
+ 
+@@ -30,6 +31,11 @@
+ #define LOONGSON_DMA3_CONF	0x3
+ #define LOONGSON_DMA4_CONF	0x4
+ 
++struct loongson_i2s_plat_config {
++	int rev_id;
++	int (*i2s_dma_config)(struct platform_device *pdev);
++};
++
+ static int loongson_i2s_apbdma_config(struct platform_device *pdev)
+ {
+ 	int val;
+@@ -47,8 +53,18 @@ static int loongson_i2s_apbdma_config(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
++static const struct loongson_i2s_plat_config ls2k0300_i2s_plat_config = {
++	.rev_id = 1,
++};
++
++static const struct loongson_i2s_plat_config ls2k1000_i2s_plat_config = {
++	.rev_id = 0,
++	.i2s_dma_config = loongson_i2s_apbdma_config,
++};
++
+ static int loongson_i2s_plat_probe(struct platform_device *pdev)
+ {
++	const struct loongson_i2s_plat_config *plat_config;
+ 	struct device *dev = &pdev->dev;
+ 	struct loongson_i2s *i2s;
+ 	struct resource *res;
+@@ -59,12 +75,17 @@ static int loongson_i2s_plat_probe(struct platform_device *pdev)
+ 	if (!i2s)
+ 		return -ENOMEM;
+ 
+-	ret = loongson_i2s_apbdma_config(pdev);
+-	if (ret)
+-		return ret;
++	plat_config = device_get_match_data(dev);
++	if (!plat_config)
++		return -EINVAL;
+ 
+-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+-	i2s->reg_base = devm_ioremap_resource(&pdev->dev, res);
++	if (plat_config->i2s_dma_config) {
++		ret = plat_config->i2s_dma_config(pdev);
++		if (ret)
++			return ret;
++	}
++
++	i2s->reg_base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
+ 	if (IS_ERR(i2s->reg_base))
+ 		return dev_err_probe(dev, PTR_ERR(i2s->reg_base),
+ 				     "devm_ioremap_resource failed\n");
+@@ -87,11 +108,17 @@ static int loongson_i2s_plat_probe(struct platform_device *pdev)
+ 	if (IS_ERR(i2s_clk))
+ 		return dev_err_probe(dev, PTR_ERR(i2s_clk), "clock property invalid\n");
+ 	i2s->clk_rate = clk_get_rate(i2s_clk);
++	i2s->rev_id = plat_config->rev_id;
+ 
+ 	dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
+ 	dev_set_name(dev, LS_I2S_DRVNAME);
+ 	dev_set_drvdata(dev, i2s);
+ 
++	if (i2s->rev_id == 1) {
++		regmap_update_bits(i2s->regmap, LS_I2S_CTRL, I2S_CTRL_RESET, I2S_CTRL_RESET);
++		fsleep(200);
++	}
++
+ 	ret = devm_snd_soc_register_component(dev, &loongson_i2s_edma_component,
+ 					      &loongson_i2s_dai, 1);
+ 	if (ret)
+@@ -102,7 +129,8 @@ static int loongson_i2s_plat_probe(struct platform_device *pdev)
+ }
+ 
+ static const struct of_device_id loongson_i2s_ids[] = {
+-	{ .compatible = "loongson,ls2k1000-i2s" },
++	{ .compatible = "loongson,ls2k0300-i2s", .data = &ls2k0300_i2s_plat_config },
++	{ .compatible = "loongson,ls2k1000-i2s", .data = &ls2k1000_i2s_plat_config },
+ 	{ /* sentinel */ },
+ };
+ MODULE_DEVICE_TABLE(of, loongson_i2s_ids);
+-- 
+2.55.0
+

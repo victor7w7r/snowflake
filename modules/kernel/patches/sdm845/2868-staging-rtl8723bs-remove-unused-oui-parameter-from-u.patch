@@ -1,0 +1,246 @@
+From deec171bb59924bdd752af2b1bf9b581f6f0ac95 Mon Sep 17 00:00:00 2001
+From: Nikolay Kulikov <nikolayof23@gmail.com>
+Date: Mon, 1 Jun 2026 18:01:24 +0300
+Subject: [PATCH 02868/15333] staging: rtl8723bs: remove unused 'oui' parameter
+ from update_beacon()
+
+After deleting one of the switch-case branches, this parameter became
+unused, so remove it.
+
+Signed-off-by: Nikolay Kulikov <nikolayof23@gmail.com>
+Reviewed-by: Dan Carpenter <error27@gmail.com>
+Link: https://patch.msgid.link/20260601150253.69930-3-nikolayof23@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/core/rtw_ap.c    | 32 +++++++++++-----------
+ drivers/staging/rtl8723bs/core/rtw_cmd.c   |  2 +-
+ drivers/staging/rtl8723bs/core/rtw_recv.c  |  4 +--
+ drivers/staging/rtl8723bs/core/rtw_xmit.c  |  8 +++---
+ drivers/staging/rtl8723bs/include/rtw_ap.h |  2 +-
+ 5 files changed, 24 insertions(+), 24 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/core/rtw_ap.c b/drivers/staging/rtl8723bs/core/rtw_ap.c
+index 6c4d3d177d99..fb8fb71522cb 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_ap.c
++++ b/drivers/staging/rtl8723bs/core/rtw_ap.c
+@@ -232,7 +232,7 @@ void expire_timeout_chk(struct adapter *padapter)
+ 
+ 					/* to update bcn with tim_bitmap for this station */
+ 					pstapriv->tim_bitmap |= BIT(psta->aid);
+-					update_beacon(padapter, WLAN_EID_TIM, NULL, true);
++					update_beacon(padapter, WLAN_EID_TIM, true);
+ 
+ 					if (!pmlmeext->active_keep_alive_check)
+ 						continue;
+@@ -739,7 +739,7 @@ void start_bss_network(struct adapter *padapter)
+ 		       rtw_get_capability((struct wlan_bssid_ex *)pnetwork));
+ 
+ 	if (pmlmeext->bstart_bss) {
+-		update_beacon(padapter, WLAN_EID_TIM, NULL, true);
++		update_beacon(padapter, WLAN_EID_TIM, true);
+ 
+ 		/* issue beacon frame */
+ 		send_beacon(padapter);
+@@ -1336,7 +1336,7 @@ static void update_bcn_rsn_ie(struct adapter *padapter)
+ {
+ }
+ 
+-void update_beacon(struct adapter *padapter, u8 ie_id, u8 *oui, u8 tx)
++void update_beacon(struct adapter *padapter, u8 ie_id, u8 tx)
+ {
+ 	struct mlme_priv *pmlmepriv;
+ 	struct mlme_ext_priv *pmlmeext;
+@@ -1513,7 +1513,7 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
+ 			if ((pmlmeext->cur_wireless_mode > WIRELESS_11B) &&
+ 			    (pmlmepriv->num_sta_no_short_preamble == 1)) {
+ 				beacon_updated = true;
+-				update_beacon(padapter, 0xFF, NULL, true);
++				update_beacon(padapter, 0xFF, true);
+ 			}
+ 		}
+ 	} else {
+@@ -1525,7 +1525,7 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
+ 			if ((pmlmeext->cur_wireless_mode > WIRELESS_11B) &&
+ 			    (pmlmepriv->num_sta_no_short_preamble == 0)) {
+ 				beacon_updated = true;
+-				update_beacon(padapter, 0xFF, NULL, true);
++				update_beacon(padapter, 0xFF, true);
+ 			}
+ 		}
+ 	}
+@@ -1538,7 +1538,7 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
+ 
+ 			if (pmlmepriv->num_sta_non_erp == 1) {
+ 				beacon_updated = true;
+-				update_beacon(padapter, WLAN_EID_ERP_INFO, NULL, true);
++				update_beacon(padapter, WLAN_EID_ERP_INFO, true);
+ 			}
+ 		}
+ 	} else {
+@@ -1549,7 +1549,7 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
+ 
+ 			if (pmlmepriv->num_sta_non_erp == 0) {
+ 				beacon_updated = true;
+-				update_beacon(padapter, WLAN_EID_ERP_INFO, NULL, true);
++				update_beacon(padapter, WLAN_EID_ERP_INFO, true);
+ 			}
+ 		}
+ 	}
+@@ -1563,7 +1563,7 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
+ 			if ((pmlmeext->cur_wireless_mode > WIRELESS_11B) &&
+ 			    (pmlmepriv->num_sta_no_short_slot_time == 1)) {
+ 				beacon_updated = true;
+-				update_beacon(padapter, 0xFF, NULL, true);
++				update_beacon(padapter, 0xFF, true);
+ 			}
+ 		}
+ 	} else {
+@@ -1575,7 +1575,7 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
+ 			if ((pmlmeext->cur_wireless_mode > WIRELESS_11B) &&
+ 			    (pmlmepriv->num_sta_no_short_slot_time == 0)) {
+ 				beacon_updated = true;
+-				update_beacon(padapter, 0xFF, NULL, true);
++				update_beacon(padapter, 0xFF, true);
+ 			}
+ 		}
+ 	}
+@@ -1610,8 +1610,8 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
+ 	}
+ 
+ 	if (rtw_ht_operation_update(padapter) > 0) {
+-		update_beacon(padapter, WLAN_EID_HT_CAPABILITY, NULL, false);
+-		update_beacon(padapter, WLAN_EID_HT_OPERATION, NULL, true);
++		update_beacon(padapter, WLAN_EID_HT_CAPABILITY, false);
++		update_beacon(padapter, WLAN_EID_HT_OPERATION, true);
+ 	}
+ 
+ 	/* update associated stations cap. */
+@@ -1633,7 +1633,7 @@ u8 bss_cap_update_on_sta_leave(struct adapter *padapter, struct sta_info *psta)
+ 		if (pmlmeext->cur_wireless_mode > WIRELESS_11B &&
+ 		    pmlmepriv->num_sta_no_short_preamble == 0){
+ 			beacon_updated = true;
+-			update_beacon(padapter, 0xFF, NULL, true);
++			update_beacon(padapter, 0xFF, true);
+ 		}
+ 	}
+ 
+@@ -1642,7 +1642,7 @@ u8 bss_cap_update_on_sta_leave(struct adapter *padapter, struct sta_info *psta)
+ 		pmlmepriv->num_sta_non_erp--;
+ 		if (pmlmepriv->num_sta_non_erp == 0) {
+ 			beacon_updated = true;
+-			update_beacon(padapter, WLAN_EID_ERP_INFO, NULL, true);
++			update_beacon(padapter, WLAN_EID_ERP_INFO, true);
+ 		}
+ 	}
+ 
+@@ -1652,7 +1652,7 @@ u8 bss_cap_update_on_sta_leave(struct adapter *padapter, struct sta_info *psta)
+ 		if (pmlmeext->cur_wireless_mode > WIRELESS_11B &&
+ 		    pmlmepriv->num_sta_no_short_slot_time == 0){
+ 			beacon_updated = true;
+-			update_beacon(padapter, 0xFF, NULL, true);
++			update_beacon(padapter, 0xFF, true);
+ 		}
+ 	}
+ 
+@@ -1672,8 +1672,8 @@ u8 bss_cap_update_on_sta_leave(struct adapter *padapter, struct sta_info *psta)
+ 	}
+ 
+ 	if (rtw_ht_operation_update(padapter) > 0) {
+-		update_beacon(padapter, WLAN_EID_HT_CAPABILITY, NULL, false);
+-		update_beacon(padapter, WLAN_EID_HT_OPERATION, NULL, true);
++		update_beacon(padapter, WLAN_EID_HT_CAPABILITY, false);
++		update_beacon(padapter, WLAN_EID_HT_OPERATION, true);
+ 	}
+ 
+ 	return beacon_updated;
+diff --git a/drivers/staging/rtl8723bs/core/rtw_cmd.c b/drivers/staging/rtl8723bs/core/rtw_cmd.c
+index c3f9ff5ffb43..7cec4c64e502 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_cmd.c
++++ b/drivers/staging/rtl8723bs/core/rtw_cmd.c
+@@ -1524,7 +1524,7 @@ static void rtw_chk_hi_queue_hdl(struct adapter *padapter)
+ 			pstapriv->sta_dz_bitmap &= ~BIT(0);
+ 
+ 			if (update_tim)
+-				update_beacon(padapter, WLAN_EID_TIM, NULL, true);
++				update_beacon(padapter, WLAN_EID_TIM, true);
+ 		} else {/* re check again */
+ 			rtw_chk_hi_queue_cmd(padapter);
+ 		}
+diff --git a/drivers/staging/rtl8723bs/core/rtw_recv.c b/drivers/staging/rtl8723bs/core/rtw_recv.c
+index 67dc87a085e0..6bb119a83036 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_recv.c
++++ b/drivers/staging/rtl8723bs/core/rtw_recv.c
+@@ -1009,7 +1009,7 @@ static signed int validate_recv_ctrl_frame(struct adapter *padapter, union recv_
+ 
+ 					/* update BCN for TIM IE */
+ 					/* update_BCNTIM(padapter); */
+-					update_beacon(padapter, WLAN_EID_TIM, NULL, true);
++					update_beacon(padapter, WLAN_EID_TIM, true);
+ 				}
+ 
+ 				/* spin_unlock_bh(&psta->sleep_q.lock); */
+@@ -1031,7 +1031,7 @@ static signed int validate_recv_ctrl_frame(struct adapter *padapter, union recv_
+ 
+ 					/* update BCN for TIM IE */
+ 					/* update_BCNTIM(padapter); */
+-					update_beacon(padapter, WLAN_EID_TIM, NULL, true);
++					update_beacon(padapter, WLAN_EID_TIM, true);
+ 				}
+ 			}
+ 		}
+diff --git a/drivers/staging/rtl8723bs/core/rtw_xmit.c b/drivers/staging/rtl8723bs/core/rtw_xmit.c
+index 1d32a6d2e434..c5876cab93c1 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_xmit.c
++++ b/drivers/staging/rtl8723bs/core/rtw_xmit.c
+@@ -2083,7 +2083,7 @@ signed int xmitframe_enqueue_for_sleeping_sta(struct adapter *padapter, struct x
+ 			pstapriv->sta_dz_bitmap |= BIT(0);
+ 
+ 			if (update_tim)
+-				update_beacon(padapter, WLAN_EID_TIM, NULL, true);
++				update_beacon(padapter, WLAN_EID_TIM, true);
+ 			else
+ 				chk_bmc_sleepq_cmd(padapter);
+ 
+@@ -2138,7 +2138,7 @@ signed int xmitframe_enqueue_for_sleeping_sta(struct adapter *padapter, struct x
+ 
+ 				if (update_tim)
+ 					/* update BCN for TIM IE */
+-					update_beacon(padapter, WLAN_EID_TIM, NULL, true);
++					update_beacon(padapter, WLAN_EID_TIM, true);
+ 			}
+ 
+ 			ret = true;
+@@ -2333,7 +2333,7 @@ void wakeup_sta_to_xmit(struct adapter *padapter, struct sta_info *psta)
+ 	spin_unlock_bh(&pxmitpriv->lock);
+ 
+ 	if (update_mask)
+-		update_beacon(padapter, WLAN_EID_TIM, NULL, true);
++		update_beacon(padapter, WLAN_EID_TIM, true);
+ }
+ 
+ void xmit_delivery_enabled_frames(struct adapter *padapter, struct sta_info *psta)
+@@ -2393,7 +2393,7 @@ void xmit_delivery_enabled_frames(struct adapter *padapter, struct sta_info *pst
+ 		if ((psta->sleepq_ac_len == 0) && (!psta->has_legacy_ac) && (wmmps_ac)) {
+ 			pstapriv->tim_bitmap &= ~BIT(psta->aid);
+ 
+-			update_beacon(padapter, WLAN_EID_TIM, NULL, true);
++			update_beacon(padapter, WLAN_EID_TIM, true);
+ 		}
+ 	}
+ 
+diff --git a/drivers/staging/rtl8723bs/include/rtw_ap.h b/drivers/staging/rtl8723bs/include/rtw_ap.h
+index 83e835eb6513..866aa8386931 100644
+--- a/drivers/staging/rtl8723bs/include/rtw_ap.h
++++ b/drivers/staging/rtl8723bs/include/rtw_ap.h
+@@ -10,7 +10,7 @@
+ void init_mlme_ap_info(struct adapter *padapter);
+ void free_mlme_ap_info(struct adapter *padapter);
+ /* void update_BCNTIM(struct adapter *padapter); */
+-void update_beacon(struct adapter *padapter, u8 ie_id, u8 *oui, u8 tx);
++void update_beacon(struct adapter *padapter, u8 ie_id, u8 tx);
+ void add_ratid(struct adapter *padapter, struct sta_info *psta, u8 rssi_level);
+ void expire_timeout_chk(struct adapter *padapter);
+ void update_sta_info_apmode(struct adapter *padapter, struct sta_info *psta);
+-- 
+2.55.0
+

@@ -1,0 +1,159 @@
+From f41e74f2111c1f8a31822e0e43db2edcc3125100 Mon Sep 17 00:00:00 2001
+From: Prike Liang <Prike.Liang@amd.com>
+Date: Wed, 20 May 2026 11:22:12 +0800
+Subject: [PATCH 00557/15333] drm/amdgpu: add userq create and destroy
+ tracepoints
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add ftrace events around user queue creation and destruction to profile
+queue setup and teardown latency.
+
+Signed-off-by: Prike Liang <Prike.Liang@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_trace.h | 58 +++++++++++++++++++++++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c |  9 ++++
+ 2 files changed, 67 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_trace.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_trace.h
+index 85724ec6aaf8..0d5fb5daddfe 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_trace.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_trace.h
+@@ -582,6 +582,64 @@ TRACE_EVENT(amdgpu_reset_reg_dumps,
+ 		      __entry->value)
+ );
+ 
++DECLARE_EVENT_CLASS(amdgpu_userq_queue,
++	    TP_PROTO(struct amdgpu_usermode_queue *queue),
++	    TP_ARGS(queue),
++	    TP_STRUCT__entry(
++			     __field(void *, queue)
++			     __field(u64, doorbell_index)
++			     __field(int, queue_type)
++			     __field(int, state)
++			     __field(u32, xcp_id)
++			     ),
++	    TP_fast_assign(
++			   __entry->queue = queue;
++			   __entry->doorbell_index = queue->doorbell_index;
++			   __entry->queue_type = queue->queue_type;
++			   __entry->state = queue->state;
++			   __entry->xcp_id = queue->xcp_id;
++			   ),
++	    TP_printk("queue=%p, doorbell=%llu, type=%d, state=%d, xcp_id=%u",
++		      __entry->queue, __entry->doorbell_index,
++		      __entry->queue_type, __entry->state, __entry->xcp_id)
++);
++DEFINE_EVENT(amdgpu_userq_queue, amdgpu_userq_create_start,
++	     TP_PROTO(struct amdgpu_usermode_queue *queue),
++	     TP_ARGS(queue));
++DEFINE_EVENT(amdgpu_userq_queue, amdgpu_userq_destroy_start,
++	     TP_PROTO(struct amdgpu_usermode_queue *queue),
++	     TP_ARGS(queue));
++DECLARE_EVENT_CLASS(amdgpu_userq_queue_result,
++	    TP_PROTO(struct amdgpu_usermode_queue *queue, int result),
++	    TP_ARGS(queue, result),
++	    TP_STRUCT__entry(
++			     __field(void *, queue)
++			     __field(u64, doorbell_index)
++			     __field(int, queue_type)
++			     __field(int, state)
++			     __field(u32, xcp_id)
++			     __field(int, result)
++			     ),
++	    TP_fast_assign(
++			   __entry->queue = queue;
++			   __entry->doorbell_index = queue->doorbell_index;
++			   __entry->queue_type = queue->queue_type;
++			   __entry->state = queue->state;
++			   __entry->xcp_id = queue->xcp_id;
++			   __entry->result = result;
++			   ),
++	    TP_printk("queue=%p, doorbell=%llu, type=%d, state=%d, xcp_id=%u, result=%d",
++		      __entry->queue, __entry->doorbell_index,
++		      __entry->queue_type, __entry->state,
++		      __entry->xcp_id, __entry->result)
++);
++DEFINE_EVENT(amdgpu_userq_queue_result, amdgpu_userq_create_end,
++	     TP_PROTO(struct amdgpu_usermode_queue *queue, int result),
++	     TP_ARGS(queue, result));
++DEFINE_EVENT(amdgpu_userq_queue_result, amdgpu_userq_destroy_end,
++	     TP_PROTO(struct amdgpu_usermode_queue *queue, int result),
++	     TP_ARGS(queue, result));
++
+ #undef AMDGPU_JOB_GET_TIMELINE_NAME
+ #endif
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
+index 285dcadb9342..b8aa2adc399e 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
+@@ -33,6 +33,7 @@
+ #include "amdgpu_userq.h"
+ #include "amdgpu_hmm.h"
+ #include "amdgpu_userq_fence.h"
++#include "amdgpu_trace.h"
+ 
+ u32 amdgpu_userq_get_supported_ip_mask(struct amdgpu_device *adev)
+ {
+@@ -505,6 +506,8 @@ amdgpu_userq_destroy(struct amdgpu_userq_mgr *uq_mgr, struct amdgpu_usermode_que
+ 	const struct amdgpu_userq_funcs *uq_funcs = adev->userq_funcs[queue->queue_type];
+ 	int r = 0;
+ 
++	trace_amdgpu_userq_destroy_start(queue);
++
+ 	cancel_delayed_work_sync(&uq_mgr->resume_work);
+ 
+ 	/* Cancel any pending hang detection work and cleanup */
+@@ -530,6 +533,7 @@ amdgpu_userq_destroy(struct amdgpu_userq_mgr *uq_mgr, struct amdgpu_usermode_que
+ 	amdgpu_bo_unreserve(queue->db_obj.obj);
+ 	amdgpu_bo_unref(&queue->db_obj.obj);
+ 
++	trace_amdgpu_userq_destroy_end(queue, r);
+ 	kfree(queue);
+ 
+ 	pm_runtime_put_autosuspend(adev_to_drm(adev)->dev);
+@@ -671,6 +675,7 @@ amdgpu_userq_create(struct drm_file *filp, union drm_amdgpu_userq *args)
+ 	}
+ 
+ 	queue->doorbell_index = index;
++	trace_amdgpu_userq_create_start(queue);
+ 	r = uq_funcs->mqd_create(queue, &args->in);
+ 	if (r) {
+ 		drm_file_err(uq_mgr->file, "Failed to create Queue\n");
+@@ -694,6 +699,7 @@ amdgpu_userq_create(struct drm_file *filp, union drm_amdgpu_userq *args)
+ 		r = amdgpu_userq_map_helper(queue);
+ 		if (r) {
+ 			drm_file_err(uq_mgr->file, "Failed to map Queue\n");
++			trace_amdgpu_userq_create_end(queue, r);
+ 			mutex_unlock(&uq_mgr->userq_mutex);
+ 			goto erase_doorbell;
+ 		}
+@@ -710,11 +716,13 @@ amdgpu_userq_create(struct drm_file *filp, union drm_amdgpu_userq *args)
+ 		 * This drops the last reference which should take care of
+ 		 * all cleanup.
+ 		 */
++		trace_amdgpu_userq_create_end(queue, r);
+ 		amdgpu_userq_put(queue);
+ 		return r;
+ 	}
+ 
+ 	amdgpu_debugfs_userq_init(filp, queue, qid);
++	trace_amdgpu_userq_create_end(queue, 0);
+ 	args->out.queue_id = qid;
+ 	return 0;
+ 
+@@ -730,6 +738,7 @@ amdgpu_userq_create(struct drm_file *filp, union drm_amdgpu_userq *args)
+ free_fence_drv:
+ 	amdgpu_userq_fence_driver_free(queue);
+ free_queue:
++	trace_amdgpu_userq_create_end(queue, r);
+ 	kfree(queue);
+ err_pm_runtime:
+ 	pm_runtime_put_autosuspend(adev_to_drm(adev)->dev);
+-- 
+2.55.0
+

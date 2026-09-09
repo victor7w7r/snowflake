@@ -1,0 +1,92 @@
+From 2d9dcffd5d3995ba04feeeebe800cbf1c0d4bbbe Mon Sep 17 00:00:00 2001
+From: Xu Yang <xu.yang_2@nxp.com>
+Date: Fri, 31 Jul 2026 16:11:23 +0800
+Subject: [PATCH 11386/15333] phy: fsl-imx8mq-usb: introduce per-variant driver
+ data structure
+
+Replace direct use of phy_ops pointer in of_device_id .data with a
+dedicated imx8mq_usb_phy_drvdata structure. This allows per-variant
+driver data to be extended in the future without changing the match
+table.
+
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Signed-off-by: Xu Yang <xu.yang_2@nxp.com>
+Link: https://patch.msgid.link/20260731-imx8mp-usb-phy-improvement-v8-5-2ec8d6b3854d@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/phy/freescale/phy-fsl-imx8mq-usb.c | 29 ++++++++++++++++------
+ 1 file changed, 22 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/phy/freescale/phy-fsl-imx8mq-usb.c b/drivers/phy/freescale/phy-fsl-imx8mq-usb.c
+index e03f9dafd69e..ba7603a008d8 100644
+--- a/drivers/phy/freescale/phy-fsl-imx8mq-usb.c
++++ b/drivers/phy/freescale/phy-fsl-imx8mq-usb.c
+@@ -132,6 +132,9 @@ struct imx8mq_usb_phy {
+ 	u32 comp_dis_tune;
+ };
+ 
++struct imx8mq_usb_phy_drvdata {
++	const struct phy_ops *ops;
++};
+ 
+ static void tca_blk_orientation_set(struct tca_blk *tca,
+ 				enum typec_orientation orientation);
+@@ -660,13 +663,25 @@ static const struct phy_ops imx8mp_usb_phy_ops = {
+ 	.owner		= THIS_MODULE,
+ };
+ 
++static const struct imx8mq_usb_phy_drvdata imx8mq_usb_phy_data = {
++	.ops = &imx8mq_usb_phy_ops,
++};
++
++static const struct imx8mq_usb_phy_drvdata imx8mp_usb_phy_data = {
++	.ops = &imx8mp_usb_phy_ops,
++};
++
++static const struct imx8mq_usb_phy_drvdata imx95_usb_phy_data = {
++	.ops = &imx8mp_usb_phy_ops,
++};
++
+ static const struct of_device_id imx8mq_usb_phy_of_match[] = {
+ 	{.compatible = "fsl,imx8mq-usb-phy",
+-	 .data = &imx8mq_usb_phy_ops,},
++	 .data = &imx8mq_usb_phy_data,},
+ 	{.compatible = "fsl,imx8mp-usb-phy",
+-	 .data = &imx8mp_usb_phy_ops,},
++	 .data = &imx8mp_usb_phy_data,},
+ 	{.compatible = "fsl,imx95-usb-phy",
+-	 .data = &imx8mp_usb_phy_ops,},
++	 .data = &imx95_usb_phy_data,},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, imx8mq_usb_phy_of_match);
+@@ -684,7 +699,7 @@ static int imx8mq_usb_phy_probe(struct platform_device *pdev)
+ 	struct phy_provider *phy_provider;
+ 	struct device *dev = &pdev->dev;
+ 	struct imx8mq_usb_phy *imx_phy;
+-	const struct phy_ops *phy_ops;
++	const struct imx8mq_usb_phy_drvdata *phy_data;
+ 	int ret;
+ 
+ 	imx_phy = devm_kzalloc(dev, sizeof(*imx_phy), GFP_KERNEL);
+@@ -719,14 +734,14 @@ static int imx8mq_usb_phy_probe(struct platform_device *pdev)
+ 	if (IS_ERR(imx_phy->vbus))
+ 		return dev_err_probe(dev, PTR_ERR(imx_phy->vbus), "failed to get vbus\n");
+ 
+-	phy_ops = of_device_get_match_data(dev);
+-	if (!phy_ops)
++	phy_data = of_device_get_match_data(dev);
++	if (!phy_data)
+ 		return -EINVAL;
+ 
+ 	pm_runtime_set_active(dev);
+ 	pm_runtime_enable(dev);
+ 
+-	imx_phy->phy = devm_phy_create(dev, NULL, phy_ops);
++	imx_phy->phy = devm_phy_create(dev, NULL, phy_data->ops);
+ 	if (IS_ERR(imx_phy->phy)) {
+ 		ret = dev_err_probe(dev, PTR_ERR(imx_phy->phy),
+ 				    "failed to create PHY\n");
+-- 
+2.55.0
+

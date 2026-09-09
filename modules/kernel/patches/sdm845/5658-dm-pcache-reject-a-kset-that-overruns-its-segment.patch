@@ -1,0 +1,74 @@
+From 7ac1f10f987a2ffae4aecf0e2ceca8f552b665cb Mon Sep 17 00:00:00 2001
+From: Bryam Vargas <hexlabsecurity@proton.me>
+Date: Fri, 17 Jul 2026 06:26:58 -0500
+Subject: [PATCH 05658/15333] dm-pcache: reject a kset that overruns its
+ segment
+
+cache_replay(), the writeback worker and the GC worker read a kset of
+get_kset_onmedia_size() bytes and advance the position by it. A forged
+key_num makes that size exceed the segment's remaining space, so the
+advance walks past the segment and trips the cache_pos_advance() BUG_ON.
+
+Reject a kset whose on-media size exceeds cache_seg_remain() before use.
+
+Fixes: 1d57628ff95b ("dm-pcache: add persistent cache target in device-mapper")
+Cc: stable@vger.kernel.org
+Signed-off-by: Bryam Vargas <hexlabsecurity@proton.me>
+Signed-off-by: Mikulas Patocka <mpatocka@redhat.com>
+---
+ drivers/md/dm-pcache/cache_gc.c        | 5 +++++
+ drivers/md/dm-pcache/cache_key.c       | 5 +++++
+ drivers/md/dm-pcache/cache_writeback.c | 5 +++++
+ 3 files changed, 15 insertions(+)
+
+diff --git a/drivers/md/dm-pcache/cache_gc.c b/drivers/md/dm-pcache/cache_gc.c
+index 1ed513745023..c483c7a3afaf 100644
+--- a/drivers/md/dm-pcache/cache_gc.c
++++ b/drivers/md/dm-pcache/cache_gc.c
+@@ -146,6 +146,11 @@ void pcache_cache_gc_fn(struct work_struct *work)
+ 			continue;
+ 		}
+ 
++		if (get_kset_onmedia_size(kset_onmedia) > cache_seg_remain(&key_tail)) {
++			atomic_inc(&cache->gc_errors);
++			return;
++		}
++
+ 		for (i = 0; i < kset_onmedia->key_num; i++) {
+ 			struct pcache_cache_key key_tmp = { 0 };
+ 
+diff --git a/drivers/md/dm-pcache/cache_key.c b/drivers/md/dm-pcache/cache_key.c
+index f4459b2e1b3b..d00497f9e462 100644
+--- a/drivers/md/dm-pcache/cache_key.c
++++ b/drivers/md/dm-pcache/cache_key.c
+@@ -818,6 +818,11 @@ int cache_replay(struct pcache_cache *cache)
+ 		}
+ 
+ 		/* Replay the kset and check for errors. */
++		if (get_kset_onmedia_size(kset_onmedia) > cache_seg_remain(pos)) {
++			ret = -EIO;
++			goto out;
++		}
++
+ 		ret = kset_replay(cache, kset_onmedia);
+ 		if (ret)
+ 			goto out;
+diff --git a/drivers/md/dm-pcache/cache_writeback.c b/drivers/md/dm-pcache/cache_writeback.c
+index 34c34b448e04..7a85a9aed18e 100644
+--- a/drivers/md/dm-pcache/cache_writeback.c
++++ b/drivers/md/dm-pcache/cache_writeback.c
+@@ -261,6 +261,11 @@ void cache_writeback_fn(struct work_struct *work)
+ 		goto queue_work;
+ 	}
+ 
++	if (get_kset_onmedia_size(kset_onmedia) > cache_seg_remain(&dirty_tail)) {
++		atomic_inc(&cache->writeback_errors);
++		goto unlock;
++	}
++
+ 	ret = cache_kset_insert_tree(cache, kset_onmedia);
+ 	if (ret) {
+ 		atomic_inc(&cache->writeback_errors);
+-- 
+2.55.0
+

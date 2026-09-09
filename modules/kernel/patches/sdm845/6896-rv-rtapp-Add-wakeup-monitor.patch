@@ -1,0 +1,425 @@
+From 6fdaab4e163609772bcc617b052a62435e89d77c Mon Sep 17 00:00:00 2001
+From: Nam Cao <namcao@linutronix.de>
+Date: Fri, 19 Jun 2026 09:21:22 +0200
+Subject: [PATCH 06896/15333] rv/rtapp: Add wakeup monitor
+
+Add a wakeup monitor to detect a lower-priority task waking up a
+higher-priority task.
+
+The rtapp/sleep monitor already detects this. However, that monitor
+triggers an error in the context of the wakee task and user only gets
+the stacktrace of that task. It is also extremely useful to get the
+stacktrace of the waker task, which this monitor offers. In other
+words, this monitor complements the rtapp/sleep monitor.
+
+Signed-off-by: Nam Cao <namcao@linutronix.de>
+Reviewed-by: Gabriele Monaco <gmonaco@redhat.com>
+Link: https://lore.kernel.org/r/ba5658fa13e49ada466b84a2c211f233037180b5.1781852967.git.namcao@linutronix.de
+Signed-off-by: Gabriele Monaco <gmonaco@redhat.com>
+---
+ Documentation/trace/rv/monitor_rtapp.rst      |  20 +++
+ kernel/trace/rv/Kconfig                       |   1 +
+ kernel/trace/rv/Makefile                      |   1 +
+ kernel/trace/rv/monitors/rtapp/Kconfig        |   2 +-
+ kernel/trace/rv/monitors/wakeup/Kconfig       |  16 ++
+ kernel/trace/rv/monitors/wakeup/wakeup.c      | 153 ++++++++++++++++++
+ kernel/trace/rv/monitors/wakeup/wakeup.h      |  92 +++++++++++
+ .../trace/rv/monitors/wakeup/wakeup_trace.h   |  14 ++
+ kernel/trace/rv/rv_trace.h                    |   1 +
+ tools/verification/models/rtapp/wakeup.ltl    |   5 +
+ 10 files changed, 304 insertions(+), 1 deletion(-)
+ create mode 100644 kernel/trace/rv/monitors/wakeup/Kconfig
+ create mode 100644 kernel/trace/rv/monitors/wakeup/wakeup.c
+ create mode 100644 kernel/trace/rv/monitors/wakeup/wakeup.h
+ create mode 100644 kernel/trace/rv/monitors/wakeup/wakeup_trace.h
+ create mode 100644 tools/verification/models/rtapp/wakeup.ltl
+
+diff --git a/Documentation/trace/rv/monitor_rtapp.rst b/Documentation/trace/rv/monitor_rtapp.rst
+index 502d3ea412eb..238b59395ff5 100644
+--- a/Documentation/trace/rv/monitor_rtapp.rst
++++ b/Documentation/trace/rv/monitor_rtapp.rst
+@@ -124,3 +124,23 @@ to handle some special cases:
+     real-time-safe because preemption is disabled for the duration.
+   - `FUTEX_LOCK_PI` is included in the allowlist for the same reason as
+     `BLOCK_ON_RT_MUTEX`.
++
++Monitor wakeup
++++++++++++++++
++
++The `wakeup` monitor reports real-time threads being woken by lower-priority threads,
++which is a hint of priority inversion. Its specification is::
++
++  RULE = always (((RT and USER_THREAD) imply
++                (not (WOKEN_BY_LOWER_PRIO or WOKEN_BY_SOFTIRQ)) or ALLOWLIST))
++
++  ALLOWLIST = BLOCK_ON_RT_MUTEX
++           or FUTEX_LOCK_PI
++
++The `sleep` monitor already reports this type of problem. The difference is the
++context in which the problem is reported. While the `sleep` monitor reports the problem
++in the context of the wakee, this `wakeup` monitor reports the problem in the context of
++the waker. This monitor complement the `sleep` monitor, giving user better
++understanding of the issue. For instance, to debug a lower-priority task waking a
++higher-priority task scenario, user can enable both `wakeup` monitor and `sleep`
++monitor to get the stack traces of both tasks.
+diff --git a/kernel/trace/rv/Kconfig b/kernel/trace/rv/Kconfig
+index 3884b14df375..4d3a14a0bac2 100644
+--- a/kernel/trace/rv/Kconfig
++++ b/kernel/trace/rv/Kconfig
+@@ -76,6 +76,7 @@ source "kernel/trace/rv/monitors/opid/Kconfig"
+ source "kernel/trace/rv/monitors/rtapp/Kconfig"
+ source "kernel/trace/rv/monitors/pagefault/Kconfig"
+ source "kernel/trace/rv/monitors/sleep/Kconfig"
++source "kernel/trace/rv/monitors/wakeup/Kconfig"
+ # Add new rtapp monitors here
+ 
+ source "kernel/trace/rv/monitors/stall/Kconfig"
+diff --git a/kernel/trace/rv/Makefile b/kernel/trace/rv/Makefile
+index 94498da35b37..c2c0e4142eb4 100644
+--- a/kernel/trace/rv/Makefile
++++ b/kernel/trace/rv/Makefile
+@@ -20,6 +20,7 @@ obj-$(CONFIG_RV_MON_OPID) += monitors/opid/opid.o
+ obj-$(CONFIG_RV_MON_STALL) += monitors/stall/stall.o
+ obj-$(CONFIG_RV_MON_DEADLINE) += monitors/deadline/deadline.o
+ obj-$(CONFIG_RV_MON_NOMISS) += monitors/nomiss/nomiss.o
++obj-$(CONFIG_RV_MON_WAKEUP) += monitors/wakeup/wakeup.o
+ # Add new monitors here
+ obj-$(CONFIG_RV_REACTORS) += rv_reactors.o
+ obj-$(CONFIG_RV_REACT_PRINTK) += reactor_printk.o
+diff --git a/kernel/trace/rv/monitors/rtapp/Kconfig b/kernel/trace/rv/monitors/rtapp/Kconfig
+index 1ce9370a9ba8..1fcd7a400ded 100644
+--- a/kernel/trace/rv/monitors/rtapp/Kconfig
++++ b/kernel/trace/rv/monitors/rtapp/Kconfig
+@@ -1,6 +1,6 @@
+ config RV_MON_RTAPP
+ 	depends on RV
+-	depends on RV_PER_TASK_MONITORS >= 2
++	depends on RV_PER_TASK_MONITORS >= 3
+ 	bool "rtapp monitor"
+ 	help
+ 	  Collection of monitors to check for common problems with real-time
+diff --git a/kernel/trace/rv/monitors/wakeup/Kconfig b/kernel/trace/rv/monitors/wakeup/Kconfig
+new file mode 100644
+index 000000000000..98f618f0e01d
+--- /dev/null
++++ b/kernel/trace/rv/monitors/wakeup/Kconfig
+@@ -0,0 +1,16 @@
++# SPDX-License-Identifier: GPL-2.0-only
++#
++config RV_MON_WAKEUP
++	depends on RV
++	depends on RV_MON_RTAPP
++	depends on HAVE_SYSCALL_TRACEPOINTS
++	default y
++	select LTL_MON_EVENTS_ID
++	bool "wakeup monitor"
++	help
++	  This monitor detects a lower-priority task waking up a
++	  higher-priority task. The RV_MON_SLEEP monitor already
++	  detects this case, but this monitor detects in the context
++	  of the waker task instead. This and RV_MON_SLEEP can be
++	  enabled together to get the stacktrace of both the waker
++	  task and the wakee task.
+diff --git a/kernel/trace/rv/monitors/wakeup/wakeup.c b/kernel/trace/rv/monitors/wakeup/wakeup.c
+new file mode 100644
+index 000000000000..01b47416f24e
+--- /dev/null
++++ b/kernel/trace/rv/monitors/wakeup/wakeup.c
+@@ -0,0 +1,153 @@
++// SPDX-License-Identifier: GPL-2.0
++#include <linux/ftrace.h>
++#include <linux/tracepoint.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/init.h>
++#include <linux/rv.h>
++#include <rv/instrumentation.h>
++
++#define MODULE_NAME "wakeup"
++
++#include <trace/events/syscalls.h>
++#include <trace/events/sched.h>
++#include <trace/events/lock.h>
++#include <uapi/linux/futex.h>
++
++#include <rv_trace.h>
++#include <monitors/rtapp/rtapp.h>
++
++
++#ifndef __NR_futex
++#define __NR_futex (-__COUNTER__)
++#endif
++#ifndef __NR_futex_time64
++#define __NR_futex_time64 (-__COUNTER__)
++#endif
++
++#include "wakeup.h"
++#include <rv/ltl_monitor.h>
++
++static void ltl_atoms_fetch(struct task_struct *task, struct ltl_monitor *mon)
++{
++	/*
++	 * This includes "actual" real-time tasks and also PI-boosted
++	 * tasks. A task being PI-boosted means it is blocking an "actual"
++	 * real-task, therefore it should also obey the monitor's rule,
++	 * otherwise the "actual" real-task may be delayed.
++	 */
++	ltl_atom_set(mon, LTL_RT, rt_or_dl_task(task));
++}
++
++static void ltl_atoms_init(struct task_struct *task, struct ltl_monitor *mon, bool task_creation)
++{
++	ltl_atom_set(mon, LTL_WOKEN_BY_LOWER_PRIO, false);
++	ltl_atom_set(mon, LTL_WOKEN_BY_SOFTIRQ, false);
++
++	if (task_creation) {
++		ltl_atom_set(mon, LTL_BLOCK_ON_RT_MUTEX, false);
++		ltl_atom_set(mon, LTL_FUTEX_LOCK_PI, false);
++	}
++
++	ltl_atom_set(mon, LTL_USER_THREAD, !(task->flags & PF_KTHREAD));
++}
++
++static void handle_sched_waking(void *data, struct task_struct *task)
++{
++	if (in_task()) {
++		if (current->prio > task->prio)
++			ltl_atom_pulse(task, LTL_WOKEN_BY_LOWER_PRIO, true);
++	} else if (in_serving_softirq()) {
++		ltl_atom_pulse(task, LTL_WOKEN_BY_SOFTIRQ, true);
++	}
++}
++
++static void handle_contention_begin(void *data, void *lock, unsigned int flags)
++{
++	if (flags & LCB_F_RT)
++		ltl_atom_update(current, LTL_BLOCK_ON_RT_MUTEX, true);
++}
++
++static void handle_contention_end(void *data, void *lock, int ret)
++{
++	ltl_atom_update(current, LTL_BLOCK_ON_RT_MUTEX, false);
++}
++
++static void handle_sys_enter(void *data, struct pt_regs *regs, long id)
++{
++	unsigned long args[6];
++	int op, cmd;
++
++	switch (id) {
++	case __NR_futex:
++	case __NR_futex_time64:
++		syscall_get_arguments(current, regs, args);
++		op = args[1];
++		cmd = op & FUTEX_CMD_MASK;
++
++		switch (cmd) {
++		case FUTEX_LOCK_PI:
++		case FUTEX_LOCK_PI2:
++			ltl_atom_update(current, LTL_FUTEX_LOCK_PI, true);
++			break;
++		}
++		break;
++	}
++}
++
++static void handle_sys_exit(void *data, struct pt_regs *regs, long ret)
++{
++	ltl_atom_update(current, LTL_FUTEX_LOCK_PI, false);
++}
++
++static int enable_wakeup(void)
++{
++	int retval;
++
++	retval = ltl_monitor_init();
++	if (retval)
++		return retval;
++
++	rv_attach_trace_probe("rtapp_wakeup", sched_waking, handle_sched_waking);
++	rv_attach_trace_probe("rtapp_wakeup", contention_begin, handle_contention_begin);
++	rv_attach_trace_probe("rtapp_wakeup", contention_end, handle_contention_end);
++	rv_attach_trace_probe("rtapp_wakeup", sys_enter, handle_sys_enter);
++	rv_attach_trace_probe("rtapp_wakeup", sys_exit, handle_sys_exit);
++
++	return 0;
++}
++
++static void disable_wakeup(void)
++{
++	rv_detach_trace_probe("rtapp_wakeup", sched_waking, handle_sched_waking);
++	rv_detach_trace_probe("rtapp_wakeup", contention_begin, handle_contention_begin);
++	rv_detach_trace_probe("rtapp_wakeup", contention_end, handle_contention_end);
++	rv_detach_trace_probe("rtapp_wakeup", sys_enter, handle_sys_enter);
++	rv_detach_trace_probe("rtapp_wakeup", sys_exit, handle_sys_exit);
++
++	ltl_monitor_destroy();
++}
++
++static struct rv_monitor rv_wakeup = {
++	.name = "wakeup",
++	.description = "Monitor that real-time tasks are not woken by lower-priority tasks",
++	.enable = enable_wakeup,
++	.disable = disable_wakeup,
++};
++
++static int __init register_wakeup(void)
++{
++	return rv_register_monitor(&rv_wakeup, &rv_rtapp);
++}
++
++static void __exit unregister_wakeup(void)
++{
++	rv_unregister_monitor(&rv_wakeup);
++}
++
++module_init(register_wakeup);
++module_exit(unregister_wakeup);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Nam Cao <namcao@linutronix.de>");
++MODULE_DESCRIPTION("Monitor that real-time tasks are not woken by lower-priority tasks");
+diff --git a/kernel/trace/rv/monitors/wakeup/wakeup.h b/kernel/trace/rv/monitors/wakeup/wakeup.h
+new file mode 100644
+index 000000000000..6f80da64e0e1
+--- /dev/null
++++ b/kernel/trace/rv/monitors/wakeup/wakeup.h
+@@ -0,0 +1,92 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++
++/*
++ * C implementation of Buchi automaton, automatically generated by
++ * tools/verification/rvgen from the linear temporal logic specification.
++ * For further information, see kernel documentation:
++ *   Documentation/trace/rv/linear_temporal_logic.rst
++ */
++
++#include <linux/rv.h>
++
++#define MONITOR_NAME wakeup
++
++enum ltl_atom {
++	LTL_BLOCK_ON_RT_MUTEX,
++	LTL_FUTEX_LOCK_PI,
++	LTL_RT,
++	LTL_USER_THREAD,
++	LTL_WOKEN_BY_LOWER_PRIO,
++	LTL_WOKEN_BY_SOFTIRQ,
++	LTL_NUM_ATOM
++};
++static_assert(LTL_NUM_ATOM <= RV_MAX_LTL_ATOM);
++
++static const char *ltl_atom_str(enum ltl_atom atom)
++{
++	static const char *const names[] = {
++		"bl_on_rt_mu",
++		"fu_lo_pi",
++		"rt",
++		"us_th",
++		"wo_lo_pr",
++		"wo_so",
++	};
++
++	return names[atom];
++}
++
++enum ltl_buchi_state {
++	S0,
++	RV_NUM_BA_STATES
++};
++static_assert(RV_NUM_BA_STATES <= RV_MAX_BA_STATES);
++
++static void ltl_start(struct task_struct *task, struct ltl_monitor *mon)
++{
++	bool woken_by_softirq = test_bit(LTL_WOKEN_BY_SOFTIRQ, mon->atoms);
++	bool woken_by_lower_prio = test_bit(LTL_WOKEN_BY_LOWER_PRIO, mon->atoms);
++	bool user_thread = test_bit(LTL_USER_THREAD, mon->atoms);
++	bool rt = test_bit(LTL_RT, mon->atoms);
++	bool futex_lock_pi = test_bit(LTL_FUTEX_LOCK_PI, mon->atoms);
++	bool block_on_rt_mutex = test_bit(LTL_BLOCK_ON_RT_MUTEX, mon->atoms);
++	bool val9 = block_on_rt_mutex || futex_lock_pi;
++	bool val6 = !woken_by_softirq;
++	bool val5 = !woken_by_lower_prio;
++	bool val8 = val5 && val6;
++	bool val10 = val8 || val9;
++	bool val3 = !user_thread;
++	bool val2 = !rt;
++	bool val4 = val2 || val3;
++	bool val11 = val4 || val10;
++
++	if (val11)
++		__set_bit(S0, mon->states);
++}
++
++static void
++ltl_possible_next_states(struct ltl_monitor *mon, unsigned int state, unsigned long *next)
++{
++	bool woken_by_softirq = test_bit(LTL_WOKEN_BY_SOFTIRQ, mon->atoms);
++	bool woken_by_lower_prio = test_bit(LTL_WOKEN_BY_LOWER_PRIO, mon->atoms);
++	bool user_thread = test_bit(LTL_USER_THREAD, mon->atoms);
++	bool rt = test_bit(LTL_RT, mon->atoms);
++	bool futex_lock_pi = test_bit(LTL_FUTEX_LOCK_PI, mon->atoms);
++	bool block_on_rt_mutex = test_bit(LTL_BLOCK_ON_RT_MUTEX, mon->atoms);
++	bool val9 = block_on_rt_mutex || futex_lock_pi;
++	bool val6 = !woken_by_softirq;
++	bool val5 = !woken_by_lower_prio;
++	bool val8 = val5 && val6;
++	bool val10 = val8 || val9;
++	bool val3 = !user_thread;
++	bool val2 = !rt;
++	bool val4 = val2 || val3;
++	bool val11 = val4 || val10;
++
++	switch (state) {
++	case S0:
++		if (val11)
++			__set_bit(S0, next);
++		break;
++	}
++}
+diff --git a/kernel/trace/rv/monitors/wakeup/wakeup_trace.h b/kernel/trace/rv/monitors/wakeup/wakeup_trace.h
+new file mode 100644
+index 000000000000..7e056183f920
+--- /dev/null
++++ b/kernel/trace/rv/monitors/wakeup/wakeup_trace.h
+@@ -0,0 +1,14 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++
++/*
++ * Snippet to be included in rv_trace.h
++ */
++
++#ifdef CONFIG_RV_MON_WAKEUP
++DEFINE_EVENT(event_ltl_monitor_id, event_wakeup,
++	     TP_PROTO(struct task_struct *task, char *states, char *atoms, char *next),
++	     TP_ARGS(task, states, atoms, next));
++DEFINE_EVENT(error_ltl_monitor_id, error_wakeup,
++	     TP_PROTO(struct task_struct *task),
++	     TP_ARGS(task));
++#endif /* CONFIG_RV_MON_WAKEUP */
+diff --git a/kernel/trace/rv/rv_trace.h b/kernel/trace/rv/rv_trace.h
+index 9622c269789c..2f8a932432c9 100644
+--- a/kernel/trace/rv/rv_trace.h
++++ b/kernel/trace/rv/rv_trace.h
+@@ -241,6 +241,7 @@ DECLARE_EVENT_CLASS(error_ltl_monitor_id,
+ );
+ #include <monitors/pagefault/pagefault_trace.h>
+ #include <monitors/sleep/sleep_trace.h>
++#include <monitors/wakeup/wakeup_trace.h>
+ // Add new monitors based on CONFIG_LTL_MON_EVENTS_ID here
+ #endif /* CONFIG_LTL_MON_EVENTS_ID */
+ 
+diff --git a/tools/verification/models/rtapp/wakeup.ltl b/tools/verification/models/rtapp/wakeup.ltl
+new file mode 100644
+index 000000000000..a5d63ca0811a
+--- /dev/null
++++ b/tools/verification/models/rtapp/wakeup.ltl
+@@ -0,0 +1,5 @@
++RULE = always (((RT and USER_THREAD) imply
++		(not (WOKEN_BY_LOWER_PRIO or WOKEN_BY_SOFTIRQ)) or ALLOWLIST))
++
++ALLOWLIST = BLOCK_ON_RT_MUTEX
++         or FUTEX_LOCK_PI
+-- 
+2.55.0
+

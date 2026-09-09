@@ -1,0 +1,76 @@
+From 8984b402e02ffe8792f6debe07af55e668f4a617 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Fri, 12 Jun 2026 20:36:53 +0300
+Subject: [PATCH 00591/15333] drm/i915/cdclk: Use the TGL+ CD2x pipe select
+ bits also on ICL
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Turns out both CDCLK_CTL pipe select 0b110 (what Bspec lists for
+pipe C on ICL) and 0b100 (what BSpec lists for pipe C on TGL+)
+actually select pipe C on ICL. So we can get rid of the weird
+ICL special case and just use the simpler TGL+ definition of
+the pipe select bits.
+
+This was reverse engineered with a hacked up intel_display_poller.
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20260612173653.7830-7-ville.syrjala@linux.intel.com
+Reviewed-by: Michał Grzelak <michal.grzelak@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_cdclk.c        | 11 ++---------
+ drivers/gpu/drm/i915/display/intel_display_regs.h |  7 ++-----
+ 2 files changed, 4 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_cdclk.c b/drivers/gpu/drm/i915/display/intel_cdclk.c
+index 8db79758187d..d3c5e3438d19 100644
+--- a/drivers/gpu/drm/i915/display/intel_cdclk.c
++++ b/drivers/gpu/drm/i915/display/intel_cdclk.c
+@@ -1946,9 +1946,7 @@ static void adlp_cdclk_pll_crawl(struct intel_display *display, int vco)
+ 
+ static u32 bxt_cdclk_cd2x_pipe_mask(struct intel_display *display)
+ {
+-	if (DISPLAY_VER(display) >= 12)
+-		return TGL_CDCLK_CD2X_PIPE_MASK;
+-	else if (DISPLAY_VER(display) >= 11)
++	if (DISPLAY_VER(display) >= 11)
+ 		return ICL_CDCLK_CD2X_PIPE_MASK;
+ 	else
+ 		return BXT_CDCLK_CD2X_PIPE_MASK;
+@@ -1956,12 +1954,7 @@ static u32 bxt_cdclk_cd2x_pipe_mask(struct intel_display *display)
+ 
+ static u32 bxt_cdclk_cd2x_pipe(struct intel_display *display, enum pipe pipe)
+ {
+-	if (DISPLAY_VER(display) >= 12) {
+-		if (pipe == INVALID_PIPE)
+-			return TGL_CDCLK_CD2X_PIPE_NONE;
+-		else
+-			return TGL_CDCLK_CD2X_PIPE(pipe);
+-	} else if (DISPLAY_VER(display) >= 11) {
++	if (DISPLAY_VER(display) >= 11) {
+ 		if (pipe == INVALID_PIPE)
+ 			return ICL_CDCLK_CD2X_PIPE_NONE;
+ 		else
+diff --git a/drivers/gpu/drm/i915/display/intel_display_regs.h b/drivers/gpu/drm/i915/display/intel_display_regs.h
+index 6c6a7fafb145..39e50423132f 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_regs.h
++++ b/drivers/gpu/drm/i915/display/intel_display_regs.h
+@@ -2785,12 +2785,9 @@ enum skl_power_gate {
+ #define  BXT_CDCLK_CD2X_PIPE_MASK	REG_GENMASK(21, 20) /* bxt/glk */
+ #define  BXT_CDCLK_CD2X_PIPE(pipe)	REG_FIELD_PREP(BXT_CDCLK_CD2X_PIPE_MASK, (pipe))
+ #define  BXT_CDCLK_CD2X_PIPE_NONE	REG_FIELD_PREP(BXT_CDCLK_CD2X_PIPE_MASK, 3)
+-#define  ICL_CDCLK_CD2X_PIPE_MASK	REG_GENMASK(21, 19) /* icl */
+-#define  ICL_CDCLK_CD2X_PIPE(pipe)	REG_FIELD_PREP(ICL_CDCLK_CD2X_PIPE_MASK, _PICK((pipe), 0, 1, 3) << 1)
++#define  ICL_CDCLK_CD2X_PIPE_MASK	REG_GENMASK(21, 19) /* icl+ */
++#define  ICL_CDCLK_CD2X_PIPE(pipe)	REG_FIELD_PREP(ICL_CDCLK_CD2X_PIPE_MASK, (pipe) << 1)
+ #define  ICL_CDCLK_CD2X_PIPE_NONE	REG_FIELD_PREP(ICL_CDCLK_CD2X_PIPE_MASK, 7)
+-#define  TGL_CDCLK_CD2X_PIPE_MASK	REG_GENMASK(21, 19) /* tgl+ */
+-#define  TGL_CDCLK_CD2X_PIPE(pipe)	REG_FIELD_PREP(TGL_CDCLK_CD2X_PIPE_MASK, (pipe) << 1)
+-#define  TGL_CDCLK_CD2X_PIPE_NONE	REG_FIELD_PREP(TGL_CDCLK_CD2X_PIPE_MASK, 7)
+ #define  CDCLK_DIVMUX_CD_OVERRIDE	REG_BIT(19) /* pre-icl */
+ #define  BXT_CDCLK_SSA_PRECHARGE_ENABLE	REG_BIT(16) /* bxt/glk */
+ #define  CDCLK_FREQ_DECIMAL_MASK	REG_GENMASK(10, 0) /* pre-lnl */
+-- 
+2.55.0
+

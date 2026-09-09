@@ -1,0 +1,55 @@
+From a347812c2ef0fafef587d2580be145d8101a0137 Mon Sep 17 00:00:00 2001
+From: Petr Pavlu <petr.pavlu@suse.com>
+Date: Fri, 12 Jun 2026 15:38:28 +0200
+Subject: [PATCH 11216/15333] module: Remove unused DISCARD_EH_FRAME definition
+ from module.lds.S
+
+The linker script scripts/module.lds.S contains an unused DISCARD_EH_FRAME
+definition introduced by commit 68c76ad4a957 ("arm64: unwind: add
+asynchronous unwind tables to kernel and modules").
+
+As shown in an earlier version of that patch [1], DISCARD_EH_FRAME was
+meant to be used by SANITIZER_DISCARDS in the same file, as follows:
+
+-# define SANITIZER_DISCARDS	*(.eh_frame)
++# define SANITIZER_DISCARDS	DISCARD_EH_FRAME
+
+However, in the meantime, SANITIZER_DISCARDS was removed entirely from
+module.lds.S by commit 89245600941e ("cfi: Switch to -fsanitize=kcfi").
+Eventually, the mentioned commit 68c76ad4a957 only added the new
+DISCARD_EH_FRAME definition to this file without actually using it.
+
+The file include/asm-generic/vmlinux.lds.h contains a similar
+DISCARD_EH_FRAME definition for vmlinux to discard .eh_frame sections that
+may be present when CONFIG_GCOV_KERNEL, CONFIG_KASAN_GENERIC or
+CONFIG_KCSAN is enabled. Testing these options on arm64 with LLVM 19.1 did
+not show any unexpected .eh_frame sections in modules.
+
+Remove the unused DISCARD_EH_FRAME definition from scripts/module.lds.S.
+
+Link: https://lore.kernel.org/linux-arm-kernel/20220701152724.3343599-2-ardb@kernel.org/ [1]
+Reviewed-by: Sami Tolvanen <samitolvanen@google.com>
+Signed-off-by: Petr Pavlu <petr.pavlu@suse.com>
+---
+ scripts/module.lds.S | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/scripts/module.lds.S b/scripts/module.lds.S
+index b62683061d79..d0f200428957 100644
+--- a/scripts/module.lds.S
++++ b/scripts/module.lds.S
+@@ -3,11 +3,6 @@
+  * Archs are free to supply their own linker scripts.  ld will
+  * combine them automatically.
+  */
+-#ifdef CONFIG_UNWIND_TABLES
+-#define DISCARD_EH_FRAME
+-#else
+-#define DISCARD_EH_FRAME	*(.eh_frame)
+-#endif
+ 
+ #include <asm-generic/codetag.lds.h>
+ 
+-- 
+2.55.0
+

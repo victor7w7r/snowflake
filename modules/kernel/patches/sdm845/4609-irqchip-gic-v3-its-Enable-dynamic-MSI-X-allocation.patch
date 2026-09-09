@@ -1,0 +1,61 @@
+From 0d6a7c417983b36f0aa2a61bc650e8df04dd6ba8 Mon Sep 17 00:00:00 2001
+From: Jinqian Yang <yangjinqian1@huawei.com>
+Date: Wed, 15 Jul 2026 11:54:37 +0800
+Subject: [PATCH 04609/15333] irqchip/gic-v3-its: Enable dynamic MSI-X
+ allocation
+
+On ARM64 platforms with GICv3 ITS, VFIO PCI passthrough currently cannot
+dynamically allocate MSI-X vectors after MSI-X has been enabled. When QEMU
+needs to extend the vector range, it must disable MSI-X, free all
+interrupts, then re-enable with a larger allocation. This creates an
+interrupt loss window for already-active vectors.
+
+Consider HNS3 with RoCE: NIC and RDMA share one PCI device and ITS
+DeviceID, with MSI-X vectors partitioned as NIC (lower range) then RoCE
+(starting at base_vector = num_nic_msi). In VFIO passthrough, loading
+hns_roce after hns3 forces QEMU to tear down all interrupts before
+re-allocating the larger range. During this process, NIC interrupts may be
+lost. Testing confirmed that this occasionally occurs, causing the network
+port reset to fail. This appears to be unavoidable, as it's a standard
+approach adopted by all network card vendors.
+
+On Hisilicon HIP09 (ARM64, GICv3/GICv4.1) with latest upstream kernel
+and QEMU 8.2. VFIO passthrough of HNS3 NIC to VM: load both hns3 and
+hns_roce_hw_v2 drivers and trigger FLR, this bug will occur occasionally.
+After enabling dynamic MSIX allocation, this bug no longer occurs.
+
+When dynamic MSI-X allocatiojn support is enabled, adding a new vector only
+inserts a new entry, existing entries are untouched, so already-active
+vectors are unaffected.
+
+The ITTs are sized to hardware size at MSI-X domain creation time. so there
+is always sufficient space for any vector index that may be dynamiclly
+allocated later. So the ITT never needs to be resized at runtime. The
+dynamic allocation path uses the already initialized ITT and allocates a
+free entry, which means no existing vector is affected.
+
+Signed-off-by: Jinqian Yang <yangjinqian1@huawei.com>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Reviewed-by: Marc Zyngier <maz@kernel.org>
+Link: https://patch.msgid.link/20260715035437.700601-1-yangjinqian1@huawei.com
+---
+ drivers/irqchip/irq-gic-its-msi-parent.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/irqchip/irq-gic-its-msi-parent.c b/drivers/irqchip/irq-gic-its-msi-parent.c
+index b9257103a999..b2b9d2068bb1 100644
+--- a/drivers/irqchip/irq-gic-its-msi-parent.c
++++ b/drivers/irqchip/irq-gic-its-msi-parent.c
+@@ -18,7 +18,8 @@
+ 
+ #define ITS_MSI_FLAGS_SUPPORTED (MSI_GENERIC_FLAGS_MASK |	\
+ 				 MSI_FLAG_PCI_MSIX      |	\
+-				 MSI_FLAG_MULTI_PCI_MSI)
++				 MSI_FLAG_MULTI_PCI_MSI |	\
++				 MSI_FLAG_PCI_MSIX_ALLOC_DYN)
+ 
+ static int its_translate_frame_address(struct fwnode_handle *msi_node, phys_addr_t *pa)
+ {
+-- 
+2.55.0
+

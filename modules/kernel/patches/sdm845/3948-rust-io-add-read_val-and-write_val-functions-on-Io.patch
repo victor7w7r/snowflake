@@ -1,0 +1,157 @@
+From 89814c42c19ea63600f7235156ae665f6bf8b369 Mon Sep 17 00:00:00 2001
+From: Gary Guo <gary@garyguo.net>
+Date: Mon, 6 Jul 2026 13:44:29 +0100
+Subject: [PATCH 03948/15333] rust: io: add `read_val` and `write_val`
+ functions on `Io`
+
+Provide `read_val` and `write_val` that allow I/O views to be accessed when
+they're narrowed down to just views of primitives.
+
+This is used to provide `io_read!` and `io_write!` macros, which are
+generalized version of current `dma_read!` and `dma_write!` macro that work
+for all types that implement `Io`.
+
+Note though `io_read!` and `io_write!` only works if backend implements
+`IoCapable` for the type; which is typically only implemented for
+atomically accessible primitives. `dma_read!` and `dma_write!` currently
+supports them via `read_volatile` and `write_volatile`; this can be
+undesirable for aggregates as LLVM may turn them to multiple instructions
+to access parts and re-assemble, even if they could be combined to a single
+instruction. Thus, `io_read!()` and `io_write!()` does not fully replace
+`dma_read!()` and `dma_write!()` in this scenario. The ability to
+read/write aggregates (when atomicity is of no concern) is better served
+with copying primitives (e.g. memcpy_{from,to}io).
+
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Signed-off-by: Gary Guo <gary@garyguo.net>
+Reviewed-by: Daniel Almeida <daniel.almeida@collabora.com>
+Link: https://patch.msgid.link/20260706-io_projection-v6-16-72cd5d055d54@garyguo.net
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/kernel/io.rs | 106 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 106 insertions(+)
+
+diff --git a/rust/kernel/io.rs b/rust/kernel/io.rs
+index c212de8860ac..3f430bce61e5 100644
+--- a/rust/kernel/io.rs
++++ b/rust/kernel/io.rs
+@@ -399,6 +399,50 @@ fn try_cast<U>(self) -> Result<<Self::Backend as IoBackend>::View<'a, U>>
+         Ok(unsafe { Self::Backend::project_view(view, ptr.cast()) })
+     }
+ 
++    /// Read a value from I/O.
++    ///
++    /// This only works for primitives supported by the I/O backend.
++    ///
++    /// # Examples
++    ///
++    /// ```no_run
++    /// # use kernel::io::*;
++    /// # fn test_read_val(mmio: Mmio<'_, u32>) {
++    /// // let mmio: Mmio<'_, u32>;
++    /// let val: u32 = mmio.read_val();
++    /// # }
++    /// ```
++    #[inline]
++    fn read_val(self) -> Self::Target
++    where
++        Self::Backend: IoCapable<Self::Target>,
++        Self::Target: Sized,
++    {
++        Self::Backend::io_read(self.as_view())
++    }
++
++    /// Write a value to I/O.
++    ///
++    /// This only works for primitives supported by the I/O backend.
++    ///
++    /// # Examples
++    ///
++    /// ```no_run
++    /// # use kernel::io::*;
++    /// # fn test_write_val(mmio: Mmio<'_, u32>) {
++    /// // let mmio: Mmio<'_, u32>;
++    /// mmio.write_val(1u32);
++    /// # }
++    /// ```
++    #[inline]
++    fn write_val(self, value: Self::Target)
++    where
++        Self::Backend: IoCapable<Self::Target>,
++        Self::Target: Sized,
++    {
++        Self::Backend::io_write(self.as_view(), value)
++    }
++
+     /// Fallible 8-bit read with runtime bounds check.
+     #[inline(always)]
+     fn try_read8(self, offset: usize) -> Result<u8>
+@@ -1232,3 +1276,65 @@ macro_rules! io_project {
+ }
+ #[doc(inline)]
+ pub use crate::io_project;
++
++/// Read from I/O memory.
++///
++/// The syntax is of form `io_read!(io, proj)` where `io` is an expression to a type that
++/// implements [`Io`] and `proj` is a [projection specification](kernel::ptr::project!).
++///
++/// # Examples
++///
++/// ```
++/// #[repr(C)]
++/// struct MyStruct { field: u32, }
++///
++/// # fn test(mmio: kernel::io::Mmio<'_, [MyStruct]>) -> Result {
++/// // let mmio: Mmio<'_, [MyStruct]>;
++/// let field: u32 = kernel::io::io_read!(mmio, [try: 2].field);
++/// # Ok::<(), Error>(()) }
++/// ```
++#[macro_export]
++#[doc(hidden)]
++macro_rules! io_read {
++    ($io:expr, $($proj:tt)*) => {
++        $crate::io::Io::read_val($crate::io_project!($io, $($proj)*))
++    };
++}
++#[doc(inline)]
++pub use crate::io_read;
++
++/// Writes to I/O memory.
++///
++/// The syntax is of form `io_write!(io, proj, val)` where `io` is an expression to a type that
++/// implements [`Io`] and `proj` is a [projection specification](kernel::ptr::project!),
++/// and `val` is the value to be written to the projected location.
++///
++/// # Examples
++///
++/// ```
++/// #[repr(C)]
++/// struct MyStruct { field: u32, }
++///
++/// # fn test(mmio: kernel::io::Mmio<'_, [MyStruct]>) -> Result {
++/// // let mmio: Mmio<'_, [MyStruct]>;
++/// kernel::io::io_write!(mmio, [try: 2].field, 10);
++/// # Ok::<(), Error>(()) }
++/// ```
++#[macro_export]
++#[doc(hidden)]
++macro_rules! io_write {
++    (@parse [$io:expr] [$($proj:tt)*] [, $val:expr]) => {
++        $crate::io::Io::write_val($crate::io_project!($io, $($proj)*), $val)
++    };
++    (@parse [$io:expr] [$($proj:tt)*] [.$field:tt $($rest:tt)*]) => {
++        $crate::io_write!(@parse [$io] [$($proj)* .$field] [$($rest)*])
++    };
++    (@parse [$io:expr] [$($proj:tt)*] [[$flavor:ident: $index:expr] $($rest:tt)*]) => {
++        $crate::io_write!(@parse [$io] [$($proj)* [$flavor: $index]] [$($rest)*])
++    };
++    ($io:expr, $($rest:tt)*) => {
++        $crate::io_write!(@parse [$io] [] [$($rest)*])
++    };
++}
++#[doc(inline)]
++pub use crate::io_write;
+-- 
+2.55.0
+

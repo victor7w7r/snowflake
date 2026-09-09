@@ -1,0 +1,78 @@
+From 6fc5fcd8ec1bdba3123b8a662410cf70bffc40f0 Mon Sep 17 00:00:00 2001
+From: Hans Zhang <18255117159@163.com>
+Date: Tue, 7 Apr 2026 21:04:50 +0800
+Subject: [PATCH 04725/15333] PCI: dwc: Use common speed conversion function
+
+Replace the private switch-based speed conversion in
+dw_pcie_link_set_max_speed() with the public pci_bus_speed2lnkctl2()
+function.
+
+This eliminates duplicate conversion logic and ensures consistency with
+other PCIe drivers, while handling invalid speeds by falling back to
+hardware capabilities.
+
+Signed-off-by: Hans Zhang <18255117159@163.com>
+Signed-off-by: Manivannan Sadhasivam <mani@kernel.org>
+Reviewed-by: Shawn Lin <shawn.lin@rock-chips.com>
+Acked-by: Manivannan Sadhasivam <mani@kernel.org>
+Link: https://patch.msgid.link/20260407130450.1489318-4-18255117159@163.com
+---
+ drivers/pci/controller/dwc/pcie-designware.c | 28 +++++++-------------
+ 1 file changed, 9 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/pci/controller/dwc/pcie-designware.c b/drivers/pci/controller/dwc/pcie-designware.c
+index ec4722ed9303..593388f29bdd 100644
+--- a/drivers/pci/controller/dwc/pcie-designware.c
++++ b/drivers/pci/controller/dwc/pcie-designware.c
+@@ -842,8 +842,10 @@ EXPORT_SYMBOL_GPL(dw_pcie_upconfig_setup);
+ 
+ static void dw_pcie_link_set_max_speed(struct dw_pcie *pci)
+ {
+-	u32 cap, ctrl2, link_speed;
++	u32 cap, ctrl2;
++	enum pci_bus_speed link_speed;
+ 	u8 offset = dw_pcie_find_capability(pci, PCI_CAP_ID_EXP);
++	u16 ctrl2_speed;
+ 
+ 	cap = dw_pcie_readl_dbi(pci, offset + PCI_EXP_LNKCAP);
+ 
+@@ -860,30 +862,18 @@ static void dw_pcie_link_set_max_speed(struct dw_pcie *pci)
+ 	ctrl2 = dw_pcie_readl_dbi(pci, offset + PCI_EXP_LNKCTL2);
+ 	ctrl2 &= ~PCI_EXP_LNKCTL2_TLS;
+ 
+-	switch (pcie_get_link_speed(pci->max_link_speed)) {
+-	case PCIE_SPEED_2_5GT:
+-		link_speed = PCI_EXP_LNKCTL2_TLS_2_5GT;
+-		break;
+-	case PCIE_SPEED_5_0GT:
+-		link_speed = PCI_EXP_LNKCTL2_TLS_5_0GT;
+-		break;
+-	case PCIE_SPEED_8_0GT:
+-		link_speed = PCI_EXP_LNKCTL2_TLS_8_0GT;
+-		break;
+-	case PCIE_SPEED_16_0GT:
+-		link_speed = PCI_EXP_LNKCTL2_TLS_16_0GT;
+-		break;
+-	default:
++	link_speed = pcie_get_link_speed(pci->max_link_speed);
++	ctrl2_speed = pci_bus_speed2lnkctl2(link_speed);
++	if (ctrl2_speed == 0) {
+ 		/* Use hardware capability */
+-		link_speed = FIELD_GET(PCI_EXP_LNKCAP_SLS, cap);
++		ctrl2_speed = FIELD_GET(PCI_EXP_LNKCAP_SLS, cap);
+ 		ctrl2 &= ~PCI_EXP_LNKCTL2_HASD;
+-		break;
+ 	}
+ 
+-	dw_pcie_writel_dbi(pci, offset + PCI_EXP_LNKCTL2, ctrl2 | link_speed);
++	dw_pcie_writel_dbi(pci, offset + PCI_EXP_LNKCTL2, ctrl2 | ctrl2_speed);
+ 
+ 	cap &= ~((u32)PCI_EXP_LNKCAP_SLS);
+-	dw_pcie_writel_dbi(pci, offset + PCI_EXP_LNKCAP, cap | link_speed);
++	dw_pcie_writel_dbi(pci, offset + PCI_EXP_LNKCAP, cap | ctrl2_speed);
+ 
+ }
+ 
+-- 
+2.55.0
+

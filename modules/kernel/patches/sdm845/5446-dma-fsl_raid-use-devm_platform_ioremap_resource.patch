@@ -1,0 +1,60 @@
+From 30cb1b9fd4295f54d22b3a15ecf8525c9fe03ebe Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Thu, 16 Jul 2026 13:29:49 -0700
+Subject: [PATCH 05446/15333] dma: fsl_raid: use devm_platform_ioremap_resource
+
+Replace the open-coded platform_get_resource() plus devm_ioremap()
+sequence with devm_platform_ioremap_resource(), which fetches the
+resource, requests the region and maps it in one call. Switch the error
+check to IS_ERR()/PTR_ERR() and drop the now-unused struct resource
+pointer.
+
+The raideng node has a single reg region (0x320000, 0x10000); the
+job-queue/ring children are separate OF devices probed independently, so
+the region reservation added by devm_ioremap_resource() is exclusive and
+does not introduce overlap failures.
+
+Assisted-by: opencode:hy3-free
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260716202949.677290-5-rosenp@gmail.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/fsl_raid.c | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/dma/fsl_raid.c b/drivers/dma/fsl_raid.c
+index 524f83faf3da..2d86f61105e5 100644
+--- a/drivers/dma/fsl_raid.c
++++ b/drivers/dma/fsl_raid.c
+@@ -751,22 +751,18 @@ static int fsl_re_probe(struct platform_device *ofdev)
+ 	u32 off;
+ 	u8 ridx = 0;
+ 	struct dma_device *dma_dev;
+-	struct resource *res;
+ 	int rc;
+ 	struct device *dev = &ofdev->dev;
+ 
++	/* IOMAP the entire RAID Engine region */
++	re_regs = devm_platform_ioremap_resource(ofdev, 0);
++	if (IS_ERR(re_regs))
++		return PTR_ERR(re_regs);
++
+ 	re_priv = devm_kzalloc(dev, sizeof(*re_priv), GFP_KERNEL);
+ 	if (!re_priv)
+ 		return -ENOMEM;
+ 
+-	res = platform_get_resource(ofdev, IORESOURCE_MEM, 0);
+-	if (!res)
+-		return -ENODEV;
+-
+-	/* IOMAP the entire RAID Engine region */
+-	re_regs = devm_ioremap(dev, res->start, resource_size(res));
+-	if (!re_regs)
+-		return -EBUSY;
+ 	re_priv->base = re_regs;
+ 
+ 	/* Program the RE mode */
+-- 
+2.55.0
+

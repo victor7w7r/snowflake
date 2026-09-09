@@ -1,0 +1,94 @@
+From dccef66d850b49fdb8a042df59416db1d88d92d8 Mon Sep 17 00:00:00 2001
+From: Wake Liu <wakel@google.com>
+Date: Mon, 25 May 2026 09:20:01 +0000
+Subject: [PATCH 02529/15333] selftests/futex: Migrate
+ futex_wait_private_mapped_file to harness
+
+Migrate futex_wait_private_mapped_file test to the kselftest harness
+framework, removing mixed legacy ksft_* API usages and passing test
+metadata to helper thread.
+
+[ tglx: Fixup coding style ]
+
+Signed-off-by: Wake Liu <wakel@google.com>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/20260525092002.3762888-3-wakel@google.com
+---
+ .../futex_wait_private_mapped_file.c          | 36 ++++++++++---------
+ 1 file changed, 20 insertions(+), 16 deletions(-)
+
+diff --git a/tools/testing/selftests/futex/functional/futex_wait_private_mapped_file.c b/tools/testing/selftests/futex/functional/futex_wait_private_mapped_file.c
+index 2a749f9b14eb..a9f7a02e3a0b 100644
+--- a/tools/testing/selftests/futex/functional/futex_wait_private_mapped_file.c
++++ b/tools/testing/selftests/futex/functional/futex_wait_private_mapped_file.c
+@@ -26,6 +26,7 @@
+ #include <pthread.h>
+ #include <libgen.h>
+ #include <signal.h>
++#include <string.h>
+ 
+ #include "futextest.h"
+ #include "kselftest_harness.h"
+@@ -41,17 +42,22 @@ struct timespec wait_timeout = { .tv_sec = 5, .tv_nsec = 0};
+ 
+ void *thr_futex_wait(void *arg)
+ {
++	struct __test_metadata *_metadata = (struct __test_metadata *)arg;
+ 	int ret;
+ 
+-	ksft_print_dbg_msg("futex wait\n");
++	TH_LOG("futex wait");
+ 	ret = futex_wait(&val, 1, &wait_timeout, 0);
+-	if (ret && errno != EWOULDBLOCK && errno != ETIMEDOUT)
+-		ksft_exit_fail_msg("futex error.\n");
++	if (ret && errno != EWOULDBLOCK && errno != ETIMEDOUT) {
++		ASSERT_TRUE(0)
++			TH_LOG("futex error: %s", strerror(errno));
++	}
+ 
+-	if (ret && errno == ETIMEDOUT)
+-		ksft_exit_fail_msg("waiter timedout\n");
++	if (ret && errno == ETIMEDOUT) {
++		ASSERT_TRUE(0)
++			TH_LOG("waiter timedout");
++	}
+ 
+-	ksft_print_dbg_msg("futex_wait: ret = %d, errno = %d\n", ret, errno);
++	TH_LOG("futex_wait: ret = %d, errno = %d", ret, errno);
+ 
+ 	return NULL;
+ }
+@@ -61,22 +67,20 @@ TEST(wait_private_mapped_file)
+ 	pthread_t thr;
+ 	int res;
+ 
+-	res = pthread_create(&thr, NULL, thr_futex_wait, NULL);
+-	if (res < 0)
+-		ksft_exit_fail_msg("pthread_create error\n");
++	res = pthread_create(&thr, NULL, thr_futex_wait, _metadata);
++	ASSERT_EQ(res, 0)
++		TH_LOG("pthread_create error");
+ 
+-	ksft_print_dbg_msg("wait a while\n");
++	TH_LOG("wait a while");
+ 	usleep(WAKE_WAIT_US);
+ 	val = 2;
+ 	res = futex_wake(&val, 1, 0);
+-	ksft_print_dbg_msg("futex_wake %d\n", res);
+-	if (res != 1)
+-		ksft_exit_fail_msg("FUTEX_WAKE didn't find the waiting thread.\n");
++	TH_LOG("futex_wake %d", res);
++	EXPECT_EQ(res, 1)
++		TH_LOG("FUTEX_WAKE didn't find the waiting thread");
+ 
+-	ksft_print_dbg_msg("join\n");
++	TH_LOG("join");
+ 	pthread_join(thr, NULL);
+-
+-	ksft_test_result_pass("wait_private_mapped_file");
+ }
+ 
+ TEST_HARNESS_MAIN
+-- 
+2.55.0
+

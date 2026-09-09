@@ -1,0 +1,280 @@
+From 338c551bcd62ff4f97ff02359baf9d6f7f1f9fda Mon Sep 17 00:00:00 2001
+From: Maulik Shah <maulik.shah@oss.qualcomm.com>
+Date: Sun, 2 Aug 2026 19:40:35 +0530
+Subject: [PATCH 12587/15333] gpio: Use IRQ trigger mask helpers
+
+Use IRQ_TYPE_LEVEL_MASK and IRQ_TYPE_EDGE_BOTH instead of open-coded
+trigger type combinations in irqchip callbacks.
+
+No functional change intended.
+
+Assisted-by: Claude:claude-sonnet-5
+Signed-off-by: Maulik Shah <maulik.shah@oss.qualcomm.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Link: https://patch.msgid.link/20260802-b4b4-irq-trigger-mask-gpio-v1-1-948973636c84@oss.qualcomm.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/gpio/gpio-davinci.c    | 8 ++++----
+ drivers/gpio/gpio-mt7621.c     | 2 +-
+ drivers/gpio/gpio-mvebu.c      | 4 ++--
+ drivers/gpio/gpio-mxs.c        | 4 ++--
+ drivers/gpio/gpio-omap.c       | 9 ++++-----
+ drivers/gpio/gpio-pl061.c      | 5 ++---
+ drivers/gpio/gpio-pxa.c        | 2 +-
+ drivers/gpio/gpio-rda.c        | 4 ++--
+ drivers/gpio/gpio-sa1100.c     | 2 +-
+ drivers/gpio/gpio-sodaville.c  | 2 +-
+ drivers/gpio/gpio-stmpe.c      | 2 +-
+ drivers/gpio/gpio-tegra.c      | 4 ++--
+ drivers/gpio/gpio-timberdale.c | 2 +-
+ 13 files changed, 24 insertions(+), 26 deletions(-)
+
+diff --git a/drivers/gpio/gpio-davinci.c b/drivers/gpio/gpio-davinci.c
+index 270cd7c88812..cccbaea1dec2 100644
+--- a/drivers/gpio/gpio-davinci.c
++++ b/drivers/gpio/gpio-davinci.c
+@@ -285,9 +285,9 @@ static void gpio_irq_unmask(struct irq_data *d)
+ 
+ 	gpiochip_enable_irq(&chips->chip, hwirq);
+ 
+-	status &= IRQ_TYPE_EDGE_FALLING | IRQ_TYPE_EDGE_RISING;
++	status &= IRQ_TYPE_EDGE_BOTH;
+ 	if (!status)
+-		status = IRQ_TYPE_EDGE_FALLING | IRQ_TYPE_EDGE_RISING;
++		status = IRQ_TYPE_EDGE_BOTH;
+ 
+ 	if (status & IRQ_TYPE_EDGE_FALLING)
+ 		writel_relaxed(mask, &g->set_falling);
+@@ -297,7 +297,7 @@ static void gpio_irq_unmask(struct irq_data *d)
+ 
+ static int gpio_irq_type(struct irq_data *d, unsigned trigger)
+ {
+-	if (trigger & ~(IRQ_TYPE_EDGE_FALLING | IRQ_TYPE_EDGE_RISING))
++	if (trigger & ~IRQ_TYPE_EDGE_BOTH)
+ 		return -EINVAL;
+ 
+ 	return 0;
+@@ -400,7 +400,7 @@ static int gpio_irq_type_unbanked(struct irq_data *data, unsigned trigger)
+ 
+ 	mask = __gpio_mask(i);
+ 
+-	if (trigger & ~(IRQ_TYPE_EDGE_FALLING | IRQ_TYPE_EDGE_RISING))
++	if (trigger & ~IRQ_TYPE_EDGE_BOTH)
+ 		return -EINVAL;
+ 
+ 	writel_relaxed(mask, (trigger & IRQ_TYPE_EDGE_FALLING)
+diff --git a/drivers/gpio/gpio-mt7621.c b/drivers/gpio/gpio-mt7621.c
+index 87086c322f08..a86f6b1060fc 100644
+--- a/drivers/gpio/gpio-mt7621.c
++++ b/drivers/gpio/gpio-mt7621.c
+@@ -194,7 +194,7 @@ mt7621_gpio_irq_type(struct irq_data *d, unsigned int type)
+ 		     rg->hlevel | rg->llevel) & mask)
+ 			return 0;
+ 
+-		type = IRQ_TYPE_EDGE_RISING | IRQ_TYPE_EDGE_FALLING;
++		type = IRQ_TYPE_EDGE_BOTH;
+ 	}
+ 
+ 	rg->rising &= ~mask;
+diff --git a/drivers/gpio/gpio-mvebu.c b/drivers/gpio/gpio-mvebu.c
+index 5b4408fcc10b..a40d832e2f7c 100644
+--- a/drivers/gpio/gpio-mvebu.c
++++ b/drivers/gpio/gpio-mvebu.c
+@@ -1295,7 +1295,7 @@ static int mvebu_gpio_probe(struct platform_device *pdev)
+ 	gc = irq_get_domain_generic_chip(mvchip->domain, 0);
+ 	gc->private = mvchip;
+ 	ct = &gc->chip_types[0];
+-	ct->type = IRQ_TYPE_LEVEL_HIGH | IRQ_TYPE_LEVEL_LOW;
++	ct->type = IRQ_TYPE_LEVEL_MASK;
+ 	ct->chip.irq_mask = mvebu_gpio_level_irq_mask;
+ 	ct->chip.irq_unmask = mvebu_gpio_level_irq_unmask;
+ 	ct->chip.irq_set_type = mvebu_gpio_irq_set_type;
+@@ -1304,7 +1304,7 @@ static int mvebu_gpio_probe(struct platform_device *pdev)
+ 	ct->chip.name = mvchip->chip.label;
+ 
+ 	ct = &gc->chip_types[1];
+-	ct->type = IRQ_TYPE_EDGE_RISING | IRQ_TYPE_EDGE_FALLING;
++	ct->type = IRQ_TYPE_EDGE_BOTH;
+ 	ct->chip.irq_ack = mvebu_gpio_irq_ack;
+ 	ct->chip.irq_mask = mvebu_gpio_edge_irq_mask;
+ 	ct->chip.irq_unmask = mvebu_gpio_edge_irq_unmask;
+diff --git a/drivers/gpio/gpio-mxs.c b/drivers/gpio/gpio-mxs.c
+index 5635694bf9f4..900315aba85a 100644
+--- a/drivers/gpio/gpio-mxs.c
++++ b/drivers/gpio/gpio-mxs.c
+@@ -198,7 +198,7 @@ static int mxs_gpio_init_gc(struct mxs_gpio_port *port, int irq_base)
+ 	gc->private = port;
+ 
+ 	ct = &gc->chip_types[0];
+-	ct->type = IRQ_TYPE_LEVEL_HIGH | IRQ_TYPE_LEVEL_LOW;
++	ct->type = IRQ_TYPE_LEVEL_MASK;
+ 	ct->chip.irq_ack = irq_gc_ack_set_bit;
+ 	ct->chip.irq_mask = irq_gc_mask_disable_reg;
+ 	ct->chip.irq_unmask = irq_gc_unmask_enable_reg;
+@@ -210,7 +210,7 @@ static int mxs_gpio_init_gc(struct mxs_gpio_port *port, int irq_base)
+ 	ct->regs.disable = PINCTRL_PIN2IRQ(port) + MXS_CLR;
+ 
+ 	ct = &gc->chip_types[1];
+-	ct->type = IRQ_TYPE_EDGE_RISING | IRQ_TYPE_EDGE_FALLING;
++	ct->type = IRQ_TYPE_EDGE_BOTH;
+ 	ct->chip.irq_ack = irq_gc_ack_set_bit;
+ 	ct->chip.irq_mask = irq_gc_mask_disable_reg;
+ 	ct->chip.irq_unmask = irq_gc_unmask_enable_reg;
+diff --git a/drivers/gpio/gpio-omap.c b/drivers/gpio/gpio-omap.c
+index e39723b5901b..005420baecf4 100644
+--- a/drivers/gpio/gpio-omap.c
++++ b/drivers/gpio/gpio-omap.c
+@@ -432,8 +432,7 @@ static int omap_gpio_irq_type(struct irq_data *d, unsigned type)
+ 	if (type & ~IRQ_TYPE_SENSE_MASK)
+ 		return -EINVAL;
+ 
+-	if (!bank->regs->leveldetect0 &&
+-		(type & (IRQ_TYPE_LEVEL_LOW|IRQ_TYPE_LEVEL_HIGH)))
++	if (!bank->regs->leveldetect0 && (type & IRQ_TYPE_LEVEL_MASK))
+ 		return -EINVAL;
+ 
+ 	raw_spin_lock_irqsave(&bank->lock, flags);
+@@ -450,9 +449,9 @@ static int omap_gpio_irq_type(struct irq_data *d, unsigned type)
+ 	}
+ 	raw_spin_unlock_irqrestore(&bank->lock, flags);
+ 
+-	if (type & (IRQ_TYPE_LEVEL_LOW | IRQ_TYPE_LEVEL_HIGH))
++	if (type & IRQ_TYPE_LEVEL_MASK)
+ 		irq_set_handler_locked(d, handle_level_irq);
+-	else if (type & (IRQ_TYPE_EDGE_FALLING | IRQ_TYPE_EDGE_RISING))
++	else if (type & IRQ_TYPE_EDGE_BOTH)
+ 		/*
+ 		 * Edge IRQs are already cleared/acked in irq_handler and
+ 		 * not need to be masked, as result handle_edge_irq()
+@@ -702,7 +701,7 @@ static void omap_gpio_unmask_irq(struct irq_data *d)
+ 	 * after enabing the interrupt to clear the wakeup status.
+ 	 */
+ 	if (bank->regs->leveldetect0 && bank->regs->wkup_en &&
+-	    trigger & (IRQ_TYPE_LEVEL_HIGH | IRQ_TYPE_LEVEL_LOW))
++	    trigger & IRQ_TYPE_LEVEL_MASK)
+ 		omap_clear_gpio_irqstatus(bank, offset);
+ 
+ 	if (trigger)
+diff --git a/drivers/gpio/gpio-pl061.c b/drivers/gpio/gpio-pl061.c
+index 919cf86fd590..fcd44e34f65e 100644
+--- a/drivers/gpio/gpio-pl061.c
++++ b/drivers/gpio/gpio-pl061.c
+@@ -132,8 +132,7 @@ static int pl061_irq_type(struct irq_data *d, unsigned trigger)
+ 	if (offset < 0 || offset >= PL061_GPIO_NR)
+ 		return -EINVAL;
+ 
+-	if ((trigger & (IRQ_TYPE_LEVEL_HIGH | IRQ_TYPE_LEVEL_LOW)) &&
+-	    (trigger & (IRQ_TYPE_EDGE_RISING | IRQ_TYPE_EDGE_FALLING)))
++	if ((trigger & IRQ_TYPE_LEVEL_MASK) && (trigger & IRQ_TYPE_EDGE_BOTH))
+ 	{
+ 		dev_err(gc->parent,
+ 			"trying to configure line %d for both level and edge "
+@@ -149,7 +148,7 @@ static int pl061_irq_type(struct irq_data *d, unsigned trigger)
+ 	gpiois = readb(pl061->base + GPIOIS);
+ 	gpioibe = readb(pl061->base + GPIOIBE);
+ 
+-	if (trigger & (IRQ_TYPE_LEVEL_HIGH | IRQ_TYPE_LEVEL_LOW)) {
++	if (trigger & IRQ_TYPE_LEVEL_MASK) {
+ 		bool polarity = trigger & IRQ_TYPE_LEVEL_HIGH;
+ 
+ 		/* Disable edge detection */
+diff --git a/drivers/gpio/gpio-pxa.c b/drivers/gpio/gpio-pxa.c
+index 5d61053e0596..2b5da973f51f 100644
+--- a/drivers/gpio/gpio-pxa.c
++++ b/drivers/gpio/gpio-pxa.c
+@@ -406,7 +406,7 @@ static int pxa_gpio_irq_type(struct irq_data *d, unsigned int type)
+ 		if (__gpio_is_occupied(pchip, gpio))
+ 			return 0;
+ 
+-		type = IRQ_TYPE_EDGE_RISING | IRQ_TYPE_EDGE_FALLING;
++		type = IRQ_TYPE_EDGE_BOTH;
+ 	}
+ 
+ 	gpdr = readl_relaxed(c->regbase + GPDR_OFFSET);
+diff --git a/drivers/gpio/gpio-rda.c b/drivers/gpio/gpio-rda.c
+index 7bbc6f0ce4c8..f6c05fdbe63f 100644
+--- a/drivers/gpio/gpio-rda.c
++++ b/drivers/gpio/gpio-rda.c
+@@ -169,9 +169,9 @@ static int rda_gpio_irq_set_type(struct irq_data *data, unsigned int flow_type)
+ 	if (ret)
+ 		return ret;
+ 
+-	if (flow_type & (IRQ_TYPE_LEVEL_LOW | IRQ_TYPE_LEVEL_HIGH))
++	if (flow_type & IRQ_TYPE_LEVEL_MASK)
+ 		irq_set_handler_locked(data, handle_level_irq);
+-	else if (flow_type & (IRQ_TYPE_EDGE_FALLING | IRQ_TYPE_EDGE_RISING))
++	else if (flow_type & IRQ_TYPE_EDGE_BOTH)
+ 		irq_set_handler_locked(data, handle_edge_irq);
+ 
+ 	return 0;
+diff --git a/drivers/gpio/gpio-sa1100.c b/drivers/gpio/gpio-sa1100.c
+index 1938ffa2f4f3..f73489e24295 100644
+--- a/drivers/gpio/gpio-sa1100.c
++++ b/drivers/gpio/gpio-sa1100.c
+@@ -134,7 +134,7 @@ static int sa1100_gpio_type(struct irq_data *d, unsigned int type)
+ 	if (type == IRQ_TYPE_PROBE) {
+ 		if ((sgc->irqrising | sgc->irqfalling) & mask)
+ 			return 0;
+-		type = IRQ_TYPE_EDGE_RISING | IRQ_TYPE_EDGE_FALLING;
++		type = IRQ_TYPE_EDGE_BOTH;
+ 	}
+ 
+ 	if (type & IRQ_TYPE_EDGE_RISING)
+diff --git a/drivers/gpio/gpio-sodaville.c b/drivers/gpio/gpio-sodaville.c
+index 37c133837729..e2a784df275c 100644
+--- a/drivers/gpio/gpio-sodaville.c
++++ b/drivers/gpio/gpio-sodaville.c
+@@ -158,7 +158,7 @@ static int sdv_register_irqsupport(struct sdv_gpio_chip_data *sd,
+ 
+ 	sd->gc->private = sd;
+ 	ct = sd->gc->chip_types;
+-	ct->type = IRQ_TYPE_LEVEL_HIGH | IRQ_TYPE_LEVEL_LOW;
++	ct->type = IRQ_TYPE_LEVEL_MASK;
+ 	ct->regs.eoi = GPSTR;
+ 	ct->regs.mask = GPIO_INT;
+ 	ct->chip.irq_mask = irq_gc_mask_clr_bit;
+diff --git a/drivers/gpio/gpio-stmpe.c b/drivers/gpio/gpio-stmpe.c
+index 6faf30347a36..ccdf13a741b7 100644
+--- a/drivers/gpio/gpio-stmpe.c
++++ b/drivers/gpio/gpio-stmpe.c
+@@ -149,7 +149,7 @@ static int stmpe_gpio_irq_set_type(struct irq_data *d, unsigned int type)
+ 	int regoffset = offset / 8;
+ 	int mask = BIT(offset % 8);
+ 
+-	if (type & IRQ_TYPE_LEVEL_LOW || type & IRQ_TYPE_LEVEL_HIGH)
++	if (type & IRQ_TYPE_LEVEL_MASK)
+ 		return -EINVAL;
+ 
+ 	/* STMPE801 and STMPE 1600 don't have RE and FE registers */
+diff --git a/drivers/gpio/gpio-tegra.c b/drivers/gpio/gpio-tegra.c
+index fa6c8ee92093..ccda3a56d599 100644
+--- a/drivers/gpio/gpio-tegra.c
++++ b/drivers/gpio/gpio-tegra.c
+@@ -342,9 +342,9 @@ static int tegra_gpio_irq_set_type(struct irq_data *d, unsigned int type)
+ 		return ret;
+ 	}
+ 
+-	if (type & (IRQ_TYPE_LEVEL_LOW | IRQ_TYPE_LEVEL_HIGH))
++	if (type & IRQ_TYPE_LEVEL_MASK)
+ 		irq_set_handler_locked(d, handle_level_irq);
+-	else if (type & (IRQ_TYPE_EDGE_FALLING | IRQ_TYPE_EDGE_RISING))
++	else if (type & IRQ_TYPE_EDGE_BOTH)
+ 		irq_set_handler_locked(d, handle_edge_irq);
+ 
+ 	if (d->parent_data)
+diff --git a/drivers/gpio/gpio-timberdale.c b/drivers/gpio/gpio-timberdale.c
+index ec378a4220a7..727fa1b5ad3b 100644
+--- a/drivers/gpio/gpio-timberdale.c
++++ b/drivers/gpio/gpio-timberdale.c
+@@ -148,7 +148,7 @@ static int timbgpio_irq_type(struct irq_data *d, unsigned trigger)
+ 	if (ver > 2)
+ 		bflr = ioread32(tgpio->membase + TGPIO_BFLR);
+ 
+-	if (trigger & (IRQ_TYPE_LEVEL_HIGH | IRQ_TYPE_LEVEL_LOW)) {
++	if (trigger & IRQ_TYPE_LEVEL_MASK) {
+ 		bflr &= ~(1 << offset);
+ 		flr &= ~(1 << offset);
+ 		if (trigger & IRQ_TYPE_LEVEL_HIGH)
+-- 
+2.55.0
+

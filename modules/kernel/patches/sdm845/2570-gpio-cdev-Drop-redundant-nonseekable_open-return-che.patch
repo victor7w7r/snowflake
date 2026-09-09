@@ -1,0 +1,40 @@
+From 44d75ed98ddde54edc55e9300bb70ea9a7c62f4b Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 3 Jul 2026 09:09:46 +0700
+Subject: [PATCH 02570/15333] gpio: cdev: Drop redundant nonseekable_open()
+ return check
+
+nonseekable_open() never fails, so the error check is unnecessary.
+Remove the dead error handling path.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260703020947.8010-1-phucduc.bui@gmail.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/gpio/gpiolib-cdev.c | 9 +--------
+ 1 file changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/drivers/gpio/gpiolib-cdev.c b/drivers/gpio/gpiolib-cdev.c
+index 82f27db0b230..9f3b628d5793 100644
+--- a/drivers/gpio/gpiolib-cdev.c
++++ b/drivers/gpio/gpiolib-cdev.c
+@@ -2682,15 +2682,8 @@ static int gpio_chrdev_open(struct inode *inode, struct file *file)
+ 	file->private_data = cdev;
+ 	cdev->fp = file;
+ 
+-	ret = nonseekable_open(inode, file);
+-	if (ret)
+-		goto out_unregister_device_notifier;
+-
+-	return ret;
++	return nonseekable_open(inode, file);
+ 
+-out_unregister_device_notifier:
+-	blocking_notifier_chain_unregister(&gdev->device_notifier,
+-					   &cdev->device_unregistered_nb);
+ out_unregister_line_notifier:
+ 	scoped_guard(write_lock_irqsave, &gdev->line_state_lock)
+ 		raw_notifier_chain_unregister(&gdev->line_state_notifier,
+-- 
+2.55.0
+

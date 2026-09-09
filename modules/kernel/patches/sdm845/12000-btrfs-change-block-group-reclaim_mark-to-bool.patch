@@ -1,0 +1,75 @@
+From c5ac19b98587cfcb3da96e06e6beddc7ac4212d2 Mon Sep 17 00:00:00 2001
+From: Sun YangKai <sunk67188@gmail.com>
+Date: Wed, 24 Jun 2026 12:02:27 +0800
+Subject: [PATCH 12000/15333] btrfs: change block group reclaim_mark to bool
+
+The reclaim_mark field in struct btrfs_block_group was a u64 that was
+incremented when marking block groups for reclaim during sweeping, but
+the actual counter value was never used - only the zero/non-zero state
+mattered for determining if a block group needed reclaim.
+
+Convert it to a bool to properly reflect its usage and reduce memory
+footprint by 8 bytes. Update assignments to use true/false instead of
+increment and zero.
+
+Reviewed-by: Boris Burkov <boris@bur.io>
+Signed-off-by: Sun YangKai <sunk67188@gmail.com>
+Reviewed-by: David Sterba <dsterba@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/block-group.c | 2 +-
+ fs/btrfs/block-group.h | 4 +++-
+ fs/btrfs/space-info.c  | 2 +-
+ 3 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/fs/btrfs/block-group.c b/fs/btrfs/block-group.c
+index c5bcd3c03d24..076c351632c0 100644
+--- a/fs/btrfs/block-group.c
++++ b/fs/btrfs/block-group.c
+@@ -3922,7 +3922,7 @@ int btrfs_update_block_group(struct btrfs_trans_handle *trans,
+ 		old_val += num_bytes;
+ 		cache->used = old_val;
+ 		cache->reserved -= num_bytes;
+-		cache->reclaim_mark = 0;
++		cache->reclaim_mark = false;
+ 		space_info->bytes_reserved -= num_bytes;
+ 		space_info->bytes_used += num_bytes;
+ 		space_info->disk_used += num_bytes * factor;
+diff --git a/fs/btrfs/block-group.h b/fs/btrfs/block-group.h
+index 790c2d467af5..69d56864d4ba 100644
+--- a/fs/btrfs/block-group.h
++++ b/fs/btrfs/block-group.h
+@@ -263,6 +263,9 @@ struct btrfs_block_group {
+ 
+ 	enum btrfs_block_group_size_class size_class:8;
+ 
++	/* If set, this blockgroup is not used for allocation between two reclaim sweeps. */
++	bool reclaim_mark;
++
+ 	/*
+ 	 * Number of extents in this block group used for swap files.
+ 	 * All accesses protected by the spinlock 'lock'.
+@@ -281,7 +284,6 @@ struct btrfs_block_group {
+ 	struct list_head active_bg_list;
+ 	struct work_struct zone_finish_work;
+ 	struct extent_buffer *last_eb;
+-	u64 reclaim_mark;
+ };
+ 
+ static inline u64 btrfs_block_group_end(const struct btrfs_block_group *block_group)
+diff --git a/fs/btrfs/space-info.c b/fs/btrfs/space-info.c
+index e6641597b321..39a28e1bec8a 100644
+--- a/fs/btrfs/space-info.c
++++ b/fs/btrfs/space-info.c
+@@ -2156,7 +2156,7 @@ static bool do_reclaim_sweep(struct btrfs_space_info *space_info, int raid)
+ 			will_reclaim = true;
+ 			reclaim = true;
+ 		}
+-		bg->reclaim_mark++;
++		bg->reclaim_mark = true;
+ 		spin_unlock(&bg->lock);
+ 		if (reclaim)
+ 			btrfs_mark_bg_to_reclaim(bg);
+-- 
+2.55.0
+

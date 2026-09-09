@@ -1,0 +1,45 @@
+From 9969d58a9b0417393d033b24c670d57b686cabbf Mon Sep 17 00:00:00 2001
+From: Hongling Zeng <zenghongling@kylinos.cn>
+Date: Thu, 20 Aug 2026 16:14:10 +0800
+Subject: [PATCH 15119/15333] ntfs: fix resource leak in ntfs_new_attr_flags
+
+When handling resident attributes that don't need sparse/compressed
+changes, ntfs_new_attr_flags() returns 0 directly at line 678 without
+calling unmap_mft_record() or ntfs_attr_put_search_ctx(). This leaks
+the MFT record mapping and attribute search context.
+
+An unprivileged user can cause a denial of service by repeatedly
+calling setxattr(2) with system.ntfs_attrib on files with resident
+attributes, eventually exhausting kernel memory.
+
+Fix by replacing the direct return with goto err_out to ensure proper
+cleanup of resources via the existing cleanup code.
+
+Fixes: e791930240a5 ("ntfs: fix resident conversion in ntfs_new_attr_flags")
+Cc: stable@vger.kernel.org
+Signed-off-by: Hongling Zeng <zenghongling@kylinos.cn>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/ntfs/ea.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/fs/ntfs/ea.c b/fs/ntfs/ea.c
+index fcba051b514a..59e5e86e38e3 100644
+--- a/fs/ntfs/ea.c
++++ b/fs/ntfs/ea.c
+@@ -674,8 +674,10 @@ static int ntfs_new_attr_flags(struct ntfs_inode *ni, __le32 fattr)
+ 	}
+ 
+ 	if (!a->non_resident) {
+-		if (!(new_aflags & (ATTR_IS_SPARSE | ATTR_IS_COMPRESSED)))
+-			return 0;
++		if (!(new_aflags & (ATTR_IS_SPARSE | ATTR_IS_COMPRESSED))) {
++			err = 0;
++			goto err_out;
++		}
+ 
+ 		if (le32_to_cpu(a->data.resident.value_length)) {
+ 			pr_err("Can't change sparse/compressed for non-empty file");
+-- 
+2.55.0
+

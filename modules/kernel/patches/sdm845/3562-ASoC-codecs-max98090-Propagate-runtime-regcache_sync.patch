@@ -1,0 +1,50 @@
+From 181bce73427cff76d280f14d691a7d7b95baa919 Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Sat, 4 Jul 2026 12:07:47 +0800
+Subject: [PATCH 03562/15333] ASoC: codecs: max98090: Propagate runtime
+ regcache_sync() errors
+
+max98090_runtime_suspend() puts the regmap into cache-only mode. Runtime
+resume clears cache-only mode, resets the device, and replays cached
+register state with regcache_sync(), but currently ignores a failed
+replay.
+
+Return the sync error and restore cache-only/dirty state before failing
+runtime resume. This deliberately leaves the separate system-resume sync
+call unchanged because the source does not provide an equally strong
+paired system suspend/cache-only proof for that path.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Link: https://patch.msgid.link/20260704040747.56587-1-pengpeng@iscas.ac.cn
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/max98090.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/sound/soc/codecs/max98090.c b/sound/soc/codecs/max98090.c
+index bccce322ccc3..60da518b0e57 100644
+--- a/sound/soc/codecs/max98090.c
++++ b/sound/soc/codecs/max98090.c
+@@ -2646,12 +2646,18 @@ static void max98090_i2c_remove(struct i2c_client *client)
+ static int max98090_runtime_resume(struct device *dev)
+ {
+ 	struct max98090_priv *max98090 = dev_get_drvdata(dev);
++	int ret;
+ 
+ 	regcache_cache_only(max98090->regmap, false);
+ 
+ 	max98090_reset(max98090);
+ 
+-	regcache_sync(max98090->regmap);
++	ret = regcache_sync(max98090->regmap);
++	if (ret < 0) {
++		regcache_cache_only(max98090->regmap, true);
++		regcache_mark_dirty(max98090->regmap);
++		return ret;
++	}
+ 
+ 	return 0;
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,109 @@
+From 6ec12414164e9d66966909e6da08453be5b6c4cc Mon Sep 17 00:00:00 2001
+From: Thomas Huth <thuth@redhat.com>
+Date: Fri, 19 Jun 2026 13:34:41 +0200
+Subject: [PATCH 06582/15333] bitmap: Replace __ASSEMBLY__ with __ASSEMBLER__
+ in header files
+
+While the GCC and Clang compilers already define __ASSEMBLER__
+automatically when compiling assembly code, __ASSEMBLY__ is a
+macro that only gets defined by the Makefiles in the kernel.
+This can be very confusing when switching between userspace
+and kernelspace coding, or when dealing with uapi headers that
+rather should use __ASSEMBLER__ instead. So let's standardize now
+on the __ASSEMBLER__ macro that is provided by the compilers.
+
+This is a completely mechanical patch (done with a simple "sed -i"
+statement).
+
+Signed-off-by: Thomas Huth <thuth@redhat.com>
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ include/linux/bitmap.h     | 4 ++--
+ include/linux/bits.h       | 6 +++---
+ tools/include/linux/bits.h | 6 +++---
+ 3 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/include/linux/bitmap.h b/include/linux/bitmap.h
+index b007d54a9036..8854acf77869 100644
+--- a/include/linux/bitmap.h
++++ b/include/linux/bitmap.h
+@@ -2,7 +2,7 @@
+ #ifndef __LINUX_BITMAP_H
+ #define __LINUX_BITMAP_H
+ 
+-#ifndef __ASSEMBLY__
++#ifndef __ASSEMBLER__
+ 
+ #include <linux/align.h>
+ #include <linux/bitops.h>
+@@ -894,6 +894,6 @@ void bitmap_write(unsigned long *map, unsigned long value,
+ #define bitmap_set_value8(map, value, start)		\
+ 	bitmap_write(map, value, start, BITS_PER_BYTE)
+ 
+-#endif /* __ASSEMBLY__ */
++#endif /* __ASSEMBLER__ */
+ 
+ #endif /* __LINUX_BITMAP_H */
+diff --git a/include/linux/bits.h b/include/linux/bits.h
+index a40cc861b3a7..b7509f15718e 100644
+--- a/include/linux/bits.h
++++ b/include/linux/bits.h
+@@ -17,7 +17,7 @@
+  * position @h. For example
+  * GENMASK_ULL(39, 21) gives us the 64bit vector 0x000000ffffe00000.
+  */
+-#if !defined(__ASSEMBLY__)
++#if !defined(__ASSEMBLER__)
+ 
+ /*
+  * Missing asm support
+@@ -75,7 +75,7 @@
+ #define BIT_U32(nr)	BIT_TYPE(u32, nr)
+ #define BIT_U64(nr)	BIT_TYPE(u64, nr)
+ 
+-#else /* defined(__ASSEMBLY__) */
++#else /* defined(__ASSEMBLER__) */
+ 
+ /*
+  * BUILD_BUG_ON_ZERO is not available in h files included from asm files,
+@@ -84,6 +84,6 @@
+ #define GENMASK(h, l)		__GENMASK(h, l)
+ #define GENMASK_ULL(h, l)	__GENMASK_ULL(h, l)
+ 
+-#endif /* !defined(__ASSEMBLY__) */
++#endif /* !defined(__ASSEMBLER__) */
+ 
+ #endif	/* __LINUX_BITS_H */
+diff --git a/tools/include/linux/bits.h b/tools/include/linux/bits.h
+index a40cc861b3a7..b7509f15718e 100644
+--- a/tools/include/linux/bits.h
++++ b/tools/include/linux/bits.h
+@@ -17,7 +17,7 @@
+  * position @h. For example
+  * GENMASK_ULL(39, 21) gives us the 64bit vector 0x000000ffffe00000.
+  */
+-#if !defined(__ASSEMBLY__)
++#if !defined(__ASSEMBLER__)
+ 
+ /*
+  * Missing asm support
+@@ -75,7 +75,7 @@
+ #define BIT_U32(nr)	BIT_TYPE(u32, nr)
+ #define BIT_U64(nr)	BIT_TYPE(u64, nr)
+ 
+-#else /* defined(__ASSEMBLY__) */
++#else /* defined(__ASSEMBLER__) */
+ 
+ /*
+  * BUILD_BUG_ON_ZERO is not available in h files included from asm files,
+@@ -84,6 +84,6 @@
+ #define GENMASK(h, l)		__GENMASK(h, l)
+ #define GENMASK_ULL(h, l)	__GENMASK_ULL(h, l)
+ 
+-#endif /* !defined(__ASSEMBLY__) */
++#endif /* !defined(__ASSEMBLER__) */
+ 
+ #endif	/* __LINUX_BITS_H */
+-- 
+2.55.0
+

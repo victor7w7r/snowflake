@@ -1,0 +1,45 @@
+From 5e150dc65d87bc533255408185dbdbc018058289 Mon Sep 17 00:00:00 2001
+From: Mohammad Shahid <mdshahid03@gmail.com>
+Date: Fri, 3 Jul 2026 23:03:01 +0530
+Subject: [PATCH 14807/15333] ntfs: reparse: remove redundant NULL checks
+ before kvfree()
+
+kvfree() safely handles NULL pointers, so the explicit NULL checks
+before calling kvfree() are unnecessary.
+
+This issue was reported by ifnullfree.cocci.
+
+Signed-off-by: Mohammad Shahid <mdshahid03@gmail.com>
+Reviewed-by: Hyunchul Lee <hyc.lee@gmail.com>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/ntfs/reparse.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/fs/ntfs/reparse.c b/fs/ntfs/reparse.c
+index fa523dc3691e..ced4c675d91f 100644
+--- a/fs/ntfs/reparse.c
++++ b/fs/ntfs/reparse.c
+@@ -317,8 +317,7 @@ unsigned int ntfs_make_symlink(struct ntfs_inode *ni)
+ 	} else
+ 		ni->flags &= ~FILE_ATTR_REPARSE_POINT;
+ 
+-	if (reparse_attr)
+-		kvfree(reparse_attr);
++	kvfree(reparse_attr);
+ 
+ 	return mode;
+ }
+@@ -358,8 +357,7 @@ unsigned int ntfs_reparse_tag_dt_types(struct ntfs_volume *vol, unsigned long mr
+ 		}
+ 	}
+ 
+-	if (reparse_attr)
+-		kvfree(reparse_attr);
++	kvfree(reparse_attr);
+ 
+ 	iput(vi);
+ 	return dt_type;
+-- 
+2.55.0
+

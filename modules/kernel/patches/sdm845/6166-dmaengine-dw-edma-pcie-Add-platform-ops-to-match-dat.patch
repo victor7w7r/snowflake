@@ -1,0 +1,74 @@
+From f8850e66ae8b3f2809b665375ba9a7106a4779f8 Mon Sep 17 00:00:00 2001
+From: Koichiro Den <den@valinux.co.jp>
+Date: Tue, 21 Jul 2026 15:28:10 +0900
+Subject: [PATCH 06166/15333] dmaengine: dw-edma-pcie: Add platform ops to
+ match data
+
+Move the platform ops pointer into match data. Existing EDDA/MDB/CPM6
+matches keep using dw_edma_pcie_plat_ops.
+
+No functional changes intended.
+
+Suggested-by: Frank Li <Frank.Li@nxp.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Signed-off-by: Koichiro Den <den@valinux.co.jp>
+Link: https://patch.msgid.link/20260721062815.4117887-10-den@valinux.co.jp
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dw-edma/dw-edma-pcie.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/dma/dw-edma/dw-edma-pcie.c b/drivers/dma/dw-edma/dw-edma-pcie.c
+index f79597a7ccf9..99ddb6e6da34 100644
+--- a/drivers/dma/dw-edma/dw-edma-pcie.c
++++ b/drivers/dma/dw-edma/dw-edma-pcie.c
+@@ -78,6 +78,7 @@ struct dw_edma_pcie_data {
+ 
+ struct dw_edma_pcie_match_data {
+ 	const struct dw_edma_pcie_data *data;
++	const struct dw_edma_plat_ops *plat_ops;
+ 	/*
+ 	 * Mandatory callback. It may leave @pdata unchanged when the static
+ 	 * template already describes the device.
+@@ -403,7 +404,7 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
+ 	}
+ 
+ 	/* Let device-specific discovery override the static template data. */
+-	if (!match->parse_caps)
++	if (!match->parse_caps || !match->plat_ops)
+ 		return -EINVAL;
+ 
+ 	err = match->parse_caps(pdev, dma_data);
+@@ -454,7 +455,7 @@ static int dw_edma_pcie_probe(struct pci_dev *pdev,
+ 
+ 	chip->mf = dma_data->mf;
+ 	chip->nr_irqs = nr_irqs;
+-	chip->ops = &dw_edma_pcie_plat_ops;
++	chip->ops = match->plat_ops;
+ 	chip->cfg_non_ll = dma_data->cfg_non_ll;
+ 
+ 	chip->ll_wr_cnt = dma_data->wr_ch_cnt;
+@@ -593,17 +594,20 @@ static void dw_edma_pcie_remove(struct pci_dev *pdev)
+ 
+ static const struct dw_edma_pcie_match_data snps_edda_match_data = {
+ 	.data = &snps_edda_data,
++	.plat_ops = &dw_edma_pcie_plat_ops,
+ 	.parse_caps = dw_edma_pcie_parse_synopsys_caps,
+ };
+ 
+ static const struct dw_edma_pcie_match_data xilinx_mdb_match_data = {
+ 	.data = &xilinx_mdb_data,
++	.plat_ops = &dw_edma_pcie_plat_ops,
+ 	.parse_caps = dw_edma_pcie_parse_xilinx_caps,
+ 	.flags = DW_EDMA_PCIE_F_DEVMEM_PHYS_OFF,
+ };
+ 
+ static const struct dw_edma_pcie_match_data xilinx_cpm6_dma_match_data = {
+ 	.data = &xilinx_cpm6_dma_data,
++	.plat_ops = &dw_edma_pcie_plat_ops,
+ 	.parse_caps = dw_edma_pcie_parse_xilinx_caps,
+ 	.flags = DW_EDMA_PCIE_F_DEVMEM_PHYS_OFF,
+ };
+-- 
+2.55.0
+

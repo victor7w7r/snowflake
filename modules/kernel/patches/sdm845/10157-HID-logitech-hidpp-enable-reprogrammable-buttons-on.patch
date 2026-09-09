@@ -1,0 +1,82 @@
+From 81a2f7801c11c794ba3b18910006190f0f55aa4e Mon Sep 17 00:00:00 2001
+From: Elliot Douglas <edouglas7358@gmail.com>
+Date: Sat, 4 Jul 2026 16:10:35 -0700
+Subject: [PATCH 10157/15333] HID: logitech-hidpp: enable reprogrammable
+ buttons on Signature M650
+
+The Bluetooth Signature M650 exposes its side buttons through the normal
+mouse report, but the observed events are short click-like events emitted
+around release rather than physical press/release state.
+
+The device appears to use the held side-button state for its built-in
+gesture and side-button + wheel horizontal-scroll mode. As a result,
+holding a side button long enough can prevent the normal mouse report from
+emitting a usable button event at all.
+
+HID++ REPROG_CONTROLS_V4 diversion for control IDs 0x0053 and 0x0056
+provides real press and release timing for those same controls. Logitech
+documents the Signature M650 side buttons as Back/Forward buttons, so
+report the diverted controls as BTN_BACK and BTN_FORWARD.
+
+The HID++ 0x1b04 documentation lists those control IDs as Back and
+Forward. The driver still verifies that the controls are present in the
+device control table and advertised as divertable before changing their
+reporting mode.
+
+Link: https://support.logi.com/hc/en-nz/articles/4414473810583-Getting-Started-Signature-M650
+Signed-off-by: Elliot Douglas <edouglas7358@gmail.com>
+Reviewed-by: Bastien Nocera <hadess@hadess.net>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ drivers/hid/hid-logitech-hidpp.c | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/hid/hid-logitech-hidpp.c b/drivers/hid/hid-logitech-hidpp.c
+index 09b0b5e00e8b..aca48a3d385b 100644
+--- a/drivers/hid/hid-logitech-hidpp.c
++++ b/drivers/hid/hid-logitech-hidpp.c
+@@ -3624,14 +3624,30 @@ static int hidpp10_extra_mouse_buttons_raw_event(struct hidpp_device *hidpp,
+ 
+ #define HIDPP_REPROG_CONTROLS_EVENT_DIVERTED		0x00
+ 
++#define HIDPP_REPROG_CONTROL_BACK			0x0053
++#define HIDPP_REPROG_CONTROL_FORWARD			0x0056
++
++#define HIDPP_PRODUCT_SIGNATURE_M650			0xb02a
++
+ struct hidpp_reprog_control_mapping {
+ 	u16 control;
+ 	u16 code;
+ };
+ 
++static const struct hidpp_reprog_control_mapping m650_reprog_control_mappings[] = {
++	{ HIDPP_REPROG_CONTROL_BACK, BTN_BACK },
++	{ HIDPP_REPROG_CONTROL_FORWARD, BTN_FORWARD },
++	{ }
++};
++
+ static const struct hidpp_reprog_control_mapping *
+ hidpp20_reprog_controls_get_mappings(struct hidpp_device *hidpp)
+ {
++	switch (hidpp->hid_dev->product) {
++	case HIDPP_PRODUCT_SIGNATURE_M650:
++		return m650_reprog_control_mappings;
++	}
++
+ 	return NULL;
+ }
+ 
+@@ -4912,7 +4928,9 @@ static const struct hid_device_id hidpp_devices[] = {
+ 	{ /* MX Vertical mouse over Bluetooth */
+ 	  HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, 0xb020) },
+ 	{ /* Signature M650 over Bluetooth */
+-	  HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, 0xb02a) },
++	  HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH,
++			       HIDPP_PRODUCT_SIGNATURE_M650),
++	  .driver_data = HIDPP_QUIRK_HIDPP_REPROG_CONTROLS_BTNS },
+ 	{ /* MX Master 3 mouse over Bluetooth */
+ 	  HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_LOGITECH, 0xb023) },
+ 	{ /* MX Anywhere 3 mouse over Bluetooth */
+-- 
+2.55.0
+

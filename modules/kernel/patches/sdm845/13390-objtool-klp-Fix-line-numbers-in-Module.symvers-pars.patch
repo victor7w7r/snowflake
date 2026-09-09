@@ -1,0 +1,43 @@
+From 51c1de13486315ad46a74b40ec17124916a08277 Mon Sep 17 00:00:00 2001
+From: Josh Poimboeuf <jpoimboe@kernel.org>
+Date: Fri, 7 Aug 2026 14:37:54 -0700
+Subject: [PATCH 13390/15333] objtool/klp: Fix line numbers in Module.symvers
+ parse errors
+
+read_exports() reports the offending line number when it fails to parse
+Module.symvers.  The counter is initialized to 1 but never incremented,
+so every error blames line 1 regardless of where the bad line is.
+
+Acked-by: Joe Lawrence <joe.lawrence@redhat.com>
+Acked-by: Song Liu <song@kernel.org>
+Link: https://patch.msgid.link/133e16bb0c7cb916f10bbfb017eba525449ad1d6.1786138493.git.jpoimboe@kernel.org
+Signed-off-by: Josh Poimboeuf <jpoimboe@kernel.org>
+---
+ tools/objtool/klp-diff.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/tools/objtool/klp-diff.c b/tools/objtool/klp-diff.c
+index 1f05646f3e9c..cdc63abab618 100644
+--- a/tools/objtool/klp-diff.c
++++ b/tools/objtool/klp-diff.c
+@@ -118,7 +118,7 @@ static int read_exports(void)
+ {
+ 	const char *symvers = "Module.symvers";
+ 	char line[1024], *path = NULL;
+-	unsigned int line_num = 1;
++	unsigned int line_num = 0;
+ 	FILE *file;
+ 
+ 	file = fopen(symvers, "r");
+@@ -140,6 +140,8 @@ static int read_exports(void)
+ 		char *sym, *mod, *type, *namespace;
+ 		struct export *export;
+ 
++		line_num++;
++
+ 		sym = strchr(line, '\t');
+ 		if (!sym) {
+ 			ERROR("malformed Module.symvers (sym) at line %d", line_num);
+-- 
+2.55.0
+

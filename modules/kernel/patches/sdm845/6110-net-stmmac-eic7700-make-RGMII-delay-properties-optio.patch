@@ -1,0 +1,56 @@
+From 186f38935e28ae700b0fe062dcc6ab345211dcee Mon Sep 17 00:00:00 2001
+From: Zhi Li <lizhi2@eswincomputing.com>
+Date: Tue, 7 Jul 2026 14:42:17 +0800
+Subject: [PATCH 06110/15333] net: stmmac: eic7700: make RGMII delay properties
+ optional
+
+Make rx-internal-delay-ps and tx-internal-delay-ps optional in the
+EIC7700 DWMAC driver.
+
+The driver previously required both properties to be present and would
+fail probe when they were missing. This restricts valid hardware
+configurations where RGMII timing is instead provided by the PHY or
+board design.
+
+Update the driver to treat missing delay properties as zero delay,
+allowing systems without explicit MAC-side delay tuning to operate
+correctly.
+
+This aligns the driver behavior with the updated device tree binding
+and provides a safe default configuration when MAC-side delay
+programming is not required.
+
+Signed-off-by: Zhi Li <lizhi2@eswincomputing.com>
+Link: https://patch.msgid.link/20260707064218.1316-1-lizhi2@eswincomputing.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/ethernet/stmicro/stmmac/dwmac-eic7700.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac-eic7700.c b/drivers/net/ethernet/stmicro/stmmac/dwmac-eic7700.c
+index 4ac979d874d6..ec99b597aeaf 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/dwmac-eic7700.c
++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac-eic7700.c
+@@ -165,9 +165,6 @@ static int eic7700_dwmac_probe(struct platform_device *pdev)
+ 		dwc_priv->eth_clk_dly_param &= ~EIC7700_ETH_RX_ADJ_DELAY;
+ 		dwc_priv->eth_clk_dly_param |=
+ 				 FIELD_PREP(EIC7700_ETH_RX_ADJ_DELAY, val);
+-	} else {
+-		return dev_err_probe(&pdev->dev, -EINVAL,
+-			"missing required property rx-internal-delay-ps\n");
+ 	}
+ 
+ 	/* Read tx-internal-delay-ps and update tx_clk delay */
+@@ -187,9 +184,6 @@ static int eic7700_dwmac_probe(struct platform_device *pdev)
+ 		dwc_priv->eth_clk_dly_param &= ~EIC7700_ETH_TX_ADJ_DELAY;
+ 		dwc_priv->eth_clk_dly_param |=
+ 				 FIELD_PREP(EIC7700_ETH_TX_ADJ_DELAY, val);
+-	} else {
+-		return dev_err_probe(&pdev->dev, -EINVAL,
+-			"missing required property tx-internal-delay-ps\n");
+ 	}
+ 
+ 	dwc_priv->eic7700_hsp_regmap =
+-- 
+2.55.0
+

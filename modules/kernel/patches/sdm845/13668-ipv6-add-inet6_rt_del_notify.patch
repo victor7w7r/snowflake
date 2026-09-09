@@ -1,0 +1,97 @@
+From 09f19ce3de67deb859cd95315d55a69a6ca45b40 Mon Sep 17 00:00:00 2001
+From: Yuyang Huang <sigefriedhyy@gmail.com>
+Date: Sat, 8 Aug 2026 09:56:38 +0900
+Subject: [PATCH 13668/15333] ipv6: add inet6_rt_del_notify()
+
+Move the body of inet6_rt_notify() to __inet6_rt_notify() and give it
+the deletion reason. inet6_rt_notify() keeps its prototype, so the
+route addition path does not change.
+
+Add inet6_rt_del_notify() and call it from fib6_del_route().
+RTA_DEL_REASON now reaches user space on RTM_DELROUTE for routes the
+kernel deleted on its own.
+
+Signed-off-by: Yuyang Huang <sigefriedhyy@gmail.com>
+Reviewed-by: Ido Schimmel <idosch@nvidia.com>
+Link: https://patch.msgid.link/20260808005642.26901-7-sigefriedhyy@gmail.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ include/net/ip6_fib.h |  2 ++
+ net/ipv6/ip6_fib.c    |  2 +-
+ net/ipv6/route.c      | 20 ++++++++++++++++----
+ 3 files changed, 19 insertions(+), 5 deletions(-)
+
+diff --git a/include/net/ip6_fib.h b/include/net/ip6_fib.h
+index 0ba5d3c56543..232289b439c3 100644
+--- a/include/net/ip6_fib.h
++++ b/include/net/ip6_fib.h
+@@ -533,6 +533,8 @@ static inline void fib6_rt_update(struct net *net, struct fib6_info *rt,
+ #endif
+ void inet6_rt_notify(int event, struct fib6_info *rt, struct nl_info *info,
+ 		     unsigned int flags);
++void inet6_rt_del_notify(struct fib6_info *rt, struct nl_info *info,
++			 enum rt_del_reason del_reason);
+ 
+ void fib6_age_exceptions(struct fib6_info *rt, struct fib6_gc_args *gc_args,
+ 			 unsigned long now);
+diff --git a/net/ipv6/ip6_fib.c b/net/ipv6/ip6_fib.c
+index f8a9ec7fa616..3e382ba1573e 100644
+--- a/net/ipv6/ip6_fib.c
++++ b/net/ipv6/ip6_fib.c
+@@ -2057,7 +2057,7 @@ static void fib6_del_route(struct fib6_table *table, struct fib6_node *fn,
+ 			call_fib6_entry_notifiers_replace(net, replace_rt);
+ 	}
+ 	if (!info->skip_notify)
+-		inet6_rt_notify(RTM_DELROUTE, rt, info, 0);
++		inet6_rt_del_notify(rt, info, del_reason);
+ 
+ 	fib6_info_release(rt);
+ }
+diff --git a/net/ipv6/route.c b/net/ipv6/route.c
+index 1c48332bd193..ae2f93a19dd9 100644
+--- a/net/ipv6/route.c
++++ b/net/ipv6/route.c
+@@ -6378,8 +6378,9 @@ static int inet6_rtm_getroute(struct sk_buff *in_skb, struct nlmsghdr *nlh,
+ 	return err;
+ }
+ 
+-void inet6_rt_notify(int event, struct fib6_info *rt, struct nl_info *info,
+-		     unsigned int nlm_flags)
++static void __inet6_rt_notify(int event, struct fib6_info *rt,
++			      struct nl_info *info, unsigned int nlm_flags,
++			      enum rt_del_reason del_reason)
+ {
+ 	struct net *net = info->nl_net;
+ 	struct sk_buff *skb;
+@@ -6398,8 +6399,7 @@ void inet6_rt_notify(int event, struct fib6_info *rt, struct nl_info *info,
+ 		goto errout;
+ 
+ 	err = rt6_fill_node(net, skb, rt, NULL, NULL, NULL, 0,
+-			    event, info->portid, seq, nlm_flags,
+-			    RT_DEL_REASON_UNSPEC);
++			    event, info->portid, seq, nlm_flags, del_reason);
+ 	if (err < 0) {
+ 		kfree_skb(skb);
+ 		/* -EMSGSIZE implies needed space grew under us. */
+@@ -6420,6 +6420,18 @@ void inet6_rt_notify(int event, struct fib6_info *rt, struct nl_info *info,
+ 	rtnl_set_sk_err(net, RTNLGRP_IPV6_ROUTE, err);
+ }
+ 
++void inet6_rt_notify(int event, struct fib6_info *rt, struct nl_info *info,
++		     unsigned int nlm_flags)
++{
++	__inet6_rt_notify(event, rt, info, nlm_flags, RT_DEL_REASON_UNSPEC);
++}
++
++void inet6_rt_del_notify(struct fib6_info *rt, struct nl_info *info,
++			 enum rt_del_reason del_reason)
++{
++	__inet6_rt_notify(RTM_DELROUTE, rt, info, 0, del_reason);
++}
++
+ void fib6_rt_update(struct net *net, struct fib6_info *rt,
+ 		    struct nl_info *info)
+ {
+-- 
+2.55.0
+

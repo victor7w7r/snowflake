@@ -1,0 +1,48 @@
+From dd406779999fa2065ec6b7c4f80906b727041d2c Mon Sep 17 00:00:00 2001
+From: Deepanshu Kartikey <kartikey406@gmail.com>
+Date: Mon, 13 Jul 2026 07:29:46 +0530
+Subject: [PATCH 06250/15333] wifi: mac80211: don't encrypt pre-auth
+ (ETH_P_PREAUTH) frames
+
+Pre-authentication frames (ETH_P_PREAUTH, 0x88C7) are sent before
+the authentication handshake completes with the target AP, so no
+encryption key exists for them yet. Unlike normal EAPOL frames
+(ETH_P_8021X, 0x888E) which are registered as the control port
+protocol, pre-auth frames are not recognized as control port frames,
+causing the kernel to incorrectly assign the current AP's key and
+attempt encryption, resulting in a WARN_ON in ieee80211_encrypt_tx_skb
+when the cipher is not handled.
+
+Fix this by setting IEEE80211_TX_INTFL_DONT_ENCRYPT for pre-auth
+frames in ieee80211_tx_h_check_control_port_protocol(), so that
+key selection skips them and they are sent unencrypted as intended.
+
+Note that the only driver hitting this path is hwsim.
+
+Reported-by: syzbot+b6ce23950fd636e6efb6@syzkaller.appspotmail.com
+Closes: https://syzkaller.appspot.com/bug?extid=b6ce23950fd636e6efb6
+Signed-off-by: Deepanshu Kartikey <kartikey406@gmail.com>
+Link: https://patch.msgid.link/20260713015946.44636-1-kartikey406@gmail.com
+[add note about hwsim, fix subject]
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ net/mac80211/tx.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
+index 42cfd76850b8..eb36f1b9771b 100644
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -557,6 +557,9 @@ ieee80211_tx_h_check_control_port_protocol(struct ieee80211_tx_data *tx)
+ 		info->flags |= IEEE80211_TX_CTL_USE_MINRATE;
+ 	}
+ 
++	if (tx->skb->protocol == htons(ETH_P_PREAUTH))
++		info->flags |= IEEE80211_TX_INTFL_DONT_ENCRYPT;
++
+ 	return TX_CONTINUE;
+ }
+ 
+-- 
+2.55.0
+

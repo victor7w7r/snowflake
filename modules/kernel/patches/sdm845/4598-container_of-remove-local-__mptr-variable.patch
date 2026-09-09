@@ -1,0 +1,75 @@
+From f9e7a7564834af3e1239fbb9a4161f448edd04fa Mon Sep 17 00:00:00 2001
+From: Vincent Mailhol <mailhol@kernel.org>
+Date: Tue, 14 Jul 2026 20:18:03 +0200
+Subject: [PATCH 04598/15333] container_of: remove local __mptr variable
+
+container_of() can be called in a nested manner to retrieve the grand
+parent structure as illustrated below:
+
+	struct foo {
+		int a;
+	};
+
+	struct bar {
+		struct foo foo;
+	};
+
+	#define to_foo(a_ptr) container_of(a_ptr, struct foo, a)
+	#define to_bar(a_ptr) container_of(to_foo(a_ptr), struct bar, foo)
+
+The issue is that the above construct will cause __mptr, the local
+variable of container_of(), to shadow itself because of the nested
+call. This then triggers a warning in sparse and W=2 builds.
+
+While this warning is benign, it still causes some overhead as proven by
+below list of commits in which people made local workarounds:
+
+  - commit 7eab14de73a8 ("mdio, phy: fix -Wshadow warnings triggered by
+    nested container_of()")
+
+  - commit 8d8c3131248d ("clk: define to_clk_regmap() as inline
+    function")
+
+  - commit bfb972c5e1cb ("IB/verbs: avoid nested container_of()")
+
+  - commit 093adbcedf12 ("btrfs: switch helper macros to static inlines
+    in sysfs.h")
+
+  - commit c1d35dfa0f7d ("rt2x00: Fix sparse warning on nested
+    container_of()")
+
+(the list is probably not exhaustive).
+
+As a matter of fact, the local variable __mptr is only used once in
+container_of(). As such, it is not strictly needed. Inline that local
+__mptr variable to remove once and for all the risk of variable
+shadowing when nesting container_of() and prevent people from writing
+further local fixes.
+
+Signed-off-by: Vincent Mailhol <mailhol@kernel.org>
+Link: https://patch.msgid.link/20260714-containerof_refactor-v1-3-b5c31164d2ad@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ include/linux/container_of.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/include/linux/container_of.h b/include/linux/container_of.h
+index 68153170db32..28db38e9ee3e 100644
+--- a/include/linux/container_of.h
++++ b/include/linux/container_of.h
+@@ -17,11 +17,10 @@
+  * Do not use container_of() in new code.
+  */
+ #define container_of(ptr, type, member) ({				\
+-	void *__mptr = (void *)(ptr);					\
+ 	static_assert(__same_type(*(ptr), typeof_member(type, member)) || \
+ 		      __same_type(*(ptr), void),			\
+ 		      "pointer type mismatch in container_of()");	\
+-	(type *)(__mptr - offsetof(type, member)); })
++	(type *)((void *)(ptr) - offsetof(type, member)); })
+ 
+ /**
+  * container_of_const - cast a member of a structure out to the containing
+-- 
+2.55.0
+

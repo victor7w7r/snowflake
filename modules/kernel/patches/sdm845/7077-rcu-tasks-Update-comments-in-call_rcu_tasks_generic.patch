@@ -1,0 +1,39 @@
+From 5976694882f6ebccd0cf7c81a6fdf5c1e08d9d67 Mon Sep 17 00:00:00 2001
+From: Zqiang <qiang.zhang@linux.dev>
+Date: Mon, 13 Jul 2026 18:31:26 +0800
+Subject: [PATCH 07077/15333] rcu-tasks: Update comments in
+ call_rcu_tasks_generic()
+
+This commit updates the comment "We can't create the thread unless
+interrupts are enabled." from 'commit 4929c913bda5 ("rcu: Make
+call_rcu_tasks() tolerate first call with irqs disabled")' to be more
+clear and also to cover deferred wakeup and to take into account the fact
+that kthread creation has been move to core_initcall() time by 'commit
+c63eb17ff06d ("rcu: Create call_rcu_tasks() kthread at boot time")'.
+
+Signed-off-by: Zqiang <qiang.zhang@linux.dev>
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ kernel/rcu/tasks.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/rcu/tasks.h b/kernel/rcu/tasks.h
+index 79aa5d51388c..bc49698a3bcc 100644
+--- a/kernel/rcu/tasks.h
++++ b/kernel/rcu/tasks.h
+@@ -395,7 +395,11 @@ static void call_rcu_tasks_generic(struct rcu_head *rhp, rcu_callback_t func,
+ 		raw_spin_unlock_irqrestore(&rtp->cbs_gbl_lock, flags);
+ 	}
+ 	rcu_read_unlock();
+-	/* We can't create the thread unless interrupts are enabled. */
++	// We can't create the kthread with interrupts disabled because a
++	// scheduler spinlock might be held, so kthread creation is deferred
++	// until core_initcall() time.  Similarly, wakeups are deferred using
++	// irq_work in order to avoid potential scheduler-lock-deadlock
++	// lockdep splats.
+ 	if (needwake && READ_ONCE(rtp->kthread_ptr))
+ 		irq_work_queue(&rtpcp->rtp_irq_work);
+ }
+-- 
+2.55.0
+

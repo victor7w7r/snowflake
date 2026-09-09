@@ -1,0 +1,36 @@
+From 16ca59d36bce02de9ad57b939cd6741ca3cd91e9 Mon Sep 17 00:00:00 2001
+From: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Date: Sat, 25 Jul 2026 01:54:46 -0700
+Subject: [PATCH 12147/15333] Bluetooth: btusb: Simplify btusb_recv_bulk() by
+ hci_acl_dlen()
+
+Simplify btusb_recv_bulk() by using hci_acl_dlen() instead of:
+
+__le16 dlen = hci_acl_hdr(skb)->dlen;
+... __le16_to_cpu(dlen) ...
+
+Signed-off-by: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ drivers/bluetooth/btusb.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
+index b06784ad955c..be82bbbc1b5c 100644
+--- a/drivers/bluetooth/btusb.c
++++ b/drivers/bluetooth/btusb.c
+@@ -1379,10 +1379,8 @@ static int btusb_recv_bulk(struct btusb_data *data, void *buffer, int count)
+ 		hci_skb_expect(skb) -= len;
+ 
+ 		if (skb->len == HCI_ACL_HDR_SIZE) {
+-			__le16 dlen = hci_acl_hdr(skb)->dlen;
+-
+ 			/* Complete ACL header */
+-			hci_skb_expect(skb) = __le16_to_cpu(dlen);
++			hci_skb_expect(skb) = hci_acl_dlen(skb);
+ 
+ 			if (skb_tailroom(skb) < hci_skb_expect(skb)) {
+ 				kfree_skb(skb);
+-- 
+2.55.0
+

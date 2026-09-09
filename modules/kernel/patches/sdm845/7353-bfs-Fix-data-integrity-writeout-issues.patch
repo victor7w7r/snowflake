@@ -1,0 +1,105 @@
+From 0cee81a3fd9f1383f7ae169419a49df8c6f66281 Mon Sep 17 00:00:00 2001
+From: Jan Kara <jack@suse.cz>
+Date: Mon, 27 Jul 2026 12:49:33 +0200
+Subject: [PATCH 07353/15333] bfs: Fix data integrity writeout issues
+
+BFS could fail to properly write out inode on fsync(2) due to races with
+WB_SYNC_NONE writeback. Several racing fsyncs could also result in some
+fsync returning earlier than all metadata buffers were properly
+persisted.
+
+Fix all these issues by using new .sync_inode_metadata method which
+makes sure all inode related metadata is written to disk during any
+WB_SYNC_ALL writeback.
+
+Signed-off-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260727104923.3828017-35-jack@suse.cz
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/bfs/dir.c   |  9 +--------
+ fs/bfs/inode.c | 30 ++++++++++++++++++++++++------
+ 2 files changed, 25 insertions(+), 14 deletions(-)
+
+diff --git a/fs/bfs/dir.c b/fs/bfs/dir.c
+index 5b40ab09a796..9b37ec4bd89a 100644
+--- a/fs/bfs/dir.c
++++ b/fs/bfs/dir.c
+@@ -68,17 +68,10 @@ static int bfs_readdir(struct file *f, struct dir_context *ctx)
+ 	return 0;
+ }
+ 
+-static int bfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
+-{
+-	return mmb_fsync(file,
+-			&BFS_I(file->f_mapping->host)->i_metadata_bhs,
+-			start, end, datasync);
+-}
+-
+ const struct file_operations bfs_dir_operations = {
+ 	.read		= generic_read_dir,
+ 	.iterate_shared	= bfs_readdir,
+-	.fsync		= bfs_fsync,
++	.fsync		= simple_fsync,
+ 	.llseek		= generic_file_llseek,
+ };
+ 
+diff --git a/fs/bfs/inode.c b/fs/bfs/inode.c
+index e41efdd35db9..06e3a848b4ef 100644
+--- a/fs/bfs/inode.c
++++ b/fs/bfs/inode.c
+@@ -136,7 +136,6 @@ static int bfs_write_inode(struct inode *inode, struct writeback_control *wbc)
+ 	unsigned long i_sblock;
+ 	struct bfs_inode *di;
+ 	struct buffer_head *bh;
+-	int err = 0;
+ 
+ 	dprintf("ino=%08x\n", ino);
+ 
+@@ -165,13 +164,31 @@ static int bfs_write_inode(struct inode *inode, struct writeback_control *wbc)
+ 	di->i_eoffset = cpu_to_le32(i_sblock * BFS_BSIZE + inode->i_size - 1);
+ 
+ 	mark_buffer_dirty(bh);
+-	if (wbc->sync_mode == WB_SYNC_ALL) {
+-		sync_dirty_buffer(bh);
+-		if (buffer_req(bh) && !buffer_uptodate(bh))
+-			err = -EIO;
+-	}
+ 	brelse(bh);
+ 	mutex_unlock(&info->bfs_lock);
++	set_inode_metadata_writeback(inode);
++	return 0;
++}
++
++static int bfs_sync_inode_metadata(struct inode *inode,
++				   struct writeback_control *wbc)
++{
++	int err = 0;
++	struct bfs_inode *di;
++	struct buffer_head *bh;
++
++	di = find_inode(inode->i_sb, (u16)inode->i_ino, &bh);
++	if (IS_ERR(di))
++		return PTR_ERR(di);
++
++	sync_dirty_buffer(bh);
++	if (buffer_write_io_error(bh)) {
++		err = -EIO;
++		goto out;
++	}
++	err = mmb_sync(&BFS_I(inode)->i_metadata_bhs);
++out:
++	brelse(bh);
+ 	return err;
+ }
+ 
+@@ -302,6 +319,7 @@ static const struct super_operations bfs_sops = {
+ 	.alloc_inode	= bfs_alloc_inode,
+ 	.free_inode	= bfs_free_inode,
+ 	.write_inode	= bfs_write_inode,
++	.sync_inode_metadata = bfs_sync_inode_metadata,
+ 	.evict_inode	= bfs_evict_inode,
+ 	.put_super	= bfs_put_super,
+ 	.statfs		= bfs_statfs,
+-- 
+2.55.0
+

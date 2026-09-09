@@ -1,0 +1,59 @@
+From c2b9620359b759d2c73be47689b3a344cb4e091b Mon Sep 17 00:00:00 2001
+From: Richard Zhu <hongxing.zhu@nxp.com>
+Date: Wed, 15 Jul 2026 15:30:24 +0800
+Subject: [PATCH 05954/15333] PCI: imx6: Add runtime PM support for i.MX95
+
+Enable runtime PM support for i.MX95 PCIe Root Complex to allow dynamic
+power management when the PCIe link is idle.
+
+The i.MX95 PCIe controller supports entering D3hot state when PCIe
+devices are not actively in use. This implementation uses
+pm_runtime_no_callbacks() to leverage the PCI core's generic runtime PM
+handling. The PCI core automatically manages D-state transitions based
+on the runtime PM state of connected endpoint devices.
+
+Signed-off-by: Richard Zhu <hongxing.zhu@nxp.com>
+Signed-off-by: Manivannan Sadhasivam <mani@kernel.org>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260715073024.1377228-1-hongxing.zhu@oss.nxp.com
+---
+ drivers/pci/controller/dwc/pci-imx6.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/pci/controller/dwc/pci-imx6.c b/drivers/pci/controller/dwc/pci-imx6.c
+index afcf3b6bf3cd..19a7b7349296 100644
+--- a/drivers/pci/controller/dwc/pci-imx6.c
++++ b/drivers/pci/controller/dwc/pci-imx6.c
+@@ -121,6 +121,7 @@ enum imx_pcie_variants {
+ #define IMX_PCIE_FLAG_SKIP_L23_READY		BIT(12)
+ /* Preserve MSI capability for platforms that require it */
+ #define IMX_PCIE_FLAG_KEEP_MSI_CAP		BIT(13)
++#define IMX_PCIE_FLAG_PM_RUNTIME		BIT(14)
+ 
+ #define imx_check_flag(pci, val)	(pci->drvdata->flags & val)
+ 
+@@ -1965,6 +1966,13 @@ static int imx_pcie_probe(struct platform_device *pdev)
+ 		 */
+ 		imx_pcie_add_lut_by_rid(imx_pcie, 0);
+ 	} else {
++		if (imx_pcie->drvdata->flags & IMX_PCIE_FLAG_PM_RUNTIME) {
++			pm_runtime_no_callbacks(dev);
++			ret = devm_pm_runtime_set_active_enabled(dev);
++			if (ret < 0)
++				return ret;
++		}
++
+ 		if (imx_check_flag(imx_pcie, IMX_PCIE_FLAG_SKIP_L23_READY))
+ 			pci->pp.skip_l23_ready = true;
+ 		if (imx_check_flag(imx_pcie, IMX_PCIE_FLAG_KEEP_MSI_CAP))
+@@ -2113,6 +2121,7 @@ static const struct imx_pcie_drvdata drvdata[] = {
+ 		.flags = IMX_PCIE_FLAG_HAS_SERDES |
+ 			 IMX_PCIE_FLAG_HAS_LUT |
+ 			 IMX_PCIE_FLAG_8GT_ECN_ERR051586 |
++			 IMX_PCIE_FLAG_PM_RUNTIME |
+ 			 IMX_PCIE_FLAG_SUPPORTS_SUSPEND,
+ 		.ltssm_off = IMX95_PE0_GEN_CTRL_3,
+ 		.ltssm_mask = IMX95_PCIE_LTSSM_EN,
+-- 
+2.55.0
+

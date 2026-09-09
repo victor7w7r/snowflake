@@ -1,0 +1,35 @@
+From bfafeb04a0402c04aa357ed93ab9dfe44b1c4a30 Mon Sep 17 00:00:00 2001
+From: Qiang Ma <maqianga@uniontech.com>
+Date: Thu, 18 Jun 2026 16:52:17 +0800
+Subject: [PATCH 03824/15333] KVM: SVM: Remove redundant ret = 0 in
+ svm_set_nested_state
+
+In svm_set_nested_state(), the success path reaches out_free with
+ret already set to 0 from nested_svm_load_cr3(). The explicit
+'ret = 0' assignment before out_free is therefore redundant.
+Remove it.
+
+No functional change.
+
+Signed-off-by: Qiang Ma <maqianga@uniontech.com>
+Link: https://patch.msgid.link/20260618085217.3934985-1-maqianga@uniontech.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/svm/nested.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/arch/x86/kvm/svm/nested.c b/arch/x86/kvm/svm/nested.c
+index ba985a02208a..2d667a581f81 100644
+--- a/arch/x86/kvm/svm/nested.c
++++ b/arch/x86/kvm/svm/nested.c
+@@ -2101,7 +2101,6 @@ static int svm_set_nested_state(struct kvm_vcpu *vcpu,
+ 		kvm_make_request(KVM_REQ_APICV_UPDATE, vcpu);
+ 
+ 	kvm_make_request(KVM_REQ_GET_NESTED_STATE_PAGES, vcpu);
+-	ret = 0;
+ out_free:
+ 	kfree(save);
+ 	kfree(ctl);
+-- 
+2.55.0
+

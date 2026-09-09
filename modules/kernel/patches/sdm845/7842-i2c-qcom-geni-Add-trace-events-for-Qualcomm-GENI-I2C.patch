@@ -1,0 +1,77 @@
+From f957616d55a829b4695e56d179569f38971b35de Mon Sep 17 00:00:00 2001
+From: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Date: Fri, 3 Jul 2026 20:38:10 +0530
+Subject: [PATCH 07842/15333] i2c: qcom-geni: Add trace events for Qualcomm
+ GENI I2C driver
+
+Add trace event definitions for the Qualcomm GENI (Generic Interface)
+I2C driver. These trace events enable runtime debugging and performance
+analysis of I2C operations.
+
+The trace events capture I2C clock configuration, interrupt status and
+error code and message.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Signed-off-by: Andi Shyti <andi.shyti@kernel.org>
+Link: https://lore.kernel.org/r/20260703-add-tracepoints-for-qcom-geni-i2c-v2-2-e8bf8b178290@oss.qualcomm.com
+---
+ drivers/i2c/busses/i2c-qcom-geni.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/drivers/i2c/busses/i2c-qcom-geni.c b/drivers/i2c/busses/i2c-qcom-geni.c
+index ec0bd10e6774..dd488df45c4c 100644
+--- a/drivers/i2c/busses/i2c-qcom-geni.c
++++ b/drivers/i2c/busses/i2c-qcom-geni.c
+@@ -1,6 +1,9 @@
+ // SPDX-License-Identifier: GPL-2.0
+ // Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+ 
++#define CREATE_TRACE_POINTS
++#include <trace/events/qcom_geni_i2c.h>
++
+ #include <linux/acpi.h>
+ #include <linux/clk.h>
+ #include <linux/dmaengine.h>
+@@ -225,6 +228,9 @@ static int qcom_geni_i2c_conf(struct geni_se *se, unsigned long freq)
+ 	val |= itr->t_low_cnt << LOW_COUNTER_SHFT;
+ 	val |= itr->t_cycle_cnt;
+ 	writel_relaxed(val, gi2c->se.base + SE_I2C_SCL_COUNTERS);
++	trace_geni_i2c_bus_setup(gi2c->se.dev, gi2c->clk_freq_out,
++				 itr->clk_div, itr->t_high_cnt,
++				 itr->t_low_cnt, itr->t_cycle_cnt);
+ 	return 0;
+ }
+ 
+@@ -258,6 +264,8 @@ static void geni_i2c_err(struct geni_i2c_dev *gi2c, int err)
+ 		dev_dbg(gi2c->se.dev, "len:%d, slv-addr:0x%x, RD/WR:%d\n",
+ 			gi2c->cur->len, gi2c->cur->addr, gi2c->cur->flags);
+ 
++	trace_geni_i2c_err(gi2c->se.dev, gi2c_log[err].err, gi2c_log[err].msg);
++
+ 	switch (err) {
+ 	case GENI_ABORT_DONE:
+ 	case ADDR_NACK:
+@@ -301,6 +309,8 @@ static irqreturn_t geni_i2c_irq(int irq, void *dev)
+ 	dma = readl_relaxed(base + SE_GENI_DMA_MODE_EN);
+ 	cur = gi2c->cur;
+ 
++	trace_geni_i2c_irq(gi2c->se.dev, m_stat, rx_st, dm_tx_st, dm_rx_st);
++
+ 	if (!cur ||
+ 	    m_stat & (M_CMD_FAILURE_EN | M_CMD_ABORT_EN) ||
+ 	    dm_rx_st & (DM_I2C_CB_ERR)) {
+@@ -820,6 +830,10 @@ static int geni_i2c_gpi_xfer(struct geni_i2c_dev *gi2c, struct i2c_msg msgs[], i
+ 	peripheral.set_config = 1;
+ 	peripheral.multi_msg = false;
+ 
++	trace_geni_i2c_bus_setup(gi2c->se.dev, gi2c->clk_freq_out,
++				 itr->clk_div, itr->t_high_cnt,
++				 itr->t_low_cnt, itr->t_cycle_cnt);
++
+ 	gi2c->num_msgs = num;
+ 	gi2c->is_tx_multi_desc_xfer = false;
+ 
+-- 
+2.55.0
+

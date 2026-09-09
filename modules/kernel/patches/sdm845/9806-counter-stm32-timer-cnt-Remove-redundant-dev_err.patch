@@ -1,0 +1,50 @@
+From 505d48c93896948c9a430fa96a303af114566db9 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Wed, 15 Jul 2026 21:50:28 +0800
+Subject: [PATCH 09806/15333] counter: stm32-timer-cnt: Remove redundant
+ dev_err()
+
+devm_request_irq() automatically logs detailed error messages on
+failure. Remove the now-redundant driver-specific dev_err() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Reviewed-by: Joshua Crofts <joshua.crofts1@gmail.com>
+Link: https://lore.kernel.org/r/20260715135030.326290-2-panchuang@vivo.com
+Signed-off-by: William Breathitt Gray <wbg@kernel.org>
+---
+ drivers/counter/stm32-timer-cnt.c | 10 ++--------
+ 1 file changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/counter/stm32-timer-cnt.c b/drivers/counter/stm32-timer-cnt.c
+index 3d3384cbea87..954a22dabb99 100644
+--- a/drivers/counter/stm32-timer-cnt.c
++++ b/drivers/counter/stm32-timer-cnt.c
+@@ -760,11 +760,8 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
+ 		/* All events reported through the global interrupt */
+ 		ret = devm_request_irq(&pdev->dev, ddata->irq[0], stm32_timer_cnt_isr,
+ 				       0, dev_name(dev), counter);
+-		if (ret) {
+-			dev_err(dev, "Failed to request irq %d (err %d)\n",
+-				ddata->irq[0], ret);
++		if (ret)
+ 			return ret;
+-		}
+ 	} else {
+ 		for (i = 0; i < priv->nr_irqs; i++) {
+ 			/*
+@@ -776,11 +773,8 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
+ 
+ 			ret = devm_request_irq(&pdev->dev, ddata->irq[i], stm32_timer_cnt_isr,
+ 					       0, dev_name(dev), counter);
+-			if (ret) {
+-				dev_err(dev, "Failed to request irq %d (err %d)\n",
+-					ddata->irq[i], ret);
++			if (ret)
+ 				return ret;
+-			}
+ 		}
+ 	}
+ 
+-- 
+2.55.0
+

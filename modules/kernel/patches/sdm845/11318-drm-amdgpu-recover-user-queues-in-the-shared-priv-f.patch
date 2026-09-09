@@ -1,0 +1,77 @@
+From e9e0bd23b55aec41f45d46007cb3cb38d40f552b Mon Sep 17 00:00:00 2001
+From: Jesse Zhang <Jesse.Zhang@amd.com>
+Date: Fri, 31 Jul 2026 12:36:25 +0800
+Subject: [PATCH 11318/15333] drm/amdgpu: recover user queues in the shared
+ priv-fault helper
+
+If a priv/bad-op fault does not match a kernel queue slot, it belongs to a
+MES-scheduled user queue. Extend the shared amdgpu_gfx_handle_priv_fault()
+helper introduced by commit d8ab7636160e ("drm/amd/amdgpu: remove
+duplicated code in gfx_v11 and gfx_v12") to recover it: gate on
+adev->gfx.disable_uq, reset a compute user queue directly from its
+doorbell, and for a gfx user queue (whose IV carries no doorbell) record
+the HW slot and schedule the per-IP recovery worker.
+
+v2:
+ - gate on adev->gfx.disable_uq instead of !adev->enable_mes (Alex)
+ - document why both the doorbell (compute) and HW-slot (gfx) reset
+   paths are needed (Alex)
+
+v3:
+ - rebase amd-staging-drm-next. adapt to the
+   commit 9243cf4777fc ("drm/amd/amdgpu: remove duplicated code in gfx_v11 and gfx_v12");
+   no functional change
+
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Suggested-by: Mario Sopena-Novales <Mario.Novales@amd.com>
+Signed-off-by: Jesse Zhang <Jesse.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c | 20 +++++++++++++++++---
+ 1 file changed, 17 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+index 4d21d83451a4..a6f95ff47d24 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+@@ -866,7 +866,8 @@ int amdgpu_gfx_enable_kgq(struct amdgpu_device *adev, int xcc_id)
+  * @queue_id: queue ID of the faulty ring
+  *
+  * This function handles privileged instruction faults by identifying
+- * the faulty ring (gfx or compute) and triggering a scheduler fault
++ * the faulty ring (gfx or compute) and triggering a scheduler fault, or by
++ * recovering the faulting user queue.
+  */
+ void amdgpu_gfx_handle_priv_fault(struct amdgpu_device *adev,
+ 					struct amdgpu_iv_entry *entry,
+@@ -901,12 +902,25 @@ void amdgpu_gfx_handle_priv_fault(struct amdgpu_device *adev,
+ 		}
+ 	}
+ 
++	/* No KQ matched: the faulting slot belongs to a user queue. */
++	if (adev->gfx.disable_uq)
++		return;
++
+ 	doorbell_offset = entry->src_data[0] & AMDGPU_CTXID0_DOORBELL_ID_MASK;
+ 
+-	/* No KQ matched: HW slot is a MES-scheduled user queue. */
+-	if (adev->enable_mes && doorbell_offset)
++	/*
++	 * A compute user-queue fault IV carries the doorbell offset, so reset
++	 * the queue directly from it. A gfx user-queue fault is raised by the
++	 * ME and carries only the HW slot (no doorbell); record the slot and
++	 * let the worker read the doorbell back from the HQD.
++	 */
++	if (doorbell_offset) {
+ 		amdgpu_userq_process_reset_irq(adev, entry->pasid,
+ 					       doorbell_offset);
++	} else {
++		set_bit(pipe_id | (queue_id << 2), &adev->gfx.userq_priv_fault_slots);
++		schedule_work(&adev->gfx.userq_priv_fault_work);
++	}
+ }
+ 
+ static void amdgpu_gfx_do_off_ctrl(struct amdgpu_device *adev, bool enable,
+-- 
+2.55.0
+

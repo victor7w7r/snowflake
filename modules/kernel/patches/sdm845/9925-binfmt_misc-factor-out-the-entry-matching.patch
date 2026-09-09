@@ -1,0 +1,102 @@
+From f9321c9f95a819aa298d81ad5f5c3b83d8c62698 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Fri, 10 Jul 2026 11:33:14 +0200
+Subject: [PATCH 09925/15333] binfmt_misc: factor out the entry matching
+
+search_binfmt_handler() open-codes both match types in one loop body
+with the maskless magic comparison spelled as a manual xor loop that
+is just memcmp() in disguise. Move the extension and magic checks
+into helpers so the walk reads as policy - skip disabled entries,
+match by entry type - and the maskless case actually uses memcmp().
+
+No functional change.
+
+Link: https://patch.msgid.link/20260710-work-binfmt_misc-locking-v3-13-a162f7cb58d6@kernel.org
+Reviewed-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/binfmt_misc.c | 50 ++++++++++++++++++++++++++++--------------------
+ 1 file changed, 29 insertions(+), 21 deletions(-)
+
+diff --git a/fs/binfmt_misc.c b/fs/binfmt_misc.c
+index c1abd4fec7d7..f6b75f1ed06c 100644
+--- a/fs/binfmt_misc.c
++++ b/fs/binfmt_misc.c
+@@ -78,6 +78,29 @@ static struct file_system_type bm_fs_type;
+  */
+ #define MAX_REGISTER_LENGTH 1920
+ 
++/* Check if @e's magic matches @bprm's buffer, applying the mask if set. */
++static bool entry_matches_magic(const struct binfmt_misc_entry *e,
++				const struct linux_binprm *bprm)
++{
++	const char *s = bprm->buf + e->offset;
++	int i;
++
++	if (!e->mask)
++		return !memcmp(s, e->magic, e->size);
++
++	for (i = 0; i < e->size; i++)
++		if ((s[i] ^ e->magic[i]) & e->mask[i])
++			return false;
++	return true;
++}
++
++/* Check if @e's registered extension matches @ext, NULL if there is none. */
++static bool entry_matches_extension(const struct binfmt_misc_entry *e,
++				    const char *ext)
++{
++	return ext && !strcmp(e->magic, ext);
++}
++
+ /**
+  * search_binfmt_handler - search for a binary handler for @bprm
+  * @misc: handle to binfmt_misc instance
+@@ -93,38 +116,23 @@ static struct file_system_type bm_fs_type;
+ static struct binfmt_misc_entry *
+ search_binfmt_handler(struct binfmt_misc *misc, struct linux_binprm *bprm)
+ {
+-	char *p = strrchr(bprm->interp, '.');
++	char *dot = strrchr(bprm->interp, '.');
++	const char *ext = dot ? dot + 1 : NULL;
+ 	struct binfmt_misc_entry *e;
+ 
+ 	/* Walk all the registered handlers. */
+ 	hlist_for_each_entry_rcu(e, &misc->entries, node) {
+-		char *s;
+-		int j;
+-
+ 		/* Make sure this one is currently enabled. */
+ 		if (!test_bit(MISC_FMT_ENABLED_BIT, &e->flags))
+ 			continue;
+ 
+-		/* Do matching based on extension if applicable. */
+-		if (!test_bit(MISC_FMT_MAGIC_BIT, &e->flags)) {
+-			if (p && !strcmp(e->magic, p + 1))
++		if (test_bit(MISC_FMT_MAGIC_BIT, &e->flags)) {
++			if (entry_matches_magic(e, bprm))
+ 				return e;
+-			continue;
+-		}
+-
+-		/* Do matching based on magic & mask. */
+-		s = bprm->buf + e->offset;
+-		if (e->mask) {
+-			for (j = 0; j < e->size; j++)
+-				if ((*s++ ^ e->magic[j]) & e->mask[j])
+-					break;
+ 		} else {
+-			for (j = 0; j < e->size; j++)
+-				if ((*s++ ^ e->magic[j]))
+-					break;
++			if (entry_matches_extension(e, ext))
++				return e;
+ 		}
+-		if (j == e->size)
+-			return e;
+ 	}
+ 
+ 	return NULL;
+-- 
+2.55.0
+

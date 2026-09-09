@@ -1,0 +1,48 @@
+From 4fddda16f939b6ee53c6946ad71a2ea1fabf43c5 Mon Sep 17 00:00:00 2001
+From: Ajay Kumar Nandam <ajay.nandam@oss.qualcomm.com>
+Date: Wed, 15 Jul 2026 17:25:14 +0530
+Subject: [PATCH 05125/15333] ASoC: codecs: lpass-va-macro: check
+ clk_set_rate() return value
+
+clk_set_rate() returns 0 on success or a negative errno on failure but
+the VA macro probe function is ignoring it. Check the return value and
+bail out of probe on failure.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Ajay Kumar Nandam <ajay.nandam@oss.qualcomm.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/20260715-xo-sd-codec-wsa-va-clk-set-rate-v2-2-16ca64c2b929@oss.qualcomm.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/lpass-va-macro.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/codecs/lpass-va-macro.c b/sound/soc/codecs/lpass-va-macro.c
+index 946051698420..dbc5795b9273 100644
+--- a/sound/soc/codecs/lpass-va-macro.c
++++ b/sound/soc/codecs/lpass-va-macro.c
+@@ -1605,7 +1605,9 @@ static int va_macro_probe(struct platform_device *pdev)
+ 	va->has_npl_clk = data->has_npl_clk;
+ 
+ 	/* mclk rate */
+-	clk_set_rate(va->mclk, 2 * VA_MACRO_MCLK_FREQ);
++	ret = clk_set_rate(va->mclk, 2 * VA_MACRO_MCLK_FREQ);
++	if (ret)
++		goto err;
+ 
+ 	if (va->has_npl_clk) {
+ 		va->npl = devm_clk_get(dev, "npl");
+@@ -1614,7 +1616,9 @@ static int va_macro_probe(struct platform_device *pdev)
+ 			goto err;
+ 		}
+ 
+-		clk_set_rate(va->npl, 2 * VA_MACRO_MCLK_FREQ);
++		ret = clk_set_rate(va->npl, 2 * VA_MACRO_MCLK_FREQ);
++		if (ret)
++			goto err;
+ 	}
+ 
+ 	ret = devm_pm_clk_create(dev);
+-- 
+2.55.0
+

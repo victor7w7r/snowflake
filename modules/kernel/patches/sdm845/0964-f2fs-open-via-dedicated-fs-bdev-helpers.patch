@@ -1,0 +1,50 @@
+From 03d0c37ccf5e587a9c6ca7c4fc8916b42d0ab200 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 16 Jun 2026 16:08:31 +0200
+Subject: [PATCH 00964/15333] f2fs: open via dedicated fs bdev helpers
+
+Route the extra device opens of a multi-device f2fs through
+fs_bdev_file_open_by_path() so each device is registered against the
+superblock, and convert the matching release in destroy_device_list()
+to fs_bdev_file_release(). The first device aliases the main bdev file
+opened by setup_bdev_super() and is already registered through it.
+
+f2fs opened its extra devices without holder ops, so a freeze, sync, or
+removal of one of them was never propagated to the superblock.
+Registering them wires those events up: every device now freezes,
+thaws, syncs, and shuts down the filesystem like the main device does.
+
+Link: https://patch.msgid.link/20260616-work-super-bdev_holder_global-v2-15-7df6b864028e@kernel.org
+Acked-by: Chao Yu <chao@kernel.org>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/f2fs/super.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/fs/f2fs/super.c b/fs/f2fs/super.c
+index 2b8d96411156..11c81e956c29 100644
+--- a/fs/f2fs/super.c
++++ b/fs/f2fs/super.c
+@@ -1971,7 +1971,7 @@ static void destroy_device_list(struct f2fs_sb_info *sbi)
+ 
+ 	for (i = 0; i < sbi->s_ndevs; i++) {
+ 		if (i > 0)
+-			bdev_fput(FDEV(i).bdev_file);
++			fs_bdev_file_release(FDEV(i).bdev_file, sbi->sb);
+ #ifdef CONFIG_BLK_DEV_ZONED
+ 		kvfree(FDEV(i).blkz_seq);
+ #endif
+@@ -4898,8 +4898,8 @@ static int f2fs_scan_devices(struct f2fs_sb_info *sbi)
+ 				FDEV(i).end_blk = FDEV(i).start_blk +
+ 						SEGS_TO_BLKS(sbi,
+ 						FDEV(i).total_segments) - 1;
+-				FDEV(i).bdev_file = bdev_file_open_by_path(
+-					FDEV(i).path, mode, sbi->sb, NULL);
++				FDEV(i).bdev_file = fs_bdev_file_open_by_path(
++					FDEV(i).path, mode, sbi->sb, sbi->sb);
+ 			}
+ 		}
+ 		if (IS_ERR(FDEV(i).bdev_file))
+-- 
+2.55.0
+

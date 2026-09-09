@@ -1,0 +1,150 @@
+From 753aa72545ce0b2503eca784f35062d0bf5418d7 Mon Sep 17 00:00:00 2001
+From: Manivannan Sadhasivam <manivannan.sadhasivam@oss.qualcomm.com>
+Date: Fri, 10 Jul 2026 13:51:20 +0200
+Subject: [PATCH 08434/15333] bus: mhi: host: Add support for devices with no
+ M3 state
+
+MHI bus transitions the device into M3 state during suspend and back to M0
+state during resume. But due to hardware issues, some devices do not
+support M3 state. To support these devices properly, MHI bus needs to skip
+transitioning the device to M3 during suspend and back to M0 during resume.
+
+For this purpose, introduce the 'mhi_cntrl->no_m3' flag and allow it to be
+set by the MHI controller drivers. Once set, this flag lets the MHI bus
+skip transitioning the device to M3/M0 during suspend/resume.
+
+But, simply skipping suspend/resume for such devices is not sufficient, as
+it leaves the MHI host in M0 state with device access enabled. Client
+drivers that do not implement PM callbacks (for instance, the non-freezable
+rx_refill worker in mhi_net driver) could then keep ringing channel
+doorbells and issue MMIO to the device even after the controller driver has
+disabled it and moved it to D3 during its own suspend, resulting in access
+to a powered down device.
+
+So instead of skipping the entire suspend/resume operation, run the full
+host suspend/resume sequence but without the device-side M state handshake.
+During suspend, only transition the host to M3 without sending the MHICTRL
+M3 command or waiting for the device M3 event. During resume, bring the
+host back to M0 through mhi_pm_m0_transition() without sending the MHICTRL
+M0 command.
+
+With the host in M3, all device access is gated by MHI_DB_ACCESS_VALID()
+and MHI_REG_ACCESS_VALID(), so any transfer queued by the clients during
+suspend is deferred until resume, where mhi_pm_m0_transition() rings the
+pending doorbells.
+
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@oss.qualcomm.com>
+---
+ drivers/bus/mhi/host/pm.c | 61 ++++++++++++++++++++++++++++-----------
+ include/linux/mhi.h       |  2 ++
+ 2 files changed, 46 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/bus/mhi/host/pm.c b/drivers/bus/mhi/host/pm.c
+index 9d29f1591a45..ced83fbb1a51 100644
+--- a/drivers/bus/mhi/host/pm.c
++++ b/drivers/bus/mhi/host/pm.c
+@@ -914,22 +914,39 @@ int mhi_pm_suspend(struct mhi_controller *mhi_cntrl)
+ 		return -EIO;
+ 	}
+ 
+-	/* Set MHI to M3 and wait for completion */
+-	mhi_set_mhi_state(mhi_cntrl, MHI_STATE_M3);
+-	write_unlock_irq(&mhi_cntrl->pm_lock);
+-	dev_dbg(dev, "Waiting for M3 completion\n");
+-
+-	ret = wait_event_timeout(mhi_cntrl->state_event,
+-				 mhi_cntrl->dev_state == MHI_STATE_M3 ||
+-				 MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state),
+-				 msecs_to_jiffies(mhi_cntrl->timeout_ms));
+-
+-	if (!ret || MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state)) {
+-		dev_err(dev,
+-			"Did not enter M3 state, MHI state: %s, PM state: %s\n",
+-			mhi_state_str(mhi_cntrl->dev_state),
+-			to_mhi_pm_state_str(mhi_cntrl->pm_state));
+-		return -EIO;
++	/*
++	 * For devices without M3 support, just set the host state to M3. This
++	 * host transition is needed to prevent the client drivers from
++	 * accessing the device during suspend.
++	 */
++	if (mhi_cntrl->no_m3) {
++		new_state = mhi_tryset_pm_state(mhi_cntrl, MHI_PM_M3);
++		write_unlock_irq(&mhi_cntrl->pm_lock);
++		if (new_state != MHI_PM_M3) {
++			dev_err(dev,
++				"Error setting to PM state: %s from: %s\n",
++				to_mhi_pm_state_str(MHI_PM_M3),
++				to_mhi_pm_state_str(mhi_cntrl->pm_state));
++			return -EIO;
++		}
++	} else {
++		/* Set MHI to M3 and wait for completion */
++		mhi_set_mhi_state(mhi_cntrl, MHI_STATE_M3);
++		write_unlock_irq(&mhi_cntrl->pm_lock);
++		dev_dbg(dev, "Waiting for M3 completion\n");
++
++		ret = wait_event_timeout(mhi_cntrl->state_event,
++					 mhi_cntrl->dev_state == MHI_STATE_M3 ||
++					 MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state),
++					 msecs_to_jiffies(mhi_cntrl->timeout_ms));
++
++		if (!ret || MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state)) {
++			dev_err(dev,
++				"Did not enter M3 state, MHI state: %s, PM state: %s\n",
++				mhi_state_str(mhi_cntrl->dev_state),
++				to_mhi_pm_state_str(mhi_cntrl->pm_state));
++			return -EIO;
++		}
+ 	}
+ 
+ 	/* Notify clients about entering LPM */
+@@ -961,7 +978,8 @@ static int __mhi_pm_resume(struct mhi_controller *mhi_cntrl, bool force)
+ 	if (MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state))
+ 		return -EIO;
+ 
+-	if (mhi_get_mhi_state(mhi_cntrl) != MHI_STATE_M3) {
++	if (!mhi_cntrl->no_m3 &&
++	    mhi_get_mhi_state(mhi_cntrl) != MHI_STATE_M3) {
+ 		dev_warn(dev, "Resuming from non M3 state (%s)\n",
+ 			 mhi_state_str(mhi_get_mhi_state(mhi_cntrl)));
+ 		if (!force)
+@@ -987,6 +1005,15 @@ static int __mhi_pm_resume(struct mhi_controller *mhi_cntrl, bool force)
+ 		return -EIO;
+ 	}
+ 
++	/*
++	 * For devices without M3 support, just move the host back to M0
++	 * directly.
++	 */
++	if (mhi_cntrl->no_m3) {
++		write_unlock_irq(&mhi_cntrl->pm_lock);
++		return mhi_pm_m0_transition(mhi_cntrl);
++	}
++
+ 	/* Set MHI to M0 and wait for completion */
+ 	mhi_set_mhi_state(mhi_cntrl, MHI_STATE_M0);
+ 	write_unlock_irq(&mhi_cntrl->pm_lock);
+diff --git a/include/linux/mhi.h b/include/linux/mhi.h
+index fb3ba639f4f8..0d60058bf5ae 100644
+--- a/include/linux/mhi.h
++++ b/include/linux/mhi.h
+@@ -374,6 +374,7 @@ struct mhi_controller_config {
+  * @bounce_buf: Use of bounce buffer
+  * @fbc_download: MHI host needs to do complete image transfer (optional)
+  * @wake_set: Device wakeup set flag
++ * @no_m3: Device doesn't support M3 state
+  * @irq_flags: irq flags passed to request_irq (optional)
+  * @mru: the default MRU for the MHI device
+  *
+@@ -459,6 +460,7 @@ struct mhi_controller {
+ 	bool bounce_buf;
+ 	bool fbc_download;
+ 	bool wake_set;
++	bool no_m3;
+ 	unsigned long irq_flags;
+ 	u32 mru;
+ };
+-- 
+2.55.0
+

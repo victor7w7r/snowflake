@@ -1,0 +1,49 @@
+From ef21090071b33844f55fac7c5470729b862dad0c Mon Sep 17 00:00:00 2001
+From: Zqiang <qiang.zhang@linux.dev>
+Date: Mon, 6 Jul 2026 18:03:10 +0800
+Subject: [PATCH 06819/15333] rcu-tasks: Dump rcu tasks status when the
+ boot-test failed
+
+This commit adds a dump RCU task status function to rcu tasks tests,
+used to obtain more information to help debug when the RCU tasks
+boot-time tests failed.
+
+Signed-off-by: Zqiang <qiang.zhang@linux.dev>
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ kernel/rcu/tasks.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/kernel/rcu/tasks.h b/kernel/rcu/tasks.h
+index 7f7d1e636217..d9e1e53f4ccf 100644
+--- a/kernel/rcu/tasks.h
++++ b/kernel/rcu/tasks.h
+@@ -1453,6 +1453,7 @@ struct rcu_tasks_test_desc {
+ 	const char *name;
+ 	bool notrun;
+ 	unsigned long runstart;
++	void (*gp_dbg)(void);
+ };
+ 
+ static struct rcu_tasks_test_desc tests[] = {
+@@ -1460,6 +1461,8 @@ static struct rcu_tasks_test_desc tests[] = {
+ 		.name = "call_rcu_tasks()",
+ 		/* If not defined, the test is skipped. */
+ 		.notrun = IS_ENABLED(CONFIG_TASKS_RCU),
++		/* Dump rcu tasks status, if test failed. */
++		.gp_dbg = show_rcu_tasks_classic_gp_kthread
+ 	},
+ 	{
+ 		.name = "call_rcu_tasks_trace()",
+@@ -1519,6 +1522,8 @@ static int rcu_tasks_verify_self_tests(void)
+ 		while (tests[i].notrun) {		// still hanging.
+ 			if (time_after(jiffies, tests[i].runstart + bst)) {
+ 				pr_err("%s has failed boot-time tests.\n", tests[i].name);
++				if (tests[i].gp_dbg)
++					tests[i].gp_dbg();
+ 				ret = -1;
+ 				break;
+ 			}
+-- 
+2.55.0
+

@@ -1,0 +1,48 @@
+From 062e44a9319f14b6f66a5e8accb98cfa873c7b0d Mon Sep 17 00:00:00 2001
+From: Claudio Imbrenda <imbrenda@linux.ibm.com>
+Date: Wed, 12 Aug 2026 12:44:29 +0200
+Subject: [PATCH 13472/15333] KVM: s390: Use srcu in
+ kvm_arch_vcpu_unlocked_ioctl()
+
+kvm_arch_vcpu_unlocked_ioctl() is called without further locks held, but
+kvm_s390_inject_vcpu(), which is called from there, needs either the
+kvm->srcu or the slots lock.
+
+Fix by taking the kvm->srcu in kvm_arch_vcpu_unlocked_ioctl().
+
+Fixes: ba5c1e9b6cee ("KVM: s390: interrupt subsystem, cpu timer, waitpsw")
+Reviewed-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+Reviewed-by: Christoph Schlameuss <schlameuss@linux.ibm.com>
+Signed-off-by: Claudio Imbrenda <imbrenda@linux.ibm.com>
+Message-ID: <20260812104436.109741-3-imbrenda@linux.ibm.com>
+---
+ arch/s390/kvm/kvm-s390.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/arch/s390/kvm/kvm-s390.c b/arch/s390/kvm/kvm-s390.c
+index 17aa38710170..91b975835457 100644
+--- a/arch/s390/kvm/kvm-s390.c
++++ b/arch/s390/kvm/kvm-s390.c
+@@ -5456,7 +5456,8 @@ long kvm_arch_vcpu_unlocked_ioctl(struct file *filp, unsigned int ioctl,
+ 
+ 		if (copy_from_user(&s390irq, argp, sizeof(s390irq)))
+ 			return -EFAULT;
+-		rc = kvm_s390_inject_vcpu(vcpu, &s390irq);
++		scoped_guard(srcu, &vcpu->kvm->srcu)
++			rc = kvm_s390_inject_vcpu(vcpu, &s390irq);
+ 		break;
+ 	}
+ 	case KVM_S390_INTERRUPT: {
+@@ -5469,7 +5470,8 @@ long kvm_arch_vcpu_unlocked_ioctl(struct file *filp, unsigned int ioctl,
+ 			return -EFAULT;
+ 		if (s390int_to_s390irq(&s390int, &s390irq))
+ 			return -EINVAL;
+-		rc = kvm_s390_inject_vcpu(vcpu, &s390irq);
++		scoped_guard(srcu, &vcpu->kvm->srcu)
++			rc = kvm_s390_inject_vcpu(vcpu, &s390irq);
+ 		break;
+ 	}
+ 	default:
+-- 
+2.55.0
+

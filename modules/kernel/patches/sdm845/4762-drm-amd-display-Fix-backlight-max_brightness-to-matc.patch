@@ -1,0 +1,82 @@
+From bd9e2b5b0473c75abc0f4134dfe79ecbfb16610d Mon Sep 17 00:00:00 2001
+From: Mario Limonciello <mario.limonciello@amd.com>
+Date: Mon, 29 Jun 2026 15:27:00 -0500
+Subject: [PATCH 04762/15333] drm/amd/display: Fix backlight max_brightness to
+ match exported range
+
+[Why]
+FWTS autobrightness fails on eDP panels because actual_brightness can
+read higher than the advertised max_brightness (e.g. 63576 vs 62451).
+
+The conversion helpers expose the firmware PWM range to userspace as
+[0..max].  But max_brightness is advertised as (max - min), which is
+smaller.  So reading the level can return a value above max_brightness.
+
+This regressed in commit 4b61b8a39051 ("drm/amd/display: Add debugging
+message for brightness caps"), which changed max_brightness to
+(max - min) and undid commit 8dbd72cb7900 ("drm/amd/display: Export full
+brightness range to userspace").
+
+[How]
+Advertise max_brightness as max, and scale the initial AC/DC brightness
+against max too.  Update the KUnit expectations to match.
+
+Fixes: 4b61b8a39051 ("drm/amd/display: Add debugging message for brightness caps")
+Reviewed-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Mario Limonciello <mario.limonciello@amd.com>
+Signed-off-by: George Zhang <george.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c   | 6 +++---
+ .../display/amdgpu_dm/tests/amdgpu_dm_backlight_test.c    | 8 ++++----
+ 2 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c
+index 11d54897a894..ca60c72855fd 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_backlight.c
+@@ -407,12 +407,12 @@ void amdgpu_dm_backlight_fill_props(const struct amdgpu_dm_backlight_caps *caps,
+ 
+ 	if (get_brightness_range(caps, &min, &max)) {
+ 		if (is_system_supplied)
+-			props->brightness = DIV_ROUND_CLOSEST((max - min) * caps->ac_level,
++			props->brightness = DIV_ROUND_CLOSEST(max * caps->ac_level,
+ 							       100);
+ 		else
+-			props->brightness = DIV_ROUND_CLOSEST((max - min) * caps->dc_level,
++			props->brightness = DIV_ROUND_CLOSEST(max * caps->dc_level,
+ 							       100);
+-		props->max_brightness = max - min;
++		props->max_brightness = max;
+ 	} else {
+ 		props->brightness = MAX_BACKLIGHT_LEVEL;
+ 		props->max_brightness = MAX_BACKLIGHT_LEVEL;
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_backlight_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_backlight_test.c
+index adb896022a27..8ebc0f263e3e 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_backlight_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_backlight_test.c
+@@ -799,8 +799,8 @@ static void dm_test_backlight_fill_props_ac_linear(struct kunit *test)
+ 	amdgpu_dm_backlight_fill_props(&caps, true, false, &props);
+ 
+ 	KUNIT_EXPECT_EQ(test, props.brightness,
+-			 DIV_ROUND_CLOSEST((max - min) * caps.ac_level, 100));
+-	KUNIT_EXPECT_EQ(test, props.max_brightness, max - min);
++			 DIV_ROUND_CLOSEST(max * caps.ac_level, 100));
++	KUNIT_EXPECT_EQ(test, props.max_brightness, max);
+ 	KUNIT_EXPECT_EQ(test, props.scale, BACKLIGHT_SCALE_LINEAR);
+ 	KUNIT_EXPECT_EQ(test, props.type, BACKLIGHT_RAW);
+ }
+@@ -825,8 +825,8 @@ static void dm_test_backlight_fill_props_dc_nonlinear(struct kunit *test)
+ 	amdgpu_dm_backlight_fill_props(&caps, false, true, &props);
+ 
+ 	KUNIT_EXPECT_EQ(test, props.brightness,
+-			 DIV_ROUND_CLOSEST((max - min) * caps.dc_level, 100));
+-	KUNIT_EXPECT_EQ(test, props.max_brightness, max - min);
++			 DIV_ROUND_CLOSEST(max * caps.dc_level, 100));
++	KUNIT_EXPECT_EQ(test, props.max_brightness, max);
+ 	KUNIT_EXPECT_EQ(test, props.scale, BACKLIGHT_SCALE_NON_LINEAR);
+ 	KUNIT_EXPECT_EQ(test, props.type, BACKLIGHT_RAW);
+ }
+-- 
+2.55.0
+

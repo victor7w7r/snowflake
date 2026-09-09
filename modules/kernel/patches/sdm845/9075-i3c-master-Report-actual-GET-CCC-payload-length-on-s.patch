@@ -1,0 +1,218 @@
+From cb92910153f4ea6d721779f72ae165cdbe7222f0 Mon Sep 17 00:00:00 2001
+From: Adrian Ng Ho Yin <adrian.ho.yin.ng@altera.com>
+Date: Wed, 8 Jul 2026 00:17:38 -0700
+Subject: [PATCH 09075/15333] i3c: master: Report actual GET CCC payload length
+ on success
+
+Set dests[].payload.actual_len on successful GET CCC transfers in I3C
+master drivers so the core can distinguish requested and received
+buffer lengths. Switch core GET helpers to use actual_len instead of
+len when interpreting GET CCC results.
+
+Signed-off-by: Adrian Ng Ho Yin <adrian.ho.yin.ng@altera.com>
+Signed-off-by: Tze Yee Ng <tze.yee.ng@altera.com>
+Reviewed-by: Alexandre Mergnat <amergnat@baylibre.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Tested-by: Tommaso Merciai <tommaso.merciai.xr@bp.renesas.com>
+Tested-by: Claudiu Beznea <claudiu.beznea.uj@bp.renesas.com> # on RZ/G3S
+Link: https://patch.msgid.link/6c66571ae7166aa4b87616d900e6d643631ac355.1783493868.git.tze.yee.ng@altera.com
+Signed-off-by: Alexandre Belloni <alexandre.belloni@bootlin.com>
+---
+ drivers/i3c/master.c                   | 11 ++++++-----
+ drivers/i3c/master/adi-i3c-master.c    |  3 +++
+ drivers/i3c/master/dw-i3c-master.c     |  5 ++++-
+ drivers/i3c/master/i3c-master-cdns.c   |  3 +++
+ drivers/i3c/master/mipi-i3c-hci/core.c |  5 +++--
+ drivers/i3c/master/renesas-i3c.c       | 16 ++++++++++++----
+ drivers/i3c/master/svc-i3c-master.c    |  4 ++--
+ 7 files changed, 33 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/i3c/master.c b/drivers/i3c/master.c
+index ac408086ddcc..84cda266d8e3 100644
+--- a/drivers/i3c/master.c
++++ b/drivers/i3c/master.c
+@@ -952,6 +952,7 @@ static void *i3c_ccc_cmd_dest_init(struct i3c_ccc_cmd_dest *dest, u8 addr,
+ {
+ 	dest->addr = addr;
+ 	dest->payload.len = payloadlen;
++	dest->payload.actual_len = 0;
+ 	if (payloadlen)
+ 		dest->payload.data = kzalloc(payloadlen, GFP_KERNEL);
+ 	else
+@@ -1374,7 +1375,7 @@ static int i3c_master_getmrl_locked(struct i3c_master_controller *master,
+ 	if (ret)
+ 		goto out;
+ 
+-	switch (dest.payload.len) {
++	switch (dest.payload.actual_len) {
+ 	case 3:
+ 		info->max_ibi_len = mrl->ibi_len;
+ 		fallthrough;
+@@ -1409,7 +1410,7 @@ static int i3c_master_getmwl_locked(struct i3c_master_controller *master,
+ 	if (ret)
+ 		goto out;
+ 
+-	if (dest.payload.len != sizeof(*mwl)) {
++	if (dest.payload.actual_len != sizeof(*mwl)) {
+ 		ret = -EIO;
+ 		goto out;
+ 	}
+@@ -1448,14 +1449,14 @@ static int i3c_master_getmxds_locked(struct i3c_master_controller *master,
+ 			goto out;
+ 	}
+ 
+-	if (dest.payload.len != 2 && dest.payload.len != 5) {
++	if (dest.payload.actual_len != 2 && dest.payload.actual_len != 5) {
+ 		ret = -EIO;
+ 		goto out;
+ 	}
+ 
+ 	info->max_read_ds = getmaxds->maxrd;
+ 	info->max_write_ds = getmaxds->maxwr;
+-	if (dest.payload.len == 5)
++	if (dest.payload.actual_len == 5)
+ 		info->max_read_turnaround = getmaxds->maxrdturn[0] |
+ 					    ((u32)getmaxds->maxrdturn[1] << 8) |
+ 					    ((u32)getmaxds->maxrdturn[2] << 16);
+@@ -1484,7 +1485,7 @@ static int i3c_master_gethdrcap_locked(struct i3c_master_controller *master,
+ 	if (ret)
+ 		goto out;
+ 
+-	if (dest.payload.len != 1) {
++	if (dest.payload.actual_len != 1) {
+ 		ret = -EIO;
+ 		goto out;
+ 	}
+diff --git a/drivers/i3c/master/adi-i3c-master.c b/drivers/i3c/master/adi-i3c-master.c
+index e29aac286957..cbf33f640c18 100644
+--- a/drivers/i3c/master/adi-i3c-master.c
++++ b/drivers/i3c/master/adi-i3c-master.c
+@@ -246,6 +246,7 @@ static void adi_i3c_master_end_xfer_locked(struct adi_i3c_master *master,
+ 		if (cmd->cmd0 & REG_CMD_FIFO_0_RNW) {
+ 			rx_len = min_t(u32, REG_CMDR_FIFO_XFER_BYTES(cmdr), cmd->rx_len);
+ 			adi_i3c_master_rd_from_rx_fifo(master, cmd->rx_buf, rx_len);
++			cmd->rx_len = rx_len;
+ 		}
+ 		cmd->error = REG_CMDR_FIFO_ERROR(cmdr);
+ 	}
+@@ -360,6 +361,8 @@ static int adi_i3c_master_send_ccc_cmd(struct i3c_master_controller *m,
+ 		adi_i3c_master_unqueue_xfer(master, xfer);
+ 
+ 	cmd->err = adi_i3c_cmd_get_err(&xfer->cmds[0]);
++	if (!xfer->ret && cmd->rnw)
++		cmd->dests[0].payload.actual_len = ccmd->rx_len;
+ 
+ 	return xfer->ret;
+ }
+diff --git a/drivers/i3c/master/dw-i3c-master.c b/drivers/i3c/master/dw-i3c-master.c
+index dc3b74822f8e..97b8f4d8564c 100644
+--- a/drivers/i3c/master/dw-i3c-master.c
++++ b/drivers/i3c/master/dw-i3c-master.c
+@@ -780,7 +780,10 @@ static int dw_i3c_ccc_get(struct dw_i3c_master *master, struct i3c_ccc_cmd *ccc)
+ 		dw_i3c_master_dequeue_xfer(master, xfer);
+ 
+ 	ret = xfer->ret;
+-	if (xfer->cmds[0].error == RESPONSE_ERROR_IBA_NACK)
++	cmd = &xfer->cmds[0];
++	if (!ret)
++		ccc->dests[0].payload.actual_len = cmd->rx_len;
++	if (cmd->error == RESPONSE_ERROR_IBA_NACK)
+ 		ccc->err = I3C_ERROR_M2;
+ 
+ 	return ret;
+diff --git a/drivers/i3c/master/i3c-master-cdns.c b/drivers/i3c/master/i3c-master-cdns.c
+index 6d221596ea35..2d98c1ce9b12 100644
+--- a/drivers/i3c/master/i3c-master-cdns.c
++++ b/drivers/i3c/master/i3c-master-cdns.c
+@@ -573,6 +573,7 @@ static void cdns_i3c_master_end_xfer_locked(struct cdns_i3c_master *master,
+ 		cmd = &xfer->cmds[CMDR_CMDID(cmdr)];
+ 		rx_len = min_t(u32, CMDR_XFER_BYTES(cmdr), cmd->rx_len);
+ 		cdns_i3c_master_rd_from_rx_fifo(master, cmd->rx_buf, rx_len);
++		cmd->rx_len = rx_len;
+ 		cmd->error = CMDR_ERROR(cmdr);
+ 	}
+ 
+@@ -714,6 +715,8 @@ static int cdns_i3c_master_send_ccc_cmd(struct i3c_master_controller *m,
+ 
+ 	ret = xfer->ret;
+ 	cmd->err = cdns_i3c_cmd_get_err(&xfer->cmds[0]);
++	if (!ret && cmd->rnw)
++		cmd->dests[0].payload.actual_len = ccmd->rx_len;
+ 	cdns_i3c_master_free_xfer(xfer);
+ 
+ 	return ret;
+diff --git a/drivers/i3c/master/mipi-i3c-hci/core.c b/drivers/i3c/master/mipi-i3c-hci/core.c
+index e80aa1f5722e..cfe9b5390b56 100644
+--- a/drivers/i3c/master/mipi-i3c-hci/core.c
++++ b/drivers/i3c/master/mipi-i3c-hci/core.c
+@@ -375,7 +375,7 @@ static int i3c_hci_send_ccc_cmd(struct i3c_master_controller *m,
+ 		goto out;
+ 	for (i = prefixed; i < nxfers; i++) {
+ 		if (ccc->rnw)
+-			ccc->dests[i - prefixed].payload.len =
++			ccc->dests[i - prefixed].payload.actual_len =
+ 				RESP_DATA_LENGTH(xfer[i].response);
+ 		switch (RESP_STATUS(xfer[i].response)) {
+ 		case RESP_SUCCESS:
+@@ -392,7 +392,8 @@ static int i3c_hci_send_ccc_cmd(struct i3c_master_controller *m,
+ 
+ 	if (ccc->rnw)
+ 		dev_dbg(&hci->master.dev, "got: %*ph",
+-			ccc->dests[0].payload.len, ccc->dests[0].payload.data);
++			ccc->dests[0].payload.actual_len,
++			ccc->dests[0].payload.data);
+ 
+ out:
+ 	hci_free_xfer(xfer, nxfers);
+diff --git a/drivers/i3c/master/renesas-i3c.c b/drivers/i3c/master/renesas-i3c.c
+index f39c449922ca..25a2b2ed618e 100644
+--- a/drivers/i3c/master/renesas-i3c.c
++++ b/drivers/i3c/master/renesas-i3c.c
+@@ -805,6 +805,8 @@ static int renesas_i3c_send_ccc_cmd(struct i3c_master_controller *m,
+ 	ret = xfer->ret;
+ 	if (ret)
+ 		ccc->err = I3C_ERROR_M2;
++	else if (ccc->rnw)
++		ccc->dests[0].payload.actual_len = cmd->rx_count;
+ 
+ 	return ret;
+ }
+@@ -1072,10 +1074,16 @@ static irqreturn_t renesas_i3c_resp_isr(int irq, void *data)
+ 			break;
+ 		case I3C_INTERNAL_STATE_CONTROLLER_READ:
+ 		case I3C_INTERNAL_STATE_CONTROLLER_COMMAND_READ:
+-			if (NDBSTLV0_RDBLV(renesas_readl(i3c->regs, NDBSTLV0)) && !cmd->err)
+-				bytes_remaining = data_len - cmd->rx_count;
+-
+-			i3c_readl_fifo(i3c->regs + NTDTBP0, cmd->rx_buf, bytes_remaining);
++			if (!cmd->err) {
++				u32 rx_count = min(cmd->rx_count, data_len);
++
++				bytes_remaining = data_len - rx_count;
++				if (bytes_remaining)
++					i3c_readl_fifo(i3c->regs + NTDTBP0,
++						       cmd->rx_buf + rx_count,
++						       bytes_remaining);
++				cmd->rx_count = data_len;
++			}
+ 			renesas_clear_bit(i3c->regs, NTIE, NTIE_RDBFIE0);
+ 			break;
+ 		default:
+diff --git a/drivers/i3c/master/svc-i3c-master.c b/drivers/i3c/master/svc-i3c-master.c
+index 486c22840ea9..e700392f0801 100644
+--- a/drivers/i3c/master/svc-i3c-master.c
++++ b/drivers/i3c/master/svc-i3c-master.c
+@@ -1725,8 +1725,8 @@ static int svc_i3c_master_send_direct_ccc_cmd(struct svc_i3c_master *master,
+ 		svc_i3c_master_dequeue_xfer(master, xfer);
+ 	mutex_unlock(&master->lock);
+ 
+-	if (cmd->actual_len != xfer_len)
+-		ccc->dests[0].payload.len = cmd->actual_len;
++	if (ccc->rnw)
++		ccc->dests[0].payload.actual_len = cmd->actual_len;
+ 
+ 	ret = xfer->ret;
+ 	svc_i3c_master_free_xfer(xfer);
+-- 
+2.55.0
+

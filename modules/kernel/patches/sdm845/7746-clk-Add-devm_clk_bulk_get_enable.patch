@@ -1,0 +1,101 @@
+From b698927accb1c974040dc6596c8df1d72682b2ed Mon Sep 17 00:00:00 2001
+From: Suraj Gupta <suraj.gupta2@amd.com>
+Date: Thu, 23 Jul 2026 18:08:32 +0530
+Subject: [PATCH 07746/15333] clk: Add devm_clk_bulk_get_enable()
+
+devm_clk_bulk_get_optional_enable() gets, prepares and enables a set of
+clocks with device-managed cleanup, but treats every clock as optional:
+a missing clock is silently returned as NULL instead of failing.
+
+Consumers that need a fixed set of mandatory clocks enabled for the
+lifetime of the device currently have to open-code devm_clk_bulk_get()
+followed by clk_bulk_prepare_enable(), which loses the managed disable on
+unbind, or fall back to per-clock devm_clk_get_enabled() calls.
+
+Add devm_clk_bulk_get_enable() as the non-optional counterpart. The
+underlying __devm_clk_bulk_get_enable() helper already supports the
+required (optional = false) path, so only export a thin wrapper for it.
+
+Signed-off-by: Suraj Gupta <suraj.gupta2@amd.com>
+Reviewed-by: Brian Masney <bmasney@redhat.com>
+Signed-off-by: Brian Masney <bmasney@redhat.com>
+---
+ .../driver-api/driver-model/devres.rst        |  1 +
+ drivers/clk/clk-devres.c                      |  7 ++++++
+ include/linux/clk.h                           | 23 +++++++++++++++++++
+ 3 files changed, 31 insertions(+)
+
+diff --git a/Documentation/driver-api/driver-model/devres.rst b/Documentation/driver-api/driver-model/devres.rst
+index 017fb155a5bc..5067500ded5c 100644
+--- a/Documentation/driver-api/driver-model/devres.rst
++++ b/Documentation/driver-api/driver-model/devres.rst
+@@ -248,6 +248,7 @@ CLOCK
+   devm_clk_put()
+   devm_clk_bulk_get()
+   devm_clk_bulk_get_all()
++  devm_clk_bulk_get_enable()
+   devm_clk_bulk_get_optional()
+   devm_get_clk_from_child()
+   devm_clk_hw_register()
+diff --git a/drivers/clk/clk-devres.c b/drivers/clk/clk-devres.c
+index 994d5bc5168b..49d4782991eb 100644
+--- a/drivers/clk/clk-devres.c
++++ b/drivers/clk/clk-devres.c
+@@ -222,6 +222,13 @@ static int __devm_clk_bulk_get_enable(struct device *dev, int num_clks,
+ 	return ret;
+ }
+ 
++int __must_check devm_clk_bulk_get_enable(struct device *dev, int num_clks,
++					  struct clk_bulk_data *clks)
++{
++	return __devm_clk_bulk_get_enable(dev, num_clks, clks, false);
++}
++EXPORT_SYMBOL_GPL(devm_clk_bulk_get_enable);
++
+ int __must_check devm_clk_bulk_get_optional_enable(struct device *dev, int num_clks,
+ 						   struct clk_bulk_data *clks)
+ {
+diff --git a/include/linux/clk.h b/include/linux/clk.h
+index 993fd6e916c7..db9cf184fd99 100644
+--- a/include/linux/clk.h
++++ b/include/linux/clk.h
+@@ -502,6 +502,22 @@ int __must_check devm_clk_bulk_get(struct device *dev, int num_clks,
+  */
+ int __must_check devm_clk_bulk_get_optional(struct device *dev, int num_clks,
+ 					    struct clk_bulk_data *clks);
++/**
++ * devm_clk_bulk_get_enable - Get and enable bulk clocks (managed)
++ * @dev: device for clock "consumer"
++ * @num_clks: the number of clk_bulk_data
++ * @clks: pointer to the clk_bulk_data table of consumer
++ *
++ * Behaves the same as devm_clk_bulk_get() but also prepares and enables the
++ * clocks in one operation with management. The clks will automatically be
++ * disabled, unprepared and freed when the device is unbound.
++ *
++ * Return: 0 if all clocks specified in clk_bulk_data table are obtained and
++ * enabled successfully. Otherwise returns valid IS_ERR() condition containing
++ * errno.
++ */
++int __must_check devm_clk_bulk_get_enable(struct device *dev, int num_clks,
++					  struct clk_bulk_data *clks);
+ /**
+  * devm_clk_bulk_get_optional_enable - Get and enable optional bulk clocks (managed)
+  * @dev: device for clock "consumer"
+@@ -1052,6 +1068,13 @@ static inline int __must_check devm_clk_bulk_get_optional(struct device *dev,
+ 	return 0;
+ }
+ 
++static inline int __must_check devm_clk_bulk_get_enable(struct device *dev,
++							int num_clks,
++							struct clk_bulk_data *clks)
++{
++	return 0;
++}
++
+ static inline int __must_check devm_clk_bulk_get_optional_enable(struct device *dev,
+ 								 int num_clks,
+ 								 struct clk_bulk_data *clks)
+-- 
+2.55.0
+

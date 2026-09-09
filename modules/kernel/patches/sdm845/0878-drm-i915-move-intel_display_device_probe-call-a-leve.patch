@@ -1,0 +1,65 @@
+From a82af46fd08474c56ca424156b4047f94121ec5e Mon Sep 17 00:00:00 2001
+From: Jani Nikula <jani.nikula@intel.com>
+Date: Mon, 15 Jun 2026 21:47:58 +0300
+Subject: [PATCH 00878/15333] drm/i915: move intel_display_device_probe() call
+ a level higher
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Having display probe be called from i915_driver_create() is slightly
+misleading, and an artefact from the past. Move the
+intel_display_device_probe() call a level higher.
+
+Use the shared PCI disable error path while at it.
+
+Reviewed-by: Michał Grzelak <michal.grzelak@intel.com>
+Link: https://patch.msgid.link/c97a8790a5cb1f6b10061286adad8148972c5b3b.1781549229.git.jani.nikula@intel.com
+Signed-off-by: Jani Nikula <jani.nikula@intel.com>
+---
+ drivers/gpu/drm/i915/i915_driver.c | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/i915_driver.c b/drivers/gpu/drm/i915/i915_driver.c
+index 43f747c3c31f..09810d5a0ad4 100644
+--- a/drivers/gpu/drm/i915/i915_driver.c
++++ b/drivers/gpu/drm/i915/i915_driver.c
+@@ -802,7 +802,6 @@ i915_driver_create(struct pci_dev *pdev, const struct pci_device_id *ent)
+ 	const struct intel_device_info *match_info =
+ 		(struct intel_device_info *)ent->driver_data;
+ 	struct drm_i915_private *i915;
+-	struct intel_display *display;
+ 
+ 	i915 = devm_drm_dev_alloc(&pdev->dev, &i915_drm_driver,
+ 				  struct drm_i915_private, drm);
+@@ -817,12 +816,6 @@ i915_driver_create(struct pci_dev *pdev, const struct pci_device_id *ent)
+ 	/* Set up device info and initial runtime info. */
+ 	intel_device_info_driver_create(i915, pdev->device, match_info);
+ 
+-	display = intel_display_device_probe(pdev, &parent);
+-	if (IS_ERR(display))
+-		return ERR_CAST(display);
+-
+-	i915->display = display;
+-
+ 	return i915;
+ }
+ 
+@@ -855,7 +848,13 @@ int i915_driver_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+ 		return PTR_ERR(i915);
+ 	}
+ 
+-	display = i915->display;
++	display = intel_display_device_probe(pdev, &parent);
++	if (IS_ERR(display)) {
++		ret = PTR_ERR(display);
++		goto out_pci_disable;
++	}
++
++	i915->display = display;
+ 
+ 	ret = i915_driver_early_probe(i915);
+ 	if (ret < 0)
+-- 
+2.55.0
+

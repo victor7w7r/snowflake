@@ -1,0 +1,79 @@
+From ba7f6f2f168081482919529f50c5aea802997f43 Mon Sep 17 00:00:00 2001
+From: Michael Guralnik <michaelgur@nvidia.com>
+Date: Sun, 26 Jul 2026 12:09:41 +0300
+Subject: [PATCH 07262/15333] RDMA/mlx5: Deprecate latency-sensitive QPs
+ feature
+
+New HW no longer implements a separate class for latency-sensitive QPs and
+advertises this by a new cap bit.
+REG_UMR is the only QP that used this feature, so gate its usage of the
+feature on this cap.
+
+Signed-off-by: Michael Guralnik <michaelgur@nvidia.com>
+Reviewed-by: Patrisious Haddad <phaddad@nvidia.com>
+Signed-off-by: Edward Srouji <edwards@nvidia.com>
+Link: https://patch.msgid.link/20260726-deprecate-lat-qps-v2-2-5e0c2ee55046@nvidia.com
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/hw/mlx5/main.c |  6 +++++-
+ drivers/infiniband/hw/mlx5/qp.c   | 12 +++++++-----
+ 2 files changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/infiniband/hw/mlx5/main.c b/drivers/infiniband/hw/mlx5/main.c
+index 788f79f040b0..cc7e9a3e7631 100644
+--- a/drivers/infiniband/hw/mlx5/main.c
++++ b/drivers/infiniband/hw/mlx5/main.c
+@@ -4951,6 +4951,9 @@ static int mlx5_ib_stage_bfrag_init(struct mlx5_ib_dev *dev)
+ 	if (err)
+ 		return err;
+ 
++	if (MLX5_CAP_GEN(dev->mdev, qp_latency_sensitive_disable))
++		return 0;
++
+ 	err = mlx5_alloc_bfreg(dev->mdev, &dev->fp_bfreg, false, true);
+ 	if (err)
+ 		mlx5_free_bfreg(dev->mdev, &dev->bfreg);
+@@ -4960,7 +4963,8 @@ static int mlx5_ib_stage_bfrag_init(struct mlx5_ib_dev *dev)
+ 
+ static void mlx5_ib_stage_bfrag_cleanup(struct mlx5_ib_dev *dev)
+ {
+-	mlx5_free_bfreg(dev->mdev, &dev->fp_bfreg);
++	if (!MLX5_CAP_GEN(dev->mdev, qp_latency_sensitive_disable))
++		mlx5_free_bfreg(dev->mdev, &dev->fp_bfreg);
+ 	mlx5_free_bfreg(dev->mdev, &dev->bfreg);
+ }
+ 
+diff --git a/drivers/infiniband/hw/mlx5/qp.c b/drivers/infiniband/hw/mlx5/qp.c
+index e25ac139e43f..0d4f8b109ad2 100644
+--- a/drivers/infiniband/hw/mlx5/qp.c
++++ b/drivers/infiniband/hw/mlx5/qp.c
+@@ -1138,7 +1138,8 @@ static int _create_kernel_qp(struct mlx5_ib_dev *dev,
+ 	void *qpc;
+ 	int err;
+ 
+-	if (init_attr->qp_type == MLX5_IB_QPT_REG_UMR)
++	if (init_attr->qp_type == MLX5_IB_QPT_REG_UMR &&
++	    !MLX5_CAP_GEN(dev->mdev, qp_latency_sensitive_disable))
+ 		qp->bf.bfreg = &dev->fp_bfreg;
+ 	else
+ 		qp->bf.bfreg = &dev->bfreg;
+@@ -2524,11 +2525,12 @@ static int create_kernel_qp(struct mlx5_ib_dev *dev, struct ib_pd *pd,
+ 	MLX5_SET(qpc, qpc, st, mlx5_st);
+ 	MLX5_SET(qpc, qpc, pm_state, MLX5_QP_PM_MIGRATED);
+ 
+-	if (attr->qp_type != MLX5_IB_QPT_REG_UMR)
++	if (attr->qp_type == MLX5_IB_QPT_REG_UMR) {
++		if (!MLX5_CAP_GEN(dev->mdev, qp_latency_sensitive_disable))
++			MLX5_SET(qpc, qpc, latency_sensitive, 1);
++	} else {
+ 		MLX5_SET(qpc, qpc, pd, to_mpd(pd ? pd : devr->p0)->pdn);
+-	else
+-		MLX5_SET(qpc, qpc, latency_sensitive, 1);
+-
++	}
+ 
+ 	if (qp->flags & IB_QP_CREATE_BLOCK_MULTICAST_LOOPBACK)
+ 		MLX5_SET(qpc, qpc, block_lb_mc, 1);
+-- 
+2.55.0
+

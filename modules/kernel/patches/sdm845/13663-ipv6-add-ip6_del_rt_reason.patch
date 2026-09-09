@@ -1,0 +1,101 @@
+From cc17e386f8a5fc23a3bf49a45d17cd45b49fbb01 Mon Sep 17 00:00:00 2001
+From: Yuyang Huang <sigefriedhyy@gmail.com>
+Date: Sat, 8 Aug 2026 09:56:33 +0900
+Subject: [PATCH 13663/15333] ipv6: add ip6_del_rt_reason()
+
+Add RTA_DEL_REASON and enum rt_del_reason to the rtnetlink uAPI, and
+add ip6_del_rt_reason(), which takes the reason a route is being
+deleted. It has no skip_notify argument: a caller that records a
+deletion reason wants the notification that carries it.
+
+The reason is unused for now. Subsequent patches propagate it to the
+deletion path and report it on RTM_DELROUTE.
+
+Signed-off-by: Yuyang Huang <sigefriedhyy@gmail.com>
+Reviewed-by: Ido Schimmel <idosch@nvidia.com>
+Link: https://patch.msgid.link/20260808005642.26901-2-sigefriedhyy@gmail.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ include/net/ip6_route.h        |  2 ++
+ include/uapi/linux/rtnetlink.h | 25 +++++++++++++++++++++++++
+ net/ipv6/route.c               |  8 ++++++++
+ 3 files changed, 35 insertions(+)
+
+diff --git a/include/net/ip6_route.h b/include/net/ip6_route.h
+index 09ffe0f13ce7..cc045705862d 100644
+--- a/include/net/ip6_route.h
++++ b/include/net/ip6_route.h
+@@ -126,6 +126,8 @@ int ipv6_route_ioctl(struct net *net, unsigned int cmd,
+ int ip6_route_add(struct fib6_config *cfg, gfp_t gfp_flags,
+ 		  struct netlink_ext_ack *extack);
+ int ip6_ins_rt(struct net *net, struct fib6_info *f6i);
++int ip6_del_rt_reason(struct net *net, struct fib6_info *f6i,
++		      enum rt_del_reason del_reason);
+ #if IS_ENABLED(CONFIG_IPV6)
+ int ip6_del_rt(struct net *net, struct fib6_info *f6i, bool skip_notify);
+ #else
+diff --git a/include/uapi/linux/rtnetlink.h b/include/uapi/linux/rtnetlink.h
+index 27265fd31e5f..3988b51db539 100644
+--- a/include/uapi/linux/rtnetlink.h
++++ b/include/uapi/linux/rtnetlink.h
+@@ -399,6 +399,7 @@ enum rtattr_type_t {
+ 	RTA_DPORT,
+ 	RTA_NH_ID,
+ 	RTA_FLOWLABEL,
++	RTA_DEL_REASON,
+ 	__RTA_MAX
+ };
+ 
+@@ -407,6 +408,30 @@ enum rtattr_type_t {
+ #define RTM_RTA(r)  ((struct rtattr*)(((char*)(r)) + NLMSG_ALIGN(sizeof(struct rtmsg))))
+ #define RTM_PAYLOAD(n) NLMSG_PAYLOAD(n,sizeof(struct rtmsg))
+ 
++/* RTA_DEL_REASON: why the kernel deleted the route. u32.
++ * Emitted only on RTM_DELROUTE notifications, and only when the deletion
++ * path records a cause. Absence means either an older kernel or a
++ * deletion path that does not (yet) record its cause - consumers must
++ * treat "absent" and "unspec" identically. New causes may be appended.
++ * Currently only IPv6 deletion paths record a cause.
++ *
++ * The attribute is notification-only: the kernel rejects it in
++ * requests, so a notification must not be echoed back verbatim.
++ *
++ * The value space is family-agnostic: a value must never be
++ * reinterpreted per address family. A cause that only one family can
++ * produce still gets its own value rather than reusing another
++ * family's.
++ */
++enum rt_del_reason {
++	RT_DEL_REASON_UNSPEC,		/* cause not recorded */
++	RT_DEL_REASON_EXPIRED,		/* RTF_EXPIRES lifetime ran out (GC) */
++	RT_DEL_REASON_RA_WITHDRAWN,	/* zero-lifetime RA / PIO / RIO */
++	__RT_DEL_REASON_MAX
++};
++
++#define RT_DEL_REASON_MAX (__RT_DEL_REASON_MAX - 1)
++
+ /* RTM_MULTIPATH --- array of struct rtnexthop.
+  *
+  * "struct rtnexthop" describes all necessary nexthop information,
+diff --git a/net/ipv6/route.c b/net/ipv6/route.c
+index 5968ce5ad150..9898578cb418 100644
+--- a/net/ipv6/route.c
++++ b/net/ipv6/route.c
+@@ -4004,6 +4004,14 @@ int ip6_del_rt(struct net *net, struct fib6_info *rt, bool skip_notify)
+ 	return __ip6_del_rt(rt, &info);
+ }
+ 
++int ip6_del_rt_reason(struct net *net, struct fib6_info *rt,
++		      enum rt_del_reason del_reason)
++{
++	struct nl_info info = { .nl_net = net };
++
++	return __ip6_del_rt(rt, &info);
++}
++
+ static int __ip6_del_rt_siblings(struct fib6_info *rt, struct fib6_config *cfg)
+ {
+ 	struct nl_info *info = &cfg->fc_nlinfo;
+-- 
+2.55.0
+

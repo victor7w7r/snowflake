@@ -1,0 +1,108 @@
+From 4902e56525076d2f7241e3a2f612d19be84900a9 Mon Sep 17 00:00:00 2001
+From: Johannes Berg <johannes@sipsolutions.net>
+Date: Mon, 27 Jul 2026 13:57:30 -0600
+Subject: [PATCH 09139/15333] seq_file: rename mangle_path to seq_mangle_path
+
+The symbol mangle_path conflicts with a gcov symbol which
+can break the build of ARCH=um with gcov, and it's also
+not very specific and descriptive.
+
+Rename mangle_path() to seq_mangle_path(), and also remove
+the export since it's not needed or used by any modules.
+
+Signed-off-by: Johannes Berg <johannes@sipsolutions.net>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Link: https://patch.msgid.link/20260727195730.2306887-1-alex.hung@amd.com
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/seq_file.c            | 11 +++++------
+ include/linux/seq_file.h |  2 +-
+ lib/seq_buf.c            |  2 +-
+ 3 files changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/fs/seq_file.c b/fs/seq_file.c
+index 4745db2a34d1..456c78719fd0 100644
+--- a/fs/seq_file.c
++++ b/fs/seq_file.c
+@@ -428,7 +428,7 @@ EXPORT_SYMBOL(seq_bprintf);
+ #endif /* CONFIG_BINARY_PRINTF */
+ 
+ /**
+- *	mangle_path -	mangle and copy path to buffer beginning
++ *	seq_mangle_path -	mangle and copy path to buffer beginning
+  *	@s: buffer start
+  *	@p: beginning of path in above buffer
+  *	@esc: set of characters that need escaping
+@@ -438,7 +438,7 @@ EXPORT_SYMBOL(seq_bprintf);
+  *      Returns pointer past last written character in @s, or NULL in case of
+  *      failure.
+  */
+-char *mangle_path(char *s, const char *p, const char *esc)
++char *seq_mangle_path(char *s, const char *p, const char *esc)
+ {
+ 	while (s <= p) {
+ 		char c = *p++;
+@@ -457,7 +457,6 @@ char *mangle_path(char *s, const char *p, const char *esc)
+ 	}
+ 	return NULL;
+ }
+-EXPORT_SYMBOL(mangle_path);
+ 
+ /**
+  * seq_path - seq_file interface to print a pathname
+@@ -477,7 +476,7 @@ int seq_path(struct seq_file *m, const struct path *path, const char *esc)
+ 	if (size) {
+ 		char *p = d_path(path, buf, size);
+ 		if (!IS_ERR(p)) {
+-			char *end = mangle_path(buf, p, esc);
++			char *end = seq_mangle_path(buf, p, esc);
+ 			if (end)
+ 				res = end - buf;
+ 		}
+@@ -520,7 +519,7 @@ int seq_path_root(struct seq_file *m, const struct path *path,
+ 			return SEQ_SKIP;
+ 		res = PTR_ERR(p);
+ 		if (!IS_ERR(p)) {
+-			char *end = mangle_path(buf, p, esc);
++			char *end = seq_mangle_path(buf, p, esc);
+ 			if (end)
+ 				res = end - buf;
+ 			else
+@@ -544,7 +543,7 @@ int seq_dentry(struct seq_file *m, struct dentry *dentry, const char *esc)
+ 	if (size) {
+ 		char *p = dentry_path(dentry, buf, size);
+ 		if (!IS_ERR(p)) {
+-			char *end = mangle_path(buf, p, esc);
++			char *end = seq_mangle_path(buf, p, esc);
+ 			if (end)
+ 				res = end - buf;
+ 		}
+diff --git a/include/linux/seq_file.h b/include/linux/seq_file.h
+index 2fb266ea69fa..dc0e8c62d9e0 100644
+--- a/include/linux/seq_file.h
++++ b/include/linux/seq_file.h
+@@ -104,7 +104,7 @@ static inline void seq_setwidth(struct seq_file *m, size_t size)
+ }
+ void seq_pad(struct seq_file *m, char c);
+ 
+-char *mangle_path(char *s, const char *p, const char *esc);
++char *seq_mangle_path(char *s, const char *p, const char *esc);
+ int seq_open(struct file *, const struct seq_operations *);
+ ssize_t seq_read(struct file *, char __user *, size_t, loff_t *);
+ ssize_t seq_read_iter(struct kiocb *iocb, struct iov_iter *iter);
+diff --git a/lib/seq_buf.c b/lib/seq_buf.c
+index b59488fa8135..a92093f346da 100644
+--- a/lib/seq_buf.c
++++ b/lib/seq_buf.c
+@@ -321,7 +321,7 @@ int seq_buf_path(struct seq_buf *s, const struct path *path, const char *esc)
+ 	if (size) {
+ 		char *p = d_path(path, buf, size);
+ 		if (!IS_ERR(p)) {
+-			char *end = mangle_path(buf, p, esc);
++			char *end = seq_mangle_path(buf, p, esc);
+ 			if (end)
+ 				res = end - buf;
+ 		}
+-- 
+2.55.0
+

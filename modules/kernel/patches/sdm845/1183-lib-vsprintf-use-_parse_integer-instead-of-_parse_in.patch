@@ -1,0 +1,48 @@
+From b482908f8cf66a079f2e85af6eb7799b63dda50d Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Thu, 4 Jun 2026 10:58:57 +0100
+Subject: [PATCH 01183/15333] lib: vsprintf: use _parse_integer() instead of
+ _parse_integer_limit()
+
+Use _parse_integer() that allows optional arguments to be explicitly
+initialised.
+
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Acked-by: Petr Mladek <pmladek@suse.com>
+Signed-off-by: Rodrigo Alencar <rodrigo.alencar@analog.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ lib/kstrtox.h  | 3 +++
+ lib/vsprintf.c | 2 +-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/lib/kstrtox.h b/lib/kstrtox.h
+index 00cf3255bdd2..ff84fe434a00 100644
+--- a/lib/kstrtox.h
++++ b/lib/kstrtox.h
+@@ -12,6 +12,9 @@ unsigned int _parse_integer_limit(const char *s, unsigned int base, unsigned lon
+ #define _parse_integer0(s, base, res, ...)						\
+ 	_parse_integer_limit(s, base, res, INT_MAX)
+ 
++#define _parse_integer1(s, base, res, max_chars, ...)					\
++	_parse_integer_limit(s, base, res, max_chars)
++
+ #define _parse_integer(s, base, res, ...)						\
+ 	CONCATENATE(_parse_integer, COUNT_ARGS(__VA_ARGS__))(s, base, res, __VA_ARGS__)
+ 
+diff --git a/lib/vsprintf.c b/lib/vsprintf.c
+index 2bc6ef483576..d2cfa1dfc343 100644
+--- a/lib/vsprintf.c
++++ b/lib/vsprintf.c
+@@ -86,7 +86,7 @@ static unsigned long long simple_strntoull(const char *startp, char **endp, unsi
+ 	cp = _parse_integer_fixup_radix(startp, &base);
+ 	prefix_chars = cp - startp;
+ 	if (prefix_chars < max_chars) {
+-		rv = _parse_integer_limit(cp, base, &result, max_chars - prefix_chars);
++		rv = _parse_integer(cp, base, &result, max_chars - prefix_chars);
+ 		/* FIXME */
+ 		cp += (rv & ~KSTRTOX_OVERFLOW);
+ 	} else {
+-- 
+2.55.0
+

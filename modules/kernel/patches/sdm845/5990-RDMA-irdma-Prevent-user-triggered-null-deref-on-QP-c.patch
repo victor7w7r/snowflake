@@ -1,0 +1,61 @@
+From d32fe5bb418832adef25e70f9d6ed50140b9f05f Mon Sep 17 00:00:00 2001
+From: Jacob Moroni <jmoroni@google.com>
+Date: Wed, 17 Jun 2026 16:40:13 +0000
+Subject: [PATCH 05990/15333] RDMA/irdma: Prevent user-triggered null deref on
+ QP create
+
+Previously, the user QP creation path would only attempt to
+populate iwqp->iwpbl if the user-provided req.user_wqe_bufs
+field was non-zero. The problem is that iwqp->iwpbl is
+unconditionally dereferenced later on in irdma_setup_virt_qp.
+
+While there was a check for iwqp->iwpbl != NULL, this check
+would only occur if req.user_wqe_bufs was non-zero. The end
+result is that a user could send a zero user_wqe_bufs value
+and trigger a null ptr deref.
+
+Fix this by unconditionally calling irdma_get_pbl and bailing
+if it fails, similar to the CQ and SRQ paths.
+
+Fixes: b48c24c2d710 ("RDMA/irdma: Implement device supported verb APIs")
+Signed-off-by: Jacob Moroni <jmoroni@google.com>
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/hw/irdma/verbs.c | 21 ++++++++++-----------
+ 1 file changed, 10 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/infiniband/hw/irdma/verbs.c b/drivers/infiniband/hw/irdma/verbs.c
+index f48cc8b5299b..a5aa1cd8ab7c 100644
+--- a/drivers/infiniband/hw/irdma/verbs.c
++++ b/drivers/infiniband/hw/irdma/verbs.c
+@@ -635,17 +635,16 @@ static int irdma_setup_umode_qp(struct ib_udata *udata,
+ 
+ 	iwqp->ctx_info.qp_compl_ctx = req.user_compl_ctx;
+ 	iwqp->user_mode = 1;
+-	if (req.user_wqe_bufs) {
+-		spin_lock_irqsave(&ucontext->qp_reg_mem_list_lock, flags);
+-		iwqp->iwpbl = irdma_get_pbl((unsigned long)req.user_wqe_bufs,
+-					    &ucontext->qp_reg_mem_list);
+-		spin_unlock_irqrestore(&ucontext->qp_reg_mem_list_lock, flags);
+-
+-		if (!iwqp->iwpbl) {
+-			ret = -ENODATA;
+-			ibdev_dbg(&iwdev->ibdev, "VERBS: no pbl info\n");
+-			return ret;
+-		}
++
++	spin_lock_irqsave(&ucontext->qp_reg_mem_list_lock, flags);
++	iwqp->iwpbl = irdma_get_pbl((unsigned long)req.user_wqe_bufs,
++				    &ucontext->qp_reg_mem_list);
++	spin_unlock_irqrestore(&ucontext->qp_reg_mem_list_lock, flags);
++
++	if (!iwqp->iwpbl) {
++		ret = -ENODATA;
++		ibdev_dbg(&iwdev->ibdev, "VERBS: no pbl info\n");
++		return ret;
+ 	}
+ 
+ 	if (!ucontext->use_raw_attrs) {
+-- 
+2.55.0
+

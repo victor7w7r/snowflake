@@ -1,0 +1,65 @@
+From 59a9d0814d9f2566ea127a993f5b602da913a61a Mon Sep 17 00:00:00 2001
+From: Baokun Li <libaokun@linux.alibaba.com>
+Date: Mon, 29 Jun 2026 19:38:26 +0800
+Subject: [PATCH 06502/15333] ext4: use kiocb_modified instead of file_modified
+ in DIO/DAX write path
+
+file_modified() passes flags=0 which drops IOCB_NOWAIT, causing
+file_update_time() to sleep in ext4_journal_start() via
+ext4_dirty_inode() even in non-blocking contexts.
+
+kiocb_modified(iocb) propagates iocb->ki_flags so that
+generic_update_time() correctly returns -EAGAIN when IOCB_NOWAIT
+is set and ->dirty_inode could block, matching the behavior
+already adopted by XFS, FUSE, and ext2.
+
+Affected paths:
+- ext4_dio_write_checks(): DIO NOWAIT write
+- ext4_write_checks(): shared by buffered (rejects NOWAIT upfront)
+  and DAX write (supports NOWAIT)
+
+ext4_fallocate() in extents.c is not affected as it has no kiocb.
+
+Reviewed-by: Zhang Yi <yi.zhang@huawei.com>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Signed-off-by: Baokun Li <libaokun@linux.alibaba.com>
+Link: https://patch.msgid.link/20260629113827.4074335-6-libaokun@linux.alibaba.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/file.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/fs/ext4/file.c b/fs/ext4/file.c
+index d12445e3907a..0e9448a110dc 100644
+--- a/fs/ext4/file.c
++++ b/fs/ext4/file.c
+@@ -307,7 +307,7 @@ static ssize_t ext4_write_checks(struct kiocb *iocb, struct iov_iter *from)
+ 	if (count <= 0)
+ 		return count;
+ 
+-	ret = file_modified(iocb->ki_filp);
++	ret = kiocb_modified(iocb);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -466,7 +466,7 @@ static const struct iomap_dio_ops ext4_dio_write_ops = {
+  *
+  * The decision is layered, evaluated in this order:
+  *
+- * 1. If file_modified() needs to update security info (!IS_NOSEC), upgrade
++ * 1. If kiocb_modified() needs to update security info (!IS_NOSEC), upgrade
+  *    to the exclusive lock -- the security update itself requires it,
+  *    regardless of whether the write extends the file or is aligned.
+  *
+@@ -556,7 +556,7 @@ static ssize_t ext4_dio_write_checks(struct kiocb *iocb, struct iov_iter *from,
+ 		*dio_flags = IOMAP_DIO_FORCE_WAIT;
+ 	}
+ 
+-	ret = file_modified(file);
++	ret = kiocb_modified(iocb);
+ 	if (ret < 0)
+ 		goto out;
+ 
+-- 
+2.55.0
+

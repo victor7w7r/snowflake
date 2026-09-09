@@ -1,0 +1,43 @@
+From 41eb81a30665ece270d677b4ac92cb82047e69bd Mon Sep 17 00:00:00 2001
+From: Jesse Zhang <Jesse.Zhang@amd.com>
+Date: Sat, 20 Jun 2026 23:06:34 +0800
+Subject: [PATCH 01758/15333] drm/amdgpu/mes12: drop queue state on
+ RESET_QUEUES unmap
+
+Set remove_queue_after_reset=1 (MES >= 0x5a) so MES drops its internal
+state instead of re-unmapping an already MMIO-reset queue, which can
+timeout into a GPU reset.
+
+Suggested-by: Shaoyun Liu <shaoyun.liu@amd.com>
+Acked-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Jesse Zhang <Jesse.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/mes_v12_0.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v12_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v12_0.c
+index d80a983b1b6c..20f4fd57b1da 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_v12_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_v12_0.c
+@@ -749,6 +749,17 @@ static int mes_v12_0_unmap_legacy_queue(struct amdgpu_mes *mes,
+ 		mes_remove_queue_pkt.unmap_legacy_queue = 1;
+ 		mes_remove_queue_pkt.queue_type =
+ 			convert_to_mes_queue_type(input->queue_type);
++		/*
++		 * A reset-time unmap: the queue was already reset via MMIO while
++		 * gangs are suspended and it is on the MES hung/fail list. Tell
++		 * MES to just drop its internal state for it. Without this flag
++		 * MES asks CP to unmap the already-reset (still wedged) queue
++		 * again, which times out and forces a GPU reset.
++		 */
++		if (input->action == RESET_QUEUES &&
++		    (mes->sched_version & AMDGPU_MES_VERSION_MASK) >= 0x5a)
++			mes_remove_queue_pkt.remove_queue_after_reset = 1;
++
+ 	}
+ 
+ 	if (mes->adev->enable_uni_mes) {
+-- 
+2.55.0
+

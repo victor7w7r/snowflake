@@ -1,0 +1,52 @@
+From 3d6757a640f8c92b6cb68a3cfdff9b9fa292a7d3 Mon Sep 17 00:00:00 2001
+From: Paul Louvel <paul.louvel@bootlin.com>
+Date: Tue, 7 Jul 2026 17:45:02 +0200
+Subject: [PATCH 12938/15333] watchdog: w83627hf_wdt: Report the probed chip
+ name via WDIOC_GETSUPPORT
+
+The watchdog identity string reported via WDIOC_GETSUPPORT has always
+been hardcoded to "W83627HF Watchdog", even though this driver supports
+a wide range of Nuvoton/Winbond Super I/O chips.
+
+This is misleading, since the driver itself correctly log the chip name
+in wdt_init(), but could report later a different chip name with
+WDIOC_GETSUPPORT.
+
+Instead format the identity at probe time using the actual chip name
+that was detected.
+
+Signed-off-by: Paul Louvel <paul.louvel@bootlin.com>
+Link: https://lore.kernel.org/r/20260707-w83627hf_wdt-nct6126d-v4-2-829e5f63d548@bootlin.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/watchdog/w83627hf_wdt.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/watchdog/w83627hf_wdt.c b/drivers/watchdog/w83627hf_wdt.c
+index a6dfa9d01702..bfe132cfea87 100644
+--- a/drivers/watchdog/w83627hf_wdt.c
++++ b/drivers/watchdog/w83627hf_wdt.c
+@@ -316,9 +316,8 @@ static unsigned int wdt_get_time(struct watchdog_device *wdog)
+  *	Kernel Interfaces
+  */
+ 
+-static const struct watchdog_info wdt_info = {
++static struct watchdog_info wdt_info = {
+ 	.options = WDIOF_SETTIMEOUT | WDIOF_KEEPALIVEPING | WDIOF_MAGICCLOSE,
+-	.identity = "W83627HF Watchdog",
+ };
+ 
+ static const struct watchdog_ops wdt_ops = {
+@@ -525,6 +524,9 @@ static int __init wdt_init(void)
+ 	pr_info("WDT driver for %s Super I/O chip initialising\n",
+ 		chip_name[chip]);
+ 
++	snprintf(wdt_info.identity, sizeof(wdt_info.identity), "%s Watchdog",
++		 chip_name[chip]);
++
+ 	watchdog_init_timeout(&wdt_dev, timeout, NULL);
+ 	watchdog_set_nowayout(&wdt_dev, nowayout);
+ 	watchdog_stop_on_reboot(&wdt_dev);
+-- 
+2.55.0
+

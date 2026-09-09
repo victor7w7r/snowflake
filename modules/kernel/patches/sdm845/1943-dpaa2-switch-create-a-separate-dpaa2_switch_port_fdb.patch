@@ -1,0 +1,75 @@
+From da7ec6b81b0bcc7599d3518023a2cdac0609105c Mon Sep 17 00:00:00 2001
+From: Ioana Ciornei <ioana.ciornei@nxp.com>
+Date: Mon, 29 Jun 2026 14:23:00 +0300
+Subject: [PATCH 01943/15333] dpaa2-switch: create a separate
+ dpaa2_switch_port_fdb_event() function
+
+Create a separate dpaa2_switch_port_fdb_event() function that will only
+handle the FDB related events. With this change, the
+dpaa2_switch_port_event() notifier handler can be written in a way that
+it's easier to follow.
+
+Signed-off-by: Ioana Ciornei <ioana.ciornei@nxp.com>
+Link: https://patch.msgid.link/20260629112309.154328-5-ioana.ciornei@nxp.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ .../ethernet/freescale/dpaa2/dpaa2-switch.c   | 28 ++++++++++++++-----
+ 1 file changed, 21 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/net/ethernet/freescale/dpaa2/dpaa2-switch.c b/drivers/net/ethernet/freescale/dpaa2/dpaa2-switch.c
+index eacab00b586a..c7c84bf2fde7 100644
+--- a/drivers/net/ethernet/freescale/dpaa2/dpaa2-switch.c
++++ b/drivers/net/ethernet/freescale/dpaa2/dpaa2-switch.c
+@@ -2337,21 +2337,18 @@ static void dpaa2_switch_event_work(struct work_struct *work)
+ 	dev_put(dev);
+ }
+ 
+-/* Called under rcu_read_lock() */
+-static int dpaa2_switch_port_event(struct notifier_block *nb,
+-				   unsigned long event, void *ptr)
++static int dpaa2_switch_port_fdb_event(struct notifier_block *nb,
++				       unsigned long event, void *ptr)
+ {
+ 	struct net_device *dev = switchdev_notifier_info_to_dev(ptr);
+ 	struct ethsw_port_priv *port_priv = netdev_priv(dev);
+ 	struct ethsw_switchdev_event_work *switchdev_work;
+ 	struct switchdev_notifier_fdb_info *fdb_info = ptr;
+-	struct ethsw_core *ethsw = port_priv->ethsw_data;
+-
+-	if (event == SWITCHDEV_PORT_ATTR_SET)
+-		return dpaa2_switch_port_attr_set_event(dev, ptr);
++	struct ethsw_core *ethsw;
+ 
+ 	if (!dpaa2_switch_port_dev_check(dev))
+ 		return NOTIFY_DONE;
++	ethsw = port_priv->ethsw_data;
+ 
+ 	switchdev_work = kzalloc_obj(*switchdev_work, GFP_ATOMIC);
+ 	if (!switchdev_work)
+@@ -2390,6 +2387,23 @@ static int dpaa2_switch_port_event(struct notifier_block *nb,
+ 	return NOTIFY_BAD;
+ }
+ 
++/* Called under rcu_read_lock() */
++static int dpaa2_switch_port_event(struct notifier_block *nb,
++				   unsigned long event, void *ptr)
++{
++	struct net_device *dev = switchdev_notifier_info_to_dev(ptr);
++
++	switch (event) {
++	case SWITCHDEV_PORT_ATTR_SET:
++		return dpaa2_switch_port_attr_set_event(dev, ptr);
++	case SWITCHDEV_FDB_ADD_TO_DEVICE:
++	case SWITCHDEV_FDB_DEL_TO_DEVICE:
++		return dpaa2_switch_port_fdb_event(nb, event, ptr);
++	default:
++		return NOTIFY_DONE;
++	}
++}
++
+ static int dpaa2_switch_port_obj_event(unsigned long event,
+ 				       struct net_device *netdev,
+ 				       struct switchdev_notifier_port_obj_info *port_obj_info)
+-- 
+2.55.0
+

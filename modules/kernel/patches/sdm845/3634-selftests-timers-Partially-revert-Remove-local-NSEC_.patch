@@ -1,0 +1,261 @@
+From f44ce7fdbdd00a596455b8689b62c12d5530d610 Mon Sep 17 00:00:00 2001
+From: Wake Liu <wakel@google.com>
+Date: Wed, 10 Jun 2026 01:47:21 +0000
+Subject: [PATCH 03634/15333] selftests: timers: Partially revert "Remove local
+ NSEC_PER_SEC and USEC_PER_SEC defines"
+
+This partially reverts commit 80fa614e2fbc ("selftests: timers: Remove
+local NSEC_PER_SEC and USEC_PER_SEC defines").
+
+The original commit removed local definitions of NSEC_PER_SEC and
+USEC_PER_SEC in favor of including <include/vdso/time64.h>. However,
+NSEC_PER_SEC in vdso/time64.h is defined as 1000000000L, which is
+32-bit on 32-bit architectures. This causes integer overflow warnings
+in several timer tests when doing arithmetic like NSEC_PER_SEC * 10 on
+32-bit systems.
+
+To fix this, restore the local definitions of NSEC_PER_SEC and
+USEC_PER_SEC in the test files, but use "LL" suffix consistently
+(1000000000LL and 1000000LL) to ensure 64-bit arithmetic and avoid
+overflows.
+
+We keep the cleanup from the original commit that renamed plural
+definitions (NSECS_PER_SEC/USECS_PER_SEC) to singular ones in
+posix_timers.c, but we now define them locally there as well.
+This also removes the dependency of the selftests on the internal
+kernel header <include/vdso/time64.h>.
+
+Signed-off-by: Wake Liu <wakel@google.com>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Acked-by: John Stultz <jstultz@google.com>
+Link: https://patch.msgid.link/20260610014721.718362-1-wakel@google.com
+---
+ tools/testing/selftests/timers/Makefile              | 2 +-
+ tools/testing/selftests/timers/adjtick.c             | 5 +++--
+ tools/testing/selftests/timers/alarmtimer-suspend.c  | 3 ++-
+ tools/testing/selftests/timers/inconsistency-check.c | 3 ++-
+ tools/testing/selftests/timers/leap-a-day.c          | 3 ++-
+ tools/testing/selftests/timers/mqueue-lat.c          | 3 ++-
+ tools/testing/selftests/timers/nanosleep.c           | 3 ++-
+ tools/testing/selftests/timers/nsleep-lat.c          | 3 ++-
+ tools/testing/selftests/timers/posix_timers.c        | 4 +++-
+ tools/testing/selftests/timers/raw_skew.c            | 3 ++-
+ tools/testing/selftests/timers/set-2038.c            | 3 ++-
+ tools/testing/selftests/timers/set-timer-lat.c       | 3 ++-
+ tools/testing/selftests/timers/valid-adjtimex.c      | 4 +++-
+ 13 files changed, 28 insertions(+), 14 deletions(-)
+
+diff --git a/tools/testing/selftests/timers/Makefile b/tools/testing/selftests/timers/Makefile
+index 32203593c62e..0e73a16874c4 100644
+--- a/tools/testing/selftests/timers/Makefile
++++ b/tools/testing/selftests/timers/Makefile
+@@ -1,5 +1,5 @@
+ # SPDX-License-Identifier: GPL-2.0
+-CFLAGS += -O3 -Wl,-no-as-needed -Wall -I $(top_srcdir)
++CFLAGS += -O3 -Wl,-no-as-needed -Wall
+ LDLIBS += -lrt -lpthread -lm
+ 
+ # these are all "safe" tests that don't modify
+diff --git a/tools/testing/selftests/timers/adjtick.c b/tools/testing/selftests/timers/adjtick.c
+index 5b3ef708d6e9..22d274d5520f 100644
+--- a/tools/testing/selftests/timers/adjtick.c
++++ b/tools/testing/selftests/timers/adjtick.c
+@@ -22,10 +22,11 @@
+ #include <sys/time.h>
+ #include <sys/timex.h>
+ #include <time.h>
+-#include <include/vdso/time64.h>
+-
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC		1000000000LL
++#define USEC_PER_SEC		1000000LL
++
+ #define MILLION			1000000
+ 
+ long systick;
+diff --git a/tools/testing/selftests/timers/alarmtimer-suspend.c b/tools/testing/selftests/timers/alarmtimer-suspend.c
+index aa66c805f6a4..d55d5b0377c6 100644
+--- a/tools/testing/selftests/timers/alarmtimer-suspend.c
++++ b/tools/testing/selftests/timers/alarmtimer-suspend.c
+@@ -28,10 +28,11 @@
+ #include <signal.h>
+ #include <stdlib.h>
+ #include <pthread.h>
+-#include <include/vdso/time64.h>
+ #include <errno.h>
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++
+ #define UNREASONABLE_LAT (NSEC_PER_SEC * 5) /* hopefully we resume in 5 secs */
+ 
+ #define SUSPEND_SECS 15
+diff --git a/tools/testing/selftests/timers/inconsistency-check.c b/tools/testing/selftests/timers/inconsistency-check.c
+index e53e63e18683..9ab7066b4e32 100644
+--- a/tools/testing/selftests/timers/inconsistency-check.c
++++ b/tools/testing/selftests/timers/inconsistency-check.c
+@@ -28,9 +28,10 @@
+ #include <sys/timex.h>
+ #include <string.h>
+ #include <signal.h>
+-#include <include/vdso/time64.h>
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++
+ /* CLOCK_HWSPECIFIC == CLOCK_SGI_CYCLE (Deprecated) */
+ #define CLOCK_HWSPECIFIC		10
+ 
+diff --git a/tools/testing/selftests/timers/leap-a-day.c b/tools/testing/selftests/timers/leap-a-day.c
+index 97c8c66bea88..71b49734e08c 100644
+--- a/tools/testing/selftests/timers/leap-a-day.c
++++ b/tools/testing/selftests/timers/leap-a-day.c
+@@ -51,9 +51,10 @@
+ #include <string.h>
+ #include <signal.h>
+ #include <unistd.h>
+-#include <include/vdso/time64.h>
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++
+ #define CLOCK_TAI 11
+ 
+ time_t next_leap;
+diff --git a/tools/testing/selftests/timers/mqueue-lat.c b/tools/testing/selftests/timers/mqueue-lat.c
+index c0d9368e4fca..ce8700c95cac 100644
+--- a/tools/testing/selftests/timers/mqueue-lat.c
++++ b/tools/testing/selftests/timers/mqueue-lat.c
+@@ -29,9 +29,10 @@
+ #include <signal.h>
+ #include <errno.h>
+ #include <mqueue.h>
+-#include <include/vdso/time64.h>
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++
+ 
+ #define TARGET_TIMEOUT		100000000	/* 100ms in nanoseconds */
+ #define UNRESONABLE_LATENCY	40000000	/* 40ms in nanosecs */
+diff --git a/tools/testing/selftests/timers/nanosleep.c b/tools/testing/selftests/timers/nanosleep.c
+index a054680b3372..ceff18149a48 100644
+--- a/tools/testing/selftests/timers/nanosleep.c
++++ b/tools/testing/selftests/timers/nanosleep.c
+@@ -27,9 +27,10 @@
+ #include <sys/timex.h>
+ #include <string.h>
+ #include <signal.h>
+-#include <include/vdso/time64.h>
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++
+ /* CLOCK_HWSPECIFIC == CLOCK_SGI_CYCLE (Deprecated) */
+ #define CLOCK_HWSPECIFIC		10
+ 
+diff --git a/tools/testing/selftests/timers/nsleep-lat.c b/tools/testing/selftests/timers/nsleep-lat.c
+index a7ba1eb1e21b..15f6493ca7b5 100644
+--- a/tools/testing/selftests/timers/nsleep-lat.c
++++ b/tools/testing/selftests/timers/nsleep-lat.c
+@@ -24,9 +24,10 @@
+ #include <sys/timex.h>
+ #include <string.h>
+ #include <signal.h>
+-#include <include/vdso/time64.h>
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++
+ #define UNRESONABLE_LATENCY 40000000 /* 40ms in nanosecs */
+ 
+ /* CLOCK_HWSPECIFIC == CLOCK_SGI_CYCLE (Deprecated) */
+diff --git a/tools/testing/selftests/timers/posix_timers.c b/tools/testing/selftests/timers/posix_timers.c
+index 2f3bac9fc6e8..fa168d802f9e 100644
+--- a/tools/testing/selftests/timers/posix_timers.c
++++ b/tools/testing/selftests/timers/posix_timers.c
+@@ -16,12 +16,14 @@
+ #include <string.h>
+ #include <unistd.h>
+ #include <time.h>
+-#include <include/vdso/time64.h>
+ #include <pthread.h>
+ #include <stdbool.h>
+ 
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++#define USEC_PER_SEC 1000000LL
++
+ #define DELAY 2
+ 
+ static void __fatal_error(const char *test, const char *name, const char *what)
+diff --git a/tools/testing/selftests/timers/raw_skew.c b/tools/testing/selftests/timers/raw_skew.c
+index a7bae7d80916..2dd16cb4cdd0 100644
+--- a/tools/testing/selftests/timers/raw_skew.c
++++ b/tools/testing/selftests/timers/raw_skew.c
+@@ -25,9 +25,10 @@
+ #include <sys/time.h>
+ #include <sys/timex.h>
+ #include <time.h>
+-#include <include/vdso/time64.h>
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++
+ #define shift_right(x, s) ({		\
+ 	__typeof__(x) __x = (x);	\
+ 	__typeof__(s) __s = (s);	\
+diff --git a/tools/testing/selftests/timers/set-2038.c b/tools/testing/selftests/timers/set-2038.c
+index ecc171de4728..c1235638406d 100644
+--- a/tools/testing/selftests/timers/set-2038.c
++++ b/tools/testing/selftests/timers/set-2038.c
+@@ -27,9 +27,10 @@
+ #include <unistd.h>
+ #include <time.h>
+ #include <sys/time.h>
+-#include <include/vdso/time64.h>
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++
+ #define KTIME_MAX	((long long)~((unsigned long long)1 << 63))
+ #define KTIME_SEC_MAX	(KTIME_MAX / NSEC_PER_SEC)
+ 
+diff --git a/tools/testing/selftests/timers/set-timer-lat.c b/tools/testing/selftests/timers/set-timer-lat.c
+index 44d2e3614fa5..e092c18befff 100644
+--- a/tools/testing/selftests/timers/set-timer-lat.c
++++ b/tools/testing/selftests/timers/set-timer-lat.c
+@@ -28,9 +28,10 @@
+ #include <signal.h>
+ #include <stdlib.h>
+ #include <pthread.h>
+-#include <include/vdso/time64.h>
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++
+ /* CLOCK_HWSPECIFIC == CLOCK_SGI_CYCLE (Deprecated) */
+ #define CLOCK_HWSPECIFIC		10
+ 
+diff --git a/tools/testing/selftests/timers/valid-adjtimex.c b/tools/testing/selftests/timers/valid-adjtimex.c
+index e1e56d3097d6..dc2559eb11a5 100644
+--- a/tools/testing/selftests/timers/valid-adjtimex.c
++++ b/tools/testing/selftests/timers/valid-adjtimex.c
+@@ -29,9 +29,11 @@
+ #include <string.h>
+ #include <signal.h>
+ #include <unistd.h>
+-#include <include/vdso/time64.h>
+ #include "kselftest.h"
+ 
++#define NSEC_PER_SEC 1000000000LL
++#define USEC_PER_SEC 1000000LL
++
+ #define ADJ_SETOFFSET 0x0100
+ 
+ #include <sys/syscall.h>
+-- 
+2.55.0
+

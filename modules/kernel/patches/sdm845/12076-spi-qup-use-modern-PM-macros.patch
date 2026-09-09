@@ -1,0 +1,75 @@
+From d87ae277834df0c531d77e138079a0b95c426b77 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:50 +0800
+Subject: [PATCH 12076/15333] spi: qup: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use #ifdef guards.
+
+This has the advantage of always compiling these functions in,
+independently of any Kconfig option. Thanks to that, bugs and other
+regressions are subsequently easier to catch.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-27-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-qup.c | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/spi/spi-qup.c b/drivers/spi/spi-qup.c
+index 034546b3f058..e8b076b1622d 100644
+--- a/drivers/spi/spi-qup.c
++++ b/drivers/spi/spi-qup.c
+@@ -1211,7 +1211,6 @@ static int spi_qup_probe(struct platform_device *pdev)
+ 	return ret;
+ }
+ 
+-#ifdef CONFIG_PM
+ static int spi_qup_pm_suspend_runtime(struct device *device)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(device);
+@@ -1253,9 +1252,7 @@ static int spi_qup_pm_resume_runtime(struct device *device)
+ 	writel_relaxed(config, controller->base + QUP_CONFIG);
+ 	return 0;
+ }
+-#endif /* CONFIG_PM */
+ 
+-#ifdef CONFIG_PM_SLEEP
+ static int spi_qup_suspend(struct device *device)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(device);
+@@ -1312,7 +1309,6 @@ static int spi_qup_resume(struct device *device)
+ 	clk_disable_unprepare(controller->iclk);
+ 	return ret;
+ }
+-#endif /* CONFIG_PM_SLEEP */
+ 
+ static void spi_qup_remove(struct platform_device *pdev)
+ {
+@@ -1352,16 +1348,16 @@ static const struct of_device_id spi_qup_dt_match[] = {
+ MODULE_DEVICE_TABLE(of, spi_qup_dt_match);
+ 
+ static const struct dev_pm_ops spi_qup_dev_pm_ops = {
+-	SET_SYSTEM_SLEEP_PM_OPS(spi_qup_suspend, spi_qup_resume)
+-	SET_RUNTIME_PM_OPS(spi_qup_pm_suspend_runtime,
+-			   spi_qup_pm_resume_runtime,
+-			   NULL)
++	SYSTEM_SLEEP_PM_OPS(spi_qup_suspend, spi_qup_resume)
++	RUNTIME_PM_OPS(spi_qup_pm_suspend_runtime,
++		       spi_qup_pm_resume_runtime,
++		       NULL)
+ };
+ 
+ static struct platform_driver spi_qup_driver = {
+ 	.driver = {
+ 		.name		= "spi_qup",
+-		.pm		= &spi_qup_dev_pm_ops,
++		.pm		= pm_ptr(&spi_qup_dev_pm_ops),
+ 		.of_match_table = spi_qup_dt_match,
+ 	},
+ 	.probe = spi_qup_probe,
+-- 
+2.55.0
+

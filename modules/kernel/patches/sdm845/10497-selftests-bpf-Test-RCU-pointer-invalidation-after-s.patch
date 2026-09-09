@@ -1,0 +1,163 @@
+From bb2df6fd891d6332cc180d198914e9f40ada50e8 Mon Sep 17 00:00:00 2001
+From: Ning Ding <dingning04@gmail.com>
+Date: Mon, 3 Aug 2026 04:26:09 -0700
+Subject: [PATCH 10497/15333] selftests/bpf: Test RCU pointer invalidation
+ after spin unlock
+
+The verifier previously accepted a task kptr after the final spin unlock
+ended its RCU protection in a sleepable program. The pointer could then be
+used after the task was freed.
+
+Add a negative test for that case. Add positive controls showing that the
+pointer remains valid in a non-sleepable program and while an explicit RCU
+read-side section is still active.
+
+Assisted-by: Codex:gpt-5.6-sol
+Assisted-by: ChatGPT:GPT-5.6-Pro
+Signed-off-by: Ning Ding <dingning04@gmail.com>
+Link: https://lore.kernel.org/bpf/20260803112615.3362122-3-dingning04@gmail.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ .../selftests/bpf/prog_tests/task_kfunc.c     |  2 +
+ .../selftests/bpf/progs/task_kfunc_common.h   | 12 +++++
+ .../selftests/bpf/progs/task_kfunc_failure.c  | 24 ++++++++++
+ .../selftests/bpf/progs/task_kfunc_success.c  | 48 +++++++++++++++++++
+ 4 files changed, 86 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/task_kfunc.c b/tools/testing/selftests/bpf/prog_tests/task_kfunc.c
+index e6e95c1416e6..fbd7855712c1 100644
+--- a/tools/testing/selftests/bpf/prog_tests/task_kfunc.c
++++ b/tools/testing/selftests/bpf/prog_tests/task_kfunc.c
+@@ -176,6 +176,8 @@ static const char * const success_tests[] = {
+ 	"test_task_from_pid_current",
+ 	"test_task_from_pid_invalid",
+ 	"task_kfunc_acquire_trusted_walked",
++	"task_kfunc_acquire_after_spin_unlock_non_sleepable",
++	"task_kfunc_acquire_after_spin_unlock_explicit_rcu",
+ 	"test_task_kfunc_flavor_relo",
+ 	"test_task_kfunc_flavor_relo_not_found",
+ };
+diff --git a/tools/testing/selftests/bpf/progs/task_kfunc_common.h b/tools/testing/selftests/bpf/progs/task_kfunc_common.h
+index e9c4fea7a4bb..052c9d0e3e2a 100644
+--- a/tools/testing/selftests/bpf/progs/task_kfunc_common.h
++++ b/tools/testing/selftests/bpf/progs/task_kfunc_common.h
+@@ -20,6 +20,18 @@ struct {
+ 	__uint(max_entries, 1);
+ } __tasks_kfunc_map SEC(".maps");
+ 
++struct task_kptr_lock_value {
++	struct bpf_spin_lock lock;
++	struct task_struct __kptr * task;
++};
++
++struct {
++	__uint(type, BPF_MAP_TYPE_ARRAY);
++	__type(key, int);
++	__type(value, struct task_kptr_lock_value);
++	__uint(max_entries, 1);
++} task_kptr_lock_map SEC(".maps");
++
+ struct task_struct *bpf_task_acquire(struct task_struct *p) __ksym;
+ void bpf_task_release(struct task_struct *p) __ksym;
+ struct task_struct *bpf_task_from_pid(s32 pid) __ksym;
+diff --git a/tools/testing/selftests/bpf/progs/task_kfunc_failure.c b/tools/testing/selftests/bpf/progs/task_kfunc_failure.c
+index 5c99b1e6532b..c0e7216b3419 100644
+--- a/tools/testing/selftests/bpf/progs/task_kfunc_failure.c
++++ b/tools/testing/selftests/bpf/progs/task_kfunc_failure.c
+@@ -378,3 +378,27 @@ int BPF_PROG(task_kfunc_release_in_map, struct task_struct *task, u64 clone_flag
+ 
+ 	return 0;
+ }
++
++SEC("?fentry.s/" SYS_PREFIX "sys_getpgid")
++__failure __msg("R1 must be a rcu pointer")
++int BPF_PROG(task_kfunc_acquire_after_final_spin_unlock)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_spin_lock(&v->lock);
++	task = v->task;
++	bpf_spin_unlock(&v->lock);
++	if (!task)
++		return 0;
++
++	acquired = bpf_task_acquire(task);
++	if (acquired)
++		bpf_task_release(acquired);
++	return 0;
++}
+diff --git a/tools/testing/selftests/bpf/progs/task_kfunc_success.c b/tools/testing/selftests/bpf/progs/task_kfunc_success.c
+index d63a79ee33dc..2bab7634c9df 100644
+--- a/tools/testing/selftests/bpf/progs/task_kfunc_success.c
++++ b/tools/testing/selftests/bpf/progs/task_kfunc_success.c
+@@ -6,6 +6,7 @@
+ #include <bpf/bpf_helpers.h>
+ 
+ #include "../bpf_experimental.h"
++#include "bpf_misc.h"
+ #include "task_kfunc_common.h"
+ 
+ char _license[] SEC("license") = "GPL";
+@@ -366,6 +367,53 @@ int BPF_PROG(task_kfunc_acquire_trusted_walked, struct task_struct *task, u64 cl
+ 	return 0;
+ }
+ 
++SEC("fentry/" SYS_PREFIX "sys_getpgid")
++int BPF_PROG(task_kfunc_acquire_after_spin_unlock_non_sleepable)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_spin_lock(&v->lock);
++	task = v->task;
++	bpf_spin_unlock(&v->lock);
++	if (!task)
++		return 0;
++
++	acquired = bpf_task_acquire(task);
++	if (acquired)
++		bpf_task_release(acquired);
++	return 0;
++}
++
++SEC("fentry.s/" SYS_PREFIX "sys_getpgid")
++int BPF_PROG(task_kfunc_acquire_after_spin_unlock_explicit_rcu)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_rcu_read_lock();
++	bpf_spin_lock(&v->lock);
++	task = v->task;
++	bpf_spin_unlock(&v->lock);
++	if (task) {
++		acquired = bpf_task_acquire(task);
++		if (acquired)
++			bpf_task_release(acquired);
++	}
++	bpf_rcu_read_unlock();
++	return 0;
++}
++
+ SEC("syscall")
+ int test_task_from_vpid_current(const void *ctx)
+ {
+-- 
+2.55.0
+

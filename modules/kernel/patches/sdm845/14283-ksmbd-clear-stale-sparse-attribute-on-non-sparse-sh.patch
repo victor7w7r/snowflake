@@ -1,0 +1,48 @@
+From 13e82e2cbd10490d8d6bb29714fb3ec884657913 Mon Sep 17 00:00:00 2001
+From: Gael Blivet <gael.blivet@gmail.com>
+Date: Tue, 7 Jul 2026 11:55:06 +0200
+Subject: [PATCH 14283/15333] ksmbd: clear stale sparse attribute on non-sparse
+ shares
+
+smb2_update_xattrs() copies the DOS SPARSE attribute bit verbatim from
+the stored xattr into the in-memory file attributes, without checking
+whether the share is currently advertising FILE_SUPPORTS_SPARSE_FILES.
+A file whose xattr has a stale SPARSE bit (set by a previous client,
+or from before the share was reconfigured) would keep reporting as
+sparse even after sparse-file support is turned off for the share.
+This matters for Time Machine: sparsebundle band files rely on
+accurate sparse-file status being reported, since macOS decides
+whether to issue FSCTL_SET_SPARSE based on it. Mask the bit out when
+the share doesn't currently advertise sparse-file support.
+
+Assisted-by: Claude:claude-sonnet-5
+Signed-off-by: Gael Blivet <gael.blivet@gmail.com>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/smb2pdu.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index 06197275956d..283527337d0c 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -2934,6 +2934,16 @@ static void smb2_update_xattrs(struct ksmbd_tree_connect *tcon,
+ 	rc = ksmbd_vfs_get_dos_attrib_xattr(mnt_idmap(path->mnt),
+ 					    path->dentry, &da);
+ 	if (rc > 0) {
++		/*
++		 * Don't report a stale SPARSE bit (e.g. left over from a
++		 * previous client, or from before the share was reconfigured)
++		 * when the share isn't currently advertising sparse-file
++		 * support. Time Machine sparsebundle band files rely on
++		 * sparse status being accurate, since macOS decides whether
++		 * to use FSCTL_SET_SPARSE based on it.
++		 */
++		if (!(server_conf.share_fake_fscaps & FILE_SUPPORTS_SPARSE_FILES))
++			da.attr &= ~FILE_ATTRIBUTE_SPARSE_FILE;
+ 		fp->f_ci->m_fattr = cpu_to_le32(da.attr);
+ 		fp->create_time = da.create_time;
+ 		fp->itime = da.itime;
+-- 
+2.55.0
+

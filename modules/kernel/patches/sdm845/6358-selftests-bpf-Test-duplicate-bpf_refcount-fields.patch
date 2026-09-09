@@ -1,0 +1,51 @@
+From 643bd5af853f41cc16e8d0d2e0ae12d60844402d Mon Sep 17 00:00:00 2001
+From: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Date: Sun, 19 Jul 2026 17:36:32 +0200
+Subject: [PATCH 06358/15333] selftests/bpf: Test duplicate bpf_refcount fields
+
+Add a raw BTF test with two bpf_refcount fields. The duplicate must be
+rejected during BTF loading instead of reaching the duplicate-field
+invariant in btf_parse_fields().
+
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Link: https://patch.msgid.link/20260719153634.2908692-6-memxor@gmail.com
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ tools/testing/selftests/bpf/prog_tests/btf.c | 21 ++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/btf.c b/tools/testing/selftests/bpf/prog_tests/btf.c
+index 2100400d896b..67b9015cbd98 100644
+--- a/tools/testing/selftests/bpf/prog_tests/btf.c
++++ b/tools/testing/selftests/bpf/prog_tests/btf.c
+@@ -4277,6 +4277,27 @@ static struct btf_raw_test raw_tests[] = {
+ 	.btf_load_err = true,
+ },
+ 
++/*
++ * struct value {
++ *     struct bpf_refcount a;
++ *     struct bpf_refcount b;
++ * };
++ */
++{
++	.descr = "struct test duplicate bpf_refcount fields",
++	.raw_types = {
++		BTF_TYPE_INT_ENC(NAME_TBD, BTF_INT_SIGNED, 0, 32, 4),	/* [1] */
++		BTF_STRUCT_ENC(NAME_TBD, 1, 4),				/* [2] */
++		BTF_MEMBER_ENC(NAME_TBD, 1, 0),
++		BTF_STRUCT_ENC(NAME_TBD, 2, 8),				/* [3] */
++		BTF_MEMBER_ENC(NAME_TBD, 2, 0),
++		BTF_MEMBER_ENC(NAME_TBD, 2, 32),
++		BTF_END_RAW,
++	},
++	BTF_STR_SEC("\0int\0bpf_refcount\0refs\0value\0a\0b"),
++	.btf_load_err = true,
++},
++
+ {
+ 	.descr = "struct test repeated fields count overflow",
+ 	.raw_types = {
+-- 
+2.55.0
+

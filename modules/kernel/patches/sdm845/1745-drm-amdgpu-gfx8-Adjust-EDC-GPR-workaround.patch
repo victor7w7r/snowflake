@@ -1,0 +1,45 @@
+From 01f4b82944a05ac6e4c72a071e5f2a56676349af Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Wed, 17 Jun 2026 21:14:26 +0200
+Subject: [PATCH 01745/15333] drm/amdgpu/gfx8: Adjust EDC GPR workaround
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When the compute queue is unavailable to run the IB,
+return -EBUSY instead of silently failing.
+
+Make sure the IB is always executed during reset:
+Set preempt condition (may be cleared during reset),
+and flush HDP cache so the GPU sees the updated value.
+
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
+index 9bb50c147042..7643077ad318 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
+@@ -1487,7 +1487,14 @@ static int gfx_v8_0_do_edc_gpr_workarounds(struct amdgpu_device *adev)
+ 
+ 	/* bail if the compute ring is not ready */
+ 	if (!ring->sched.ready)
+-		return 0;
++		return -EBUSY;
++
++	if (amdgpu_in_reset(adev)) {
++		/* Set preempt condition to execute IB */
++		amdgpu_ring_set_preempt_cond_exec(ring, true);
++		/* Flush HDP cache so the GPU can see the updated COND_EXEC value */
++		amdgpu_device_flush_hdp(adev, NULL);
++	}
+ 
+ 	tmp = RREG32(mmGB_EDC_MODE);
+ 	WREG32(mmGB_EDC_MODE, 0);
+-- 
+2.55.0
+

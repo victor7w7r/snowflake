@@ -1,0 +1,47 @@
+From cf3df2124adcc6266df19226c096cd6dccb3dcbc Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Mon, 1 Jun 2026 12:38:23 +0300
+Subject: [PATCH 00179/15333] drm/i915/dp_link_training: Check for pending
+ autoretrain explicitly
+
+Check explicitly for a pending autoretrain by matching
+seq_train_failures == 1.
+
+This makes the actual condition clear, since at the point where the
+counter is checked it is also below MAX_SEQ_TRAIN_FAILURES.
+
+This also prepares for replacing the counter with an enum in a follow-up
+change.
+
+Reviewed-by: Mika Kahola <mika.kahola@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260601093836.3057345-11-imre.deak@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_dp_link_training.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_training.c b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+index f03e05c730a2..cbac9a70e8d5 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_training.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+@@ -1305,7 +1305,7 @@ void intel_dp_stop_link_train(struct intel_dp *intel_dp,
+ 
+ 	if (!display->hotplug.ignore_long_hpd &&
+ 	    link_training->seq_train_failures < MAX_SEQ_TRAIN_FAILURES) {
+-		int delay_ms = link_training->seq_train_failures ? 0 : 2000;
++		int delay_ms = link_training->seq_train_failures == 1 ? 0 : 2000;
+ 
+ 		intel_encoder_link_check_queue_work(encoder, delay_ms);
+ 	}
+@@ -2006,7 +2006,7 @@ intel_dp_needs_link_retrain(struct intel_dp *intel_dp)
+ 	if (link_training->seq_train_failures >= MAX_SEQ_TRAIN_FAILURES)
+ 		return false;
+ 
+-	if (link_training->seq_train_failures)
++	if (link_training->seq_train_failures == 1)
+ 		return true;
+ 
+ 	/* Retrain if link not ok */
+-- 
+2.55.0
+

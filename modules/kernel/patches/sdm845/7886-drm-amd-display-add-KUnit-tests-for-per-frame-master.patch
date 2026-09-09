@@ -1,0 +1,189 @@
+From b01e10bd9fc1c3e76582991bf1937a871f1b12ce Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Mon, 6 Jul 2026 19:23:04 -0600
+Subject: [PATCH 07886/15333] drm/amd/display: add KUnit tests for per-frame
+ master sync
+
+[WHAT]
+Add KUnit tests for dm_enable_per_frame_crtc_master_sync covering the
+single-stream no-op, the two-stream master selection with trigger
+parameters, and the NULL-stream skip path.
+
+Assisted-by: Copilot:Claude-Opus-4.8
+Reviewed-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Wayne Lin <wayne.lin@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c |   5 +-
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h |   1 +
+ .../display/amdgpu_dm/tests/amdgpu_dm_test.c  | 103 ++++++++++++++++++
+ 3 files changed, 107 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+index ec08aed843da..d6e0175d9668 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -141,7 +141,7 @@ static void amdgpu_dm_destroy_drm_device(struct amdgpu_display_manager *dm);
+ 
+ static int amdgpu_dm_atomic_setup_commit(struct drm_atomic_commit *state);
+ static void amdgpu_dm_atomic_commit_tail(struct drm_atomic_commit *state);
+-static void dm_enable_per_frame_crtc_master_sync(struct dc_state *context);
++STATIC_IFN_KUNIT void dm_enable_per_frame_crtc_master_sync(struct dc_state *context);
+ 
+ static int amdgpu_dm_atomic_check(struct drm_device *dev,
+ 				  struct drm_atomic_commit *state);
+@@ -5344,7 +5344,7 @@ STATIC_IFN_KUNIT void set_master_stream(struct dc_stream_state *stream_set[],
+ }
+ EXPORT_IF_KUNIT(set_master_stream);
+ 
+-static void dm_enable_per_frame_crtc_master_sync(struct dc_state *context)
++STATIC_IFN_KUNIT void dm_enable_per_frame_crtc_master_sync(struct dc_state *context)
+ {
+ 	int i = 0;
+ 	struct dc_stream_state *stream;
+@@ -5372,6 +5372,7 @@ static void dm_enable_per_frame_crtc_master_sync(struct dc_state *context)
+ 		set_multisync_trigger_params(stream);
+ 	}
+ }
++EXPORT_IF_KUNIT(dm_enable_per_frame_crtc_master_sync);
+ 
+ /**
+  * amdgpu_dm_atomic_commit_tail() - AMDgpu DM's commit tail implementation.
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+index 7c410d766573..61d75f2a285d 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+@@ -1181,6 +1181,7 @@ void set_master_stream(struct dc_stream_state *stream_set[], int stream_count);
+ void reset_freesync_config_for_crtc(struct dm_crtc_state *new_crtc_state);
+ void get_freesync_config_for_crtc(struct dm_crtc_state *new_crtc_state,
+ 				  struct dm_connector_state *new_con_state);
++void dm_enable_per_frame_crtc_master_sync(struct dc_state *context);
+ struct hdcp_workqueue;
+ bool is_content_protection_different(struct drm_crtc_state *new_crtc_state,
+ 				     struct drm_crtc_state *old_crtc_state,
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c
+index 34f3c1bb9152..c0516ce2311b 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c
+@@ -1838,6 +1838,105 @@ static void dm_test_reset_freesync_config(struct kunit *test)
+ 	KUNIT_EXPECT_FALSE(test, crtc_state->vrr_infopacket.valid);
+ }
+ 
++/* Tests for dm_enable_per_frame_crtc_master_sync() */
++
++/**
++ * dm_test_per_frame_master_sync_single_stream - Test fewer than two streams is a no-op
++ * @test: The KUnit test context
++ */
++static void dm_test_per_frame_master_sync_single_stream(struct kunit *test)
++{
++	struct dc_state *context;
++	struct dc_stream_state *stream;
++
++	context = kunit_kzalloc(test, sizeof(*context), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, context);
++	stream = kunit_kzalloc(test, sizeof(*stream), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, stream);
++
++	stream->triggered_crtc_reset.enabled = true;
++	context->streams[0] = stream;
++	context->stream_count = 1;
++
++	dm_enable_per_frame_crtc_master_sync(context);
++
++	/* < 2 streams: early return, event_source stays NULL */
++	KUNIT_EXPECT_NULL(test, stream->triggered_crtc_reset.event_source);
++}
++
++/**
++ * dm_test_per_frame_master_sync_two_streams - Test the master is picked and applied
++ * @test: The KUnit test context
++ */
++static void dm_test_per_frame_master_sync_two_streams(struct kunit *test)
++{
++	struct dc_state *context;
++	struct dc_stream_state *stream0, *stream1;
++
++	context = kunit_kzalloc(test, sizeof(*context), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, context);
++	stream0 = kunit_kzalloc(test, sizeof(*stream0), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, stream0);
++	stream1 = kunit_kzalloc(test, sizeof(*stream1), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, stream1);
++
++	/* stream0 60Hz, stream1 120Hz, both trigger-reset enabled */
++	stream0->triggered_crtc_reset.enabled = true;
++	stream0->timing.pix_clk_100hz = 1485000;
++	stream0->timing.h_total = 2200;
++	stream0->timing.v_total = 1125;
++	stream1->triggered_crtc_reset.enabled = true;
++	stream1->timing.pix_clk_100hz = 2970000;
++	stream1->timing.h_total = 2200;
++	stream1->timing.v_total = 1125;
++	stream1->timing.flags.VSYNC_POSITIVE_POLARITY = 1;
++
++	context->streams[0] = stream0;
++	context->streams[1] = stream1;
++	context->stream_count = 2;
++
++	dm_enable_per_frame_crtc_master_sync(context);
++
++	/* set_master_stream picks the highest refresh (stream1) as event source */
++	KUNIT_EXPECT_PTR_EQ(test, stream0->triggered_crtc_reset.event_source,
++			    stream1);
++	KUNIT_EXPECT_PTR_EQ(test, stream1->triggered_crtc_reset.event_source,
++			    stream1);
++	/* set_multisync_trigger_params applied to enabled streams */
++	KUNIT_EXPECT_EQ(test, (int)stream0->triggered_crtc_reset.event,
++			(int)CRTC_EVENT_VSYNC_RISING);
++	KUNIT_EXPECT_EQ(test, (int)stream0->triggered_crtc_reset.delay,
++			(int)TRIGGER_DELAY_NEXT_PIXEL);
++}
++
++/**
++ * dm_test_per_frame_master_sync_skips_null_stream - Test NULL stream entries are skipped
++ * @test: The KUnit test context
++ */
++static void dm_test_per_frame_master_sync_skips_null_stream(struct kunit *test)
++{
++	struct dc_state *context;
++	struct dc_stream_state *stream;
++
++	context = kunit_kzalloc(test, sizeof(*context), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, context);
++	stream = kunit_kzalloc(test, sizeof(*stream), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, stream);
++
++	stream->triggered_crtc_reset.enabled = true;
++	stream->timing.pix_clk_100hz = 1485000;
++	stream->timing.h_total = 2200;
++	stream->timing.v_total = 1125;
++	context->streams[0] = stream;
++	context->streams[1] = NULL;
++	context->stream_count = 2;
++
++	dm_enable_per_frame_crtc_master_sync(context);
++
++	KUNIT_EXPECT_PTR_EQ(test, stream->triggered_crtc_reset.event_source,
++			    stream);
++}
++
+ static struct kunit_case amdgpu_dm_tests[] = {
+ 	/* Simple DM callbacks */
+ 	KUNIT_CASE(dm_test_is_idle),
+@@ -1939,6 +2038,10 @@ static struct kunit_case amdgpu_dm_tests[] = {
+ 	KUNIT_CASE(dm_test_freesync_config_active_fixed),
+ 	/* reset_freesync_config_for_crtc */
+ 	KUNIT_CASE(dm_test_reset_freesync_config),
++	/* dm_enable_per_frame_crtc_master_sync */
++	KUNIT_CASE(dm_test_per_frame_master_sync_single_stream),
++	KUNIT_CASE(dm_test_per_frame_master_sync_two_streams),
++	KUNIT_CASE(dm_test_per_frame_master_sync_skips_null_stream),
+ 	{}
+ };
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,97 @@
+From deda667260ae495f5edc68d56e229dbfbf732243 Mon Sep 17 00:00:00 2001
+From: Song Guo <songguo@google.com>
+Date: Wed, 15 Jul 2026 12:21:46 +0000
+Subject: [PATCH 05579/15333] misc: open-dice: add ACPI device discovery
+ support
+
+OpenDICE can also used on x86 platforms for attestation, one of the
+usecase is Android's protected VM.
+
+The OpenDICE device driver only supports device tree, adding ACPI
+support so it can also be used on x86 environments easily.
+
+The patch is verified using crosvm, with the following ACPI table passed
+using --acpi-table, with --file-backed-mapping for the corresponding
+memory region.
+
+DefinitionBlock (
+    "opendice.aml", "SSDT", 2, "GOOGLE", "OpenDICE", 0x00000001
+)
+{
+    Scope (\_SB)
+    {
+        Device (DICE)
+        {
+            Name (_HID, "PRP0001")
+
+            Name (_DSD, Package () {
+                ToUUID ("daffd814-6eba-4d8c-8a91-bc9bbf4aa301"),
+                Package () {
+                    Package () {
+                        "compatible",
+                        Package () { "google,open-dice" }
+                    }
+                }
+            })
+
+            Name (_CRS, ResourceTemplate () {
+                Memory32Fixed (ReadOnly, 0x9D1C3000, 0x00001000)
+            })
+        }
+    }
+}
+
+Signed-off-by: Song Guo <songguo@google.com>
+Link: https://patch.msgid.link/20260715122146.4069884-4-songguo@google.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/misc/open-dice.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/misc/open-dice.c b/drivers/misc/open-dice.c
+index aabece6ed3d1..303b35b03cb4 100644
+--- a/drivers/misc/open-dice.c
++++ b/drivers/misc/open-dice.c
+@@ -2,6 +2,7 @@
+ /*
+  * Copyright (C) 2021 - Google LLC
+  * Author: David Brazdil <dbrazdil@google.com>
++ * Author: Song Guo <songguo@google.com>
+  *
+  * Driver for Open Profile for DICE.
+  *
+@@ -19,6 +20,7 @@
+  *     close(fd);
+  */
+ 
++#include <linux/acpi.h>
+ #include <linux/io.h>
+ #include <linux/miscdevice.h>
+ #include <linux/mm.h>
+@@ -133,8 +135,17 @@ static int __init open_dice_probe(struct platform_device *pdev)
+ 		}
+ 		mem_base = rmem->base;
+ 		mem_size = rmem->size;
++	} else if (is_acpi_node(dev->fwnode)) {
++		struct resource *res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++
++		if (!res) {
++			dev_err(dev, "failed to get MMIO resource\n");
++			return -EINVAL;
++		}
++		mem_base = res->start;
++		mem_size = resource_size(res);
+ 	} else {
+-		dev_err(dev, "device not supported (no DT node)\n");
++		dev_err(dev, "device not supported (no DT or ACPI node)\n");
+ 		return -EINVAL;
+ 	}
+ 
+@@ -218,3 +229,4 @@ module_exit(open_dice_exit);
+ MODULE_DESCRIPTION("Driver for Open Profile for DICE.");
+ MODULE_LICENSE("GPL v2");
+ MODULE_AUTHOR("David Brazdil <dbrazdil@google.com>");
++MODULE_AUTHOR("Song Guo <songguo@google.com>");
+-- 
+2.55.0
+

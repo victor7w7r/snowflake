@@ -1,0 +1,76 @@
+From 0c09d1ad81ed55b02f64f4dd2e2e7c83161e5740 Mon Sep 17 00:00:00 2001
+From: fangqiurong <fangqiurong@kylinos.cn>
+Date: Wed, 12 Aug 2026 14:11:16 +0800
+Subject: [PATCH 13557/15333] sched_ext: Gate cid kfuncs behind the SCX
+ struct_ops check
+
+scx_bpf_cid_to_cpu(), scx_bpf_cpu_to_cid() and scx_bpf_cid_topo() live in
+the scx_kfunc_ids_cid set, but scx_kfunc_context_filter() doesn't check
+that set. The filter's first test treats any kfunc outside its known sets
+as non-SCX and allows it, so these three kfuncs can be called from any
+struct_ops program - e.g. a TCP congestion control program.
+
+Add scx_kfunc_ids_cid to the filter's known sets, matching how in_any and
+in_idle are handled.
+
+Fixes: e9b55af47edf ("sched_ext: Add topological CPU IDs (cids)")
+Assisted-by: Z.ai:glm-5.2
+Signed-off-by: fangqiurong <fangqiurong@kylinos.cn>
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ kernel/sched/ext/cid.h | 1 +
+ kernel/sched/ext/ext.c | 9 +++++----
+ 2 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/kernel/sched/ext/cid.h b/kernel/sched/ext/cid.h
+index 1f74d1f331f5..2fe2311a0f99 100644
+--- a/kernel/sched/ext/cid.h
++++ b/kernel/sched/ext/cid.h
+@@ -67,6 +67,7 @@ extern s32 __rcu *scx_shard_node;
+ extern struct scx_cid_shard __rcu *scx_cid_shard_ranges;
+ extern struct scx_cid_topo __rcu *scx_cid_topo;
+ extern struct btf_id_set8 scx_kfunc_ids_init_cids;
++extern struct btf_id_set8 scx_kfunc_ids_cid;
+ 
+ void scx_cmask_clear(struct scx_cmask *m);
+ void scx_cmask_fill(struct scx_cmask *m);
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 313db9fac1f9..61b156d7fc4b 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -10866,19 +10866,20 @@ int scx_kfunc_context_filter(const struct bpf_prog *prog, u32 kfunc_id)
+ 	bool in_idle = btf_id_set8_contains(&scx_kfunc_ids_idle, kfunc_id);
+ 	bool in_any = btf_id_set8_contains(&scx_kfunc_ids_any, kfunc_id);
+ 	bool in_cpu_only = btf_id_set8_contains(&scx_kfunc_ids_cpu_only, kfunc_id);
++	bool in_cid = btf_id_set8_contains(&scx_kfunc_ids_cid, kfunc_id);
+ 	u32 moff, flags;
+ 
+ 	/* Not an SCX kfunc - allow. */
+ 	if (!(in_unlocked || in_init_cids || in_select_cpu || in_enqueue || in_dispatch ||
+-	      in_cpu_release || in_idle || in_any))
++	      in_cpu_release || in_idle || in_any || in_cid))
+ 		return 0;
+ 
+ 	/* SYSCALL progs (e.g. BPF test_run()) may call unlocked and select_cpu kfuncs. */
+ 	if (prog->type == BPF_PROG_TYPE_SYSCALL)
+-		return (in_unlocked || in_select_cpu || in_idle || in_any) ? 0 : -EACCES;
++		return (in_unlocked || in_select_cpu || in_idle || in_any || in_cid) ? 0 : -EACCES;
+ 
+ 	if (prog->type != BPF_PROG_TYPE_STRUCT_OPS)
+-		return (in_any || in_idle) ? 0 : -EACCES;
++		return (in_any || in_idle || in_cid) ? 0 : -EACCES;
+ 
+ 	/*
+ 	 * add_subprog_and_kfunc() collects all kfunc calls, including dead code
+@@ -10913,7 +10914,7 @@ int scx_kfunc_context_filter(const struct bpf_prog *prog, u32 kfunc_id)
+ 		return -EACCES;
+ 
+ 	/* SCX struct_ops: check the per-op allow list. */
+-	if (in_any || in_idle)
++	if (in_any || in_idle || in_cid)
+ 		return 0;
+ 
+ 	moff = prog->aux->attach_st_ops_member_off;
+-- 
+2.55.0
+

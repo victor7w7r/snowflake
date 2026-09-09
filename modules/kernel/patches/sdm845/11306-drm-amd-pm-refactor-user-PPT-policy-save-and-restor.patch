@@ -1,0 +1,221 @@
+From 534e172b888d1f6aab271f054dae6dd8a2f18c74 Mon Sep 17 00:00:00 2001
+From: Yang Wang <kevinyang.wang@amd.com>
+Date: Thu, 30 Jul 2026 11:26:37 +0800
+Subject: [PATCH 11306/15333] drm/amd/pm: refactor user PPT policy save and
+ restore
+
+The existing user policy representation has three ambiguities:
+
+- A numeric value cannot distinguish explicit zero from an unset policy.
+- One value per controller cannot preserve independent AC and DC requests.
+- Suspend-only restore misses runtime resume, GPU reset, and table reload.
+
+Refactor policy storage and restore as follows:
+
+- Store values and validity masks by power source and PPT controller.
+- Save writes against the active source.
+- Restore the active source after default SMU setup.
+- Reapply the target policy after live AC/DC transitions.
+- Use the target source default when no explicit request exists.
+
+The late-init path now covers system resume, runtime resume, GPU reset,
+and custom PPTable reload. Common code owns persistent policy; PMFW
+continues to own effective current limits.
+
+Signed-off-by: Yang Wang <kevinyang.wang@amd.com>
+Reviewed-by: Kenneth Feng <kenneth.feng@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/pm/amdgpu_dpm.c           |  2 +-
+ drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c     | 89 +++++++++++++------
+ drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h |  5 +-
+ 3 files changed, 68 insertions(+), 28 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/amdgpu_dpm.c b/drivers/gpu/drm/amd/pm/amdgpu_dpm.c
+index c3688b3b12cc..ce526db4d24a 100644
+--- a/drivers/gpu/drm/amd/pm/amdgpu_dpm.c
++++ b/drivers/gpu/drm/amd/pm/amdgpu_dpm.c
+@@ -508,7 +508,7 @@ void amdgpu_pm_acpi_event_handler(struct amdgpu_device *adev)
+ 			amdgpu_dpm_notify_ac_dc(adev);
+ 
+ 		if (is_support_sw_smu(adev))
+-			smu_set_ac_dc(adev->powerplay.pp_handle);
++			smu_set_ac_dc(adev->powerplay.pp_handle, true);
+ 
+ 		mutex_unlock(&adev->pm.mutex);
+ 	}
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+index 3fb677248700..7a3aabeac05d 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+@@ -488,12 +488,52 @@ static void smu_set_user_clk_dependencies(struct smu_context *smu, enum smu_clk_
+ 		return;
+ }
+ 
++static void smu_restore_ppt_limits(struct smu_context *smu,
++				   bool restore_defaults)
++{
++	enum smu_power_src_type power_source;
++	struct smu_ppt_limit_range *range;
++	uint32_t restore_mask;
++	uint32_t limit;
++	int i, ret;
++
++	power_source = smu->adev->pm.ac_power ?
++		SMU_POWER_SOURCE_AC : SMU_POWER_SOURCE_DC;
++	restore_mask = smu->user_dpm_profile.ppt_limit_user_mask[power_source] &
++		smu->ppt_limits.supported_mask;
++	if (!restore_mask && !restore_defaults)
++		return;
++
++	smu->user_dpm_profile.flags |= SMU_DPM_USER_PROFILE_RESTORE;
++
++	for (i = SMU_PPT_LIMIT_PPT0; i < SMU_LIMIT_TYPE_COUNT; i++) {
++		if (!(smu->ppt_limits.supported_mask & BIT(i)))
++			continue;
++
++		if (restore_mask & BIT(i)) {
++			limit = smu->user_dpm_profile.ppt_limits[power_source][i];
++		} else if (restore_defaults) {
++			range = &smu->ppt_limits.range[power_source][i];
++			limit = range->default_value;
++		} else {
++			continue;
++		}
++
++		ret = smu_set_ppt_limit(smu, i, limit);
++		if (ret)
++			dev_err(smu->adev->dev,
++				"Failed to restore PPT%d limit: %d\n", i, ret);
++	}
++
++	smu->user_dpm_profile.flags &= ~SMU_DPM_USER_PROFILE_RESTORE;
++}
++
+ /**
+  * smu_restore_dpm_user_profile - reinstate user dpm profile
+  *
+  * @smu:	smu_context pointer
+  *
+- * Restore saved user power limits, clock frequencies and fan settings.
++ * Restore saved user clock frequencies and fan settings.
+  */
+ static void smu_restore_dpm_user_profile(struct smu_context *smu)
+ {
+@@ -509,17 +549,6 @@ static void smu_restore_dpm_user_profile(struct smu_context *smu)
+ 	/* Enable restore flag */
+ 	smu->user_dpm_profile.flags |= SMU_DPM_USER_PROFILE_RESTORE;
+ 
+-	/* set the user dpm power limits */
+-	for (int i = SMU_PPT_LIMIT_PPT0; i < SMU_LIMIT_TYPE_COUNT; i++) {
+-		if (!smu->user_dpm_profile.ppt_limits[i])
+-			continue;
+-		ret = smu_set_ppt_limit(smu, i,
+-					    smu->user_dpm_profile.ppt_limits[i]);
+-		if (ret)
+-			dev_err(smu->adev->dev,
+-				"Failed to set %d PPT limit value\n", i);
+-	}
+-
+ 	/* set the user dpm clock configurations */
+ 	if (smu_dpm_ctx->dpm_level == AMD_DPM_FORCED_LEVEL_MANUAL) {
+ 		enum smu_clk_type clk_type;
+@@ -930,7 +959,7 @@ static int smu_late_init(struct amdgpu_ip_block *ip_block)
+ 	 * is unnecessary.
+ 	 */
+ 	adev->pm.ac_power = power_supply_is_system_supplied() > 0;
+-	smu_set_ac_dc(smu);
++	smu_set_ac_dc(smu, false);
+ 
+ 	if ((amdgpu_ip_version(adev, MP1_HWIP, 0) == IP_VERSION(13, 0, 1)) ||
+ 	    (amdgpu_ip_version(adev, MP1_HWIP, 0) == IP_VERSION(13, 0, 3)))
+@@ -965,6 +994,8 @@ static int smu_late_init(struct amdgpu_ip_block *ip_block)
+ 		return ret;
+ 	}
+ 
++	if (adev->in_suspend)
++		smu_restore_ppt_limits(smu, false);
+ 	smu_restore_dpm_user_profile(smu);
+ 
+ 	return 0;
+@@ -2742,7 +2773,7 @@ static int smu_set_watermarks_for_clock_ranges(void *handle,
+ 	return smu_set_watermarks_table(smu, clock_ranges);
+ }
+ 
+-int smu_set_ac_dc(struct smu_context *smu)
++int smu_set_ac_dc(struct smu_context *smu, bool restore_ppt_policy)
+ {
+ 	int ret = 0;
+ 
+@@ -2750,17 +2781,22 @@ int smu_set_ac_dc(struct smu_context *smu)
+ 		return -EOPNOTSUPP;
+ 
+ 	/* controlled by firmware */
+-	if (smu->dc_controlled_by_gpio)
+-		return 0;
++	if (!smu->dc_controlled_by_gpio) {
++		ret = smu_set_power_source(smu,
++					   smu->adev->pm.ac_power ?
++					   SMU_POWER_SOURCE_AC :
++					   SMU_POWER_SOURCE_DC);
++		if (ret) {
++			dev_err(smu->adev->dev, "Failed to switch to %s mode!\n",
++				smu->adev->pm.ac_power ? "AC" : "DC");
++			return ret;
++		}
++	}
+ 
+-	ret = smu_set_power_source(smu,
+-				   smu->adev->pm.ac_power ? SMU_POWER_SOURCE_AC :
+-				   SMU_POWER_SOURCE_DC);
+-	if (ret)
+-		dev_err(smu->adev->dev, "Failed to switch to %s mode!\n",
+-		       smu->adev->pm.ac_power ? "AC" : "DC");
++	if (restore_ppt_policy)
++		smu_restore_ppt_limits(smu, true);
+ 
+-	return ret;
++	return 0;
+ }
+ 
+ const struct amd_ip_funcs smu_ip_funcs = {
+@@ -3016,8 +3052,11 @@ static int smu_set_ppt_limit(void *handle, uint32_t limit_type, uint32_t limit)
+ 	ret = smu->ppt_funcs->set_ppt_limit(smu, limit_type, limit);
+ 	if (ret)
+ 		return ret;
+-	if (!(smu->user_dpm_profile.flags & SMU_DPM_USER_PROFILE_RESTORE))
+-		smu->user_dpm_profile.ppt_limits[limit_type] = limit;
++	if (!(smu->user_dpm_profile.flags & SMU_DPM_USER_PROFILE_RESTORE)) {
++		smu->user_dpm_profile.ppt_limits[power_source][limit_type] = limit;
++		smu->user_dpm_profile.ppt_limit_user_mask[power_source] |=
++			BIT(limit_type);
++	}
+ 
+ 	return 0;
+ }
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h b/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
+index b86c5da38b10..00d075cb86b8 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
+@@ -251,7 +251,8 @@ enum smu_memory_pool_size {
+ 
+ struct smu_user_dpm_profile {
+ 	uint32_t fan_mode;
+-	uint32_t ppt_limits[SMU_LIMIT_TYPE_COUNT];
++	uint32_t ppt_limits[SMU_POWER_SOURCE_COUNT][SMU_LIMIT_TYPE_COUNT];
++	uint32_t ppt_limit_user_mask[SMU_POWER_SOURCE_COUNT];
+ 	uint32_t fan_speed_pwm;
+ 	uint32_t fan_speed_rpm;
+ 	uint32_t flags;
+@@ -1951,7 +1952,7 @@ int smu_set_soft_freq_range(struct smu_context *smu, enum pp_clock_type clk_type
+ 
+ int smu_set_gfx_power_up_by_imu(struct smu_context *smu);
+ 
+-int smu_set_ac_dc(struct smu_context *smu);
++int smu_set_ac_dc(struct smu_context *smu, bool restore_ppt_policy);
+ 
+ int smu_set_xgmi_plpd_mode(struct smu_context *smu,
+ 			   enum pp_xgmi_plpd_mode mode);
+-- 
+2.55.0
+

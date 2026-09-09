@@ -1,0 +1,93 @@
+From 29479b14315de24616cc1fad86cbd392c36f557a Mon Sep 17 00:00:00 2001
+From: Tiezhu Yang <yangtiezhu@loongson.cn>
+Date: Mon, 17 Aug 2026 22:07:14 +0800
+Subject: [PATCH 14456/15333] LoongArch: Use current_stack_pointer in
+ current_pt_regs()
+
+The current implementation of current_pt_regs() relies on the compiler
+__builtin_frame_address(0). This introduces an unnecessary dependency
+on the frame pointer register, which forces the compiler to generate
+redundant prologue and epilogue code, create a larger stack frame, and
+perform redundant memory operations to preserve the frame pointer even
+in functions where it is otherwise unnecessary.
+
+Optimize this by switching to current_stack_pointer, which explicitly
+maps to the hardware stack pointer register. This allows the compiler
+to compute the stack alignment directly from the natively maintained
+"$sp" register, completely eliminating the overhead of preserving and
+restoring the frame pointer on the stack memory.
+
+As a prominent example, this optimization improves the hot-path function
+copy_thread(). A disassembly comparison of copy_thread() illustrates the
+elimination of the frame pointer, the reduction of stack frame size from
+48 bytes down to 32 bytes, and a more compact epilogue path:
+
+Before:
+
+00000000000004f0 <copy_thread>:
+ 4f0:   02ff4063        addi.d          $sp, $sp, -48
+ 4f4:   29c08076        st.d            $fp, $sp, 32
+ 4f8:   29c06077        st.d            $s0, $sp, 24
+ 4fc:   29c0a061        st.d            $ra, $sp, 40
+ 500:   02c0c076        addi.d          $fp, $sp, 48
+ ...
+ 54c:   1400006e        lu12i.w         $t2, 3
+ ...
+ 55c:   03bffdce        ori             $t2, $t2, 0xfff
+ 560:   00153ace        or              $t2, $fp, $t2
+ 564:   02fb05cd        addi.d          $t1, $t2, -319
+ ...
+ 628:   28c0a061        ld.d            $ra, $sp, 40
+ 62c:   28c08076        ld.d            $fp, $sp, 32
+ 630:   28c06077        ld.d            $s0, $sp, 24
+ 634:   00150004        move            $a0, $zero
+ 638:   02c0c063        addi.d          $sp, $sp, 48
+ 63c:   4c000020        ret
+
+After:
+
+00000000000004f0 <copy_thread>:
+ 4f0:   02ff8063        addi.d          $sp, $sp, -32
+ 4f4:   29c04077        st.d            $s0, $sp, 16
+ 4f8:   29c06061        st.d            $ra, $sp, 24
+ [ prologue st.d and addi.d for $fp are completely eliminated ]
+ ...
+ 544:   1400006e        lu12i.w         $t2, 3
+ ...
+ 554:   03bffdce        ori             $t2, $t2, 0xfff
+ 558:   0015386e        or              $t2, $sp, $t2
+ 55c:   02fb05cd        addi.d          $t1, $t2, -319
+ ...
+ 620:   28c06061        ld.d            $ra, $sp, 24
+ 624:   28c04077        ld.d            $s0, $sp, 16
+ 628:   00150004        move            $a0, $zero
+ [ epilogue ld.d for $fp is eliminated; exit path is shortened ]
+ 62c:   02c08063        addi.d          $sp, $sp, 32
+ 630:   4c000020        ret
+
+Signed-off-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Signed-off-by: Huacai Chen <chenhuacai@loongson.cn>
+---
+ arch/loongarch/include/asm/ptrace.h | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/arch/loongarch/include/asm/ptrace.h b/arch/loongarch/include/asm/ptrace.h
+index e5d21e836d99..2a7ed442d905 100644
+--- a/arch/loongarch/include/asm/ptrace.h
++++ b/arch/loongarch/include/asm/ptrace.h
+@@ -170,11 +170,7 @@ static inline void die_if_kernel(const char *str, struct pt_regs *regs)
+ 		die(str, regs);
+ }
+ 
+-#define current_pt_regs()						\
+-({									\
+-	unsigned long sp = (unsigned long)__builtin_frame_address(0);	\
+-	(struct pt_regs *)((sp | (THREAD_SIZE - 1)) + 1) - 1;		\
+-})
++#define current_pt_regs() ((struct pt_regs *)((current_stack_pointer | (THREAD_SIZE - 1)) + 1) - 1)
+ 
+ /* Helpers for working with the user stack pointer */
+ 
+-- 
+2.55.0
+

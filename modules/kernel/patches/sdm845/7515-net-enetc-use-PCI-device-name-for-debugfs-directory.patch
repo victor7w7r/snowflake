@@ -1,0 +1,44 @@
+From 9db43e6f35db54f35742e23143cdd7251f952bfd Mon Sep 17 00:00:00 2001
+From: Wei Fang <wei.fang@nxp.com>
+Date: Mon, 20 Jul 2026 09:43:07 +0800
+Subject: [PATCH 07515/15333] net: enetc: use PCI device name for debugfs
+ directory
+
+enetc_create_debugfs() is called right after register_netdev(), at which
+point ndev->name still holds the format "eth%d" (e.g., eth0) rather than
+the final assigned name (e.g., via udev rules).
+
+Use pci_name() instead of netdev_name() to name the debugfs directory.
+The PCI device name is unique, stable, and available from the start,
+making it a more reliable identifier for the debugfs entry. Therefore,
+the observable debugfs path from something like
+/sys/kernel/debug/eth0/mac_filter to a PCI BDF-style path such as
+/sys/kernel/debug/0002:00:00.0/mac_filter.
+
+Signed-off-by: Wei Fang <wei.fang@nxp.com>
+Reviewed-by: Joe Damato <joe@dama.to>
+Link: https://patch.msgid.link/20260720014317.1059359-6-wei.fang@oss.nxp.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/freescale/enetc/enetc4_debugfs.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/freescale/enetc/enetc4_debugfs.c b/drivers/net/ethernet/freescale/enetc/enetc4_debugfs.c
+index 4a769d9e5679..be378bf8f74d 100644
+--- a/drivers/net/ethernet/freescale/enetc/enetc4_debugfs.c
++++ b/drivers/net/ethernet/freescale/enetc/enetc4_debugfs.c
+@@ -81,10 +81,9 @@ DEFINE_SHOW_ATTRIBUTE(enetc_mac_filter);
+ 
+ void enetc_create_debugfs(struct enetc_si *si)
+ {
+-	struct net_device *ndev = si->ndev;
+ 	struct dentry *root;
+ 
+-	root = debugfs_create_dir(netdev_name(ndev), NULL);
++	root = debugfs_create_dir(pci_name(si->pdev), NULL);
+ 	if (IS_ERR(root))
+ 		return;
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,50 @@
+From 81c1c0cb68a13d14dd1bbffcf4c49e26f9a6478c Mon Sep 17 00:00:00 2001
+From: Chen-Yu Tsai <wenst@chromium.org>
+Date: Tue, 11 Aug 2026 20:20:07 +0800
+Subject: [PATCH 13638/15333] platform/chrome: of_hw_prober: Add delay for hana
+ trackpads
+
+Up until now, the MT8173 elm/hana device tree has set the dedicated
+regulator supplying the trackpad as always-on, simply because the Elan
+driver was missing proper delays. As a result the delay for the
+Synaptics trackpad was also omitted, as it was not strictly required
+under such a model and delayed the availability of the trackpad to the
+user.
+
+The Elan driver recently gained proper delays after power-up, with
+adaptive skipping of the delay if the regulator was originally
+on. The I2C HID driver and I2C OF component prober library gained
+similar adaptive delay skipping. The device tree will be fixed to have
+the regulator not be always on, and proper post-power-on delay time
+added to the I2C HID device.
+
+Also add the post-power-on delay to the ChromeOS OF component prober,
+so that if the regulator is off at the time of probing, the prober knows
+to wait for the hardware to initialize.
+
+Signed-off-by: Chen-Yu Tsai <wenst@chromium.org>
+Link: https://lore.kernel.org/r/20260811122011.3539250-8-wenst@chromium.org
+Signed-off-by: Tzung-Bi Shih <tzungbi@kernel.org>
+---
+ drivers/platform/chrome/chromeos_of_hw_prober.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/drivers/platform/chrome/chromeos_of_hw_prober.c b/drivers/platform/chrome/chromeos_of_hw_prober.c
+index 8562a0e89dc6..54d8941617e2 100644
+--- a/drivers/platform/chrome/chromeos_of_hw_prober.c
++++ b/drivers/platform/chrome/chromeos_of_hw_prober.c
+@@ -70,10 +70,8 @@ static const struct chromeos_i2c_probe_data chromeos_i2c_probe_hana_trackpad = {
+ 		/*
+ 		 * ELAN trackpad needs 2 ms for H/W init and 100 ms for F/W init.
+ 		 * Synaptics trackpad needs 100 ms.
+-		 * However, the regulator is set to "always-on", presumably to
+-		 * avoid this delay. The ELAN driver is also missing delays.
+ 		 */
+-		.post_power_on_delay_ms = 0,
++		.post_power_on_delay_ms = 110,
+ 	},
+ };
+ 
+-- 
+2.55.0
+

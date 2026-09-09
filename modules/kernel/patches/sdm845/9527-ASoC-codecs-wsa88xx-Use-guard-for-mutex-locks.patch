@@ -1,0 +1,85 @@
+From 3ca9593964f7e4bb8e21efc536e76722ff56e5bd Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 31 Jul 2026 10:06:48 +0700
+Subject: [PATCH 09527/15333] ASoC: codecs: wsa88xx: Use guard() for mutex
+ locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/20260731030648.8706-27-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/wsa883x.c | 11 +++++------
+ sound/soc/codecs/wsa884x.c | 10 ++++------
+ 2 files changed, 9 insertions(+), 12 deletions(-)
+
+diff --git a/sound/soc/codecs/wsa883x.c b/sound/soc/codecs/wsa883x.c
+index 24a5904d8e6c..442cf9f3eaac 100644
+--- a/sound/soc/codecs/wsa883x.c
++++ b/sound/soc/codecs/wsa883x.c
+@@ -4,6 +4,7 @@
+  */
+ 
+ #include <linux/bitops.h>
++#include <linux/cleanup.h>
+ #include <linux/device.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/hwmon.h>
+@@ -1237,9 +1238,8 @@ static int wsa883x_spkr_event(struct snd_soc_dapm_widget *w,
+ 
+ 	switch (event) {
+ 	case SND_SOC_DAPM_POST_PMU:
+-		mutex_lock(&wsa883x->sp_lock);
+-		wsa883x->pa_on = true;
+-		mutex_unlock(&wsa883x->sp_lock);
++		scoped_guard(mutex, &wsa883x->sp_lock)
++			wsa883x->pa_on = true;
+ 
+ 		switch (wsa883x->dev_mode) {
+ 		case RECEIVER:
+@@ -1290,9 +1290,8 @@ static int wsa883x_spkr_event(struct snd_soc_dapm_widget *w,
+ 					      WSA883X_GLOBAL_PA_EN_MASK, 0);
+ 		snd_soc_component_write_field(component, WSA883X_PDM_WD_CTL,
+ 					      WSA883X_PDM_EN_MASK, 0);
+-		mutex_lock(&wsa883x->sp_lock);
+-		wsa883x->pa_on = false;
+-		mutex_unlock(&wsa883x->sp_lock);
++		scoped_guard(mutex, &wsa883x->sp_lock)
++			wsa883x->pa_on = false;
+ 		break;
+ 	}
+ 	return 0;
+diff --git a/sound/soc/codecs/wsa884x.c b/sound/soc/codecs/wsa884x.c
+index 567861dd42ad..a367c94bfb4d 100644
+--- a/sound/soc/codecs/wsa884x.c
++++ b/sound/soc/codecs/wsa884x.c
+@@ -1701,9 +1701,8 @@ static int wsa884x_spkr_event(struct snd_soc_dapm_widget *w,
+ 
+ 	switch (event) {
+ 	case SND_SOC_DAPM_POST_PMU:
+-		mutex_lock(&wsa884x->sp_lock);
+-		wsa884x->pa_on = true;
+-		mutex_unlock(&wsa884x->sp_lock);
++		scoped_guard(mutex, &wsa884x->sp_lock)
++			wsa884x->pa_on = true;
+ 
+ 		wsa884x_spkr_post_pmu(component, wsa884x);
+ 
+@@ -1717,9 +1716,8 @@ static int wsa884x_spkr_event(struct snd_soc_dapm_widget *w,
+ 					      WSA884X_PDM_WD_CTL_PDM_WD_EN_MASK,
+ 					      0x0);
+ 
+-		mutex_lock(&wsa884x->sp_lock);
+-		wsa884x->pa_on = false;
+-		mutex_unlock(&wsa884x->sp_lock);
++		scoped_guard(mutex, &wsa884x->sp_lock)
++			wsa884x->pa_on = false;
+ 		break;
+ 	}
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,35 @@
+From a02d51919b05a5b5b237012b3e6ea738bc533b08 Mon Sep 17 00:00:00 2001
+From: Mikulas Patocka <mpatocka@redhat.com>
+Date: Mon, 13 Jul 2026 21:25:21 +0200
+Subject: [PATCH 04235/15333] dm-ioctl: delete a useless condition
+
+The condition "remaining <= 0" can never be true. The variable remaining
+has type size_t, thus it can't be negative. It can't be zero because we
+made sure earlier that "remaining > sizeof(struct dm_target_spec)" and
+then we added "sizeof(struct dm_target_spec)" to "outptr" (this means
+that we subtraceted "sizeof(struct dm_target_spec)" from "remaining").
+
+Signed-off-by: Mikulas Patocka <mpatocka@redhat.com>
+Assisted-by: Claude:claude-opus-4.6
+---
+ drivers/md/dm-ioctl.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/drivers/md/dm-ioctl.c b/drivers/md/dm-ioctl.c
+index 61af2a437a05..d77e9971c28c 100644
+--- a/drivers/md/dm-ioctl.c
++++ b/drivers/md/dm-ioctl.c
+@@ -1444,10 +1444,6 @@ static void retrieve_status(struct dm_table *table,
+ 
+ 		outptr += sizeof(struct dm_target_spec);
+ 		remaining = len - (outptr - outbuf);
+-		if (remaining <= 0) {
+-			param->flags |= DM_BUFFER_FULL_FLAG;
+-			break;
+-		}
+ 
+ 		/* Get the status/table string from the target driver */
+ 		if (ti->type->status) {
+-- 
+2.55.0
+

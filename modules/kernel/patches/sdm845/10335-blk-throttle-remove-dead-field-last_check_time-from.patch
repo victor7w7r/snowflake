@@ -1,0 +1,44 @@
+From 19f6bbd753f5d09eadc4a127b89ffac823d90b26 Mon Sep 17 00:00:00 2001
+From: Tao Cui <cuitao@kylinos.cn>
+Date: Fri, 17 Jul 2026 13:48:55 +0800
+Subject: [PATCH 10335/15333] blk-throttle: remove dead field last_check_time
+ from throtl_grp
+
+The last_check_time field in throtl_grp was used by the
+CONFIG_BLK_DEV_THROTTLING_LOW mechanism (in throtl_upgrade_check() and
+the downgrade logic) to timestamp the last upgrade/downgrade check.
+
+Commit bf20ab538c81 ("blk-throttle: remove CONFIG_BLK_DEV_THROTTLING_LOW")
+removed all five of its uses in blk-throttle.c and the surrounding LOW
+fields (latency_target, last_finish_time, checked_last_finish_time,
+avg_idletime, idletime_threshold, bio_cnt, bad_bio_cnt,
+bio_cnt_reset_time), but missed the field definition itself.
+
+It has been a dead field since then: zero references in blk-throttle.c
+and the whole tree.  Remove it.
+
+Signed-off-by: Tao Cui <cuitao@kylinos.cn>
+Reviewed-by: Yu Kuai <yukuai@fygo.io>
+Reviewed-by: Tang Yizhou <yizhou.tang@shopee.com>
+Link: https://patch.msgid.link/20260717054855.2018578-1-cui.tao@linux.dev
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ block/blk-throttle.h | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/block/blk-throttle.h b/block/blk-throttle.h
+index 9d7a42c039a1..1b5775771e07 100644
+--- a/block/blk-throttle.h
++++ b/block/blk-throttle.h
+@@ -120,8 +120,6 @@ struct throtl_grp {
+ 	int64_t bytes_disp[2];
+ 	int io_disp[2];
+ 
+-	unsigned long last_check_time;
+-
+ 	/* When did we start a new slice */
+ 	unsigned long slice_start[2];
+ 	unsigned long slice_end[2];
+-- 
+2.55.0
+

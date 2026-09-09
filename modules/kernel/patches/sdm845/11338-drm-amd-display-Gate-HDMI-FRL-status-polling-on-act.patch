@@ -1,0 +1,44 @@
+From df94112ceebfb20bc7f6524769c74d5e6e8dcc2d Mon Sep 17 00:00:00 2001
+From: Fangzhi Zuo <jerry.zuo@amd.com>
+Date: Fri, 17 Jul 2026 23:46:23 -0400
+Subject: [PATCH 11338/15333] drm/amd/display: Gate HDMI FRL status polling on
+ active FRL link rate
+
+[Why]
+hdmi_frl_status_polling_work() skipped any link whose connector_signal
+was not SIGNAL_TYPE_HDMI_FRL. connector_signal is not reliably set to
+SIGNAL_TYPE_HDMI_FRL while a link is actually running FRL, so links that
+were operating in FRL mode were skipped and their status flags never got
+polled, missing link-retrain events.
+
+[How]
+Use frl_link_settings.frl_link_rate to decide whether a link is running
+FRL. A non-zero rate means FRL is active, so only links with a zero rate
+are skipped. This ensures every link actually operating in FRL mode is
+polled for status changes.
+
+Reviewed-by: Harry Wentland <harry.wentland@amd.com>
+Signed-off-by: Fangzhi Zuo <jerry.zuo@amd.com>
+Signed-off-by: Roman Li <roman.li@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+index db211884616c..2b0ffa20d98e 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+@@ -3068,7 +3068,7 @@ static void hdmi_frl_status_polling_work(struct work_struct *work)
+ 		if (!dc_is_hdmi_signal(dc_link->connector_signal))
+ 			continue;
+ 
+-		if (dc_link->connector_signal != SIGNAL_TYPE_HDMI_FRL)
++		if (dc_link->frl_link_settings.frl_link_rate == 0)
+ 			continue;
+ 
+ 		link_update = dc_link_frl_poll_status_flag(dc_link);
+-- 
+2.55.0
+

@@ -1,0 +1,71 @@
+From 2ee1cc0bbd9b8a798d108828a3a749e9683e519c Mon Sep 17 00:00:00 2001
+From: Zong Li <zong.li@sifive.com>
+Date: Fri, 7 Aug 2026 19:24:30 -0600
+Subject: [PATCH 12288/15333] riscv: cfi: reduce shadow stack size limit from
+ 2GB to 512MB
+
+Change the shadow stack size calculation from RLIMIT_STACK/2 (capped at
+2GB) to RLIMIT_STACK/8 (capped at 512MB), following David Laight's
+analysis and recommendation.
+
+Rationale:
+
+David Laight pointed out that the focus should be on the ratio between
+shadow stack size and the normal stack size, rather than just the
+absolute upper limit. His analysis showed that while there are many
+functions with small stack frames, the majority have stack deltas of
+over 64 bytes due to saved registers and local variables.
+
+Shadow stacks only store return addresses (8 bytes per entry on 64-bit
+systems), whereas normal stack frames typically consume 64+ bytes. This
+8:64 byte ratio means that programs using a lot of stack space are
+dominated by large buffer allocations and local variables, not extreme
+recursion depths with minimal local data.
+
+For example, with the default RLIMIT_STACK of 8MB:
+- RLIMIT_STACK/2 gives a 4MB shadow stack supporting 512K nested calls
+- RLIMIT_STACK/8 gives a 1MB shadow stack supporting 128K nested calls
+
+Given typical stack frame sizes of 64+ bytes, RLIMIT_STACK/8 is still
+conservative and provides adequate depth for practical applications.
+David noted that this could even be safely halved again.
+
+This reduction also better accommodates memory-constrained platforms.
+On systems with limited physical memory, allocating large shadow stacks
+can cause virtual memory allocation failures when overcommit mode is set
+to OVERCOMMIT_GUESS or OVERCOMMIT_NEVER.
+
+Suggested-by: David Laight <david.laight.linux@gmail.com>
+Link: https://lore.kernel.org/all/20260518105725.7afe7a4c@pumpkin/
+Signed-off-by: Zong Li <zong.li@sifive.com>
+Link: https://patch.msgid.link/20260522093634.3530233-1-zong.li@sifive.com
+Signed-off-by: Paul Walmsley <pjw@kernel.org>
+---
+ arch/riscv/kernel/usercfi.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/riscv/kernel/usercfi.c b/arch/riscv/kernel/usercfi.c
+index 5a7113d69bad..f027e6e05251 100644
+--- a/arch/riscv/kernel/usercfi.c
++++ b/arch/riscv/kernel/usercfi.c
+@@ -110,7 +110,7 @@ void set_indir_lp_lock(struct task_struct *task, bool lock)
+ }
+ /*
+  * The shadow stack only stores the return address and not any variables
+- * this should be more than sufficient for most applications.
++ * 512M should be more than sufficient for most applications.
+  * Else PAGE_ALIGN it and return back
+  */
+ static unsigned long calc_shstk_size(unsigned long size)
+@@ -118,7 +118,7 @@ static unsigned long calc_shstk_size(unsigned long size)
+ 	if (size)
+ 		return PAGE_ALIGN(size);
+ 
+-	return PAGE_ALIGN(min(rlimit(RLIMIT_STACK) / 2, SZ_2G));
++	return PAGE_ALIGN(min(rlimit(RLIMIT_STACK) / 8, SZ_512M));
+ }
+ 
+ /*
+-- 
+2.55.0
+

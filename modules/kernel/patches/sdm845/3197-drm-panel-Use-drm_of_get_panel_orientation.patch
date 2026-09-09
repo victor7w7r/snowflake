@@ -1,0 +1,543 @@
+From b5a8b1f2a97360649fc67e5e28cc4f2132122422 Mon Sep 17 00:00:00 2001
+From: Thierry Reding <treding@nvidia.com>
+Date: Wed, 1 Jul 2026 14:03:20 +0200
+Subject: [PATCH 03197/15333] drm/panel: Use drm_of_get_panel_orientation()
+
+The old of_drm_get_panel_orientation() function was replaced by the
+drm_of_get_panel_orientation() in the core DRM OF helpers. Replace all
+uses of the old helper and remove it.
+
+Changes in v5:
+- also convert r63419 panel
+Changes in v4:
+- also convert anbernic, chipone and ili9488 panels
+Changes in v2:
+- include drm_of.h in all drivers to make sure the new symbol is defined
+
+Signed-off-by: Thierry Reding <treding@nvidia.com>
+Signed-off-by: Thomas Zimmermann <tzimmermann@suse.de>
+Reviewed-by: Javier Martinez Canillas <javierm@redhat.com>
+Link: https://patch.msgid.link/20260701121055.192475-4-tzimmermann@suse.de
+---
+ drivers/gpu/drm/drm_panel.c                   | 20 -------------------
+ drivers/gpu/drm/panel/panel-anbernic-td4310.c |  3 ++-
+ .../drm/panel/panel-boe-th101mb31ig002-28a.c  |  3 ++-
+ .../gpu/drm/panel/panel-boe-tv101wum-nl6.c    |  3 ++-
+ .../gpu/drm/panel/panel-chipone-icna35xx.c    |  3 ++-
+ .../gpu/drm/panel/panel-chipwealth-ch13726a.c |  3 ++-
+ drivers/gpu/drm/panel/panel-edp.c             |  3 ++-
+ drivers/gpu/drm/panel/panel-elida-kd35t133.c  |  3 ++-
+ .../gpu/drm/panel/panel-focaltech-ota7290b.c  |  3 ++-
+ drivers/gpu/drm/panel/panel-himax-hx83102.c   |  3 ++-
+ drivers/gpu/drm/panel/panel-himax-hx8394.c    |  3 ++-
+ drivers/gpu/drm/panel/panel-ilitek-ili9488.c  |  3 ++-
+ .../gpu/drm/panel/panel-ilitek-ili9806e-dsi.c |  3 ++-
+ drivers/gpu/drm/panel/panel-ilitek-ili9881c.c |  3 ++-
+ drivers/gpu/drm/panel/panel-ilitek-ili9882t.c |  3 ++-
+ .../gpu/drm/panel/panel-jadard-jd9365da-h3.c  |  2 +-
+ drivers/gpu/drm/panel/panel-lvds.c            |  2 +-
+ drivers/gpu/drm/panel/panel-novatek-nt36523.c |  3 ++-
+ drivers/gpu/drm/panel/panel-renesas-r63419.c  |  3 ++-
+ drivers/gpu/drm/panel/panel-simple.c          |  2 +-
+ drivers/gpu/drm/panel/panel-sitronix-st7701.c |  3 ++-
+ drivers/gpu/drm/panel/panel-sitronix-st7703.c |  3 ++-
+ .../gpu/drm/panel/panel-sitronix-st7789v.c    |  3 ++-
+ include/drm/drm_panel.h                       |  8 --------
+ 24 files changed, 41 insertions(+), 50 deletions(-)
+
+diff --git a/drivers/gpu/drm/drm_panel.c b/drivers/gpu/drm/drm_panel.c
+index eddd13a34c03..d7c6f4824b2d 100644
+--- a/drivers/gpu/drm/drm_panel.c
++++ b/drivers/gpu/drm/drm_panel.c
+@@ -492,26 +492,6 @@ struct drm_panel *of_drm_find_panel(const struct device_node *np)
+ 	return ERR_PTR(-EPROBE_DEFER);
+ }
+ EXPORT_SYMBOL(of_drm_find_panel);
+-
+-/**
+- * of_drm_get_panel_orientation - look up the orientation of the panel through
+- * the "rotation" binding from a device tree node
+- * @np: device tree node of the panel
+- * @orientation: orientation enum to be filled in
+- *
+- * Looks up the rotation of a panel in the device tree. The orientation of the
+- * panel is expressed as a property name "rotation" in the device tree. The
+- * rotation in the device tree is counter clockwise.
+- *
+- * Return: 0 when a valid rotation value (0, 90, 180, or 270) is read or the
+- * rotation property doesn't exist. Return a negative error code on failure.
+- */
+-int of_drm_get_panel_orientation(const struct device_node *np,
+-				 enum drm_panel_orientation *orientation)
+-{
+-	return drm_of_get_panel_orientation(np, orientation);
+-}
+-EXPORT_SYMBOL(of_drm_get_panel_orientation);
+ #endif
+ 
+ /* Find panel by fwnode. This should be identical to of_drm_find_panel(). */
+diff --git a/drivers/gpu/drm/panel/panel-anbernic-td4310.c b/drivers/gpu/drm/panel/panel-anbernic-td4310.c
+index 9a1b4525423c..3b6de1b2fbc6 100644
+--- a/drivers/gpu/drm/panel/panel-anbernic-td4310.c
++++ b/drivers/gpu/drm/panel/panel-anbernic-td4310.c
+@@ -12,6 +12,7 @@
+ #include <linux/regulator/consumer.h>
+ 
+ #include <drm/drm_mipi_dsi.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ #include <drm/drm_probe_helper.h>
+ 
+@@ -165,7 +166,7 @@ static int panel_anbernic_td4310_probe(struct mipi_dsi_device *dsi)
+ 	if (!ctx->panel_info)
+ 		return -EINVAL;
+ 
+-	ret = of_drm_get_panel_orientation(dev->of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &ctx->orientation);
+ 	if (ret < 0)
+ 		return dev_err_probe(dev, ret, "Failed to get panel orientation\n");
+ 
+diff --git a/drivers/gpu/drm/panel/panel-boe-th101mb31ig002-28a.c b/drivers/gpu/drm/panel/panel-boe-th101mb31ig002-28a.c
+index 01b4458e55ad..a70a2e58f88c 100644
+--- a/drivers/gpu/drm/panel/panel-boe-th101mb31ig002-28a.c
++++ b/drivers/gpu/drm/panel/panel-boe-th101mb31ig002-28a.c
+@@ -15,6 +15,7 @@
+ #include <drm/drm_connector.h>
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ #include <drm/drm_probe_helper.h>
+ 
+@@ -380,7 +381,7 @@ static int boe_th101mb31ig002_dsi_probe(struct mipi_dsi_device *dsi)
+ 		return dev_err_probe(&dsi->dev, PTR_ERR(ctx->reset),
+ 				     "Failed to get reset GPIO\n");
+ 
+-	ret = of_drm_get_panel_orientation(dsi->dev.of_node,
++	ret = drm_of_get_panel_orientation(dsi->dev.of_node,
+ 					   &ctx->orientation);
+ 	if (ret)
+ 		return dev_err_probe(&dsi->dev, ret,
+diff --git a/drivers/gpu/drm/panel/panel-boe-tv101wum-nl6.c b/drivers/gpu/drm/panel/panel-boe-tv101wum-nl6.c
+index 658ce64c71eb..150dff3ab6c3 100644
+--- a/drivers/gpu/drm/panel/panel-boe-tv101wum-nl6.c
++++ b/drivers/gpu/drm/panel/panel-boe-tv101wum-nl6.c
+@@ -13,6 +13,7 @@
+ #include <drm/drm_connector.h>
+ #include <drm/drm_crtc.h>
+ #include <drm/drm_mipi_dsi.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ #include <video/mipi_display.h>
+@@ -1722,7 +1723,7 @@ static int boe_panel_add(struct boe_panel *boe)
+ 
+ 	boe->base.prepare_prev_first = true;
+ 
+-	err = of_drm_get_panel_orientation(dev->of_node, &boe->orientation);
++	err = drm_of_get_panel_orientation(dev->of_node, &boe->orientation);
+ 	if (err < 0) {
+ 		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, err);
+ 		return err;
+diff --git a/drivers/gpu/drm/panel/panel-chipone-icna35xx.c b/drivers/gpu/drm/panel/panel-chipone-icna35xx.c
+index 86d096455caa..2cc16494a4ce 100644
+--- a/drivers/gpu/drm/panel/panel-chipone-icna35xx.c
++++ b/drivers/gpu/drm/panel/panel-chipone-icna35xx.c
+@@ -21,6 +21,7 @@
+ #include <drm/drm_crtc.h>
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ #include <drm/drm_probe_helper.h>
+ 
+@@ -374,7 +375,7 @@ static int icna35xx_probe(struct mipi_dsi_device *dsi)
+ 	pinfo->dsi = dsi;
+ 	mipi_dsi_set_drvdata(dsi, pinfo);
+ 
+-	ret = of_drm_get_panel_orientation(dev->of_node, &pinfo->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &pinfo->orientation);
+ 	if (ret < 0) {
+ 		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, ret);
+ 		return ret;
+diff --git a/drivers/gpu/drm/panel/panel-chipwealth-ch13726a.c b/drivers/gpu/drm/panel/panel-chipwealth-ch13726a.c
+index be76bc825c3f..562dc573528d 100644
+--- a/drivers/gpu/drm/panel/panel-chipwealth-ch13726a.c
++++ b/drivers/gpu/drm/panel/panel-chipwealth-ch13726a.c
+@@ -13,6 +13,7 @@
+ 
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ #include <video/mipi_display.h>
+@@ -268,7 +269,7 @@ static int ch13726a_probe(struct mipi_dsi_device *dsi)
+ 		return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio),
+ 				     "Failed to get reset-gpios\n");
+ 
+-	ret = of_drm_get_panel_orientation(dev->of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &ctx->orientation);
+ 	if (ret < 0) {
+ 		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, ret);
+ 		return ret;
+diff --git a/drivers/gpu/drm/panel/panel-edp.c b/drivers/gpu/drm/panel/panel-edp.c
+index bd7acc31b292..f66474d3ef65 100644
+--- a/drivers/gpu/drm/panel/panel-edp.c
++++ b/drivers/gpu/drm/panel/panel-edp.c
+@@ -40,6 +40,7 @@
+ #include <drm/drm_crtc.h>
+ #include <drm/drm_device.h>
+ #include <drm/drm_edid.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ /**
+@@ -865,7 +866,7 @@ static int panel_edp_probe(struct device *dev, const struct panel_desc *desc,
+ 		return dev_err_probe(dev, PTR_ERR(panel->enable_gpio),
+ 				     "failed to request GPIO\n");
+ 
+-	err = of_drm_get_panel_orientation(dev->of_node, &panel->orientation);
++	err = drm_of_get_panel_orientation(dev->of_node, &panel->orientation);
+ 	if (err) {
+ 		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, err);
+ 		return err;
+diff --git a/drivers/gpu/drm/panel/panel-elida-kd35t133.c b/drivers/gpu/drm/panel/panel-elida-kd35t133.c
+index 1f177834d629..d23002b5a2d7 100644
+--- a/drivers/gpu/drm/panel/panel-elida-kd35t133.c
++++ b/drivers/gpu/drm/panel/panel-elida-kd35t133.c
+@@ -21,6 +21,7 @@
+ 
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ /* Manufacturer specific Commands send via DSI */
+@@ -233,7 +234,7 @@ static int kd35t133_probe(struct mipi_dsi_device *dsi)
+ 		return ret;
+ 	}
+ 
+-	ret = of_drm_get_panel_orientation(dev->of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &ctx->orientation);
+ 	if (ret < 0) {
+ 		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, ret);
+ 		return ret;
+diff --git a/drivers/gpu/drm/panel/panel-focaltech-ota7290b.c b/drivers/gpu/drm/panel/panel-focaltech-ota7290b.c
+index ed02a8daf96f..bbc870b8fda8 100644
+--- a/drivers/gpu/drm/panel/panel-focaltech-ota7290b.c
++++ b/drivers/gpu/drm/panel/panel-focaltech-ota7290b.c
+@@ -17,6 +17,7 @@
+ 
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ #include <drm/drm_probe_helper.h>
+ 
+@@ -181,7 +182,7 @@ static int ota7290b_probe(struct mipi_dsi_device *dsi)
+ 		return dev_err_probe(&dsi->dev, PTR_ERR(ctx->vdd),
+ 					"Couldn't get our VDD supply\n");
+ 
+-	ret = of_drm_get_panel_orientation(dsi->dev.of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(dsi->dev.of_node, &ctx->orientation);
+ 	if (ret) {
+ 		dev_err(&dsi->dev, "%pOF: failed to get orientation: %d\n",
+ 			dsi->dev.of_node, ret);
+diff --git a/drivers/gpu/drm/panel/panel-himax-hx83102.c b/drivers/gpu/drm/panel/panel-himax-hx83102.c
+index d7e5664a5838..6a0851ccf9bb 100644
+--- a/drivers/gpu/drm/panel/panel-himax-hx83102.c
++++ b/drivers/gpu/drm/panel/panel-himax-hx83102.c
+@@ -17,6 +17,7 @@
+ #include <drm/drm_connector.h>
+ #include <drm/drm_crtc.h>
+ #include <drm/drm_mipi_dsi.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ #include <video/mipi_display.h>
+@@ -1264,7 +1265,7 @@ static int hx83102_panel_add(struct hx83102 *ctx)
+ 
+ 	ctx->base.prepare_prev_first = true;
+ 
+-	err = of_drm_get_panel_orientation(dev->of_node, &ctx->orientation);
++	err = drm_of_get_panel_orientation(dev->of_node, &ctx->orientation);
+ 	if (err < 0)
+ 		return dev_err_probe(dev, err, "failed to get orientation\n");
+ 
+diff --git a/drivers/gpu/drm/panel/panel-himax-hx8394.c b/drivers/gpu/drm/panel/panel-himax-hx8394.c
+index 416203da2f45..09124610fdc8 100644
+--- a/drivers/gpu/drm/panel/panel-himax-hx8394.c
++++ b/drivers/gpu/drm/panel/panel-himax-hx8394.c
+@@ -21,6 +21,7 @@
+ 
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ #define DRV_NAME "panel-himax-hx8394"
+@@ -991,7 +992,7 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
+ 		return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio),
+ 				     "Failed to get reset gpio\n");
+ 
+-	ret = of_drm_get_panel_orientation(dev->of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &ctx->orientation);
+ 	if (ret < 0) {
+ 		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, ret);
+ 		return ret;
+diff --git a/drivers/gpu/drm/panel/panel-ilitek-ili9488.c b/drivers/gpu/drm/panel/panel-ilitek-ili9488.c
+index 7302766034fc..6ab8ae72abbf 100644
+--- a/drivers/gpu/drm/panel/panel-ilitek-ili9488.c
++++ b/drivers/gpu/drm/panel/panel-ilitek-ili9488.c
+@@ -13,6 +13,7 @@
+ 
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ #include <drm/drm_probe_helper.h>
+ 
+@@ -237,7 +238,7 @@ static int ili9488_dsi_probe(struct mipi_dsi_device *dsi)
+ 	if (ret < 0)
+ 		return dev_err_probe(dev, ret, "failed to get regulators\n");
+ 
+-	ret = of_drm_get_panel_orientation(dev->of_node, &ili->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &ili->orientation);
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "failed to get orientation\n");
+ 
+diff --git a/drivers/gpu/drm/panel/panel-ilitek-ili9806e-dsi.c b/drivers/gpu/drm/panel/panel-ilitek-ili9806e-dsi.c
+index ad33414719fc..0fb06c425545 100644
+--- a/drivers/gpu/drm/panel/panel-ilitek-ili9806e-dsi.c
++++ b/drivers/gpu/drm/panel/panel-ilitek-ili9806e-dsi.c
+@@ -9,6 +9,7 @@
+ 
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ #include <drm/drm_probe_helper.h>
+ 
+@@ -131,7 +132,7 @@ static int ili9806e_dsi_probe(struct mipi_dsi_device *dsi)
+ 	dsi->format = ctx->desc->format;
+ 	dsi->lanes = ctx->desc->lanes;
+ 
+-	ret = of_drm_get_panel_orientation(dev->of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &ctx->orientation);
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "Failed to get orientation\n");
+ 
+diff --git a/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c b/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c
+index 0652cdb57d11..3abdd0870e83 100644
+--- a/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c
++++ b/drivers/gpu/drm/panel/panel-ilitek-ili9881c.c
+@@ -16,6 +16,7 @@
+ 
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ #include <video/mipi_display.h>
+@@ -2571,7 +2572,7 @@ static int ili9881c_dsi_probe(struct mipi_dsi_device *dsi)
+ 		return dev_err_probe(&dsi->dev, PTR_ERR(ctx->reset),
+ 				     "Couldn't get our reset GPIO\n");
+ 
+-	ret = of_drm_get_panel_orientation(dsi->dev.of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(dsi->dev.of_node, &ctx->orientation);
+ 	if (ret) {
+ 		dev_err(&dsi->dev, "%pOF: failed to get orientation: %d\n",
+ 			dsi->dev.of_node, ret);
+diff --git a/drivers/gpu/drm/panel/panel-ilitek-ili9882t.c b/drivers/gpu/drm/panel/panel-ilitek-ili9882t.c
+index 5f4e0d82ee67..6d07fe901357 100644
+--- a/drivers/gpu/drm/panel/panel-ilitek-ili9882t.c
++++ b/drivers/gpu/drm/panel/panel-ilitek-ili9882t.c
+@@ -13,6 +13,7 @@
+ #include <drm/drm_connector.h>
+ #include <drm/drm_crtc.h>
+ #include <drm/drm_mipi_dsi.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ #include <video/mipi_display.h>
+@@ -795,7 +796,7 @@ static int ili9882t_add(struct ili9882t *ili)
+ 
+ 	gpiod_set_value_cansleep(ili->enable_gpio, 0);
+ 
+-	err = of_drm_get_panel_orientation(dev->of_node, &ili->orientation);
++	err = drm_of_get_panel_orientation(dev->of_node, &ili->orientation);
+ 	if (err < 0) {
+ 		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, err);
+ 		return err;
+diff --git a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+index f6b04de1182e..67ef9e0fea03 100644
+--- a/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
++++ b/drivers/gpu/drm/panel/panel-jadard-jd9365da-h3.c
+@@ -2992,7 +2992,7 @@ static int jadard_dsi_probe(struct mipi_dsi_device *dsi)
+ 		return dev_err_probe(&dsi->dev, PTR_ERR(jadard->vccio),
+ 				"failed to get vccio regulator\n");
+ 
+-	ret = of_drm_get_panel_orientation(dev->of_node, &jadard->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &jadard->orientation);
+ 	if (ret < 0)
+ 		return dev_err_probe(dev, ret, "failed to get orientation\n");
+ 
+diff --git a/drivers/gpu/drm/panel/panel-lvds.c b/drivers/gpu/drm/panel/panel-lvds.c
+index 46b07f38559f..37f7498449ec 100644
+--- a/drivers/gpu/drm/panel/panel-lvds.c
++++ b/drivers/gpu/drm/panel/panel-lvds.c
+@@ -126,7 +126,7 @@ static int panel_lvds_parse_dt(struct panel_lvds *lvds)
+ 	struct device_node *np = lvds->dev->of_node;
+ 	int ret;
+ 
+-	ret = of_drm_get_panel_orientation(np, &lvds->orientation);
++	ret = drm_of_get_panel_orientation(np, &lvds->orientation);
+ 	if (ret < 0) {
+ 		dev_err(lvds->dev, "%pOF: failed to get orientation %d\n", np, ret);
+ 		return ret;
+diff --git a/drivers/gpu/drm/panel/panel-novatek-nt36523.c b/drivers/gpu/drm/panel/panel-novatek-nt36523.c
+index 226d91daf8c7..34b9123d3fd7 100644
+--- a/drivers/gpu/drm/panel/panel-novatek-nt36523.c
++++ b/drivers/gpu/drm/panel/panel-novatek-nt36523.c
+@@ -19,6 +19,7 @@
+ #include <drm/drm_crtc.h>
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ #define DSI_NUM_MIN 1
+@@ -1206,7 +1207,7 @@ static int nt36523_probe(struct mipi_dsi_device *dsi)
+ 	pinfo->dsi[0] = dsi;
+ 	mipi_dsi_set_drvdata(dsi, pinfo);
+ 
+-	ret = of_drm_get_panel_orientation(dev->of_node, &pinfo->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &pinfo->orientation);
+ 	if (ret < 0) {
+ 		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, ret);
+ 		return ret;
+diff --git a/drivers/gpu/drm/panel/panel-renesas-r63419.c b/drivers/gpu/drm/panel/panel-renesas-r63419.c
+index 59ac323f5276..ff3846d574e5 100644
+--- a/drivers/gpu/drm/panel/panel-renesas-r63419.c
++++ b/drivers/gpu/drm/panel/panel-renesas-r63419.c
+@@ -20,6 +20,7 @@
+ #include <drm/drm_connector.h>
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ #include <drm/drm_probe_helper.h>
+ 
+@@ -292,7 +293,7 @@ static int renesas_r63419_probe(struct mipi_dsi_device *dsi)
+ 	mipi_dsi_set_drvdata(dsi, ctx);
+ 
+ 	/* Get panel orientation */
+-	ret = of_drm_get_panel_orientation(dev->of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &ctx->orientation);
+ 	if (ret < 0 && ret != -ENODEV)
+ 		return dev_err_probe(dev, ret,
+ 				     "Failed to get panel orientation\n");
+diff --git a/drivers/gpu/drm/panel/panel-simple.c b/drivers/gpu/drm/panel/panel-simple.c
+index c09bf3db5e78..5c169fdf265c 100644
+--- a/drivers/gpu/drm/panel/panel-simple.c
++++ b/drivers/gpu/drm/panel/panel-simple.c
+@@ -693,7 +693,7 @@ static struct panel_simple *panel_simple_probe(struct device *dev)
+ 		return dev_err_cast_probe(dev, panel->enable_gpio,
+ 					  "failed to request GPIO\n");
+ 
+-	err = of_drm_get_panel_orientation(dev->of_node, &panel->orientation);
++	err = drm_of_get_panel_orientation(dev->of_node, &panel->orientation);
+ 	if (err) {
+ 		dev_err(dev, "%pOF: failed to get orientation %d\n", dev->of_node, err);
+ 		return ERR_PTR(err);
+diff --git a/drivers/gpu/drm/panel/panel-sitronix-st7701.c b/drivers/gpu/drm/panel/panel-sitronix-st7701.c
+index 2f79ec4a2063..f16e0de1ea60 100644
+--- a/drivers/gpu/drm/panel/panel-sitronix-st7701.c
++++ b/drivers/gpu/drm/panel/panel-sitronix-st7701.c
+@@ -7,6 +7,7 @@
+ #include <drm/drm_mipi_dbi.h>
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ #include <linux/bitfield.h>
+@@ -1296,7 +1297,7 @@ static int st7701_probe(struct device *dev, int connector_type)
+ 		return PTR_ERR(st7701->reset);
+ 	}
+ 
+-	ret = of_drm_get_panel_orientation(dev->of_node, &st7701->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &st7701->orientation);
+ 	if (ret < 0)
+ 		return dev_err_probe(dev, ret, "Failed to get orientation\n");
+ 
+diff --git a/drivers/gpu/drm/panel/panel-sitronix-st7703.c b/drivers/gpu/drm/panel/panel-sitronix-st7703.c
+index f1641c9c7d13..fcbb0b7d50e4 100644
+--- a/drivers/gpu/drm/panel/panel-sitronix-st7703.c
++++ b/drivers/gpu/drm/panel/panel-sitronix-st7703.c
+@@ -20,6 +20,7 @@
+ 
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ #define DRV_NAME "panel-sitronix-st7703"
+@@ -873,7 +874,7 @@ static int st7703_probe(struct mipi_dsi_device *dsi)
+ 		return dev_err_probe(dev, PTR_ERR(ctx->iovcc),
+ 				     "Failed to request iovcc regulator\n");
+ 
+-	ret = of_drm_get_panel_orientation(dsi->dev.of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(dsi->dev.of_node, &ctx->orientation);
+ 	if (ret < 0)
+ 		return dev_err_probe(&dsi->dev, ret, "Failed to get orientation\n");
+ 
+diff --git a/drivers/gpu/drm/panel/panel-sitronix-st7789v.c b/drivers/gpu/drm/panel/panel-sitronix-st7789v.c
+index d5f821d6b23c..da6ed31d151e 100644
+--- a/drivers/gpu/drm/panel/panel-sitronix-st7789v.c
++++ b/drivers/gpu/drm/panel/panel-sitronix-st7789v.c
+@@ -14,6 +14,7 @@
+ 
+ #include <drm/drm_device.h>
+ #include <drm/drm_modes.h>
++#include <drm/drm_of.h>
+ #include <drm/drm_panel.h>
+ 
+ #define ST7789V_RAMCTRL_CMD		0xb0
+@@ -646,7 +647,7 @@ static int st7789v_probe(struct spi_device *spi)
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "Failed to get backlight\n");
+ 
+-	ret = of_drm_get_panel_orientation(spi->dev.of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(spi->dev.of_node, &ctx->orientation);
+ 	if (ret)
+ 		return dev_err_probe(&spi->dev, ret, "Failed to get orientation\n");
+ 
+diff --git a/include/drm/drm_panel.h b/include/drm/drm_panel.h
+index 86b3f9c65c92..b87323443f49 100644
+--- a/include/drm/drm_panel.h
++++ b/include/drm/drm_panel.h
+@@ -337,19 +337,11 @@ int drm_panel_get_modes(struct drm_panel *panel, struct drm_connector *connector
+ 
+ #if defined(CONFIG_OF) && defined(CONFIG_DRM_PANEL)
+ struct drm_panel *of_drm_find_panel(const struct device_node *np);
+-int of_drm_get_panel_orientation(const struct device_node *np,
+-				 enum drm_panel_orientation *orientation);
+ #else
+ static inline struct drm_panel *of_drm_find_panel(const struct device_node *np)
+ {
+ 	return ERR_PTR(-ENODEV);
+ }
+-
+-static inline int of_drm_get_panel_orientation(const struct device_node *np,
+-					       enum drm_panel_orientation *orientation)
+-{
+-	return -ENODEV;
+-}
+ #endif
+ 
+ #if defined(CONFIG_DRM_PANEL)
+-- 
+2.55.0
+

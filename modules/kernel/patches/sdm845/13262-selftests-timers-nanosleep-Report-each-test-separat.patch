@@ -1,0 +1,80 @@
+From a1211288234058b0d13e2cc4a910b556c5308fdd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh=20=28Schneider=20Electric=29?=
+ <thomas.weissschuh@linutronix.de>
+Date: Mon, 3 Aug 2026 12:04:44 +0200
+Subject: [PATCH 13262/15333] selftests: timers: nanosleep: Report each test
+ separately
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Currently the test for the sleep functionality itself and the one for
+the remaining time are reported together. This makes the test output a
+bit confusing, especially as the upcoming tests for auxiliary clocks
+will have different results between the two parts.
+
+Report each test part on its own.
+
+This also allows continuing testing other clocks after a single one
+has failed.
+
+Signed-off-by: Thomas Weißschuh (Schneider Electric) <thomas.weissschuh@linutronix.de>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/20260803-auxclock-nanosleep-prep-v2-13-910cbd485390@linutronix.de
+---
+ tools/testing/selftests/timers/nanosleep.c | 21 ++++++++-------------
+ 1 file changed, 8 insertions(+), 13 deletions(-)
+
+diff --git a/tools/testing/selftests/timers/nanosleep.c b/tools/testing/selftests/timers/nanosleep.c
+index dd899dcfb2cb..b45e4c855259 100644
+--- a/tools/testing/selftests/timers/nanosleep.c
++++ b/tools/testing/selftests/timers/nanosleep.c
+@@ -142,23 +142,18 @@ static void nanosleep_test_clock(clockid_t clockid)
+ 
+ 	while (length <= (NSEC_PER_SEC * 10)) {
+ 		ret = nanosleep_test(clockid, length);
+-		if (ret == KSFT_SKIP) {
+-			ksft_test_result_skip("%s\n", clock_name(clockid));
++		if (ret != KSFT_PASS) {
++			ksft_test_result_report(ret, "%s\n", clock_name(clockid));
++			ksft_test_result_skip("%s (remaining)\n", clock_name(clockid));
+ 			return;
+ 		}
+-		if (ret == KSFT_FAIL) {
+-			ksft_test_result_fail("%s\n", clock_name(clockid));
+-			ksft_exit_fail();
+-		}
++
+ 		length *= 100;
+ 	}
++	ksft_test_result_pass("%s\n", clock_name(clockid));
+ 
+ 	ret = nanosleep_test_remaining(clockid);
+-	if (ret == KSFT_FAIL) {
+-		ksft_test_result_fail("%s\n", clock_name(clockid));
+-		ksft_exit_fail();
+-	}
+-	ksft_test_result_pass("%s\n", clock_name(clockid));
++	ksft_test_result_report(ret, "%s (remaining)\n", clock_name(clockid));
+ }
+ 
+ int main(int argc, char **argv)
+@@ -175,7 +170,7 @@ int main(int argc, char **argv)
+ 	};
+ 
+ 	ksft_print_header();
+-	ksft_set_plan(ARRAY_SIZE(tested_clocks));
++	ksft_set_plan(ARRAY_SIZE(tested_clocks) * 2);
+ 
+ 	for (size_t clock_index = 0; clock_index < ARRAY_SIZE(tested_clocks); clock_index++) {
+ 		clockid = tested_clocks[clock_index];
+@@ -184,5 +179,5 @@ int main(int argc, char **argv)
+ 
+ 		nanosleep_test_clock(clockid);
+ 	}
+-	ksft_exit_pass();
++	ksft_finished();
+ }
+-- 
+2.55.0
+

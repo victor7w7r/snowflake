@@ -1,0 +1,75 @@
+From 3c6b291c29e77225ec0f28b29b7a7976cc46aefc Mon Sep 17 00:00:00 2001
+From: Animesh Manna <animesh.manna@intel.com>
+Date: Tue, 16 Jun 2026 01:33:33 +0530
+Subject: [PATCH 00327/15333] drm/i915/cmtg: Add a hook to make eDP transcoder
+ secondary
+
+Program DDI_FUNC_CTL2 to configure the eDP transcoder as secondary
+to the CMTG transcoder.
+
+v2:
+- Update commit header to be more clear. [Uma]
+
+Bspec: 68915
+Reviewed-by: Uma Shankar <uma.shankar@intel.com>
+Reviewed-by: Dibin Moolakadan Subrahmanian <dibin.moolakadan.subrahmanian@intel.com>
+Signed-off-by: Animesh Manna <animesh.manna@intel.com>
+Link: https://patch.msgid.link/20260615200339.885190-17-animesh.manna@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_cmtg.c          | 14 ++++++++++++++
+ drivers/gpu/drm/i915/display/intel_cmtg.h          |  1 +
+ drivers/gpu/drm/i915/display/intel_display_types.h |  4 ++++
+ 3 files changed, 19 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_cmtg.c b/drivers/gpu/drm/i915/display/intel_cmtg.c
+index 129d31fd8176..2347958e5f53 100644
+--- a/drivers/gpu/drm/i915/display/intel_cmtg.c
++++ b/drivers/gpu/drm/i915/display/intel_cmtg.c
+@@ -310,3 +310,17 @@ void intel_cmtg_enable_sync(const struct intel_crtc_state *crtc_state)
+ 			 transcoder_name(cpu_transcoder));
+ 	}
+ }
++
++void intel_cmtg_enable_ddi(const struct intel_crtc_state *crtc_state)
++{
++	struct intel_display *display = to_intel_display(crtc_state);
++	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
++	enum transcoder cpu_transcoder = crtc_state->cpu_transcoder;
++
++	if (!intel_cmtg_is_allowed(crtc_state))
++		return;
++
++	intel_de_rmw(display, TRANS_DDI_FUNC_CTL2(display, cpu_transcoder), 0, CMTG_SECONDARY_MODE);
++	crtc->cmtg.enabled = true;
++	drm_dbg_kms(display->drm, "CMTG: %s enabled\n", transcoder_name(cpu_transcoder));
++}
+diff --git a/drivers/gpu/drm/i915/display/intel_cmtg.h b/drivers/gpu/drm/i915/display/intel_cmtg.h
+index 7897422511d8..d759cf7e5ae2 100644
+--- a/drivers/gpu/drm/i915/display/intel_cmtg.h
++++ b/drivers/gpu/drm/i915/display/intel_cmtg.h
+@@ -16,6 +16,7 @@ enum set_timing_type {
+ 	LRR
+ };
+ 
++void intel_cmtg_enable_ddi(const struct intel_crtc_state *crtc_state);
+ void intel_cmtg_enable_sync(const struct intel_crtc_state *crtc_state);
+ void intel_cmtg_set_m_n(const struct intel_crtc_state *crtc_state);
+ void intel_cmtg_set_vrr_timings(const struct intel_crtc_state *crtc_state);
+diff --git a/drivers/gpu/drm/i915/display/intel_display_types.h b/drivers/gpu/drm/i915/display/intel_display_types.h
+index aa4772a1c208..6cd102a3b610 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_types.h
++++ b/drivers/gpu/drm/i915/display/intel_display_types.h
+@@ -1574,6 +1574,10 @@ struct intel_crtc {
+ #endif
+ 
+ 	bool vblank_psr_notify;
++
++	struct {
++		bool enabled;
++	} cmtg;
+ };
+ 
+ struct intel_plane_error {
+-- 
+2.55.0
+

@@ -1,0 +1,73 @@
+From 08699796dabf6f6256e49ebd52af3008cfd96d64 Mon Sep 17 00:00:00 2001
+From: Alejandro Lucero <alucerop@amd.com>
+Date: Tue, 30 Jun 2026 16:13:43 +0100
+Subject: [PATCH 01563/15333] sfc: Map cxl regs
+
+Use cxl core functions for discovering and mapping CXL device registers.
+
+Signed-off-by: Alejandro Lucero <alucerop@amd.com>
+Reviewed-by: Dan Williams <dan.j.williams@intel.com>
+Reviewed-by: Jonathan Cameron <Jonathan.Cameron@huawei.com>
+Reviewed-by: Dave Jiang <dave.jiang@intel.com>
+Reviewed-by: Ben Cheatham <benjamin.cheatham@amd.com>
+Acked-by: Edward Cree <ecree.xilinx@gmail.com>
+Link: https://patch.msgid.link/20260630151346.31201-3-alejandro.lucero-palau@amd.com
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/net/ethernet/sfc/efx_cxl.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/drivers/net/ethernet/sfc/efx_cxl.c b/drivers/net/ethernet/sfc/efx_cxl.c
+index be252af972ab..704b0ebae937 100644
+--- a/drivers/net/ethernet/sfc/efx_cxl.c
++++ b/drivers/net/ethernet/sfc/efx_cxl.c
+@@ -7,6 +7,8 @@
+ 
+ #include <linux/pci.h>
+ 
++#include <cxl/cxl.h>
++#include <cxl/pci.h>
+ #include "net_driver.h"
+ #include "efx_cxl.h"
+ 
+@@ -18,6 +20,7 @@ int efx_cxl_init(struct efx_probe_data *probe_data)
+ 	struct pci_dev *pci_dev = efx->pci_dev;
+ 	struct efx_cxl *cxl;
+ 	u16 dvsec;
++	int rc;
+ 
+ 	/* Is the device configured with and using CXL? */
+ 	if (!pcie_is_cxl(pci_dev))
+@@ -42,6 +45,29 @@ int efx_cxl_init(struct efx_probe_data *probe_data)
+ 	if (!cxl)
+ 		return -ENOMEM;
+ 
++	rc = cxl_pci_setup_regs(pci_dev, CXL_REGLOC_RBI_COMPONENT,
++				&cxl->cxlds.reg_map);
++	if (rc) {
++		pci_err(pci_dev, "No component registers\n");
++		return rc;
++	}
++
++	if (!cxl->cxlds.reg_map.component_map.hdm_decoder.valid) {
++		pci_err(pci_dev, "Expected HDM component register not found\n");
++		return -ENODEV;
++	}
++
++	if (!cxl->cxlds.reg_map.component_map.ras.valid) {
++		pci_err(pci_dev, "Expected RAS component register not found\n");
++		return -ENODEV;
++	}
++
++	/* Set media ready explicitly as there are neither mailbox for checking
++	 * this state nor the CXL register involved, both not mandatory for
++	 * type2.
++	 */
++	cxl->cxlds.media_ready = true;
++
+ 	probe_data->cxl = cxl;
+ 
+ 	return 0;
+-- 
+2.55.0
+

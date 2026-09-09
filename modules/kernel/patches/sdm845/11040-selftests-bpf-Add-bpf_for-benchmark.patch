@@ -1,0 +1,254 @@
+From 5a1de41147b0b604e49144671937e9178bf5b5c1 Mon Sep 17 00:00:00 2001
+From: Puranjay Mohan <puranjay@kernel.org>
+Date: Tue, 4 Aug 2026 06:45:58 -0700
+Subject: [PATCH 11040/15333] selftests/bpf: Add bpf_for() benchmark
+
+Add a bpf_for() benchmark modelled on bench_bpf_loop so the per-iteration
+iterator cost can be measured and compared against bpf_loop. It runs an
+empty bpf_for(i, 0, nr_loops) loop 1000 times per trigger and accounts
+nr_loops hits per outer iteration:
+
+  $ ./bench -p 1 --nr_loops 1000 bpf-for
+
+Signed-off-by: Puranjay Mohan <puranjay@kernel.org>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Link: https://lore.kernel.org/bpf/20260804134601.2305303-7-puranjay@kernel.org
+---
+ tools/testing/selftests/bpf/Makefile          |   2 +
+ tools/testing/selftests/bpf/bench.c           |   4 +
+ .../selftests/bpf/benchs/bench_bpf_for.c      | 104 ++++++++++++++++++
+ .../selftests/bpf/benchs/run_bench_bpf_for.sh |  15 +++
+ .../selftests/bpf/progs/bpf_for_bench.c       |  32 ++++++
+ 5 files changed, 157 insertions(+)
+ create mode 100644 tools/testing/selftests/bpf/benchs/bench_bpf_for.c
+ create mode 100755 tools/testing/selftests/bpf/benchs/run_bench_bpf_for.sh
+ create mode 100644 tools/testing/selftests/bpf/progs/bpf_for_bench.c
+
+diff --git a/tools/testing/selftests/bpf/Makefile b/tools/testing/selftests/bpf/Makefile
+index 2749b26fd4cd..d3655a706482 100644
+--- a/tools/testing/selftests/bpf/Makefile
++++ b/tools/testing/selftests/bpf/Makefile
+@@ -974,6 +974,7 @@ $(OUTPUT)/bench_ringbufs.o: $(OUTPUT)/ringbuf_bench.skel.h \
+ 			    $(OUTPUT)/perfbuf_bench.skel.h
+ $(OUTPUT)/bench_bloom_filter_map.o: $(OUTPUT)/bloom_filter_bench.skel.h
+ $(OUTPUT)/bench_bpf_loop.o: $(OUTPUT)/bpf_loop_bench.skel.h
++$(OUTPUT)/bench_bpf_for.o: $(OUTPUT)/bpf_for_bench.skel.h
+ $(OUTPUT)/bench_strncmp.o: $(OUTPUT)/strncmp_bench.skel.h
+ $(OUTPUT)/bench_bpf_hashmap_full_update.o: $(OUTPUT)/bpf_hashmap_full_update_bench.skel.h
+ $(OUTPUT)/bench_local_storage.o: $(OUTPUT)/local_storage_bench.skel.h
+@@ -999,6 +1000,7 @@ $(OUTPUT)/bench: $(OUTPUT)/bench.o \
+ 		 $(OUTPUT)/bench_ringbufs.o \
+ 		 $(OUTPUT)/bench_bloom_filter_map.o \
+ 		 $(OUTPUT)/bench_bpf_loop.o \
++		 $(OUTPUT)/bench_bpf_for.o \
+ 		 $(OUTPUT)/bench_strncmp.o \
+ 		 $(OUTPUT)/bench_bpf_hashmap_full_update.o \
+ 		 $(OUTPUT)/bench_local_storage.o \
+diff --git a/tools/testing/selftests/bpf/bench.c b/tools/testing/selftests/bpf/bench.c
+index 3d9d2cd7764b..b86b73456d3c 100644
+--- a/tools/testing/selftests/bpf/bench.c
++++ b/tools/testing/selftests/bpf/bench.c
+@@ -276,6 +276,7 @@ static const struct argp_option opts[] = {
+ extern struct argp bench_ringbufs_argp;
+ extern struct argp bench_bloom_map_argp;
+ extern struct argp bench_bpf_loop_argp;
++extern struct argp bench_bpf_for_argp;
+ extern struct argp bench_local_storage_argp;
+ extern struct argp bench_local_storage_rcu_tasks_trace_argp;
+ extern struct argp bench_strncmp_argp;
+@@ -292,6 +293,7 @@ static const struct argp_child bench_parsers[] = {
+ 	{ &bench_ringbufs_argp, 0, "Ring buffers benchmark", 0 },
+ 	{ &bench_bloom_map_argp, 0, "Bloom filter map benchmark", 0 },
+ 	{ &bench_bpf_loop_argp, 0, "bpf_loop helper benchmark", 0 },
++	{ &bench_bpf_for_argp, 0, "bpf_for loop benchmark", 0 },
+ 	{ &bench_local_storage_argp, 0, "local_storage benchmark", 0 },
+ 	{ &bench_strncmp_argp, 0, "bpf_strncmp helper benchmark", 0 },
+ 	{ &bench_local_storage_rcu_tasks_trace_argp, 0,
+@@ -557,6 +559,7 @@ extern const struct bench bench_bloom_false_positive;
+ extern const struct bench bench_hashmap_without_bloom;
+ extern const struct bench bench_hashmap_with_bloom;
+ extern const struct bench bench_bpf_loop;
++extern const struct bench bench_bpf_for;
+ extern const struct bench bench_strncmp_no_helper;
+ extern const struct bench bench_strncmp_helper;
+ extern const struct bench bench_bpf_hashmap_full_update;
+@@ -640,6 +643,7 @@ static const struct bench *benchs[] = {
+ 	&bench_hashmap_without_bloom,
+ 	&bench_hashmap_with_bloom,
+ 	&bench_bpf_loop,
++	&bench_bpf_for,
+ 	&bench_strncmp_no_helper,
+ 	&bench_strncmp_helper,
+ 	&bench_bpf_hashmap_full_update,
+diff --git a/tools/testing/selftests/bpf/benchs/bench_bpf_for.c b/tools/testing/selftests/bpf/benchs/bench_bpf_for.c
+new file mode 100644
+index 000000000000..730c51ad2dec
+--- /dev/null
++++ b/tools/testing/selftests/bpf/benchs/bench_bpf_for.c
+@@ -0,0 +1,104 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (c) 2026 Meta Platforms, Inc. and affiliates. */
++
++#include <argp.h>
++#include "bench.h"
++#include "bpf_for_bench.skel.h"
++
++/* BPF triggering benchmarks */
++static struct ctx {
++	struct bpf_for_bench *skel;
++} ctx;
++
++static struct {
++	__u32 nr_loops;
++} args = {
++	/*
++	 * Default to a large loop count so the per-iteration bpf_iter_num_next() cost dominates
++	 * the one-time bpf_iter_num_new()/destroy() setup and teardown.
++	 */
++	.nr_loops = 1000,
++};
++
++enum {
++	ARG_NR_LOOPS = 4000,
++};
++
++static const struct argp_option opts[] = {
++	{ "nr_loops", ARG_NR_LOOPS, "nr_loops", 0,
++		"Set number of iterations for the bpf_for() loop"},
++	{},
++};
++
++static error_t parse_arg(int key, char *arg, struct argp_state *state)
++{
++	switch (key) {
++	case ARG_NR_LOOPS:
++		args.nr_loops = strtol(arg, NULL, 10);
++		break;
++	default:
++		return ARGP_ERR_UNKNOWN;
++	}
++
++	return 0;
++}
++
++/* exported into benchmark runner */
++const struct argp bench_bpf_for_argp = {
++	.options = opts,
++	.parser = parse_arg,
++};
++
++static void validate(void)
++{
++	if (env.consumer_cnt != 0) {
++		fprintf(stderr, "benchmark doesn't support consumer!\n");
++		exit(1);
++	}
++}
++
++static void *producer(void *input)
++{
++	while (true)
++		/* trigger the bpf program */
++		syscall(__NR_getpgid);
++
++	return NULL;
++}
++
++static void measure(struct bench_res *res)
++{
++	res->hits = atomic_swap(&ctx.skel->bss->hits, 0);
++}
++
++static void setup(void)
++{
++	struct bpf_link *link;
++
++	setup_libbpf();
++
++	ctx.skel = bpf_for_bench__open_and_load();
++	if (!ctx.skel) {
++		fprintf(stderr, "failed to open skeleton\n");
++		exit(1);
++	}
++
++	link = bpf_program__attach(ctx.skel->progs.benchmark);
++	if (!link) {
++		fprintf(stderr, "failed to attach program!\n");
++		exit(1);
++	}
++
++	ctx.skel->bss->nr_loops = args.nr_loops;
++}
++
++const struct bench bench_bpf_for = {
++	.name = "bpf-for",
++	.argp = &bench_bpf_for_argp,
++	.validate = validate,
++	.setup = setup,
++	.producer_thread = producer,
++	.measure = measure,
++	.report_progress = ops_report_progress,
++	.report_final = ops_report_final,
++};
+diff --git a/tools/testing/selftests/bpf/benchs/run_bench_bpf_for.sh b/tools/testing/selftests/bpf/benchs/run_bench_bpf_for.sh
+new file mode 100755
+index 000000000000..7da6453920da
+--- /dev/null
++++ b/tools/testing/selftests/bpf/benchs/run_bench_bpf_for.sh
+@@ -0,0 +1,15 @@
++#!/bin/bash
++# SPDX-License-Identifier: GPL-2.0
++
++source ./benchs/run_common.sh
++
++set -eufo pipefail
++
++for t in 1 4 8 12 16; do
++for i in 10 100 500 1000 5000 10000 50000 100000 500000 1000000; do
++subtitle "nr_loops: $i, nr_threads: $t"
++	summarize_ops "bpf_for: " \
++	    "$($RUN_BENCH -p $t --nr_loops $i bpf-for)"
++	printf "\n"
++done
++done
+diff --git a/tools/testing/selftests/bpf/progs/bpf_for_bench.c b/tools/testing/selftests/bpf/progs/bpf_for_bench.c
+new file mode 100644
+index 000000000000..f9c723051fc7
+--- /dev/null
++++ b/tools/testing/selftests/bpf/progs/bpf_for_bench.c
+@@ -0,0 +1,32 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (c) 2026 Meta Platforms, Inc. and affiliates. */
++
++#include "vmlinux.h"
++#include <bpf/bpf_helpers.h>
++#include "bpf_misc.h"
++
++char _license[] SEC("license") = "GPL";
++
++int nr_loops;
++long hits;
++
++static int outer_loop(__u32 index, void *data)
++{
++	int i;
++
++	/*
++	 * Empty body: the work being measured is the open-coded numeric iterator itself
++	 * (bpf_iter_num_new/next/destroy behind bpf_for()).
++	 */
++	bpf_for(i, 0, nr_loops)
++		;
++	__sync_add_and_fetch(&hits, nr_loops);
++	return 0;
++}
++
++SEC("fentry/" SYS_PREFIX "sys_getpgid")
++int benchmark(void *ctx)
++{
++	bpf_loop(1000, outer_loop, NULL, 0);
++	return 0;
++}
+-- 
+2.55.0
+

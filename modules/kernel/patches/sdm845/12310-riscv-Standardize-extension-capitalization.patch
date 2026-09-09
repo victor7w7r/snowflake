@@ -1,0 +1,395 @@
+From 0c5a9ab5192b8cc15fa7b32a1f747c70aaee51b0 Mon Sep 17 00:00:00 2001
+From: Charlie Jenkins <charlie@rivosinc.com>
+Date: Fri, 7 Aug 2026 19:24:33 -0600
+Subject: [PATCH 12310/15333] riscv: Standardize extension capitalization
+
+The base extensions are often lowercase and were written as lowercase in
+hwcap, but other references to these extensions in the kernel are
+uppercase. Standardize the case to make it easier to handle macro
+expansion.
+
+Acked-by: Anup Patel <anup@brainfault.org>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+Signed-off-by: Charlie Jenkins <thecharlesjenkins@gmail.com>
+[andrew.jones: Apply KVM_ISA_EXT_ARR(), fixup all KVM use.]
+Signed-off-by: Andrew Jones <andrew.jones@oss.qualcomm.com>
+Signed-off-by: Guodong Xu <docular.xu@gmail.com>
+Link: https://patch.msgid.link/20260701-rva23u64-hwprobe-v2-v5-4-2c61f94a695a@gmail.com
+[pjw@kernel.org: fixed a checkpatch warning; added Andrew's username to his tag comments]
+Signed-off-by: Paul Walmsley <pjw@kernel.org>
+---
+ arch/riscv/include/asm/hwcap.h     | 18 ++++++------
+ arch/riscv/include/asm/switch_to.h |  4 +--
+ arch/riscv/kernel/cpufeature.c     | 45 +++++++++++++++---------------
+ arch/riscv/kernel/sys_hwprobe.c    |  4 +--
+ arch/riscv/kvm/isa.c               | 16 +++++------
+ arch/riscv/kvm/main.c              |  2 +-
+ arch/riscv/kvm/vcpu_fp.c           | 20 ++++++-------
+ arch/riscv/kvm/vcpu_onereg.c       |  6 ++--
+ arch/riscv/kvm/vcpu_vector.c       | 10 +++----
+ 9 files changed, 63 insertions(+), 62 deletions(-)
+
+diff --git a/arch/riscv/include/asm/hwcap.h b/arch/riscv/include/asm/hwcap.h
+index b656f5627f2e..c0cb576b134f 100644
+--- a/arch/riscv/include/asm/hwcap.h
++++ b/arch/riscv/include/asm/hwcap.h
+@@ -10,15 +10,15 @@
+ 
+ #include <uapi/asm/hwcap.h>
+ 
+-#define RISCV_ISA_EXT_a		('a' - 'a')
+-#define RISCV_ISA_EXT_c		('c' - 'a')
+-#define RISCV_ISA_EXT_d		('d' - 'a')
+-#define RISCV_ISA_EXT_f		('f' - 'a')
+-#define RISCV_ISA_EXT_h		('h' - 'a')
+-#define RISCV_ISA_EXT_i		('i' - 'a')
+-#define RISCV_ISA_EXT_m		('m' - 'a')
+-#define RISCV_ISA_EXT_q		('q' - 'a')
+-#define RISCV_ISA_EXT_v		('v' - 'a')
++#define RISCV_ISA_EXT_A		('a' - 'a')
++#define RISCV_ISA_EXT_C		('c' - 'a')
++#define RISCV_ISA_EXT_D		('d' - 'a')
++#define RISCV_ISA_EXT_F		('f' - 'a')
++#define RISCV_ISA_EXT_H		('h' - 'a')
++#define RISCV_ISA_EXT_I		('i' - 'a')
++#define RISCV_ISA_EXT_M		('m' - 'a')
++#define RISCV_ISA_EXT_Q		('q' - 'a')
++#define RISCV_ISA_EXT_V		('v' - 'a')
+ 
+ /*
+  * These macros represent the logical IDs of each multi-letter RISC-V ISA
+diff --git a/arch/riscv/include/asm/switch_to.h b/arch/riscv/include/asm/switch_to.h
+index 1c7ea53ec012..04f10a949066 100644
+--- a/arch/riscv/include/asm/switch_to.h
++++ b/arch/riscv/include/asm/switch_to.h
+@@ -61,8 +61,8 @@ static inline void __switch_to_fpu(struct task_struct *prev,
+ 
+ static __always_inline bool has_fpu(void)
+ {
+-	return riscv_has_extension_likely(RISCV_ISA_EXT_f) ||
+-		riscv_has_extension_likely(RISCV_ISA_EXT_d);
++	return riscv_has_extension_likely(RISCV_ISA_EXT_F) ||
++		riscv_has_extension_likely(RISCV_ISA_EXT_D);
+ }
+ #else
+ static __always_inline bool has_fpu(void) { return false; }
+diff --git a/arch/riscv/kernel/cpufeature.c b/arch/riscv/kernel/cpufeature.c
+index 53f63f560349..ebe4a2593c40 100644
+--- a/arch/riscv/kernel/cpufeature.c
++++ b/arch/riscv/kernel/cpufeature.c
+@@ -84,7 +84,7 @@ EXPORT_SYMBOL_GPL(__riscv_isa_extension_available);
+ static int riscv_ext_f_depends(const struct riscv_isa_ext_data *data,
+ 			       const unsigned long *isa_bitmap)
+ {
+-	if (__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_f))
++	if (__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_F))
+ 		return 0;
+ 
+ 	return -EPROBE_DEFER;
+@@ -146,7 +146,7 @@ static int riscv_ext_f_validate(const struct riscv_isa_ext_data *data,
+ 	 * Due to extension ordering, d is checked before f, so no deferral
+ 	 * is required.
+ 	 */
+-	if (!__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_d)) {
++	if (!__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_D)) {
+ 		pr_warn_once("This kernel does not support systems with F but not D\n");
+ 		return -EINVAL;
+ 	}
+@@ -189,7 +189,7 @@ static int riscv_ext_vector_float_validate(const struct riscv_isa_ext_data *data
+ 	 * Since this function validates vector only, and v/Zve* are probed
+ 	 * after f/d, there's no need for a deferral here.
+ 	 */
+-	if (!__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_d))
++	if (!__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_D))
+ 		return -EINVAL;
+ 
+ 	return 0;
+@@ -224,7 +224,7 @@ static int riscv_ext_zcd_validate(const struct riscv_isa_ext_data *data,
+ 				  const unsigned long *isa_bitmap)
+ {
+ 	if (__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_ZCA) &&
+-	    __riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_d))
++	    __riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_D))
+ 		return 0;
+ 
+ 	return -EPROBE_DEFER;
+@@ -237,7 +237,7 @@ static int riscv_ext_zcf_validate(const struct riscv_isa_ext_data *data,
+ 		return -EINVAL;
+ 
+ 	if (__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_ZCA) &&
+-	    __riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_f))
++	    __riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_F))
+ 		return 0;
+ 
+ 	return -EPROBE_DEFER;
+@@ -511,15 +511,16 @@ static const unsigned int riscv_c_exts[] = {
+  * New entries to this struct should follow the ordering rules described above.
+  */
+ const struct riscv_isa_ext_data riscv_isa_ext[] = {
+-	__RISCV_ISA_EXT_DATA(i, RISCV_ISA_EXT_i),
+-	__RISCV_ISA_EXT_DATA(m, RISCV_ISA_EXT_m),
+-	__RISCV_ISA_EXT_SUPERSET(a, RISCV_ISA_EXT_a, riscv_a_exts),
+-	__RISCV_ISA_EXT_DATA_VALIDATE(f, RISCV_ISA_EXT_f, riscv_ext_f_validate),
+-	__RISCV_ISA_EXT_DATA_VALIDATE(d, RISCV_ISA_EXT_d, riscv_ext_d_validate),
+-	__RISCV_ISA_EXT_DATA(q, RISCV_ISA_EXT_q),
+-	__RISCV_ISA_EXT_SUPERSET(c, RISCV_ISA_EXT_c, riscv_c_exts),
+-	__RISCV_ISA_EXT_SUPERSET_VALIDATE(v, RISCV_ISA_EXT_v, riscv_v_exts, riscv_ext_vector_float_validate),
+-	__RISCV_ISA_EXT_DATA(h, RISCV_ISA_EXT_h),
++	__RISCV_ISA_EXT_DATA(i, RISCV_ISA_EXT_I),
++	__RISCV_ISA_EXT_DATA(m, RISCV_ISA_EXT_M),
++	__RISCV_ISA_EXT_SUPERSET(a, RISCV_ISA_EXT_A, riscv_a_exts),
++	__RISCV_ISA_EXT_DATA_VALIDATE(f, RISCV_ISA_EXT_F, riscv_ext_f_validate),
++	__RISCV_ISA_EXT_DATA_VALIDATE(d, RISCV_ISA_EXT_D, riscv_ext_d_validate),
++	__RISCV_ISA_EXT_DATA(q, RISCV_ISA_EXT_Q),
++	__RISCV_ISA_EXT_SUPERSET(c, RISCV_ISA_EXT_C, riscv_c_exts),
++	__RISCV_ISA_EXT_SUPERSET_VALIDATE(v, RISCV_ISA_EXT_V, riscv_v_exts,
++					  riscv_ext_vector_float_validate),
++	__RISCV_ISA_EXT_DATA(h, RISCV_ISA_EXT_H),
+ 	__RISCV_ISA_EXT_SUPERSET_VALIDATE(zicbom, RISCV_ISA_EXT_ZICBOM, riscv_xlinuxenvcfg_exts, riscv_ext_zicbom_validate),
+ 	__RISCV_ISA_EXT_DATA_VALIDATE(zicbop, RISCV_ISA_EXT_ZICBOP, riscv_ext_zicbop_validate),
+ 	__RISCV_ISA_EXT_SUPERSET_VALIDATE(zicboz, RISCV_ISA_EXT_ZICBOZ, riscv_xlinuxenvcfg_exts, riscv_ext_zicboz_validate),
+@@ -925,7 +926,7 @@ static void __init riscv_fill_hwcap_from_isa_string(unsigned long *isa2hwcap)
+ 		 * marchid.
+ 		 */
+ 		if (acpi_disabled && boot_vendorid == THEAD_VENDOR_ID && boot_archid == 0x0)
+-			clear_bit(RISCV_ISA_EXT_v, source_isa);
++			clear_bit(RISCV_ISA_EXT_V, source_isa);
+ 
+ 		riscv_resolve_isa(source_isa, isainfo->isa, &this_hwcap, isa2hwcap);
+ 
+@@ -1133,13 +1134,13 @@ void __init riscv_fill_hwcap(void)
+ 	unsigned long isa2hwcap[RISCV_ISA_EXT_BASE] = {0};
+ 	int i, j;
+ 
+-	isa2hwcap[RISCV_ISA_EXT_i] = COMPAT_HWCAP_ISA_I;
+-	isa2hwcap[RISCV_ISA_EXT_m] = COMPAT_HWCAP_ISA_M;
+-	isa2hwcap[RISCV_ISA_EXT_a] = COMPAT_HWCAP_ISA_A;
+-	isa2hwcap[RISCV_ISA_EXT_f] = COMPAT_HWCAP_ISA_F;
+-	isa2hwcap[RISCV_ISA_EXT_d] = COMPAT_HWCAP_ISA_D;
+-	isa2hwcap[RISCV_ISA_EXT_c] = COMPAT_HWCAP_ISA_C;
+-	isa2hwcap[RISCV_ISA_EXT_v] = COMPAT_HWCAP_ISA_V;
++	isa2hwcap[RISCV_ISA_EXT_I] = COMPAT_HWCAP_ISA_I;
++	isa2hwcap[RISCV_ISA_EXT_M] = COMPAT_HWCAP_ISA_M;
++	isa2hwcap[RISCV_ISA_EXT_A] = COMPAT_HWCAP_ISA_A;
++	isa2hwcap[RISCV_ISA_EXT_F] = COMPAT_HWCAP_ISA_F;
++	isa2hwcap[RISCV_ISA_EXT_D] = COMPAT_HWCAP_ISA_D;
++	isa2hwcap[RISCV_ISA_EXT_C] = COMPAT_HWCAP_ISA_C;
++	isa2hwcap[RISCV_ISA_EXT_V] = COMPAT_HWCAP_ISA_V;
+ 
+ 	if (!acpi_disabled) {
+ 		riscv_fill_hwcap_from_isa_string(isa2hwcap);
+diff --git a/arch/riscv/kernel/sys_hwprobe.c b/arch/riscv/kernel/sys_hwprobe.c
+index c11d9e765372..5d6732641c57 100644
+--- a/arch/riscv/kernel/sys_hwprobe.c
++++ b/arch/riscv/kernel/sys_hwprobe.c
+@@ -85,10 +85,10 @@ static void hwprobe_isa_ext0(struct riscv_hwprobe *pair,
+ 	if (has_fpu())
+ 		pair->value |= RISCV_HWPROBE_IMA_FD;
+ 
+-	if (riscv_isa_extension_available(NULL, c))
++	if (riscv_isa_extension_available(NULL, C))
+ 		pair->value |= RISCV_HWPROBE_IMA_C;
+ 
+-	if (has_vector() && riscv_isa_extension_available(NULL, v))
++	if (has_vector() && riscv_isa_extension_available(NULL, V))
+ 		pair->value |= RISCV_HWPROBE_IMA_V;
+ 
+ 	/*
+diff --git a/arch/riscv/kvm/isa.c b/arch/riscv/kvm/isa.c
+index 1132d909cc25..94077117d113 100644
+--- a/arch/riscv/kvm/isa.c
++++ b/arch/riscv/kvm/isa.c
+@@ -17,14 +17,14 @@
+ /* Mapping between KVM ISA Extension ID & guest ISA extension ID */
+ static const unsigned long kvm_isa_ext_arr[] = {
+ 	/* Single letter extensions (alphabetically sorted) */
+-	[KVM_RISCV_ISA_EXT_A] = RISCV_ISA_EXT_a,
+-	[KVM_RISCV_ISA_EXT_C] = RISCV_ISA_EXT_c,
+-	[KVM_RISCV_ISA_EXT_D] = RISCV_ISA_EXT_d,
+-	[KVM_RISCV_ISA_EXT_F] = RISCV_ISA_EXT_f,
+-	[KVM_RISCV_ISA_EXT_H] = RISCV_ISA_EXT_h,
+-	[KVM_RISCV_ISA_EXT_I] = RISCV_ISA_EXT_i,
+-	[KVM_RISCV_ISA_EXT_M] = RISCV_ISA_EXT_m,
+-	[KVM_RISCV_ISA_EXT_V] = RISCV_ISA_EXT_v,
++	KVM_ISA_EXT_ARR(A),
++	KVM_ISA_EXT_ARR(C),
++	KVM_ISA_EXT_ARR(D),
++	KVM_ISA_EXT_ARR(F),
++	KVM_ISA_EXT_ARR(H),
++	KVM_ISA_EXT_ARR(I),
++	KVM_ISA_EXT_ARR(M),
++	KVM_ISA_EXT_ARR(V),
+ 	/* Multi letter extensions (alphabetically sorted) */
+ 	KVM_ISA_EXT_ARR(SMNPM),
+ 	KVM_ISA_EXT_ARR(SMSTATEEN),
+diff --git a/arch/riscv/kvm/main.c b/arch/riscv/kvm/main.c
+index 0924c75100a2..0b8bf5f9eab1 100644
+--- a/arch/riscv/kvm/main.c
++++ b/arch/riscv/kvm/main.c
+@@ -85,7 +85,7 @@ static int __init riscv_kvm_init(void)
+ 	char slist[64];
+ 	const char *str;
+ 
+-	if (!riscv_isa_extension_available(NULL, h)) {
++	if (!riscv_isa_extension_available(NULL, H)) {
+ 		kvm_info("hypervisor extension not available\n");
+ 		return -ENODEV;
+ 	}
+diff --git a/arch/riscv/kvm/vcpu_fp.c b/arch/riscv/kvm/vcpu_fp.c
+index 6ad6df26a2fd..bb11e6757d34 100644
+--- a/arch/riscv/kvm/vcpu_fp.c
++++ b/arch/riscv/kvm/vcpu_fp.c
+@@ -21,8 +21,8 @@ void kvm_riscv_vcpu_fp_reset(struct kvm_vcpu *vcpu)
+ 	struct kvm_cpu_context *cntx = &vcpu->arch.guest_context;
+ 
+ 	cntx->sstatus &= ~SR_FS;
+-	if (riscv_isa_extension_available(vcpu->arch.isa, f) ||
+-	    riscv_isa_extension_available(vcpu->arch.isa, d))
++	if (riscv_isa_extension_available(vcpu->arch.isa, F) ||
++	    riscv_isa_extension_available(vcpu->arch.isa, D))
+ 		cntx->sstatus |= SR_FS_INITIAL;
+ 	else
+ 		cntx->sstatus |= SR_FS_OFF;
+@@ -38,9 +38,9 @@ void kvm_riscv_vcpu_guest_fp_save(struct kvm_cpu_context *cntx,
+ 				  const unsigned long *isa)
+ {
+ 	if ((cntx->sstatus & SR_FS) == SR_FS_DIRTY) {
+-		if (riscv_isa_extension_available(isa, d))
++		if (riscv_isa_extension_available(isa, D))
+ 			__kvm_riscv_fp_d_save(cntx);
+-		else if (riscv_isa_extension_available(isa, f))
++		else if (riscv_isa_extension_available(isa, F))
+ 			__kvm_riscv_fp_f_save(cntx);
+ 		kvm_riscv_vcpu_fp_clean(cntx);
+ 	}
+@@ -50,9 +50,9 @@ void kvm_riscv_vcpu_guest_fp_restore(struct kvm_cpu_context *cntx,
+ 				     const unsigned long *isa)
+ {
+ 	if ((cntx->sstatus & SR_FS) != SR_FS_OFF) {
+-		if (riscv_isa_extension_available(isa, d))
++		if (riscv_isa_extension_available(isa, D))
+ 			__kvm_riscv_fp_d_restore(cntx);
+-		else if (riscv_isa_extension_available(isa, f))
++		else if (riscv_isa_extension_available(isa, F))
+ 			__kvm_riscv_fp_f_restore(cntx);
+ 		kvm_riscv_vcpu_fp_clean(cntx);
+ 	}
+@@ -89,7 +89,7 @@ int kvm_riscv_vcpu_get_reg_fp(struct kvm_vcpu *vcpu,
+ 	void *reg_val;
+ 
+ 	if ((rtype == KVM_REG_RISCV_FP_F) &&
+-	    riscv_isa_extension_available(vcpu->arch.isa, f)) {
++	    riscv_isa_extension_available(vcpu->arch.isa, F)) {
+ 		if (KVM_REG_SIZE(reg->id) != sizeof(u32))
+ 			return -EINVAL;
+ 		if (reg_num == KVM_REG_RISCV_FP_F_REG(fcsr))
+@@ -102,7 +102,7 @@ int kvm_riscv_vcpu_get_reg_fp(struct kvm_vcpu *vcpu,
+ 		} else
+ 			return -ENOENT;
+ 	} else if ((rtype == KVM_REG_RISCV_FP_D) &&
+-		   riscv_isa_extension_available(vcpu->arch.isa, d)) {
++		   riscv_isa_extension_available(vcpu->arch.isa, D)) {
+ 		if (reg_num == KVM_REG_RISCV_FP_D_REG(fcsr)) {
+ 			if (KVM_REG_SIZE(reg->id) != sizeof(u32))
+ 				return -EINVAL;
+@@ -138,7 +138,7 @@ int kvm_riscv_vcpu_set_reg_fp(struct kvm_vcpu *vcpu,
+ 	void *reg_val;
+ 
+ 	if ((rtype == KVM_REG_RISCV_FP_F) &&
+-	    riscv_isa_extension_available(vcpu->arch.isa, f)) {
++	    riscv_isa_extension_available(vcpu->arch.isa, F)) {
+ 		if (KVM_REG_SIZE(reg->id) != sizeof(u32))
+ 			return -EINVAL;
+ 		if (reg_num == KVM_REG_RISCV_FP_F_REG(fcsr))
+@@ -151,7 +151,7 @@ int kvm_riscv_vcpu_set_reg_fp(struct kvm_vcpu *vcpu,
+ 		} else
+ 			return -ENOENT;
+ 	} else if ((rtype == KVM_REG_RISCV_FP_D) &&
+-		   riscv_isa_extension_available(vcpu->arch.isa, d)) {
++		   riscv_isa_extension_available(vcpu->arch.isa, D)) {
+ 		if (reg_num == KVM_REG_RISCV_FP_D_REG(fcsr)) {
+ 			if (KVM_REG_SIZE(reg->id) != sizeof(u32))
+ 				return -EINVAL;
+diff --git a/arch/riscv/kvm/vcpu_onereg.c b/arch/riscv/kvm/vcpu_onereg.c
+index 99b9107b1ac1..afcfdc79a145 100644
+--- a/arch/riscv/kvm/vcpu_onereg.c
++++ b/arch/riscv/kvm/vcpu_onereg.c
+@@ -748,7 +748,7 @@ static inline unsigned long num_fp_f_regs(const struct kvm_vcpu *vcpu)
+ {
+ 	const struct kvm_cpu_context *cntx = &vcpu->arch.guest_context;
+ 
+-	if (riscv_isa_extension_available(vcpu->arch.isa, f))
++	if (riscv_isa_extension_available(vcpu->arch.isa, F))
+ 		return sizeof(cntx->fp.f) / sizeof(u32);
+ 	else
+ 		return 0;
+@@ -777,7 +777,7 @@ static inline unsigned long num_fp_d_regs(const struct kvm_vcpu *vcpu)
+ {
+ 	const struct kvm_cpu_context *cntx = &vcpu->arch.guest_context;
+ 
+-	if (riscv_isa_extension_available(vcpu->arch.isa, d))
++	if (riscv_isa_extension_available(vcpu->arch.isa, D))
+ 		return sizeof(cntx->fp.d.f) / sizeof(u64) + 1;
+ 	else
+ 		return 0;
+@@ -856,7 +856,7 @@ static inline unsigned long num_sbi_regs(struct kvm_vcpu *vcpu)
+ 
+ static inline unsigned long num_vector_regs(const struct kvm_vcpu *vcpu)
+ {
+-	if (!riscv_isa_extension_available(vcpu->arch.isa, v))
++	if (!riscv_isa_extension_available(vcpu->arch.isa, V))
+ 		return 0;
+ 
+ 	/* vstart, vl, vtype, vcsr, vlenb and 32 vector regs */
+diff --git a/arch/riscv/kvm/vcpu_vector.c b/arch/riscv/kvm/vcpu_vector.c
+index 3708616e2c32..3c3183b39ae2 100644
+--- a/arch/riscv/kvm/vcpu_vector.c
++++ b/arch/riscv/kvm/vcpu_vector.c
+@@ -27,7 +27,7 @@ void kvm_riscv_vcpu_vector_reset(struct kvm_vcpu *vcpu)
+ 
+ 	cntx->vector.vlenb = riscv_v_vsize / 32;
+ 
+-	if (riscv_isa_extension_available(isa, v)) {
++	if (riscv_isa_extension_available(isa, V)) {
+ 		cntx->sstatus |= SR_VS_INITIAL;
+ 		WARN_ON(!cntx->vector.datap);
+ 		memset(cntx->vector.datap, 0, riscv_v_vsize);
+@@ -46,7 +46,7 @@ void kvm_riscv_vcpu_guest_vector_save(struct kvm_cpu_context *cntx,
+ 				      unsigned long *isa)
+ {
+ 	if ((cntx->sstatus & SR_VS) == SR_VS_DIRTY) {
+-		if (riscv_isa_extension_available(isa, v))
++		if (riscv_isa_extension_available(isa, V))
+ 			__kvm_riscv_vector_save(cntx);
+ 		kvm_riscv_vcpu_vector_clean(cntx);
+ 	}
+@@ -56,7 +56,7 @@ void kvm_riscv_vcpu_guest_vector_restore(struct kvm_cpu_context *cntx,
+ 					 unsigned long *isa)
+ {
+ 	if ((cntx->sstatus & SR_VS) != SR_VS_OFF) {
+-		if (riscv_isa_extension_available(isa, v))
++		if (riscv_isa_extension_available(isa, V))
+ 			__kvm_riscv_vector_restore(cntx);
+ 		kvm_riscv_vcpu_vector_clean(cntx);
+ 	}
+@@ -164,7 +164,7 @@ int kvm_riscv_vcpu_get_reg_vector(struct kvm_vcpu *vcpu,
+ 	void *reg_addr;
+ 	int rc;
+ 
+-	if (!riscv_isa_extension_available(isa, v))
++	if (!riscv_isa_extension_available(isa, V))
+ 		return -ENOENT;
+ 
+ 	rc = kvm_riscv_vcpu_vreg_addr(vcpu, reg_num, reg_size, &reg_addr);
+@@ -190,7 +190,7 @@ int kvm_riscv_vcpu_set_reg_vector(struct kvm_vcpu *vcpu,
+ 	void *reg_addr;
+ 	int rc;
+ 
+-	if (!riscv_isa_extension_available(isa, v))
++	if (!riscv_isa_extension_available(isa, V))
+ 		return -ENOENT;
+ 
+ 	if (reg_num == KVM_REG_RISCV_VECTOR_CSR_REG(vlenb)) {
+-- 
+2.55.0
+

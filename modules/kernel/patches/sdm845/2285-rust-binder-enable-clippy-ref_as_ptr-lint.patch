@@ -1,0 +1,132 @@
+From 36bddf13dc1b88616a2ecdb331ffc23c42a3eb67 Mon Sep 17 00:00:00 2001
+From: Tamir Duberstein <tamird@kernel.org>
+Date: Tue, 26 May 2026 14:39:09 -0400
+Subject: [PATCH 02285/15333] rust: binder: enable `clippy::ref_as_ptr` lint
+
+In Rust 1.78.0, Clippy introduced the `ref_as_ptr` lint [1]:
+
+> Using `as` casts may result in silently changing mutability or type.
+
+While this does not eliminate unchecked `as` conversions, it makes such
+conversions easier to scrutinize. It also has the slight benefit of
+removing a degree of freedom on which to bikeshed. Thus apply the
+changes and enable the lint in the Binder Rust driver -- no functional
+change intended.
+
+Link: https://rust-lang.github.io/rust-clippy/master/index.html#ref_as_ptr [1]
+Assisted-by: Codex:gpt-5
+Signed-off-by: Tamir Duberstein <tamird@kernel.org>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Link: https://patch.msgid.link/20260526-binder-strict-provenance-v2-3-a41d89c29bc5@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/android/binder/defs.rs             | 4 +++-
+ drivers/android/binder/node.rs             | 3 ++-
+ drivers/android/binder/page_range.rs       | 4 ++--
+ drivers/android/binder/rust_binder_main.rs | 2 +-
+ drivers/android/binder/trace.rs            | 4 +++-
+ 5 files changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/android/binder/defs.rs b/drivers/android/binder/defs.rs
+index 354c32c39e83..e697c2c13e29 100644
+--- a/drivers/android/binder/defs.rs
++++ b/drivers/android/binder/defs.rs
+@@ -4,6 +4,8 @@
+ 
+ use core::mem::MaybeUninit;
+ use core::ops::{Deref, DerefMut};
++use core::ptr;
++
+ use kernel::{
+     transmute::{AsBytes, FromBytes},
+     uapi::{self, *},
+@@ -165,7 +167,7 @@ impl BinderTransactionDataSecctx {
+     pub(crate) fn tr_data(&mut self) -> &mut BinderTransactionData {
+         // SAFETY: Transparent wrapper is safe to transmute.
+         unsafe {
+-            &mut *((&mut self.transaction_data as *mut uapi::binder_transaction_data)
++            &mut *(ptr::from_mut::<uapi::binder_transaction_data>(&mut self.transaction_data)
+                 .cast::<BinderTransactionData>())
+         }
+     }
+diff --git a/drivers/android/binder/node.rs b/drivers/android/binder/node.rs
+index d710940c3c8f..3d96738dee66 100644
+--- a/drivers/android/binder/node.rs
++++ b/drivers/android/binder/node.rs
+@@ -21,6 +21,7 @@
+ };
+ 
+ use core::mem;
++use core::ptr;
+ 
+ mod wrapper;
+ pub(crate) use self::wrapper::CritIncrWrapper;
+@@ -321,7 +322,7 @@ pub(crate) unsafe fn remove_node_info(
+     /// An id that is unique across all binder nodes on the system. Used as the key in the
+     /// `by_node` map.
+     pub(crate) fn global_id(&self) -> usize {
+-        (self as *const Node).addr()
++        ptr::from_ref(self).addr()
+     }
+ 
+     pub(crate) fn get_id(&self) -> (u64, u64) {
+diff --git a/drivers/android/binder/page_range.rs b/drivers/android/binder/page_range.rs
+index fbb93ebb9697..52ffbf3504e7 100644
+--- a/drivers/android/binder/page_range.rs
++++ b/drivers/android/binder/page_range.rs
+@@ -312,7 +312,7 @@ pub(crate) fn register_with_vma(&self, vma: &virt::VmaNew) -> Result<usize> {
+ 
+         // SAFETY: This just initializes the pages array.
+         unsafe {
+-            let self_ptr = self as *const ShrinkablePageRange;
++            let self_ptr = ptr::from_ref(self);
+             for i in 0..num_pages {
+                 let info = pages.as_mut_ptr().add(i);
+                 (&raw mut (*info).range).write(self_ptr);
+@@ -593,7 +593,7 @@ pub(crate) unsafe fn write<T: ?Sized>(&self, offset: usize, obj: &T) -> Result {
+         unsafe {
+             self.iterate(offset, size_of_val(obj), |page, offset, to_copy| {
+                 // SAFETY: The sum of `offset` and `to_copy` is bounded by the size of T.
+-                let obj_ptr = (obj as *const T).cast::<u8>().add(obj_offset);
++                let obj_ptr = ptr::from_ref(obj).cast::<u8>().add(obj_offset);
+                 // SAFETY: We have a reference to the object, so the pointer is valid.
+                 page.write_raw(obj_ptr, offset, to_copy)?;
+                 obj_offset += to_copy;
+diff --git a/drivers/android/binder/rust_binder_main.rs b/drivers/android/binder/rust_binder_main.rs
+index fa28697982d3..88da29413e16 100644
+--- a/drivers/android/binder/rust_binder_main.rs
++++ b/drivers/android/binder/rust_binder_main.rs
+@@ -6,7 +6,7 @@
+ 
+ #![crate_name = "rust_binder"]
+ #![recursion_limit = "256"]
+-#![allow(clippy::as_underscore, clippy::ref_as_ptr, clippy::cast_lossless)]
++#![allow(clippy::as_underscore, clippy::cast_lossless)]
+ 
+ use kernel::{
+     bindings::{self, seq_file},
+diff --git a/drivers/android/binder/trace.rs b/drivers/android/binder/trace.rs
+index 5539672d7285..06aabb3cc2f1 100644
+--- a/drivers/android/binder/trace.rs
++++ b/drivers/android/binder/trace.rs
+@@ -4,6 +4,8 @@
+ 
+ use crate::transaction::Transaction;
+ 
++use core::ptr;
++
+ use kernel::bindings::{rust_binder_transaction, task_struct};
+ use kernel::error::Result;
+ use kernel::ffi::{c_int, c_uint, c_ulong};
+@@ -26,7 +28,7 @@
+ 
+ #[inline]
+ fn raw_transaction(t: &Transaction) -> rust_binder_transaction {
+-    t as *const Transaction as rust_binder_transaction
++    ptr::from_ref(t).cast_mut().cast()
+ }
+ 
+ #[inline]
+-- 
+2.55.0
+

@@ -1,0 +1,48 @@
+From aee44196d2162d53c24474761655030f87eba7e5 Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Wed, 29 Jul 2026 02:29:44 -0700
+Subject: [PATCH 10302/15333] ipv6: raw: drop unused level argument from
+ do_rawv6_getsockopt
+
+do_rawv6_getsockopt() takes a level argument but never uses it; the
+level dispatch is handled by the caller, rawv6_getsockopt(). Drop it,
+matching ipv4's do_raw_getsockopt().
+
+No functional change.
+
+Reviewed-by: Joe Damato <joe@dama.to>
+Acked-by: Stanislav Fomichev <sdf@fomichev.me>
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Link: https://patch.msgid.link/20260729-getsockopt_phase4-v4-1-c44576757c17@debian.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/ipv6/raw.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/net/ipv6/raw.c b/net/ipv6/raw.c
+index b88d364e78aa..cb109ac956cb 100644
+--- a/net/ipv6/raw.c
++++ b/net/ipv6/raw.c
+@@ -1051,8 +1051,8 @@ static int rawv6_setsockopt(struct sock *sk, int level, int optname,
+ 	return do_rawv6_setsockopt(sk, level, optname, optval, optlen);
+ }
+ 
+-static int do_rawv6_getsockopt(struct sock *sk, int level, int optname,
+-			    char __user *optval, int __user *optlen)
++static int do_rawv6_getsockopt(struct sock *sk, int optname,
++			       char __user *optval, int __user *optlen)
+ {
+ 	struct raw6_sock *rp = raw6_sk(sk);
+ 	int val, len;
+@@ -1109,7 +1109,7 @@ static int rawv6_getsockopt(struct sock *sk, int level, int optname,
+ 		return ipv6_getsockopt(sk, level, optname, optval, optlen);
+ 	}
+ 
+-	return do_rawv6_getsockopt(sk, level, optname, optval, optlen);
++	return do_rawv6_getsockopt(sk, optname, optval, optlen);
+ }
+ 
+ static int rawv6_ioctl(struct sock *sk, int cmd, int *karg)
+-- 
+2.55.0
+

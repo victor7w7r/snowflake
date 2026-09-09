@@ -1,0 +1,231 @@
+From 5f40cba7d4fa343cf074d1a764683c1392f3134e Mon Sep 17 00:00:00 2001
+From: Basavaraj Natikar <Basavaraj.Natikar@amd.com>
+Date: Thu, 11 Jun 2026 11:11:57 +0530
+Subject: [PATCH 07281/15333] thunderbolt: Assert downstream port reset on
+ shutdown
+
+On shutdown the connection manager tears down the router tree without
+signalling connected devices. A Thunderbolt 3 device directly connected
+to a USB4 host never receives a disconnect indication and during shutdown
+this can cause polling the dead link for up to 60 seconds. On some
+platforms this behavior leads to a warm reset instead of a shutdown due
+to this timeout.
+
+Fix this by asserting PORT_CS_19.DPR on each connected downstream port
+before tearing down the router tree. This drives SBTX low (USB4 spec
+section 6.9), causing the device to detect SBRX low and transition to
+Uninitialized Unplugged state immediately.
+
+Always do this on system shutdown/reboot by forcing host_reset in the
+PCI ->shutdown callback. On plain driver unload only do it when the host
+router was actually reset on load (host_reset=1), since in that case the
+tunnels are not preserved across reload anyway; with host_reset=0 the
+tunnels are kept alive across unload/reload so the links are left intact.
+Restrict the reset to Thunderbolt 3 devices.
+
+Reviewed-by: Mario Limonciello (AMD) <superm1@kernel.org>
+Co-developed-by: Sanath S <Sanath.S@amd.com>
+Signed-off-by: Sanath S <Sanath.S@amd.com>
+Signed-off-by: Basavaraj Natikar <Basavaraj.Natikar@amd.com>
+Signed-off-by: Mika Westerberg <mika.westerberg@linux.intel.com>
+---
+ drivers/thunderbolt/nhi.c    |  2 ++
+ drivers/thunderbolt/pci.c    | 28 +++++++++++++++++++++++-----
+ drivers/thunderbolt/switch.c | 11 ++++++++++-
+ drivers/thunderbolt/tb.c     | 21 +++++++++++++++++++++
+ drivers/thunderbolt/tb.h     |  1 +
+ include/linux/thunderbolt.h  |  6 ++++++
+ 6 files changed, 63 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/thunderbolt/nhi.c b/drivers/thunderbolt/nhi.c
+index 0f795ea58756..698fb124d529 100644
+--- a/drivers/thunderbolt/nhi.c
++++ b/drivers/thunderbolt/nhi.c
+@@ -1235,6 +1235,8 @@ int nhi_probe(struct tb_nhi *nhi)
+ 
+ 	init_completion(&nhi->domain_released);
+ 
++	nhi->host_reset = host_reset;
++
+ 	res = tb_domain_add(tb, host_reset);
+ 	if (res) {
+ 		/*
+diff --git a/drivers/thunderbolt/pci.c b/drivers/thunderbolt/pci.c
+index bbd186c29ef7..dbb6badda867 100644
+--- a/drivers/thunderbolt/pci.c
++++ b/drivers/thunderbolt/pci.c
+@@ -230,7 +230,7 @@ static void nhi_pci_ring_release_msix(struct tb_ring *ring)
+ 	ring->irq = 0;
+ }
+ 
+-static void nhi_pci_shutdown(struct tb_nhi *nhi)
++static void nhi_pci_release_irq(struct tb_nhi *nhi)
+ {
+ 	struct tb_nhi_pci *nhi_pci = nhi_to_pci(nhi);
+ 	struct pci_dev *pdev = to_pci_dev(nhi->dev);
+@@ -256,7 +256,7 @@ static const struct tb_nhi_ops pci_nhi_default_ops = {
+ 	.post_nvm_auth = nhi_pci_complete_dma_port,
+ 	.request_ring_irq = nhi_pci_ring_request_msix,
+ 	.release_ring_irq = nhi_pci_ring_release_msix,
+-	.shutdown = nhi_pci_shutdown,
++	.shutdown = nhi_pci_release_irq,
+ 	.is_present = nhi_pci_is_present,
+ 	.init_interrupts = nhi_pci_init_msi,
+ };
+@@ -424,7 +424,7 @@ static int icl_nhi_resume(struct tb_nhi *nhi)
+ 
+ static void icl_nhi_shutdown(struct tb_nhi *nhi)
+ {
+-	nhi_pci_shutdown(nhi);
++	nhi_pci_release_irq(nhi);
+ 
+ 	icl_nhi_force_power(nhi, false);
+ }
+@@ -479,11 +479,19 @@ static int nhi_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 	return nhi_probe(&nhi_pci->nhi);
+ }
+ 
+-static void nhi_pci_remove(struct pci_dev *pdev)
++static void nhi_pci_do_remove(struct pci_dev *pdev, bool reset)
+ {
+ 	struct tb *tb = pci_get_drvdata(pdev);
+ 	struct tb_nhi *nhi = tb->nhi;
+ 
++	/*
++	 * On system shutdown/reboot force a host router reset so the
++	 * connection manager asserts DPR on connected Thunderbolt 3 devices
++	 * before the router tree is removed (see tb_stop()).
++	 */
++	if (reset)
++		nhi->host_reset = true;
++
+ 	pm_runtime_get_sync(&pdev->dev);
+ 	pm_runtime_dont_use_autosuspend(&pdev->dev);
+ 	pm_runtime_forbid(&pdev->dev);
+@@ -493,6 +501,16 @@ static void nhi_pci_remove(struct pci_dev *pdev)
+ 	nhi_shutdown(nhi);
+ }
+ 
++static void nhi_pci_remove(struct pci_dev *pdev)
++{
++	nhi_pci_do_remove(pdev, false);
++}
++
++static void nhi_pci_shutdown(struct pci_dev *pdev)
++{
++	nhi_pci_do_remove(pdev, true);
++}
++
+ static struct pci_device_id nhi_ids[] = {
+ 	/*
+ 	 * We have to specify class, the TB bridges use the same device and
+@@ -593,7 +611,7 @@ static struct pci_driver nhi_driver = {
+ 	.id_table = nhi_ids,
+ 	.probe = nhi_pci_probe,
+ 	.remove = nhi_pci_remove,
+-	.shutdown = nhi_pci_remove,
++	.shutdown = nhi_pci_shutdown,
+ 	.driver.pm = &nhi_pm_ops,
+ };
+ 
+diff --git a/drivers/thunderbolt/switch.c b/drivers/thunderbolt/switch.c
+index a830c82bb905..404c0693df50 100644
+--- a/drivers/thunderbolt/switch.c
++++ b/drivers/thunderbolt/switch.c
+@@ -682,7 +682,16 @@ int tb_port_disable(struct tb_port *port)
+ 	return __tb_port_enable(port, false);
+ }
+ 
+-static int tb_port_reset(struct tb_port *port)
++/**
++ * tb_port_reset() - Reset the port
++ * @port: Port to reset
++ *
++ * Resets @port. For USB4 ports this issues a USB4 port reset and for
++ * legacy ports the link controller port is reset.
++ *
++ * Return: %0 on success, negative errno otherwise.
++ */
++int tb_port_reset(struct tb_port *port)
+ {
+ 	if (tb_switch_is_usb4(port->sw))
+ 		return port->cap_usb4 ? usb4_port_reset(port) : 0;
+diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
+index 76323255439a..b7cc6894a598 100644
+--- a/drivers/thunderbolt/tb.c
++++ b/drivers/thunderbolt/tb.c
+@@ -2941,7 +2941,9 @@ static void tb_handle_event(struct tb *tb, enum tb_cfg_pkg_type type,
+ static void tb_stop(struct tb *tb)
+ {
+ 	struct tb_cm *tcm = tb_priv(tb);
++	struct tb_nhi *nhi = tb->nhi;
+ 	struct tb_tunnel *tunnel;
++	struct tb_port *port;
+ 	struct tb_tunnel *n;
+ 
+ 	cancel_delayed_work(&tcm->remove_work);
+@@ -2956,6 +2958,25 @@ static void tb_stop(struct tb *tb)
+ 			tb_tunnel_deactivate(tunnel);
+ 		tb_tunnel_put(tunnel);
+ 	}
++	/*
++	 * Signal disconnect to connected devices before the router tree is
++	 * removed below. A Thunderbolt 3 device directly connected to a USB4
++	 * host otherwise never receives a disconnect indication, leaving
++	 * firmware to poll the dead link for up to ~60 s which on some
++	 * platforms turns the shutdown into a warm reset. Asserting
++	 * PORT_CS_19.DPR drives SBTX low (USB4 spec section 6.9) so the device
++	 * detects SBRX low and goes to Uninitialized Unplugged immediately.
++	 */
++	if (nhi->host_reset) {
++		tb_switch_for_each_port(tb->root_switch, port) {
++			if (!tb_port_is_null(port) || !tb_port_has_remote(port))
++				continue;
++			if (tb_switch_is_usb4(port->remote->sw))
++				continue;
++			if (tb_port_reset(port))
++				tb_port_dbg(port, "downstream port reset failed, continuing\n");
++		}
++	}
+ 	tb_switch_remove(tb->root_switch);
+ 	tb->root_switch = NULL;
+ 	tcm->hotplug_active = false; /* signal tb_handle_hotplug to quit */
+diff --git a/drivers/thunderbolt/tb.h b/drivers/thunderbolt/tb.h
+index ec9192b61bc0..4373336d9425 100644
+--- a/drivers/thunderbolt/tb.h
++++ b/drivers/thunderbolt/tb.h
+@@ -1103,6 +1103,7 @@ int tb_port_clear_counter(struct tb_port *port, int counter);
+ int tb_port_unlock(struct tb_port *port);
+ int tb_port_enable(struct tb_port *port);
+ int tb_port_disable(struct tb_port *port);
++int tb_port_reset(struct tb_port *port);
+ int tb_port_alloc_in_hopid(struct tb_port *port, int hopid, int max_hopid);
+ void tb_port_release_in_hopid(struct tb_port *port, int hopid);
+ int tb_port_alloc_out_hopid(struct tb_port *port, int hopid, int max_hopid);
+diff --git a/include/linux/thunderbolt.h b/include/linux/thunderbolt.h
+index feb1af175cfd..cb1621c6b703 100644
+--- a/include/linux/thunderbolt.h
++++ b/include/linux/thunderbolt.h
+@@ -514,6 +514,11 @@ void tb_service_properties_changed(struct tb_service *svc);
+  * @hop_count: Number of rings (end point hops) supported by NHI.
+  * @quirks: NHI specific quirks if any
+  * @domain_released: Completed when domain has been fully released
++ * @host_reset: Host router was reset on driver load, or forced on system
++ *		shutdown/reboot. When set, tb_stop() asserts DPR on connected
++ *		downstream ports to signal disconnect before tearing down the
++ *		router tree. Only Thunderbolt 3 devices are reset; USB4
++ *		routers are skipped.
+  */
+ struct tb_nhi {
+ 	spinlock_t lock;
+@@ -528,6 +533,7 @@ struct tb_nhi {
+ 	u32 hop_count;
+ 	unsigned long quirks;
+ 	struct completion domain_released;
++	bool host_reset;
+ };
+ 
+ /**
+-- 
+2.55.0
+

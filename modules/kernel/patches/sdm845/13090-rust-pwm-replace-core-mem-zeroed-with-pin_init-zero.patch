@@ -1,0 +1,44 @@
+From 3aeb2997680ecbce5564b6aa9a56c6d4f1fed209 Mon Sep 17 00:00:00 2001
+From: Francis Laniel <laniel_francis@privacyrequired.com>
+Date: Wed, 3 Jun 2026 19:09:09 +0300
+Subject: [PATCH 13090/15333] rust: pwm: replace `core::mem::zeroed` with
+ `pin_init::zeroed`
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+All types in `bindings` implement `Zeroable` if they can, so use
+`pin_init::zeroed` instead of relying on `unsafe` code.
+
+If this ends up not compiling in the future, something in bindgen or on
+the C side changed and is most likely incorrect.
+
+Suggested-by: Benno Lossin <lossin@kernel.org>
+Link: https://github.com/Rust-for-Linux/linux/issues/1189
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Acked-by: Michal Wilczynski <m.wilczynski@samsung.com>
+Signed-off-by: Francis Laniel <laniel_francis@privacyrequired.com>
+Link: https://patch.msgid.link/20260603160910.159307-1-laniel_francis@privacyrequired.com
+Signed-off-by: Uwe Kleine-König <ukleinek@kernel.org>
+---
+ rust/kernel/pwm.rs | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/rust/kernel/pwm.rs b/rust/kernel/pwm.rs
+index 6c9d667009ef..3427b7d93a03 100644
+--- a/rust/kernel/pwm.rs
++++ b/rust/kernel/pwm.rs
+@@ -494,9 +494,7 @@ pub(crate) fn as_raw(&self) -> *const bindings::pwm_ops {
+ /// This is used to bridge Rust trait implementations to the C `struct pwm_ops`
+ /// expected by the kernel.
+ pub const fn create_pwm_ops<T: PwmOps>() -> PwmOpsVTable {
+-    // SAFETY: `core::mem::zeroed()` is unsafe. For `pwm_ops`, all fields are
+-    // `Option<extern "C" fn(...)>` or data, so a zeroed pattern (None/0) is valid initially.
+-    let mut ops: bindings::pwm_ops = unsafe { core::mem::zeroed() };
++    let mut ops: bindings::pwm_ops = pin_init::zeroed();
+ 
+     ops.request = Some(Adapter::<T>::request_callback);
+     ops.capture = Some(Adapter::<T>::capture_callback);
+-- 
+2.55.0
+

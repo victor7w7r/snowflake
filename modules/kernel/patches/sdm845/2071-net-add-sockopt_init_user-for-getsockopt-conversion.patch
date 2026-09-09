@@ -1,0 +1,68 @@
+From b5997f911eec53790d56ca438c8ad61e872d795b Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Tue, 30 Jun 2026 07:01:26 -0700
+Subject: [PATCH 02071/15333] net: add sockopt_init_user() for getsockopt
+ conversion
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a helper that initializes a user-backed sockopt_t from the (optval,
+optlen) __user pair passed to a getsockopt() callback.
+
+It is used by transitional __user getsockopt wrappers while the
+proto-layer getsockopt callbacks are converted to take a sockopt_t, and
+is removed once the conversion is complete.
+
+The goal is to help to convert leafs. Example:
+
+ sock_common_getsockopt(... char __user *optval, int __user *optlen)
+      → udp_getsockopt(sk, level, optname, optval__user, optlen__user)
+               → udp_lib_getsockopt(sk, level, optname, &opt)   /* needs a sockopt_t */
+
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Acked-by: Stanislav Fomichev <sdf@fomichev.me>
+Acked-by: Willem de Bruijn <willemb@google.com>
+Link: https://patch.msgid.link/20260630-getsockopt_phase2-v2-1-193335f3d4d1@debian.org
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ include/linux/net.h | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/include/linux/net.h b/include/linux/net.h
+index f268f395ce47..277188a40c72 100644
+--- a/include/linux/net.h
++++ b/include/linux/net.h
+@@ -47,6 +47,29 @@ typedef struct sockopt {
+ 	int optlen;
+ } sockopt_t;
+ 
++/*
++ * Initialize a user-backed sockopt_t from the (optval, optlen) __user pair of
++ * a getsockopt() callback. Used by transitional __user getsockopt wrappers
++ * while the proto-layer callbacks are converted to take a sockopt_t; the
++ * caller writes opt->optlen back to the user optlen after the callback.
++ */
++static inline int sockopt_init_user(sockopt_t *opt, char __user *optval,
++				    int __user *optlen)
++{
++	int len;
++
++	if (get_user(len, optlen))
++		return -EFAULT;
++	if (len < 0)
++		return -EINVAL;
++
++	iov_iter_ubuf(&opt->iter_out, ITER_DEST, optval, len);
++	iov_iter_ubuf(&opt->iter_in, ITER_SOURCE, optval, len);
++	opt->optlen = len;
++
++	return 0;
++}
++
+ struct poll_table_struct;
+ struct pipe_inode_info;
+ struct inode;
+-- 
+2.55.0
+

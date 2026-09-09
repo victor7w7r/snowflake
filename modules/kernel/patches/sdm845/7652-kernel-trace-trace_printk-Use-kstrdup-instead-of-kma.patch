@@ -1,0 +1,33 @@
+From b11d9af16d526a9e56382d6b0a3f09e2c2298981 Mon Sep 17 00:00:00 2001
+From: David Laight <david.laight.linux@gmail.com>
+Date: Sat, 6 Jun 2026 21:26:28 +0100
+Subject: [PATCH 07652/15333] kernel/trace/trace_printk: Use kstrdup() instead
+ of kmalloc() and strcpy()
+
+Link: https://patch.msgid.link/20260606202633.5018-34-david.laight.linux@gmail.com
+Signed-off-by: David Laight <david.laight.linux@gmail.com>
+Reviewed-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+Signed-off-by: Steven Rostedt <rostedt@goodmis.org>
+---
+ kernel/trace/trace_printk.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/kernel/trace/trace_printk.c b/kernel/trace/trace_printk.c
+index 3ea17af60169..98171a2398e4 100644
+--- a/kernel/trace/trace_printk.c
++++ b/kernel/trace/trace_printk.c
+@@ -71,10 +71,9 @@ void hold_module_trace_bprintk_format(const char **start, const char **end)
+ 		fmt = NULL;
+ 		tb_fmt = kmalloc_obj(*tb_fmt);
+ 		if (tb_fmt) {
+-			fmt = kmalloc(strlen(*iter) + 1, GFP_KERNEL);
++			fmt = kstrdup(*iter, GFP_KERNEL);
+ 			if (fmt) {
+ 				list_add_tail(&tb_fmt->list, &trace_bprintk_fmt_list);
+-				strcpy(fmt, *iter);
+ 				tb_fmt->fmt = fmt;
+ 			} else
+ 				kfree(tb_fmt);
+-- 
+2.55.0
+

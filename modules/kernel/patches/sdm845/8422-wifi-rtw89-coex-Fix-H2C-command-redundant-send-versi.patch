@@ -1,0 +1,53 @@
+From 4406b550ae2db9d80334471742d0b8ef4984d9cc Mon Sep 17 00:00:00 2001
+From: Ching-Te Ku <ku920601@realtek.com>
+Date: Fri, 24 Jul 2026 21:56:39 +0800
+Subject: [PATCH 08422/15333] wifi: rtw89: coex: Fix H2C command redundant send
+ & version fall through
+
+I/O offload higher priority sending event didn't return after H2C command
+was sent, add a return to prevent send twice in the same time. Update
+driver info entry which is handling module control info didn't handle the
+version 9 command format, add if condition to handle it. TX power update
+H2C command result checker logic was reversed, it will lead to the TX
+power value never update again after first update, fix the issue.
+
+Signed-off-by: Ching-Te Ku <ku920601@realtek.com>
+Signed-off-by: Ping-Ke Shih <pkshih@realtek.com>
+Link: https://patch.msgid.link/20260724135640.3195044-14-pkshih@realtek.com
+---
+ drivers/net/wireless/realtek/rtw89/coex.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/wireless/realtek/rtw89/coex.c b/drivers/net/wireless/realtek/rtw89/coex.c
+index 7ab22c60a420..6b3e199398cf 100644
+--- a/drivers/net/wireless/realtek/rtw89/coex.c
++++ b/drivers/net/wireless/realtek/rtw89/coex.c
+@@ -1073,6 +1073,7 @@ static int _send_fw_cmd(struct rtw89_dev *rtwdev, u8 h2c_class, u8 h2c_func,
+ 		}
+ 
+ 		btc->fwinfo.cnt_h2c++;
++		return 0;
+ 	} else { /* Fill H2C MACRO buffer(TLV format) temporarily */
+ 		if (btc->hbuf_cnt == 0)
+ 			_reset_h2c_macro(btc);
+@@ -3500,6 +3501,8 @@ static void _fw_set_drv_info(struct rtw89_dev *rtwdev, u8 index)
+ 
+ 		if (ver->fcxctrl == 7)
+ 			rtw89_fw_h2c_cxdrv_ctrl_v7(rtwdev, index);
++		else if (ver->fcxctrl == 9)
++			rtw89_fw_h2c_cxdrv_ctrl_v9(rtwdev, index);
+ 		else
+ 			rtw89_fw_h2c_cxdrv_ctrl(rtwdev, index);
+ 		break;
+@@ -3893,7 +3896,7 @@ static void _set_bt_tx_power(struct rtw89_dev *rtwdev, bool force_exec, u8 bid,
+ 		if (rtwdev->chip->chip_gen == RTW89_CHIP_AX)
+ 			len = SET_RF_PARA_AX_LEN;
+ 
+-		if (_send_fw_cmd(rtwdev, BTFC_SET, h2c_func, buf, len)) {
++		if (!_send_fw_cmd(rtwdev, BTFC_SET, h2c_func, buf, len)) {
+ 			btc->dm.rf_trx_para.bt_tx_power[i] = level;
+ 			if (rf_band == RTW89_BAND_2G)
+ 				bt->tx_power_now = level;
+-- 
+2.55.0
+

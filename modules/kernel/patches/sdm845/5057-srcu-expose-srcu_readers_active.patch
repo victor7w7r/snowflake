@@ -1,0 +1,157 @@
+From 91d5185187e97611e328d03ee5e00e54b5d6d2b0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Onur=20=C3=96zkan?= <work@onurozkan.dev>
+Date: Sat, 13 Jun 2026 09:40:09 +0300
+Subject: [PATCH 05057/15333] srcu: expose srcu_readers_active()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This is needed by rust/helpers/srcu.c which now adds
+rust_helper_srcu_readers_active() as a wrapper around the SRCU helper
+for Rust callers.
+
+To achive this:
+
+1- Move the srcu_readers_active() implementation from
+   "kernel/rcu/srcutree.c" to "include/linux/srcutree.h".
+
+2- Implement a matching srcu_readers_active() in
+   "include/linux/srcutiny.h" and use it on the existing open-coded
+   WARN_ON() check in cleanup_srcu_struct().
+
+Signed-off-by: Onur Özkan <work@onurozkan.dev>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Reviewed-by: Boqun Feng <boqun@kernel.org>
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ include/linux/srcutiny.h | 13 +++++++++++++
+ include/linux/srcutree.h | 24 ++++++++++++++++++++++++
+ kernel/rcu/srcutiny.c    |  2 +-
+ kernel/rcu/srcutree.c    | 25 -------------------------
+ rust/helpers/srcu.c      |  5 +++++
+ 5 files changed, 43 insertions(+), 26 deletions(-)
+
+diff --git a/include/linux/srcutiny.h b/include/linux/srcutiny.h
+index 905b629e8fa3..fbcf13bc12d1 100644
+--- a/include/linux/srcutiny.h
++++ b/include/linux/srcutiny.h
+@@ -154,4 +154,17 @@ static inline void srcu_torture_stats_print(struct srcu_struct *ssp,
+ 		 data_race(READ_ONCE(ssp->srcu_idx_max)));
+ }
+ 
++/**
++ * srcu_readers_active - returns true if there are readers. and false otherwise.
++ * @ssp: which srcu_struct to count active readers (holding srcu_read_lock).
++ *
++ * Note that this is not an atomic primitive, and can therefore suffer
++ * severe errors when invoked on an active srcu_struct. That said, it
++ * can be useful as an error check at cleanup time.
++ */
++static inline bool srcu_readers_active(struct srcu_struct *ssp)
++{
++	return READ_ONCE(ssp->srcu_lock_nesting[0]) || READ_ONCE(ssp->srcu_lock_nesting[1]);
++}
++
+ #endif
+diff --git a/include/linux/srcutree.h b/include/linux/srcutree.h
+index fd1a9270cb9a..75e54e4f963f 100644
+--- a/include/linux/srcutree.h
++++ b/include/linux/srcutree.h
+@@ -374,4 +374,28 @@ static inline void srcu_check_read_flavor(struct srcu_struct *ssp, int read_flav
+ 		__srcu_check_read_flavor(ssp, read_flavor);
+ }
+ 
++/**
++ * srcu_readers_active - returns true if there are readers. and false otherwise.
++ * @ssp: which srcu_struct to count active readers (holding srcu_read_lock).
++ *
++ * Note that this is not an atomic primitive, and can therefore suffer
++ * severe errors when invoked on an active srcu_struct. That said, it
++ * can be useful as an error check at cleanup time.
++ */
++static inline bool srcu_readers_active(struct srcu_struct *ssp)
++{
++	int cpu;
++	unsigned long sum = 0;
++
++	for_each_possible_cpu(cpu) {
++		struct srcu_data *sdp = per_cpu_ptr(ssp->sda, cpu);
++
++		sum += atomic_long_read(&sdp->srcu_ctrs[0].srcu_locks);
++		sum += atomic_long_read(&sdp->srcu_ctrs[1].srcu_locks);
++		sum -= atomic_long_read(&sdp->srcu_ctrs[0].srcu_unlocks);
++		sum -= atomic_long_read(&sdp->srcu_ctrs[1].srcu_unlocks);
++	}
++	return sum;
++}
++
+ #endif
+diff --git a/kernel/rcu/srcutiny.c b/kernel/rcu/srcutiny.c
+index 47d48ed31848..558ba8d316db 100644
+--- a/kernel/rcu/srcutiny.c
++++ b/kernel/rcu/srcutiny.c
+@@ -85,7 +85,7 @@ EXPORT_SYMBOL_GPL(init_srcu_struct_generic);
+  */
+ void cleanup_srcu_struct(struct srcu_struct *ssp)
+ {
+-	WARN_ON(ssp->srcu_lock_nesting[0] || ssp->srcu_lock_nesting[1]);
++	WARN_ON(srcu_readers_active(ssp));
+ 	irq_work_sync(&ssp->srcu_irq_work);
+ 	flush_work(&ssp->srcu_work);
+ 	WARN_ON(ssp->srcu_gp_running);
+diff --git a/kernel/rcu/srcutree.c b/kernel/rcu/srcutree.c
+index 56c5db5c29a0..4a00e90e17fc 100644
+--- a/kernel/rcu/srcutree.c
++++ b/kernel/rcu/srcutree.c
+@@ -599,31 +599,6 @@ static bool srcu_readers_active_idx_check(struct srcu_struct *ssp, int idx)
+ 	return srcu_readers_lock_idx(ssp, idx, did_gp, unlocks);
+ }
+ 
+-/**
+- * srcu_readers_active - returns true if there are readers. and false
+- *                       otherwise
+- * @ssp: which srcu_struct to count active readers (holding srcu_read_lock).
+- *
+- * Note that this is not an atomic primitive, and can therefore suffer
+- * severe errors when invoked on an active srcu_struct.  That said, it
+- * can be useful as an error check at cleanup time.
+- */
+-static bool srcu_readers_active(struct srcu_struct *ssp)
+-{
+-	int cpu;
+-	unsigned long sum = 0;
+-
+-	for_each_possible_cpu(cpu) {
+-		struct srcu_data *sdp = per_cpu_ptr(ssp->sda, cpu);
+-
+-		sum += atomic_long_read(&sdp->srcu_ctrs[0].srcu_locks);
+-		sum += atomic_long_read(&sdp->srcu_ctrs[1].srcu_locks);
+-		sum -= atomic_long_read(&sdp->srcu_ctrs[0].srcu_unlocks);
+-		sum -= atomic_long_read(&sdp->srcu_ctrs[1].srcu_unlocks);
+-	}
+-	return sum;
+-}
+-
+ /*
+  * We use an adaptive strategy for synchronize_srcu() and especially for
+  * synchronize_srcu_expedited().  We spin for a fixed time period
+diff --git a/rust/helpers/srcu.c b/rust/helpers/srcu.c
+index 225b3bf9334a..1a2f563640e0 100644
+--- a/rust/helpers/srcu.c
++++ b/rust/helpers/srcu.c
+@@ -9,6 +9,11 @@ __rust_helper int rust_helper_init_srcu_struct_with_key(struct srcu_struct *ssp,
+ 	return __init_srcu_struct(ssp, name, key);
+ }
+ 
++__rust_helper bool rust_helper_srcu_readers_active(struct srcu_struct *ssp)
++{
++	return srcu_readers_active(ssp);
++}
++
+ __rust_helper int rust_helper_srcu_read_lock(struct srcu_struct *ssp)
+ {
+ 	return srcu_read_lock(ssp);
+-- 
+2.55.0
+

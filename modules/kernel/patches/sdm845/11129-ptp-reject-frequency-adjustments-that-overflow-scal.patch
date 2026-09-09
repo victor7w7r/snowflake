@@ -1,0 +1,77 @@
+From 504ef04e8674c918c22ebc16356424ac1346dd60 Mon Sep 17 00:00:00 2001
+From: Deep Shah <deepshah146@gmail.com>
+Date: Sat, 1 Aug 2026 22:29:22 +0000
+Subject: [PATCH 11129/15333] ptp: reject frequency adjustments that overflow
+ scaled_ppm_to_ppb()
+
+ptp_clock_adjtime() validates an ADJ_FREQUENCY request by converting the
+requested scaled ppm to ppb and comparing it against ops->max_adj:
+
+	long ppb = scaled_ppm_to_ppb(tx->freq);
+	if (ppb > ops->max_adj || ppb < -ops->max_adj)
+		return -ERANGE;
+
+scaled_ppm_to_ppb() computes (1 + ppm) * 125 >> 13 in s64.  For a
+sufficiently large tx->freq the multiplication overflows s64 and wraps,
+so the resulting ppb can fall back within [-max_adj, max_adj] and pass
+the check.  The unclamped tx->freq is then handed to ->adjfine(), where
+drivers scale it again (e.g. scaled_ppm * 762939453125 in ptp_idt82p33)
+and program a bogus frequency word.
+
+For example tx->freq = 147573952589676412 makes (1 + ppm) * 125 equal
+2^64 + 9, which wraps to ppb == 0 and is accepted.
+
+The caller already has write access to the PHC, so this hardens the
+max_adj sanity check rather than crossing a privilege boundary, and
+well-behaved user space (e.g. ptp4l) never requests such values.  It is
+a follow-up to commit 475b92f93216 ("ptp: improve max_adj check against
+unreasonable values"), which handled the analogous s32 narrowing but not
+this multiplication overflow.
+
+Detect the overflow with check_*_overflow() and reject the request in
+ptp_clock_adjtime() instead of acting on the wrapped value.
+
+Signed-off-by: Deep Shah <deepshah146@gmail.com>
+Reviewed-by: Vadim Fedorenko <vadim.fedorenko@linux.dev>
+Acked-by: Richard Cochran <richardcochran@gmail.com>
+Link: https://patch.msgid.link/20260801222923.39017-2-deepshah146@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/ptp/ptp_clock.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/ptp/ptp_clock.c b/drivers/ptp/ptp_clock.c
+index d6f54ccaf93b..4111342d64f0 100644
+--- a/drivers/ptp/ptp_clock.c
++++ b/drivers/ptp/ptp_clock.c
+@@ -9,6 +9,7 @@
+ #include <linux/init.h>
+ #include <linux/kernel.h>
+ #include <linux/module.h>
++#include <linux/overflow.h>
+ #include <linux/posix-clock.h>
+ #include <linux/pps_kernel.h>
+ #include <linux/property.h>
+@@ -159,7 +160,18 @@ static int ptp_clock_adjtime(struct posix_clock *pc, struct __kernel_timex *tx)
+ 		delta = ktime_to_ns(kt);
+ 		err = ops->adjtime(ops, delta);
+ 	} else if (tx->modes & ADJ_FREQUENCY) {
+-		long ppb = scaled_ppm_to_ppb(tx->freq);
++		long ppb;
++		s64 tmp;
++
++		/*
++		 * scaled_ppm_to_ppb() multiplies (1 + freq) by 125 in s64;
++		 * reject a ->freq large enough to overflow that, which would
++		 * otherwise wrap the result back into the max_adj range.
++		 */
++		if (check_add_overflow((s64)tx->freq, (s64)1, &tmp) ||
++		    check_mul_overflow(tmp, (s64)125, &tmp))
++			return -ERANGE;
++		ppb = scaled_ppm_to_ppb(tx->freq);
+ 		if (ppb > ops->max_adj || ppb < -ops->max_adj)
+ 			return -ERANGE;
+ 		err = ops->adjfine(ops, tx->freq);
+-- 
+2.55.0
+

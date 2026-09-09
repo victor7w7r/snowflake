@@ -1,0 +1,76 @@
+From e3f3d046f3f6467785ae35cefef33e3b7c774be4 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:20:01 +0800
+Subject: [PATCH 12087/15333] spi: tegra210-quad: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use __maybe_unused.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-38-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-tegra210-quad.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/spi/spi-tegra210-quad.c b/drivers/spi/spi-tegra210-quad.c
+index 588a929a9785..8ede864c3d3c 100644
+--- a/drivers/spi/spi-tegra210-quad.c
++++ b/drivers/spi/spi-tegra210-quad.c
+@@ -1837,14 +1837,14 @@ static void tegra_qspi_remove(struct platform_device *pdev)
+ 	tegra_qspi_deinit_dma(tqspi);
+ }
+ 
+-static int __maybe_unused tegra_qspi_suspend(struct device *dev)
++static int tegra_qspi_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+ 
+ 	return spi_controller_suspend(host);
+ }
+ 
+-static int __maybe_unused tegra_qspi_resume(struct device *dev)
++static int tegra_qspi_resume(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+ 	struct tegra_qspi *tqspi = spi_controller_get_devdata(host);
+@@ -1863,7 +1863,7 @@ static int __maybe_unused tegra_qspi_resume(struct device *dev)
+ 	return spi_controller_resume(host);
+ }
+ 
+-static int __maybe_unused tegra_qspi_runtime_suspend(struct device *dev)
++static int tegra_qspi_runtime_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+ 	struct tegra_qspi *tqspi = spi_controller_get_devdata(host);
+@@ -1879,7 +1879,7 @@ static int __maybe_unused tegra_qspi_runtime_suspend(struct device *dev)
+ 	return 0;
+ }
+ 
+-static int __maybe_unused tegra_qspi_runtime_resume(struct device *dev)
++static int tegra_qspi_runtime_resume(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+ 	struct tegra_qspi *tqspi = spi_controller_get_devdata(host);
+@@ -1896,14 +1896,14 @@ static int __maybe_unused tegra_qspi_runtime_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops tegra_qspi_pm_ops = {
+-	SET_RUNTIME_PM_OPS(tegra_qspi_runtime_suspend, tegra_qspi_runtime_resume, NULL)
+-	SET_SYSTEM_SLEEP_PM_OPS(tegra_qspi_suspend, tegra_qspi_resume)
++	RUNTIME_PM_OPS(tegra_qspi_runtime_suspend, tegra_qspi_runtime_resume, NULL)
++	SYSTEM_SLEEP_PM_OPS(tegra_qspi_suspend, tegra_qspi_resume)
+ };
+ 
+ static struct platform_driver tegra_qspi_driver = {
+ 	.driver = {
+ 		.name		= "tegra-qspi",
+-		.pm		= &tegra_qspi_pm_ops,
++		.pm		= pm_ptr(&tegra_qspi_pm_ops),
+ 		.of_match_table	= tegra_qspi_of_match,
+ 		.acpi_match_table = ACPI_PTR(tegra_qspi_acpi_match),
+ 	},
+-- 
+2.55.0
+

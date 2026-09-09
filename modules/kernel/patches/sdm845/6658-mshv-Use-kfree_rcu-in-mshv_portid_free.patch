@@ -1,0 +1,37 @@
+From dacbe5d56fd3707316b44153eb15a9fd149d56f9 Mon Sep 17 00:00:00 2001
+From: Stanislave Kinsburskii <skinsburskii@linux.microsoft.com>
+Date: Wed, 22 Jul 2026 23:56:46 +0000
+Subject: [PATCH 06658/15333] mshv: Use kfree_rcu in mshv_portid_free
+
+mshv_portid_free() uses synchronize_rcu() followed by kfree() to
+reclaim port table entries. This blocks the caller until a full RCU
+grace period elapses, which is unnecessary since the same module already
+uses the non-blocking kfree_rcu() pattern in mshv_port_table_fini().
+
+Replace with kfree_rcu() to avoid the blocking wait and keep the
+reclamation strategy consistent across the file.
+
+Signed-off-by: Stanislav Kinsburskii <skinsburskii@linux.microsoft.com>
+Reviewed-by: Anirudh Rayabharam (Microsoft) <anirudh@anirudhrb.com>
+Signed-off-by: Wei Liu <wei.liu@kernel.org>
+---
+ drivers/hv/mshv_portid_table.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/hv/mshv_portid_table.c b/drivers/hv/mshv_portid_table.c
+index 6f59b3e37624..0d632507ed21 100644
+--- a/drivers/hv/mshv_portid_table.c
++++ b/drivers/hv/mshv_portid_table.c
+@@ -62,8 +62,7 @@ mshv_portid_free(int port_id)
+ 	WARN_ON(!info);
+ 	idr_unlock(&port_table_idr);
+ 
+-	synchronize_rcu();
+-	kfree(info);
++	kfree_rcu(info, portbl_rcu);
+ }
+ 
+ int
+-- 
+2.55.0
+

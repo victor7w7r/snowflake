@@ -1,0 +1,56 @@
+From e46a9b8150c9cd7a41ae963389901a85ec40bea8 Mon Sep 17 00:00:00 2001
+From: Ian Rogers <irogers@google.com>
+Date: Tue, 21 Jul 2026 16:52:50 -0700
+Subject: [PATCH 11955/15333] perf find-map: Remove PATH_MAX 128-byte stack
+ array restriction
+
+Use getline() to dynamically allocate the required line buffer for maps
+parsing, guaranteeing bounds safety and avoiding compiler warnings
+by evaluating the return value in the loop condition directly.
+
+Assisted-by: Antigravity:gemini-3.5-flash
+Signed-off-by: Ian Rogers <irogers@google.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/util/find-map.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/tools/perf/util/find-map.c b/tools/perf/util/find-map.c
+index 7b2300588ece..bba511795a69 100644
+--- a/tools/perf/util/find-map.c
++++ b/tools/perf/util/find-map.c
+@@ -1,8 +1,13 @@
+ // SPDX-License-Identifier: GPL-2.0
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
+ static int find_map(void **start, void **end, const char *name)
+ {
+ 	FILE *maps;
+-	char line[128];
++	char *line = NULL;
++	size_t len = 0;
+ 	int found = 0;
+ 
+ 	maps = fopen("/proc/self/maps", "r");
+@@ -11,7 +16,7 @@ static int find_map(void **start, void **end, const char *name)
+ 		return -1;
+ 	}
+ 
+-	while (!found && fgets(line, sizeof(line), maps)) {
++	while (!found && getline(&line, &len, maps) != -1) {
+ 		int m = -1;
+ 
+ 		/* We care only about private r-x mappings. */
+@@ -25,6 +30,7 @@ static int find_map(void **start, void **end, const char *name)
+ 			found = 1;
+ 	}
+ 
++	free(line);
+ 	fclose(maps);
+ 	return !found;
+ }
+-- 
+2.55.0
+

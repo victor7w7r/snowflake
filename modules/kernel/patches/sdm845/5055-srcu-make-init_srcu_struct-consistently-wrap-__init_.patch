@@ -1,0 +1,179 @@
+From a47dea1baa3b445365ad0757e6dee4ef8fde49e6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Onur=20=C3=96zkan?= <work@onurozkan.dev>
+Date: Sat, 13 Jun 2026 09:40:07 +0300
+Subject: [PATCH 05055/15333] srcu: make init_srcu_struct() consistently wrap
+ __init_srcu_struct()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Restructure the SRCU initialization functions so it always follows
+one direction:
+
+    init_srcu_struct() -> __init_srcu_struct() -> lockdep or generic
+
+This uses the same wrapper style as mutex. It avoids the old confusing
+style where init_srcu_struct() and __init_srcu_struct() called each
+other in different configs. It also helps Rust side to have simpler
+helper for SRCU initialization.
+
+Signed-off-by: Onur Özkan <work@onurozkan.dev>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Reviewed-by: Boqun Feng <boqun@kernel.org>
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ include/linux/srcu.h  | 29 ++++++++++++++++++++---------
+ kernel/rcu/srcutiny.c | 12 ++++++------
+ kernel/rcu/srcutree.c | 11 ++++++-----
+ 3 files changed, 32 insertions(+), 20 deletions(-)
+
+diff --git a/include/linux/srcu.h b/include/linux/srcu.h
+index a54ce9e808b9..c5ab7df6fe5c 100644
+--- a/include/linux/srcu.h
++++ b/include/linux/srcu.h
+@@ -25,20 +25,19 @@ context_lock_struct(srcu_struct, __reentrant_ctx_lock);
+ 
+ #ifdef CONFIG_DEBUG_LOCK_ALLOC
+ 
+-int __init_srcu_struct(struct srcu_struct *ssp, const char *name, struct lock_class_key *key);
++int init_srcu_struct_lockdep(struct srcu_struct *ssp, const char *name,
++				     struct lock_class_key *key);
++static inline int __init_srcu_struct(struct srcu_struct *ssp, const char *name,
++				     struct lock_class_key *key)
++{
++	return init_srcu_struct_lockdep(ssp, name, key);
++}
+ #ifndef CONFIG_TINY_SRCU
+ int __init_srcu_struct_fast(struct srcu_struct *ssp, const char *name, struct lock_class_key *key);
+ int __init_srcu_struct_fast_updown(struct srcu_struct *ssp, const char *name,
+ 				   struct lock_class_key *key);
+ #endif // #ifndef CONFIG_TINY_SRCU
+ 
+-#define init_srcu_struct(ssp) \
+-({ \
+-	static struct lock_class_key __srcu_key; \
+-	\
+-	__init_srcu_struct((ssp), #ssp, &__srcu_key); \
+-})
+-
+ #define init_srcu_struct_fast(ssp) \
+ ({ \
+ 	static struct lock_class_key __srcu_key; \
+@@ -56,7 +55,12 @@ int __init_srcu_struct_fast_updown(struct srcu_struct *ssp, const char *name,
+ #define __SRCU_DEP_MAP_INIT(srcu_name)	.dep_map = { .name = #srcu_name },
+ #else /* #ifdef CONFIG_DEBUG_LOCK_ALLOC */
+ 
+-int init_srcu_struct(struct srcu_struct *ssp);
++int init_srcu_struct_generic(struct srcu_struct *ssp);
++static inline int __init_srcu_struct(struct srcu_struct *ssp, const char *name,
++				     struct lock_class_key *key)
++{
++	return init_srcu_struct_generic(ssp);
++}
+ #ifndef CONFIG_TINY_SRCU
+ int init_srcu_struct_fast(struct srcu_struct *ssp);
+ int init_srcu_struct_fast_updown(struct srcu_struct *ssp);
+@@ -65,6 +69,13 @@ int init_srcu_struct_fast_updown(struct srcu_struct *ssp);
+ #define __SRCU_DEP_MAP_INIT(srcu_name)
+ #endif /* #else #ifdef CONFIG_DEBUG_LOCK_ALLOC */
+ 
++#define init_srcu_struct(ssp) \
++({ \
++	static struct lock_class_key __srcu_key; \
++	\
++	__init_srcu_struct((ssp), #ssp, &__srcu_key); \
++})
++
+ /* Values for SRCU Tree srcu_data ->srcu_reader_flavor, but also used by rcutorture. */
+ #define SRCU_READ_FLAVOR_NORMAL		0x1		// srcu_read_lock().
+ #define SRCU_READ_FLAVOR_NMI		0x2		// srcu_read_lock_nmisafe().
+diff --git a/kernel/rcu/srcutiny.c b/kernel/rcu/srcutiny.c
+index a2e2d516e51b..47d48ed31848 100644
+--- a/kernel/rcu/srcutiny.c
++++ b/kernel/rcu/srcutiny.c
+@@ -48,31 +48,31 @@ static int init_srcu_struct_fields(struct srcu_struct *ssp)
+ 
+ #ifdef CONFIG_DEBUG_LOCK_ALLOC
+ 
+-int __init_srcu_struct(struct srcu_struct *ssp, const char *name,
+-		       struct lock_class_key *key)
++int init_srcu_struct_lockdep(struct srcu_struct *ssp, const char *name,
++		     struct lock_class_key *key)
+ {
+ 	/* Don't re-initialize a lock while it is held. */
+ 	debug_check_no_locks_freed((void *)ssp, sizeof(*ssp));
+ 	lockdep_init_map(&ssp->dep_map, name, key, 0);
+ 	return init_srcu_struct_fields(ssp);
+ }
+-EXPORT_SYMBOL_GPL(__init_srcu_struct);
++EXPORT_SYMBOL_GPL(init_srcu_struct_lockdep);
+ 
+ #else /* #ifdef CONFIG_DEBUG_LOCK_ALLOC */
+ 
+ /*
+- * init_srcu_struct - initialize a sleep-RCU structure
++ * init_srcu_struct_generic - initialize a sleep-RCU structure
+  * @ssp: structure to initialize.
+  *
+  * Must invoke this on a given srcu_struct before passing that srcu_struct
+  * to any other function.  Each srcu_struct represents a separate domain
+  * of SRCU protection.
+  */
+-int init_srcu_struct(struct srcu_struct *ssp)
++int init_srcu_struct_generic(struct srcu_struct *ssp)
+ {
+ 	return init_srcu_struct_fields(ssp);
+ }
+-EXPORT_SYMBOL_GPL(init_srcu_struct);
++EXPORT_SYMBOL_GPL(init_srcu_struct_generic);
+ 
+ #endif /* #else #ifdef CONFIG_DEBUG_LOCK_ALLOC */
+ 
+diff --git a/kernel/rcu/srcutree.c b/kernel/rcu/srcutree.c
+index 7c2f7cc131f7..56c5db5c29a0 100644
+--- a/kernel/rcu/srcutree.c
++++ b/kernel/rcu/srcutree.c
+@@ -266,12 +266,13 @@ __init_srcu_struct_common(struct srcu_struct *ssp, const char *name, struct lock
+ 	return init_srcu_struct_fields(ssp, false);
+ }
+ 
+-int __init_srcu_struct(struct srcu_struct *ssp, const char *name, struct lock_class_key *key)
++int init_srcu_struct_lockdep(struct srcu_struct *ssp, const char *name,
++			     struct lock_class_key *key)
+ {
+ 	ssp->srcu_reader_flavor = 0;
+ 	return __init_srcu_struct_common(ssp, name, key);
+ }
+-EXPORT_SYMBOL_GPL(__init_srcu_struct);
++EXPORT_SYMBOL_GPL(init_srcu_struct_lockdep);
+ 
+ int __init_srcu_struct_fast(struct srcu_struct *ssp, const char *name, struct lock_class_key *key)
+ {
+@@ -291,7 +292,7 @@ EXPORT_SYMBOL_GPL(__init_srcu_struct_fast_updown);
+ #else /* #ifdef CONFIG_DEBUG_LOCK_ALLOC */
+ 
+ /**
+- * init_srcu_struct - initialize a sleep-RCU structure
++ * init_srcu_struct_generic - initialize a sleep-RCU structure
+  * @ssp: structure to initialize.
+  *
+  * Use this in place of DEFINE_SRCU() and DEFINE_STATIC_SRCU()
+@@ -301,12 +302,12 @@ EXPORT_SYMBOL_GPL(__init_srcu_struct_fast_updown);
+  * to any other function.  Each srcu_struct represents a separate domain
+  * of SRCU protection.
+  */
+-int init_srcu_struct(struct srcu_struct *ssp)
++int init_srcu_struct_generic(struct srcu_struct *ssp)
+ {
+ 	ssp->srcu_reader_flavor = 0;
+ 	return init_srcu_struct_fields(ssp, false);
+ }
+-EXPORT_SYMBOL_GPL(init_srcu_struct);
++EXPORT_SYMBOL_GPL(init_srcu_struct_generic);
+ 
+ /**
+  * init_srcu_struct_fast - initialize a fast-reader sleep-RCU structure
+-- 
+2.55.0
+

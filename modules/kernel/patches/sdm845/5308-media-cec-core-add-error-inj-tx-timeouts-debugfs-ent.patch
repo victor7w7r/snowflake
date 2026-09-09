@@ -1,0 +1,113 @@
+From 22c0f8e2d9fa156ac25ff1854142956f2464e5c8 Mon Sep 17 00:00:00 2001
+From: Hans Verkuil <hverkuil+cisco@kernel.org>
+Date: Fri, 10 Jul 2026 13:07:36 +0200
+Subject: [PATCH 05308/15333] media: cec/core: add error-inj-tx-timeouts
+ debugfs entry
+
+Add a new debugfs entry that makes it possible to do
+error injection of failing the next N transmits by a
+timeout.
+
+This can be used to test what happens in that case during
+the claiming of a free logical address.
+
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+Signed-off-by: Mauro Carvalho Chehab <mchehab+huawei@kernel.org>
+---
+ drivers/media/cec/core/cec-adap.c |  7 +++++++
+ drivers/media/cec/core/cec-core.c | 31 +++++++++++++++++++++++++++++++
+ include/media/cec.h               |  4 ++++
+ 3 files changed, 42 insertions(+)
+
+diff --git a/drivers/media/cec/core/cec-adap.c b/drivers/media/cec/core/cec-adap.c
+index 774bf9099183..ee8a200b9803 100644
+--- a/drivers/media/cec/core/cec-adap.c
++++ b/drivers/media/cec/core/cec-adap.c
+@@ -629,6 +629,13 @@ void cec_transmit_done_ts(struct cec_adapter *adap, u8 status,
+ 		attempts_made = 1;
+ 
+ 	mutex_lock(&adap->lock);
++	if (adap->error_inj_tx_timeouts) {
++		dprintk(2, "%s: error_inj_tx_timeouts %u\n",
++			__func__, adap->error_inj_tx_timeouts);
++		adap->error_inj_tx_timeouts--;
++		mutex_unlock(&adap->lock);
++		return;
++	}
+ 	data = adap->transmitting;
+ 	if (!data) {
+ 		/*
+diff --git a/drivers/media/cec/core/cec-core.c b/drivers/media/cec/core/cec-core.c
+index c51e769b4e34..230f8a413e74 100644
+--- a/drivers/media/cec/core/cec-core.c
++++ b/drivers/media/cec/core/cec-core.c
+@@ -223,6 +223,34 @@ static int cec_error_inj_show(struct seq_file *sf, void *unused)
+ 	return call_op(adap, error_inj_show, sf);
+ }
+ DEFINE_SHOW_STORE_ATTRIBUTE(cec_error_inj);
++
++static ssize_t cec_error_inj_tx_timeouts_write(struct file *file,
++			const char __user *ubuf, size_t count, loff_t *ppos)
++{
++	struct seq_file *sf = file->private_data;
++	struct cec_adapter *adap = sf->private;
++	int ret;
++
++	if (count > 5)
++		return -EINVAL;
++
++	mutex_lock(&adap->lock);
++	ret = kstrtou32_from_user(ubuf, count, 0, &adap->error_inj_tx_timeouts);
++	if (ret)
++		adap->error_inj_tx_timeouts = 0;
++	mutex_unlock(&adap->lock);
++	return ret ? : count;
++}
++
++static int cec_error_inj_tx_timeouts_show(struct seq_file *sf, void *unused)
++{
++	struct cec_adapter *adap = sf->private;
++
++	seq_printf(sf, "%u", adap->error_inj_tx_timeouts);
++	return 0;
++}
++
++DEFINE_SHOW_STORE_ATTRIBUTE(cec_error_inj_tx_timeouts);
+ #endif
+ 
+ struct cec_adapter *cec_allocate_adapter(const struct cec_adap_ops *ops,
+@@ -367,6 +395,9 @@ int cec_register_adapter(struct cec_adapter *adap,
+ 	debugfs_create_devm_seqfile(&adap->devnode.dev, "status", adap->cec_dir,
+ 				    cec_adap_status);
+ 
++	debugfs_create_file("error-inj-tx-timeouts", 0644, adap->cec_dir, adap,
++			    &cec_error_inj_tx_timeouts_fops);
++
+ 	if (!adap->ops->error_inj_show || !adap->ops->error_inj_parse_line)
+ 		return 0;
+ 	debugfs_create_file("error-inj", 0644, adap->cec_dir, adap,
+diff --git a/include/media/cec.h b/include/media/cec.h
+index 5aff399e69e6..4c8b0950b377 100644
+--- a/include/media/cec.h
++++ b/include/media/cec.h
+@@ -221,6 +221,8 @@ struct cec_adap_ops {
+  * @tx_error_log_cnt:	number of logged Error transmits since the adapter was
+  *                      enabled. Used to avoid flooding the kernel log if this
+  *                      happens a lot.
++ * @error_inj_tx_timeouts: error injection: the next @error_inj_tx_timeouts
++ *			transmits will time out.
+  * @notifier:		CEC notifier
+  * @pin:		CEC pin status struct
+  * @cec_dir:		debugfs cec directory
+@@ -281,6 +283,8 @@ struct cec_adapter {
+ 	u32 tx_low_drive_log_cnt;
+ 	u32 tx_error_log_cnt;
+ 
++	u32 error_inj_tx_timeouts;
++
+ #ifdef CONFIG_CEC_NOTIFIER
+ 	struct cec_notifier *notifier;
+ #endif
+-- 
+2.55.0
+

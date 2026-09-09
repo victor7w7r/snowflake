@@ -1,0 +1,48 @@
+From d2bc4752548652d9de002e9ca93c162ac54e115a Mon Sep 17 00:00:00 2001
+From: Biren Pandya <birenpandya@gmail.com>
+Date: Wed, 15 Jul 2026 09:08:21 +0530
+Subject: [PATCH 05903/15333] media: i2c: max9286: Add missing
+ media_entity_cleanup()
+
+The remove function is missing a call to media_entity_cleanup(). Add it.
+
+Reviewed-by: Jacopo Mondi <jacopo.mondi@ideasonboard.com>
+Signed-off-by: Biren Pandya <birenpandya@gmail.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/i2c/max9286.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/i2c/max9286.c b/drivers/media/i2c/max9286.c
+index ac0712ce1e65..79eab9045e24 100644
+--- a/drivers/media/i2c/max9286.c
++++ b/drivers/media/i2c/max9286.c
+@@ -1062,7 +1062,7 @@ static int max9286_v4l2_register(struct max9286_priv *priv)
+ 	priv->sd.state_lock = priv->ctrls.lock;
+ 	ret = v4l2_subdev_init_finalize(&priv->sd);
+ 	if (ret)
+-		goto err_async;
++		goto err_entity;
+ 
+ 	ret = v4l2_async_register_subdev(&priv->sd);
+ 	if (ret < 0) {
+@@ -1074,6 +1074,8 @@ static int max9286_v4l2_register(struct max9286_priv *priv)
+ 
+ err_subdev:
+ 	v4l2_subdev_cleanup(&priv->sd);
++err_entity:
++	media_entity_cleanup(&priv->sd.entity);
+ err_async:
+ 	v4l2_ctrl_handler_free(&priv->ctrls);
+ 	max9286_v4l2_notifier_unregister(priv);
+@@ -1084,6 +1086,7 @@ static int max9286_v4l2_register(struct max9286_priv *priv)
+ static void max9286_v4l2_unregister(struct max9286_priv *priv)
+ {
+ 	v4l2_subdev_cleanup(&priv->sd);
++	media_entity_cleanup(&priv->sd.entity);
+ 	v4l2_ctrl_handler_free(&priv->ctrls);
+ 	v4l2_async_unregister_subdev(&priv->sd);
+ 	max9286_v4l2_notifier_unregister(priv);
+-- 
+2.55.0
+

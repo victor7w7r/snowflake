@@ -1,0 +1,63 @@
+From 7a1bbc1bf66fa7491a2264959e92b9ba1f506636 Mon Sep 17 00:00:00 2001
+From: Jonathan Cavitt <jonathan.cavitt@intel.com>
+Date: Wed, 24 Jun 2026 04:23:10 +0800
+Subject: [PATCH 00885/15333] drm/i915: Refactor generic_handle_irq_safe()
+ error messages
+
+Refactor all error messages resulting from generic_handle_irq_safe()
+failures in I915 for clarity.
+
+v2:
+- Use drm_err_ratelimited() correctly (jcavitt)
+
+v3:
+- Use xe_err_ratelimited() instead (Jadav)
+- Split into patch series (jcavitt)
+
+v4:
+- Use suggested phrasing (Wajdeczko)
+
+v5:
+- s/PTR_ERR/ERR_PTR (jcavitt)
+
+Suggested-by: Raag Jadav <raag.jadav@intel.com>
+Suggested-by: Michal Wajdeczko <Michal.Wajdeczko@intel.com>
+Signed-off-by: Jonathan Cavitt <jonathan.cavitt@intel.com>
+Reviewed-by: Jani Nikula <jani.nikula@intel.com>
+Reviewed-by: Andi Shyti <andi.shyti@linux.intel.com>
+Signed-off-by: Andi Shyti <andi.shyti@linux.intel.com>
+Link: https://lore.kernel.org/r/20260623202310.1023770-1-jonathan.cavitt@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_lpe_audio.c | 2 +-
+ drivers/gpu/drm/i915/gt/intel_gsc.c            | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_lpe_audio.c b/drivers/gpu/drm/i915/display/intel_lpe_audio.c
+index 022ad18044bf..ff2cf479d8e1 100644
+--- a/drivers/gpu/drm/i915/display/intel_lpe_audio.c
++++ b/drivers/gpu/drm/i915/display/intel_lpe_audio.c
+@@ -265,7 +265,7 @@ void intel_lpe_audio_irq_handler(struct intel_display *display)
+ 	ret = generic_handle_irq_safe(display->audio.lpe.irq);
+ 	if (ret)
+ 		drm_err_ratelimited(display->drm,
+-				    "error handling LPE audio irq: %d\n", ret);
++				    "LPE audio: irq handling failed (%pe)\n", ERR_PTR(ret));
+ }
+ 
+ /**
+diff --git a/drivers/gpu/drm/i915/gt/intel_gsc.c b/drivers/gpu/drm/i915/gt/intel_gsc.c
+index 050d909fb4f8..1c06bf76568a 100644
+--- a/drivers/gpu/drm/i915/gt/intel_gsc.c
++++ b/drivers/gpu/drm/i915/gt/intel_gsc.c
+@@ -286,7 +286,7 @@ static void gsc_irq_handler(struct intel_gt *gt, unsigned int intf_id)
+ 
+ 	ret = generic_handle_irq_safe(gt->gsc.intf[intf_id].irq);
+ 	if (ret)
+-		gt_err_ratelimited(gt, "error handling GSC irq: %d\n", ret);
++		gt_err_ratelimited(gt, "GSC: irq handling failed (%pe)\n", ERR_PTR(ret));
+ }
+ 
+ void intel_gsc_irq_handler(struct intel_gt *gt, u32 iir)
+-- 
+2.55.0
+

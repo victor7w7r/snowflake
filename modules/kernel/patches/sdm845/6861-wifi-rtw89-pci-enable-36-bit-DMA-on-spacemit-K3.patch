@@ -1,0 +1,39 @@
+From 27a5046cc56e851d2c498214b134170681ccb28a Mon Sep 17 00:00:00 2001
+From: Anirudh Srinivasan <asrinivasan@oss.tenstorrent.com>
+Date: Thu, 16 Jul 2026 18:05:11 -0500
+Subject: [PATCH 06861/15333] wifi: rtw89: pci: enable 36-bit DMA on spacemit
+ K3
+
+The Spacemit K3 Pico ITX Board has a RTL8852BE pcie card behind a PCIe
+root port, but the SoC doesn't have any 32 bit DMA addreseses which the
+rtw89 seems to use by default. Enable 36 bit DMA ability that the driver
+has when this particular root port is detected so that the driver can
+probe on this SoC.
+
+Tested-by: Aurelien Jarno <aurelien@aurel32.net>
+Acked-by: Ping-Ke Shih <pkshih@realtek.com>
+Signed-off-by: Anirudh Srinivasan <asrinivasan@oss.tenstorrent.com>
+Signed-off-by: Ping-Ke Shih <pkshih@realtek.com>
+Link: https://patch.msgid.link/20260716-rtw89-spacemit-k3-v2-2-392b577ebf75@oss.tenstorrent.com
+---
+ drivers/net/wireless/realtek/rtw89/pci.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/net/wireless/realtek/rtw89/pci.c b/drivers/net/wireless/realtek/rtw89/pci.c
+index 102bae488180..c5b82fc46d06 100644
+--- a/drivers/net/wireless/realtek/rtw89/pci.c
++++ b/drivers/net/wireless/realtek/rtw89/pci.c
+@@ -3326,6 +3326,10 @@ static bool rtw89_pci_is_dac_compatible_bridge(struct rtw89_dev *rtwdev)
+ 		if (bridge->device == 0x2806)
+ 			return true;
+ 		break;
++	case PCI_VENDOR_ID_SPACEMIT:
++		if (bridge->device == PCI_DEVICE_ID_SPACEMIT_K3)
++			return true;
++		break;
+ 	}
+ 
+ 	return false;
+-- 
+2.55.0
+

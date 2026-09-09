@@ -1,0 +1,262 @@
+From 597233e29855fcdd225114d7c618ca8c6f35bc7a Mon Sep 17 00:00:00 2001
+From: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Date: Thu, 9 Jul 2026 19:41:32 +0200
+Subject: [PATCH 06085/15333] dtc: dt-check-style: Expect first device_type
+
+A few nodes do have "device_type" property which is mostly, but not always,
+the first property in a device node, when applicable.  Adjust the DTS
+coding style rules to actually expect the device_type first and improve
+the dt-check-style to handle this correctly.
+
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260709-dts-style-checker-v5-4-fcc147cb697d@oss.qualcomm.com
+Signed-off-by: Rob Herring (Arm) <robh@kernel.org>
+---
+ .../devicetree/bindings/dts-coding-style.rst  | 15 ++++---
+ scripts/dtc/dt-check-style                    | 31 +++++++------
+ .../bad/dts-property-order.dts                | 43 +++++++++++++++++++
+ .../bad/yaml-prop-order-device-type.yaml      | 31 +++++++++++++
+ .../expected/dts-property-order.dts.txt       |  6 +++
+ .../yaml-prop-order-device-type.yaml.txt      |  2 +
+ .../good/dts-property-order.dts               | 41 ++++++++++++++++++
+ 7 files changed, 148 insertions(+), 21 deletions(-)
+ create mode 100644 scripts/dtc/dt-style-selftest/bad/dts-property-order.dts
+ create mode 100644 scripts/dtc/dt-style-selftest/bad/yaml-prop-order-device-type.yaml
+ create mode 100644 scripts/dtc/dt-style-selftest/expected/dts-property-order.dts.txt
+ create mode 100644 scripts/dtc/dt-style-selftest/expected/yaml-prop-order-device-type.yaml.txt
+ create mode 100644 scripts/dtc/dt-style-selftest/good/dts-property-order.dts
+
+diff --git a/Documentation/devicetree/bindings/dts-coding-style.rst b/Documentation/devicetree/bindings/dts-coding-style.rst
+index 4a02ea60cbbe..63648db377e1 100644
+--- a/Documentation/devicetree/bindings/dts-coding-style.rst
++++ b/Documentation/devicetree/bindings/dts-coding-style.rst
+@@ -114,15 +114,16 @@ Order of Properties in Device Node
+ 
+ The following order of properties in device nodes is preferred:
+ 
+-1. "compatible"
+-2. "reg"
+-3. "ranges"
+-4. Standard/common properties (defined by common bindings, e.g. without
++1. "device_type" (if applicable)
++2. "compatible"
++3. "reg"
++4. "ranges"
++5. Standard/common properties (defined by common bindings, e.g. without
+    vendor-prefixes)
+-5. Vendor-specific properties
+-6. "status" (if applicable), preceded by a blank line if there is content
++6. Vendor-specific properties
++7. "status" (if applicable), preceded by a blank line if there is content
+    before the property
+-7. Child nodes, where each node is preceded with a blank line
++8. Child nodes, where each node is preceded with a blank line
+ 
+ The "status" property is by default "okay", thus it can be omitted.
+ 
+diff --git a/scripts/dtc/dt-check-style b/scripts/dtc/dt-check-style
+index f5276b5fdd46..d19ef26c2213 100755
+--- a/scripts/dtc/dt-check-style
++++ b/scripts/dtc/dt-check-style
+@@ -565,28 +565,31 @@ def check_child_name_order(ctx):
+ 
+ def _property_bucket(name):
+     """Return the canonical bucket index for a property:
+-       0 compatible
+-       1 reg / reg-names
+-       2 ranges
+-       3 standard properties (no vendor comma in #-stripped name)
+-       4 vendor-specific properties
+-       5 status
+-    Plus a sub-key inside the bucket for fixed slots (compatible, reg,
+-    reg-names, ranges, status). 'standard' and 'vendor' return None for
++       0 device_type
++       1 compatible
++       2 reg / reg-names
++       3 ranges
++       4 standard properties (no vendor comma in #-stripped name)
++       5 vendor-specific properties
++       6 status
++    Plus a sub-key inside the bucket for fixed slots (device_type, compatible,
++    reg, reg-names, ranges, status). 'standard' and 'vendor' return None for
+     the sub-key, signalling that the within-bucket key is computed by
+     the pairing rules."""
+     stripped = name.lstrip('#')
+-    if name == 'compatible':
++    if name == 'device_type':
+         return (0, 0)
+-    if name == 'reg':
++    if name == 'compatible':
+         return (1, 0)
++    if name == 'reg':
++        return (2, 0)
+     if name == 'reg-names':
+-        return (1, 1)
++        return (2, 1)
+     if name == 'ranges':
+-        return (2, 0)
++        return (3, 0)
+     if name == 'status':
+-        return (5, 0)
+-    return (4 if ',' in stripped else 3, None)
++        return (6, 0)
++    return (5 if ',' in stripped else 4, None)
+ 
+ 
+ # Declarative pairing rules: each is a callable
+diff --git a/scripts/dtc/dt-style-selftest/bad/dts-property-order.dts b/scripts/dtc/dt-style-selftest/bad/dts-property-order.dts
+new file mode 100644
+index 000000000000..f31abb6ceae4
+--- /dev/null
++++ b/scripts/dtc/dt-style-selftest/bad/dts-property-order.dts
+@@ -0,0 +1,43 @@
++// SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
++/*
++ * Test fixture: Incorrect property order
++ */
++
++/dts-v1/;
++
++/ {
++	cpus {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		cpu@0 {
++			reg = <0x0 0x0>;
++			compatible = "arm,cortex-a57";
++			device_type = "cpu";
++			enable-method = "psci";
++		};
++	};
++
++	pmu {
++		compatible = "example,pmu";
++
++		status = "disabled";
++		dma-coherent;
++	};
++
++	soc@0 {
++		ranges = <0 0 0 0xc0000000>;
++		compatible = "simple-bus";
++
++		#address-cells = <1>;
++		#size-cells = <1>;
++
++		interrupt-controller@10000 {
++			reg = <0x10000 0x1000>;
++			interrupts = <1 2 3>,
++				     <4 5 6>,
++				     <7 8 9>;
++			compatible = "example,intc";
++		};
++	};
++};
+diff --git a/scripts/dtc/dt-style-selftest/bad/yaml-prop-order-device-type.yaml b/scripts/dtc/dt-style-selftest/bad/yaml-prop-order-device-type.yaml
+new file mode 100644
+index 000000000000..e2c69e9ff452
+--- /dev/null
++++ b/scripts/dtc/dt-style-selftest/bad/yaml-prop-order-device-type.yaml
+@@ -0,0 +1,31 @@
++# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/test-bad-prop-order.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Test fixture with device_type
++
++maintainers:
++  - Test User <test@example.com>
++
++properties:
++  compatible:
++    const: example,test-prop-order-device-type
++  reg:
++    maxItems: 1
++  device_type: true
++
++required:
++  - compatible
++  - reg
++
++additionalProperties: false
++
++examples:
++  - |
++    device@1000 {
++        compatible = "example,test-prop-order-device-type";
++        device_type = "cpu";
++        reg = <0x1000 0x100>;
++    };
+diff --git a/scripts/dtc/dt-style-selftest/expected/dts-property-order.dts.txt b/scripts/dtc/dt-style-selftest/expected/dts-property-order.dts.txt
+new file mode 100644
+index 000000000000..4bc21328625f
+--- /dev/null
++++ b/scripts/dtc/dt-style-selftest/expected/dts-property-order.dts.txt
+@@ -0,0 +1,6 @@
++# mode=strict
++bad/dts-property-order.dts:15: [property-order] property 'compatible' out of canonical order (should sort before 'reg')
++bad/dts-property-order.dts:16: [property-order] property 'device_type' out of canonical order (should sort before 'compatible')
++bad/dts-property-order.dts:25: [property-order] property 'dma-coherent' out of canonical order (should sort before 'status')
++bad/dts-property-order.dts:30: [property-order] property 'compatible' out of canonical order (should sort before 'ranges')
++bad/dts-property-order.dts:40: [property-order] property 'compatible' out of canonical order (should sort before 'interrupts')
+diff --git a/scripts/dtc/dt-style-selftest/expected/yaml-prop-order-device-type.yaml.txt b/scripts/dtc/dt-style-selftest/expected/yaml-prop-order-device-type.yaml.txt
+new file mode 100644
+index 000000000000..9350e2b80f75
+--- /dev/null
++++ b/scripts/dtc/dt-style-selftest/expected/yaml-prop-order-device-type.yaml.txt
+@@ -0,0 +1,2 @@
++# mode=strict
++bad/yaml-prop-order-device-type.yaml:29: example 0 [property-order] property 'device_type' out of canonical order (should sort before 'compatible')
+diff --git a/scripts/dtc/dt-style-selftest/good/dts-property-order.dts b/scripts/dtc/dt-style-selftest/good/dts-property-order.dts
+new file mode 100644
+index 000000000000..0e183e3459cd
+--- /dev/null
++++ b/scripts/dtc/dt-style-selftest/good/dts-property-order.dts
+@@ -0,0 +1,41 @@
++// SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
++/*
++ * Test fixture: Incorrect property order
++ */
++
++/dts-v1/;
++
++/ {
++	cpus {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		cpu@0 {
++			device_type = "cpu";
++			compatible = "arm,cortex-a57";
++			reg = <0x0 0x0>;
++			enable-method = "psci";
++		};
++	};
++
++	pmu {
++		compatible = "example,pmu";
++		dma-coherent;
++
++		status = "disabled";
++	};
++
++	soc@0 {
++		compatible = "simple-bus";
++		ranges = <0 0 0 0xc0000000>;
++
++		#address-cells = <1>;
++		#size-cells = <1>;
++
++		interrupt-controller@10000 {
++			compatible = "example,intc";
++			reg = <0x10000 0x1000>;
++			interrupts = <1 2 3>;
++		};
++	};
++};
+-- 
+2.55.0
+

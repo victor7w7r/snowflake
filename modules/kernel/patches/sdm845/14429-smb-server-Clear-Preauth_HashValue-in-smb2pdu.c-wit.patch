@@ -1,0 +1,41 @@
+From 5b90f78dc22a3ee2f9dabbb41100f029bb799727 Mon Sep 17 00:00:00 2001
+From: Thomas Huth <thuth@redhat.com>
+Date: Tue, 11 Aug 2026 17:46:20 +0200
+Subject: [PATCH 14429/15333] smb: server: Clear Preauth_HashValue in smb2pdu.c
+ with kfree_sensitive()
+
+struct preauth_session contains the Preauth_HashValue[] array that
+might contain sensitive data. Use kfree_sensitive() to clear it
+before returning the memory to the heap.
+
+Signed-off-by: Thomas Huth <thuth@redhat.com>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/smb2pdu.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index a7bfa6dbcfd5..835d9e2aacc4 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -2475,7 +2475,7 @@ int smb2_sess_setup(struct ksmbd_work *work)
+ 						ksmbd_preauth_session_lookup(conn, sess->id);
+ 					if (preauth_sess) {
+ 						list_del(&preauth_sess->preauth_entry);
+-						kfree(preauth_sess);
++						kfree_sensitive(preauth_sess);
+ 					}
+ 				}
+ 			} else {
+@@ -2529,7 +2529,7 @@ int smb2_sess_setup(struct ksmbd_work *work)
+ 			preauth_sess = ksmbd_preauth_session_lookup(conn, sess->id);
+ 			if (preauth_sess) {
+ 				list_del(&preauth_sess->preauth_entry);
+-				kfree(preauth_sess);
++				kfree_sensitive(preauth_sess);
+ 			}
+ 		}
+ 
+-- 
+2.55.0
+

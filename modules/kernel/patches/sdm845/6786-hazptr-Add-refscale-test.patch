@@ -1,0 +1,89 @@
+From 2aaef4a4ff3387a2603d8f7ca9fee573d1d9ec73 Mon Sep 17 00:00:00 2001
+From: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+Date: Mon, 23 Feb 2026 15:44:18 -0500
+Subject: [PATCH 06786/15333] hazptr: Add refscale test
+
+Add the refscale test for hazptr to measure the reader side
+performance.
+
+Co-developed-by: Boqun Feng <boqun@kernel.org>
+Signed-off-by: Boqun Feng <boqun@kernel.org>
+Signed-off-by: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+Cc: <rcu@vger.kernel.org>
+Cc: <lkmm@lists.linux.dev>
+---
+ kernel/rcu/refscale.c | 43 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 43 insertions(+)
+
+diff --git a/kernel/rcu/refscale.c b/kernel/rcu/refscale.c
+index a2d9d75d88a1..2320b3fedec7 100644
+--- a/kernel/rcu/refscale.c
++++ b/kernel/rcu/refscale.c
+@@ -29,6 +29,7 @@
+ #include <linux/reboot.h>
+ #include <linux/sched.h>
+ #include <linux/seq_buf.h>
++#include <linux/hazptr.h>
+ #include <linux/spinlock.h>
+ #include <linux/smp.h>
+ #include <linux/stat.h>
+@@ -1200,6 +1201,47 @@ static const struct ref_scale_ops typesafe_seqlock_ops = {
+ 	.name		= "typesafe_seqlock"
+ };
+ 
++static void ref_hazptr_read_section(const int nloops)
++{
++	static void *ref_hazptr_read_section_ptr = ref_hazptr_read_section;
++	int i;
++
++	for (i = nloops; i >= 0; i--) {
++		struct hazptr_ctx ctx;
++		void *addr;
++
++		addr = hazptr_acquire(&ctx, &ref_hazptr_read_section_ptr);
++		hazptr_release(&ctx, addr);
++	}
++}
++
++static void ref_hazptr_delay_section(const int nloops, const int udl, const int ndl)
++{
++	static void *ref_hazptr_delay_section_ptr = ref_hazptr_delay_section;
++	int i;
++
++	for (i = nloops; i >= 0; i--) {
++		struct hazptr_ctx ctx;
++		void *addr;
++
++		addr = hazptr_acquire(&ctx, &ref_hazptr_delay_section_ptr);
++		un_delay(udl, ndl);
++		hazptr_release(&ctx, addr);
++	}
++}
++
++static bool ref_hazptr_init(void)
++{
++	return true;
++}
++
++static const struct ref_scale_ops hazptr_ops = {
++	.init		= ref_hazptr_init,
++	.readsection	= ref_hazptr_read_section,
++	.delaysection	= ref_hazptr_delay_section,
++	.name		= "hazptr"
++};
++
+ static void rcu_scale_one_reader(void)
+ {
+ 	if (readdelay <= 0)
+@@ -1504,6 +1546,7 @@ ref_scale_init(void)
+ 		&sched_clock_ops, &clock_ops, &jiffies_ops,
+ 		&preempt_ops, &bh_ops, &irq_ops, &irqsave_ops,
+ 		&typesafe_ref_ops, &typesafe_lock_ops, &typesafe_seqlock_ops,
++		&hazptr_ops,
+ 	};
+ 
+ 	if (!torture_init_begin(scale_type, verbose))
+-- 
+2.55.0
+

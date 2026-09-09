@@ -1,0 +1,56 @@
+From ecfe11e8f40bbe734bcc6bfc4fdd19602bed5a6b Mon Sep 17 00:00:00 2001
+From: Qu Wenruo <wqu@suse.com>
+Date: Sun, 5 Jul 2026 21:24:46 +0930
+Subject: [PATCH 11995/15333] btrfs: remove SCRUB_MAX_SECTORS_PER_BLOCK
+
+The last user of this macro is removed in commit 001e3fc263ce ("btrfs:
+scrub: remove scrub_block and scrub_sector structures").
+
+Now that macro is only utilized in an ASSERT(), which no longer makes
+much sense.
+
+Just remove it completely.
+
+Reviewed-by: Johannes Thumshirn <johannes.thumshirn@wdc.com>
+Signed-off-by: Qu Wenruo <wqu@suse.com>
+Reviewed-by: David Sterba <dsterba@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/scrub.c | 14 --------------
+ 1 file changed, 14 deletions(-)
+
+diff --git a/fs/btrfs/scrub.c b/fs/btrfs/scrub.c
+index d2f7ac5b6e96..5ec04c91e12d 100644
+--- a/fs/btrfs/scrub.c
++++ b/fs/btrfs/scrub.c
+@@ -57,12 +57,6 @@ struct scrub_ctx;
+ 
+ #define SCRUB_TOTAL_STRIPES		(SCRUB_GROUPS_PER_SCTX * SCRUB_STRIPES_PER_GROUP)
+ 
+-/*
+- * The following value times PAGE_SIZE needs to be large enough to match the
+- * largest node/leaf/sector size that shall be supported.
+- */
+-#define SCRUB_MAX_SECTORS_PER_BLOCK	(BTRFS_MAX_METADATA_BLOCKSIZE / SZ_4K)
+-
+ /* Represent one sector and its needed info to verify the content. */
+ struct scrub_sector_verification {
+ 	union {
+@@ -3091,14 +3085,6 @@ int btrfs_scrub_dev(struct btrfs_fs_info *fs_info, u64 devid, u64 start,
+ 	/* At mount time we have ensured nodesize is in the range of [4K, 64K]. */
+ 	ASSERT(fs_info->nodesize <= BTRFS_STRIPE_LEN);
+ 
+-	/*
+-	 * SCRUB_MAX_SECTORS_PER_BLOCK is calculated using the largest possible
+-	 * value (max nodesize / min sectorsize), thus nodesize should always
+-	 * be fine.
+-	 */
+-	ASSERT(fs_info->nodesize <=
+-	       SCRUB_MAX_SECTORS_PER_BLOCK << fs_info->sectorsize_bits);
+-
+ 	/* Allocate outside of device_list_mutex */
+ 	sctx = scrub_setup_ctx(fs_info, is_dev_replace);
+ 	if (IS_ERR(sctx))
+-- 
+2.55.0
+

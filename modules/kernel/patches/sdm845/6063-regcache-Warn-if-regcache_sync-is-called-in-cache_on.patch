@@ -1,0 +1,51 @@
+From 86fc3483a4d60f575533d1d5542bacca2a25ddc7 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Mon, 20 Jul 2026 10:32:37 +0700
+Subject: [PATCH 06063/15333] regcache: Warn if regcache_sync() is called in
+ cache_only mode
+
+Calling regcache_sync() while cache_only is enabled is invalid API
+usage, since writes are intentionally kept in the cache and cannot
+be synchronized to hardware.
+Document that callers must disable cache_only before calling
+regcache_sync(), and reject incorrect usage with a WARN_ON() and
+-EINVAL.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260720033238.52479-1-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/base/regmap/regcache.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/base/regmap/regcache.c b/drivers/base/regmap/regcache.c
+index aa8f2efed779..29a9fda41c44 100644
+--- a/drivers/base/regmap/regcache.c
++++ b/drivers/base/regmap/regcache.c
+@@ -397,6 +397,10 @@ static int rbtree_all(const void *key, const struct rb_node *node)
+  * volatile.  In general drivers can choose not to use the provided
+  * syncing functionality if they so require.
+  *
++ * This pushes cached changes made while cache_only (e.g. suspend) down
++ * to hardware. The caller must disable cache_only before calling this
++ * function.
++ *
+  * Return a negative value on failure, 0 on success.
+  */
+ int regcache_sync(struct regmap *map)
+@@ -413,6 +417,12 @@ int regcache_sync(struct regmap *map)
+ 	BUG_ON(!map->cache_ops);
+ 
+ 	map->lock(map->lock_arg);
++
++	if (WARN_ON(map->cache_only)) {
++		map->unlock(map->lock_arg);
++		return -EINVAL;
++	}
++
+ 	/* Remember the initial bypass state */
+ 	bypass = map->cache_bypass;
+ 	dev_dbg(map->dev, "Syncing %s cache\n",
+-- 
+2.55.0
+

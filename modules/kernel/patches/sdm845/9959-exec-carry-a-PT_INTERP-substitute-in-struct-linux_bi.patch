@@ -1,0 +1,147 @@
+From 73808bc5fd98eb055c12fa9afd954cea5417817f Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 21 Jul 2026 16:13:57 +0200
+Subject: [PATCH 09959/15333] exec: carry a PT_INTERP substitute in struct
+ linux_binprm
+
+binfmt_misc currently supports an execution model where the registered
+interpreter becomes the executed program and the matched binary is
+handed to it as payload. The upcoming binfmt_misc loader mode inverts
+this. The matched binary remains the executed program and the registered
+interpreter is substituted into the role the binary's PT_INTERP would
+have played.
+
+Add the channel for that hand-over. bprm->loader carries an
+open_exec-style struct file reference from the binfmt_misc match to the
+binary format that consumes it. Unlike bprm->interpreter it does not
+request a restart of the format search. The stashing handler declines
+the exec with -ENOEXEC and the search continues to the real format in
+the same round.
+
+Both ELF loaders consume it, so give them the two helpers to do it with
+rather than a copy each. bprm_open_interpreter() hands out the substitute
+in place of what PT_INTERP names and bprm_drop_loader() releases one that
+turned out not to apply.
+
+Establish the complete lifecycle up front so a stashed loader can
+neither leak nor be silently ignored.
+
+- Chain restart: if another format wins the round by staging
+  bprm->interpreter (binfmt_script) the stashed loader belonged to
+  the file being replaced. Drop it at the top of the swap block in
+  exec_binprm().
+
+- Unclaimed or error: free_bprm() releases a still-stashed loader
+  next to the other bprm file references.
+
+- Silent non-substitution: a final format that reaches
+  begin_new_exec() with a pending loader would run the binary while
+  ignoring the override. Refuse with -ENOEXEC before the point of no
+  return. Formats that do not know about the override (binfmt_flat,
+  out-of-tree) need no changes.
+
+Link: https://patch.msgid.link/20260721-work-bpf-binfmt_misc-ptinterp-v2-15-e57866e4ae0f@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/exec.c               | 42 +++++++++++++++++++++++++++++++++++++++++
+ include/linux/binfmts.h |  3 +++
+ 2 files changed, 45 insertions(+)
+
+diff --git a/fs/exec.c b/fs/exec.c
+index 128964d1e9d6..856731f78d05 100644
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1123,6 +1123,10 @@ int begin_new_exec(struct linux_binprm * bprm)
+ 	struct task_struct *me = current;
+ 	int retval;
+ 
++	/* A pending PT_INTERP substitution this format cannot consume. */
++	if (bprm->loader)
++		return -ENOEXEC;
++
+ 	/* Once we are committed compute the creds */
+ 	retval = bprm_creds_from_file(bprm);
+ 	if (retval)
+@@ -1414,6 +1418,39 @@ static void do_close_execat(struct file *file)
+ 	fput(file);
+ }
+ 
++/**
++ * bprm_open_interpreter - open the interpreter the binary asks for
++ * @bprm: binary that is being executed
++ * @path: the interpreter path named in the binary's PT_INTERP
++ *
++ * A binfmt_misc loader entry substitutes for the interpreter the binary
++ * names. Hand out the stashed substitute if there is one and open @path
++ * if there is not. The caller owns the reference either way and releases
++ * it like any other open_exec() one.
++ *
++ * Return: the interpreter on success, an ERR_PTR on failure
++ */
++struct file *bprm_open_interpreter(struct linux_binprm *bprm, const char *path)
++{
++	if (bprm->loader)
++		return no_free_ptr(bprm->loader);
++	return open_exec(path);
++}
++
++/**
++ * bprm_drop_loader - discard a PT_INTERP substitute that does not apply
++ * @bprm: binary that is being executed
++ *
++ * A binary without PT_INTERP has nothing to substitute for, so drop the
++ * override and let the binary load natively rather than have
++ * begin_new_exec() refuse it. A no-op once bprm_open_interpreter() took
++ * the substitute.
++ */
++void bprm_drop_loader(struct linux_binprm *bprm)
++{
++	do_close_execat(no_free_ptr(bprm->loader));
++}
++
+ static void free_bprm(struct linux_binprm *bprm)
+ {
+ 	if (bprm->mm) {
+@@ -1433,6 +1470,8 @@ static void free_bprm(struct linux_binprm *bprm)
+ 	if (bprm->old_mm)
+ 		exec_mm_put_old(bprm->old_mm);
+ 	do_close_execat(bprm->file);
++	/* An unconsumed PT_INTERP substitute from a binfmt_misc loader entry. */
++	bprm_drop_loader(bprm);
+ 	do_close_execat(bprm->executable);
+ 	/* If a binfmt changed the interp, free it. */
+ 	if (bprm->interp != bprm->filename)
+@@ -1750,6 +1789,9 @@ static int exec_binprm(struct linux_binprm *bprm)
+ 		if (!bprm->interpreter)
+ 			break;
+ 
++		/* A stashed PT_INTERP substitute belonged to the replaced file. */
++		bprm_drop_loader(bprm);
++
+ 		exec = bprm->file;
+ 		bprm->file = bprm->interpreter;
+ 		bprm->interpreter = NULL;
+diff --git a/include/linux/binfmts.h b/include/linux/binfmts.h
+index 62465574e2a0..a2daecbb01d6 100644
+--- a/include/linux/binfmts.h
++++ b/include/linux/binfmts.h
+@@ -62,6 +62,7 @@ struct linux_binprm {
+ 		is_check:1;
+ 	struct file *executable; /* Executable to pass to the interpreter */
+ 	struct file *interpreter;
++	struct file *loader;
+ 	struct file *file;
+ 	struct cred *cred;	/* new credentials */
+ 	int unsafe;		/* how unsafe this exec is (mask of LSM_UNSAFE_*) */
+@@ -159,6 +160,8 @@ extern int begin_new_exec(struct linux_binprm * bprm);
+ extern void setup_new_exec(struct linux_binprm * bprm);
+ extern void finalize_exec(struct linux_binprm *bprm);
+ extern void would_dump(struct linux_binprm *, struct file *);
++struct file *bprm_open_interpreter(struct linux_binprm *bprm, const char *path);
++void bprm_drop_loader(struct linux_binprm *bprm);
+ 
+ extern int suid_dumpable;
+ 
+-- 
+2.55.0
+

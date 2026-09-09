@@ -1,0 +1,41 @@
+From 5b8c4b238b02db7af65f349a9d677c2dd60359ac Mon Sep 17 00:00:00 2001
+From: Jay Buddhabhatti <jay.buddhabhatti@amd.com>
+Date: Fri, 24 Jul 2026 02:53:52 -0700
+Subject: [PATCH 12492/15333] firmware: xilinx: Propagate actual error from
+ feature check
+
+When do_fw_call() fails in __do_feature_check_call(), propagate the
+actual errno from zynqmp_pm_ret_code() instead of always returning
+-EOPNOTSUPP. This gives callers more precise error information. Existing
+callers only test ret < 0 and are unchanged by this.
+
+Signed-off-by: Jay Buddhabhatti <jay.buddhabhatti@amd.com>
+Reviewed-by: Radhey Shyam Pandey <radhey.shyam.pandey@amd.com>
+Reviewed-by: Prasanna Kumar T S M <ptsm@linux.microsoft.com>
+Link: https://patch.msgid.link/20260724095352.2890326-3-jay.buddhabhatti@amd.com
+Signed-off-by: Michal Simek <michal.simek@amd.com>
+---
+ drivers/firmware/xilinx/zynqmp.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/firmware/xilinx/zynqmp.c b/drivers/firmware/xilinx/zynqmp.c
+index 79993ac8452a..1e3ade42b69f 100644
+--- a/drivers/firmware/xilinx/zynqmp.c
++++ b/drivers/firmware/xilinx/zynqmp.c
+@@ -251,11 +251,9 @@ static int __do_feature_check_call(const u32 api_id, u32 *ret_payload)
+ 	}
+ 
+ 	if (ret)
+-		ret = -EOPNOTSUPP;
+-	else
+-		ret = ret_payload[1];
++		return ret;
+ 
+-	return ret;
++	return ret_payload[1];
+ }
+ 
+ static int do_feature_check_call(const u32 api_id)
+-- 
+2.55.0
+

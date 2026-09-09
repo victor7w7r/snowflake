@@ -1,0 +1,118 @@
+From 9bb39d09ab0f0f0e2f341d727e65fa1712c3bffa Mon Sep 17 00:00:00 2001
+From: Sean Wang <sean.wang@mediatek.com>
+Date: Wed, 24 Jun 2026 19:18:33 -0500
+Subject: [PATCH 09330/15333] wifi: mt76: mt792x: build iface combinations
+ dynamically
+
+Move mt792x interface combination selection into a helper and store the
+selected table in mt792x device state.
+
+This keeps the existing non-CNM and CNM combinations unchanged while
+making later firmware-gated extensions add combinations without touching
+the common wiphy setup path.
+
+Co-developed-by: Stella Liu <yu-ching.liu@mediatek.com>
+Signed-off-by: Stella Liu <yu-ching.liu@mediatek.com>
+Co-developed-by: Jeremy Yu <chengwei.yu@mediatek.com>
+Signed-off-by: Jeremy Yu <chengwei.yu@mediatek.com>
+Signed-off-by: Sean Wang <sean.wang@mediatek.com>
+Link: https://patch.msgid.link/20260625001834.475094-9-sean.wang@kernel.org
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+---
+ drivers/net/wireless/mediatek/mt76/mt792x.h   |  2 ++
+ .../net/wireless/mediatek/mt76/mt792x_core.c  | 36 ++++++++++++++-----
+ 2 files changed, 30 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x.h b/drivers/net/wireless/mediatek/mt76/mt792x.h
+index 319dc3ba8434..e98c4fd81044 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x.h
++++ b/drivers/net/wireless/mediatek/mt76/mt792x.h
+@@ -337,6 +337,8 @@ struct mt792x_dev {
+ 	struct ieee80211_chanctx_conf *new_ctx;
+ 
+ 	struct ieee80211_vif *nan_vif;
++	const struct ieee80211_iface_combination *iface_combinations;
++	int n_iface_combinations;
+ };
+ 
+ static inline struct mt792x_bss_conf *
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_core.c b/drivers/net/wireless/mediatek/mt76/mt792x_core.c
+index 8fc643fc0dfe..0c74fedf07e3 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_core.c
++++ b/drivers/net/wireless/mediatek/mt76/mt792x_core.c
+@@ -60,7 +60,7 @@ static const struct ieee80211_iface_limit if_limits_chanctx_scc[] = {
+ 	}
+ };
+ 
+-static const struct ieee80211_iface_combination if_comb_chanctx[] = {
++static const struct ieee80211_iface_combination if_comb_chanctx_base[] = {
+ 	{
+ 		.limits = if_limits_chanctx_mcc,
+ 		.n_limits = ARRAY_SIZE(if_limits_chanctx_mcc),
+@@ -77,6 +77,22 @@ static const struct ieee80211_iface_combination if_comb_chanctx[] = {
+ 	}
+ };
+ 
++static int mt792x_setup_iface_combinations(struct mt792x_dev *dev)
++{
++	const bool cnm = !!(dev->fw_features & MT792x_FW_CAP_CNM);
++
++	if (!cnm) {
++		dev->iface_combinations = if_comb;
++		dev->n_iface_combinations = ARRAY_SIZE(if_comb);
++		return 0;
++	}
++
++	dev->iface_combinations = if_comb_chanctx_base;
++	dev->n_iface_combinations = ARRAY_SIZE(if_comb_chanctx_base);
++
++	return 0;
++}
++
+ void mt792x_tx(struct ieee80211_hw *hw, struct ieee80211_tx_control *control,
+ 	       struct sk_buff *skb)
+ {
+@@ -663,6 +679,7 @@ int mt792x_init_wiphy(struct ieee80211_hw *hw)
+ 	struct mt792x_phy *phy = mt792x_hw_phy(hw);
+ 	struct mt792x_dev *dev = phy->dev;
+ 	struct wiphy *wiphy = hw->wiphy;
++	int err;
+ 
+ 	hw->queues = 4;
+ 	if (dev->has_eht) {
+@@ -683,15 +700,17 @@ int mt792x_init_wiphy(struct ieee80211_hw *hw)
+ 	hw->vif_data_size = sizeof(struct mt792x_vif);
+ 	hw->chanctx_data_size = sizeof(struct mt792x_chanctx);
+ 
+-	if (dev->fw_features & MT792x_FW_CAP_CNM) {
++	if (dev->fw_features & MT792x_FW_CAP_CNM)
+ 		wiphy->flags |= WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL;
+-		wiphy->iface_combinations = if_comb_chanctx;
+-		wiphy->n_iface_combinations = ARRAY_SIZE(if_comb_chanctx);
+-	} else {
++	else
+ 		wiphy->flags &= ~WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL;
+-		wiphy->iface_combinations = if_comb;
+-		wiphy->n_iface_combinations = ARRAY_SIZE(if_comb);
+-	}
++
++	err = mt792x_setup_iface_combinations(dev);
++	if (err)
++		return err;
++
++	wiphy->iface_combinations = dev->iface_combinations;
++	wiphy->n_iface_combinations = dev->n_iface_combinations;
+ 	wiphy->flags &= ~(WIPHY_FLAG_IBSS_RSN | WIPHY_FLAG_4ADDR_AP |
+ 			  WIPHY_FLAG_4ADDR_STATION);
+ 	wiphy->interface_modes = BIT(NL80211_IFTYPE_STATION) |
+@@ -699,6 +718,7 @@ int mt792x_init_wiphy(struct ieee80211_hw *hw)
+ 				 BIT(NL80211_IFTYPE_P2P_CLIENT) |
+ 				 BIT(NL80211_IFTYPE_P2P_GO) |
+ 				 BIT(NL80211_IFTYPE_P2P_DEVICE);
++
+ 	wiphy->max_scan_ie_len = MT76_CONNAC_SCAN_IE_LEN;
+ 	wiphy->max_scan_ssids = 4;
+ 	wiphy->max_sched_scan_plan_interval =
+-- 
+2.55.0
+

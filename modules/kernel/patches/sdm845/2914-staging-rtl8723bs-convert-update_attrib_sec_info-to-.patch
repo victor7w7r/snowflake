@@ -1,0 +1,71 @@
+From 0ff10f2e4c461bfe34a15d7f2c691d96c856f312 Mon Sep 17 00:00:00 2001
+From: Hungyu Lin <dennylin0707@gmail.com>
+Date: Tue, 7 Jul 2026 11:25:02 +0000
+Subject: [PATCH 02914/15333] staging: rtl8723bs: convert
+ update_attrib_sec_info to return errno
+
+Convert update_attrib_sec_info() to return 0 on success and
+a negative errno on failure.
+
+No functional change intended.
+
+Signed-off-by: Hungyu Lin <dennylin0707@gmail.com>
+Link: https://patch.msgid.link/20260707112503.612-4-dennylin0707@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/core/rtw_xmit.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/core/rtw_xmit.c b/drivers/staging/rtl8723bs/core/rtw_xmit.c
+index a91d4e12b724..5a108d911ee6 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_xmit.c
++++ b/drivers/staging/rtl8723bs/core/rtw_xmit.c
+@@ -505,7 +505,7 @@ static void update_attrib_phy_info(struct adapter *padapter, struct pkt_attrib *
+ 	pattrib->retry_ctrl = false;
+ }
+ 
+-static s32 update_attrib_sec_info(struct adapter *padapter, struct pkt_attrib *pattrib, struct sta_info *psta)
++static int update_attrib_sec_info(struct adapter *padapter, struct pkt_attrib *pattrib, struct sta_info *psta)
+ {
+ 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
+ 	struct security_priv *psecuritypriv = &padapter->securitypriv;
+@@ -519,7 +519,7 @@ static s32 update_attrib_sec_info(struct adapter *padapter, struct pkt_attrib *p
+ 		pattrib->encrypt = 0;
+ 
+ 		if ((pattrib->ether_type != 0x888e) && !check_fwstate(pmlmepriv, WIFI_MP_STATE))
+-			return _FAIL;
++			return -EINVAL;
+ 	} else {
+ 		GET_ENCRY_ALGO(psecuritypriv, psta, pattrib->encrypt, bmcast);
+ 
+@@ -558,7 +558,7 @@ static s32 update_attrib_sec_info(struct adapter *padapter, struct pkt_attrib *p
+ 		pattrib->icv_len = 4;
+ 
+ 		if (psecuritypriv->busetkipkey == _FAIL)
+-			return _FAIL;
++			return -EINVAL;
+ 
+ 		if (bmcast)
+ 			TKIP_IV(pattrib->iv, psta->dot11txpn, pattrib->key_idx);
+@@ -596,7 +596,7 @@ static s32 update_attrib_sec_info(struct adapter *padapter, struct pkt_attrib *p
+ 	else
+ 		pattrib->bswenc = false;
+ 
+-	return _SUCCESS;
++	return 0;
+ }
+ 
+ u8 qos_acm(u8 acm_mask, u8 priority)
+@@ -755,7 +755,8 @@ static s32 update_attrib(struct adapter *padapter, struct sk_buff *pkt, struct p
+ 		return _FAIL;
+ 
+ 	spin_lock_bh(&psta->lock);
+-	if (update_attrib_sec_info(padapter, pattrib, psta) == _FAIL) {
++	ret = update_attrib_sec_info(padapter, pattrib, psta);
++	if (ret) {
+ 		spin_unlock_bh(&psta->lock);
+ 		return _FAIL;
+ 	}
+-- 
+2.55.0
+

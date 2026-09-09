@@ -1,0 +1,59 @@
+From 5a151274c1fd8696ddc7e9a84906a67ab0df66e8 Mon Sep 17 00:00:00 2001
+From: Shih-Yuan Lee <fourdollars@debian.org>
+Date: Sat, 11 Jul 2026 17:33:22 +0800
+Subject: [PATCH 12883/15333] hwmon: (applesmc) Fix lockless cache validation
+ data race
+
+In applesmc_get_entry_by_index(), the cache->valid flag is checked
+locklessly, but setting it to true lacks memory barriers. This can lead to
+a data race (TOCTOU) where another thread sees cache->valid as true
+before the actual cache contents (cache->key, cache->len, cache->type, etc.)
+are fully committed and visible to that CPU, potentially causing it to read
+uninitialized data and send incorrect keys to the Apple SMC hardware.
+
+Introduce memory barriers (smp_load_acquire and smp_store_release) with
+explanatory comments to ensure cache synchronization is thread-safe and
+fully visible across all CPUs.
+
+Signed-off-by: Shih-Yuan Lee <fourdollars@debian.org>
+Link: https://lore.kernel.org/r/20260711093323.14529-3-fourdollars@debian.org
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/hwmon/applesmc.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/hwmon/applesmc.c b/drivers/hwmon/applesmc.c
+index 9b2d9ecb20c0..317135fc4b73 100644
+--- a/drivers/hwmon/applesmc.c
++++ b/drivers/hwmon/applesmc.c
+@@ -33,6 +33,7 @@
+ #include <linux/workqueue.h>
+ #include <linux/err.h>
+ #include <linux/bits.h>
++#include <asm/barrier.h>
+ 
+ /* data port used by Apple SMC */
+ #define APPLESMC_DATA_PORT	0x300
+@@ -373,7 +374,8 @@ static const struct applesmc_entry *applesmc_get_entry_by_index(int index)
+ 	__be32 be;
+ 	int ret = 0;
+ 
+-	if (cache->valid)
++	/* Pairs with smp_store_release() to ensure cache contents are visible */
++	if (smp_load_acquire(&cache->valid))
+ 		return cache;
+ 
+ 	mutex_lock(&smcreg.mutex);
+@@ -392,7 +394,8 @@ static const struct applesmc_entry *applesmc_get_entry_by_index(int index)
+ 	cache->len = info[0];
+ 	memcpy(cache->type, &info[1], 4);
+ 	cache->flags = info[5];
+-	cache->valid = true;
++	/* Pairs with smp_load_acquire() to commit cache contents before setting valid */
++	smp_store_release(&cache->valid, true);
+ 
+ out:
+ 	mutex_unlock(&smcreg.mutex);
+-- 
+2.55.0
+

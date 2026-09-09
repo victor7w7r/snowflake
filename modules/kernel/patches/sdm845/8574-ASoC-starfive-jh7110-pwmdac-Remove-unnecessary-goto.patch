@@ -1,0 +1,46 @@
+From 65ebc8347a9cfdbf6133adfb018c7243ce5d30f6 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 23 Jul 2026 18:10:11 +0700
+Subject: [PATCH 08574/15333] ASoC: starfive: jh7110-pwmdac: Remove unnecessary
+ goto
+
+The error path after jh7110_pwmdac_runtime_resume() failure only performs a
+single cleanup operation before returning. Remove the unnecessary goto
+and return directly after calling pm_runtime_disable(), simplifying the
+control flow without changing the behavior.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260723111014.54071-2-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/starfive/jh7110_pwmdac.c | 11 ++++-------
+ 1 file changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/sound/soc/starfive/jh7110_pwmdac.c b/sound/soc/starfive/jh7110_pwmdac.c
+index a603dd17931c..562936981cf0 100644
+--- a/sound/soc/starfive/jh7110_pwmdac.c
++++ b/sound/soc/starfive/jh7110_pwmdac.c
+@@ -486,16 +486,13 @@ static int jh7110_pwmdac_probe(struct platform_device *pdev)
+ 	pm_runtime_enable(dev->dev);
+ 	if (!pm_runtime_enabled(&pdev->dev)) {
+ 		ret = jh7110_pwmdac_runtime_resume(&pdev->dev);
+-		if (ret)
+-			goto err_pm_disable;
++		if (ret) {
++			pm_runtime_disable(&pdev->dev);
++			return ret;
++		}
+ 	}
+ 
+ 	return 0;
+-
+-err_pm_disable:
+-	pm_runtime_disable(&pdev->dev);
+-
+-	return ret;
+ }
+ 
+ static void jh7110_pwmdac_remove(struct platform_device *pdev)
+-- 
+2.55.0
+

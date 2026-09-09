@@ -1,0 +1,63 @@
+From 253ed6e24c9a92899dd798a8aaba8c6dc0a41920 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Wed, 8 Jul 2026 20:35:47 +0200
+Subject: [PATCH 03667/15333] ACPI: fan: Use devm_acpi_install_notify_handler()
+
+Replace the custom open-coded devres-based management of an ACPI notify
+handler with devm_acpi_install_notify_handler().
+
+No intentional functional impact.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Reviewed-by: Armin Wolf <W_Armin@gmx.de>
+Link: https://patch.msgid.link/2866967.mvXUDI8C0e@rafael.j.wysocki
+---
+ drivers/acpi/fan_core.c | 25 ++++---------------------
+ 1 file changed, 4 insertions(+), 21 deletions(-)
+
+diff --git a/drivers/acpi/fan_core.c b/drivers/acpi/fan_core.c
+index fb08b8549ed7..624d0736b581 100644
+--- a/drivers/acpi/fan_core.c
++++ b/drivers/acpi/fan_core.c
+@@ -489,26 +489,6 @@ static void acpi_fan_notify_handler(acpi_handle handle, u32 event, void *context
+ 	}
+ }
+ 
+-static void acpi_fan_notify_remove(void *data)
+-{
+-	struct acpi_fan *fan = data;
+-
+-	acpi_remove_notify_handler(fan->handle, ACPI_DEVICE_NOTIFY, acpi_fan_notify_handler);
+-}
+-
+-static int devm_acpi_fan_notify_init(struct device *dev)
+-{
+-	struct acpi_fan *fan = dev_get_drvdata(dev);
+-	acpi_status status;
+-
+-	status = acpi_install_notify_handler(fan->handle, ACPI_DEVICE_NOTIFY,
+-					     acpi_fan_notify_handler, dev);
+-	if (ACPI_FAILURE(status))
+-		return -EIO;
+-
+-	return devm_add_action_or_reset(dev, acpi_fan_notify_remove, fan);
+-}
+-
+ static int acpi_fan_probe(struct platform_device *pdev)
+ {
+ 	int result = 0;
+@@ -556,7 +536,10 @@ static int acpi_fan_probe(struct platform_device *pdev)
+ 		if (result)
+ 			return result;
+ 
+-		result = devm_acpi_fan_notify_init(&pdev->dev);
++		result = devm_acpi_install_notify_handler(&pdev->dev,
++							  ACPI_DEVICE_NOTIFY,
++							  acpi_fan_notify_handler,
++							  &pdev->dev);
+ 		if (result)
+ 			return result;
+ 
+-- 
+2.55.0
+

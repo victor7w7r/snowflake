@@ -1,0 +1,40 @@
+From eb4022c1fae2bb029178779bc2b1fe84a9510dbf Mon Sep 17 00:00:00 2001
+From: Koichiro Den <den@valinux.co.jp>
+Date: Sat, 18 Jul 2026 03:06:37 +0900
+Subject: [PATCH 05829/15333] dmaengine: dw-edma-pcie: Drop redundant
+ pci_free_irq_vectors()
+
+dw_edma_pcie enables the PCI device with pcim_enable_device(), so IRQ
+vectors allocated by pci_alloc_irq_vectors() are released by
+pcim_msi_release() on device release. The driver should not call
+pci_free_irq_vectors() manually.
+
+Drop the redundant remove-time cleanup and rely on the managed PCI
+device lifetime instead, as documented by commit 03e4905402ae ("PCI/MSI:
+Clarify pci_free_irq_vectors() usage for managed devices").
+
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Signed-off-by: Koichiro Den <den@valinux.co.jp>
+Link: https://patch.msgid.link/20260717180639.2643243-8-den@valinux.co.jp
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dw-edma/dw-edma-pcie.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/drivers/dma/dw-edma/dw-edma-pcie.c b/drivers/dma/dw-edma/dw-edma-pcie.c
+index b34e1e45aeb3..db7f1ea35bf3 100644
+--- a/drivers/dma/dw-edma/dw-edma-pcie.c
++++ b/drivers/dma/dw-edma/dw-edma-pcie.c
+@@ -555,9 +555,6 @@ static void dw_edma_pcie_remove(struct pci_dev *pdev)
+ 	err = dw_edma_remove(chip);
+ 	if (err)
+ 		pci_warn(pdev, "can't remove device properly: %d\n", err);
+-
+-	/* Freeing IRQs */
+-	pci_free_irq_vectors(pdev);
+ }
+ 
+ static const struct pci_device_id dw_edma_pcie_id_table[] = {
+-- 
+2.55.0
+

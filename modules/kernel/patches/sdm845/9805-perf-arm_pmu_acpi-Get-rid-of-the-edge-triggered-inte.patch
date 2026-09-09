@@ -1,0 +1,63 @@
+From e445816a488a66ea75f228f3b9b451aeff953250 Mon Sep 17 00:00:00 2001
+From: Marc Zyngier <maz@kernel.org>
+Date: Sat, 25 Jul 2026 17:26:27 +0100
+Subject: [PATCH 09805/15333] perf: arm_pmu_acpi: Get rid of the edge-triggered
+ interrupt oddity
+
+The ACPI spec bizarrely indicates that the PMU interrupt can be
+edge-triggered, which contradicts the very basics of the PMU
+architecture (SW is required to clear the interrupt condition for
+the level to drop).
+
+Remove the code parsing this flag and always flag the interrupt
+as level triggered, no matter what firmware says.
+
+Signed-off-by: Marc Zyngier <maz@kernel.org>
+Reviewed-by: Zenghui Yu <yuzenghui@huawei.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ drivers/perf/arm_pmu_acpi.c | 13 ++++++-------
+ 1 file changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/perf/arm_pmu_acpi.c b/drivers/perf/arm_pmu_acpi.c
+index e80f76d95e68..ca6bf8f86cfe 100644
+--- a/drivers/perf/arm_pmu_acpi.c
++++ b/drivers/perf/arm_pmu_acpi.c
+@@ -22,7 +22,7 @@ static DEFINE_PER_CPU(int, pmu_irqs);
+ static int arm_pmu_acpi_register_irq(int cpu)
+ {
+ 	struct acpi_madt_generic_interrupt *gicc;
+-	int gsi, trigger;
++	int gsi;
+ 
+ 	gicc = acpi_cpu_get_madt_gicc(cpu);
+ 
+@@ -38,11 +38,6 @@ static int arm_pmu_acpi_register_irq(int cpu)
+ 	if (!gsi)
+ 		return 0;
+ 
+-	if (gicc->flags & ACPI_MADT_PERFORMANCE_IRQ_MODE)
+-		trigger = ACPI_EDGE_SENSITIVE;
+-	else
+-		trigger = ACPI_LEVEL_SENSITIVE;
+-
+ 	/*
+ 	 * Helpfully, the MADT GICC doesn't have a polarity flag for the
+ 	 * "performance interrupt". Luckily, on compliant GICs the polarity is
+@@ -53,8 +48,12 @@ static int arm_pmu_acpi_register_irq(int cpu)
+ 	 * may not match the real polarity, but that should not matter.
+ 	 *
+ 	 * Other interrupt controllers are not supported with ACPI.
++	 *
++	 * The spec also indicates that the PMU interrupt can be edge
++	 * triggered, which doesn't make any sense (SW needs to clear the
++	 * interrupt condition for the level to drop). Ignore the silly flag.
+ 	 */
+-	return acpi_register_gsi(NULL, gsi, trigger, ACPI_ACTIVE_HIGH);
++	return acpi_register_gsi(NULL, gsi, ACPI_LEVEL_SENSITIVE, ACPI_ACTIVE_HIGH);
+ }
+ 
+ static void arm_pmu_acpi_unregister_irq(int cpu)
+-- 
+2.55.0
+

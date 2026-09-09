@@ -1,0 +1,36 @@
+From b60d1d91444bc9c8e3b99d815be9647e129d017f Mon Sep 17 00:00:00 2001
+From: Ce Sun <cesun102@amd.com>
+Date: Thu, 9 Jul 2026 14:22:51 +0800
+Subject: [PATCH 04576/15333] drm/amdgpu: use IP version check in sysfs
+ creation conditional logic
+
+avoid sysfs node creation faults when performing NPS mode switching
+
+Signed-off-by: Ce Sun <cesun102@amd.com>
+Reviewed-by: Tao Zhou <tao.zhou1@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+index fd2c0cc1b958..19067df24600 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+@@ -3777,8 +3777,11 @@ int amdgpu_ras_block_late_init(struct amdgpu_device *adev,
+ 	}
+ 
+ 	if (amdgpu_uniras_enabled(adev) || (ras_obj->hw_ops &&
+-	    (ras_obj->hw_ops->query_ras_error_count ||
+-	     ras_obj->hw_ops->query_ras_error_status))) {
++	   (ras_obj->hw_ops->query_ras_error_count ||
++	    ras_obj->hw_ops->query_ras_error_status)) ||
++	    amdgpu_ip_version(adev, MP0_HWIP, 0) == IP_VERSION(13, 0, 14) ||
++	    amdgpu_ip_version(adev, MP0_HWIP, 0) == IP_VERSION(13, 0, 12) ||
++	    amdgpu_ip_version(adev, MP0_HWIP, 0) == IP_VERSION(13, 0, 6)) {
+ 		r = amdgpu_ras_sysfs_create(adev, ras_block);
+ 		if (r)
+ 			goto interrupt;
+-- 
+2.55.0
+

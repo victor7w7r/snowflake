@@ -1,0 +1,42 @@
+From 5838193edccab7810d5dc51c165a316089272dc6 Mon Sep 17 00:00:00 2001
+From: Vadim Fedorenko <vadim.fedorenko@linux.dev>
+Date: Thu, 6 Aug 2026 20:18:49 +0000
+Subject: [PATCH 13408/15333] bnxt_en: enable PTM function
+
+The patch mentioned in Fixes missed one main point of implementing
+proper PTM support. To make it fully operational it has to be explicitly
+enabled. Add missing call in probe callback and disable it in teardown
+callback.
+
+Signed-off-by: Vadim Fedorenko <vadim.fedorenko@linux.dev>
+Reviewed-by: Pavan Chebbi <pavan.chebbi@broadcom.com>
+Link: https://patch.msgid.link/20260806201849.3161402-1-vadim.fedorenko@linux.dev
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/broadcom/bnxt/bnxt.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/net/ethernet/broadcom/bnxt/bnxt.c b/drivers/net/ethernet/broadcom/bnxt/bnxt.c
+index 25099077fe4f..8a9c7646b53f 100644
+--- a/drivers/net/ethernet/broadcom/bnxt/bnxt.c
++++ b/drivers/net/ethernet/broadcom/bnxt/bnxt.c
+@@ -14978,6 +14978,7 @@ static void bnxt_unmap_bars(struct bnxt *bp, struct pci_dev *pdev)
+ 
+ static void bnxt_cleanup_pci(struct bnxt *bp)
+ {
++	pci_disable_ptm(bp->pdev);
+ 	bnxt_unmap_bars(bp, bp->pdev);
+ 	pci_release_regions(bp->pdev);
+ 	if (pci_is_enabled(bp->pdev))
+@@ -15546,6 +15547,8 @@ static int bnxt_init_board(struct pci_dev *pdev, struct net_device *dev)
+ 		goto init_err_release;
+ 	}
+ 
++	pci_enable_ptm(pdev);
++
+ 	INIT_WORK(&bp->sp_task, bnxt_sp_task);
+ 	INIT_DELAYED_WORK(&bp->fw_reset_task, bnxt_fw_reset_task);
+ 
+-- 
+2.55.0
+

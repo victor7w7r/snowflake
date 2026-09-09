@@ -1,0 +1,48 @@
+From c63037c69a5173dd87efde82bfa4c339adefd72e Mon Sep 17 00:00:00 2001
+From: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Date: Wed, 1 Jul 2026 12:58:50 +0200
+Subject: [PATCH 02989/15333] dt-bindings: rockchip: pmu: Narrow definition of
+ reboot-mode
+
+The 'reboot-mode' child of PMU node must be a syscon-reboot-mode one, so
+add missing $ref to enforce the validation and disallow other
+reboot-mode handlers.
+Defining 'type: object' is on the other hand not necessary when other
+schema is referenced.
+
+This can be further restricted to match hardware/firmware:
+syscon-reboot-mode schema allows arbitrary "mode-.* properties but only
+a subset actually makes sense and is valid.  Provide negative look-ahead
+pattern to disallow any modes not supported by the device, which
+tightens the binding.
+
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Acked-by: Rob Herring (Arm) <robh@kernel.org>
+Link: https://patch.msgid.link/20260701105849.197086-3-krzysztof.kozlowski@oss.qualcomm.com
+Signed-off-by: Heiko Stuebner <heiko@sntech.de>
+---
+ Documentation/devicetree/bindings/arm/rockchip/pmu.yaml | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/devicetree/bindings/arm/rockchip/pmu.yaml b/Documentation/devicetree/bindings/arm/rockchip/pmu.yaml
+index 55b2200d6e75..1cff2328cd01 100644
+--- a/Documentation/devicetree/bindings/arm/rockchip/pmu.yaml
++++ b/Documentation/devicetree/bindings/arm/rockchip/pmu.yaml
+@@ -61,7 +61,13 @@ properties:
+     type: object
+ 
+   reboot-mode:
+-    type: object
++    $ref: /schemas/power/reset/syscon-reboot-mode.yaml
++    unevaluatedProperties: false
++
++    patternProperties:
++      # Negative look-ahead to disallow unsupported modes. The '$' has to be
++      # part of lookahead group to work, instead of trailing outside of ().
++      "^mode-(?!(bootloader$|loader$|normal$|recovery$))": false
+ 
+ required:
+   - compatible
+-- 
+2.55.0
+

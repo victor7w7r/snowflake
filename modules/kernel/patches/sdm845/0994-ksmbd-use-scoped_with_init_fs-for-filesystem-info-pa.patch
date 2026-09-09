@@ -1,0 +1,47 @@
+From a82c92bcfc058bb1787deff7c1cc615923275633 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Mon, 1 Jun 2026 15:56:47 +0200
+Subject: [PATCH 00994/15333] ksmbd: use scoped_with_init_fs() for filesystem
+ info path lookup
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use scoped_with_init_fs() to temporarily override current->fs for
+the kern_path() call in smb2_get_info_filesystem() so the share
+path lookup happens in init's filesystem context.
+
+All ksmbd paths ← SMB command handlers ← handle_ksmbd_work() ← workqueue
+← ksmbd_conn_handler_loop() ← kthread
+
+Link: https://patch.msgid.link/20260601-work-kthread-nullfs-v4-14-77ee053060e0@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/smb/server/smb2pdu.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index 5859fa68bb84..c5d2a00c3716 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -9,6 +9,7 @@
+ #include <net/addrconf.h>
+ #include <linux/syscalls.h>
+ #include <linux/namei.h>
++#include <linux/fs_struct.h>
+ #include <linux/statfs.h>
+ #include <linux/ethtool.h>
+ #include <linux/falloc.h>
+@@ -5867,7 +5868,8 @@ static int smb2_get_info_filesystem(struct ksmbd_work *work,
+ 	if (!share->path)
+ 		return -EIO;
+ 
+-	rc = kern_path(share->path, LOOKUP_NO_SYMLINKS, &path);
++	scoped_with_init_fs()
++		rc = kern_path(share->path, LOOKUP_NO_SYMLINKS, &path);
+ 	if (rc) {
+ 		pr_err("cannot create vfs path\n");
+ 		return -EIO;
+-- 
+2.55.0
+

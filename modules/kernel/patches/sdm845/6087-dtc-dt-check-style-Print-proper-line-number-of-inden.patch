@@ -1,0 +1,116 @@
+From 42879c68b7e269aac336129caa5711aad1b25bdc Mon Sep 17 00:00:00 2001
+From: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Date: Thu, 9 Jul 2026 19:41:34 +0200
+Subject: [PATCH 06087/15333] dtc: dt-check-style: Print proper line number of
+ indentation detection place
+
+Script judges the indentation however always suggests it is the first
+line which is wrong, e.g.:
+
+  sigmastar/mstar-infinity2m.dtsi:1: [indent-unit-dts] indent unit must be 1 tab in DTS, got '\t\t'
+
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260709-dts-style-checker-v5-6-fcc147cb697d@oss.qualcomm.com
+Signed-off-by: Rob Herring (Arm) <robh@kernel.org>
+---
+ scripts/dtc/dt-check-style                    | 29 ++++++++++---------
+ .../expected/dts-spaces.dts.txt               |  2 +-
+ .../expected/yaml-indent-strict.yaml.txt      |  2 +-
+ 3 files changed, 17 insertions(+), 16 deletions(-)
+
+diff --git a/scripts/dtc/dt-check-style b/scripts/dtc/dt-check-style
+index ad07b0d27470..3985923622e8 100755
+--- a/scripts/dtc/dt-check-style
++++ b/scripts/dtc/dt-check-style
+@@ -392,8 +392,9 @@ def check_mixed_indent_chars(ctx):
+ def detect_indent_unit(ctx):
+     """Find the indent unit used at depth 1 in this block.
+ 
+-    Returns one of: '  ' (2 spaces), '    ' (4 spaces), '\\t' (tab),
+-    or None if depth-1 is empty or ambiguous."""
++    Returns tuple of string (one of: '  ' (2 spaces), '    ' (4 spaces),
++    '\\t' (tab), or None if depth-1 is empty or ambiguous) and line number when
++    detection was made)."""
+     for dl in ctx.lines:
+         if dl.depth != 1:
+             continue
+@@ -404,48 +405,48 @@ def detect_indent_unit(ctx):
+         if not dl.indent_str:
+             continue
+         if dl.indent_str == '\t':
+-            return '\t'
++            return ('\t', dl.lineno)
+         if dl.indent_str == '    ':
+-            return '    '
++            return ('    ', dl.lineno)
+         if dl.indent_str == '  ':
+-            return '  '
++            return ('  ', dl.lineno)
+         # Anything else at depth 1 is non-canonical; flag elsewhere.
+-        return dl.indent_str
+-    return None
++        return (dl.indent_str, dl.lineno)
++    return (None, None)
+ 
+ 
+ def check_indent_unit_relaxed(ctx):
+     """YAML examples: 2 or 4 spaces. Never tabs or other widths."""
+-    unit = detect_indent_unit(ctx)
++    (unit, lineno) = detect_indent_unit(ctx)
+     if unit is None:
+         return
+     if unit not in ('  ', '    '):
+-        yield (1, 'indent unit must be 2 or 4 spaces, got %r' % unit)
++        yield (lineno, 'indent unit must be 2 or 4 spaces, got %r' % unit)
+ 
+ 
+ def check_indent_unit_dts(ctx):
+     """DTS files: 1 tab per level. Always required."""
+-    unit = detect_indent_unit(ctx)
++    (unit, lineno) = detect_indent_unit(ctx)
+     if unit is None:
+         return
+     if unit != '\t':
+-        yield (1, 'indent unit must be 1 tab in DTS, got %r' % unit)
++        yield (lineno, 'indent unit must be 1 tab in DTS, got %r' % unit)
+ 
+ 
+ def check_indent_unit_strict(ctx):
+     """YAML: must be exactly 4 spaces. DTS: 1 tab (same as relaxed)."""
+-    unit = detect_indent_unit(ctx)
++    (unit, lineno) = detect_indent_unit(ctx)
+     if unit is None:
+         return
+     if ctx.file_type == 'yaml':
+         if unit != '    ':
+-            yield (1, 'indent unit must be 4 spaces in strict mode, '
++            yield (lineno, 'indent unit must be 4 spaces in strict mode, '
+                    'got %r' % unit)
+ 
+ 
+ def check_indent_consistent(ctx):
+     """All indented lines must be a multiple of the detected unit."""
+-    unit = detect_indent_unit(ctx)
++    (unit, lineno) = detect_indent_unit(ctx)
+     if unit is None:
+         return
+     if ctx.file_type == 'yaml':
+diff --git a/scripts/dtc/dt-style-selftest/expected/dts-spaces.dts.txt b/scripts/dtc/dt-style-selftest/expected/dts-spaces.dts.txt
+index 070025c4568c..5afdb101dcee 100644
+--- a/scripts/dtc/dt-style-selftest/expected/dts-spaces.dts.txt
++++ b/scripts/dtc/dt-style-selftest/expected/dts-spaces.dts.txt
+@@ -1,2 +1,2 @@
+ # mode=relaxed
+-bad/dts-spaces.dts:1: [indent-unit-dts] indent unit must be 1 tab in DTS, got '    '
++bad/dts-spaces.dts:9: [indent-unit-dts] indent unit must be 1 tab in DTS, got '    '
+diff --git a/scripts/dtc/dt-style-selftest/expected/yaml-indent-strict.yaml.txt b/scripts/dtc/dt-style-selftest/expected/yaml-indent-strict.yaml.txt
+index 5ef290d3a847..c4f31deea4ca 100644
+--- a/scripts/dtc/dt-style-selftest/expected/yaml-indent-strict.yaml.txt
++++ b/scripts/dtc/dt-style-selftest/expected/yaml-indent-strict.yaml.txt
+@@ -1,2 +1,2 @@
+ # mode=strict
+-bad/yaml-indent-strict.yaml:26: example 0 [indent-unit-strict] indent unit must be 4 spaces in strict mode, got '  '
++bad/yaml-indent-strict.yaml:27: example 0 [indent-unit-strict] indent unit must be 4 spaces in strict mode, got '  '
+-- 
+2.55.0
+

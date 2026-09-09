@@ -1,0 +1,150 @@
+From 60bbdfb959ca0390d56595d3e4a717176f7352ee Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Christian=20K=C3=B6nig?= <christian.koenig@amd.com>
+Date: Mon, 11 May 2026 14:46:54 +0200
+Subject: [PATCH 05213/15333] drm/amdgpu: use correct gfp_t for job allocation
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+For job allocation in GPU reset and page fault handling we must use
+GFP_ATOMIC to guarantee that we don't cycle back and depend on a
+dma_fence submission for the memory allocation.
+
+Add gfp_flags argument to amdgpu_job_alloc() and expose the
+gfp_flags of IB pools with amdgpu_ib_pool_gfp_flags() so that
+we can use different flags when allocating jobs.
+
+Assisted-by: Claude:Sonnet 4
+Signed-off-by: Christian König <christian.koenig@amd.com>
+Reviewed-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c |  3 ++-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c     |  2 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c     | 11 +++++++++++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_job.c    |  9 +++++----
+ drivers/gpu/drm/amd/amdgpu/amdgpu_job.h    |  2 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h   |  2 ++
+ 6 files changed, 22 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c
+index a496c383cf6e..121282dd30c1 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c
+@@ -711,7 +711,8 @@ int amdgpu_amdkfd_submit_ib(struct amdgpu_device *adev,
+ 		goto err;
+ 	}
+ 
+-	ret = amdgpu_job_alloc(adev, NULL, NULL, NULL, 1, 0, &job);
++	ret = amdgpu_job_alloc(adev, NULL, NULL, NULL, 1, 0, GFP_KERNEL,
++			       &job);
+ 	if (ret)
+ 		goto err;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
+index 2a6859b6ef05..e8eaa3908ca0 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
+@@ -268,7 +268,7 @@ static int amdgpu_cs_pass1(struct amdgpu_cs_parser *p,
+ 	for (i = 0; i < p->gang_size; ++i) {
+ 		ret = amdgpu_job_alloc(p->adev, vm, p->entities[i], vm,
+ 				       num_ibs[i], p->filp->client_id,
+-				       &p->jobs[i]);
++				       GFP_KERNEL, &p->jobs[i]);
+ 		if (ret)
+ 			goto free_all_kdata;
+ 		switch (p->adev->enforce_isolation[fpriv->xcp_id]) {
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c
+index dca96f71efd1..634b3f7a5fff 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ib.c
+@@ -416,6 +416,17 @@ void amdgpu_ib_pool_fini(struct amdgpu_device *adev)
+ 	adev->ib_pool_ready = false;
+ }
+ 
++/**
++ * amdgpu_ib_pool_gfp_flags - Returns the gfp flags to use for each pool
++ * @adev: amdgpu device pointer
++ * @type: the IB pool type
++ */
++gfp_t amdgpu_ib_pool_gfp_flags(struct amdgpu_device *adev,
++			       enum amdgpu_ib_pool_type type)
++{
++	return adev->ib_pools[type].gfp_flags;
++}
++
+ /**
+  * amdgpu_ib_ring_tests - test IBs on the rings
+  *
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_job.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_job.c
+index fa695bdcf6eb..d97cf1212e0f 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_job.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_job.c
+@@ -199,7 +199,7 @@ static enum drm_gpu_sched_stat amdgpu_job_timedout(struct drm_sched_job *s_job)
+ int amdgpu_job_alloc(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 		     struct drm_sched_entity *entity, void *owner,
+ 		     unsigned int num_ibs, u64 drm_client_id,
+-		     struct amdgpu_job **job)
++		     gfp_t gfp_flags, struct amdgpu_job **job)
+ {
+ 	struct amdgpu_fence *af;
+ 	int r;
+@@ -207,18 +207,18 @@ int amdgpu_job_alloc(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 	if (num_ibs == 0)
+ 		return -EINVAL;
+ 
+-	*job = kzalloc_flex(**job, ibs, num_ibs);
++	*job = kzalloc_flex(**job, ibs, num_ibs, gfp_flags);
+ 	if (!*job)
+ 		return -ENOMEM;
+ 
+-	af = kzalloc_obj(struct amdgpu_fence);
++	af = kzalloc_obj(struct amdgpu_fence, gfp_flags);
+ 	if (!af) {
+ 		r = -ENOMEM;
+ 		goto err_job;
+ 	}
+ 	(*job)->hw_fence = af;
+ 
+-	af = kzalloc_obj(struct amdgpu_fence);
++	af = kzalloc_obj(struct amdgpu_fence, gfp_flags);
+ 	if (!af) {
+ 		r = -ENOMEM;
+ 		goto err_fence;
+@@ -257,6 +257,7 @@ int amdgpu_job_alloc_with_ib(struct amdgpu_device *adev,
+ 	int r;
+ 
+ 	r = amdgpu_job_alloc(adev, NULL, entity, owner, 1, k_job_id,
++			     amdgpu_ib_pool_gfp_flags(adev, pool_type),
+ 			     job);
+ 	if (r)
+ 		return r;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_job.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_job.h
+index 822849693b3a..7e03bd2ff639 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_job.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_job.h
+@@ -116,7 +116,7 @@ static inline struct amdgpu_ring *amdgpu_job_ring(struct amdgpu_job *job)
+ int amdgpu_job_alloc(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 		     struct drm_sched_entity *entity, void *owner,
+ 		     unsigned int num_ibs, u64 drm_client_id,
+-		     struct amdgpu_job **job);
++		     gfp_t gfp_flags, struct amdgpu_job **job);
+ int amdgpu_job_alloc_with_ib(struct amdgpu_device *adev,
+ 			     struct drm_sched_entity *entity, void *owner,
+ 			     size_t size, enum amdgpu_ib_pool_type pool_type,
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h
+index b11e9f244b53..015623b8fd05 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.h
+@@ -583,6 +583,8 @@ int amdgpu_ib_schedule(struct amdgpu_ring *ring, unsigned num_ibs,
+ 		       struct dma_fence **f);
+ int amdgpu_ib_pool_init(struct amdgpu_device *adev);
+ void amdgpu_ib_pool_fini(struct amdgpu_device *adev);
++gfp_t amdgpu_ib_pool_gfp_flags(struct amdgpu_device *adev,
++			       enum amdgpu_ib_pool_type type);
+ int amdgpu_ib_ring_tests(struct amdgpu_device *adev);
+ bool amdgpu_ring_sched_ready(struct amdgpu_ring *ring);
+ void amdgpu_ring_backup_unprocessed_commands(struct amdgpu_ring *ring,
+-- 
+2.55.0
+

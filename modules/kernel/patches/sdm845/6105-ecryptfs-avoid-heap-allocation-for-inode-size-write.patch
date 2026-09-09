@@ -1,0 +1,54 @@
+From 8fafd7c86fc35bd11eb34d4ab2d6282b3354f30f Mon Sep 17 00:00:00 2001
+From: Yichong Chen <chenyichong@uniontech.com>
+Date: Tue, 30 Jun 2026 11:08:00 +0800
+Subject: [PATCH 06105/15333] ecryptfs: avoid heap allocation for inode size
+ write
+
+ecryptfs_write_inode_size_to_header() allocates an 8-byte buffer only
+to write the encoded inode size to the lower file header.
+
+Use a stack __be64 value instead. This avoids an unnecessary allocation
+and removes a failure path without changing the data written to disk.
+
+Signed-off-by: Yichong Chen <chenyichong@uniontech.com>
+Signed-off-by: Tyler Hicks <code@tyhicks.com>
+---
+ fs/ecryptfs/mmap.c | 15 ++++-----------
+ 1 file changed, 4 insertions(+), 11 deletions(-)
+
+diff --git a/fs/ecryptfs/mmap.c b/fs/ecryptfs/mmap.c
+index 2c2b12fedeae..0222f98143ab 100644
+--- a/fs/ecryptfs/mmap.c
++++ b/fs/ecryptfs/mmap.c
+@@ -355,24 +355,17 @@ static int ecryptfs_write_begin(const struct kiocb *iocb,
+  */
+ static int ecryptfs_write_inode_size_to_header(struct inode *ecryptfs_inode)
+ {
+-	char *file_size_virt;
++	__be64 file_size;
+ 	int rc;
+ 
+-	file_size_virt = kmalloc(sizeof(u64), GFP_KERNEL);
+-	if (!file_size_virt) {
+-		rc = -ENOMEM;
+-		goto out;
+-	}
+-	put_unaligned_be64(i_size_read(ecryptfs_inode), file_size_virt);
+-	rc = ecryptfs_write_lower(ecryptfs_inode, file_size_virt, 0,
+-				  sizeof(u64));
+-	kfree(file_size_virt);
++	file_size = cpu_to_be64(i_size_read(ecryptfs_inode));
++	rc = ecryptfs_write_lower(ecryptfs_inode, (char *)&file_size, 0,
++				  sizeof(file_size));
+ 	if (rc < 0)
+ 		printk(KERN_ERR "%s: Error writing file size to header; "
+ 		       "rc = [%d]\n", __func__, rc);
+ 	else
+ 		rc = 0;
+-out:
+ 	return rc;
+ }
+ 
+-- 
+2.55.0
+

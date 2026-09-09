@@ -1,0 +1,77 @@
+From ab74d1fbe0618940f0d8100e36f7383d903afe5f Mon Sep 17 00:00:00 2001
+From: Aaron Tomlin <atomlin@atomlin.com>
+Date: Wed, 22 Jul 2026 11:50:49 -0400
+Subject: [PATCH 06891/15333] perf trace: Add --bitmask-list command-line
+ option
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Introduce a new '--bitmask-list' command-line option for 'perf trace'.
+When this option is specified, the formatting of cpumasks is delegated
+to bitmap_scnprintf(), enabling cpumasks to be displayed as a condensed,
+human-readable list (e.g., "0,2-5,7") instead of the default hexadecimal
+representation. An example is provided below:
+
+❯ sudo ./perf trace --show-cpu --bitmask-list --event ipi:ipi_send_cpumask --max-event 5
+     0.000 [000] Xorg/1434 ipi:ipi_send_cpumask(cpumask: 2-3,6, callsite: 0xffffffff9994f8e4, callback: 0xffffffff9994fdd0)
+   694.527 [002] chrome/2894 ipi:ipi_send_cpumask(cpumask: 1,3-5, callsite: 0xffffffff9994f8e4, callback: 0xffffffff9994fdd0)
+  2666.608 [003] Chrome_ChildIO/2948 ipi:ipi_send_cpumask(cpumask: 4,7, callsite: 0xffffffff9994f8e4, callback: 0xffffffff9994fdd0)
+  2673.638 [000] Chrome_IOThrea/2920 ipi:ipi_send_cpumask(cpumask: 2-5, callsite: 0xffffffff9994f8e4, callback: 0xffffffff9994fdd0)
+  2714.228 [005] chrome/3375 ipi:ipi_send_cpumask(cpumask: 0-4,6-7, callsite: 0xffffffff9994f8e4, callback: 0xffffffff9994fdd0)
+
+Signed-off-by: Aaron Tomlin <atomlin@atomlin.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/Documentation/perf-trace.txt | 4 ++++
+ tools/perf/builtin-trace.c              | 5 +++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/tools/perf/Documentation/perf-trace.txt b/tools/perf/Documentation/perf-trace.txt
+index d0b6c771a1b9..d20b43ea3d37 100644
+--- a/tools/perf/Documentation/perf-trace.txt
++++ b/tools/perf/Documentation/perf-trace.txt
+@@ -247,6 +247,10 @@ the thread executes on the designated CPUs. Default is to monitor all CPUs.
+ 	pretty-printing serves as a fallback to hand-crafted pretty printers, as the latter can
+ 	better pretty-print integer flags and struct pointers.
+ 
++--bitmask-list::
++	Show bitmasks as a human-readable, condensed list (e.g. "0,2-5,7")
++	instead of the default hexadecimal representation.
++
+ --bpf-summary::
+ 	Collect system call statistics in BPF.  This is only for live mode and
+ 	works well with -s/--summary option where no argument information is
+diff --git a/tools/perf/builtin-trace.c b/tools/perf/builtin-trace.c
+index 186978cafab9..e47b5ae4e82a 100644
+--- a/tools/perf/builtin-trace.c
++++ b/tools/perf/builtin-trace.c
+@@ -226,6 +226,7 @@ struct trace {
+ 	bool			force;
+ 	bool			vfs_getname;
+ 	bool			force_btf;
++	bool			bitmask_list;
+ 	bool			summary_bpf;
+ 	int			trace_pgfaults;
+ 	char			*perfconfig_events;
+@@ -3280,6 +3281,9 @@ static size_t trace__fprintf_tp_fields(struct trace *trace, struct perf_sample *
+ 
+ 			if (syscall_arg.len == 0) {
+ 				printed += scnprintf(bf + printed, size - printed, "0");
++			} else if (trace->bitmask_list) {
++				printed += bitmap_scnprintf(mask, syscall_arg.len * 8,
++							    bf + printed, size - printed);
+ 			} else {
+ 				int i;
+ 				bool skip_zero = true;
+@@ -5593,6 +5597,7 @@ int cmd_trace(int argc, const char **argv)
+ 		     "start"),
+ 	OPT_BOOLEAN(0, "force-btf", &trace.force_btf, "Prefer btf_dump general pretty printer"
+ 		       "to customized ones"),
++	OPT_BOOLEAN(0, "bitmask-list", &trace.bitmask_list, "Show bitmask as a human-readable list"),
+ 	OPT_BOOLEAN(0, "bpf-summary", &trace.summary_bpf, "Summary syscall stats in BPF"),
+ 	OPT_INTEGER(0, "max-summary", &trace.max_summary,
+ 		     "Max number of entries in the summary."),
+-- 
+2.55.0
+

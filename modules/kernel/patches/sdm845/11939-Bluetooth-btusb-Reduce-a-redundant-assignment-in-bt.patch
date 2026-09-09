@@ -1,0 +1,44 @@
+From 92db4555c73f2aab9954dc7d2bc84c0563e6db7d Mon Sep 17 00:00:00 2001
+From: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Date: Thu, 25 Jun 2026 22:19:56 -0700
+Subject: [PATCH 11939/15333] Bluetooth: btusb: Reduce a redundant assignment
+ in btusb_probe()
+
+Initialize @priv_size at declaration rather than separately:
+- Simpler: one statement completes both declaration and assignment.
+- More flexible: the variable is immediately usable from that point,
+  so any new priv_size += can be freely inserted without caring about
+  where the separate priv_size = 0 sits.
+
+Reviewed-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Signed-off-by: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ drivers/bluetooth/btusb.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
+index 2a58a82a3ece..bb5e1c2a6bc4 100644
+--- a/drivers/bluetooth/btusb.c
++++ b/drivers/bluetooth/btusb.c
+@@ -4082,7 +4082,7 @@ static int btusb_probe(struct usb_interface *intf,
+ 	struct btusb_data *data;
+ 	struct hci_dev *hdev;
+ 	unsigned ifnum_base;
+-	int err, priv_size;
++	int err, priv_size = 0;
+ 
+ 	BT_DBG("intf %p id %p", intf, id);
+ 
+@@ -4153,8 +4153,6 @@ static int btusb_probe(struct usb_interface *intf,
+ 	init_usb_anchor(&data->ctrl_anchor);
+ 	spin_lock_init(&data->rxlock);
+ 
+-	priv_size = 0;
+-
+ 	data->recv_event = hci_recv_frame;
+ 	data->recv_bulk = btusb_recv_bulk;
+ 
+-- 
+2.55.0
+

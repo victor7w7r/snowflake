@@ -1,0 +1,123 @@
+From 66da1ae19672a295507b0c66cd74231e5bf482a9 Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Mon, 3 Aug 2026 15:35:32 -0700
+Subject: [PATCH 12396/15333] gpio: move ppc4xx gpio driver from arch/powerpc
+ to drivers/gpio
+
+Move the ppc4xx gpio driver out of arch/powerpc/platforms/44x/ into
+drivers/gpio/gpio-ppc44x.c. The driver has no architecture-specific
+dependencies and follows the same pattern as other PowerPC GPIO
+drivers already in drivers/gpio/ (e.g. gpio-mpc8xxx, gpio-mpc5200).
+
+- Renamed Kconfig symbol from PPC4xx_GPIO to GPIO_PPC44X
+- Updated ppc44x_defconfig and warp_defconfig to use the new symbol
+- Marked the new option as tristate (was bool) since the driver
+  supports module build via module_platform_driver()
+
+Assisted-by: opencode:big-pickle
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Signed-off-by: Madhavan Srinivasan <maddy@linux.ibm.com>
+Link: https://patch.msgid.link/20260803223539.86303-2-rosenp@gmail.com
+---
+ arch/powerpc/configs/44x/warp_defconfig                    | 2 +-
+ arch/powerpc/configs/ppc44x_defconfig                      | 2 +-
+ arch/powerpc/platforms/44x/Kconfig                         | 7 -------
+ arch/powerpc/platforms/44x/Makefile                        | 2 +-
+ drivers/gpio/Kconfig                                       | 7 +++++++
+ drivers/gpio/Makefile                                      | 1 +
+ .../platforms/44x/gpio.c => drivers/gpio/gpio-ppc44x.c     | 0
+ 7 files changed, 11 insertions(+), 10 deletions(-)
+ rename arch/powerpc/platforms/44x/gpio.c => drivers/gpio/gpio-ppc44x.c (100%)
+
+diff --git a/arch/powerpc/configs/44x/warp_defconfig b/arch/powerpc/configs/44x/warp_defconfig
+index 5757625469c4..d6014b9c5708 100644
+--- a/arch/powerpc/configs/44x/warp_defconfig
++++ b/arch/powerpc/configs/44x/warp_defconfig
+@@ -12,7 +12,7 @@ CONFIG_MODULE_UNLOAD=y
+ # CONFIG_BLK_DEV_BSG is not set
+ # CONFIG_EBONY is not set
+ CONFIG_WARP=y
+-CONFIG_PPC4xx_GPIO=y
++CONFIG_GPIO_PPC44X=y
+ CONFIG_HZ_1000=y
+ CONFIG_CMDLINE="ip=on"
+ # CONFIG_PCI is not set
+diff --git a/arch/powerpc/configs/ppc44x_defconfig b/arch/powerpc/configs/ppc44x_defconfig
+index 0dc537f6aff3..d351551e266f 100644
+--- a/arch/powerpc/configs/ppc44x_defconfig
++++ b/arch/powerpc/configs/ppc44x_defconfig
+@@ -22,7 +22,7 @@ CONFIG_GLACIER=y
+ CONFIG_REDWOOD=y
+ CONFIG_EIGER=y
+ CONFIG_YOSEMITE=y
+-CONFIG_PPC4xx_GPIO=y
++CONFIG_GPIO_PPC44X=y
+ CONFIG_MATH_EMULATION=y
+ CONFIG_NET=y
+ CONFIG_PACKET=y
+diff --git a/arch/powerpc/platforms/44x/Kconfig b/arch/powerpc/platforms/44x/Kconfig
+index fc79f8466933..150813cea945 100644
+--- a/arch/powerpc/platforms/44x/Kconfig
++++ b/arch/powerpc/platforms/44x/Kconfig
+@@ -227,13 +227,6 @@ config PPC44x_SIMPLE
+ 	help
+ 	  This option enables the simple PowerPC 44x platform support.
+ 
+-config PPC4xx_GPIO
+-	bool "PPC4xx GPIO support"
+-	depends on 44x
+-	select GPIOLIB
+-	help
+-	  Enable gpiolib support for ppc440 based boards
+-
+ # 44x specific CPU modules, selected based on the board above.
+ config 440EP
+ 	bool
+diff --git a/arch/powerpc/platforms/44x/Makefile b/arch/powerpc/platforms/44x/Makefile
+index ca7b1bb442d9..4598d8b89bf4 100644
+--- a/arch/powerpc/platforms/44x/Makefile
++++ b/arch/powerpc/platforms/44x/Makefile
+@@ -15,4 +15,4 @@ obj-$(CONFIG_FSP2)	+= fsp2.o
+ obj-$(CONFIG_PCI)		+= pci.o
+ obj-$(CONFIG_PPC4xx_HSTA_MSI)	+= hsta_msi.o
+ obj-$(CONFIG_PPC4xx_CPM)	+= cpm.o
+-obj-$(CONFIG_PPC4xx_GPIO)	+= gpio.o
++
+diff --git a/drivers/gpio/Kconfig b/drivers/gpio/Kconfig
+index 28cf6d2e83c2..b91e04128766 100644
+--- a/drivers/gpio/Kconfig
++++ b/drivers/gpio/Kconfig
+@@ -593,6 +593,13 @@ config GPIO_POLARFIRE_SOC
+ 	help
+ 	  Say yes here to support the GPIO controllers on Microchip FPGAs.
+ 
++config GPIO_PPC44X
++	tristate "PPC44x GPIO support"
++	depends on 44x
++	select GPIO_GENERIC
++	help
++	  Enable gpiolib support for ppc440 based boards.
++
+ config GPIO_PXA
+ 	bool "PXA GPIO support"
+ 	depends on ARCH_PXA || ARCH_MMP || COMPILE_TEST
+diff --git a/drivers/gpio/Makefile b/drivers/gpio/Makefile
+index 4d0e900402fc..23aedc107cc5 100644
+--- a/drivers/gpio/Makefile
++++ b/drivers/gpio/Makefile
+@@ -147,6 +147,7 @@ obj-$(CONFIG_GPIO_PCIE_IDIO_24)		+= gpio-pcie-idio-24.o
+ obj-$(CONFIG_GPIO_PCI_IDIO_16)		+= gpio-pci-idio-16.o
+ obj-$(CONFIG_GPIO_PISOSR)		+= gpio-pisosr.o
+ obj-$(CONFIG_GPIO_PL061)		+= gpio-pl061.o
++obj-$(CONFIG_GPIO_PPC44X)		+= gpio-ppc44x.o
+ obj-$(CONFIG_GPIO_PMIC_EIC_SPRD)	+= gpio-pmic-eic-sprd.o
+ obj-$(CONFIG_GPIO_POLARFIRE_SOC)	+= gpio-mpfs.o
+ obj-$(CONFIG_GPIO_PXA)			+= gpio-pxa.o
+diff --git a/arch/powerpc/platforms/44x/gpio.c b/drivers/gpio/gpio-ppc44x.c
+similarity index 100%
+rename from arch/powerpc/platforms/44x/gpio.c
+rename to drivers/gpio/gpio-ppc44x.c
+-- 
+2.55.0
+

@@ -1,0 +1,354 @@
+From d95429c1d4a994ba764b92ffb52afa488b98a8a7 Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Thu, 9 Jul 2026 17:36:15 -0600
+Subject: [PATCH 07941/15333] drm/amd/display: share common DM KUnit helpers
+
+Move fixture setup that was duplicated across several amdgpu_dm
+KUnit tests into amdgpu_dm_kunit_helpers.c:
+
+- dm_kunit_alloc_dc_with_ctx() allocates a dc and its dc_context.
+- dm_kunit_alloc_drm_with_connector_list() allocates a drm_device
+  with an initialized connector list.
+
+Update the irq, psr, crtc and backlight tests to use these helpers.
+
+Reviewed-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Fangzhi Zuo <jerry.zuo@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../tests/amdgpu_dm_backlight_test.c          |  9 +----
+ .../amdgpu_dm/tests/amdgpu_dm_crtc_test.c     | 30 +++-----------
+ .../amdgpu_dm/tests/amdgpu_dm_irq_test.c      | 32 ++++-----------
+ .../amdgpu_dm/tests/amdgpu_dm_kunit_helpers.c | 39 +++++++++++++++----
+ .../tests/amdgpu_dm_kunit_test_helpers.h      |  4 ++
+ .../amdgpu_dm/tests/amdgpu_dm_psr_test.c      | 15 ++-----
+ 6 files changed, 52 insertions(+), 77 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_backlight_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_backlight_test.c
+index f55f93747df7..618fd5142da0 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_backlight_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_backlight_test.c
+@@ -56,14 +56,7 @@ static void setup_test_connector(struct kunit *test,
+ 
+ static void setup_test_dm_ddev(struct kunit *test, struct amdgpu_display_manager *dm)
+ {
+-	struct drm_device *ddev;
+-
+-	ddev = kunit_kzalloc(test, sizeof(*ddev), GFP_KERNEL);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, ddev);
+-
+-	INIT_LIST_HEAD(&ddev->mode_config.connector_list);
+-	spin_lock_init(&ddev->mode_config.connector_list_lock);
+-	dm->ddev = ddev;
++	dm->ddev = dm_kunit_alloc_drm_with_connector_list(test);
+ }
+ 
+ /* Tests for dm_find_stream_with_link() */
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_crtc_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_crtc_test.c
+index 0edaf969f16b..ac21bbec92ab 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_crtc_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_crtc_test.c
+@@ -296,13 +296,9 @@ static void dm_test_crtc_is_headless_null_adev(struct kunit *test)
+ static void dm_test_crtc_is_headless_no_connectors(struct kunit *test)
+ {
+ 	struct amdgpu_device *adev = kunit_kzalloc(test, sizeof(*adev), GFP_KERNEL);
+-	struct drm_device *dev = kunit_kzalloc(test, sizeof(*dev), GFP_KERNEL);
++	struct drm_device *dev = dm_kunit_alloc_drm_with_connector_list(test);
+ 
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, adev);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dev);
+-
+-	INIT_LIST_HEAD(&dev->mode_config.connector_list);
+-	spin_lock_init(&dev->mode_config.connector_list_lock);
+ 	adev->dm.ddev = dev;
+ 
+ 	KUNIT_EXPECT_TRUE(test, amdgpu_dm_is_headless(adev));
+@@ -315,15 +311,11 @@ static void dm_test_crtc_is_headless_no_connectors(struct kunit *test)
+ static void dm_test_crtc_is_headless_writeback_only(struct kunit *test)
+ {
+ 	struct amdgpu_device *adev = kunit_kzalloc(test, sizeof(*adev), GFP_KERNEL);
+-	struct drm_device *dev = kunit_kzalloc(test, sizeof(*dev), GFP_KERNEL);
++	struct drm_device *dev = dm_kunit_alloc_drm_with_connector_list(test);
+ 	struct drm_connector *wb = kunit_kzalloc(test, sizeof(*wb), GFP_KERNEL);
+ 
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, adev);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dev);
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, wb);
+-
+-	INIT_LIST_HEAD(&dev->mode_config.connector_list);
+-	spin_lock_init(&dev->mode_config.connector_list_lock);
+ 	adev->dm.ddev = dev;
+ 
+ 	dm_test_add_connector(dev, wb, DRM_MODE_CONNECTOR_WRITEBACK,
+@@ -339,15 +331,11 @@ static void dm_test_crtc_is_headless_writeback_only(struct kunit *test)
+ static void dm_test_crtc_is_headless_disconnected_display(struct kunit *test)
+ {
+ 	struct amdgpu_device *adev = kunit_kzalloc(test, sizeof(*adev), GFP_KERNEL);
+-	struct drm_device *dev = kunit_kzalloc(test, sizeof(*dev), GFP_KERNEL);
++	struct drm_device *dev = dm_kunit_alloc_drm_with_connector_list(test);
+ 	struct drm_connector *display = kunit_kzalloc(test, sizeof(*display), GFP_KERNEL);
+ 
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, adev);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dev);
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, display);
+-
+-	INIT_LIST_HEAD(&dev->mode_config.connector_list);
+-	spin_lock_init(&dev->mode_config.connector_list_lock);
+ 	adev->dm.ddev = dev;
+ 
+ 	dm_test_add_connector(dev, display, DRM_MODE_CONNECTOR_HDMIA,
+@@ -363,15 +351,11 @@ static void dm_test_crtc_is_headless_disconnected_display(struct kunit *test)
+ static void dm_test_crtc_is_headless_connected_display(struct kunit *test)
+ {
+ 	struct amdgpu_device *adev = kunit_kzalloc(test, sizeof(*adev), GFP_KERNEL);
+-	struct drm_device *dev = kunit_kzalloc(test, sizeof(*dev), GFP_KERNEL);
++	struct drm_device *dev = dm_kunit_alloc_drm_with_connector_list(test);
+ 	struct drm_connector *display = kunit_kzalloc(test, sizeof(*display), GFP_KERNEL);
+ 
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, adev);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dev);
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, display);
+-
+-	INIT_LIST_HEAD(&dev->mode_config.connector_list);
+-	spin_lock_init(&dev->mode_config.connector_list_lock);
+ 	adev->dm.ddev = dev;
+ 
+ 	dm_test_add_connector(dev, display, DRM_MODE_CONNECTOR_HDMIA,
+@@ -387,17 +371,13 @@ static void dm_test_crtc_is_headless_connected_display(struct kunit *test)
+ static void dm_test_crtc_is_headless_mixed_connectors(struct kunit *test)
+ {
+ 	struct amdgpu_device *adev = kunit_kzalloc(test, sizeof(*adev), GFP_KERNEL);
+-	struct drm_device *dev = kunit_kzalloc(test, sizeof(*dev), GFP_KERNEL);
++	struct drm_device *dev = dm_kunit_alloc_drm_with_connector_list(test);
+ 	struct drm_connector *wb = kunit_kzalloc(test, sizeof(*wb), GFP_KERNEL);
+ 	struct drm_connector *display = kunit_kzalloc(test, sizeof(*display), GFP_KERNEL);
+ 
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, adev);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dev);
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, wb);
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, display);
+-
+-	INIT_LIST_HEAD(&dev->mode_config.connector_list);
+-	spin_lock_init(&dev->mode_config.connector_list_lock);
+ 	adev->dm.ddev = dev;
+ 
+ 	dm_test_add_connector(dev, wb, DRM_MODE_CONNECTOR_WRITEBACK,
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_irq_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_irq_test.c
+index dc7ef0523b8f..28c36217f6a2 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_irq_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_irq_test.c
+@@ -202,22 +202,6 @@ static void dm_test_dmub_notify_callback(struct amdgpu_device *adev,
+ 	dm_test_dmub_notify_count++;
+ }
+ 
+-static struct dc *dm_test_alloc_dc_with_ctx(struct kunit *test)
+-{
+-	struct dc_context *ctx;
+-	struct dc *dc;
+-
+-	dc = kunit_kzalloc(test, sizeof(*dc), GFP_KERNEL);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dc);
+-	ctx = kunit_kzalloc(test, sizeof(*ctx), GFP_KERNEL);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, ctx);
+-
+-	dc->ctx = ctx;
+-	ctx->dc = dc;
+-
+-	return dc;
+-}
+-
+ static enum dc_irq_source dm_test_to_dal_irq_source_dce110(
+ 		struct irq_service *irq_service,
+ 		uint32_t src_id,
+@@ -299,7 +283,7 @@ static struct dc *dm_test_alloc_dc_with_irq_service(struct kunit *test,
+ 	struct dc *dc;
+ 	int i;
+ 
+-	dc = dm_test_alloc_dc_with_ctx(test);
++	dc = dm_kunit_alloc_dc_with_ctx(test);
+ 	res_pool = kunit_kzalloc(test, sizeof(*res_pool), GFP_KERNEL);
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, res_pool);
+ 	irqs = kunit_kzalloc(test, sizeof(*irqs), GFP_KERNEL);
+@@ -3283,7 +3267,7 @@ static void dm_test_register_hpd_handlers_dmub_outbox(struct kunit *test)
+ 
+ 	adev = dm_kunit_alloc_adev(test);
+ 	KUNIT_ASSERT_EQ(test, amdgpu_dm_irq_init(adev), 0);
+-	dc = dm_test_alloc_dc_with_ctx(test);
++	dc = dm_kunit_alloc_dc_with_ctx(test);
+ 	adev->dm.dc = dc;
+ 
+ 	/* Make dc_is_dmub_outbox_supported() return true. */
+@@ -3495,7 +3479,7 @@ static void dm_test_dmub_outbox1_low_irq_empty(struct kunit *test)
+ 	struct dc *dc;
+ 
+ 	adev = dm_kunit_alloc_adev(test);
+-	dc = dm_test_alloc_dc_with_ctx(test);
++	dc = dm_kunit_alloc_dc_with_ctx(test);
+ 	dc_dmub_srv = kunit_kzalloc(test, sizeof(*dc_dmub_srv), GFP_KERNEL);
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dc_dmub_srv);
+ 	dmub = kunit_kzalloc(test, sizeof(*dmub), GFP_KERNEL);
+@@ -3529,7 +3513,7 @@ static struct amdgpu_device *dm_test_alloc_adev_outbox_notify(struct kunit *test
+ 	struct dc *dc;
+ 
+ 	adev = dm_kunit_alloc_adev(test);
+-	dc = dm_test_alloc_dc_with_ctx(test);
++	dc = dm_kunit_alloc_dc_with_ctx(test);
+ 	dc_dmub_srv = kunit_kzalloc(test, sizeof(*dc_dmub_srv), GFP_KERNEL);
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dc_dmub_srv);
+ 	dmub = kunit_kzalloc(test, sizeof(*dmub), GFP_KERNEL);
+@@ -3635,7 +3619,7 @@ static void dm_test_dce110_register_irq_handlers_rejects_uninitialized_sources(s
+ 	struct dc *dc;
+ 
+ 	adev = dm_kunit_alloc_adev(test);
+-	dc = dm_test_alloc_dc_with_ctx(test);
++	dc = dm_kunit_alloc_dc_with_ctx(test);
+ 	adev->dm.dc = dc;
+ 
+ 	KUNIT_EXPECT_EQ(test, amdgpu_dm_dce110_register_irq_handlers(adev), -EINVAL);
+@@ -3696,7 +3680,7 @@ static void dm_test_dcn10_register_irq_handlers_zero_crtc(struct kunit *test)
+ 	adev = dm_kunit_alloc_adev(test);
+ 	KUNIT_ASSERT_EQ(test, kunit_add_action_or_reset(test, dm_test_free_irq_sources,
+ 							 adev), 0);
+-	dc = dm_test_alloc_dc_with_ctx(test);
++	dc = dm_kunit_alloc_dc_with_ctx(test);
+ 	adev->dm.dc = dc;
+ 	adev->mode_info.num_hpd = 1;
+ 	amdgpu_dm_set_irq_funcs(adev);
+@@ -3759,7 +3743,7 @@ static void dm_test_register_outbox_irq_handlers_without_dmub(struct kunit *test
+ 	adev = dm_kunit_alloc_adev(test);
+ 	KUNIT_ASSERT_EQ(test, kunit_add_action_or_reset(test, dm_test_free_irq_sources,
+ 							 adev), 0);
+-	dc = dm_test_alloc_dc_with_ctx(test);
++	dc = dm_kunit_alloc_dc_with_ctx(test);
+ 	adev->dm.dc = dc;
+ 	amdgpu_dm_set_irq_funcs(adev);
+ 
+@@ -3899,7 +3883,7 @@ static void dm_test_handle_vmin_vmax_update(struct kunit *test)
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, adev);
+ 	mutex_init(&adev->dm.dc_lock);
+ 
+-	dc = dm_test_alloc_dc_with_ctx(test);
++	dc = dm_kunit_alloc_dc_with_ctx(test);
+ 	dc->current_state = kunit_kzalloc(test, sizeof(*dc->current_state),
+ 					  GFP_KERNEL);
+ 	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dc->current_state);
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_kunit_helpers.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_kunit_helpers.c
+index 58615cdbe854..75cd4fef3076 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_kunit_helpers.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_kunit_helpers.c
+@@ -45,23 +45,32 @@ struct dc_link *dm_kunit_alloc_link(struct kunit *test)
+ }
+ EXPORT_SYMBOL(dm_kunit_alloc_link);
+ 
+-struct dc_link *dm_kunit_alloc_link_with_ctx(struct kunit *test)
++struct dc *dm_kunit_alloc_dc_with_ctx(struct kunit *test)
+ {
+-	struct dc_link *link;
+ 	struct dc_context *ctx;
+ 	struct dc *dc;
+ 
+-	link = dm_kunit_alloc_link(test);
++	dc = kunit_kzalloc(test, sizeof(*dc), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, dc);
+ 
+ 	ctx = kunit_kzalloc(test, sizeof(*ctx), GFP_KERNEL);
+ 	KUNIT_ASSERT_NOT_NULL(test, ctx);
+ 
+-	dc = kunit_kzalloc(test, sizeof(*dc), GFP_KERNEL);
+-	KUNIT_ASSERT_NOT_NULL(test, dc);
+-
+-	link->ctx = ctx;
+-	ctx->dc = dc;
+ 	dc->ctx = ctx;
++	ctx->dc = dc;
++
++	return dc;
++}
++EXPORT_SYMBOL(dm_kunit_alloc_dc_with_ctx);
++
++struct dc_link *dm_kunit_alloc_link_with_ctx(struct kunit *test)
++{
++	struct dc_link *link;
++	struct dc *dc;
++
++	link = dm_kunit_alloc_link(test);
++	dc = dm_kunit_alloc_dc_with_ctx(test);
++	link->ctx = dc->ctx;
+ 
+ 	return link;
+ }
+@@ -138,5 +147,19 @@ struct amdgpu_dm_connector *dm_kunit_alloc_connector(struct kunit *test,
+ }
+ EXPORT_SYMBOL(dm_kunit_alloc_connector);
+ 
++struct drm_device *dm_kunit_alloc_drm_with_connector_list(struct kunit *test)
++{
++	struct drm_device *dev;
++
++	dev = kunit_kzalloc(test, sizeof(*dev), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dev);
++
++	INIT_LIST_HEAD(&dev->mode_config.connector_list);
++	spin_lock_init(&dev->mode_config.connector_list_lock);
++
++	return dev;
++}
++EXPORT_SYMBOL(dm_kunit_alloc_drm_with_connector_list);
++
+ MODULE_LICENSE("Dual MIT/GPL");
+ MODULE_DESCRIPTION("KUnit test helpers for amdgpu_dm tests");
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_kunit_test_helpers.h b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_kunit_test_helpers.h
+index 0f1c48fa2128..49b358681d60 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_kunit_test_helpers.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_kunit_test_helpers.h
+@@ -13,14 +13,18 @@
+ struct amdgpu_device;
+ struct amdgpu_display_manager;
+ struct amdgpu_dm_connector;
++struct dc;
+ struct dc_link;
+ struct dc_state;
+ struct dc_stream_state;
++struct drm_device;
+ 
+ struct amdgpu_device *dm_kunit_alloc_adev(struct kunit *test);
++struct dc *dm_kunit_alloc_dc_with_ctx(struct kunit *test);
+ struct dc_link *dm_kunit_alloc_link(struct kunit *test);
+ struct dc_link *dm_kunit_alloc_link_with_ctx(struct kunit *test);
+ struct amdgpu_display_manager *dm_kunit_alloc_dm(struct kunit *test);
++struct drm_device *dm_kunit_alloc_drm_with_connector_list(struct kunit *test);
+ struct dc_stream_state *dm_kunit_alloc_stream(struct kunit *test,
+ 					      struct dc_link *link);
+ void dm_kunit_add_stream_to_state(struct kunit *test, struct dc_state *state,
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_psr_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_psr_test.c
+index 09bd98e93047..0a484ea7c0e8 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_psr_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_psr_test.c
+@@ -46,19 +46,10 @@ static struct core_power *create_test_power_module(struct kunit *test,
+ 
+ static struct dc_link *alloc_test_psrsu_link(struct kunit *test)
+ {
+-	struct dc_link *link = dm_kunit_alloc_link(test);
+-	struct dc_context *ctx;
+-	struct dc *dc;
+-
+-	ctx = kunit_kzalloc(test, sizeof(*ctx), GFP_KERNEL);
+-	KUNIT_ASSERT_NOT_NULL(test, ctx);
+-
+-	dc = kunit_kzalloc(test, sizeof(*dc), GFP_KERNEL);
+-	KUNIT_ASSERT_NOT_NULL(test, dc);
++	struct dc_link *link = dm_kunit_alloc_link_with_ctx(test);
++	struct dc_context *ctx = link->ctx;
++	struct dc *dc = ctx->dc;
+ 
+-	link->ctx = ctx;
+-	ctx->dc = dc;
+-	dc->ctx = ctx;
+ 	dc->caps.dmcub_support = true;
+ 	ctx->dce_version = DCN_VERSION_3_1;
+ 	link->dpcd_caps.edp_rev = DP_EDP_14;
+-- 
+2.55.0
+

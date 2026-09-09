@@ -1,0 +1,53 @@
+From 9e6966f7040451603d4c93341d0205421046d902 Mon Sep 17 00:00:00 2001
+From: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Date: Thu, 30 Jul 2026 15:51:28 +0300
+Subject: [PATCH 09571/15333] ASoC: SOF: Intel: hda: Keep non-alt mlinks
+ powered at probe on ACE2+
+
+Drop the hda_bus_ml_put_all() call at the end of hda_init_caps().
+
+On multi-link (mlink) capable platforms the non-alternate links
+(HDaudio and iDisp) are powered on by hardware when CRST# is
+de-asserted (LCTL.SPA = 1) and their ref_count is pre-charged to 1 in
+hda_ml_alloc_h2link() to match this state. The put_all call
+immediately dropped that reference and toggled LCTL.SPA back to 0,
+relying on the first stream open to power the link up again.
+
+On ACE2+ platforms this redundant SPA 1->0->1 toggle at probe leaves
+the Processing Pipe Capability (PPLC) Linear Link Position counters in
+a state where they do not advance on the first stream after boot. The
+counters only start working after the first full runtime suspend/resume
+cycle, which includes a CRST# assert/deassert that fully resets the PPC
+AON block.
+
+Keep the non-alt links powered from CRST# de-assert through first use.
+System suspend still powers them down via hda_bus_ml_suspend(), and
+resume relies on CRST# de-assert to bring them back up, so no other
+path is affected.
+
+Signed-off-by: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Reviewed-by: Kai Vehmanen <kai.vehmanen@linux.intel.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Reviewed-by: Liam Girdwood <liam.r.girdwood@intel.com>
+Link: https://patch.msgid.link/20260730125130.29887-3-peter.ujfalusi@linux.intel.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/intel/hda.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/sound/soc/sof/intel/hda.c b/sound/soc/sof/intel/hda.c
+index 8602ae3892a2..4dbba9186b29 100644
+--- a/sound/soc/sof/intel/hda.c
++++ b/sound/soc/sof/intel/hda.c
+@@ -682,8 +682,6 @@ static int hda_init_caps(struct snd_sof_dev *sdev)
+ 	if (!HDA_IDISP_CODEC(bus->codec_mask))
+ 		hda_codec_i915_display_power(sdev, false);
+ 
+-	hda_bus_ml_put_all(bus);
+-
+ 	return 0;
+ }
+ 
+-- 
+2.55.0
+

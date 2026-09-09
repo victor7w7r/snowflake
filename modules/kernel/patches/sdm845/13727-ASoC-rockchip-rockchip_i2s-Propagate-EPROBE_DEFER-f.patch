@@ -1,0 +1,46 @@
+From be4f82d15235ad4341c6529ff6cca048c26eb5a4 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 6 Aug 2026 12:21:27 +0700
+Subject: [PATCH 13727/15333] ASoC: rockchip: rockchip_i2s: Propagate
+ -EPROBE_DEFER from devm_pinctrl_get()
+
+Return -EPROBE_DEFER from devm_pinctrl_get() instead of ignoring it and
+continuing probe. This allows the driver to be reprobed once the
+pinctrl provider becomes available.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260806052136.21034-6-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/rockchip/rockchip_i2s.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/sound/soc/rockchip/rockchip_i2s.c b/sound/soc/rockchip/rockchip_i2s.c
+index 354430f916f9..261f36d4c2fd 100644
+--- a/sound/soc/rockchip/rockchip_i2s.c
++++ b/sound/soc/rockchip/rockchip_i2s.c
+@@ -790,7 +790,11 @@ static int rockchip_i2s_probe(struct platform_device *pdev)
+ 
+ 	i2s->bclk_ratio = 64;
+ 	i2s->pinctrl = devm_pinctrl_get(&pdev->dev);
+-	if (!IS_ERR(i2s->pinctrl)) {
++	if (IS_ERR(i2s->pinctrl)) {
++		if (PTR_ERR(i2s->pinctrl) == -EPROBE_DEFER)
++			return -EPROBE_DEFER;
++		dev_dbg(&pdev->dev, "failed to find i2s pinctrl\n");
++	} else {
+ 		i2s->bclk_on = pinctrl_lookup_state(i2s->pinctrl, "bclk_on");
+ 		if (!IS_ERR_OR_NULL(i2s->bclk_on)) {
+ 			i2s->bclk_off = pinctrl_lookup_state(i2s->pinctrl, "bclk_off");
+@@ -799,8 +803,6 @@ static int rockchip_i2s_probe(struct platform_device *pdev)
+ 				return -EINVAL;
+ 			}
+ 		}
+-	} else {
+-		dev_dbg(&pdev->dev, "failed to find i2s pinctrl\n");
+ 	}
+ 
+ 	i2s_pinctrl_select_bclk_off(i2s);
+-- 
+2.55.0
+

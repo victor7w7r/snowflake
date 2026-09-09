@@ -1,0 +1,176 @@
+From 6727c44461f788bb49a37875fbc70654e8db30b2 Mon Sep 17 00:00:00 2001
+From: Eric Biggers <ebiggers@kernel.org>
+Date: Mon, 8 Jun 2026 17:58:48 +0000
+Subject: [PATCH 02449/15333] hwrng: qcom - Move qcom-rng.c into
+ drivers/char/hw_random/
+
+Since this file just implements a hwrng driver, move it into
+drivers/char/hw_random/.  Rename the kconfig option accordingly as well.
+
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ arch/arm/configs/multi_v7_defconfig           |  2 +-
+ arch/arm/configs/qcom_defconfig               |  2 +-
+ arch/arm64/configs/defconfig                  |  2 +-
+ drivers/char/hw_random/Kconfig                | 11 +++++++++++
+ drivers/char/hw_random/Makefile               |  1 +
+ drivers/{crypto => char/hw_random}/qcom-rng.c |  0
+ drivers/crypto/Kconfig                        | 11 -----------
+ drivers/crypto/Makefile                       |  1 -
+ drivers/gpu/drm/ci/arm64.config               |  2 +-
+ 9 files changed, 16 insertions(+), 16 deletions(-)
+ rename drivers/{crypto => char/hw_random}/qcom-rng.c (100%)
+
+diff --git a/arch/arm/configs/multi_v7_defconfig b/arch/arm/configs/multi_v7_defconfig
+index 2de547c8b901..01e016752c4d 100644
+--- a/arch/arm/configs/multi_v7_defconfig
++++ b/arch/arm/configs/multi_v7_defconfig
+@@ -405,6 +405,7 @@ CONFIG_ASPEED_KCS_IPMI_BMC=m
+ CONFIG_ASPEED_BT_IPMI_BMC=m
+ CONFIG_HW_RANDOM=y
+ CONFIG_HW_RANDOM_ST=y
++CONFIG_HW_RANDOM_QCOM=m
+ CONFIG_TCG_TPM=m
+ CONFIG_TCG_TIS_I2C_INFINEON=m
+ CONFIG_I2C_CHARDEV=y
+@@ -1321,7 +1322,6 @@ CONFIG_CRYPTO_DEV_ATMEL_TDES=m
+ CONFIG_CRYPTO_DEV_ATMEL_SHA=m
+ CONFIG_CRYPTO_DEV_MARVELL_CESA=m
+ CONFIG_CRYPTO_DEV_QCE=m
+-CONFIG_CRYPTO_DEV_QCOM_RNG=m
+ CONFIG_CRYPTO_DEV_ROCKCHIP=m
+ CONFIG_CRYPTO_DEV_STM32_HASH=m
+ CONFIG_CRYPTO_DEV_STM32_CRYP=m
+diff --git a/arch/arm/configs/qcom_defconfig b/arch/arm/configs/qcom_defconfig
+index 03309b89ea4c..df0a0ce5b097 100644
+--- a/arch/arm/configs/qcom_defconfig
++++ b/arch/arm/configs/qcom_defconfig
+@@ -117,6 +117,7 @@ CONFIG_SERIAL_MSM=y
+ CONFIG_SERIAL_MSM_CONSOLE=y
+ CONFIG_SERIAL_DEV_BUS=y
+ CONFIG_HW_RANDOM=y
++CONFIG_HW_RANDOM_QCOM=m
+ CONFIG_I2C=y
+ CONFIG_I2C_CHARDEV=y
+ CONFIG_I2C_QUP=y
+@@ -296,7 +297,6 @@ CONFIG_CRYPTO_USER_API_HASH=m
+ CONFIG_CRYPTO_USER_API_SKCIPHER=m
+ CONFIG_CRYPTO_USER_API_RNG=m
+ CONFIG_CRYPTO_USER_API_AEAD=m
+-CONFIG_CRYPTO_DEV_QCOM_RNG=m
+ CONFIG_DMA_CMA=y
+ CONFIG_CMA_SIZE_MBYTES=64
+ CONFIG_PRINTK_TIME=y
+diff --git a/arch/arm64/configs/defconfig b/arch/arm64/configs/defconfig
+index 654a102cb5bc..76ce07a08d5a 100644
+--- a/arch/arm64/configs/defconfig
++++ b/arch/arm64/configs/defconfig
+@@ -601,6 +601,7 @@ CONFIG_HW_RANDOM=y
+ CONFIG_HW_RANDOM_VIRTIO=y
+ CONFIG_HW_RANDOM_HISI_TRNG=m
+ CONFIG_HW_RANDOM_XILINX=m
++CONFIG_HW_RANDOM_QCOM=m
+ CONFIG_TCG_TPM=y
+ CONFIG_TCG_TIS=m
+ CONFIG_TCG_TIS_SPI=m
+@@ -1940,7 +1941,6 @@ CONFIG_CRYPTO_DEV_SUN8I_CE=m
+ CONFIG_CRYPTO_DEV_FSL_CAAM=m
+ CONFIG_CRYPTO_DEV_FSL_DPAA2_CAAM=m
+ CONFIG_CRYPTO_DEV_QCE=m
+-CONFIG_CRYPTO_DEV_QCOM_RNG=m
+ CONFIG_CRYPTO_DEV_TEGRA=m
+ CONFIG_CRYPTO_DEV_ZYNQMP_AES=m
+ CONFIG_CRYPTO_DEV_ZYNQMP_SHA3=m
+diff --git a/drivers/char/hw_random/Kconfig b/drivers/char/hw_random/Kconfig
+index a5bcef4a54ee..b4c359abc4f9 100644
+--- a/drivers/char/hw_random/Kconfig
++++ b/drivers/char/hw_random/Kconfig
+@@ -636,6 +636,17 @@ config HW_RANDOM_XILINX
+ 	  To compile this driver as a module, choose M here: the module
+ 	  will be called xilinx-trng.
+ 
++config HW_RANDOM_QCOM
++	tristate "Qualcomm True Random Number Generator Driver"
++	depends on ARCH_QCOM || COMPILE_TEST
++	depends on HW_RANDOM
++	help
++	  This driver provides support for the True Random Number
++	  Generator hardware found on some Qualcomm SoCs.
++
++	  To compile this driver as a module, choose M here. The
++	  module will be called qcom-rng. If unsure, say N.
++
+ endif # HW_RANDOM
+ 
+ config UML_RANDOM
+diff --git a/drivers/char/hw_random/Makefile b/drivers/char/hw_random/Makefile
+index 95b5adb49560..8fce2aa6cf7d 100644
+--- a/drivers/char/hw_random/Makefile
++++ b/drivers/char/hw_random/Makefile
+@@ -54,3 +54,4 @@ obj-$(CONFIG_HW_RANDOM_POLARFIRE_SOC) += mpfs-rng.o
+ obj-$(CONFIG_HW_RANDOM_ROCKCHIP) += rockchip-rng.o
+ obj-$(CONFIG_HW_RANDOM_JH7110) += jh7110-trng.o
+ obj-$(CONFIG_HW_RANDOM_XILINX) += xilinx-trng.o
++obj-$(CONFIG_HW_RANDOM_QCOM) += qcom-rng.o
+diff --git a/drivers/crypto/qcom-rng.c b/drivers/char/hw_random/qcom-rng.c
+similarity index 100%
+rename from drivers/crypto/qcom-rng.c
+rename to drivers/char/hw_random/qcom-rng.c
+diff --git a/drivers/crypto/Kconfig b/drivers/crypto/Kconfig
+index eb834d15d614..03a8f7a1f75e 100644
+--- a/drivers/crypto/Kconfig
++++ b/drivers/crypto/Kconfig
+@@ -637,17 +637,6 @@ config CRYPTO_DEV_QCE_SW_MAX_LEN
+ 	  always processed by the software fallback, and all DES requests
+ 	  are done by the hardware.
+ 
+-config CRYPTO_DEV_QCOM_RNG
+-	tristate "Qualcomm Random Number Generator Driver"
+-	depends on ARCH_QCOM || COMPILE_TEST
+-	depends on HW_RANDOM
+-	help
+-	  This driver provides support for the Random Number
+-	  Generator hardware found on Qualcomm SoCs.
+-
+-	  To compile this driver as a module, choose M here. The
+-	  module will be called qcom-rng. If unsure, say N.
+-
+ config CRYPTO_DEV_IMGTEC_HASH
+ 	tristate "Imagination Technologies hardware hash accelerator"
+ 	depends on MIPS || COMPILE_TEST
+diff --git a/drivers/crypto/Makefile b/drivers/crypto/Makefile
+index 5a950c7abc39..2c33b83f3cfa 100644
+--- a/drivers/crypto/Makefile
++++ b/drivers/crypto/Makefile
+@@ -27,7 +27,6 @@ obj-$(CONFIG_CRYPTO_DEV_PADLOCK_AES) += padlock-aes.o
+ obj-$(CONFIG_CRYPTO_DEV_PADLOCK_SHA) += padlock-sha.o
+ obj-$(CONFIG_CRYPTO_DEV_PPC4XX) += amcc/
+ obj-$(CONFIG_CRYPTO_DEV_QCE) += qce/
+-obj-$(CONFIG_CRYPTO_DEV_QCOM_RNG) += qcom-rng.o
+ obj-$(CONFIG_CRYPTO_DEV_ROCKCHIP) += rockchip/
+ obj-$(CONFIG_CRYPTO_DEV_S5P) += s5p-sss.o
+ obj-$(CONFIG_CRYPTO_DEV_SA2UL) += sa2ul.o
+diff --git a/drivers/gpu/drm/ci/arm64.config b/drivers/gpu/drm/ci/arm64.config
+index 563a69669a7b..c46125c1f80f 100644
+--- a/drivers/gpu/drm/ci/arm64.config
++++ b/drivers/gpu/drm/ci/arm64.config
+@@ -78,7 +78,6 @@ CONFIG_INTERCONNECT_QCOM_MSM8996=y
+ CONFIG_INTERCONNECT_QCOM_OSM_L3=y
+ CONFIG_INTERCONNECT_QCOM_SC7180=y
+ CONFIG_INTERCONNECT_QCOM_SM8350=y
+-CONFIG_CRYPTO_DEV_QCOM_RNG=y
+ CONFIG_SC_DISPCC_7180=y
+ CONFIG_SC_GPUCC_7180=y
+ CONFIG_SM_GPUCC_8350=y
+@@ -189,6 +188,7 @@ CONFIG_GNSS=y
+ CONFIG_GNSS_MTK_SERIAL=y
+ CONFIG_HW_RANDOM=y
+ CONFIG_HW_RANDOM_MTK=y
++CONFIG_HW_RANDOM_QCOM=y
+ CONFIG_MTK_DEVAPC=y
+ CONFIG_PWM_MTK_DISP=y
+ CONFIG_MTK_CMDQ=y
+-- 
+2.55.0
+

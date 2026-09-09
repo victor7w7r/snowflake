@@ -1,0 +1,109 @@
+From b0c857049153680e1b6ccb59abf359a4ca523561 Mon Sep 17 00:00:00 2001
+From: Andrey Grodzovsky <andrey.grodzovsky@crowdstrike.com>
+Date: Thu, 6 Aug 2026 11:29:59 -0400
+Subject: [PATCH 13068/15333] ftrace: deprecate disabling via ftrace_enabled
+ sysctl
+
+Writing 0 to kernel.ftrace_enabled has not reliably disabled ftrace
+for years (FTRACE_OPS_FL_PERMANENT users already block it, and more
+callers rely on ftrace always being on). Refuse the write instead of
+leaving it in an inconsistent "disables some, not all" state: return
+-EOPNOTSUPP and log a message. Reads and enabling (writing 1) are
+unaffected.
+
+Update the docs to note the deprecation up front.
+
+Link: https://patch.msgid.link/20260806153000.4184871-2-andrey.grodzovsky@crowdstrike.com
+Suggested-by: Steven Rostedt <rostedt@goodmis.org>
+Signed-off-by: Andrey Grodzovsky <andrey.grodzovsky@crowdstrike.com>
+Acked-by: Song Liu <song@kernel.org>
+Signed-off-by: Steven Rostedt <rostedt@goodmis.org>
+---
+ Documentation/trace/ftrace.rst |  5 ++++
+ kernel/trace/ftrace.c          | 43 +++++-----------------------------
+ 2 files changed, 11 insertions(+), 37 deletions(-)
+
+diff --git a/Documentation/trace/ftrace.rst b/Documentation/trace/ftrace.rst
+index 84f06bf0da9b..7261f25f8b4b 100644
+--- a/Documentation/trace/ftrace.rst
++++ b/Documentation/trace/ftrace.rst
+@@ -3313,6 +3313,11 @@ this special filter via::
+ ftrace_enabled
+ --------------
+ 
++.. note::
++   Disabling ftrace via this switch is deprecated. Writing 0 is refused
++   with -EOPNOTSUPP and logs a warning; writing 1 and reading the value
++   are unaffected.
++
+ Note, the proc sysctl ftrace_enable is a big on/off switch for the
+ function tracer. By default it is enabled (when function tracing is
+ enabled in the kernel). If it is disabled, all function tracing is
+diff --git a/kernel/trace/ftrace.c b/kernel/trace/ftrace.c
+index 6c47a94f5924..d1989958d6b2 100644
+--- a/kernel/trace/ftrace.c
++++ b/kernel/trace/ftrace.c
+@@ -9370,38 +9370,10 @@ static void ftrace_startup_sysctl(void)
+ 	}
+ }
+ 
+-static void ftrace_shutdown_sysctl(void)
+-{
+-	int command;
+-
+-	if (unlikely(ftrace_disabled))
+-		return;
+-
+-	/* ftrace_start_up is true if ftrace is running */
+-	if (ftrace_start_up) {
+-		command = FTRACE_DISABLE_CALLS;
+-		if (ftrace_graph_active)
+-			command |= FTRACE_STOP_FUNC_RET;
+-		ftrace_run_update_code(command);
+-	}
+-}
+ #else
+ # define ftrace_startup_sysctl()       do { } while (0)
+-# define ftrace_shutdown_sysctl()      do { } while (0)
+ #endif /* CONFIG_DYNAMIC_FTRACE */
+ 
+-static bool is_permanent_ops_registered(void)
+-{
+-	struct ftrace_ops *op;
+-
+-	do_for_each_ftrace_op(op, ftrace_ops_list) {
+-		if (op->flags & FTRACE_OPS_FL_PERMANENT)
+-			return true;
+-	} while_for_each_ftrace_op(op);
+-
+-	return false;
+-}
+-
+ static int
+ ftrace_enable_sysctl(const struct ctl_table *table, int write,
+ 		     void *buffer, size_t *lenp, loff_t *ppos)
+@@ -9428,15 +9400,12 @@ ftrace_enable_sysctl(const struct ctl_table *table, int write,
+ 		ftrace_startup_sysctl();
+ 
+ 	} else {
+-		if (is_permanent_ops_registered()) {
+-			ftrace_enabled = true;
+-			return -EBUSY;
+-		}
+-
+-		/* stopping ftrace calls (just send to ftrace_stub) */
+-		ftrace_trace_function = ftrace_stub;
+-
+-		ftrace_shutdown_sysctl();
++		/*
++		 * Disabling ftrace at runtime via this knob is deprecated.
++		 */
++		ftrace_enabled = true;
++		pr_warn_once("The ftrace_enabled file is deprecated and no longer disables ftrace\n");
++		return -EOPNOTSUPP;
+ 	}
+ 
+ 	last_ftrace_enabled = !!ftrace_enabled;
+-- 
+2.55.0
+

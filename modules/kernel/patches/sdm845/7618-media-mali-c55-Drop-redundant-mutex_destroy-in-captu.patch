@@ -1,0 +1,42 @@
+From 876006e994c4ac8f2af553364b5a2282d6dee9ab Mon Sep 17 00:00:00 2001
+From: David Carlier <devnexen@gmail.com>
+Date: Tue, 30 Jun 2026 21:40:28 +0100
+Subject: [PATCH 07618/15333] media: mali-c55: Drop redundant mutex_destroy in
+ capture register error path
+
+In mali_c55_register_cap_dev(), a failure of media_entity_pads_init()
+destroys cap_dev->lock inline and then jumps to err_destroy_mutex, which
+destroys the same mutex a second time. Calling mutex_destroy() twice is
+harmless, so this is not a bugfix, but the inline call is redundant: the
+err_destroy_mutex label already covers this path, just like the switch
+default case immediately above.
+
+Drop the inline mutex_destroy() and rely solely on the err_destroy_mutex
+label, so the mutex is destroyed exactly once on every error path.
+
+Signed-off-by: David Carlier <devnexen@gmail.com>
+Reviewed-by: Jacopo Mondi <jacopo.mondi@ideasonboard.com>
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+---
+ drivers/media/platform/arm/mali-c55/mali-c55-capture.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/drivers/media/platform/arm/mali-c55/mali-c55-capture.c b/drivers/media/platform/arm/mali-c55/mali-c55-capture.c
+index 7aaa5c3f7354..ff01553026fb 100644
+--- a/drivers/media/platform/arm/mali-c55/mali-c55-capture.c
++++ b/drivers/media/platform/arm/mali-c55/mali-c55-capture.c
+@@ -857,10 +857,8 @@ static int mali_c55_register_cap_dev(struct mali_c55 *mali_c55,
+ 
+ 	cap_dev->pad.flags = MEDIA_PAD_FL_SINK;
+ 	ret = media_entity_pads_init(&cap_dev->vdev.entity, 1, &cap_dev->pad);
+-	if (ret) {
+-		mutex_destroy(&cap_dev->lock);
++	if (ret)
+ 		goto err_destroy_mutex;
+-	}
+ 
+ 	vb2q->type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+ 	vb2q->io_modes = VB2_MMAP | VB2_DMABUF;
+-- 
+2.55.0
+

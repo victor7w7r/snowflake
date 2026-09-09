@@ -1,0 +1,47 @@
+From ebb314763f975af722a9f3c86752cdf82b61c78a Mon Sep 17 00:00:00 2001
+From: Alexandre Courbot <acourbot@nvidia.com>
+Date: Fri, 24 Jul 2026 20:37:04 +0900
+Subject: [PATCH 10233/15333] rust: io: register: dispatch shortcut rules
+ internally
+
+A couple of shortcut rules redispatch an already normalized declaration
+through the public register! entry point. This is unneeded - the public
+rule should only be invoked by users.
+
+Dispatch directly to the appropriate internal @reg rule instead.
+
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Link: https://patch.msgid.link/20260724-registers_fix-v2-1-a0fb58b02185@nvidia.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/kernel/io/register.rs | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/rust/kernel/io/register.rs b/rust/kernel/io/register.rs
+index 6cb07fc92cc3..9aa17aa520aa 100644
+--- a/rust/kernel/io/register.rs
++++ b/rust/kernel/io/register.rs
+@@ -888,7 +888,8 @@ macro_rules! register {
+             { $($fields:tt)* }
+     ) => {
+         $crate::register!(
+-            $(#[$attr])* $vis $name($storage) [ $size, stride = ::core::mem::size_of::<$storage>() ]
++            @reg $(#[$attr])* $vis $name($storage)
++                [ $size, stride = ::core::mem::size_of::<$storage>() ]
+                 @ $offset { $($fields)* }
+         );
+     };
+@@ -932,7 +933,8 @@ macro_rules! register {
+             @ $base:ident + $offset:literal { $($fields:tt)* }
+     ) => {
+         $crate::register!(
+-            $(#[$attr])* $vis $name($storage) [ $size, stride = ::core::mem::size_of::<$storage>() ]
++            @reg $(#[$attr])* $vis $name($storage)
++                [ $size, stride = ::core::mem::size_of::<$storage>() ]
+                 @ $base + $offset { $($fields)* }
+         );
+     };
+-- 
+2.55.0
+

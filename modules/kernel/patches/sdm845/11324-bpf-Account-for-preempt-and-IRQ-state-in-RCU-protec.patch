@@ -1,0 +1,119 @@
+From d65739bf93be5160c1e0af00064874bbe262d5b6 Mon Sep 17 00:00:00 2001
+From: Ning Ding <dingning04@gmail.com>
+Date: Wed, 5 Aug 2026 16:39:33 -0700
+Subject: [PATCH 11324/15333] bpf: Account for preempt and IRQ state in RCU
+ protection
+
+Disabling preemption or local IRQs keeps the current CPU in an RCU
+read-side critical section, but in_rcu_cs() does not account for either
+state. The verifier therefore rejects safe kptr accesses and invalidates
+pointers when another RCU source ends.
+
+Include preemption-disabled and IRQ-disabled state in in_rcu_cs().
+Invalidate RCU-protected pointers on RCU unlock, preempt enable, or IRQ
+restore only after the final protection ends.
+
+Signed-off-by: Ning Ding <dingning04@gmail.com>
+Link: https://lore.kernel.org/bpf/20260805233940.3966981-2-dingning04@gmail.com
+[ kkd: Simplify was_in_rcu_cs on spin unlock and adjust the selftest. ]
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ kernel/bpf/verifier.c                              | 14 ++++++++++----
+ .../testing/selftests/bpf/progs/cpumask_failure.c  |  8 ++++++--
+ 2 files changed, 16 insertions(+), 6 deletions(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index d952bd95cbb7..e6233c0081d1 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -4452,7 +4452,9 @@ static bool in_sleepable(struct bpf_verifier_env *env)
+ static bool in_rcu_cs(struct bpf_verifier_env *env)
+ {
+ 	return env->cur_state->active_rcu_locks ||
++	       env->cur_state->active_preempt_locks ||
+ 	       env->cur_state->active_locks ||
++	       env->cur_state->active_irq_id ||
+ 	       !in_sleepable(env);
+ }
+ 
+@@ -7166,7 +7168,6 @@ static int process_spin_lock(struct bpf_verifier_env *env, struct bpf_reg_state
+ 			return err;
+ 		}
+ 	} else {
+-		bool was_in_rcu_cs;
+ 		void *ptr;
+ 		int type;
+ 
+@@ -7194,12 +7195,11 @@ static int process_spin_lock(struct bpf_verifier_env *env, struct bpf_reg_state
+ 			verbose(env, "%s_unlock cannot be out of order\n", lock_str);
+ 			return -EINVAL;
+ 		}
+-		was_in_rcu_cs = in_rcu_cs(env);
+ 		if (release_lock_state(cur, type, reg->id, ptr)) {
+ 			verbose(env, "%s_unlock of different lock\n", lock_str);
+ 			return -EINVAL;
+ 		}
+-		if (was_in_rcu_cs && !in_rcu_cs(env))
++		if (!in_rcu_cs(env))
+ 			invalidate_rcu_protected_refs(env);
+ 
+ 		invalidate_non_owning_refs(env);
+@@ -11663,6 +11663,9 @@ static int process_irq_flag(struct bpf_verifier_env *env, struct bpf_reg_state *
+ 		err = unmark_stack_slot_irq_flag(env, reg, kfunc_class);
+ 		if (err)
+ 			return err;
++
++		if (!in_rcu_cs(env))
++			invalidate_rcu_protected_refs(env);
+ 	}
+ 	return 0;
+ }
+@@ -13159,7 +13162,8 @@ static int check_kfunc_call(struct bpf_verifier_env *env, struct bpf_insn *insn,
+ 			verbose(env, "unmatched rcu read unlock (kernel function %s)\n", func_name);
+ 			return -EINVAL;
+ 		}
+-		if (--env->cur_state->active_rcu_locks == 0)
++		env->cur_state->active_rcu_locks--;
++		if (!in_rcu_cs(env))
+ 			invalidate_rcu_protected_refs(env);
+ 	} else if (preempt_disable) {
+ 		env->cur_state->active_preempt_locks++;
+@@ -13169,6 +13173,8 @@ static int check_kfunc_call(struct bpf_verifier_env *env, struct bpf_insn *insn,
+ 			return -EINVAL;
+ 		}
+ 		env->cur_state->active_preempt_locks--;
++		if (!in_rcu_cs(env))
++			invalidate_rcu_protected_refs(env);
+ 	}
+ 
+ 	if (sleepable && !in_sleepable_context(env)) {
+diff --git a/tools/testing/selftests/bpf/progs/cpumask_failure.c b/tools/testing/selftests/bpf/progs/cpumask_failure.c
+index 74b4cd4bcdbb..4628feb53d86 100644
+--- a/tools/testing/selftests/bpf/progs/cpumask_failure.c
++++ b/tools/testing/selftests/bpf/progs/cpumask_failure.c
+@@ -116,9 +116,9 @@ int BPF_PROG(test_cpumask_null, struct task_struct *task, u64 clone_flags)
+ 	return 0;
+ }
+ 
+-SEC("tp_btf/task_newtask")
++SEC("?fentry.s/" SYS_PREFIX "sys_getpgid")
+ __failure __msg("R2 must be a rcu pointer")
+-int BPF_PROG(test_global_mask_out_of_rcu, struct task_struct *task, u64 clone_flags)
++int BPF_PROG(test_global_mask_out_of_rcu)
+ {
+ 	struct bpf_cpumask *local, *prev;
+ 
+@@ -133,6 +133,10 @@ int BPF_PROG(test_global_mask_out_of_rcu, struct task_struct *task, u64 clone_fl
+ 		return 0;
+ 	}
+ 
++	/*
++	 * Use a sleepable program so explicit RCU is the only source of RCU
++	 * protection.
++	 */
+ 	bpf_rcu_read_lock();
+ 	local = global_mask;
+ 	if (!local) {
+-- 
+2.55.0
+

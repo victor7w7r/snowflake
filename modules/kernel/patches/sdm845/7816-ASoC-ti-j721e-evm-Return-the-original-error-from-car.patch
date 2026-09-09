@@ -1,0 +1,38 @@
+From 1a1145d1b249acf36ff576f303ca6cdea4add99c Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 16 Jul 2026 17:39:04 +0700
+Subject: [PATCH 07816/15333] ASoC: ti: j721e-evm: Return the original error
+ from card name parsing
+
+Return the error from snd_soc_of_parse_card_name() directly instead of
+converting it to -ENODEV. The helper already logs the error, so drop the
+redundant dev_err().
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260716103911.77652-4-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/ti/j721e-evm.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/sound/soc/ti/j721e-evm.c b/sound/soc/ti/j721e-evm.c
+index c214ae0d7b95..b95ade8198eb 100644
+--- a/sound/soc/ti/j721e-evm.c
++++ b/sound/soc/ti/j721e-evm.c
+@@ -868,10 +868,9 @@ static int j721e_soc_probe(struct platform_device *pdev)
+ 	card->num_dapm_routes = ARRAY_SIZE(j721e_cpb_dapm_routes);
+ 	card->fully_routed = 1;
+ 
+-	if (snd_soc_of_parse_card_name(card, "model")) {
+-		dev_err(&pdev->dev, "Card name is not provided\n");
+-		return -ENODEV;
+-	}
++	ret = snd_soc_of_parse_card_name(card, "model");
++	if (ret)
++		return ret;
+ 
+ 	link_cnt = 0;
+ 	conf_cnt = 0;
+-- 
+2.55.0
+

@@ -1,0 +1,85 @@
+From bd402b8ac0158dc6c7c04eb308095c9574813854 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Fri, 24 Jul 2026 11:03:45 +0800
+Subject: [PATCH 07489/15333] iio: pressure: Remove redundant
+ dev_err()/dev_err_probe()
+
+Since commit
+55b48e23f5c4 ("genirq/devres: Add error handling in devm_request_*_irq()"),
+devm_request_irq() and devm_request_threaded_irq() automatically log
+detailed error messages on failure. Remove the now-redundant
+driver-specific dev_err() and dev_err_probe() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@intel.com>
+Reviewed-by: Joshua Crofts <joshua.crofts1@gmail.com>
+Signed-off-by: Jonathan Cameron <jonathan.cameron@oss.qualcomm.com>
+---
+ drivers/iio/pressure/bmp280-core.c | 2 +-
+ drivers/iio/pressure/dlhl60d.c     | 4 +---
+ drivers/iio/pressure/rohm-bm1390.c | 2 +-
+ drivers/iio/pressure/zpa2326.c     | 5 +----
+ 4 files changed, 4 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/iio/pressure/bmp280-core.c b/drivers/iio/pressure/bmp280-core.c
+index c89153dcc323..1066792b9087 100644
+--- a/drivers/iio/pressure/bmp280-core.c
++++ b/drivers/iio/pressure/bmp280-core.c
+@@ -1339,7 +1339,7 @@ static int __bmp280_trigger_probe(struct iio_dev *indio_dev,
+ 					irq_thread_handler, IRQF_ONESHOT,
+ 					indio_dev->name, indio_dev);
+ 	if (ret)
+-		return dev_err_probe(dev, ret, "request IRQ failed.\n");
++		return ret;
+ 
+ 	ret = devm_iio_trigger_register(data->dev, data->trig);
+ 	if (ret)
+diff --git a/drivers/iio/pressure/dlhl60d.c b/drivers/iio/pressure/dlhl60d.c
+index 01a873165923..961888fd03a7 100644
+--- a/drivers/iio/pressure/dlhl60d.c
++++ b/drivers/iio/pressure/dlhl60d.c
+@@ -309,10 +309,8 @@ static int dlh_probe(struct i2c_client *client)
+ 		ret = devm_request_irq(&client->dev, client->irq, dlh_interrupt,
+ 				       IRQF_TRIGGER_RISING | IRQF_NO_THREAD,
+ 				       st->info->name, indio_dev);
+-		if (ret) {
+-			dev_err(&client->dev, "failed to allocate threaded irq");
++		if (ret)
+ 			return ret;
+-		}
+ 
+ 		st->use_interrupt = true;
+ 		init_completion(&st->completion);
+diff --git a/drivers/iio/pressure/rohm-bm1390.c b/drivers/iio/pressure/rohm-bm1390.c
+index 9d72ae64126c..57941fb4a535 100644
+--- a/drivers/iio/pressure/rohm-bm1390.c
++++ b/drivers/iio/pressure/rohm-bm1390.c
+@@ -805,7 +805,7 @@ static int bm1390_setup_trigger(struct bm1390_data *data, struct iio_dev *idev,
+ 					&bm1390_irq_thread_handler,
+ 					IRQF_ONESHOT, name, idev);
+ 	if (ret)
+-		return dev_err_probe(data->dev, ret, "Could not request IRQ\n");
++		return ret;
+ 
+ 
+ 	ret = devm_iio_trigger_register(data->dev, itrig);
+diff --git a/drivers/iio/pressure/zpa2326.c b/drivers/iio/pressure/zpa2326.c
+index 2c68fdf2744e..b38493ff3b8b 100644
+--- a/drivers/iio/pressure/zpa2326.c
++++ b/drivers/iio/pressure/zpa2326.c
+@@ -911,11 +911,8 @@ static int zpa2326_init_managed_irq(struct device          *parent,
+ 					zpa2326_handle_threaded_irq,
+ 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+ 					dev_name(parent), indio_dev);
+-	if (err) {
+-		dev_err(parent, "failed to request interrupt %d (%d)", irq,
+-			err);
++	if (err)
+ 		return err;
+-	}
+ 
+ 	dev_info(parent, "using interrupt %d", irq);
+ 
+-- 
+2.55.0
+

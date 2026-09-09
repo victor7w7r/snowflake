@@ -1,0 +1,41 @@
+From 930a915de89ce6b3ae4d1b902304df3b0fb507cc Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Fri, 15 May 2026 09:56:07 -0400
+Subject: [PATCH 00368/15333] drm/amdgpu: don't reemit if there is nothing to
+ reemit
+
+Return early in amdgpu_ring_set_fence_errors_and_reemit()
+if ring_backup_entries_to_copy is 0.  That means that either
+the ring is idle and there is nothing to reemit, or there
+some reason why we should reemit, so return early and
+signal the fences (if applicable).
+
+Reviewed-by: Jesse Zhang <jesse.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
+index ea69b1bac7c6..6a43c8494fa8 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
+@@ -727,6 +727,15 @@ void amdgpu_ring_set_fence_errors_and_reemit(struct amdgpu_ring *ring,
+ 	last_seq = amdgpu_fence_read(ring) & ring->fence_drv.num_fences_mask;
+ 	seq = ring->fence_drv.sync_seq & ring->fence_drv.num_fences_mask;
+ 
++	/* If there is nothing to reemit, return early and set an error on the fence
++	 * if applicable. If all of the fences are siganlled, this will be a nop.
++	 * if there are still fences and ring_backup_entries_to_copy is 0, then
++	 * we are skipping it on purpose.
++	 */
++	if (!ring->ring_backup_entries_to_copy) {
++		amdgpu_fence_driver_force_completion(ring, &guilty_fence->base);
++		return;
++	}
+ 	ring->reemit = true;
+ 	amdgpu_ring_alloc(ring, ring->ring_backup_entries_to_copy);
+ 	spin_lock_irqsave(&ring->fence_drv.lock, flags);
+-- 
+2.55.0
+

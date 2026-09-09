@@ -1,0 +1,40 @@
+From 475b59db3bd5c7717b5441481ac06f226815cb0a Mon Sep 17 00:00:00 2001
+From: Tiezhu Yang <yangtiezhu@loongson.cn>
+Date: Wed, 1 Jul 2026 11:51:07 +0800
+Subject: [PATCH 01985/15333] bpf: Use BPF_CALL_IMM macro consistently in
+ bpf_do_misc_fixups
+
+In bpf_do_misc_fixups(), the conversion from a function address to a
+BPF immediate value is handled using the BPF_CALL_IMM macro inside the
+'patch_map_ops_generic' label block. However, immediately following it
+in the 'patch_call_imm' label block, the immediate value is calculated
+manually by subtracting __bpf_call_base from fn->func.
+
+Inspired by KaFai Wan's review comments on fixing helper call offsets,
+use the BPF_CALL_IMM macro in 'patch_call_imm' as well to clean this up.
+This removes the redundant manual pointer arithmetic and ensures coding
+style consistency across adjacent label blocks within the same function.
+
+Signed-off-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Link: https://lore.kernel.org/bpf/20260701035107.8069-1-yangtiezhu@loongson.cn
+---
+ kernel/bpf/fixups.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/bpf/fixups.c b/kernel/bpf/fixups.c
+index 3cf2cc6e3ab6..12a8a4eb757f 100644
+--- a/kernel/bpf/fixups.c
++++ b/kernel/bpf/fixups.c
+@@ -2338,7 +2338,7 @@ int bpf_do_misc_fixups(struct bpf_verifier_env *env)
+ 				     func_id_name(insn->imm), insn->imm);
+ 			return -EFAULT;
+ 		}
+-		insn->imm = fn->func - __bpf_call_base;
++		insn->imm = BPF_CALL_IMM(fn->func);
+ next_insn:
+ 		if (subprogs[cur_subprog + 1].start == i + delta + 1) {
+ 			subprogs[cur_subprog].stack_depth += stack_depth_extra;
+-- 
+2.55.0
+

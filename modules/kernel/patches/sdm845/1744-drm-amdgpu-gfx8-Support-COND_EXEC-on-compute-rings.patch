@@ -1,0 +1,48 @@
+From 6e54e467973eb4a541a1ffe5c81ed54b9b59eda5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Wed, 17 Jun 2026 21:14:25 +0200
+Subject: [PATCH 01744/15333] drm/amdgpu/gfx8: Support COND_EXEC on compute
+ rings
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+It is useful to minimize collateral damage during an IP block
+soft reset. We can clear the COND_EXEC condition so that
+only the currently executing submission is at risk.
+
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
+index e753b029a077..9bb50c147042 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
+@@ -6787,10 +6787,12 @@ static const struct amdgpu_ring_funcs gfx_v8_0_ring_funcs_compute = {
+ 	.get_wptr = gfx_v8_0_ring_get_wptr_compute,
+ 	.set_wptr = gfx_v8_0_ring_set_wptr_compute,
+ 	.emit_frame_size =
++		5 + /* gfx_v8_0_ring_emit_init_cond_exec (from amdgpu_ib_schedule) */
+ 		20 + /* gfx_v8_0_ring_emit_gds_switch */
+ 		7 + /* gfx_v8_0_ring_emit_hdp_flush */
+ 		5 + /* hdp_invalidate */
+ 		7 + /* gfx_v8_0_ring_emit_pipeline_sync */
++		5 + /* gfx_v8_0_ring_emit_init_cond_exec (from amdgpu_vm_flush) */
+ 		VI_FLUSH_GPU_TLB_NUM_WREG * 5 + 7 + /* gfx_v8_0_ring_emit_vm_flush */
+ 		7 + 7 + 7 + /* gfx_v8_0_ring_emit_fence_compute x3 for user fence, vm fence */
+ 		7 + /* gfx_v8_0_emit_mem_sync_compute */
+@@ -6811,6 +6813,7 @@ static const struct amdgpu_ring_funcs gfx_v8_0_ring_funcs_compute = {
+ 	.soft_recovery = gfx_v8_0_ring_soft_recovery,
+ 	.emit_mem_sync = gfx_v8_0_emit_mem_sync_compute,
+ 	.emit_wave_limit = gfx_v8_0_emit_wave_limit,
++	.init_cond_exec = gfx_v8_0_ring_emit_init_cond_exec,
+ };
+ 
+ static const struct amdgpu_ring_funcs gfx_v8_0_ring_funcs_kiq = {
+-- 
+2.55.0
+

@@ -1,0 +1,33 @@
+From edfbc5d2adf151a33e8528e6e5da3cc69e49f1eb Mon Sep 17 00:00:00 2001
+From: Daniel Palmer <daniel@0x0f.com>
+Date: Fri, 31 Jul 2026 21:19:13 +0900
+Subject: [PATCH 12468/15333] fbdev: tdfxfb: Wake the VGA core before
+ programming the CRTC
+
+If the card was unbooted the VGA core needs to be woken up before
+poking at it.
+
+Signed-off-by: Daniel Palmer <daniel@0x0f.com>
+Signed-off-by: Helge Deller <deller@gmx.de>
+---
+ drivers/video/fbdev/tdfxfb.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/video/fbdev/tdfxfb.c b/drivers/video/fbdev/tdfxfb.c
+index 74a8dfef1d9d..8e5d2f3ef666 100644
+--- a/drivers/video/fbdev/tdfxfb.c
++++ b/drivers/video/fbdev/tdfxfb.c
+@@ -485,6 +485,10 @@ static void do_write_regs(struct fb_info *info, struct banshee_reg *reg)
+ 
+ 	tdfx_outl(par, MISCINIT1, tdfx_inl(par, MISCINIT1) | 0x01);
+ 
++	/* Wake the VGA core if it hasn't already been woken up */
++	tdfx_outl(par, VGAINIT0, reg->vgainit0);
++	vga_outb(par, 0x3c3, 0x01);
++
+ 	crt_outb(par, 0x11, crt_inb(par, 0x11) & 0x7f); /* CRT unprotect */
+ 
+ 	banshee_make_room(par, 3);
+-- 
+2.55.0
+

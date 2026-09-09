@@ -1,0 +1,41 @@
+From 82167f2f0fdec3ce2c418b2dd35408ba74b1f6e3 Mon Sep 17 00:00:00 2001
+From: Minhong He <heminhong@kylinos.cn>
+Date: Mon, 3 Aug 2026 16:59:50 +0800
+Subject: [PATCH 10693/15333] net: macvlan: check register_netdevice_notifier()
+ error in macvlan_init_module()
+
+macvlan_init_module() ignores register_netdevice_notifier() errors and
+continues module initialization, which can leave macvlan loaded without
+its netdev notifier registered.
+
+Check the error and fail module initialization early.
+
+This is a future looking check, register_netdevice_notifier()
+only fails on double registration or if the registered notifier
+itself returns an error.
+
+Signed-off-by: Minhong He <heminhong@kylinos.cn>
+Link: https://patch.msgid.link/20260803085950.142325-1-heminhong@kylinos.cn
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/macvlan.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/macvlan.c b/drivers/net/macvlan.c
+index 42169f3614c4..8d71a832cb17 100644
+--- a/drivers/net/macvlan.c
++++ b/drivers/net/macvlan.c
+@@ -1915,7 +1915,9 @@ static int __init macvlan_init_module(void)
+ {
+ 	int err;
+ 
+-	register_netdevice_notifier(&macvlan_notifier_block);
++	err = register_netdevice_notifier(&macvlan_notifier_block);
++	if (err)
++		return err;
+ 
+ 	err = macvlan_link_register(&macvlan_link_ops);
+ 	if (err < 0)
+-- 
+2.55.0
+

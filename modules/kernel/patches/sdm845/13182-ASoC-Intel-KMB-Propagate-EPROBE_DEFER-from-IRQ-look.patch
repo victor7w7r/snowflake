@@ -1,0 +1,33 @@
+From ce76c44c34ad1d4e0b1671ba376db814afbb3e83 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 6 Aug 2026 12:59:37 +0700
+Subject: [PATCH 13182/15333] ASoC: Intel: KMB: Propagate -EPROBE_DEFER from
+ IRQ lookup
+
+Return -EPROBE_DEFER from platform_get_irq_optional() so the driver is
+re-probed when the interrupt resource becomes available instead of
+continuing probe without an IRQ.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260806055937.24600-1-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/intel/keembay/kmb_platform.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/sound/soc/intel/keembay/kmb_platform.c b/sound/soc/intel/keembay/kmb_platform.c
+index 6659e8060ef3..48f132f01878 100644
+--- a/sound/soc/intel/keembay/kmb_platform.c
++++ b/sound/soc/intel/keembay/kmb_platform.c
+@@ -873,6 +873,8 @@ static int kmb_plat_dai_probe(struct platform_device *pdev)
+ 
+ 	if (kmb_i2s->use_pio) {
+ 		irq = platform_get_irq_optional(pdev, 0);
++		if (irq == -EPROBE_DEFER)
++			return irq;
+ 		if (irq > 0) {
+ 			ret = devm_request_irq(dev, irq, kmb_i2s_irq_handler, 0,
+ 					       pdev->name, kmb_i2s);
+-- 
+2.55.0
+

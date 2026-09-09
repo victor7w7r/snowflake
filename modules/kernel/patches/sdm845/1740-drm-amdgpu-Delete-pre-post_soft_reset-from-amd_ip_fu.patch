@@ -1,0 +1,471 @@
+From b7500532e12b32d9ac54a4faacebb12baca091a4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Wed, 17 Jun 2026 21:14:17 +0200
+Subject: [PATCH 01740/15333] drm/amdgpu: Delete pre/post_soft_reset() from
+ amd_ip_funcs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+These functions were largely redundant with the respective
+suspend() and resume() functions, the main difference being
+that they were less used and therefore less likely to be
+tested and correct.
+
+Move anything relevant from pre/post_soft_reset()
+that is not already done by suspend()/resume()
+into the soft_reset() functions.
+
+Note that future uses of soft_reset() will need to call
+the suspend() / resume() functions and the necessary clock
+and power gating functions.
+
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Acked-by: Christian König <christian.koenig@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c   | 11 +--
+ drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c    | 95 +++---------------------
+ drivers/gpu/drm/amd/amdgpu/jpeg_v5_0_1.c |  2 -
+ drivers/gpu/drm/amd/amdgpu/jpeg_v5_0_2.c |  2 -
+ drivers/gpu/drm/amd/amdgpu/sdma_v3_0.c   | 40 ----------
+ drivers/gpu/drm/amd/amdgpu/tonga_ih.c    | 20 -----
+ drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c    | 25 -------
+ drivers/gpu/drm/amd/amdgpu/vce_v3_0.c    | 27 -------
+ drivers/gpu/drm/amd/amdgpu/vcn_v5_0_1.c  |  2 -
+ drivers/gpu/drm/amd/amdgpu/vcn_v5_0_2.c  |  2 -
+ drivers/gpu/drm/amd/include/amd_shared.h |  2 -
+ 11 files changed, 15 insertions(+), 213 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
+index d9bc929c1c3a..4cd6e8bfd4c9 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
+@@ -5256,14 +5256,12 @@ static int gfx_v11_0_soft_reset(struct amdgpu_ip_block *ip_block)
+ 
+ 	amdgpu_gfx_rlc_exit_safe_mode(adev, 0);
+ 
+-	return gfx_v11_0_cp_resume(adev);
+-}
++	r = gfx_v11_0_cp_resume(adev);
++	if (r)
++		return r;
+ 
+-static int gfx_v11_0_post_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	struct amdgpu_device *adev = ip_block->adev;
+ 	/**
+-	 * GFX soft reset will impact MES, need resume MES when do GFX soft reset
++	 * GFX soft reset impacts MES, resume MES after GFX soft reset is finished
+ 	 */
+ 	return amdgpu_mes_resume(adev, 0);
+ }
+@@ -6988,7 +6986,6 @@ static const struct amd_ip_funcs gfx_v11_0_ip_funcs = {
+ 	.is_idle = gfx_v11_0_is_idle,
+ 	.wait_for_idle = gfx_v11_0_wait_for_idle,
+ 	.soft_reset = gfx_v11_0_soft_reset,
+-	.post_soft_reset = gfx_v11_0_post_soft_reset,
+ 	.set_clockgating_state = gfx_v11_0_set_clockgating_state,
+ 	.set_powergating_state = gfx_v11_0_set_powergating_state,
+ 	.get_clockgating_state = gfx_v11_0_get_clockgating_state,
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
+index 59728dfd8a7b..8ae9ab0fb886 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v8_0.c
+@@ -4891,52 +4891,12 @@ static int gfx_v8_0_resume(struct amdgpu_ip_block *ip_block)
+ 	return gfx_v8_0_hw_init(ip_block);
+ }
+ 
+-static int gfx_v8_0_pre_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	struct amdgpu_device *adev = ip_block->adev;
+-	u32 grbm_soft_reset = 0;
+-
+-	if ((!adev->gfx.grbm_soft_reset) &&
+-	    (!adev->gfx.srbm_soft_reset))
+-		return 0;
+-
+-	grbm_soft_reset = adev->gfx.grbm_soft_reset;
+-
+-	/* stop the rlc */
+-	adev->gfx.rlc.funcs->stop(adev);
+-
+-	if (REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_CP) ||
+-	    REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_GFX))
+-		/* Disable GFX parsing/prefetching */
+-		gfx_v8_0_cp_gfx_enable(adev, false);
+-
+-	if (REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_CP) ||
+-	    REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_CPF) ||
+-	    REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_CPC) ||
+-	    REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_CPG)) {
+-		int i;
+-
+-		for (i = 0; i < adev->gfx.num_compute_rings; i++) {
+-			struct amdgpu_ring *ring = &adev->gfx.compute_ring[i];
+-
+-			mutex_lock(&adev->srbm_mutex);
+-			vi_srbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
+-			gfx_v8_0_deactivate_hqd(adev, 2);
+-			vi_srbm_select(adev, 0, 0, 0, 0);
+-			mutex_unlock(&adev->srbm_mutex);
+-		}
+-		/* Disable MEC parsing/prefetching */
+-		gfx_v8_0_cp_compute_enable(adev, false);
+-	}
+-
+-	return 0;
+-}
+-
+ static int gfx_v8_0_soft_reset(struct amdgpu_ip_block *ip_block)
+ {
+ 	struct amdgpu_device *adev = ip_block->adev;
+ 	u32 grbm_soft_reset = 0, srbm_soft_reset = 0;
+ 	u32 tmp;
++	int i;
+ 
+ 	if ((!adev->gfx.grbm_soft_reset) &&
+ 	    (!adev->gfx.srbm_soft_reset))
+@@ -4945,6 +4905,16 @@ static int gfx_v8_0_soft_reset(struct amdgpu_ip_block *ip_block)
+ 	grbm_soft_reset = adev->gfx.grbm_soft_reset;
+ 	srbm_soft_reset = adev->gfx.srbm_soft_reset;
+ 
++	for (i = 0; i < adev->gfx.num_compute_rings; i++) {
++		struct amdgpu_ring *ring = &adev->gfx.compute_ring[i];
++
++		mutex_lock(&adev->srbm_mutex);
++		vi_srbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
++		gfx_v8_0_deactivate_hqd(adev, 2);
++		vi_srbm_select(adev, 0, 0, 0, 0);
++		mutex_unlock(&adev->srbm_mutex);
++	}
++
+ 	if (grbm_soft_reset || srbm_soft_reset) {
+ 		tmp = RREG32(mmGMCON_DEBUG);
+ 		tmp = REG_SET_FIELD(tmp, GMCON_DEBUG, GFX_STALL, 1);
+@@ -4994,47 +4964,6 @@ static int gfx_v8_0_soft_reset(struct amdgpu_ip_block *ip_block)
+ 	return 0;
+ }
+ 
+-static int gfx_v8_0_post_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	struct amdgpu_device *adev = ip_block->adev;
+-	u32 grbm_soft_reset = 0;
+-
+-	if ((!adev->gfx.grbm_soft_reset) &&
+-	    (!adev->gfx.srbm_soft_reset))
+-		return 0;
+-
+-	grbm_soft_reset = adev->gfx.grbm_soft_reset;
+-
+-	if (REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_CP) ||
+-	    REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_CPF) ||
+-	    REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_CPC) ||
+-	    REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_CPG)) {
+-		int i;
+-
+-		for (i = 0; i < adev->gfx.num_compute_rings; i++) {
+-			struct amdgpu_ring *ring = &adev->gfx.compute_ring[i];
+-
+-			mutex_lock(&adev->srbm_mutex);
+-			vi_srbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
+-			gfx_v8_0_deactivate_hqd(adev, 2);
+-			vi_srbm_select(adev, 0, 0, 0, 0);
+-			mutex_unlock(&adev->srbm_mutex);
+-		}
+-		gfx_v8_0_kiq_resume(adev);
+-		gfx_v8_0_kcq_resume(adev);
+-	}
+-
+-	if (REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_CP) ||
+-	    REG_GET_FIELD(grbm_soft_reset, GRBM_SOFT_RESET, SOFT_RESET_GFX))
+-		gfx_v8_0_cp_gfx_resume(adev);
+-
+-	gfx_v8_0_cp_test_all_rings(adev);
+-
+-	adev->gfx.rlc.funcs->start(adev);
+-
+-	return 0;
+-}
+-
+ /**
+  * gfx_v8_0_get_gpu_clock_counter - return GPU clock counter snapshot
+  *
+@@ -6797,9 +6726,7 @@ static const struct amd_ip_funcs gfx_v8_0_ip_funcs = {
+ 	.resume = gfx_v8_0_resume,
+ 	.is_idle = gfx_v8_0_is_idle,
+ 	.wait_for_idle = gfx_v8_0_wait_for_idle,
+-	.pre_soft_reset = gfx_v8_0_pre_soft_reset,
+ 	.soft_reset = gfx_v8_0_soft_reset,
+-	.post_soft_reset = gfx_v8_0_post_soft_reset,
+ 	.set_clockgating_state = gfx_v8_0_set_clockgating_state,
+ 	.set_powergating_state = gfx_v8_0_set_powergating_state,
+ 	.get_clockgating_state = gfx_v8_0_get_clockgating_state,
+diff --git a/drivers/gpu/drm/amd/amdgpu/jpeg_v5_0_1.c b/drivers/gpu/drm/amd/amdgpu/jpeg_v5_0_1.c
+index 26a3f759ea94..a562369d2d81 100644
+--- a/drivers/gpu/drm/amd/amdgpu/jpeg_v5_0_1.c
++++ b/drivers/gpu/drm/amd/amdgpu/jpeg_v5_0_1.c
+@@ -888,9 +888,7 @@ static const struct amd_ip_funcs jpeg_v5_0_1_ip_funcs = {
+ 	.resume = jpeg_v5_0_1_resume,
+ 	.is_idle = jpeg_v5_0_1_is_idle,
+ 	.wait_for_idle = jpeg_v5_0_1_wait_for_idle,
+-	.pre_soft_reset = NULL,
+ 	.soft_reset = NULL,
+-	.post_soft_reset = NULL,
+ 	.set_clockgating_state = jpeg_v5_0_1_set_clockgating_state,
+ 	.set_powergating_state = jpeg_v5_0_1_set_powergating_state,
+ 	.dump_ip_state = amdgpu_jpeg_dump_ip_state,
+diff --git a/drivers/gpu/drm/amd/amdgpu/jpeg_v5_0_2.c b/drivers/gpu/drm/amd/amdgpu/jpeg_v5_0_2.c
+index 717eaf43c9a6..ff02f72352a8 100644
+--- a/drivers/gpu/drm/amd/amdgpu/jpeg_v5_0_2.c
++++ b/drivers/gpu/drm/amd/amdgpu/jpeg_v5_0_2.c
+@@ -690,9 +690,7 @@ static const struct amd_ip_funcs jpeg_v5_0_2_ip_funcs = {
+ 	.resume = jpeg_v5_0_2_resume,
+ 	.is_idle = jpeg_v5_0_2_is_idle,
+ 	.wait_for_idle = jpeg_v5_0_2_wait_for_idle,
+-	.pre_soft_reset = NULL,
+ 	.soft_reset = NULL,
+-	.post_soft_reset = NULL,
+ 	.set_clockgating_state = jpeg_v5_0_2_set_clockgating_state,
+ 	.set_powergating_state = jpeg_v5_0_2_set_powergating_state,
+ 	.dump_ip_state = amdgpu_jpeg_dump_ip_state,
+diff --git a/drivers/gpu/drm/amd/amdgpu/sdma_v3_0.c b/drivers/gpu/drm/amd/amdgpu/sdma_v3_0.c
+index e77261a64cf8..c2d098cd72ce 100644
+--- a/drivers/gpu/drm/amd/amdgpu/sdma_v3_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/sdma_v3_0.c
+@@ -1237,44 +1237,6 @@ static int sdma_v3_0_wait_for_idle(struct amdgpu_ip_block *ip_block)
+ 	return -ETIMEDOUT;
+ }
+ 
+-static int sdma_v3_0_pre_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	struct amdgpu_device *adev = ip_block->adev;
+-	u32 srbm_soft_reset = 0;
+-
+-	if (!adev->sdma.srbm_soft_reset)
+-		return 0;
+-
+-	srbm_soft_reset = adev->sdma.srbm_soft_reset;
+-
+-	if (REG_GET_FIELD(srbm_soft_reset, SRBM_SOFT_RESET, SOFT_RESET_SDMA) ||
+-	    REG_GET_FIELD(srbm_soft_reset, SRBM_SOFT_RESET, SOFT_RESET_SDMA1)) {
+-		sdma_v3_0_ctx_switch_enable(adev, false);
+-		sdma_v3_0_enable(adev, false);
+-	}
+-
+-	return 0;
+-}
+-
+-static int sdma_v3_0_post_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	struct amdgpu_device *adev = ip_block->adev;
+-	u32 srbm_soft_reset = 0;
+-
+-	if (!adev->sdma.srbm_soft_reset)
+-		return 0;
+-
+-	srbm_soft_reset = adev->sdma.srbm_soft_reset;
+-
+-	if (REG_GET_FIELD(srbm_soft_reset, SRBM_SOFT_RESET, SOFT_RESET_SDMA) ||
+-	    REG_GET_FIELD(srbm_soft_reset, SRBM_SOFT_RESET, SOFT_RESET_SDMA1)) {
+-		sdma_v3_0_gfx_resume(adev);
+-		sdma_v3_0_rlc_resume(adev);
+-	}
+-
+-	return 0;
+-}
+-
+ static int sdma_v3_0_soft_reset(struct amdgpu_ip_block *ip_block)
+ {
+ 	struct amdgpu_device *adev = ip_block->adev;
+@@ -1531,8 +1493,6 @@ static const struct amd_ip_funcs sdma_v3_0_ip_funcs = {
+ 	.resume = sdma_v3_0_resume,
+ 	.is_idle = sdma_v3_0_is_idle,
+ 	.wait_for_idle = sdma_v3_0_wait_for_idle,
+-	.pre_soft_reset = sdma_v3_0_pre_soft_reset,
+-	.post_soft_reset = sdma_v3_0_post_soft_reset,
+ 	.soft_reset = sdma_v3_0_soft_reset,
+ 	.set_clockgating_state = sdma_v3_0_set_clockgating_state,
+ 	.set_powergating_state = sdma_v3_0_set_powergating_state,
+diff --git a/drivers/gpu/drm/amd/amdgpu/tonga_ih.c b/drivers/gpu/drm/amd/amdgpu/tonga_ih.c
+index 671f5bf18a3a..a3e883f6f099 100644
+--- a/drivers/gpu/drm/amd/amdgpu/tonga_ih.c
++++ b/drivers/gpu/drm/amd/amdgpu/tonga_ih.c
+@@ -390,24 +390,6 @@ static int tonga_ih_wait_for_idle(struct amdgpu_ip_block *ip_block)
+ 	return -ETIMEDOUT;
+ }
+ 
+-static int tonga_ih_pre_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	if (!ip_block->adev->irq.srbm_soft_reset)
+-		return 0;
+-
+-	return tonga_ih_hw_fini(ip_block);
+-}
+-
+-static int tonga_ih_post_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	struct amdgpu_device *adev = ip_block->adev;
+-
+-	if (!adev->irq.srbm_soft_reset)
+-		return 0;
+-
+-	return tonga_ih_hw_init(ip_block);
+-}
+-
+ static int tonga_ih_soft_reset(struct amdgpu_ip_block *ip_block)
+ {
+ 	struct amdgpu_device *adev = ip_block->adev;
+@@ -462,9 +444,7 @@ static const struct amd_ip_funcs tonga_ih_ip_funcs = {
+ 	.resume = tonga_ih_resume,
+ 	.is_idle = tonga_ih_is_idle,
+ 	.wait_for_idle = tonga_ih_wait_for_idle,
+-	.pre_soft_reset = tonga_ih_pre_soft_reset,
+ 	.soft_reset = tonga_ih_soft_reset,
+-	.post_soft_reset = tonga_ih_post_soft_reset,
+ 	.set_clockgating_state = tonga_ih_set_clockgating_state,
+ 	.set_powergating_state = tonga_ih_set_powergating_state,
+ };
+diff --git a/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c b/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c
+index 7a6b6277cadd..8bb9592b0981 100644
+--- a/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c
+@@ -1166,17 +1166,6 @@ static int uvd_v6_0_wait_for_idle(struct amdgpu_ip_block *ip_block)
+ 
+ #define AMDGPU_UVD_STATUS_BUSY_MASK    0xfd
+ 
+-static int uvd_v6_0_pre_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	struct amdgpu_device *adev = ip_block->adev;
+-
+-	if (!adev->uvd.inst->srbm_soft_reset)
+-		return 0;
+-
+-	uvd_v6_0_stop(adev);
+-	return 0;
+-}
+-
+ static int uvd_v6_0_soft_reset(struct amdgpu_ip_block *ip_block)
+ {
+ 	struct amdgpu_device *adev = ip_block->adev;
+@@ -1208,18 +1197,6 @@ static int uvd_v6_0_soft_reset(struct amdgpu_ip_block *ip_block)
+ 	return 0;
+ }
+ 
+-static int uvd_v6_0_post_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	struct amdgpu_device *adev = ip_block->adev;
+-
+-	if (!adev->uvd.inst->srbm_soft_reset)
+-		return 0;
+-
+-	mdelay(5);
+-
+-	return uvd_v6_0_start(adev);
+-}
+-
+ static int uvd_v6_0_set_interrupt_state(struct amdgpu_device *adev,
+ 					struct amdgpu_irq_src *source,
+ 					unsigned type,
+@@ -1519,9 +1496,7 @@ static const struct amd_ip_funcs uvd_v6_0_ip_funcs = {
+ 	.resume = uvd_v6_0_resume,
+ 	.is_idle = uvd_v6_0_is_idle,
+ 	.wait_for_idle = uvd_v6_0_wait_for_idle,
+-	.pre_soft_reset = uvd_v6_0_pre_soft_reset,
+ 	.soft_reset = uvd_v6_0_soft_reset,
+-	.post_soft_reset = uvd_v6_0_post_soft_reset,
+ 	.set_clockgating_state = uvd_v6_0_set_clockgating_state,
+ 	.set_powergating_state = uvd_v6_0_set_powergating_state,
+ 	.get_clockgating_state = uvd_v6_0_get_clockgating_state,
+diff --git a/drivers/gpu/drm/amd/amdgpu/vce_v3_0.c b/drivers/gpu/drm/amd/amdgpu/vce_v3_0.c
+index e01c4af46db1..9f4e88440c0a 100644
+--- a/drivers/gpu/drm/amd/amdgpu/vce_v3_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/vce_v3_0.c
+@@ -662,31 +662,6 @@ static int vce_v3_0_soft_reset(struct amdgpu_ip_block *ip_block)
+ 	return 0;
+ }
+ 
+-static int vce_v3_0_pre_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	struct amdgpu_device *adev = ip_block->adev;
+-
+-	if (!adev->vce.srbm_soft_reset)
+-		return 0;
+-
+-	mdelay(5);
+-
+-	return vce_v3_0_suspend(ip_block);
+-}
+-
+-
+-static int vce_v3_0_post_soft_reset(struct amdgpu_ip_block *ip_block)
+-{
+-	struct amdgpu_device *adev = ip_block->adev;
+-
+-	if (!adev->vce.srbm_soft_reset)
+-		return 0;
+-
+-	mdelay(5);
+-
+-	return vce_v3_0_resume(ip_block);
+-}
+-
+ static int vce_v3_0_set_interrupt_state(struct amdgpu_device *adev,
+ 					struct amdgpu_irq_src *source,
+ 					unsigned type,
+@@ -868,9 +843,7 @@ static const struct amd_ip_funcs vce_v3_0_ip_funcs = {
+ 	.resume = vce_v3_0_resume,
+ 	.is_idle = vce_v3_0_is_idle,
+ 	.wait_for_idle = vce_v3_0_wait_for_idle,
+-	.pre_soft_reset = vce_v3_0_pre_soft_reset,
+ 	.soft_reset = vce_v3_0_soft_reset,
+-	.post_soft_reset = vce_v3_0_post_soft_reset,
+ 	.set_clockgating_state = vce_v3_0_set_clockgating_state,
+ 	.set_powergating_state = vce_v3_0_set_powergating_state,
+ 	.get_clockgating_state = vce_v3_0_get_clockgating_state,
+diff --git a/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_1.c b/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_1.c
+index 0e1a309a3e3a..9c23055cf5ce 100644
+--- a/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_1.c
++++ b/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_1.c
+@@ -1674,9 +1674,7 @@ static const struct amd_ip_funcs vcn_v5_0_1_ip_funcs = {
+ 	.resume = vcn_v5_0_1_resume,
+ 	.is_idle = vcn_v5_0_1_is_idle,
+ 	.wait_for_idle = vcn_v5_0_1_wait_for_idle,
+-	.pre_soft_reset = NULL,
+ 	.soft_reset = NULL,
+-	.post_soft_reset = NULL,
+ 	.set_clockgating_state = vcn_v5_0_1_set_clockgating_state,
+ 	.set_powergating_state = vcn_set_powergating_state,
+ 	.dump_ip_state = amdgpu_vcn_dump_ip_state,
+diff --git a/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_2.c b/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_2.c
+index 1fb1dea3f129..b9f6ae75ea72 100644
+--- a/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_2.c
++++ b/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_2.c
+@@ -1203,9 +1203,7 @@ static const struct amd_ip_funcs vcn_v5_0_2_ip_funcs = {
+ 	.resume = vcn_v5_0_2_resume,
+ 	.is_idle = vcn_v5_0_2_is_idle,
+ 	.wait_for_idle = vcn_v5_0_2_wait_for_idle,
+-	.pre_soft_reset = NULL,
+ 	.soft_reset = NULL,
+-	.post_soft_reset = NULL,
+ 	.set_clockgating_state = vcn_v5_0_2_set_clockgating_state,
+ 	.set_powergating_state = vcn_set_powergating_state,
+ };
+diff --git a/drivers/gpu/drm/amd/include/amd_shared.h b/drivers/gpu/drm/amd/include/amd_shared.h
+index e698e4411eb0..10396018afb3 100644
+--- a/drivers/gpu/drm/amd/include/amd_shared.h
++++ b/drivers/gpu/drm/amd/include/amd_shared.h
+@@ -471,9 +471,7 @@ struct amd_ip_funcs {
+ 	void (*complete)(struct amdgpu_ip_block *ip_block);
+ 	bool (*is_idle)(struct amdgpu_ip_block *ip_block);
+ 	int (*wait_for_idle)(struct amdgpu_ip_block *ip_block);
+-	int (*pre_soft_reset)(struct amdgpu_ip_block *ip_block);
+ 	int (*soft_reset)(struct amdgpu_ip_block *ip_block);
+-	int (*post_soft_reset)(struct amdgpu_ip_block *ip_block);
+ 	int (*set_clockgating_state)(struct amdgpu_ip_block *ip_block,
+ 				     enum amd_clockgating_state state);
+ 	int (*set_powergating_state)(struct amdgpu_ip_block *ip_block,
+-- 
+2.55.0
+

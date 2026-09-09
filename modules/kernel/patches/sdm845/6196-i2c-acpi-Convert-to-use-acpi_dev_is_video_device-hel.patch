@@ -1,0 +1,52 @@
+From 4bff98d343e7450384352637d5b5d20f7ddc749a Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Tue, 14 Jul 2026 20:53:43 +0200
+Subject: [PATCH 06196/15333] i2c: acpi: Convert to use
+ acpi_dev_is_video_device() helper
+
+Replace open coded variant of acpi_dev_is_video_device() helper.
+
+Acked-by: Wolfram Sang <wsa@kernel.org>
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/20260714185915.865396-5-andriy.shevchenko@linux.intel.com
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/i2c/i2c-core-acpi.c | 15 +++++----------
+ 1 file changed, 5 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/i2c/i2c-core-acpi.c b/drivers/i2c/i2c-core-acpi.c
+index 28c0e4884a7f..4aec8aeea826 100644
+--- a/drivers/i2c/i2c-core-acpi.c
++++ b/drivers/i2c/i2c-core-acpi.c
+@@ -128,15 +128,6 @@ static int i2c_acpi_fill_info(struct acpi_resource *ares, void *data)
+ 	return 1;
+ }
+ 
+-static const struct acpi_device_id i2c_acpi_ignored_device_ids[] = {
+-	/*
+-	 * ACPI video acpi_devices, which are handled by the acpi-video driver
+-	 * sometimes contain a SERIAL_TYPE_I2C ACPI resource, ignore these.
+-	 */
+-	{ ACPI_VIDEO_HID, 0 },
+-	{}
+-};
+-
+ struct i2c_acpi_irq_context {
+ 	int irq;
+ 	bool wake_capable;
+@@ -155,7 +146,11 @@ static int i2c_acpi_do_lookup(struct acpi_device *adev,
+ 	if (!acpi_dev_ready_for_enumeration(adev))
+ 		return -ENODEV;
+ 
+-	if (acpi_match_device_ids(adev, i2c_acpi_ignored_device_ids) == 0)
++	/*
++	 * ACPI video devices, which are handled by the acpi-video driver,
++	 * sometimes contain a SERIAL_TYPE_I2C ACPI resource, ignore these.
++	 */
++	if (acpi_dev_is_video_device(adev))
+ 		return -ENODEV;
+ 
+ 	memset(info, 0, sizeof(*info));
+-- 
+2.55.0
+

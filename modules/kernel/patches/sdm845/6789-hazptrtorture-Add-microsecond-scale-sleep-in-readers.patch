@@ -1,0 +1,57 @@
+From 8967123e64836489861830a3ad79de99ca8a8d54 Mon Sep 17 00:00:00 2001
+From: "Paul E. McKenney" <paulmck@kernel.org>
+Date: Thu, 9 Apr 2026 13:25:29 -0700
+Subject: [PATCH 06789/15333] hazptrtorture: Add microsecond-scale sleep in
+ readers
+
+This commit adds a default-disabled reader_sleep_us module parameter
+that causes the hazard-pointer reader to unconditionally sleep for the
+specified number of microseconds.
+
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+Cc: Boqun Feng <boqun@kernel.org>
+Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+Cc: <rcu@vger.kernel.org>
+Cc: <lkmm@lists.linux.dev>
+---
+ kernel/rcu/hazptrtorture.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/kernel/rcu/hazptrtorture.c b/kernel/rcu/hazptrtorture.c
+index 22a0610d0dbd..9ecb86520551 100644
+--- a/kernel/rcu/hazptrtorture.c
++++ b/kernel/rcu/hazptrtorture.c
+@@ -35,6 +35,7 @@ torture_param(int, onoff_holdoff, 0, "Time after boot before CPU hotplugs (s)");
+ torture_param(int, onoff_interval, 0, "Time between CPU hotplugs (jiffies), 0=disable");
+ torture_param(int, preempt_duration, 0, "Preemption duration (ms), zero to disable");
+ torture_param(int, preempt_interval, MSEC_PER_SEC, "Interval between preemptions (ms)");
++torture_param(int, reader_sleep_us, 0, "Reader sleep duration (us)");
+ torture_param(int, shuffle_interval, 3, "Number of seconds between shuffles");
+ torture_param(int, shutdown_secs, 0, "Shutdown time (s), <= zero to disable.");
+ torture_param(int, stat_interval, 60, "Number of seconds between stats printk()s");
+@@ -219,6 +220,8 @@ static void hazptr_read_delay(struct torture_random_state *rrsp)
+ 		udelay(shortdelay_us);
+ 	if (!preempt_count() && !(torture_random(rrsp) % (nrealreaders * 500)))
+ 		torture_preempt_schedule();  /* QS only if preemptible. */
++	if (reader_sleep_us > 0)
++		torture_hrtimeout_us(reader_sleep_us, 0, NULL);
+ }
+ 
+ static void hazptr_torture_read_unlock(struct hazptr_ctx *hcp, struct hazptr_torture *htp)
+@@ -507,11 +510,13 @@ hazptr_torture_print_module_parms(struct hazptr_torture_ops *cur_ops, const char
+ 		 "--- %s: nreaders=%d "
+ 		 "onoff_interval=%d onoff_holdoff=%d "
+ 		 "preempt_duration=%d preempt_interval=%d "
++		 "reader_sleep_us=%d "
+ 		 "shuffle_interval=%d shutdown_secs=%d stat_interval=%d stutter=%d "
+ 		 "verbose=%d\n",
+ 		 torture_type, tag, nrealreaders,
+ 		 onoff_interval, onoff_holdoff,
+ 		 preempt_duration, preempt_interval,
++		 reader_sleep_us,
+ 		 shuffle_interval, shutdown_secs, stat_interval, stutter,
+ 		 verbose);
+ }
+-- 
+2.55.0
+

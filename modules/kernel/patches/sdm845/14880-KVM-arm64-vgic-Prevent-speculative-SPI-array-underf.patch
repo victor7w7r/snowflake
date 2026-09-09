@@ -1,0 +1,49 @@
+From 93cfad8da7164b095b2402ec9b2067fa15d6f250 Mon Sep 17 00:00:00 2001
+From: Sascha Bischoff <Sascha.Bischoff@arm.com>
+Date: Tue, 11 Aug 2026 15:10:47 +0000
+Subject: [PATCH 14880/15333] KVM: arm64: vgic: Prevent speculative SPI array
+ underflow
+
+For a non-GICv5 VM, SPI interrupt IDs include the private-interrupt
+offset, while KVM's SPI array is indexed from zero. The lookup applies
+array_index_nospec() to the absolute interrupt ID and subtracts the
+private-interrupt offset afterwards.
+
+On a speculative bypass of the range check for an interrupt ID below
+the private range, the clamp preserves the small absolute value and
+the subtraction underflows to an out-of-bounds SPI array index.
+
+Convert the interrupt ID to a zero-based index into the SPI array
+before applying array_index_nospec(). This way, we ensure that we
+clamp to a reachable SPI ID, rather than an out-of-range SPI index.
+
+Fixes: 41b87599c743 ("KVM: arm/arm64: vgic: fix possible spectre-v1 in vgic_get_irq()")
+Link: https://sashiko.dev/#/patchset/20260724104819.1296803-1-sascha.bischoff@arm.com?part=27
+Signed-off-by: Sascha Bischoff <sascha.bischoff@arm.com>
+Reviewed-by: Joey Gouly <joey.gouly@arm.com>
+Reviewed-by: Marc Zyngier <maz@kernel.org>
+Link: https://patch.msgid.link/20260811150941.941295-3-sascha.bischoff@arm.com
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/vgic/vgic.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/kvm/vgic/vgic.c b/arch/arm64/kvm/vgic/vgic.c
+index 5a4768d8cd4f..3077cfdaa146 100644
+--- a/arch/arm64/kvm/vgic/vgic.c
++++ b/arch/arm64/kvm/vgic/vgic.c
+@@ -93,8 +93,9 @@ struct vgic_irq *vgic_get_irq(struct kvm *kvm, u32 intid)
+ 	/* SPIs */
+ 	if (intid >= VGIC_NR_PRIVATE_IRQS &&
+ 	    intid < (kvm->arch.vgic.nr_spis + VGIC_NR_PRIVATE_IRQS)) {
+-		intid = array_index_nospec(intid, kvm->arch.vgic.nr_spis + VGIC_NR_PRIVATE_IRQS);
+-		return &kvm->arch.vgic.spis[intid - VGIC_NR_PRIVATE_IRQS];
++		intid -= VGIC_NR_PRIVATE_IRQS;
++		intid = array_index_nospec(intid, kvm->arch.vgic.nr_spis);
++		return &kvm->arch.vgic.spis[intid];
+ 	}
+ 
+ 	/* LPIs */
+-- 
+2.55.0
+

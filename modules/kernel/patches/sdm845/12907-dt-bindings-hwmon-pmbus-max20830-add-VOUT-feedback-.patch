@@ -1,0 +1,77 @@
+From b8efcfca4370d1392e23c0ca84111bff26fe3926 Mon Sep 17 00:00:00 2001
+From: Alexis Czezar Torreno <alexisczezar.torreno@analog.com>
+Date: Thu, 30 Jul 2026 09:03:33 +0800
+Subject: [PATCH 12907/15333] dt-bindings: hwmon: (pmbus/max20830): add VOUT
+ feedback resistor properties and complete examples
+
+Add adi,vout-rfb1-ohms and adi,vout-rfb2-ohms properties to support
+external voltage divider configuration for VOUT sensing. When the
+desired output voltage is higher than VREF, a resistor divider (RFB1
+and RFB2) is required to reach the intended value.
+
+The properties use a dependency constraint to ensure both resistors
+are specified together, or neither. This prevents misconfiguration
+where only one resistor value is provided.
+
+This patch also adds missing entries in the examples.
+
+Reviewed-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Signed-off-by: Alexis Czezar Torreno <alexisczezar.torreno@analog.com>
+Link: https://lore.kernel.org/r/20260730-dev-max20830c-v5-1-a7553f84ee74@analog.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ .../bindings/hwmon/pmbus/adi,max20830.yaml    | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/hwmon/pmbus/adi,max20830.yaml b/Documentation/devicetree/bindings/hwmon/pmbus/adi,max20830.yaml
+index 1625dd59417f..01b7275f5b34 100644
+--- a/Documentation/devicetree/bindings/hwmon/pmbus/adi,max20830.yaml
++++ b/Documentation/devicetree/bindings/hwmon/pmbus/adi,max20830.yaml
+@@ -44,15 +44,32 @@ properties:
+       GPIO connected to the power-good status output pin.
+     maxItems: 1
+ 
++  adi,vout-rfb1-ohms:
++    description:
++      Top feedback resistor (RFB1) value in ohms for VOUT sensing divider.
++      When the desired output voltage is higher than VREF, a resistor divider
++      is required. VOUT = VREF × (1 + RFB1/RFB2)
++
++  adi,vout-rfb2-ohms:
++    description:
++      Bottom feedback resistor (RFB2) value in ohms for VOUT sensing divider.
++      Datasheet recommends that RFB2 does not exceed 2.5kΩ.
++
+ required:
+   - compatible
+   - reg
+   - vddh-supply
+ 
++dependencies:
++  adi,vout-rfb1-ohms: ['adi,vout-rfb2-ohms']
++  adi,vout-rfb2-ohms: ['adi,vout-rfb1-ohms']
++
+ unevaluatedProperties: false
+ 
+ examples:
+   - |
++    #include <dt-bindings/gpio/gpio.h>
++
+     i2c {
+         #address-cells = <1>;
+         #size-cells = <0>;
+@@ -61,6 +78,11 @@ examples:
+             compatible = "adi,max20830";
+             reg = <0x30>;
+             vddh-supply = <&vddh>;
++            avdd-supply = <&avdd>;
++            ldoin-supply = <&ldoin>;
++            pwr-good-gpios = <&gpio 2 GPIO_ACTIVE_HIGH>;
++            adi,vout-rfb1-ohms = <10000>;
++            adi,vout-rfb2-ohms = <2000>;
+         };
+     };
+ ...
+-- 
+2.55.0
+

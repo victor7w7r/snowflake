@@ -1,0 +1,74 @@
+From 74504945c3f653660b25780f9110c4f4be4abc75 Mon Sep 17 00:00:00 2001
+From: Igor Putko <igorpetindev@gmail.com>
+Date: Tue, 7 Jul 2026 16:59:41 +0900
+Subject: [PATCH 02960/15333] nilfs2: handle corrupted checkpoint count
+ gracefully during deletion
+
+Syzkaller reported a kernel warning in nilfs_cpfile_delete_checkpoints()
+due to a corrupted checkpoint count on the storage medium where
+le32_to_cpu(cp->cp_checkpoints_count) is less than the number of
+checkpoints being deleted.
+Triggering a WARN_ON() for disk image corruption is suboptimal. Fix
+this by returning -EIO and reporting a filesystem error via
+nilfs_error() instead of interrupting execution with a kernel warning.
+
+Reported-by: syzbot+79b815da3aec0a6a4d02@syzkaller.appspotmail.com
+Closes: https://syzkaller.appspot.com/bug?extid=79b815da3aec0a6a4d02
+Signed-off-by: Igor Putko <igorpetindev@gmail.com>
+Fixes: 1f5abe7e7dbc ("nilfs2: replace BUG_ON and BUG calls triggerable from ioctl")
+Cc: stable+noautosel@kernel.org # Warning suppression primarily; will request backport individually if needed
+Signed-off-by: Ryusuke Konishi <konishi.ryusuke@gmail.com>
+Signed-off-by: Viacheslav Dubeyko <slava@dubeyko.com>
+---
+ fs/nilfs2/cpfile.c | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/fs/nilfs2/cpfile.c b/fs/nilfs2/cpfile.c
+index 4bbdc832d7f2..d3349fa58abe 100644
+--- a/fs/nilfs2/cpfile.c
++++ b/fs/nilfs2/cpfile.c
+@@ -81,18 +81,26 @@ nilfs_cpfile_block_add_valid_checkpoints(const struct inode *cpfile,
+ 	return count;
+ }
+ 
+-static unsigned int
++static int
+ nilfs_cpfile_block_sub_valid_checkpoints(const struct inode *cpfile,
+ 					 struct buffer_head *bh,
+ 					 unsigned int n)
+ {
+ 	struct nilfs_checkpoint *cp;
+-	unsigned int count;
++	unsigned int checkpoints_count;
++	int count;
+ 
+ 	cp = kmap_local_folio(bh->b_folio,
+ 			      offset_in_folio(bh->b_folio, bh->b_data));
+-	WARN_ON(le32_to_cpu(cp->cp_checkpoints_count) < n);
+-	count = le32_to_cpu(cp->cp_checkpoints_count) - n;
++	checkpoints_count = le32_to_cpu(cp->cp_checkpoints_count);
++	if (unlikely(checkpoints_count < n)) {
++		nilfs_error(cpfile->i_sb,
++			    "deleted checkpoints count %u exceeds block count %u",
++			    n, checkpoints_count);
++		kunmap_local(cp);
++		return -EIO;
++	}
++	count = checkpoints_count - n;
+ 	cp->cp_checkpoints_count = cpu_to_le32(count);
+ 	kunmap_local(cp);
+ 	return count;
+@@ -522,6 +530,10 @@ int nilfs_cpfile_delete_checkpoints(struct inode *cpfile,
+ 		count = nilfs_cpfile_block_sub_valid_checkpoints(cpfile, cp_bh,
+ 								 nicps);
+ 		brelse(cp_bh);
++		if (unlikely(count < 0)) {
++			ret = count;
++			break;
++		}
+ 		if (count)
+ 			continue;
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,88 @@
+From b78d749d4ba7c217d2be644619a79a72e1fd5dfd Mon Sep 17 00:00:00 2001
+From: Lukas Timmermann <linux@timmermann.space>
+Date: Sun, 14 Jun 2026 22:16:35 +0200
+Subject: [PATCH 01029/15333] ARM: dts: exynos: Add bluetooth support to manta
+
+Enable the bcm4330-bt device for manta boards on serial0.
+Also adds the necessary pin definitions and interrupt handling for
+wakeup.
+
+Co-developed-by: Alexandre Marquet <tb@a-marquet.fr>
+Signed-off-by: Alexandre Marquet <tb@a-marquet.fr>
+Signed-off-by: Lukas Timmermann <linux@timmermann.space>
+Link: https://patch.msgid.link/20260614-manta-bluetooth-v2-1-52de06cabf9d@timmermann.space
+[krzk: Fixed invalid Co-developed-by for Lukas Timmermann]
+Signed-off-by: Krzysztof Kozlowski <krzk@kernel.org>
+---
+ .../arm/boot/dts/samsung/exynos5250-manta.dts | 41 ++++++++++++++++++-
+ 1 file changed, 40 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/boot/dts/samsung/exynos5250-manta.dts b/arch/arm/boot/dts/samsung/exynos5250-manta.dts
+index 24a27b342227..76d3657eb22f 100644
+--- a/arch/arm/boot/dts/samsung/exynos5250-manta.dts
++++ b/arch/arm/boot/dts/samsung/exynos5250-manta.dts
+@@ -461,6 +461,13 @@ acc_int: acc-int-pins {
+ 		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
+ 	};
+ 
++	bt_host_wakeup: bt-host-wakeup-pins {
++		samsung,pins = "gpx2-6";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_INPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS4_PIN_DRV_LV1>;
++	};
++
+ 	max77686_irq: max77686-irq-pins {
+ 		samsung,pins = "gpx0-2";
+ 		samsung,pin-function = <EXYNOS_PIN_FUNC_F>;
+@@ -488,6 +495,20 @@ bh1721fvc_reset: bh1721fvc-reset-pins {
+ 		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+ 	};
+ 
++	bt_reg_on: bt-reg-on-pins {
++		samsung,pins = "gph0-0";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
++		samsung,pin-con-pdn = <EXYNOS_PIN_PDN_PREV>;
++		samsung,pin-pud-pdn = <EXYNOS_PIN_PULL_NONE>;
++	};
++
++	bt_wake: bt-wake-pins {
++		samsung,pins = "gph1-3";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
++		samsung,pin-con-pdn = <EXYNOS_PIN_PDN_PREV>;
++		samsung,pin-pud-pdn = <EXYNOS_PIN_PULL_NONE>;
++	};
++
+ 	msense_reset: msense-reset-pins {
+ 		samsung,pins = "gpg2-0";
+ 		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
+@@ -536,7 +557,25 @@ &sd1_cmd {
+ 
+ /* Bluetooth */
+ &serial_0 {
+-	status = "disabled";
++	pinctrl-0 = <&uart0_data &uart0_fctl>;
++	pinctrl-names = "default";
++
++	bluetooth {
++		compatible = "brcm,bcm4330-bt";
++
++		pinctrl-0 = <&bt_reg_on &bt_wake &bt_host_wakeup>;
++		pinctrl-names = "default";
++
++		shutdown-gpios = <&gph0 0 GPIO_ACTIVE_HIGH>;
++		device-wakeup-gpios = <&gph1 3 GPIO_ACTIVE_HIGH>;
++
++		interrupt-parent = <&gpx2>;
++		interrupts = <6 IRQ_TYPE_EDGE_FALLING>;
++		interrupt-names = "host-wakeup";
++
++		clocks = <&max77686 MAX77686_CLK_PMIC>;
++		clock-names = "lpo";
++	};
+ };
+ 
+ /* GPS */
+-- 
+2.55.0
+

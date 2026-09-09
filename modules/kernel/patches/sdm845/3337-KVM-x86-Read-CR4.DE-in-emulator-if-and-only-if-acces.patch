@@ -1,0 +1,40 @@
+From 7a642d8dcfa8fa20f99b303ac1c6591f2057327d Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 12 Jun 2026 16:01:13 -0700
+Subject: [PATCH 03337/15333] KVM: x86: Read CR4.DE in emulator if and only if
+ accessing DR4 or DR5
+
+Micro-optimize emulation of MOV DR instructions by checking CR4.DE if and
+only if DR4 or DR5 is being accessed.
+
+No functional change intended.
+
+Reviewed-by: Jim Mattson <jmattson@google.com>
+Link: https://patch.msgid.link/20260612230113.684301-9-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/emulate.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/arch/x86/kvm/emulate.c b/arch/x86/kvm/emulate.c
+index e030ef9b9744..8071b372d233 100644
+--- a/arch/x86/kvm/emulate.c
++++ b/arch/x86/kvm/emulate.c
+@@ -3840,13 +3840,11 @@ static int check_dr_read(struct x86_emulate_ctxt *ctxt)
+ {
+ 	bool is_intel = ctxt->ops->guest_cpuid_is_intel_compatible(ctxt);
+ 	int dr = ctxt->modrm_reg;
+-	u64 cr4;
+ 
+ 	if (dr > 7)
+ 		return emulate_ud(ctxt);
+ 
+-	cr4 = ctxt->ops->get_cr(ctxt, 4);
+-	if ((cr4 & X86_CR4_DE) && (dr == 4 || dr == 5))
++	if ((dr == 4 || dr == 5) && (ctxt->ops->get_cr(ctxt, 4) & X86_CR4_DE))
+ 		return emulate_ud(ctxt);
+ 
+ 	/* Intel CPUs prioritize the DR7.GD=1 #DB over the CPL>0 #GP. */
+-- 
+2.55.0
+

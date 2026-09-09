@@ -1,0 +1,115 @@
+From f97bdc8ec1dc7b33781a702eeba55326c206be56 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig=20=28The=20Capable=20Hub=29?=
+ <u.kleine-koenig@baylibre.com>
+Date: Thu, 16 Jul 2026 21:25:23 +0200
+Subject: [PATCH 05638/15333] mtd: nand-omap2: Move omap_nand_ids[] to raw nand
+ driver
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Defining a static array in a header results in each .c file that
+includes the header (here: drivers/memory/omap-gpmc.c and
+drivers/mtd/nand/raw/omap2.c) to contain a copy of that array when
+compiled to an object file.
+
+With sizeof(struct of_device_id[3]) ≥ 588 having omap_nand_ids[] twice
+just to do two string comparisons is quite some bloat. So move
+omap_nand_ids[] to the nand driver which actually needs that array for
+its module meta data and do the compatible check by hand.
+
+bloat-o-meter reports for drivers/memory/omap-gpmc.o (ARCH=arm):
+
+	add/remove: 1/2 grow/shrink: 1/0 up/down: 28/-588 (-560)
+	Function                                     old     new   delta
+	gpmc_probe_generic_child                    2108    2136     +28
+	omap_nand_ids                                588       -    -588
+	Total: Before=18114, After=17554, chg -3.09%
+
+(drivers/mtd/nand/raw/omap2.o doesn't change).
+
+This allows to drop <linux/mod_devicetable.h> from
+include/linux/platform_data/mtd-nand-omap2.h (which is my original
+motivation for this change). Note that this header isn't needed in the
+two drivers because omap-gpmc.c doesn't use any device id struct and for
+the nand driver omap2.c of_device_id is already provided via
+<linux/platform_device.h>.
+
+Signed-off-by: Uwe Kleine-König (The Capable Hub) <u.kleine-koenig@baylibre.com>
+Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
+---
+ drivers/memory/omap-gpmc.c                   | 9 ++++++++-
+ drivers/mtd/nand/raw/omap2.c                 | 6 +++++-
+ include/linux/platform_data/mtd-nand-omap2.h | 7 -------
+ 3 files changed, 13 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/memory/omap-gpmc.c b/drivers/memory/omap-gpmc.c
+index 958d2b0ea54a..48af31a54b55 100644
+--- a/drivers/memory/omap-gpmc.c
++++ b/drivers/memory/omap-gpmc.c
+@@ -2129,6 +2129,13 @@ static void __maybe_unused gpmc_read_timings_dt(struct device_node *np,
+ 		of_property_read_bool(np, "gpmc,time-para-granularity");
+ }
+ 
++static int gpmc_child_is_nand(struct device_node *child)
++{
++	/* This has to match drivers/mtd/nand/raw/omap2.c's omap_nand_ids[] */
++	return of_device_is_compatible(child, "ti,omap2-nand") ||
++		of_device_is_compatible(child, "ti,am64-nand");
++}
++
+ /**
+  * gpmc_probe_generic_child - configures the gpmc for a child device
+  * @pdev:	pointer to gpmc platform device
+@@ -2220,7 +2227,7 @@ static int gpmc_probe_generic_child(struct platform_device *pdev,
+ 		goto err;
+ 	}
+ 
+-	if (of_match_node(omap_nand_ids, child)) {
++	if (gpmc_child_is_nand(child)) {
+ 		/* NAND specific setup */
+ 		val = 8;
+ 		of_property_read_u32(child, "nand-bus-width", &val);
+diff --git a/drivers/mtd/nand/raw/omap2.c b/drivers/mtd/nand/raw/omap2.c
+index 39e297486721..552f36da79fc 100644
+--- a/drivers/mtd/nand/raw/omap2.c
++++ b/drivers/mtd/nand/raw/omap2.c
+@@ -2318,7 +2318,11 @@ static void omap_nand_remove(struct platform_device *pdev)
+ 	nand_cleanup(nand_chip);
+ }
+ 
+-/* omap_nand_ids defined in linux/platform_data/mtd-nand-omap2.h */
++static const struct of_device_id omap_nand_ids[] = {
++        { .compatible = "ti,omap2-nand" },
++        { .compatible = "ti,am64-nand" },
++        { }
++};
+ MODULE_DEVICE_TABLE(of, omap_nand_ids);
+ 
+ static struct platform_driver omap_nand_driver = {
+diff --git a/include/linux/platform_data/mtd-nand-omap2.h b/include/linux/platform_data/mtd-nand-omap2.h
+index 8c2f1f185353..2ddb624b97fd 100644
+--- a/include/linux/platform_data/mtd-nand-omap2.h
++++ b/include/linux/platform_data/mtd-nand-omap2.h
+@@ -7,7 +7,6 @@
+ #define	_MTD_NAND_OMAP2_H
+ 
+ #include <linux/mtd/partitions.h>
+-#include <linux/mod_devicetable.h>
+ 
+ #define	GPMC_BCH_NUM_REMAINDER	8
+ 
+@@ -63,10 +62,4 @@ struct gpmc_nand_regs {
+ 	void __iomem	*gpmc_bch_result6[GPMC_BCH_NUM_REMAINDER];
+ };
+ 
+-static const struct of_device_id omap_nand_ids[] = {
+-	{ .compatible = "ti,omap2-nand", },
+-	{ .compatible = "ti,am64-nand", },
+-	{},
+-};
+-
+ #endif /* _MTD_NAND_OMAP2_H */
+-- 
+2.55.0
+

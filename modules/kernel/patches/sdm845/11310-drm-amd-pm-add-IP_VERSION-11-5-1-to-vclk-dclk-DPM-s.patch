@@ -1,0 +1,65 @@
+From 19d408ea197a66d3a20818e759ca216eb9020760 Mon Sep 17 00:00:00 2001
+From: Priya Hosur <Priya.Hosur@amd.com>
+Date: Thu, 4 Jun 2026 18:33:14 +0530
+Subject: [PATCH 11310/15333] drm/amd/pm: add IP_VERSION(11,5,1) to vclk/dclk
+ DPM sysfs whitelists
+
+Add IP_VERSION(11,5,1) to pp_dpm_vclk and pp_dpm_dclk visibility
+whitelists so these sysfs entries are exposed on Strix Halo (GC
+11.5.1). Add IP_VERSION(11,5,1) to pp_dpm_vclk1 and pp_dpm_dclk1
+whitelists with the existing num_vcn_inst >= 2 guard since Strix
+Halo has two VCN instances.
+
+Without this, amd-smi reports N/A for VCLK0, VCLK1, DCLK0 and
+DCLK1 clocks.
+
+Signed-off-by: Priya Hosur <Priya.Hosur@amd.com>
+Acked-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/pm/amdgpu_pm.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/amdgpu_pm.c b/drivers/gpu/drm/amd/pm/amdgpu_pm.c
+index 4c6cdaeac5a9..15b2923d5378 100644
+--- a/drivers/gpu/drm/amd/pm/amdgpu_pm.c
++++ b/drivers/gpu/drm/amd/pm/amdgpu_pm.c
+@@ -2022,6 +2022,7 @@ static int pp_dpm_clk_default_attr_update(struct amdgpu_device *adev, struct amd
+ 		      gc_ver == IP_VERSION(11, 0, 1) ||
+ 		      gc_ver == IP_VERSION(11, 0, 4) ||
+ 		      gc_ver == IP_VERSION(11, 5, 0) ||
++		      gc_ver == IP_VERSION(11, 5, 1) ||
+ 		      gc_ver == IP_VERSION(11, 0, 2) ||
+ 		      gc_ver == IP_VERSION(11, 0, 3) ||
+ 		      amdgpu_is_multi_aid(adev)))
+@@ -2030,7 +2031,8 @@ static int pp_dpm_clk_default_attr_update(struct amdgpu_device *adev, struct amd
+ 		if (!((gc_ver == IP_VERSION(10, 3, 1) ||
+ 		       gc_ver == IP_VERSION(10, 3, 0) ||
+ 		       gc_ver == IP_VERSION(11, 0, 2) ||
+-		       gc_ver == IP_VERSION(11, 0, 3)) && adev->vcn.num_vcn_inst >= 2))
++		       gc_ver == IP_VERSION(11, 0, 3) ||
++		       gc_ver == IP_VERSION(11, 5, 1)) && adev->vcn.num_vcn_inst >= 2))
+ 			*states = ATTR_STATE_UNSUPPORTED;
+ 	} else if (DEVICE_ATTR_IS(pp_dpm_dclk)) {
+ 		if (!(gc_ver == IP_VERSION(10, 3, 1) ||
+@@ -2043,6 +2045,7 @@ static int pp_dpm_clk_default_attr_update(struct amdgpu_device *adev, struct amd
+ 		      gc_ver == IP_VERSION(11, 0, 1) ||
+ 		      gc_ver == IP_VERSION(11, 0, 4) ||
+ 		      gc_ver == IP_VERSION(11, 5, 0) ||
++		      gc_ver == IP_VERSION(11, 5, 1) ||
+ 		      gc_ver == IP_VERSION(11, 0, 2) ||
+ 		      gc_ver == IP_VERSION(11, 0, 3) ||
+ 		      amdgpu_is_multi_aid(adev)))
+@@ -2051,7 +2054,8 @@ static int pp_dpm_clk_default_attr_update(struct amdgpu_device *adev, struct amd
+ 		if (!((gc_ver == IP_VERSION(10, 3, 1) ||
+ 		       gc_ver == IP_VERSION(10, 3, 0) ||
+ 		       gc_ver == IP_VERSION(11, 0, 2) ||
+-		       gc_ver == IP_VERSION(11, 0, 3)) && adev->vcn.num_vcn_inst >= 2))
++		       gc_ver == IP_VERSION(11, 0, 3) ||
++		       gc_ver == IP_VERSION(11, 5, 1)) && adev->vcn.num_vcn_inst >= 2))
+ 			*states = ATTR_STATE_UNSUPPORTED;
+ 	} else if (DEVICE_ATTR_IS(pp_dpm_pcie)) {
+ 		if (amdgpu_is_multi_aid(adev))
+-- 
+2.55.0
+

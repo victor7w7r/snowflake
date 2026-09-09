@@ -1,0 +1,71 @@
+From c42be528a5a4da70eefa7d2e531dc719a8d103a4 Mon Sep 17 00:00:00 2001
+From: John Madieu <john.madieu.xa@bp.renesas.com>
+Date: Fri, 19 Jun 2026 08:39:49 +0000
+Subject: [PATCH 04342/15333] arm64: dts: renesas: rzg3e-smarc-som: Add Versa3
+ clock generator
+
+Add the Renesas 5P35023 (Versa3) programmable clock generator on the
+I2C2 bus along with its 24MHz input clock (x2 oscillator) to feed the
+audio subsystem.
+
+The Versa3 provides the following clock outputs:
+  - Output 0: 24MHz (reference),
+  - Output 1: 12.288MHz (audio, 48kHz family),
+  - Output 2: 11.2896MHz (audio, 44.1kHz family),
+  - Output 3: 12.288MHz (audio),
+  - Output 4: 25MHz (DIFF1, Ethernet).
+
+These clocks are required for the audio codec and the Ethernet
+controller found on the RZ/G3E SMARC EVK.
+
+Output 5 (DIFF2) is left out, as it is not connected on this board.
+
+Signed-off-by: John Madieu <john.madieu.xa@bp.renesas.com>
+Reviewed-by: Geert Uytterhoeven <geert+renesas@glider.be>
+Link: https://patch.msgid.link/20260619083951.3777556-3-john.madieu.xa@bp.renesas.com
+Signed-off-by: Geert Uytterhoeven <geert+renesas@glider.be>
+---
+ .../boot/dts/renesas/rzg3e-smarc-som.dtsi     | 20 +++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/renesas/rzg3e-smarc-som.dtsi b/arch/arm64/boot/dts/renesas/rzg3e-smarc-som.dtsi
+index 15c22dbf0ad3..455ed35ae5d3 100644
+--- a/arch/arm64/boot/dts/renesas/rzg3e-smarc-som.dtsi
++++ b/arch/arm64/boot/dts/renesas/rzg3e-smarc-som.dtsi
+@@ -78,6 +78,12 @@ reg_vdd0p8v_others: regulator-vdd0p8v-others {
+ 		regulator-always-on;
+ 	};
+ 
++	x2: x2-clock {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <24000000>;
++	};
++
+ 	/* 32.768kHz crystal */
+ 	x3: x3-clock {
+ 		compatible = "fixed-clock";
+@@ -137,6 +143,20 @@ raa215300: pmic@12 {
+ 
+ 		interrupts-extended = <&pinctrl RZG3E_GPIO(S, 1) IRQ_TYPE_EDGE_FALLING>;
+ 	};
++
++	versa3: clock-generator@68 {
++		compatible = "renesas,5p35023";
++		reg = <0x68>;
++		#clock-cells = <1>;
++		clocks = <&x2>;
++
++		assigned-clocks = <&versa3 0>, <&versa3 1>,
++				  <&versa3 2>, <&versa3 3>,
++				  <&versa3 4>;
++		assigned-clock-rates = <24000000>, <12288000>,
++				       <11289600>, <12288000>,
++				       <25000000>;
++	};
+ };
+ 
+ &i3c {
+-- 
+2.55.0
+

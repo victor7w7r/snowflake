@@ -1,0 +1,67 @@
+From 0e3d3b4bb06a435a26788143a89724225c238240 Mon Sep 17 00:00:00 2001
+From: Gerald Schaefer <gerald.schaefer@linux.ibm.com>
+Date: Tue, 16 Jun 2026 19:46:27 +0200
+Subject: [PATCH 03222/15333] s390/mm: Use set_pmd() / set_pud() for hugetlb
+ pagetable entries
+
+hugetlb code is known to view all pagetable entries as PTEs, instead of
+corresponding upper levels like PMD or PUD. For s390, with different
+pagetable entry layout for different levels, this requires some
+conversion action under the hood.
+
+The converted PMD and PUD entries are then written via set_pte()
+function, but that might add some PTE-specific modifications.
+There is no functional problem with current code, and the clearing of
+_PAGE_UNUSED in set_pte(). Avoid future problems by using the set_pmd()
+and set_pud() functions instead.
+
+Signed-off-by: Gerald Schaefer <gerald.schaefer@linux.ibm.com>
+Reviewed-by: Claudio Imbrenda <imbrenda@linux.ibm.com>
+Reviewed-by: Alexander Gordeev <agordeev@linux.ibm.com>
+Signed-off-by: Alexander Gordeev <agordeev@linux.ibm.com>
+Signed-off-by: Vasily Gorbik <gor@linux.ibm.com>
+---
+ arch/s390/include/asm/hugetlb.h |  4 ++--
+ arch/s390/mm/hugetlbpage.c      | 10 ++++++----
+ 2 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/arch/s390/include/asm/hugetlb.h b/arch/s390/include/asm/hugetlb.h
+index e33a5b587ee4..02db08429b7c 100644
+--- a/arch/s390/include/asm/hugetlb.h
++++ b/arch/s390/include/asm/hugetlb.h
+@@ -42,9 +42,9 @@ static inline void huge_pte_clear(struct mm_struct *mm, unsigned long addr,
+ 				  pte_t *ptep, unsigned long sz)
+ {
+ 	if ((pte_val(ptep_get(ptep)) & _REGION_ENTRY_TYPE_MASK) == _REGION_ENTRY_TYPE_R3)
+-		set_pte(ptep, __pte(_REGION3_ENTRY_EMPTY));
++		set_pud((pud_t *)ptep, __pud(_REGION3_ENTRY_EMPTY));
+ 	else
+-		set_pte(ptep, __pte(_SEGMENT_ENTRY_EMPTY));
++		set_pmd((pmd_t *)ptep, __pmd(_SEGMENT_ENTRY_EMPTY));
+ }
+ 
+ #define __HAVE_ARCH_HUGE_PTEP_CLEAR_FLUSH
+diff --git a/arch/s390/mm/hugetlbpage.c b/arch/s390/mm/hugetlbpage.c
+index db35d8fe8609..f84aa9265430 100644
+--- a/arch/s390/mm/hugetlbpage.c
++++ b/arch/s390/mm/hugetlbpage.c
+@@ -147,10 +147,12 @@ void __set_huge_pte_at(struct mm_struct *mm, unsigned long addr,
+ 		if (likely(pte_present(pte)))
+ 			rste |= _REGION3_ENTRY_LARGE;
+ 		rste |= _REGION_ENTRY_TYPE_R3;
+-	} else if (likely(pte_present(pte)))
+-		rste |= _SEGMENT_ENTRY_LARGE;
+-
+-	set_pte(ptep, __pte(rste));
++		set_pud((pud_t *)ptep, __pud(rste));
++	} else {
++		if (likely(pte_present(pte)))
++			rste |= _SEGMENT_ENTRY_LARGE;
++		set_pmd((pmd_t *)ptep, __pmd(rste));
++	}
+ }
+ 
+ void set_huge_pte_at(struct mm_struct *mm, unsigned long addr,
+-- 
+2.55.0
+

@@ -1,0 +1,161 @@
+From f65c1fb427aa5726cfe7a1b903f733f3a27099bb Mon Sep 17 00:00:00 2001
+From: Simon Schippers <simon.schippers@tu-dortmund.de>
+Date: Mon, 3 Aug 2026 20:36:39 +0200
+Subject: [PATCH 12269/15333] vhost-net: wake queue of tun/tap after ptr_ring
+ consume
+
+Add tun_wake_queue() to tun.c and export it for use by vhost-net. The
+function validates that the file belongs to a device implemented by
+drivers/net/tun.c, in IFF_TUN as well as in IFF_TAP mode, and that the
+tfile exists, dereferences the tun_struct under RCU, and delegates to
+__tun_wake_queue().
+
+vhost_net_buf_produce() now calls tun_wake_queue() after a successful
+batched consume of the ring to allow the netdev subqueue to be woken up.
+The point is to allow the queue to be stopped when it gets full, which is
+required for traffic shaping, implemented by the following
+"stop tail-drop when IFF_BACKPRESSURE is set".
+As __tun_wake_queue() returns early unless IFF_BACKPRESSURE is set, a
+tun/tap device that does not opt in only pays for the added check.
+
+macvtap and ipvtap rings, which get_tap_ptr_ring() accepts too, are
+unaffected: their producer is the tap_handle_frame() rx_handler and not
+ndo_start_xmit, so stopping a netdev TX queue would not hold it back.
+drivers/net/tap.c has no netdev_ops of its own either. No
+tap_wake_queue() is needed.
+
+cons_cnt and the wake decision are best-effort and are not reverted by
+ptr_ring_unconsume(), so vhost_net_buf_unproduce() can leave the subqueue
+woken over a full ring. The producer re-stops it on the next packet, and
+that path only runs from vhost_net_stop_vq() and vhost_net_set_backend(),
+when the consumer is going away, so a stopped queue is the correct end
+state rather than a stall.
+
+Co-developed-by: Tim Gebauer <tim.gebauer@tu-dortmund.de>
+Signed-off-by: Tim Gebauer <tim.gebauer@tu-dortmund.de>
+Signed-off-by: Simon Schippers <simon.schippers@tu-dortmund.de>
+Link: https://patch.msgid.link/20260803183641.96882-4-simon.schippers@tu-dortmund.de
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/tun.c      | 25 +++++++++++++++++++++++++
+ drivers/vhost/net.c    | 21 +++++++++++++++------
+ include/linux/if_tun.h |  4 ++++
+ 3 files changed, 44 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/net/tun.c b/drivers/net/tun.c
+index d49b6bfd104d..dc32566588d1 100644
+--- a/drivers/net/tun.c
++++ b/drivers/net/tun.c
+@@ -3848,6 +3848,31 @@ struct ptr_ring *tun_get_tx_ring(struct file *file)
+ }
+ EXPORT_SYMBOL_GPL(tun_get_tx_ring);
+ 
++/* Callers must hold ring.consumer_lock */
++void tun_wake_queue(struct file *file, int consumed)
++{
++	struct tun_file *tfile;
++	struct tun_struct *tun;
++
++	if (file->f_op != &tun_fops)
++		return;
++
++	tfile = file->private_data;
++	if (!tfile)
++		return;
++
++	lockdep_assert_held(&tfile->tx_ring.consumer_lock);
++
++	rcu_read_lock();
++
++	tun = rcu_dereference(tfile->tun);
++	if (tun)
++		__tun_wake_queue(tun, tfile, consumed);
++
++	rcu_read_unlock();
++}
++EXPORT_SYMBOL_GPL(tun_wake_queue);
++
+ module_init(tun_init);
+ module_exit(tun_cleanup);
+ MODULE_DESCRIPTION(DRV_DESCRIPTION);
+diff --git a/drivers/vhost/net.c b/drivers/vhost/net.c
+index 6949b704166d..3e72b9c6af0c 100644
+--- a/drivers/vhost/net.c
++++ b/drivers/vhost/net.c
+@@ -176,13 +176,21 @@ static void *vhost_net_buf_consume(struct vhost_net_buf *rxq)
+ 	return ret;
+ }
+ 
+-static int vhost_net_buf_produce(struct vhost_net_virtqueue *nvq)
++static int vhost_net_buf_produce(struct sock *sk,
++				 struct vhost_net_virtqueue *nvq)
+ {
++	struct file *file = sk->sk_socket->file;
+ 	struct vhost_net_buf *rxq = &nvq->rxq;
+ 
+ 	rxq->head = 0;
+-	rxq->tail = ptr_ring_consume_batched(nvq->rx_ring, rxq->queue,
+-					      VHOST_NET_BATCH);
++	spin_lock(&nvq->rx_ring->consumer_lock);
++	rxq->tail = __ptr_ring_consume_batched(nvq->rx_ring, rxq->queue,
++					       VHOST_NET_BATCH);
++
++	if (rxq->tail)
++		tun_wake_queue(file, rxq->tail);
++
++	spin_unlock(&nvq->rx_ring->consumer_lock);
+ 	return rxq->tail;
+ }
+ 
+@@ -209,14 +217,15 @@ static int vhost_net_buf_peek_len(void *ptr)
+ 	return __skb_array_len_with_tag(ptr);
+ }
+ 
+-static int vhost_net_buf_peek(struct vhost_net_virtqueue *nvq)
++static int vhost_net_buf_peek(struct sock *sk,
++			      struct vhost_net_virtqueue *nvq)
+ {
+ 	struct vhost_net_buf *rxq = &nvq->rxq;
+ 
+ 	if (!vhost_net_buf_is_empty(rxq))
+ 		goto out;
+ 
+-	if (!vhost_net_buf_produce(nvq))
++	if (!vhost_net_buf_produce(sk, nvq))
+ 		return 0;
+ 
+ out:
+@@ -1004,7 +1013,7 @@ static int peek_head_len(struct vhost_net_virtqueue *rvq, struct sock *sk)
+ 	unsigned long flags;
+ 
+ 	if (rvq->rx_ring)
+-		return vhost_net_buf_peek(rvq);
++		return vhost_net_buf_peek(sk, rvq);
+ 
+ 	spin_lock_irqsave(&sk->sk_receive_queue.lock, flags);
+ 	head = skb_peek(&sk->sk_receive_queue);
+diff --git a/include/linux/if_tun.h b/include/linux/if_tun.h
+index 80166eb62f41..eeb9ed3c5a23 100644
+--- a/include/linux/if_tun.h
++++ b/include/linux/if_tun.h
+@@ -22,6 +22,8 @@ struct tun_msg_ctl {
+ #if defined(CONFIG_TUN) || defined(CONFIG_TUN_MODULE)
+ struct socket *tun_get_socket(struct file *);
+ struct ptr_ring *tun_get_tx_ring(struct file *file);
++/* Callers must hold the consumer_lock of the ring of file */
++void tun_wake_queue(struct file *file, int consumed);
+ 
+ static inline bool tun_is_xdp_frame(void *ptr)
+ {
+@@ -55,6 +57,8 @@ static inline struct ptr_ring *tun_get_tx_ring(struct file *f)
+ 	return ERR_PTR(-EINVAL);
+ }
+ 
++static inline void tun_wake_queue(struct file *f, int consumed) {}
++
+ static inline bool tun_is_xdp_frame(void *ptr)
+ {
+ 	return false;
+-- 
+2.55.0
+

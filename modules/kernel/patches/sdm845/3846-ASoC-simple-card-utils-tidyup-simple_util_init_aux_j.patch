@@ -1,0 +1,65 @@
+From 279bfbb150aef95a3ee281cdd9ebefdddfb43a1e Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Thu, 2 Jul 2026 01:46:02 +0000
+Subject: [PATCH 03846/15333] ASoC: simple-card-utils: tidyup
+ simple_util_init_aux_jacks()
+
+Current code makes old style / new style conversion difficult.
+To make future conversions easier to understand, this patch clean up the
+code a little. but no functional change.
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Link: https://patch.msgid.link/8733y2xixy.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/simple_card_utils.h     | 3 +--
+ sound/soc/generic/simple-card-utils.c | 4 ++--
+ sound/soc/generic/simple-card.c       | 2 +-
+ 3 files changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/include/sound/simple_card_utils.h b/include/sound/simple_card_utils.h
+index ff9747c6aa49..5e2e91578bf5 100644
+--- a/include/sound/simple_card_utils.h
++++ b/include/sound/simple_card_utils.h
+@@ -219,8 +219,7 @@ static inline int simple_util_parse_aux_devs(struct simple_util_priv *priv, char
+ int simple_util_init_jack(struct snd_soc_card *card,
+ 			       struct simple_util_jack *sjack,
+ 			       int is_hp, char *prefix, char *pin);
+-int simple_util_init_aux_jacks(struct simple_util_priv *priv,
+-				char *prefix);
++int simple_util_init_aux_jacks(struct snd_soc_card *card, char *prefix);
+ int simple_util_init_priv(struct simple_util_priv *priv,
+ 			       struct link_info *li);
+ void simple_util_remove(struct platform_device *pdev);
+diff --git a/sound/soc/generic/simple-card-utils.c b/sound/soc/generic/simple-card-utils.c
+index 522dd1e3c96a..44632759b185 100644
+--- a/sound/soc/generic/simple-card-utils.c
++++ b/sound/soc/generic/simple-card-utils.c
+@@ -824,9 +824,9 @@ int simple_util_init_jack(struct snd_soc_card *card,
+ }
+ EXPORT_SYMBOL_GPL(simple_util_init_jack);
+ 
+-int simple_util_init_aux_jacks(struct simple_util_priv *priv, char *prefix)
++int simple_util_init_aux_jacks(struct snd_soc_card *card, char *prefix)
+ {
+-	struct snd_soc_card *card = simple_priv_to_card(priv);
++	struct simple_util_priv *priv = snd_soc_card_get_drvdata(card);
+ 	struct snd_soc_component *component;
+ 	int found_jack_index = 0;
+ 	int type = 0;
+diff --git a/sound/soc/generic/simple-card.c b/sound/soc/generic/simple-card.c
+index a67f4aad0188..49289cd655ea 100644
+--- a/sound/soc/generic/simple-card.c
++++ b/sound/soc/generic/simple-card.c
+@@ -661,7 +661,7 @@ static int simple_soc_probe(struct snd_soc_card *card)
+ 	if (ret < 0)
+ 		goto end;
+ 
+-	ret = simple_util_init_aux_jacks(priv, PREFIX);
++	ret = simple_util_init_aux_jacks(card, PREFIX);
+ end:
+ 	return simple_ret(priv, ret);
+ }
+-- 
+2.55.0
+

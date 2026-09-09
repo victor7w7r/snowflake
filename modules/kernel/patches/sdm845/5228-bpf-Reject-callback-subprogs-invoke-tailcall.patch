@@ -1,0 +1,56 @@
+From a41d0c30d764e086c62b049e806fd12df4f4acfc Mon Sep 17 00:00:00 2001
+From: Pu Lehui <pulehui@huawei.com>
+Date: Thu, 16 Jul 2026 12:01:56 +0000
+Subject: [PATCH 05228/15333] bpf: Reject callback subprogs invoke tailcall
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Some JIT compilers, such as x86_64, rely on a register to pass the TCC.
+When subprograms of synchronous callback invoke tailcall, C helpers
+invoking bpf callback clobber this register, and the corrupted TCC may
+bypass the TCC limit, leading to infinite tailcall.
+
+Fix this by rejecting tailcall inside all subprogs of sync callback.
+This also cleanly consolidates the existing async and exception callback
+checks into a single unified `is_cb` check.
+
+Reported-by: Sashiko <sashiko-bot@kernel.org>
+Reported-by: Björn Töpel <bjorn@kernel.org>
+Signed-off-by: Pu Lehui <pulehui@huawei.com>
+Acked-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://patch.msgid.link/20260716120157.835937-3-pulehui@huaweicloud.com
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ kernel/bpf/verifier.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 782d939c38cd..62d46b4c9962 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -5237,10 +5237,6 @@ static int check_max_stack_depth_subprog(struct bpf_verifier_env *env, int idx,
+ 		if (verifier_bug_if(sidx < 0, env, "callee not found at insn %d", next_insn))
+ 			return -EFAULT;
+ 		if (subprog[sidx].is_async_cb) {
+-			if (subprog[sidx].has_tail_call) {
+-				verifier_bug(env, "subprog has tail_call and async cb");
+-				return -EFAULT;
+-			}
+ 			/* async callbacks don't increase bpf prog stack size unless called directly */
+ 			if (!bpf_pseudo_call(insn + i))
+ 				continue;
+@@ -5281,8 +5277,8 @@ static int check_max_stack_depth_subprog(struct bpf_verifier_env *env, int idx,
+ 	 */
+ 	if (tail_call_reachable) {
+ 		for (tmp = idx; tmp >= 0; tmp = dinfo[tmp].caller) {
+-			if (subprog[tmp].is_exception_cb) {
+-				verbose(env, "cannot tail call within exception cb\n");
++			if (subprog[tmp].is_cb) {
++				verbose(env, "cannot tail call within callback\n");
+ 				return -EINVAL;
+ 			}
+ 			if (subprog[tmp].stack_arg_cnt) {
+-- 
+2.55.0
+

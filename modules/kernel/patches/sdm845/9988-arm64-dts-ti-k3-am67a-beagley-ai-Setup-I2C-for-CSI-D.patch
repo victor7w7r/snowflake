@@ -1,0 +1,65 @@
+From f0d750aa4072d8e06a3133a852d48149d02cdd49 Mon Sep 17 00:00:00 2001
+From: Jai Luthra <jai.luthra@ideasonboard.com>
+Date: Tue, 2 Jun 2026 18:29:27 +0530
+Subject: [PATCH 09988/15333] arm64: dts: ti: k3-am67a-beagley-ai: Setup I2C
+ for CSI/DSI connectors
+
+I2C0 is used by the 22-pin CSI1/DSI0 connector and I2C2 is used by the
+22-pin CSI0 connector.
+
+Add the missing pinmux definition for the I2C2, and setup both nodes but
+keep them disabled. They will be enabled by the camera and display
+overlays.
+
+Signed-off-by: Jai Luthra <jai.luthra@ideasonboard.com>
+Reviewed-by: Rishikesh Donadkar <r-donadkar@ti.com>
+Link: https://patch.msgid.link/20260602-beagley-cameras-v3-1-fe6ae35b7eda@ideasonboard.com
+Signed-off-by: Vignesh Raghavendra <vigneshr@ti.com>
+---
+ .../arm64/boot/dts/ti/k3-am67a-beagley-ai.dts | 25 +++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/ti/k3-am67a-beagley-ai.dts b/arch/arm64/boot/dts/ti/k3-am67a-beagley-ai.dts
+index 5255e04b9ac7..890d3a745375 100644
+--- a/arch/arm64/boot/dts/ti/k3-am67a-beagley-ai.dts
++++ b/arch/arm64/boot/dts/ti/k3-am67a-beagley-ai.dts
+@@ -157,6 +157,13 @@ J722S_IOPAD(0x01e4, PIN_INPUT_PULLUP, 0) /* (B22) I2C0_SDA */
+ 		bootph-all;
+ 	};
+ 
++	main_i2c2_pins_default: main-i2c2-default-pins {
++		pinctrl-single,pins = <
++			J722S_IOPAD(0x00b0, PIN_INPUT_PULLUP, 1) /* (P22) GPMC0_CSn2.I2C2_SCL */
++			J722S_IOPAD(0x00b4, PIN_INPUT_PULLUP, 1) /* (P23) GPMC0_CSn3.I2C2_SDA */
++		>;
++	};
++
+ 	main_uart0_pins_default: main-uart0-default-pins {
+ 		pinctrl-single,pins = <
+ 			J722S_IOPAD(0x01c8, PIN_INPUT, 0)	/* (A22) UART0_RXD */
+@@ -399,4 +406,22 @@ &sdhci1 {
+ 	status = "okay";
+ };
+ 
++&main_i2c0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&main_i2c0_pins_default>;
++	clock-frequency = <400000>;
++
++	/* Only used by the CSI1/DSI0 connector; enable it in the overlay */
++	status = "disabled";
++};
++
++&main_i2c2 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&main_i2c2_pins_default>;
++	clock-frequency = <400000>;
++
++	/* Only used by the CSI0 connector; enable it in the overlay */
++	status = "disabled";
++};
++
+ #include "k3-j722s-ti-ipc-firmware.dtsi"
+-- 
+2.55.0
+

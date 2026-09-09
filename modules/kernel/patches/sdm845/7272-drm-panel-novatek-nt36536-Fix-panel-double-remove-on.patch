@@ -1,0 +1,51 @@
+From 4085da1e6ad90ca7a227d8528de2c77042fabf8a Mon Sep 17 00:00:00 2001
+From: David Carlier <devnexen@gmail.com>
+Date: Fri, 24 Jul 2026 05:17:46 +0100
+Subject: [PATCH 07272/15333] drm/panel: novatek-nt36536: Fix panel
+ double-remove on attach failure
+
+The DSI attach error path calls drm_panel_remove() by hand even though
+the panel was registered with devm_drm_panel_add(), which already
+arranges for drm_panel_remove() to run on driver detach. When
+mipi_dsi_attach() fails the panel is therefore removed twice: once
+directly and once again while devres unwinds.
+
+drm_panel_add() takes a reference and drm_panel_remove() drops one, so
+the extra removal releases the last reference early and frees the panel
+container. The put registered by devm_drm_panel_alloc() then operates on
+freed memory, resulting in a use-after-free and a reference-count
+underflow when a DSI host rejects the requested configuration during
+probe.
+
+Drop the manual drm_panel_remove() and let the managed cleanup handle
+it, matching the other dual-DSI panel drivers.
+
+Fixes: 75a5dbd1f4f7 ("drm/panel: Add Novatek NT36536 panel driver")
+Signed-off-by: David Carlier <devnexen@gmail.com>
+Reviewed-by: Pengyu Luo <mitltlatltl@gmail.com>
+Signed-off-by: Neil Armstrong <neil.armstrong@linaro.org>
+Link: https://patch.msgid.link/20260724041746.12887-1-devnexen@gmail.com
+---
+ drivers/gpu/drm/panel/panel-novatek-nt36536.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-novatek-nt36536.c b/drivers/gpu/drm/panel/panel-novatek-nt36536.c
+index 2a82b54880c3..8bd125650168 100644
+--- a/drivers/gpu/drm/panel/panel-novatek-nt36536.c
++++ b/drivers/gpu/drm/panel/panel-novatek-nt36536.c
+@@ -429,11 +429,9 @@ static int novatek_probe(struct mipi_dsi_device *dsi)
+ 		ctx->dsi[i]->mode_flags = desc->mode_flags;
+ 		ctx->dsi[i]->dsc = &ctx->dsc;
+ 		ret = devm_mipi_dsi_attach(dev, ctx->dsi[i]);
+-		if (ret < 0) {
+-			drm_panel_remove(&ctx->panel);
++		if (ret < 0)
+ 			return dev_err_probe(dev, ret,
+ 					     "Failed to attach to DSI host\n");
+-		}
+ 	}
+ 
+ 	if (desc->has_dcs_backlight) {
+-- 
+2.55.0
+

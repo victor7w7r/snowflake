@@ -1,0 +1,36 @@
+From 9ad6f337888ec85f66dd095015454cd449f68429 Mon Sep 17 00:00:00 2001
+From: Eric Biggers <ebiggers@kernel.org>
+Date: Sun, 5 Jul 2026 11:44:19 -0700
+Subject: [PATCH 05273/15333] crypto: af_alg - Allow additional ciphers for
+ cryptsetup
+
+Add "xts(camellia)", "xts(serpent)", and "xts(twofish)" to the allowlist
+for af_alg_restrict=1.  These niche AES alternatives have continued to
+see rare but persistent use via cryptsetup, which has historically
+relied on the AF_ALG support for these ciphers in XTS mode for
+performing the keyslot encryption.  (cryptsetup v2.8.7 and later fall
+back to a temporary dm-crypt mapping, but that requires root.)
+
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ crypto/algif_skcipher.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/crypto/algif_skcipher.c b/crypto/algif_skcipher.c
+index 2b8069667974..49ae779b3b6b 100644
+--- a/crypto/algif_skcipher.c
++++ b/crypto/algif_skcipher.c
+@@ -45,6 +45,9 @@ static const struct af_alg_allowlist_entry skcipher_allowlist[] = {
+ 	{ "ecb(des)", true }, /* iwd */
+ 	{ "hctr2(aes)", false }, /* cryptsetup */
+ 	{ "xts(aes)", false }, /* cryptsetup benchmark */
++	{ "xts(camellia)", false }, /* cryptsetup */
++	{ "xts(serpent)", false }, /* cryptsetup */
++	{ "xts(twofish)", false }, /* cryptsetup */
+ 	{},
+ };
+ 
+-- 
+2.55.0
+

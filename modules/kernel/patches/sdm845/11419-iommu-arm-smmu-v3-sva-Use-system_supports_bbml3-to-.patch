@@ -1,0 +1,38 @@
+From d8fc0793cf6862813d9bde224230e0edeafab88c Mon Sep 17 00:00:00 2001
+From: Will Deacon <will@kernel.org>
+Date: Thu, 6 Aug 2026 16:31:28 +0000
+Subject: [PATCH 11419/15333] iommu/arm-smmu-v3-sva: Use
+ system_supports_bbml3() to detect CPU feature
+
+Commit 94104e3cfa80 ("arm64: cpufeature: Rename BBML2_NOABORT as BBML3")
+renamed the cpu_supports_bbml2_noabort() helper to cpu_supports_bbml3(),
+as the Linux-defined "noabort" semantics have now been incorporated into
+the architecture under the BBML3 feature.
+
+Update the caller in the SMMUv3 SVA driver to use the new function.
+There is a slightly oddity in that the SMMUv3 architecture already
+defined BBML2 in such a way that aborts were prohibited, so we use the
+BBML3 feature on the CPU to enable BBML2 in the SMMU.
+
+Fixes: 94104e3cfa80 ("arm64: cpufeature: Rename BBML2_NOABORT as BBML3")
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c
+index 1ed8a6f29dc4..01492fb52659 100644
+--- a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c
++++ b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3-sva.c
+@@ -208,7 +208,7 @@ bool arm_smmu_sva_supported(struct arm_smmu_device *smmu)
+ 		feat_mask |= ARM_SMMU_FEAT_VAX;
+ 	}
+ 
+-	if (system_supports_bbml2_noabort())
++	if (system_supports_bbml3())
+ 		feat_mask |= ARM_SMMU_FEAT_BBML2;
+ 
+ 	if ((smmu->features & feat_mask) != feat_mask)
+-- 
+2.55.0
+

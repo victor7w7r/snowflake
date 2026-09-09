@@ -1,0 +1,50 @@
+From eeafd9e12144fb6249e1510f9db8a4aaf8155a0a Mon Sep 17 00:00:00 2001
+From: Link Mauve <linkmauve@linkmauve.fr>
+Date: Sun, 26 Jul 2026 14:45:31 +0200
+Subject: [PATCH 08224/15333] media: ov2740: move regmap_config to a static
+ const variable
+
+This one was fully static, so no need to fill it in the register
+function manually.
+
+Signed-off-by: Link Mauve <linkmauve@linkmauve.fr>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/i2c/ov2740.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/media/i2c/ov2740.c b/drivers/media/i2c/ov2740.c
+index fbcbadcecebe..39003c1632ad 100644
+--- a/drivers/media/i2c/ov2740.c
++++ b/drivers/media/i2c/ov2740.c
+@@ -1241,11 +1241,16 @@ static int ov2740_nvmem_read(void *priv, unsigned int off, void *val,
+ 	return ret;
+ }
+ 
++static const struct regmap_config regmap_config = {
++	.val_bits = 8,
++	.reg_bits = 16,
++	.disable_locking = true,
++};
++
+ static int ov2740_register_nvmem(struct i2c_client *client,
+ 				 struct ov2740 *ov2740)
+ {
+ 	struct nvm_data *nvm;
+-	struct regmap_config regmap_config = { };
+ 	struct regmap *regmap;
+ 	struct device *dev = ov2740->dev;
+ 	struct nvmem_config nvmem_config = {
+@@ -1266,9 +1271,6 @@ static int ov2740_register_nvmem(struct i2c_client *client,
+ 	if (!nvm)
+ 		return -ENOMEM;
+ 
+-	regmap_config.val_bits = 8;
+-	regmap_config.reg_bits = 16;
+-	regmap_config.disable_locking = true;
+ 	regmap = devm_regmap_init_i2c(client, &regmap_config);
+ 	if (IS_ERR(regmap))
+ 		return PTR_ERR(regmap);
+-- 
+2.55.0
+

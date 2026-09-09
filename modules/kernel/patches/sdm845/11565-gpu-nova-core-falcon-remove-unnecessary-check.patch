@@ -1,0 +1,46 @@
+From d1dc8faf1152e39070250df714b2d544c8ae32bb Mon Sep 17 00:00:00 2001
+From: Alexandre Courbot <acourbot@nvidia.com>
+Date: Wed, 5 Aug 2026 14:01:45 +0900
+Subject: [PATCH 11565/15333] gpu: nova-core: falcon: remove unnecessary check
+
+The `try_with_base` call performed on `NV_PFALCON_FALCON_DMATRFBASE1`
+already returns `EOVERFLOW` if the address is too large for the
+register, making this check redundant.
+
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+Link: https://patch.msgid.link/20260805-falcon-dma-projections-v2-1-4cc9f3f13ee9@nvidia.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/gpu/nova-core/falcon.rs | 9 +--------
+ 1 file changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/falcon.rs b/drivers/gpu/nova-core/falcon.rs
+index a91cbdd5d636..cd05985f5ee6 100644
+--- a/drivers/gpu/nova-core/falcon.rs
++++ b/drivers/gpu/nova-core/falcon.rs
+@@ -9,8 +9,7 @@
+     dma::{
+         Coherent,
+         CoherentBox,
+-        DmaAddress,
+-        DmaMask, //
++        DmaAddress, //
+     },
+     io::{
+         poll::read_poll_timeout,
+@@ -534,12 +533,6 @@ fn dma_wr(
+             return Err(EINVAL);
+         }
+ 
+-        // The DMATRFBASE/1 register pair only supports a 49-bit address.
+-        if dma_start > DmaMask::new::<49>().value() {
+-            dev_err!(self.dev, "DMA address {:#x} exceeds 49 bits\n", dma_start);
+-            return Err(ERANGE);
+-        }
+-
+         // DMA transfers can only be done in units of 256 bytes. Compute how many such transfers we
+         // need to perform.
+         let num_transfers = load_offsets.len.div_ceil(DMA_LEN);
+-- 
+2.55.0
+

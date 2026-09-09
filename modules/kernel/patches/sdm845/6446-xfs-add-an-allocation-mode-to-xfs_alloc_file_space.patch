@@ -1,0 +1,148 @@
+From 86e332447d726127e042b28f7c65ca3784443794 Mon Sep 17 00:00:00 2001
+From: Pankaj Raghav <p.raghav@samsung.com>
+Date: Mon, 6 Jul 2026 10:41:16 +0200
+Subject: [PATCH 06446/15333] xfs: add an allocation mode to
+ xfs_alloc_file_space()
+
+xfs_alloc_file_space() hardcodes XFS_BMAPI_PREALLOC to preallocate
+unwritten extents across a range.
+
+In preparation for FALLOC_FL_WRITE_ZEROES, add an explicit allocation
+mode argument, enum xfs_alloc_file_space_mode, and derive the xfs_bmapi
+flags from it. The only mode for now is XFS_ALLOC_FILE_SPACE_PREALLOC,
+which preallocates unwritten extents and marks the inode as preallocated
+exactly as before, so there is no functional change.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Reviewed-by: "Darrick J. Wong" <djwong@kernel.org>
+Signed-off-by: Pankaj Raghav <p.raghav@samsung.com>
+Signed-off-by: Carlos Maiolino <cem@kernel.org>
+---
+ fs/xfs/xfs_bmap_util.c | 25 +++++++++++++++++++++----
+ fs/xfs/xfs_bmap_util.h |  6 +++++-
+ fs/xfs/xfs_file.c      |  9 ++++++---
+ 3 files changed, 32 insertions(+), 8 deletions(-)
+
+diff --git a/fs/xfs/xfs_bmap_util.c b/fs/xfs/xfs_bmap_util.c
+index c88b9ade7389..48db310b118c 100644
+--- a/fs/xfs/xfs_bmap_util.c
++++ b/fs/xfs/xfs_bmap_util.c
+@@ -642,11 +642,19 @@ xfs_free_eofblocks(
+ 	return error;
+ }
+ 
++/*
++ * Allocate space for a file according to @mode:
++ *
++ * XFS_ALLOC_FILE_SPACE_PREALLOC:
++ * Preallocate unwritten extents over holes across the range and mark the inode
++ * as preallocated.
++ */
+ int
+ xfs_alloc_file_space(
+ 	struct xfs_inode	*ip,
+ 	xfs_off_t		offset,
+-	xfs_off_t		len)
++	xfs_off_t		len,
++	enum xfs_alloc_file_space_mode mode)
+ {
+ 	xfs_mount_t		*mp = ip->i_mount;
+ 	xfs_off_t		count;
+@@ -657,6 +665,7 @@ xfs_alloc_file_space(
+ 	int			rt;
+ 	xfs_trans_t		*tp;
+ 	xfs_bmbt_irec_t		imaps[1], *imapp;
++	uint32_t		bmapi_flags, nr_exts;
+ 	int			error;
+ 
+ 	if (xfs_is_always_cow_inode(ip))
+@@ -674,6 +683,15 @@ xfs_alloc_file_space(
+ 	if (len <= 0)
+ 		return -EINVAL;
+ 
++	switch (mode) {
++	case XFS_ALLOC_FILE_SPACE_PREALLOC:
++		bmapi_flags = XFS_BMAPI_PREALLOC;
++		nr_exts = XFS_IEXT_ADD_NOSPLIT_CNT;
++		break;
++	default:
++		return -EINVAL;
++	}
++
+ 	rt = XFS_IS_REALTIME_INODE(ip);
+ 	extsz = xfs_get_extsz_hint(ip);
+ 
+@@ -733,8 +751,7 @@ xfs_alloc_file_space(
+ 		if (error)
+ 			break;
+ 
+-		error = xfs_iext_count_extend(tp, ip, XFS_DATA_FORK,
+-				XFS_IEXT_ADD_NOSPLIT_CNT);
++		error = xfs_iext_count_extend(tp, ip, XFS_DATA_FORK, nr_exts);
+ 		if (error)
+ 			goto error;
+ 
+@@ -748,7 +765,7 @@ xfs_alloc_file_space(
+ 		 * will eventually reach the requested range.
+ 		 */
+ 		error = xfs_bmapi_write(tp, ip, startoffset_fsb,
+-				allocatesize_fsb, XFS_BMAPI_PREALLOC, 0, imapp,
++				allocatesize_fsb, bmapi_flags, 0, imapp,
+ 				&nimaps);
+ 		if (error) {
+ 			if (error != -ENOSR)
+diff --git a/fs/xfs/xfs_bmap_util.h b/fs/xfs/xfs_bmap_util.h
+index eaaf094154b9..929b39d9d88a 100644
+--- a/fs/xfs/xfs_bmap_util.h
++++ b/fs/xfs/xfs_bmap_util.h
+@@ -55,8 +55,12 @@ int	xfs_bmap_last_extent(struct xfs_trans *tp, struct xfs_inode *ip,
+ 			     int *is_empty);
+ 
+ /* preallocation and hole punch interface */
++enum xfs_alloc_file_space_mode {
++	XFS_ALLOC_FILE_SPACE_PREALLOC,
++};
++
+ int	xfs_alloc_file_space(struct xfs_inode *ip, xfs_off_t offset,
+-		xfs_off_t len);
++		xfs_off_t len, enum xfs_alloc_file_space_mode mode);
+ int	xfs_free_file_space(struct xfs_inode *ip, xfs_off_t offset,
+ 		xfs_off_t len, struct xfs_zone_alloc_ctx *ac);
+ int	xfs_collapse_file_space(struct xfs_inode *, xfs_off_t offset,
+diff --git a/fs/xfs/xfs_file.c b/fs/xfs/xfs_file.c
+index 845a97c9b063..e90ea6ebdc8e 100644
+--- a/fs/xfs/xfs_file.c
++++ b/fs/xfs/xfs_file.c
+@@ -1406,7 +1406,8 @@ xfs_falloc_zero_range(
+ 		len = round_up(offset + len, blksize) -
+ 			round_down(offset, blksize);
+ 		offset = round_down(offset, blksize);
+-		error = xfs_alloc_file_space(ip, offset, len);
++		error = xfs_alloc_file_space(ip, offset, len,
++				XFS_ALLOC_FILE_SPACE_PREALLOC);
+ 	}
+ 	if (error)
+ 		return error;
+@@ -1432,7 +1433,8 @@ xfs_falloc_unshare_range(
+ 	if (error)
+ 		return error;
+ 
+-	error = xfs_alloc_file_space(XFS_I(inode), offset, len);
++	error = xfs_alloc_file_space(XFS_I(inode), offset, len,
++			XFS_ALLOC_FILE_SPACE_PREALLOC);
+ 	if (error)
+ 		return error;
+ 	return xfs_falloc_setsize(file, new_size);
+@@ -1460,7 +1462,8 @@ xfs_falloc_allocate_range(
+ 	if (error)
+ 		return error;
+ 
+-	error = xfs_alloc_file_space(XFS_I(inode), offset, len);
++	error = xfs_alloc_file_space(XFS_I(inode), offset, len,
++			XFS_ALLOC_FILE_SPACE_PREALLOC);
+ 	if (error)
+ 		return error;
+ 	return xfs_falloc_setsize(file, new_size);
+-- 
+2.55.0
+

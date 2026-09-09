@@ -1,0 +1,60 @@
+From 35a3da9fe1b212a9012952a04f383b8dc3708dd7 Mon Sep 17 00:00:00 2001
+From: Linghui Wu <linghui.wu@oss.qualcomm.com>
+Date: Thu, 30 Jul 2026 08:02:26 +0530
+Subject: [PATCH 09743/15333] wifi: ath10k: filter non-UTF testmode events
+
+When UTF monitor is enabled, ath10k forwards WMI events to nl80211
+testmode. Non-UTF events can therefore be delivered to userspace and
+confuse FTM tools which expect only UTF responses.
+
+Only forward known UTF event IDs from WMI event namespaces that route
+events through ath10k_tm_event_wmi(), and drop other WMI events while UTF
+monitor is active. READY events are still handled by the normal WMI
+receive path.
+
+Tested-on: WCN3990 hw1.0 SNOC WLAN.HL.3.3.7.c5-00093.2-QCAHLSWMTPL-1
+
+Signed-off-by: Linghui Wu <linghui.wu@oss.qualcomm.com>
+Reviewed-by: Rameshkumar Sundaram <rameshkumar.sundaram@oss.qualcomm.com>
+Reviewed-by: Baochen Qiang <baochen.qiang@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260730023226.707008-1-linghui.wu@oss.qualcomm.com
+Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath10k/testmode.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/drivers/net/wireless/ath/ath10k/testmode.c b/drivers/net/wireless/ath/ath10k/testmode.c
+index d3bd385694d6..282ae6e20c8e 100644
+--- a/drivers/net/wireless/ath/ath10k/testmode.c
++++ b/drivers/net/wireless/ath/ath10k/testmode.c
+@@ -156,6 +156,14 @@ static void ath10k_tm_event_segmented(struct ath10k *ar, u32 cmd_id, struct sk_b
+ 	cfg80211_testmode_event(nl_skb, GFP_ATOMIC);
+ }
+ 
++static bool ath10k_tm_is_utf_event(u32 cmd_id)
++{
++	return cmd_id == WMI_10X_PDEV_UTF_EVENTID ||
++	       cmd_id == WMI_10_2_PDEV_UTF_EVENTID ||
++	       cmd_id == WMI_10_4_PDEV_UTF_EVENTID ||
++	       cmd_id == WMI_TLV_PDEV_UTF_EVENTID;
++}
++
+ /* Returns true if callee consumes the skb and the skb should be discarded.
+  * Returns false if skb is not used. Does not sleep.
+  */
+@@ -182,6 +190,12 @@ bool ath10k_tm_event_wmi(struct ath10k *ar, u32 cmd_id, struct sk_buff *skb)
+ 	 */
+ 	consumed = true;
+ 
++	if (!ath10k_tm_is_utf_event(cmd_id)) {
++		ath10k_dbg(ar, ATH10K_DBG_TESTMODE,
++			   "testmode drop non-utf event cmd_id %u\n", cmd_id);
++		goto out;
++	}
++
+ 	if (ar->testmode.expected_seq != ATH10K_FTM_SEG_NONE)
+ 		ath10k_tm_event_segmented(ar, cmd_id, skb);
+ 	else
+-- 
+2.55.0
+

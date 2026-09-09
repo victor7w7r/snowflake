@@ -1,0 +1,107 @@
+From 7e07baaa9e41c4140924a90f1c5cf8feeb9879fb Mon Sep 17 00:00:00 2001
+From: "Masami Hiramatsu (Google)" <mhiramat@kernel.org>
+Date: Thu, 2 Jul 2026 21:12:39 +0900
+Subject: [PATCH 02079/15333] tracing/probes: Rename FETCH_OP_DATA to
+ FETCH_OP_IMMSTR
+
+Since FETCH_OP_DATA is used solely to store immediate string
+values, rename it to the more specific FETCH_OP_IMMSTR.
+
+No behavior change, just rename it.
+
+Link: https://lore.kernel.org/all/178217906914.643090.2958799486090467704.stgit@devnote2/
+
+Signed-off-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+---
+ kernel/trace/trace_probe.c      | 12 ++++++------
+ kernel/trace/trace_probe.h      |  2 +-
+ kernel/trace/trace_probe_tmpl.h |  2 +-
+ 3 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/kernel/trace/trace_probe.c b/kernel/trace/trace_probe.c
+index 9a58c0789ac5..348a7f97d6c7 100644
+--- a/kernel/trace/trace_probe.c
++++ b/kernel/trace/trace_probe.c
+@@ -1309,7 +1309,7 @@ parse_probe_arg(char *arg, const struct fetch_type *type,
+ 				break;
+ 			ctx->offset = cur_offs;
+ 			if (code->op == FETCH_OP_COMM ||
+-			    code->op == FETCH_OP_DATA) {
++			    code->op == FETCH_OP_IMMSTR) {
+ 				trace_probe_log_err(ctx->offset, COMM_CANT_DEREF);
+ 				return -EINVAL;
+ 			}
+@@ -1330,7 +1330,7 @@ parse_probe_arg(char *arg, const struct fetch_type *type,
+ 			ret = __parse_imm_string(arg + 2, &tmp, ctx->offset + 2);
+ 			if (ret)
+ 				break;
+-			code->op = FETCH_OP_DATA;
++			code->op = FETCH_OP_IMMSTR;
+ 			code->data = tmp;
+ 		} else {
+ 			ret = str_to_immediate(arg + 1, &code->immediate);
+@@ -1485,7 +1485,7 @@ static int finalize_fetch_insn(struct fetch_insn *code,
+ 		} else {
+ 			if (code->op != FETCH_OP_DEREF && code->op != FETCH_OP_UDEREF &&
+ 			    code->op != FETCH_OP_IMM && code->op != FETCH_OP_COMM &&
+-			    code->op != FETCH_OP_DATA && code->op != FETCH_OP_TP_ARG) {
++			    code->op != FETCH_OP_IMMSTR && code->op != FETCH_OP_TP_ARG) {
+ 				trace_probe_log_err(ctx->offset + type_offset,
+ 						    BAD_STRING);
+ 				return -EINVAL;
+@@ -1494,7 +1494,7 @@ static int finalize_fetch_insn(struct fetch_insn *code,
+ 
+ 		if (!strcmp(parg->type->name, "symstr") ||
+ 		    (code->op == FETCH_OP_IMM || code->op == FETCH_OP_COMM ||
+-		     code->op == FETCH_OP_DATA) || code->op == FETCH_OP_TP_ARG ||
++		     code->op == FETCH_OP_IMMSTR) || code->op == FETCH_OP_TP_ARG ||
+ 		     parg->count) {
+ 			/*
+ 			 * IMM, DATA and COMM is pointing actual address, those
+@@ -1670,7 +1670,7 @@ static int traceprobe_parse_probe_arg_body(const char *argv, ssize_t *size,
+ 	if (ret < 0) {
+ 		for (code = tmp; code < tmp + FETCH_INSN_MAX; code++)
+ 			if (code->op == FETCH_NOP_SYMBOL ||
+-			    code->op == FETCH_OP_DATA)
++			    code->op == FETCH_OP_IMMSTR)
+ 				kfree(code->data);
+ 	}
+ 	kfree(tmp);
+@@ -1769,7 +1769,7 @@ void traceprobe_free_probe_arg(struct probe_arg *arg)
+ 
+ 	while (code && code->op != FETCH_OP_END) {
+ 		if (code->op == FETCH_NOP_SYMBOL ||
+-		    code->op == FETCH_OP_DATA)
++		    code->op == FETCH_OP_IMMSTR)
+ 			kfree(code->data);
+ 		code++;
+ 	}
+diff --git a/kernel/trace/trace_probe.h b/kernel/trace/trace_probe.h
+index 43e6954c14c5..40b53b5b58a9 100644
+--- a/kernel/trace/trace_probe.h
++++ b/kernel/trace/trace_probe.h
+@@ -94,7 +94,7 @@ enum fetch_op {
+ 	FETCH_OP_COMM,		/* Current comm */
+ 	FETCH_OP_ARG,		/* Function argument : .param */
+ 	FETCH_OP_FOFFS,		/* File offset: .immediate */
+-	FETCH_OP_DATA,		/* Allocated data: .data */
++	FETCH_OP_IMMSTR,	/* Allocated string: .data */
+ 	FETCH_OP_EDATA,		/* Entry data: .offset */
+ 	// Stage 2 (dereference) op
+ 	FETCH_OP_DEREF,		/* Dereference: .offset */
+diff --git a/kernel/trace/trace_probe_tmpl.h b/kernel/trace/trace_probe_tmpl.h
+index f39b37fcdb3b..51436f19083b 100644
+--- a/kernel/trace/trace_probe_tmpl.h
++++ b/kernel/trace/trace_probe_tmpl.h
+@@ -109,7 +109,7 @@ process_common_fetch_insn(struct fetch_insn *code, unsigned long *val)
+ 	case FETCH_OP_COMM:
+ 		*val = (unsigned long)current->comm;
+ 		break;
+-	case FETCH_OP_DATA:
++	case FETCH_OP_IMMSTR:
+ 		*val = (unsigned long)code->data;
+ 		break;
+ 	default:
+-- 
+2.55.0
+

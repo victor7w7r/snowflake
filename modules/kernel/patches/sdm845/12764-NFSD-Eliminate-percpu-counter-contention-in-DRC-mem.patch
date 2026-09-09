@@ -1,0 +1,76 @@
+From 259dfa726db686ea7d5d863736bd0f3545633efe Mon Sep 17 00:00:00 2001
+From: Chuck Lever <cel@kernel.org>
+Date: Thu, 16 Jul 2026 20:12:29 -0400
+Subject: [PATCH 12764/15333] NFSD: Eliminate percpu counter contention in DRC
+ memory accounting
+
+The DRC memory usage counter (NFSD_STATS_DRC_MEM_USAGE) tracks
+bytes, but percpu_counter_add() uses the global percpu_counter_batch
+threshold of max(32, 2*nr_cpus). Each DRC entry add or removal
+updates the counter by sizeof(struct nfsd_cacherep) (~144 bytes),
+which always exceeds the batch threshold. percpu_counter_add()
+then acquires the counter's global spinlock on every update,
+serializing all nfsd threads.
+
+On a 10-CPU NFS server handling a high rate of non-idempotent
+NFSv3 operations, this lock accounts for a measurable fraction
+of total spin lock overhead because nfsd_cache_lookup() both
+inserts a new entry and prunes up to three old entries per RPC,
+producing 4-7 global lock acquisitions per operation.
+
+Switch to percpu_counter_add_local() and percpu_counter_sub_local(),
+which batch with INT_MAX so that updates always remain on the per-CPU
+fast path regardless of the amount. The only reader of this counter uses
+percpu_counter_sum_positive(), which sums the per-CPU deltas under the
+global lock, so read accuracy is unaffected.
+
+Reviewed-by: Jeff Layton <jlayton@kernel.org>
+Reviewed-by: NeilBrown <neil@brown.name>
+Link: https://patch.msgid.link/20260717001232.438792-3-cel@kernel.org
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ fs/nfsd/stats.h | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/fs/nfsd/stats.h b/fs/nfsd/stats.h
+index 87736b7fbf28..15d30c045dc3 100644
+--- a/fs/nfsd/stats.h
++++ b/fs/nfsd/stats.h
+@@ -60,14 +60,32 @@ static inline void nfsd_stats_payload_misses_inc(struct nfsd_net *nn)
+ 	percpu_counter_inc(&nn->counter[NFSD_STATS_PAYLOAD_MISSES]);
+ }
+ 
++/**
++ * nfsd_stats_drc_mem_usage_add - Add memory used by a cache item
++ * @nn: target network namespace
++ * @amount: byte count
++ *
++ * percpu_counter_add_local() keeps updates on the per-CPU fast
++ * path. The sole reader, percpu_counter_sum_positive(), sums the
++ * per-CPU deltas, so batching locally does not lose accuracy.
++ */
+ static inline void nfsd_stats_drc_mem_usage_add(struct nfsd_net *nn, s64 amount)
+ {
+-	percpu_counter_add(&nn->counter[NFSD_STATS_DRC_MEM_USAGE], amount);
++	percpu_counter_add_local(&nn->counter[NFSD_STATS_DRC_MEM_USAGE],
++				 amount);
+ }
+ 
++/**
++ * nfsd_stats_drc_mem_usage_sub - Subtract memory used by a cache item
++ * @nn: target network namespace
++ * @amount: byte count
++ *
++ * See nfsd_stats_drc_mem_usage_add() for batching rationale.
++ */
+ static inline void nfsd_stats_drc_mem_usage_sub(struct nfsd_net *nn, s64 amount)
+ {
+-	percpu_counter_sub(&nn->counter[NFSD_STATS_DRC_MEM_USAGE], amount);
++	percpu_counter_sub_local(&nn->counter[NFSD_STATS_DRC_MEM_USAGE],
++				 amount);
+ }
+ 
+ #ifdef CONFIG_NFSD_V4
+-- 
+2.55.0
+

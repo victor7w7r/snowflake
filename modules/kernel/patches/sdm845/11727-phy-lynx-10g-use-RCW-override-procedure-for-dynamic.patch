@@ -1,0 +1,114 @@
+From ce816ddb047b5551210ef1aa27415cf4ff29d8e4 Mon Sep 17 00:00:00 2001
+From: Vladimir Oltean <vladimir.oltean@nxp.com>
+Date: Wed, 22 Jul 2026 02:16:03 +0300
+Subject: [PATCH 11727/15333] phy: lynx-10g: use RCW override procedure for
+ dynamic protocol change
+
+Up until this patch, the only protocol change supported was between
+1000Base-X/SGMII and 2500Base-X. The others require an RCW override
+procedure which was lacking.
+
+Since now the guts driver provides the means of applying this procedure,
+make use of it and remove any comment which mentioned the limitation.
+
+Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
+Acked-by: Vinod Koul <vkoul@kernel.org>
+Reviewed-by: Ioana Ciornei <ioana.ciornei@nxp.com>
+Link: https://lore.kernel.org/r/20260721231603.67865-10-vladimir.oltean@nxp.com
+Signed-off-by: Christophe Leroy (CS GROUP) <chleroy@kernel.org>
+---
+ drivers/phy/freescale/Kconfig            |  1 +
+ drivers/phy/freescale/phy-fsl-lynx-10g.c | 23 ++++++++++++++---------
+ 2 files changed, 15 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/phy/freescale/Kconfig b/drivers/phy/freescale/Kconfig
+index 5bf3864fbe64..d4e189fffbf8 100644
+--- a/drivers/phy/freescale/Kconfig
++++ b/drivers/phy/freescale/Kconfig
+@@ -58,6 +58,7 @@ config PHY_FSL_LYNX_10G
+ 	tristate "Freescale Layerscape Lynx 10G SerDes PHY support"
+ 	depends on OF
+ 	depends on ARCH_LAYERSCAPE || COMPILE_TEST
++	select FSL_GUTS
+ 	select GENERIC_PHY
+ 	select PHY_FSL_LYNX_CORE
+ 	help
+diff --git a/drivers/phy/freescale/phy-fsl-lynx-10g.c b/drivers/phy/freescale/phy-fsl-lynx-10g.c
+index 38def160ef1a..60c85d08c33e 100644
+--- a/drivers/phy/freescale/phy-fsl-lynx-10g.c
++++ b/drivers/phy/freescale/phy-fsl-lynx-10g.c
+@@ -8,6 +8,7 @@
+ #include <linux/phy/phy.h>
+ #include <linux/platform_device.h>
+ #include <linux/workqueue.h>
++#include <linux/fsl/guts.h>
+ 
+ #include "phy-fsl-lynx-core.h"
+ 
+@@ -1167,14 +1168,7 @@ static bool lynx_10g_lane_mode_needs_rcw_override(struct lynx_lane *lane,
+ 
+ 	/* Major protocol changes, which involve changing the PCS connection to
+ 	 * the GMII MAC with the one to the XGMII MAC, require an RCW override
+-	 * procedure to reconfigure an internal mux, as documented here:
+-	 * https://lore.kernel.org/linux-phy/20230810102631.bvozjer3t67r67iy@skbuf/
+-	 * This is SoC-specific, and not yet implemented in drivers/soc/fsl/guts.c.
+-	 *
+-	 * So the supported set of protocols depends on the initial lane mode.
+-	 *
+-	 * Minor protocol changes (SGMII <-> 1000Base-X <-> 2500Base-X or
+-	 * 10GBase-R <-> USXGMII) are supported.
++	 * procedure to reconfigure an internal mux.
+ 	 */
+ 	if ((lynx_lane_mode_uses_gmii_mac(curr) &&
+ 	     lynx_lane_mode_uses_xgmii_mac(new)) ||
+@@ -1189,6 +1183,7 @@ static int lynx_10g_validate(struct phy *phy, enum phy_mode mode, int submode,
+ 			     union phy_configure_opts *opts)
+ {
+ 	struct lynx_lane *lane = phy_get_drvdata(phy);
++	struct lynx_priv *priv = lane->priv;
+ 	enum lynx_lane_mode lane_mode;
+ 	int err;
+ 
+@@ -1197,7 +1192,8 @@ static int lynx_10g_validate(struct phy *phy, enum phy_mode mode, int submode,
+ 		return err;
+ 
+ 	if (lynx_10g_lane_mode_needs_rcw_override(lane, lane_mode))
+-		return -EINVAL;
++		return fsl_guts_lane_validate(priv->info->index, lane->id,
++					      lane_mode);
+ 
+ 	return 0;
+ }
+@@ -1205,6 +1201,7 @@ static int lynx_10g_validate(struct phy *phy, enum phy_mode mode, int submode,
+ static int lynx_10g_set_mode(struct phy *phy, enum phy_mode mode, int submode)
+ {
+ 	struct lynx_lane *lane = phy_get_drvdata(phy);
++	struct lynx_priv *priv = lane->priv;
+ 	bool powered_up = lane->powered_up;
+ 	enum lynx_lane_mode lane_mode;
+ 	int err;
+@@ -1225,6 +1222,13 @@ static int lynx_10g_set_mode(struct phy *phy, enum phy_mode mode, int submode)
+ 	if (powered_up)
+ 		lynx_10g_lane_halt(phy);
+ 
++	if (lynx_10g_lane_mode_needs_rcw_override(lane, lane_mode)) {
++		err = fsl_guts_lane_set_mode(priv->info->index, lane->id,
++					     lane_mode);
++		if (err)
++			goto out;
++	}
++
+ 	err = lynx_10g_lane_disable_pcvt(lane, lane->mode);
+ 	if (err)
+ 		goto out;
+@@ -1314,6 +1318,7 @@ static struct platform_driver lynx_10g_driver = {
+ };
+ module_platform_driver(lynx_10g_driver);
+ 
++MODULE_IMPORT_NS("FSL_GUTS");
+ MODULE_IMPORT_NS("PHY_FSL_LYNX");
+ MODULE_AUTHOR("Ioana Ciornei <ioana.ciornei@nxp.com>");
+ MODULE_AUTHOR("Vladimir Oltean <vladimir.oltean@nxp.com>");
+-- 
+2.55.0
+

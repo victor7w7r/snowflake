@@ -1,0 +1,84 @@
+From 544315e401727364f7ce3ba771a36f7dc24ba6c4 Mon Sep 17 00:00:00 2001
+From: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Date: Mon, 3 Aug 2026 11:46:45 -0700
+Subject: [PATCH 13940/15333] HID: logitech-hidpp: move FF initialization to
+ .input_configured()
+
+The driver currently initializes force-feedback in its probe() function
+after calling hid_connect(). This is racy as the input device is
+already registered and visible to userspace at that point.
+
+Move the FF initialization to the .input_configured() callback to ensure
+the device is fully prepared before registration.
+
+Assisted-by: Gemini:gemini-3.1-pro
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ drivers/hid/hid-logitech-hidpp.c | 36 +++++++++++++++++---------------
+ 1 file changed, 19 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/hid/hid-logitech-hidpp.c b/drivers/hid/hid-logitech-hidpp.c
+index 90b0184df777..db53b45b0752 100644
+--- a/drivers/hid/hid-logitech-hidpp.c
++++ b/drivers/hid/hid-logitech-hidpp.c
+@@ -3861,15 +3861,32 @@ static void hidpp_populate_input(struct hidpp_device *hidpp,
+ 		hidpp10_extra_mouse_buttons_populate_input(hidpp, input);
+ }
+ 
+-static int hidpp_input_configured(struct hid_device *hdev,
+-				struct hid_input *hidinput)
++static int hidpp_input_configured(struct hid_device *hdev, struct hid_input *hidinput)
+ {
+ 	struct hidpp_device *hidpp = hid_get_drvdata(hdev);
+ 	struct input_dev *input = hidinput->input;
++	int ret;
+ 
+ 	if (!hidpp)
+ 		return 0;
+ 
++	if (hidpp->quirks & HIDPP_QUIRK_CLASS_G920) {
++		struct hidpp_ff_private_data data;
++
++		if (!list_is_first(&hidinput->list, &hdev->inputs))
++			return 0;
++
++		ret = g920_get_config(hidpp, &data);
++		if (!ret)
++			ret = hidpp_ff_init(hidpp, &data);
++
++		if (ret) {
++			hid_warn(hidpp->hid_dev,
++				 "Unable to initialize force feedback support, errno %d\n",
++				 ret);
++		}
++	}
++
+ 	hidpp_populate_input(hidpp, input);
+ 
+ 	return 0;
+@@ -4530,21 +4547,6 @@ static int hidpp_probe(struct hid_device *hdev, const struct hid_device_id *id)
+ 	schedule_work(&hidpp->work);
+ 	flush_work(&hidpp->work);
+ 
+-	if (hidpp->quirks & HIDPP_QUIRK_CLASS_G920) {
+-		struct hidpp_ff_private_data data;
+-
+-		ret = g920_get_config(hidpp, &data);
+-		if (!ret)
+-			ret = hidpp_ff_init(hidpp, &data);
+-
+-		if (ret) {
+-			hid_warn(hidpp->hid_dev,
+-		     "Unable to initialize force feedback support, errno %d\n",
+-				 ret);
+-			ret = 0;
+-		}
+-	}
+-
+ 	/*
+ 	 * This relies on logi_dj_ll_close() being a no-op so that DJ connection
+ 	 * events will still be received.
+-- 
+2.55.0
+

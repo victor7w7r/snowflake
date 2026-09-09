@@ -1,0 +1,100 @@
+From 08bb824ae3fc73efd453cb303fdec5938ddc8aea Mon Sep 17 00:00:00 2001
+From: Xiang Liu <xiang.liu@amd.com>
+Date: Tue, 4 Aug 2026 22:50:18 +0800
+Subject: [PATCH 11443/15333] drm/amd/ras: track debug mode for query mode
+
+The RAS manager uses the rascore debug mode setting to control whether
+MCA data is read directly or collected through PMFW MCA polling and
+ClearMcaOnRead. Track that debug mode state in ras_mgr so
+amdgpu_ras_get_error_query_mode() can classify queries as direct or
+firmware-backed.
+
+Limit the PMFW polling wait in recovery to firmware-backed MODE1 fatal
+recovery so other reset paths, such as MODE2, do not pay the delay
+unnecessarily.
+
+Signed-off-by: Xiang Liu <xiang.liu@amd.com>
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c         |  7 ++++++-
+ .../gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c    | 17 ++++++++++++++++-
+ .../gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h    |  2 ++
+ 3 files changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+index 297f8b04c4eb..35eb87591740 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+@@ -2751,7 +2751,8 @@ static void amdgpu_ras_do_recovery(struct work_struct *work)
+ 		}
+ 
+ 		if (amdgpu_ras_get_error_query_mode(adev, &error_query_mode)) {
+-			if (error_query_mode == AMDGPU_RAS_FIRMWARE_ERROR_QUERY) {
++			if (error_query_mode == AMDGPU_RAS_FIRMWARE_ERROR_QUERY &&
++			    (ras->gpu_reset_flags & AMDGPU_RAS_GPU_RESET_MODE1_RESET)) {
+ 				/* wait 500ms to ensure pmfw polling mca bank info done */
+ 				msleep(500);
+ 			}
+@@ -4422,6 +4423,10 @@ bool amdgpu_ras_get_error_query_mode(struct amdgpu_device *adev,
+ 
+ 	if (amdgpu_sriov_vf(adev)) {
+ 		*error_query_mode = AMDGPU_RAS_VIRT_ERROR_COUNT_QUERY;
++	} else if (amdgpu_uniras_enabled(adev)) {
++		*error_query_mode = amdgpu_ras_mgr_get_debug_mode(adev) ?
++			AMDGPU_RAS_DIRECT_ERROR_QUERY :
++			AMDGPU_RAS_FIRMWARE_ERROR_QUERY;
+ 	} else {
+ 		*error_query_mode = AMDGPU_RAS_DIRECT_ERROR_QUERY;
+ 	}
+diff --git a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c
+index c6c2e2cdaf18..e039249b41af 100644
+--- a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c
++++ b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.c
+@@ -800,9 +800,24 @@ int amdgpu_ras_mgr_lookup_bad_pages_in_a_row(struct amdgpu_device *adev,
+ int amdgpu_ras_mgr_set_debug_mode(struct amdgpu_device *adev, bool enable)
+ {
+ 	struct amdgpu_ras_mgr *ras_mgr = amdgpu_ras_mgr_get_context(adev);
++	int ret;
+ 
+ 	if (!ras_mgr || !ras_mgr->ras_core || !ras_mgr->ras_is_ready)
+ 		return false;
+ 
+-	return ras_core_set_debug_mode(ras_mgr->ras_core, enable);
++	ret = ras_core_set_debug_mode(ras_mgr->ras_core, enable);
++	if (!ret)
++		ras_mgr->is_debug_mode = enable;
++
++	return ret;
++}
++
++bool amdgpu_ras_mgr_get_debug_mode(struct amdgpu_device *adev)
++{
++	struct amdgpu_ras_mgr *ras_mgr = amdgpu_ras_mgr_get_context(adev);
++
++	if (!ras_mgr || !ras_mgr->ras_core || !ras_mgr->ras_is_ready)
++		return true;
++
++	return ras_mgr->is_debug_mode;
+ }
+diff --git a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h
+index a20bb8fdce87..b81fd88fca71 100644
+--- a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h
++++ b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_mgr.h
+@@ -53,6 +53,7 @@ struct amdgpu_ras_mgr {
+ 	void *virt_ras_cmd;
+ 	uint64_t last_poison_consumption_seqno;
+ 	bool ras_is_ready;
++	bool is_debug_mode;
+ 
+ 	bool is_paused;
+ 	struct completion ras_event_done;
+@@ -86,4 +87,5 @@ int amdgpu_ras_mgr_resume_after_reset(struct amdgpu_device *adev);
+ int amdgpu_ras_mgr_lookup_bad_pages_in_a_row(struct amdgpu_device *adev,
+ 		uint64_t addr, uint64_t *nps_page_addr, uint32_t max_page_count);
+ int amdgpu_ras_mgr_set_debug_mode(struct amdgpu_device *adev, bool enable);
++bool amdgpu_ras_mgr_get_debug_mode(struct amdgpu_device *adev);
+ #endif
+-- 
+2.55.0
+

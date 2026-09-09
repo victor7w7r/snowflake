@@ -1,0 +1,94 @@
+From 5d51a3958ae03e2eda5db9e32b4b224d17faf7d2 Mon Sep 17 00:00:00 2001
+From: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Date: Wed, 15 Jul 2026 09:55:15 +0530
+Subject: [PATCH 05408/15333] serial: qcom_geni: Add panic notifier to stop
+ UART on panic
+
+When a VM crashes with an active UART DMA transfer in progress, the
+SMMU raises context faults as the DMA engine continues to access IOVAs
+that are invalidated when the VM's memory context is torn down. These
+faults can affect other VMs sharing the same SMMU instance and obscure
+the root cause of the crash. Additionally, a stuck TX transfer on the
+panic console UART can cause the panic handler to stall, dropping the
+panic output.
+
+Register a panic notifier to stop TX and RX. The notifier does not take
+the port lock, since panic can be entered with the lock already held by
+the interrupted context, and there is no safe way to detect that here;
+instead, the device's runtime PM status is checked first so that TX/RX
+are only stopped while the hardware is still clocked and accessible,
+and the register accesses are skipped entirely once the device is
+runtime suspended.
+
+Signed-off-by: Praveen Talari <praveen.talari@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260715-add_shutdown_and_panic_notifier_serial-v1-2-23e3787c7109@oss.qualcomm.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/qcom_geni_serial.c | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/drivers/tty/serial/qcom_geni_serial.c b/drivers/tty/serial/qcom_geni_serial.c
+index 04e1227390dd..67b14fda4ff9 100644
+--- a/drivers/tty/serial/qcom_geni_serial.c
++++ b/drivers/tty/serial/qcom_geni_serial.c
+@@ -18,6 +18,7 @@
+ #include <linux/irq.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
++#include <linux/panic_notifier.h>
+ #include <linux/pm_domain.h>
+ #include <linux/pm_opp.h>
+ #include <linux/platform_device.h>
+@@ -156,6 +157,7 @@ struct qcom_geni_serial_port {
+ 	struct qcom_geni_private_data private_data;
+ 	const struct qcom_geni_device_data *dev_data;
+ 	struct dev_pm_domain_list *pd_list;
++	struct notifier_block panic_nb;
+ };
+ 
+ static const struct uart_ops qcom_geni_console_pops;
+@@ -1824,6 +1826,22 @@ static const struct uart_ops qcom_geni_uart_pops = {
+ 	.pm = qcom_geni_serial_pm,
+ };
+ 
++static int qcom_geni_serial_panic_notifier(struct notifier_block *nb,
++					   unsigned long action, void *data)
++{
++	struct qcom_geni_serial_port *port =
++		container_of(nb, struct qcom_geni_serial_port, panic_nb);
++	struct uart_port *uport = &port->uport;
++
++	if (pm_runtime_status_suspended(uport->dev))
++		return NOTIFY_OK;
++
++	qcom_geni_serial_stop_tx(uport);
++	qcom_geni_serial_stop_rx(uport);
++
++	return NOTIFY_OK;
++}
++
+ static int qcom_geni_serial_probe(struct platform_device *pdev)
+ {
+ 	int ret = 0;
+@@ -1959,6 +1977,9 @@ static int qcom_geni_serial_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		goto error;
+ 
++	port->panic_nb.notifier_call = qcom_geni_serial_panic_notifier;
++	atomic_notifier_chain_register(&panic_notifier_list, &port->panic_nb);
++
+ 	return 0;
+ 
+ error:
+@@ -1977,6 +1998,8 @@ static void qcom_geni_serial_remove(struct platform_device *pdev)
+ 	struct uart_port *uport = &port->uport;
+ 	struct uart_driver *drv = port->private_data.drv;
+ 
++	atomic_notifier_chain_unregister(&panic_notifier_list, &port->panic_nb);
++
+ 	dev_pm_clear_wake_irq(&pdev->dev);
+ 	device_init_wakeup(&pdev->dev, false);
+ 	ida_free(&port_ida, uport->line);
+-- 
+2.55.0
+

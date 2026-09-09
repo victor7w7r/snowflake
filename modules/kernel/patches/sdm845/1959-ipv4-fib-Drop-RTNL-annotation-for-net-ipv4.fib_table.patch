@@ -1,0 +1,120 @@
+From 763a9437101b9f6210bcfbfd72ce51eb90b7a56e Mon Sep 17 00:00:00 2001
+From: Kuniyuki Iwashima <kuniyu@google.com>
+Date: Mon, 29 Jun 2026 18:10:56 +0000
+Subject: [PATCH 01959/15333] ipv4: fib: Drop RTNL annotation for
+ net->ipv4.fib_table_hash[].
+
+fib_newrule() will drop RTNL except for the first IPv4 rule.
+
+net->ipv4.fib_table_hash[] will be read with no protection,
+but this is fine because fib_table is not destroyed until
+netns dismantle except for the merged main/local table.
+
+fib_unmerge() will continue to be called under RTNL, so other
+readers (fib_flush() and fib_info_notify_update()) just have
+to care about the concurrent hlist_add().
+
+IPv6 and IPMR/IP6MR also take this strategy and use RCU helpers
+to avoid data race against concurrent hlist_add().
+
+Let's not use lockdep_rtnl_is_held() and rcu_dereference_rtnl()
+for net->ipv4.fib_table_hash[].
+
+Note that commit a7e53531234d ("fib_trie: Make fib_table rcu
+safe") started to use the _safe version in fib_flush(), but it
+is not needed thanks to RTNL.
+
+Signed-off-by: Kuniyuki Iwashima <kuniyu@google.com>
+Link: https://patch.msgid.link/20260629181226.1929658-5-kuniyu@google.com
+Reviewed-by: Ido Schimmel <idosch@nvidia.com>
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ include/net/ip_fib.h    |  3 ++-
+ net/ipv4/fib_frontend.c | 23 +++++++++++++----------
+ net/ipv4/fib_trie.c     |  3 +--
+ 3 files changed, 16 insertions(+), 13 deletions(-)
+
+diff --git a/include/net/ip_fib.h b/include/net/ip_fib.h
+index c63a3c4967ae..0a35355fb0f3 100644
+--- a/include/net/ip_fib.h
++++ b/include/net/ip_fib.h
+@@ -302,7 +302,8 @@ static inline struct fib_table *fib_get_table(struct net *net, u32 id)
+ 		&net->ipv4.fib_table_hash[TABLE_LOCAL_INDEX] :
+ 		&net->ipv4.fib_table_hash[TABLE_MAIN_INDEX];
+ 
+-	tb_hlist = rcu_dereference_rtnl(hlist_first_rcu(ptr));
++	/* Only fib4_rules_init() adds fib_table. */
++	tb_hlist = rcu_dereference_protected(hlist_first_rcu(ptr), true);
+ 
+ 	return hlist_entry(tb_hlist, struct fib_table, tb_hlist);
+ }
+diff --git a/net/ipv4/fib_frontend.c b/net/ipv4/fib_frontend.c
+index 336d70649eb9..54eb72695093 100644
+--- a/net/ipv4/fib_frontend.c
++++ b/net/ipv4/fib_frontend.c
+@@ -126,24 +126,28 @@ struct fib_table *fib_new_table(struct net *net, u32 id)
+ }
+ EXPORT_SYMBOL_GPL(fib_new_table);
+ 
+-/* caller must hold either rtnl or rcu read lock */
+ struct fib_table *fib_get_table(struct net *net, u32 id)
+ {
+-	struct fib_table *tb;
++	struct fib_table *tb = NULL;
+ 	struct hlist_head *head;
+ 	unsigned int h;
+ 
+ 	if (id == 0)
+ 		id = RT_TABLE_MAIN;
+ 	h = id & (FIB_TABLE_HASHSZ - 1);
+-
+ 	head = &net->ipv4.fib_table_hash[h];
+-	hlist_for_each_entry_rcu(tb, head, tb_hlist,
+-				 lockdep_rtnl_is_held()) {
++
++	/* fib_table is not destroyed until ip_fib_net_exit()
++	 * except for the merged main/local table.
++	 * fib_unmerge() is called under RTNL, so other readers
++	 * under RTNL (e.g. fib_flush(), fib_info_notify_update())
++	 * can safely traverse the list with rcu_dereference_raw().
++	 */
++	hlist_for_each_entry_rcu(tb, head, tb_hlist, true)
+ 		if (tb->tb_id == id)
+-			return tb;
+-	}
+-	return NULL;
++			break;
++
++	return tb;
+ }
+ #endif /* CONFIG_IP_MULTIPLE_TABLES */
+ 
+@@ -206,10 +210,9 @@ void fib_flush(struct net *net)
+ 
+ 	for (h = 0; h < FIB_TABLE_HASHSZ; h++) {
+ 		struct hlist_head *head = &net->ipv4.fib_table_hash[h];
+-		struct hlist_node *tmp;
+ 		struct fib_table *tb;
+ 
+-		hlist_for_each_entry_safe(tb, tmp, head, tb_hlist)
++		hlist_for_each_entry_rcu(tb, head, tb_hlist, true)
+ 			flushed += fib_table_flush(net, tb, false);
+ 	}
+ 
+diff --git a/net/ipv4/fib_trie.c b/net/ipv4/fib_trie.c
+index e11dc86ceda0..d1d342d7148e 100644
+--- a/net/ipv4/fib_trie.c
++++ b/net/ipv4/fib_trie.c
+@@ -2137,8 +2137,7 @@ void fib_info_notify_update(struct net *net, struct nl_info *info)
+ 		struct hlist_head *head = &net->ipv4.fib_table_hash[h];
+ 		struct fib_table *tb;
+ 
+-		hlist_for_each_entry_rcu(tb, head, tb_hlist,
+-					 lockdep_rtnl_is_held())
++		hlist_for_each_entry_rcu(tb, head, tb_hlist, true)
+ 			__fib_info_notify_update(net, tb, info);
+ 	}
+ }
+-- 
+2.55.0
+

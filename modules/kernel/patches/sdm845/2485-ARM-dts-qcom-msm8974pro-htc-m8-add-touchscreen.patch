@@ -1,0 +1,76 @@
+From 811a24b0ec0c3ec74dbe324c390b75a2b92571ea Mon Sep 17 00:00:00 2001
+From: Alexandre Messier <alex@me.ssier.org>
+Date: Mon, 6 Apr 2026 01:17:00 -0400
+Subject: [PATCH 02485/15333] ARM: dts: qcom: msm8974pro-htc-m8: add
+ touchscreen
+
+Add the touchscreen device node for the HTC One (M8).
+
+The downstream vendor kernel used an I2C frequency of 384 kHz
+for this bus. Use the same value as the vendor.
+
+Signed-off-by: Alexandre Messier <alex@me.ssier.org>
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260406-m8-dts-additions-v2-4-c4c4bd50af48@me.ssier.org
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ .../boot/dts/qcom/qcom-msm8974pro-htc-m8.dts  | 36 +++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/arch/arm/boot/dts/qcom/qcom-msm8974pro-htc-m8.dts b/arch/arm/boot/dts/qcom/qcom-msm8974pro-htc-m8.dts
+index 2edf407db567..66ad93e7dd20 100644
+--- a/arch/arm/boot/dts/qcom/qcom-msm8974pro-htc-m8.dts
++++ b/arch/arm/boot/dts/qcom/qcom-msm8974pro-htc-m8.dts
+@@ -65,6 +65,35 @@ vreg_vph_pwr: vreg-vph-pwr {
+ 	};
+ };
+ 
++&blsp1_i2c2 {
++	clock-frequency = <384000>;
++
++	status = "okay";
++
++	touch@20 {
++		compatible = "syna,rmi4-i2c";
++		reg = <0x20>;
++
++		interrupts-extended = <&tlmm 18 IRQ_TYPE_LEVEL_LOW>;
++
++		pinctrl-0 = <&ts_int_pin>;
++		pinctrl-names = "default";
++
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		rmi4-f01@1 {
++			reg = <0x1>;
++			syna,nosleep-mode = <1>;
++		};
++
++		rmi4-f11@11 {
++			reg = <0x11>;
++			syna,sensor-type = <1>;
++		};
++	};
++};
++
+ &blsp1_i2c3 {
+ 	clock-frequency = <384000>;
+ 
+@@ -353,6 +382,13 @@ cmd-data-pins {
+ 		};
+ 	};
+ 
++	ts_int_pin: ts-int-pin-state {
++		pins = "gpio18";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	wcnss_pin_a: wcnss-pin-active-state {
+ 		bt-pins {
+ 			pins = "gpio35", "gpio43", "gpio44";
+-- 
+2.55.0
+

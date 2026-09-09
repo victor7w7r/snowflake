@@ -1,0 +1,116 @@
+From c51978a2d6ef6518fb638fa99eca0526bd903ee7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Fri, 29 May 2026 19:11:47 +0300
+Subject: [PATCH 00200/15333] drm/i915/de: Remove the 2 usec fast timeout
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Currently any "slow" wait will first try a "fast" wait
+with a 2 usec timeout, and then fall back to whatever
+timeout was specified originally. The "slow" wait will
+anyway start off with a mere 10 usec polling interval,
+so basically we can only save 8 usec with the "fast" wait
+(maybe a bit more given hrtimer setup costs etc.).
+
+I don't think we really do any operations in the display
+code where that kinds of 8 usec saving would be meaningful.
+So just get rid of the whole "fast" wait complication and
+go straight for the "slow" wait.
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20260529161147.17573-1-ville.syrjala@linux.intel.com
+Reviewed-by: Jani Nikula <jani.nikula@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_de.c | 40 ++++++-------------------
+ 1 file changed, 9 insertions(+), 31 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_de.c b/drivers/gpu/drm/i915/display/intel_de.c
+index 6daee9e82503..a7417905192d 100644
+--- a/drivers/gpu/drm/i915/display/intel_de.c
++++ b/drivers/gpu/drm/i915/display/intel_de.c
+@@ -9,11 +9,11 @@
+ 
+ #include "intel_de.h"
+ 
+-static int __intel_de_wait_for_register(struct intel_display *display,
+-					intel_reg_t reg, u32 mask, u32 value,
+-					unsigned int timeout_us,
+-					u32 (*read)(struct intel_display *display, intel_reg_t reg),
+-					u32 *out_val, bool is_atomic)
++static int intel_de_wait_for_register(struct intel_display *display,
++				      intel_reg_t reg, u32 mask, u32 value,
++				      unsigned int timeout_us,
++				      u32 (*read)(struct intel_display *display, intel_reg_t reg),
++				      u32 *out_val, bool is_atomic)
+ {
+ 	const ktime_t end = ktime_add_us(ktime_get_raw(), timeout_us);
+ 	int wait_max = 1000;
+@@ -60,28 +60,6 @@ static int __intel_de_wait_for_register(struct intel_display *display,
+ 	return ret;
+ }
+ 
+-static int intel_de_wait_for_register(struct intel_display *display,
+-				      intel_reg_t reg, u32 mask, u32 value,
+-				      unsigned int fast_timeout_us,
+-				      unsigned int slow_timeout_us,
+-				      u32 (*read)(struct intel_display *display, intel_reg_t reg),
+-				      u32 *out_value, bool is_atomic)
+-{
+-	int ret = -EINVAL;
+-
+-	if (fast_timeout_us)
+-		ret = __intel_de_wait_for_register(display, reg, mask, value,
+-						   fast_timeout_us, read,
+-						   out_value, is_atomic);
+-
+-	if (ret && slow_timeout_us)
+-		ret = __intel_de_wait_for_register(display, reg, mask, value,
+-						   slow_timeout_us, read,
+-						   out_value, is_atomic);
+-
+-	return ret;
+-}
+-
+ int intel_de_wait_us(struct intel_display *display, intel_reg_t reg,
+ 		     u32 mask, u32 value, unsigned int timeout_us,
+ 		     u32 *out_value)
+@@ -91,7 +69,7 @@ int intel_de_wait_us(struct intel_display *display, intel_reg_t reg,
+ 	intel_dmc_wl_get(display, reg);
+ 
+ 	ret = intel_de_wait_for_register(display, reg, mask, value,
+-					 timeout_us, 0,
++					 timeout_us,
+ 					 intel_de_read,
+ 					 out_value, false);
+ 
+@@ -109,7 +87,7 @@ int intel_de_wait_ms(struct intel_display *display, intel_reg_t reg,
+ 	intel_dmc_wl_get(display, reg);
+ 
+ 	ret = intel_de_wait_for_register(display, reg, mask, value,
+-					 2, timeout_ms * 1000,
++					 timeout_ms * 1000,
+ 					 intel_de_read,
+ 					 out_value, false);
+ 
+@@ -123,7 +101,7 @@ int intel_de_wait_fw_ms(struct intel_display *display, intel_reg_t reg,
+ 			u32 *out_value)
+ {
+ 	return intel_de_wait_for_register(display, reg, mask, value,
+-					  2, timeout_ms * 1000,
++					  timeout_ms * 1000,
+ 					  intel_de_read_fw,
+ 					  out_value, false);
+ }
+@@ -133,7 +111,7 @@ int intel_de_wait_fw_us_atomic(struct intel_display *display, intel_reg_t reg,
+ 			       u32 *out_value)
+ {
+ 	return intel_de_wait_for_register(display, reg, mask, value,
+-					  timeout_us, 0,
++					  timeout_us,
+ 					  intel_de_read_fw,
+ 					  out_value, true);
+ }
+-- 
+2.55.0
+

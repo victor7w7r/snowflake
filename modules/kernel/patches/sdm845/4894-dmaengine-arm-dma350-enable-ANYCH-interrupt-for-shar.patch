@@ -1,0 +1,48 @@
+From 643c1e1ae3eb3cd9be31e83c2240e41849a6cb56 Mon Sep 17 00:00:00 2001
+From: Jun Guo <jun.guo@cixtech.com>
+Date: Thu, 21 May 2026 15:29:23 +0800
+Subject: [PATCH 04894/15333] dmaengine: arm-dma350: enable ANYCH interrupt for
+ shared IRQ wiring
+
+Enable DMANSECCTRL.INTREN_ANYCHINTR during probe so channel
+interrupts are propagated when integrators wire DMA-350 channels
+onto a shared IRQ line.
+
+Signed-off-by: Jun Guo <jun.guo@cixtech.com>
+Reviewed-by: Robin Murphy <robin.murphy@arm.com>
+Link: https://patch.msgid.link/20260521072924.3000282-2-jun.guo@cixtech.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/arm-dma350.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/dma/arm-dma350.c b/drivers/dma/arm-dma350.c
+index 84220fa83029..09403aca8bb0 100644
+--- a/drivers/dma/arm-dma350.c
++++ b/drivers/dma/arm-dma350.c
+@@ -13,6 +13,11 @@
+ #include "dmaengine.h"
+ #include "virt-dma.h"
+ 
++#define DMANSECCTRL		0x200
++
++#define NSEC_CTRL		0x0c
++#define INTREN_ANYCHINTR_EN	BIT(0)
++
+ #define DMAINFO			0x0f00
+ 
+ #define DMA_BUILDCFG0		0xb0
+@@ -582,6 +587,10 @@ static int d350_probe(struct platform_device *pdev)
+ 	dmac->dma.device_issue_pending = d350_issue_pending;
+ 	INIT_LIST_HEAD(&dmac->dma.channels);
+ 
++	reg = readl_relaxed(base + DMANSECCTRL + NSEC_CTRL);
++	writel_relaxed(reg | INTREN_ANYCHINTR_EN,
++		       base + DMANSECCTRL + NSEC_CTRL);
++
+ 	/* Would be nice to have per-channel caps for this... */
+ 	memset = true;
+ 	for (int i = 0; i < nchan; i++) {
+-- 
+2.55.0
+

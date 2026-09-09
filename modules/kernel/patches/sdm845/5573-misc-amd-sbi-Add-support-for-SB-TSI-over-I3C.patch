@@ -1,0 +1,287 @@
+From f61a6fd4593bddc0f2109a1d3359fd2a88124d33 Mon Sep 17 00:00:00 2001
+From: Prathima <Prathima.Lk@amd.com>
+Date: Fri, 10 Jul 2026 16:46:39 +0530
+Subject: [PATCH 05573/15333] misc: amd-sbi: Add support for SB-TSI over I3C
+
+AMD SB-TSI temperature sensors can be accessed over both
+I2C and I3C buses depending on the platform configuration.
+Extend the SB-TSI driver to support both I2C and I3C bus interfaces
+by selecting the appropriate transport based on the probed bus type.
+The driver maintains backward compatibility with existing I2C
+deployments while enabling support for systems using the I3C bus.
+Register both I2C and I3C drivers using module_i3c_i2c_driver() and
+update the Kconfig dependency from I2C to I3C_OR_I2C.
+
+Reviewed-by: Akshay Gupta <Akshay.Gupta@amd.com>
+Signed-off-by: Prathima <Prathima.Lk@amd.com>
+Link: https://patch.msgid.link/20260710111642.850022-6-Akshay.Gupta@amd.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/misc/amd-sbi/Kconfig    |  4 +-
+ drivers/misc/amd-sbi/tsi-core.c | 55 +++++++++++++++++++++++++++-
+ drivers/misc/amd-sbi/tsi-core.h | 26 +++++++++++++
+ drivers/misc/amd-sbi/tsi.c      | 65 +++++++++++++++++++++++++++++++--
+ include/linux/misc/tsi.h        | 11 +++++-
+ 5 files changed, 152 insertions(+), 9 deletions(-)
+ create mode 100644 drivers/misc/amd-sbi/tsi-core.h
+
+diff --git a/drivers/misc/amd-sbi/Kconfig b/drivers/misc/amd-sbi/Kconfig
+index 512251690e0e..1a96b71f8506 100644
+--- a/drivers/misc/amd-sbi/Kconfig
++++ b/drivers/misc/amd-sbi/Kconfig
+@@ -23,13 +23,13 @@ config AMD_SBRMI_HWMON
+ 
+ config AMD_SBTSI
+ 	tristate "AMD side band TSI support"
+-	depends on I2C
++	depends on I3C_OR_I2C
+ 	depends on ARM || ARM64 || COMPILE_TEST
+ 	select AUXILIARY_BUS
+ 	help
+ 	  Enables support for the AMD SB-TSI (Side Band Temperature Sensor
+ 	  Interface) driver, which provides access to emulated CPU temperature
+-	  sensors on AMD SoCs via an I2C connected BMC device.
++	  sensors on AMD SoCs via an I2C/I3C connected BMC device.
+ 
+ 	  This driver can also be built as a module. If so, the module will
+ 	  be called sbtsi.
+diff --git a/drivers/misc/amd-sbi/tsi-core.c b/drivers/misc/amd-sbi/tsi-core.c
+index 6ef1831515bb..1c6f37f26d94 100644
+--- a/drivers/misc/amd-sbi/tsi-core.c
++++ b/drivers/misc/amd-sbi/tsi-core.c
+@@ -7,7 +7,12 @@
+  */
+ 
+ #include <linux/module.h>
+-#include <linux/misc/tsi.h>
++#include "tsi-core.h"
++
++static inline struct sbtsi_i3c_priv *to_sbtsi_i3c_priv(struct sbtsi_data *data)
++{
++	return container_of(data, struct sbtsi_i3c_priv, data);
++}
+ 
+ /* I2C transfer function */
+ static int sbtsi_i2c_xfer(struct sbtsi_data *data, u8 reg, u8 *val, bool is_read)
+@@ -23,8 +28,56 @@ static int sbtsi_i2c_xfer(struct sbtsi_data *data, u8 reg, u8 *val, bool is_read
+ 	return i2c_smbus_write_byte_data(data->client, reg, *val);
+ }
+ 
++/* I3C read transfer function */
++static int sbtsi_i3c_read(struct sbtsi_data *data, u8 reg, u8 *val)
++{
++	struct sbtsi_i3c_priv *priv = to_sbtsi_i3c_priv(data);
++	struct i3c_xfer xfers[2] = { };
++	int ret;
++
++	priv->tx[0] = reg;
++
++	/* Write the register address (DMA_TO_DEVICE). */
++	xfers[0].rnw = false;
++	xfers[0].len = 1;
++	xfers[0].data.out = priv->tx;
++
++	/* Read the data byte into a separate buffer (DMA_FROM_DEVICE). */
++	xfers[1].rnw = true;
++	xfers[1].len = 1;
++	xfers[1].data.in = &priv->rx;
++
++	ret = i3c_device_do_xfers(data->i3cdev, xfers, 2, I3C_SDR);
++	if (ret)
++		return ret;
++
++	*val = priv->rx;
++	return ret;
++}
++
++/* I3C write transfer function */
++static int sbtsi_i3c_write(struct sbtsi_data *data, u8 reg, u8 val)
++{
++	struct sbtsi_i3c_priv *priv = to_sbtsi_i3c_priv(data);
++	struct i3c_xfer xfers = {
++		.rnw = false,
++		.len = 2,
++		.data.out = priv->tx,
++	};
++
++	priv->tx[0] = reg;
++	priv->tx[1] = val;
++
++	return i3c_device_do_xfers(data->i3cdev, &xfers, 1, I3C_SDR);
++}
++
++/* Unified transfer function for I2C and I3C access */
+ int sbtsi_xfer(struct sbtsi_data *data, u8 reg, u8 *val, bool is_read)
+ {
++	if (data->is_i3c)
++		return is_read ? sbtsi_i3c_read(data, reg, val)
++			       : sbtsi_i3c_write(data, reg, *val);
++
+ 	return sbtsi_i2c_xfer(data, reg, val, is_read);
+ }
+ EXPORT_SYMBOL_GPL(sbtsi_xfer);
+diff --git a/drivers/misc/amd-sbi/tsi-core.h b/drivers/misc/amd-sbi/tsi-core.h
+new file mode 100644
+index 000000000000..7e8c0e7c3bcf
+--- /dev/null
++++ b/drivers/misc/amd-sbi/tsi-core.h
+@@ -0,0 +1,26 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * AMD SBTSI core driver private definitions.
++ *
++ * Copyright (C) 2026 Advanced Micro Devices, Inc.
++ */
++
++#ifndef _LINUX_TSI_CORE_H_
++#define _LINUX_TSI_CORE_H_
++
++#include <linux/cache.h>
++#include <linux/misc/tsi.h>
++
++/**
++ * struct sbtsi_i3c_priv - per-device state for I3C SBTSI (includes DMA-safe buffers)
++ * @data: public device state exposed via dev_set_drvdata()
++ * @tx:   outgoing I3C bytes (DMA_TO_DEVICE); [0] register address, [1] value
++ * @rx:   incoming I3C data byte (DMA_FROM_DEVICE)
++ */
++struct sbtsi_i3c_priv {
++	struct sbtsi_data data;
++	u8 tx[2];
++	u8 rx __aligned(ARCH_DMA_MINALIGN);
++};
++
++#endif /* _LINUX_TSI_CORE_H_ */
+diff --git a/drivers/misc/amd-sbi/tsi.c b/drivers/misc/amd-sbi/tsi.c
+index 35b9f40741e7..1530f440a020 100644
+--- a/drivers/misc/amd-sbi/tsi.c
++++ b/drivers/misc/amd-sbi/tsi.c
+@@ -1,6 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ /*
+- * tsi.c - AMD SBTSI I2C core driver. Probes the SBTSI device over I2C
++ * tsi.c - AMD SBTSI I2C/I3C core driver. Probes the SBTSI device over I2C/I3C
+  *         and publishes an auxiliary device on the auxiliary bus.
+  *
+  * Copyright (C) 2026 Advanced Micro Devices, Inc.
+@@ -10,8 +10,8 @@
+ #include <linux/bitfield.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
+-#include <linux/misc/tsi.h>
+ #include <linux/slab.h>
++#include "tsi-core.h"
+ 
+ #define SBTSI_REG_CONFIG		0x03 /* RO */
+ 
+@@ -104,6 +104,7 @@ static int sbtsi_i2c_probe(struct i2c_client *client)
+ 	if (!data)
+ 		return -ENOMEM;
+ 
++	data->is_i3c = false;
+ 	data->client = client;
+ 
+ 	/* In a multi-socket system, devices that are otherwise identical do not
+@@ -139,7 +140,63 @@ static struct i2c_driver sbtsi_driver = {
+ 	.id_table = sbtsi_id,
+ };
+ 
+-module_i2c_driver(sbtsi_driver);
++static int sbtsi_i3c_probe(struct i3c_device *i3cdev)
++{
++	struct device *dev = i3cdev_to_dev(i3cdev);
++	struct i3c_device_info devinfo;
++	struct sbtsi_i3c_priv *i3c_priv;
++	struct sbtsi_data *data;
++
++	/*
++	 * AMD OOB devices differ on basis of Instance ID,
++	 * for SBTSI, instance ID is 0.
++	 * As the device Id match is not on basis of Instance ID,
++	 * add the below check to probe the SBTSI device only and
++	 * not other OOB devices.
++	 */
++	i3c_device_get_info(i3cdev, &devinfo);
++	if (I3C_PID_INSTANCE_ID(devinfo.pid) != 0)
++		return -ENXIO;
++
++	i3c_priv = devm_kzalloc(dev, sizeof(*i3c_priv), GFP_KERNEL);
++	if (!i3c_priv)
++		return -ENOMEM;
++
++	data = &i3c_priv->data;
++	data->i3cdev = i3cdev;
++	data->is_i3c = true;
++	/*
++	 * In a multi-socket system, otherwise identical devices do not share
++	 * the same address; each instance is enumerated with a distinct dynamic
++	 * (assigned) address on the I3C bus. Use that address (passed in as
++	 * dev_addr) as the auxiliary device instance ID so that every socket
++	 * gets a unique auxiliary device name.
++	 */
++	data->dev_addr = devinfo.dyn_addr;
++
++	return sbtsi_probe_common(dev, data);
++}
++
++static const struct i3c_device_id sbtsi_i3c_id[] = {
++	/* PID for AMD SBTSI device */
++	I3C_DEVICE_EXTRA_INFO(0x112, 0x0, 0x1, NULL),	/* Socket:0, Turin and Genoa */
++	I3C_DEVICE_EXTRA_INFO(0x0, 0x0, 0x118, NULL),	/* Socket:0, Venice */
++	I3C_DEVICE_EXTRA_INFO(0x0, 0x100, 0x118, NULL),	/* Socket:1, Venice */
++	I3C_DEVICE_EXTRA_INFO(0x112, 0x0, 0x119, NULL),	/* Socket:0, Venice */
++	I3C_DEVICE_EXTRA_INFO(0x112, 0x100, 0x119, NULL),	/* Socket:1, Venice */
++	{}
++};
++MODULE_DEVICE_TABLE(i3c, sbtsi_i3c_id);
++
++static struct i3c_driver sbtsi_i3c_driver = {
++	.driver = {
++		.name = "sbtsi-i3c",
++	},
++	.probe = sbtsi_i3c_probe,
++	.id_table = sbtsi_i3c_id,
++};
++
++module_i3c_i2c_driver(sbtsi_i3c_driver, &sbtsi_driver);
+ 
+-MODULE_DESCRIPTION("AMD SB-TSI I2C core driver");
++MODULE_DESCRIPTION("AMD SB-TSI I2C/I3C core driver");
+ MODULE_LICENSE("GPL");
+diff --git a/include/linux/misc/tsi.h b/include/linux/misc/tsi.h
+index 6533879cc358..0bdd9d923f92 100644
+--- a/include/linux/misc/tsi.h
++++ b/include/linux/misc/tsi.h
+@@ -9,20 +9,27 @@
+ #define _LINUX_MISC_TSI_H_
+ 
+ #include <linux/i2c.h>
++#include <linux/i3c/device.h>
+ #include <linux/types.h>
+ 
+ /**
+  * struct sbtsi_data - driver private data for an AMD SB-TSI device
+  * @client:	underlying I2C client
+- * @dev_addr:	I2C device address, used as the auxiliary device instance id
++ * @i3cdev:	underlying I3C device (when using I3C bus)
++ * @dev_addr:	I2C/I3C device address, used as the auxiliary device instance id
+  * @ext_range_mode:	sensor uses extended temperature range
+  * @read_order:	if set, decimal part must be read before integer part
++ * @is_i3c:	true when the device is accessed over I3C
+  */
+ struct sbtsi_data {
+-	struct i2c_client *client;
++	union {
++		struct i2c_client *client;
++		struct i3c_device *i3cdev;
++	};
+ 	u8 dev_addr;
+ 	bool ext_range_mode;
+ 	bool read_order;
++	bool is_i3c;
+ };
+ 
+ /*
+-- 
+2.55.0
+

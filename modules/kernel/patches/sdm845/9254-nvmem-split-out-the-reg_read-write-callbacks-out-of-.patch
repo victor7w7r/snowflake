@@ -1,0 +1,198 @@
+From 7f1dbd7a6e309dff4aed8d2b787c96c6901cfbe2 Mon Sep 17 00:00:00 2001
+From: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Date: Wed, 29 Jul 2026 10:46:39 +0100
+Subject: [PATCH 09254/15333] nvmem: split out the reg_read/write() callbacks
+ out of struct nvmem_device
+
+The reg_read/write() fields of struct nvmem_device point to memory owned
+by the nvmem provider. They must not be dereferenced after the provider
+is unregistered. Ahead of protecting against accesses to invalid memory
+with SRCU, move the callbacks into a separate structure the address of
+which is stored in nvmem_device.
+
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Tested-by: Loic Poulain <loic.poulain@oss.qualcomm.com>
+Signed-off-by: Srinivas Kandagatla <srini@kernel.org>
+Link: https://patch.msgid.link/20260729094647.111468-7-srini@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/nvmem/core.c      | 37 +++++++++++++++++++++++++++----------
+ drivers/nvmem/internals.h |  9 +++++++--
+ 2 files changed, 34 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/nvmem/core.c b/drivers/nvmem/core.c
+index 5f8bee5b9bff..bc5eb44431ca 100644
+--- a/drivers/nvmem/core.c
++++ b/drivers/nvmem/core.c
+@@ -57,25 +57,28 @@ static BLOCKING_NOTIFIER_HEAD(nvmem_notifier);
+ static int __nvmem_reg_read(struct nvmem_device *nvmem, unsigned int offset,
+ 			    void *val, size_t bytes)
+ {
+-	if (!nvmem->reg_read)
++	struct nvmem_operations *ops = nvmem->ops;
++
++	if (!ops->reg_read)
+ 		return -EOPNOTSUPP;
+ 
+-	return nvmem->reg_read(nvmem->priv, offset, val, bytes);
++	return ops->reg_read(nvmem->priv, offset, val, bytes);
+ }
+ 
+ static int __nvmem_reg_write(struct nvmem_device *nvmem, unsigned int offset,
+ 			     void *val, size_t bytes)
+ {
++	struct nvmem_operations *ops = nvmem->ops;
+ 	int ret, wr_ok;
+ 
+-	if (!nvmem->reg_write)
++	if (!ops->reg_write)
+ 		return -EOPNOTSUPP;
+ 
+ 	ret = gpiod_set_value_cansleep(nvmem->wp_gpio, 0);
+ 	if (ret)
+ 		return ret;
+ 
+-	wr_ok = nvmem->reg_write(nvmem->priv, offset, val, bytes);
++	wr_ok = ops->reg_write(nvmem->priv, offset, val, bytes);
+ 
+ 	ret = gpiod_set_value_cansleep(nvmem->wp_gpio, 1);
+ 	if (ret)
+@@ -286,6 +289,8 @@ static ssize_t bin_attr_nvmem_write(struct file *filp, struct kobject *kobj,
+ 
+ static umode_t nvmem_bin_attr_get_umode(struct nvmem_device *nvmem)
+ {
++	struct nvmem_operations *ops = nvmem->ops;
++
+ 	umode_t mode = 0400;
+ 
+ 	if (!nvmem->root_only)
+@@ -294,10 +299,10 @@ static umode_t nvmem_bin_attr_get_umode(struct nvmem_device *nvmem)
+ 	if (!nvmem->read_only)
+ 		mode |= 0200;
+ 
+-	if (!nvmem->reg_write)
++	if (!ops->reg_write)
+ 		mode &= ~0200;
+ 
+-	if (!nvmem->reg_read)
++	if (!ops->reg_read)
+ 		mode &= ~0444;
+ 
+ 	return mode;
+@@ -328,6 +333,7 @@ static umode_t nvmem_attr_is_visible(struct kobject *kobj,
+ {
+ 	struct device *dev = kobj_to_dev(kobj);
+ 	struct nvmem_device *nvmem = to_nvmem_device(dev);
++	struct nvmem_operations *ops = nvmem->ops;
+ 
+ 	/*
+ 	 * If the device has no .reg_write operation, do not allow
+@@ -336,7 +342,7 @@ static umode_t nvmem_attr_is_visible(struct kobject *kobj,
+ 	 * can be forced into read-write mode using the 'force_ro'
+ 	 * attribute.
+ 	 */
+-	if (attr == &dev_attr_force_ro.attr && !nvmem->reg_write)
++	if (attr == &dev_attr_force_ro.attr && !ops->reg_write)
+ 		return 0;	/* Attribute not visible */
+ 
+ 	return attr->mode;
+@@ -537,6 +543,7 @@ static void nvmem_release(struct device *dev)
+ 
+ 	ida_free(&nvmem_ida, nvmem->id);
+ 	gpiod_put(nvmem->wp_gpio);
++	kfree(nvmem->ops);
+ 	kfree(nvmem);
+ }
+ 
+@@ -897,6 +904,7 @@ EXPORT_SYMBOL_GPL(nvmem_layout_unregister);
+ 
+ struct nvmem_device *nvmem_register(const struct nvmem_config *config)
+ {
++	struct nvmem_operations *ops;
+ 	struct nvmem_device *nvmem;
+ 	int rval;
+ 
+@@ -910,8 +918,15 @@ struct nvmem_device *nvmem_register(const struct nvmem_config *config)
+ 	if (!nvmem)
+ 		return ERR_PTR(-ENOMEM);
+ 
++	ops = kzalloc_obj(*ops);
++	if (!ops) {
++		kfree(nvmem);
++		return ERR_PTR(-ENOMEM);
++	}
++
+ 	rval = ida_alloc(&nvmem_ida, GFP_KERNEL);
+ 	if (rval < 0) {
++		kfree(ops);
+ 		kfree(nvmem);
+ 		return ERR_PTR(rval);
+ 	}
+@@ -921,6 +936,7 @@ struct nvmem_device *nvmem_register(const struct nvmem_config *config)
+ 	nvmem->dev.type = &nvmem_provider_type;
+ 	nvmem->dev.bus = &nvmem_bus_type;
+ 	nvmem->dev.parent = config->dev;
++	nvmem->ops = ops;
+ 
+ 	device_initialize(&nvmem->dev);
+ 
+@@ -937,6 +953,9 @@ struct nvmem_device *nvmem_register(const struct nvmem_config *config)
+ 	INIT_LIST_HEAD(&nvmem->cells);
+ 	nvmem->fixup_dt_cell_info = config->fixup_dt_cell_info;
+ 
++	ops->reg_read = config->reg_read;
++	ops->reg_write = config->reg_write;
++
+ 	nvmem->owner = config->owner;
+ 	if (!nvmem->owner && config->dev->driver)
+ 		nvmem->owner = config->dev->driver->owner;
+@@ -946,8 +965,6 @@ struct nvmem_device *nvmem_register(const struct nvmem_config *config)
+ 	nvmem->root_only = config->root_only;
+ 	nvmem->priv = config->priv;
+ 	nvmem->type = config->type;
+-	nvmem->reg_read = config->reg_read;
+-	nvmem->reg_write = config->reg_write;
+ 	nvmem->keepout = config->keepout;
+ 	nvmem->nkeepout = config->nkeepout;
+ 	if (config->of_node)
+@@ -973,7 +990,7 @@ struct nvmem_device *nvmem_register(const struct nvmem_config *config)
+ 		goto err_put_device;
+ 
+ 	nvmem->read_only = device_property_present(config->dev, "read-only") ||
+-			   config->read_only || !nvmem->reg_write;
++			   config->read_only || !ops->reg_write;
+ 
+ #ifdef CONFIG_NVMEM_SYSFS
+ 	nvmem->dev.groups = nvmem_dev_groups;
+diff --git a/drivers/nvmem/internals.h b/drivers/nvmem/internals.h
+index 7cbc55f40259..070eef89ffca 100644
+--- a/drivers/nvmem/internals.h
++++ b/drivers/nvmem/internals.h
+@@ -7,6 +7,12 @@
+ #include <linux/nvmem-consumer.h>
+ #include <linux/nvmem-provider.h>
+ 
++/* Hold pointers to callbacks owned by the nvmem provider module. */
++struct nvmem_operations {
++	nvmem_reg_read_t	reg_read;
++	nvmem_reg_write_t	reg_write;
++};
++
+ struct nvmem_device {
+ 	struct module		*owner;
+ 	struct device		dev;
+@@ -26,10 +32,9 @@ struct nvmem_device {
+ 				   struct nvmem_cell_info *cell);
+ 	const struct nvmem_keepout *keepout;
+ 	unsigned int		nkeepout;
+-	nvmem_reg_read_t	reg_read;
+-	nvmem_reg_write_t	reg_write;
+ 	struct gpio_desc	*wp_gpio;
+ 	struct nvmem_layout	*layout;
++	struct nvmem_operations	*ops;
+ 	void *priv;
+ 	bool			sysfs_cells_populated;
+ };
+-- 
+2.55.0
+

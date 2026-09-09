@@ -1,0 +1,50 @@
+From 62d8b452615fd7a61976a1372bb81937807968c3 Mon Sep 17 00:00:00 2001
+From: Lijo Lazar <lijo.lazar@amd.com>
+Date: Wed, 17 Jun 2026 14:22:08 +0530
+Subject: [PATCH 01693/15333] drm/amdgpu: Fix kobject cleanup in xcp sysfs
+
+Fix the indexing issue. Release the kobject whose init/add failed, and
+unwind the successfully added ones.
+
+Signed-off-by: Lijo Lazar <lijo.lazar@amd.com>
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_xcp.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_xcp.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_xcp.c
+index 409e103ffe8c..9202ddf3d69c 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_xcp.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_xcp.c
+@@ -903,7 +903,7 @@ static void amdgpu_xcp_cfg_sysfs_init(struct amdgpu_device *adev)
+ {
+ 	struct amdgpu_xcp_res_details *xcp_res;
+ 	struct amdgpu_xcp_cfg *xcp_cfg;
+-	int i, r, j, rid, mode;
++	int i, r, rid, mode;
+ 
+ 	if (!adev->xcp_mgr)
+ 		return;
+@@ -949,14 +949,16 @@ static void amdgpu_xcp_cfg_sysfs_init(struct amdgpu_device *adev)
+ 					 &xcp_cfg_res_sysfs_ktype,
+ 					 &xcp_cfg->kobj, "%s",
+ 					 xcp_res_names[rid]);
+-		if (r)
++		if (r) {
++			kobject_put(&xcp_res->kobj);
+ 			goto err;
++		}
+ 	}
+ 
+ 	adev->xcp_mgr->xcp_cfg = xcp_cfg;
+ 	return;
+ err:
+-	for (j = 0; j < i; j++) {
++	while (i--) {
+ 		xcp_res = &xcp_cfg->xcp_res[i];
+ 		kobject_put(&xcp_res->kobj);
+ 	}
+-- 
+2.55.0
+

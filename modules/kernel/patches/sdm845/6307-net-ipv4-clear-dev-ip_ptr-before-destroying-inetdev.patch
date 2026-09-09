@@ -1,0 +1,45 @@
+From aa22336b76b732d2c890f9de3419e05873711027 Mon Sep 17 00:00:00 2001
+From: Yuyang Huang <yuyanghuang@google.com>
+Date: Sat, 11 Jul 2026 09:54:04 +0900
+Subject: [PATCH 06307/15333] net: ipv4: clear dev->ip_ptr before destroying
+ inetdev
+
+To prevent RCU readers from accessing a partially destroyed in_device,
+clear dev->ip_ptr early in inetdev_destroy() before freeing the
+multicast list and individual IP addresses. This aligns the IPv4 teardown
+sequence with the IPv6 implementation.
+
+Cc: Kuniyuki Iwashima <kuniyu@google.com>
+Signed-off-by: Yuyang Huang <yuyanghuang@google.com>
+Reviewed-by: Ido Schimmel <idosch@nvidia.com>
+Link: https://patch.msgid.link/20260711005405.2861680-4-yuyanghuang@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/ipv4/devinet.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/net/ipv4/devinet.c b/net/ipv4/devinet.c
+index a35b72662e43..3b31f4bec30e 100644
+--- a/net/ipv4/devinet.c
++++ b/net/ipv4/devinet.c
+@@ -322,6 +322,8 @@ static void inetdev_destroy(struct in_device *in_dev)
+ 
+ 	in_dev->dead = 1;
+ 
++	RCU_INIT_POINTER(dev->ip_ptr, NULL);
++
+ 	ip_mc_destroy_dev(in_dev);
+ 
+ 	while ((ifa = rtnl_dereference(in_dev->ifa_list)) != NULL) {
+@@ -329,8 +331,6 @@ static void inetdev_destroy(struct in_device *in_dev)
+ 		inet_free_ifa(ifa);
+ 	}
+ 
+-	RCU_INIT_POINTER(dev->ip_ptr, NULL);
+-
+ 	devinet_sysctl_unregister(in_dev);
+ 	neigh_parms_release(&arp_tbl, in_dev->arp_parms);
+ 	arp_ifdown(dev);
+-- 
+2.55.0
+

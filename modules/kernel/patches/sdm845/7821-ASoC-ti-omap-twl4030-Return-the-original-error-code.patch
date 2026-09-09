@@ -1,0 +1,38 @@
+From 23c89b7d91ccd9de3e2e6ab90202d52bfdaaff54 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 16 Jul 2026 17:39:09 +0700
+Subject: [PATCH 07821/15333] ASoC: ti: omap-twl4030: Return the original error
+ code
+
+Return the error from snd_soc_of_parse_card_name() directly and drop
+the redundant error message since the helper already logs the failure.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Acked-by: Jarkko Nikula <jarkko.nikula@bitmer.com>
+Link: https://patch.msgid.link/20260716103911.77652-9-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/ti/omap-twl4030.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/sound/soc/ti/omap-twl4030.c b/sound/soc/ti/omap-twl4030.c
+index 4d80f8a7a947..2a80e44035d7 100644
+--- a/sound/soc/ti/omap-twl4030.c
++++ b/sound/soc/ti/omap-twl4030.c
+@@ -253,10 +253,9 @@ static int omap_twl4030_probe(struct platform_device *pdev)
+ 		struct device_node *dai_node;
+ 		struct property *prop;
+ 
+-		if (snd_soc_of_parse_card_name(card, "ti,model")) {
+-			dev_err(&pdev->dev, "Card name is not provided\n");
+-			return -ENODEV;
+-		}
++		ret = snd_soc_of_parse_card_name(card, "ti,model");
++		if (ret)
++			return ret;
+ 
+ 		dai_node = of_parse_phandle(node, "ti,mcbsp", 0);
+ 		if (!dai_node) {
+-- 
+2.55.0
+

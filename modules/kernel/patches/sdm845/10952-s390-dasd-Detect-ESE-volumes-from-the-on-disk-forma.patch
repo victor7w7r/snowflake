@@ -1,0 +1,350 @@
+From 268e40548da2758851b6962a0a4ed2ab241ddbe9 Mon Sep 17 00:00:00 2001
+From: Stefan Haberland <sth@linux.ibm.com>
+Date: Wed, 5 Aug 2026 13:16:09 +0200
+Subject: [PATCH 10952/15333] s390/dasd: Detect ESE volumes from the on-disk
+ format label
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Read the format label from track 0 record 4 at device bring-up and cache
+it. When a valid label is present, is_ese() is derived from it instead of
+the hardware volume field.
+A volume copied off ESE storage onto other hardware is thus still handled
+as thin.
+Without a label (older format) is_ese() falls back to the hardware field as
+before.
+The cache is refreshed after a format so is_ese() stays coherent without an
+offline/online cycle.
+
+The label F_ESE bit is stamped from the hardware capability rather than
+is_ese(), and space release (quick format) is gated on the hardware
+capability, so a copied label cannot enable it on non-ESE hardware.
+
+The ese sysfs attribute, and with this lsdasd, shows the hardware
+capability and not the internal handling. This is in line with the view
+from storage server interface. To reflect the specific internal handling an
+additional attribute on_demand_formatting is added to show that a device is
+handled like an ESE device internally based on the disk label.
+
+Reviewed-by: Jan Höppner <hoeppner@linux.ibm.com>
+Signed-off-by: Stefan Haberland <sth@linux.ibm.com>
+Link: https://patch.msgid.link/20260805111612.1285190-17-sth@linux.ibm.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ drivers/s390/block/dasd_devmap.c |   6 +-
+ drivers/s390/block/dasd_eckd.c   | 174 ++++++++++++++++++++++++++++---
+ drivers/s390/block/dasd_eckd.h   |   7 ++
+ drivers/s390/block/dasd_int.h    |   3 +
+ 4 files changed, 175 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/s390/block/dasd_devmap.c b/drivers/s390/block/dasd_devmap.c
+index f6aab94b7be6..d07d384a004f 100644
+--- a/drivers/s390/block/dasd_devmap.c
++++ b/drivers/s390/block/dasd_devmap.c
+@@ -2482,9 +2482,10 @@ static ssize_t dasd_##_name##_show(struct device *dev,			\
+ 									\
+ 	return sysfs_emit(buf, "%d\n", val);			\
+ }									\
+-static DEVICE_ATTR(_name, 0444, dasd_##_name##_show, NULL);		\
++static DEVICE_ATTR(_name, 0444, dasd_##_name##_show, NULL);
+ 
+-DASD_DEFINE_ATTR(ese, device->discipline->is_ese);
++DASD_DEFINE_ATTR(ese, device->discipline->ese_capable);
++DASD_DEFINE_ATTR(on_demand_formatting, device->discipline->on_demand_format);
+ DASD_DEFINE_ATTR(extent_size, device->discipline->ext_size);
+ DASD_DEFINE_ATTR(pool_id, device->discipline->ext_pool_id);
+ DASD_DEFINE_ATTR(space_configured, device->discipline->space_configured);
+@@ -2522,6 +2523,7 @@ static struct attribute * dasd_attrs[] = {
+ 	&dev_attr_path_reset.attr,
+ 	&dev_attr_hpf.attr,
+ 	&dev_attr_ese.attr,
++	&dev_attr_on_demand_formatting.attr,
+ 	&dev_attr_fc_security.attr,
+ 	&dev_attr_copy_pair.attr,
+ 	&dev_attr_copy_role.attr,
+diff --git a/drivers/s390/block/dasd_eckd.c b/drivers/s390/block/dasd_eckd.c
+index 33f843a21fa0..d3e107bf63c4 100644
+--- a/drivers/s390/block/dasd_eckd.c
++++ b/drivers/s390/block/dasd_eckd.c
+@@ -1676,7 +1676,8 @@ static int dasd_eckd_read_vol_info(struct dasd_device *device)
+ 	return rc;
+ }
+ 
+-static int dasd_eckd_is_ese(struct dasd_device *device)
++/* Hardware/volume ESE capability, from the Volume Storage Query. */
++static int dasd_eckd_ese_capable(struct dasd_device *device)
+ {
+ 	struct dasd_eckd_private *private = device->private;
+ 
+@@ -1686,6 +1687,53 @@ static int dasd_eckd_is_ese(struct dasd_device *device)
+ 	return private->vsq.vol_info.ese;
+ }
+ 
++/*
++ * Whether the volume is to be handled as ESE (thin). This reflects the state
++ * of the data, not the hardware: a volume copied off ESE storage onto other
++ * hardware still needs ESE handling. The on-disk format label is authoritative
++ * when present; without it (e.g. a volume formatted by an older driver) fall
++ * back to the hardware ESE field.
++ *
++ * Only the F_ESE flag gates this. An ESE volume is thin regardless of whether
++ * it was quick- or full-formatted (tracks are allocated on write, and discard
++ * re-thins a full one).
++ */
++static int dasd_eckd_is_ese(struct dasd_device *device)
++{
++	struct dasd_eckd_private *private = device->private;
++
++	/* sysfs may read this during set_online before private is allocated */
++	if (!private)
++		return 0;
++
++	if (private->ese_label_valid)
++		return !!(private->ese_label.flags & DASD_ESE_LABEL_F_ESE);
++
++	return dasd_eckd_ese_capable(device);
++}
++
++/*
++ * Whether the volume is formatted on demand (thin), as opposed to fully
++ * formatted. This is the format mode, not the hardware ESE capability. When a
++ * label is present it is authoritative (F_QUICK). Without a label the mode is
++ * unknown, but an ESE volume is still handled on demand (NRF triggers the
++ * format), so fall back to the ESE state to stay consistent with the driver's
++ * behavior on older, label-less volumes.
++ */
++static int dasd_eckd_on_demand_format(struct dasd_device *device)
++{
++	struct dasd_eckd_private *private = device->private;
++
++	/* sysfs may read this during set_online before private is allocated */
++	if (!private)
++		return 0;
++
++	if (private->ese_label_valid)
++		return !!(private->ese_label.flags & DASD_ESE_LABEL_F_QUICK);
++
++	return dasd_eckd_is_ese(device);
++}
++
+ static int dasd_eckd_ext_pool_id(struct dasd_device *device)
+ {
+ 	struct dasd_eckd_private *private = device->private;
+@@ -2105,6 +2153,69 @@ static bool dasd_eckd_pprc_enabled(struct dasd_device *device)
+ 	return private->rdc_data.facilities.PPRC_enabled;
+ }
+ 
++/*
++ * Read the on-disk format label from track 0, record 4. On a formatted volume
++ * R4 holds the label as its record data; on an unformatted (fresh ESE) or
++ * label-less volume the read returns No Record Found, which is expected and
++ * leaves the cache invalid so is_ese() falls back to the hardware field.
++ */
++static void dasd_eckd_read_format_label(struct dasd_device *device)
++{
++	struct dasd_eckd_private *private = device->private;
++	struct dasd_format_label *label;
++	struct DE_eckd_data *dedata;
++	struct LO_eckd_data *lodata;
++	struct dasd_ccw_req *cqr;
++	struct ccw1 *ccw;
++
++	private->ese_label_valid = false;
++
++	/* The label lives on the base volume; aliases have none of their own. */
++	if (private->uid.type == UA_BASE_PAV_ALIAS ||
++	    private->uid.type == UA_HYPER_PAV_ALIAS)
++		return;
++
++	cqr = dasd_smalloc_request(DASD_ECKD_MAGIC, 3 /* DE + LO + READ */,
++				   sizeof(*dedata) + sizeof(*lodata) +
++				   sizeof(*label), device, NULL);
++	if (IS_ERR(cqr))
++		return;
++
++	dedata = cqr->data;
++	lodata = (struct LO_eckd_data *)(dedata + 1);
++	label = (struct dasd_format_label *)(lodata + 1);
++
++	ccw = cqr->cpaddr;
++	define_extent(ccw++, dedata, 0, 0, DASD_ECKD_CCW_READ, device, 0);
++	ccw[-1].flags |= CCW_FLAG_CC;
++	locate_record(ccw++, lodata, 0, 4, 1, DASD_ECKD_CCW_READ, device,
++		      sizeof(*label));
++	ccw[-1].flags |= CCW_FLAG_CC;
++	ccw->cmd_code = DASD_ECKD_CCW_READ;
++	ccw->count = sizeof(*label);
++	ccw->flags = CCW_FLAG_SLI;
++	ccw->cda = virt_to_dma32(label);
++
++	cqr->startdev = device;
++	cqr->memdev = device;
++	cqr->block = NULL;
++	cqr->retries = 256;
++	cqr->expires = 10 * HZ;
++	cqr->buildclk = get_tod_clock();
++	cqr->status = DASD_CQR_FILLED;
++	/* R4 may be absent (unformatted) or larger than the label. */
++	set_bit(DASD_CQR_SUPPRESS_NRF, &cqr->flags);
++	set_bit(DASD_CQR_SUPPRESS_IL, &cqr->flags);
++
++	if (!dasd_sleep_on(cqr) &&
++	    label->magic == DASD_ESE_LABEL_MAGIC &&
++	    label->version == DASD_ESE_LABEL_VERSION) {
++		private->ese_label = *label;
++		private->ese_label_valid = true;
++	}
++	dasd_sfree_request(cqr, device);
++}
++
+ /*
+  * Check device characteristics.
+  * If the device is accessible using ECKD discipline, the device is enabled.
+@@ -2215,9 +2326,12 @@ dasd_eckd_check_characteristics(struct dasd_device *device)
+ 	/* Read Volume Information */
+ 	dasd_eckd_read_vol_info(device);
+ 
++	/* Read the on-disk format label for ESE detection */
++	dasd_eckd_read_format_label(device);
++
+ 	/*
+-	 * is_ese() now reflects the hardware ESE state, so derive the default
+-	 * fulltrack write bias from the module parameter.
++	 * is_ese() now reflects the real ESE state (vsq + on-disk label), so
++	 * the adaptive heuristic can be derived correctly for this device.
+ 	 */
+ 	device->ft_bias = min_t(unsigned int, full_track_bias, DASD_FT_BIAS_MAX);
+ 	dasd_ft_bias_apply(device);
+@@ -2733,7 +2847,12 @@ static void dasd_eckd_fill_format_label(struct dasd_device *device, void *data,
+ 	memset(label, 0, blksize);
+ 	label->magic = DASD_ESE_LABEL_MAGIC;
+ 	label->version = DASD_ESE_LABEL_VERSION;
+-	if (dasd_eckd_is_ese(device))
++	/*
++	 * F_ESE records the hardware capability at format time, not is_ese():
++	 * is_ese() is derived from the label, so using it here would let the
++	 * flag flip on repeated quick/full reformats.
++	 */
++	if (dasd_eckd_ese_capable(device))
+ 		label->flags |= DASD_ESE_LABEL_F_ESE;
+ 	if (private->ese_format_quick)
+ 		label->flags |= DASD_ESE_LABEL_F_QUICK;
+@@ -2743,6 +2862,13 @@ static void dasd_eckd_fill_format_label(struct dasd_device *device, void *data,
+ 	label->format_tod = get_tod_clock();
+ 	strscpy(label->kernel_version, init_utsname()->release,
+ 		sizeof(label->kernel_version));
++
++	/*
++	 * Populate the cache directly from the bytes just computed instead of
++	 * synchronously reading them back from disk after the write lands.
++	 */
++	private->ese_label = *label;
++	private->ese_label_valid = true;
+ }
+ 
+ static struct dasd_ccw_req *
+@@ -3227,23 +3353,35 @@ static int dasd_eckd_format_device(struct dasd_device *base,
+ 	struct dasd_eckd_private *private = base->private;
+ 	int rc;
+ 
+-	/*
+-	 * A full format (start_unit == 0) returns the device to a fully sparse
+-	 * state, so restart the heuristic from ft1 without an offline cycle.
+-	 */
+-	if (fdata->start_unit == 0)
+-		dasd_ft_bias_apply(base);
+-
+ 	rc = dasd_eckd_format_process_data(base, fdata, enable_pav, 0, NULL,
+ 					   0, NULL);
++	if (fdata->start_unit != 0)
++		return rc;
++
++	if (rc) {
++		/*
++		 * The format failed, so the label cached speculatively during
++		 * CCW build may not match the disk; drop it so is_ese() falls
++		 * back to the hardware field until the next successful format
++		 * or bring-up.
++		 */
++		private->ese_label_valid = false;
++		return rc;
++	}
+ 
+ 	/*
+ 	 * The quick-format indicator was consumed by the label stamped into
+ 	 * track 0; clear it so a later format that is not preceded by a full
+ 	 * space release is recorded as a full format.
+ 	 */
+-	if (fdata->start_unit == 0)
+-		private->ese_format_quick = 0;
++	private->ese_format_quick = 0;
++
++	/*
++	 * A full format returns the device to a fully sparse state and has just
++	 * committed a fresh label; restart the heuristic from ft1 on the now
++	 * current is_ese state, without an offline cycle.
++	 */
++	dasd_ft_bias_apply(base);
+ 
+ 	return rc;
+ }
+@@ -4246,6 +4384,14 @@ static int dasd_eckd_release_space_trks(struct dasd_device *device,
+ static int dasd_eckd_release_space(struct dasd_device *device,
+ 				   struct format_data_t *rdata)
+ {
++	/*
++	 * Space release (and thus a quick format) requires real ESE hardware.
++	 * is_ese() may be true from a copied label on non-ESE hardware, so gate
++	 * on the hardware capability, not on is_ese().
++	 */
++	if (!dasd_eckd_ese_capable(device))
++		return -EOPNOTSUPP;
++
+ 	if (rdata->intensity & DASD_FMT_INT_ESE_FULL)
+ 		return dasd_eckd_release_space_full(device);
+ 	else if (rdata->intensity == 0)
+@@ -7619,6 +7765,8 @@ static struct dasd_discipline dasd_eckd_discipline = {
+ 	.hpf_enabled = dasd_eckd_hpf_enabled,
+ 	.reset_path = dasd_eckd_reset_path,
+ 	.is_ese = dasd_eckd_is_ese,
++	.ese_capable = dasd_eckd_ese_capable,
++	.on_demand_format = dasd_eckd_on_demand_format,
+ 	.space_allocated = dasd_eckd_space_allocated,
+ 	.space_configured = dasd_eckd_space_configured,
+ 	.logical_capacity = dasd_eckd_logical_capacity,
+diff --git a/drivers/s390/block/dasd_eckd.h b/drivers/s390/block/dasd_eckd.h
+index 92fd8ac92b79..30745f62402b 100644
+--- a/drivers/s390/block/dasd_eckd.h
++++ b/drivers/s390/block/dasd_eckd.h
+@@ -747,6 +747,13 @@ struct dasd_eckd_private {
+ 	 * the next format to mark the on-disk label as a quick (vs full) format.
+ 	 */
+ 	int ese_format_quick;
++	/*
++	 * Cached on-disk format label (R4), read at online and refreshed on
++	 * format. When valid, is_ese() is derived from it; otherwise it falls
++	 * back to the hardware ESE field (vsq.vol_info.ese).
++	 */
++	struct dasd_format_label ese_label;
++	bool ese_label_valid;
+ };
+ 
+ 
+diff --git a/drivers/s390/block/dasd_int.h b/drivers/s390/block/dasd_int.h
+index 59cce4e7dbc1..8c73850f7947 100644
+--- a/drivers/s390/block/dasd_int.h
++++ b/drivers/s390/block/dasd_int.h
+@@ -401,6 +401,9 @@ struct dasd_discipline {
+ 	 * Extent Space Efficient (ESE) relevant functions
+ 	 */
+ 	int (*is_ese)(struct dasd_device *);
++	int (*ese_capable)(struct dasd_device *);
++	/* Whether the volume is formatted on demand (thin), from the label */
++	int (*on_demand_format)(struct dasd_device *);
+ 	/* Capacity */
+ 	int (*space_allocated)(struct dasd_device *);
+ 	int (*space_configured)(struct dasd_device *);
+-- 
+2.55.0
+

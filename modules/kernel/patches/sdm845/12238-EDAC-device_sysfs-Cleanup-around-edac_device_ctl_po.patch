@@ -1,0 +1,87 @@
+From 9987979189133486632842d894603813b22937e1 Mon Sep 17 00:00:00 2001
+From: "Borislav Petkov (AMD)" <bp@alien8.de>
+Date: Fri, 7 Aug 2026 14:16:17 -0700
+Subject: [PATCH 12238/15333] EDAC/device_sysfs: Cleanup around
+ edac_device_ctl_poll_msec_store()
+
+- Align function args
+- Fix comment style
+- Fixup formatting around edac_device_reset_delay_period() too
+
+The not-too-trivial change is converting the
+edac_device_reset_delay_period() msec argument to unsigned int as that
+is what the rest of the code expects.
+
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+---
+ drivers/edac/edac_device.c       | 10 +++-------
+ drivers/edac/edac_device_sysfs.c | 12 +++++-------
+ drivers/edac/edac_module.h       |  3 +--
+ 3 files changed, 9 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/edac/edac_device.c b/drivers/edac/edac_device.c
+index cf0d3c2dfc04..638be1f47c59 100644
+--- a/drivers/edac/edac_device.c
++++ b/drivers/edac/edac_device.c
+@@ -342,14 +342,10 @@ static void edac_device_workq_teardown(struct edac_device_ctl_info *edac_dev)
+ }
+ 
+ /*
+- * edac_device_reset_delay_period
+- *
+- *	need to stop any outstanding workq queued up at this time
+- *	because we will be resetting the sleep time.
+- *	Then restart the workq on the new delay
++ * Stop any outstanding workq queued up at this time because sleep time will
++ * be reset. Then restart the workq on the new delay.
+  */
+-void edac_device_reset_delay_period(struct edac_device_ctl_info *edac_dev,
+-				    unsigned long msec)
++void edac_device_reset_delay_period(struct edac_device_ctl_info *edac_dev, unsigned int msec)
+ {
+ 	edac_dev->poll_msec = msec;
+ 	edac_dev->delay	    = msecs_to_jiffies(msec);
+diff --git a/drivers/edac/edac_device_sysfs.c b/drivers/edac/edac_device_sysfs.c
+index 6995ce039db9..6359007701ba 100644
+--- a/drivers/edac/edac_device_sysfs.c
++++ b/drivers/edac/edac_device_sysfs.c
+@@ -84,17 +84,15 @@ static ssize_t edac_device_ctl_poll_msec_show(struct edac_device_ctl_info
+ 	return sprintf(data, "%u\n", ctl_info->poll_msec);
+ }
+ 
+-static ssize_t edac_device_ctl_poll_msec_store(struct edac_device_ctl_info
+-					*ctl_info, const char *data,
+-					size_t count)
++static ssize_t edac_device_ctl_poll_msec_store(struct edac_device_ctl_info *ctl_info,
++					       const char *data, size_t count)
+ {
+ 	unsigned int value;
+ 	int ret;
+ 
+-	/* get the value and enforce that it is non-zero, must be at least
+-	 * one millisecond for the delay period, between scans
+-	 * Then cancel last outstanding delay for the work request
+-	 * and set a new one.
++	/*
++	 * Get the value, make sure it is non-zero, must be at least one millisecond
++	 * for the delay period between scans.
+ 	 */
+ 	ret = kstrtouint(data, 0, &value);
+ 	if (ret < 0)
+diff --git a/drivers/edac/edac_module.h b/drivers/edac/edac_module.h
+index 47593afdc234..eceef5539186 100644
+--- a/drivers/edac/edac_module.h
++++ b/drivers/edac/edac_module.h
+@@ -52,8 +52,7 @@ bool edac_queue_work(struct delayed_work *work, unsigned long delay);
+ bool edac_stop_work(struct delayed_work *work);
+ bool edac_mod_work(struct delayed_work *work, unsigned long delay);
+ 
+-extern void edac_device_reset_delay_period(struct edac_device_ctl_info
+-					   *edac_dev, unsigned long msec);
++extern void edac_device_reset_delay_period(struct edac_device_ctl_info *edac_dev, unsigned int msec);
+ extern void edac_mc_reset_delay_period(unsigned long value);
+ 
+ /*
+-- 
+2.55.0
+

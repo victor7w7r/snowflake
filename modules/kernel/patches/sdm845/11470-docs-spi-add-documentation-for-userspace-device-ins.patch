@@ -1,0 +1,175 @@
+From 036d4b059be01eb67b65b03131855fc42153de6a Mon Sep 17 00:00:00 2001
+From: Vishwaroop A <va@nvidia.com>
+Date: Mon, 3 Aug 2026 10:46:14 +0000
+Subject: [PATCH 11470/15333] docs: spi: add documentation for userspace device
+ instantiation
+
+Document the new_device and delete_device sysfs attributes on SPI
+controllers:
+
+  - Documentation/spi/instantiating-devices.rst: describes when and
+    why this interface is needed, accepted parameters, usage examples,
+    and limitations.
+  - Documentation/ABI/testing/sysfs-class-spi-master: formal ABI
+    entry for both attributes.
+
+Signed-off-by: Vishwaroop A <va@nvidia.com>
+Link: https://patch.msgid.link/20260803104614.2548375-3-va@nvidia.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ .../ABI/testing/sysfs-class-spi-master        | 34 +++++++
+ Documentation/spi/index.rst                   |  1 +
+ Documentation/spi/instantiating-devices.rst   | 88 +++++++++++++++++++
+ 3 files changed, 123 insertions(+)
+ create mode 100644 Documentation/ABI/testing/sysfs-class-spi-master
+ create mode 100644 Documentation/spi/instantiating-devices.rst
+
+diff --git a/Documentation/ABI/testing/sysfs-class-spi-master b/Documentation/ABI/testing/sysfs-class-spi-master
+new file mode 100644
+index 000000000000..0a524fcd96d2
+--- /dev/null
++++ b/Documentation/ABI/testing/sysfs-class-spi-master
+@@ -0,0 +1,34 @@
++What:		/sys/class/spi_master/spiB/new_device
++Date:		July 2026
++KernelVersion:	7.3
++Contact:	linux-spi@vger.kernel.org
++Description:	(WO) Instantiate a new SPI device on bus B, where B
++		is the bus number (0, 1, 2, ...). Takes parameters
++		in the format:
++
++		<modalias> <chip_select> [<max_speed_hz> [<mode>]]
++
++		where modalias is the driver name, chip_select is the
++		CS line number, and max_speed_hz and mode are optional.
++
++		The device can later be removed with delete_device.
++
++		Only devices created via this interface can be removed
++		with delete_device; platform and DT devices are not
++		affected.
++
++		Example:
++		# echo spidev 0 > /sys/class/spi_master/spi0/new_device
++		# echo spidev 0 10000000 > /sys/class/spi_master/spi0/new_device
++		# echo spidev 0 10000000 3 > /sys/class/spi_master/spi0/new_device
++
++What:		/sys/class/spi_master/spiB/delete_device
++Date:		July 2026
++KernelVersion:	7.3
++Contact:	linux-spi@vger.kernel.org
++Description:	(WO) Remove a SPI device previously created via
++		new_device. Takes a single parameter: the chip select
++		number of the device to remove.
++
++		Example:
++		# echo 0 > /sys/class/spi_master/spi0/delete_device
+diff --git a/Documentation/spi/index.rst b/Documentation/spi/index.rst
+index ac0c2233ce48..3f723e2c07da 100644
+--- a/Documentation/spi/index.rst
++++ b/Documentation/spi/index.rst
+@@ -8,6 +8,7 @@ Serial Peripheral Interface (SPI)
+    :maxdepth: 1
+ 
+    spi-summary
++   instantiating-devices
+    spidev
+    multiple-data-lanes
+    butterfly
+diff --git a/Documentation/spi/instantiating-devices.rst b/Documentation/spi/instantiating-devices.rst
+new file mode 100644
+index 000000000000..ec07353b425d
+--- /dev/null
++++ b/Documentation/spi/instantiating-devices.rst
+@@ -0,0 +1,88 @@
++.. SPDX-License-Identifier: GPL-2.0
++
++==============================
++How to instantiate SPI devices
++==============================
++
++SPI devices are normally declared statically via device-tree, ACPI, or
++board files. When the SPI controller is registered, these devices are
++instantiated automatically by the SPI core. This is the preferred method
++for any device with a proper kernel driver.
++
++Instantiate from user-space
++---------------------------
++
++In certain cases a SPI device cannot be declared statically:
++
++* The ``spidev`` driver, which provides raw userspace access to SPI
++  buses, explicitly rejects the bare ``"spidev"`` compatible string in
++  device-tree because spidev is a Linux implementation detail, not a
++  hardware description. Vendor-specific compatible strings for spidev
++  (e.g. ``"vendor,board-spidev"``) are also generally not accepted
++  upstream. Device-tree overlays do not help here either, since the
++  spidev driver performs the same compatible check regardless of how
++  the DT node was loaded.
++
++* You are developing or testing a SPI device on a development board
++  where the SPI bus is exposed on expansion headers, and the connected
++  device may change frequently.
++
++For these cases, a sysfs interface is provided on each SPI host controller
++(similar to the I2C ``new_device``/``delete_device`` interface described
++in Documentation/i2c/instantiating-devices.rst). Two write-only
++attribute files are created in every SPI host controller directory:
++``new_device`` and ``delete_device``.
++
++File ``new_device`` takes 2 to 4 parameters: the name of the SPI
++device (a string), the chip select number, and optionally
++``max_speed_hz`` and ``mode``::
++
++  <modalias> <chip_select> [<max_speed_hz> [<mode>]]
++
++The modalias is set both as the device's ``modalias`` field and as its
++``driver_override``. This ensures that the device binds to the named
++driver directly, bypassing the normal bus matching logic (OF, ACPI,
++and ``id_table``). This is necessary because drivers like ``spidev``
++deliberately exclude generic names from their ``id_table``.
++
++If ``max_speed_hz`` is omitted or 0, ``spi_setup()`` clamps it to
++the controller's maximum speed. If ``mode`` is omitted, SPI mode 0
++(CPOL=0, CPHA=0) is used.
++
++File ``delete_device`` takes a single parameter: the chip select
++number. As no two devices can share a chip select on a given SPI bus,
++the chip select is sufficient to uniquely identify the device.
++
++Examples::
++
++  # Create a spidev device on SPI bus 0, chip select 0
++  echo spidev 0 > /sys/class/spi_master/spi0/new_device
++
++  # Create with explicit clock rate and SPI mode
++  echo spidev 0 10000000 3 > /sys/class/spi_master/spi0/new_device
++
++  # Remove the device
++  echo 0 > /sys/class/spi_master/spi0/delete_device
++
++The attributes are added after the host controller and its firmware-described
++devices have been registered. Their addition emits a ``change`` uevent,
++allowing a udev rule to write to ``new_device`` when the interface is ready.
++
++Limitations
++^^^^^^^^^^^
++
++Devices created through this interface have the following limitations
++compared to devices declared via device-tree:
++
++* No interrupt (IRQ) support.
++* No additional properties such as ``spi-max-frequency`` DT bindings
++  or controller-specific configuration.
++* No platform data or software nodes.
++
++For ``spidev`` usage these limitations are not relevant, since spidev
++provides a raw byte-level interface that does not require any of these
++features.
++
++Only devices created via ``new_device`` can be removed through
++``delete_device``. Devices declared via device-tree, ACPI, or board
++files are not affected by this interface.
+-- 
+2.55.0
+

@@ -1,0 +1,183 @@
+From da8b3221d332d3df8b59006c81f5313504ebea2f Mon Sep 17 00:00:00 2001
+From: Aditya Chari <adi25charis@gmail.com>
+Date: Sat, 25 Jul 2026 21:21:08 +0530
+Subject: [PATCH 07581/15333] greybus: audio: Split gb_audio_gb_get_topology()
+ into size query and data fetch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`gb_audio_gb_get_topology()` combined three separate responsibilities into
+a single call: querying the topology size, allocating a buffer for it, and
+fetching the topology data into that buffer. This left callers with no
+way to perform any of these steps independently, and forced the kzalloc()
+allocation to live inside the protocol‑layer driver rather than the
+caller, as already flagged by a FIXME comment at the call site
+in `audio_module.c`.
+
+Split the function into two:
+- `gb_audio_gb_get_topology_size()` – queries only the topology size
+- `gb_audio_gb_get_topology()`      – fetches topology data into a
+                                      caller‑supplied buffer
+                                      of a given size
+
+Update the only caller, `gb_audio_probe()` in `audio_module.c`, to
+query the size first, allocate the topology buffer itself,
+then fetch the data into it, freeing the buffer via the existing
+`free_topology` error path on failure. The topology size is now
+stored as `size_t` and validated in the caller before allocation,
+addressing the earlier TODO and FIXME comments.
+
+This resolves both the "TODO: Split into separate calls" comment
+above the original function in `audio_gb.c` and the FIXME comment
+at the call site in `audio_module.c`, both of which are removed
+as part of this change.
+
+No functional change in behavior for the existing probe path.
+
+Signed-off-by: Aditya Chari S <adi25charis@gmail.com>
+Reviewed-by: Dan Carpenter <error27@gmail.com>
+Link: https://patch.msgid.link/20260725155108.7060-1-adi25charis@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/greybus/audio_codec.h  |  4 ++-
+ drivers/staging/greybus/audio_gb.c     | 45 +++++++-------------------
+ drivers/staging/greybus/audio_module.c | 27 ++++++++++++----
+ 3 files changed, 35 insertions(+), 41 deletions(-)
+
+diff --git a/drivers/staging/greybus/audio_codec.h b/drivers/staging/greybus/audio_codec.h
+index f3f7a7ec6be4..b45cd257d6fb 100644
+--- a/drivers/staging/greybus/audio_codec.h
++++ b/drivers/staging/greybus/audio_codec.h
+@@ -178,8 +178,10 @@ int gbaudio_register_module(struct gbaudio_module_info *module);
+ void gbaudio_unregister_module(struct gbaudio_module_info *module);
+ 
+ /* protocol related */
++int gb_audio_gb_get_topology_size(struct gb_connection *connection,
++				  size_t *size);
+ int gb_audio_gb_get_topology(struct gb_connection *connection,
+-			     struct gb_audio_topology **topology);
++			     struct gb_audio_topology *topology, size_t size);
+ int gb_audio_gb_get_control(struct gb_connection *connection,
+ 			    u8 control_id, u8 index,
+ 			    struct gb_audio_ctl_elem_value *value);
+diff --git a/drivers/staging/greybus/audio_gb.c b/drivers/staging/greybus/audio_gb.c
+index 144591f1a512..2e6f155d8b66 100644
+--- a/drivers/staging/greybus/audio_gb.c
++++ b/drivers/staging/greybus/audio_gb.c
+@@ -8,13 +8,10 @@
+ #include <linux/greybus.h>
+ #include "audio_codec.h"
+ 
+-/* TODO: Split into separate calls */
+-int gb_audio_gb_get_topology(struct gb_connection *connection,
+-			     struct gb_audio_topology **topology)
++int gb_audio_gb_get_topology_size(struct gb_connection *connection,
++				  size_t *size)
+ {
+ 	struct gb_audio_get_topology_size_response size_resp;
+-	struct gb_audio_topology *topo;
+-	u16 size;
+ 	int ret;
+ 
+ 	ret = gb_operation_sync(connection, GB_AUDIO_TYPE_GET_TOPOLOGY_SIZE,
+@@ -22,38 +19,18 @@ int gb_audio_gb_get_topology(struct gb_connection *connection,
+ 	if (ret)
+ 		return ret;
+ 
+-	size = le16_to_cpu(size_resp.size);
+-	if (size < sizeof(*topo))
+-		return -ENODATA;
+-
+-	topo = kzalloc(size, GFP_KERNEL);
+-	if (!topo)
+-		return -ENOMEM;
+-
+-	ret = gb_operation_sync(connection, GB_AUDIO_TYPE_GET_TOPOLOGY, NULL, 0,
+-				topo, size);
+-	if (ret) {
+-		kfree(topo);
+-		return ret;
+-	}
+-
+-	/*
+-	 * The size_* fields are supplied by the module and are used by
+-	 * gbaudio_tplg_parse_data() to compute offsets into the blob; make
+-	 * sure the sections fit within the fetched topology, so walking it
+-	 * cannot read out of bounds.
+-	 */
+-	if ((u64)le32_to_cpu(topo->size_dais) + le32_to_cpu(topo->size_controls) +
+-	    le32_to_cpu(topo->size_widgets) + le32_to_cpu(topo->size_routes) >
+-	    size - sizeof(*topo)) {
+-		kfree(topo);
+-		return -EINVAL;
+-	}
+-
+-	*topology = topo;
++	*size = le16_to_cpu(size_resp.size);
+ 
+ 	return 0;
+ }
++EXPORT_SYMBOL_GPL(gb_audio_gb_get_topology_size);
++
++int gb_audio_gb_get_topology(struct gb_connection *connection,
++			     struct gb_audio_topology *topology, size_t size)
++{
++	return gb_operation_sync(connection, GB_AUDIO_TYPE_GET_TOPOLOGY, NULL, 0,
++				 topology, size);
++}
+ EXPORT_SYMBOL_GPL(gb_audio_gb_get_topology);
+ 
+ int gb_audio_gb_get_control(struct gb_connection *connection,
+diff --git a/drivers/staging/greybus/audio_module.c b/drivers/staging/greybus/audio_module.c
+index 12c376c477b3..4cd1f42c11f0 100644
+--- a/drivers/staging/greybus/audio_module.c
++++ b/drivers/staging/greybus/audio_module.c
+@@ -239,6 +239,7 @@ static int gb_audio_probe(struct gb_bundle *bundle,
+ 	struct gb_audio_manager_module_descriptor desc;
+ 	struct gbaudio_data_connection *dai, *_dai;
+ 	int ret, i;
++	size_t size;
+ 	struct gb_audio_topology *topology;
+ 
+ 	/* There should be at least one Management and one Data cport */
+@@ -304,16 +305,30 @@ static int gb_audio_probe(struct gb_bundle *bundle,
+ 	}
+ 	gbmodule->dev_id = gbmodule->mgmt_connection->intf->interface_id;
+ 
+-	/*
+-	 * FIXME: malloc for topology happens via audio_gb driver
+-	 * should be done within codec driver itself
+-	 */
+-	ret = gb_audio_gb_get_topology(gbmodule->mgmt_connection, &topology);
++	ret = gb_audio_gb_get_topology_size(gbmodule->mgmt_connection, &size);
+ 	if (ret) {
+-		dev_err(dev, "%d:Error while fetching topology\n", ret);
++		dev_err(dev, "%d:Error while fetching topology size\n", ret);
++		goto disable_connection;
++	}
++
++	if (size < sizeof(*topology)) {
++		dev_err(dev, "Invalid topology size: %zu\n", size);
++		ret = -EINVAL;
+ 		goto disable_connection;
+ 	}
+ 
++	topology = kzalloc(size, GFP_KERNEL);
++	if (!topology) {
++		ret = -ENOMEM;
++		goto disable_connection;
++	}
++
++	ret = gb_audio_gb_get_topology(gbmodule->mgmt_connection, topology, size);
++	if (ret) {
++		dev_err(dev, "%d:Error while fetching topology\n", ret);
++		goto free_topology;
++	}
++
+ 	/* process topology data */
+ 	ret = gbaudio_tplg_parse_data(gbmodule, topology);
+ 	if (ret) {
+-- 
+2.55.0
+

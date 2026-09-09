@@ -1,0 +1,74 @@
+From 9626075249c5ec181a166472c0a5c3620e2ad72d Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Tue, 21 Jul 2026 01:00:37 +0000
+Subject: [PATCH 09671/15333] ASoC: bcm: use .auto_selectable_formats
+
+We can use .auto_selectable_formats. Let's adds it.
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Link: https://patch.msgid.link/87tsptjgwa.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/bcm/bcm2835-i2s.c | 13 +++++++++++++
+ sound/soc/bcm/cygnus-ssp.c  |  7 +++++++
+ 2 files changed, 20 insertions(+)
+
+diff --git a/sound/soc/bcm/bcm2835-i2s.c b/sound/soc/bcm/bcm2835-i2s.c
+index 87d2f06c2f53..208977828254 100644
+--- a/sound/soc/bcm/bcm2835-i2s.c
++++ b/sound/soc/bcm/bcm2835-i2s.c
+@@ -748,6 +748,17 @@ static int bcm2835_i2s_dai_probe(struct snd_soc_dai *dai)
+ 	return 0;
+ }
+ 
++static const u64 bcm2835_selectable_formats =
++	SND_SOC_POSSIBLE_DAIFMT_I2S	|
++	SND_SOC_POSSIBLE_DAIFMT_RIGHT_J	|
++	SND_SOC_POSSIBLE_DAIFMT_LEFT_J	|
++	SND_SOC_POSSIBLE_DAIFMT_DSP_A	|
++	SND_SOC_POSSIBLE_DAIFMT_DSP_B	|
++	SND_SOC_POSSIBLE_DAIFMT_NB_NF	|
++	SND_SOC_POSSIBLE_DAIFMT_NB_IF	|
++	SND_SOC_POSSIBLE_DAIFMT_IB_NF	|
++	SND_SOC_POSSIBLE_DAIFMT_IB_IF;
++
+ static const struct snd_soc_dai_ops bcm2835_i2s_dai_ops = {
+ 	.probe		= bcm2835_i2s_dai_probe,
+ 	.startup	= bcm2835_i2s_startup,
+@@ -758,6 +769,8 @@ static const struct snd_soc_dai_ops bcm2835_i2s_dai_ops = {
+ 	.set_fmt	= bcm2835_i2s_set_dai_fmt,
+ 	.set_bclk_ratio	= bcm2835_i2s_set_dai_bclk_ratio,
+ 	.set_tdm_slot	= bcm2835_i2s_set_dai_tdm_slot,
++	.auto_selectable_formats	= &bcm2835_selectable_formats,
++	.num_auto_selectable_formats	= 1,
+ };
+ 
+ static struct snd_soc_dai_driver bcm2835_i2s_dai = {
+diff --git a/sound/soc/bcm/cygnus-ssp.c b/sound/soc/bcm/cygnus-ssp.c
+index 47706ae0a31f..753021789a52 100644
+--- a/sound/soc/bcm/cygnus-ssp.c
++++ b/sound/soc/bcm/cygnus-ssp.c
+@@ -1133,6 +1133,11 @@ static int cygnus_ssp_resume(struct snd_soc_component *component)
+ #define cygnus_ssp_resume  NULL
+ #endif
+ 
++static const u64 cygnus_selectable_formats =
++	SND_SOC_POSSIBLE_DAIFMT_I2S	|
++	SND_SOC_POSSIBLE_DAIFMT_DSP_A	|
++	SND_SOC_POSSIBLE_DAIFMT_DSP_B;
++
+ static const struct snd_soc_dai_ops cygnus_ssp_dai_ops = {
+ 	.startup	= cygnus_ssp_startup,
+ 	.shutdown	= cygnus_ssp_shutdown,
+@@ -1141,6 +1146,8 @@ static const struct snd_soc_dai_ops cygnus_ssp_dai_ops = {
+ 	.set_fmt	= cygnus_ssp_set_fmt,
+ 	.set_sysclk	= cygnus_ssp_set_sysclk,
+ 	.set_tdm_slot	= cygnus_set_dai_tdm_slot,
++	.auto_selectable_formats	= &cygnus_selectable_formats,
++	.num_auto_selectable_formats	= 1,
+ };
+ 
+ static const struct snd_soc_dai_ops cygnus_spdif_dai_ops = {
+-- 
+2.55.0
+

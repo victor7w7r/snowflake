@@ -1,0 +1,47 @@
+From 879aca5119cd7487bac64089127927aaae233a63 Mon Sep 17 00:00:00 2001
+From: Linu Cherian <linu.cherian@arm.com>
+Date: Thu, 23 Jul 2026 10:10:33 +0530
+Subject: [PATCH 11249/15333] arm64: cpufeature: Detect BBML3 based on
+ ID_AA64MMFR2_EL1.BBM
+
+Add ID_AA64MMFR2_EL1.BBM based BBML3 feature detection in
+cpu_supports_bbml3() so that cpus with the feature would
+not have to be added into MIDR based supports_bbml3_list.
+
+Reviewed-by: Gavin Shan <gshan@redhat.com>
+Reviewed-by: Anshuman Khandual <anshuman.khandual@arm.com>
+Signed-off-by: Linu Cherian <linu.cherian@arm.com>
+[will: Tidy up cpu_supports_bbml3()]
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/kernel/cpufeature.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/arch/arm64/kernel/cpufeature.c b/arch/arm64/kernel/cpufeature.c
+index 896bafdb00b1..4025d51d2d93 100644
+--- a/arch/arm64/kernel/cpufeature.c
++++ b/arch/arm64/kernel/cpufeature.c
+@@ -2153,16 +2153,12 @@ bool cpu_supports_bbml3(void)
+ 		MIDR_RANGE(MIDR_C1_PREMIUM, 1, 1, 0xf, 0xf),
+ 		{}
+ 	};
++	u64 mmfr2 = __read_sysreg_by_encoding(SYS_ID_AA64MMFR2_EL1);
+ 
+-	if (!is_midr_in_range_list(supports_bbml3_list))
+-		return false;
+-
+-	/*
+-	 * We currently ignore the ID_AA64MMFR2_EL1 register, and only care
+-	 * about whether the MIDR check passes.
+-	 */
++	if (SYS_FIELD_GET(ID_AA64MMFR2_EL1, BBM, mmfr2) >= ID_AA64MMFR2_EL1_BBM_3)
++		return true;
+ 
+-	return true;
++	return is_midr_in_range_list(supports_bbml3_list);
+ }
+ 
+ static bool has_bbml3(const struct arm64_cpu_capabilities *caps, int scope)
+-- 
+2.55.0
+

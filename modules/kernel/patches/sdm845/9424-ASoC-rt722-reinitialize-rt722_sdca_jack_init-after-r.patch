@@ -1,0 +1,33 @@
+From 74a66323e1489cfccecf6dfcfa1df4a914676bc2 Mon Sep 17 00:00:00 2001
+From: Shuming Fan <shumingf@realtek.com>
+Date: Fri, 31 Jul 2026 16:41:14 +0800
+Subject: [PATCH 09424/15333] ASoC: rt722: reinitialize rt722_sdca_jack_init()
+ after reset
+
+Check whether the .set_jack callback has already been invoked before the reset.
+If so, call rt722_sdca_jack_init() again to restore the jack settings.
+
+Signed-off-by: Shuming Fan <shumingf@realtek.com>
+Link: https://patch.msgid.link/20260731084114.4142106-1-shumingf@realtek.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/rt722-sdca.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/sound/soc/codecs/rt722-sdca.c b/sound/soc/codecs/rt722-sdca.c
+index decf9407ab6d..e8c63cc9fe7f 100644
+--- a/sound/soc/codecs/rt722-sdca.c
++++ b/sound/soc/codecs/rt722-sdca.c
+@@ -1892,6 +1892,9 @@ int rt722_sdca_io_init(struct device *dev, struct sdw_slave *slave)
+ 	rt722_sdca_amp_preset(rt722);
+ 	rt722_sdca_jack_preset(rt722);
+ 
++	if (rt722->hs_jack && (!rt722->first_hw_init))
++		rt722_sdca_jack_init(rt722);
++
+ 	if (rt722->first_hw_init) {
+ 		regcache_cache_bypass(rt722->regmap, false);
+ 		regcache_mark_dirty(rt722->regmap);
+-- 
+2.55.0
+

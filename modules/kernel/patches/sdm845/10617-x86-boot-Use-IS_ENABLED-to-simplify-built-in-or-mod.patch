@@ -1,0 +1,82 @@
+From 2ea3973d4f8483a9654e1e0e2c648f78ca527011 Mon Sep 17 00:00:00 2001
+From: Thorsten Blum <thorsten.blum@linux.dev>
+Date: Tue, 4 Aug 2026 13:52:25 +0200
+Subject: [PATCH 10617/15333] x86/boot: Use IS_ENABLED() to simplify
+ built-in-or-module checks
+
+Replace open-coded built-in-or-module checks for CONFIG_APM, CONFIG_EDD,
+and CONFIG_X86_SPEEDSTEP_SMI with IS_ENABLED().
+
+No change in functionality intended.
+
+Signed-off-by: Thorsten Blum <thorsten.blum@linux.dev>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Link: https://patch.msgid.link/20260804115227.62158-4-thorsten.blum@linux.dev
+---
+ arch/x86/boot/edd.c     |  2 +-
+ arch/x86/boot/main.c    | 10 ++++------
+ arch/x86/kernel/setup.c |  5 ++---
+ 3 files changed, 7 insertions(+), 10 deletions(-)
+
+diff --git a/arch/x86/boot/edd.c b/arch/x86/boot/edd.c
+index 1fb4bc70cee9..97cad16f6bf2 100644
+--- a/arch/x86/boot/edd.c
++++ b/arch/x86/boot/edd.c
+@@ -15,7 +15,7 @@
+ #include <linux/edd.h>
+ #include "string.h"
+ 
+-#if defined(CONFIG_EDD) || defined(CONFIG_EDD_MODULE)
++#if IS_ENABLED(CONFIG_EDD)
+ 
+ /*
+  * Read the MBR (first sector) from a specific device.
+diff --git a/arch/x86/boot/main.c b/arch/x86/boot/main.c
+index 9d0fea18d3c8..4e382d95ef9a 100644
+--- a/arch/x86/boot/main.c
++++ b/arch/x86/boot/main.c
+@@ -164,14 +164,12 @@ void main(void)
+ 	query_ist();
+ 
+ 	/* Query APM information */
+-#if defined(CONFIG_APM) || defined(CONFIG_APM_MODULE)
+-	query_apm_bios();
+-#endif
++	if (IS_ENABLED(CONFIG_APM))
++		query_apm_bios();
+ 
+ 	/* Query EDD information */
+-#if defined(CONFIG_EDD) || defined(CONFIG_EDD_MODULE)
+-	query_edd();
+-#endif
++	if (IS_ENABLED(CONFIG_EDD))
++		query_edd();
+ 
+ 	/* Set the video mode */
+ 	set_video();
+diff --git a/arch/x86/kernel/setup.c b/arch/x86/kernel/setup.c
+index 46882ce79c3a..fca42b178b3c 100644
+--- a/arch/x86/kernel/setup.c
++++ b/arch/x86/kernel/setup.c
+@@ -120,8 +120,7 @@ struct cpuinfo_x86 new_cpu_data;
+ struct apm_info apm_info;
+ EXPORT_SYMBOL(apm_info);
+ 
+-#if defined(CONFIG_X86_SPEEDSTEP_SMI) || \
+-	defined(CONFIG_X86_SPEEDSTEP_SMI_MODULE)
++#if IS_ENABLED(CONFIG_X86_SPEEDSTEP_SMI)
+ struct ist_info ist_info;
+ EXPORT_SYMBOL(ist_info);
+ #else
+@@ -230,7 +229,7 @@ char builtin_cmdline[COMMAND_LINE_SIZE] = CONFIG_CMDLINE;
+ bool builtin_cmdline_added __ro_after_init;
+ #endif
+ 
+-#if defined(CONFIG_EDD) || defined(CONFIG_EDD_MODULE)
++#if IS_ENABLED(CONFIG_EDD)
+ struct edd edd;
+ #ifdef CONFIG_EDD_MODULE
+ EXPORT_SYMBOL(edd);
+-- 
+2.55.0
+

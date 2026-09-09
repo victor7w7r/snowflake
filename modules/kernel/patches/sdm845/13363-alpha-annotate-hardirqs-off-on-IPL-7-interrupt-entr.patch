@@ -1,0 +1,98 @@
+From f32977deb1f6bfac0c5e0121905477bf21c973bd Mon Sep 17 00:00:00 2001
+From: Matt Turner <mattst88@gmail.com>
+Date: Mon, 10 Aug 2026 16:28:35 -0400
+Subject: [PATCH 13363/15333] alpha: annotate hardirqs-off on IPL 7 interrupt
+ entry
+
+do_entInt() opens with local_irq_disable(), which with
+CONFIG_TRACE_IRQFLAGS only calls trace_hardirqs_off() if interrupts were
+not already off:
+
+	#define local_irq_disable()				\
+		do {						\
+			bool was_disabled = raw_irqs_disabled();\
+			raw_local_irq_disable();		\
+			if (!was_disabled)			\
+				trace_hardirqs_off();		\
+		} while (0)
+
+On alpha raw_irqs_disabled() is (rdps() & 7) == IPL_MAX, i.e. IPL 7.
+PALcode raises PS.IPL to the level of the interrupt before entInt runs,
+so for an IPL 7 entry - a processor machine check (vector 0x660) or a
+system event (vector 0x680), both IPL_MCHECK == IPL_MAX - the gate is
+already true and the annotation is skipped.  lockdep keeps whatever
+hardirq state the interrupted context had.  If that context had
+interrupts enabled, lockdep believes they are still enabled for the
+duration of the handler, and every lockdep_assert_irqs_disabled() in the
+interrupt path fires:
+
+  WARNING: kernel/context_tracking.c:346 at ct_irq_enter+0xc4/0xd0, CPU#0: swapper/0/0
+  [...]
+  [<fffffc0001ef74d4>] ct_irq_enter+0xc4/0xd0
+  [<fffffc000105ebd0>] irq_enter+0x20/0x50
+  [<fffffc000103707c>] do_entInt+0x1dc/0x2e0
+  [<fffffc0001031d60>] ret_from_exception+0x0/0x10
+
+  irq event stamp: 735356346
+  hardirqs last  enabled at (735356346): trace_hardirqs_on+0x68/0x220
+  hardirqs last disabled at (735356345): do_idle+0xf0/0x270
+
+The stamps show the problem directly: the most recent event is the
+enable from the interrupted idle loop, and do_entInt() recorded no
+disable at all.  ct_irq_exit() warns the same way on the way out.
+
+Ordinary device interrupts arrive at IPL 3-5 and IPIs and performance
+counter interrupts at IPL 6, so was_disabled is false for them and the
+annotation happens normally.  Only the two IPL 7 vectors are affected,
+which is why this needs an environmental event to show up.
+
+Take the hardware IPL out of the decision and drive the annotation from
+lockdep's own state instead.
+
+This corrects the annotation only.  An IPL 7 event can also interrupt a
+region that has legitimately disabled interrupts, where irq_enter() and
+irq_exit() are not the right primitives and NMI semantics are needed;
+that is a larger change and is left alone here.
+
+Tested on an AlphaServer ES47 (Marvel/EV7) by injecting system events
+through the system management path: fifteen injections, idle and under
+load, with no splat.  The same injection on a freshly booted kernel
+without this change reproduces both warnings.
+
+Signed-off-by: Matt Turner <mattst88@gmail.com>
+Reviewed-by: Magnus Lindholm <linmag7@gmail.com>
+Tested-by: Magnus Lindholm <linmag7@gmail.com>
+Link: https://lore.kernel.org/r/20260810202835.3592833-2-mattst88@gmail.com
+Signed-off-by: Magnus Lindholm <linmag7@gmail.com>
+---
+ arch/alpha/kernel/irq_alpha.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/arch/alpha/kernel/irq_alpha.c b/arch/alpha/kernel/irq_alpha.c
+index 736294d3dd51..1b799aafb7dc 100644
+--- a/arch/alpha/kernel/irq_alpha.c
++++ b/arch/alpha/kernel/irq_alpha.c
+@@ -52,8 +52,19 @@ do_entInt(unsigned long type, unsigned long vector,
+ 	 * Note that there is no matching local_irq_enable() due to
+ 	 * severe problems with RTI at IPL0 and some MILO PALcode
+ 	 * (namely LX164).
++	 *
++	 * PALcode has already raised PS.IPL to the level of the interrupt
++	 * being delivered.  For an IPL 7 entry - a machine check or a system
++	 * event - that is IPL_MAX, which is what arch_irqs_disabled() tests
++	 * for, so local_irq_disable() would decide interrupts were already
++	 * off and skip trace_hardirqs_off().  lockdep would then spend the
++	 * whole handler believing interrupts are enabled.  Drive the
++	 * annotation from lockdep's own state rather than the hardware IPL.
+ 	 */
+-	local_irq_disable();
++	raw_local_irq_disable();
++	if (lockdep_hardirqs_enabled())
++		trace_hardirqs_off();
++
+ 	old_regs = set_irq_regs(regs);
+ 
+ 	switch (type) {
+-- 
+2.55.0
+

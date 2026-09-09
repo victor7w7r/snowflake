@@ -1,0 +1,86 @@
+From 9818b99c128d4ee648c637dfb2dc7bff9256923b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig=20=28The=20Capable=20Hub=29?=
+ <u.kleine-koenig@baylibre.com>
+Date: Tue, 23 Jun 2026 12:45:57 +0200
+Subject: [PATCH 01286/15333] ARM: imx: Drop obsolete stuff from common.h
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+i.MX21 (and thus imx21_init_early()) is gone since v5.10-rc1 (commit
+4b563a066611 ("ARM: imx: Remove imx21 support")).
+
+The init_irq() functions are gone since v5.12-rc5 (commit e2c1b0ff38c9
+("ARM: imx: avic: Convert to using IRQCHIP_DECLARE")).
+
+And mxc_device_init() was removed for v5.10-rc1 (in commit 8485adf17a15
+("ARM: imx: Remove imx device directory")).
+
+The last user of imx1_reset_init() is gone since v4.9-rc1 (commit
+e1291cffcc50 ("ARM: i.MX: Remove i.MX1 non-DT support")).
+
+Drop declaration of enum mxc_cpu_pwr_mode, the actual definition follows
+later in common.h without a usage in-between.
+
+All users of of_device_id also include <linux/of.h>,
+<linux/of_address.h> or <linux/of_platform.h> which is enough to not
+need the forward declaration.
+
+Signed-off-by: Uwe Kleine-König (The Capable Hub) <u.kleine-koenig@baylibre.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+---
+ arch/arm/mach-imx/common.h | 7 -------
+ arch/arm/mach-imx/system.c | 8 --------
+ 2 files changed, 15 deletions(-)
+
+diff --git a/arch/arm/mach-imx/common.h b/arch/arm/mach-imx/common.h
+index 45c1a2a7b35f..d7ecaa822adb 100644
+--- a/arch/arm/mach-imx/common.h
++++ b/arch/arm/mach-imx/common.h
+@@ -14,23 +14,16 @@ struct platform_device;
+ struct pt_regs;
+ struct clk;
+ struct device_node;
+-enum mxc_cpu_pwr_mode;
+-struct of_device_id;
+ 
+ void mx31_map_io(void);
+ void mx35_map_io(void);
+-void imx21_init_early(void);
+ void imx31_init_early(void);
+ void imx35_init_early(void);
+-void mx31_init_irq(void);
+-void mx35_init_irq(void);
+ void mxc_set_cpu_type(unsigned int type);
+ void mxc_restart(enum reboot_mode, const char *);
+ void mxc_arch_reset_init(void __iomem *);
+-void imx1_reset_init(void __iomem *);
+ void imx_set_aips(void __iomem *);
+ void imx_aips_allow_unprivileged_access(const char *compat);
+-int mxc_device_init(void);
+ void imx_set_soc_revision(unsigned int rev);
+ void imx_init_revision_from_anatop(void);
+ void imx6_enable_rbc(bool enable);
+diff --git a/arch/arm/mach-imx/system.c b/arch/arm/mach-imx/system.c
+index e88ca027129d..1afae485f203 100644
+--- a/arch/arm/mach-imx/system.c
++++ b/arch/arm/mach-imx/system.c
+@@ -74,14 +74,6 @@ void __init mxc_arch_reset_init(void __iomem *base)
+ 		clk_prepare(wdog_clk);
+ }
+ 
+-#ifdef CONFIG_SOC_IMX1
+-void __init imx1_reset_init(void __iomem *base)
+-{
+-	wcr_enable = (1 << 0);
+-	mxc_arch_reset_init(base);
+-}
+-#endif
+-
+ #ifdef CONFIG_CACHE_L2X0
+ void __init imx_init_l2cache(void)
+ {
+-- 
+2.55.0
+

@@ -1,0 +1,71 @@
+From 57de5fb319810561e8fa50a7c952977aebfcebc1 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Tue, 7 Jul 2026 13:12:35 +0200
+Subject: [PATCH 03524/15333] platform/surface: surfacepro3_button: Stop
+ setting acpi_device_name()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The driver sets acpi_device_name() to initialize an input class device
+name initialization and print a message on probe success, but the input
+class device name can be set directly to the "Surface Pro 3/4 Buttons"
+string literal and used for printing the message.
+
+Make the driver do so, stop setting acpi_device_name() in it and drop
+the symbol specifically defined for this purpose.
+
+No intentional functional impact.
+
+This will facilitate the removal of device_name from struct
+acpi_device_pnp in the future.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Reviewed-by: Chen Yu <yu.c.chen@intel.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/12927239.O9o76ZdvQC@rafael.j.wysocki
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/surface/surfacepro3_button.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/platform/surface/surfacepro3_button.c b/drivers/platform/surface/surfacepro3_button.c
+index 388a3e1a488c..b38aa010053e 100644
+--- a/drivers/platform/surface/surfacepro3_button.c
++++ b/drivers/platform/surface/surfacepro3_button.c
+@@ -20,7 +20,6 @@
+ #define SURFACE_PRO3_BUTTON_HID		"MSHW0028"
+ #define SURFACE_PRO4_BUTTON_HID		"MSHW0040"
+ #define SURFACE_BUTTON_OBJ_NAME		"VGBI"
+-#define SURFACE_BUTTON_DEVICE_NAME	"Surface Pro 3/4 Buttons"
+ 
+ #define MSHW0040_DSM_REVISION		0x01
+ #define MSHW0040_DSM_GET_OMPR		0x02	// get OEM Platform Revision
+@@ -212,11 +211,10 @@ static int surface_button_probe(struct platform_device *pdev)
+ 		goto err_free_button;
+ 	}
+ 
+-	strscpy(acpi_device_name(device), SURFACE_BUTTON_DEVICE_NAME);
+ 	snprintf(button->phys, sizeof(button->phys), "%s/buttons",
+ 		 acpi_device_hid(device));
+ 
+-	input->name = acpi_device_name(device);
++	input->name = "Surface Pro 3/4 Buttons";
+ 	input->phys = button->phys;
+ 	input->id.bustype = BUS_HOST;
+ 	input->dev.parent = &pdev->dev;
+@@ -239,8 +237,8 @@ static int surface_button_probe(struct platform_device *pdev)
+ 		goto err_free_button;
+ 	}
+ 
+-	dev_info(&pdev->dev, "%s [%s]\n", acpi_device_name(device),
+-		 acpi_device_bid(device));
++	dev_info(&pdev->dev, "%s [%s]\n", input->name, acpi_device_bid(device));
++
+ 	return 0;
+ 
+  err_free_input:
+-- 
+2.55.0
+

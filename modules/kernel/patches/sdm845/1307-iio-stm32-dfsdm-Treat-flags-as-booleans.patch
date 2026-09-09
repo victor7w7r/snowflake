@@ -1,0 +1,54 @@
+From ec034d09813213634f3abf6eaa1880bef2584090 Mon Sep 17 00:00:00 2001
+From: "Rob Herring (Arm)" <robh@kernel.org>
+Date: Fri, 12 Jun 2026 16:51:50 -0500
+Subject: [PATCH 01307/15333] iio: stm32-dfsdm: Treat flags as booleans
+
+The "st,adc-alt-channel" and "st,filter0-sync" properties are
+documented as boolean flags. The legacy parser read them as integer
+cells, unlike the child-node parser which already checks only for
+presence.
+
+Use presence and boolean helpers so both parsers follow the binding and
+the property type checker no longer reports the flags.
+
+Assisted-by: Codex:gpt-5-5
+Signed-off-by: Rob Herring (Arm) <robh@kernel.org>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@intel.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/adc/stm32-dfsdm-adc.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/iio/adc/stm32-dfsdm-adc.c b/drivers/iio/adc/stm32-dfsdm-adc.c
+index 9664b9bd75d4..00f05e167afc 100644
+--- a/drivers/iio/adc/stm32-dfsdm-adc.c
++++ b/drivers/iio/adc/stm32-dfsdm-adc.c
+@@ -660,11 +660,8 @@ static int stm32_dfsdm_channel_parse_of(struct stm32_dfsdm *dfsdm,
+ 	}
+ 	df_ch->src = val;
+ 
+-	ret = of_property_read_u32_index(indio_dev->dev.of_node,
+-					 "st,adc-alt-channel", chan_idx,
+-					 &df_ch->alt_si);
+-	if (ret < 0)
+-		df_ch->alt_si = 0;
++	df_ch->alt_si = of_property_present(indio_dev->dev.of_node,
++					    "st,adc-alt-channel");
+ 
+ 	return 0;
+ }
+@@ -1815,9 +1812,8 @@ static int stm32_dfsdm_adc_probe(struct platform_device *pdev)
+ 
+ 	adc->dfsdm->fl_list[adc->fl_id].ford = val;
+ 
+-	ret = of_property_read_u32(dev->of_node, "st,filter0-sync", &val);
+-	if (!ret)
+-		adc->dfsdm->fl_list[adc->fl_id].sync_mode = val;
++	adc->dfsdm->fl_list[adc->fl_id].sync_mode =
++		of_property_read_bool(dev->of_node, "st,filter0-sync");
+ 
+ 	adc->dev_data = dev_data;
+ 	ret = dev_data->init(dev, iio);
+-- 
+2.55.0
+

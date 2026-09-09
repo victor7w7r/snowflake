@@ -1,0 +1,52 @@
+From a0d6255b4adcd5b903c289921284c3c362fc1fd6 Mon Sep 17 00:00:00 2001
+From: Qingfang Deng <qingfang.deng@linux.dev>
+Date: Tue, 11 Aug 2026 15:49:47 +0800
+Subject: [PATCH 13617/15333] pptp: drop packets received before connect
+
+pptp_bind() publishes the socket by its local call ID before it is
+connected, so GRE packets can reach pptp_rcv_core() while
+PPPOX_CONNECTED is clear.
+
+Such packets are queued on sk_receive_queue, but PPTP provides no recvmsg
+operation and never drains the queue after connect. The packets therefore
+remain there until socket destruction.
+
+Drop such packets immediately instead. Since PPTP no longer queues packets
+on sk_receive_queue, remove the corresponding destructor purge.
+
+Signed-off-by: Qingfang Deng <qingfang.deng@linux.dev>
+Link: https://patch.msgid.link/20260811074948.345834-1-qingfang.deng@linux.dev
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ppp/pptp.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/net/ppp/pptp.c b/drivers/net/ppp/pptp.c
+index cc8c102122d8..a797a0606f6b 100644
+--- a/drivers/net/ppp/pptp.c
++++ b/drivers/net/ppp/pptp.c
+@@ -278,11 +278,8 @@ static int pptp_rcv_core(struct sock *sk, struct sk_buff *skb)
+ 	__u8 *payload;
+ 	struct pptp_gre_header *header;
+ 
+-	if (!(sk->sk_state & PPPOX_CONNECTED)) {
+-		if (sock_queue_rcv_skb(sk, skb))
+-			goto drop;
+-		return NET_RX_SUCCESS;
+-	}
++	if (!(sk->sk_state & PPPOX_CONNECTED))
++		goto drop;
+ 
+ 	header = (struct pptp_gre_header *)(skb->data);
+ 	headersize  = sizeof(*header);
+@@ -539,7 +536,6 @@ static void pptp_sock_destruct(struct sock *sk)
+ 		del_chan(pppox_sk(sk));
+ 		pppox_unbind_sock(sk);
+ 	}
+-	skb_queue_purge(&sk->sk_receive_queue);
+ 	dst_release(rcu_dereference_protected(sk->sk_dst_cache, 1));
+ }
+ 
+-- 
+2.55.0
+

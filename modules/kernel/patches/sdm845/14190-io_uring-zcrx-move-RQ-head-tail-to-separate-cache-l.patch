@@ -1,0 +1,82 @@
+From 433c57e9b175ed82c0f68a58200d2f10a6ea5580 Mon Sep 17 00:00:00 2001
+From: Pavel Begunkov <asml.silence@gmail.com>
+Date: Fri, 7 Aug 2026 14:19:20 +0100
+Subject: [PATCH 14190/15333] io_uring/zcrx: move RQ head/tail to separate
+ cache lines
+
+RQ head and tail are currently put into the same cache line, which can
+cause false sharing problems when refill is run on another CPU. Put them
+into separate cache lines.
+
+Signed-off-by: Pavel Begunkov <asml.silence@gmail.com>
+Reviewed-by: Mina Almasry <almasrymina@google.com>
+Link: https://patch.msgid.link/f769116a3f5267f06cb9a9a819d482ddea2e0852.1786108672.git.asml.silence@gmail.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ io_uring/query.c | 2 +-
+ io_uring/zcrx.c  | 8 ++++----
+ io_uring/zcrx.h  | 7 ++++++-
+ 3 files changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/io_uring/query.c b/io_uring/query.c
+index d529d94aa8f4..2e7b893cc8f0 100644
+--- a/io_uring/query.c
++++ b/io_uring/query.c
+@@ -38,7 +38,7 @@ static ssize_t io_query_zcrx(union io_query_data *data)
+ 	e->register_flags = ZCRX_SUPPORTED_REG_FLAGS;
+ 	e->area_flags = IORING_ZCRX_AREA_DMABUF;
+ 	e->nr_ctrl_opcodes = __ZCRX_CTRL_LAST;
+-	e->rq_hdr_size = sizeof(struct io_uring);
++	e->rq_hdr_size = sizeof(struct zcrx_rq_hdr);
+ 	e->rq_hdr_alignment = L1_CACHE_BYTES;
+ 	e->features = ZCRX_FEATURES;
+ 	e->__resv2 = 0;
+diff --git a/io_uring/zcrx.c b/io_uring/zcrx.c
+index 19a432df0ebe..c81d52b29f30 100644
+--- a/io_uring/zcrx.c
++++ b/io_uring/zcrx.c
+@@ -379,9 +379,9 @@ static void io_zcrx_get_niov_uref(struct net_iov *niov)
+ 
+ static void io_fill_zcrx_offsets(struct io_uring_zcrx_offsets *offsets)
+ {
+-	offsets->head = offsetof(struct io_uring, head);
+-	offsets->tail = offsetof(struct io_uring, tail);
+-	offsets->rqes = ALIGN(sizeof(struct io_uring), L1_CACHE_BYTES);
++	offsets->head = offsetof(struct zcrx_rq_hdr, head);
++	offsets->tail = offsetof(struct zcrx_rq_hdr, tail);
++	offsets->rqes = ALIGN(sizeof(struct zcrx_rq_hdr), L1_CACHE_BYTES);
+ }
+ 
+ static int io_allocate_rbuf_ring(struct io_ring_ctx *ctx,
+@@ -409,7 +409,7 @@ static int io_allocate_rbuf_ring(struct io_ring_ctx *ctx,
+ 		return ret;
+ 
+ 	ptr = io_region_get_ptr(&ifq->rq_region);
+-	ifq->rq.ring = (struct io_uring *)ptr;
++	ifq->rq.ring = (struct zcrx_rq_hdr *)ptr;
+ 	ifq->rq.rqes = (struct io_uring_zcrx_rqe *)(ptr + off);
+ 
+ 	memset(ifq->rq.ring, 0, sizeof(*ifq->rq.ring));
+diff --git a/io_uring/zcrx.h b/io_uring/zcrx.h
+index fa00900e479e..3cdfa4415d62 100644
+--- a/io_uring/zcrx.h
++++ b/io_uring/zcrx.h
+@@ -43,9 +43,14 @@ struct io_zcrx_area {
+ 	struct io_zcrx_mem	mem;
+ };
+ 
++struct zcrx_rq_hdr {
++	u32		head ____cacheline_aligned_in_smp;
++	u32		tail ____cacheline_aligned_in_smp;
++};
++
+ struct zcrx_rq {
+ 	spinlock_t			lock;
+-	struct io_uring			*ring;
++	struct zcrx_rq_hdr		*ring;
+ 	struct io_uring_zcrx_rqe	*rqes;
+ 	u32				cached_head;
+ 	u32				nr_entries;
+-- 
+2.55.0
+

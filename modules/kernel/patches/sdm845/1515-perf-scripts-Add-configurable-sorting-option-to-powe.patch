@@ -1,0 +1,117 @@
+From 0cf831b7a40d8e35a966044a79b013611db678ad Mon Sep 17 00:00:00 2001
+From: Shivani Nittor <shivani@linux.ibm.com>
+Date: Sat, 27 Jun 2026 14:33:33 +0530
+Subject: [PATCH 01515/15333] perf scripts: Add configurable sorting option to
+ powerpc-hcalls
+
+The powerpc-hcalls.py script currently prints hypercall
+statistics in a fixed sort order based on the number of
+hcall occurrences, making it difficult to analyze hcalls
+from different execution characteristics.
+
+Add support for runtime-configurable sorting so users
+can order hypercall statistics by count, minimum
+latency, maximum latency, or average latency using
+a --sort option.
+
+Parse arguments through sys.argv to support perf script
+argument passing semantics.
+
+Example:
+
+perf record -a -e powerpc* sleep 10
+
+perf script -s ./powerpc-hcalls.py -i ./perf.data -- --sort=max
+
+SORT KEY = max
+hcall                            count   min(ns)   max(ns)   avg(ns)
+
+H_SEND_LOGICAL_LAN                  47      7380     40148      8739
+H_VIO_SIGNAL                       706       880     17454      1911
+H_RANDOM                             1     15176     15176     15176
+H_PUT_TCE_INDIRECT                   4      3032     10444      4956
+H_ADD_LOGICAL_LAN_BUFFER           363      1250      8716      1534
+H_SEND_CRQ                           8      2086      6846      3044
+H_PUT_TCE                            9      1284      4932      2646
+H_STUFF_TCE                         13      1620      3962      2358
+
+This makes it easier to identify frequently occurring
+or high-latency hypercalls depending on the analysis
+being performed.
+
+Signed-off-by: Shivani Nittor <shivani@linux.ibm.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/scripts/python/powerpc-hcalls.py | 46 ++++++++++++++++++++-
+ 1 file changed, 45 insertions(+), 1 deletion(-)
+
+diff --git a/tools/perf/scripts/python/powerpc-hcalls.py b/tools/perf/scripts/python/powerpc-hcalls.py
+index 4c14bd05da46..fedce1b68cad 100644
+--- a/tools/perf/scripts/python/powerpc-hcalls.py
++++ b/tools/perf/scripts/python/powerpc-hcalls.py
+@@ -25,6 +25,7 @@ from Util import *
+ #	} ...
+ # }
+ output = {}
++sort_key = 'count'
+ 
+ # d_enter: {
+ #	cpu: {
+@@ -247,10 +248,53 @@ def hcall_table_lookup(opcode):
+ 
+ print_ptrn = '%-28s%10s%10s%10s%10s'
+ 
++def sort_output(opcode):
++	stats = output[opcode]
++
++	if sort_key == 'min':
++		return stats['min']
++	if sort_key == 'max':
++		return stats['max']
++	if sort_key == 'avg':
++		return stats['time'] // stats['cnt']
++
++	return stats['cnt']
++
++def trace_begin():
++	global sort_key
++
++	valid_sort_keys = ['count', 'min', 'max', 'avg']
++
++	i = 1
++	while i < len(sys.argv):
++		arg = sys.argv[i]
++
++		if arg == '-s' or arg == '--sort':
++			if i + 1 >= len(sys.argv):
++				print("Error: -s/--sort requires a sort key argument")
++				sys.exit(1)
++			sort_key = sys.argv[i + 1]
++			i += 2
++			continue
++
++		if arg.startswith('--sort='):
++			sort_key = arg.split('=', 1)[1]
++			i += 1
++			continue
++
++		i += 1
++
++	if sort_key not in valid_sort_keys:
++		print(f"Error: Invalid sort key '{sort_key}'. Valid options are: {', '.join(valid_sort_keys)}")
++		sys.exit(1)
++
++	print("SORT KEY =", sort_key)
++
+ def trace_end():
+ 	print(print_ptrn % ('hcall', 'count', 'min(ns)', 'max(ns)', 'avg(ns)'))
+ 	print('-' * 68)
+-	for opcode in output:
++	for opcode in sorted(output, key = sort_output,
++                            reverse=True):
+ 		h_name = hcall_table_lookup(opcode)
+ 		time = output[opcode]['time']
+ 		cnt = output[opcode]['cnt']
+-- 
+2.55.0
+

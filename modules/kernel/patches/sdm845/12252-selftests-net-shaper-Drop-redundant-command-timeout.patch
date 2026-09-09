@@ -1,0 +1,53 @@
+From 9515a13829dfa98e3c462e179337e7b9cc3ca841 Mon Sep 17 00:00:00 2001
+From: Mohsin Bashir <hmohsin@meta.com>
+Date: Tue, 4 Aug 2026 20:09:23 -0700
+Subject: [PATCH 12252/15333] selftests: net: shaper: Drop redundant command
+ timeouts
+
+Commit 57bb59ab6fa3 ("selftests: net: bump default cmd() timeout to 20
+seconds") raised the default cmd() timeout to 20 seconds, so the explicit
+timeout=10 passed to the ethtool channel commands in queue_update() is
+now redundant and, in fact, shorter than the default. Drop it and rely
+on the default timeout.
+
+Signed-off-by: Mohsin Bashir <hmohsin@meta.com>
+Link: https://patch.msgid.link/20260805030936.1092907-2-mohsin.bashr@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ tools/testing/selftests/drivers/net/shaper.py | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/tools/testing/selftests/drivers/net/shaper.py b/tools/testing/selftests/drivers/net/shaper.py
+index e39d270e688d..c80a4bf8cc05 100755
+--- a/tools/testing/selftests/drivers/net/shaper.py
++++ b/tools/testing/selftests/drivers/net/shaper.py
+@@ -388,7 +388,7 @@ def queue_update(cfg, nl_shaper) -> None:
+                        'bw-max': (i + 1) * 1000})
+     # Delete a channel, with no shapers configured on top of the related
+     # queue: no changes expected
+-    cmd(f"ethtool -L {cfg.dev['ifname']} {cfg.rx_type} 3", timeout=10)
++    cmd(f"ethtool -L {cfg.dev['ifname']} {cfg.rx_type} 3")
+     shapers = nl_shaper.get({'ifindex': cfg.ifindex}, dump=True)
+     ksft_eq(shapers, [{'ifindex': cfg.ifindex,
+                        'parent': {'scope': 'netdev'},
+@@ -408,7 +408,7 @@ def queue_update(cfg, nl_shaper) -> None:
+ 
+     # Delete a channel, with a shaper configured on top of the related
+     # queue: the shaper must be deleted, too
+-    cmd(f"ethtool -L {cfg.dev['ifname']} {cfg.rx_type} 2", timeout=10)
++    cmd(f"ethtool -L {cfg.dev['ifname']} {cfg.rx_type} 2")
+ 
+     shapers = nl_shaper.get({'ifindex': cfg.ifindex}, dump=True)
+     ksft_eq(shapers, [{'ifindex': cfg.ifindex,
+@@ -423,7 +423,7 @@ def queue_update(cfg, nl_shaper) -> None:
+                        'bw-max': 2000}])
+ 
+     # Restore the original channels number, no expected changes
+-    cmd(f"ethtool -L {cfg.dev['ifname']} {cfg.rx_type} {cfg.nr_queues}", timeout=10)
++    cmd(f"ethtool -L {cfg.dev['ifname']} {cfg.rx_type} {cfg.nr_queues}")
+     shapers = nl_shaper.get({'ifindex': cfg.ifindex}, dump=True)
+     ksft_eq(shapers, [{'ifindex': cfg.ifindex,
+                        'parent': {'scope': 'netdev'},
+-- 
+2.55.0
+

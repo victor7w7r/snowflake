@@ -1,0 +1,90 @@
+From 17f3e140d09da4d17dadef82ab67547e71215a64 Mon Sep 17 00:00:00 2001
+From: Shyam Sundar S K <Shyam-sundar.S-k@amd.com>
+Date: Thu, 23 Jul 2026 16:45:33 +0530
+Subject: [PATCH 07451/15333] platform/x86/amd/pmf: Refactor NPU metrics for
+ platform extensibility
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Refactor the NPU metrics retrieval code to use a switch-case structure
+based on CPU ID, preparing the driver for supporting additional
+platforms with different metrics table formats.
+
+This change restructures amd_pmf_get_smu_metrics() to handle
+platform-specific metrics retrieval paths. The existing logic for
+1AH_M20H and 1AH_M60H platforms is preserved within the switch-case
+block.
+
+No functional changes.
+
+Reviewed-by: Mario Limonciello (AMD) <superm1@kernel.org>
+Co-developed-by: Patil Rajesh Reddy <Patil.Reddy@amd.com>
+Signed-off-by: Patil Rajesh Reddy <Patil.Reddy@amd.com>
+Signed-off-by: Shyam Sundar S K <Shyam-sundar.S-k@amd.com>
+Link: https://patch.msgid.link/20260723111534.1940925-7-Shyam-sundar.S-k@amd.com
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/x86/amd/pmf/metrics.c | 41 +++++++++++++++-----------
+ 1 file changed, 23 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/platform/x86/amd/pmf/metrics.c b/drivers/platform/x86/amd/pmf/metrics.c
+index 8ee60d455ec3..5635b1a01827 100644
+--- a/drivers/platform/x86/amd/pmf/metrics.c
++++ b/drivers/platform/x86/amd/pmf/metrics.c
+@@ -136,28 +136,33 @@ static int amd_pmf_get_smu_metrics(struct amd_pmf_dev *dev, struct amd_pmf_npu_m
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = amd_pmf_set_dram_addr(dev, true);
+-	if (ret)
+-		return ret;
++	switch (dev->cpu_id) {
++	case PCI_DEVICE_ID_AMD_1AH_M20H_ROOT:
++	case PCI_DEVICE_ID_AMD_1AH_M60H_ROOT:
++		ret = amd_pmf_set_dram_addr(dev, true);
++		if (ret)
++			return ret;
+ 
+-	memset(dev->buf, 0, dev->mtable_size);
++		memset(dev->buf, 0, dev->mtable_size);
+ 
+-	/* Send SMU command to get NPU metrics */
+-	ret = amd_pmf_send_cmd(dev, SET_TRANSFER_TABLE, SET_CMD, METRICS_TABLE_ID, NULL);
+-	if (ret) {
+-		dev_err(dev->dev, "SMU command failed to get NPU metrics: %d\n", ret);
+-		return ret;
+-	}
++		/* Send SMU command to get NPU metrics */
++		ret = amd_pmf_send_cmd(dev, SET_TRANSFER_TABLE, SET_CMD, METRICS_TABLE_ID, NULL);
++		if (ret) {
++			dev_err(dev->dev, "SMU command failed to get NPU metrics: %d\n", ret);
++			return ret;
++		}
+ 
+-	memcpy(&dev->m_table_v2, dev->buf, dev->mtable_size);
++		memcpy(&dev->m_table_v2, dev->buf, dev->mtable_size);
+ 
+-	data->npuclk_freq = dev->m_table_v2.npuclk_freq;
+-	for (i = 0; i < ARRAY_SIZE(data->npu_busy); i++)
+-		data->npu_busy[i] = dev->m_table_v2.npu_busy[i];
+-	data->npu_power = dev->m_table_v2.npu_power;
+-	data->mpnpuclk_freq = dev->m_table_v2.mpnpuclk_freq;
+-	data->npu_reads = dev->m_table_v2.npu_reads;
+-	data->npu_writes = dev->m_table_v2.npu_writes;
++		data->npuclk_freq = dev->m_table_v2.npuclk_freq;
++		for (i = 0; i < ARRAY_SIZE(data->npu_busy); i++)
++			data->npu_busy[i] = dev->m_table_v2.npu_busy[i];
++		data->npu_power = dev->m_table_v2.npu_power;
++		data->mpnpuclk_freq = dev->m_table_v2.mpnpuclk_freq;
++		data->npu_reads = dev->m_table_v2.npu_reads;
++		data->npu_writes = dev->m_table_v2.npu_writes;
++		break;
++	}
+ 
+ 	return 0;
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,73 @@
+From d99690513a9aff85ad282e5d622844b66471319c Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Thu, 23 Jul 2026 06:34:35 +0000
+Subject: [PATCH 10669/15333] ASoC: soc-component: add
+ snd_soc_component_{set/to}_priv()
+
+struct snd_soc_component will be capsuled soon, its member will not be
+able to access from non soc-component.c.
+
+Basically, each drivers are using dev_{set/get}_drvdata() to set own data,
+but it is not enough. Let's add .priv.
+
+Add snd_soc_component_{set/to}_priv() to access priv.
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/87qzkurz7o.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/soc-component.h |  6 ++++++
+ sound/soc/soc-component.c     | 12 ++++++++++++
+ 2 files changed, 18 insertions(+)
+
+diff --git a/include/sound/soc-component.h b/include/sound/soc-component.h
+index a13d5c98e0f3..c49b59630101 100644
+--- a/include/sound/soc-component.h
++++ b/include/sound/soc-component.h
+@@ -253,6 +253,9 @@ struct snd_soc_component {
+ 	void *mark_pm;
+ 
+ 	struct dentry *debugfs_root;
++
++	/* Component private data */
++	void *priv;
+ };
+ 
+ #define for_each_component_dais(component, dai)\
+@@ -288,6 +291,9 @@ struct snd_soc_component *snd_soc_component_alloc(struct device *dev);
+ void snd_soc_component_set_name(struct snd_soc_component *component, const char *name);
+ const char *snd_soc_component_name(struct snd_soc_component *component);
+ 
++void snd_soc_component_set_priv(struct snd_soc_component *component, void *priv);
++void *snd_soc_component_to_priv(struct snd_soc_component *component);
++
+ void snd_soc_component_set_aux(struct snd_soc_component *component,
+ 			       struct snd_soc_aux_dev *aux);
+ int snd_soc_component_init(struct snd_soc_component *component);
+diff --git a/sound/soc/soc-component.c b/sound/soc/soc-component.c
+index 5131e2bf3a10..dc7d203cb76a 100644
+--- a/sound/soc/soc-component.c
++++ b/sound/soc/soc-component.c
+@@ -54,6 +54,18 @@ const char *snd_soc_component_name(struct snd_soc_component *component)
+ }
+ EXPORT_SYMBOL_GPL(snd_soc_component_name);
+ 
++void snd_soc_component_set_priv(struct snd_soc_component *component, void *priv)
++{
++	component->priv = priv;
++}
++EXPORT_SYMBOL_GPL(snd_soc_component_set_priv);
++
++void *snd_soc_component_to_priv(struct snd_soc_component *component)
++{
++	return component->priv;
++}
++EXPORT_SYMBOL_GPL(snd_soc_component_to_priv);
++
+ /*
+  * We might want to check substream by using list.
+  * In such case, we can update these macros.
+-- 
+2.55.0
+

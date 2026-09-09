@@ -1,0 +1,43 @@
+From 9ba9a1486312dfbec99621eb5ae761739f2fd721 Mon Sep 17 00:00:00 2001
+From: William Palacek <William.Palacek@amd.com>
+Date: Mon, 25 May 2026 12:09:36 -0400
+Subject: [PATCH 01771/15333] drm/amdkfd: use scnprintf/vscnprintf in
+ kfd_smi_event_add
+
+snprintf() and vsnprintf() return the number of bytes that would have
+been written if the buffer were large enough, not the actual bytes
+written. If truncation occurs, the accumulated length can exceed the
+buffer size, causing kfifo_in() to read past the fifo_in[] stack buffer.
+
+Switch to scnprintf() and vscnprintf() which return the actual number
+of bytes written, excluding the null terminator. This prevents the
+potential buffer over-read when calculating the offset for subsequent
+writes.
+
+Signed-off-by: William Palacek <William.Palacek@amd.com>
+Reviewed-by: Alysa Liu <Alysa.Liu@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdkfd/kfd_smi_events.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_smi_events.c b/drivers/gpu/drm/amd/amdkfd/kfd_smi_events.c
+index e659cd50eb0b..6a7b4d959541 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_smi_events.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_smi_events.c
+@@ -224,10 +224,10 @@ static void kfd_smi_event_add(struct task_struct *task, struct kfd_node *dev,
+ 
+ 	pid = kfd_smi_task_to_pid(task);
+ 
+-	len = snprintf(fifo_in, sizeof(fifo_in), "%x ", event);
++	len = scnprintf(fifo_in, sizeof(fifo_in), "%x ", event);
+ 
+ 	va_start(args, fmt);
+-	len += vsnprintf(fifo_in + len, sizeof(fifo_in) - len, fmt, args);
++	len += vscnprintf(fifo_in + len, sizeof(fifo_in) - len, fmt, args);
+ 	va_end(args);
+ 
+ 	add_event_to_kfifo(pid, dev, event, fifo_in, len);
+-- 
+2.55.0
+

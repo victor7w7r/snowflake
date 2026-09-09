@@ -1,0 +1,73 @@
+From 0556300369d8fcdc0db08f8b4984a01119fd315f Mon Sep 17 00:00:00 2001
+From: Peter Hilber <peter.hilber@oss.qualcomm.com>
+Date: Fri, 5 Jun 2026 16:29:21 +0200
+Subject: [PATCH 10360/15333] virtio-mmio: add support for transport version 3
+
+Virtio MMIO transport version 3 allows device reset to complete
+asynchronously. Unlike version 2, where writing zero to Status must
+complete the reset before the write returns, version 3 requires the
+driver to poll Status until it reads back zero before considering reset
+complete.
+
+Update virtio-mmio accordingly: accept transport version 3 and, during
+reset, wait for Status to become zero. Keep the polling loop unbounded,
+consistent with virtio-pci, since the reset callback does not return an
+error code.
+
+Signed-off-by: Peter Hilber <peter.hilber@oss.qualcomm.com>
+Link: https://github.com/oasis-tcs/virtio-spec/commit/bb1dd2e1fe89b862f38f15873d835a698b196f89
+Message-ID: <20260605142921.2824-1-peter.hilber@oss.qualcomm.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+---
+ drivers/virtio/virtio_mmio.c | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/virtio/virtio_mmio.c b/drivers/virtio/virtio_mmio.c
+index 510b7c4efdff..316f03b97356 100644
+--- a/drivers/virtio/virtio_mmio.c
++++ b/drivers/virtio/virtio_mmio.c
+@@ -55,6 +55,7 @@
+ #define pr_fmt(fmt) "virtio-mmio: " fmt
+ 
+ #include <linux/acpi.h>
++#include <linux/delay.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/highmem.h>
+ #include <linux/interrupt.h>
+@@ -114,9 +115,9 @@ static int vm_finalize_features(struct virtio_device *vdev)
+ 	vring_transport_features(vdev);
+ 
+ 	/* Make sure there are no mixed devices */
+-	if (vm_dev->version == 2 &&
++	if (vm_dev->version >= 2 &&
+ 			!__virtio_test_bit(vdev, VIRTIO_F_VERSION_1)) {
+-		dev_err(&vdev->dev, "New virtio-mmio devices (version 2) must provide VIRTIO_F_VERSION_1 feature!\n");
++		dev_err(&vdev->dev, "New virtio-mmio devices (version >= 2) must provide VIRTIO_F_VERSION_1 feature!\n");
+ 		return -EINVAL;
+ 	}
+ 
+@@ -254,6 +255,12 @@ static void vm_reset(struct virtio_device *vdev)
+ 
+ 	/* 0 status means a reset. */
+ 	writel(0, vm_dev->base + VIRTIO_MMIO_STATUS);
++
++	if (vm_dev->version >= 3) {
++		/* Wait for reset to complete. */
++		while (vm_get_status(vdev))
++			fsleep(1000);
++	}
+ }
+ 
+ 
+@@ -600,7 +607,7 @@ static int virtio_mmio_probe(struct platform_device *pdev)
+ 
+ 	/* Check device version */
+ 	vm_dev->version = readl(vm_dev->base + VIRTIO_MMIO_VERSION);
+-	if (vm_dev->version < 1 || vm_dev->version > 2) {
++	if (vm_dev->version < 1 || vm_dev->version > 3) {
+ 		dev_err(&pdev->dev, "Version %ld not supported!\n",
+ 				vm_dev->version);
+ 		rc = -ENXIO;
+-- 
+2.55.0
+

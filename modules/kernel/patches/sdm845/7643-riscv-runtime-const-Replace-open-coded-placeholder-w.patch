@@ -1,0 +1,83 @@
+From ee10b1028129a73857593801614d5bf75a15b9c7 Mon Sep 17 00:00:00 2001
+From: K Prateek Nayak <kprateek.nayak@amd.com>
+Date: Tue, 28 Jul 2026 05:25:36 +0000
+Subject: [PATCH 07643/15333] riscv/runtime-const: Replace open-coded
+ placeholder with RUNTIME_MAGIC
+
+Define the placeholder used for lui + addi[w] patching sequence as
+RUNTIME_MAGIC and use that instead of open coding the constants in the
+inline assembly.
+
+No functional changes intended.
+
+Suggested-by: Guo Ren <guoren@kernel.org>
+Signed-off-by: K Prateek Nayak <kprateek.nayak@amd.com>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Reviewed-by: Charlie Jenkins <thecharlesjenkins@gmail.com>
+Reviewed-by: Guo Ren <guoren@kernel.org>
+Tested-by: Charlie Jenkins <thecharlesjenkins@gmail.com>
+Link: https://patch.msgid.link/20260728052540.4728-5-kprateek.nayak@amd.com
+---
+ arch/riscv/include/asm/runtime-const.h | 38 ++++++++++++++------------
+ 1 file changed, 20 insertions(+), 18 deletions(-)
+
+diff --git a/arch/riscv/include/asm/runtime-const.h b/arch/riscv/include/asm/runtime-const.h
+index 900db0a103d0..1ce02605d2e4 100644
+--- a/arch/riscv/include/asm/runtime-const.h
++++ b/arch/riscv/include/asm/runtime-const.h
+@@ -15,21 +15,23 @@
+ 
+ #include <linux/uaccess.h>
+ 
++#define RUNTIME_MAGIC __ASM_STR(0x89ABCDEF)
++
+ #ifdef CONFIG_32BIT
+-#define runtime_const_ptr(sym)					\
+-({								\
+-	typeof(sym) __ret;					\
+-	asm_inline(".option push\n\t"				\
+-		".option norvc\n\t"				\
+-		"1:\t"						\
+-		"lui	%[__ret],0x89abd\n\t"			\
+-		"addi	%[__ret],%[__ret],-0x211\n\t"		\
+-		".option pop\n\t"				\
+-		".pushsection runtime_ptr_" #sym ",\"a\"\n\t"	\
+-		".long 1b - .\n\t"				\
+-		".popsection"					\
+-		: [__ret] "=r" (__ret));			\
+-	__ret;							\
++#define runtime_const_ptr(sym)						\
++({									\
++	typeof(sym) __ret;						\
++	asm_inline(".option push\n\t"					\
++		".option norvc\n\t"					\
++		"1:\t"							\
++		"lui	%[__ret], %%hi(" RUNTIME_MAGIC ")\n\t"		\
++		"addi	%[__ret],%[__ret], %%lo(" RUNTIME_MAGIC ")\n\t"	\
++		".option pop\n\t"					\
++		".pushsection runtime_ptr_" #sym ",\"a\"\n\t"		\
++		".long 1b - .\n\t"					\
++		".popsection"						\
++		: [__ret] "=r" (__ret));				\
++	__ret;								\
+ })
+ #else
+ /*
+@@ -46,10 +48,10 @@
+ 	".option push\n\t"					\
+ 	".option norvc\n\t"					\
+ 	"1:\t"							\
+-	"lui	%[__ret],0x89abd\n\t"				\
+-	"lui	%[__tmp],0x1234\n\t"				\
+-	"addiw	%[__ret],%[__ret],-0x211\n\t"			\
+-	"addiw	%[__tmp],%[__tmp],0x567\n\t"			\
++	"lui	%[__ret], %%hi(" RUNTIME_MAGIC ")\n\t"		\
++	"lui	%[__tmp], %%hi(" RUNTIME_MAGIC ")\n\t"		\
++	"addiw	%[__ret],%[__ret], %%lo(" RUNTIME_MAGIC ")\n\t"	\
++	"addiw	%[__tmp],%[__tmp], %%lo(" RUNTIME_MAGIC ")\n\t"	\
+ 
+ #define RISCV_RUNTIME_CONST_64_BASE				\
+ 	"slli	%[__tmp],%[__tmp],32\n\t"			\
+-- 
+2.55.0
+

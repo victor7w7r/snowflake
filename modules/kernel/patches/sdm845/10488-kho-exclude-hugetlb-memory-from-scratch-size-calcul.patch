@@ -1,0 +1,67 @@
+From fdd843f2be1a639a1f7522388e43283b60f26397 Mon Sep 17 00:00:00 2001
+From: "Pratyush Yadav (Google)" <pratyush@kernel.org>
+Date: Sat, 1 Aug 2026 10:48:31 +0200
+Subject: [PATCH 10488/15333] kho: exclude hugetlb memory from scratch size
+ calculation
+
+HugeTLB pages can be preserved memory. So they are never allocated from
+scratch. Instead, they are allocated from the memory blocks with no
+preserved memory. These areas are detected at runtime on each boot.
+
+But since they are allocated via memblock, they show up as RSRV_KERN,
+and blow up the scratch size when scratch scale is in use.
+
+All hugetlb pages are marked RSRV_HUGETLB. Subtract their size from
+RSRV_KERN when calculating scratch sizes.
+
+Signed-off-by: Pratyush Yadav (Google) <pratyush@kernel.org>
+Link: https://patch.msgid.link/20260801084833.1897543-23-pratyush@kernel.org
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+---
+ kernel/liveupdate/kexec_handover.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/liveupdate/kexec_handover.c b/kernel/liveupdate/kexec_handover.c
+index 8449fa75a64d..9c31613341b9 100644
+--- a/kernel/liveupdate/kexec_handover.c
++++ b/kernel/liveupdate/kexec_handover.c
+@@ -744,19 +744,24 @@ early_param("kho_scratch", kho_parse_scratch_size);
+ static void __init scratch_size_update(void)
+ {
+ 	/*
+-	 * If fixed sizes are not provided via command line, calculate them
+-	 * now.
++	 * If fixed sizes are not provided via command line, calculate them now.
++	 * Remove HugeTLB allocations from it because they never get allocated
++	 * from scratch.
+ 	 */
+ 	if (scratch_scale) {
+ 		phys_addr_t size;
+ 
+ 		size = memblock_reserved_kern_size(ARCH_LOW_ADDRESS_LIMIT,
+ 						   NUMA_NO_NODE);
++		size -= memblock_reserved_hugetlb_size(ARCH_LOW_ADDRESS_LIMIT,
++						       NUMA_NO_NODE);
+ 		size = size * scratch_scale / 100;
+ 		scratch_size_lowmem = size;
+ 
+ 		size = memblock_reserved_kern_size(MEMBLOCK_ALLOC_ANYWHERE,
+ 						   NUMA_NO_NODE);
++		size -= memblock_reserved_hugetlb_size(MEMBLOCK_ALLOC_ANYWHERE,
++						       NUMA_NO_NODE);
+ 		size = size * scratch_scale / 100 - scratch_size_lowmem;
+ 		scratch_size_global = size;
+ 	}
+@@ -776,6 +781,9 @@ static phys_addr_t __init scratch_size_node(int nid)
+ 	if (scratch_scale) {
+ 		size = memblock_reserved_kern_size(MEMBLOCK_ALLOC_ANYWHERE,
+ 						   nid);
++		/* Do not count HugeTLB pages. */
++		size -= memblock_reserved_hugetlb_size(MEMBLOCK_ALLOC_ANYWHERE,
++						       nid);
+ 		size = size * scratch_scale / 100;
+ 	} else {
+ 		size = scratch_size_pernode;
+-- 
+2.55.0
+

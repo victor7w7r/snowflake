@@ -1,0 +1,118 @@
+From 5a260163e15fe898e190ba14c25da81ce15f6018 Mon Sep 17 00:00:00 2001
+From: Flaviu Nistor <flaviu.nistor@gmail.com>
+Date: Thu, 25 Jun 2026 19:04:23 +0300
+Subject: [PATCH 12849/15333] hwmon: (chipcap2) Add support for label
+
+Add support for label sysfs attribute similar to other hwmon devices.
+This is particularly useful for systems with multiple sensors on the
+same board, where identifying individual sensors is much easier since
+labels can be defined via device tree.
+
+Signed-off-by: Flaviu Nistor <flaviu.nistor@gmail.com>
+Reviewed-by: Javier Carrasco <javier.carrasco.cruz@gmail.com>
+Link: https://lore.kernel.org/r/20260625160423.17882-2-flaviu.nistor@gmail.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ Documentation/hwmon/chipcap2.rst |  2 ++
+ drivers/hwmon/chipcap2.c         | 25 +++++++++++++++++++++++--
+ 2 files changed, 25 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/hwmon/chipcap2.rst b/Documentation/hwmon/chipcap2.rst
+index dc165becc64c..c38d87b91b69 100644
+--- a/Documentation/hwmon/chipcap2.rst
++++ b/Documentation/hwmon/chipcap2.rst
+@@ -70,4 +70,6 @@ humidity1_min_hyst:             RW      humidity low hystersis
+ humidity1_max_hyst:             RW      humidity high hystersis
+ humidity1_min_alarm:            RO      humidity low alarm indicator
+ humidity1_max_alarm:            RO      humidity high alarm indicator
++humidity1_label:                RO      descriptive name for the sensor
++temp1_label:                    RO      descriptive name for the sensor
+ =============================== ======= ========================================
+diff --git a/drivers/hwmon/chipcap2.c b/drivers/hwmon/chipcap2.c
+index 4aecf463180f..086571d556b7 100644
+--- a/drivers/hwmon/chipcap2.c
++++ b/drivers/hwmon/chipcap2.c
+@@ -22,6 +22,8 @@
+ #include <linux/irq.h>
+ #include <linux/module.h>
+ #include <linux/regulator/consumer.h>
++#include <linux/mod_devicetable.h>
++#include <linux/property.h>
+ 
+ #define CC2_START_CM			0xA0
+ #define CC2_START_NOM			0x80
+@@ -83,6 +85,7 @@ struct cc2_data {
+ 	struct i2c_client *client;
+ 	struct regulator *regulator;
+ 	const char *name;
++	const char *label;
+ 	int irq_ready;
+ 	int irq_low;
+ 	int irq_high;
+@@ -449,6 +452,8 @@ static umode_t cc2_is_visible(const void *data, enum hwmon_sensor_types type,
+ 		switch (attr) {
+ 		case hwmon_humidity_input:
+ 			return 0444;
++		case hwmon_humidity_label:
++			return cc2->label ? 0444 : 0;
+ 		case hwmon_humidity_min_alarm:
+ 			return cc2->rh_alarm.low_alarm_visible ? 0444 : 0;
+ 		case hwmon_humidity_max_alarm:
+@@ -466,6 +471,8 @@ static umode_t cc2_is_visible(const void *data, enum hwmon_sensor_types type,
+ 		switch (attr) {
+ 		case hwmon_temp_input:
+ 			return 0444;
++		case hwmon_temp_label:
++			return cc2->label ? 0444 : 0;
+ 		default:
+ 			return 0;
+ 		}
+@@ -552,6 +559,16 @@ static int cc2_humidity_max_alarm_status(struct cc2_data *data, long *val)
+ 	return 0;
+ }
+ 
++static int cc2_read_string(struct device *dev, enum hwmon_sensor_types type,
++			   u32 attr, int channel, const char **str)
++{
++	struct cc2_data *data = dev_get_drvdata(dev);
++
++	*str = data->label;
++
++	return 0;
++}
++
+ static int cc2_read(struct device *dev, enum hwmon_sensor_types type, u32 attr,
+ 		    int channel, long *val)
+ {
+@@ -670,8 +687,9 @@ static int cc2_request_alarm_irqs(struct cc2_data *data, struct device *dev)
+ }
+ 
+ static const struct hwmon_channel_info *cc2_info[] = {
+-	HWMON_CHANNEL_INFO(temp, HWMON_T_INPUT),
+-	HWMON_CHANNEL_INFO(humidity, HWMON_H_INPUT | HWMON_H_MIN | HWMON_H_MAX |
++	HWMON_CHANNEL_INFO(temp, HWMON_T_INPUT | HWMON_T_LABEL),
++	HWMON_CHANNEL_INFO(humidity, HWMON_H_INPUT | HWMON_H_LABEL |
++			   HWMON_H_MIN | HWMON_H_MAX |
+ 			   HWMON_H_MIN_HYST | HWMON_H_MAX_HYST |
+ 			   HWMON_H_MIN_ALARM | HWMON_H_MAX_ALARM),
+ 	NULL
+@@ -680,6 +698,7 @@ static const struct hwmon_channel_info *cc2_info[] = {
+ static const struct hwmon_ops cc2_hwmon_ops = {
+ 	.is_visible = cc2_is_visible,
+ 	.read = cc2_read,
++	.read_string = cc2_read_string,
+ 	.write = cc2_write,
+ };
+ 
+@@ -710,6 +729,8 @@ static int cc2_probe(struct i2c_client *client)
+ 		return dev_err_probe(dev, PTR_ERR(data->regulator),
+ 				     "Failed to get regulator\n");
+ 
++	device_property_read_string(dev, "label", &data->label);
++
+ 	ret = cc2_request_ready_irq(data, dev);
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "Failed to request ready irq\n");
+-- 
+2.55.0
+

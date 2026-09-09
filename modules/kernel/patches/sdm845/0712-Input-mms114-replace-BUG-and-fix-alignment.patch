@@ -1,0 +1,85 @@
+From 55b109de8ec5eb9840a1ea5ee163e3fee9aa3ba6 Mon Sep 17 00:00:00 2001
+From: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Date: Mon, 22 Jun 2026 22:36:13 -0700
+Subject: [PATCH 00712/15333] Input: mms114 - replace BUG() and fix alignment
+
+Avoid taking the machine down with BUG() if a caller ever requests a
+read spanning the write-only MODE_CONTROL register; warn and return
+-EINVAL so the driver can recover.
+
+Additionally, fix parameter alignment to match the open parenthesis
+in several functions to conform to the kernel coding style.
+
+Assisted-by: Antigravity:gemini-3.5-flash
+Link: https://patch.msgid.link/20260616050912.1531241-5-dmitry.torokhov@gmail.com
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+---
+ drivers/input/touchscreen/mms114.c | 17 ++++++++---------
+ 1 file changed, 8 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/input/touchscreen/mms114.c b/drivers/input/touchscreen/mms114.c
+index c59aec8f2feb..bf01eee0560a 100644
+--- a/drivers/input/touchscreen/mms114.c
++++ b/drivers/input/touchscreen/mms114.c
+@@ -95,8 +95,8 @@ static int __mms114_read_reg(struct mms114_data *data, u8 reg,
+ 	u8 buf = reg;
+ 	int error;
+ 
+-	if (reg <= MMS114_MODE_CONTROL && reg + len > MMS114_MODE_CONTROL)
+-		BUG();
++	if (WARN_ON(reg <= MMS114_MODE_CONTROL && reg + len > MMS114_MODE_CONTROL))
++		return -EINVAL;
+ 
+ 	/* Write register */
+ 	xfer[0].addr = client->addr;
+@@ -310,8 +310,7 @@ static int mms114_get_version(struct mms114_data *data)
+ 		if (error)
+ 			return error;
+ 
+-		group = i2c_smbus_read_byte_data(data->client,
+-						  MMS152_COMPAT_GROUP);
++		group = i2c_smbus_read_byte_data(data->client, MMS152_COMPAT_GROUP);
+ 		if (group < 0)
+ 			return group;
+ 
+@@ -371,14 +370,14 @@ static int mms114_setup_regs(struct mms114_data *data)
+ 
+ 	if (data->contact_threshold) {
+ 		error = mms114_write_reg(data, MMS114_CONTACT_THRESHOLD,
+-				data->contact_threshold);
++					 data->contact_threshold);
+ 		if (error < 0)
+ 			return error;
+ 	}
+ 
+ 	if (data->moving_threshold) {
+ 		error = mms114_write_reg(data, MMS114_MOVING_THRESHOLD,
+-				data->moving_threshold);
++					 data->moving_threshold);
+ 		if (error < 0)
+ 			return error;
+ 	}
+@@ -464,9 +463,9 @@ static int mms114_parse_legacy_bindings(struct mms114_data *data)
+ 	}
+ 
+ 	device_property_read_u32(dev, "contact-threshold",
+-				&data->contact_threshold);
++				 &data->contact_threshold);
+ 	device_property_read_u32(dev, "moving-threshold",
+-				&data->moving_threshold);
++				 &data->moving_threshold);
+ 
+ 	if (device_property_read_bool(dev, "x-invert"))
+ 		props->invert_x = true;
+@@ -519,7 +518,7 @@ static int mms114_probe(struct i2c_client *client)
+ 		return data->num_keycodes;
+ 	} else if (data->num_keycodes > MMS114_MAX_TOUCHKEYS) {
+ 		dev_warn(&client->dev,
+-			"Found %d linux,keycodes but max is %d, ignoring the rest\n",
++			 "Found %d linux,keycodes but max is %d, ignoring the rest\n",
+ 			 data->num_keycodes, MMS114_MAX_TOUCHKEYS);
+ 		data->num_keycodes = MMS114_MAX_TOUCHKEYS;
+ 	}
+-- 
+2.55.0
+

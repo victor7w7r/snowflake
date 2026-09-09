@@ -1,0 +1,126 @@
+From 2e5268fc45823004da97bff520506624bdca111c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ma=C3=ADra=20Canal?= <mcanal@igalia.com>
+Date: Sat, 16 May 2026 11:40:59 -0300
+Subject: [PATCH 00163/15333] accel: ethosu: Remove redundant job_lock
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The job_lock mutex guarded dev->in_flight_job across ethosu_job_run(),
+the threaded IRQ handler, and ethosu_job_timedout(). However, the DRM
+scheduler already provides most of the serialization required, which
+makes this mutex redundant.
+
+Analyzing the different scenarios:
+
+  1. run_job() and timedout_job() are mutually exclusive scheduler
+     callbacks, so the scheduler itself serializes them.
+
+  2. run_job() and the IRQ handler are implicitly serialized, but they can
+     overlap in time: dma_fence_signal() synchronously queues the next
+     run_job onto submit_wq, and the worker can execute run_job(next) on
+     another CPU before the IRQ thread finishes. The mutex previously kept
+     the IRQ's trailing "in_flight_job = NULL" from racing run_job(next)'s
+     "in_flight_job = next" store.
+
+     The handler is now restructured to clear in_flight_job before calling
+     dma_fence_signal(), so any run_job(next) woken by the signal observes
+     NULL.
+
+  3. timedout_job() and the IRQ handler can also overlap if the hardware
+     completes the timed-out job near the timeout boundary, since
+     drm_sched_stop()'s cancel_work_sync() only synchronizes with the
+     scheduler's workqueue. The IRQ handler saves in_flight_job into a
+     local with READ_ONCE() before dereferencing ->done_fence, and
+     run_job()/timedout_job() publish the field with WRITE_ONCE(). This
+     prevents the compiler from reloading the pointer, and keeps the IRQ
+     thread operating on the same job for the duration of the handler even
+     if timedout_job() concurrently clears the field.
+
+Drop the mutex along with its initialization.
+
+Signed-off-by: Maíra Canal <mcanal@igalia.com>
+Link: https://patch.msgid.link/20260516144623.2582427-2-mcanal@igalia.com
+Signed-off-by: Rob Herring (Arm) <robh@kernel.org>
+---
+ drivers/accel/ethosu/ethosu_device.h |  2 --
+ drivers/accel/ethosu/ethosu_job.c    | 22 ++++++++--------------
+ 2 files changed, 8 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/accel/ethosu/ethosu_device.h b/drivers/accel/ethosu/ethosu_device.h
+index 3a1d07d94785..d4458eac8447 100644
+--- a/drivers/accel/ethosu/ethosu_device.h
++++ b/drivers/accel/ethosu/ethosu_device.h
+@@ -195,8 +195,6 @@ struct ethosu_device {
+ 	struct drm_ethosu_npu_info npu_info;
+ 
+ 	struct ethosu_job *in_flight_job;
+-	/* For in_flight_job and ethosu_job_hw_submit() */
+-	struct mutex job_lock;
+ 
+ 	/* For dma_fence */
+ 	spinlock_t fence_lock;
+diff --git a/drivers/accel/ethosu/ethosu_job.c b/drivers/accel/ethosu/ethosu_job.c
+index 99dec33f526b..74f3493fb11a 100644
+--- a/drivers/accel/ethosu/ethosu_job.c
++++ b/drivers/accel/ethosu/ethosu_job.c
+@@ -218,10 +218,8 @@ static struct dma_fence *ethosu_job_run(struct drm_sched_job *sched_job)
+ 
+ 	ethosu_switch_perfmon(dev, job);
+ 
+-	scoped_guard(mutex, &dev->job_lock) {
+-		dev->in_flight_job = job;
+-		ethosu_job_hw_submit(dev, job);
+-	}
++	WRITE_ONCE(dev->in_flight_job, job);
++	ethosu_job_hw_submit(dev, job);
+ 
+ 	return fence;
+ }
+@@ -229,6 +227,7 @@ static struct dma_fence *ethosu_job_run(struct drm_sched_job *sched_job)
+ static void ethosu_job_handle_irq(struct ethosu_device *dev)
+ {
+ 	u32 status = readl_relaxed(dev->regs + NPU_REG_STATUS);
++	struct ethosu_job *job;
+ 
+ 	if (status & (STATUS_BUS_STATUS | STATUS_CMD_PARSE_ERR)) {
+ 		dev_err(dev->base.dev, "Error IRQ - %x\n", status);
+@@ -236,11 +235,10 @@ static void ethosu_job_handle_irq(struct ethosu_device *dev)
+ 		return;
+ 	}
+ 
+-	scoped_guard(mutex, &dev->job_lock) {
+-		if (dev->in_flight_job) {
+-			dma_fence_signal(dev->in_flight_job->done_fence);
+-			dev->in_flight_job = NULL;
+-		}
++	job = READ_ONCE(dev->in_flight_job);
++	if (job) {
++		WRITE_ONCE(dev->in_flight_job, NULL);
++		dma_fence_signal(job->done_fence);
+ 	}
+ }
+ 
+@@ -296,8 +294,7 @@ static enum drm_gpu_sched_stat ethosu_job_timedout(struct drm_sched_job *bad)
+ 
+ 	drm_sched_stop(&dev->sched, bad);
+ 
+-	scoped_guard(mutex, &dev->job_lock)
+-		dev->in_flight_job = NULL;
++	WRITE_ONCE(dev->in_flight_job, NULL);
+ 
+ 	/* Proceed with reset now. */
+ 	pm_runtime_force_suspend(dev->base.dev);
+@@ -328,9 +325,6 @@ int ethosu_job_init(struct ethosu_device *edev)
+ 	int ret;
+ 
+ 	spin_lock_init(&edev->fence_lock);
+-	ret = devm_mutex_init(dev, &edev->job_lock);
+-	if (ret)
+-		return ret;
+ 	ret = devm_mutex_init(dev, &edev->sched_lock);
+ 	if (ret)
+ 		return ret;
+-- 
+2.55.0
+

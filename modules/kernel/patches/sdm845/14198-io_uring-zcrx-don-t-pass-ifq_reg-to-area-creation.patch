@@ -1,0 +1,68 @@
+From eb840beb51bb17da87968f3b8359183bde11be22 Mon Sep 17 00:00:00 2001
+From: Pavel Begunkov <asml.silence@gmail.com>
+Date: Fri, 7 Aug 2026 14:19:28 +0100
+Subject: [PATCH 14198/15333] io_uring/zcrx: don't pass ifq_reg to area
+ creation
+
+We might want to create an area without having an instance of struct
+io_uring_zcrx_ifq_reg. Extract a helper that doesn't have the ifq
+registration structure as an argument but takes the buf length
+explicitly.
+
+Signed-off-by: Pavel Begunkov <asml.silence@gmail.com>
+Link: https://patch.msgid.link/76751ee4747abb4893058fcaaa36895dfe24a297.1786108672.git.asml.silence@gmail.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ io_uring/zcrx.c | 20 ++++++++++++++------
+ 1 file changed, 14 insertions(+), 6 deletions(-)
+
+diff --git a/io_uring/zcrx.c b/io_uring/zcrx.c
+index db529736bdab..8914869ed29a 100644
+--- a/io_uring/zcrx.c
++++ b/io_uring/zcrx.c
+@@ -459,21 +459,22 @@ static int io_zcrx_append_area(struct io_zcrx_ifq *ifq,
+ 	return 0;
+ }
+ 
+-static int io_zcrx_create_area(struct io_zcrx_ifq *ifq,
++static int __zcrx_create_area(struct io_zcrx_ifq *ifq,
+ 			       struct io_uring_zcrx_area_reg *area_reg,
+-			       struct io_uring_zcrx_ifq_reg *reg)
++			       u32 rx_buf_len)
+ {
+ 	int buf_size_shift = PAGE_SHIFT;
+ 	struct io_zcrx_area *area;
+ 	unsigned nr_iovs;
+ 	int i, ret;
+ 
+-	if (reg->rx_buf_len) {
+-		if (!is_power_of_2(reg->rx_buf_len) ||
+-		     reg->rx_buf_len < PAGE_SIZE)
++	if (rx_buf_len) {
++		if (!is_power_of_2(rx_buf_len) || rx_buf_len < PAGE_SIZE)
+ 			return -EINVAL;
+-		buf_size_shift = ilog2(reg->rx_buf_len);
++		buf_size_shift = ilog2(rx_buf_len);
+ 	}
++	if (WARN_ON_ONCE(ifq->niov_shift))
++		return -EINVAL;
+ 	if (!ifq->dev && buf_size_shift != PAGE_SHIFT)
+ 		return -EOPNOTSUPP;
+ 
+@@ -543,6 +544,13 @@ static int io_zcrx_create_area(struct io_zcrx_ifq *ifq,
+ 	return ret;
+ }
+ 
++static int io_zcrx_create_area(struct io_zcrx_ifq *ifq,
++			       struct io_uring_zcrx_area_reg *area_reg,
++			       struct io_uring_zcrx_ifq_reg *reg)
++{
++	return __zcrx_create_area(ifq, area_reg, reg->rx_buf_len);
++}
++
+ static struct io_zcrx_ifq *io_zcrx_ifq_alloc(struct io_ring_ctx *ctx)
+ {
+ 	struct io_zcrx_ifq *ifq;
+-- 
+2.55.0
+

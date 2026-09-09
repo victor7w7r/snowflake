@@ -1,0 +1,73 @@
+From 1eafa5eb97dcb6a76947ffc06c18c272f1eaf1b6 Mon Sep 17 00:00:00 2001
+From: Rodrigo Alencar <rodrigo.alencar@analog.com>
+Date: Thu, 4 Jun 2026 10:58:58 +0100
+Subject: [PATCH 01287/15333] lib: kstrtox: add initial value to
+ _parse_integer_limit()
+
+Add init parameter to _parse_integer_limit() that defines an initial
+value for the accumulated result when parsing an 64-bit integer. The
+new function prototype is adjusted so that the _parse_integer() macros
+stay consistent allowing for one more argument, which defaults to 0.
+
+Signed-off-by: Rodrigo Alencar <rodrigo.alencar@analog.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ lib/kstrtox.c | 5 +++--
+ lib/kstrtox.h | 9 ++++++---
+ 2 files changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/lib/kstrtox.c b/lib/kstrtox.c
+index adc03e27e4a2..6d00162aea6c 100644
+--- a/lib/kstrtox.c
++++ b/lib/kstrtox.c
+@@ -45,6 +45,7 @@ const char *_parse_integer_fixup_radix(const char *s, unsigned int *base)
+  * @base: Radix
+  * @p: Where to store result
+  * @max_chars: Maximum amount of characters to convert
++ * @init: Initial value of the multiply-accumulate result
+  *
+  * Convert non-negative integer string representation in explicitly given
+  * radix to an integer. If overflow occurs, value at @p is set to ULLONG_MAX.
+@@ -56,12 +57,12 @@ const char *_parse_integer_fixup_radix(const char *s, unsigned int *base)
+  */
+ noinline
+ unsigned int _parse_integer_limit(const char *s, unsigned int base, unsigned long long *p,
+-				  size_t max_chars)
++				  size_t max_chars, unsigned long long init)
+ {
+ 	unsigned int rv, overflow = 0;
+ 	unsigned long long res;
+ 
+-	res = 0;
++	res = init;
+ 	for (rv = 0; rv < max_chars; rv++, s++) {
+ 		unsigned int c = *s;
+ 		unsigned int lc = _tolower(c);
+diff --git a/lib/kstrtox.h b/lib/kstrtox.h
+index ff84fe434a00..73dee79fd8ed 100644
+--- a/lib/kstrtox.h
++++ b/lib/kstrtox.h
+@@ -7,13 +7,16 @@
+ #define KSTRTOX_OVERFLOW	(1U << 31)
+ const char *_parse_integer_fixup_radix(const char *s, unsigned int *base);
+ unsigned int _parse_integer_limit(const char *s, unsigned int base, unsigned long long *res,
+-				  size_t max_chars);
++				  size_t max_chars, unsigned long long init);
+ 
+ #define _parse_integer0(s, base, res, ...)						\
+-	_parse_integer_limit(s, base, res, INT_MAX)
++	_parse_integer_limit(s, base, res, INT_MAX, 0)
+ 
+ #define _parse_integer1(s, base, res, max_chars, ...)					\
+-	_parse_integer_limit(s, base, res, max_chars)
++	_parse_integer_limit(s, base, res, max_chars, 0)
++
++#define _parse_integer2(s, base, res, max_chars, init, ...)				\
++	_parse_integer_limit(s, base, res, max_chars, init)
+ 
+ #define _parse_integer(s, base, res, ...)						\
+ 	CONCATENATE(_parse_integer, COUNT_ARGS(__VA_ARGS__))(s, base, res, __VA_ARGS__)
+-- 
+2.55.0
+

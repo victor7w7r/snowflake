@@ -1,0 +1,43 @@
+From 218ef5b3447402a549d8a25e28ae6de73e27ac04 Mon Sep 17 00:00:00 2001
+From: Anas Iqbal <mohd.abd.6602@gmail.com>
+Date: Thu, 19 Mar 2026 16:30:11 +0000
+Subject: [PATCH 00009/15333] PM / devfreq: event: rockchip-dfi: Fix missing
+ clk_disable_unprepare() on error
+
+Smatch reports:
+drivers/devfreq/event/rockchip-dfi.c:215 rockchip_dfi_enable() warn:
+'dfi->clk' from clk_prepare_enable() not released.
+
+If rockchip_dfi_ddrtype_to_ctrl() fails after clk_prepare_enable(),
+the clock is not disabled, leading to a resource leak.
+
+Add clk_disable_unprepare() in the error path to properly release
+the clock.
+
+Fixes: d724f4a4581b ("PM / devfreq: rockchip-dfi: Prepare for multiple users")
+Signed-off-by: Anas Iqbal <mohd.abd.6602@gmail.com>
+Signed-off-by: Chanwoo Choi <cw00.choi@samsung.com>
+Link: https://lore.kernel.org/lkml/20260319163011.18876-1-mohd.abd.6602@gmail.com/
+---
+ drivers/devfreq/event/rockchip-dfi.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/devfreq/event/rockchip-dfi.c b/drivers/devfreq/event/rockchip-dfi.c
+index 5e6e7e900bda..8db0bceeded4 100644
+--- a/drivers/devfreq/event/rockchip-dfi.c
++++ b/drivers/devfreq/event/rockchip-dfi.c
+@@ -185,8 +185,10 @@ static int rockchip_dfi_enable(struct rockchip_dfi *dfi)
+ 	}
+ 
+ 	ret = rockchip_dfi_ddrtype_to_ctrl(dfi, &ctrl);
+-	if (ret)
++	if (ret) {
++		clk_disable_unprepare(dfi->clk);
+ 		goto out;
++	}
+ 
+ 	for (i = 0; i < dfi->max_channels; i++) {
+ 
+-- 
+2.55.0
+

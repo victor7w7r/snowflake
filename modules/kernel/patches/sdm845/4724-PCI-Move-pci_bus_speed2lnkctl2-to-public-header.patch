@@ -1,0 +1,91 @@
+From a03c77abaa802433210f193617000a3c1edd20be Mon Sep 17 00:00:00 2001
+From: Hans Zhang <18255117159@163.com>
+Date: Tue, 7 Apr 2026 21:04:49 +0800
+Subject: [PATCH 04724/15333] PCI: Move pci_bus_speed2lnkctl2() to public
+ header
+
+Move the static array-based pci_bus_speed2lnkctl2() function from
+bwctrl.c to pci.h as a public inline function.
+
+This provides efficient O(1) speed-to-LNKCTL2 value conversion using
+static array lookup, maintaining optimal performance while enabling
+code reuse by other PCIe drivers.
+
+Signed-off-by: Hans Zhang <18255117159@163.com>
+[mani: replaced <asm/bug.h> with <linux/bug.h> as per checkpatch]
+Signed-off-by: Manivannan Sadhasivam <mani@kernel.org>
+Reviewed-by: Shawn Lin <shawn.lin@rock-chips.com>
+Acked-by: Bjorn Helgaas <bhelgaas@google.com>
+Link: https://patch.msgid.link/20260407130450.1489318-3-18255117159@163.com
+---
+ drivers/pci/pci.h         | 18 ++++++++++++++++++
+ drivers/pci/pcie/bwctrl.c | 17 -----------------
+ 2 files changed, 18 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/pci/pci.h b/drivers/pci/pci.h
+index d756688d446d..93731242d314 100644
+--- a/drivers/pci/pci.h
++++ b/drivers/pci/pci.h
+@@ -2,6 +2,7 @@
+ #ifndef DRIVERS_PCI_H
+ #define DRIVERS_PCI_H
+ 
++#include <linux/bug.h>
+ #include <linux/align.h>
+ #include <linux/bitfield.h>
+ #include <linux/pci.h>
+@@ -604,6 +605,23 @@ static inline bool pcie_valid_speed(enum pci_bus_speed speed)
+ 	return (speed >= PCIE_SPEED_2_5GT) && (speed <= PCIE_SPEED_64_0GT);
+ }
+ 
++static inline u16 pci_bus_speed2lnkctl2(enum pci_bus_speed speed)
++{
++	static const u8 speed_conv[] = {
++		[PCIE_SPEED_2_5GT] = PCI_EXP_LNKCTL2_TLS_2_5GT,
++		[PCIE_SPEED_5_0GT] = PCI_EXP_LNKCTL2_TLS_5_0GT,
++		[PCIE_SPEED_8_0GT] = PCI_EXP_LNKCTL2_TLS_8_0GT,
++		[PCIE_SPEED_16_0GT] = PCI_EXP_LNKCTL2_TLS_16_0GT,
++		[PCIE_SPEED_32_0GT] = PCI_EXP_LNKCTL2_TLS_32_0GT,
++		[PCIE_SPEED_64_0GT] = PCI_EXP_LNKCTL2_TLS_64_0GT,
++	};
++
++	if (WARN_ON_ONCE(!pcie_valid_speed(speed)))
++		return 0;
++
++	return speed_conv[speed];
++}
++
+ static inline int pcie_dev_speed_mbps(enum pci_bus_speed speed)
+ {
+ 	switch (speed) {
+diff --git a/drivers/pci/pcie/bwctrl.c b/drivers/pci/pcie/bwctrl.c
+index ea82e326f164..d48021bfd844 100644
+--- a/drivers/pci/pcie/bwctrl.c
++++ b/drivers/pci/pcie/bwctrl.c
+@@ -48,23 +48,6 @@ struct pcie_bwctrl_data {
+ /* Prevent port removal during Link Speed changes. */
+ static DECLARE_RWSEM(pcie_bwctrl_setspeed_rwsem);
+ 
+-static u16 pci_bus_speed2lnkctl2(enum pci_bus_speed speed)
+-{
+-	static const u8 speed_conv[] = {
+-		[PCIE_SPEED_2_5GT] = PCI_EXP_LNKCTL2_TLS_2_5GT,
+-		[PCIE_SPEED_5_0GT] = PCI_EXP_LNKCTL2_TLS_5_0GT,
+-		[PCIE_SPEED_8_0GT] = PCI_EXP_LNKCTL2_TLS_8_0GT,
+-		[PCIE_SPEED_16_0GT] = PCI_EXP_LNKCTL2_TLS_16_0GT,
+-		[PCIE_SPEED_32_0GT] = PCI_EXP_LNKCTL2_TLS_32_0GT,
+-		[PCIE_SPEED_64_0GT] = PCI_EXP_LNKCTL2_TLS_64_0GT,
+-	};
+-
+-	if (WARN_ON_ONCE(!pcie_valid_speed(speed)))
+-		return 0;
+-
+-	return speed_conv[speed];
+-}
+-
+ static inline u16 pcie_supported_speeds2target_speed(u8 supported_speeds)
+ {
+ 	return __fls(supported_speeds);
+-- 
+2.55.0
+

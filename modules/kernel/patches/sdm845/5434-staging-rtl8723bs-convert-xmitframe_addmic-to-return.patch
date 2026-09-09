@@ -1,0 +1,72 @@
+From 723b19cb3a65a56e5974d3d26e081215b7de728c Mon Sep 17 00:00:00 2001
+From: Hungyu Lin <dennylin0707@gmail.com>
+Date: Mon, 13 Jul 2026 07:05:35 +0000
+Subject: [PATCH 05434/15333] staging: rtl8723bs: convert xmitframe_addmic() to
+ return errno
+
+Convert xmitframe_addmic() to return 0 on success and
+a negative errno on failure.
+
+Update the immediate caller to handle errno return values
+while preserving the existing _SUCCESS/_FAIL semantics.
+
+No functional change intended.
+
+Signed-off-by: Hungyu Lin <dennylin0707@gmail.com>
+Reviewed-by: Dan Carpenter <error27@gmail.com>
+Link: https://patch.msgid.link/20260713070537.15903-4-dennylin0707@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/core/rtw_xmit.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/core/rtw_xmit.c b/drivers/staging/rtl8723bs/core/rtw_xmit.c
+index bbc7f89f1e76..cfeaf5575c61 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_xmit.c
++++ b/drivers/staging/rtl8723bs/core/rtw_xmit.c
+@@ -797,7 +797,7 @@ static int update_attrib(struct adapter *padapter, struct sk_buff *pkt, struct p
+ 	return 0;
+ }
+ 
+-static s32 xmitframe_addmic(struct adapter *padapter, struct xmit_frame *pxmitframe)
++static int xmitframe_addmic(struct adapter *padapter, struct xmit_frame *pxmitframe)
+ {
+ 	signed int			curfragnum, length;
+ 	u8 *pframe, *payload, mic[8];
+@@ -820,12 +820,12 @@ static s32 xmitframe_addmic(struct adapter *padapter, struct xmit_frame *pxmitfr
+ 
+ 			if (bmcst) {
+ 				if (!memcmp(psecuritypriv->dot118021XGrptxmickey[psecuritypriv->dot118021XGrpKeyid].skey, null_key, 16))
+-					return _FAIL;
++					return -EINVAL;
+ 				/* start to calculate the mic code */
+ 				rtw_secmicsetkey(&micdata, psecuritypriv->dot118021XGrptxmickey[psecuritypriv->dot118021XGrpKeyid].skey);
+ 			} else {
+ 				if (!memcmp(&pattrib->dot11tkiptxmickey.skey[0], null_key, 16))
+-					return _FAIL;
++					return -EINVAL;
+ 				/* start to calculate the mic code */
+ 				rtw_secmicsetkey(&micdata, &pattrib->dot11tkiptxmickey.skey[0]);
+ 			}
+@@ -876,7 +876,7 @@ static s32 xmitframe_addmic(struct adapter *padapter, struct xmit_frame *pxmitfr
+ 			pattrib->last_txcmdsz += 8;
+ 			}
+ 	}
+-	return _SUCCESS;
++	return 0;
+ }
+ 
+ static s32 xmitframe_swencrypt(struct adapter *padapter, struct xmit_frame *pxmitframe)
+@@ -1175,7 +1175,8 @@ s32 rtw_xmitframe_coalesce(struct adapter *padapter, struct sk_buff *pkt, struct
+ 		memcpy(mem_start, pbuf_start + hw_hdr_offset, pattrib->hdrlen);
+ 	}
+ 
+-	if (xmitframe_addmic(padapter, pxmitframe) == _FAIL) {
++	ret = xmitframe_addmic(padapter, pxmitframe);
++	if (ret) {
+ 		res = _FAIL;
+ 		goto exit;
+ 	}
+-- 
+2.55.0
+

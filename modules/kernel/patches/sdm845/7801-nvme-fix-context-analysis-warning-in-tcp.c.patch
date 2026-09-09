@@ -1,0 +1,45 @@
+From 521b1587de93650950d59b59b058bf5c24230973 Mon Sep 17 00:00:00 2001
+From: Nilay Shroff <nilay@linux.ibm.com>
+Date: Mon, 13 Jul 2026 17:24:20 +0530
+Subject: [PATCH 07801/15333] nvme: fix context analysis warning in tcp.c
+
+After adding Clang context annotations, compiling tcp.c reports the
+following warning while context analysis is enabled:
+
+drivers/nvme/host/tcp.c:2572:24: warning: passing pointer to variable 'list' requires holding mutex 'nvme_tcp_ctrl_mutex'
+	  [-Wthread-safety-pointer]
+2572 |         if (list_empty(&ctrl->list))
+     |                               ^
+
+The above warning is triggered because ctrl->list is guarded with mutex
+nvme_tcp_ctrl_mutex but when list_empty(&ctrl->list) is invoked it
+doesn't acquire nvme_tcp_ctrl_mutex.
+
+Replace list_empty() with list_empty_careful(), which is intended
+for lockless inspection of list heads during teardown when no concurrent
+list modifications are expected. This suppresses the corresponding
+Clang context analysis warning while preserving the existing behavior.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Nilay Shroff <nilay@linux.ibm.com>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/tcp.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/nvme/host/tcp.c b/drivers/nvme/host/tcp.c
+index 8d2fbfc7cd8d..87d8067f3283 100644
+--- a/drivers/nvme/host/tcp.c
++++ b/drivers/nvme/host/tcp.c
+@@ -2579,7 +2579,7 @@ static void nvme_tcp_free_ctrl(struct nvme_ctrl *nctrl)
+ {
+ 	struct nvme_tcp_ctrl *ctrl = to_tcp_ctrl(nctrl);
+ 
+-	if (list_empty(&ctrl->list))
++	if (list_empty_careful(&ctrl->list))
+ 		goto free_ctrl;
+ 
+ 	mutex_lock(&nvme_tcp_ctrl_mutex);
+-- 
+2.55.0
+

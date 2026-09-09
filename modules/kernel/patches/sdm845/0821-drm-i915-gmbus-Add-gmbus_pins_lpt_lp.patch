@@ -1,0 +1,61 @@
+From 1c626c95b4bf4200f1d17817f7cc98a272c7a604 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Tue, 23 Jun 2026 15:51:08 +0300
+Subject: [PATCH 00821/15333] drm/i915/gmbus: Add gmbus_pins_lpt_lp[]
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+LPT/WPT-LP don't have as many GPIO pins as the -H variants.
+Add proper mapping for the -LP PCHs so that we can't end up
+poking at non-existent GPIOs.
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20260623125111.6632-4-ville.syrjala@linux.intel.com
+Reviewed-by: Michał Grzelak <michal.grzelak@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_gmbus.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_gmbus.c b/drivers/gpu/drm/i915/display/intel_gmbus.c
+index 2869ec23e1ec..f69b8841c5dd 100644
+--- a/drivers/gpu/drm/i915/display/intel_gmbus.c
++++ b/drivers/gpu/drm/i915/display/intel_gmbus.c
+@@ -86,13 +86,18 @@ static const struct gmbus_pin gmbus_pins[] = {
+ 	[GMBUS_PIN_DPD] = { "dpd", GPIO_5 },
+ };
+ 
+-static const struct gmbus_pin gmbus_pins_lpt[] = {
++static const struct gmbus_pin gmbus_pins_lpt_h[] = {
+ 	[GMBUS_PIN_VGADDC] = { "vga", GPIO_0 },
+ 	[GMBUS_PIN_DPC] = { "dpc", GPIO_3 },
+ 	[GMBUS_PIN_DPB] = { "dpb", GPIO_4 },
+ 	[GMBUS_PIN_DPD] = { "dpd", GPIO_5 },
+ };
+ 
++static const struct gmbus_pin gmbus_pins_lpt_lp[] = {
++	[GMBUS_PIN_DPC] = { "dpc", GPIO_3 },
++	[GMBUS_PIN_DPB] = { "dpb", GPIO_4 },
++};
++
+ static const struct gmbus_pin gmbus_pins_skl[] = {
+ 	[GMBUS_PIN_DPC] = { "dpc", GPIO_3 },
+ 	[GMBUS_PIN_DPB] = { "dpb", GPIO_4 },
+@@ -178,9 +183,12 @@ static const struct gmbus_pin *get_gmbus_pin(struct intel_display *display,
+ 	} else if (DISPLAY_VER(display) == 9) {
+ 		pins = gmbus_pins_skl;
+ 		size = ARRAY_SIZE(gmbus_pins_skl);
++	} else if (HAS_PCH_LPT_LP(display)) {
++		pins = gmbus_pins_lpt_lp;
++		size = ARRAY_SIZE(gmbus_pins_lpt_lp);
+ 	} else if (HAS_PCH_LPT(display)) {
+-		pins = gmbus_pins_lpt;
+-		size = ARRAY_SIZE(gmbus_pins_lpt);
++		pins = gmbus_pins_lpt_h;
++		size = ARRAY_SIZE(gmbus_pins_lpt_h);
+ 	} else {
+ 		pins = gmbus_pins;
+ 		size = ARRAY_SIZE(gmbus_pins);
+-- 
+2.55.0
+

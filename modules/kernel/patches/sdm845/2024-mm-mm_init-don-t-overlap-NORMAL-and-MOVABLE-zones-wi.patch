@@ -1,0 +1,86 @@
+From eb0e5b61369f7614574fe3262c1cc3c88441e04d Mon Sep 17 00:00:00 2001
+From: "Mike Rapoport (Microsoft)" <rppt@kernel.org>
+Date: Tue, 30 Jun 2026 10:22:11 +0300
+Subject: [PATCH 02024/15333] mm/mm_init: don't overlap NORMAL and MOVABLE
+ zones with kernelcore=mirror
+
+When kernelcore or movablecore kernel parameters define size of the
+NORMAL and MOVABLE zones as percents of the total memory or by absolute
+value, ZONE_NORMAL is clamped at the beginning of ZONE_MOVABLE.
+
+However, when kernelcore=mirror the ZONE_NORMAL span is not changed but
+rather pages from ZONE_MOVABLE counted as absent in ZONE_NORMAL.
+
+Make the behaviour of kernelcore= parameter uniform and treat mirror
+just as another way to size the zones.
+
+Co-developed-by: Wei Yang <richard.weiyang@gmail.com>
+Signed-off-by: Wei Yang <richard.weiyang@gmail.com>
+Link: https://patch.msgid.link/20260630072212.624305-2-rppt@kernel.org
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Reviewed-by: David Hildenbrand (Arm) <david@kernel.org>
+---
+ mm/mm_init.c | 36 +++---------------------------------
+ 1 file changed, 3 insertions(+), 33 deletions(-)
+
+diff --git a/mm/mm_init.c b/mm/mm_init.c
+index 0f64909e8d20..57923dd33d06 100644
+--- a/mm/mm_init.c
++++ b/mm/mm_init.c
+@@ -1174,9 +1174,8 @@ static void __init adjust_zone_range_for_zone_movable(int nid,
+ 				arch_zone_highest_possible_pfn[movable_zone]);
+ 
+ 		/* Adjust for ZONE_MOVABLE starting within this range */
+-		} else if (!mirrored_kernelcore &&
+-			*zone_start_pfn < zone_movable_pfn[nid] &&
+-			*zone_end_pfn > zone_movable_pfn[nid]) {
++		} else if (*zone_start_pfn < zone_movable_pfn[nid] &&
++			   *zone_end_pfn > zone_movable_pfn[nid]) {
+ 			*zone_end_pfn = zone_movable_pfn[nid];
+ 
+ 		/* Check if this whole range is within ZONE_MOVABLE */
+@@ -1224,40 +1223,11 @@ static unsigned long __init zone_absent_pages_in_node(int nid,
+ 					unsigned long zone_start_pfn,
+ 					unsigned long zone_end_pfn)
+ {
+-	unsigned long nr_absent;
+-
+ 	/* zone is empty, we don't have any absent pages */
+ 	if (zone_start_pfn == zone_end_pfn)
+ 		return 0;
+ 
+-	nr_absent = __absent_pages_in_range(nid, zone_start_pfn, zone_end_pfn);
+-
+-	/*
+-	 * ZONE_MOVABLE handling.
+-	 * Treat pages to be ZONE_MOVABLE in ZONE_NORMAL as absent pages
+-	 * and vice versa.
+-	 */
+-	if (mirrored_kernelcore && zone_movable_pfn[nid]) {
+-		unsigned long start_pfn, end_pfn;
+-		struct memblock_region *r;
+-
+-		for_each_mem_region(r) {
+-			start_pfn = clamp(memblock_region_memory_base_pfn(r),
+-					  zone_start_pfn, zone_end_pfn);
+-			end_pfn = clamp(memblock_region_memory_end_pfn(r),
+-					zone_start_pfn, zone_end_pfn);
+-
+-			if (zone_type == ZONE_MOVABLE &&
+-			    memblock_is_mirror(r))
+-				nr_absent += end_pfn - start_pfn;
+-
+-			if (zone_type == ZONE_NORMAL &&
+-			    !memblock_is_mirror(r))
+-				nr_absent += end_pfn - start_pfn;
+-		}
+-	}
+-
+-	return nr_absent;
++	return __absent_pages_in_range(nid, zone_start_pfn, zone_end_pfn);
+ }
+ 
+ /*
+-- 
+2.55.0
+

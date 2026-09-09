@@ -1,0 +1,60 @@
+From de6bda2088e4b72e01538b5b116fbbb1a49dfc71 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Wed, 15 Jul 2026 16:55:21 +0700
+Subject: [PATCH 08239/15333] ASoC: sunxi: sun4i-codec: Drop redundant error
+ messages
+
+The called functions already log failures where appropriate. Return the
+original error directly and avoid duplicate error messages.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260715095525.40668-3-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sunxi/sun4i-codec.c | 19 +++++--------------
+ 1 file changed, 5 insertions(+), 14 deletions(-)
+
+diff --git a/sound/soc/sunxi/sun4i-codec.c b/sound/soc/sunxi/sun4i-codec.c
+index 05308df3ae5b..71f7a1fedd88 100644
+--- a/sound/soc/sunxi/sun4i-codec.c
++++ b/sound/soc/sunxi/sun4i-codec.c
+@@ -2380,31 +2380,22 @@ static int sun4i_codec_probe(struct platform_device *pdev)
+ 
+ 	ret = devm_snd_soc_register_component(&pdev->dev, quirks->codec,
+ 				     &sun4i_codec_dai, 1);
+-	if (ret) {
+-		dev_err(&pdev->dev, "Failed to register our codec\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	ret = devm_snd_soc_register_component(&pdev->dev,
+ 					      &sun4i_codec_component,
+ 					      &dummy_cpu_dai, 1);
+-	if (ret) {
+-		dev_err(&pdev->dev, "Failed to register our DAI\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	ret = devm_snd_dmaengine_pcm_register(&pdev->dev, NULL, 0);
+-	if (ret) {
+-		dev_err(&pdev->dev, "Failed to register against DMAEngine\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	card = quirks->create_card(&pdev->dev);
+-	if (IS_ERR(card)) {
+-		ret = PTR_ERR(card);
+-		dev_err(&pdev->dev, "Failed to create our card\n");
+-		return ret;
+-	}
++	if (IS_ERR(card))
++		return PTR_ERR(card);
+ 
+ 	snd_soc_card_set_drvdata(card, scodec);
+ 
+-- 
+2.55.0
+

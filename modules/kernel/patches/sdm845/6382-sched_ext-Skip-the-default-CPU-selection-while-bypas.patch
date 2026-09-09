@@ -1,0 +1,62 @@
+From 5f860e647de21269c3b7f03be9d892d6af46b972 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Tue, 21 Jul 2026 11:25:14 -1000
+Subject: [PATCH 06382/15333] sched_ext: Skip the default CPU selection while
+ bypassing
+
+select_task_rq_scx() falls into the default path when the scheduler has no
+ops.select_cpu or is bypassing. There it calls scx_select_cpu_dfl() and
+direct-dispatches to the picked CPU's local DSQ.
+
+While bypassing, neither does anything: the enqueue path routes the task to
+a bypass DSQ before consulting the direct-dispatch target, so the direct
+dispatch never happens, and the CPU pick at most shifts which CPU's bypass
+DSQ receives the task. Worse, when the scheduler does its own idle tracking,
+the built-in idle cpumasks the pick consults are not even updated, so it
+doesn't work anyway.
+
+Return prev_cpu without the default selection while bypassing and let the
+bypass enqueue place the task.
+
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ kernel/sched/ext/ext.c | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 96389ec31ab8..e6c4cbe1f182 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -3277,6 +3277,19 @@ static int select_task_rq_scx(struct task_struct *p, int prev_cpu, int wake_flag
+ 	} else {
+ 		s32 cpu;
+ 
++		/*
++		 * While bypassing, the enqueue path routes @p to a bypass DSQ
++		 * without consulting the direct-dispatch target, making the
++		 * default selection pointless. It doesn't work anyway when the
++		 * scheduler does its own idle tracking and the built-in idle
++		 * cpumasks are not updated. Leave @p on @prev_cpu.
++		 */
++		if (bypassing) {
++			__scx_add_event(sch, SCX_EV_BYPASS_DISPATCH, 1);
++			p->scx.selected_cpu = prev_cpu;
++			return prev_cpu;
++		}
++
+ 		cpu = scx_select_cpu_dfl(p, prev_cpu, wake_flags, NULL, 0);
+ 		if (cpu >= 0) {
+ 			refill_task_slice_dfl(sch, p);
+@@ -3286,8 +3299,6 @@ static int select_task_rq_scx(struct task_struct *p, int prev_cpu, int wake_flag
+ 		}
+ 		p->scx.selected_cpu = cpu;
+ 
+-		if (bypassing)
+-			__scx_add_event(sch, SCX_EV_BYPASS_DISPATCH, 1);
+ 		return cpu;
+ 	}
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,51 @@
+From b77334654027ef56583e257e26e6d8a6ed8f9830 Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Sat, 1 Aug 2026 00:44:36 +0900
+Subject: [PATCH 14719/15333] fuse: use min_not_zero() in
+ fuse_init_server_timeout()
+
+fuse_init_server_timeout() limits timeout to fuse_max_req_timeout with
+the same logic as min_not_zero(), and returns early exactly when the
+computed timeout would be zero.
+
+So use min_not_zero() instead and return when the computed timeout is
+zero.
+
+No functional change.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Reviewed-by: Joanne Koong <joannelkoong@gmail.com>
+Signed-off-by: Miklos Szeredi <mszeredi@redhat.com>
+---
+ fs/fuse/req_timeout.c | 12 +++---------
+ 1 file changed, 3 insertions(+), 9 deletions(-)
+
+diff --git a/fs/fuse/req_timeout.c b/fs/fuse/req_timeout.c
+index 6cc6fc491343..95a1acd7bc08 100644
+--- a/fs/fuse/req_timeout.c
++++ b/fs/fuse/req_timeout.c
+@@ -128,18 +128,12 @@ static void set_request_timeout(struct fuse_chan *fch, unsigned int timeout)
+ 
+ void fuse_init_server_timeout(struct fuse_chan *fch, unsigned int timeout)
+ {
+-	if (!timeout && !fuse_max_req_timeout && !fuse_default_req_timeout)
+-		return;
+-
+ 	if (!timeout)
+ 		timeout = fuse_default_req_timeout;
+ 
+-	if (fuse_max_req_timeout) {
+-		if (timeout)
+-			timeout = min(fuse_max_req_timeout, timeout);
+-		else
+-			timeout = fuse_max_req_timeout;
+-	}
++	timeout = min_not_zero(timeout, fuse_max_req_timeout);
++	if (!timeout)
++		return;
+ 
+ 	timeout = max(FUSE_TIMEOUT_TIMER_FREQ, timeout);
+ 
+-- 
+2.55.0
+

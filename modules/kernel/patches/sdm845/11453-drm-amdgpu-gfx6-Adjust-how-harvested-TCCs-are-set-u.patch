@@ -1,0 +1,72 @@
+From 900e7f951e45de3189c24a8f60da4658b6e7ede0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Mon, 3 Aug 2026 15:23:06 +0200
+Subject: [PATCH 11453/15333] drm/amdgpu/gfx6: Adjust how harvested TCCs are
+ set up
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Adjust gfx_v6_0_setup_tcc() to keep it working after
+a GFX IP block soft reset. On a soft reset, the
+TCP_CHAN_STEER_LO/HI registers are not cleared so
+the function needs a slight adjustment to how the
+number of active TCCs are calculated.
+
+Additionally, let's expose the disabled TCC mask
+in the tcc_disabled_mask field, like on other GPUs.
+
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/gfx_v6_0.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v6_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v6_0.c
+index b1dfcbe9640c..a51403caa342 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v6_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v6_0.c
+@@ -1597,7 +1597,7 @@ static void gfx_v6_0_setup_spi(struct amdgpu_device *adev)
+  */
+ static void gfx_v6_0_setup_tcc(struct amdgpu_device *adev)
+ {
+-	u32 i, tcc, tcp_addr_config, num_active_tcc = 0;
++	u32 i, tcc, tcp_addr_config, num_active_tcc = 0, num_max_active_tcc;
+ 	u64 chan_steer, patched_chan_steer = 0;
+ 	const u32 num_max_tcc = adev->gfx.config.max_texture_channel_caches;
+ 	const u32 dis_tcc_mask =
+@@ -1611,6 +1611,8 @@ static void gfx_v6_0_setup_tcc(struct amdgpu_device *adev)
+ 	if (!dis_tcc_mask)
+ 		return;
+ 
++	num_max_active_tcc = num_max_tcc - hweight32(dis_tcc_mask);
++
+ 	/* Each 4-bit nibble contains the index of a TCC used by all TCPs */
+ 	chan_steer = RREG32(mmTCP_CHAN_STEER_LO) | ((u64)RREG32(mmTCP_CHAN_STEER_HI) << 32ull);
+ 
+@@ -1623,9 +1625,12 @@ static void gfx_v6_0_setup_tcc(struct amdgpu_device *adev)
+ 			patched_chan_steer |= (u64)tcc << (u64)(4 * num_active_tcc);
+ 			++num_active_tcc;
+ 		}
++
++		if (num_active_tcc == num_max_active_tcc)
++			break;
+ 	}
+ 
+-	WARN_ON(num_active_tcc != num_max_tcc - hweight32(dis_tcc_mask));
++	WARN_ON(num_active_tcc != num_max_active_tcc);
+ 
+ 	/* Patch number of TCCs used by TCPs */
+ 	tcp_addr_config = REG_SET_FIELD(RREG32(mmTCP_ADDR_CONFIG),
+@@ -1635,6 +1640,8 @@ static void gfx_v6_0_setup_tcc(struct amdgpu_device *adev)
+ 	WREG32(mmTCP_ADDR_CONFIG, tcp_addr_config);
+ 	WREG32(mmTCP_CHAN_STEER_HI, upper_32_bits(patched_chan_steer));
+ 	WREG32(mmTCP_CHAN_STEER_LO, lower_32_bits(patched_chan_steer));
++
++	adev->gfx.config.tcc_disabled_mask = dis_tcc_mask;
+ }
+ 
+ static void gfx_v6_0_config_init(struct amdgpu_device *adev)
+-- 
+2.55.0
+

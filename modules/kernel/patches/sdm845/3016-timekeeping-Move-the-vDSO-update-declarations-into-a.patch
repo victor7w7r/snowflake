@@ -1,0 +1,104 @@
+From 79bd39c58f2c6fdbc5fb6300d309606f3cb84ab8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh?= <thomas.weissschuh@linutronix.de>
+Date: Tue, 7 Jul 2026 08:07:15 +0200
+Subject: [PATCH 03016/15333] timekeeping: Move the vDSO update declarations
+ into a private header
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+All architectures are now fully using the generic vDSO infrastructure.
+They don't need these declarations anymore to implement the functions
+in architecture-specific code.
+
+Move them to the private header.
+
+Signed-off-by: Thomas Weißschuh <thomas.weissschuh@linutronix.de>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/20260707-timekeeping-header-cleanup-v1-2-e85ad96409a9@linutronix.de
+---
+ include/linux/timekeeper_internal.h | 19 -------------------
+ kernel/time/time.c                  |  1 +
+ kernel/time/timekeeping_internal.h  | 21 +++++++++++++++++++++
+ 3 files changed, 22 insertions(+), 19 deletions(-)
+
+diff --git a/include/linux/timekeeper_internal.h b/include/linux/timekeeper_internal.h
+index 58c83d6e65b3..264db7c9c071 100644
+--- a/include/linux/timekeeper_internal.h
++++ b/include/linux/timekeeper_internal.h
+@@ -190,23 +190,4 @@ struct timekeeper {
+ 	s32			tai_offset;
+ };
+ 
+-#ifdef CONFIG_GENERIC_GETTIMEOFDAY
+-
+-extern void update_vsyscall(struct timekeeper *tk);
+-extern void update_vsyscall_tz(void);
+-extern void vdso_time_update_aux(struct timekeeper *tk);
+-
+-#else
+-
+-static inline void update_vsyscall(struct timekeeper *tk)
+-{
+-}
+-static inline void update_vsyscall_tz(void)
+-{
+-}
+-static inline void vdso_time_update_aux(struct timekeeper *tk)
+-{
+-}
+-#endif
+-
+ #endif /* _LINUX_TIMEKEEPER_INTERNAL_H */
+diff --git a/kernel/time/time.c b/kernel/time/time.c
+index 0dd63a91e7c5..d1a7efd80bf5 100644
+--- a/kernel/time/time.c
++++ b/kernel/time/time.c
+@@ -42,6 +42,7 @@
+ 
+ #include <generated/timeconst.h>
+ #include "timekeeping.h"
++#include "timekeeping_internal.h"
+ 
+ /*
+  * The timezone where the local system is located.  Used as a default by some
+diff --git a/kernel/time/timekeeping_internal.h b/kernel/time/timekeeping_internal.h
+index 973ede670a36..6d719b8e5ea2 100644
+--- a/kernel/time/timekeeping_internal.h
++++ b/kernel/time/timekeeping_internal.h
+@@ -6,6 +6,8 @@
+ #include <linux/spinlock.h>
+ #include <linux/time.h>
+ 
++struct timekeeper;
++
+ /*
+  * timekeeping debug functions
+  */
+@@ -48,4 +50,23 @@ void timekeeper_unlock_irqrestore(unsigned long flags);
+ /* NTP specific interface to access the current seconds value */
+ long ktime_get_ntp_seconds(unsigned int id);
+ 
++#ifdef CONFIG_GENERIC_GETTIMEOFDAY
++
++extern void update_vsyscall(struct timekeeper *tk);
++extern void update_vsyscall_tz(void);
++extern void vdso_time_update_aux(struct timekeeper *tk);
++
++#else
++
++static inline void update_vsyscall(struct timekeeper *tk)
++{
++}
++static inline void update_vsyscall_tz(void)
++{
++}
++static inline void vdso_time_update_aux(struct timekeeper *tk)
++{
++}
++#endif
++
+ #endif /* _TIMEKEEPING_INTERNAL_H */
+-- 
+2.55.0
+

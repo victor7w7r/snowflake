@@ -1,0 +1,69 @@
+From 884dfb2dfe2cde33b8efe91ebf91542c88ca9034 Mon Sep 17 00:00:00 2001
+From: Richard Zhu <hongxing.zhu@nxp.com>
+Date: Thu, 30 Jul 2026 16:55:42 +0800
+Subject: [PATCH 08572/15333] clk: imx95-blk-ctl: Add func_out_en clock for
+ i.MX9x PCIe
+
+Add a func_out_en clock for i.MX9x PCIe to serve as the parent gate clock
+of the CREF_EN (BIT6) gate clock. Both of these two gate clocks enable
+the output of the internal 100MHz differential reference clock.
+
+When the internal PLL clock is used as the PCIe reference clock, both
+BIT6 (CREF_EN) and BIT2 (FUNC_OUTPUT_EN) control the PCIE_REF_OUT_CLK.
+
+If these bits default to 1, the output clock is enabled. With typical
+100-ohm termination on the board, this results in approximately 6mA of
+unnecessary power consumption when the PCIe internal PLL clock is not
+in use.
+
+To eliminate this power consumption, add a func_out_en clock gate that
+serves as the parent of the existing CREF_EN (BIT6) gate clock. Both
+gates must be enabled to output the internal 100MHz differential
+reference clock, and both will be disabled when the clock is not needed.
+
+Signed-off-by: Richard Zhu <hongxing.zhu@nxp.com>
+Reviewed-by: Peng Fan <peng.fan@nxp.com>
+Link: https://patch.msgid.link/20260730085542.263025-1-hongxing.zhu@oss.nxp.com
+Signed-off-by: Abel Vesa <abel.vesa@oss.qualcomm.com>
+---
+ drivers/clk/imx/clk-imx95-blk-ctl.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/clk/imx/clk-imx95-blk-ctl.c b/drivers/clk/imx/clk-imx95-blk-ctl.c
+index 56bed4471995..1f9259f45607 100644
+--- a/drivers/clk/imx/clk-imx95-blk-ctl.c
++++ b/drivers/clk/imx/clk-imx95-blk-ctl.c
+@@ -286,18 +286,28 @@ static const struct imx95_blk_ctl_dev_data netcmix_dev_data = {
+ static const struct imx95_blk_ctl_clk_dev_data hsio_blk_ctl_clk_dev_data[] = {
+ 	[0] = {
+ 		.name = "hsio_blk_ctl_clk",
+-		.parent_names = (const char *[]){ "hsio_pll", },
++		.parent_names = (const char *[]){ "func_out_en", },
+ 		.num_parents = 1,
+ 		.reg = 0,
+ 		.bit_idx = 6,
+ 		.bit_width = 1,
+ 		.type = CLK_GATE,
+ 		.flags = CLK_SET_RATE_PARENT,
++	},
++	[1] = {
++		.name = "func_out_en",
++		.parent_names = (const char *[]){ "hsio_pll", },
++		.num_parents = 1,
++		.reg = 0,
++		.bit_idx = 2,
++		.bit_width = 1,
++		.type = CLK_GATE,
++		.flags = CLK_SET_RATE_PARENT,
+ 	}
+ };
+ 
+ static const struct imx95_blk_ctl_dev_data hsio_blk_ctl_dev_data = {
+-	.num_clks = 1,
++	.num_clks = ARRAY_SIZE(hsio_blk_ctl_clk_dev_data),
+ 	.clk_dev_data = hsio_blk_ctl_clk_dev_data,
+ 	.clk_reg_offset = 0,
+ };
+-- 
+2.55.0
+

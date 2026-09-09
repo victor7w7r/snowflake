@@ -1,0 +1,79 @@
+From 03c13fa1399179d846e2796de20de8d55f5edae7 Mon Sep 17 00:00:00 2001
+From: Maxime Ripard <mripard@kernel.org>
+Date: Tue, 26 May 2026 18:46:30 +0200
+Subject: [PATCH 00054/15333] drm/tidss: Convert to atomic_create_state
+
+Our driver uses reset to create the various object states, but only
+calls the helper that allocate a new state. They are thus strictly
+equivalent to the new atomic_create_state helpers, so let's switch to
+these.
+
+Reviewed-by: Tomi Valkeinen <tomi.valkeinen@ideasonboard.com>
+Reviewed-by: Laurent Pinchart <laurent.pinchart+renesas@ideasonboard.com>
+Link: https://patch.msgid.link/20260526-drm-mode-config-init-v6-18-852346394200@kernel.org
+Signed-off-by: Maxime Ripard <mripard@kernel.org>
+---
+ drivers/gpu/drm/tidss/tidss_crtc.c  | 17 +++++++----------
+ drivers/gpu/drm/tidss/tidss_plane.c |  2 +-
+ 2 files changed, 8 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/gpu/drm/tidss/tidss_crtc.c b/drivers/gpu/drm/tidss/tidss_crtc.c
+index acab9307bdf3..400329aa2200 100644
+--- a/drivers/gpu/drm/tidss/tidss_crtc.c
++++ b/drivers/gpu/drm/tidss/tidss_crtc.c
+@@ -357,20 +357,17 @@ static void tidss_crtc_destroy_state(struct drm_crtc *crtc,
+ 	kfree(tstate);
+ }
+ 
+-static void tidss_crtc_reset(struct drm_crtc *crtc)
++static struct drm_crtc_state *tidss_crtc_create_state(struct drm_crtc *crtc)
+ {
+ 	struct tidss_crtc_state *tstate;
+ 
+-	if (crtc->state)
+-		tidss_crtc_destroy_state(crtc, crtc->state);
+-
+ 	tstate = kzalloc_obj(*tstate);
+-	if (!tstate) {
+-		crtc->state = NULL;
+-		return;
+-	}
++	if (!tstate)
++		return ERR_PTR(-ENOMEM);
++
++	__drm_atomic_helper_crtc_state_init(&tstate->base, crtc);
+ 
+-	__drm_atomic_helper_crtc_reset(crtc, &tstate->base);
++	return &tstate->base;
+ }
+ 
+ static struct drm_crtc_state *tidss_crtc_duplicate_state(struct drm_crtc *crtc)
+@@ -405,10 +402,10 @@ static void tidss_crtc_destroy(struct drm_crtc *crtc)
+ }
+ 
+ static const struct drm_crtc_funcs tidss_crtc_funcs = {
+-	.reset = tidss_crtc_reset,
+ 	.destroy = tidss_crtc_destroy,
+ 	.set_config = drm_atomic_helper_set_config,
+ 	.page_flip = drm_atomic_helper_page_flip,
++	.atomic_create_state = tidss_crtc_create_state,
+ 	.atomic_duplicate_state = tidss_crtc_duplicate_state,
+ 	.atomic_destroy_state = tidss_crtc_destroy_state,
+ 	.enable_vblank = tidss_crtc_enable_vblank,
+diff --git a/drivers/gpu/drm/tidss/tidss_plane.c b/drivers/gpu/drm/tidss/tidss_plane.c
+index 1a8b44fb45f8..6d82976c2db1 100644
+--- a/drivers/gpu/drm/tidss/tidss_plane.c
++++ b/drivers/gpu/drm/tidss/tidss_plane.c
+@@ -178,8 +178,8 @@ static const struct drm_plane_helper_funcs tidss_primary_plane_helper_funcs = {
+ static const struct drm_plane_funcs tidss_plane_funcs = {
+ 	.update_plane = drm_atomic_helper_update_plane,
+ 	.disable_plane = drm_atomic_helper_disable_plane,
+-	.reset = drm_atomic_helper_plane_reset,
+ 	.destroy = drm_plane_destroy,
++	.atomic_create_state = drm_atomic_helper_plane_create_state,
+ 	.atomic_duplicate_state = drm_atomic_helper_plane_duplicate_state,
+ 	.atomic_destroy_state = drm_atomic_helper_plane_destroy_state,
+ };
+-- 
+2.55.0
+

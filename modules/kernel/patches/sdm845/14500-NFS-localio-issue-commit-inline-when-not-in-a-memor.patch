@@ -1,0 +1,62 @@
+From 3e05a62a97b15dfaf9b14875d68084003828fb74 Mon Sep 17 00:00:00 2001
+From: Mike Snitzer <snitzer@hammerspace.com>
+Date: Mon, 6 Jul 2026 12:05:49 -0400
+Subject: [PATCH 14500/15333] NFS/localio: issue commit inline when not in a
+ memory-reclaim context
+
+Extend the memory-reclaim-context test used for LOCALIO reads and writes to
+the commit (fsync) path.  As with data IO, bouncing every commit through the
+dedicated !WQ_MEM_RECLAIM nfslocaliod_workqueue is only required when the
+submitting context is a memory-reclaim context: nfs_local_run_commit() calls
+vfs_fsync_range(), which may flush the underlying filesystem's own
+!WQ_MEM_RECLAIM workqueue, and doing so from a WQ_MEM_RECLAIM worker or a
+PF_MEMALLOC task trips check_flush_dependency().
+
+The writeback path does exercise this: nfs_write_inode() (the ->write_inode
+super_op) runs under wb_workfn on the WQ_MEM_RECLAIM bdi_wq and reaches
+nfs_local_commit() via __nfs_commit_inode(), so that case must keep
+deferring.  Application-context commits -- fsync (nfs_file_fsync), O_DIRECT
+(nfs_direct), and copy/clone (nfs42) -- are not in a reclaim context and now
+run the fsync inline via nfs_local_defer_io(), avoiding the per-commit
+workqueue hop.
+
+Completion (nfs_commit_release_pages -> nfs_commit_end) then runs
+synchronously in the submitting context; higher layers already cope with
+this, as __nfs_commit_inode() dispatches the commit async and waits for it
+separately via wait_on_commit().
+
+Assisted-by: Claude:claude-opus-4-8
+Signed-off-by: Mike Snitzer <snitzer@kernel.org>
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ fs/nfs/localio.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/fs/nfs/localio.c b/fs/nfs/localio.c
+index acbc2bddcf81..f42b6112a613 100644
+--- a/fs/nfs/localio.c
++++ b/fs/nfs/localio.c
+@@ -1132,7 +1132,19 @@ int nfs_local_commit(struct nfsd_file *localio,
+ 	}
+ 
+ 	nfs_local_init_commit(data, call_ops);
+-	queue_work(nfslocaliod_workqueue, &ctx->work);
++
++	/*
++	 * Run the commit (fsync) inline when not in a memory-reclaim context,
++	 * rather than bouncing through nfslocaliod_workqueue; see
++	 * nfs_local_defer_io().  Completion (nfs_commit_release_pages ->
++	 * nfs_commit_end) then runs synchronously, which higher layers cope
++	 * with: __nfs_commit_inode() dispatches async and waits via
++	 * wait_on_commit().
++	 */
++	if (nfs_local_defer_io())
++		queue_work(nfslocaliod_workqueue, &ctx->work);
++	else
++		nfs_local_fsync_work(&ctx->work);
+ 
+ 	return 0;
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,53 @@
+From 042278f5fa9e681420ab486d6cbf464e26667461 Mon Sep 17 00:00:00 2001
+From: Philipp Stanner <phasta@kernel.org>
+Date: Wed, 24 Jun 2026 17:07:03 +0200
+Subject: [PATCH 10533/15333] rust: revocable: Use safe synchronize_rcu()
+ abstraction
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We now have a safe wrapper for the foreign function synchronize_rcu().
+
+Use it in revocable.rs.
+
+Signed-off-by: Philipp Stanner <phasta@kernel.org>
+Reviewed-by: Onur Özkan <work@onurozkan.dev>
+Reviewed-by: Danilo Krummrich <dakr@kernel.org>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Signed-off-by: Boqun Feng <boqun@kernel.org>
+Link: https://patch.msgid.link/20260624150704.1504001-4-phasta@kernel.org
+---
+ rust/kernel/revocable.rs | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/rust/kernel/revocable.rs b/rust/kernel/revocable.rs
+index 0f4ae673256d..f539603349f1 100644
+--- a/rust/kernel/revocable.rs
++++ b/rust/kernel/revocable.rs
+@@ -7,7 +7,11 @@
+ 
+ use pin_init::Wrapper;
+ 
+-use crate::{bindings, prelude::*, sync::rcu, types::Opaque};
++use crate::{
++    prelude::*,
++    sync::rcu,
++    types::Opaque, //
++};
+ use core::{
+     marker::PhantomData,
+     ops::Deref,
+@@ -161,8 +165,7 @@ unsafe fn revoke_internal<const SYNC: bool>(&self) -> bool {
+ 
+         if revoke {
+             if SYNC {
+-                // SAFETY: Just an FFI call, there are no further requirements.
+-                unsafe { bindings::synchronize_rcu() };
++                rcu::synchronize_rcu();
+             }
+ 
+             // SAFETY: We know `self.data` is valid because only one CPU can succeed the
+-- 
+2.55.0
+

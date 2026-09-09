@@ -1,0 +1,67 @@
+From 3e2262df8460742b8a0cb3796e3780691e37be1f Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Wed, 15 Jul 2026 16:55:22 +0700
+Subject: [PATCH 08240/15333] ASoC: sunxi: sun4i-i2s: Use dev_err_probe() for
+ probe error handling
+
+Use dev_err_probe() for probe error handling to simplify the error paths
+and handle -EPROBE_DEFER correctly.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Chen-Yu Tsai <wens@kernel.org>
+Link: https://patch.msgid.link/20260715095525.40668-4-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sunxi/sun4i-i2s.c | 28 ++++++++++++----------------
+ 1 file changed, 12 insertions(+), 16 deletions(-)
+
+diff --git a/sound/soc/sunxi/sun4i-i2s.c b/sound/soc/sunxi/sun4i-i2s.c
+index 40de99a34bc3..716fa4d872ff 100644
+--- a/sound/soc/sunxi/sun4i-i2s.c
++++ b/sound/soc/sunxi/sun4i-i2s.c
+@@ -1550,30 +1550,26 @@ static int sun4i_i2s_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	i2s->bus_clk = devm_clk_get(&pdev->dev, "apb");
+-	if (IS_ERR(i2s->bus_clk)) {
+-		dev_err(&pdev->dev, "Can't get our bus clock\n");
+-		return PTR_ERR(i2s->bus_clk);
+-	}
++	if (IS_ERR(i2s->bus_clk))
++		return dev_err_probe(&pdev->dev, PTR_ERR(i2s->bus_clk),
++				     "Can't get our bus clock\n");
+ 
+ 	i2s->regmap = devm_regmap_init_mmio(&pdev->dev, regs,
+ 					    i2s->variant->sun4i_i2s_regmap);
+-	if (IS_ERR(i2s->regmap)) {
+-		dev_err(&pdev->dev, "Regmap initialisation failed\n");
+-		return PTR_ERR(i2s->regmap);
+-	}
++	if (IS_ERR(i2s->regmap))
++		return dev_err_probe(&pdev->dev, PTR_ERR(i2s->regmap),
++				     "Regmap initialisation failed\n");
+ 
+ 	i2s->mod_clk = devm_clk_get(&pdev->dev, "mod");
+-	if (IS_ERR(i2s->mod_clk)) {
+-		dev_err(&pdev->dev, "Can't get our mod clock\n");
+-		return PTR_ERR(i2s->mod_clk);
+-	}
++	if (IS_ERR(i2s->mod_clk))
++		return dev_err_probe(&pdev->dev, PTR_ERR(i2s->mod_clk),
++				     "Can't get our mod clock\n");
+ 
+ 	if (i2s->variant->has_reset) {
+ 		i2s->rst = devm_reset_control_get_exclusive(&pdev->dev, NULL);
+-		if (IS_ERR(i2s->rst)) {
+-			dev_err(&pdev->dev, "Failed to get reset control\n");
+-			return PTR_ERR(i2s->rst);
+-		}
++		if (IS_ERR(i2s->rst))
++			return dev_err_probe(&pdev->dev, PTR_ERR(i2s->rst),
++					     "Failed to get reset control\n");
+ 	}
+ 
+ 	if (!IS_ERR(i2s->rst)) {
+-- 
+2.55.0
+

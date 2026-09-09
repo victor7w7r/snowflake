@@ -1,0 +1,81 @@
+From d0f102fce372e57970bd1debbee1dbdd0152cf6d Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Mon, 1 Jun 2026 15:56:50 +0200
+Subject: [PATCH 00999/15333] initramfs: use scoped_with_init_fs() for rootfs
+ unpacking
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Extract the initramfs unpacking code into a separate
+unpack_initramfs() function and wrap its invocation from
+do_populate_rootfs() with scoped_with_init_fs(). This ensures all
+file operations during initramfs unpacking (including filp_open()
+calls in do_name() and populate_initrd_image()) happen in init's
+filesystem context.
+
+Note that security_initramfs_populated() needs the scope as well since
+it does use current->fs to derive the initramfs superblock.
+
+do_populate_rootfs() ← async_schedule_domain() ← kworker (async
+workqueue)
+
+May also run synchronously from PID 1 in case async workqueue is
+considered full. Overriding in that case is fine as well.
+
+Link: https://patch.msgid.link/20260601-work-kthread-nullfs-v4-17-77ee053060e0@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ init/initramfs.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/init/initramfs.c b/init/initramfs.c
+index 20a18fcda48e..4e27b97a8844 100644
+--- a/init/initramfs.c
++++ b/init/initramfs.c
+@@ -6,6 +6,7 @@
+ #include <linux/fcntl.h>
+ #include <linux/file.h>
+ #include <linux/fs.h>
++#include <linux/fs_struct.h>
+ #include <linux/hex.h>
+ #include <linux/init.h>
+ #include <linux/init_syscalls.h>
+@@ -716,7 +717,7 @@ static void __init populate_initrd_image(char *err)
+ }
+ #endif /* CONFIG_BLK_DEV_RAM */
+ 
+-static void __init do_populate_rootfs(void *unused, async_cookie_t cookie)
++static void __init unpack_initramfs(async_cookie_t cookie)
+ {
+ 	/* Load the built in initramfs */
+ 	char *err = unpack_to_rootfs(__initramfs_start, __initramfs_size);
+@@ -724,7 +725,7 @@ static void __init do_populate_rootfs(void *unused, async_cookie_t cookie)
+ 		panic_show_mem("%s", err); /* Failed to decompress INTERNAL initramfs */
+ 
+ 	if (!initrd_start || IS_ENABLED(CONFIG_INITRAMFS_FORCE))
+-		goto done;
++		return;
+ 
+ 	if (IS_ENABLED(CONFIG_BLK_DEV_RAM))
+ 		printk(KERN_INFO "Trying to unpack rootfs image as initramfs...\n");
+@@ -739,9 +740,14 @@ static void __init do_populate_rootfs(void *unused, async_cookie_t cookie)
+ 		printk(KERN_EMERG "Initramfs unpacking failed: %s\n", err);
+ #endif
+ 	}
++}
+ 
+-done:
+-	security_initramfs_populated();
++static void __init do_populate_rootfs(void *unused, async_cookie_t cookie)
++{
++	scoped_with_init_fs() {
++		unpack_initramfs(cookie);
++		security_initramfs_populated();
++	}
+ 
+ 	/*
+ 	 * If the initrd region is overlapped with crashkernel reserved region,
+-- 
+2.55.0
+

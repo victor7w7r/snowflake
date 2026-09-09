@@ -1,0 +1,50 @@
+From dec58a70d4e7d7eb2764bb3cfcb8e6692b652f0c Mon Sep 17 00:00:00 2001
+From: Shivaji Kant <shivajikant@google.com>
+Date: Sat, 1 Aug 2026 05:12:59 +0000
+Subject: [PATCH 09889/15333] bpf: Allow IP_TRANSPARENT and IPV6_TRANSPARENT in
+ bpf_{set,get}sockopt()
+
+Currently, bpf_setsockopt() and bpf_getsockopt() for SOL_IP and SOL_IPV6
+only allow a small subset of socket options (such as IP_TOS,
+IPV6_TCLASS, and IPV6_AUTOFLOWLABEL). Calling bpf_setsockopt() with
+IP_TRANSPARENT or IPV6_TRANSPARENT fails with -EINVAL.
+
+Transparent proxying (TPROXY) and related networking components often
+rely on IP_TRANSPARENT and IPV6_TRANSPARENT to enable binding sockets
+to non-local IP addresses.
+
+Allow IP_TRANSPARENT for SOL_IP in sol_ip_sockopt() and
+IPV6_TRANSPARENT for SOL_IPV6 in sol_ipv6_sockopt().
+
+Signed-off-by: Shivaji Kant <shivajikant@google.com>
+Tested-by: Anubhav Singh <anubhavsinggh@google.com>
+Reviewed-by: Kuniyuki Iwashima <kuniyu@google.com>
+Link: https://lore.kernel.org/bpf/20260801051307.478469-1-shivajikant@google.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ net/core/filter.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/net/core/filter.c b/net/core/filter.c
+index eb4d299b1fec..25bfd9d7df4b 100644
+--- a/net/core/filter.c
++++ b/net/core/filter.c
+@@ -5645,6 +5645,7 @@ static int sol_ip_sockopt(struct sock *sk, int optname,
+ 
+ 	switch (optname) {
+ 	case IP_TOS:
++	case IP_TRANSPARENT:
+ 		if (*optlen != sizeof(int))
+ 			return -EINVAL;
+ 		break;
+@@ -5671,6 +5672,7 @@ static int sol_ipv6_sockopt(struct sock *sk, int optname,
+ 	switch (optname) {
+ 	case IPV6_TCLASS:
+ 	case IPV6_AUTOFLOWLABEL:
++	case IPV6_TRANSPARENT:
+ 		if (*optlen != sizeof(int))
+ 			return -EINVAL;
+ 		break;
+-- 
+2.55.0
+

@@ -1,0 +1,98 @@
+From 1b5c2eb00e596002c9414ca2cf90c51053159f00 Mon Sep 17 00:00:00 2001
+From: Mohsin Bashir <hmohsin@meta.com>
+Date: Tue, 4 Aug 2026 20:09:25 -0700
+Subject: [PATCH 12254/15333] selftests: net: shaper: Decouple basic_groups
+ from netdev rate limiting
+
+Decouple basic_groups from the set_nshapers test dependency. The
+test was gated on cfg.netdev which is set by set_nshapers. Replace
+with direct capability checks: netdev scope support (required for
+grouping under netdev handle) and queue scope nesting + weight.
+
+Remove bw-max and metric from the .group call so the test validates
+pure queue grouping without rate limiting. The rate-limited variant is
+restored in the following patch, which adds a dedicated
+basic_groups_with_rate test.
+
+Signed-off-by: Mohsin Bashir <hmohsin@meta.com>
+Link: https://patch.msgid.link/20260805030936.1092907-4-mohsin.bashr@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ tools/testing/selftests/drivers/net/shaper.py | 40 ++++++++-----------
+ 1 file changed, 16 insertions(+), 24 deletions(-)
+
+diff --git a/tools/testing/selftests/drivers/net/shaper.py b/tools/testing/selftests/drivers/net/shaper.py
+index 1954f3263f25..45a4bf42995e 100755
+--- a/tools/testing/selftests/drivers/net/shaper.py
++++ b/tools/testing/selftests/drivers/net/shaper.py
+@@ -168,19 +168,11 @@ def del_nshapers(cfg, nl_shaper) -> None:
+     ksft_eq(len(shapers), 0)
+ 
+ def basic_groups(cfg, nl_shaper) -> None:
+-    if not cfg.netdev:
+-        raise KsftSkipEx("netdev shaper not supported by the device")
+     _require_queues(cfg, 3)
+ 
+-    try:
+-        caps = nl_shaper.cap_get({'ifindex': cfg.ifindex,
+-                                  'scope':'queue'})
+-    except NlError as e:
+-        if e.error == 95:
+-            raise KsftSkipEx("shapers not supported by the device")
+-        raise
+-    if not 'support-weight' in caps:
+-        raise KsftSkipEx("device does not support queue scope shapers with weight")
++    _require_caps(cfg, nl_shaper, 'netdev', [], "netdev scope not supported by the device")
++    _require_caps(cfg, nl_shaper, 'queue', ['support-nesting', 'support-weight'],
++                  "queue scope not supported with nesting and weight")
+ 
+     node_handle = nl_shaper.group({
+                         'ifindex': cfg.ifindex,
+@@ -188,31 +180,31 @@ def basic_groups(cfg, nl_shaper) -> None:
+                                    'weight': 1},
+                                   {'handle': {'scope': 'queue', 'id': 2},
+                                    'weight': 2}],
+-                         'handle': {'scope':'netdev'},
+-                         'metric': 'bps',
+-                         'bw-max': 10000})
++                         'handle': {'scope':'netdev'}})
+     ksft_eq(node_handle, {'ifindex': cfg.ifindex,
+                           'handle': {'scope': 'netdev'}})
+ 
++    del_node = defer(_delete_shaper, cfg, nl_shaper, {'scope': 'netdev'})
++    del_queues = [defer(_delete_shaper, cfg, nl_shaper,
++                        {'scope': 'queue', 'id': qid})
++                  for qid in (1, 2)]
++
+     shaper = nl_shaper.get({'ifindex': cfg.ifindex,
+                             'handle': {'scope': 'queue', 'id': 1}})
+     ksft_eq(shaper, {'ifindex': cfg.ifindex,
+                      'parent': {'scope': 'netdev'},
+                      'handle': {'scope': 'queue', 'id': 1},
+                      'weight': 1 })
++    for dq in del_queues:
++        dq.exec()
+ 
+-    nl_shaper.delete({'ifindex': cfg.ifindex,
+-                      'handle': {'scope': 'queue', 'id': 2}})
+-    nl_shaper.delete({'ifindex': cfg.ifindex,
+-                      'handle': {'scope': 'queue', 'id': 1}})
+-
+-    # Deleting all the leaves shaper does not affect the node one
+-    # when the latter has 'netdev' scope.
+     shapers = nl_shaper.get({'ifindex': cfg.ifindex}, dump=True)
+-    ksft_eq(len(shapers), 1)
++    ksft_eq(shapers, [{'ifindex': cfg.ifindex,
++                       'handle': {'scope': 'netdev'}}])
+ 
+-    nl_shaper.delete({'ifindex': cfg.ifindex,
+-                      'handle': {'scope': 'netdev'}})
++    del_node.exec()
++    shapers = nl_shaper.get({'ifindex': cfg.ifindex}, dump=True)
++    ksft_eq(len(shapers), 0)
+ 
+ def qgroups(cfg, nl_shaper) -> None:
+     _require_queues(cfg, 4)
+-- 
+2.55.0
+

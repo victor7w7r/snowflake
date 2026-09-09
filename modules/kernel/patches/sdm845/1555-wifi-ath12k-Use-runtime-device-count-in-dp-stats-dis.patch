@@ -1,0 +1,51 @@
+From 34620d1890cc1fcf87a95219d6781d7f7b9d8cbd Mon Sep 17 00:00:00 2001
+From: Sreeramya Soratkal <sreeramya.soratkal@oss.qualcomm.com>
+Date: Fri, 26 Jun 2026 14:22:51 +0530
+Subject: [PATCH 01555/15333] wifi: ath12k: Use runtime device count in dp
+ stats display
+
+The REO Rx Received and Rx WBM REL SRC Errors display loops in
+ath12k_debugfs_dump_device_dp_stats() iterate up to the compile-time
+constant ATH12K_MAX_DEVICES.  This unconditionally prints zeros
+in columns with no hardware behind it, making the output misleading.
+
+Replace the compile-time bound with the runtime ab->ag->num_devices so
+only live device slots appear in the output.
+
+Tested-on: QCN9274 hw2.0 PCI WLAN.WBE.1.6-01243-QCAHKSWPL_SILICONZ-1
+
+Signed-off-by: Sreeramya Soratkal <sreeramya.soratkal@oss.qualcomm.com>
+Reviewed-by: Baochen Qiang <baochen.qiang@oss.qualcomm.com>
+Reviewed-by: Aishwarya R <aishwarya.r@oss.qualcomm.com>
+Reviewed-by: Rameshkumar Sundaram <rameshkumar.sundaram@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260626085253.3927269-2-sreeramya.soratkal@oss.qualcomm.com
+Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/debugfs.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/debugfs.c b/drivers/net/wireless/ath/ath12k/debugfs.c
+index d17d4a8f1cb7..bab9d96d6acc 100644
+--- a/drivers/net/wireless/ath/ath12k/debugfs.c
++++ b/drivers/net/wireless/ath/ath12k/debugfs.c
+@@ -1173,7 +1173,7 @@ static ssize_t ath12k_debugfs_dump_device_dp_stats(struct file *file,
+ 	for (i = 0; i < DP_REO_DST_RING_MAX; i++) {
+ 		len += scnprintf(buf + len, size - len, "Ring%d:", i + 1);
+ 
+-		for (j = 0; j < ATH12K_MAX_DEVICES; j++) {
++		for (j = 0; j < ab->ag->num_devices; j++) {
+ 			len += scnprintf(buf + len, size - len,
+ 					"\t%d:%u", j,
+ 					 device_stats->reo_rx[i][j]);
+@@ -1190,7 +1190,7 @@ static ssize_t ath12k_debugfs_dump_device_dp_stats(struct file *file,
+ 	for (i = 0; i < HAL_WBM_REL_SRC_MODULE_MAX; i++) {
+ 		len += scnprintf(buf + len, size - len, "%s:", wbm_rel_src[i]);
+ 
+-		for (j = 0; j < ATH12K_MAX_DEVICES; j++) {
++		for (j = 0; j < ab->ag->num_devices; j++) {
+ 			len += scnprintf(buf + len,
+ 					 size - len,
+ 					 "\t%d:%u", j,
+-- 
+2.55.0
+

@@ -1,0 +1,114 @@
+From a16d5be8ea2ad36aa95373095fd635b3c5f84be4 Mon Sep 17 00:00:00 2001
+From: Amit Barzilai <amit.barzilai22@gmail.com>
+Date: Wed, 29 Jul 2026 08:30:53 +0300
+Subject: [PATCH 11261/15333] drm/ssd130x: Scale ssd133x per-channel contrast
+ by brightness on init
+
+ssd133x_init() wrote the SSD133X_CONTRAST_A/B/C commands with magic hex
+values (0x91/0x50/0x7d).  These are a per-channel white-balance
+calibration: the A/B/C channels drive sub-pixels whose OLED materials
+differ in luminous efficiency, so the values set the white point at full
+brightness.
+
+Extract them into ssd133x_set_contrast(), which scales each channel by a
+requested brightness via ssd130x_scale_contrast(), instead of writing the
+calibration unconditionally.  This makes the sequence readable, avoids
+repetition, and is a prerequisite for wiring up an ssd133x backlight
+controller that dims while preserving the white point.
+
+Note this changes the ssd133x power-on brightness.  Previously the init
+wrote the calibration unscaled and ignored ssd130x->contrast, so the
+panel always booted at full brightness.  It now scales by the shared
+default contrast of 127, i.e. half of MAX_CONTRAST (255).  This is
+intentional and matches ssd130x, whose contrast register also defaults
+to 127 (mid-scale), so all families now power on at ~50% and report
+props.brightness = 127 / max_brightness = 255 to userspace.
+
+Assisted-by: Claude:claude-fable-5
+Signed-off-by: Amit Barzilai <amit.barzilai22@gmail.com>
+Reviewed-by: Javier Martinez Canillas <javierm@redhat.com>
+Link: https://patch.msgid.link/20260729053054.29374-2-amit.barzilai22@gmail.com
+Signed-off-by: Javier Martinez Canillas <javierm@redhat.com>
+---
+ drivers/gpu/drm/solomon/ssd130x.c | 41 ++++++++++++++++++++++++++++---
+ 1 file changed, 38 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/solomon/ssd130x.c b/drivers/gpu/drm/solomon/ssd130x.c
+index 0940eae7a2e4..f49e5245b216 100644
+--- a/drivers/gpu/drm/solomon/ssd130x.c
++++ b/drivers/gpu/drm/solomon/ssd130x.c
+@@ -14,6 +14,7 @@
+ #include <linux/bits.h>
+ #include <linux/delay.h>
+ #include <linux/gpio/consumer.h>
++#include <linux/math.h>
+ #include <linux/property.h>
+ #include <linux/pwm.h>
+ #include <linux/regulator/consumer.h>
+@@ -140,6 +141,11 @@
+ #define SSD133X_SET_PRECHARGE_VOLTAGE		0xbb
+ #define SSD133X_SET_VCOMH_VOLTAGE		0xbe
+ 
++/* ssd133x A/B/C channel contrast at full brightness (white balance) */
++#define SSD133X_DEFAULT_CONTRAST_A		0x91
++#define SSD133X_DEFAULT_CONTRAST_B		0x50
++#define SSD133X_DEFAULT_CONTRAST_C		0x7d
++
+ #define MAX_CONTRAST 255
+ 
+ const struct ssd130x_deviceinfo ssd130x_variants[] = {
+@@ -582,12 +588,37 @@ static int ssd132x_init(struct ssd130x_device *ssd130x)
+ 	return ssd130x_run_cmd_seq(ssd130x, cmds);
+ }
+ 
++/* Scale a channel's white-balance calibration contrast by the requested brightness */
++static u8 ssd130x_scale_contrast(u8 calibration, u32 brightness)
++{
++	return DIV_ROUND_CLOSEST(calibration * brightness, MAX_CONTRAST);
++}
++
++/*
++ * The A/B/C contrast channels drive sub-pixels whose OLED materials differ
++ * in luminous efficiency, so the per-channel values are a white-balance
++ * calibration.  Scale them by the requested brightness instead of
++ * overwriting them, to keep the white point while dimming.
++ */
++static int ssd133x_set_contrast(struct ssd130x_device *ssd130x, u32 brightness)
++{
++	const u8 cmds[] = {
++		2, SSD133X_CONTRAST_A,
++		ssd130x_scale_contrast(SSD133X_DEFAULT_CONTRAST_A, brightness),
++		2, SSD133X_CONTRAST_B,
++		ssd130x_scale_contrast(SSD133X_DEFAULT_CONTRAST_B, brightness),
++		2, SSD133X_CONTRAST_C,
++		ssd130x_scale_contrast(SSD133X_DEFAULT_CONTRAST_C, brightness),
++		0,
++	};
++
++	return ssd130x_run_cmd_seq(ssd130x, cmds);
++}
++
+ static int ssd133x_init(struct ssd130x_device *ssd130x)
+ {
++	int ret;
+ 	const u8 cmds[] = {
+-		2, SSD133X_CONTRAST_A, 0x91,
+-		2, SSD133X_CONTRAST_B, 0x50,
+-		2, SSD133X_CONTRAST_C, 0x7d,
+ 		2, SSD133X_SET_MASTER_CURRENT, 0x06,
+ 		3, SSD133X_SET_COL_RANGE, 0x00, ssd130x->width - 1,
+ 		3, SSD133X_SET_ROW_RANGE, 0x00, ssd130x->height - 1,
+@@ -614,6 +645,10 @@ static int ssd133x_init(struct ssd130x_device *ssd130x)
+ 		0,
+ 	};
+ 
++	ret = ssd133x_set_contrast(ssd130x, ssd130x->contrast);
++	if (ret < 0)
++		return ret;
++
+ 	return ssd130x_run_cmd_seq(ssd130x, cmds);
+ }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,35 @@
+From 7ae5829ab0f2f69e8a62689a147e16cd41d1b155 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 16 Jul 2026 17:39:03 +0700
+Subject: [PATCH 07815/15333] ASoC: ti: davinci-evm: Use dev_err_probe() for
+ error handling
+
+Replace dev_err() with dev_err_probe() when reporting
+devm_snd_soc_register_card() failures. This suppresses
+unnecessary log messages for deferred probe errors.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260716103911.77652-3-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/ti/davinci-evm.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/sound/soc/ti/davinci-evm.c b/sound/soc/ti/davinci-evm.c
+index ad514c2e5a25..3156d87a3a12 100644
+--- a/sound/soc/ti/davinci-evm.c
++++ b/sound/soc/ti/davinci-evm.c
+@@ -245,9 +245,8 @@ static int davinci_evm_probe(struct platform_device *pdev)
+ 
+ 	snd_soc_card_set_drvdata(&evm_soc_card, drvdata);
+ 	ret = devm_snd_soc_register_card(&pdev->dev, &evm_soc_card);
+-
+ 	if (ret) {
+-		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n", ret);
++		dev_err_probe(&pdev->dev, ret, "snd_soc_register_card() failed\n");
+ 		goto err_put;
+ 	}
+ 
+-- 
+2.55.0
+

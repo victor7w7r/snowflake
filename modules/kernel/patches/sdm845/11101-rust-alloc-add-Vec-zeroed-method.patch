@@ -1,0 +1,74 @@
+From 60782beb112ee1514ea7888adc9a53dc370fc522 Mon Sep 17 00:00:00 2001
+From: Timur Tabi <ttabi@nvidia.com>
+Date: Fri, 31 Jul 2026 15:10:10 -0500
+Subject: [PATCH 11101/15333] rust: alloc: add Vec::zeroed method
+
+Add a constructor for kernel Vec that allocates a vector of a given length
+with all elements zero-initialized. Memory is allocated with the __GFP_ZERO
+flag, matching the existing KBox::zeroed() pattern.
+
+Signed-off-by: Timur Tabi <ttabi@nvidia.com>
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Tested-by: Alexandre Courbot <acourbot@nvidia.com>
+Link: https://patch.msgid.link/20260731201017.2580713-2-ttabi@nvidia.com
+Co-developed-by: Danilo Krummrich <dakr@kernel.org>
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/kernel/alloc/kvec.rs | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/rust/kernel/alloc/kvec.rs b/rust/kernel/alloc/kvec.rs
+index f7af62835aa8..c7546b9da4fa 100644
+--- a/rust/kernel/alloc/kvec.rs
++++ b/rust/kernel/alloc/kvec.rs
+@@ -9,6 +9,7 @@
+         Vmalloc,
+         VmallocPageIter, //
+     },
++    flags::__GFP_ZERO,
+     layout::ArrayLayout,
+     AllocError,
+     Allocator,
+@@ -51,6 +52,8 @@
+     }, //
+ };
+ 
++use pin_init::Zeroable;
++
+ mod errors;
+ pub use self::errors::{InsertError, PushError, RemoveError};
+ 
+@@ -532,6 +535,30 @@ pub fn with_capacity(capacity: usize, flags: Flags) -> Result<Self, AllocError>
+         Ok(v)
+     }
+ 
++    /// Creates a new [`Vec`] with `n` zero-initialized elements.
++    ///
++    /// # Examples
++    ///
++    /// ```
++    /// let v = KVec::<u32>::zeroed(20, GFP_KERNEL)?;
++    ///
++    /// assert!(v.iter().all(|&x| x == 0));
++    /// # Ok::<(), Error>(())
++    /// ```
++    pub fn zeroed(n: usize, flags: Flags) -> Result<Self, AllocError>
++    where
++        T: Zeroable,
++    {
++        let mut v = Self::with_capacity(n, flags | __GFP_ZERO)?;
++
++        // SAFETY:
++        // - `n <= capacity - len`: `with_capacity(n)` guarantees capacity >= n, len is 0.
++        // - All elements in `[0, n)` are initialized: `__GFP_ZERO` zeroes the allocation,
++        //   and `T: Zeroable` guarantees all-zeroes is a valid bit pattern.
++        unsafe { v.inc_len(n) };
++        Ok(v)
++    }
++
+     /// Creates a `Vec<T, A>` from a pointer, a length and a capacity using the allocator `A`.
+     ///
+     /// # Examples
+-- 
+2.55.0
+

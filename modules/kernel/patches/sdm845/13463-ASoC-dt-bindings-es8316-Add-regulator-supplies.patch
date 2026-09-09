@@ -1,0 +1,75 @@
+From e9966d450b4612423ad2f60827c47cd7657a14f9 Mon Sep 17 00:00:00 2001
+From: Hongyang Zhao <hongyang.zhao@thundersoft.com>
+Date: Wed, 12 Aug 2026 17:35:43 +0800
+Subject: [PATCH 13463/15333] ASoC: dt-bindings: es8316: Add regulator supplies
+
+The ES8316 has separate AVDD, CPVDD, DVDD and PVDD supply inputs for
+its analog, charge pump, digital core and digital I/O domains. Describe
+all four inputs so boards can model the codec power topology.
+
+The binding also covers ES8311 and ES8323, whose supply inputs differ,
+so restrict these properties to the ES8316 compatible. Keep them
+optional for compatibility with existing descriptions.
+
+Signed-off-by: Hongyang Zhao <hongyang.zhao@thundersoft.com>
+Link: https://patch.msgid.link/20260812-es8316-regulator-next-20260722-v2-1-e7078bc9bc9c@thundersoft.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ .../bindings/sound/everest,es8316.yaml        | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/sound/everest,es8316.yaml b/Documentation/devicetree/bindings/sound/everest,es8316.yaml
+index fe5d938ca310..276c73bb4790 100644
+--- a/Documentation/devicetree/bindings/sound/everest,es8316.yaml
++++ b/Documentation/devicetree/bindings/sound/everest,es8316.yaml
+@@ -30,6 +30,17 @@ description: |
+ 
+ allOf:
+   - $ref: dai-common.yaml#
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: everest,es8316
++    else:
++      properties:
++        avdd-supply: false
++        cpvdd-supply: false
++        dvdd-supply: false
++        pvdd-supply: false
+ 
+ properties:
+   compatible:
+@@ -49,6 +60,18 @@ properties:
+     items:
+       - const: mclk
+ 
++  avdd-supply:
++    description: Regulator providing the analog supply, from 2.0 V to 3.6 V
++
++  cpvdd-supply:
++    description: Regulator providing the charge pump supply, from 1.6 V to 2.0 V
++
++  dvdd-supply:
++    description: Regulator providing the digital core supply, from 1.6 V to 3.6 V
++
++  pvdd-supply:
++    description: Regulator providing the digital I/O supply, from 1.6 V to 3.6 V
++
+   interrupts:
+     maxItems: 1
+     description: Headphone detect interrupt
+@@ -77,6 +100,10 @@ examples:
+         reg = <0x11>;
+         clocks = <&clks 10>;
+         clock-names = "mclk";
++        avdd-supply = <&reg_3p3v>;
++        cpvdd-supply = <&reg_1p8v>;
++        dvdd-supply = <&reg_1p8v>;
++        pvdd-supply = <&reg_1p8v>;
+         #sound-dai-cells = <0>;
+       };
+     };
+-- 
+2.55.0
+

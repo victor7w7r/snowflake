@@ -1,0 +1,40 @@
+From 3cbbc9fa33382d03f2813118e672eb318eba9cde Mon Sep 17 00:00:00 2001
+From: Yuyang Huang <yuyanghuang@google.com>
+Date: Sat, 11 Jul 2026 09:54:02 +0900
+Subject: [PATCH 06305/15333] net: prestera: ignore duplicate RIF destruction
+ events
+
+During address teardown, the inetaddr notifier may be called multiple
+times for the same interface. Ignore NETDEV_DOWN events if the RIF has
+already been destroyed, rather than returning -EEXIST, which aborts the
+notifier chain.
+
+Cc: Ido Schimmel <idosch@nvidia.com>
+Cc: Kuniyuki Iwashima <kuniyu@google.com>
+Signed-off-by: Yuyang Huang <yuyanghuang@google.com>
+Link: https://patch.msgid.link/20260711005405.2861680-2-yuyanghuang@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/marvell/prestera/prestera_router.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/ethernet/marvell/prestera/prestera_router.c b/drivers/net/ethernet/marvell/prestera/prestera_router.c
+index b036b173a308..0c4f462baa6e 100644
+--- a/drivers/net/ethernet/marvell/prestera/prestera_router.c
++++ b/drivers/net/ethernet/marvell/prestera/prestera_router.c
+@@ -1302,10 +1302,8 @@ static int __prestera_inetaddr_port_event(struct net_device *port_dev,
+ 		dev_hold(port_dev);
+ 		break;
+ 	case NETDEV_DOWN:
+-		if (!re) {
+-			NL_SET_ERR_MSG_MOD(extack, "Can't find RIF");
+-			return -EEXIST;
+-		}
++		if (!re)
++			return 0;
+ 		prestera_rif_entry_destroy(port->sw, re);
+ 		dev_put(port_dev);
+ 		break;
+-- 
+2.55.0
+

@@ -1,0 +1,39 @@
+From 8e4f5ca8bf67efc6006c066e873f0535bd7a9cd9 Mon Sep 17 00:00:00 2001
+From: Linmao Li <lilinmao@kylinos.cn>
+Date: Fri, 24 Jul 2026 18:36:56 +0800
+Subject: [PATCH 07700/15333] wifi: nxpwifi: reject zero-length extension
+ elements in beacon IEs
+
+nxpwifi_update_bss_desc_with_ie() dispatches on elem->data[0] for
+WLAN_EID_EXTENSION without checking that the element has a payload.
+A well-formed extension element carries at least the element ID
+extension byte, but nothing enforces that in the IE stream, and the
+loop accepts a zero-length element because its header alone fits.
+elem->data[0] then reads the byte after the element, which is past the
+kmemdup()ed IE buffer when that element ends the stream.
+
+Fixes: 73b01e57ed3e ("wifi: nxp: add nxpwifi driver for IW61x")
+Signed-off-by: Linmao Li <lilinmao@kylinos.cn>
+Link: https://patch.msgid.link/20260724103656.2494129-1-lilinmao@kylinos.cn
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ drivers/net/wireless/nxp/nxpwifi/scan.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/net/wireless/nxp/nxpwifi/scan.c b/drivers/net/wireless/nxp/nxpwifi/scan.c
+index bb3ce2b6f4b9..b77056983e83 100644
+--- a/drivers/net/wireless/nxp/nxpwifi/scan.c
++++ b/drivers/net/wireless/nxp/nxpwifi/scan.c
+@@ -1255,6 +1255,9 @@ int nxpwifi_update_bss_desc_with_ie(struct nxpwifi_adapter *adapter,
+ 				(u16)(current_ptr - bss_entry->beacon_buf);
+ 			break;
+ 		case WLAN_EID_EXTENSION:
++			if (!element_len)
++				return -EINVAL;
++
+ 			elem = (struct element *)current_ptr;
+ 
+ 			switch (elem->data[0]) {
+-- 
+2.55.0
+

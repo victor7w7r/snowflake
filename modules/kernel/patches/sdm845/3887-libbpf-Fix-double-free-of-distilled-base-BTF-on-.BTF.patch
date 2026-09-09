@@ -1,0 +1,71 @@
+From 77f02c9926e1d58f418a705ee4ecc6975721e117 Mon Sep 17 00:00:00 2001
+From: Naveed Khan <naveed@digiscrypt.com>
+Date: Wed, 8 Jul 2026 01:48:11 +0530
+Subject: [PATCH 03887/15333] libbpf: Fix double-free of distilled base BTF on
+ .BTF.ext parse error
+
+When btf_parse_elf() is called without a caller-supplied base_btf (i.e.
+via the public btf__parse_elf()) and the object file carries a .BTF.base
+(distilled base) section, a dist_base_btf object is created and used as
+the base of the split BTF built from the .BTF section.  Because base_btf
+is NULL, the relocation block that would otherwise free and clear
+dist_base_btf is skipped, and ownership of dist_base_btf is instead
+transferred to the split btf by setting btf->owns_base = true.
+
+That ownership transfer was performed before the fallible btf_ext__new()
+call that parses the .BTF.ext section.  If .BTF.ext is malformed,
+btf_ext__new() fails and the function jumps to the error path, which
+frees dist_base_btf directly and then frees btf.  Since owns_base is
+already set, btf__free(btf) also frees btf->base_btf, which is the same
+dist_base_btf object.  The result is a use-after-free read followed by a
+double free of the base BTF, driven entirely by a crafted object file
+(a .BTF + .BTF.base + malformed .BTF.ext combination) passed to
+btf__parse_elf(), as used by bpftool, pahole and similar tools.
+
+Transfer ownership only after .BTF.ext has been parsed successfully, so
+that any earlier failure leaves dist_base_btf owned solely by the local
+cleanup path and it is freed exactly once.
+
+Signed-off-by: Naveed Khan <naveed@digiscrypt.com>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Link: https://lore.kernel.org/bpf/178345549172.94179.7948304165383170781@digiscrypt.com
+---
+ tools/lib/bpf/btf.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/tools/lib/bpf/btf.c b/tools/lib/bpf/btf.c
+index bf6a68118405..8417de92d028 100644
+--- a/tools/lib/bpf/btf.c
++++ b/tools/lib/bpf/btf.c
+@@ -1506,9 +1506,6 @@ static struct btf *btf_parse_elf(const char *path, struct btf *base_btf,
+ 		dist_base_btf = NULL;
+ 	}
+ 
+-	if (dist_base_btf)
+-		btf->owns_base = true;
+-
+ 	switch (gelf_getclass(elf)) {
+ 	case ELFCLASS32:
+ 		btf__set_pointer_size(btf, 4);
+@@ -1523,13 +1520,16 @@ static struct btf *btf_parse_elf(const char *path, struct btf *base_btf,
+ 
+ 	if (btf_ext && secs.btf_ext_data) {
+ 		*btf_ext = btf_ext__new(secs.btf_ext_data->d_buf, secs.btf_ext_data->d_size);
+-		if (IS_ERR(*btf_ext)) {
+-			err = PTR_ERR(*btf_ext);
++		if (!*btf_ext) {
++			err = -errno;
+ 			goto done;
+ 		}
+ 	} else if (btf_ext) {
+ 		*btf_ext = NULL;
+ 	}
++
++	if (dist_base_btf)
++		btf->owns_base = true;
+ done:
+ 	if (elf)
+ 		elf_end(elf);
+-- 
+2.55.0
+

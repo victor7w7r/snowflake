@@ -1,0 +1,78 @@
+From 69bf497cfa799f80cade1ce5e663fb3c58da7b85 Mon Sep 17 00:00:00 2001
+From: Linus Walleij <linusw@kernel.org>
+Date: Tue, 30 Jun 2026 13:19:41 +0200
+Subject: [PATCH 02042/15333] net: dsa: realtek: rtl83xx: Make learning
+ optional in join/leave
+
+Mostly to make it possible to add rtl83xx support piece by piece,
+make the port learning callback optional in rtl83xx_port_bridge_join()
+and rtl83xx_port_bridge_leave().
+
+Signed-off-by: Linus Walleij <linusw@kernel.org>
+Link: https://patch.msgid.link/20260630-rtl8366rb-improvements-v2-1-05eb9d6a37f5@kernel.org
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/dsa/realtek/rtl83xx.c | 26 ++++++++++++--------------
+ 1 file changed, 12 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/net/dsa/realtek/rtl83xx.c b/drivers/net/dsa/realtek/rtl83xx.c
+index 71124ecca92f..90843d52c5a8 100644
+--- a/drivers/net/dsa/realtek/rtl83xx.c
++++ b/drivers/net/dsa/realtek/rtl83xx.c
+@@ -356,9 +356,6 @@ int rtl83xx_port_bridge_join(struct dsa_switch *ds, int port,
+ 	if (!priv->ops->port_add_isolation)
+ 		return -EOPNOTSUPP;
+ 
+-	if (!priv->ops->port_set_learning)
+-		return -EOPNOTSUPP;
+-
+ 	dev_dbg(priv->dev, "bridge %d join port %d\n", bridge.num, port);
+ 
+ 	/* Add this port to the isolation group of every other port
+@@ -396,9 +393,11 @@ int rtl83xx_port_bridge_join(struct dsa_switch *ds, int port,
+ 			goto undo_self_isolation;
+ 	}
+ 
+-	ret = priv->ops->port_set_learning(priv, port, true);
+-	if (ret)
+-		goto undo_efid;
++	if (priv->ops->port_set_learning) {
++		ret = priv->ops->port_set_learning(priv, port, true);
++		if (ret)
++			goto undo_efid;
++	}
+ 
+ 	return 0;
+ 
+@@ -443,9 +442,6 @@ void rtl83xx_port_bridge_leave(struct dsa_switch *ds, int port,
+ 	if (!priv->ops->port_remove_isolation)
+ 		return;
+ 
+-	if (!priv->ops->port_set_learning)
+-		return;
+-
+ 	dev_dbg(priv->dev, "bridge %d leave port %d\n", bridge.num, port);
+ 
+ 	/* Remove this port from the isolation group of every other
+@@ -474,11 +470,13 @@ void rtl83xx_port_bridge_leave(struct dsa_switch *ds, int port,
+ 	 * downstream DSA ports from the isolation group.
+ 	 */
+ 
+-	ret = priv->ops->port_set_learning(priv, port, false);
+-	if (ret)
+-		dev_err(priv->dev,
+-			"failed to disable learning on port %d: %pe\n",
+-			port, ERR_PTR(ret));
++	if (priv->ops->port_set_learning) {
++		ret = priv->ops->port_set_learning(priv, port, false);
++		if (ret)
++			dev_err(priv->dev,
++				"failed to disable learning on port %d: %pe\n",
++				port, ERR_PTR(ret));
++	}
+ 
+ 	/* Remove those ports from the isolation group of this port */
+ 	ret = priv->ops->port_remove_isolation(priv, port, mask);
+-- 
+2.55.0
+

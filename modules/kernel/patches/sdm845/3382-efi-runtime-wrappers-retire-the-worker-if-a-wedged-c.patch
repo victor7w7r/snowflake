@@ -1,0 +1,41 @@
+From cf790fdb851867532b9a0f88588dcce648dbffe9 Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Tue, 16 Jun 2026 05:09:40 -0700
+Subject: [PATCH 03382/15333] efi/runtime-wrappers: retire the worker if a
+ wedged call ever returns
+
+When __efi_queue_work() times out it disables runtime services and
+returns, but the kworker is still blocked inside firmware. If the
+firmware eventually unblocks, efi_call_rts() would run its tail on an
+efi_rts_work that the timed-out caller has long abandoned: signalling a
+stale completion and clearing efi_runtime_lock_owner that may by then
+belong to another caller.
+
+If runtime services have been disabled by the time the call returns,
+park the worker with efi_rts_park_worker() instead, so it never touches
+efi_rts_work again or returns to the workqueue.
+
+Suggested-by: Ard Biesheuvel <ardb@kernel.org>
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Signed-off-by: Ard Biesheuvel <ardb@kernel.org>
+---
+ drivers/firmware/efi/runtime-wrappers.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/firmware/efi/runtime-wrappers.c b/drivers/firmware/efi/runtime-wrappers.c
+index 2b0a7caf9094..591a725b1061 100644
+--- a/drivers/firmware/efi/runtime-wrappers.c
++++ b/drivers/firmware/efi/runtime-wrappers.c
+@@ -336,6 +336,9 @@ static void __nocfi efi_call_rts(struct work_struct *work)
+ 	efi_call_virt_check_flags(flags, efi_rts_work.caller);
+ 	arch_efi_call_virt_teardown();
+ 
++	if (!efi_enabled(EFI_RUNTIME_SERVICES))
++		efi_rts_park_worker();
++
+ 	efi_rts_work.status = status;
+ 	complete(&efi_rts_work.efi_rts_comp);
+ 	efi_runtime_lock_owner = NULL;
+-- 
+2.55.0
+

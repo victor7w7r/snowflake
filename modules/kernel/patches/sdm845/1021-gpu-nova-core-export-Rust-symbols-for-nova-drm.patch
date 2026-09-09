@@ -1,0 +1,113 @@
+From 3b7b7ad78fd2adae8d9a016677b6dbbb9c9632a2 Mon Sep 17 00:00:00 2001
+From: Alexandre Courbot <acourbot@nvidia.com>
+Date: Mon, 22 Jun 2026 22:30:08 +0900
+Subject: [PATCH 01021/15333] gpu: nova-core: export Rust symbols for nova-drm
+
+Export nova-core's Rust symbols so nova-drm can resolve references to it
+when loaded as a module.
+
+This is done by generating declarations and EXPORT_SYMBOL_RUST_GPL()
+calls for Rust symbols referenced by nova-drm, and compiling them into
+the module as `nova_core_exports.o`.
+
+`nova_core_exports.o` declares every Rust symbol as `extern int`.
+Running `gendwarfksyms` on it would compute CRCs from those placeholder
+types instead of the real Rust ones, so make MODVERSIONS use this shim
+only for the export list, and derive CRCs from `nova_core.o`.
+
+This patch is intended to be a workaround until the build system
+supports Rust cross-crate dependencies natively.
+
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+Link: https://patch.msgid.link/20260622-nova-exports-v5-2-6191773fc977@nvidia.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/gpu/Makefile                      | 40 ++++++++++++++++++++++-
+ drivers/gpu/nova-core/.gitignore          |  1 +
+ drivers/gpu/nova-core/nova_core_exports.c | 15 +++++++++
+ 3 files changed, 55 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/gpu/nova-core/.gitignore
+ create mode 100644 drivers/gpu/nova-core/nova_core_exports.c
+
+diff --git a/drivers/gpu/Makefile b/drivers/gpu/Makefile
+index 45e0941324fb..67d51b7f3f55 100644
+--- a/drivers/gpu/Makefile
++++ b/drivers/gpu/Makefile
+@@ -14,7 +14,45 @@ obj-$(CONFIG_TRACE_GPU_MEM)		+= trace/
+ # system supports cross-crate dependencies natively.
+ 
+ obj-$(CONFIG_NOVA_CORE) += nova-core.o
+-nova-core-y := nova-core/nova_core.o
++nova-core-y := nova-core/nova_core.o nova-core/nova_core_exports.o
+ 
+ obj-$(CONFIG_DRM_NOVA) += nova-drm.o
+ nova-drm-y := drm/nova/nova.o
++
++# Export Rust symbols from nova-core only if nova-drm actually references them.
++nova-core-export-deps := $(if $(CONFIG_DRM_NOVA),$(obj)/drm/nova/nova.o)
++
++rust_needed_exports = \
++	{ $(if $(strip $(2)),$(NM) -u $(2);,) echo "__DEFINED_RUST_SYMBOLS__"; \
++	  $(NM) -p --defined-only $(1); } | \
++	awk -v fmt='$(3)' ' \
++		/^__DEFINED_RUST_SYMBOLS__$$/ { defs = 1; next } \
++		!defs { if ($$NF ~ /^_R/) needed[$$NF] = 1; next } \
++		defs && $$2 ~ /(T|R|D|B)/ && $$3 ~ /^_R/ && \
++			$$3 !~ /_(init|cleanup)_module$$/ && \
++			$$3 !~ /__(pfx|cfi|odr_asan)/ && \
++			$$3 in needed { printf fmt, $$3 } \
++	'
++
++quiet_cmd_exports = EXPORTS $@
++      cmd_exports = \
++	$(call rust_needed_exports,$<,$(nova-core-export-deps),EXPORT_SYMBOL_RUST_GPL(%s);\n) > $@
++
++$(obj)/nova-core/exports_nova_core_generated.h: $(obj)/nova-core/nova_core.o $(nova-core-export-deps) FORCE
++	$(call if_changed,exports)
++
++targets += nova-core/exports_nova_core_generated.h
++
++$(obj)/nova-core/nova_core_exports.o: $(obj)/nova-core/exports_nova_core_generated.h
++CFLAGS_nova-core/nova_core_exports.o := -I $(objtree)/$(obj)/nova-core
++
++ifdef CONFIG_MODVERSIONS
++# The C export shim declares Rust symbols as `extern int`, so reuse its export
++# list but generate symbol CRCs from the Rust object instead of the shim's DWARF.
++$(obj)/nova-core/nova_core_exports.o: private cmd_gensymtypes_c = \
++	$(call getexportsymbols,\1) | \
++	$(objtree)/scripts/gendwarfksyms/gendwarfksyms \
++		$(if $(KBUILD_GENDWARFKSYMS_STABLE), --stable) \
++		$(if $(KBUILD_SYMTYPES), --symtypes $(@:.o=.symtypes),) \
++		$(obj)/nova-core/nova_core.o
++endif
+diff --git a/drivers/gpu/nova-core/.gitignore b/drivers/gpu/nova-core/.gitignore
+new file mode 100644
+index 000000000000..7cc8318c76b1
+--- /dev/null
++++ b/drivers/gpu/nova-core/.gitignore
+@@ -0,0 +1 @@
++exports_nova_core_generated.h
+diff --git a/drivers/gpu/nova-core/nova_core_exports.c b/drivers/gpu/nova-core/nova_core_exports.c
+new file mode 100644
+index 000000000000..6e80ca9792ee
+--- /dev/null
++++ b/drivers/gpu/nova-core/nova_core_exports.c
+@@ -0,0 +1,15 @@
++// SPDX-License-Identifier: GPL-2.0
++// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++
++/*
++ * Exports Rust symbols from the `nova_core` crate for use by dependent modules.
++ *
++ * This is a workaround until the build system supports Rust cross-module
++ * dependencies natively.
++ */
++
++#include <linux/export.h>
++
++#define EXPORT_SYMBOL_RUST_GPL(sym) extern int sym; EXPORT_SYMBOL_GPL(sym)
++
++#include "exports_nova_core_generated.h"
+-- 
+2.55.0
+

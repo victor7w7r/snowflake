@@ -1,0 +1,37 @@
+From ab8c3ed895586f933bdd134fe7765a2e9f303ffd Mon Sep 17 00:00:00 2001
+From: Ashwin Gundarapu <linuxuser509@zohomail.in>
+Date: Fri, 22 May 2026 21:16:52 +0530
+Subject: [PATCH 03636/15333] media: cx231xx: fix null pointer deref in
+ snd_cx231xx_pcm_close
+
+Add a null check for the dev pointer after retrieving it from
+the substream. Without this, a use-after-free or null pointer
+dereference can occur when closing the audio device, causing
+a kernel page fault.
+
+Link: https://bugzilla.redhat.com/show_bug.cgi?id=2365068
+Signed-off-by: Ashwin Gundarapu <linuxuser509@zohomail.in>
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+---
+ drivers/media/usb/cx231xx/cx231xx-audio.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/media/usb/cx231xx/cx231xx-audio.c b/drivers/media/usb/cx231xx/cx231xx-audio.c
+index 9c71b32552df..b24ceef497e4 100644
+--- a/drivers/media/usb/cx231xx/cx231xx-audio.c
++++ b/drivers/media/usb/cx231xx/cx231xx-audio.c
+@@ -443,6 +443,11 @@ static int snd_cx231xx_pcm_close(struct snd_pcm_substream *substream)
+ 	int ret;
+ 	struct cx231xx *dev = snd_pcm_substream_chip(substream);
+ 
++	if (!dev) {
++		pr_err("cx231xx: called with null device\n");
++		return -ENODEV;
++	}
++
+ 	dev_dbg(dev->dev, "closing device\n");
+ 
+ 	/* inform hardware to stop streaming */
+-- 
+2.55.0
+

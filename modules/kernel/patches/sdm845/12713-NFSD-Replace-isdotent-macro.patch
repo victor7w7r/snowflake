@@ -1,0 +1,178 @@
+From de9cf600400b8243bf017141f91465e905687db0 Mon Sep 17 00:00:00 2001
+From: Chuck Lever <cel@kernel.org>
+Date: Sun, 21 Jun 2026 17:35:35 -0400
+Subject: [PATCH 12713/15333] NFSD: Replace isdotent() macro
+
+The VFS provides name_is_dot_dotdot() as the canonical helper for
+recognizing the "." and ".." directory entries, and fs/ already uses
+it widely. nfsd has instead carried its own open-coded isdotent()
+macro that computes the same predicate for non-empty names, a needless
+duplicate of shared functionality. The macro reads the first name byte
+without first confirming the name is non-empty; name_is_dot_dotdot()
+tests the length first, so it never touches a zero-length buffer.
+Convert every isdotent() call site to the generic helper and remove the
+macro.
+
+Reviewed-by: Jeff Layton <jlayton@kernel.org>
+Link: https://patch.msgid.link/20260621213535.539450-1-cel@kernel.org
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ fs/nfsd/nfs3proc.c |  2 +-
+ fs/nfsd/nfs3xdr.c  |  2 +-
+ fs/nfsd/nfs4proc.c |  2 +-
+ fs/nfsd/nfs4xdr.c  |  4 ++--
+ fs/nfsd/nfsd.h     |  3 ---
+ fs/nfsd/nfsproc.c  |  2 +-
+ fs/nfsd/vfs.c      | 13 +++++++------
+ 7 files changed, 13 insertions(+), 15 deletions(-)
+
+diff --git a/fs/nfsd/nfs3proc.c b/fs/nfsd/nfs3proc.c
+index 617a70d13292..bbaef884f893 100644
+--- a/fs/nfsd/nfs3proc.c
++++ b/fs/nfsd/nfs3proc.c
+@@ -291,7 +291,7 @@ nfsd3_create_file(struct svc_rqst *rqstp, struct svc_fh *fhp,
+ 
+ 	if (!nfsd3_time_in_range(iap))
+ 		return nfserr_inval;
+-	if (isdotent(argp->name, argp->len))
++	if (name_is_dot_dotdot(argp->name, argp->len))
+ 		return nfserr_exist;
+ 	if (!(iap->ia_valid & ATTR_MODE))
+ 		iap->ia_mode = 0;
+diff --git a/fs/nfsd/nfs3xdr.c b/fs/nfsd/nfs3xdr.c
+index 2ff9a991a8fb..e481804bb120 100644
+--- a/fs/nfsd/nfs3xdr.c
++++ b/fs/nfsd/nfs3xdr.c
+@@ -987,7 +987,7 @@ compose_entry_fh(struct nfsd3_readdirres *cd, struct svc_fh *fhp,
+ 	dparent = cd->fh.fh_dentry;
+ 	exp  = cd->fh.fh_export;
+ 
+-	if (isdotent(name, namlen)) {
++	if (name_is_dot_dotdot(name, namlen)) {
+ 		if (namlen == 2) {
+ 			dchild = dget_parent(dparent);
+ 			/*
+diff --git a/fs/nfsd/nfs4proc.c b/fs/nfsd/nfs4proc.c
+index 8351ccaae59c..669896be08b6 100644
+--- a/fs/nfsd/nfs4proc.c
++++ b/fs/nfsd/nfs4proc.c
+@@ -259,7 +259,7 @@ nfsd4_create_file(struct svc_rqst *rqstp, struct svc_fh *fhp,
+ 	__be32 status;
+ 	int host_err;
+ 
+-	if (isdotent(open->op_fname, open->op_fnamelen))
++	if (name_is_dot_dotdot(open->op_fname, open->op_fnamelen))
+ 		return nfserr_exist;
+ 	if (!(iap->ia_valid & ATTR_MODE))
+ 		iap->ia_mode = 0;
+diff --git a/fs/nfsd/nfs4xdr.c b/fs/nfsd/nfs4xdr.c
+index 3affb144c66a..aef48fb0fac2 100644
+--- a/fs/nfsd/nfs4xdr.c
++++ b/fs/nfsd/nfs4xdr.c
+@@ -98,7 +98,7 @@ check_filename(char *str, int len)
+ 		return nfserr_inval;
+ 	if (len > NFS4_MAXNAMLEN)
+ 		return nfserr_nametoolong;
+-	if (isdotent(str, len))
++	if (name_is_dot_dotdot(str, len))
+ 		return nfserr_badname;
+ 	for (i = 0; i < len; i++)
+ 		if (str[i] == '/')
+@@ -4629,7 +4629,7 @@ nfsd4_encode_entry4(void *ccdv, const char *name, int namlen,
+ 	__be32 nfserr = nfserr_toosmall;
+ 
+ 	/* In nfsv4, "." and ".." never make it onto the wire.. */
+-	if (name && isdotent(name, namlen)) {
++	if (name && name_is_dot_dotdot(name, namlen)) {
+ 		cd->common.err = nfs_ok;
+ 		return 0;
+ 	}
+diff --git a/fs/nfsd/nfsd.h b/fs/nfsd/nfsd.h
+index d33d49b61e6a..4c5d915225df 100644
+--- a/fs/nfsd/nfsd.h
++++ b/fs/nfsd/nfsd.h
+@@ -357,9 +357,6 @@ enum {
+ #define	nfserr_symlink_not_dir	cpu_to_be32(NFSERR_SYMLINK_NOT_DIR)
+ };
+ 
+-/* Check for dir entries '.' and '..' */
+-#define isdotent(n, l)	(l < 3 && n[0] == '.' && (l == 1 || n[1] == '.'))
+-
+ #ifdef CONFIG_NFSD_V4
+ 
+ /* before processing a COMPOUND operation, we have to check that there
+diff --git a/fs/nfsd/nfsproc.c b/fs/nfsd/nfsproc.c
+index a73d5c259cd9..f60043632575 100644
+--- a/fs/nfsd/nfsproc.c
++++ b/fs/nfsd/nfsproc.c
+@@ -305,7 +305,7 @@ nfsd_proc_create(struct svc_rqst *rqstp)
+ 	/* Check for NFSD_MAY_WRITE in nfsd_create if necessary */
+ 
+ 	resp->status = nfserr_exist;
+-	if (isdotent(argp->name, argp->len))
++	if (name_is_dot_dotdot(argp->name, argp->len))
+ 		goto done;
+ 	hosterr = fh_want_write(dirfhp);
+ 	if (hosterr) {
+diff --git a/fs/nfsd/vfs.c b/fs/nfsd/vfs.c
+index c81aea23363a..9e05c3949cc1 100644
+--- a/fs/nfsd/vfs.c
++++ b/fs/nfsd/vfs.c
+@@ -255,7 +255,7 @@ nfsd_lookup_dentry(struct svc_rqst *rqstp, struct svc_fh *fhp,
+ 	exp = exp_get(fhp->fh_export);
+ 
+ 	/* Lookup the name, but don't follow links */
+-	if (isdotent(name, len)) {
++	if (name_is_dot_dotdot(name, len)) {
+ 		if (len==1)
+ 			dentry = dget(dparent);
+ 		else if (dparent != exp->ex_path.dentry)
+@@ -1884,7 +1884,7 @@ nfsd_create(struct svc_rqst *rqstp, struct svc_fh *fhp,
+ 
+ 	trace_nfsd_vfs_create(rqstp, fhp, type, fname, flen);
+ 
+-	if (isdotent(fname, flen))
++	if (name_is_dot_dotdot(fname, flen))
+ 		return nfserr_exist;
+ 
+ 	err = fh_verify(rqstp, fhp, S_IFDIR, NFSD_MAY_NOP);
+@@ -1986,7 +1986,7 @@ nfsd_symlink(struct svc_rqst *rqstp, struct svc_fh *fhp,
+ 	if (!flen || path[0] == '\0')
+ 		goto out;
+ 	err = nfserr_exist;
+-	if (isdotent(fname, flen))
++	if (name_is_dot_dotdot(fname, flen))
+ 		goto out;
+ 
+ 	err = fh_verify(rqstp, fhp, S_IFDIR, NFSD_MAY_CREATE);
+@@ -2063,7 +2063,7 @@ nfsd_link(struct svc_rqst *rqstp, struct svc_fh *ffhp,
+ 	if (!len)
+ 		goto out;
+ 	err = nfserr_exist;
+-	if (isdotent(name, len))
++	if (name_is_dot_dotdot(name, len))
+ 		goto out;
+ 
+ 	err = nfs_ok;
+@@ -2174,7 +2174,8 @@ nfsd_rename(struct svc_rqst *rqstp, struct svc_fh *ffhp, char *fname, int flen,
+ 	tdentry = tfhp->fh_dentry;
+ 
+ 	err = nfserr_perm;
+-	if (!flen || isdotent(fname, flen) || !tlen || isdotent(tname, tlen))
++	if (!flen || name_is_dot_dotdot(fname, flen) ||
++	    !tlen || name_is_dot_dotdot(tname, tlen))
+ 		goto out;
+ 
+ 	err = nfserr_xdev;
+@@ -2296,7 +2297,7 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
+ 	trace_nfsd_vfs_unlink(rqstp, fhp, fname, flen);
+ 
+ 	err = nfserr_acces;
+-	if (!flen || isdotent(fname, flen))
++	if (!flen || name_is_dot_dotdot(fname, flen))
+ 		goto out;
+ 	err = fh_verify(rqstp, fhp, S_IFDIR, NFSD_MAY_REMOVE);
+ 	if (err)
+-- 
+2.55.0
+

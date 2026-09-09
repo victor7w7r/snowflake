@@ -1,0 +1,64 @@
+From 047071a90cc6a50f14dd8f6fb0578e5b2c36a938 Mon Sep 17 00:00:00 2001
+From: Ankit Nautiyal <ankit.k.nautiyal@intel.com>
+Date: Tue, 16 Jun 2026 13:36:26 +0530
+Subject: [PATCH 00574/15333] drm/i915/alpm: Move the check for PSR and Fixed
+ RR in compute_config_late
+
+With optimized guardband, we need to take into account LOBF requirements
+via intel_alpm_lobf_min_guardband().
+
+Currently, we set has_lobf based not only on whether it is supported, but
+also on whether PSR/fixed RR are ON. Since these features can switch ON and
+OFF seamlessly, this may cause LOBF to change, resulting in a change in
+guardband requirements, and eventually to a full modeset.
+
+To avoid this, always account for LOBF if it is supported, in the
+encoder->compute_config() stage. For this, allow has_lobf to be set
+irrespective of PSR/Fixed RR. Later, in the encoder->compute_config_late()
+stage, use the PSR/Fixed RR checks to set has_lobf to the final value.
+
+Move the PSR/Fixed RR checks from intel_alpm_lobf_compute_config() to
+intel_alpm_lobf_compute_config_late(), where we already account for other
+LOBF constraints.
+
+v2: Reset has_lobf if psr or VRR is ON in
+    intel_alpm_lobf_compute_config_late(). (Animesh)
+
+Signed-off-by: Ankit Nautiyal <ankit.k.nautiyal@intel.com>
+Reviewed-by: Animesh Manna <animesh.manna@intel.com>
+Link: https://patch.msgid.link/20260616080627.2136659-1-ankit.k.nautiyal@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_alpm.c | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_alpm.c b/drivers/gpu/drm/i915/display/intel_alpm.c
+index 9b6248548f64..f1383764b702 100644
+--- a/drivers/gpu/drm/i915/display/intel_alpm.c
++++ b/drivers/gpu/drm/i915/display/intel_alpm.c
+@@ -291,7 +291,9 @@ void intel_alpm_lobf_compute_config_late(struct intel_dp *intel_dp,
+ 	if (!crtc_state->has_lobf)
+ 		return;
+ 
+-	if (!intel_alpm_lobf_is_window1_sufficient(crtc_state)) {
++	if (crtc_state->has_psr ||
++	    !intel_vrr_is_fixed_rr(crtc_state) ||
++	    !intel_alpm_lobf_is_window1_sufficient(crtc_state)) {
+ 		crtc_state->has_lobf = false;
+ 		return;
+ 	}
+@@ -343,11 +345,7 @@ void intel_alpm_lobf_compute_config(struct intel_dp *intel_dp,
+ 	if (!intel_dp->as_sdp_supported)
+ 		return;
+ 
+-	if (crtc_state->has_psr)
+-		return;
+-
+-	if (!intel_vrr_always_use_vrr_tg(display) ||
+-	    !intel_vrr_is_fixed_rr(crtc_state))
++	if (!intel_vrr_always_use_vrr_tg(display))
+ 		return;
+ 
+ 	if (!(intel_alpm_aux_wake_supported(intel_dp) ||
+-- 
+2.55.0
+

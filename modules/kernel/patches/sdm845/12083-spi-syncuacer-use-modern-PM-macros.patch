@@ -1,0 +1,61 @@
+From 7bf07ac9be73d6cc63f98aac92bfd4ec6d01da8f Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:57 +0800
+Subject: [PATCH 12083/15333] spi: syncuacer: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use __maybe_unused.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-34-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-synquacer.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/spi/spi-synquacer.c b/drivers/spi/spi-synquacer.c
+index c14225e39fd1..6d0cd11637b5 100644
+--- a/drivers/spi/spi-synquacer.c
++++ b/drivers/spi/spi-synquacer.c
+@@ -738,7 +738,7 @@ static void synquacer_spi_remove(struct platform_device *pdev)
+ 	clk_disable_unprepare(sspi->clk);
+ }
+ 
+-static int __maybe_unused synquacer_spi_suspend(struct device *dev)
++static int synquacer_spi_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+ 	struct synquacer_spi *sspi = spi_controller_get_devdata(host);
+@@ -754,7 +754,7 @@ static int __maybe_unused synquacer_spi_suspend(struct device *dev)
+ 	return ret;
+ }
+ 
+-static int __maybe_unused synquacer_spi_resume(struct device *dev)
++static int synquacer_spi_resume(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+ 	struct synquacer_spi *sspi = spi_controller_get_devdata(host);
+@@ -786,8 +786,8 @@ static int __maybe_unused synquacer_spi_resume(struct device *dev)
+ 	return ret;
+ }
+ 
+-static SIMPLE_DEV_PM_OPS(synquacer_spi_pm_ops, synquacer_spi_suspend,
+-			 synquacer_spi_resume);
++static DEFINE_SIMPLE_DEV_PM_OPS(synquacer_spi_pm_ops, synquacer_spi_suspend,
++				synquacer_spi_resume);
+ 
+ static const struct of_device_id synquacer_spi_of_match[] = {
+ 	{.compatible = "socionext,synquacer-spi"},
+@@ -806,7 +806,7 @@ MODULE_DEVICE_TABLE(acpi, synquacer_hsspi_acpi_ids);
+ static struct platform_driver synquacer_spi_driver = {
+ 	.driver = {
+ 		.name = "synquacer-spi",
+-		.pm = &synquacer_spi_pm_ops,
++		.pm = pm_sleep_ptr(&synquacer_spi_pm_ops),
+ 		.of_match_table = synquacer_spi_of_match,
+ 		.acpi_match_table = ACPI_PTR(synquacer_hsspi_acpi_ids),
+ 	},
+-- 
+2.55.0
+

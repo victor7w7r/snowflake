@@ -1,0 +1,38 @@
+From 1a416ae446afa42d2d8500ce25bd61c564508721 Mon Sep 17 00:00:00 2001
+From: "Masami Hiramatsu (Google)" <mhiramat@kernel.org>
+Date: Wed, 15 Jul 2026 11:06:18 +0900
+Subject: [PATCH 04593/15333] selftests/ftrace: Add test case for a symbol in a
+ module without module name
+
+Add a test case for probing on a symbol in a module without module name.
+When probing on a symbol in a module, ftrace accepts both the syntax that
+<MODNAME>:<SYMBOL> and <SYMBOL>. Current test case only checks the former
+syntax. This adds a test for the latter one.
+
+Link: https://lore.kernel.org/all/169846405196.88147.17766692778800222203.stgit@devnote2/
+
+Signed-off-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+---
+ .../testing/selftests/ftrace/test.d/kprobe/kprobe_module.tc | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/tools/testing/selftests/ftrace/test.d/kprobe/kprobe_module.tc b/tools/testing/selftests/ftrace/test.d/kprobe/kprobe_module.tc
+index 7e74ee11edf9..4b32e1b9a8d3 100644
+--- a/tools/testing/selftests/ftrace/test.d/kprobe/kprobe_module.tc
++++ b/tools/testing/selftests/ftrace/test.d/kprobe/kprobe_module.tc
+@@ -13,6 +13,12 @@ fi
+ MOD=trace_printk
+ FUNC=trace_printk_irq_work
+ 
++:;: "Add an event on a module function without module name" ;:
++
++echo "p:event0 $FUNC" > kprobe_events
++test -d events/kprobes/event0 || exit_failure
++echo "-:kprobes/event0" >> kprobe_events
++
+ :;: "Add an event on a module function without specifying event name" ;:
+ 
+ echo "p $MOD:$FUNC" > kprobe_events
+-- 
+2.55.0
+

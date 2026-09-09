@@ -1,0 +1,64 @@
+From 62069801861973fb90b15049dbab7544f927f216 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Mon, 3 Aug 2026 11:01:55 -1000
+Subject: [PATCH 10249/15333] sched_ext: scx_qmap - Idle-check pinned tasks
+ before direct dispatch
+
+pick_direct_dispatch_cid() sent a pinned task straight to its only cpu
+without an idle check. An insert onto a time-shared cid is forced IMMED,
+which may not wait on a busy cpu - the kernel bounces the task back to
+ops.enqueue(), the shortcut re-inserts it, and the loop runs into the
+reenqueue repeat limit.
+
+Run pinned tasks through the same idle test as everyone else and queue them
+when the cpu is busy. always_enq_immed forces IMMED on every local insert
+and already skipped the shortcut for the same reason. The check was the last
+reader of the always_enq_immed rodata mirror, so drop the variable. The -I
+option still sets SCX_OPS_ALWAYS_ENQ_IMMED.
+
+v2: Drop the now-unread always_enq_immed rodata mirror. (sashiko AI)
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ tools/sched_ext/scx_qmap.bpf.c | 4 ----
+ tools/sched_ext/scx_qmap.c     | 1 -
+ 2 files changed, 5 deletions(-)
+
+diff --git a/tools/sched_ext/scx_qmap.bpf.c b/tools/sched_ext/scx_qmap.bpf.c
+index 8822ed11c0d8..87612fa7e00d 100644
+--- a/tools/sched_ext/scx_qmap.bpf.c
++++ b/tools/sched_ext/scx_qmap.bpf.c
+@@ -66,7 +66,6 @@ const volatile bool print_msgs;
+ const volatile u64 sub_cgroup_id;
+ const volatile s32 disallow_tgid;
+ const volatile bool suppress_dump;
+-const volatile bool always_enq_immed;
+ const volatile u32 immed_stress_nth;
+ const volatile u32 max_tasks;
+ 
+@@ -230,9 +229,6 @@ static s32 pick_direct_dispatch_cid(struct task_struct *p, s32 prev_cid,
+ 	s32 cid;
+ 	u32 i;
+ 
+-	if (!always_enq_immed && p->nr_cpus_allowed == 1)
+-		return prev_cid;
+-
+ 	if (cmask_test(prev_cid, &qa.self_cids.mask) &&
+ 	    cmask_test_and_clear(prev_cid, &qa.idle_cids.mask))
+ 		return prev_cid;
+diff --git a/tools/sched_ext/scx_qmap.c b/tools/sched_ext/scx_qmap.c
+index 3f54796e48be..c4c4cee11f8e 100644
+--- a/tools/sched_ext/scx_qmap.c
++++ b/tools/sched_ext/scx_qmap.c
+@@ -315,7 +315,6 @@ int main(int argc, char **argv)
+ 			skel->struct_ops.qmap_ops->flags |= SCX_OPS_SWITCH_PARTIAL;
+ 			break;
+ 		case 'I':
+-			skel->rodata->always_enq_immed = true;
+ 			skel->struct_ops.qmap_ops->flags |= SCX_OPS_ALWAYS_ENQ_IMMED;
+ 			break;
+ 		case 'F':
+-- 
+2.55.0
+

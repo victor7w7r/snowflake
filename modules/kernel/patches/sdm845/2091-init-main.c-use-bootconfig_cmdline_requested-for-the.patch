@@ -1,0 +1,87 @@
+From 85595d3f964825c833fd2597521fcef67c3071de Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Thu, 2 Jul 2026 21:15:46 +0900
+Subject: [PATCH 02091/15333] init/main.c: use bootconfig_cmdline_requested()
+ for the runtime opt-in
+
+setup_boot_config() open-coded the same "is bootconfig requested on the
+kernel command line?" check that setup_arch() performs via the shared
+bootconfig_cmdline_requested() helper. Switch it to the helper so the
+early (setup_arch) and late (setup_boot_config) paths use one parser and
+cannot disagree on what counts as opt-in.
+
+The helper also reports the offset of the init arguments following a "--"
+separator, which is exactly what initargs_offs needs, so the local
+parse_args() call, its bootconfig_params() callback and the tmp_cmdline
+copy are removed.
+
+No functional change intended.
+
+Link: https://lore.kernel.org/all/20260626-bootconfig_using_tools-v7-9-24ab72139c29@debian.org/
+
+Suggested-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Signed-off-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+---
+ init/main.c | 27 ++++++---------------------
+ 1 file changed, 6 insertions(+), 21 deletions(-)
+
+diff --git a/init/main.c b/init/main.c
+index 260bd5242f94..39a518a47242 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -356,28 +356,17 @@ static char * __init xbc_make_cmdline(const char *key)
+ 	return new_cmdline;
+ }
+ 
+-static int __init bootconfig_params(char *param, char *val,
+-				    const char *unused, void *arg)
+-{
+-	if (strcmp(param, "bootconfig") == 0) {
+-		bootconfig_found = true;
+-	}
+-	return 0;
+-}
+-
+ static int __init warn_bootconfig(char *str)
+ {
+-	/* The 'bootconfig' has been handled by bootconfig_params(). */
++	/* The 'bootconfig' option is handled by setup_boot_config(). */
+ 	return 0;
+ }
+ 
+ static void __init setup_boot_config(void)
+ {
+-	static char tmp_cmdline[COMMAND_LINE_SIZE] __initdata;
+ 	const char *msg, *data;
+-	int pos, ret;
++	int pos, ret, offs;
+ 	size_t size;
+-	char *err;
+ 	bool from_embedded = false;
+ 
+ 	/* Cut out the bootconfig data even if we have no bootconfig option */
+@@ -388,16 +377,12 @@ static void __init setup_boot_config(void)
+ 		from_embedded = true;
+ 	}
+ 
+-	strscpy(tmp_cmdline, boot_command_line, COMMAND_LINE_SIZE);
+-	err = parse_args("bootconfig", tmp_cmdline, NULL, 0, 0, 0, NULL,
+-			 bootconfig_params);
+-
+-	if (IS_ERR(err) || !(bootconfig_found || IS_ENABLED(CONFIG_BOOT_CONFIG_FORCE)))
++	bootconfig_found = bootconfig_cmdline_requested(boot_command_line, &offs);
++	if (!(bootconfig_found || IS_ENABLED(CONFIG_BOOT_CONFIG_FORCE)))
+ 		return;
+ 
+-	/* parse_args() stops at the next param of '--' and returns an address */
+-	if (err)
+-		initargs_offs = err - tmp_cmdline;
++	/* Offset of the init arguments after a "--", located by the helper. */
++	initargs_offs = offs;
+ 
+ 	if (!data) {
+ 		/* If user intended to use bootconfig, show an error level message */
+-- 
+2.55.0
+

@@ -1,0 +1,86 @@
+From 67e955e073c6ff9167828444913a864a14275463 Mon Sep 17 00:00:00 2001
+From: Chaitanya Kumar Borah <chaitanya.kumar.borah@intel.com>
+Date: Wed, 15 Jul 2026 11:12:21 +0530
+Subject: [PATCH 04709/15333] drm/i915/display: expose blend mode on
+ alpha-capable planes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since commit 860e748bddcc ("drm: ensure blend mode supported if pixel
+format with alpha exposed"), drm_mode_config_validate() warns when a
+plane exposes an alpha pixel format but not the "pixel blend mode"
+property. The cursor (ARGB8888, all platforms) and the VLV/CHV primary
+and sprite planes trip this.
+
+Userspace has historically assumed premultiplied blending when the
+property is not attached, so it is safe to assume that planes that
+did not expose the property already blended with fixed pre-multiplied
+alpha in hardware. Therefore, expose a "pixel blend mode" property
+advertising only DRM_MODE_BLEND_PREMULTI to match that assumption and
+silence the warning. The cursor call is unconditional; the primary and
+sprite calls are gated to VLV/CHV, the only platforms whose format lists
+include alpha formats.
+
+Assisted-by: Claude:claude-opus-4-8
+Cc: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Cc: Uma Shankar <uma.shankar@intel.com>
+Cc: Leandro Ribeiro <leandro.ribeiro@collabora.com>
+Closes: https://gitlab.freedesktop.org/drm/i915/kernel/-/work_items/16623
+Signed-off-by: Chaitanya Kumar Borah <chaitanya.kumar.borah@intel.com>
+Reviewed-by: Uma Shankar <uma.shankar@intel.com>
+Signed-off-by: Ankit Nautiyal <ankit.k.nautiyal@intel.com>
+Link: https://patch.msgid.link/20260715054221.451421-1-chaitanya.kumar.borah@intel.com
+---
+ drivers/gpu/drm/i915/display/i9xx_plane.c   | 4 ++++
+ drivers/gpu/drm/i915/display/intel_cursor.c | 3 +++
+ drivers/gpu/drm/i915/display/intel_sprite.c | 4 ++++
+ 3 files changed, 11 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/i9xx_plane.c b/drivers/gpu/drm/i915/display/i9xx_plane.c
+index 70734d32a409..490908f59141 100644
+--- a/drivers/gpu/drm/i915/display/i9xx_plane.c
++++ b/drivers/gpu/drm/i915/display/i9xx_plane.c
+@@ -1108,6 +1108,10 @@ intel_primary_plane_create(struct intel_display *display, enum pipe pipe)
+ 						   DRM_MODE_ROTATE_0,
+ 						   supported_rotations);
+ 
++	if (display->platform.valleyview || display->platform.cherryview)
++		drm_plane_create_blend_mode_property(&plane->base,
++						     BIT(DRM_MODE_BLEND_PREMULTI));
++
+ 	zpos = 0;
+ 	drm_plane_create_zpos_immutable_property(&plane->base, zpos);
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_cursor.c b/drivers/gpu/drm/i915/display/intel_cursor.c
+index 88384dea868b..0673f16f6fd0 100644
+--- a/drivers/gpu/drm/i915/display/intel_cursor.c
++++ b/drivers/gpu/drm/i915/display/intel_cursor.c
+@@ -1078,6 +1078,9 @@ intel_cursor_plane_create(struct intel_display *display,
+ 
+ 	intel_cursor_add_size_hints_property(cursor);
+ 
++	drm_plane_create_blend_mode_property(&cursor->base,
++					     BIT(DRM_MODE_BLEND_PREMULTI));
++
+ 	zpos = DISPLAY_RUNTIME_INFO(display)->num_sprites[pipe] + 1;
+ 	drm_plane_create_zpos_immutable_property(&cursor->base, zpos);
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_sprite.c b/drivers/gpu/drm/i915/display/intel_sprite.c
+index 6a65f92e8a03..3e38960bbbd8 100644
+--- a/drivers/gpu/drm/i915/display/intel_sprite.c
++++ b/drivers/gpu/drm/i915/display/intel_sprite.c
+@@ -1722,6 +1722,10 @@ intel_sprite_plane_create(struct intel_display *display,
+ 					  DRM_COLOR_YCBCR_BT709,
+ 					  DRM_COLOR_YCBCR_LIMITED_RANGE);
+ 
++	if (display->platform.valleyview || display->platform.cherryview)
++		drm_plane_create_blend_mode_property(&plane->base,
++						     BIT(DRM_MODE_BLEND_PREMULTI));
++
+ 	zpos = sprite + 1;
+ 	drm_plane_create_zpos_immutable_property(&plane->base, zpos);
+ 
+-- 
+2.55.0
+

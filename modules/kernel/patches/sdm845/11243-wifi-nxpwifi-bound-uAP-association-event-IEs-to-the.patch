@@ -1,0 +1,70 @@
+From ca800a9302764c445de0da0e84d2252400a770ee Mon Sep 17 00:00:00 2001
+From: Linmao Li <lilinmao@kylinos.cn>
+Date: Wed, 29 Jul 2026 16:24:57 +0800
+Subject: [PATCH 11243/15333] wifi: nxpwifi: bound uAP association event IEs to
+ the event buffer
+
+nxpwifi_uap_event_sta_assoc() exposes the association request IEs that
+the firmware reports in the uAP association event, which the driver
+copies into the fixed-size event_body[] buffer.
+
+event->len is supplied by firmware and is not validated. A value smaller
+than the header underflows the subtraction used for assoc_req_ies_len,
+while a larger value can make the IE range extend beyond event_body[].
+Subsequent IE parsing can then read past the adapter object.
+
+Validate both bounds before using the firmware-reported length.
+
+nxpwifi was derived from mwifiex before commit f0858bfc7d3c ("wifi:
+mwifiex: bound uAP association event IEs to the event buffer") and
+retains the same unchecked length. Apply the equivalent bounds check
+here.
+
+Fixes: 73b01e57ed3e ("wifi: nxp: add nxpwifi driver for IW61x")
+Signed-off-by: Linmao Li <lilinmao@kylinos.cn>
+Reviewed-by: Jeff Chen <jeff.chen_1@nxp.com>
+Link: https://patch.msgid.link/20260729082457.1897303-1-lilinmao@kylinos.cn
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ drivers/net/wireless/nxp/nxpwifi/uap_event.c | 22 ++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/wireless/nxp/nxpwifi/uap_event.c b/drivers/net/wireless/nxp/nxpwifi/uap_event.c
+index ed8e24ae9c0a..9f717a3d7ec5 100644
+--- a/drivers/net/wireless/nxp/nxpwifi/uap_event.c
++++ b/drivers/net/wireless/nxp/nxpwifi/uap_event.c
+@@ -107,11 +107,29 @@ nxpwifi_uap_event_sta_assoc(struct nxpwifi_private *priv)
+ 			len = ETH_ALEN;
+ 
+ 		if (len != -1) {
++			u16 evt_len = le16_to_cpu(event->len);
++
+ 			sinfo->assoc_req_ies = &event->data[len];
+ 			len = (u8 *)sinfo->assoc_req_ies -
+ 			      (u8 *)&event->frame_control;
+-			sinfo->assoc_req_ies_len =
+-				le16_to_cpu(event->len) - (u16)len;
++
++			/*
++			 * event->len is reported by the device firmware
++			 * and is not otherwise validated. Reject a length
++			 * that underflows the header or that would place
++			 * the association request IEs outside the fixed
++			 * event_body[] buffer.
++			 */
++			if (evt_len < len ||
++			    (u8 *)&event->frame_control + evt_len >
++			    adapter->event_body + MAX_EVENT_SIZE) {
++				nxpwifi_dbg(adapter, ERROR,
++					    "invalid STA assoc event length\n");
++				kfree(sinfo);
++				return -EINVAL;
++			}
++
++			sinfo->assoc_req_ies_len = evt_len - (u16)len;
+ 		}
+ 	}
+ 	cfg80211_new_sta(priv->netdev->ieee80211_ptr, event->sta_addr, sinfo,
+-- 
+2.55.0
+

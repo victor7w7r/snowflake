@@ -1,0 +1,303 @@
+From 2b75f87dee58930a182a04ee1ce4900af2fb210d Mon Sep 17 00:00:00 2001
+From: Ethan Nelson-Moore <enelsonmoore@gmail.com>
+Date: Wed, 10 Jun 2026 18:44:04 -0700
+Subject: [PATCH 02875/15333] staging: rtl8723bs: remove references to
+ nonexistent CONFIG_IEEE80211W option
+
+Comments in the rtl8723bs driver contain many references to
+CONFIG_IEEE80211W, which does not exist in the kernel (though it does
+exist in wpa_supplicant, where this code was likely also used). Remove
+them.
+
+Discovered while searching for CONFIG_* symbols referenced in code but
+not defined in any Kconfig file.
+
+Signed-off-by: Ethan Nelson-Moore <enelsonmoore@gmail.com>
+Link: https://patch.msgid.link/20260611014430.437534-1-enelsonmoore@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/core/rtw_cmd.c      |  2 --
+ .../staging/rtl8723bs/core/rtw_ioctl_set.c    |  1 -
+ drivers/staging/rtl8723bs/core/rtw_mlme.c     |  3 ---
+ drivers/staging/rtl8723bs/core/rtw_security.c | 26 ++++++-------------
+ drivers/staging/rtl8723bs/include/drv_types.h |  2 +-
+ drivers/staging/rtl8723bs/include/ieee80211.h |  4 +--
+ drivers/staging/rtl8723bs/include/rtw_cmd.h   |  5 ++--
+ drivers/staging/rtl8723bs/os_dep/os_intfs.c   |  1 -
+ 8 files changed, 13 insertions(+), 31 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/core/rtw_cmd.c b/drivers/staging/rtl8723bs/core/rtw_cmd.c
+index 8e2d27b74ea9..099231894d0f 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_cmd.c
++++ b/drivers/staging/rtl8723bs/core/rtw_cmd.c
+@@ -1008,7 +1008,6 @@ u8 rtw_addbareq_cmd(struct adapter *padapter, u8 tid, u8 *addr)
+ 	return res;
+ }
+ 
+-/* add for CONFIG_IEEE80211W, none 11w can use it */
+ u8 rtw_reset_securitypriv_cmd(struct adapter *padapter)
+ {
+ 	struct cmd_obj *ph2c;
+@@ -1769,7 +1768,6 @@ u8 rtw_drvextra_cmd_hdl(struct adapter *padapter, unsigned char *pbuf)
+ 	case CHECK_HIQ_WK_CID:
+ 		rtw_chk_hi_queue_hdl(padapter);
+ 		break;
+-	/* add for CONFIG_IEEE80211W, none 11w can use it */
+ 	case RESET_SECURITYPRIV:
+ 		rtw_reset_securitypriv(padapter);
+ 		break;
+diff --git a/drivers/staging/rtl8723bs/core/rtw_ioctl_set.c b/drivers/staging/rtl8723bs/core/rtw_ioctl_set.c
+index c8992a148508..958bb0d2aaa1 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_ioctl_set.c
++++ b/drivers/staging/rtl8723bs/core/rtw_ioctl_set.c
+@@ -346,7 +346,6 @@ u8 rtw_set_802_11_disassociate(struct adapter *padapter)
+ 	if (check_fwstate(pmlmepriv, _FW_LINKED)) {
+ 		rtw_disassoc_cmd(padapter, 0, true);
+ 		rtw_indicate_disconnect(padapter);
+-		/* modify for CONFIG_IEEE80211W, none 11w can use it */
+ 		rtw_free_assoc_resources_cmd(padapter);
+ 		rtw_pwr_wakeup(padapter);
+ 	}
+diff --git a/drivers/staging/rtl8723bs/core/rtw_mlme.c b/drivers/staging/rtl8723bs/core/rtw_mlme.c
+index 580b25d5b6da..668343baabac 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_mlme.c
++++ b/drivers/staging/rtl8723bs/core/rtw_mlme.c
+@@ -895,7 +895,6 @@ void rtw_indicate_disconnect(struct adapter *padapter)
+ 
+ 		rtw_cfg80211_indicate_disconnect(padapter);
+ 
+-		/* modify for CONFIG_IEEE80211W, none 11w also can use the same command */
+ 		rtw_reset_securitypriv_cmd(padapter);
+ 
+ 		/* set ips_deny_time to avoid enter IPS before LPS leave */
+@@ -1082,7 +1081,6 @@ void rtw_reset_securitypriv(struct adapter *adapter)
+ 	u8 backupPMKIDIndex = 0;
+ 	u8 backupTKIPCountermeasure = 0x00;
+ 	u32 backupTKIPcountermeasure_time = 0;
+-	/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 	struct mlme_ext_priv *pmlmeext = &adapter->mlmeextpriv;
+ 
+ 	spin_lock_bh(&adapter->security_key_mutex);
+@@ -1132,7 +1130,6 @@ void rtw_reset_securitypriv(struct adapter *adapter)
+ 		psec_priv->ndisencryptstatus = Ndis802_11WEPDisabled;
+ 		/*  */
+ 	}
+-	/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 	spin_unlock_bh(&adapter->security_key_mutex);
+ }
+ 
+diff --git a/drivers/staging/rtl8723bs/core/rtw_security.c b/drivers/staging/rtl8723bs/core/rtw_security.c
+index da61a552bdb3..fd7780b4809b 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_security.c
++++ b/drivers/staging/rtl8723bs/core/rtw_security.c
+@@ -620,7 +620,7 @@ static void construct_mic_iv(u8 *mic_iv,
+ 			     u8 *mpdu,
+ 			     uint payload_length,
+ 			     u8 *pn_vector,
+-			     uint frtype) /* add for CONFIG_IEEE80211W, none 11w also can use */
++			     uint frtype)
+ {
+ 		signed int i;
+ 
+@@ -656,7 +656,7 @@ static void construct_mic_iv(u8 *mic_iv,
+ static void construct_mic_header1(u8 *mic_header1,
+ 				  signed int header_length,
+ 				  u8 *mpdu,
+-				  uint frtype) /* for CONFIG_IEEE80211W, none 11w also can use */
++				  uint frtype)
+ {
+ 		mic_header1[0] = (u8)((header_length - 2) / 256);
+ 		mic_header1[1] = (u8)((header_length - 2) % 256);
+@@ -739,7 +739,7 @@ static void construct_ctr_preload(u8 *ctr_preload,
+ 				  u8 *mpdu,
+ 				  u8 *pn_vector,
+ 				  signed int c,
+-				  uint frtype) /* for CONFIG_IEEE80211W, none 11w also can use */
++				  uint frtype)
+ {
+ 	signed int i = 0;
+ 
+@@ -799,7 +799,7 @@ static signed int aes_cipher(u8 *key, uint	hdrlen,
+ 		if (hdrlen !=  WLAN_HDR_A3_QOS_LEN)
+ 			hdrlen += 2;
+ 
+-	} else if ((frtype == WIFI_DATA) && /*  add for CONFIG_IEEE80211W, none 11w also can use */
++	} else if ((frtype == WIFI_DATA) &&
+ 		   ((frsubtype == 0x08) ||
+ 		   (frsubtype == 0x09) ||
+ 		   (frsubtype == 0x0a) ||
+@@ -825,12 +825,12 @@ static signed int aes_cipher(u8 *key, uint	hdrlen,
+ 			 pframe,	 /* message, */
+ 			 plen,
+ 			 pn_vector,
+-			 frtype); /*  add for CONFIG_IEEE80211W, none 11w also can use */
++			 frtype);
+ 
+ 	construct_mic_header1(mic_header1,
+ 			      hdrlen,
+ 			      pframe,	/* message */
+-			      frtype); /*  add for CONFIG_IEEE80211W, none 11w also can use */
++			      frtype);
+ 
+ 	construct_mic_header2(mic_header2,
+ 			      pframe,	/* message, */
+@@ -879,7 +879,6 @@ static signed int aes_cipher(u8 *key, uint	hdrlen,
+ 	for (i = 0; i < num_blocks; i++) {
+ 		construct_ctr_preload(ctr_preload, a4_exists, qc_exists, pframe, /* message, */
+ 				      pn_vector, i + 1, frtype);
+-		/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 		aes128k128d(key, ctr_preload, aes_out);
+ 		crypto_xor_cpy(chain_buffer, aes_out, &pframe[payload_index], 16);
+ 		for (j = 0; j < 16; j++)
+@@ -891,7 +890,6 @@ static signed int aes_cipher(u8 *key, uint	hdrlen,
+ 		/* encrypt it and copy the unpadded part back   */
+ 		construct_ctr_preload(ctr_preload, a4_exists, qc_exists, pframe, /* message, */
+ 				      pn_vector, num_blocks + 1, frtype);
+-		/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 
+ 		for (j = 0; j < 16; j++)
+ 			padded_buffer[j] = 0x00;
+@@ -907,7 +905,6 @@ static signed int aes_cipher(u8 *key, uint	hdrlen,
+ 	/* Encrypt the MIC */
+ 	construct_ctr_preload(ctr_preload, a4_exists, qc_exists, pframe, /* message, */
+ 			      pn_vector, 0, frtype);
+-	/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 
+ 	for (j = 0; j < 16; j++)
+ 		padded_buffer[j] = 0x00;
+@@ -1018,7 +1015,7 @@ static signed int aes_decipher(u8 *key, uint	hdrlen,
+ 		if (hdrlen !=  WLAN_HDR_A3_QOS_LEN)
+ 			hdrlen += 2;
+ 
+-	} else if ((frtype == WIFI_DATA) && /* only for data packet . add for CONFIG_IEEE80211W, none 11w also can use */
++	} else if ((frtype == WIFI_DATA) &&
+ 		   ((frsubtype == 0x08) ||
+ 		   (frsubtype == 0x09) ||
+ 		   (frsubtype == 0x0a) ||
+@@ -1039,7 +1036,7 @@ static signed int aes_decipher(u8 *key, uint	hdrlen,
+ 		construct_ctr_preload(ctr_preload, a4_exists,
+ 				      qc_exists, pframe,
+ 				      pn_vector, i + 1,
+-				      frtype); /*  add for CONFIG_IEEE80211W, none 11w also can use */
++				      frtype);
+ 
+ 		aes128k128d(key, ctr_preload, aes_out);
+ 		crypto_xor_cpy(chain_buffer, aes_out, &pframe[payload_index], 16);
+@@ -1053,7 +1050,6 @@ static signed int aes_decipher(u8 *key, uint	hdrlen,
+ 		/* encrypt it and copy the unpadded part back   */
+ 		construct_ctr_preload(ctr_preload, a4_exists, qc_exists, pframe, pn_vector,
+ 				      num_blocks + 1, frtype);
+-		/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 
+ 		for (j = 0; j < 16; j++)
+ 			padded_buffer[j] = 0x00;
+@@ -1078,10 +1074,8 @@ static signed int aes_decipher(u8 *key, uint	hdrlen,
+ 	pn_vector[5] = pframe[hdrlen + 7];
+ 
+ 	construct_mic_iv(mic_iv, qc_exists, a4_exists, message, plen - 8, pn_vector, frtype);
+-	/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 
+ 	construct_mic_header1(mic_header1, hdrlen, message, frtype);
+-	/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 	construct_mic_header2(mic_header2, message, a4_exists, qc_exists);
+ 
+ 	payload_remainder = (plen - 8) % 16;
+@@ -1126,7 +1120,6 @@ static signed int aes_decipher(u8 *key, uint	hdrlen,
+ 	for (i = 0; i < num_blocks; i++) {
+ 		construct_ctr_preload(ctr_preload, a4_exists, qc_exists, message, pn_vector, i + 1,
+ 				      frtype);
+-		/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 		aes128k128d(key, ctr_preload, aes_out);
+ 		crypto_xor_cpy(chain_buffer, aes_out, &message[payload_index], 16);
+ 		for (j = 0; j < 16; j++)
+@@ -1138,7 +1131,6 @@ static signed int aes_decipher(u8 *key, uint	hdrlen,
+ 		/* encrypt it and copy the unpadded part back   */
+ 		construct_ctr_preload(ctr_preload, a4_exists, qc_exists, message, pn_vector,
+ 				      num_blocks + 1, frtype);
+-		/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 
+ 		for (j = 0; j < 16; j++)
+ 			padded_buffer[j] = 0x00;
+@@ -1153,7 +1145,6 @@ static signed int aes_decipher(u8 *key, uint	hdrlen,
+ 
+ 	/* Encrypt the MIC */
+ 	construct_ctr_preload(ctr_preload, a4_exists, qc_exists, message, pn_vector, 0, frtype);
+-	/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 
+ 	for (j = 0; j < 16; j++)
+ 		padded_buffer[j] = 0x00;
+@@ -1427,7 +1418,6 @@ static int omac1_aes_128_vector(u8 *key, size_t num_elem,
+  * This is a mode for using block cipher (AES in this case) for authentication.
+  * OMAC1 was standardized with the name CMAC by NIST in a Special Publication
+  * (SP) 800-38B.
+- * modify for CONFIG_IEEE80211W
+  */
+ int omac1_aes_128(u8 *key, u8 *data, size_t data_len, u8 *mac)
+ {
+diff --git a/drivers/staging/rtl8723bs/include/drv_types.h b/drivers/staging/rtl8723bs/include/drv_types.h
+index 552d0c5fa47f..c837157404d0 100644
+--- a/drivers/staging/rtl8723bs/include/drv_types.h
++++ b/drivers/staging/rtl8723bs/include/drv_types.h
+@@ -283,7 +283,7 @@ struct adapter {
+ 	struct	recv_priv recvpriv;
+ 	struct	sta_priv stapriv;
+ 	struct	security_priv securitypriv;
+-	spinlock_t   security_key_mutex; /*  add for CONFIG_IEEE80211W, none 11w also can use */
++	spinlock_t   security_key_mutex;
+ 	struct	registry_priv registrypriv;
+ 	struct	eeprom_priv eeprompriv;
+ 
+diff --git a/drivers/staging/rtl8723bs/include/ieee80211.h b/drivers/staging/rtl8723bs/include/ieee80211.h
+index 39ee139f1da9..72f89ec9e32f 100644
+--- a/drivers/staging/rtl8723bs/include/ieee80211.h
++++ b/drivers/staging/rtl8723bs/include/ieee80211.h
+@@ -529,9 +529,9 @@ enum {
+ 	RTW_WLAN_CATEGORY_FT = 6,
+ 	RTW_WLAN_CATEGORY_HT = 7,
+ 	RTW_WLAN_CATEGORY_SA_QUERY = 8,
+-	RTW_WLAN_CATEGORY_UNPROTECTED_WNM = 11, /*  add for CONFIG_IEEE80211W, none 11w also can use */
++	RTW_WLAN_CATEGORY_UNPROTECTED_WNM = 11,
+ 	RTW_WLAN_CATEGORY_TDLS = 12,
+-	RTW_WLAN_CATEGORY_SELF_PROTECTED = 15, /*  add for CONFIG_IEEE80211W, none 11w also can use */
++	RTW_WLAN_CATEGORY_SELF_PROTECTED = 15,
+ 	RTW_WLAN_CATEGORY_WMM = 17,
+ 	RTW_WLAN_CATEGORY_P2P = 0x7f,/* P2P action frames */
+ };
+diff --git a/drivers/staging/rtl8723bs/include/rtw_cmd.h b/drivers/staging/rtl8723bs/include/rtw_cmd.h
+index 357d8cb452c6..28d2be1d2a85 100644
+--- a/drivers/staging/rtl8723bs/include/rtw_cmd.h
++++ b/drivers/staging/rtl8723bs/include/rtw_cmd.h
+@@ -133,8 +133,8 @@ enum {
+ 	INTEl_WIDI_WK_CID,
+ 	C2H_WK_CID,
+ 	RTP_TIMER_CFG_WK_CID,
+-	RESET_SECURITYPRIV, /*  add for CONFIG_IEEE80211W, none 11w also can use */
+-	FREE_ASSOC_RESOURCES, /*  add for CONFIG_IEEE80211W, none 11w also can use */
++	RESET_SECURITYPRIV,
++	FREE_ASSOC_RESOURCES,
+ 	DM_IN_LPS_WK_CID,
+ 	DM_RA_MSK_WK_CID, /* add for STA update RAMask when bandwidth change. */
+ 	BEAMFORMING_WK_CID,
+@@ -594,7 +594,6 @@ extern u8 rtw_setfwdig_cmd(struct adapter *padapter, u8 type);
+ extern u8 rtw_setfwra_cmd(struct adapter *padapter, u8 type);
+ 
+ extern u8 rtw_addbareq_cmd(struct adapter *padapter, u8 tid, u8 *addr);
+-/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ extern u8 rtw_reset_securitypriv_cmd(struct adapter *padapter);
+ extern u8 rtw_free_assoc_resources_cmd(struct adapter *padapter);
+ extern u8 rtw_dynamic_chk_wk_cmd(struct adapter *adapter);
+diff --git a/drivers/staging/rtl8723bs/os_dep/os_intfs.c b/drivers/staging/rtl8723bs/os_dep/os_intfs.c
+index 2d51786a4ba0..f9128156f45b 100644
+--- a/drivers/staging/rtl8723bs/os_dep/os_intfs.c
++++ b/drivers/staging/rtl8723bs/os_dep/os_intfs.c
+@@ -661,7 +661,6 @@ u8 rtw_init_drv_sw(struct adapter *padapter)
+ 
+ 	if (_rtw_init_recv_priv(&padapter->recvpriv, padapter) == _FAIL)
+ 		goto free_xmit_priv;
+-	/*  add for CONFIG_IEEE80211W, none 11w also can use */
+ 	spin_lock_init(&padapter->security_key_mutex);
+ 
+ 	/*  We don't need to memset padapter->XXX to zero, because adapter is allocated by vzalloc(). */
+-- 
+2.55.0
+

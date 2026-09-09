@@ -1,0 +1,34 @@
+From b27e20b4475af6f0d839badec9648b5587c8dffd Mon Sep 17 00:00:00 2001
+From: Jori Koolstra <jkoolstra@xs4all.nl>
+Date: Tue, 30 Jun 2026 12:53:42 +0200
+Subject: [PATCH 01662/15333] hfsplus: drop redundant S_IFDIR from mkdir
+
+vfs_mkdir() now sets the S_IFDIR type bit in the mode it passes to
+->mkdir(), so OR-ing S_IFDIR into the mode again in hfsplus_mkdir() is
+redundant. Drop it.
+
+Assisted-by: LLM
+Signed-off-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Link: https://patch.msgid.link/20260630105400.68459-14-jkoolstra@xs4all.nl
+Reviewed-by: NeilBrown <neil@brown.name>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/hfsplus/dir.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/hfsplus/dir.c b/fs/hfsplus/dir.c
+index 8bf6c7cdd9a8..ec74de68b35f 100644
+--- a/fs/hfsplus/dir.c
++++ b/fs/hfsplus/dir.c
+@@ -570,7 +570,7 @@ static int hfsplus_create(struct mnt_idmap *idmap, struct inode *dir,
+ static struct dentry *hfsplus_mkdir(struct mnt_idmap *idmap, struct inode *dir,
+ 				    struct dentry *dentry, umode_t mode)
+ {
+-	return ERR_PTR(hfsplus_mknod(&nop_mnt_idmap, dir, dentry, mode | S_IFDIR, 0));
++	return ERR_PTR(hfsplus_mknod(&nop_mnt_idmap, dir, dentry, mode, 0));
+ }
+ 
+ static int hfsplus_rename(struct mnt_idmap *idmap,
+-- 
+2.55.0
+

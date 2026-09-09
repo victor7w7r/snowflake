@@ -1,0 +1,158 @@
+From f7c0e02eb61284395f74424edaefbbd323f83c4e Mon Sep 17 00:00:00 2001
+From: Mahad Ibrahim <mahad.ibrahim.dev@gmail.com>
+Date: Sat, 8 Aug 2026 22:38:29 +0000
+Subject: [PATCH 12581/15333] thunderbolt: debugfs: Replace get_zeroed_page()
+ with kzalloc()
+
+validate_and_copy_from_user() allocates a page to store data from
+userspace via get_zeroed_page(), and then returns it as a buffer.
+Neither the function itself nor its callers require struct page access.
+
+This buffer can easily be allocated with kzalloc() as there is nothing
+special about it that requires going through the page allocator.
+kzalloc(), which internally reduces to kmalloc() with __GFP_ZERO,
+provides a better API and kfree() does not need to know the size of the
+freed object. Additionally it removes the casts of (void *) and
+(unsigned long) which only obfuscate the code.
+
+Replace get_zeroed_page() with kzalloc() and free_page() with kfree().
+
+Link: https://lore.kernel.org/all/635405e4-9423-4a25-a6e7-e03c8ea0bcbe@redhat.com/
+Signed-off-by: Mahad Ibrahim <mahad.ibrahim.dev@gmail.com>
+Acked-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Signed-off-by: Mika Westerberg <mika.westerberg@linux.intel.com>
+---
+ drivers/thunderbolt/debugfs.c | 28 ++++++++++++++--------------
+ 1 file changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/thunderbolt/debugfs.c b/drivers/thunderbolt/debugfs.c
+index f5cf0e177f40..6e9080e7bcec 100644
+--- a/drivers/thunderbolt/debugfs.c
++++ b/drivers/thunderbolt/debugfs.c
+@@ -136,13 +136,13 @@ static void *validate_and_copy_from_user(const void __user *user_buf,
+ 	if (!access_ok(user_buf, *count))
+ 		return ERR_PTR(-EFAULT);
+ 
+-	buf = (void *)get_zeroed_page(GFP_KERNEL);
++	buf = kzalloc(PAGE_SIZE, GFP_KERNEL);
+ 	if (!buf)
+ 		return ERR_PTR(-ENOMEM);
+ 
+ 	nbytes = min_t(size_t, *count, PAGE_SIZE);
+ 	if (copy_from_user(buf, user_buf, nbytes)) {
+-		free_page((unsigned long)buf);
++		kfree(buf);
+ 		return ERR_PTR(-EFAULT);
+ 	}
+ 
+@@ -265,7 +265,7 @@ static ssize_t regs_write(struct tb_switch *sw, struct tb_port *port,
+ out:
+ 	pm_runtime_mark_last_busy(&sw->dev);
+ 	pm_runtime_put_autosuspend(&sw->dev);
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 
+ 	return ret < 0 ? ret : count;
+ }
+@@ -406,7 +406,7 @@ static ssize_t port_sb_regs_write(struct file *file, const char __user *user_buf
+ out:
+ 	pm_runtime_mark_last_busy(&sw->dev);
+ 	pm_runtime_put_autosuspend(&sw->dev);
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 
+ 	return ret < 0 ? ret : count;
+ }
+@@ -439,7 +439,7 @@ static ssize_t retimer_sb_regs_write(struct file *file,
+ out:
+ 	pm_runtime_mark_last_busy(&rt->dev);
+ 	pm_runtime_put_autosuspend(&rt->dev);
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 
+ 	return ret < 0 ? ret : count;
+ }
+@@ -652,7 +652,7 @@ margining_ber_level_write(struct file *file, const char __user *user_buf,
+ 	margining->ber_level = val;
+ 
+ out_free:
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ out_unlock:
+ 	mutex_unlock(&tb->lock);
+ 
+@@ -829,7 +829,7 @@ margining_lanes_write(struct file *file, const char __user *user_buf,
+ 		}
+ 	}
+ 
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 
+ 	if (lane == -1)
+ 		return -EINVAL;
+@@ -958,7 +958,7 @@ margining_error_counter_write(struct file *file, const char __user *user_buf,
+ 	else
+ 		goto err_free;
+ 
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 
+ 	scoped_cond_guard(mutex_intr, return -ERESTARTSYS, &tb->lock) {
+ 		if (!margining->software)
+@@ -970,7 +970,7 @@ margining_error_counter_write(struct file *file, const char __user *user_buf,
+ 	return count;
+ 
+ err_free:
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 	return -EINVAL;
+ }
+ 
+@@ -1116,7 +1116,7 @@ static ssize_t margining_mode_write(struct file *file,
+ 	mutex_unlock(&tb->lock);
+ 
+ out_free:
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 	return ret ? ret : count;
+ }
+ 
+@@ -1503,7 +1503,7 @@ static ssize_t margining_test_write(struct file *file,
+ 	mutex_unlock(&tb->lock);
+ 
+ out_free:
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 	return ret ? ret : count;
+ }
+ 
+@@ -1569,7 +1569,7 @@ static ssize_t margining_margin_write(struct file *file,
+ 	mutex_unlock(&tb->lock);
+ 
+ out_free:
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 	return ret ? ret : count;
+ }
+ 
+@@ -1624,7 +1624,7 @@ static ssize_t margining_eye_write(struct file *file,
+ 			ret = -EINVAL;
+ 	}
+ 
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 	return ret ? ret : count;
+ }
+ 
+@@ -1934,7 +1934,7 @@ static ssize_t counters_write(struct file *file, const char __user *user_buf,
+ out:
+ 	pm_runtime_mark_last_busy(&sw->dev);
+ 	pm_runtime_put_autosuspend(&sw->dev);
+-	free_page((unsigned long)buf);
++	kfree(buf);
+ 
+ 	return ret < 0 ? ret : count;
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,54 @@
+From 30ce0cb576b622f8fb5c5c9ebe43e28365374a3a Mon Sep 17 00:00:00 2001
+From: Abdun Nihaal <nihaal@cse.iitm.ac.in>
+Date: Sat, 1 Aug 2026 11:25:05 +0530
+Subject: [PATCH 10685/15333] net: microchip: vcap api: Fix possible memory
+ leak in vcap_decode_rule()
+
+The memory allocated for struct vcap_rule_internal, keyfields and
+actionfields inside vcap_dup_rule() are not freed in some of the error
+paths in vcap_decode_rule(). Fix that by calling vcap_free_rule().
+
+Compile tested only. Issue found using a prototype static analysis tool
+built on top of the LLVM compiler infrastructure.
+
+Cc: stable+noautosel@kernel.org # untested fix to unlikely driver error path
+Reviewed-by: Joe Damato <joe@dama.to>
+Signed-off-by: Abdun Nihaal <nihaal@cse.iitm.ac.in>
+Link: https://patch.msgid.link/20260801055507.47534-1-nihaal@cse.iitm.ac.in
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/microchip/vcap/vcap_api.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/ethernet/microchip/vcap/vcap_api.c b/drivers/net/ethernet/microchip/vcap/vcap_api.c
+index ff86cde11a32..788c0728d763 100644
+--- a/drivers/net/ethernet/microchip/vcap/vcap_api.c
++++ b/drivers/net/ethernet/microchip/vcap/vcap_api.c
+@@ -2427,18 +2427,21 @@ struct vcap_rule *vcap_decode_rule(struct vcap_rule_internal *elem)
+ 
+ 	err = vcap_read_rule(ri);
+ 	if (err)
+-		return ERR_PTR(err);
++		goto err_free_rule;
+ 
+ 	err = vcap_decode_keyset(ri);
+ 	if (err)
+-		return ERR_PTR(err);
++		goto err_free_rule;
+ 
+ 	err = vcap_decode_actionset(ri);
+ 	if (err)
+-		return ERR_PTR(err);
++		goto err_free_rule;
+ 
+ out:
+ 	return &ri->data;
++err_free_rule:
++	vcap_free_rule(&ri->data);
++	return ERR_PTR(err);
+ }
+ 
+ struct vcap_rule *vcap_get_rule(struct vcap_control *vctrl, u32 id)
+-- 
+2.55.0
+

@@ -1,0 +1,61 @@
+From bb961fdd1700859ab764bae3f7b0c8f3b14f87dc Mon Sep 17 00:00:00 2001
+From: "Matthieu Baerts (NGI0)" <matttbe@kernel.org>
+Date: Wed, 12 Aug 2026 16:55:38 +0200
+Subject: [PATCH 14637/15333] mptcp: pm: userspace: make remove_addr_entry
+ static
+
+Only used in pm_userspace.c.
+
+While at it, use the mptcp_userspace_pm_ prefix, like most functions in
+this file: that makes it clear it is specific to this userspace PM.
+
+Reviewed-by: Geliang Tang <geliang@kernel.org>
+Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+Link: https://patch.msgid.link/20260812-net-next-mptcp-misc-feat-7-3-v1-3-1905a818f6cb@kernel.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/mptcp/pm_userspace.c | 7 ++++---
+ net/mptcp/protocol.h     | 2 --
+ 2 files changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/net/mptcp/pm_userspace.c b/net/mptcp/pm_userspace.c
+index 2203cc2d2748..b94fbb483bf9 100644
+--- a/net/mptcp/pm_userspace.c
++++ b/net/mptcp/pm_userspace.c
+@@ -281,8 +281,9 @@ static int mptcp_userspace_pm_remove_id_zero_address(struct mptcp_sock *msk)
+ 	return err;
+ }
+ 
+-void mptcp_pm_remove_addr_entry(struct mptcp_sock *msk,
+-				struct mptcp_pm_addr_entry *entry)
++static void
++mptcp_userspace_pm_remove_addr_entry(struct mptcp_sock *msk,
++				     struct mptcp_pm_addr_entry *entry)
+ {
+ 	struct mptcp_rm_list alist = { .nr = 0 };
+ 	int anno_nr = 0;
+@@ -340,7 +341,7 @@ int mptcp_pm_nl_remove_doit(struct sk_buff *skb, struct genl_info *info)
+ 	list_del_rcu(&match->list);
+ 	spin_unlock_bh(&msk->pm.lock);
+ 
+-	mptcp_pm_remove_addr_entry(msk, match);
++	mptcp_userspace_pm_remove_addr_entry(msk, match);
+ 
+ 	release_sock(sk);
+ 
+diff --git a/net/mptcp/protocol.h b/net/mptcp/protocol.h
+index 20627e12c113..06a107d4e839 100644
+--- a/net/mptcp/protocol.h
++++ b/net/mptcp/protocol.h
+@@ -1149,8 +1149,6 @@ int mptcp_pm_announce_addr(struct mptcp_sock *msk,
+ 			   const struct mptcp_addr_info *addr,
+ 			   bool echo);
+ int mptcp_pm_remove_addr(struct mptcp_sock *msk, const struct mptcp_rm_list *rm_list);
+-void mptcp_pm_remove_addr_entry(struct mptcp_sock *msk,
+-				struct mptcp_pm_addr_entry *entry);
+ 
+ /* the default path manager, used in mptcp_pm_unregister */
+ extern struct mptcp_pm_ops mptcp_pm_kernel;
+-- 
+2.55.0
+

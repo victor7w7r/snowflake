@@ -1,0 +1,71 @@
+From 53f4ad49d76b516f5d235ea10b727b2d548b0218 Mon Sep 17 00:00:00 2001
+From: Yosry Ahmed <yosry@kernel.org>
+Date: Tue, 28 Jul 2026 17:42:21 +0000
+Subject: [PATCH 08209/15333] KVM: selftests: Fix RAX and RFLAGS VMCB offsets
+ when running L2
+
+The offsets used (0x170 and 0x1f8) are offsets within vmcb_save_area,
+not vmcb. The correct offsets should include the base of vmcb_save_area
+within vmcb (which is 0x400 -- so 0x570 and 0x5f8).
+
+Instead of just correcting the offsets, use vmcb->save.rax and
+vmcb->save.rflags as parameters to the asm block and avoid hardcoding
+offsets completely. While at it, also use guest_regs.rax directly
+instead of assuming it's at offset 0 of guest_regs.
+
+Note: "+m" must be used for vmcb_rax and vmcb_rflags, as caching those
+fields in registers would be wrong as the underlying KVM will update
+them in memory.
+
+The same problem was recently fixed (differently) for kvm-unit-tests
+[1].
+
+[1]https://lore.kernel.org/all/20260521092311.86030-1-pbonzini@redhat.com/
+
+Reported-by: Sashiko <sashiko-bot@kernel.org>
+Closes: https://sashiko.dev/#/patchset/20260518202514.2037078-1-yosry%40kernel.org?part=1
+Signed-off-by: Yosry Ahmed <yosry@kernel.org>
+Link: https://patch.msgid.link/20260728174232.2423257-3-yosry@kernel.org
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ tools/testing/selftests/kvm/lib/x86/svm.c | 19 +++++++++++--------
+ 1 file changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/tools/testing/selftests/kvm/lib/x86/svm.c b/tools/testing/selftests/kvm/lib/x86/svm.c
+index 1445b890986f..766d15f1d534 100644
+--- a/tools/testing/selftests/kvm/lib/x86/svm.c
++++ b/tools/testing/selftests/kvm/lib/x86/svm.c
+@@ -164,19 +164,22 @@ void run_guest(struct vmcb *vmcb, u64 vmcb_gpa)
+ {
+ 	asm volatile (
+ 		"vmload %[vmcb_gpa]\n\t"
+-		"mov rflags, %%r15\n\t"	// rflags
+-		"mov %%r15, 0x170(%[vmcb])\n\t"
+-		"mov guest_regs, %%r15\n\t"	// rax
+-		"mov %%r15, 0x1f8(%[vmcb])\n\t"
++		"mov rflags, %%r15\n\t"
++		"mov %%r15, %[vmcb_rflags]\n\t"
++		"mov %[guest_regs_rax], %%r15\n\t"
++		"mov %%r15, %[vmcb_rax]\n\t"
+ 		LOAD_GPR_C
+ 		"vmrun %[vmcb_gpa]\n\t"
+ 		SAVE_GPR_C
+-		"mov 0x170(%[vmcb]), %%r15\n\t"	// rflags
++		"mov %[vmcb_rflags], %%r15\n\t"
+ 		"mov %%r15, rflags\n\t"
+-		"mov 0x1f8(%[vmcb]), %%r15\n\t"	// rax
+-		"mov %%r15, guest_regs\n\t"
++		"mov %[vmcb_rax], %%r15\n\t"	// rax
++		"mov %%r15, %[guest_regs_rax]\n\t"
+ 		"vmsave %[vmcb_gpa]\n\t"
+-		: : [vmcb] "r" (vmcb), [vmcb_gpa] "a" (vmcb_gpa)
++		: [vmcb_rflags] "+m" (vmcb->save.rflags),
++		  [vmcb_rax] "+m" (vmcb->save.rax),
++		  [guest_regs_rax] "+rm" (guest_regs.rax)
++		: [vmcb_gpa] "a" (vmcb_gpa)
+ 		: "r15", "memory");
+ }
+ 
+-- 
+2.55.0
+

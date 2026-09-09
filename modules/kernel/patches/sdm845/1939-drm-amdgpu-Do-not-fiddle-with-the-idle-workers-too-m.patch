@@ -1,0 +1,145 @@
+From 50be7c9b5d5ea55fd40bb411cf324cec99ec7417 Mon Sep 17 00:00:00 2001
+From: Tvrtko Ursulin <tvrtko.ursulin@igalia.com>
+Date: Fri, 26 Jun 2026 09:55:58 +0100
+Subject: [PATCH 01939/15333] drm/amdgpu: Do not fiddle with the idle workers
+ too much
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Idle workers only need to be canceled or pushed back if we are potentially
+idle. Make the both operations conditional on the pre-increment and post-
+decrement status of the in-flight job counter.
+
+Reviewed-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Tvrtko Ursulin <tvrtko.ursulin@igalia.com>
+Cc: Alex Deucher <alexander.deucher@amd.com>
+Cc: Christian König <christian.koenig@amd.com>
+Cc: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c  | 11 +++++------
+ drivers/gpu/drm/amd/amdgpu/amdgpu_jpeg.c |  9 +++++----
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c  | 12 +++++-------
+ drivers/gpu/drm/amd/amdgpu/vcn_v2_5.c    | 12 +++++-------
+ 4 files changed, 20 insertions(+), 24 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+index 419992589df3..96c9d4f00b27 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+@@ -2733,9 +2733,8 @@ void amdgpu_gfx_profile_ring_begin_use(struct amdgpu_ring *ring)
+ 	else
+ 		profile = PP_SMC_POWER_PROFILE_COMPUTE;
+ 
+-	atomic_inc(&adev->gfx.total_submission_cnt);
+-
+-	cancel_delayed_work_sync(&adev->gfx.idle_work);
++	if (!atomic_fetch_inc(&adev->gfx.total_submission_cnt))
++		cancel_delayed_work_sync(&adev->gfx.idle_work);
+ 
+ 	/* We can safely return early here because we've cancelled the
+ 	 * the delayed work so there is no one else to set it to false
+@@ -2763,9 +2762,9 @@ void amdgpu_gfx_profile_ring_end_use(struct amdgpu_ring *ring)
+ 	if (amdgpu_dpm_is_overdrive_enabled(adev))
+ 		return;
+ 
+-	atomic_dec(&ring->adev->gfx.total_submission_cnt);
+-
+-	schedule_delayed_work(&ring->adev->gfx.idle_work, GFX_PROFILE_IDLE_TIMEOUT);
++	if (atomic_dec_and_test(&ring->adev->gfx.total_submission_cnt))
++		schedule_delayed_work(&ring->adev->gfx.idle_work,
++				      GFX_PROFILE_IDLE_TIMEOUT);
+ }
+ 
+ /**
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_jpeg.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_jpeg.c
+index 63ee6ba6a931..57935c321515 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_jpeg.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_jpeg.c
+@@ -134,8 +134,8 @@ void amdgpu_jpeg_ring_begin_use(struct amdgpu_ring *ring)
+ {
+ 	struct amdgpu_device *adev = ring->adev;
+ 
+-	atomic_inc(&adev->jpeg.total_submission_cnt);
+-	cancel_delayed_work_sync(&adev->jpeg.idle_work);
++	if (!atomic_fetch_inc(&adev->jpeg.total_submission_cnt))
++		cancel_delayed_work_sync(&adev->jpeg.idle_work);
+ 
+ 	mutex_lock(&adev->jpeg.jpeg_pg_lock);
+ 	amdgpu_device_ip_set_powergating_state(adev, AMD_IP_BLOCK_TYPE_JPEG,
+@@ -145,8 +145,9 @@ void amdgpu_jpeg_ring_begin_use(struct amdgpu_ring *ring)
+ 
+ void amdgpu_jpeg_ring_end_use(struct amdgpu_ring *ring)
+ {
+-	atomic_dec(&ring->adev->jpeg.total_submission_cnt);
+-	schedule_delayed_work(&ring->adev->jpeg.idle_work, JPEG_IDLE_TIMEOUT);
++	if (atomic_dec_and_test(&ring->adev->jpeg.total_submission_cnt))
++		schedule_delayed_work(&ring->adev->jpeg.idle_work,
++				      JPEG_IDLE_TIMEOUT);
+ }
+ 
+ int amdgpu_jpeg_dec_ring_test_ring(struct amdgpu_ring *ring)
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c
+index e4d435d4a629..fe504f1a3fc8 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c
+@@ -506,9 +506,8 @@ void amdgpu_vcn_ring_begin_use(struct amdgpu_ring *ring)
+ 	struct amdgpu_device *adev = ring->adev;
+ 	struct amdgpu_vcn_inst *vcn_inst = &adev->vcn.inst[ring->me];
+ 
+-	atomic_inc(&vcn_inst->total_submission_cnt);
+-
+-	cancel_delayed_work_sync(&vcn_inst->idle_work);
++	if (!atomic_fetch_inc(&vcn_inst->total_submission_cnt))
++		cancel_delayed_work_sync(&vcn_inst->idle_work);
+ 
+ 	mutex_lock(&vcn_inst->vcn_pg_lock);
+ 	vcn_inst->set_pg_state(vcn_inst, AMD_PG_STATE_UNGATE);
+@@ -550,10 +549,9 @@ void amdgpu_vcn_ring_end_use(struct amdgpu_ring *ring)
+ 	    !adev->vcn.inst[ring->me].using_unified_queue)
+ 		atomic_dec(&ring->adev->vcn.inst[ring->me].dpg_enc_submission_cnt);
+ 
+-	atomic_dec(&ring->adev->vcn.inst[ring->me].total_submission_cnt);
+-
+-	schedule_delayed_work(&ring->adev->vcn.inst[ring->me].idle_work,
+-			      VCN_IDLE_TIMEOUT);
++	if (atomic_dec_and_test(&ring->adev->vcn.inst[ring->me].total_submission_cnt))
++		schedule_delayed_work(&ring->adev->vcn.inst[ring->me].idle_work,
++				      VCN_IDLE_TIMEOUT);
+ }
+ 
+ int amdgpu_vcn_dec_ring_test_ring(struct amdgpu_ring *ring)
+diff --git a/drivers/gpu/drm/amd/amdgpu/vcn_v2_5.c b/drivers/gpu/drm/amd/amdgpu/vcn_v2_5.c
+index 8b8184fe6764..0d8a3cea63ee 100644
+--- a/drivers/gpu/drm/amd/amdgpu/vcn_v2_5.c
++++ b/drivers/gpu/drm/amd/amdgpu/vcn_v2_5.c
+@@ -159,9 +159,8 @@ static void vcn_v2_5_ring_begin_use(struct amdgpu_ring *ring)
+ 	struct amdgpu_device *adev = ring->adev;
+ 	struct amdgpu_vcn_inst *v = &adev->vcn.inst[ring->me];
+ 
+-	atomic_inc(&adev->vcn.inst[0].total_submission_cnt);
+-
+-	cancel_delayed_work_sync(&adev->vcn.inst[0].idle_work);
++	if (!atomic_fetch_inc(&adev->vcn.inst[0].total_submission_cnt))
++		cancel_delayed_work_sync(&adev->vcn.inst[0].idle_work);
+ 
+ 	/* We can safely return early here because we've cancelled the
+ 	 * the delayed work so there is no one else to set it to false
+@@ -207,10 +206,9 @@ static void vcn_v2_5_ring_end_use(struct amdgpu_ring *ring)
+ 	    !adev->vcn.inst[ring->me].using_unified_queue)
+ 		atomic_dec(&adev->vcn.inst[ring->me].dpg_enc_submission_cnt);
+ 
+-	atomic_dec(&adev->vcn.inst[0].total_submission_cnt);
+-
+-	schedule_delayed_work(&adev->vcn.inst[0].idle_work,
+-			      VCN_IDLE_TIMEOUT);
++	if (atomic_dec_and_test(&adev->vcn.inst[0].total_submission_cnt))
++		schedule_delayed_work(&adev->vcn.inst[0].idle_work,
++				      VCN_IDLE_TIMEOUT);
+ }
+ 
+ /**
+-- 
+2.55.0
+

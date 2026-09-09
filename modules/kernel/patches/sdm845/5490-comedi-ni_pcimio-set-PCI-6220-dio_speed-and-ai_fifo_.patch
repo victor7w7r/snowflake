@@ -1,0 +1,52 @@
+From 71375da8b473445f51f0668d5622922827402357 Mon Sep 17 00:00:00 2001
+From: Shashwat Agrawal <shashwatagrawal473@gmail.com>
+Date: Mon, 29 Jun 2026 19:24:04 +0530
+Subject: [PATCH 05490/15333] comedi: ni_pcimio: set PCI-6220 dio_speed and
+ ai_fifo_depth from NI specs
+
+The PCI-6220 board entry was missing .dio_speed, unlike the PXI-6220 and
+the other 622x boards in the table. Set it to 1000 ns to match those
+entries and the 1 MHz maximum DI/DO sample clock on Port 0 in the NI
+PCI/PXI-6220 specifications.
+
+Also update .ai_fifo_depth for PCI-6220 and PXI-6220 from 512 to 4095
+samples, matching the documented AI input FIFO size and the rest of the
+622x entries.
+
+Link: https://www.ni.com/docs/en-US/bundle/pci-pxi-6220-specs/page/specs.html
+Signed-off-by: Shashwat Agrawal <shashwatagrawal473@gmail.com>
+Reviewed-by: Ian Abbott <abbotti@mev.co.uk>
+Link: https://patch.msgid.link/20260629135404.19835-1-shashwatagrawal473@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/comedi/drivers/ni_pcimio.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/comedi/drivers/ni_pcimio.c b/drivers/comedi/drivers/ni_pcimio.c
+index 4be9ca4f4828..299e2a0e9474 100644
+--- a/drivers/comedi/drivers/ni_pcimio.c
++++ b/drivers/comedi/drivers/ni_pcimio.c
+@@ -685,17 +685,18 @@ static const struct ni_board_struct ni_boards[] = {
+ 		.name		= "pci-6220",
+ 		.n_adchan	= 16,
+ 		.ai_maxdata	= 0xffff,
+-		.ai_fifo_depth	= 512,		/* FIXME: guess */
++		.ai_fifo_depth	= 4095,
+ 		.gainlkup	= ai_gain_622x,
+ 		.ai_speed	= 4000,
+ 		.reg_type	= ni_reg_622x,
+ 		.caldac		= { caldac_none },
++		.dio_speed	= 1000,
+ 	},
+ 	[BOARD_PXI6220] = {
+ 		.name		= "pxi-6220",
+ 		.n_adchan	= 16,
+ 		.ai_maxdata	= 0xffff,
+-		.ai_fifo_depth	= 512,		/* FIXME: guess */
++		.ai_fifo_depth	= 4095,
+ 		.gainlkup	= ai_gain_622x,
+ 		.ai_speed	= 4000,
+ 		.reg_type	= ni_reg_622x,
+-- 
+2.55.0
+

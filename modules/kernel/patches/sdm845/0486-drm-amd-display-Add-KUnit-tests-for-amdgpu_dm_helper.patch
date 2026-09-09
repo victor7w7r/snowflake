@@ -1,0 +1,924 @@
+From d974b7865f170803c4bda5706f13fb1e22506cb7 Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Wed, 6 May 2026 16:39:07 -0600
+Subject: [PATCH 00486/15333] drm/amd/display: Add KUnit tests for
+ amdgpu_dm_helpers
+
+Add amdgpu_dm_helpers_test.c with 32 KUnit test cases covering the
+following functions in amdgpu_dm_helpers.c:
+
+- edid_extract_panel_id(): basic extraction with known mfg_id and
+  prod_code; zero inputs produce zero output.
+- dm_is_freesync_pcon_whitelist(): every entry in the whitelist
+  table returns true; an unknown ID and a zero ID return false.
+- populate_hdmi_info_from_connector(): scdc_present is copied from
+  hdmi->scdc.supported for both true and false; FRL DSC fields map
+  10bpc and 12bpc correctly and ignore unknown values.
+- dm_get_adaptive_sync_support_type(): five cases covering the
+  default non-converter path, HDMI converter without conditions,
+  partial conditions, all conditions met with a whitelist device
+  (FREESYNC_TYPE_PCON_IN_WHITELIST), and all conditions met with a
+  non-whitelisted device.
+- dm_helpers_is_fullscreen() / dm_helpers_is_hdr_on(): stubs always
+  return false.
+- get_max_frl_rate(): all six valid lane/rate combinations plus the
+  unknown combination returning 0.
+- dm_dtn_log_begin()/dm_dtn_log_append_v()/dm_dtn_log_end(): buffer
+  accumulation and NULL-context handling without crashing.
+- dm_helpers_dp_read_dpcd()/dm_helpers_dp_write_dpcd(): NULL link
+  private data returns false.
+- dm_helpers_dp_mst_start_top_mgr()/dm_helpers_dp_mst_stop_top_mgr():
+  NULL link private data and the boot path.
+- dm_helpers_dp_write_hblank_reduction(): stub returns false.
+
+Assisted-by: Copilot:Claude-Opus-4.8
+Reviewed-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Chenyu Chen <chen-yu.chen@amd.com>
+Tested-by: Daniel Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../amd/display/amdgpu_dm/amdgpu_dm_helpers.c |  58 +-
+ .../amd/display/amdgpu_dm/amdgpu_dm_helpers.h |  20 +
+ .../drm/amd/display/amdgpu_dm/tests/Makefile  |   1 +
+ .../amdgpu_dm/tests/amdgpu_dm_helpers_test.c  | 645 ++++++++++++++++++
+ 4 files changed, 707 insertions(+), 17 deletions(-)
+ create mode 100644 drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.h
+ create mode 100644 drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_helpers_test.c
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
+index eef031022be2..71e2627f9a9d 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
+@@ -48,6 +48,8 @@
+ #include "dm_helpers.h"
+ #include "ddc_service_types.h"
+ #include "clk_mgr.h"
++#include "amdgpu_dm_kunit_helpers.h"
++#include "amdgpu_dm_helpers.h"
+ 
+ #define MCCS_DEST_ADDR (0x6E >> 1)
+ #define MCCS_SRC_ADDR	0x51
+@@ -88,12 +90,13 @@ union vcp_reply {
+ 	unsigned char raw[11];
+ };
+ 
+-static u32 edid_extract_panel_id(struct edid *edid)
++STATIC_IFN_KUNIT u32 edid_extract_panel_id(struct edid *edid)
+ {
+ 	return (u32)edid->mfg_id[0] << 24   |
+ 	       (u32)edid->mfg_id[1] << 16   |
+ 	       (u32)EDID_PRODUCT_ID(edid);
+ }
++EXPORT_IF_KUNIT(edid_extract_panel_id);
+ 
+ static void apply_edid_quirks(struct dc_link *link, struct edid *edid,
+ 			      struct dc_edid_caps *edid_caps)
+@@ -495,6 +498,7 @@ void dm_dtn_log_begin(struct dc_context *ctx,
+ 
+ 	dm_dtn_log_append_v(ctx, log_ctx, "%s", msg);
+ }
++EXPORT_IF_KUNIT(dm_dtn_log_begin);
+ 
+ __printf(3, 4)
+ void dm_dtn_log_append_v(struct dc_context *ctx,
+@@ -557,6 +561,7 @@ void dm_dtn_log_append_v(struct dc_context *ctx,
+ 	if (n > 0)
+ 		log_ctx->pos += n;
+ }
++EXPORT_IF_KUNIT(dm_dtn_log_append_v);
+ 
+ void dm_dtn_log_end(struct dc_context *ctx,
+ 	struct dc_log_buffer_ctx *log_ctx)
+@@ -570,6 +575,7 @@ void dm_dtn_log_end(struct dc_context *ctx,
+ 
+ 	dm_dtn_log_append_v(ctx, log_ctx, "%s", msg);
+ }
++EXPORT_IF_KUNIT(dm_dtn_log_end);
+ 
+ bool dm_helpers_dp_mst_start_top_mgr(
+ 		struct dc_context *ctx,
+@@ -604,6 +610,7 @@ bool dm_helpers_dp_mst_start_top_mgr(
+ 
+ 	return true;
+ }
++EXPORT_IF_KUNIT(dm_helpers_dp_mst_start_top_mgr);
+ 
+ bool dm_helpers_dp_mst_stop_top_mgr(
+ 		struct dc_context *ctx,
+@@ -626,6 +633,7 @@ bool dm_helpers_dp_mst_stop_top_mgr(
+ 
+ 	return false;
+ }
++EXPORT_IF_KUNIT(dm_helpers_dp_mst_stop_top_mgr);
+ 
+ bool dm_helpers_dp_read_dpcd(
+ 		struct dc_context *ctx,
+@@ -643,6 +651,7 @@ bool dm_helpers_dp_read_dpcd(
+ 	return drm_dp_dpcd_read(&aconnector->dm_dp_aux.aux, address, data,
+ 				size) == size;
+ }
++EXPORT_IF_KUNIT(dm_helpers_dp_read_dpcd);
+ 
+ bool dm_helpers_dp_write_dpcd(
+ 		struct dc_context *ctx,
+@@ -659,6 +668,7 @@ bool dm_helpers_dp_write_dpcd(
+ 	return drm_dp_dpcd_write(&aconnector->dm_dp_aux.aux,
+ 			address, (uint8_t *)data, size) > 0;
+ }
++EXPORT_IF_KUNIT(dm_helpers_dp_write_dpcd);
+ 
+ bool dm_helpers_submit_i2c(
+ 		struct dc_context *ctx,
+@@ -974,6 +984,7 @@ bool dm_helpers_dp_write_hblank_reduction(struct dc_context *ctx, const struct d
+ 	// TODO
+ 	return false;
+ }
++EXPORT_IF_KUNIT(dm_helpers_dp_write_hblank_reduction);
+ 
+ bool dm_helpers_is_dp_sink_present(struct dc_link *link)
+ {
+@@ -1091,7 +1102,7 @@ dm_helpers_read_vbios_hardcoded_edid(struct dc_link *link, struct amdgpu_dm_conn
+ 	return edid;
+ }
+ 
+-static uint8_t get_max_frl_rate(uint8_t max_lanes, uint8_t max_rate_per_lane)
++STATIC_IFN_KUNIT uint8_t get_max_frl_rate(uint8_t max_lanes, uint8_t max_rate_per_lane)
+ {
+ 	uint8_t max_frl_rate;
+ 
+@@ -1112,6 +1123,7 @@ static uint8_t get_max_frl_rate(uint8_t max_lanes, uint8_t max_rate_per_lane)
+ 
+ 	return max_frl_rate;
+ }
++EXPORT_IF_KUNIT(get_max_frl_rate);
+ 
+ static uint8_t get_dsc_max_slices(uint8_t max_slices, int clk_per_slice)
+ {
+@@ -1156,6 +1168,7 @@ void populate_hdmi_info_from_connector(bool enable_frl, struct drm_hdmi_info *hd
+ 		}
+ 	}
+ }
++EXPORT_IF_KUNIT(populate_hdmi_info_from_connector);
+ 
+ enum dc_edid_status dm_helpers_read_local_edid(
+ 		struct dc_context *ctx,
+@@ -1556,24 +1569,32 @@ void dm_helpers_dp_mst_update_branch_bandwidth(
+ 	// TODO
+ }
+ 
+-static bool dm_is_freesync_pcon_whitelist(const uint32_t branch_dev_id)
++STATIC_IFN_KUNIT const uint32_t dm_freesync_pcon_whitelist[] = {
++	DP_BRANCH_DEVICE_ID_0060AD,
++	DP_BRANCH_DEVICE_ID_00E04C,
++	DP_BRANCH_DEVICE_ID_90CC24,
++	DP_BRANCH_DEVICE_ID_001CF8,
++	DP_BRANCH_DEVICE_ID_001FF2,
++};
++EXPORT_IF_KUNIT(dm_freesync_pcon_whitelist);
++
++STATIC_IFN_KUNIT uint32_t dm_freesync_pcon_whitelist_count(void)
+ {
+-	bool ret_val = false;
+-
+-	switch (branch_dev_id) {
+-	case DP_BRANCH_DEVICE_ID_0060AD:
+-	case DP_BRANCH_DEVICE_ID_00E04C:
+-	case DP_BRANCH_DEVICE_ID_90CC24:
+-	case DP_BRANCH_DEVICE_ID_001CF8:
+-	case DP_BRANCH_DEVICE_ID_001FF2:
+-		ret_val = true;
+-		break;
+-	default:
+-		break;
+-	}
++	return ARRAY_SIZE(dm_freesync_pcon_whitelist);
++}
++EXPORT_IF_KUNIT(dm_freesync_pcon_whitelist_count);
++
++STATIC_IFN_KUNIT bool dm_is_freesync_pcon_whitelist(const uint32_t branch_dev_id)
++{
++	u32 i;
+ 
+-	return ret_val;
++	for (i = 0; i < dm_freesync_pcon_whitelist_count(); i++)
++		if (dm_freesync_pcon_whitelist[i] == branch_dev_id)
++			return true;
++
++	return false;
+ }
++EXPORT_IF_KUNIT(dm_is_freesync_pcon_whitelist);
+ 
+ enum adaptive_sync_type dm_get_adaptive_sync_support_type(struct dc_link *link)
+ {
+@@ -1593,18 +1614,21 @@ enum adaptive_sync_type dm_get_adaptive_sync_support_type(struct dc_link *link)
+ 
+ 	return as_type;
+ }
++EXPORT_IF_KUNIT(dm_get_adaptive_sync_support_type);
+ 
+ bool dm_helpers_is_fullscreen(struct dc_context *ctx, struct dc_stream_state *stream)
+ {
+ 	// TODO
+ 	return false;
+ }
++EXPORT_IF_KUNIT(dm_helpers_is_fullscreen);
+ 
+ bool dm_helpers_is_hdr_on(struct dc_context *ctx, struct dc_stream_state *stream)
+ {
+ 	// TODO
+ 	return false;
+ }
++EXPORT_IF_KUNIT(dm_helpers_is_hdr_on);
+ 
+ static int mccs_operation_vcp_request(unsigned int vcp_code, struct dc_link *link,
+ 				union vcp_reply *reply)
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.h
+new file mode 100644
+index 000000000000..2ac9762895ec
+--- /dev/null
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.h
+@@ -0,0 +1,20 @@
++/* SPDX-License-Identifier: MIT */
++/*
++ * Copyright 2026 Advanced Micro Devices, Inc.
++ */
++
++#ifndef __AMDGPU_DM_HELPERS_H__
++#define __AMDGPU_DM_HELPERS_H__
++
++#if IS_ENABLED(CONFIG_DRM_AMD_DC_KUNIT_TEST)
++#include <drm/drm_edid.h>
++
++/* Exported for KUnit testing */
++u32 edid_extract_panel_id(struct edid *edid);
++uint8_t get_max_frl_rate(uint8_t max_lanes, uint8_t max_rate_per_lane);
++bool dm_is_freesync_pcon_whitelist(const uint32_t branch_dev_id);
++extern const uint32_t dm_freesync_pcon_whitelist[];
++uint32_t dm_freesync_pcon_whitelist_count(void);
++#endif /* CONFIG_DRM_AMD_DC_KUNIT_TEST */
++
++#endif /* __AMDGPU_DM_HELPERS_H__ */
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/Makefile b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/Makefile
+index 364b4f3c783f..a067332f9f41 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/Makefile
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/Makefile
+@@ -29,3 +29,4 @@ obj-$(CONFIG_DRM_AMD_DC_KUNIT_TEST) += amdgpu_dm_pp_smu_test.o
+ obj-$(CONFIG_DRM_AMD_DC_KUNIT_TEST) += amdgpu_dm_test.o
+ obj-$(CONFIG_DRM_AMD_DC_KUNIT_TEST) += amdgpu_dm_crtc_test.o
+ obj-$(CONFIG_DRM_AMD_DC_KUNIT_TEST) += amdgpu_dm_services_test.o
++obj-$(CONFIG_DRM_AMD_DC_KUNIT_TEST) += amdgpu_dm_helpers_test.o
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_helpers_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_helpers_test.c
+new file mode 100644
+index 000000000000..14004ff87c9b
+--- /dev/null
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_helpers_test.c
+@@ -0,0 +1,645 @@
++// SPDX-License-Identifier: GPL-2.0 OR MIT
++/*
++ * KUnit tests for amdgpu_dm_helpers.c
++ *
++ * Copyright 2026 Advanced Micro Devices, Inc.
++ */
++
++#include <kunit/test.h>
++#include <drm/drm_edid.h>
++#include <drm/drm_kunit_helpers.h>
++
++#include "dc.h"
++#include "amdgpu.h"
++#include "amdgpu_mode.h"
++#include "amdgpu_dm.h"
++#include "dm_helpers.h"
++#include "ddc_service_types.h"
++#include "amdgpu_dm_helpers.h"
++
++/* Tests for edid_extract_panel_id() */
++
++/**
++ * dm_test_edid_extract_panel_id_basic - Test Edid extract panel id basic
++ * @test: The KUnit test context
++ */
++static void dm_test_edid_extract_panel_id_basic(struct kunit *test)
++{
++	struct edid *edid;
++	u32 panel_id;
++
++	edid = kunit_kzalloc(test, sizeof(*edid), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, edid);
++
++	edid->mfg_id[0] = 0x12;
++	edid->mfg_id[1] = 0x34;
++	edid->prod_code[0] = 0xAB;
++	edid->prod_code[1] = 0xCD;
++
++	panel_id = edid_extract_panel_id(edid);
++
++	/*
++	 * Expected: (0x12 << 24) | (0x34 << 16) | EDID_PRODUCT_ID(edid)
++	 * EDID_PRODUCT_ID = prod_code[0] | (prod_code[1] << 8) = 0xAB | 0xCD00 = 0xCDAB
++	 * Result: 0x12340000 | 0x0000CDAB = 0x1234CDAB
++	 */
++	KUNIT_EXPECT_EQ(test, panel_id, (u32)0x1234CDAB);
++}
++
++/**
++ * dm_test_edid_extract_panel_id_zeros - Test Edid extract panel id zeros
++ * @test: The KUnit test context
++ */
++static void dm_test_edid_extract_panel_id_zeros(struct kunit *test)
++{
++	struct edid *edid;
++
++	edid = kunit_kzalloc(test, sizeof(*edid), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, edid);
++
++	KUNIT_EXPECT_EQ(test, edid_extract_panel_id(edid), 0U);
++}
++
++/* Tests for dm_is_freesync_pcon_whitelist() */
++
++/**
++ * dm_test_freesync_pcon_whitelist_all_known - Test all known Freesync Pcon whitelist entries
++ * @test: The KUnit test context
++ *
++ * Iterates over the driver's whitelist table directly so that any ID added
++ * to dm_freesync_pcon_whitelist[] is automatically covered by this test.
++ */
++static void dm_test_freesync_pcon_whitelist_all_known(struct kunit *test)
++{
++	u32 i;
++
++	for (i = 0; i < dm_freesync_pcon_whitelist_count(); i++)
++		KUNIT_EXPECT_TRUE(test,
++				  dm_is_freesync_pcon_whitelist(dm_freesync_pcon_whitelist[i]));
++}
++
++/**
++ * dm_test_freesync_pcon_whitelist_not_in_list - Test Freesync pcon whitelist not in list
++ * @test: The KUnit test context
++ */
++static void dm_test_freesync_pcon_whitelist_not_in_list(struct kunit *test)
++{
++	/* 0xFFFFFF is not a known whitelist device */
++	KUNIT_EXPECT_FALSE(test, dm_is_freesync_pcon_whitelist(0xFFFFFF));
++}
++
++/**
++ * dm_test_freesync_pcon_whitelist_zero - Test Freesync pcon whitelist zero
++ * @test: The KUnit test context
++ */
++static void dm_test_freesync_pcon_whitelist_zero(struct kunit *test)
++{
++	KUNIT_EXPECT_FALSE(test, dm_is_freesync_pcon_whitelist(0));
++}
++
++/* Tests for populate_hdmi_info_from_connector() */
++
++/**
++ * dm_test_populate_hdmi_scdc_present_true - Test Populate hdmi scdc present true
++ * @test: The KUnit test context
++ */
++static void dm_test_populate_hdmi_scdc_present_true(struct kunit *test)
++{
++	struct drm_hdmi_info *hdmi;
++	struct dc_edid_caps *caps;
++
++	hdmi = kunit_kzalloc(test, sizeof(*hdmi), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, hdmi);
++	caps = kunit_kzalloc(test, sizeof(*caps), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, caps);
++
++	hdmi->scdc.supported = true;
++
++	populate_hdmi_info_from_connector(true, hdmi, caps);
++
++	KUNIT_EXPECT_TRUE(test, caps->scdc_present);
++}
++
++/**
++ * dm_test_populate_hdmi_scdc_present_false - Test Populate hdmi scdc present false
++ * @test: The KUnit test context
++ */
++static void dm_test_populate_hdmi_scdc_present_false(struct kunit *test)
++{
++	struct drm_hdmi_info *hdmi;
++	struct dc_edid_caps *caps;
++
++	hdmi = kunit_kzalloc(test, sizeof(*hdmi), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, hdmi);
++	caps = kunit_kzalloc(test, sizeof(*caps), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, caps);
++
++	hdmi->scdc.supported = false;
++	caps->scdc_present = true; /* pre-set to confirm it gets cleared */
++
++	populate_hdmi_info_from_connector(true, hdmi, caps);
++
++	KUNIT_EXPECT_FALSE(test, caps->scdc_present);
++}
++
++/**
++ * dm_test_populate_hdmi_frl_dsc_10bpc - Test HDMI FRL DSC 10 bpc caps
++ * @test: The KUnit test context
++ */
++static void dm_test_populate_hdmi_frl_dsc_10bpc(struct kunit *test)
++{
++	struct drm_hdmi_info *hdmi;
++	struct dc_edid_caps *caps;
++
++	hdmi = kunit_kzalloc(test, sizeof(*hdmi), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, hdmi);
++	caps = kunit_kzalloc(test, sizeof(*caps), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, caps);
++
++	hdmi->max_lanes = 4;
++	hdmi->max_frl_rate_per_lane = 12;
++	hdmi->dsc_cap.v_1p2 = true;
++	hdmi->dsc_cap.bpc_supported = 10;
++	hdmi->dsc_cap.all_bpp = true;
++	hdmi->dsc_cap.native_420 = true;
++	hdmi->dsc_cap.max_slices = 8;
++	hdmi->dsc_cap.clk_per_slice = 400;
++	hdmi->dsc_cap.max_lanes = 4;
++	hdmi->dsc_cap.max_frl_rate_per_lane = 10;
++	hdmi->dsc_cap.total_chunk_kbytes = 7;
++
++	populate_hdmi_info_from_connector(true, hdmi, caps);
++
++	KUNIT_EXPECT_EQ(test, caps->max_frl_rate, 6);
++	KUNIT_EXPECT_TRUE(test, caps->frl_dsc_support);
++	KUNIT_EXPECT_TRUE(test, caps->frl_dsc_10bpc);
++	KUNIT_EXPECT_FALSE(test, caps->frl_dsc_12bpc);
++	KUNIT_EXPECT_TRUE(test, caps->frl_dsc_all_bpp);
++	KUNIT_EXPECT_TRUE(test, caps->frl_dsc_native_420);
++	KUNIT_EXPECT_EQ(test, caps->frl_dsc_max_slices, 5);
++	KUNIT_EXPECT_EQ(test, caps->frl_dsc_max_frl_rate, 5);
++	KUNIT_EXPECT_EQ(test, caps->frl_dsc_total_chunk_kbytes, 7);
++}
++
++/**
++ * dm_test_populate_hdmi_frl_dsc_12bpc - Test HDMI FRL DSC 12 bpc caps
++ * @test: The KUnit test context
++ */
++static void dm_test_populate_hdmi_frl_dsc_12bpc(struct kunit *test)
++{
++	struct drm_hdmi_info *hdmi;
++	struct dc_edid_caps *caps;
++
++	hdmi = kunit_kzalloc(test, sizeof(*hdmi), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, hdmi);
++	caps = kunit_kzalloc(test, sizeof(*caps), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, caps);
++
++	hdmi->max_lanes = 3;
++	hdmi->max_frl_rate_per_lane = 6;
++	hdmi->dsc_cap.v_1p2 = true;
++	hdmi->dsc_cap.bpc_supported = 12;
++	hdmi->dsc_cap.max_slices = 16;
++	hdmi->dsc_cap.clk_per_slice = 400;
++	hdmi->dsc_cap.max_lanes = 3;
++	hdmi->dsc_cap.max_frl_rate_per_lane = 3;
++
++	populate_hdmi_info_from_connector(true, hdmi, caps);
++
++	KUNIT_EXPECT_EQ(test, caps->max_frl_rate, 2);
++	KUNIT_EXPECT_TRUE(test, caps->frl_dsc_support);
++	KUNIT_EXPECT_FALSE(test, caps->frl_dsc_10bpc);
++	KUNIT_EXPECT_TRUE(test, caps->frl_dsc_12bpc);
++	KUNIT_EXPECT_EQ(test, caps->frl_dsc_max_slices, 7);
++	KUNIT_EXPECT_EQ(test, caps->frl_dsc_max_frl_rate, 1);
++}
++
++/**
++ * dm_test_populate_hdmi_frl_dsc_unknown_values - Test HDMI FRL DSC unknown values
++ * @test: The KUnit test context
++ */
++static void dm_test_populate_hdmi_frl_dsc_unknown_values(struct kunit *test)
++{
++	struct drm_hdmi_info *hdmi;
++	struct dc_edid_caps *caps;
++
++	hdmi = kunit_kzalloc(test, sizeof(*hdmi), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, hdmi);
++	caps = kunit_kzalloc(test, sizeof(*caps), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, caps);
++
++	hdmi->max_lanes = 2;
++	hdmi->max_frl_rate_per_lane = 3;
++	hdmi->dsc_cap.v_1p2 = true;
++	hdmi->dsc_cap.bpc_supported = 8;
++	hdmi->dsc_cap.max_slices = 3;
++	hdmi->dsc_cap.clk_per_slice = 340;
++	hdmi->dsc_cap.max_lanes = 2;
++	hdmi->dsc_cap.max_frl_rate_per_lane = 12;
++
++	populate_hdmi_info_from_connector(true, hdmi, caps);
++
++	KUNIT_EXPECT_EQ(test, caps->max_frl_rate, 0);
++	KUNIT_EXPECT_TRUE(test, caps->frl_dsc_support);
++	KUNIT_EXPECT_FALSE(test, caps->frl_dsc_10bpc);
++	KUNIT_EXPECT_FALSE(test, caps->frl_dsc_12bpc);
++	KUNIT_EXPECT_EQ(test, caps->frl_dsc_max_slices, 0);
++	KUNIT_EXPECT_EQ(test, caps->frl_dsc_max_frl_rate, 0);
++}
++
++/* Tests for dm_get_adaptive_sync_support_type() */
++
++/**
++ * dm_test_adaptive_sync_type_none_default - Test Adaptive sync type none default
++ * @test: The KUnit test context
++ */
++static void dm_test_adaptive_sync_type_none_default(struct kunit *test)
++{
++	struct dc_link *link;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++
++	/* dongle_type = 0 (DISPLAY_DONGLE_NONE) → default case → TYPE_NONE */
++	KUNIT_EXPECT_EQ(test,
++			(int)dm_get_adaptive_sync_support_type(link),
++			(int)ADAPTIVE_SYNC_TYPE_NONE);
++}
++
++/**
++ * dm_test_adaptive_sync_type_converter_no_conditions - Converter without caps
++ * @test: The KUnit test context
++ */
++static void dm_test_adaptive_sync_type_converter_no_conditions(struct kunit *test)
++{
++	struct dc_link *link;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++
++	/* HDMI converter but no adaptive sync cap → still NONE */
++	link->dpcd_caps.dongle_type = DISPLAY_DONGLE_DP_HDMI_CONVERTER;
++
++	KUNIT_EXPECT_EQ(test,
++			(int)dm_get_adaptive_sync_support_type(link),
++			(int)ADAPTIVE_SYNC_TYPE_NONE);
++}
++
++/**
++ * dm_test_adaptive_sync_type_converter_partial_conditions - Partial caps
++ * @test: The KUnit test context
++ */
++static void dm_test_adaptive_sync_type_converter_partial_conditions(struct kunit *test)
++{
++	struct dc_link *link;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++
++	/* Cap set and whitelist ID, but allow_invalid_MSA_timing_param = false */
++	link->dpcd_caps.dongle_type = DISPLAY_DONGLE_DP_HDMI_CONVERTER;
++	link->dpcd_caps.adaptive_sync_caps.dp_adap_sync_caps.bits.ADAPTIVE_SYNC_SDP_SUPPORT = 1;
++	link->dpcd_caps.allow_invalid_MSA_timing_param = false;
++	link->dpcd_caps.branch_dev_id = DP_BRANCH_DEVICE_ID_0060AD;
++
++	KUNIT_EXPECT_EQ(test,
++			(int)dm_get_adaptive_sync_support_type(link),
++			(int)ADAPTIVE_SYNC_TYPE_NONE);
++}
++
++/**
++ * dm_test_adaptive_sync_type_pcon_whitelist - Test Adaptive sync type pcon whitelist
++ * @test: The KUnit test context
++ */
++static void dm_test_adaptive_sync_type_pcon_whitelist(struct kunit *test)
++{
++	struct dc_link *link;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++
++	/* All conditions met → FREESYNC_TYPE_PCON_IN_WHITELIST */
++	link->dpcd_caps.dongle_type = DISPLAY_DONGLE_DP_HDMI_CONVERTER;
++	link->dpcd_caps.adaptive_sync_caps.dp_adap_sync_caps.bits.ADAPTIVE_SYNC_SDP_SUPPORT = 1;
++	link->dpcd_caps.allow_invalid_MSA_timing_param = true;
++	link->dpcd_caps.branch_dev_id = DP_BRANCH_DEVICE_ID_0060AD;
++
++	KUNIT_EXPECT_EQ(test,
++			(int)dm_get_adaptive_sync_support_type(link),
++			(int)FREESYNC_TYPE_PCON_IN_WHITELIST);
++}
++
++/**
++ * dm_test_adaptive_sync_type_converter_nonwhitelist - Converter not whitelisted
++ * @test: The KUnit test context
++ */
++static void dm_test_adaptive_sync_type_converter_nonwhitelist(struct kunit *test)
++{
++	struct dc_link *link;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++
++	/* All conditions met but branch_dev_id not in whitelist → NONE */
++	link->dpcd_caps.dongle_type = DISPLAY_DONGLE_DP_HDMI_CONVERTER;
++	link->dpcd_caps.adaptive_sync_caps.dp_adap_sync_caps.bits.ADAPTIVE_SYNC_SDP_SUPPORT = 1;
++	link->dpcd_caps.allow_invalid_MSA_timing_param = true;
++	link->dpcd_caps.branch_dev_id = 0xFFFFFF;
++
++	KUNIT_EXPECT_EQ(test,
++			(int)dm_get_adaptive_sync_support_type(link),
++			(int)ADAPTIVE_SYNC_TYPE_NONE);
++}
++
++/* Tests for dm_helpers_is_fullscreen() and dm_helpers_is_hdr_on() */
++
++/**
++ * dm_test_helpers_is_fullscreen_returns_false - Test Helpers is fullscreen returns false
++ * @test: The KUnit test context
++ */
++static void dm_test_helpers_is_fullscreen_returns_false(struct kunit *test)
++{
++	/* Stub — always returns false */
++	KUNIT_EXPECT_FALSE(test, dm_helpers_is_fullscreen(NULL, NULL));
++}
++
++/**
++ * dm_test_helpers_is_hdr_on_returns_false - Test Helpers is hdr on returns false
++ * @test: The KUnit test context
++ */
++static void dm_test_helpers_is_hdr_on_returns_false(struct kunit *test)
++{
++	/* Stub — always returns false */
++	KUNIT_EXPECT_FALSE(test, dm_helpers_is_hdr_on(NULL, NULL));
++}
++
++/* Tests for get_max_frl_rate() */
++
++/**
++ * dm_test_get_max_frl_rate_3lanes_3gbps - Test Get max frl rate 3lanes 3gbps
++ * @test: The KUnit test context
++ */
++static void dm_test_get_max_frl_rate_3lanes_3gbps(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, get_max_frl_rate(3, 3), 1);
++}
++
++/**
++ * dm_test_get_max_frl_rate_3lanes_6gbps - Test Get max frl rate 3lanes 6gbps
++ * @test: The KUnit test context
++ */
++static void dm_test_get_max_frl_rate_3lanes_6gbps(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, get_max_frl_rate(3, 6), 2);
++}
++
++/**
++ * dm_test_get_max_frl_rate_4lanes_6gbps - Test Get max frl rate 4lanes 6gbps
++ * @test: The KUnit test context
++ */
++static void dm_test_get_max_frl_rate_4lanes_6gbps(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, get_max_frl_rate(4, 6), 3);
++}
++
++/**
++ * dm_test_get_max_frl_rate_4lanes_8gbps - Test Get max frl rate 4lanes 8gbps
++ * @test: The KUnit test context
++ */
++static void dm_test_get_max_frl_rate_4lanes_8gbps(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, get_max_frl_rate(4, 8), 4);
++}
++
++/**
++ * dm_test_get_max_frl_rate_4lanes_10gbps - Test Get max frl rate 4lanes 10gbps
++ * @test: The KUnit test context
++ */
++static void dm_test_get_max_frl_rate_4lanes_10gbps(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, get_max_frl_rate(4, 10), 5);
++}
++
++/**
++ * dm_test_get_max_frl_rate_4lanes_12gbps - Test Get max frl rate 4lanes 12gbps
++ * @test: The KUnit test context
++ */
++static void dm_test_get_max_frl_rate_4lanes_12gbps(struct kunit *test)
++{
++	KUNIT_EXPECT_EQ(test, get_max_frl_rate(4, 12), 6);
++}
++
++/**
++ * dm_test_get_max_frl_rate_unknown - Test Get max frl rate unknown
++ * @test: The KUnit test context
++ */
++static void dm_test_get_max_frl_rate_unknown(struct kunit *test)
++{
++	/* Unknown lane/rate combination → 0 */
++	KUNIT_EXPECT_EQ(test, get_max_frl_rate(2, 3), 0);
++}
++
++/* Tests for dm_dtn_log_begin() / dm_dtn_log_append_v() / dm_dtn_log_end() */
++
++/**
++ * dm_test_dtn_log_buffer_accumulates - Test DTN log buffer accumulation
++ * @test: The KUnit test context
++ */
++static void dm_test_dtn_log_buffer_accumulates(struct kunit *test)
++{
++	struct dc_log_buffer_ctx log_ctx = {0};
++
++	dm_dtn_log_begin(NULL, &log_ctx);
++	dm_dtn_log_append_v(NULL, &log_ctx, "x=%d\n", 7);
++	dm_dtn_log_end(NULL, &log_ctx);
++
++	KUNIT_ASSERT_NOT_NULL(test, log_ctx.buf);
++	KUNIT_EXPECT_STREQ(test, log_ctx.buf, "[dtn begin]\nx=7\n[dtn end]\n");
++	KUNIT_EXPECT_EQ(test, log_ctx.pos, strlen("[dtn begin]\nx=7\n[dtn end]\n"));
++
++	kvfree(log_ctx.buf);
++}
++
++/**
++ * dm_test_dtn_log_null_ctx_no_crash - Test DTN log helpers with NULL log buffer
++ * @test: The KUnit test context
++ */
++static void dm_test_dtn_log_null_ctx_no_crash(struct kunit *test)
++{
++	/* NULL log_ctx redirects to dmesg and must not dereference a buffer */
++	dm_dtn_log_begin(NULL, NULL);
++	dm_dtn_log_append_v(NULL, NULL, "value %d\n", 1);
++	dm_dtn_log_end(NULL, NULL);
++
++	KUNIT_EXPECT_TRUE(test, true);
++}
++
++/* Tests for dm_helpers_dp_read_dpcd() / dm_helpers_dp_write_dpcd() */
++
++/**
++ * dm_test_dp_read_dpcd_null_priv - Test DPCD read returns false without connector
++ * @test: The KUnit test context
++ */
++static void dm_test_dp_read_dpcd_null_priv(struct kunit *test)
++{
++	struct dc_link *link;
++	uint8_t data = 0;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++
++	/* link->priv (aconnector) is NULL → early return false */
++	KUNIT_EXPECT_FALSE(test,
++			   dm_helpers_dp_read_dpcd(NULL, link, 0, &data, sizeof(data)));
++}
++
++/**
++ * dm_test_dp_write_dpcd_null_priv - Test DPCD write returns false without connector
++ * @test: The KUnit test context
++ */
++static void dm_test_dp_write_dpcd_null_priv(struct kunit *test)
++{
++	struct dc_link *link;
++	uint8_t data = 0;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++
++	/* link->priv (aconnector) is NULL → early return false */
++	KUNIT_EXPECT_FALSE(test,
++			   dm_helpers_dp_write_dpcd(NULL, link, 0, &data, sizeof(data)));
++}
++
++/* Tests for dm_helpers_dp_mst_start_top_mgr() / dm_helpers_dp_mst_stop_top_mgr() */
++
++/**
++ * dm_test_mst_start_top_mgr_null_priv - Test MST start returns false without connector
++ * @test: The KUnit test context
++ */
++static void dm_test_mst_start_top_mgr_null_priv(struct kunit *test)
++{
++	struct dc_link *link;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++
++	KUNIT_EXPECT_FALSE(test, dm_helpers_dp_mst_start_top_mgr(NULL, link, false));
++}
++
++/**
++ * dm_test_mst_stop_top_mgr_null_priv - Test MST stop returns false without connector
++ * @test: The KUnit test context
++ */
++static void dm_test_mst_stop_top_mgr_null_priv(struct kunit *test)
++{
++	struct dc_link *link;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++
++	KUNIT_EXPECT_FALSE(test, dm_helpers_dp_mst_stop_top_mgr(NULL, link));
++}
++
++/**
++ * dm_test_mst_start_top_mgr_boot - Test MST start boot path on a connector-backed link
++ * @test: The KUnit test context
++ *
++ * Uses the DRM KUnit mock device to back the connector so the link is a
++ * realistic connector-backed link. The boot path short-circuits and returns
++ * true without touching the MST topology manager.
++ */
++static void dm_test_mst_start_top_mgr_boot(struct kunit *test)
++{
++	struct amdgpu_dm_connector *aconnector;
++	struct amdgpu_device *adev;
++	struct drm_device *drm;
++	struct device *dev;
++	struct dc_link *link;
++
++	dev = drm_kunit_helper_alloc_device(test);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dev);
++
++	drm = __drm_kunit_helper_alloc_drm_device(test, dev,
++						  sizeof(*adev),
++						  offsetof(struct amdgpu_device, ddev),
++						  DRIVER_MODESET);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, drm);
++	adev = drm_to_adev(drm);
++
++	aconnector = kunit_kzalloc(test, sizeof(*aconnector), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, aconnector);
++	aconnector->base.dev = drm;
++
++	link = kunit_kzalloc(test, sizeof(*link), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, link);
++	link->priv = aconnector;
++
++	KUNIT_EXPECT_TRUE(test, dm_helpers_dp_mst_start_top_mgr(NULL, link, true));
++}
++
++/* Tests for dm_helpers_dp_write_hblank_reduction() */
++
++/**
++ * dm_test_dp_write_hblank_reduction_false - Test hblank reduction stub returns false
++ * @test: The KUnit test context
++ */
++static void dm_test_dp_write_hblank_reduction_false(struct kunit *test)
++{
++	KUNIT_EXPECT_FALSE(test, dm_helpers_dp_write_hblank_reduction(NULL, NULL));
++}
++
++static struct kunit_case amdgpu_dm_helpers_test_cases[] = {
++	/* edid_extract_panel_id */
++	KUNIT_CASE(dm_test_edid_extract_panel_id_basic),
++	KUNIT_CASE(dm_test_edid_extract_panel_id_zeros),
++	/* dm_is_freesync_pcon_whitelist */
++	KUNIT_CASE(dm_test_freesync_pcon_whitelist_all_known),
++	KUNIT_CASE(dm_test_freesync_pcon_whitelist_not_in_list),
++	KUNIT_CASE(dm_test_freesync_pcon_whitelist_zero),
++	/* populate_hdmi_info_from_connector */
++	KUNIT_CASE(dm_test_populate_hdmi_scdc_present_true),
++	KUNIT_CASE(dm_test_populate_hdmi_scdc_present_false),
++	KUNIT_CASE(dm_test_populate_hdmi_frl_dsc_10bpc),
++	KUNIT_CASE(dm_test_populate_hdmi_frl_dsc_12bpc),
++	KUNIT_CASE(dm_test_populate_hdmi_frl_dsc_unknown_values),
++	/* dm_get_adaptive_sync_support_type */
++	KUNIT_CASE(dm_test_adaptive_sync_type_none_default),
++	KUNIT_CASE(dm_test_adaptive_sync_type_converter_no_conditions),
++	KUNIT_CASE(dm_test_adaptive_sync_type_converter_partial_conditions),
++	KUNIT_CASE(dm_test_adaptive_sync_type_pcon_whitelist),
++	KUNIT_CASE(dm_test_adaptive_sync_type_converter_nonwhitelist),
++	/* dm_helpers_is_fullscreen / dm_helpers_is_hdr_on */
++	KUNIT_CASE(dm_test_helpers_is_fullscreen_returns_false),
++	KUNIT_CASE(dm_test_helpers_is_hdr_on_returns_false),
++	/* get_max_frl_rate */
++	KUNIT_CASE(dm_test_get_max_frl_rate_3lanes_3gbps),
++	KUNIT_CASE(dm_test_get_max_frl_rate_3lanes_6gbps),
++	KUNIT_CASE(dm_test_get_max_frl_rate_4lanes_6gbps),
++	KUNIT_CASE(dm_test_get_max_frl_rate_4lanes_8gbps),
++	KUNIT_CASE(dm_test_get_max_frl_rate_4lanes_10gbps),
++	KUNIT_CASE(dm_test_get_max_frl_rate_4lanes_12gbps),
++	KUNIT_CASE(dm_test_get_max_frl_rate_unknown),
++	/* dm_dtn_log_begin / dm_dtn_log_append_v / dm_dtn_log_end */
++	KUNIT_CASE(dm_test_dtn_log_buffer_accumulates),
++	KUNIT_CASE(dm_test_dtn_log_null_ctx_no_crash),
++	/* dm_helpers_dp_read_dpcd / dm_helpers_dp_write_dpcd */
++	KUNIT_CASE(dm_test_dp_read_dpcd_null_priv),
++	KUNIT_CASE(dm_test_dp_write_dpcd_null_priv),
++	/* dm_helpers_dp_mst_start_top_mgr / dm_helpers_dp_mst_stop_top_mgr */
++	KUNIT_CASE(dm_test_mst_start_top_mgr_null_priv),
++	KUNIT_CASE(dm_test_mst_stop_top_mgr_null_priv),
++	KUNIT_CASE(dm_test_mst_start_top_mgr_boot),
++	/* dm_helpers_dp_write_hblank_reduction */
++	KUNIT_CASE(dm_test_dp_write_hblank_reduction_false),
++	{}
++};
++
++static struct kunit_suite amdgpu_dm_helpers_test_suite = {
++	.name = "amdgpu_dm_helpers",
++	.test_cases = amdgpu_dm_helpers_test_cases,
++};
++
++kunit_test_suite(amdgpu_dm_helpers_test_suite);
++
++MODULE_DESCRIPTION("KUnit tests for amdgpu_dm_helpers");
++MODULE_LICENSE("Dual MIT/GPL");
+-- 
+2.55.0
+

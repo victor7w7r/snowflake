@@ -1,0 +1,85 @@
+From fca8fe6149048c71ea8863f22674a8fc3cd84f2e Mon Sep 17 00:00:00 2001
+From: ZhaoJinming <zhaojinming@uniontech.com>
+Date: Mon, 10 Aug 2026 18:22:38 +0800
+Subject: [PATCH 13337/15333] Bluetooth: btmtksdio: fix deadlock in close and
+ reset paths
+
+btmtksdio_close() and btmtksdio_reset() call cancel_work_sync() on
+bdev->txrx_work while holding the sdio host lock, which is also acquired
+by btmtksdio_txrx_work().  If txrx_work is queued when close/reset runs,
+a worker thread may start it after the host lock is taken and block in
+sdio_claim_host(), while cancel_work_sync() waits for the work to
+finish.  The host lock is only released after cancel_work_sync()
+returns, so both sides wait forever, deadlocking close/reset.
+
+Fix this by releasing the sdio host lock before calling
+cancel_work_sync(), then re-acquiring it afterwards.
+
+In btmtksdio_close() the interrupt is already disabled by
+sdio_release_irq(), which also unregisters the IRQ handler, so no new
+work can be scheduled and cancel_work_sync() fully quiesces txrx_work.
+
+btmtksdio_reset() must additionally unregister the IRQ handler before
+dropping the host lock: btmtksdio_txrx_work() unconditionally re-enables
+the device interrupt (C_INT_EN_SET) when the handler is still registered,
+so an in-flight worker would re-enable interrupts and be rescheduled
+while the device is being reset, defeating the cancellation.  The IRQ is
+re-claimed by btmtksdio_open() when the HCI device is re-opened after
+the reset.
+
+This mirrors the pattern already used by btmtksdio_flush(), which
+cancels the work without holding the host lock.
+
+Signed-off-by: ZhaoJinming <zhaojinming@uniontech.com>
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ drivers/bluetooth/btmtksdio.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/drivers/bluetooth/btmtksdio.c b/drivers/bluetooth/btmtksdio.c
+index 4e1012e90979..67d055d5f197 100644
+--- a/drivers/bluetooth/btmtksdio.c
++++ b/drivers/bluetooth/btmtksdio.c
+@@ -746,8 +746,16 @@ static int btmtksdio_close(struct hci_dev *hdev)
+ 
+ 	sdio_release_irq(bdev->func);
+ 
++	/* No new work can be scheduled after sdio_release_irq(), so cancel the
++	 * work outside the sdio host lock. btmtksdio_txrx_work() also claims
++	 * the host, so canceling it while holding the lock would deadlock.
++	 */
++	sdio_release_host(bdev->func);
++
+ 	cancel_work_sync(&bdev->txrx_work);
+ 
++	sdio_claim_host(bdev->func);
++
+ 	btmtksdio_fw_pmctrl(bdev);
+ 
+ 	clear_bit(BTMTKSDIO_FUNC_ENABLED, &bdev->tx_state);
+@@ -1293,8 +1301,22 @@ static void btmtksdio_reset(struct hci_dev *hdev)
+ 
+ 	sdio_writel(bdev->func, C_INT_EN_CLR, MTK_REG_CHLPCR, NULL);
+ 	skb_queue_purge(&bdev->txq);
++
++	/* Unregister the IRQ before releasing the host lock so that a
++	 * concurrently running btmtksdio_txrx_work() cannot re-enable the
++	 * device interrupt (C_INT_EN_SET) and be rescheduled while the device
++	 * is being reset. btmtksdio_txrx_work() also claims the host, so the
++	 * work must be cancelled outside the sdio host lock to avoid a
++	 * deadlock. The IRQ is re-claimed by btmtksdio_open() when the HCI
++	 * device is re-opened after the reset.
++	 */
++	sdio_release_irq(bdev->func);
++	sdio_release_host(bdev->func);
++
+ 	cancel_work_sync(&bdev->txrx_work);
+ 
++	sdio_claim_host(bdev->func);
++
+ 	gpiod_set_value_cansleep(bdev->reset, 1);
+ 	msleep(100);
+ 	gpiod_set_value_cansleep(bdev->reset, 0);
+-- 
+2.55.0
+

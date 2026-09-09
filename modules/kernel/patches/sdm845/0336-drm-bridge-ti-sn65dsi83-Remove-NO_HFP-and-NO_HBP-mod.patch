@@ -1,0 +1,52 @@
+From 4af021a977735420e8fe18d64bef18ad0608d981 Mon Sep 17 00:00:00 2001
+From: Sudarshan Shetty <tessolveupstream@gmail.com>
+Date: Wed, 27 May 2026 14:27:35 +0530
+Subject: [PATCH 00336/15333] drm: bridge: ti-sn65dsi83: Remove NO_HFP and
+ NO_HBP mode flags for LVDS stability
+
+The current DSI mode configuration disables horizontal front porch
+(HFP) and back porch (HBP) transmission using
+MIPI_DSI_MODE_VIDEO_NO_HFP and MIPI_DSI_MODE_VIDEO_NO_HBP.
+
+However, the SN65DSI83/84 bridge relies on receiving full horizontal
+timing information over DSI in order to correctly reconstruct the
+LVDS output timings. When HFP and HBP are not transmitted, the bridge
+cannot recreate the required timing parameters, resulting in unstable
+or missing display output on some panels.
+
+The SN65DSI84 datasheet also describes transmission of complete
+horizontal timing information as part of the DSI video stream.
+
+Remove MIPI_DSI_MODE_VIDEO_NO_HFP and MIPI_DSI_MODE_VIDEO_NO_HBP
+so that HFP and HBP timing information is transmitted to the bridge.
+
+Reference:
+SN65DSI84 Datasheet, Section 7.4.7 (page 20):
+https://www.ti.com/lit/ds/symlink/sn65dsi84.pdf
+
+Tested-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+Tested-by: Alexander Stein <alexander.stein@ew.tq-group.com>
+Signed-off-by: Sudarshan Shetty <tessolveupstream@gmail.com>
+Reviewed-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+Link: https://patch.msgid.link/20260527085736.920390-2-tessolveupstream@gmail.com
+[Luca: cleaned up datasheet URL]
+Signed-off-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+---
+ drivers/gpu/drm/bridge/ti-sn65dsi83.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/bridge/ti-sn65dsi83.c b/drivers/gpu/drm/bridge/ti-sn65dsi83.c
+index 42b451432bbb..c03ff1ea9df8 100644
+--- a/drivers/gpu/drm/bridge/ti-sn65dsi83.c
++++ b/drivers/gpu/drm/bridge/ti-sn65dsi83.c
+@@ -977,7 +977,6 @@ static int sn65dsi83_host_attach(struct sn65dsi83 *ctx)
+ 	dsi->lanes = dsi_lanes;
+ 	dsi->format = MIPI_DSI_FMT_RGB888;
+ 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
+-			  MIPI_DSI_MODE_VIDEO_NO_HFP | MIPI_DSI_MODE_VIDEO_NO_HBP |
+ 			  MIPI_DSI_MODE_VIDEO_NO_HSA | MIPI_DSI_MODE_NO_EOT_PACKET;
+ 
+ 	ret = devm_mipi_dsi_attach(dev, dsi);
+-- 
+2.55.0
+

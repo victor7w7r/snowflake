@@ -1,0 +1,116 @@
+From b32f4ed0cc069206cb7b6baa0654b14410a91440 Mon Sep 17 00:00:00 2001
+From: Adrian Ng Ho Yin <adrian.ho.yin.ng@altera.com>
+Date: Wed, 8 Jul 2026 00:17:41 -0700
+Subject: [PATCH 09078/15333] i3c: master: Add optional_bytes for
+ variable-length GET CCC validation
+
+Add optional_bytes to struct i3c_ccc_cmd_payload so callers describe
+variable-length GET CCC responses. GETMRL and GETMXDS set optional_bytes
+at the call site. Extend i3c_ccc_validate_payload_len() to honour it.
+
+Signed-off-by: Adrian Ng Ho Yin <adrian.ho.yin.ng@altera.com>
+Signed-off-by: Tze Yee Ng <tze.yee.ng@altera.com>
+Reviewed-by: Alexandre Mergnat <amergnat@baylibre.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Tested-by: Tommaso Merciai <tommaso.merciai.xr@bp.renesas.com>
+Tested-by: Claudiu Beznea <claudiu.beznea.uj@bp.renesas.com> # on RZ/G3S
+Link: https://patch.msgid.link/2e07dc944eab1c4358be1da87fa5000e711ac8bd.1783493868.git.tze.yee.ng@altera.com
+Signed-off-by: Alexandre Belloni <alexandre.belloni@bootlin.com>
+---
+ drivers/i3c/master.c    | 29 +++++++++++++++++++++++------
+ include/linux/i3c/ccc.h |  2 ++
+ 2 files changed, 25 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/i3c/master.c b/drivers/i3c/master.c
+index 9c32fd0c5fef..fd3e79d10c84 100644
+--- a/drivers/i3c/master.c
++++ b/drivers/i3c/master.c
+@@ -953,6 +953,7 @@ static void *i3c_ccc_cmd_dest_init(struct i3c_ccc_cmd_dest *dest, u8 addr,
+ 	dest->addr = addr;
+ 	dest->payload.len = payloadlen;
+ 	dest->payload.actual_len = 0;
++	dest->payload.optional_bytes = 0;
+ 	if (payloadlen)
+ 		dest->payload.data = kzalloc(payloadlen, GFP_KERNEL);
+ 	else
+@@ -995,11 +996,19 @@ static int i3c_ccc_validate_payload_len(struct i3c_ccc_cmd *cmd)
+ 
+ 	for (i = 0; i < cmd->ndests; i++) {
+ 		struct i3c_ccc_cmd_payload *p = &cmd->dests[i].payload;
++		u16 min_len;
++
++		if (p->optional_bytes > p->len)
++			return -EINVAL;
+ 
+ 		if (p->actual_len > p->len)
+ 			return -EIO;
+ 
+-		if (p->len && p->actual_len != p->len)
++		if (!p->len)
++			continue;
++
++		min_len = p->len - p->optional_bytes;
++		if (p->actual_len < min_len)
+ 			return -EIO;
+ 	}
+ 
+@@ -1414,10 +1423,14 @@ static int i3c_master_getmrl_locked(struct i3c_master_controller *master,
+ 		return -ENOMEM;
+ 
+ 	/*
+-	 * When the device does not have IBI payload GETMRL only returns 2
+-	 * bytes of data.
++	 * GETMRL returns 2 bytes (max read length) when the device does not
++	 * advertise IBI payload, or 2 or 3 bytes when it does (the optional
++	 * third byte is max IBI length). Use optional_bytes to allow either
++	 * length when IBI payload is supported.
+ 	 */
+-	if (!(info->bcr & I3C_BCR_IBI_PAYLOAD))
++	if (info->bcr & I3C_BCR_IBI_PAYLOAD)
++		dest.payload.optional_bytes = 1;
++	else
+ 		dest.payload.len -= 1;
+ 
+ 	i3c_ccc_cmd_init(&cmd, true, I3C_CCC_GETMRL, &dest, 1);
+@@ -1486,14 +1499,18 @@ static int i3c_master_getmxds_locked(struct i3c_master_controller *master,
+ 	if (!getmaxds)
+ 		return -ENOMEM;
+ 
++	dest.payload.optional_bytes = 3;
++
+ 	i3c_ccc_cmd_init(&cmd, true, I3C_CCC_GETMXDS, &dest, 1);
+ 	ret = i3c_master_send_ccc_cmd_locked(master, &cmd);
+ 	if (ret) {
+ 		/*
+-		 * Retry when the device does not support max read turnaround
+-		 * while expecting shorter length from this CCC command.
++		 * optional_bytes = 3 accepts a 2-byte response on the first
++		 * attempt, so this fallback runs only when the 5-byte request
++		 * fails rather than returning a short read.
+ 		 */
+ 		dest.payload.len -= 3;
++		dest.payload.optional_bytes = 0;
+ 		i3c_ccc_cmd_init(&cmd, true, I3C_CCC_GETMXDS, &dest, 1);
+ 		ret = i3c_master_send_ccc_cmd_locked(master, &cmd);
+ 		if (ret)
+diff --git a/include/linux/i3c/ccc.h b/include/linux/i3c/ccc.h
+index 2506d83b8255..7ad677baf761 100644
+--- a/include/linux/i3c/ccc.h
++++ b/include/linux/i3c/ccc.h
+@@ -347,11 +347,13 @@ struct i3c_ccc_getxtime {
+  *
+  * @len: requested payload length
+  * @actual_len: number of bytes received on a GET CCC (filled by the driver)
++ * @optional_bytes: GET CCCs may return up to this many fewer bytes than @len
+  * @data: payload data. This buffer must be DMA-able
+  */
+ struct i3c_ccc_cmd_payload {
+ 	u16 len;
+ 	u16 actual_len;
++	u16 optional_bytes;
+ 	void *data;
+ };
+ 
+-- 
+2.55.0
+

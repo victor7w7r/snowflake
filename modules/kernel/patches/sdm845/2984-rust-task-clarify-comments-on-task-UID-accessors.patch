@@ -1,0 +1,74 @@
+From ef2d3e4635761b0af2bf1b89a2252e42a3bf37f1 Mon Sep 17 00:00:00 2001
+From: Jann Horn <jannh@google.com>
+Date: Fri, 3 Jul 2026 06:57:01 +0000
+Subject: [PATCH 02984/15333] rust: task: clarify comments on task UID
+ accessors
+
+Linux has separate subjective and objective task credentials, see the
+comment above `struct cred`. Clarify which accessor functions operate on
+which set of credentials.
+
+Also document that Task::euid() is a very weird operation. You can see how
+weird it is by grepping for task_euid() in the history - binder was its
+only user. Task::euid() obtains the objective effective UID - it looks
+at the credentials of the task for purposes of acting on it as an
+object, but then accesses the effective UID (which the credentials.7 man
+page describes as "[...] used by the kernel to determine the permissions
+that the process will have when accessing shared resources [...]").
+
+For context:
+Arguably, binder's use of task_euid() is a theoretical security problem,
+which only has no impact on Android because Android has no setuid binaries
+executable by apps.
+commit 29bc22ac5e5b ("binder: use euid from cred instead of using task")
+originally fixed that by removing that only user of task_euid(), but the
+fix got reverted in commit c21a80ca0684 ("binder: fix test regression
+due to sender_euid change") because some Android test started failing.
+It was since fixed again by commit 65b672152289 ("binder: use
+current_euid() for transaction sender identity"), which uses
+current_euid() instead.
+
+Signed-off-by: Jann Horn <jannh@google.com>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Signed-off-by: Alice Ryhl <aliceryhl@google.com>
+Signed-off-by: Paul Moore <paul@paul-moore.com>
+---
+ rust/kernel/task.rs | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/rust/kernel/task.rs b/rust/kernel/task.rs
+index 38273f4eedb5..eabd65bfde12 100644
+--- a/rust/kernel/task.rs
++++ b/rust/kernel/task.rs
+@@ -210,14 +210,17 @@ pub fn pid(&self) -> Pid {
+         unsafe { *ptr::addr_of!((*self.as_ptr()).pid) }
+     }
+ 
+-    /// Returns the UID of the given task.
++    /// Returns the objective real UID of the given task.
+     #[inline]
+     pub fn uid(&self) -> Kuid {
+         // SAFETY: It's always safe to call `task_uid` on a valid task.
+         Kuid::from_raw(unsafe { bindings::task_uid(self.as_ptr()) })
+     }
+ 
+-    /// Returns the effective UID of the given task.
++    /// Returns the objective effective UID of the given task.
++    ///
++    /// You should probably not be using this; the effective UID is normally
++    /// only relevant in subjective credentials.
+     #[inline]
+     pub fn euid(&self) -> Kuid {
+         // SAFETY: It's always safe to call `task_euid` on a valid task.
+@@ -371,7 +374,7 @@ fn eq(&self, other: &Self) -> bool {
+ impl Eq for Task {}
+ 
+ impl Kuid {
+-    /// Get the current euid.
++    /// Get the current subjective effective UID.
+     #[inline]
+     pub fn current_euid() -> Kuid {
+         // SAFETY: Just an FFI call.
+-- 
+2.55.0
+

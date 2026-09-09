@@ -1,0 +1,63 @@
+From 1647a1b67377e9f7b4ca75bc5607eda6791abd0a Mon Sep 17 00:00:00 2001
+From: Wadim Mueller <wafgo01@gmail.com>
+Date: Tue, 28 Jul 2026 23:49:42 +0200
+Subject: [PATCH 10657/15333] iio: core: add IIO_VAL_DECIMAL64_FEMTO format
+ type
+
+Extend the IIO_VAL_DECIMAL64_* family with a femto-scaled variant
+(scale 15), following the existing MILLI/MICRO/NANO/PICO pattern. Both
+the read formatting path in __iio_format_value() and the write parsing
+path in iio_write_channel_info() (via kstrtodec64()) already derive
+their scale from "type - IIO_VAL_DECIMAL64_BASE", so the new type only
+needs to be added to the respective switch cases.
+
+This is needed by drivers reporting very small SI quantities where the
+existing pico scale loses precision. For example the Sensirion SLF3S
+liquid flow sensor reports its volume-flow scale in m^3/s, where the
+SLF3S-0600F scale is ~1.667e-12 m^3/s: at pico scale only a single
+significant digit survives, whereas femto scale preserves the full
+sensor resolution.
+
+Signed-off-by: Wadim Mueller <wafgo01@gmail.com>
+Reviewed-by: Rodrigo Alencar <rodrigo.alencar@analog.com>
+Signed-off-by: Jonathan Cameron <jonathan.cameron@oss.qualcomm.com>
+---
+ drivers/iio/industrialio-core.c | 2 ++
+ include/linux/iio/types.h       | 1 +
+ 2 files changed, 3 insertions(+)
+
+diff --git a/drivers/iio/industrialio-core.c b/drivers/iio/industrialio-core.c
+index 37cf2817b3d0..767a7794624a 100644
+--- a/drivers/iio/industrialio-core.c
++++ b/drivers/iio/industrialio-core.c
+@@ -715,6 +715,7 @@ static ssize_t __iio_format_value(char *buf, size_t offset, unsigned int type,
+ 	case IIO_VAL_DECIMAL64_MICRO:
+ 	case IIO_VAL_DECIMAL64_NANO:
+ 	case IIO_VAL_DECIMAL64_PICO:
++	case IIO_VAL_DECIMAL64_FEMTO:
+ 	{
+ 		int scale = type - IIO_VAL_DECIMAL64_BASE;
+ 		s64 frac;
+@@ -1032,6 +1033,7 @@ static ssize_t iio_write_channel_info(struct device *dev,
+ 		case IIO_VAL_DECIMAL64_MICRO:
+ 		case IIO_VAL_DECIMAL64_NANO:
+ 		case IIO_VAL_DECIMAL64_PICO:
++		case IIO_VAL_DECIMAL64_FEMTO:
+ 			dec_scale = type - IIO_VAL_DECIMAL64_BASE;
+ 			fallthrough;
+ 		case IIO_VAL_INT_64:
+diff --git a/include/linux/iio/types.h b/include/linux/iio/types.h
+index 924ac9dc6893..d8944c9e5e90 100644
+--- a/include/linux/iio/types.h
++++ b/include/linux/iio/types.h
+@@ -42,6 +42,7 @@ enum iio_event_info {
+ #define IIO_VAL_DECIMAL64_MICRO		(IIO_VAL_DECIMAL64_BASE + 6)
+ #define IIO_VAL_DECIMAL64_NANO		(IIO_VAL_DECIMAL64_BASE + 9)
+ #define IIO_VAL_DECIMAL64_PICO		(IIO_VAL_DECIMAL64_BASE + 12)
++#define IIO_VAL_DECIMAL64_FEMTO		(IIO_VAL_DECIMAL64_BASE + 15)
+ 
+ static inline s64 iio_val_s64_compose(s32 val0, s32 val1)
+ {
+-- 
+2.55.0
+

@@ -1,0 +1,125 @@
+From 8d4707af573f3ecbea1c5c29ddf1a56c01e178ce Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 12 Jun 2026 17:03:14 -0700
+Subject: [PATCH 00763/15333] KVM: x86: Move register helper declarations from
+ kvm_host.h => regs.h
+
+Relocate declarations of Control/Debug Register, EFLAGS and RIP helpers
+from x86's kvm_host.h to regs.h, to continue trimming down kvm_host.h.
+
+No functional change intended.
+
+Reviewed-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+Reviewed-by: Binbin Wu <binbin.wu@linux.intel.com>
+Message-ID: <20260613000329.732085-16-seanjc@google.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/kvm_host.h | 19 -------------------
+ arch/x86/kvm/regs.h             | 18 ++++++++++++++++++
+ 2 files changed, 18 insertions(+), 19 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 8fbe5897bc02..f3ccac0c9306 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -2185,8 +2185,6 @@ void kvm_mmu_invalidate_mmio_sptes(struct kvm *kvm, u64 gen);
+ void kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned long kvm_nr_mmu_pages);
+ void kvm_zap_gfn_range(struct kvm *kvm, gfn_t gfn_start, gfn_t gfn_end);
+ 
+-int load_pdptrs(struct kvm_vcpu *vcpu, unsigned long cr3);
+-
+ /*
+  * EMULTYPE_NO_DECODE - Set when re-emulating an instruction (after completing
+  *			userspace I/O) to indicate that the emulation context
+@@ -2311,24 +2309,12 @@ void kvm_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector);
+ int kvm_task_switch(struct kvm_vcpu *vcpu, u16 tss_selector, int idt_index,
+ 		    int reason, bool has_error_code, u32 error_code);
+ 
+-void kvm_post_set_cr0(struct kvm_vcpu *vcpu, unsigned long old_cr0, unsigned long cr0);
+-void kvm_post_set_cr4(struct kvm_vcpu *vcpu, unsigned long old_cr4, unsigned long cr4);
+-int kvm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
+-int kvm_set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3);
+-int kvm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
+-int kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8);
+-int kvm_set_dr(struct kvm_vcpu *vcpu, int dr, unsigned long val);
+-unsigned long kvm_get_dr(struct kvm_vcpu *vcpu, int dr);
+-unsigned long kvm_get_cr8(struct kvm_vcpu *vcpu);
+-void kvm_lmsw(struct kvm_vcpu *vcpu, unsigned long msw);
+ int __kvm_set_xcr(struct kvm_vcpu *vcpu, u32 index, u64 xcr);
+ int kvm_emulate_xsetbv(struct kvm_vcpu *vcpu);
+ 
+ int kvm_get_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr);
+ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr);
+ 
+-unsigned long kvm_get_rflags(struct kvm_vcpu *vcpu);
+-void kvm_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags);
+ int kvm_emulate_rdpmc(struct kvm_vcpu *vcpu);
+ 
+ void kvm_queue_exception(struct kvm_vcpu *vcpu, unsigned nr);
+@@ -2365,8 +2351,6 @@ static inline int __kvm_irq_line_state(unsigned long *irq_state,
+ void kvm_inject_nmi(struct kvm_vcpu *vcpu);
+ int kvm_get_nr_pending_nmis(struct kvm_vcpu *vcpu);
+ 
+-void kvm_update_dr7(struct kvm_vcpu *vcpu);
+-
+ bool __kvm_mmu_unprotect_gfn_and_retry(struct kvm_vcpu *vcpu, gpa_t cr2_or_gpa,
+ 				       bool always_retry);
+ 
+@@ -2520,9 +2504,6 @@ u64 kvm_read_l1_tsc(struct kvm_vcpu *vcpu, u64 host_tsc);
+ u64 kvm_calc_nested_tsc_offset(u64 l1_offset, u64 l2_offset, u64 l2_multiplier);
+ u64 kvm_calc_nested_tsc_multiplier(u64 l1_multiplier, u64 l2_multiplier);
+ 
+-unsigned long kvm_get_linear_rip(struct kvm_vcpu *vcpu);
+-bool kvm_is_linear_rip(struct kvm_vcpu *vcpu, unsigned long linear_rip);
+-
+ void kvm_make_scan_ioapic_request(struct kvm *kvm);
+ void kvm_make_scan_ioapic_request_mask(struct kvm *kvm,
+ 				       unsigned long *vcpu_bitmap);
+diff --git a/arch/x86/kvm/regs.h b/arch/x86/kvm/regs.h
+index 28f62583545f..de507c6e2eba 100644
+--- a/arch/x86/kvm/regs.h
++++ b/arch/x86/kvm/regs.h
+@@ -16,6 +16,18 @@
+ 
+ static_assert(!(KVM_POSSIBLE_CR0_GUEST_BITS & X86_CR0_PDPTR_BITS));
+ 
++void kvm_post_set_cr0(struct kvm_vcpu *vcpu, unsigned long old_cr0, unsigned long cr0);
++void kvm_post_set_cr4(struct kvm_vcpu *vcpu, unsigned long old_cr4, unsigned long cr4);
++int kvm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
++int kvm_set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3);
++int kvm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
++int kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8);
++int kvm_set_dr(struct kvm_vcpu *vcpu, int dr, unsigned long val);
++unsigned long kvm_get_dr(struct kvm_vcpu *vcpu, int dr);
++unsigned long kvm_get_cr8(struct kvm_vcpu *vcpu);
++void kvm_lmsw(struct kvm_vcpu *vcpu, unsigned long msw);
++int load_pdptrs(struct kvm_vcpu *vcpu, unsigned long cr3);
++
+ static inline bool is_long_mode(struct kvm_vcpu *vcpu)
+ {
+ #ifdef CONFIG_X86_64
+@@ -433,7 +445,12 @@ static inline unsigned long kvm_get_segment_base(struct kvm_vcpu *vcpu, int seg)
+ 	return kvm_x86_call(get_segment_base)(vcpu, seg);
+ }
+ 
++unsigned long kvm_get_linear_rip(struct kvm_vcpu *vcpu);
++bool kvm_is_linear_rip(struct kvm_vcpu *vcpu, unsigned long linear_rip);
++
++unsigned long kvm_get_rflags(struct kvm_vcpu *vcpu);
+ void __kvm_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags);
++void kvm_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags);
+ 
+ void kvm_vcpu_ioctl_x86_get_sregs2(struct kvm_vcpu *vcpu,
+ 				   struct kvm_sregs2 *sregs2);
+@@ -444,6 +461,7 @@ void kvm_run_sync_regs_to_user(struct kvm_vcpu *vcpu);
+ int kvm_run_sync_regs_from_user(struct kvm_vcpu *vcpu);
+ 
+ void kvm_update_dr0123(struct kvm_vcpu *vcpu);
++void kvm_update_dr7(struct kvm_vcpu *vcpu);
+ int kvm_vcpu_ioctl_x86_get_debugregs(struct kvm_vcpu *vcpu,
+ 				     struct kvm_debugregs *dbgregs);
+ int kvm_vcpu_ioctl_x86_set_debugregs(struct kvm_vcpu *vcpu,
+-- 
+2.55.0
+

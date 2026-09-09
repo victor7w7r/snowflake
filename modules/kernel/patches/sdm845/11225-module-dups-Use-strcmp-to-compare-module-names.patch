@@ -1,0 +1,35 @@
+From cc6e79b2080da3310dbf9749c6ee61ae1641ec70 Mon Sep 17 00:00:00 2001
+From: Petr Pavlu <petr.pavlu@suse.com>
+Date: Thu, 6 Aug 2026 11:10:19 +0200
+Subject: [PATCH 11225/15333] module/dups: Use strcmp() to compare module names
+
+Use strcmp() instead of strlen()+memcmp() to compare module names in
+kmod_dup_request_lookup(), since all strings are NUL-terminated.
+
+Reviewed-by: Aaron Tomlin <atomlin@atomlin.com>
+Signed-off-by: Petr Pavlu <petr.pavlu@suse.com>
+---
+ kernel/module/dups.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/kernel/module/dups.c b/kernel/module/dups.c
+index 201a7f4c151f..fa3a4e623543 100644
+--- a/kernel/module/dups.c
++++ b/kernel/module/dups.c
+@@ -72,11 +72,9 @@ static struct kmod_dup_req *kmod_dup_request_lookup(char *module_name)
+ 	lockdep_assert_held(&kmod_dup_mutex);
+ 
+ 	list_for_each_entry(kmod_req, &dup_kmod_reqs, list) {
+-		if (strlen(kmod_req->name) == strlen(module_name) &&
+-		    !memcmp(kmod_req->name, module_name, strlen(module_name))) {
++		if (!strcmp(kmod_req->name, module_name))
+ 			return kmod_req;
+-                }
+-        }
++	}
+ 
+ 	return NULL;
+ }
+-- 
+2.55.0
+

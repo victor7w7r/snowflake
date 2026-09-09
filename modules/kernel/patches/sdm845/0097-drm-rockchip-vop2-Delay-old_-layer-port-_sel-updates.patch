@@ -1,0 +1,108 @@
+From 6a2f7339191b652f7ff998595df90987b33c3fda Mon Sep 17 00:00:00 2001
+From: Cristian Ciocaltea <cristian.ciocaltea@collabora.com>
+Date: Mon, 4 May 2026 21:24:01 +0300
+Subject: [PATCH 00097/15333] drm/rockchip: vop2: Delay old_{layer|port}_sel
+ updates in setup_layer_mixer()
+
+The old_layer_sel and old_port_sel local variables were introduced to
+hold the previous VP configuration for comparisons and wait targets,
+working around the premature update of vop2->old_layer_sel and
+vop2->old_port_sel earlier in the function.
+
+Remove these superfluous locals and instead defer the assignments of
+vop2->old_layer_sel and vop2->old_port_sel to just before the
+corresponding shadow register writes, where the transition from old to
+new logically belongs.
+
+No functional change intended.
+
+Signed-off-by: Cristian Ciocaltea <cristian.ciocaltea@collabora.com>
+Reviewed-by: Andy Yan <andy.yan@rock-chips.com>
+Signed-off-by: Heiko Stuebner <heiko@sntech.de>
+Link: https://patch.msgid.link/20260504-vop2-layer-cfg-tmout-v1-3-730226a7331e@collabora.com
+---
+ drivers/gpu/drm/rockchip/rockchip_vop2_reg.c | 21 +++++++++-----------
+ 1 file changed, 9 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/gpu/drm/rockchip/rockchip_vop2_reg.c b/drivers/gpu/drm/rockchip/rockchip_vop2_reg.c
+index 5206f01ec787..1f5e8c2acecd 100644
+--- a/drivers/gpu/drm/rockchip/rockchip_vop2_reg.c
++++ b/drivers/gpu/drm/rockchip/rockchip_vop2_reg.c
+@@ -2136,9 +2136,7 @@ static void rk3568_vop2_setup_layer_mixer(struct vop2_video_port *vp)
+ 	struct drm_plane *plane;
+ 	u32 layer_sel = 0;
+ 	u32 port_sel;
+-	u32 old_layer_sel = 0;
+ 	u32 atv_layer_sel = 0;
+-	u32 old_port_sel = 0;
+ 	u8 layer_id;
+ 	u8 old_layer_id;
+ 	u8 layer_sel_id;
+@@ -2161,8 +2159,7 @@ static void rk3568_vop2_setup_layer_mixer(struct vop2_video_port *vp)
+ 	else
+ 		ovl_ctrl &= ~RK3568_OVL_CTRL__YUV_MODE(vp->id);
+ 
+-	old_port_sel = vop2->old_port_sel;
+-	port_sel = old_port_sel;
++	port_sel = vop2->old_port_sel;
+ 	port_sel &= RK3568_OVL_PORT_SEL__SEL_PORT;
+ 
+ 	if (vp0->nlayers)
+@@ -2188,8 +2185,7 @@ static void rk3568_vop2_setup_layer_mixer(struct vop2_video_port *vp)
+ 		port_sel |= FIELD_PREP(RK3588_OVL_PORT_SET__PORT3_MUX, 7);
+ 
+ 	atv_layer_sel = vop2_readl(vop2, RK3568_OVL_LAYER_SEL);
+-	old_layer_sel = vop2->old_layer_sel;
+-	layer_sel = old_layer_sel;
++	layer_sel = vop2->old_layer_sel;
+ 
+ 	ofs = 0;
+ 	for (i = 0; i < vp->id; i++)
+@@ -2273,8 +2269,6 @@ static void rk3568_vop2_setup_layer_mixer(struct vop2_video_port *vp)
+ 			     old_win->data->layer_sel_id[vp->id]);
+ 	}
+ 
+-	vop2->old_layer_sel = layer_sel;
+-	vop2->old_port_sel = port_sel;
+ 	/*
+ 	 * As the RK3568_OVL_LAYER_SEL and RK3568_OVL_PORT_SEL are shared by all Video Ports,
+ 	 * and the configuration take effect by one Video Port's vsync.
+@@ -2290,7 +2284,7 @@ static void rk3568_vop2_setup_layer_mixer(struct vop2_video_port *vp)
+ 	 *    of the new VP.
+ 	 */
+ 
+-	if (layer_sel != old_layer_sel && atv_layer_sel != old_layer_sel) {
++	if (layer_sel != vop2->old_layer_sel && atv_layer_sel != vop2->old_layer_sel) {
+ 		cfg_done = vop2_readl(vop2, RK3568_REG_CFG_DONE);
+ 		cfg_done &= (BIT(vop2->data->nr_vps) - 1);
+ 		cfg_done &= ~BIT(vp->id);
+@@ -2298,20 +2292,23 @@ static void rk3568_vop2_setup_layer_mixer(struct vop2_video_port *vp)
+ 		 * Changes of other VPs' overlays have not taken effect
+ 		 */
+ 		if (cfg_done)
+-			rk3568_vop2_wait_for_layer_cfg_done(vop2, old_layer_sel);
++			rk3568_vop2_wait_for_layer_cfg_done(vop2, vop2->old_layer_sel);
+ 	}
+ 
+-	if (layer_sel != old_layer_sel || port_sel != old_port_sel)
++	if (layer_sel != vop2->old_layer_sel || port_sel != vop2->old_port_sel)
+ 		ovl_ctrl |= FIELD_PREP(RK3568_OVL_CTRL__LAYERSEL_REGDONE_SEL, vp->id);
+ 	vop2_writel(vop2, RK3568_OVL_CTRL, ovl_ctrl);
+ 
+-	if (port_sel != old_port_sel) {
++	if (port_sel != vop2->old_port_sel) {
++		vop2->old_port_sel = port_sel;
+ 		vop2_writel(vop2, RK3568_OVL_PORT_SEL, port_sel);
+ 		vop2_cfg_done(vp);
+ 		rk3568_vop2_wait_for_port_mux_done(vop2);
+ 	}
+ 
++	vop2->old_layer_sel = layer_sel;
+ 	vop2_writel(vop2, RK3568_OVL_LAYER_SEL, layer_sel);
++
+ 	mutex_unlock(&vop2->ovl_lock);
+ }
+ 
+-- 
+2.55.0
+

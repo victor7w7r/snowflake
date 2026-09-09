@@ -1,0 +1,87 @@
+From b0c2e98d291b9db03dcbaddd38d3a33428b098a8 Mon Sep 17 00:00:00 2001
+From: John Johansen <john.johansen@canonical.com>
+Date: Sat, 1 Aug 2026 00:15:52 -0700
+Subject: [PATCH 09684/15333] apparmor: fix implicit declaration of function
+ 'decompress_zstd'
+
+When CONFIG_ZSTD_DECOMPRESS is not enabled, and neither
+CONFIG_SECURITY_APPARMOR_EXPORT_BINARY nor
+CONFIG_SECURITY_APPARMOR_COMPRESSED_POLICY are enabled.
+
+The build will fail with implicit declaration of function
+'decompress_zstd' because there is not an appropriate stub function,
+for when the zstd decompression isn't enabled.
+
+In addition fix compress_min, and compress_max to be conditional on
+CONFIG_SECURITY_APPARMOR_EXPORT_BINARY, as they are used with the
+exported policy.
+
+Reported-by: kernel test robot <lkp@intel.com>
+Closes: https://lore.kernel.org/oe-kbuild-all/202608010834.9yIVzhG2-lkp@intel.com/
+Fixes: 1c5f27e845e84 ("apparmor: Fix build failure when ZSTD_DECOMPRESS is not enabled")
+Signed-off-by: John Johansen <john.johansen@canonical.com>
+---
+ security/apparmor/apparmorfs.c | 21 +++++++++++++++------
+ 1 file changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/security/apparmor/apparmorfs.c b/security/apparmor/apparmorfs.c
+index 4309555b5541..2ae7404526d1 100644
+--- a/security/apparmor/apparmorfs.c
++++ b/security/apparmor/apparmorfs.c
+@@ -583,6 +583,14 @@ static struct aa_loaddata *aa_get_data_from_compressed(const char __user *userbu
+ 
+ }
+ #else
++static int decompress_zstd(char *src __always_unused,
++			   size_t slen __always_unused,
++			   char *dst __always_unused,
++			   size_t dlen __always_unused)
++{
++	return -EINVAL;
++}
++
+ static struct aa_loaddata *aa_get_data_from_compressed(const char __user *userbuf __always_unused,
+ 						  size_t buffer_size __always_unused,
+ 						  loff_t *pos __always_unused,
+@@ -1450,6 +1458,12 @@ static int seq_ns_name_show(struct seq_file *seq, void *v)
+ 	return 0;
+ }
+ 
++SEQ_NS_FOPS(stacked);
++SEQ_NS_FOPS(nsstacked);
++SEQ_NS_FOPS(level);
++SEQ_NS_FOPS(name);
++
++#ifdef CONFIG_SECURITY_APPARMOR_EXPORT_BINARY
+ static int seq_ns_compress_min_show(struct seq_file *seq, void *v)
+ {
+ 	seq_printf(seq, "%d\n", AA_MIN_CLEVEL);
+@@ -1462,16 +1476,11 @@ static int seq_ns_compress_max_show(struct seq_file *seq, void *v)
+ 	return 0;
+ }
+ 
+-SEQ_NS_FOPS(stacked);
+-SEQ_NS_FOPS(nsstacked);
+-SEQ_NS_FOPS(level);
+-SEQ_NS_FOPS(name);
+ SEQ_NS_FOPS(compress_min);
+ SEQ_NS_FOPS(compress_max);
+ 
+ 
+ /* policy/raw_data/ * file ops */
+-#ifdef CONFIG_SECURITY_APPARMOR_EXPORT_BINARY
+ #define SEQ_RAWDATA_FOPS(NAME)						      \
+ static int seq_rawdata_ ##NAME ##_open(struct inode *inode, struct file *file)\
+ {									      \
+@@ -2681,7 +2690,7 @@ static struct aa_sfs_entry aa_sfs_entry_apparmor[] = {
+ 	AA_SFS_FILE_FOPS(".ns_level", 0444, &seq_ns_level_fops),
+ 	AA_SFS_FILE_FOPS(".ns_name", 0444, &seq_ns_name_fops),
+ 	AA_SFS_FILE_FOPS("profiles", 0444, &aa_sfs_profiles_fops),
+-#ifdef CONFIG_SECURITY_APPARMOR_COMPRESSED_POLICY
++#ifdef CONFIG_SECURITY_APPARMOR_EXPORT_BINARY
+ 	AA_SFS_FILE_FOPS("raw_data_compression_level_min", 0444, &seq_ns_compress_min_fops),
+ 	AA_SFS_FILE_FOPS("raw_data_compression_level_max", 0444, &seq_ns_compress_max_fops),
+ #endif
+-- 
+2.55.0
+

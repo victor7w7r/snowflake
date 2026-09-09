@@ -1,0 +1,198 @@
+From 4967c466ca3860fcc3ae70fee286f220020774fe Mon Sep 17 00:00:00 2001
+From: Juergen Gross <jgross@suse.com>
+Date: Mon, 29 Jun 2026 08:05:08 +0200
+Subject: [PATCH 02055/15333] x86/resctrl: Stop using 32-bit MSR interfaces
+
+The 32-bit MSR interfaces rdmsr() and wrmsr() are planned to be
+removed. Use the related 64-bit variants instead.
+
+Signed-off-by: Juergen Gross <jgross@suse.com>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Acked-by: Reinette Chatre <reinette.chatre@intel.com>
+Link: https://patch.msgid.link/20260629060526.3638272-18-jgross@suse.com
+---
+ arch/x86/include/asm/resctrl.h            |  5 ++++-
+ arch/x86/kernel/cpu/resctrl/core.c        |  7 ++++--
+ arch/x86/kernel/cpu/resctrl/monitor.c     | 27 +++++++++++++----------
+ arch/x86/kernel/cpu/resctrl/pseudo_lock.c | 12 +++++-----
+ 4 files changed, 30 insertions(+), 21 deletions(-)
+
+diff --git a/arch/x86/include/asm/resctrl.h b/arch/x86/include/asm/resctrl.h
+index 575f8408a9e7..8f6edcdcfd87 100644
+--- a/arch/x86/include/asm/resctrl.h
++++ b/arch/x86/include/asm/resctrl.h
+@@ -102,6 +102,7 @@ static inline void __resctrl_sched_in(struct task_struct *tsk)
+ 	struct resctrl_pqr_state *state = this_cpu_ptr(&pqr_state);
+ 	u32 closid = READ_ONCE(state->default_closid);
+ 	u32 rmid = READ_ONCE(state->default_rmid);
++	struct msr val;
+ 	u32 tmp;
+ 
+ 	/*
+@@ -123,7 +124,9 @@ static inline void __resctrl_sched_in(struct task_struct *tsk)
+ 	if (closid != state->cur_closid || rmid != state->cur_rmid) {
+ 		state->cur_closid = closid;
+ 		state->cur_rmid = rmid;
+-		wrmsr(MSR_IA32_PQR_ASSOC, rmid, closid);
++		val.l = rmid;
++		val.h = closid;
++		wrmsrq(MSR_IA32_PQR_ASSOC, val.q);
+ 	}
+ }
+ 
+diff --git a/arch/x86/kernel/cpu/resctrl/core.c b/arch/x86/kernel/cpu/resctrl/core.c
+index 9c01d2562b7a..f452e8ce4cef 100644
+--- a/arch/x86/kernel/cpu/resctrl/core.c
++++ b/arch/x86/kernel/cpu/resctrl/core.c
+@@ -725,13 +725,16 @@ static void domain_remove_cpu(int cpu, struct rdt_resource *r)
+ static void clear_closid_rmid(int cpu)
+ {
+ 	struct resctrl_pqr_state *state = this_cpu_ptr(&pqr_state);
++	struct msr val = {
++		.l = RESCTRL_RESERVED_RMID,
++		.h = RESCTRL_RESERVED_CLOSID
++	};
+ 
+ 	state->default_closid = RESCTRL_RESERVED_CLOSID;
+ 	state->default_rmid = RESCTRL_RESERVED_RMID;
+ 	state->cur_closid = RESCTRL_RESERVED_CLOSID;
+ 	state->cur_rmid = RESCTRL_RESERVED_RMID;
+-	wrmsr(MSR_IA32_PQR_ASSOC, RESCTRL_RESERVED_RMID,
+-	      RESCTRL_RESERVED_CLOSID);
++	wrmsrq(MSR_IA32_PQR_ASSOC, val.q);
+ }
+ 
+ static int resctrl_arch_online_cpu(unsigned int cpu)
+diff --git a/arch/x86/kernel/cpu/resctrl/monitor.c b/arch/x86/kernel/cpu/resctrl/monitor.c
+index 03ee6102ab07..153dc5a268a4 100644
+--- a/arch/x86/kernel/cpu/resctrl/monitor.c
++++ b/arch/x86/kernel/cpu/resctrl/monitor.c
+@@ -136,7 +136,7 @@ static int logical_rmid_to_physical_rmid(int cpu, int lrmid)
+ 
+ static int __rmid_read_phys(u32 prmid, enum resctrl_event_id eventid, u64 *val)
+ {
+-	u64 msr_val;
++	struct msr msr_val = { .l = eventid, .h = prmid };
+ 
+ 	/*
+ 	 * As per the SDM, when IA32_QM_EVTSEL.EvtID (bits 7:0) is configured
+@@ -146,15 +146,15 @@ static int __rmid_read_phys(u32 prmid, enum resctrl_event_id eventid, u64 *val)
+ 	 * IA32_QM_CTR.Error (bit 63) and IA32_QM_CTR.Unavailable (bit 62)
+ 	 * are error bits.
+ 	 */
+-	wrmsr(MSR_IA32_QM_EVTSEL, eventid, prmid);
+-	rdmsrq(MSR_IA32_QM_CTR, msr_val);
++	wrmsrq(MSR_IA32_QM_EVTSEL, msr_val.q);
++	rdmsrq(MSR_IA32_QM_CTR, msr_val.q);
+ 
+-	if (msr_val & RMID_VAL_ERROR)
++	if (msr_val.q & RMID_VAL_ERROR)
+ 		return -EIO;
+-	if (msr_val & RMID_VAL_UNAVAIL)
++	if (msr_val.q & RMID_VAL_UNAVAIL)
+ 		return -EINVAL;
+ 
+-	*val = msr_val;
++	*val = msr_val.q;
+ 	return 0;
+ }
+ 
+@@ -278,7 +278,10 @@ int resctrl_arch_rmid_read(struct rdt_resource *r, struct rdt_domain_hdr *hdr,
+ 
+ static int __cntr_id_read(u32 cntr_id, u64 *val)
+ {
+-	u64 msr_val;
++	struct msr msr_val = {
++		.l = ABMC_EXTENDED_EVT_ID | ABMC_EVT_ID,
++		.h = cntr_id
++	};
+ 
+ 	/*
+ 	 * QM_EVTSEL Register definition:
+@@ -301,15 +304,15 @@ static int __cntr_id_read(u32 cntr_id, u64 *val)
+ 	 * ID is set in the QM_EVTSEL.RMID field.  The RMID_VAL_UNAVAIL bit
+ 	 * is set if the counter data is unavailable.
+ 	 */
+-	wrmsr(MSR_IA32_QM_EVTSEL, ABMC_EXTENDED_EVT_ID | ABMC_EVT_ID, cntr_id);
+-	rdmsrq(MSR_IA32_QM_CTR, msr_val);
++	wrmsrq(MSR_IA32_QM_EVTSEL, msr_val.q);
++	rdmsrq(MSR_IA32_QM_CTR, msr_val.q);
+ 
+-	if (msr_val & RMID_VAL_ERROR)
++	if (msr_val.q & RMID_VAL_ERROR)
+ 		return -EIO;
+-	if (msr_val & RMID_VAL_UNAVAIL)
++	if (msr_val.q & RMID_VAL_UNAVAIL)
+ 		return -EINVAL;
+ 
+-	*val = msr_val;
++	*val = msr_val.q;
+ 	return 0;
+ }
+ 
+diff --git a/arch/x86/kernel/cpu/resctrl/pseudo_lock.c b/arch/x86/kernel/cpu/resctrl/pseudo_lock.c
+index de580eca3363..d7caab0409b6 100644
+--- a/arch/x86/kernel/cpu/resctrl/pseudo_lock.c
++++ b/arch/x86/kernel/cpu/resctrl/pseudo_lock.c
+@@ -241,16 +241,16 @@ int resctrl_arch_pseudo_lock_fn(void *_plr)
+ int resctrl_arch_measure_cycles_lat_fn(void *_plr)
+ {
+ 	struct pseudo_lock_region *plr = _plr;
+-	u32 saved_low, saved_high;
+ 	unsigned long i;
+ 	u64 start, end;
+ 	void *mem_r;
++	u64 saved;
+ 
+ 	local_irq_disable();
+ 	/*
+ 	 * Disable hardware prefetchers.
+ 	 */
+-	rdmsr(MSR_MISC_FEATURE_CONTROL, saved_low, saved_high);
++	rdmsrq(MSR_MISC_FEATURE_CONTROL, saved);
+ 	wrmsrq(MSR_MISC_FEATURE_CONTROL, prefetch_disable_bits);
+ 	mem_r = READ_ONCE(plr->kmem);
+ 	/*
+@@ -267,7 +267,7 @@ int resctrl_arch_measure_cycles_lat_fn(void *_plr)
+ 		end = rdtsc_ordered();
+ 		trace_pseudo_lock_mem_latency((u32)(end - start));
+ 	}
+-	wrmsr(MSR_MISC_FEATURE_CONTROL, saved_low, saved_high);
++	wrmsrq(MSR_MISC_FEATURE_CONTROL, saved);
+ 	local_irq_enable();
+ 	plr->thread_done = 1;
+ 	wake_up_interruptible(&plr->lock_thread_wq);
+@@ -312,11 +312,11 @@ static int measure_residency_fn(struct perf_event_attr *miss_attr,
+ 	u64 hits_before = 0, hits_after = 0, miss_before = 0, miss_after = 0;
+ 	struct perf_event *miss_event, *hit_event;
+ 	int hit_pmcnum, miss_pmcnum;
+-	u32 saved_low, saved_high;
+ 	unsigned int line_size;
+ 	unsigned int size;
+ 	unsigned long i;
+ 	void *mem_r;
++	u64 saved;
+ 	u64 tmp;
+ 
+ 	miss_event = perf_event_create_kernel_counter(miss_attr, plr->cpu,
+@@ -346,7 +346,7 @@ static int measure_residency_fn(struct perf_event_attr *miss_attr,
+ 	/*
+ 	 * Disable hardware prefetchers.
+ 	 */
+-	rdmsr(MSR_MISC_FEATURE_CONTROL, saved_low, saved_high);
++	rdmsrq(MSR_MISC_FEATURE_CONTROL, saved);
+ 	wrmsrq(MSR_MISC_FEATURE_CONTROL, prefetch_disable_bits);
+ 
+ 	/* Initialize rest of local variables */
+@@ -405,7 +405,7 @@ static int measure_residency_fn(struct perf_event_attr *miss_attr,
+ 	 */
+ 	rmb();
+ 	/* Re-enable hardware prefetchers */
+-	wrmsr(MSR_MISC_FEATURE_CONTROL, saved_low, saved_high);
++	wrmsrq(MSR_MISC_FEATURE_CONTROL, saved);
+ 	local_irq_enable();
+ out_hit:
+ 	perf_event_release_kernel(hit_event);
+-- 
+2.55.0
+

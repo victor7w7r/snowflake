@@ -1,0 +1,115 @@
+From ec926b3bcb49000bafb402a6864d19ae40a3d288 Mon Sep 17 00:00:00 2001
+From: Troy Mitchell <troy.mitchell@linux.spacemit.com>
+Date: Tue, 21 Jul 2026 19:35:56 -0700
+Subject: [PATCH 06823/15333] ASoC: dt-bindings: sound: spacemit,k1-i2s: allow
+ 6 clocks for K3 i2s1
+
+The K3 I2S controllers normally use the published 7-clock layout:
+
+  sysclk, bclk, bus, func, sysclk_div, c_sysclk, c_bclk
+
+However, K3 i2s1 has no dedicated sysclk divider and therefore uses a
+6-clock layout:
+
+  sysclk, bclk, bus, func, c_sysclk, c_bclk
+
+Describe the 4-clock K1 and both K3 layouts as separate tuples. Lower
+the K3 minimum from 7 to 6 clocks while preserving the existing
+7-clock ordering.
+
+Fixes: 6bc6b28c0314 ("ASoC: dt-bindings: add SpacemiT K3 SoC compatible")
+Signed-off-by: Troy Mitchell <troy.mitchell@linux.spacemit.com>
+Link: https://patch.msgid.link/20260721-kx-i2s-dts-v1-2-d22cb6cfaab5@linux.spacemit.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ .../bindings/sound/spacemit,k1-i2s.yaml       | 64 +++++++++++++------
+ 1 file changed, 44 insertions(+), 20 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/sound/spacemit,k1-i2s.yaml b/Documentation/devicetree/bindings/sound/spacemit,k1-i2s.yaml
+index 240d90402e4f..72723f067b2a 100644
+--- a/Documentation/devicetree/bindings/sound/spacemit,k1-i2s.yaml
++++ b/Documentation/devicetree/bindings/sound/spacemit,k1-i2s.yaml
+@@ -23,9 +23,9 @@ allOf:
+     then:
+       properties:
+         clocks:
+-          minItems: 7
++          minItems: 6
+         clock-names:
+-          minItems: 7
++          minItems: 6
+     else:
+       properties:
+         clocks:
+@@ -43,26 +43,50 @@ properties:
+     maxItems: 1
+ 
+   clocks:
+-    minItems: 4
+-    items:
+-      - description: clock for I2S sysclk
+-      - description: clock for I2S bclk
+-      - description: clock for I2S bus
+-      - description: clock for I2S controller
+-      - description: clock for I2S sysclk divider
+-      - description: clock for I2S common sysclk
+-      - description: clock for I2S common bclk
++    oneOf:
++      - items:
++          - description: clock for I2S sysclk
++          - description: clock for I2S bclk
++          - description: clock for I2S bus
++          - description: clock for I2S controller
++      - items:
++          - description: clock for I2S sysclk
++          - description: clock for I2S bclk
++          - description: clock for I2S bus
++          - description: clock for I2S controller
++          - description: clock for I2S common sysclk
++          - description: clock for I2S common bclk
++      - items:
++          - description: clock for I2S sysclk
++          - description: clock for I2S bclk
++          - description: clock for I2S bus
++          - description: clock for I2S controller
++          - description: clock for I2S sysclk divider
++          - description: clock for I2S common sysclk
++          - description: clock for I2S common bclk
+ 
+   clock-names:
+-    minItems: 4
+-    items:
+-      - const: sysclk
+-      - const: bclk
+-      - const: bus
+-      - const: func
+-      - const: sysclk_div
+-      - const: c_sysclk
+-      - const: c_bclk
++    oneOf:
++      - items:
++          - const: sysclk
++          - const: bclk
++          - const: bus
++          - const: func
++      - items:
++          - const: sysclk
++          - const: bclk
++          - const: bus
++          - const: func
++          - const: c_sysclk
++          - const: c_bclk
++      - items:
++          - const: sysclk
++          - const: bclk
++          - const: bus
++          - const: func
++          - const: sysclk_div
++          - const: c_sysclk
++          - const: c_bclk
+ 
+   dmas:
+     minItems: 1
+-- 
+2.55.0
+

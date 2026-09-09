@@ -1,0 +1,62 @@
+From 43f129d2148983f69f8f9c34f2a64d27f888bef1 Mon Sep 17 00:00:00 2001
+From: Daniel Borkmann <daniel@iogearbox.net>
+Date: Wed, 8 Jul 2026 20:41:07 +0200
+Subject: [PATCH 03317/15333] selftests/bpf: Close fd on unexpected success in
+ signed loader
+
+The signature_enforced, signature_too_large, signature_zero_size and
+signature_bad_keyring subtests load a program that must be rejected,
+but leave the fd open if the kernel unexpectedly accepts the load:
+test_progs asserts record the failure and continue, so the fd would
+linger for the rest of the run. Just close it.
+
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Link: https://lore.kernel.org/bpf/20260708184107.369182-1-daniel@iogearbox.net
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ tools/testing/selftests/bpf/prog_tests/signed_loader.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/signed_loader.c b/tools/testing/selftests/bpf/prog_tests/signed_loader.c
+index 0019492cf07a..77381d345435 100644
+--- a/tools/testing/selftests/bpf/prog_tests/signed_loader.c
++++ b/tools/testing/selftests/bpf/prog_tests/signed_loader.c
+@@ -326,6 +326,8 @@ static void signature_enforced(void)
+ 		fd = load_loader(f.gopts.insns, f.gopts.insns_sz, -1, junk,
+ 				 sizeof(junk), KEY_SPEC_SESSION_KEYRING, 0);
+ 		ASSERT_EQ(fd, -EBADMSG, "invalid signature rejected at load");
++		if (fd >= 0)
++			close(fd);
+ 	}
+ 	gen_loader_fixture_fini(&f);
+ }
+@@ -575,6 +577,8 @@ static void signature_too_large(void)
+ 		fd = load_loader(f.gopts.insns, f.gopts.insns_sz, -1, junk,
+ 				 64 << 20, KEY_SPEC_SESSION_KEYRING, 0);
+ 		ASSERT_EQ(fd, -EINVAL, "oversized signature rejected");
++		if (fd >= 0)
++			close(fd);
+ 	}
+ 	gen_loader_fixture_fini(&f);
+ }
+@@ -594,6 +598,8 @@ static void signature_zero_size(void)
+ 		fd = load_loader(f.gopts.insns, f.gopts.insns_sz, -1, junk,
+ 				 0, KEY_SPEC_SESSION_KEYRING, 0);
+ 		ASSERT_EQ(fd, -EINVAL, "zero-size signature rejected");
++		if (fd >= 0)
++			close(fd);
+ 	}
+ 	gen_loader_fixture_fini(&f);
+ }
+@@ -614,6 +620,8 @@ static void signature_bad_keyring(void)
+ 		fd = load_loader(f.gopts.insns, f.gopts.insns_sz, -1, junk,
+ 				 sizeof(junk), INT_MAX, 0);
+ 		ASSERT_EQ(fd, -EINVAL, "signature with bad keyring_id rejected");
++		if (fd >= 0)
++			close(fd);
+ 	}
+ 	gen_loader_fixture_fini(&f);
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,90 @@
+From 6b5edc71aac6ff45f555172b9cdae10c4294707b Mon Sep 17 00:00:00 2001
+From: Arnd Bergmann <arnd@arndb.de>
+Date: Thu, 24 Jul 2025 15:41:21 +0200
+Subject: [PATCH 06966/15333] x86/olpc: select GPIOLIB_LEGACY
+
+The OLPC GPIO controller sets up a fixed number space that is used
+by at least two drivers:
+
+arch/x86/platform/olpc/olpc-xo1-sci.c: In function 'setup_ec_sci':
+arch/x86/platform/olpc/olpc-xo1-sci.c:358:13: error: implicit declaration of function 'gpio_request' [-Wimplicit-function-declaration]
+  358 |         r = gpio_request(OLPC_GPIO_ECSCI, "OLPC-ECSCI");
+      |             ^~~~~~~~~~~~
+sound/pci/cs5535audio/cs5535audio_olpc.c: In function 'olpc_analog_input':
+sound/pci/cs5535audio/cs5535audio_olpc.c:41:9: error: implicit declaration of function 'gpio_set_value'; did you mean 'gpiod_set_value'? [-Wimplicit-function-declaration]
+   41 |         gpio_set_value(OLPC_GPIO_MIC_AC, on);
+
+The AMD Geode platform that this is based on is now marked as
+'Orphaned' in Kconfig, and it is likely that there are no XO1
+users on modern kernels, but so far there is no consensus on
+removing it entirely.
+
+Select CONFIG_GPIOLIB_LEGACY for this platform and make sure the
+sound driver portion cannot be compiled without this.
+
+Acked-by: Borislav Petkov (AMD) <bp@alien8.de>
+Acked-by: Takashi Iwai <tiwai@suse.de>
+Reviewed-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Acked-by: Dmitry Torokhov <dmitry.torokhov@gmail.com> # for input
+Signed-off-by: Arnd Bergmann <arnd@arndb.de>
+---
+ arch/x86/Kconfig                         | 1 +
+ arch/x86/platform/olpc/olpc-xo1-sci.c    | 2 +-
+ sound/pci/Kconfig                        | 1 +
+ sound/pci/cs5535audio/cs5535audio_olpc.c | 2 +-
+ 4 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index bdad90f210e4..4ad8a7bbd93d 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -2976,6 +2976,7 @@ config OLPC
+ 	bool "One Laptop Per Child support"
+ 	depends on !X86_PAE
+ 	select GPIOLIB
++	select GPIOLIB_LEGACY
+ 	select OF
+ 	select OF_PROMTREE
+ 	select IRQ_DOMAIN
+diff --git a/arch/x86/platform/olpc/olpc-xo1-sci.c b/arch/x86/platform/olpc/olpc-xo1-sci.c
+index 30751b42d54e..a5b47960ba32 100644
+--- a/arch/x86/platform/olpc/olpc-xo1-sci.c
++++ b/arch/x86/platform/olpc/olpc-xo1-sci.c
+@@ -9,7 +9,7 @@
+ 
+ #include <linux/cs5535.h>
+ #include <linux/device.h>
+-#include <linux/gpio.h>
++#include <linux/gpio/legacy.h>
+ #include <linux/input.h>
+ #include <linux/interrupt.h>
+ #include <linux/platform_device.h>
+diff --git a/sound/pci/Kconfig b/sound/pci/Kconfig
+index e0996a9d90b0..6366f72b3667 100644
+--- a/sound/pci/Kconfig
++++ b/sound/pci/Kconfig
+@@ -300,6 +300,7 @@ config SND_CS5535AUDIO
+ 	tristate "CS5535/CS5536 Audio"
+ 	depends on X86_32 || MIPS || COMPILE_TEST
+ 	depends on HAS_IOPORT
++	depends on GPIOLIB_LEGACY || !OLPC
+ 	select SND_PCM
+ 	select SND_AC97_CODEC
+ 	help
+diff --git a/sound/pci/cs5535audio/cs5535audio_olpc.c b/sound/pci/cs5535audio/cs5535audio_olpc.c
+index 122170a410d9..cfdcc5bf4341 100644
+--- a/sound/pci/cs5535audio/cs5535audio_olpc.c
++++ b/sound/pci/cs5535audio/cs5535audio_olpc.c
+@@ -9,7 +9,7 @@
+ #include <sound/info.h>
+ #include <sound/control.h>
+ #include <sound/ac97_codec.h>
+-#include <linux/gpio.h>
++#include <linux/gpio/legacy.h>
+ 
+ #include <asm/olpc.h>
+ #include "cs5535audio.h"
+-- 
+2.55.0
+

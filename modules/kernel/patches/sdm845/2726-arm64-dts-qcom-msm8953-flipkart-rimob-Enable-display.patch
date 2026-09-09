@@ -1,0 +1,125 @@
+From a8c0bd4233a9612f200a27f535b66e71eec289a6 Mon Sep 17 00:00:00 2001
+From: Cristian Cozzolino <cristian_ci@protonmail.com>
+Date: Tue, 31 Mar 2026 11:47:11 +0200
+Subject: [PATCH 02726/15333] arm64: dts: qcom: msm8953-flipkart-rimob: Enable
+ display and GPU
+
+Add the description for the display panel found on this phone.
+And with this done we can also enable the GPU and set the zap shader
+firmware path.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Reviewed-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Signed-off-by: Cristian Cozzolino <cristian_ci@protonmail.com>
+Link: https://lore.kernel.org/r/20260331-rimob-new-features-v5-3-5fcf42a29c12@protonmail.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ .../boot/dts/qcom/msm8953-flipkart-rimob.dts  | 73 +++++++++++++++++++
+ 1 file changed, 73 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/msm8953-flipkart-rimob.dts b/arch/arm64/boot/dts/qcom/msm8953-flipkart-rimob.dts
+index ef4faf763132..5a9d71d1e466 100644
+--- a/arch/arm64/boot/dts/qcom/msm8953-flipkart-rimob.dts
++++ b/arch/arm64/boot/dts/qcom/msm8953-flipkart-rimob.dts
+@@ -78,6 +78,13 @@ vph_pwr: vph-pwr-regulator {
+ 	};
+ };
+ 
++&gpu {
++	status = "okay";
++};
++
++&gpu_zap_shader {
++	firmware-name = "qcom/msm8953/flipkart/rimob/a506_zap.mbn";
++};
+ 
+ &hsusb_phy {
+ 	vdd-supply = <&pm8953_l3>;
+@@ -87,11 +94,70 @@ &hsusb_phy {
+ 	status = "okay";
+ };
+ 
++&ibb {
++	qcom,discharge-resistor-kohms = <32>;
++};
++
++&lab {
++	qcom,soft-start-us = <800>;
++};
++
++&mdss {
++	status = "okay";
++};
++
++&mdss_dsi0 {
++	vdda-supply = <&pm8953_s3>;
++	vddio-supply = <&pm8953_l6>;
++
++	status = "okay";
++
++	panel: panel@0 {
++		compatible = "flipkart,rimob-panel-nt35532-cs";
++		reg = <0>;
++
++		backlight = <&pmi8950_wled>;
++		reset-gpios = <&tlmm 61 GPIO_ACTIVE_LOW>;
++		avdd-supply = <&lab>;
++		avee-supply = <&ibb>;
++		vci-supply = <&pm8953_l17>;
++		vddi-supply = <&pm8953_l6>;
++
++		pinctrl-0 = <&panel_default>;
++		pinctrl-names = "default";
++
++		port {
++			panel_in: endpoint {
++				remote-endpoint = <&mdss_dsi0_out>;
++			};
++		};
++	};
++};
++
++&mdss_dsi0_out {
++	data-lanes = <0 1 2 3>;
++	remote-endpoint = <&panel_in>;
++};
++
++&mdss_dsi0_phy {
++	vcca-supply = <&pm8953_l3>;
++
++	status = "okay";
++};
++
+ &pm8953_resin {
+ 	linux,code = <KEY_VOLUMEDOWN>;
+ 	status = "okay";
+ };
+ 
++&pmi8950_wled {
++	qcom,current-limit-microamp = <10000>;
++	qcom,num-strings = <3>;
++	qcom,ovp-millivolt = <29500>;
++
++	status = "okay";
++};
++
+ &rpm_requests {
+ 	regulators {
+ 		compatible = "qcom,rpm-pm8953-regulators";
+@@ -238,6 +304,13 @@ &sdhc_2 {
+ &tlmm {
+ 	gpio-reserved-ranges = <0 4>, <135 4>;
+ 
++	panel_default: panel-default-state {
++		pins = "gpio61";
++		function = "gpio";
++		drive-strength = <8>;
++		bias-disable;
++	};
++
+ 	gpio_key_default: gpio-key-default-state {
+ 		pins = "gpio85";
+ 		function = "gpio";
+-- 
+2.55.0
+

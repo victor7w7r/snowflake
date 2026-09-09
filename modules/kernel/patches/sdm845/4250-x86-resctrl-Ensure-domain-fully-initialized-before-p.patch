@@ -1,0 +1,136 @@
+From 25afd838fb2aae6325ae13937e7db06362a05673 Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Mon, 13 Jul 2026 10:39:42 -0700
+Subject: [PATCH 04250/15333] x86/resctrl: Ensure domain fully initialized
+ before placed on RCU list
+
+A resctrl domain consists of the domain structure self that includes
+pointers to dynamically allocated filesystem as well as architecture
+specific data. For example, the L3 monitoring domain structure consists
+of the architecture specific struct rdt_hw_l3_mon_domain that contains
+the dynamically allocated rdt_hw_l3_mon_domain::arch_mbm_states
+architectural state and the embedded struct rdt_l3_mon_domain contains
+the dynamically allocated rdt_l3_mon_domain::mbm_states resctrl fs state.
+
+The domains are added to and removed from an RCU protected list while
+cpus_write_lock() is held so that readers could access domains via
+cpus_read_lock() or from an RCU read-side critical section.  A reader
+accessing a domain via the RCU list expects that the domain and all its
+dynamically allocated data is accessible.
+
+Only place the domain on the RCU list when all its dynamically allocated
+data is ready, similarly unlink it from RCU list (again with cpus_write_lock()
+held) before removing any of its dynamically allocated data.
+
+Calling resctrl_online_mon_domain() before adding the domain to the RCU
+list creates the kernfs files that expose the domain's monitoring data to
+user space before adding the domain to the RCU list. This is safe because
+rdtgroup_mondata_show() acquires cpus_read_lock() before it traverses the
+RCU list and will thus block until the domain is added to the RCU list.
+
+There are no readers accessing a domain via RCU list. Ensure safety of
+access when such a reader arrives.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Reviewed-by: Chen Yu <yu.c.chen@intel.com>
+Link: https://patch.msgid.link/31ae67084c983e8cb8c5ef2c65e1096de5e8f9b0.1783963505.git.reinette.chatre@intel.com
+---
+ arch/x86/kernel/cpu/resctrl/core.c      | 18 +++++++-----------
+ arch/x86/kernel/cpu/resctrl/intel_aet.c |  5 ++---
+ 2 files changed, 9 insertions(+), 14 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/resctrl/core.c b/arch/x86/kernel/cpu/resctrl/core.c
+index 9c01d2562b7a..bca782050198 100644
+--- a/arch/x86/kernel/cpu/resctrl/core.c
++++ b/arch/x86/kernel/cpu/resctrl/core.c
+@@ -515,14 +515,12 @@ static void domain_add_cpu_ctrl(int cpu, struct rdt_resource *r)
+ 		return;
+ 	}
+ 
+-	list_add_tail_rcu(&d->hdr.list, add_pos);
+-
+ 	err = resctrl_online_ctrl_domain(r, d);
+ 	if (err) {
+-		list_del_rcu(&d->hdr.list);
+-		synchronize_rcu();
+ 		ctrl_domain_free(hw_dom);
++		return;
+ 	}
++	list_add_tail_rcu(&d->hdr.list, add_pos);
+ }
+ 
+ static void l3_mon_domain_setup(int cpu, int id, struct rdt_resource *r, struct list_head *add_pos)
+@@ -556,14 +554,12 @@ static void l3_mon_domain_setup(int cpu, int id, struct rdt_resource *r, struct
+ 		return;
+ 	}
+ 
+-	list_add_tail_rcu(&d->hdr.list, add_pos);
+-
+ 	err = resctrl_online_mon_domain(r, &d->hdr);
+ 	if (err) {
+-		list_del_rcu(&d->hdr.list);
+-		synchronize_rcu();
+ 		l3_mon_domain_free(hw_dom);
++		return;
+ 	}
++	list_add_tail_rcu(&d->hdr.list, add_pos);
+ }
+ 
+ static void domain_add_cpu_mon(int cpu, struct rdt_resource *r)
+@@ -642,9 +638,9 @@ static void domain_remove_cpu_ctrl(int cpu, struct rdt_resource *r)
+ 	d = container_of(hdr, struct rdt_ctrl_domain, hdr);
+ 	hw_dom = resctrl_to_arch_ctrl_dom(d);
+ 
+-	resctrl_offline_ctrl_domain(r, d);
+ 	list_del_rcu(&hdr->list);
+ 	synchronize_rcu();
++	resctrl_offline_ctrl_domain(r, d);
+ 
+ 	/*
+ 	 * rdt_ctrl_domain "d" is going to be freed below, so clear
+@@ -689,9 +685,9 @@ static void domain_remove_cpu_mon(int cpu, struct rdt_resource *r)
+ 
+ 		d = container_of(hdr, struct rdt_l3_mon_domain, hdr);
+ 		hw_dom = resctrl_to_arch_mon_dom(d);
+-		resctrl_offline_mon_domain(r, hdr);
+ 		list_del_rcu(&hdr->list);
+ 		synchronize_rcu();
++		resctrl_offline_mon_domain(r, hdr);
+ 		l3_mon_domain_free(hw_dom);
+ 		break;
+ 	}
+@@ -702,9 +698,9 @@ static void domain_remove_cpu_mon(int cpu, struct rdt_resource *r)
+ 			return;
+ 
+ 		pkgd = container_of(hdr, struct rdt_perf_pkg_mon_domain, hdr);
+-		resctrl_offline_mon_domain(r, hdr);
+ 		list_del_rcu(&hdr->list);
+ 		synchronize_rcu();
++		resctrl_offline_mon_domain(r, hdr);
+ 		kfree(pkgd);
+ 		break;
+ 	}
+diff --git a/arch/x86/kernel/cpu/resctrl/intel_aet.c b/arch/x86/kernel/cpu/resctrl/intel_aet.c
+index 89b8b619d5d5..c22c3cf5167d 100644
+--- a/arch/x86/kernel/cpu/resctrl/intel_aet.c
++++ b/arch/x86/kernel/cpu/resctrl/intel_aet.c
+@@ -398,12 +398,11 @@ void intel_aet_mon_domain_setup(int cpu, int id, struct rdt_resource *r,
+ 	d->hdr.type = RESCTRL_MON_DOMAIN;
+ 	d->hdr.rid = RDT_RESOURCE_PERF_PKG;
+ 	cpumask_set_cpu(cpu, &d->hdr.cpu_mask);
+-	list_add_tail_rcu(&d->hdr.list, add_pos);
+ 
+ 	err = resctrl_online_mon_domain(r, &d->hdr);
+ 	if (err) {
+-		list_del_rcu(&d->hdr.list);
+-		synchronize_rcu();
+ 		kfree(d);
++		return;
+ 	}
++	list_add_tail_rcu(&d->hdr.list, add_pos);
+ }
+-- 
+2.55.0
+

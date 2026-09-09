@@ -1,0 +1,70 @@
+From 39b28ab6e91cd09270f8f8d7858a6a1508053804 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Wed, 24 Jun 2026 19:35:23 +0200
+Subject: [PATCH 04900/15333] cpufreq: intel_pstate: Consolidate frequency
+ values computation
+
+Update intel_pstate_get_cpu_pstates() to use
+intel_pstate_update_freq_limits() for computing the max and
+turbo frequency values in all cases, including non-hybrid HWP
+and HWP disabled.
+
+No intentional functional impact.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Link: https://patch.msgid.link/3059329.e9J7NaK4W3@rafael.j.wysocki
+---
+ drivers/cpufreq/intel_pstate.c | 12 +++---------
+ 1 file changed, 3 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index a7bb7be59848..7f7a5ccc930c 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -589,13 +589,11 @@ static void intel_pstate_hybrid_hwp_adjust(struct cpudata *cpu)
+ 	freq = perf_ctl_max_phys * perf_ctl_scaling;
+ 	cpu->pstate.max_pstate_physical = intel_pstate_freq_to_hwp(cpu, freq);
+ 
+-	freq = cpu->pstate.min_pstate * perf_ctl_scaling;
+-	cpu->pstate.min_freq = freq;
+ 	/*
+ 	 * Cast the min P-state value retrieved via pstate_funcs.get_min() to
+ 	 * the effective range of HWP performance levels.
+ 	 */
+-	cpu->pstate.min_pstate = intel_pstate_freq_to_hwp(cpu, freq);
++	cpu->pstate.min_pstate = intel_pstate_freq_to_hwp(cpu, cpu->pstate.min_freq);
+ }
+ 
+ static bool turbo_is_disabled(void)
+@@ -2317,6 +2315,7 @@ static void intel_pstate_get_cpu_pstates(struct cpudata *cpu)
+ 
+ 	cpu->pstate.max_pstate_physical = pstate_funcs.get_max_physical(cpu->cpu);
+ 	cpu->pstate.min_pstate = pstate_funcs.get_min(cpu->cpu);
++	cpu->pstate.min_freq = cpu->pstate.min_pstate * perf_ctl_scaling;
+ 	cpu->pstate.perf_ctl_scaling = perf_ctl_scaling;
+ 
+ 	if (hwp_active) {
+@@ -2325,7 +2324,6 @@ static void intel_pstate_get_cpu_pstates(struct cpudata *cpu)
+ 		if (pstate_funcs.get_cpu_scaling) {
+ 			cpu->pstate.scaling = pstate_funcs.get_cpu_scaling(cpu->cpu);
+ 			intel_pstate_hybrid_hwp_adjust(cpu);
+-			intel_pstate_update_freq_limits(cpu);
+ 		} else {
+ 			cpu->pstate.scaling = perf_ctl_scaling;
+ 		}
+@@ -2340,11 +2338,7 @@ static void intel_pstate_get_cpu_pstates(struct cpudata *cpu)
+ 		cpu->pstate.turbo_pstate = pstate_funcs.get_turbo(cpu->cpu);
+ 	}
+ 
+-	if (cpu->pstate.scaling == perf_ctl_scaling) {
+-		cpu->pstate.min_freq = cpu->pstate.min_pstate * perf_ctl_scaling;
+-		cpu->pstate.max_freq = cpu->pstate.max_pstate * perf_ctl_scaling;
+-		cpu->pstate.turbo_freq = cpu->pstate.turbo_pstate * perf_ctl_scaling;
+-	}
++	intel_pstate_update_freq_limits(cpu);
+ 
+ 	if (pstate_funcs.get_aperf_mperf_shift)
+ 		cpu->aperf_mperf_shift = pstate_funcs.get_aperf_mperf_shift();
+-- 
+2.55.0
+

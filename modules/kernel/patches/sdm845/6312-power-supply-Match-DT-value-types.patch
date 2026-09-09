@@ -1,0 +1,60 @@
+From 6a3b47a5a5fc0e294aa6d62ea70b63571f829823 Mon Sep 17 00:00:00 2001
+From: "Rob Herring (Arm)" <robh@kernel.org>
+Date: Fri, 12 Jun 2026 16:53:07 -0500
+Subject: [PATCH 06312/15333] power: supply: Match DT value types
+
+The battery drivers read properties whose bindings use signed values
+for temperature thresholds and unsigned values for voltage thresholds.
+Some helpers used the opposite signedness, which makes property type
+checking report real mismatches.
+
+Use signed helpers where the binding and DTS allow negative values, and
+use unsigned helpers for voltage properties documented as uint32 cells.
+
+Assisted-by: Codex:gpt-5-5
+Signed-off-by: Rob Herring (Arm) <robh@kernel.org>
+Reviewed-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260612215308.1888834-1-robh@kernel.org
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/ltc2941-battery-gauge.c | 2 +-
+ drivers/power/supply/max17042_battery.c      | 8 ++++++--
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/power/supply/ltc2941-battery-gauge.c b/drivers/power/supply/ltc2941-battery-gauge.c
+index 5b6760722f38..d1be314f36a0 100644
+--- a/drivers/power/supply/ltc2941-battery-gauge.c
++++ b/drivers/power/supply/ltc2941-battery-gauge.c
+@@ -463,7 +463,7 @@ static int ltc294x_i2c_probe(struct i2c_client *client)
+ 
+ 	/* r_sense can be negative, when sense+ is connected to the battery
+ 	 * instead of the sense-. This results in reversed measurements. */
+-	ret = of_property_read_u32(np, "lltc,resistor-sense", &r_sense);
++	ret = of_property_read_s32(np, "lltc,resistor-sense", &r_sense);
+ 	if (ret < 0)
+ 		return dev_err_probe(&client->dev, ret,
+ 			"Could not find lltc,resistor-sense in devicetree\n");
+diff --git a/drivers/power/supply/max17042_battery.c b/drivers/power/supply/max17042_battery.c
+index 639dacdb9b31..581699335a5f 100644
+--- a/drivers/power/supply/max17042_battery.c
++++ b/drivers/power/supply/max17042_battery.c
+@@ -1027,10 +1027,14 @@ static int max17042_parse_dt(struct max17042_chip *chip)
+ 		chip->temp_min = INT_MIN;
+ 	if (of_property_read_s32(np, "maxim,over-heat-temp", &chip->temp_max))
+ 		chip->temp_max = INT_MAX;
+-	if (of_property_read_s32(np, "maxim,dead-volt", &chip->vmin))
++	if (of_property_read_u32(np, "maxim,dead-volt", &prop))
+ 		chip->vmin = INT_MIN;
+-	if (of_property_read_s32(np, "maxim,over-volt", &chip->vmax))
++	else
++		chip->vmin = prop;
++	if (of_property_read_u32(np, "maxim,over-volt", &prop))
+ 		chip->vmax = INT_MAX;
++	else
++		chip->vmin = prop;
+ 
+ 	return 0;
+ }
+-- 
+2.55.0
+

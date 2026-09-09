@@ -1,0 +1,81 @@
+From 003c01b2f0bad8c8c515928938ce4e7135603884 Mon Sep 17 00:00:00 2001
+From: Alvin Sun <alvin.sun@linux.dev>
+Date: Tue, 11 Aug 2026 14:39:49 +0800
+Subject: [PATCH 13442/15333] rust: configfs: use `LocalModule` for
+ `THIS_MODULE`
+
+Replace the `THIS_MODULE` static reference in the `configfs_attrs!`
+macro with `this_module::<LocalModule>()`, and update
+rnull to import `LocalModule` instead of `THIS_MODULE`, consistent
+with the move of `THIS_MODULE` into the `ModuleMetadata` trait.
+
+Assisted-by: opencode:glm-5.2
+Reviewed-by: Andreas Hindborg <a.hindborg@kernel.org>
+Acked-by: Danilo Krummrich <dakr@kernel.org>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Acked-by: Andreas Hindborg <a.hindborg@kernel.org>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Signed-off-by: Alvin Sun <alvin.sun@linux.dev>
+Link: https://patch.msgid.link/20260811-fix-fops-owner-v10-7-7e71776f9dbe@linux.dev
+[ Rebased to avoid the imports cleanup patch. - Miguel ]
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ drivers/block/rnull/configfs.rs | 2 +-
+ rust/kernel/configfs.rs         | 9 ++++++---
+ 2 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/block/rnull/configfs.rs b/drivers/block/rnull/configfs.rs
+index 7c2eb5c0b722..32c10c3f4d0f 100644
+--- a/drivers/block/rnull/configfs.rs
++++ b/drivers/block/rnull/configfs.rs
+@@ -1,6 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0
+ 
+-use super::{NullBlkDevice, THIS_MODULE};
++use super::NullBlkDevice;
+ use kernel::{
+     block::mq::gen_disk::{GenDisk, GenDiskBuilder},
+     configfs::{self, AttributeOperations},
+diff --git a/rust/kernel/configfs.rs b/rust/kernel/configfs.rs
+index 2339c6467325..cd082b83e9e7 100644
+--- a/rust/kernel/configfs.rs
++++ b/rust/kernel/configfs.rs
+@@ -875,13 +875,14 @@ fn as_ptr(&self) -> *const bindings::config_item_type {
+ ///                 configfs::Subsystem<Configuration>,
+ ///                 Configuration
+ ///                 >::new_with_child_ctor::<N,Child>(
+-///             &THIS_MODULE,
++///             ::kernel::module::this_module::<crate::LocalModule>(),
+ ///             &CONFIGURATION_ATTRS
+ ///         );
+ ///
+ ///     &CONFIGURATION_TPE
+ /// }
+ /// ```
++#[allow(clippy::crate_in_macro_def)]
+ #[macro_export]
+ macro_rules! configfs_attrs {
+     (
+@@ -1021,7 +1022,8 @@ macro_rules! configfs_attrs {
+ 
+                     static [< $data:upper _TPE >] : $crate::configfs::ItemType<$container, $data>  =
+                         $crate::configfs::ItemType::<$container, $data>::new::<N>(
+-                            &THIS_MODULE, &[<$ data:upper _ATTRS >]
++                            $crate::module::this_module::<crate::LocalModule>(),
++                            &[<$ data:upper _ATTRS >]
+                         );
+                 )?
+ 
+@@ -1030,7 +1032,8 @@ macro_rules! configfs_attrs {
+                         $crate::configfs::ItemType<$container, $data>  =
+                             $crate::configfs::ItemType::<$container, $data>::
+                             new_with_child_ctor::<N, $child>(
+-                                &THIS_MODULE, &[<$ data:upper _ATTRS >]
++                                $crate::module::this_module::<crate::LocalModule>(),
++                                &[<$ data:upper _ATTRS >]
+                             );
+                 )?
+ 
+-- 
+2.55.0
+

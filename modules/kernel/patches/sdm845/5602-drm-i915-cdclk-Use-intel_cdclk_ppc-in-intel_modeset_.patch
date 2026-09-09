@@ -1,0 +1,72 @@
+From 04e1c59b349ec719aea836c5dc69f2ab648336eb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Wed, 15 Jul 2026 15:09:23 +0300
+Subject: [PATCH 05602/15333] drm/i915/cdclk: Use intel_cdclk_ppc() in
+ intel_modeset_readout_hw_state()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Replace the hand roller intel_cdclk_ppc() with the real thing
+in intel_modeset_readout_hw_state().
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20260715120926.10786-2-ville.syrjala@linux.intel.com
+Reviewed-by: Nemesa Garg <nemesa.garg@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_cdclk.c         |  2 +-
+ drivers/gpu/drm/i915/display/intel_cdclk.h         |  1 +
+ drivers/gpu/drm/i915/display/intel_modeset_setup.c | 12 ++++--------
+ 3 files changed, 6 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_cdclk.c b/drivers/gpu/drm/i915/display/intel_cdclk.c
+index d3c5e3438d19..1d7ff2cbaebb 100644
+--- a/drivers/gpu/drm/i915/display/intel_cdclk.c
++++ b/drivers/gpu/drm/i915/display/intel_cdclk.c
+@@ -2908,7 +2908,7 @@ intel_set_cdclk_post_plane_update(struct intel_atomic_state *state)
+ }
+ 
+ /* pixels per CDCLK */
+-static int intel_cdclk_ppc(struct intel_display *display, bool double_wide)
++int intel_cdclk_ppc(struct intel_display *display, bool double_wide)
+ {
+ 	return DISPLAY_VER(display) >= 10 || double_wide ? 2 : 1;
+ }
+diff --git a/drivers/gpu/drm/i915/display/intel_cdclk.h b/drivers/gpu/drm/i915/display/intel_cdclk.h
+index 1ff7d078b42c..a60cbf745ee2 100644
+--- a/drivers/gpu/drm/i915/display/intel_cdclk.h
++++ b/drivers/gpu/drm/i915/display/intel_cdclk.h
+@@ -22,6 +22,7 @@ struct intel_cdclk_config {
+ 	bool joined_mbus;
+ };
+ 
++int intel_cdclk_ppc(struct intel_display *display, bool double_wide);
+ void intel_cdclk_init_hw(struct intel_display *display);
+ void intel_cdclk_uninit_hw(struct intel_display *display);
+ void intel_init_cdclk_hooks(struct intel_display *display);
+diff --git a/drivers/gpu/drm/i915/display/intel_modeset_setup.c b/drivers/gpu/drm/i915/display/intel_modeset_setup.c
+index e27a531e1aa2..14d829171c7d 100644
+--- a/drivers/gpu/drm/i915/display/intel_modeset_setup.c
++++ b/drivers/gpu/drm/i915/display/intel_modeset_setup.c
+@@ -854,14 +854,10 @@ static void intel_modeset_readout_hw_state(struct intel_display *display)
+ 			 * FIXME don't have the fb yet, so can't
+ 			 * use plane->min_cdclk() :(
+ 			 */
+-			if (plane_state->uapi.visible && plane->min_cdclk) {
+-				if (crtc_state->double_wide || DISPLAY_VER(display) >= 10)
+-					crtc_state->plane_min_cdclk[plane->id] =
+-						DIV_ROUND_UP(crtc_state->pixel_rate, 2);
+-				else
+-					crtc_state->plane_min_cdclk[plane->id] =
+-						crtc_state->pixel_rate;
+-			}
++			if (plane_state->uapi.visible && plane->min_cdclk)
++				crtc_state->plane_min_cdclk[plane->id] =
++					DIV_ROUND_UP(crtc_state->pixel_rate,
++						     intel_cdclk_ppc(display, crtc_state->double_wide));
+ 			drm_dbg_kms(display->drm,
+ 				    "[PLANE:%d:%s] min_cdclk %d kHz\n",
+ 				    plane->base.base.id, plane->base.name,
+-- 
+2.55.0
+

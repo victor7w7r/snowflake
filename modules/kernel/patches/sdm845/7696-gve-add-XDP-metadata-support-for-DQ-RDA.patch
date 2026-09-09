@@ -1,0 +1,38 @@
+From 871657dc6996ec7e6b90a87369d52a4a59f22753 Mon Sep 17 00:00:00 2001
+From: Joshua Washington <joshwash@google.com>
+Date: Wed, 22 Jul 2026 15:16:34 -0700
+Subject: [PATCH 07696/15333] gve: add XDP metadata support for DQ RDA
+
+Commit 1b42e07af1ee ("gve: Add Rx HWTS metadata to AF_XDP ZC mode")
+exposes support for the XDP RX timestamping metadata operation in the DQ
+RDA mode. While the operation works on its own, the intent was to enable
+XDP metadata support for the queue format as a whole along with it.
+Currently bpf_xdp_adjust_meta fails because meta_valid is set to false.
+This change updates xdp_buff preparation to set meta_valid to true, so
+metadata can be fully used by XDP programs.
+
+Reviewed-by: Harshitha Ramamurthy <hramamurthy@google.com>
+Reviewed-by: Jordan Rhee <jordanrhee@google.com>
+Signed-off-by: Joshua Washington <joshwash@google.com>
+Link: https://patch.msgid.link/20260722221634.186886-3-joshwash@google.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/ethernet/google/gve/gve_rx_dqo.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/google/gve/gve_rx_dqo.c b/drivers/net/ethernet/google/gve/gve_rx_dqo.c
+index 97db9f701e63..36ad2b02d7d9 100644
+--- a/drivers/net/ethernet/google/gve/gve_rx_dqo.c
++++ b/drivers/net/ethernet/google/gve/gve_rx_dqo.c
+@@ -916,7 +916,7 @@ static int gve_rx_dqo(struct napi_struct *napi, struct gve_rx_ring *rx,
+ 				 buf_state->page_info.page_address +
+ 				 buf_state->page_info.page_offset,
+ 				 buf_state->page_info.pad,
+-				 buf_len, false);
++				 buf_len, true);
+ 		gve_xdp.gve = priv;
+ 		gve_xdp.compl_desc = compl_desc;
+ 
+-- 
+2.55.0
+

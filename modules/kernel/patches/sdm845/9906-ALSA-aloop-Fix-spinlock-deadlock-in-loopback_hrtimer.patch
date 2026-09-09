@@ -1,0 +1,55 @@
+From 5ba790f097f6208fe1a1f840868dab0f7ae04a04 Mon Sep 17 00:00:00 2001
+From: Yu-Hsuan Hsu <yuhsuan@chromium.org>
+Date: Fri, 31 Jul 2026 07:39:35 +0000
+Subject: [PATCH 09906/15333] ALSA: aloop: Fix spinlock deadlock in
+ loopback_hrtimer_stop()
+
+In loopback_hrtimer_stop(), calling hrtimer_cancel() while holding
+cable->lock triggers an AB-BA spinlock deadlock if the hrtimer softirq
+is executing concurrently on another CPU:
+
+1) CPU A runs loopback_trigger(STOP), acquires spin_lock(&cable->lock),
+   and calls hrtimer_cancel(). Since hrtimer_cancel() is synchronous,
+   it spins waiting for the executing callback to complete before
+   returning.
+2) CPU B executes loopback_hrtimer_function(), which immediately tries
+   to acquire spin_lock(&cable->lock).
+
+This mutual dependency leads to a CPU hard lockup and NMI watchdog
+panic when multiple streams start and stop concurrently with small
+period sizes.
+
+Replace hrtimer_cancel() in loopback_hrtimer_stop() with the non-blocking
+hrtimer_try_to_cancel(), matching the behavior of jiffies timers
+(timer_delete vs timer_delete_sync). If try_to_cancel returns -1
+because the handler is running, CPU A releases cable->lock cleanly.
+When the running handler subsequently acquires cable->lock, it observes
+that the stream is no longer in running state (cleared by trigger STOP)
+and terminates without re-arming the timer. Synchronous hrtimer_cancel()
+remains preserved in loopback_hrtimer_stop_sync() where cable->lock is
+not held.
+
+Fixes: bf08a5f698dc ("ALSA: aloop: Add 'hrtimer' option to timer_source")
+Signed-off-by: Yu-Hsuan Hsu <yuhsuan@chromium.org>
+Link: https://patch.msgid.link/20260731074255.1513402-1-yuhsuan@chromium.org
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/drivers/aloop.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sound/drivers/aloop.c b/sound/drivers/aloop.c
+index 7ebe8e5c9303..d520d83c2577 100644
+--- a/sound/drivers/aloop.c
++++ b/sound/drivers/aloop.c
+@@ -303,7 +303,7 @@ static inline int loopback_jiffies_timer_stop(struct loopback_pcm *dpcm)
+ /* call in cable->lock */
+ static inline int loopback_hrtimer_stop(struct loopback_pcm *dpcm)
+ {
+-	hrtimer_cancel(&dpcm->hrtimer);
++	hrtimer_try_to_cancel(&dpcm->hrtimer);
+ 
+ 	return 0;
+ }
+-- 
+2.55.0
+

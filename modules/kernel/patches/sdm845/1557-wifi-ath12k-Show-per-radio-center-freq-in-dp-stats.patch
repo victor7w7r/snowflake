@@ -1,0 +1,54 @@
+From b1d8d626e206a757b745af2adcbc7127ec593a20 Mon Sep 17 00:00:00 2001
+From: Sreeramya Soratkal <sreeramya.soratkal@oss.qualcomm.com>
+Date: Fri, 26 Jun 2026 14:22:53 +0530
+Subject: [PATCH 01557/15333] wifi: ath12k: Show per-radio center freq in dp
+ stats
+
+Currently, the frequency on which each radio is operating
+is not available in device_dp_stats. This information is
+helpful in debugging the channel-specific throughput and
+is available with iw/nl80211 dump.
+
+Extend the device_dp_stats dump to display the center
+frequency in the existing per-radio loop.
+
+Tested-on: QCN9274 hw2.0 PCI WLAN.WBE.1.6-01243-QCAHKSWPL_SILICONZ-1
+
+Signed-off-by: Sreeramya Soratkal <sreeramya.soratkal@oss.qualcomm.com>
+Reviewed-by: Baochen Qiang <baochen.qiang@oss.qualcomm.com>
+Reviewed-by: Aishwarya R <aishwarya.r@oss.qualcomm.com>
+Reviewed-by: Rameshkumar Sundaram <rameshkumar.sundaram@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260626085253.3927269-4-sreeramya.soratkal@oss.qualcomm.com
+Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/debugfs.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/net/wireless/ath/ath12k/debugfs.c b/drivers/net/wireless/ath/ath12k/debugfs.c
+index 57c213111259..d54995b7adb2 100644
+--- a/drivers/net/wireless/ath/ath12k/debugfs.c
++++ b/drivers/net/wireless/ath/ath12k/debugfs.c
+@@ -1031,6 +1031,7 @@ static ssize_t ath12k_debugfs_dump_device_dp_stats(struct file *file,
+ 	struct ath12k_device_dp_stats *device_stats = &dp->device_stats;
+ 	int len = 0, i, j, ret;
+ 	struct ath12k *ar;
++	u32 center_freq;
+ 	const int size = 4096;
+ 	static const char *rxdma_err[HAL_REO_ENTR_RING_RXDMA_ECODE_MAX] = {
+ 		[HAL_REO_ENTR_RING_RXDMA_ECODE_OVERFLOW_ERR] = "Overflow",
+@@ -1164,6 +1165,12 @@ static ssize_t ath12k_debugfs_dump_device_dp_stats(struct file *file,
+ 	for (i = 0; i < ab->num_radios; i++) {
+ 		ar = ath12k_mac_get_ar_by_pdev_id(ab, DP_SW2HW_MACID(i));
+ 		if (ar) {
++			spin_lock_bh(&ar->data_lock);
++			center_freq = ar->rx_channel ? ar->rx_channel->center_freq : 0;
++			spin_unlock_bh(&ar->data_lock);
++			len += scnprintf(buf + len, size - len,
++					 "\nradio%d center_freq: %u\n",
++					 i, center_freq);
+ 			len += scnprintf(buf + len, size - len,
+ 					"\nradio%d tx_pending: %u\n", i,
+ 					atomic_read(&ar->dp.num_tx_pending));
+-- 
+2.55.0
+

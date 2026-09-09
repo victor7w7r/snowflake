@@ -1,0 +1,46 @@
+From 2c3827ec75d852e2792b78d4903fe51409cdc1fb Mon Sep 17 00:00:00 2001
+From: David Heidelberg <david@ixit.cz>
+Date: Sun, 23 Aug 2026 11:25:20 +0200
+Subject: [PATCH 15299/15333] mfd: wcd934x: set DMA mask on parent to silence
+ "DMA mask not set"
+
+The wcd934x MFD parent (a slim_device) never initializes its
+dma_mask/coherent_dma_mask. When the DT-aware children pass through
+of_dma_configure() this triggers the "DMA mask not set" warning for
+each child.
+
+Cc: stable@vger.kernel.org
+Fixes: f959dcd6ddfd ("dma-direct: Fix potential NULL pointer dereference")
+Assisted-by: tencent:hy3
+Signed-off-by: David Heidelberg <david@ixit.cz>
+---
+ drivers/mfd/wcd934x.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/mfd/wcd934x.c b/drivers/mfd/wcd934x.c
+index 3c3080e8c8cf..853edda9b6da 100644
+--- a/drivers/mfd/wcd934x.c
++++ b/drivers/mfd/wcd934x.c
+@@ -2,6 +2,7 @@
+ // Copyright (c) 2019, Linaro Limited
+ 
+ #include <linux/clk.h>
++#include <linux/dma-mapping.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/interrupt.h>
+ #include <linux/kernel.h>
+@@ -217,6 +218,11 @@ static int wcd934x_slim_probe(struct slim_device *sdev)
+ 	struct gpio_desc *reset_gpio;
+ 	int ret;
+ 
++	ret = dma_coerce_mask_and_coherent(dev, DMA_BIT_MASK(32));
++	if (ret)
++		return dev_err_probe(dev, ret,
++				     "Failed to set dma mask\n");
++
+ 	ddata = devm_kzalloc(dev, sizeof(*ddata), GFP_KERNEL);
+ 	if (!ddata)
+ 		return	-ENOMEM;
+-- 
+2.55.0
+

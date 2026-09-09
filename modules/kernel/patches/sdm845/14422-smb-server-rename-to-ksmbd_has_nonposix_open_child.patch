@@ -1,0 +1,60 @@
+From 1e3b4b4f7768126e365d9b74246f2f26a3b6fda3 Mon Sep 17 00:00:00 2001
+From: ChenXiaoSong <chenxiaosong@kylinos.cn>
+Date: Wed, 5 Aug 2026 05:11:10 +0000
+Subject: [PATCH 14422/15333] smb/server: rename to
+ ksmbd_has_nonposix_open_child()
+
+The original function name `ksmbd_has_open_files()` could be confused with
+the function name introduced in the next patch, and it does not accurately
+describe what this function does.
+
+Signed-off-by: ChenXiaoSong <chenxiaosong@kylinos.cn>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/vfs.c       | 2 +-
+ fs/smb/server/vfs_cache.c | 2 +-
+ fs/smb/server/vfs_cache.h | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/fs/smb/server/vfs.c b/fs/smb/server/vfs.c
+index 0e7d66b0e899..4c3cf376a756 100644
+--- a/fs/smb/server/vfs.c
++++ b/fs/smb/server/vfs.c
+@@ -718,7 +718,7 @@ int ksmbd_vfs_rename(struct ksmbd_work *work, struct ksmbd_file *old_fp,
+ 	if (err)
+ 		goto out_drop_write;
+ 
+-	if (d_is_dir(old_child) && ksmbd_has_open_files(old_fp)) {
++	if (d_is_dir(old_child) && ksmbd_has_nonposix_open_child(old_fp)) {
+ 		err = -EACCES;
+ 		goto out3;
+ 	}
+diff --git a/fs/smb/server/vfs_cache.c b/fs/smb/server/vfs_cache.c
+index eac9886eb6e3..028bc1b0f652 100644
+--- a/fs/smb/server/vfs_cache.c
++++ b/fs/smb/server/vfs_cache.c
+@@ -1137,7 +1137,7 @@ struct ksmbd_file *ksmbd_lookup_fd_inode(struct dentry *dentry)
+ 	return NULL;
+ }
+ 
+-bool ksmbd_has_open_files(struct ksmbd_file *old_fp)
++bool ksmbd_has_nonposix_open_child(struct ksmbd_file *old_fp)
+ {
+ 	struct dentry *dentry = old_fp->filp->f_path.dentry;
+ 	struct ksmbd_file *fp;
+diff --git a/fs/smb/server/vfs_cache.h b/fs/smb/server/vfs_cache.h
+index 127ea4987e3f..9dca617bc429 100644
+--- a/fs/smb/server/vfs_cache.h
++++ b/fs/smb/server/vfs_cache.h
+@@ -212,7 +212,7 @@ bool ksmbd_has_stream_without_delete_share(struct ksmbd_file *fp);
+ int ksmbd_close_fd_app_instance_id(char *app_instance_id);
+ struct ksmbd_file *ksmbd_lookup_fd_cguid(char *cguid);
+ struct ksmbd_file *ksmbd_lookup_fd_inode(struct dentry *dentry);
+-bool ksmbd_has_open_files(struct ksmbd_file *old_fp);
++bool ksmbd_has_nonposix_open_child(struct ksmbd_file *old_fp);
+ unsigned int ksmbd_open_durable_fd(struct ksmbd_file *fp);
+ struct ksmbd_file *ksmbd_open_fd(struct ksmbd_work *work, struct file *filp);
+ void ksmbd_launch_ksmbd_durable_scavenger(void);
+-- 
+2.55.0
+

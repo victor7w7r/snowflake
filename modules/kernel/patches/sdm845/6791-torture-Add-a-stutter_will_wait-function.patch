@@ -1,0 +1,81 @@
+From 19774ca9c3ca15b2843a5c05cc055b2087a93e0c Mon Sep 17 00:00:00 2001
+From: "Paul E. McKenney" <paulmck@kernel.org>
+Date: Mon, 1 Jun 2026 17:33:14 -0700
+Subject: [PATCH 06791/15333] torture: Add a stutter_will_wait() function
+
+This commit adds a stutter_will_wait() function that returns true if a
+call to stutter_wait() at that same time would have waited.  Of course,
+the passage of time means that the return value might become immediately
+stale, so this should be periodically polled on the one hand, or used
+only for heuristic purposes on the other.
+
+The initial use case for this function is to clean up references to
+objects that might otherwise be held across the stutter interval, which
+could result in false-positive failures.
+
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+Cc: Boqun Feng <boqun@kernel.org>
+Cc: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+Cc: <rcu@vger.kernel.org>
+Cc: <lkmm@lists.linux.dev>
+---
+ include/linux/torture.h |  1 +
+ kernel/torture.c        | 23 +++++++++++++++++++++--
+ 2 files changed, 22 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/torture.h b/include/linux/torture.h
+index 66d2d444428a..b8e5d0f3c2d8 100644
+--- a/include/linux/torture.h
++++ b/include/linux/torture.h
+@@ -98,6 +98,7 @@ void torture_shutdown_absorb(const char *title);
+ int torture_shutdown_init(int ssecs, void (*cleanup)(void));
+ 
+ /* Task stuttering, which forces load/no-load transitions. */
++bool stutter_will_wait(void);
+ bool stutter_wait(const char *title);
+ int torture_stutter_init(int s, int sgap);
+ 
+diff --git a/kernel/torture.c b/kernel/torture.c
+index 77cb3589b19f..bcd2e9c8a263 100644
+--- a/kernel/torture.c
++++ b/kernel/torture.c
+@@ -727,6 +727,26 @@ static ktime_t stutter_till_abs_time;
+ static int stutter;
+ static int stutter_gap;
+ 
++static bool _stutter_will_wait(ktime_t *till_ns)
++{
++	*till_ns = READ_ONCE(stutter_till_abs_time);
++	if (*till_ns && ktime_before(ktime_get(), *till_ns))
++		return true;
++	return false;
++}
++
++/*
++ * Will stutter_wait() actually stutter?  The returned result is of
++ * course immediately stale due to the passage of time.
++ */
++bool stutter_will_wait(void)
++{
++	ktime_t till_ns;
++
++	return _stutter_will_wait(&till_ns);
++}
++EXPORT_SYMBOL_GPL(stutter_will_wait);
++
+ /*
+  * Block until the stutter interval ends.  This must be called periodically
+  * by all running kthreads that need to be subject to stuttering.
+@@ -737,8 +757,7 @@ bool stutter_wait(const char *title)
+ 	ktime_t till_ns;
+ 
+ 	cond_resched_tasks_rcu_qs();
+-	till_ns = READ_ONCE(stutter_till_abs_time);
+-	if (till_ns && ktime_before(ktime_get(), till_ns)) {
++	if (_stutter_will_wait(&till_ns)) {
+ 		torture_hrtimeout_ns(till_ns, 0, HRTIMER_MODE_ABS, NULL);
+ 		ret = true;
+ 	}
+-- 
+2.55.0
+

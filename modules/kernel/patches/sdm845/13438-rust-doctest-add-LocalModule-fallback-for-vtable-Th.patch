@@ -1,0 +1,57 @@
+From 98f256e2726262473bfc9e24f3f5cd3509424da4 Mon Sep 17 00:00:00 2001
+From: Alvin Sun <alvin.sun@linux.dev>
+Date: Tue, 11 Aug 2026 14:39:45 +0800
+Subject: [PATCH 13438/15333] rust: doctest: add LocalModule fallback for
+ #[vtable] ThisModule
+
+Add a `LocalModule` struct with a null-pointer `ModuleMetadata` impl
+in the doctest harness, so that `crate::LocalModule` (auto-inserted
+by `#[vtable]`) resolves correctly when there is no `module!` macro.
+
+Assisted-by: opencode:glm-5.2
+Reviewed-by: Andreas Hindborg <a.hindborg@kernel.org>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Acked-by: Danilo Krummrich <dakr@kernel.org>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Signed-off-by: Alvin Sun <alvin.sun@linux.dev>
+Link: https://patch.msgid.link/20260811-fix-fops-owner-v10-3-7e71776f9dbe@linux.dev
+[ Fixed `clippy::undocumented_unsafe_blocks` lint by wrapping with
+  a block. Added interim `#[allow(dead_code)]`. - Miguel ]
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ scripts/rustdoc_test_gen.rs | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/scripts/rustdoc_test_gen.rs b/scripts/rustdoc_test_gen.rs
+index ee76e96b41ee..2018e47c151e 100644
+--- a/scripts/rustdoc_test_gen.rs
++++ b/scripts/rustdoc_test_gen.rs
+@@ -239,6 +239,25 @@ macro_rules! assert_eq {{
+ 
+ const __LOG_PREFIX: &[u8] = b"rust_doctests_kernel\0";
+ 
++/// Dummy module type for doctest context.
++#[allow(dead_code)]
++struct LocalModule;
++
++use kernel::{{
++    str::CStr,
++    ModuleMetadata,
++    ThisModule, //
++}};
++use core::ptr::null_mut;
++
++impl ModuleMetadata for LocalModule {{
++    const NAME: &'static CStr = c"rust_doctests_kernel";
++    const THIS_MODULE: ThisModule = {{
++        // SAFETY: `try_module_get`/`module_put` handle null module pointers gracefully.
++        unsafe {{ ThisModule::from_ptr(null_mut()) }}
++    }};
++}}
++
+ {rust_tests}
+ "#
+     )
+-- 
+2.55.0
+

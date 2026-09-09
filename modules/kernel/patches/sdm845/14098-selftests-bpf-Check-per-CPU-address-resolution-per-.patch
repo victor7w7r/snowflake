@@ -1,0 +1,125 @@
+From f61306e8c98ce63021efb3091d422260b6be25bb Mon Sep 17 00:00:00 2001
+From: Vineet Gupta <vineet.gupta@linux.dev>
+Date: Fri, 14 Aug 2026 15:02:54 -0700
+Subject: [PATCH 14098/15333] selftests/bpf: Check per-CPU address resolution
+ per register
+
+An ld_imm64 of a per-CPU map value is followed by a mov_percpu_addr that
+reuses the same register, so which register the address lands in decides
+how the JIT encodes the add. Getting the REX prefix wrong there is
+invisible to a functional test unless the address happens to land in an
+extended register, which is why this went unnoticed.
+
+Load a .percpu variable into every register in one program and match the
+JITed add against the register each one must resolve into.
+
+Signed-off-by: Vineet Gupta <vineet.gupta@linux.dev>
+Link: https://patch.msgid.link/20260814220254.3797467-3-vineet.gupta@linux.dev
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ .../selftests/bpf/prog_tests/verifier.c       |  2 +
+ .../bpf/progs/verifier_percpu_addr.c          | 72 +++++++++++++++++++
+ 2 files changed, 74 insertions(+)
+ create mode 100644 tools/testing/selftests/bpf/progs/verifier_percpu_addr.c
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/verifier.c b/tools/testing/selftests/bpf/prog_tests/verifier.c
+index 8113fea7ba86..64ac49ad67e6 100644
+--- a/tools/testing/selftests/bpf/prog_tests/verifier.c
++++ b/tools/testing/selftests/bpf/prog_tests/verifier.c
+@@ -79,6 +79,7 @@
+ #include "verifier_netfilter_retcode.skel.h"
+ #include "verifier_bpf_fastcall.skel.h"
+ #include "verifier_or_jmp32_k.skel.h"
++#include "verifier_percpu_addr.skel.h"
+ #include "verifier_precision.skel.h"
+ #include "verifier_prevent_map_lookup.skel.h"
+ #include "verifier_private_stack.skel.h"
+@@ -240,6 +241,7 @@ void test_verifier_netfilter_ctx(void)        { RUN(verifier_netfilter_ctx); }
+ void test_verifier_netfilter_retcode(void)    { RUN(verifier_netfilter_retcode); }
+ void test_verifier_bpf_fastcall(void)         { RUN(verifier_bpf_fastcall); }
+ void test_verifier_or_jmp32_k(void)           { RUN(verifier_or_jmp32_k); }
++void test_verifier_percpu_addr(void)          { RUN(verifier_percpu_addr); }
+ void test_verifier_precision(void)            { RUN(verifier_precision); }
+ void test_verifier_prevent_map_lookup(void)   { RUN(verifier_prevent_map_lookup); }
+ void test_verifier_private_stack(void)        { RUN(verifier_private_stack); }
+diff --git a/tools/testing/selftests/bpf/progs/verifier_percpu_addr.c b/tools/testing/selftests/bpf/progs/verifier_percpu_addr.c
+new file mode 100644
+index 000000000000..967f4e6e3a49
+--- /dev/null
++++ b/tools/testing/selftests/bpf/progs/verifier_percpu_addr.c
+@@ -0,0 +1,72 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <vmlinux.h>
++#include <bpf/bpf_helpers.h>
++#include "bpf_misc.h"
++
++#if defined(__TARGET_ARCH_x86)
++
++int percpu_data SEC(".percpu");
++
++/*
++ * An ld_imm64 of a per-CPU map value is followed by a mov_percpu_addr that
++ * reuses the same register, so check that the add resolves into the register
++ * the address was loaded into, for every register.
++ */
++SEC("raw_tp")
++__description("per-CPU address resolution")
++__success
++__arch_x86_64
++__jited("	movabsq	$0x{{.*}}, %rax")
++__jited("	addq	%gs:{{.*}}, %rax")
++__jited("	movabsq	$0x{{.*}}, %rdi")
++__jited("	addq	%gs:{{.*}}, %rdi")
++__jited("	movabsq	$0x{{.*}}, %rsi")
++__jited("	addq	%gs:{{.*}}, %rsi")
++__jited("	movabsq	$0x{{.*}}, %rdx")
++__jited("	addq	%gs:{{.*}}, %rdx")
++__jited("	movabsq	$0x{{.*}}, %rcx")
++__jited("	addq	%gs:{{.*}}, %rcx")
++__jited("	movabsq	$0x{{.*}}, %r8")
++__jited("	addq	%gs:{{.*}}, %r8")
++__jited("	movabsq	$0x{{.*}}, %rbx")
++__jited("	addq	%gs:{{.*}}, %rbx")
++__jited("	movabsq	$0x{{.*}}, %r13")
++__jited("	addq	%gs:{{.*}}, %r13")
++__jited("	movabsq	$0x{{.*}}, %r14")
++__jited("	addq	%gs:{{.*}}, %r14")
++__jited("	movabsq	$0x{{.*}}, %r15")
++__jited("	addq	%gs:{{.*}}, %r15")
++__naked void percpu_addr(void)
++{
++	asm volatile ("					\
++	r0 = %[percpu_data] ll;				\
++	r1 = %[percpu_data] ll;				\
++	r2 = %[percpu_data] ll;				\
++	r3 = %[percpu_data] ll;				\
++	r4 = %[percpu_data] ll;				\
++	r5 = %[percpu_data] ll;				\
++	r6 = %[percpu_data] ll;				\
++	r7 = %[percpu_data] ll;				\
++	r8 = %[percpu_data] ll;				\
++	r9 = %[percpu_data] ll;				\
++	r0 = 0;						\
++	exit;						\
++"	:
++	: __imm_addr(percpu_data)
++	: __clobber_all);
++}
++
++#else
++
++SEC("raw_tp")
++__description("percpu addr dummy")
++__success
++int dummy_test(void)
++{
++	return 0;
++}
++
++#endif
++
++char _license[] SEC("license") = "GPL";
+-- 
+2.55.0
+

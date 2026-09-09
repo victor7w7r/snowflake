@@ -1,0 +1,73 @@
+From 6ba3bd6f22314072d36949767e1d1192b97e5ba4 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Wed, 15 Jul 2026 13:37:59 -1000
+Subject: [PATCH 05076/15333] sched_ext: Gate sub_dispatch_prev with
+ CONFIG_EXT_SUB_SCHED
+
+rq->scx.sub_dispatch_prev is sub-sched-only but was left unconditional. Move
+it into the CONFIG_EXT_SUB_SCHED block next to ecaps_to_sync and gate its
+updates.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/inlines.h | 19 +++++++++++--------
+ kernel/sched/sched.h       |  3 +--
+ 2 files changed, 12 insertions(+), 10 deletions(-)
+
+diff --git a/kernel/sched/ext/inlines.h b/kernel/sched/ext/inlines.h
+index 45c657bdad50..d2d074cee1cb 100644
+--- a/kernel/sched/ext/inlines.h
++++ b/kernel/sched/ext/inlines.h
+@@ -74,16 +74,19 @@ scx_dispatch_sched(struct scx_sched *sch, struct rq *rq,
+ 	do {
+ 		dspc->nr_tasks = 0;
+ 
+-		if (nested) {
+-			SCX_CALL_OP(sch, dispatch, rq, scx_cpu_arg(cpu),
+-				    prev_on_sch ? prev : NULL);
+-		} else {
+-			/* stash @prev so that nested invocations can access it */
++#ifdef CONFIG_EXT_SUB_SCHED
++		/* stash @prev so that nested invocations can access it */
++		if (!nested)
+ 			rq->scx.sub_dispatch_prev = prev;
+-			SCX_CALL_OP(sch, dispatch, rq, scx_cpu_arg(cpu),
+-				    prev_on_sch ? prev : NULL);
++#endif
++
++		SCX_CALL_OP(sch, dispatch, rq, scx_cpu_arg(cpu),
++			    prev_on_sch ? prev : NULL);
++
++#ifdef CONFIG_EXT_SUB_SCHED
++		if (!nested)
+ 			rq->scx.sub_dispatch_prev = NULL;
+-		}
++#endif
+ 
+ 		scx_flush_dispatch_buf(sch, rq);
+ 
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index 54cff94556c0..64d79e9efc3d 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -814,6 +814,7 @@ struct scx_rq {
+ 	u64			clock;			/* current per-rq clock -- see scx_bpf_now() */
+ #ifdef CONFIG_EXT_SUB_SCHED
+ 	struct llist_head	ecaps_to_sync;		/* pending ecaps syncs */
++	struct task_struct	*sub_dispatch_prev;
+ #endif
+ 	cpumask_var_t		cpus_to_sync;
+ 	bool			kick_sync_pending;
+@@ -821,8 +822,6 @@ struct scx_rq {
+ 
+ 	struct list_head	sched_pcpus_to_kick;	/* see kick_cpus_irq_workfn() */
+ 
+-	struct task_struct	*sub_dispatch_prev;
+-
+ 	raw_spinlock_t		deferred_reenq_lock;
+ 	u64			deferred_reenq_locals_seq;
+ 	struct list_head	deferred_reenq_locals;	/* scheds requesting reenq of local DSQ */
+-- 
+2.55.0
+

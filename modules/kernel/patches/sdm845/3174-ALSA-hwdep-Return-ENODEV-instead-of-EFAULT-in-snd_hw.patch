@@ -1,0 +1,37 @@
+From c49e88ea6cee4454c4bd849ac5e8abd2f6a7ac26 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Tue, 7 Jul 2026 15:45:02 +0700
+Subject: [PATCH 03174/15333] ALSA: hwdep: Return -ENODEV instead of -EFAULT in
+ snd_hwdep_open()
+
+When try_module_get() fails in snd_hwdep_open(), the owning module is
+going away and the device is no longer usable, so -EFAULT ("bad address")
+is the wrong error. Return -ENODEV, matching the other unavailable-device
+paths in this function(the NULL hw check and the card->shutdown check).
+This changes the errno reported to userspace on this rare race.
+No other behaviour changes.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260707084506.718583-3-phucduc.bui@gmail.com
+---
+ sound/core/hwdep.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sound/core/hwdep.c b/sound/core/hwdep.c
+index 973d11732bfd..352047e0b33e 100644
+--- a/sound/core/hwdep.c
++++ b/sound/core/hwdep.c
+@@ -87,7 +87,7 @@ static int snd_hwdep_open(struct inode *inode, struct file * file)
+ 
+ 	if (!try_module_get(hw->card->module)) {
+ 		snd_card_unref(hw->card);
+-		return -EFAULT;
++		return -ENODEV;
+ 	}
+ 
+ 	init_waitqueue_entry(&wait, current);
+-- 
+2.55.0
+

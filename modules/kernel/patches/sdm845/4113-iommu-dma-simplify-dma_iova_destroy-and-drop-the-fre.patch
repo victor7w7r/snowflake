@@ -1,0 +1,125 @@
+From 1acce29926d93f3eba427696fe3da6451504dae2 Mon Sep 17 00:00:00 2001
+From: Honglei Huang <honghuan@amd.com>
+Date: Fri, 3 Jul 2026 11:37:29 +0800
+Subject: [PATCH 04113/15333] iommu/dma: simplify dma_iova_destroy() and drop
+ the free_iova helper
+
+dma_iova_destroy() frees the IOVA space through __iommu_dma_iova_unlink()
+using a "free_iova" boolean, which duplicates the IOVA free logic in
+dma_iova_free(). And it frees using the unmapped @mapped_len, which for a
+partially linked reservation is smaller than the reserved size. This
+results in a benign waste as pointed out by Robin, not a leak. So this is
+a cleanup, not a fix.
+
+Drop the duplicated free path. Fold __iommu_dma_iova_unlink into
+dma_iova_unlink and remove the free_iova parameter so it only unmaps.
+dma_iova_destroy then unlinks the mapped range if mapped_len is set and
+unconditionally calls dma_iova_free, which frees the whole reservation
+via dma_iova_size. The freed size now always matches the reserved size,
+and destroy reads as unlink then free.
+
+Note that dma_iova_destroy() no longer routes the free through the flush
+queue; teardown now unmaps synchronously and frees directly, matching
+dma_iova_free().
+
+No functional change intended for callers.
+
+Suggested-by: Leon Romanovsky <leonro@nvidia.com>
+Signed-off-by: Honglei Huang <honghuan@amd.com>
+Signed-off-by: Marek Szyprowski <m.szyprowski@samsung.com>
+Link: https://lore.kernel.org/r/20260703033729.455358-1-honghuan@amd.com
+---
+ drivers/iommu/dma-iommu.c | 57 +++++++++++++++------------------------
+ 1 file changed, 22 insertions(+), 35 deletions(-)
+
+diff --git a/drivers/iommu/dma-iommu.c b/drivers/iommu/dma-iommu.c
+index 9abaec0703ef..5598ed4bff72 100644
+--- a/drivers/iommu/dma-iommu.c
++++ b/drivers/iommu/dma-iommu.c
+@@ -2068,10 +2068,20 @@ static void iommu_dma_iova_unlink_range_slow(struct device *dev,
+ 		arch_sync_dma_flush();
+ }
+ 
+-static void __iommu_dma_iova_unlink(struct device *dev,
+-		struct dma_iova_state *state, size_t offset, size_t size,
+-		enum dma_data_direction dir, unsigned long attrs,
+-		bool free_iova)
++/**
++ * dma_iova_unlink - Unlink a range of IOVA space
++ * @dev: DMA device
++ * @state: IOVA state
++ * @offset: offset into the IOVA state to unlink
++ * @size: size of the buffer
++ * @dir: DMA direction
++ * @attrs: attributes of mapping properties
++ *
++ * Unlink a range of IOVA space for the given IOVA state.
++ */
++void dma_iova_unlink(struct device *dev, struct dma_iova_state *state,
++		size_t offset, size_t size, enum dma_data_direction dir,
++		unsigned long attrs)
+ {
+ 	struct iommu_domain *domain = iommu_get_dma_domain(dev);
+ 	struct iommu_dma_cookie *cookie = domain->iova_cookie;
+@@ -2087,35 +2097,13 @@ static void __iommu_dma_iova_unlink(struct device *dev,
+ 		iommu_dma_iova_unlink_range_slow(dev, addr, size, dir, attrs);
+ 
+ 	iommu_iotlb_gather_init(&iotlb_gather);
+-	iotlb_gather.queued = free_iova && READ_ONCE(cookie->fq_domain);
+ 
+ 	size = iova_align(iovad, size + iova_start_pad);
+ 	addr -= iova_start_pad;
+ 	unmapped = iommu_unmap_fast(domain, addr, size, &iotlb_gather);
+ 	WARN_ON(unmapped != size);
+ 
+-	if (!iotlb_gather.queued)
+-		iommu_iotlb_sync(domain, &iotlb_gather);
+-	if (free_iova)
+-		iommu_dma_free_iova(domain, addr, size, &iotlb_gather);
+-}
+-
+-/**
+- * dma_iova_unlink - Unlink a range of IOVA space
+- * @dev: DMA device
+- * @state: IOVA state
+- * @offset: offset into the IOVA state to unlink
+- * @size: size of the buffer
+- * @dir: DMA direction
+- * @attrs: attributes of mapping properties
+- *
+- * Unlink a range of IOVA space for the given IOVA state.
+- */
+-void dma_iova_unlink(struct device *dev, struct dma_iova_state *state,
+-		size_t offset, size_t size, enum dma_data_direction dir,
+-		unsigned long attrs)
+-{
+-	 __iommu_dma_iova_unlink(dev, state, offset, size, dir, attrs, false);
++	iommu_iotlb_sync(domain, &iotlb_gather);
+ }
+ EXPORT_SYMBOL_GPL(dma_iova_unlink);
+ 
+@@ -2136,14 +2124,13 @@ void dma_iova_destroy(struct device *dev, struct dma_iova_state *state,
+ 		unsigned long attrs)
+ {
+ 	if (mapped_len)
+-		__iommu_dma_iova_unlink(dev, state, 0, mapped_len, dir, attrs,
+-				true);
+-	else
+-		/*
+-		 * We can be here if first call to dma_iova_link() failed and
+-		 * there is nothing to unlink, so let's be more clear.
+-		 */
+-		dma_iova_free(dev, state);
++		dma_iova_unlink(dev, state, 0, mapped_len, dir, attrs);
++
++	/*
++	 * We can be here if the first call to dma_iova_link() failed and
++	 * there is nothing to unlink, so let's be more clear.
++	 */
++	dma_iova_free(dev, state);
+ }
+ EXPORT_SYMBOL_GPL(dma_iova_destroy);
+ 
+-- 
+2.55.0
+

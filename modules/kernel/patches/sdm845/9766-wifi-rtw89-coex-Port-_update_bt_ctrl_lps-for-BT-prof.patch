@@ -1,0 +1,135 @@
+From dd7e70e76bf632c04a824e16fed034df74020109 Mon Sep 17 00:00:00 2001
+From: Ching-Te Ku <ku920601@realtek.com>
+Date: Thu, 30 Jul 2026 14:02:18 +0800
+Subject: [PATCH 09766/15333] wifi: rtw89: coex: Port _update_bt_ctrl_lps() for
+ BT profile-based LPS control
+
+The old lps_ctrl_scbd logic in _update_bt_scbd() blocked WiFi LPS only
+when mode == BTC_WLINK_V0_2G_STA, which created a dead-lock while
+WiFi already in LPS suppressed TDD binding so mode was never set to
+BTC_WLINK_V0_2G_STA, lps_ctrl_scbd stayed 0, and WiFi remained stuck
+in LPS. Port _update_bt_ctrl_lps() from the reference implementation to
+check BT profile existence (A2DP, HFP, PAN) for both radios directly,
+with out_of_band and freerun guards so LPS is only blocked when WiFi and
+Bluetooth actually share a band. Call it from both _update_bt_scbd() and
+_update_bt_info() so profile changes reported via either SCBD or BT info
+C2H correctly update lps_ctrl_scbd. Also remove the dead
+lps_ctrl_scbd_last field.
+
+Signed-off-by: Ching-Te Ku <ku920601@realtek.com>
+Signed-off-by: Ping-Ke Shih <pkshih@realtek.com>
+Link: https://patch.msgid.link/20260730060220.55844-6-pkshih@realtek.com
+---
+ drivers/net/wireless/realtek/rtw89/coex.c | 51 +++++++++++++++--------
+ drivers/net/wireless/realtek/rtw89/core.h |  1 -
+ 2 files changed, 33 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/net/wireless/realtek/rtw89/coex.c b/drivers/net/wireless/realtek/rtw89/coex.c
+index 2f06fcf0d67f..39dff9fdc1cd 100644
+--- a/drivers/net/wireless/realtek/rtw89/coex.c
++++ b/drivers/net/wireless/realtek/rtw89/coex.c
+@@ -3238,8 +3238,6 @@ static void _fw_set_policy(struct rtw89_dev *rtwdev, u16 policy_type,
+ 	else
+ 		btc->btc_ctrl_lps = dm->lps_ctrl_scbd;
+ 
+-	dm->lps_ctrl_scbd_last = dm->lps_ctrl_scbd;
+-
+ 	if (btc->btc_ctrl_lps == 1)
+ 		rtw89_set_coex_ctrl_lps(rtwdev, btc->btc_ctrl_lps);
+ 
+@@ -7778,6 +7776,35 @@ void rtw89_coex_rfk_chk_work(struct wiphy *wiphy, struct wiphy_work *work)
+ 	}
+ }
+ 
++static void _update_bt_ctrl_lps(struct rtw89_dev *rtwdev)
++{
++	struct rtw89_btc *btc = &rtwdev->btc;
++	struct rtw89_btc_bt_info *bt0 = &btc->cx.bt0;
++	struct rtw89_btc_bt_info *bt1 = &btc->cx.bt1;
++	struct rtw89_btc_dm *dm = &btc->dm;
++	bool lps_ctrl = false;
++
++	if (dm->out_of_band || dm->freerun)
++		lps_ctrl = false;
++	else if (bt0->whql_test || bt1->whql_test)
++		lps_ctrl = true;
++	else if (bt0->link_info.a2dp_desc.exist ||
++		 bt0->link_info.hfp_desc.exist ||
++		 bt0->link_info.pan_desc.exist)
++		lps_ctrl = true;
++	else if (bt1->link_info.a2dp_desc.exist ||
++		 bt1->link_info.hfp_desc.exist ||
++		 bt1->link_info.pan_desc.exist)
++		lps_ctrl = true;
++
++	if (dm->lps_ctrl_scbd != lps_ctrl) {
++		dm->lps_ctrl_scbd = lps_ctrl;
++		dm->lps_ctrl_change = true;
++	} else {
++		dm->lps_ctrl_change = false;
++	}
++}
++
+ static void _update_bt_scbd(struct rtw89_dev *rtwdev, u8 bid)
+ {
+ 	struct rtw89_btc_bt_link_info *bt_2g, *bt_56g;
+@@ -7786,7 +7813,7 @@ static void _update_bt_scbd(struct rtw89_dev *rtwdev, u8 bid)
+ 	struct rtw89_btc_dm *dm = &btc->dm;
+ 	struct rtw89_btc_bt_info *bt;
+ 	u32 val, any_bt_connect, any_bt_6g_connect = 0;
+-	bool bt_link_change = false, lps_ctrl = false;
++	bool bt_link_change = false;
+ 	u8 id, id_start, id_stop;
+ 
+ 	if (!rtwdev->chip->scbd || bid > BTC_ALL_BT)
+@@ -7879,25 +7906,12 @@ static void _update_bt_scbd(struct rtw89_dev *rtwdev, u8 bid)
+ 			bt_56g->status.map.connect = any_bt_6g_connect;
+ 		}
+ 
+-		/* if specific profile exist */
+-		if (bt->link_info.a2dp_desc.exist ||
+-		    bt->link_info.pan_desc.exist ||
+-		    bt->link_info.hfp_desc.exist ||
+-		    bt->whql_test)
+-			lps_ctrl = true;
+-
+-		if (dm->lps_ctrl_scbd  != lps_ctrl) {
+-			dm->lps_ctrl_scbd  = lps_ctrl;
+-			bt_link_change = true;
+-			dm->lps_ctrl_change = true;
+-		} else {
+-			dm->lps_ctrl_change = false;
+-		}
+-
+ 		bt->run_patch_code = !!(val & BTC_BSCB_PATCH_CODE);
+ 		bt->scbd = val;
+ 	}
+ 
++	_update_bt_ctrl_lps(rtwdev);
++
+ 	if (bt_link_change) {
+ 		rtw89_debug(rtwdev, RTW89_DBG_BTC,
+ 			    "[BTC], %s: bt status change!!\n", __func__);
+@@ -9136,6 +9150,7 @@ static void _update_bt_info(struct rtw89_dev *rtwdev, u8 bid, u8 *buf, u32 len)
+ 					 RTW89_COEX_BT_DEVINFO_WORK_PERIOD);
+ 	}
+ 
++	_update_bt_ctrl_lps(rtwdev);
+ 	_run_coex(rtwdev, BTC_RSN_UPDATE_BT_INFO);
+ }
+ 
+diff --git a/drivers/net/wireless/realtek/rtw89/core.h b/drivers/net/wireless/realtek/rtw89/core.h
+index 7f114c9a98ad..2b21d969ece7 100644
+--- a/drivers/net/wireless/realtek/rtw89/core.h
++++ b/drivers/net/wireless/realtek/rtw89/core.h
+@@ -4116,7 +4116,6 @@ struct rtw89_btc_dm {
+ 	u8 fdd_en: 1;
+ 	u8 tdd_en: 1;
+ 	u8 lps_ctrl_scbd: 1;
+-	u8 lps_ctrl_scbd_last: 1;
+ 	u8 lps_ctrl_change: 1;
+ 	u8 bis_tdma: 1; /* BIS TDMA mode active */
+ 	u8 scbd_write_instant;
+-- 
+2.55.0
+

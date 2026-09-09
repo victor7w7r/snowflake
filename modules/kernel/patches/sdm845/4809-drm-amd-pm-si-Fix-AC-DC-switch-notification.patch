@@ -1,0 +1,57 @@
+From 358dd0a9ce66d898fa934887385327547d599d88 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Sun, 12 Jul 2026 19:39:27 +0200
+Subject: [PATCH 04809/15333] drm/amd/pm/si: Fix AC/DC switch notification
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+There were two mistakes in the previous implementation:
+
+The check for ATOM_PP_PLATFORM_CAP_HARDWAREDC should be
+inverted. We recently learned that the kernel should send
+PPSMC_MSG_RunningOnAC when the flag is set, and not the
+other way around.
+
+The clocks also need to be recomputed, because the code in
+the si_apply_state_adjust_rules() function selects different
+limits on AC and DC.
+
+Fixes: 2d071f6457af ("drm/amd/pm/si: Notify the SMC when switching to AC")
+Tested-by: Jeremy Klarenbeek <jeremy.klarenbeek99@gmail.com>
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/pm/legacy-dpm/si_dpm.c | 15 +++++++++------
+ 1 file changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/legacy-dpm/si_dpm.c b/drivers/gpu/drm/amd/pm/legacy-dpm/si_dpm.c
+index 9d837d23d3a7..012227c70600 100644
+--- a/drivers/gpu/drm/amd/pm/legacy-dpm/si_dpm.c
++++ b/drivers/gpu/drm/amd/pm/legacy-dpm/si_dpm.c
+@@ -3892,13 +3892,16 @@ static void si_notify_hw_of_powersource(void *handle)
+ {
+ 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
+ 
+-	/* Check if the platform already manages the AC/DC switch via dedicated GPIO. */
+-	if (adev->pm.dpm.platform_caps & ATOM_PP_PLATFORM_CAP_HARDWAREDC)
+-		return;
+-
+-	/* The SMU automatically notices DC, but needs to be notified when switching to AC. */
+-	if (adev->pm.ac_power)
++	/*
++	 * Check if the platform already manages the AC/DC switch via dedicated GPIO.
++	 * Otherwise SMU automatically notices DC, but needs to be notified of AC.
++	 */
++	if (adev->pm.ac_power &&
++	    (adev->pm.dpm.platform_caps & ATOM_PP_PLATFORM_CAP_HARDWAREDC))
+ 		amdgpu_si_send_msg_to_smc(adev, PPSMC_MSG_RunningOnAC);
++
++	/* Recompute clocks with updated max_limits. */
++	amdgpu_legacy_dpm_compute_clocks(adev);
+ }
+ 
+ static PPSMC_Result si_send_msg_to_smc_with_parameter(struct amdgpu_device *adev,
+-- 
+2.55.0
+

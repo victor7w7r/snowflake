@@ -1,0 +1,67 @@
+From cca2780b61947fd27ec621541edd0902e193a609 Mon Sep 17 00:00:00 2001
+From: Subasri S <subasris1210@gmail.com>
+Date: Thu, 16 Jul 2026 19:37:10 +0530
+Subject: [PATCH 06918/15333] ipvs: use type-safe allocation helpers in
+ ip_vs_rht_alloc
+
+As per Documentation/process/deprecated.rst, open-coded kmalloc
+assignments for struct objects are deprecated. Replace
+kzalloc(sizeof(*ptr), GFP_KERNEL) with kzalloc_obj() and
+kvmalloc_array(n, sizeof(*ptr), GFP_KERNEL) with kvmalloc_objs()
+in ip_vs_rht_alloc().
+
+Compile tested with CONFIG_IP_VS=y and runtime tested using
+tools/testing/selftests/net/netfilter/ipvs.sh on x86_64/QEMU.
+
+Signed-off-by: Subasri S <subasris1210@gmail.com>
+Reviewed-by: Phil Sutter <phil@nwl.cc>
+Acked-by: Julian Anastasov <ja@ssi.bg>
+Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ net/netfilter/ipvs/ip_vs_core.c | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/net/netfilter/ipvs/ip_vs_core.c b/net/netfilter/ipvs/ip_vs_core.c
+index bafab93451d0..a896bfb53f07 100644
+--- a/net/netfilter/ipvs/ip_vs_core.c
++++ b/net/netfilter/ipvs/ip_vs_core.c
+@@ -176,7 +176,7 @@ void ip_vs_rht_rcu_free(struct rcu_head *head)
+ 
+ struct ip_vs_rht *ip_vs_rht_alloc(int buckets, int scounts, int locks)
+ {
+-	struct ip_vs_rht *t = kzalloc(sizeof(*t), GFP_KERNEL);
++	struct ip_vs_rht *t = kzalloc_obj(*t);
+ 	int i;
+ 
+ 	if (!t)
+@@ -186,7 +186,7 @@ struct ip_vs_rht *ip_vs_rht_alloc(int buckets, int scounts, int locks)
+ 
+ 		scounts = min(scounts, buckets);
+ 		scounts = min(scounts, ml);
+-		t->seqc = kvmalloc_array(scounts, sizeof(*t->seqc), GFP_KERNEL);
++		t->seqc = kvmalloc_objs(*t->seqc, scounts);
+ 		if (!t->seqc)
+ 			goto err;
+ 		for (i = 0; i < scounts; i++)
+@@ -194,8 +194,7 @@ struct ip_vs_rht *ip_vs_rht_alloc(int buckets, int scounts, int locks)
+ 
+ 		if (locks) {
+ 			locks = min(locks, scounts);
+-			t->lock = kvmalloc_array(locks, sizeof(*t->lock),
+-						 GFP_KERNEL);
++			t->lock = kvmalloc_objs(*t->lock, locks);
+ 			if (!t->lock)
+ 				goto err;
+ 			for (i = 0; i < locks; i++)
+@@ -203,7 +202,7 @@ struct ip_vs_rht *ip_vs_rht_alloc(int buckets, int scounts, int locks)
+ 		}
+ 	}
+ 
+-	t->buckets = kvmalloc_array(buckets, sizeof(*t->buckets), GFP_KERNEL);
++	t->buckets = kvmalloc_objs(*t->buckets, buckets);
+ 	if (!t->buckets)
+ 		goto err;
+ 	for (i = 0; i < buckets; i++)
+-- 
+2.55.0
+

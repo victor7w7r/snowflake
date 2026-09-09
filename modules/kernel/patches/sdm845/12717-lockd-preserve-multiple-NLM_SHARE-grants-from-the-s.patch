@@ -1,0 +1,188 @@
+From 737e9ac7faa46ba4cc1ccd294780d84b03beff95 Mon Sep 17 00:00:00 2001
+From: Oscar Ou <oscarou@synology.com>
+Date: Fri, 3 Jul 2026 14:38:56 +0800
+Subject: [PATCH 12717/15333] lockd: preserve multiple NLM_SHARE grants from
+ the same owner
+
+When an NFSv3/NLM client issues multiple NLM_SHARE calls from a single
+host for the same (file, owner) tuple, the current implementation
+overwrites the recorded access and deny modes with the latest pair.
+A subsequent NLM_UNSHARE then drops the entire entry, even if other
+grants were implicitly subsumed by the most recent SHARE.  This is
+particularly visible to Windows-style clients that map each open of
+a file to a distinct NLM_SHARE, all carrying the same NLM owner
+handle.  For example:
+
+    1. SHARE(access=RW, deny=W)   -> entry [RW, deny W]
+    2. SHARE(access=R,  deny=N)   -> entry [R, deny N]   (RW/W overwritten)
+    3. UNSHARE(access=R, deny=N)  -> entry freed
+    4. UNSHARE(access=RW, deny=W) -> nothing to release
+
+NLM has no duplicate reply cache, so both SHARE and UNSHARE handlers
+must be idempotent under UDP retransmit.
+
+Track each (access, deny) pair with a single bit in a u16 bitmap.
+fsh_access and fsh_mode are each in {0..3}, so there are 16 possible
+pairs; index = (access << 2) | deny.  SHARE sets the bit, UNSHARE
+clears it, both via idempotent bit operations.  s_access and s_mode
+are recomputed as the union of the (access, deny) values whose bit
+is set, and the entry is freed once s_access_deny_bmap reaches zero.
+
+NLM_UNSHARE gains the access and deny modes as arguments so the
+correct bit can be cleared.  The two callers in svcproc.c and
+svc4proc.c are updated to forward the decoded values.
+
+Signed-off-by: Oscar Ou <oscarou@synology.com>
+Link: https://patch.msgid.link/20260703063856.2423734-1-oscarou@synology.com
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ fs/lockd/share.h    |  8 +++++++-
+ fs/lockd/svc4proc.c |  4 +++-
+ fs/lockd/svcproc.c  |  4 +++-
+ fs/lockd/svcshare.c | 36 +++++++++++++++++++++++++++++++-----
+ 4 files changed, 44 insertions(+), 8 deletions(-)
+
+diff --git a/fs/lockd/share.h b/fs/lockd/share.h
+index 1ec3ccdb2aef..a12b6c454f58 100644
+--- a/fs/lockd/share.h
++++ b/fs/lockd/share.h
+@@ -8,9 +8,14 @@
+ #ifndef _LOCKD_SHARE_H
+ #define _LOCKD_SHARE_H
+ 
++#include <linux/bits.h>
++
+ /* Synthetic svid for lockowner lookup during share operations */
+ #define LOCKD_SHARE_SVID	(~(u32)0)
+ 
++/* One bit per (access, deny) pair; index = (access << 2) | deny */
++#define LOCKD_FSH_BIT(a, d)	BIT(((a) << 2) | (d))
++
+ /*
+  * DOS share for a specific file
+  */
+@@ -21,12 +26,13 @@ struct lockd_share {
+ 	struct xdr_netobj	s_owner;	/* owner handle */
+ 	u32			s_access;	/* access mode */
+ 	u32			s_mode;		/* deny mode */
++	u16			s_access_deny_bmap;	/* held (access, deny) pairs */
+ };
+ 
+ __be32	nlmsvc_share_file(struct nlm_host *host, struct nlm_file *file,
+ 			  struct xdr_netobj *oh, u32 access, u32 mode);
+ __be32	nlmsvc_unshare_file(struct nlm_host *host, struct nlm_file *file,
+-			    struct xdr_netobj *oh);
++			    struct xdr_netobj *oh, u32 access, u32 mode);
+ void	nlmsvc_traverse_shares(struct nlm_host *, struct nlm_file *,
+ 					       nlm_host_match_fn_t);
+ 
+diff --git a/fs/lockd/svc4proc.c b/fs/lockd/svc4proc.c
+index b73004a7987e..d104aab0881a 100644
+--- a/fs/lockd/svc4proc.c
++++ b/fs/lockd/svc4proc.c
+@@ -1079,7 +1079,9 @@ static __be32 nlm4svc_proc_unshare(struct svc_rqst *rqstp)
+ 	if (resp->xdrgen.stat)
+ 		goto out;
+ 
+-	resp->xdrgen.stat = nlmsvc_unshare_file(host, file, &lock->oh);
++	resp->xdrgen.stat = nlmsvc_unshare_file(host, file, &lock->oh,
++						argp->xdrgen.share.access,
++						argp->xdrgen.share.mode);
+ 
+ 	nlmsvc_release_lockowner(lock);
+ 
+diff --git a/fs/lockd/svcproc.c b/fs/lockd/svcproc.c
+index d410b8c69893..a1f9d66c2981 100644
+--- a/fs/lockd/svcproc.c
++++ b/fs/lockd/svcproc.c
+@@ -1098,7 +1098,9 @@ static __be32 nlmsvc_proc_unshare(struct svc_rqst *rqstp)
+ 	if (resp->xdrgen.stat)
+ 		goto out;
+ 
+-	resp->xdrgen.stat = nlmsvc_unshare_file(host, file, &lock->oh);
++	resp->xdrgen.stat = nlmsvc_unshare_file(host, file, &lock->oh,
++						argp->xdrgen.share.access,
++						argp->xdrgen.share.mode);
+ 
+ 	nlmsvc_release_lockowner(lock);
+ 
+diff --git a/fs/lockd/svcshare.c b/fs/lockd/svcshare.c
+index 5ac0ec25d62d..a58b7035b58b 100644
+--- a/fs/lockd/svcshare.c
++++ b/fs/lockd/svcshare.c
+@@ -25,6 +25,25 @@ nlm_cmp_owner(struct lockd_share *share, struct xdr_netobj *oh)
+ 	    && !memcmp(share->s_owner.data, oh->data, oh->len);
+ }
+ 
++/*
++ * Recompute s_access / s_mode as the union of every (access, deny) pair
++ * whose bit is currently set in s_access_deny_bmap.
++ */
++static void nlm_recompute_share(struct lockd_share *share)
++{
++	u32 new_access = 0, new_mode = 0;
++	unsigned int i;
++
++	for (i = 0; i < 16; i++) {
++		if (share->s_access_deny_bmap & BIT(i)) {
++			new_access |= i >> 2;
++			new_mode   |= i & 3;
++		}
++	}
++	share->s_access = new_access;
++	share->s_mode = new_mode;
++}
++
+ /**
+  * nlmsvc_share_file - create a share
+  * @host: Network client peer
+@@ -64,12 +83,13 @@ nlmsvc_share_file(struct nlm_host *host, struct nlm_file *file,
+ 	share->s_host       = host;
+ 	share->s_owner.data = ohdata;
+ 	share->s_owner.len  = oh->len;
++	share->s_access_deny_bmap  = 0;
+ 	share->s_next       = file->f_shares;
+ 	file->f_shares      = share;
+ 
+ update:
+-	share->s_access = access;
+-	share->s_mode = mode;
++	share->s_access_deny_bmap |= LOCKD_FSH_BIT(access, mode);
++	nlm_recompute_share(share);
+ 	return nlm_granted;
+ }
+ 
+@@ -78,12 +98,14 @@ nlmsvc_share_file(struct nlm_host *host, struct nlm_file *file,
+  * @host: Network client peer
+  * @file: File to be unshared
+  * @oh: Share owner handle
++ * @access: Access mode of the SHARE being released
++ * @mode: Deny mode of the SHARE being released
+  *
+  * Returns an NLM status code.
+  */
+ __be32
+ nlmsvc_unshare_file(struct nlm_host *host, struct nlm_file *file,
+-		    struct xdr_netobj *oh)
++		    struct xdr_netobj *oh, u32 access, u32 mode)
+ {
+ 	struct lockd_share	*share, **shpp;
+ 
+@@ -93,8 +115,12 @@ nlmsvc_unshare_file(struct nlm_host *host, struct nlm_file *file,
+ 	for (shpp = &file->f_shares; (share = *shpp) != NULL;
+ 					shpp = &share->s_next) {
+ 		if (share->s_host == host && nlm_cmp_owner(share, oh)) {
+-			*shpp = share->s_next;
+-			kfree(share);
++			share->s_access_deny_bmap &= ~LOCKD_FSH_BIT(access, mode);
++			nlm_recompute_share(share);
++			if (!share->s_access_deny_bmap) {
++				*shpp = share->s_next;
++				kfree(share);
++			}
+ 			return nlm_granted;
+ 		}
+ 	}
+-- 
+2.55.0
+

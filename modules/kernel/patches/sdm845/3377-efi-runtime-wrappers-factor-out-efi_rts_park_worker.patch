@@ -1,0 +1,81 @@
+From 3e5ba97c181e32ca9b810414272b57bb7600998e Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Tue, 16 Jun 2026 05:09:35 -0700
+Subject: [PATCH 03377/15333] efi/runtime-wrappers: factor out
+ efi_rts_park_worker()
+
+x86's efi_crash_gracefully_on_page_fault() ends in an infinite
+schedule() loop so the kworker that faulted in firmware never runs
+efi_rts_wq again. A later change needs the same "park this worker
+forever" primitive on the runtime service timeout path, so factor the
+loop into a shared efi_rts_park_worker() and call it from the x86
+page-fault handler.
+
+No functional change.
+
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Signed-off-by: Ard Biesheuvel <ardb@kernel.org>
+---
+ arch/x86/platform/efi/quirks.c          |  9 +--------
+ drivers/firmware/efi/runtime-wrappers.c | 13 +++++++++++++
+ include/linux/efi.h                     |  2 ++
+ 3 files changed, 16 insertions(+), 8 deletions(-)
+
+diff --git a/arch/x86/platform/efi/quirks.c b/arch/x86/platform/efi/quirks.c
+index 90a065fcb1fa..02c56a02eb9b 100644
+--- a/arch/x86/platform/efi/quirks.c
++++ b/arch/x86/platform/efi/quirks.c
+@@ -832,12 +832,5 @@ void efi_crash_gracefully_on_page_fault(unsigned long phys_addr,
+ 	clear_bit(EFI_RUNTIME_SERVICES, &efi.flags);
+ 	pr_info("Froze efi_rts_wq and disabled EFI Runtime Services\n");
+ 
+-	/*
+-	 * Call schedule() in an infinite loop, so that any spurious wake ups
+-	 * will never run efi_rts_wq again.
+-	 */
+-	for (;;) {
+-		set_current_state(TASK_IDLE);
+-		schedule();
+-	}
++	efi_rts_park_worker();
+ }
+diff --git a/drivers/firmware/efi/runtime-wrappers.c b/drivers/firmware/efi/runtime-wrappers.c
+index da8d29621644..a1e46ab00366 100644
+--- a/drivers/firmware/efi/runtime-wrappers.c
++++ b/drivers/firmware/efi/runtime-wrappers.c
+@@ -211,6 +211,19 @@ static struct task_struct *efi_runtime_lock_owner;
+ extern struct semaphore __efi_uv_runtime_lock __alias(efi_runtime_lock);
+ #endif
+ 
++/*
++ * Park a worker that must never run efi_rts_wq again: EFI runtime services
++ * have been disabled and its efi_rts_work is abandoned. Loop in schedule()
++ * so a spurious wakeup cannot resume it.
++ */
++void efi_rts_park_worker(void)
++{
++	for (;;) {
++		set_current_state(TASK_IDLE);
++		schedule();
++	}
++}
++
+ /*
+  * Calls the appropriate efi_runtime_service() with the appropriate
+  * arguments.
+diff --git a/include/linux/efi.h b/include/linux/efi.h
+index 24221a842412..015505423277 100644
+--- a/include/linux/efi.h
++++ b/include/linux/efi.h
+@@ -1256,6 +1256,8 @@ extern struct efi_runtime_work efi_rts_work;
+ /* Workqueue to queue EFI Runtime Services */
+ extern struct workqueue_struct *efi_rts_wq;
+ 
++void efi_rts_park_worker(void);
++
+ struct linux_efi_memreserve {
+ 	int		size;			// allocated size of the array
+ 	atomic_t	count;			// number of entries used
+-- 
+2.55.0
+

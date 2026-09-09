@@ -1,0 +1,74 @@
+From 0e42d4039cb41ae3101fc8df361df418e6ce59eb Mon Sep 17 00:00:00 2001
+From: Pablo Neira Ayuso <pablo@netfilter.org>
+Date: Thu, 6 Aug 2026 23:54:06 +0200
+Subject: [PATCH 12595/15333] netfilter: flowtable: detach layer 2
+ encapsulation parser from lookup
+
+Move the layer 2 encapsulation header parser out of the lookup function
+to prepare for IPv4 over IPv6 and SIT.
+
+Acked-by: Lorenzo Bianconi <lorenzo@kernel.org>
+Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ net/netfilter/nf_flow_table_ip.c | 24 ++++++++++++------------
+ 1 file changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/net/netfilter/nf_flow_table_ip.c b/net/netfilter/nf_flow_table_ip.c
+index ff45f17f3c4a..c8c29a9a1684 100644
+--- a/net/netfilter/nf_flow_table_ip.c
++++ b/net/netfilter/nf_flow_table_ip.c
+@@ -459,12 +459,6 @@ nf_flow_offload_lookup(struct nf_flowtable_ctx *ctx,
+ {
+ 	struct flow_offload_tuple tuple = {};
+ 
+-	if (!nf_flow_skb_encap_protocol(ctx, skb))
+-		return NULL;
+-
+-	if (unlikely(ctx->ether_type != htons(ETH_P_IP)))
+-		return NULL;
+-
+ 	if (nf_flow_tuple_ip(ctx, skb, &tuple) < 0)
+ 		return NULL;
+ 
+@@ -877,6 +871,12 @@ nf_flow_offload_ip_hook(void *priv, struct sk_buff *skb,
+ 	};
+ 	int ret;
+ 
++	if (!nf_flow_skb_encap_protocol(&ctx, skb))
++		return NF_ACCEPT;
++
++	if (unlikely(ctx.ether_type != htons(ETH_P_IP)))
++		return NF_ACCEPT;
++
+ 	tuplehash = nf_flow_offload_lookup(&ctx, flow_table, skb);
+ 	if (!tuplehash)
+ 		return NF_ACCEPT;
+@@ -1117,12 +1117,6 @@ nf_flow_offload_ipv6_lookup(struct nf_flowtable_ctx *ctx,
+ {
+ 	struct flow_offload_tuple tuple = {};
+ 
+-	if (!nf_flow_skb_encap_protocol(ctx, skb))
+-		return NULL;
+-
+-	if (unlikely(ctx->ether_type != htons(ETH_P_IPV6)))
+-		return NULL;
+-
+ 	if (nf_flow_tuple_ipv6(ctx, skb, &tuple) < 0)
+ 		return NULL;
+ 
+@@ -1206,6 +1200,12 @@ nf_flow_offload_ipv6_hook(void *priv, struct sk_buff *skb,
+ 	};
+ 	int ret;
+ 
++	if (!nf_flow_skb_encap_protocol(&ctx, skb))
++		return NF_ACCEPT;
++
++	if (unlikely(ctx.ether_type != htons(ETH_P_IPV6)))
++		return NF_ACCEPT;
++
+ 	tuplehash = nf_flow_offload_ipv6_lookup(&ctx, flow_table, skb);
+ 	if (!tuplehash)
+ 		return NF_ACCEPT;
+-- 
+2.55.0
+

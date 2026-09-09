@@ -1,0 +1,59 @@
+From 408866669ce01b8f2111afdea2c13d15a8960bff Mon Sep 17 00:00:00 2001
+From: Alex Tran <alex.tran@oss.qualcomm.com>
+Date: Mon, 10 Aug 2026 11:58:17 -0700
+Subject: [PATCH 13190/15333] gpio: gpio-by-pinctrl: Apply initial value in
+ direction output wrapper
+
+Apply the requested initial value via the existing gpio set
+wrapper, so that the pin is not left at its previous level.
+Afterwards, configure the gpio pin as output.
+
+Fixes: 7671f4949a6c ("gpio: gpio-by-pinctrl: add pinctrl based generic GPIO driver")
+Signed-off-by: Alex Tran <alex.tran@oss.qualcomm.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@intel.com>
+Link: https://patch.msgid.link/20260810-gpio-pinctrl-output-set-val-v3-1-8e35222b5c8c@oss.qualcomm.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/gpio/gpio-by-pinctrl.c | 18 ++++++++++++------
+ 1 file changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpio/gpio-by-pinctrl.c b/drivers/gpio/gpio-by-pinctrl.c
+index 7d7c48ce5163..f54efd635f13 100644
+--- a/drivers/gpio/gpio-by-pinctrl.c
++++ b/drivers/gpio/gpio-by-pinctrl.c
+@@ -27,12 +27,6 @@ static int pin_control_gpio_get_direction(struct gpio_chip *gc, unsigned int off
+ 	return GPIO_LINE_DIRECTION_IN;
+ }
+ 
+-static int pin_control_gpio_direction_output(struct gpio_chip *chip,
+-					     unsigned int offset, int val)
+-{
+-	return pinctrl_gpio_direction_output(chip, offset);
+-}
+-
+ static int pin_control_gpio_get(struct gpio_chip *chip, unsigned int offset)
+ {
+ 	unsigned long config;
+@@ -55,6 +49,18 @@ static int pin_control_gpio_set(struct gpio_chip *chip, unsigned int offset,
+ 	return pinctrl_gpio_set_config(chip, offset, config);
+ }
+ 
++static int pin_control_gpio_direction_output(struct gpio_chip *chip,
++					     unsigned int offset, int val)
++{
++	int ret;
++
++	ret = pin_control_gpio_set(chip, offset, val);
++	if (ret)
++		return ret;
++
++	return pinctrl_gpio_direction_output(chip, offset);
++}
++
+ static int pin_control_gpio_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+-- 
+2.55.0
+

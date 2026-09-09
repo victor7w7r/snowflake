@@ -1,0 +1,50 @@
+From ea1224da5d61ea9a6c18d6b79562a1354dccf395 Mon Sep 17 00:00:00 2001
+From: Yu-Hsuan Hsu <yuhsuan@google.com>
+Date: Thu, 30 Jul 2026 16:04:45 +0300
+Subject: [PATCH 09609/15333] ASoC: SOF: Use high-priority workqueue for PCM
+ period elapsed
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The snd_sof_pcm_period_elapsed function currently schedules work on the
+system-wide workqueue. This can lead to potential delays or jitter in
+audio processing if the system workqueue is busy with other tasks.
+
+To improve real-time performance and ensure timely processing of PCM
+periods, we can use the system_highpri_wq instead of the default work
+queue.
+
+In performance testing, this change significantly reduced the observed
+scheduling delays. For instance, under load(stressapptest -M 15000 -m
+60), the maximum delay dropped from 9ms on the system workqueue to 5ms
+on the dedicated high-priority workqueue.
+
+Suggested-by: Kai Vehmanen <kai.vehmanen@linux.intel.com>
+Signed-off-by: Yu-Hsuan Hsu <yuhsuan@google.com>
+Reviewed-by: Péter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Reviewed-by: Kai Vehmanen <kai.vehmanen@linux.intel.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Signed-off-by: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Link: https://patch.msgid.link/20260730130445.8277-1-peter.ujfalusi@linux.intel.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/pcm.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sound/soc/sof/pcm.c b/sound/soc/sof/pcm.c
+index b2071edeaea6..f748d072109a 100644
+--- a/sound/soc/sof/pcm.c
++++ b/sound/soc/sof/pcm.c
+@@ -62,7 +62,7 @@ void snd_sof_pcm_period_elapsed(struct snd_pcm_substream *substream)
+ 	 * To avoid sending IPC before the previous IPC is handled, we
+ 	 * schedule delayed work here to call the snd_pcm_period_elapsed().
+ 	 */
+-	schedule_work(&spcm->stream[substream->stream].period_elapsed_work);
++	queue_work(system_highpri_wq, &spcm->stream[substream->stream].period_elapsed_work);
+ }
+ EXPORT_SYMBOL(snd_sof_pcm_period_elapsed);
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,46 @@
+From 09d09e5d79f3174bc082fcea85743a6ce4b69016 Mon Sep 17 00:00:00 2001
+From: Jacob Moroni <jmoroni@google.com>
+Date: Tue, 28 Jul 2026 14:15:00 +0000
+Subject: [PATCH 10998/15333] RDMA/core: Prevent rereg_mr for dmabuf umems
+
+The rereg_mr method has always been explicitly blocked in
+rdma-core for dmabuf MRs anyway, so add a check to the
+ib_umem_check_rereg helper so that each driver doesn't need
+to handle it.
+
+Depending on how the driver handled rereg_mr, this also
+has the benefit of preventing rereg_mr from being used
+to add the IB_ACCESS_MW_BIND flag to a dmabuf MR. This
+flag is not allowed during registration, so it seems
+sensible to prevent it from being added back with rereg_mr.
+
+Preventing IB_ACCESS_MW_BIND is important for drivers that
+support revocable dmabufs and implement "revoke" by issuing
+a dereg_mr command to the HW because most(?) HW will reject
+this command if the MR has windows bound to it, and a failure
+to revoke is supposed to trigger a function reset.
+
+Signed-off-by: Jacob Moroni <jmoroni@google.com>
+Link: https://patch.msgid.link/20260728141501.1425737-1-jmoroni@google.com
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/core/umem.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/infiniband/core/umem.c b/drivers/infiniband/core/umem.c
+index 81f44dadfa52..88110b9661f5 100644
+--- a/drivers/infiniband/core/umem.c
++++ b/drivers/infiniband/core/umem.c
+@@ -677,6 +677,9 @@ int ib_umem_check_rereg(struct ib_umem *umem, int flags, int new_access_flags)
+ 	if (!umem)
+ 		return 0;
+ 
++	if (umem->is_dmabuf)
++		return -EOPNOTSUPP;
++
+ 	if ((flags & IB_MR_REREG_ACCESS) && !(flags & IB_MR_REREG_TRANS))
+ 		if (ib_access_writable(new_access_flags) && !umem->writable)
+ 			return -EACCES;
+-- 
+2.55.0
+

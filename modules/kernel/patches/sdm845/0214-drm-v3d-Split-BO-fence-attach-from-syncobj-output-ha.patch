@@ -1,0 +1,77 @@
+From 58e3a4828074d90f15397014c72358a2d1212bda Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ma=C3=ADra=20Canal?= <mcanal@igalia.com>
+Date: Thu, 4 Jun 2026 17:32:23 -0300
+Subject: [PATCH 00214/15333] drm/v3d: Split BO fence attach from syncobj
+ output handling
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+v3d_attach_fences_and_unlock_reservation() does three different things:
+(1) attaches the submission's last fence to every BO, (2) releases
+drm_exec, and (3) replaces the userspace out_sync syncobjs. Decouple
+these three behaviors into different functions, so that each function
+has a more self-contained behavior.
+
+v3d_submit_jobs() now invokes the three steps explicitly, which makes the
+submission sequence self-documenting and keeps each helper self-contained.
+
+No functional change; just code consolidation.
+
+Reviewed-by: Tvrtko Ursulin <tvrtko.ursulin@igalia.com>
+Link: https://patch.msgid.link/20260604-v3d-sched-misc-fixes-v4-10-c068f5bf5ccf@igalia.com
+Signed-off-by: Maíra Canal <mcanal@igalia.com>
+---
+ drivers/gpu/drm/v3d/v3d_submit.c | 19 +++++++++++++------
+ 1 file changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/v3d/v3d_submit.c b/drivers/gpu/drm/v3d/v3d_submit.c
+index 28c4bee605a3..3ad01ab47ebc 100644
+--- a/drivers/gpu/drm/v3d/v3d_submit.c
++++ b/drivers/gpu/drm/v3d/v3d_submit.c
+@@ -319,12 +319,9 @@ v3d_attach_perfmon_to_jobs(struct v3d_submit *submit, u32 perfmon_id)
+ }
+ 
+ static void
+-v3d_attach_fences_and_unlock_reservation(struct v3d_submit *submit,
+-					 u32 out_sync, struct v3d_submit_ext *se)
++v3d_submit_attach_object_fences(struct v3d_submit *submit)
+ {
+-	bool has_multisync = se && (se->flags & DRM_V3D_EXT_ID_MULTI_SYNC);
+ 	struct v3d_job *last_job = submit->jobs[submit->job_count - 1];
+-	struct drm_syncobj *sync_out;
+ 
+ 	/* The submission's last fence covers the entire submission. Attach it
+ 	 * to every BO touched by any job in the submission.
+@@ -338,8 +335,15 @@ v3d_attach_fences_and_unlock_reservation(struct v3d_submit *submit,
+ 					   DMA_RESV_USAGE_WRITE);
+ 		}
+ 	}
++}
+ 
+-	v3d_submit_unlock_reservations(submit);
++static void
++v3d_submit_process_post_deps(struct v3d_submit *submit, u32 out_sync,
++			     struct v3d_submit_ext *se)
++{
++	bool has_multisync = se && (se->flags & DRM_V3D_EXT_ID_MULTI_SYNC);
++	struct v3d_job *last_job = submit->jobs[submit->job_count - 1];
++	struct drm_syncobj *sync_out;
+ 
+ 	/* Update the return sync object for the job */
+ 	/* If it only supports a single signal semaphore*/
+@@ -400,7 +404,10 @@ v3d_submit_jobs(struct v3d_submit *submit, u32 out_sync,
+ 
+ 	mutex_unlock(&v3d->sched_lock);
+ 
+-	v3d_attach_fences_and_unlock_reservation(submit, out_sync, se);
++	v3d_submit_attach_object_fences(submit);
++	v3d_submit_unlock_reservations(submit);
++	v3d_submit_process_post_deps(submit, out_sync, se);
++
+ 	v3d_submit_put_jobs(submit);
+ 
+ 	return 0;
+-- 
+2.55.0
+

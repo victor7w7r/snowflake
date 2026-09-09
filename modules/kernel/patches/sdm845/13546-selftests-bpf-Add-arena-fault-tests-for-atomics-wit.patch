@@ -1,0 +1,184 @@
+From 611a9f0d3dcaaddd7ac5ede1c3d98d5f64092159 Mon Sep 17 00:00:00 2001
+From: Daniel Borkmann <daniel@iogearbox.net>
+Date: Tue, 11 Aug 2026 15:16:00 +0200
+Subject: [PATCH 13546/15333] selftests/bpf: Add arena fault tests for atomics
+ with fetch
+
+Add stream_arena_xchg_fault and stream_arena_cmpxchg_fault next to the
+existing read, write and load-acquire fault tests, covering the two
+places a read-modify-write can deposit the old value: src_reg for a
+BPF_XCHG and r0 for a BPF_CMPXCHG. Both cover both halves of the JIT
+bug that left the fetch destination alone when a RMW on an arena pointer
+faulted:
+
+  - the fault has to be reported as a WRITE, and at the address held by
+    the destination register, which __stderr() and test_address() check
+  - the register receiving the fetched value has to be cleared by the
+    fault handler, which the programs check by poisoning it before the
+    atomic and returning it, so __retval(0) fails if it is left untouched
+
+The __stderr() annotation can only wildcard the faulting address since
+the arena base is not known until runtime, hence the two test_address()
+subtests on top, which pin it to the address held by dst_reg rather than
+src_reg.
+
+Note, the atomics are open coded since linux/filter.h cannot be included
+alongside vmlinux.h.
+
+  # LDLIBS=-static PKG_CONFIG='pkg-config --static' ./vmtest.sh -- ./test_progs -t stream
+  [...]
+  #464/1   stream_arena_fault_address/read_fault:OK
+  #464/2   stream_arena_fault_address/write_fault:OK
+  #464/3   stream_arena_fault_address/load_acquire_fault:OK
+  #464/4   stream_arena_fault_address/xchg_fault:OK
+  #464/5   stream_arena_fault_address/cmpxchg_fault:OK
+  #464     stream_arena_fault_address:OK
+  [...]
+  #466/5   stream_success/stream_arena_write_fault:OK
+  #466/6   stream_success/stream_arena_read_fault:OK
+  #466/7   stream_success/stream_arena_load_acquire_fault:OK
+  #466/8   stream_success/stream_arena_xchg_fault:OK
+  #466/9   stream_success/stream_arena_cmpxchg_fault:OK
+  [...]
+  Summary: 4/22 PASSED, 0 SKIPPED, 0 FAILED
+
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Acked-by: Eduard Zingerman <eddyz87@gmail.com>
+Acked-by: Puranjay Mohan <puranjay@kernel.org>
+Link: https://patch.msgid.link/20260811131600.506721-6-daniel@iogearbox.net
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ .../testing/selftests/bpf/prog_tests/stream.c |   4 +
+ tools/testing/selftests/bpf/progs/stream.c    | 101 ++++++++++++++++++
+ 2 files changed, 105 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/stream.c b/tools/testing/selftests/bpf/prog_tests/stream.c
+index 15dd3ae2a84b..e4e9374309e2 100644
+--- a/tools/testing/selftests/bpf/prog_tests/stream.c
++++ b/tools/testing/selftests/bpf/prog_tests/stream.c
+@@ -105,6 +105,10 @@ void test_stream_arena_fault_address(void)
+ 		test_address(skel->progs.stream_arena_write_fault, &skel->bss->fault_addr);
+ 	if (test__start_subtest("load_acquire_fault"))
+ 		test_address(skel->progs.stream_arena_load_acquire_fault, &skel->bss->fault_addr);
++	if (test__start_subtest("xchg_fault"))
++		test_address(skel->progs.stream_arena_xchg_fault, &skel->bss->fault_addr);
++	if (test__start_subtest("cmpxchg_fault"))
++		test_address(skel->progs.stream_arena_cmpxchg_fault, &skel->bss->fault_addr);
+ 
+ 	stream__destroy(skel);
+ }
+diff --git a/tools/testing/selftests/bpf/progs/stream.c b/tools/testing/selftests/bpf/progs/stream.c
+index cf5533e11f39..00a37933e411 100644
+--- a/tools/testing/selftests/bpf/progs/stream.c
++++ b/tools/testing/selftests/bpf/progs/stream.c
+@@ -229,6 +229,107 @@ int stream_arena_load_acquire_fault(void *ctx)
+ 	return val;
+ }
+ 
++SEC("syscall")
++__arch_x86_64
++__arch_arm64
++__success __retval(0)
++__stderr("ERROR: Arena WRITE access at unmapped address 0x{{.*}}")
++__stderr("CPU: {{[0-9]+}} UID: 0 PID: {{[0-9]+}} Comm: {{.*}}")
++__stderr("Call trace:\n"
++"{{([a-zA-Z_][a-zA-Z0-9_]*\\+0x[0-9a-fA-F]+/0x[0-9a-fA-F]+\n"
++"|[ \t]+[^\n]+\n)*}}")
++int stream_arena_xchg_fault(void *ctx)
++{
++	static const struct bpf_insn xchg_insn = {
++		.code	 = 0xc3,	/* BPF_STX | BPF_ATOMIC | BPF_W */
++		.dst_reg = 1,		/* BPF_REG_1 */
++		.src_reg = 2,		/* BPF_REG_2 */
++		.off	 = 0x7fff,
++		.imm	 = 0xe1,	/* BPF_XCHG */
++	};
++	struct bpf_arena *ptr = (void *)&arena;
++	u64 user_vm_start, val;
++
++	/*
++	 * Prevent GCC bounds warning: casting &arena to struct bpf_arena *
++	 * triggers bounds checking since the map definition is smaller than
++	 * struct bpf_arena. barrier_var() makes the pointer opaque to GCC,
++	 * preventing the bounds analysis.
++	 */
++	barrier_var(ptr);
++	user_vm_start = ptr->user_vm_start;
++	fault_addr = user_vm_start + 0x7fff;
++	bpf_addr_space_cast(user_vm_start, 0, 1);
++	/*
++	 * A read-modify-write carrying BPF_FETCH writes to memory, so the fault
++	 * has to be reported as a WRITE from the dst_reg address, but it also
++	 * reads the old value into src_reg, so the exception handler has to
++	 * clear src_reg. Poison it up front, the returned value must be 0.
++	 */
++	asm volatile (
++		"r1 = %[user_vm_start];"
++		"r2 = 1;"
++		".8byte %[xchg_insn];" /* r2 = xchg((u32 *)(r1 + 0x7fff), r2) */
++		"%[val] = r2;"
++		: [val] "=r" (val)
++		: [user_vm_start] "r" (user_vm_start),
++		  __imm_insn(xchg_insn, xchg_insn)
++		: "r1", "r2"
++	);
++	return val;
++}
++
++SEC("syscall")
++__arch_x86_64
++__arch_arm64
++__success __retval(0)
++__stderr("ERROR: Arena WRITE access at unmapped address 0x{{.*}}")
++__stderr("CPU: {{[0-9]+}} UID: 0 PID: {{[0-9]+}} Comm: {{.*}}")
++__stderr("Call trace:\n"
++"{{([a-zA-Z_][a-zA-Z0-9_]*\\+0x[0-9a-fA-F]+/0x[0-9a-fA-F]+\n"
++"|[ \t]+[^\n]+\n)*}}")
++int stream_arena_cmpxchg_fault(void *ctx)
++{
++	static const struct bpf_insn cmpxchg_insn = {
++		.code	 = 0xc3,	/* BPF_STX | BPF_ATOMIC | BPF_W */
++		.dst_reg = 1,		/* BPF_REG_1 */
++		.src_reg = 2,		/* BPF_REG_2 */
++		.off	 = 0x7fff,
++		.imm	 = 0xf1,	/* BPF_CMPXCHG */
++	};
++	struct bpf_arena *ptr = (void *)&arena;
++	u64 user_vm_start, val;
++
++	/*
++	 * Prevent GCC bounds warning: casting &arena to struct bpf_arena *
++	 * triggers bounds checking since the map definition is smaller than
++	 * struct bpf_arena. barrier_var() makes the pointer opaque to GCC,
++	 * preventing the bounds analysis.
++	 */
++	barrier_var(ptr);
++	user_vm_start = ptr->user_vm_start;
++	fault_addr = user_vm_start + 0x7fff;
++	bpf_addr_space_cast(user_vm_start, 0, 1);
++	/*
++	 * Same as the exchange above, except that a BPF_CMPXCHG reads the old
++	 * value into r0 rather than into src_reg, so r0 is the register the
++	 * exception handler has to clear. It doubles as the compare value, but
++	 * the comparison never happens since the access faults first.
++	 */
++	asm volatile (
++		"r1 = %[user_vm_start];"
++		"r0 = 1;"
++		"r2 = 2;"
++		".8byte %[cmpxchg_insn];" /* r0 = cmpxchg((u32 *)(r1 + 0x7fff), r0, r2) */
++		"%[val] = r0;"
++		: [val] "=r" (val)
++		: [user_vm_start] "r" (user_vm_start),
++		  __imm_insn(cmpxchg_insn, cmpxchg_insn)
++		: "r0", "r1", "r2"
++	);
++	return val;
++}
++
+ static __noinline void subprog(void)
+ {
+ 	int __arena *addr = (int __arena *)0xdeadbeef;
+-- 
+2.55.0
+

@@ -1,0 +1,166 @@
+From cf5f98609a03d89a32cd0922b092eea66bdb2e77 Mon Sep 17 00:00:00 2001
+From: Prike Liang <Prike.Liang@amd.com>
+Date: Fri, 3 Jul 2026 10:25:58 +0800
+Subject: [PATCH 04793/15333] drm/amdgpu: add mes process context alloc/free
+
+Those helpers allocates/frees slots from bitmaps for
+process_context_array_index processed by MES firmware.
+
+Signed-off-by: Prike Liang <Prike.Liang@amd.com>
+Reviewed-by: Michael Chen <michael.chen@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c    | 46 ++++++++++++++++++++++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h    |  5 +++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h  |  2 +
+ drivers/gpu/drm/amd/amdgpu/mes_userqueue.c |  9 ++++-
+ drivers/gpu/drm/amd/amdgpu/mes_v11_0.c     |  1 +
+ 5 files changed, 62 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+index 56791e9e345a..699c6db4ea36 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+@@ -1034,6 +1034,52 @@ int amdgpu_mes_rs64mem_setup_bitmaps(struct amdgpu_mes *mes)
+ 	return 0;
+ }
+ 
++/**
++ * amdgpu_mes_alloc_proc_ctx_index - allocate a process context slot
++ *
++ * @mes: MES instance
++ *
++ * Returns 0 on success, -ENOSPC if all slots are used (caller should
++ * fall back to system memory path).
++ */
++int amdgpu_mes_alloc_proc_ctx_index(struct amdgpu_mes *mes,
++				    struct amdgpu_usermode_queue *queue)
++{
++	unsigned long bit;
++
++	if (!mes->use_rs64mem || !mes->proc_ctx_bitmap)
++		return -EOPNOTSUPP;
++
++	amdgpu_mes_lock(mes);
++	bit = find_first_zero_bit(mes->proc_ctx_bitmap,
++				  mes->proc_ctx_array_size);
++	if (bit >= mes->proc_ctx_array_size) {
++		amdgpu_mes_unlock(mes);
++		return -ENOSPC;
++	}
++	set_bit(bit, mes->proc_ctx_bitmap);
++	queue->proc_ctx_array_index = (uint32_t)bit;
++	amdgpu_mes_unlock(mes);
++
++	return 0;
++}
++
++/**
++ * amdgpu_mes_free_proc_ctx_index - free a process context slot
++ */
++void amdgpu_mes_free_proc_ctx_index(struct amdgpu_mes *mes,
++				    struct amdgpu_usermode_queue *queue)
++{
++	if (!mes->use_rs64mem || !mes->proc_ctx_bitmap)
++		return;
++	if (queue->proc_ctx_array_index >= mes->proc_ctx_array_size)
++		return;
++
++	amdgpu_mes_lock(mes);
++	clear_bit(queue->proc_ctx_array_index, mes->proc_ctx_bitmap);
++	amdgpu_mes_unlock(mes);
++}
++
+ #if defined(CONFIG_DEBUG_FS)
+ 
+ static int amdgpu_debugfs_mes_event_log_show(struct seq_file *m, void *unused)
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
+index 5c50bc9616b7..33a426f58e72 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
+@@ -279,6 +279,7 @@ struct mes_add_queue_input {
+ 	uint32_t	exclusively_scheduled;
+ 	uint32_t	sh_mem_config_data;
+ 	uint32_t	vm_cntx_cntl;
++	uint32_t	process_context_array_index;
+ };
+ 
+ struct mes_remove_queue_input {
+@@ -631,4 +632,8 @@ int amdgpu_mes_update_enforce_isolation(struct amdgpu_device *adev);
+ int amdgpu_mes_rs64mem_init(struct amdgpu_mes *mes);
+ void amdgpu_mes_rs64mem_fini(struct amdgpu_mes *mes);
+ int amdgpu_mes_rs64mem_setup_bitmaps(struct amdgpu_mes *mes);
++int amdgpu_mes_alloc_proc_ctx_index(struct amdgpu_mes *mes,
++				    struct amdgpu_usermode_queue *queue);
++void amdgpu_mes_free_proc_ctx_index(struct amdgpu_mes *mes,
++				    struct amdgpu_usermode_queue *queue);
+ #endif /* __AMDGPU_MES_H__ */
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h
+index 61e5f8a06eb2..8bb0d3213abf 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h
+@@ -100,6 +100,8 @@ struct amdgpu_usermode_queue {
+ 		} va;
+ 		u64 va_array[6];
+ 	} userq_vas;
++
++	uint32_t	proc_ctx_array_index;
+ };
+ 
+ struct amdgpu_userq_funcs {
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c b/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
+index defa050fd871..c5b01a552592 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
+@@ -121,6 +121,7 @@ static int mes_userq_map(struct amdgpu_usermode_queue *queue)
+ 	struct amdgpu_userq_obj *ctx = &queue->fw_obj;
+ 	struct amdgpu_mqd_prop *userq_props = queue->userq_prop;
+ 	struct mes_add_queue_input queue_input;
++	struct amdgpu_mes *mes = &adev->mes;
+ 	int r;
+ 
+ 	memset(&queue_input, 0x0, sizeof(struct mes_add_queue_input));
+@@ -146,7 +147,10 @@ static int mes_userq_map(struct amdgpu_usermode_queue *queue)
+ 	queue_input.doorbell_offset = userq_props->doorbell_index;
+ 	queue_input.page_table_base_addr = amdgpu_gmc_pd_addr(queue->vm->root.bo);
+ 	queue_input.wptr_mc_addr = queue->wptr_obj.gpu_addr;
+-
++	if (mes->use_rs64mem) {
++		amdgpu_mes_alloc_proc_ctx_index(mes, queue);
++		queue_input.process_context_array_index = queue->proc_ctx_array_index;
++	}
+ 	amdgpu_mes_lock(&adev->mes);
+ 	r = adev->mes.funcs->add_hw_queue(&adev->mes, &queue_input);
+ 	amdgpu_mes_unlock(&adev->mes);
+@@ -165,6 +169,7 @@ static int mes_userq_unmap(struct amdgpu_usermode_queue *queue)
+ 	struct amdgpu_device *adev = uq_mgr->adev;
+ 	struct mes_remove_queue_input queue_input;
+ 	struct amdgpu_userq_obj *ctx = &queue->fw_obj;
++	struct amdgpu_mes *mes = &adev->mes;
+ 	int r;
+ 
+ 	memset(&queue_input, 0x0, sizeof(struct mes_remove_queue_input));
+@@ -175,6 +180,8 @@ static int mes_userq_unmap(struct amdgpu_usermode_queue *queue)
+ 	amdgpu_mes_lock(&adev->mes);
+ 	r = adev->mes.funcs->remove_hw_queue(&adev->mes, &queue_input);
+ 	amdgpu_mes_unlock(&adev->mes);
++	if (mes->use_rs64mem)
++		amdgpu_mes_free_proc_ctx_index(mes, queue);
+ 	if (r)
+ 		DRM_ERROR("Failed to unmap queue in HW, err (%d)\n", r);
+ 	return r;
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
+index 72ca7302bbfb..e119e743f489 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
+@@ -335,6 +335,7 @@ static int mes_v11_0_add_hw_queue(struct amdgpu_mes *mes,
+ 	mes_add_queue_pkt.process_va_end = input->process_va_end;
+ 	mes_add_queue_pkt.process_quantum = input->process_quantum;
+ 	mes_add_queue_pkt.process_context_addr = input->process_context_addr;
++	mes_add_queue_pkt.process_context_array_index = input->process_context_array_index;
+ 	mes_add_queue_pkt.gang_quantum = input->gang_quantum;
+ 	mes_add_queue_pkt.gang_context_addr = input->gang_context_addr;
+ 	mes_add_queue_pkt.inprocess_gang_priority =
+-- 
+2.55.0
+

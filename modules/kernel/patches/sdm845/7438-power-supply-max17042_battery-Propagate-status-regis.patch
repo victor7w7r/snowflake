@@ -1,0 +1,51 @@
+From 98d02b5128833c3d812e62a2616f33f1524c8394 Mon Sep 17 00:00:00 2001
+From: Vincent Cloutier <vincent@cloutier.co>
+Date: Sun, 26 Jul 2026 21:13:03 -0400
+Subject: [PATCH 07438/15333] power: supply: max17042_battery: Propagate status
+ register errors
+
+The driver ignores errors from the initial STATUS read and final POR clear.
+A failed read can leave the POR decision based on an invalid value, while a
+failed clear can report initialization complete with POR still set.
+
+Check the probe-time read and return the POR-clear result from
+max17042_init_chip(). Keep this error handling separate from the retry
+policy added later.
+
+Assisted-by: OpenCode:gpt-5.6-sol
+Signed-off-by: Vincent Cloutier <vincent@cloutier.co>
+Link: https://patch.msgid.link/20260727011319.621794-6-vincent.cloutier@icloud.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/max17042_battery.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/power/supply/max17042_battery.c b/drivers/power/supply/max17042_battery.c
+index bfc563ff9c31..f59dec8864ef 100644
+--- a/drivers/power/supply/max17042_battery.c
++++ b/drivers/power/supply/max17042_battery.c
+@@ -909,8 +909,7 @@ static int max17042_init_chip(struct max17042_chip *chip)
+ 	}
+ 
+ 	/* Init complete, Clear the POR bit */
+-	regmap_update_bits(map, MAX17042_STATUS, STATUS_POR_BIT, 0x0);
+-	return 0;
++	return regmap_clear_bits(map, MAX17042_STATUS, STATUS_POR_BIT);
+ }
+ 
+ static void max17042_set_soc_threshold(struct max17042_chip *chip, u16 off)
+@@ -1253,7 +1252,10 @@ static int max17042_probe(struct i2c_client *client, struct device *dev, int irq
+ 
+ 	chip->irq = irq;
+ 
+-	regmap_read(chip->regmap, MAX17042_STATUS, &val);
++	ret = regmap_read(chip->regmap, MAX17042_STATUS, &val);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to read status\n");
++
+ 	if (val & STATUS_POR_BIT) {
+ 		ret = devm_delayed_work_autocancel(dev, &chip->work,
+ 						   max17042_init_worker);
+-- 
+2.55.0
+

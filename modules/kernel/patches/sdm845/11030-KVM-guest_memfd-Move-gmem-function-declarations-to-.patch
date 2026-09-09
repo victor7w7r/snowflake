@@ -1,0 +1,125 @@
+From f8479adb280afd21240548c1e473227168bfae83 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 31 Jul 2026 10:38:39 -0700
+Subject: [PATCH 11030/15333] KVM: guest_memfd: Move gmem function declarations
+ to dedicated guest_memfd.h
+
+Extract the gmem function declarations out of kvm_mm.h and into a dedicated
+header, guest_memfd.h.  This will allow creating a MAINTAINERS entry for
+guest_memfd without having to rely on content pattern matching.
+
+Reviewed-by: Ackerley Tng <ackerleytng@google.com>
+Acked-by: David Hildenbrand (Arm) <david@kernel.org>
+Link: https://patch.msgid.link/20260731173842.2649391-3-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ virt/kvm/guest_memfd.c |  1 +
+ virt/kvm/guest_memfd.h | 34 ++++++++++++++++++++++++++++++++++
+ virt/kvm/kvm_main.c    |  1 +
+ virt/kvm/kvm_mm.h      | 27 ---------------------------
+ 4 files changed, 36 insertions(+), 27 deletions(-)
+ create mode 100644 virt/kvm/guest_memfd.h
+
+diff --git a/virt/kvm/guest_memfd.c b/virt/kvm/guest_memfd.c
+index 86690683b2fe..de2585539b25 100644
+--- a/virt/kvm/guest_memfd.c
++++ b/virt/kvm/guest_memfd.c
+@@ -9,6 +9,7 @@
+ #include <linux/pagemap.h>
+ 
+ #include "kvm_mm.h"
++#include "guest_memfd.h"
+ 
+ static struct vfsmount *kvm_gmem_mnt;
+ 
+diff --git a/virt/kvm/guest_memfd.h b/virt/kvm/guest_memfd.h
+new file mode 100644
+index 000000000000..0f9c6f840838
+--- /dev/null
++++ b/virt/kvm/guest_memfd.h
+@@ -0,0 +1,34 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef __KVM_GUEST_MEMFD_H__
++#define __KVM_GUEST_MEMFD_H__
++
++#include <linux/kvm_types.h>
++
++#ifdef CONFIG_KVM_GUEST_MEMFD
++int kvm_gmem_init(struct module *module);
++void kvm_gmem_exit(void);
++int kvm_gmem_create(struct kvm *kvm, struct kvm_create_guest_memfd *args);
++int kvm_gmem_bind(struct kvm *kvm, struct kvm_memory_slot *slot,
++		  unsigned int fd, uoff_t offset);
++void kvm_gmem_unbind(struct kvm_memory_slot *slot);
++#else
++static inline int kvm_gmem_init(struct module *module)
++{
++	return 0;
++}
++static inline void kvm_gmem_exit(void) {};
++static inline int kvm_gmem_bind(struct kvm *kvm,
++					 struct kvm_memory_slot *slot,
++					 unsigned int fd, uoff_t offset)
++{
++	WARN_ON_ONCE(1);
++	return -EIO;
++}
++
++static inline void kvm_gmem_unbind(struct kvm_memory_slot *slot)
++{
++	WARN_ON_ONCE(1);
++}
++#endif /* CONFIG_KVM_GUEST_MEMFD */
++
++#endif /* __KVM_GUEST_MEMFD_H__ */
+diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
+index e44c20c04961..a2f67623e60a 100644
+--- a/virt/kvm/kvm_main.c
++++ b/virt/kvm/kvm_main.c
+@@ -56,6 +56,7 @@
+ 
+ #include "coalesced_mmio.h"
+ #include "async_pf.h"
++#include "guest_memfd.h"
+ #include "kvm_mm.h"
+ #include "vfio.h"
+ 
+diff --git a/virt/kvm/kvm_mm.h b/virt/kvm/kvm_mm.h
+index 7510ca915dd1..c65cfdb14f1c 100644
+--- a/virt/kvm/kvm_mm.h
++++ b/virt/kvm/kvm_mm.h
+@@ -70,31 +70,4 @@ static inline void gfn_to_pfn_cache_invalidate_start(struct kvm *kvm,
+ }
+ #endif /* HAVE_KVM_PFNCACHE */
+ 
+-#ifdef CONFIG_KVM_GUEST_MEMFD
+-int kvm_gmem_init(struct module *module);
+-void kvm_gmem_exit(void);
+-int kvm_gmem_create(struct kvm *kvm, struct kvm_create_guest_memfd *args);
+-int kvm_gmem_bind(struct kvm *kvm, struct kvm_memory_slot *slot,
+-		  unsigned int fd, uoff_t offset);
+-void kvm_gmem_unbind(struct kvm_memory_slot *slot);
+-#else
+-static inline int kvm_gmem_init(struct module *module)
+-{
+-	return 0;
+-}
+-static inline void kvm_gmem_exit(void) {};
+-static inline int kvm_gmem_bind(struct kvm *kvm,
+-					 struct kvm_memory_slot *slot,
+-					 unsigned int fd, uoff_t offset)
+-{
+-	WARN_ON_ONCE(1);
+-	return -EIO;
+-}
+-
+-static inline void kvm_gmem_unbind(struct kvm_memory_slot *slot)
+-{
+-	WARN_ON_ONCE(1);
+-}
+-#endif /* CONFIG_KVM_GUEST_MEMFD */
+-
+ #endif /* __KVM_MM_H__ */
+-- 
+2.55.0
+

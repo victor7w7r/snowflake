@@ -1,0 +1,156 @@
+From 0ec31e033f020dc83728b2c1dc1de9b3a4902eaa Mon Sep 17 00:00:00 2001
+From: Joel Granados <joel.granados@kernel.org>
+Date: Thu, 25 Jun 2026 22:38:16 +0200
+Subject: [PATCH 10989/15333] sysctl: Add negp parameter to douintvec converter
+ functions
+
+Updates all douintvec converter function signatures to include a bool
+*negp parameter. This is a preparation commit required to eventually run
+all converters under the same function. The negp argument will be
+ignored as it is not relevant for the uint type. Note that
+do_proc_uint_conv_pipe_maxsz in pipe.c is also modified.
+
+Signed-off-by: Joel Granados <joel.granados@kernel.org>
+---
+ fs/pipe.c              |  2 +-
+ include/linux/sysctl.h |  2 +-
+ kernel/sysctl.c        | 31 ++++++++++++++++---------------
+ 3 files changed, 18 insertions(+), 17 deletions(-)
+
+diff --git a/fs/pipe.c b/fs/pipe.c
+index 429b0714ec57..8f98ca864cb4 100644
+--- a/fs/pipe.c
++++ b/fs/pipe.c
+@@ -1589,7 +1589,7 @@ static int u2k_pipe_maxsz(const ulong *u_ptr, uint *k_ptr)
+ 	return proc_uint_u2k_conv_uop(u_ptr, k_ptr, round_pipe_size_ul);
+ }
+ 
+-static int do_proc_uint_conv_pipe_maxsz(ulong *u_ptr, uint *k_ptr,
++static int do_proc_uint_conv_pipe_maxsz(bool *negp, ulong *u_ptr, uint *k_ptr,
+ 					int dir, const struct ctl_table *table)
+ {
+ 	return proc_uint_conv(u_ptr, k_ptr, dir, table, true,
+diff --git a/include/linux/sysctl.h b/include/linux/sysctl.h
+index 2886fbceb5d6..0d406b64968a 100644
+--- a/include/linux/sysctl.h
++++ b/include/linux/sysctl.h
+@@ -102,7 +102,7 @@ int proc_douintvec_minmax(const struct ctl_table *table, int write, void *buffer
+ 		size_t *lenp, loff_t *ppos);
+ int proc_douintvec_conv(const struct ctl_table *table, int write, void *buffer,
+ 			size_t *lenp, loff_t *ppos,
+-			int (*conv)(unsigned long *lvalp, unsigned int *valp,
++			int (*conv)(bool *negp, ulong *lvalp, uint *valp,
+ 				    int write, const struct ctl_table *table));
+ int proc_uint_k2u_conv(ulong *u_ptr, const uint *k_ptr);
+ int proc_uint_u2k_conv_uop(const ulong *u_ptr, uint *k_ptr,
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index e53e60213462..ef5a9c5b1d10 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -444,15 +444,15 @@ static int proc_uint_u2k_conv(const ulong *u_ptr, uint *k_ptr)
+ 	return proc_uint_u2k_conv_uop(u_ptr, k_ptr, NULL);
+ }
+ 
+-static int do_proc_uint_conv(ulong *u_ptr, uint *k_ptr, int dir,
++static int do_proc_uint_conv(bool *negp, ulong *u_ptr, uint *k_ptr, int dir,
+ 			     const struct ctl_table *tbl)
+ {
+ 	return proc_uint_conv(u_ptr, k_ptr, dir, tbl, false,
+ 			      proc_uint_u2k_conv, proc_uint_k2u_conv);
+ }
+ 
+-static int do_proc_uint_conv_minmax(ulong *u_ptr, uint *k_ptr, int dir,
+-				    const struct ctl_table *tbl)
++static int do_proc_uint_conv_minmax(bool *negp, ulong *u_ptr, uint *k_ptr,
++				    int dir, const struct ctl_table *tbl)
+ {
+ 	return proc_uint_conv(u_ptr, k_ptr, dir, tbl, true,
+ 			      proc_uint_u2k_conv, proc_uint_k2u_conv);
+@@ -643,7 +643,7 @@ static int do_proc_dointvec(const struct ctl_table *table, int dir,
+ 
+ static int do_proc_douintvec_w(const struct ctl_table *table, void *buffer,
+ 			       size_t *lenp, loff_t *ppos,
+-			       int (*conv)(unsigned long *u_ptr,
++			       int (*conv)(bool *negp, unsigned long *u_ptr,
+ 					   unsigned int *k_ptr, int dir,
+ 					   const struct ctl_table *table))
+ {
+@@ -675,7 +675,7 @@ static int do_proc_douintvec_w(const struct ctl_table *table, void *buffer,
+ 		goto out_free;
+ 	}
+ 
+-	if (conv(&lval, (unsigned int *) table->data, 1, table)) {
++	if (conv(&neg, &lval, (unsigned int *) table->data, 1, table)) {
+ 		err = -EINVAL;
+ 		goto out_free;
+ 	}
+@@ -696,17 +696,18 @@ static int do_proc_douintvec_w(const struct ctl_table *table, void *buffer,
+ 
+ static int do_proc_douintvec_r(const struct ctl_table *table, void *buffer,
+ 			       size_t *lenp, loff_t *ppos,
+-			       int (*conv)(unsigned long *u_ptr,
++			       int (*conv)(bool *negp, unsigned long *u_ptr,
+ 					   unsigned int *k_ptr, int dir,
+ 					   const struct ctl_table *table))
+ {
+ 	unsigned long lval;
+ 	int err = 0;
+ 	size_t left;
++	bool negp;
+ 
+ 	left = *lenp;
+ 
+-	if (conv(&lval, (unsigned int *) table->data, 0, table)) {
++	if (conv(&negp, &lval, (unsigned int *) table->data, 0, table)) {
+ 		err = -EINVAL;
+ 		goto out;
+ 	}
+@@ -726,9 +727,8 @@ static int do_proc_douintvec_r(const struct ctl_table *table, void *buffer,
+ 
+ static int do_proc_douintvec(const struct ctl_table *table, int dir,
+ 			     void *buffer, size_t *lenp, loff_t *ppos,
+-			      int (*conv)(unsigned long *u_ptr,
+-					  unsigned int *k_ptr, int dir,
+-					  const struct ctl_table *table))
++			     int (*conv)(bool *negp, ulong *u_ptr, uint *k_ptr,
++					 int dir, const struct ctl_table *table))
+ {
+ 	unsigned int vleft;
+ 
+@@ -749,9 +749,6 @@ static int do_proc_douintvec(const struct ctl_table *table, int dir,
+ 		return -EINVAL;
+ 	}
+ 
+-	if (!conv)
+-		conv = do_proc_uint_conv;
+-
+ 	if (SYSCTL_USER_TO_KERN(dir))
+ 		return do_proc_douintvec_w(table, buffer, lenp, ppos, conv);
+ 	return do_proc_douintvec_r(table, buffer, lenp, ppos, conv);
+@@ -775,9 +772,13 @@ static int do_proc_douintvec(const struct ctl_table *table, int dir,
+  */
+ int proc_douintvec_conv(const struct ctl_table *table, int dir, void *buffer,
+ 			size_t *lenp, loff_t *ppos,
+-			int (*conv)(unsigned long *u_ptr, unsigned int *k_ptr,
++			int (*conv)(bool *negp, ulong *u_ptr, uint *k_ptr,
+ 				    int dir, const struct ctl_table *table))
+ {
++
++	if (!conv)
++		conv = do_proc_uint_conv;
++
+ 	return do_proc_douintvec(table, dir, buffer, lenp, ppos, conv);
+ }
+ 
+@@ -1279,7 +1280,7 @@ int proc_douintvec_minmax(const struct ctl_table *table, int dir,
+ 
+ int proc_douintvec_conv(const struct ctl_table *table, int write, void *buffer,
+ 			size_t *lenp, loff_t *ppos,
+-			int (*conv)(unsigned long *lvalp, unsigned int *valp,
++			int (*conv)(bool *negp, ulong *lvalp, uint *valp,
+ 				    int write, const struct ctl_table *table))
+ {
+ 	return -ENOSYS;
+-- 
+2.55.0
+

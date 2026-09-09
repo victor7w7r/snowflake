@@ -1,0 +1,190 @@
+From 78e6cdf518f5d83b9619d42d03a7e82122dc7049 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Tue, 23 Jun 2026 14:41:29 +0300
+Subject: [PATCH 00784/15333] drm/i915/panel: Adjust
+ intel_panel_compute_config() calling convention
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Pass the full atomic state to intel_panel_compute_config(). We'll
+need this for some upcoming VRR fastset tricks. And to accompany
+full state we'll also need the crtc (or its state) as well.
+
+v2: Rebase
+
+Reviewed-by: Suraj Kandpal <suraj.kandpal@intel.com>
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20260623114130.7333-1-ville.syrjala@linux.intel.com
+Tested-by: Vidya Srinivas <vidya.srinivas@intel.com>
+Acked-by: Jani Nikula <jani.nikula@intel.com>
+---
+ drivers/gpu/drm/i915/display/icl_dsi.c     |  2 +-
+ drivers/gpu/drm/i915/display/intel_dp.c    |  2 +-
+ drivers/gpu/drm/i915/display/intel_dvo.c   |  2 +-
+ drivers/gpu/drm/i915/display/intel_lvds.c  |  2 +-
+ drivers/gpu/drm/i915/display/intel_panel.c | 21 +++++++++++++--------
+ drivers/gpu/drm/i915/display/intel_panel.h |  6 ++++--
+ drivers/gpu/drm/i915/display/intel_sdvo.c  |  4 ++--
+ drivers/gpu/drm/i915/display/vlv_dsi.c     |  2 +-
+ 8 files changed, 24 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/icl_dsi.c b/drivers/gpu/drm/i915/display/icl_dsi.c
+index 59184f2f805c..ea0cdb7822f3 100644
+--- a/drivers/gpu/drm/i915/display/icl_dsi.c
++++ b/drivers/gpu/drm/i915/display/icl_dsi.c
+@@ -1672,7 +1672,7 @@ static int gen11_dsi_compute_config(struct intel_atomic_state *state,
+ 	pipe_config->sink_format = INTEL_OUTPUT_FORMAT_RGB;
+ 	pipe_config->output_format = INTEL_OUTPUT_FORMAT_RGB;
+ 
+-	ret = intel_panel_compute_config(intel_connector, adjusted_mode);
++	ret = intel_panel_compute_config(state, pipe_config, intel_connector);
+ 	if (ret)
+ 		return ret;
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+index b9324b590ee9..da8a94821c11 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
++++ b/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -3639,7 +3639,7 @@ intel_dp_compute_config(struct intel_atomic_state *state,
+ 	int ret = 0, link_bpp_x16;
+ 
+ 	if (intel_dp_is_edp(intel_dp)) {
+-		ret = intel_panel_compute_config(connector, adjusted_mode);
++		ret = intel_panel_compute_config(state, pipe_config, connector);
+ 		if (ret)
+ 			return ret;
+ 	}
+diff --git a/drivers/gpu/drm/i915/display/intel_dvo.c b/drivers/gpu/drm/i915/display/intel_dvo.c
+index 181722c41b96..f157699a7c4c 100644
+--- a/drivers/gpu/drm/i915/display/intel_dvo.c
++++ b/drivers/gpu/drm/i915/display/intel_dvo.c
+@@ -257,7 +257,7 @@ static int intel_dvo_compute_config(struct intel_atomic_state *state,
+ 	 * with the panel scaling set up to source from the H/VDisplay
+ 	 * of the original mode.
+ 	 */
+-	ret = intel_panel_compute_config(connector, adjusted_mode);
++	ret = intel_panel_compute_config(state, pipe_config, connector);
+ 	if (ret)
+ 		return ret;
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_lvds.c b/drivers/gpu/drm/i915/display/intel_lvds.c
+index 30e4809b36ac..872753478cf2 100644
+--- a/drivers/gpu/drm/i915/display/intel_lvds.c
++++ b/drivers/gpu/drm/i915/display/intel_lvds.c
+@@ -460,7 +460,7 @@ static int intel_lvds_compute_config(struct intel_atomic_state *state,
+ 	 * with the panel scaling set up to source from the H/VDisplay
+ 	 * of the original mode.
+ 	 */
+-	ret = intel_panel_compute_config(connector, adjusted_mode);
++	ret = intel_panel_compute_config(state, crtc_state, connector);
+ 	if (ret)
+ 		return ret;
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_panel.c b/drivers/gpu/drm/i915/display/intel_panel.c
+index 2b8401b6d4d6..faa24537ef63 100644
+--- a/drivers/gpu/drm/i915/display/intel_panel.c
++++ b/drivers/gpu/drm/i915/display/intel_panel.c
+@@ -219,9 +219,11 @@ enum drrs_type intel_panel_drrs_type(struct intel_connector *connector)
+ 	return connector->panel.vbt.drrs_type;
+ }
+ 
+-static int intel_panel_compute_config_vrr(struct intel_connector *connector,
+-					  struct drm_display_mode *adjusted_mode)
++static int intel_panel_compute_config_vrr(struct intel_atomic_state *state,
++					  struct intel_crtc_state *crtc_state,
++					  struct intel_connector *connector)
+ {
++	struct drm_display_mode *adjusted_mode = &crtc_state->hw.adjusted_mode;
+ 	const struct drm_display_mode *fixed_mode;
+ 	int vrefresh, fixed_mode_vrefresh;
+ 
+@@ -251,9 +253,11 @@ static int intel_panel_compute_config_vrr(struct intel_connector *connector,
+ 	return 0;
+ }
+ 
+-static int intel_panel_compute_config_fixed_rr(struct intel_connector *connector,
+-					       struct drm_display_mode *adjusted_mode)
++static int intel_panel_compute_config_fixed_rr(struct intel_atomic_state *state,
++					       struct intel_crtc_state *crtc_state,
++					       struct intel_connector *connector)
+ {
++	struct drm_display_mode *adjusted_mode = &crtc_state->hw.adjusted_mode;
+ 	const struct drm_display_mode *fixed_mode;
+ 	int vrefresh, fixed_mode_vrefresh;
+ 
+@@ -286,14 +290,15 @@ static int intel_panel_compute_config_fixed_rr(struct intel_connector *connector
+ 	return 0;
+ }
+ 
+-int intel_panel_compute_config(struct intel_connector *connector,
+-			       struct drm_display_mode *adjusted_mode)
++int intel_panel_compute_config(struct intel_atomic_state *state,
++			       struct intel_crtc_state *crtc_state,
++			       struct intel_connector *connector)
+ {
+ 	int ret;
+ 
+-	ret = intel_panel_compute_config_vrr(connector, adjusted_mode);
++	ret = intel_panel_compute_config_vrr(state, crtc_state, connector);
+ 	if (ret)
+-		ret = intel_panel_compute_config_fixed_rr(connector, adjusted_mode);
++		ret = intel_panel_compute_config_fixed_rr(state, crtc_state, connector);
+ 
+ 	return ret;
+ }
+diff --git a/drivers/gpu/drm/i915/display/intel_panel.h b/drivers/gpu/drm/i915/display/intel_panel.h
+index 23bd227826c9..30c6078ecb1b 100644
+--- a/drivers/gpu/drm/i915/display/intel_panel.h
++++ b/drivers/gpu/drm/i915/display/intel_panel.h
+@@ -14,6 +14,7 @@ struct drm_connector;
+ struct drm_connector_state;
+ struct drm_display_mode;
+ struct drm_edid;
++struct intel_atomic_state;
+ struct intel_connector;
+ struct intel_crtc_state;
+ struct intel_display;
+@@ -45,8 +46,9 @@ enum drm_mode_status
+ intel_panel_mode_valid(struct intel_connector *connector,
+ 		       const struct drm_display_mode *mode,
+ 		       int *target_clock);
+-int intel_panel_compute_config(struct intel_connector *connector,
+-			       struct drm_display_mode *adjusted_mode);
++int intel_panel_compute_config(struct intel_atomic_state *state,
++			       struct intel_crtc_state *crtc_state,
++			       struct intel_connector *connector);
+ void intel_panel_add_edid_fixed_modes(struct intel_connector *connector,
+ 				      bool use_alt_fixed_modes);
+ void intel_panel_add_vbt_lfp_fixed_mode(struct intel_connector *connector);
+diff --git a/drivers/gpu/drm/i915/display/intel_sdvo.c b/drivers/gpu/drm/i915/display/intel_sdvo.c
+index 6b73c9a5ec7f..3075ef04df56 100644
+--- a/drivers/gpu/drm/i915/display/intel_sdvo.c
++++ b/drivers/gpu/drm/i915/display/intel_sdvo.c
+@@ -1399,8 +1399,8 @@ static int intel_sdvo_compute_config(struct intel_atomic_state *state,
+ 		const struct drm_display_mode *fixed_mode;
+ 		int ret;
+ 
+-		ret = intel_panel_compute_config(&intel_sdvo_connector->base,
+-						 adjusted_mode);
++		ret = intel_panel_compute_config(state, pipe_config,
++						 &intel_sdvo_connector->base);
+ 		if (ret)
+ 			return ret;
+ 
+diff --git a/drivers/gpu/drm/i915/display/vlv_dsi.c b/drivers/gpu/drm/i915/display/vlv_dsi.c
+index b89318f5bdc2..8829f365592e 100644
+--- a/drivers/gpu/drm/i915/display/vlv_dsi.c
++++ b/drivers/gpu/drm/i915/display/vlv_dsi.c
+@@ -281,7 +281,7 @@ static int intel_dsi_compute_config(struct intel_atomic_state *state,
+ 	pipe_config->sink_format = INTEL_OUTPUT_FORMAT_RGB;
+ 	pipe_config->output_format = INTEL_OUTPUT_FORMAT_RGB;
+ 
+-	ret = intel_panel_compute_config(intel_connector, adjusted_mode);
++	ret = intel_panel_compute_config(state, pipe_config, intel_connector);
+ 	if (ret)
+ 		return ret;
+ 
+-- 
+2.55.0
+

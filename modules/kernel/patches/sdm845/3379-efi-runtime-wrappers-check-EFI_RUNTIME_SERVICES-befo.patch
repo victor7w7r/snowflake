@@ -1,0 +1,50 @@
+From 690ab48d353e00648c02166864d375d5e2d7689d Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Tue, 16 Jun 2026 05:09:37 -0700
+Subject: [PATCH 03379/15333] efi/runtime-wrappers: check EFI_RUNTIME_SERVICES
+ before using efi_rts_work
+
+Move the EFI_RUNTIME_SERVICES check to the top of __efi_queue_work() and
+return directly, so a caller that finds runtime services disabled returns
+without touching the shared efi_rts_work. No functional change.
+
+This prepares for bounding the wait, where a timeout will clear
+EFI_RUNTIME_SERVICES while the leaked worker still owns efi_rts_work; a
+later caller must then bail out before reinitialising it.
+
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Signed-off-by: Ard Biesheuvel <ardb@kernel.org>
+---
+ drivers/firmware/efi/runtime-wrappers.c | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/firmware/efi/runtime-wrappers.c b/drivers/firmware/efi/runtime-wrappers.c
+index 13857e5291b9..ae974edc0b04 100644
+--- a/drivers/firmware/efi/runtime-wrappers.c
++++ b/drivers/firmware/efi/runtime-wrappers.c
+@@ -333,17 +333,16 @@ static void __nocfi efi_call_rts(struct work_struct *work)
+ static efi_status_t __efi_queue_work(enum efi_rts_ids id,
+ 				     union efi_rts_args *args)
+ {
++	if (!efi_enabled(EFI_RUNTIME_SERVICES)) {
++		pr_warn_once("EFI Runtime Services are disabled!\n");
++		return EFI_DEVICE_ERROR;
++	}
++
+ 	efi_rts_work.efi_rts_id = id;
+ 	efi_rts_work.args = args;
+ 	efi_rts_work.caller = __builtin_return_address(0);
+ 	efi_rts_work.status = EFI_ABORTED;
+ 
+-	if (!efi_enabled(EFI_RUNTIME_SERVICES)) {
+-		pr_warn_once("EFI Runtime Services are disabled!\n");
+-		efi_rts_work.status = EFI_DEVICE_ERROR;
+-		goto exit;
+-	}
+-
+ 	init_completion(&efi_rts_work.efi_rts_comp);
+ 	INIT_WORK(&efi_rts_work.work, efi_call_rts);
+ 
+-- 
+2.55.0
+

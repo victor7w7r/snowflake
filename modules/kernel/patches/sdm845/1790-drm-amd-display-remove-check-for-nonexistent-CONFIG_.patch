@@ -1,0 +1,48 @@
+From c69657158582a14e057a9e582e48bbc012884d69 Mon Sep 17 00:00:00 2001
+From: Ethan Nelson-Moore <enelsonmoore@gmail.com>
+Date: Wed, 10 Jun 2026 18:30:11 -0700
+Subject: [PATCH 01790/15333] drm/amd/display: remove check for nonexistent
+ CONFIG_HAVE_KGDB
+
+drivers/gpu/drm/amd/display/dc/sspl/spl_debug.h checks for
+CONFIG_HAVE_KGDB or CONFIG_KGDB to determine whether to call
+kgdb_breakpoint(). CONFIG_HAVE_KGDB has never existed in the kernel.
+Remove the check for it and retain only the correct check for
+CONFIG_KGDB.
+
+Discovered while searching for CONFIG_* symbols referenced in code but
+not defined in any Kconfig file.
+
+Signed-off-by: Ethan Nelson-Moore <enelsonmoore@gmail.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Acked-by: George Zhang <george.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/display/dc/sspl/spl_debug.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/sspl/spl_debug.h b/drivers/gpu/drm/amd/display/dc/sspl/spl_debug.h
+index a6f6132df241..a0e9df382582 100644
+--- a/drivers/gpu/drm/amd/display/dc/sspl/spl_debug.h
++++ b/drivers/gpu/drm/amd/display/dc/sspl/spl_debug.h
+@@ -5,7 +5,7 @@
+ #ifndef SPL_DEBUG_H
+ #define SPL_DEBUG_H
+ 
+-#if defined(CONFIG_HAVE_KGDB) || defined(CONFIG_KGDB)
++#ifdef CONFIG_KGDB
+ #define SPL_ASSERT_CRITICAL(expr) do {	\
+ 	if (WARN_ON(!(expr))) { \
+ 		kgdb_breakpoint(); \
+@@ -17,7 +17,7 @@
+ 		; \
+ 	} \
+ } while (0)
+-#endif /* CONFIG_HAVE_KGDB || CONFIG_KGDB */
++#endif /* CONFIG_KGDB */
+ 
+ #if defined(CONFIG_DEBUG_KERNEL_DC)
+ #define SPL_ASSERT(expr) SPL_ASSERT_CRITICAL(expr)
+-- 
+2.55.0
+

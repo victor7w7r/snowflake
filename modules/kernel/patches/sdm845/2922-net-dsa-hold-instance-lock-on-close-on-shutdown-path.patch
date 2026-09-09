@@ -1,0 +1,98 @@
+From cefa18fab29cf0dc99f6e7aa10ee332826f305c0 Mon Sep 17 00:00:00 2001
+From: Stanislav Fomichev <sdf.kernel@gmail.com>
+Date: Thu, 2 Jul 2026 15:41:46 -0700
+Subject: [PATCH 02922/15333] net: dsa: hold instance lock on close-on-shutdown
+ paths
+
+netif_close_many will soon assert ops lock (for locked DOWN/GOING_DOWN).
+Update dsa_switch_shutdown to manually grab and release the ops lock.
+
+Signed-off-by: Stanislav Fomichev <sdf@fomichev.me>
+Link: https://patch.msgid.link/20260702224150.3730033-3-sdf@fomichev.me
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ net/dsa/dsa.c  | 20 +++++++++++++++++---
+ net/dsa/user.c | 19 +++++++++++++++++--
+ 2 files changed, 34 insertions(+), 5 deletions(-)
+
+diff --git a/net/dsa/dsa.c b/net/dsa/dsa.c
+index 9cb732f6b1e3..da53a666d4b8 100644
+--- a/net/dsa/dsa.c
++++ b/net/dsa/dsa.c
+@@ -18,6 +18,7 @@
+ #include <linux/of.h>
+ #include <linux/of_net.h>
+ #include <net/dsa_stubs.h>
++#include <net/netdev_lock.h>
+ #include <net/sch_generic.h>
+ 
+ #include "conduit.h"
+@@ -1620,10 +1621,23 @@ void dsa_switch_shutdown(struct dsa_switch *ds)
+ 
+ 	rtnl_lock();
+ 
+-	dsa_switch_for_each_cpu_port(dp, ds)
+-		list_add(&dp->conduit->close_list, &close_list);
++	dsa_switch_for_each_cpu_port(dp, ds) {
++		if (!(dp->conduit->flags & IFF_UP))
++			continue;
++		list_add_tail(&dp->conduit->close_list, &close_list);
++		netdev_lock_ops(dp->conduit);
++	}
++
++	netif_close_many(&close_list, false);
+ 
+-	netif_close_many(&close_list, true);
++	while (!list_empty(&close_list)) {
++		struct net_device *conduit;
++
++		conduit = list_first_entry(&close_list, struct net_device,
++					   close_list);
++		netdev_unlock_ops(conduit);
++		list_del_init(&conduit->close_list);
++	}
+ 
+ 	dsa_switch_for_each_user_port(dp, ds) {
+ 		conduit = dsa_port_to_conduit(dp);
+diff --git a/net/dsa/user.c b/net/dsa/user.c
+index 072fa76972cc..03c7af6abe18 100644
+--- a/net/dsa/user.c
++++ b/net/dsa/user.c
+@@ -13,6 +13,7 @@
+ #include <linux/of_net.h>
+ #include <linux/of_mdio.h>
+ #include <linux/mdio.h>
++#include <net/netdev_lock.h>
+ #include <net/rtnetlink.h>
+ #include <net/pkt_cls.h>
+ #include <net/selftests.h>
+@@ -3599,10 +3600,24 @@ static int dsa_user_netdevice_event(struct notifier_block *nb,
+ 			if (dp->cpu_dp != cpu_dp)
+ 				continue;
+ 
+-			list_add(&dp->user->close_list, &close_list);
++			if (!(dp->user->flags & IFF_UP))
++				continue;
++
++			list_add_tail(&dp->user->close_list, &close_list);
++			netdev_lock_ops(dp->user);
+ 		}
+ 
+-		netif_close_many(&close_list, true);
++		netif_close_many(&close_list, false);
++
++		while (!list_empty(&close_list)) {
++			struct net_device *user_dev;
++
++			user_dev = list_first_entry(&close_list,
++						    struct net_device,
++						    close_list);
++			netdev_unlock_ops(user_dev);
++			list_del_init(&user_dev->close_list);
++		}
+ 
+ 		return NOTIFY_OK;
+ 	}
+-- 
+2.55.0
+

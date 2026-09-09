@@ -1,0 +1,147 @@
+From f8e0a84ab1b786fda9a50087c267de67ec5aa79c Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Mon, 6 Jul 2026 09:21:06 -0600
+Subject: [PATCH 07857/15333] drm/amd/display: add fused IO KUnit coverage
+
+[WHAT]
+Add KUnit coverage for the DMUB fused IO helpers: the
+dm_dmub_aux_fused_io_callback() NULL-argument guard and the
+abort_fused_io() no-DMUB-service path.
+
+Assisted-by: Copilot:Claude-Opus-4.8 GPT-5.5
+Reviewed-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Wayne Lin <wayne.lin@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../amd/display/amdgpu_dm/amdgpu_dm_dmub.c    |  3 +-
+ .../amd/display/amdgpu_dm/amdgpu_dm_dmub.h    |  8 +++
+ .../amdgpu_dm/tests/amdgpu_dm_dmub_test.c     | 52 +++++++++++++++++++
+ 3 files changed, 62 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.c
+index c17488e57eae..9c4858ca6954 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.c
+@@ -830,7 +830,7 @@ int amdgpu_dm_process_dmub_aux_transfer_sync(
+ 	return ret;
+ }
+ 
+-static void abort_fused_io(
++STATIC_IFN_KUNIT void abort_fused_io(
+ 		struct dc_context *ctx,
+ 		const struct dmub_cmd_fused_request *request
+ )
+@@ -844,6 +844,7 @@ static void abort_fused_io(
+ 	io->request = *request;
+ 	dm_execute_dmub_cmd(ctx, &command, DM_DMUB_WAIT_TYPE_NO_WAIT);
+ }
++EXPORT_IF_KUNIT(abort_fused_io);
+ 
+ static bool execute_fused_io(
+ 		struct amdgpu_device *dev,
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.h
+index a4a03e40ec37..ba50e1af80c1 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.h
+@@ -65,4 +65,12 @@ int dm_init_microcode(struct amdgpu_device *adev);
+ #define FIRMWARE_RAVEN_DMCU		"amdgpu/raven_dmcu.bin"
+ #define FIRMWARE_NAVI12_DMCU		"amdgpu/navi12_dmcu.bin"
+ 
++#if IS_ENABLED(CONFIG_DRM_AMD_DC_KUNIT_TEST)
++struct dc_context;
++struct dmub_cmd_fused_request;
++
++void abort_fused_io(struct dc_context *ctx,
++		    const struct dmub_cmd_fused_request *request);
++#endif
++
+ #endif /* AMDGPU_DM_AMDGPU_DM_DMUB_H_ */
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_dmub_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_dmub_test.c
+index bae34436c89e..c3bd93b15d0a 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_dmub_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_dmub_test.c
+@@ -396,6 +396,22 @@ static void dm_test_dmub_aux_fused_io_callback_max_ddc_line(struct kunit *test)
+ 	KUNIT_EXPECT_EQ(test, reply_ddc_line, notify_ddc_line);
+ }
+ 
++/**
++ * dm_test_dmub_aux_fused_io_callback_null_args - Test the NULL-argument guard
++ * @test: The KUnit test context
++ *
++ * Passing a NULL device triggers the defensive guard (an ASSERT that maps to
++ * WARN_ON_ONCE in this build) and returns early without dereferencing the
++ * arguments. The call must not crash.
++ */
++static void dm_test_dmub_aux_fused_io_callback_null_args(struct kunit *test)
++{
++	struct dmub_notification notify = {};
++
++	/* Must not crash; guard hits ASSERT (WARN_ON_ONCE) and returns. */
++	dm_dmub_aux_fused_io_callback(NULL, &notify);
++}
++
+ /* Tests for dm_get_default_ips_mode() */
+ 
+ /**
+@@ -916,6 +932,39 @@ static void dm_test_init_microcode_unsupported_asic(struct kunit *test)
+ 	KUNIT_EXPECT_EQ(test, dm_init_microcode(adev), 0);
+ }
+ 
++/* Tests for abort_fused_io() */
++
++/**
++ * dm_test_abort_fused_io_no_dmub_srv - Test fused IO abort is a safe no-op without DMUB service
++ * @test: The KUnit test context
++ *
++ * abort_fused_io() builds an abort command and submits it via
++ * dm_execute_dmub_cmd(); with no DC DMUB service the submission fails
++ * silently and the call must not crash.
++ */
++static void dm_test_abort_fused_io_no_dmub_srv(struct kunit *test)
++{
++	struct amdgpu_device *adev;
++	struct dc_context *ctx;
++	struct dmub_cmd_fused_request *req;
++
++	adev = kunit_kzalloc(test, sizeof(*adev), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, adev);
++
++	ctx = kunit_kzalloc(test, sizeof(*ctx), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, ctx);
++
++	req = kunit_kzalloc(test, sizeof(*req), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, req);
++
++	spin_lock_init(&adev->dm.dmub_lock);
++	ctx->driver_context = adev;
++	ctx->dmub_srv = NULL;
++
++	/* Must not crash. */
++	abort_fused_io(ctx, req);
++}
++
+ static struct kunit_case amdgpu_dm_dmub_tests[] = {
+ 	/* dm_register_dmub_notify_callback() */
+ 	KUNIT_CASE(dm_test_register_dmub_notify_callback_null_callback),
+@@ -930,6 +979,7 @@ static struct kunit_case amdgpu_dm_dmub_tests[] = {
+ 	/* dm_dmub_aux_fused_io_callback() */
+ 	KUNIT_CASE(dm_test_dmub_aux_fused_io_callback_copies_reply_and_completes),
+ 	KUNIT_CASE(dm_test_dmub_aux_fused_io_callback_max_ddc_line),
++	KUNIT_CASE(dm_test_dmub_aux_fused_io_callback_null_args),
+ 	/* dm_get_default_ips_mode() */
+ 	KUNIT_CASE(dm_test_get_default_ips_mode_dcn35),
+ 	KUNIT_CASE(dm_test_get_default_ips_mode_dcn351),
+@@ -959,6 +1009,8 @@ static struct kunit_case amdgpu_dm_dmub_tests[] = {
+ 	KUNIT_CASE(dm_test_dmub_sw_init_unsupported_asic),
+ 	/* dm_init_microcode() */
+ 	KUNIT_CASE(dm_test_init_microcode_unsupported_asic),
++	/* abort_fused_io() */
++	KUNIT_CASE(dm_test_abort_fused_io_no_dmub_srv),
+ 	{}
+ };
+ 
+-- 
+2.55.0
+

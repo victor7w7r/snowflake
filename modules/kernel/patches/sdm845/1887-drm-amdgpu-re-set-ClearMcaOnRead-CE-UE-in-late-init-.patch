@@ -1,0 +1,33 @@
+From 4a63d64b0396860ef8920b6bdb3943b6457a0250 Mon Sep 17 00:00:00 2001
+From: Ce Sun <cesun102@amd.com>
+Date: Sat, 28 Mar 2026 18:01:50 +0800
+Subject: [PATCH 01887/15333] drm/amdgpu: re-set ClearMcaOnRead CE/UE in late
+ init for uniras
+
+Re-set the ClearMcaOnRead flags for UE and CE errors during RAS late init
+to maintain correct MCA error handling behavior
+
+Signed-off-by: Ce Sun <cesun102@amd.com>
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+index 64e1872ef210..4ab6eccb5691 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.c
+@@ -4370,6 +4370,9 @@ int amdgpu_ras_late_init(struct amdgpu_device *adev)
+ 	if (amdgpu_sriov_vf(adev) && !amdgpu_sriov_ras_telemetry_en(adev))
+ 		return 0;
+ 
++	if (amdgpu_uniras_enabled(adev))
++		amdgpu_ras_mgr_set_debug_mode(adev, false);
++
+ 	list_for_each_entry_safe(node, tmp, &adev->ras_list, node) {
+ 		obj = node->ras_obj;
+ 		if (!obj) {
+-- 
+2.55.0
+

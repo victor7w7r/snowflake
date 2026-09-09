@@ -1,0 +1,124 @@
+From 6cd45ef4dfa5ba4daae126143a3d009d36687d80 Mon Sep 17 00:00:00 2001
+From: Sven Eckelmann <sven@narfation.org>
+Date: Thu, 11 Jun 2026 09:48:34 +0200
+Subject: [PATCH 00906/15333] batman-adv: tp_meter: adjust name of receiver
+ lock
+
+The lock used to protect the receiver from reading/writing in parallel to
+ack sequence number relevant data was still called unacked_lock. But it is
+no longer only about the unacked_list. Use a broader term to reflect this.
+
+Signed-off-by: Sven Eckelmann <sven@narfation.org>
+---
+ net/batman-adv/tp_meter.c | 20 ++++++++++----------
+ net/batman-adv/types.h    |  4 ++--
+ 2 files changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/net/batman-adv/tp_meter.c b/net/batman-adv/tp_meter.c
+index f18ce360839d..ffd3171d4b99 100644
+--- a/net/batman-adv/tp_meter.c
++++ b/net/batman-adv/tp_meter.c
+@@ -1252,13 +1252,13 @@ static void batadv_tp_receiver_release(struct kref *ref)
+ 	/* lock should not be needed because this object is now out of any
+ 	 * context!
+ 	 */
+-	spin_lock_bh(&tp_vars->unacked_lock);
++	spin_lock_bh(&tp_vars->ack_seqno_lock);
+ 	list_for_each_entry_safe(un, safe, &tp_vars->unacked_list, list) {
+ 		list_del(&un->list);
+ 		kfree(un);
+ 		tp_vars->unacked_count--;
+ 	}
+-	spin_unlock_bh(&tp_vars->unacked_lock);
++	spin_unlock_bh(&tp_vars->ack_seqno_lock);
+ 
+ 	kfree_rcu(tp_vars, common.rcu);
+ }
+@@ -1316,13 +1316,13 @@ static void batadv_tp_receiver_shutdown(struct timer_list *t)
+ 	if (batadv_tp_list_detach(&tp_vars->common))
+ 		batadv_tp_receiver_put(tp_vars);
+ 
+-	spin_lock_bh(&tp_vars->unacked_lock);
++	spin_lock_bh(&tp_vars->ack_seqno_lock);
+ 	list_for_each_entry_safe(un, safe, &tp_vars->unacked_list, list) {
+ 		list_del(&un->list);
+ 		kfree(un);
+ 		tp_vars->unacked_count--;
+ 	}
+-	spin_unlock_bh(&tp_vars->unacked_lock);
++	spin_unlock_bh(&tp_vars->ack_seqno_lock);
+ 
+ 	/* drop reference of timer */
+ 	if (WARN_ON(atomic_xchg(&tp_vars->receiving, 0) != 1))
+@@ -1415,7 +1415,7 @@ static int batadv_tp_send_ack(struct batadv_priv *bat_priv, const u8 *dst,
+  */
+ static bool batadv_tp_handle_out_of_order(struct batadv_tp_receiver *tp_vars,
+ 					  u32 seqno, u32 payload_len)
+-	__must_hold(&tp_vars->unacked_lock)
++	__must_hold(&tp_vars->ack_seqno_lock)
+ {
+ 	struct batadv_tp_unacked *un, *new;
+ 	struct batadv_tp_unacked *safe;
+@@ -1532,7 +1532,7 @@ static bool batadv_tp_handle_out_of_order(struct batadv_tp_receiver *tp_vars,
+  * @tp_vars: the private data of the current TP meter session
+  */
+ static void batadv_tp_ack_unordered(struct batadv_tp_receiver *tp_vars)
+-	__must_hold(&tp_vars->unacked_lock)
++	__must_hold(&tp_vars->ack_seqno_lock)
+ {
+ 	struct batadv_tp_unacked *un, *safe;
+ 	u32 to_ack;
+@@ -1602,7 +1602,7 @@ batadv_tp_init_recv(struct batadv_priv *bat_priv,
+ 	tp_vars->common.bat_priv = bat_priv;
+ 	kref_init(&tp_vars->common.refcount);
+ 
+-	spin_lock_init(&tp_vars->unacked_lock);
++	spin_lock_init(&tp_vars->ack_seqno_lock);
+ 	INIT_LIST_HEAD(&tp_vars->unacked_list);
+ 	tp_vars->unacked_count = 0;
+ 
+@@ -1664,7 +1664,7 @@ static void batadv_tp_recv_msg(struct batadv_priv *bat_priv,
+ 		WRITE_ONCE(tp_vars->last_recv_time, jiffies);
+ 	}
+ 
+-	spin_lock_bh(&tp_vars->unacked_lock);
++	spin_lock_bh(&tp_vars->ack_seqno_lock);
+ 
+ 	/* if the packet is a duplicate, it may be the case that an ACK has been
+ 	 * lost. Resend the ACK
+@@ -1680,7 +1680,7 @@ static void batadv_tp_recv_msg(struct batadv_priv *bat_priv,
+ 		 * not been enqueued correctly
+ 		 */
+ 		if (!batadv_tp_handle_out_of_order(tp_vars, seqno, payload_len)) {
+-			spin_unlock_bh(&tp_vars->unacked_lock);
++			spin_unlock_bh(&tp_vars->ack_seqno_lock);
+ 			goto out;
+ 		}
+ 
+@@ -1696,7 +1696,7 @@ static void batadv_tp_recv_msg(struct batadv_priv *bat_priv,
+ 
+ send_ack:
+ 	to_ack = tp_vars->last_recv;
+-	spin_unlock_bh(&tp_vars->unacked_lock);
++	spin_unlock_bh(&tp_vars->ack_seqno_lock);
+ 
+ 	/* send the ACK. If the received packet was out of order, the ACK that
+ 	 * is going to be sent is a duplicate (the sender will count them and
+diff --git a/net/batman-adv/types.h b/net/batman-adv/types.h
+index c194d8069774..cd12755d21f3 100644
+--- a/net/batman-adv/types.h
++++ b/net/batman-adv/types.h
+@@ -1474,8 +1474,8 @@ struct batadv_tp_receiver {
+ 	/** @unacked_list: list of unacked packets (meta-info only) */
+ 	struct list_head unacked_list;
+ 
+-	/** @unacked_lock: protect unacked_list + &batadv_tp_receiver.last_recv */
+-	spinlock_t unacked_lock;
++	/** @ack_seqno_lock: protect unacked_list + &batadv_tp_receiver.last_recv */
++	spinlock_t ack_seqno_lock;
+ 
+ 	/** @unacked_count: number of unacked entries */
+ 	size_t unacked_count;
+-- 
+2.55.0
+

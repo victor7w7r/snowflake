@@ -1,0 +1,47 @@
+From 89679d7908e7f09dfa45cf9fe1ab59795455d197 Mon Sep 17 00:00:00 2001
+From: Matt Turner <mattst88@gmail.com>
+Date: Wed, 5 Aug 2026 14:55:57 -0400
+Subject: [PATCH 13364/15333] alpha: pass -Wa,-mev6 only when using GNU as
+
+That flag exists to stop gas emulating instructions the assembler thinks
+the target lacks.  It is a gas-only option, and LLVM's integrated
+assembler does not emulate instructions in the first place, so nothing
+is needed there.
+
+Condition it on CONFIG_AS_IS_GNU rather than the compiler, so it is
+still passed for clang builds using GNU as (LLVM_IAS=0) and omitted only
+for the integrated assembler.
+
+Signed-off-by: Matt Turner <mattst88@gmail.com>
+Reviewed-by: Magnus Lindholm <linmag7@gmail.com>
+Link: https://lore.kernel.org/r/20260805185557.3283233-1-mattst88@gmail.com
+Signed-off-by: Magnus Lindholm <linmag7@gmail.com>
+---
+ arch/alpha/Makefile | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/arch/alpha/Makefile b/arch/alpha/Makefile
+index 35445ff2e489..7074602dca94 100644
+--- a/arch/alpha/Makefile
++++ b/arch/alpha/Makefile
+@@ -27,10 +27,16 @@ cpuflags-$(CONFIG_ALPHA_GENERIC)	:= -mcpu=ev56 -mtune=ev6
+ cflags-y				+= $(cpuflags-y)
+ 
+ 
++KBUILD_CFLAGS += $(cflags-y)
++
+ # For TSUNAMI, we must have the assembler not emulate our instructions.
+ # The same is true for IRONGATE, POLARIS, PYXIS.
+ # BWX is most important, but we don't really want any emulation ever.
+-KBUILD_CFLAGS += $(cflags-y) -Wa,-mev6
++# Only gas emulates instructions the target does not implement, and only gas
++# understands -mev6.  LLVM's integrated assembler never emulates.
++ifdef CONFIG_AS_IS_GNU
++KBUILD_CFLAGS += -Wa,-mev6
++endif
+ 
+ libs-y				+= arch/alpha/lib/
+ 
+-- 
+2.55.0
+

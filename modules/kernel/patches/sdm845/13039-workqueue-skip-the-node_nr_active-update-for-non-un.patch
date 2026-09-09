@@ -1,0 +1,38 @@
+From a5bde5d8fde8a8cb28e59a672d5ddc5b9c1e7656 Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Wed, 5 Aug 2026 07:52:36 -0700
+Subject: [PATCH 13039/15333] workqueue: skip the node_nr_active update for
+ non-unbound workqueues
+
+apply_wqattrs_commit() updates node_nr_active->max unconditionally.
+wq->node_nr_active[] is only allocated for unbound workqueues, so guard
+the call before per-cpu workqueues start using this path.
+
+No functional change: only unbound workqueues reach apply_wqattrs_*()
+today.
+
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ kernel/workqueue.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/workqueue.c b/kernel/workqueue.c
+index 65ac75431c3b..8fd6af72ffd8 100644
+--- a/kernel/workqueue.c
++++ b/kernel/workqueue.c
+@@ -5556,8 +5556,9 @@ static void apply_wqattrs_commit(struct apply_wqattrs_ctx *ctx)
+ 							ctx->pwq_tbl[cpu]);
+ 	ctx->dfl_pwq = install_unbound_pwq(ctx->wq, -1, ctx->dfl_pwq);
+ 
+-	/* update node_nr_active->max */
+-	wq_update_node_max_active(ctx->wq, -1);
++	/* update node_nr_active->max, which only unbound workqueues have */
++	if (ctx->wq->flags & WQ_UNBOUND)
++		wq_update_node_max_active(ctx->wq, -1);
+ 
+ 	mutex_unlock(&ctx->wq->mutex);
+ }
+-- 
+2.55.0
+

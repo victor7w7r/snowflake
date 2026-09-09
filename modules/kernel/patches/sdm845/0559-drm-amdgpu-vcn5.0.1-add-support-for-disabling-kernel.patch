@@ -1,0 +1,55 @@
+From a28667f75a6cb5413f97732e25a5df74959b5bd8 Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Wed, 27 May 2026 16:11:35 -0400
+Subject: [PATCH 00559/15333] drm/amdgpu/vcn5.0.1: add support for disabling
+ kernel queues
+
+Allow the user to disable kernel queues.  This can be used
+to free up vmid resources if kernel queues are not needed.
+
+Set amdgpu.user_queue=2 to disable kernel queues.
+
+Reviewed-by: Kent Russell <kent.russell@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/vcn_v5_0_1.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_1.c b/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_1.c
+index d3db0494341e..95f55bab528a 100644
+--- a/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_1.c
++++ b/drivers/gpu/drm/amd/amdgpu/vcn_v5_0_1.c
+@@ -94,6 +94,19 @@ static int vcn_v5_0_1_early_init(struct amdgpu_ip_block *ip_block)
+ 	struct amdgpu_device *adev = ip_block->adev;
+ 	int i, r;
+ 
++	switch (amdgpu_user_queue) {
++	case -1:
++	case 0:
++	default:
++		adev->vcn.disable_kq = false;
++		adev->vcn.disable_uq = true;
++		break;
++	case 2:
++		adev->vcn.disable_kq = true;
++		adev->vcn.disable_uq = true;
++		break;
++	}
++
+ 	for (i = 0; i < adev->vcn.num_vcn_inst; ++i)
+ 		/* re-use enc ring as unified ring */
+ 		adev->vcn.inst[i].num_enc_rings = 1;
+@@ -188,6 +201,10 @@ static int vcn_v5_0_1_sw_init(struct amdgpu_ip_block *ip_block)
+ 
+ 		ring = &adev->vcn.inst[i].ring_enc[0];
+ 		ring->use_doorbell = true;
++		if (adev->vcn.disable_kq) {
++			ring->no_scheduler = true;
++			ring->no_user_submission = true;
++		}
+ 		if (!amdgpu_sriov_vf(adev))
+ 			ring->doorbell_index =
+ 				(adev->doorbell_index.vcn.vcn_ring0_1 << 1) +
+-- 
+2.55.0
+

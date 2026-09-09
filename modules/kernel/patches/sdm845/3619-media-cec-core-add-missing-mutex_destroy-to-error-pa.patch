@@ -1,0 +1,61 @@
+From b2b9a296b7a5a4c1d0d75b94ce5668a46741c43b Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Thu, 9 Jul 2026 10:20:54 +0200
+Subject: [PATCH 03619/15333] media: cec: core: add missing mutex_destroy to
+ error path and remove
+
+Add missing mutex_destroy() call to error path and remove to properly
+clean up the mutex initialized during adapter allocation. Ensure proper
+resource cleanup and follows kernel practices.
+
+Found by code review.
+
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+---
+ drivers/media/cec/core/cec-core.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/drivers/media/cec/core/cec-core.c b/drivers/media/cec/core/cec-core.c
+index 55011e555d35..0c89fac58349 100644
+--- a/drivers/media/cec/core/cec-core.c
++++ b/drivers/media/cec/core/cec-core.c
+@@ -302,6 +302,11 @@ struct cec_adapter *cec_allocate_adapter(const struct cec_adap_ops *ops,
+ 	return adap;
+ 
+ err_free_adap:
++	mutex_destroy(&adap->devnode.lock);
++	mutex_destroy(&adap->devnode.lock_fhs);
++
++	mutex_destroy(&adap->lock);
++
+ 	kfree(adap);
+ 	return ERR_PTR(res);
+ }
+@@ -388,14 +393,23 @@ void cec_delete_adapter(struct cec_adapter *adap)
+ {
+ 	if (IS_ERR_OR_NULL(adap))
+ 		return;
++
+ 	if (adap->kthread_config)
+ 		kthread_stop(adap->kthread_config);
+ 	kthread_stop(adap->kthread);
++
+ 	if (adap->ops->adap_free)
+ 		adap->ops->adap_free(adap);
++
+ #ifdef CONFIG_MEDIA_CEC_RC
+ 	rc_free_device(adap->rc);
+ #endif
++
++	mutex_destroy(&adap->devnode.lock);
++	mutex_destroy(&adap->devnode.lock_fhs);
++
++	mutex_destroy(&adap->lock);
++
+ 	kfree(adap);
+ }
+ EXPORT_SYMBOL_GPL(cec_delete_adapter);
+-- 
+2.55.0
+

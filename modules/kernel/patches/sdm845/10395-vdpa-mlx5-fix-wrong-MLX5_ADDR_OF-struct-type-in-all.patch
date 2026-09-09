@@ -1,0 +1,47 @@
+From 77de17065aba501fba5e36ede6e6e3e4cba9a264 Mon Sep 17 00:00:00 2001
+From: Li RongQing <lirongqing@baidu.com>
+Date: Mon, 6 Jul 2026 14:09:02 +0800
+Subject: [PATCH 10395/15333] vdpa/mlx5: fix wrong MLX5_ADDR_OF struct type in
+ alloc_inout()
+
+In alloc_inout(), the qpc field offset was computed using
+MLX5_ADDR_OF(rst2init_qp_in, ...) in both the INIT2RTR_QP and
+RTR2RTS_QP cases. This is a copy-paste error: each case should use
+its own input structure type to get the correct qpc offset.
+
+Fix the INIT2RTR_QP case to use MLX5_ADDR_OF(init2rtr_qp_in, ...)
+and the RTR2RTS_QP case to use MLX5_ADDR_OF(rtr2rts_qp_in, ...).
+
+Signed-off-by: Li RongQing <lirongqing@baidu.com>
+Reviewed-by: Dragos Tatulea <dtatulea@nvidia.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+Message-ID: <20260706060902.2341-1-lirongqing@baidu.com>
+---
+ drivers/vdpa/mlx5/net/mlx5_vnet.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/vdpa/mlx5/net/mlx5_vnet.c b/drivers/vdpa/mlx5/net/mlx5_vnet.c
+index ad0d5fbbbca8..eb431a1471a0 100644
+--- a/drivers/vdpa/mlx5/net/mlx5_vnet.c
++++ b/drivers/vdpa/mlx5/net/mlx5_vnet.c
+@@ -1080,7 +1080,7 @@ static void alloc_inout(struct mlx5_vdpa_net *ndev, int cmd, void **in, int *inl
+ 		MLX5_SET(init2rtr_qp_in, *in, opcode, cmd);
+ 		MLX5_SET(init2rtr_qp_in, *in, uid, ndev->mvdev.res.uid);
+ 		MLX5_SET(init2rtr_qp_in, *in, qpn, qpn);
+-		qpc = MLX5_ADDR_OF(rst2init_qp_in, *in, qpc);
++		qpc = MLX5_ADDR_OF(init2rtr_qp_in, *in, qpc);
+ 		MLX5_SET(qpc, qpc, mtu, MLX5_QPC_MTU_256_BYTES);
+ 		MLX5_SET(qpc, qpc, log_msg_max, 30);
+ 		MLX5_SET(qpc, qpc, remote_qpn, rqpn);
+@@ -1098,7 +1098,7 @@ static void alloc_inout(struct mlx5_vdpa_net *ndev, int cmd, void **in, int *inl
+ 		MLX5_SET(rtr2rts_qp_in, *in, opcode, cmd);
+ 		MLX5_SET(rtr2rts_qp_in, *in, uid, ndev->mvdev.res.uid);
+ 		MLX5_SET(rtr2rts_qp_in, *in, qpn, qpn);
+-		qpc = MLX5_ADDR_OF(rst2init_qp_in, *in, qpc);
++		qpc = MLX5_ADDR_OF(rtr2rts_qp_in, *in, qpc);
+ 		pp = MLX5_ADDR_OF(qpc, qpc, primary_address_path);
+ 		MLX5_SET(ads, pp, ack_timeout, 14);
+ 		MLX5_SET(qpc, qpc, retry_count, 7);
+-- 
+2.55.0
+

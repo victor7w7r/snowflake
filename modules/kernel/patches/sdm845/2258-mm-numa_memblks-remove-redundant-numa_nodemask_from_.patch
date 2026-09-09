@@ -1,0 +1,66 @@
+From a9bafc1832d2db97813069823821ed333b8ecda6 Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Fri, 3 Jul 2026 13:13:27 +0900
+Subject: [PATCH 02258/15333] mm: numa_memblks: remove redundant
+ numa_nodemask_from_meminfo()
+
+numa_add_memblk() now sets each added node in numa_nodes_parsed, so
+numa_nodes_parsed already contains every node that owns memory.  The nodes
+numa_nodemask_from_meminfo() adds from numa_meminfo are already set, so the
+calls in numa_alloc_distance() and numa_register_meminfo() are redundant.
+
+So remove both call sites and the unused function itself.
+
+No functional change.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Link: https://patch.msgid.link/20260703041329.2797584-8-ekffu200098@gmail.com
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+---
+ mm/numa_memblks.c | 16 ----------------
+ 1 file changed, 16 deletions(-)
+
+diff --git a/mm/numa_memblks.c b/mm/numa_memblks.c
+index 844c71d6d4c0..67dc9f4edd7b 100644
+--- a/mm/numa_memblks.c
++++ b/mm/numa_memblks.c
+@@ -17,20 +17,6 @@ nodemask_t numa_nodes_parsed __initdata;
+ static struct numa_meminfo numa_meminfo __initdata_or_meminfo;
+ static struct numa_meminfo numa_reserved_meminfo __initdata_or_meminfo;
+ 
+-/*
+- * Set nodes, which have memory in @mi, in *@nodemask.
+- */
+-static void __init numa_nodemask_from_meminfo(nodemask_t *nodemask,
+-					      const struct numa_meminfo *mi)
+-{
+-	int i;
+-
+-	for (i = 0; i < ARRAY_SIZE(mi->blk); i++)
+-		if (mi->blk[i].start != mi->blk[i].end &&
+-		    mi->blk[i].nid != NUMA_NO_NODE)
+-			node_set(mi->blk[i].nid, *nodemask);
+-}
+-
+ /**
+  * numa_reset_distance - Reset NUMA distance table
+  *
+@@ -56,7 +42,6 @@ static int __init numa_alloc_distance(void)
+ 
+ 	/* size the new table and allocate it */
+ 	nodes_parsed = numa_nodes_parsed;
+-	numa_nodemask_from_meminfo(&nodes_parsed, &numa_meminfo);
+ 
+ 	for_each_node_mask(i, nodes_parsed)
+ 		cnt = i;
+@@ -415,7 +400,6 @@ static int __init numa_register_meminfo(struct numa_meminfo *mi)
+ 
+ 	/* Account for nodes with cpus and no memory */
+ 	node_possible_map = numa_nodes_parsed;
+-	numa_nodemask_from_meminfo(&node_possible_map, mi);
+ 	if (WARN_ON(nodes_empty(node_possible_map)))
+ 		return -EINVAL;
+ 
+-- 
+2.55.0
+

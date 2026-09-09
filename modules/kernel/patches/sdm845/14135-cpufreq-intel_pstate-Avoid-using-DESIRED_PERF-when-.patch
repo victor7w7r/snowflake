@@ -1,0 +1,87 @@
+From d657aa1b8ed345eeb24e33967de2655547993fce Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Wed, 5 Aug 2026 14:18:11 +0200
+Subject: [PATCH 14135/15333] cpufreq: intel_pstate: Avoid using DESIRED_PERF
+ when DEC is enabled
+
+In principle, the desired performance level can be set in MSR_HWP_REQUEST
+to indicate to the processor what performance level the OS would like
+the given CPU to run at, but if the Dynamic Efficiency Control (DEC)
+feature is enabled in the processor, doing so may result in confusing
+the processor firmware.  It is then better to let the processor firmware
+figure out the most suitable performance level by itself.
+
+Accordingly, make intel_pstate always set the desired performance level
+to zero (which means "no preference") when running on a platform with
+DEC enabled.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Acked-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Link: https://patch.msgid.link/4758098.LvFx2qVVIh@rafael.j.wysocki
+---
+ drivers/cpufreq/intel_pstate.c | 13 +++++++++----
+ 1 file changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index 8a068fe8320a..ceb340f7a110 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -303,6 +303,7 @@ static bool per_cpu_limits __ro_after_init;
+ static bool hwp_forced __ro_after_init;
+ static bool hwp_boost __read_mostly;
+ static bool hwp_is_hybrid;
++static u32 hwp_desired_mask __read_mostly = ~0U;
+ 
+ static struct cpufreq_driver *intel_pstate_driver __read_mostly;
+ 
+@@ -3150,7 +3151,7 @@ static void intel_cpufreq_hwp_update(struct cpudata *cpu, u32 min, u32 max,
+ 	value |= HWP_MAX_PERF(max);
+ 
+ 	value &= ~HWP_DESIRED_PERF(~0L);
+-	value |= HWP_DESIRED_PERF(desired);
++	value |= HWP_DESIRED_PERF(desired & hwp_desired_mask);
+ 
+ 	if (value == prev)
+ 		return;
+@@ -3760,9 +3761,9 @@ static bool hwp_check_epp(void)
+ 
+ static bool hwp_check_dec(void)
+ {
+-	u64 power_ctl;
++	u64 power_ctl = 0;
+ 
+-	rdmsrq(MSR_IA32_POWER_CTL, power_ctl);
++	rdmsrq_safe(MSR_IA32_POWER_CTL, &power_ctl);
+ 	return !!(power_ctl & BIT(POWER_CTL_DEC_ENABLE));
+ }
+ 
+@@ -3787,6 +3788,7 @@ static int __init intel_pstate_init(void)
+ 	id = x86_match_cpu(hwp_support_ids);
+ 	if (id) {
+ 		bool epp_present = hwp_check_epp();
++		bool dec_present = hwp_check_dec();
+ 
+ 		/*
+ 		 * If HWP is enabled already, there is no choice but to deal
+@@ -3798,7 +3800,7 @@ static int __init intel_pstate_init(void)
+ 			no_hwp = 0;
+ 		} else if (no_load) {
+ 			return -ENODEV;
+-		} else if (!epp_present && !hwp_check_dec()) {
++		} else if (!epp_present && !dec_present) {
+ 			/*
+ 			 * Avoid enabling HWP for processors without EPP support
+ 			 * unless the Dynamic Efficiency Control (DEC) enable
+@@ -3820,6 +3822,9 @@ static int __init intel_pstate_init(void)
+ 			if (!default_driver)
+ 				default_driver = &intel_pstate;
+ 
++			if (dec_present)
++				hwp_desired_mask = 0;
++
+ 			if (!id->driver_data)
+ 				pstate_funcs.get_cpu_scaling = hwp_get_cpu_scaling;
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,55 @@
+From 31522a902f2ae18aa4dcb48346dd61c5779a6f29 Mon Sep 17 00:00:00 2001
+From: Zhi Wang <zhiw@nvidia.com>
+Date: Thu, 4 Jun 2026 14:43:33 +0300
+Subject: [PATCH 00196/15333] gpu: nova-core: return FSP response buffer to
+ caller
+
+Change send_sync_fsp() to return the raw response buffer after
+validating the common MCTP/NVDM headers and error code. This allows
+callers to perform protocol-specific parsing on the response payload,
+which is needed for the upcoming PRC protocol support.
+
+For the existing COT caller, the response buffer is unused.
+
+Signed-off-by: Zhi Wang <zhiw@nvidia.com>
+Link: https://patch.msgid.link/20260604114339.1565660-4-zhiw@nvidia.com
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/fsp.rs | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/fsp.rs b/drivers/gpu/nova-core/fsp.rs
+index 78b90bfbfba4..5fd2e9e277b1 100644
+--- a/drivers/gpu/nova-core/fsp.rs
++++ b/drivers/gpu/nova-core/fsp.rs
+@@ -257,7 +257,8 @@ pub(crate) fn wait_secure_boot(
+     }
+ 
+     /// Sends a message to FSP and waits for the response.
+-    fn send_sync_fsp<M>(&mut self, dev: &device::Device, bar: Bar0<'_>, msg: &M) -> Result
++    /// Returns the full response buffer on success.
++    fn send_sync_fsp<M>(&mut self, dev: &device::Device, bar: Bar0<'_>, msg: &M) -> Result<KVec<u8>>
+     where
+         M: MessageToFsp,
+     {
+@@ -315,7 +316,7 @@ fn send_sync_fsp<M>(&mut self, dev: &device::Device, bar: Bar0<'_>, msg: &M) ->
+             return Err(EIO);
+         }
+ 
+-        Ok(())
++        Ok(response_buf)
+     }
+ 
+     /// Boots GSP FMC via FSP Chain of Trust.
+@@ -336,7 +337,7 @@ pub(crate) fn boot_fmc(
+             GFP_KERNEL,
+         )?;
+ 
+-        self.send_sync_fsp(dev, bar, &*msg)?;
++        let _response_buf = self.send_sync_fsp(dev, bar, &*msg)?;
+ 
+         dev_dbg!(dev, "FSP Chain of Trust completed successfully\n");
+         Ok(())
+-- 
+2.55.0
+

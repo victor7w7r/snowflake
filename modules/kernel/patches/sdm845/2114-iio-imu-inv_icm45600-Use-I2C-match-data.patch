@@ -1,0 +1,38 @@
+From e6026ff7e67dda516dd4701956160649b97c9636 Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Wed, 24 Jun 2026 13:38:23 +0800
+Subject: [PATCH 02114/15333] iio: imu: inv_icm45600: Use I2C match data
+
+The I2C driver provides chip_info through both the OF match table and
+the I2C id table, but probe reads it with device_get_match_data().  That
+misses id-table driver_data for non-firmware I2C matches and can reject
+a supported device with -ENODEV.
+
+Use i2c_get_match_data() so the id-table chip_info is used when firmware
+match data is not present.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@intel.com>
+Reviewed-by: Jean-Baptiste Maneyrol <jean-baptiste.maneyrol@tdk.com>
+Reviewed-by: Joshua Crofts <joshua.crofts1@gmail.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/imu/inv_icm45600/inv_icm45600_i2c.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/iio/imu/inv_icm45600/inv_icm45600_i2c.c b/drivers/iio/imu/inv_icm45600/inv_icm45600_i2c.c
+index 26fba538a3cf..f606e54a195a 100644
+--- a/drivers/iio/imu/inv_icm45600/inv_icm45600_i2c.c
++++ b/drivers/iio/imu/inv_icm45600/inv_icm45600_i2c.c
+@@ -23,7 +23,7 @@ static int inv_icm45600_probe(struct i2c_client *client)
+ 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_I2C_BLOCK))
+ 		return -ENODEV;
+ 
+-	chip_info = device_get_match_data(&client->dev);
++	chip_info = i2c_get_match_data(client);
+ 	if (!chip_info)
+ 		return -ENODEV;
+ 
+-- 
+2.55.0
+

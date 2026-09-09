@@ -1,0 +1,194 @@
+From c50ed4627e333934aaf0473a822169786c83dce5 Mon Sep 17 00:00:00 2001
+From: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Date: Thu, 30 Jul 2026 11:24:44 +0300
+Subject: [PATCH 08802/15333] ASoC: SOF: ipc4: Add decoder for RESOURCE_EVENT
+ notifications from firmware
+
+Decode and print out the content of currently supported RESOURCE_EVENT
+notifications from firmware along with the needed data structures and
+definitions.
+
+Signed-off-by: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Reviewed-by: Liam Girdwood <liam.r.girdwood@intel.com>
+Link: https://patch.msgid.link/20260730082444.4828-1-peter.ujfalusi@linux.intel.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/sof/ipc4/header.h | 53 ++++++++++++++++++++-
+ sound/soc/sof/ipc4.c            | 84 +++++++++++++++++++++++++++++++++
+ 2 files changed, 136 insertions(+), 1 deletion(-)
+
+diff --git a/include/sound/sof/ipc4/header.h b/include/sound/sof/ipc4/header.h
+index 4554e5e8cab5..e747741f35c0 100644
+--- a/include/sound/sof/ipc4/header.h
++++ b/include/sound/sof/ipc4/header.h
+@@ -536,12 +536,63 @@ enum sof_ipc4_notification_type {
+ 	SOF_IPC4_NOTIFY_TYPE_LAST,
+ };
+ 
++enum sof_ipc4_resource_type {
++	SOF_IPC4_MODULE_INSTANCE,
++	SOF_IPC4_PIPELINE,
++	SOF_IPC4_GATEWAY,
++	SOF_IPC4_EDF_TASK,
++	SOF_IPC4_INVALID_RESOURCE_TYPE,
++};
++
++enum sof_ipc4_event_type {
++	/* Underrun detected by the Mixer */
++	SOF_IPC4_MIXER_UNDERRUN_DETECTED = 1,
++	/* Error caught during data processing */
++	SOF_IPC4_PROCESS_DATA_ERROR = 3,
++	/* Underrun detected by gateway. */
++	SOF_IPC4_GATEWAY_UNDERRUN_DETECTED = 6,
++	/* Overrun detected by gateway */
++	SOF_IPC4_GATEWAY_OVERRUN_DETECTED,
++};
++
++/**
++ * struct sof_ipc4_process_data_error_event_data - process data error event payload
++ * @error_code: Error code returned by data processing function
++ */
++struct sof_ipc4_process_data_error_event_data {
++	uint32_t error_code;
++};
++
++/**
++ * struct sof_ipc4_mixer_underrun_event_data - mixer underrun event payload
++ * @eos_flag: Indicates EndOfStream
++ * @data_mixed: Data processed by module (in bytes)
++ * @expected_data_mixed: Expected data to be processed (in bytes)
++ */
++struct sof_ipc4_mixer_underrun_event_data {
++	uint32_t eos_flag;
++	uint32_t data_mixed;
++	uint32_t expected_data_mixed;
++};
++
++/**
++ * union sof_ipc4_resource_event_data - resource event specific payload
++ * @dws: Raw event data payload as six dwords
++ * @process_data_error: SOF_IPC4_PROCESS_DATA_ERROR payload
++ * @mixer_underrun: SOF_IPC4_MIXER_UNDERRUN_DETECTED payload
++ */
++union sof_ipc4_resource_event_data {
++	uint32_t dws[6];
++	struct sof_ipc4_process_data_error_event_data process_data_error;
++	struct sof_ipc4_mixer_underrun_event_data mixer_underrun;
++};
++
+ struct sof_ipc4_notify_resource_data {
+ 	uint32_t resource_type;
+ 	uint32_t resource_id;
+ 	uint32_t event_type;
+ 	uint32_t reserved;
+-	uint32_t data[6];
++	union sof_ipc4_resource_event_data data;
+ } __packed __aligned(4);
+ 
+ #define SOF_IPC4_DEBUG_DESCRIPTOR_SIZE		12 /* 3 x u32 */
+diff --git a/sound/soc/sof/ipc4.c b/sound/soc/sof/ipc4.c
+index c9c6c0c52c62..e77f73390bd8 100644
+--- a/sound/soc/sof/ipc4.c
++++ b/sound/soc/sof/ipc4.c
+@@ -289,6 +289,89 @@ static void sof_ipc4_dump_payload(struct snd_sof_dev *sdev,
+ 			     16, 4, ipc_data, size, false);
+ }
+ 
++static const char *sof_ipc4_resource_type_str(u32 type)
++{
++	switch (type) {
++	case SOF_IPC4_MODULE_INSTANCE:
++		return "resource: MODULE_INSTANCE";
++	case SOF_IPC4_PIPELINE:
++		return "resource: PIPELINE";
++	case SOF_IPC4_GATEWAY:
++		return "resource: GATEWAY";
++	case SOF_IPC4_EDF_TASK:
++		return "resource: EDF_TASK";
++	case SOF_IPC4_INVALID_RESOURCE_TYPE:
++		return "Resource is invalid";
++	default:
++		return "Unknown resource type";
++	}
++}
++
++static const char *sof_ipc4_resource_event_type_str(u32 event_type)
++{
++	switch (event_type) {
++	case SOF_IPC4_MIXER_UNDERRUN_DETECTED:
++		return "event:    MIXER_UNDERRUN_DETECTED";
++	case SOF_IPC4_PROCESS_DATA_ERROR:
++		return "event:    PROCESS_DATA_ERROR";
++	case SOF_IPC4_GATEWAY_UNDERRUN_DETECTED:
++		return "event:    GATEWAY_UNDERRUN_DETECTED";
++	case SOF_IPC4_GATEWAY_OVERRUN_DETECTED:
++		return "event:    GATEWAY_OVERRUN_DETECTED";
++	default:
++		return "Unknown event type";
++	}
++}
++
++static void sof_ipc4_resource_event_handler(struct snd_sof_dev *sdev,
++					    struct sof_ipc4_msg *ipc4_msg)
++{
++	struct sof_ipc4_notify_resource_data *data = ipc4_msg->data_ptr;
++
++	/* Print event details */
++	switch (data->event_type) {
++	case SOF_IPC4_MIXER_UNDERRUN_DETECTED:
++		dev_dbg(sdev->dev, "%s (%u): eos %u, mixed %u, expected %u\n",
++			sof_ipc4_resource_event_type_str(data->event_type),
++			data->event_type, data->data.mixer_underrun.eos_flag,
++			data->data.mixer_underrun.data_mixed,
++			data->data.mixer_underrun.expected_data_mixed);
++		break;
++	case SOF_IPC4_PROCESS_DATA_ERROR:
++		dev_dbg(sdev->dev, "%s (%u): error_code %#x\n",
++			sof_ipc4_resource_event_type_str(data->event_type),
++			data->event_type, data->data.process_data_error.error_code);
++		break;
++	case SOF_IPC4_GATEWAY_UNDERRUN_DETECTED:
++	case SOF_IPC4_GATEWAY_OVERRUN_DETECTED:
++		dev_dbg(sdev->dev, "%s (%u)\n",
++			sof_ipc4_resource_event_type_str(data->event_type),
++			data->event_type);
++		break;
++	default:
++		dev_dbg(sdev->dev, "%s (%u): raw dws %#x %#x %#x %#x %#x %#x\n",
++			sof_ipc4_resource_event_type_str(data->event_type),
++			data->event_type,
++			data->data.dws[0], data->data.dws[1], data->data.dws[2],
++			data->data.dws[3], data->data.dws[4], data->data.dws[5]);
++		break;
++	}
++
++	/* Print resource details */
++	if (data->resource_type == SOF_IPC4_MODULE_INSTANCE) {
++		u32 module_id = SOF_IPC4_MOD_ID_GET(data->resource_id);
++		u32 instance_id = SOF_IPC4_MOD_INSTANCE_GET(data->resource_id);
++
++		dev_dbg(sdev->dev, "%s (%u), module_id %u, instance_id %u\n",
++			sof_ipc4_resource_type_str(data->resource_type),
++			data->resource_type, module_id, instance_id);
++	} else if (data->resource_type != SOF_IPC4_INVALID_RESOURCE_TYPE) {
++		dev_dbg(sdev->dev, "%s (%u), id %u\n",
++			sof_ipc4_resource_type_str(data->resource_type),
++			data->resource_type, data->resource_id);
++	}
++}
++
+ static int sof_ipc4_get_reply(struct snd_sof_dev *sdev)
+ {
+ 	struct snd_sof_ipc_msg *msg = sdev->msg;
+@@ -734,6 +817,7 @@ static void sof_ipc4_rx_msg(struct snd_sof_dev *sdev)
+ 		break;
+ 	case SOF_IPC4_NOTIFY_RESOURCE_EVENT:
+ 		data_size = sizeof(struct sof_ipc4_notify_resource_data);
++		handler_func = sof_ipc4_resource_event_handler;
+ 		break;
+ 	case SOF_IPC4_NOTIFY_LOG_BUFFER_STATUS:
+ 		sof_ipc4_mtrace_update_pos(sdev, SOF_IPC4_LOG_CORE_GET(ipc4_msg->primary));
+-- 
+2.55.0
+

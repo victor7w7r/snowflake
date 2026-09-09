@@ -1,0 +1,45 @@
+From 79c9dc93fcae5e52bd1b4f96e138604d844ad759 Mon Sep 17 00:00:00 2001
+From: Amery Hung <ameryhung@gmail.com>
+Date: Wed, 15 Jul 2026 10:21:27 -0700
+Subject: [PATCH 05667/15333] bpf: Zero kfunc arg meta before error paths can
+ read it
+
+check_kfunc_call() reads meta.func_name when bpf_fetch_kfunc_arg_meta()
+returns -EACCES, but that error can come from fetch_kfunc_meta() (e.g.
+fd_array_get_btf() rejecting BTF binding for a signed program) before
+meta is memset(), leaving it uninitialized and risking a garbage deref
+in verbose().
+
+Move the memset() to the start of bpf_fetch_kfunc_arg_meta() so meta is
+zeroed on every error return. The intended "not allowed" -EACCES path
+still sets func_name first, so its message is unchanged.
+
+Signed-off-by: Amery Hung <ameryhung@gmail.com>
+Acked-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Link: https://patch.msgid.link/20260715172127.2416388-3-ameryhung@gmail.com
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ kernel/bpf/verifier.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 828a220647d6..a78cdabf8560 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -12567,11 +12567,12 @@ int bpf_fetch_kfunc_arg_meta(struct bpf_verifier_env *env,
+ 	struct bpf_kfunc_meta kfunc;
+ 	int err;
+ 
++	memset(meta, 0, sizeof(*meta));
++
+ 	err = fetch_kfunc_meta(env, func_id, offset, &kfunc);
+ 	if (err)
+ 		return err;
+ 
+-	memset(meta, 0, sizeof(*meta));
+ 	meta->btf = kfunc.btf;
+ 	meta->func_id = kfunc.id;
+ 	meta->func_proto = kfunc.proto;
+-- 
+2.55.0
+

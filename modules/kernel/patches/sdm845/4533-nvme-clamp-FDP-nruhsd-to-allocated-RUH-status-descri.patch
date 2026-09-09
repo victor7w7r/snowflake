@@ -1,0 +1,39 @@
+From 29261f8bb41662f2a660c479e5cf592942b53f78 Mon Sep 17 00:00:00 2001
+From: Hari Mishal <harimishal1@gmail.com>
+Date: Thu, 9 Jul 2026 14:30:33 +0200
+Subject: [PATCH 04533/15333] nvme: clamp FDP nruhsd to allocated RUH status
+ descriptor count
+
+nvme_query_fdp_info() allocates the RUH status buffer for at most S8_MAX
+- 1 descriptors, and then copies ruhs->ruhsd[] into head->plids[] using
+the controller reported ruhs->nruhsd directly as the loop bound.
+However, that count wasn't taken into account for the actual buffer's
+size, so there was a chance for a controller reporting a larger nruhsd
+to cause the copy to overflow the buffer.  Clamp nr_plids to the same
+bound used for the allocation.
+
+Assisted-by: gkh_clanker_t1000
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Hari Mishal <harimishal1@gmail.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/core.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/nvme/host/core.c b/drivers/nvme/host/core.c
+index 0b8330c79b1a..cdb16e949e2a 100644
+--- a/drivers/nvme/host/core.c
++++ b/drivers/nvme/host/core.c
+@@ -2361,7 +2361,7 @@ static int nvme_query_fdp_info(struct nvme_ns *ns, struct nvme_ns_info *info)
+ 		goto free;
+ 	}
+ 
+-	head->nr_plids = le16_to_cpu(ruhs->nruhsd);
++	head->nr_plids = min(le16_to_cpu(ruhs->nruhsd), S8_MAX - 1);
+ 	if (!head->nr_plids)
+ 		goto free;
+ 
+-- 
+2.55.0
+

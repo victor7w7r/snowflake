@@ -1,0 +1,55 @@
+From fe3e786ef4eb6e47d2901f568a27bd920477bbe9 Mon Sep 17 00:00:00 2001
+From: Zinc Lim <limzhineng2@gmail.com>
+Date: Thu, 2 Jul 2026 09:49:31 -0700
+Subject: [PATCH 03453/15333] selftests: drv-net: rss_ctx: Add retries to
+ test_rss_context_overlap to reduce flakes
+
+Similar to commit 690043b95c18 ("selftests: drv-net: rss: Add
+retries to test_rss_key_indir to reduce flakes"), implement the
+retry mechanism for test_rss_context_overlap. This gives the test
+more attempts to distribute the flow evenly, as the chance of
+flow skewing to one queue is high.
+
+Example failures:
+
+ # Check failed 5288 < 7000 traffic on main context (1/2): [2727, 2561, 8961, 6648]
+not ok 1 rss_ctx.test_rss_context_overlap
+
+ # Check failed 6710 < 7000 traffic on main context (2/2): [9280, 5217, 5358, 1352]
+not ok 1 rss_ctx.test_rss_context_overlap
+
+Ran test_rss_context_overlap and test_rss_context_overlap2
+over 1,000 consecutive runs with no failures.
+
+Signed-off-by: Zinc Lim <limzhineng2@gmail.com>
+Link: https://patch.msgid.link/20260702164932.2832916-1-limzhineng2@gmail.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ tools/testing/selftests/drivers/net/hw/rss_ctx.py | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/tools/testing/selftests/drivers/net/hw/rss_ctx.py b/tools/testing/selftests/drivers/net/hw/rss_ctx.py
+index f36f76d6ca59..5b25fa89c629 100755
+--- a/tools/testing/selftests/drivers/net/hw/rss_ctx.py
++++ b/tools/testing/selftests/drivers/net/hw/rss_ctx.py
+@@ -651,9 +651,14 @@ def test_rss_context_overlap(cfg, other_ctx=0):
+         ntuple = defer(ethtool, f"-N {cfg.ifname} delete {ntuple_id}")
+ 
+     # Test the main context
+-    cnts = _get_rx_cnts(cfg)
+-    GenerateTraffic(cfg, port=port).wait_pkts_and_stop(20000)
+-    cnts = _get_rx_cnts(cfg, prev=cnts)
++    attempts = 3
++    for attempt in range(attempts):
++        cnts = _get_rx_cnts(cfg)
++        GenerateTraffic(cfg, port=port).wait_pkts_and_stop(20000)
++        cnts = _get_rx_cnts(cfg, prev=cnts)
++        if sum(cnts[:2]) >= 7000 and sum(cnts[2:4]) >= 7000:
++            break
++        ksft_pr(f"Skewed queue distribution, attempt {attempt + 1}/{attempts}: " + str(cnts))
+ 
+     ksft_ge(sum(cnts[ :4]), 20000, "traffic on main context: " + str(cnts))
+     ksft_ge(sum(cnts[ :2]),  7000, "traffic on main context (1/2): " + str(cnts))
+-- 
+2.55.0
+

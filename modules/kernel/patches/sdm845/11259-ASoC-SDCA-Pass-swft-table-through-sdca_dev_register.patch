@@ -1,0 +1,172 @@
+From a50e530e05fad766003f84c0e206058c6efd70c8 Mon Sep 17 00:00:00 2001
+From: Charles Keepax <ckeepax@opensource.cirrus.com>
+Date: Wed, 5 Aug 2026 13:42:05 +0100
+Subject: [PATCH 11259/15333] ASoC: SDCA: Pass swft table through
+ sdca_dev_register()
+
+Rather than passing the SoundWire slave into find_sdca_filesets(),
+stash the swift table whilst processing sdca_dev_register(). This
+allows us to completely remove the passing of the sdw_slave into
+the ACPI parsing code.
+
+Signed-off-by: Charles Keepax <ckeepax@opensource.cirrus.com>
+Reviewed-by: Pierre-Louis Bossart <pierre-louis.bossart@linux.dev>
+Link: https://patch.msgid.link/20260805124205.4152543-9-ckeepax@opensource.cirrus.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/sdca_function.h         |  3 +--
+ sound/soc/codecs/rt766-sdca.c         |  2 +-
+ sound/soc/codecs/tac5xx2-sdw.c        |  2 +-
+ sound/soc/codecs/tas2783-sdw.c        |  2 +-
+ sound/soc/sdca/sdca_class_function.c  |  2 +-
+ sound/soc/sdca/sdca_function_device.c |  7 +++++--
+ sound/soc/sdca/sdca_functions.c       | 10 +++-------
+ 7 files changed, 13 insertions(+), 15 deletions(-)
+
+diff --git a/include/sound/sdca_function.h b/include/sound/sdca_function.h
+index 72441ed5eba4..f65a1d6784e8 100644
+--- a/include/sound/sdca_function.h
++++ b/include/sound/sdca_function.h
+@@ -1460,8 +1460,7 @@ static inline u32 sdca_range_search(struct sdca_control_range *range,
+ 	return 0;
+ }
+ 
+-int sdca_parse_function(struct device *dev, struct sdw_slave *sdw,
+-			struct sdca_function_data *function);
++int sdca_parse_function(struct device *dev, struct sdca_function_data *function);
+ 
+ const char *sdca_find_terminal_name(enum sdca_terminal_type type);
+ 
+diff --git a/sound/soc/codecs/rt766-sdca.c b/sound/soc/codecs/rt766-sdca.c
+index 54ed0c42fba2..64d763b96a06 100644
+--- a/sound/soc/codecs/rt766-sdca.c
++++ b/sound/soc/codecs/rt766-sdca.c
+@@ -1201,7 +1201,7 @@ int rt766_sdca_init(struct device *dev, struct regmap *regmap, struct sdw_slave
+ 		}
+ 
+ 		func_data_ptr->desc = &slave->sdca_data.function[i];
+-		ret = sdca_parse_function(dev, slave, func_data_ptr);
++		ret = sdca_parse_function(dev, func_data_ptr);
+ 		if (ret) {
+ 			devm_kfree(dev, func_data_ptr);
+ 			goto _free_dai_drv_;
+diff --git a/sound/soc/codecs/tac5xx2-sdw.c b/sound/soc/codecs/tac5xx2-sdw.c
+index ea0408b71713..fdb6213d1360 100644
+--- a/sound/soc/codecs/tac5xx2-sdw.c
++++ b/sound/soc/codecs/tac5xx2-sdw.c
+@@ -1940,7 +1940,7 @@ static s32 tac_sdw_probe(struct sdw_slave *peripheral,
+ 						     "failed to allocate %s function data",
+ 						     func_name);
+ 			function_data->desc = &peripheral->sdca_data.function[i];
+-			ret = sdca_parse_function(dev, peripheral, function_data);
++			ret = sdca_parse_function(dev, function_data);
+ 			if (!ret)
+ 				*func_ptr = function_data;
+ 			else
+diff --git a/sound/soc/codecs/tas2783-sdw.c b/sound/soc/codecs/tas2783-sdw.c
+index 34f17e063fa3..94f11e3b0c20 100644
+--- a/sound/soc/codecs/tas2783-sdw.c
++++ b/sound/soc/codecs/tas2783-sdw.c
+@@ -1348,7 +1348,7 @@ static s32 tas_sdw_probe(struct sdw_slave *peripheral,
+ 		function_data->desc = &peripheral->sdca_data.function[i];
+ 
+ 		/* Parse the function */
+-		ret = sdca_parse_function(dev, peripheral, function_data);
++		ret = sdca_parse_function(dev, function_data);
+ 		if (!ret)
+ 			tas_dev->sa_func_data = function_data;
+ 		else
+diff --git a/sound/soc/sdca/sdca_class_function.c b/sound/soc/sdca/sdca_class_function.c
+index 2fb2b043c979..cc7045dc26e6 100644
+--- a/sound/soc/sdca/sdca_class_function.c
++++ b/sound/soc/sdca/sdca_class_function.c
+@@ -329,7 +329,7 @@ static int class_function_probe(struct auxiliary_device *auxdev,
+ 	drv->core = core;
+ 	drv->function = &sdev->function;
+ 
+-	ret = sdca_parse_function(dev, core->sdw, drv->function);
++	ret = sdca_parse_function(dev, drv->function);
+ 	if (ret)
+ 		return ret;
+ 
+diff --git a/sound/soc/sdca/sdca_function_device.c b/sound/soc/sdca/sdca_function_device.c
+index b5ca98283a88..54604872ae0d 100644
+--- a/sound/soc/sdca/sdca_function_device.c
++++ b/sound/soc/sdca/sdca_function_device.c
+@@ -32,7 +32,8 @@ static void sdca_dev_release(struct device *dev)
+ 
+ /* alloc, init and add link devices */
+ static struct sdca_dev *sdca_dev_register(struct device *parent,
+-					  struct sdca_function_desc *function_desc)
++					  struct sdca_function_desc *function_desc,
++					  struct acpi_table_swft *swft)
+ {
+ 	struct sdca_dev *sdev;
+ 	struct auxiliary_device *auxdev;
+@@ -50,6 +51,7 @@ static struct sdca_dev *sdca_dev_register(struct device *parent,
+ 	auxdev->dev.release = sdca_dev_release;
+ 
+ 	sdev->function.desc = function_desc;
++	sdev->function.fdl_data.swft = swft;
+ 
+ 	rc = ida_alloc(&sdca_function_ida, GFP_KERNEL);
+ 	if (rc < 0) {
+@@ -99,7 +101,8 @@ int sdca_dev_register_functions(struct sdw_slave *slave)
+ 		struct sdca_dev *func_dev;
+ 
+ 		func_dev = sdca_dev_register(&slave->dev,
+-					     &sdca_data->function[i]);
++					     &sdca_data->function[i],
++					     sdca_data->swft);
+ 		if (IS_ERR(func_dev)) {
+ 			ret = PTR_ERR(func_dev);
+ 			/*
+diff --git a/sound/soc/sdca/sdca_functions.c b/sound/soc/sdca/sdca_functions.c
+index 1196cc09389a..e01d91eb3cc8 100644
+--- a/sound/soc/sdca/sdca_functions.c
++++ b/sound/soc/sdca/sdca_functions.c
+@@ -2072,8 +2072,7 @@ static int find_sdca_clusters(struct device *dev,
+ 	return 0;
+ }
+ 
+-static int find_sdca_filesets(struct device *dev, struct sdw_slave *sdw,
+-			      struct fwnode_handle *function_node,
++static int find_sdca_filesets(struct device *dev, struct fwnode_handle *function_node,
+ 			      struct sdca_function_data *function)
+ {
+ 	static const int mult_fileset = 3;
+@@ -2155,7 +2154,6 @@ static int find_sdca_filesets(struct device *dev, struct sdw_slave *sdw,
+ 		set->files = files;
+ 	}
+ 
+-	function->fdl_data.swft = sdw->sdca_data.swft;
+ 	function->fdl_data.num_sets = num_sets;
+ 	function->fdl_data.sets = sets;
+ 
+@@ -2210,13 +2208,11 @@ static int find_sdca_hid(struct device *dev, struct fwnode_handle *function_node
+ /**
+  * sdca_parse_function - parse ACPI DisCo for a Function
+  * @dev: Pointer to device against which function data will be allocated.
+- * @sdw: SoundWire slave device to be processed.
+  * @function: Pointer to the Function information, to be populated.
+  *
+  * Return: Returns 0 for success.
+  */
+-int sdca_parse_function(struct device *dev, struct sdw_slave *sdw,
+-			struct sdca_function_data *function)
++int sdca_parse_function(struct device *dev, struct sdca_function_data *function)
+ {
+ 	struct fwnode_handle *node = function->desc->node;
+ 	u32 tmp;
+@@ -2254,7 +2250,7 @@ int sdca_parse_function(struct device *dev, struct sdw_slave *sdw,
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	ret = find_sdca_filesets(dev, sdw, node, function);
++	ret = find_sdca_filesets(dev, node, function);
+ 	if (ret)
+ 		return ret;
+ 
+-- 
+2.55.0
+

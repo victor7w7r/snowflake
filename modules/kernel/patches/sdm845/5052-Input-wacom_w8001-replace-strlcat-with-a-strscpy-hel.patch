@@ -1,0 +1,87 @@
+From 3ed4ba919eb35860ee1867e2851ee3e6f9fe37f5 Mon Sep 17 00:00:00 2001
+From: Ian Bridges <icb@fastmail.org>
+Date: Tue, 14 Jul 2026 20:22:41 -0500
+Subject: [PATCH 05052/15333] Input: wacom_w8001 - replace strlcat() with a
+ strscpy() helper
+
+In preparation for removing the strlcat() API[1], replace its five
+uses with a small append helper built on strnlen() and strscpy().
+
+The five calls append device name fragments to a basename buffer
+that grows in place across the setup functions. The helper takes
+the same arguments as strlcat() and writes the same bytes, including
+when a fragment is truncated.
+
+Link: https://github.com/KSPP/linux/issues/370 [1]
+Signed-off-by: Ian Bridges <icb@fastmail.org>
+Link: https://patch.msgid.link/albg4Rv7QxvLJD05@dev
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+---
+ drivers/input/touchscreen/wacom_w8001.c | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/input/touchscreen/wacom_w8001.c b/drivers/input/touchscreen/wacom_w8001.c
+index 45930d731873..d8d1cdc3f09e 100644
+--- a/drivers/input/touchscreen/wacom_w8001.c
++++ b/drivers/input/touchscreen/wacom_w8001.c
+@@ -417,6 +417,13 @@ static int w8001_detect(struct w8001 *w8001)
+ 	return 0;
+ }
+ 
++static void w8001_append_suffix(char *dest, const char *suffix, size_t dest_sz)
++{
++	size_t used = strnlen(dest, dest_sz);
++
++	strscpy(dest + used, suffix, dest_sz - used);
++}
++
+ static int w8001_setup_pen(struct w8001 *w8001, char *basename,
+ 			   size_t basename_sz)
+ {
+@@ -453,7 +460,7 @@ static int w8001_setup_pen(struct w8001 *w8001, char *basename,
+ 	}
+ 
+ 	w8001->id = 0x90;
+-	strlcat(basename, " Penabled", basename_sz);
++	w8001_append_suffix(basename, " Penabled", basename_sz);
+ 
+ 	return 0;
+ }
+@@ -503,14 +510,14 @@ static int w8001_setup_touch(struct w8001 *w8001, char *basename,
+ 	case 2:
+ 		w8001->pktlen = W8001_PKTLEN_TOUCH93;
+ 		w8001->id = 0x93;
+-		strlcat(basename, " 1FG", basename_sz);
++		w8001_append_suffix(basename, " 1FG", basename_sz);
+ 		break;
+ 
+ 	case 1:
+ 	case 3:
+ 	case 4:
+ 		w8001->pktlen = W8001_PKTLEN_TOUCH9A;
+-		strlcat(basename, " 1FG", basename_sz);
++		w8001_append_suffix(basename, " 1FG", basename_sz);
+ 		w8001->id = 0x9a;
+ 		break;
+ 
+@@ -534,7 +541,7 @@ static int w8001_setup_touch(struct w8001 *w8001, char *basename,
+ 		input_abs_set_res(dev, ABS_MT_POSITION_X, touch.panel_res);
+ 		input_abs_set_res(dev, ABS_MT_POSITION_Y, touch.panel_res);
+ 
+-		strlcat(basename, " 2FG", basename_sz);
++		w8001_append_suffix(basename, " 2FG", basename_sz);
+ 		if (w8001->max_pen_x && w8001->max_pen_y)
+ 			w8001->id = 0xE3;
+ 		else
+@@ -542,7 +549,7 @@ static int w8001_setup_touch(struct w8001 *w8001, char *basename,
+ 		break;
+ 	}
+ 
+-	strlcat(basename, " Touchscreen", basename_sz);
++	w8001_append_suffix(basename, " Touchscreen", basename_sz);
+ 
+ 	return 0;
+ }
+-- 
+2.55.0
+

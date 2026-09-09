@@ -1,0 +1,108 @@
+From 7195f75e80759d4bb7a59bd79b7ff9153e63e498 Mon Sep 17 00:00:00 2001
+From: Prike Liang <Prike.Liang@amd.com>
+Date: Tue, 4 Aug 2026 15:39:03 +0800
+Subject: [PATCH 11442/15333] drm/amdgpu/mes: tear down the rs64mem bitmap in
+ sw_fini
+
+It's more reasonable to tear down the rs64mem bitmap software
+context at MES sw_fini phase. This also can avoid the following
+lock order issue.
+
+[ 2529.150983] kworker/u64:1/3134 is trying to acquire lock:
+[ 2529.151206] ffff8aebd9a3fa10 (reservation_ww_class_mutex){+.+.}-{4:4}, at: amdgpu_bo_free_kernel+0x4e/0x130 [amdgpu]
+[ 2529.151989]
+               but task is already holding lock:
+[ 2529.152227] ffff8aebd2411648 (&reset_domain->sem){++++}-{4:4}, at: amdgpu_device_lock_reset_domain+0x20/0x30 [amdgpu]
+[ 2529.153008]
+               which lock already depends on the new lock.
+
+[ 2529.153342]
+               the existing dependency chain (in reverse order) is:
+[ 2529.153645]
+               -> #2 (&reset_domain->sem){++++}-{4:4}:
+[ 2529.153913]        down_read+0x4a/0x240
+[ 2529.154081]        amdgpu_userq_destroy+0xd8/0x3a0 [amdgpu]
+[ 2529.154635]        amdgpu_userq_ioctl+0x3e2/0xe30 [amdgpu]
+[ 2529.155157]        drm_ioctl_kernel+0xaf/0x110 [drm]
+[ 2529.155401]        drm_ioctl+0x290/0x510 [drm]
+[ 2529.155612]        amdgpu_drm_ioctl+0x52/0x90 [amdgpu]
+[ 2529.156068]        __x64_sys_ioctl+0xa0/0xf0
+[ 2529.156249]        x64_sys_call+0x1278/0x21c0
+[ 2529.156434]        do_syscall_64+0xbe/0x5f0
+[ 2529.156611]        entry_SYSCALL_64_after_hwframe+0x76/0x7e
+[ 2529.156842]
+               -> #1 (&userq_mgr->userq_mutex){+.+.}-{4:4}:
+[ 2529.157127]        __mutex_lock+0xb2/0x11a0
+[ 2529.157304]        mutex_lock_nested+0x1f/0x30
+[ 2529.157492]        amdgpu_userq_vm_validate_and_restore_queue+0x710/0x9b0 [amdgpu]
+[ 2529.158098]        amdgpu_userq_restore_worker+0x39/0x290 [amdgpu]
+[ 2529.158646]        process_one_work+0x23e/0x6f
+               -> #0 (reservation_ww_class_mutex){+.+.}-{4:4}:
+[ 2529.159832]        __lock_acquire+0x14c4/0x2210
+[ 2529.160021]        lock_acquire+0xc6/0x310
+[ 2529.160193]        __ww_mutex_lock.constprop.0+0xd9/0x1a30
+[ 2529.160419]        ww_mutex_lock+0x40/0xb0
+[ 2529.160590]        amdgpu_bo_free_kernel+0x4e/0x130 [amdgpu]
+[ 2529.161077]        amdgpu_mes_rs64mem_fini+0x35/0x60 [amdgpu]
+[ 2529.161601]        mes_v11_0_suspend+0x2d/0x40 [amdgpu]
+[ 2529.162102]        amdgpu_ip_block_suspend+0x2b/0x70 [amdgpu]
+[ 2529.162609]        amdgpu_device_ip_suspend_phase2+0xa4/0x270 [amdgpu]
+[ 2529.163116]        amdgpu_device_pre_asic_reset+0x130/0x1f0 [amdgpu]
+[ 2529.163617]        amdgpu_device_asic_reset+0x55/0x530 [amdgpu]
+[ 2529.164101]        amdgpu_device_gpu_recover+0x1e5/0x410 [amdgpu]
+[ 2529.164592]        amdgpu_userq_mgr_reset_work+0x80/0xa0 [amdgpu]
+[ 2529.165140]        amdgpu_userq_hang_detect_work+0xbb/0x1c0 [amdgpu]
+[ 2529.165693]        process_one_work+0x23e/0x6f0
+[ 2529.165884]        worker_thread+0x1c4/0x380
+[ 2529.166065]        kthread+0x10c/0x150
+[ 2529.166226]        ret_from_fork+0x314/0x390
+[ 2529.166408]        ret_from_fork_asm+0x1a/0x30
+[ 2529.166595]
+               other info that might help us debug this:
+
+[ 2529.166917] Chain exists of:
+                 reservation_ww_class_mutex --> &userq_mgr->userq_mutex --> &reset_domain->sem
+
+Signed-off-by: Prike Liang <Prike.Liang@amd.com>
+Reviewed-by: Michael Chen <michael.chen@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c | 4 ++++
+ drivers/gpu/drm/amd/amdgpu/mes_v11_0.c  | 4 ----
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+index 5998e05ecd79..b96f94e5169f 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+@@ -308,8 +308,12 @@ void amdgpu_mes_fini(struct amdgpu_device *adev)
+ 
+ 	amdgpu_mes_doorbell_free(adev);
+ 
++	if (adev->mes.use_rs64mem)
++		amdgpu_mes_rs64mem_fini(&adev->mes);
++
+ 	ida_destroy(&adev->mes.doorbell_ida);
+ 	mutex_destroy(&adev->mes.mutex_hidden);
++
+ }
+ 
+ int amdgpu_mes_suspend(struct amdgpu_device *adev, u32 xcc_id)
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
+index 553f9d39add8..bef8ce83d83f 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
+@@ -2033,10 +2033,6 @@ static int mes_v11_0_hw_init(struct amdgpu_ip_block *ip_block)
+ 
+ static int mes_v11_0_hw_fini(struct amdgpu_ip_block *ip_block)
+ {
+-	struct amdgpu_device *adev = ip_block->adev;
+-
+-	if (adev->mes.use_rs64mem)
+-		amdgpu_mes_rs64mem_fini(&adev->mes);
+ 	return 0;
+ }
+ 
+-- 
+2.55.0
+

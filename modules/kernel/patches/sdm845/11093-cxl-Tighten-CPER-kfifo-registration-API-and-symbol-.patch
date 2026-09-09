@@ -1,0 +1,238 @@
+From 59a37f9200688916650e1d60774c90f023c79b57 Mon Sep 17 00:00:00 2001
+From: Dan Williams <djbw@kernel.org>
+Date: Mon, 3 Aug 2026 17:18:00 -0500
+Subject: [PATCH 11093/15333] cxl: Tighten CPER kfifo registration API and
+ symbol visibility
+
+Tighten the CPER protocol error kfifo registration API and symbol
+visibility.
+
+Use EXPORT_SYMBOL_FOR_MODULES() instead of EXPORT_SYMBOL_NS_GPL() for
+the CPER kfifo registration symbols. This names the consuming module
+explicitly and gives compile-time enforcement.
+
+Drop the work_struct argument from the unregister path. Change the
+WARN_ONCE condition to a NULL check since there is no caller pointer
+to compare against anymore.
+
+Return void from the registration helpers whose result callers ignore.
+cxl_cper_register_work() keeps its int return as the only one consumed by
+a caller. Flag double registration with WARN_ONCE() inside the lock
+instead of returning an error.
+
+Change cxl_ras_init() to void because there is one consumer and one
+producer so the error return was unnecessary. Remove the now-dead error
+check in cxl_core_init().
+
+Co-developed-by: Terry Bowman <terry.bowman@amd.com>
+Signed-off-by: Terry Bowman <terry.bowman@amd.com>
+Signed-off-by: Dan Williams <djbw@kernel.org>
+Reviewed-by: Dave Jiang <dave.jiang@intel.com>
+Reviewed-by: Alison Schofield <alison.schofield@intel.com>
+Link: https://patch.msgid.link/20260803221810.3685703-5-terry.bowman@amd.com
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/acpi/apei/ghes.c | 32 +++++++++++++++-----------------
+ drivers/cxl/core/core.h  |  7 ++-----
+ drivers/cxl/core/port.c  |  6 +-----
+ drivers/cxl/core/ras.c   |  6 +++---
+ include/cxl/event.h      | 21 ++++++---------------
+ 5 files changed, 27 insertions(+), 45 deletions(-)
+
+diff --git a/drivers/acpi/apei/ghes.c b/drivers/acpi/apei/ghes.c
+index ca7a138c1ff2..187f54e31c33 100644
+--- a/drivers/acpi/apei/ghes.c
++++ b/drivers/acpi/apei/ghes.c
+@@ -778,41 +778,41 @@ static void cxl_cper_post_prot_err(struct cxl_cper_sec_prot_err *prot_err,
+ #endif
+ }
+ 
+-int cxl_cper_register_prot_err_work(struct work_struct *work)
++void cxl_cper_register_prot_err_work(struct work_struct *work)
+ {
+ 	guard(raw_spinlock_irqsave)(&cxl_cper_prot_err_work_lock);
+ 
+ 	if (WARN_ONCE(cxl_cper_prot_err_work,
+ 		      "CPER-CXL kfifo consumer already registered\n"))
+-		return -EINVAL;
++		return;
+ 	cxl_cper_prot_err_work = work;
+-	return 0;
+ }
+-EXPORT_SYMBOL_NS_GPL(cxl_cper_register_prot_err_work, "CXL");
++EXPORT_SYMBOL_FOR_MODULES(cxl_cper_register_prot_err_work, "cxl_core");
+ 
+-int cxl_cper_unregister_prot_err_work(struct work_struct *work)
++void cxl_cper_unregister_prot_err_work(void)
+ {
++	struct work_struct *old;
++
+ 	scoped_guard(raw_spinlock_irqsave, &cxl_cper_prot_err_work_lock) {
+-		if (WARN_ONCE(cxl_cper_prot_err_work != work,
+-			      "CPER-CXL kfifo consumer mismatch on unregister\n"))
+-			return -EINVAL;
++		WARN_ONCE(!cxl_cper_prot_err_work,
++			  "CPER-CXL kfifo consumer not registered on unregister\n");
++		old = cxl_cper_prot_err_work;
+ 		cxl_cper_prot_err_work = NULL;
+ 	}
+ 
+-	cancel_work_sync(work);
++	if (old)
++		cancel_work_sync(old);
+ 
+ 	/* Discard stale entries so they are not replayed on next module load */
+ 	kfifo_reset(&cxl_cper_prot_err_fifo);
+-
+-	return 0;
+ }
+-EXPORT_SYMBOL_NS_GPL(cxl_cper_unregister_prot_err_work, "CXL");
++EXPORT_SYMBOL_FOR_MODULES(cxl_cper_unregister_prot_err_work, "cxl_core");
+ 
+ int cxl_cper_prot_err_kfifo_get(struct cxl_cper_prot_err_work_data *wd)
+ {
+ 	return kfifo_get(&cxl_cper_prot_err_fifo, wd);
+ }
+-EXPORT_SYMBOL_NS_GPL(cxl_cper_prot_err_kfifo_get, "CXL");
++EXPORT_SYMBOL_FOR_MODULES(cxl_cper_prot_err_kfifo_get, "cxl_core");
+ 
+ /* Room for 8 entries for each of the 4 event log queues */
+ #define CXL_CPER_FIFO_DEPTH 32
+@@ -867,12 +867,12 @@ int cxl_cper_register_work(struct work_struct *work)
+ }
+ EXPORT_SYMBOL_NS_GPL(cxl_cper_register_work, "CXL");
+ 
+-int cxl_cper_unregister_work(struct work_struct *work)
++void cxl_cper_unregister_work(struct work_struct *work)
+ {
+ 	scoped_guard(raw_spinlock_irqsave, &cxl_cper_work_lock) {
+ 		if (WARN_ONCE(cxl_cper_work != work,
+ 			      "CXL CPER kfifo consumer mismatch on unregister\n"))
+-			return -EINVAL;
++			return;
+ 		cxl_cper_work = NULL;
+ 	}
+ 
+@@ -880,8 +880,6 @@ int cxl_cper_unregister_work(struct work_struct *work)
+ 
+ 	/* Discard stale entries so they are not replayed on next module load */
+ 	kfifo_reset(&cxl_cper_fifo);
+-
+-	return 0;
+ }
+ EXPORT_SYMBOL_NS_GPL(cxl_cper_unregister_work, "CXL");
+ 
+diff --git a/drivers/cxl/core/core.h b/drivers/cxl/core/core.h
+index 07555ae63859..23fe40ddf4c6 100644
+--- a/drivers/cxl/core/core.h
++++ b/drivers/cxl/core/core.h
+@@ -183,7 +183,7 @@ static inline struct device *dport_to_host(struct cxl_dport *dport)
+ 	return &port->dev;
+ }
+ #ifdef CONFIG_CXL_RAS
+-int cxl_ras_init(void);
++void cxl_ras_init(void);
+ void cxl_ras_exit(void);
+ bool cxl_handle_ras(struct device *dev, void __iomem *ras_base);
+ void cxl_handle_cor_ras(struct device *dev, void __iomem *ras_base);
+@@ -192,10 +192,7 @@ void cxl_disable_rch_root_ints(struct cxl_dport *dport);
+ void cxl_handle_rdport_errors(struct cxl_dev_state *cxlds);
+ void devm_cxl_dport_ras_setup(struct cxl_dport *dport);
+ #else
+-static inline int cxl_ras_init(void)
+-{
+-	return 0;
+-}
++static inline void cxl_ras_init(void) { }
+ static inline void cxl_ras_exit(void) { }
+ static inline bool cxl_handle_ras(struct device *dev, void __iomem *ras_base)
+ {
+diff --git a/drivers/cxl/core/port.c b/drivers/cxl/core/port.c
+index 1215ee4f4035..f90f899c31d0 100644
+--- a/drivers/cxl/core/port.c
++++ b/drivers/cxl/core/port.c
+@@ -2531,14 +2531,10 @@ static __init int cxl_core_init(void)
+ 	if (rc)
+ 		goto err_region;
+ 
+-	rc = cxl_ras_init();
+-	if (rc)
+-		goto err_ras;
++	cxl_ras_init();
+ 
+ 	return 0;
+ 
+-err_ras:
+-	cxl_region_exit();
+ err_region:
+ 	bus_unregister(&cxl_bus_type);
+ err_bus:
+diff --git a/drivers/cxl/core/ras.c b/drivers/cxl/core/ras.c
+index bc74d4848132..e307361bb39e 100644
+--- a/drivers/cxl/core/ras.c
++++ b/drivers/cxl/core/ras.c
+@@ -129,14 +129,14 @@ static void cxl_cper_prot_err_work_fn(struct work_struct *work)
+ }
+ static DECLARE_WORK(cxl_cper_prot_err_work, cxl_cper_prot_err_work_fn);
+ 
+-int cxl_ras_init(void)
++void cxl_ras_init(void)
+ {
+-	return cxl_cper_register_prot_err_work(&cxl_cper_prot_err_work);
++	cxl_cper_register_prot_err_work(&cxl_cper_prot_err_work);
+ }
+ 
+ void cxl_ras_exit(void)
+ {
+-	cxl_cper_unregister_prot_err_work(&cxl_cper_prot_err_work);
++	cxl_cper_unregister_prot_err_work();
+ }
+ 
+ static void cxl_dport_map_ras(struct cxl_dport *dport)
+diff --git a/include/cxl/event.h b/include/cxl/event.h
+index ff97fea718d2..b5673384d930 100644
+--- a/include/cxl/event.h
++++ b/include/cxl/event.h
+@@ -287,10 +287,10 @@ struct cxl_cper_prot_err_work_data {
+ 
+ #ifdef CONFIG_ACPI_APEI_GHES
+ int cxl_cper_register_work(struct work_struct *work);
+-int cxl_cper_unregister_work(struct work_struct *work);
++void cxl_cper_unregister_work(struct work_struct *work);
+ int cxl_cper_kfifo_get(struct cxl_cper_work_data *wd);
+-int cxl_cper_register_prot_err_work(struct work_struct *work);
+-int cxl_cper_unregister_prot_err_work(struct work_struct *work);
++void cxl_cper_register_prot_err_work(struct work_struct *work);
++void cxl_cper_unregister_prot_err_work(void);
+ int cxl_cper_prot_err_kfifo_get(struct cxl_cper_prot_err_work_data *wd);
+ #else
+ static inline int cxl_cper_register_work(struct work_struct *work)
+@@ -298,22 +298,13 @@ static inline int cxl_cper_register_work(struct work_struct *work)
+ 	return 0;
+ }
+ 
+-static inline int cxl_cper_unregister_work(struct work_struct *work)
+-{
+-	return 0;
+-}
++static inline void cxl_cper_unregister_work(struct work_struct *work) { }
+ static inline int cxl_cper_kfifo_get(struct cxl_cper_work_data *wd)
+ {
+ 	return 0;
+ }
+-static inline int cxl_cper_register_prot_err_work(struct work_struct *work)
+-{
+-	return 0;
+-}
+-static inline int cxl_cper_unregister_prot_err_work(struct work_struct *work)
+-{
+-	return 0;
+-}
++static inline void cxl_cper_register_prot_err_work(struct work_struct *work) { }
++static inline void cxl_cper_unregister_prot_err_work(void) { }
+ static inline int cxl_cper_prot_err_kfifo_get(struct cxl_cper_prot_err_work_data *wd)
+ {
+ 	return 0;
+-- 
+2.55.0
+

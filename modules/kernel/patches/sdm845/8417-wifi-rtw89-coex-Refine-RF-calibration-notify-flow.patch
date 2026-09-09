@@ -1,0 +1,48 @@
+From 528e5e1d78253136ea1b6f400f09db956476dba3 Mon Sep 17 00:00:00 2001
+From: Ching-Te Ku <ku920601@realtek.com>
+Date: Fri, 24 Jul 2026 21:56:34 +0800
+Subject: [PATCH 08417/15333] wifi: rtw89: coex: Refine RF calibration notify
+ flow
+
+BT-coexistence only needs to record RF calibration is doing or not, don't
+need to record the status of the calibration steps.
+
+Signed-off-by: Ching-Te Ku <ku920601@realtek.com>
+Signed-off-by: Ping-Ke Shih <pkshih@realtek.com>
+Link: https://patch.msgid.link/20260724135640.3195044-9-pkshih@realtek.com
+---
+ drivers/net/wireless/realtek/rtw89/coex.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/wireless/realtek/rtw89/coex.c b/drivers/net/wireless/realtek/rtw89/coex.c
+index 96ec5fa20422..187e7e70e86d 100644
+--- a/drivers/net/wireless/realtek/rtw89/coex.c
++++ b/drivers/net/wireless/realtek/rtw89/coex.c
+@@ -9144,14 +9144,13 @@ static bool _ntfy_wl_rfk(struct rtw89_dev *rtwdev, u8 phy_path,
+ 		wl->rfk_info.state = BTC_WRFK_START;
+ 
+ 		btc->cx.wl.wcnt[BTC_WCNT_RFK_REQ]++;
+-		btc->cx.wl.wcnt[BTC_WCNT_RFK_GO]++;
+ 		btc->dm.cnt_notify[BTC_NCNT_WL_RFK]++;
+ 
+ 		_write_scbd(rtwdev, BTC_ALL_BT, BTC_WSCB_WLRFK, true);
+ 		break;
+ 	case BTC_WRFK_ONESHOT_START:
+ 	case BTC_WRFK_ONESHOT_STOP:
+-		wl->rfk_info.state = state;
++		btc->cx.wl.wcnt[BTC_WCNT_RFK_GO]++;
+ 		if (type != BTC_WRFKT_RXDCK)
+ 			return BTC_WRFK_ALLOW;
+ 		break;
+@@ -9165,7 +9164,7 @@ static bool _ntfy_wl_rfk(struct rtw89_dev *rtwdev, u8 phy_path,
+ 	default:
+ 		rtw89_debug(rtwdev, RTW89_DBG_BTC,
+ 			    "[BTC], %s() warning state=%d\n", __func__, state);
+-		break;
++		return result;
+ 	}
+ 
+ 	if (result == BTC_WRFK_ALLOW) {
+-- 
+2.55.0
+

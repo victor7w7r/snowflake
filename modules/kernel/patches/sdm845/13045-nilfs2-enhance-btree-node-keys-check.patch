@@ -1,0 +1,76 @@
+From d7d54599a132408ee8ce857393974dddfb88357c Mon Sep 17 00:00:00 2001
+From: Wang Jianjian <wangjianjian3@huawei.com>
+Date: Mon, 10 Aug 2026 23:20:52 +0900
+Subject: [PATCH 13045/15333] nilfs2: enhance btree node keys check
+
+syzbot reported a warning on nilfs_btree_assign:
+WARNING: fs/nilfs2/btree.c:2302 at nilfs_btree_assign+0x983/0xbe0 fs/nilfs2/btree.c:2302,
+
+Analysis found that a corrupted file has the following btree layout:
+Level2(key/ptr): [ 256/15 ]
+Level1(key/ptr): [ 0/8, 1/9, 0/10, 3/11, 4/12, 5/13, 6/14,
+                   139637976727559/16, 0/17 ]
+
+The test truncated the file to 2 bytes, which partially zeroes the first
+block and adds the file to the dirty list. When the segment constructor
+writes it and assigns a new blocknr for the index block, it searches the
+btree with key=0 and min level=2, and apparently returns -ENOENT.
+
+Therefore, we should perform more checks on the btree nodes and return
+early.
+
+[ryusuke: split long lines in btree.c to satisfy checkpatch and
+ improved the error message format for clarity]
+
+Reported-by: syzbot+158be45e4d99232e1900@syzkaller.appspotmail.com
+Closes: https://syzkaller.appspot.com/bug?extid=158be45e4d99232e1900
+Signed-off-by: Wang Jianjian <wangjianjian3@huawei.com>
+Fixes: 17c76b0104e4 ("nilfs2: B-tree based block mapping")
+Cc: stable+noautosel@kernel.org # Warning suppression primarily
+Signed-off-by: Ryusuke Konishi <konishi.ryusuke@gmail.com>
+Signed-off-by: Viacheslav Dubeyko <slava@dubeyko.com>
+---
+ fs/nilfs2/btree.c | 19 ++++++++++++++++---
+ 1 file changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/fs/nilfs2/btree.c b/fs/nilfs2/btree.c
+index 64bac66af25b..6b8332e8c0db 100644
+--- a/fs/nilfs2/btree.c
++++ b/fs/nilfs2/btree.c
+@@ -341,7 +341,8 @@ static int nilfs_btree_node_broken(const struct nilfs_btree_node *node,
+ 				   sector_t blocknr)
+ {
+ 	int level, flags, nchildren;
+-	int ret = 0;
++	__u64 key, prev_key;
++	int i;
+ 
+ 	level = nilfs_btree_node_get_level(node);
+ 	flags = nilfs_btree_node_get_flags(node);
+@@ -356,9 +357,21 @@ static int nilfs_btree_node_broken(const struct nilfs_btree_node *node,
+ 			   "bad btree node (ino=%llu, blocknr=%llu): level = %d, flags = 0x%x, nchildren = %d",
+ 			   inode->i_ino, (unsigned long long)blocknr, level,
+ 			   flags, nchildren);
+-		ret = 1;
++		return 1;
+ 	}
+-	return ret;
++
++	for (i = 1, prev_key = nilfs_btree_node_get_key(node, 0);
++	     i < nchildren; i++, prev_key = key) {
++		key = nilfs_btree_node_get_key(node, i);
++		if (unlikely(key <= prev_key)) {
++			nilfs_crit(inode->i_sb,
++				"bad btree node (ino=%llu, blocknr=%llu): unsorted keys at index %d (%llu) and %d (%llu)",
++				inode->i_ino, (unsigned long long)blocknr,
++				i - 1, prev_key, i, key);
++			return 1;
++		}
++	}
++	return 0;
+ }
+ 
+ /**
+-- 
+2.55.0
+

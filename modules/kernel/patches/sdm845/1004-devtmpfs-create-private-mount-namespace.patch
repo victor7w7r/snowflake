@@ -1,0 +1,33 @@
+From 66d2faeccbff262164495b5cd8bcdc5b45ad5af0 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Mon, 1 Jun 2026 15:56:54 +0200
+Subject: [PATCH 01004/15333] devtmpfs: create private mount namespace
+
+Kernel threads start in a completely isolated nullfs mount. Use
+UNSHARE_EMPTY_MNTNS to give the devtmpfsd kthread a private empty mount
+namespace with its root and pwd already set up, so it can mount its own
+devtmpfs instance instead of unsharing a copy of the initial mount
+namespace.
+
+Link: https://patch.msgid.link/20260601-work-kthread-nullfs-v4-21-77ee053060e0@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ drivers/base/devtmpfs.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/base/devtmpfs.c b/drivers/base/devtmpfs.c
+index b1c4ceb65026..aef0fcc6aba1 100644
+--- a/drivers/base/devtmpfs.c
++++ b/drivers/base/devtmpfs.c
+@@ -413,7 +413,7 @@ static noinline int __init devtmpfs_setup(void *p)
+ {
+ 	int err;
+ 
+-	err = ksys_unshare(CLONE_NEWNS);
++	err = ksys_unshare(UNSHARE_EMPTY_MNTNS);
+ 	if (err)
+ 		goto out;
+ 	err = init_mount("devtmpfs", "/", "devtmpfs", DEVTMPFS_MFLAGS, NULL);
+-- 
+2.55.0
+

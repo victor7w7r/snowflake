@@ -1,0 +1,57 @@
+From 116165611d4d287ae58992528ba779133e7c72b3 Mon Sep 17 00:00:00 2001
+From: Griffin Kroah-Hartman <griffin@kroah.com>
+Date: Mon, 6 Jul 2026 17:01:11 +0200
+Subject: [PATCH 04203/15333] soc: imx9: devm_kasprintf error handling
+
+Add error handling to devm_kasprintf functions in imx9_soc_probe().
+
+Assisted-by: gkh_clanker_2000
+Cc: Frank Li <Frank.Li@nxp.com>
+Cc: Sascha Hauer <s.hauer@pengutronix.de>
+Cc: Pengutronix Kernel Team <kernel@pengutronix.de>
+Cc: Fabio Estevam <festevam@gmail.com>
+Cc: Peng Fan <peng.fan@nxp.com>
+Cc: Shawn Guo <shawnguo@kernel.org>
+Cc: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Signed-off-by: Griffin Kroah-Hartman <griffin@kroah.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+---
+ drivers/soc/imx/soc-imx9.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/soc/imx/soc-imx9.c b/drivers/soc/imx/soc-imx9.c
+index 58eef7d4f908..23b54b7d7502 100644
+--- a/drivers/soc/imx/soc-imx9.c
++++ b/drivers/soc/imx/soc-imx9.c
+@@ -35,6 +35,8 @@ static int imx9_soc_probe(struct platform_device *pdev)
+ 		return dev_err_probe(dev, err, "%s: missing model property\n", __func__);
+ 
+ 	attr->family = devm_kasprintf(dev, GFP_KERNEL, "Freescale i.MX");
++	if (!attr->family)
++		return -ENOMEM;
+ 
+ 	/*
+ 	 * Retrieve the soc id, rev & uid info:
+@@ -52,11 +54,18 @@ static int imx9_soc_probe(struct platform_device *pdev)
+ 	rev_minor = SOC_REV_MINOR(res.a1);
+ 
+ 	attr->soc_id = devm_kasprintf(dev, GFP_KERNEL, "i.MX%2x", soc_id);
++	if (!attr->soc_id)
++		return -ENOMEM;
++
+ 	attr->revision = devm_kasprintf(dev, GFP_KERNEL, "%d.%d", rev_major, rev_minor);
++	if (!attr->revision)
++		return -ENOMEM;
+ 
+ 	uid127_64 = res.a2;
+ 	uid63_0 = res.a3;
+ 	attr->serial_number = devm_kasprintf(dev, GFP_KERNEL, "%016llx%016llx", uid127_64, uid63_0);
++	if (!attr->serial_number)
++		return -ENOMEM;
+ 
+ 	sdev = soc_device_register(attr);
+ 	if (IS_ERR(sdev))
+-- 
+2.55.0
+

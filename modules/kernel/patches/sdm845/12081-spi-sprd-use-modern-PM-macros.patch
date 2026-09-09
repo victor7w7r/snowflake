@@ -1,0 +1,60 @@
+From 96e9434dee1d97396f454d2b265087e91faf5447 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:55 +0800
+Subject: [PATCH 12081/15333] spi: sprd: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use __maybe_unused.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-32-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-sprd.c | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/spi/spi-sprd.c b/drivers/spi/spi-sprd.c
+index 29380938ef65..12b09174bb24 100644
+--- a/drivers/spi/spi-sprd.c
++++ b/drivers/spi/spi-sprd.c
+@@ -1016,7 +1016,7 @@ static void sprd_spi_remove(struct platform_device *pdev)
+ 	pm_runtime_disable(&pdev->dev);
+ }
+ 
+-static int __maybe_unused sprd_spi_runtime_suspend(struct device *dev)
++static int sprd_spi_runtime_suspend(struct device *dev)
+ {
+ 	struct spi_controller *sctlr = dev_get_drvdata(dev);
+ 	struct sprd_spi *ss = spi_controller_get_devdata(sctlr);
+@@ -1029,7 +1029,7 @@ static int __maybe_unused sprd_spi_runtime_suspend(struct device *dev)
+ 	return 0;
+ }
+ 
+-static int __maybe_unused sprd_spi_runtime_resume(struct device *dev)
++static int sprd_spi_runtime_resume(struct device *dev)
+ {
+ 	struct spi_controller *sctlr = dev_get_drvdata(dev);
+ 	struct sprd_spi *ss = spi_controller_get_devdata(sctlr);
+@@ -1050,8 +1050,7 @@ static int __maybe_unused sprd_spi_runtime_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops sprd_spi_pm_ops = {
+-	SET_RUNTIME_PM_OPS(sprd_spi_runtime_suspend,
+-			   sprd_spi_runtime_resume, NULL)
++	RUNTIME_PM_OPS(sprd_spi_runtime_suspend, sprd_spi_runtime_resume, NULL)
+ };
+ 
+ static const struct of_device_id sprd_spi_of_match[] = {
+@@ -1064,7 +1063,7 @@ static struct platform_driver sprd_spi_driver = {
+ 	.driver = {
+ 		.name = "sprd-spi",
+ 		.of_match_table = sprd_spi_of_match,
+-		.pm = &sprd_spi_pm_ops,
++		.pm = pm_ptr(&sprd_spi_pm_ops),
+ 	},
+ 	.probe = sprd_spi_probe,
+ 	.remove = sprd_spi_remove,
+-- 
+2.55.0
+

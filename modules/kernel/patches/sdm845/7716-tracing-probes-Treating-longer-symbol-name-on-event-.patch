@@ -1,0 +1,104 @@
+From c00e735410d7269c0c655219cf42846da6b435c7 Mon Sep 17 00:00:00 2001
+From: "Masami Hiramatsu (Google)" <mhiramat@kernel.org>
+Date: Tue, 28 Jul 2026 13:40:11 +0900
+Subject: [PATCH 07716/15333] tracing/probes: Treating longer symbol name on
+ event comparation
+
+MAX_COMMON_HEAD_LEN (63) was used to allocate a temporary buffer for
+formatting command heads in trace_kprobe_match_command_head() and
+trace_uprobe_match_command_head(). However, the buffer size is too
+short for some longer symbols. Especially, with rust code, the symbol
+can be mangled and become very long.
+
+Refactor trace_kprobe_match_command_head() to perform direct string
+comparisons using strcmp() and strncmp(), eliminating the need for a
+temporary buffer and removing the MAX_COMMON_HEAD_LEN string length
+restriction on probe symbol names.
+
+For trace_uprobe_match_command_head(), since tu->filename is already
+matched via strncmp(), use a fixed 64-byte stack buffer solely for
+formatting offset and ref_ctr_offset (which requires at most 39 bytes).
+
+With all users converted, remove the MAX_COMMON_HEAD_LEN definition from
+trace_probe.h.
+
+Link: https://lore.kernel.org/all/178521361102.34226.9650586522488974115.stgit@devnote2/
+
+Reported-by: Zhan Xusheng <zhanxusheng1024@gmail.com>
+Link: https://lore.kernel.org/all/20260724023317.624074-1-zhanxusheng@xiaomi.com/
+Signed-off-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+---
+ kernel/trace/trace_kprobe.c | 24 ++++++++++++++++--------
+ kernel/trace/trace_probe.h  |  1 -
+ kernel/trace/trace_uprobe.c |  2 +-
+ 3 files changed, 17 insertions(+), 10 deletions(-)
+
+diff --git a/kernel/trace/trace_kprobe.c b/kernel/trace/trace_kprobe.c
+index c25f902aa1a6..e41a7c113646 100644
+--- a/kernel/trace/trace_kprobe.c
++++ b/kernel/trace/trace_kprobe.c
+@@ -149,20 +149,28 @@ static bool trace_kprobe_is_busy(struct dyn_event *ev)
+ static bool trace_kprobe_match_command_head(struct trace_kprobe *tk,
+ 					    int argc, const char **argv)
+ {
+-	char buf[MAX_COMMON_HEAD_LEN + 1];
++	char buf[32];
++	int len;
+ 
+ 	if (!argc)
+ 		return true;
+ 
+-	if (!tk->symbol)
++	if (!tk->symbol) {
+ 		snprintf(buf, sizeof(buf), "0x%p", tk->rp.kp.addr);
+-	else if (tk->rp.kp.offset)
+-		snprintf(buf, sizeof(buf), "%s+%u",
+-			 trace_kprobe_symbol(tk), tk->rp.kp.offset);
+-	else
+-		snprintf(buf, sizeof(buf), "%s", trace_kprobe_symbol(tk));
+-	if (strcmp(buf, argv[0]))
++		if (strcmp(buf, argv[0]))
++			return false;
++	} else if (tk->rp.kp.offset) {
++		len = strlen(trace_kprobe_symbol(tk));
++		if (strncmp(trace_kprobe_symbol(tk), argv[0], len) ||
++		    argv[0][len] != '+')
++			return false;
++
++		snprintf(buf, sizeof(buf), "%u", tk->rp.kp.offset);
++		if (strcmp(buf, &argv[0][len + 1]))
++			return false;
++	} else if (strcmp(trace_kprobe_symbol(tk), argv[0]))
+ 		return false;
++
+ 	argc--; argv++;
+ 
+ 	return trace_probe_match_command_args(&tk->tp, argc, argv);
+diff --git a/kernel/trace/trace_probe.h b/kernel/trace/trace_probe.h
+index c0f05763811c..fba1af092a9b 100644
+--- a/kernel/trace/trace_probe.h
++++ b/kernel/trace/trace_probe.h
+@@ -33,7 +33,6 @@
+ 
+ #define MAX_TRACE_ARGS		128
+ #define MAX_ARGSTR_LEN		255
+-#define MAX_COMMON_HEAD_LEN	63
+ #define MAX_ARRAY_LEN		64
+ #define MAX_ARG_NAME_LEN	32
+ #define MAX_BTF_ARGS_LEN	128
+diff --git a/kernel/trace/trace_uprobe.c b/kernel/trace/trace_uprobe.c
+index 67bd8fd91e3e..861d857adadb 100644
+--- a/kernel/trace/trace_uprobe.c
++++ b/kernel/trace/trace_uprobe.c
+@@ -281,7 +281,7 @@ static bool trace_uprobe_is_busy(struct dyn_event *ev)
+ static bool trace_uprobe_match_command_head(struct trace_uprobe *tu,
+ 					    int argc, const char **argv)
+ {
+-	char buf[MAX_COMMON_HEAD_LEN + 1];
++	char buf[64];
+ 	int len;
+ 
+ 	if (!argc)
+-- 
+2.55.0
+

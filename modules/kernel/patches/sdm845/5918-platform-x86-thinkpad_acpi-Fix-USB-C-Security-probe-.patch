@@ -1,0 +1,47 @@
+From 10bae492e814eeb1013ab9bc08f655d14fca46e4 Mon Sep 17 00:00:00 2001
+From: Vishnu Sankar <vishnuocv@gmail.com>
+Date: Wed, 15 Jul 2026 10:02:05 +0900
+Subject: [PATCH 05918/15333] platform/x86: thinkpad_acpi: Fix USB-C Security
+ probe failure on unsupported platforms
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On systems where the USCS ACPI method is absent, acpi_evalf() returns
+AE_NOT_FOUND which maps to -EIO. This caused tpacpi_usbc_security_init()
+to propagate the error and thinkpad_acpi failed to probe entirely on
+unsupported platforms.
+
+Fix this by checking for USCS method presence with acpi_has_method() before
+attempting to call it, returning -ENODEV immediately if absent.
+This follows the same pattern used by other subdrivers in thinkpad_acpi.c.
+
+Fixes: 67e8d1e9cacd ("platform/x86: thinkpad_acpi: Add USB-C Security (USCS) support")
+Reported-by: Oliver Lin <oliver@liuxiaozhen.dev>
+Closes: https://lore.kernel.org/platform-driver-x86/239c8162-e1e6-4b49-8292-35547c5a525c@liuxiaozhen.dev/
+Tested-by: Oliver Lin <oliver@liuxiaozhen.dev>
+Signed-off-by: Vishnu Sankar <vishnuocv@gmail.com>
+Link: https://patch.msgid.link/20260715010205.514132-1-vishnuocv@gmail.com
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/x86/lenovo/thinkpad_acpi.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/platform/x86/lenovo/thinkpad_acpi.c b/drivers/platform/x86/lenovo/thinkpad_acpi.c
+index 6dd7c28fc0db..efc7784f11d1 100644
+--- a/drivers/platform/x86/lenovo/thinkpad_acpi.c
++++ b/drivers/platform/x86/lenovo/thinkpad_acpi.c
+@@ -11368,6 +11368,9 @@ static int tpacpi_usbc_security_init(struct ibm_init_struct *iibm)
+ {
+ 	int err;
+ 
++	if (!acpi_has_method(hkey_handle, "USCS"))
++		return -ENODEV;
++
+ 	err = usbc_security_query(&tp_features.usbc_security_enabled);
+ 	if (err == -ENODEV)
+ 		return 0;
+-- 
+2.55.0
+

@@ -1,0 +1,117 @@
+From 270e3f076b509c24d8cf69dde11db12d64706113 Mon Sep 17 00:00:00 2001
+From: Ian Rogers <irogers@google.com>
+Date: Mon, 15 Jun 2026 18:15:43 -0700
+Subject: [PATCH 01505/15333] perf python: Add LiveSession helper
+
+Add LiveSession class in tools/perf/python/perf_live.py to support
+live event collection using perf.evlist and perf.parse_events,
+avoiding the need to fork a separate perf record process.
+
+Signed-off-by: Ian Rogers <irogers@google.com>
+Assisted-by: Gemini:gemini-3.1-pro-preview
+Cc: Adrian Hunter <adrian.hunter@intel.com>
+Cc: Alice Rogers <alice.mei.rogers@gmail.com>
+Cc: Dapeng Mi <dapeng1.mi@linux.intel.com>
+Cc: Ingo Molnar <mingo@redhat.com>
+Cc: James Clark <james.clark@linaro.org>
+Cc: Leo Yan <leo.yan@linux.dev>
+Cc: Namhyung Kim <namhyung@kernel.org>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Thomas Richter <tmricht@linux.ibm.com>
+Signed-off-by: Arnaldo Carvalho de Melo <acme@redhat.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/python/perf_live.py             | 59 ++++++++++++++++++++++
+ tools/perf/tests/shell/lib/setup_python.sh | 13 +++++
+ 2 files changed, 72 insertions(+)
+ create mode 100755 tools/perf/python/perf_live.py
+
+diff --git a/tools/perf/python/perf_live.py b/tools/perf/python/perf_live.py
+new file mode 100755
+index 000000000000..616b5f657463
+--- /dev/null
++++ b/tools/perf/python/perf_live.py
+@@ -0,0 +1,59 @@
++# SPDX-License-Identifier: GPL-2.0
++"""
++Live event session helper using perf.evlist.
++
++This module provides a LiveSession class that allows running a callback
++for each event collected live from the system, similar to perf.session
++but without requiring a perf.data file.
++"""
++
++import perf
++
++
++class LiveSession:
++    """Represents a live event collection session."""
++
++    def __init__(self, event_string: str, sample_callback):
++        self.event_string = event_string
++        self.sample_callback = sample_callback
++        # Create a cpu map for all online CPUs
++        self.cpus = perf.cpu_map()
++        # Parse events and set maps
++        self.evlist = perf.parse_events(self.event_string, self.cpus)
++        self.evlist.config()
++
++    def run(self):
++        """Run the live session."""
++        try:
++            self.evlist.open()
++            self.evlist.mmap()
++            self.evlist.enable()
++
++            while True:
++                # Poll for events with 100ms timeout
++                try:
++                    self.evlist.poll(100)
++                except InterruptedError:
++                    continue
++                for cpu in self.cpus:
++                    for _ in range(1000): # Limit to 1000 events per CPU per poll to prevent starvation
++                        try:
++                            event = self.evlist.read_on_cpu(cpu)
++                        except TypeError as e:
++                            if "Unknown CPU" in str(e):
++                                # CPU might be unmapped or offline, wait for mmap event
++                                break
++                            if "Unexpected header type" in str(e):
++                                # Ignore valid but unsupported event types
++                                continue
++                            raise
++
++                        if event is None:
++                            break
++
++                        if event.type == perf.RECORD_SAMPLE:
++                            self.sample_callback(event)
++        except KeyboardInterrupt:
++            pass
++        finally:
++            self.evlist.close()
+diff --git a/tools/perf/tests/shell/lib/setup_python.sh b/tools/perf/tests/shell/lib/setup_python.sh
+index a58e5536f2ed..2173215a0517 100644
+--- a/tools/perf/tests/shell/lib/setup_python.sh
++++ b/tools/perf/tests/shell/lib/setup_python.sh
+@@ -14,3 +14,16 @@ then
+   echo Skipping test, python not detected please set environment variable PYTHON.
+   exit 2
+ fi
++
++# Set PYTHONPATH to find the in-tree built perf.so first, avoiding system-wide perf.so
++if [ -n "$PERF_EXEC_PATH" ] && [ -d "$PERF_EXEC_PATH/python" ]; then
++  PYTHONPATH_DIR="$PERF_EXEC_PATH/python"
++elif [ -d "$(dirname "$0")/../../python" ]; then
++  PYTHONPATH_DIR="$(dirname "$0")/../../python"
++elif [ -d "$(dirname "$0")/../python" ]; then
++  PYTHONPATH_DIR="$(dirname "$0")/../python"
++fi
++
++if [ -n "$PYTHONPATH_DIR" ]; then
++  export PYTHONPATH="$PYTHONPATH_DIR${PYTHONPATH:+:$PYTHONPATH}"
++fi
+-- 
+2.55.0
+

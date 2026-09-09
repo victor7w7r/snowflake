@@ -1,0 +1,118 @@
+From a5c6ae8de11ef0c3aedbe5e123354aad87d0d925 Mon Sep 17 00:00:00 2001
+From: Maxime Chevallier <maxime.chevallier@bootlin.com>
+Date: Tue, 28 Jul 2026 09:52:20 +0200
+Subject: [PATCH 08526/15333] net: phy: micrel: Add loopback support for
+ ksz9131
+
+ksz9131 is configured for local loopback in a similar fashion as the
+ksz9031, with a need for full-duplex operation, but with some extra
+steps to take as specified in section 4.13.1 :
+
+1. Configure the following registers:
+- MMD 1C, Register 15 = EEEE
+- MMD 1C, Register 16 = EEEE
+- MMD 1C, Register 18 = EEEE
+- MMD 1C, Register 1B = EEEE
+
+These 4 registers are marked as "Reserved" in the register map.
+
+When setting loopback up without configuring these 4 registers, the PHY
+appears to shut its RXC down, which can trigger failures on MACs that
+require it, such as stmmac.
+
+The datasheet does not specify to which state the registers must be
+reset when disabling loopback, so let's restore them to their measured
+initial values.
+
+This was discovered when trying to use stmmac selftests on imx8mp with a
+ksz9131 connected in RGMII.
+
+Signed-off-by: Maxime Chevallier <maxime.chevallier@bootlin.com>
+Reviewed-by: Andrew Lunn <andrew@lunn.ch>
+Link: https://patch.msgid.link/20260728075222.956780-1-maxime.chevallier@bootlin.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/phy/micrel.c | 60 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 60 insertions(+)
+
+diff --git a/drivers/net/phy/micrel.c b/drivers/net/phy/micrel.c
+index 55df5efcfc86..ae830781824b 100644
+--- a/drivers/net/phy/micrel.c
++++ b/drivers/net/phy/micrel.c
+@@ -1161,6 +1161,65 @@ static int ksz9031_set_loopback(struct phy_device *phydev, bool enable,
+ 				     5000, 500000, true);
+ }
+ 
++/* KSZ9131-specific sequence to enable loopback, registers are undocumented
++ * in the datasheet but mentionned in the local loopback mode configuration
++ * steps.
++ *
++ * Without taking these steps, the PHY appears to disable its RXC while in
++ * loopback mode, which may be needed by some MACs such as stmmac.
++ */
++static int ksz9131_loopback_enable(struct phy_device *phydev)
++{
++	int ret;
++
++	ret = phy_write_mmd(phydev, 0x1c, 0x15, 0xeeee);
++	if (ret)
++		return ret;
++
++	ret = phy_write_mmd(phydev, 0x1c, 0x16, 0xeeee);
++	if (ret)
++		return ret;
++
++	ret = phy_write_mmd(phydev, 0x1c, 0x18, 0xeeee);
++	if (ret)
++		return ret;
++
++	return phy_write_mmd(phydev, 0x1c, 0x1b, 0xeeee);
++}
++
++/* KSZ9131 datasheet doesn't state how to deal with the MMD 0x1c registers
++ * when disabling loopback.
++ *
++ * Set them back to their measured initial state when disabling loopback, and
++ * ignore errors while doing so.
++ */
++static void ksz9131_loopback_disable(struct phy_device *phydev)
++{
++	phy_write_mmd(phydev, 0x1c, 0x15, 0x6eff);
++	phy_write_mmd(phydev, 0x1c, 0x16, 0xe6ff);
++	phy_write_mmd(phydev, 0x1c, 0x18, 0x43ff);
++	phy_write_mmd(phydev, 0x1c, 0x1b, 0x07ff);
++}
++
++static int ksz9131_set_loopback(struct phy_device *phydev, bool enable,
++				int speed)
++{
++	int ret;
++
++	if (enable) {
++		ret = ksz9131_loopback_enable(phydev);
++		if (ret)
++			return ret;
++	}
++
++	ret = ksz9031_set_loopback(phydev, enable, speed);
++
++	if (ret || !enable)
++		ksz9131_loopback_disable(phydev);
++
++	return ret;
++}
++
+ static int ksz9031_of_load_skew_values(struct phy_device *phydev,
+ 				       const struct device_node *of_node,
+ 				       u16 reg, size_t field_sz,
+@@ -6993,6 +7052,7 @@ static struct phy_driver ksphy_driver[] = {
+ 	.cable_test_start	= ksz9x31_cable_test_start,
+ 	.cable_test_get_status	= ksz9x31_cable_test_get_status,
+ 	.get_features	= ksz9477_get_features,
++	.set_loopback	= ksz9131_set_loopback,
+ }, {
+ 	PHY_ID_MATCH_MODEL(PHY_ID_KSZ8873MLL),
+ 	.name		= "Micrel KSZ8873MLL Switch",
+-- 
+2.55.0
+

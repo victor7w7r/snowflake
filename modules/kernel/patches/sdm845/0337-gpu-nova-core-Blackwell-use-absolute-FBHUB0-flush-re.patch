@@ -1,0 +1,126 @@
+From 21baef62022fbcca539fca2171e2d3ff15fcb9d3 Mon Sep 17 00:00:00 2001
+From: John Hubbard <jhubbard@nvidia.com>
+Date: Wed, 10 Jun 2026 18:18:59 -0700
+Subject: [PATCH 00337/15333] gpu: nova-core: Blackwell: use absolute FBHUB0
+ flush registers
+
+The GB20x sysmem flush registers were defined relative to an Fbhub0Base
+register window, but there is exactly one FBHUB0 base, so expressing them
+as base-plus-offset only adds indirection.
+
+Rename these to FBHUB0 and give them their fixed absolute addresses,
+dropping the base struct and its RegisterBase impl.
+
+No functional changes.
+
+Signed-off-by: John Hubbard <jhubbard@nvidia.com>
+Link: https://patch.msgid.link/20260611011901.84517-2-jhubbard@nvidia.com
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/fb/hal/gb202.rs | 26 +++++++-------------------
+ drivers/gpu/nova-core/regs.rs         | 19 ++++++++-----------
+ 2 files changed, 15 insertions(+), 30 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/fb/hal/gb202.rs b/drivers/gpu/nova-core/fb/hal/gb202.rs
+index 038d1278c634..6747ba6c9c13 100644
+--- a/drivers/gpu/nova-core/fb/hal/gb202.rs
++++ b/drivers/gpu/nova-core/fb/hal/gb202.rs
+@@ -4,13 +4,7 @@
+ //! Blackwell GB20x framebuffer HAL.
+ 
+ use kernel::{
+-    io::{
+-        register::{
+-            RegisterBase,
+-            WithBase, //
+-        },
+-        Io, //
+-    },
++    io::Io,
+     num::Bounded,
+     prelude::*,
+     sizes::SizeConstants, //
+@@ -24,17 +18,13 @@
+ 
+ struct Gb202;
+ 
+-impl RegisterBase<regs::Fbhub0Base> for Gb202 {
+-    const BASE: usize = 0x008a_0000;
+-}
+-
+ fn read_sysmem_flush_page_gb202(bar: Bar0<'_>) -> u64 {
+     let lo = u64::from(
+-        bar.read(regs::NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_LO::of::<Gb202>())
++        bar.read(regs::NV_PFB_FBHUB0_PCIE_FLUSH_SYSMEM_ADDR_LO)
+             .adr(),
+     );
+     let hi = u64::from(
+-        bar.read(regs::NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_HI::of::<Gb202>())
++        bar.read(regs::NV_PFB_FBHUB0_PCIE_FLUSH_SYSMEM_ADDR_HI)
+             .adr(),
+     );
+ 
+@@ -44,15 +34,13 @@ fn read_sysmem_flush_page_gb202(bar: Bar0<'_>) -> u64 {
+ /// Write the sysmem flush page address through the GB20x FBHUB0 registers.
+ fn write_sysmem_flush_page_gb202(bar: Bar0<'_>, addr: Bounded<u64, 52>) {
+     // Write HI first. The hardware will trigger the flush on the LO write.
+-    bar.write(
+-        regs::NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_HI::of::<Gb202>(),
+-        regs::NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_HI::zeroed()
++    bar.write_reg(
++        regs::NV_PFB_FBHUB0_PCIE_FLUSH_SYSMEM_ADDR_HI::zeroed()
+             .with_adr(addr.shr::<32, 20>().cast::<u32>()),
+     );
+-    bar.write(
+-        regs::NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_LO::of::<Gb202>(),
++    bar.write_reg(
+         // CAST: lower 32 bits. Hardware ignores bits 7:0.
+-        regs::NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_LO::zeroed().with_adr(*addr as u32),
++        regs::NV_PFB_FBHUB0_PCIE_FLUSH_SYSMEM_ADDR_LO::zeroed().with_adr(*addr as u32),
+     );
+ }
+ 
+diff --git a/drivers/gpu/nova-core/regs.rs b/drivers/gpu/nova-core/regs.rs
+index 73339a0cff99..5ab7ccfb9855 100644
+--- a/drivers/gpu/nova-core/regs.rs
++++ b/drivers/gpu/nova-core/regs.rs
+@@ -153,11 +153,6 @@ fn fmt(&self, f: &mut kernel::fmt::Formatter<'_>) -> kernel::fmt::Result {
+ /// The base is provided by the GB10x framebuffer HAL.
+ pub(crate) struct Hshub0Base(());
+ 
+-/// Base of the GB20x FBHUB0 register window (`NV_FBHUB0_PRI_BASE` in Open RM).
+-///
+-/// The base is provided by the GB20x framebuffer HAL.
+-pub(crate) struct Fbhub0Base(());
+-
+ register! {
+     // GB10x sysmem flush registers, relative to the HSHUB0 base. GB10x routes sysmembar
+     // through a primary and an EG (egress) pair that must both be programmed to the same
+@@ -178,16 +173,18 @@ fn fmt(&self, f: &mut kernel::fmt::Formatter<'_>) -> kernel::fmt::Result {
+     pub(crate) NV_PFB_HSHUB_EG_PCIE_FLUSH_SYSMEM_ADDR_HI(u32) @ Hshub0Base + 0x000006c4 {
+         19:0    adr;
+     }
++}
+ 
+-    // GB20x sysmem flush registers, relative to the FBHUB0 base. Unlike the older
+-    // NV_PFB_NISO_FLUSH_SYSMEM_ADDR registers which encode the address with an 8-bit
+-    // right-shift, these take the raw address split into lower and upper halves. Hardware
+-    // ignores bits 7:0 of the LO register.
+-    pub(crate) NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_LO(u32) @ Fbhub0Base + 0x00001d58 {
++register! {
++    // GB20x FBHUB0 sysmem flush registers. Unlike the older
++    // NV_PFB_NISO_FLUSH_SYSMEM_ADDR registers, which encode the address with an
++    // 8-bit right-shift, these take the raw address split into lower and upper
++    // halves. Hardware ignores bits 7:0 of the LO register.
++    pub(crate) NV_PFB_FBHUB0_PCIE_FLUSH_SYSMEM_ADDR_LO(u32) @ 0x008a1d58 {
+         31:0    adr => u32;
+     }
+ 
+-    pub(crate) NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_HI(u32) @ Fbhub0Base + 0x00001d5c {
++    pub(crate) NV_PFB_FBHUB0_PCIE_FLUSH_SYSMEM_ADDR_HI(u32) @ 0x008a1d5c {
+         19:0    adr;
+     }
+ }
+-- 
+2.55.0
+

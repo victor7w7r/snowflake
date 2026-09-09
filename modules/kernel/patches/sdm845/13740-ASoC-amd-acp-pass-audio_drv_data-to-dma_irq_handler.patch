@@ -1,0 +1,48 @@
+From 0196c4b4f82beec2114ee3c13888314ca551e32a Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Mon, 10 Aug 2026 21:19:25 -0700
+Subject: [PATCH 13740/15333] ASoC: amd: acp: pass audio_drv_data to
+ dma_irq_handler
+
+The IRQ handler only needs the audio_drv_data, so pass it directly
+as the request_irq argument instead of the device pointer and a
+dev_get_drvdata() lookup.
+
+Assisted-by: opencode:deepseek-v4-flash-free
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Link: https://patch.msgid.link/20260811041925.25016-1-rosenp@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/amd/acp-pcm-dma.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/sound/soc/amd/acp-pcm-dma.c b/sound/soc/amd/acp-pcm-dma.c
+index 2b8848b6df2b..ee75737202dc 100644
+--- a/sound/soc/amd/acp-pcm-dma.c
++++ b/sound/soc/amd/acp-pcm-dma.c
+@@ -691,12 +691,10 @@ static irqreturn_t dma_irq_handler(int irq, void *arg)
+ {
+ 	u16 dscr_idx;
+ 	u32 intr_flag, ext_intr_status;
+-	struct audio_drv_data *irq_data;
++	struct audio_drv_data *irq_data = arg;
+ 	void __iomem *acp_mmio;
+-	struct device *dev = arg;
+ 	bool valid_irq = false;
+ 
+-	irq_data = dev_get_drvdata(dev);
+ 	acp_mmio = irq_data->acp_mmio;
+ 
+ 	ext_intr_status = acp_reg_read(acp_mmio, mmACP_EXTERNAL_INTR_STAT);
+@@ -1294,7 +1292,7 @@ static int acp_audio_probe(struct platform_device *pdev)
+ 		return irq;
+ 
+ 	status = devm_request_irq(&pdev->dev, irq, dma_irq_handler,
+-				  0, "ACP_IRQ", &pdev->dev);
++				  0, "ACP_IRQ", audio_drv_data);
+ 	if (status) {
+ 		dev_err(&pdev->dev, "ACP IRQ request failed\n");
+ 		return status;
+-- 
+2.55.0
+

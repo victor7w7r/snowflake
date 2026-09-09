@@ -1,0 +1,151 @@
+From 46651c650facce7cac33610ccc7a07a9c9d90df4 Mon Sep 17 00:00:00 2001
+From: Magnus Lindholm <linmag7@gmail.com>
+Date: Mon, 6 Jul 2026 18:56:43 +0200
+Subject: [PATCH 05791/15333] alpha: add ARCH_STACKWALK-based stacktrace
+ support
+
+Implement arch_stack_walk() for Alpha using a simple kernel
+stack scanning walker. Start from regs+1 for current tasks
+to skip pt_regs and use pcb.ksp for blocked tasks. Filter
+candidates with __kernel_text_address() and stop at stack
+bounds via kstack_end().
+
+Enable CONFIG_STACKTRACE_SUPPORT and CONFIG_ARCH_STACKWALK
+so generic stacktrace users (dump_stack(), /proc/*/stack,
+SysRq backtraces, etc.) work on Alpha.
+
+This provides functional in-kernel stack traces without
+requiring frame pointer unwinding.
+
+Reviewed-by: Matt Turner <mattst88@gmail.com>
+Tested-by: Matt Turner <mattst88@gmail.com>
+Signed-off-by: Magnus Lindholm <linmag7@gmail.com>
+Link: https://lore.kernel.org/r/20260706170019.2941459-3-linmag7@gmail.com
+Signed-off-by: Magnus Lindholm <linmag7@gmail.com>
+---
+ arch/alpha/Kconfig              |  4 +++
+ arch/alpha/kernel/Makefile      |  3 +-
+ arch/alpha/kernel/stacktrace.c  | 61 +++++++++++++++++++++++++++++++++
+ arch/alpha/kernel/vmlinux.lds.S |  2 ++
+ 4 files changed, 69 insertions(+), 1 deletion(-)
+ create mode 100644 arch/alpha/kernel/stacktrace.c
+
+diff --git a/arch/alpha/Kconfig b/arch/alpha/Kconfig
+index f3b882835617..7ac435c56845 100644
+--- a/arch/alpha/Kconfig
++++ b/arch/alpha/Kconfig
+@@ -39,6 +39,7 @@ config ALPHA
+ 	select MODULES_USE_ELF_RELA
+ 	select ODD_RT_SIGACTION
+ 	select OLD_SIGSUSPEND
++	select ARCH_STACKWALK
+ 	select CPU_NO_EFFICIENT_FFS if !ALPHA_EV67
+ 	select MMU_GATHER_NO_RANGE
+ 	select MMU_GATHER_RCU_TABLE_FREE
+@@ -80,6 +81,9 @@ config PGTABLE_LEVELS
+ config AUDIT_ARCH
+ 	bool
+ 
++config STACKTRACE_SUPPORT
++	def_bool y
++
+ menu "System setup"
+ 
+ choice
+diff --git a/arch/alpha/kernel/Makefile b/arch/alpha/kernel/Makefile
+index 187cd8df2faf..4ea5c189e60e 100644
+--- a/arch/alpha/kernel/Makefile
++++ b/arch/alpha/kernel/Makefile
+@@ -9,7 +9,8 @@ ccflags-y	:= -Wno-sign-compare
+ 
+ obj-y    := head.o entry.o traps.o process.o osf_sys.o irq.o \
+ 	    irq_alpha.o signal.o setup.o ptrace.o time.o \
+-	    systbls.o err_common.o io.o bugs.o termios.o
++	    systbls.o err_common.o io.o bugs.o termios.o \
++	    stacktrace.o
+ 
+ obj-$(CONFIG_VGA_HOSE)	+= console.o
+ obj-$(CONFIG_SMP)	+= smp.o
+diff --git a/arch/alpha/kernel/stacktrace.c b/arch/alpha/kernel/stacktrace.c
+new file mode 100644
+index 000000000000..74d95f591039
+--- /dev/null
++++ b/arch/alpha/kernel/stacktrace.c
+@@ -0,0 +1,61 @@
++// SPDX-License-Identifier: GPL-2.0
++#include <linux/sched.h>
++#include <linux/sched/task_stack.h>
++#include <linux/stacktrace.h>
++#include <linux/kallsyms.h>
++
++#include <asm/thread_info.h>
++#include <asm/ptrace.h>
++
++static __always_inline unsigned long alpha_get_current_ksp(void)
++{
++	unsigned long sp;
++
++	asm volatile("mov $30, %0" : "=r"(sp));
++	return sp;
++}
++
++static void alpha_scan_kernel_stack(unsigned long ksp,
++				    stack_trace_consume_fn consume_entry,
++				    void *cookie)
++{
++	unsigned long *p = (unsigned long *)ksp;
++
++	if (unlikely(ksp & (sizeof(unsigned long) - 1)))
++		return;
++
++	while (!kstack_end(p)) {
++		unsigned long addr = READ_ONCE_NOCHECK(*p++);
++
++		if (!__kernel_text_address(addr))
++			continue;
++
++		if (!consume_entry(cookie, addr))
++			break;
++	}
++}
++
++noinline void arch_stack_walk(stack_trace_consume_fn consume_entry,
++				      void *cookie,
++				      struct task_struct *task,
++				      struct pt_regs *regs)
++{
++	unsigned long ksp;
++
++	if (!task)
++		task = current;
++
++	if (regs && task == current) {
++		/*
++		 * pt_regs is stored on the kernel stack; regs+1 matches
++		 * what arch/alpha/kernel/traps.c uses as the trace start.
++		 */
++		ksp = (unsigned long)(regs + 1);
++	} else if (task == current) {
++		ksp = alpha_get_current_ksp();
++	} else {
++		ksp = task_thread_info(task)->pcb.ksp;
++	}
++
++	alpha_scan_kernel_stack(ksp, consume_entry, cookie);
++}
+diff --git a/arch/alpha/kernel/vmlinux.lds.S b/arch/alpha/kernel/vmlinux.lds.S
+index 2d136c63db16..95704e64b6a6 100644
+--- a/arch/alpha/kernel/vmlinux.lds.S
++++ b/arch/alpha/kernel/vmlinux.lds.S
+@@ -28,6 +28,8 @@ SECTIONS
+ 		TEXT_TEXT
+ 		SCHED_TEXT
+ 		LOCK_TEXT
++		IRQENTRY_TEXT
++		SOFTIRQENTRY_TEXT
+ 		*(.fixup)
+ 		*(.gnu.warning)
+ 	} :text
+-- 
+2.55.0
+

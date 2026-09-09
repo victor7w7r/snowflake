@@ -1,0 +1,43 @@
+From 22a42ee5dad307d4236839e75929c86346cf42e3 Mon Sep 17 00:00:00 2001
+From: Randy Dunlap <rdunlap@infradead.org>
+Date: Fri, 7 Aug 2026 21:53:31 -0700
+Subject: [PATCH 13208/15333] docs: sphinx-build-wrapper: include localversion
+ in kernel version string
+
+Add any localversion* text to the kernel version string
+so that the docs index (home) page accurately indicates what
+the docs build version is.
+
+E.g.:
+  7.2.0-rc6-next-20260807
+
+Signed-off-by: Randy Dunlap <rdunlap@infradead.org>
+Signed-off-by: Jonathan Corbet <corbet@lwn.net>
+Message-ID: <20260808045331.326769-1-rdunlap@infradead.org>
+---
+ tools/docs/sphinx-build-wrapper | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/tools/docs/sphinx-build-wrapper b/tools/docs/sphinx-build-wrapper
+index 1bb962202784..ec83583e229a 100755
+--- a/tools/docs/sphinx-build-wrapper
++++ b/tools/docs/sphinx-build-wrapper
+@@ -219,6 +219,15 @@ class SphinxBuilder:
+         self.kernelrelease = os.environ.get("KERNELRELEASE", "unknown")
+         self.pdflatex = os.environ.get("PDFLATEX", "xelatex")
+ 
++        #
++        # Add localversion* to kernelversion if present
++        #
++        for file in glob(os.environ["srctree"] + "/localversion*"):
++            if not file.endswith(".orig"):
++                with open(file, 'r', encoding='utf-8') as f:
++                    text = f.read()
++                    self.kernelversion += text
++
+         #
+         # Kernel main Makefile defines a PYTHON3 variable whose default is
+         # "python3". When set to a different value, it allows running a
+-- 
+2.55.0
+

@@ -1,0 +1,70 @@
+From f47180b0e9cc59e1989adb093a4b94187642b405 Mon Sep 17 00:00:00 2001
+From: Ian Bridges <icb@fastmail.org>
+Date: Fri, 3 Jul 2026 07:12:46 -0500
+Subject: [PATCH 02652/15333] kunit: string-stream: Replace strlcat() with
+ strscpy() and seq_buf
+
+In preparation for removing the strlcat() API[1], replace its uses in
+string-stream.
+
+string_stream_vadd() appends at most a single newline into space that
+was explicitly reserved when the fragment was sized, so a bounded copy
+at the end of the string is enough. The return value of strscpy()
+keeps the length accounting unchanged. string_stream_get_string()
+concatenates a variable number of fragments into a buffer sized to
+hold them all, which is what seq_buf is for.
+
+Link: https://lore.kernel.org/r/akenPvVk1xr_-480@dev
+Link: https://github.com/KSPP/linux/issues/370 [1]
+Signed-off-by: Ian Bridges <icb@fastmail.org>
+Reviewed-by: David Gow <david@davidgow.net>
+Signed-off-by: Shuah Khan <skhan@linuxfoundation.org>
+---
+ lib/kunit/string-stream.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/lib/kunit/string-stream.c b/lib/kunit/string-stream.c
+index 0d8f1b30559b..51ba40ebf19f 100644
+--- a/lib/kunit/string-stream.c
++++ b/lib/kunit/string-stream.c
+@@ -9,6 +9,7 @@
+ #include <kunit/static_stub.h>
+ #include <kunit/test.h>
+ #include <linux/list.h>
++#include <linux/seq_buf.h>
+ #include <linux/slab.h>
+ 
+ #include "string-stream.h"
+@@ -74,7 +75,8 @@ int string_stream_vadd(struct string_stream *stream,
+ 
+ 		/* Append newline if necessary. */
+ 		if (frag_container->fragment[result_len - 1] != '\n')
+-			result_len = strlcat(frag_container->fragment, "\n", buf_len);
++			result_len += strscpy(frag_container->fragment + result_len,
++					      "\n", buf_len - result_len);
+ 	} else {
+ 		result_len = vsnprintf(frag_container->fragment, buf_len, fmt, args);
+ 	}
+@@ -118,15 +120,18 @@ char *string_stream_get_string(struct string_stream *stream)
+ {
+ 	struct string_stream_fragment *frag_container;
+ 	size_t buf_len = stream->length + 1; /* +1 for null byte. */
++	struct seq_buf sb;
+ 	char *buf;
+ 
+ 	buf = kzalloc(buf_len, stream->gfp);
+ 	if (!buf)
+ 		return NULL;
+ 
++	seq_buf_init(&sb, buf, buf_len);
++
+ 	spin_lock(&stream->lock);
+ 	list_for_each_entry(frag_container, &stream->fragments, node)
+-		strlcat(buf, frag_container->fragment, buf_len);
++		seq_buf_puts(&sb, frag_container->fragment);
+ 	spin_unlock(&stream->lock);
+ 
+ 	return buf;
+-- 
+2.55.0
+

@@ -1,0 +1,59 @@
+From 686a639c02109960c6da9c82d0689568a3f46953 Mon Sep 17 00:00:00 2001
+From: Tomer Maimon <tmaimon77@gmail.com>
+Date: Mon, 6 Jul 2026 17:48:26 +0300
+Subject: [PATCH 12942/15333] dt-bindings: watchdog: npcm: add GCR syscon
+ property
+
+NPCM750 and NPCM845 latch watchdog reset indications in the SoC
+GCR block rather than in the watchdog block itself.
+
+Add the optional nuvoton,sysgcr phandle so watchdog nodes can
+reference the shared GCR reset-status registers that hold those
+latched watchdog reset indications.
+
+This is needed by the following reset-status support, which reads
+those latches and reports watchdog-caused resets through bootstatus.
+
+Signed-off-by: Tomer Maimon <tmaimon77@gmail.com>
+Acked-by: Conor Dooley <conor.dooley@microchip.com>
+Link: https://lore.kernel.org/r/20260706144828.3517631-2-tmaimon77@gmail.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ .../bindings/watchdog/nuvoton,npcm750-wdt.yaml     | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/watchdog/nuvoton,npcm750-wdt.yaml b/Documentation/devicetree/bindings/watchdog/nuvoton,npcm750-wdt.yaml
+index 7aa30f5b5c49..81269fdc81a5 100644
+--- a/Documentation/devicetree/bindings/watchdog/nuvoton,npcm750-wdt.yaml
++++ b/Documentation/devicetree/bindings/watchdog/nuvoton,npcm750-wdt.yaml
+@@ -16,6 +16,14 @@ description:
+ 
+ allOf:
+   - $ref: watchdog.yaml#
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: nuvoton,wpcm450-wdt
++    then:
++      properties:
++        nuvoton,sysgcr: false
+ 
+ properties:
+   compatible:
+@@ -40,6 +48,12 @@ properties:
+   clock-frequency:
+     description: Frequency in Hz of the clock that drives the NPCM timer.
+ 
++  nuvoton,sysgcr:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description:
++      a phandle to access the GCR reset-status registers that latch
++      watchdog reset indications on NPCM750 and NPCM845.
++
+ required:
+   - compatible
+   - reg
+-- 
+2.55.0
+

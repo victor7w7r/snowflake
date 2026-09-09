@@ -1,0 +1,55 @@
+From c341749d6abca2b81946f92e55567b5765b2b610 Mon Sep 17 00:00:00 2001
+From: Namhyung Kim <namhyung@kernel.org>
+Date: Fri, 10 Jul 2026 17:04:19 -0700
+Subject: [PATCH 05149/15333] perf test: Update test for --for-each-cgroup
+ option
+
+To simply check the number of output lines with and without the option.
+
+Before this series, it failed like below:
+
+  $ perf test -v 125
+  125: perf stat --bpf-counters --for-each-cgroup test:
+  ---- start ----
+  test child forked, pid 1941516
+  Normal output has 22 lines, but it now has 54
+  ---- end(-1) ----
+  125: perf stat --bpf-counters --for-each-cgroup test         : FAILED!
+
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/tests/shell/stat_bpf_counters_cgrp.sh | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/tools/perf/tests/shell/stat_bpf_counters_cgrp.sh b/tools/perf/tests/shell/stat_bpf_counters_cgrp.sh
+index ff2e06c408bc..febe3af06441 100755
+--- a/tools/perf/tests/shell/stat_bpf_counters_cgrp.sh
++++ b/tools/perf/tests/shell/stat_bpf_counters_cgrp.sh
+@@ -58,9 +58,24 @@ check_system_wide_counted()
+ 	fi
+ }
+ 
++# Missing flags in evlist__clone() resulted in different output.
++# Just check the number of output lines for simple verification.
++check_evlist_expand()
++{
++	normal_output=$(perf stat -a -x, true 2>&1 | wc -l)
++	expand_output=$(perf stat -a -x, --bpf-counters --for-each-cgroup / true 2>&1 | wc -l)
++	if [ "${normal_output}" != "${expand_output}" ]; then
++		if [ "${verbose}" = "1" ]; then
++			echo "Normal output has ${normal_output} lines, but it now has ${expand_output}"
++		fi
++		exit 1
++	fi
++}
++
+ check_bpf_counter
+ find_cgroups
+ 
+ check_system_wide_counted
++check_evlist_expand
+ 
+ exit 0
+-- 
+2.55.0
+

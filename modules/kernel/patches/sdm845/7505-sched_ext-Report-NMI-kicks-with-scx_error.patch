@@ -1,0 +1,52 @@
+From e06ece82d7b078b511d36fbaca46df231c647e16 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Mon, 27 Jul 2026 11:20:32 -1000
+Subject: [PATCH 07505/15333] sched_ext: Report NMI kicks with scx_error()
+
+The per-cpu kick lists are protected by IRQ masking which doesn't stop NMIs,
+so scx_bpf_kick_cpu() from NMI silently drops the kick after a one-time
+warning. A dropped kick can leave a CPU idle when the scheduler believes it
+was woken, which is a correctness problem for the scheduler even if the
+kernel is fine. Now that scx_error() works from NMI, abort the scheduler
+instead so that the bug is surfaced deterministically. The warned_nmi_kick
+tracking is no longer needed.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/ext.c      | 6 +-----
+ kernel/sched/ext/internal.h | 1 -
+ 2 files changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index cc526776b3cc..cff55fa3d58f 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -9219,11 +9219,7 @@ void scx_kick_cpu(struct scx_sched *sch, s32 cpu, u64 flags)
+ 	 * not mask NMIs, so kicking from NMI could corrupt it and is unsupported.
+ 	 */
+ 	if (unlikely(in_nmi())) {
+-		if (!sch->warned_nmi_kick) {
+-			sch->warned_nmi_kick = true;
+-			pr_warn("sched_ext: %s: scx_bpf_kick_cpu() from NMI ignored\n",
+-				sch->ops.name);
+-		}
++		scx_error(sch, "scx_bpf_kick_cpu() called from NMI");
+ 		return;
+ 	}
+ 
+diff --git a/kernel/sched/ext/internal.h b/kernel/sched/ext/internal.h
+index 5b73ffb0251a..7501ec28958b 100644
+--- a/kernel/sched/ext/internal.h
++++ b/kernel/sched/ext/internal.h
+@@ -1543,7 +1543,6 @@ struct scx_sched {
+ 	 */
+ 	bool			warned_zero_slice:1;
+ 	bool			warned_unassoc_progs:1;
+-	bool			warned_nmi_kick:1;
+ 
+ 	struct list_head	all;
+ 
+-- 
+2.55.0
+

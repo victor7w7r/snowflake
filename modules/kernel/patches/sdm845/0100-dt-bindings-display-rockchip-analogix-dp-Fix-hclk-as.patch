@@ -1,0 +1,103 @@
+From 826ab13cf73e7bd5b268085c9594850f6a7fc7fd Mon Sep 17 00:00:00 2001
+From: Damon Ding <damon.ding@rock-chips.com>
+Date: Mon, 1 Jun 2026 14:50:50 +0800
+Subject: [PATCH 00100/15333] dt-bindings: display: rockchip: analogix-dp: Fix
+ hclk as third clock for RK3588
+
+RK3588 eDP controller requires HCLK_VO1 to access the VO1 GRF
+registers and enable the video datapath.
+
+Previously, the clock was enabled implicitly via the 'rockchip,vo-grf'
+phandle reference, which allowed the eDP to work without explicitly
+managing the hclk_vo1 clock. However, this is not safe or explicit.
+
+To make the clock dependency explicit, enforce per-SoC clock-names
+requirements:
+ - RK3288: 2 clocks (dp, pclk)
+ - RK3399: 3 clocks (dp, pclk, grf)
+ - RK3588: 3 clocks (dp, pclk, hclk)
+
+Do not reuse the 'grf' clock name for RK3588 because it represents
+a different clock with distinct control logic:
+- The 'grf' clock is only for GRF register access and is toggled
+  dynamically during register access.
+- The 'hclk' clock controls both GRF access and video datapath
+  gating, and must remain enabled during probe.
+
+Fixes: f855146263b1 ("dt-bindings: display: rockchip: analogix-dp: Add support for RK3588")
+Signed-off-by: Damon Ding <damon.ding@rock-chips.com>
+Acked-by: Conor Dooley <conor.dooley@microchip.com>
+Signed-off-by: Heiko Stuebner <heiko@sntech.de>
+Link: https://patch.msgid.link/20260601065100.1103873-2-damon.ding@rock-chips.com
+---
+ .../rockchip/rockchip,analogix-dp.yaml        | 40 ++++++++++++++++++-
+ 1 file changed, 39 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/devicetree/bindings/display/rockchip/rockchip,analogix-dp.yaml b/Documentation/devicetree/bindings/display/rockchip/rockchip,analogix-dp.yaml
+index d99b23b88cc5..6643889f2a9c 100644
+--- a/Documentation/devicetree/bindings/display/rockchip/rockchip,analogix-dp.yaml
++++ b/Documentation/devicetree/bindings/display/rockchip/rockchip,analogix-dp.yaml
+@@ -26,7 +26,9 @@ properties:
+     items:
+       - const: dp
+       - const: pclk
+-      - const: grf
++      - enum:
++          - grf
++          - hclk
+ 
+   power-domains:
+     maxItems: 1
+@@ -60,6 +62,35 @@ required:
+ allOf:
+   - $ref: /schemas/display/bridge/analogix,dp.yaml#
+ 
++  - if:
++      properties:
++        compatible:
++          contains:
++            enum:
++              - rockchip,rk3288-dp
++    then:
++      properties:
++        clocks:
++          maxItems: 2
++        clock-names:
++          maxItems: 2
++
++  - if:
++      properties:
++        compatible:
++          contains:
++            enum:
++              - rockchip,rk3399-edp
++    then:
++      properties:
++        clocks:
++          minItems: 3
++        clock-names:
++          items:
++            - const: dp
++            - const: pclk
++            - const: grf
++
+   - if:
+       properties:
+         compatible:
+@@ -68,6 +99,13 @@ allOf:
+               - rockchip,rk3588-edp
+     then:
+       properties:
++        clocks:
++          minItems: 3
++        clock-names:
++          items:
++            - const: dp
++            - const: pclk
++            - const: hclk
+         resets:
+           minItems: 2
+         reset-names:
+-- 
+2.55.0
+

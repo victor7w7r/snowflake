@@ -1,0 +1,68 @@
+From 2d5e8c2167ab7af17535cd7a6f5bda995e85c7b2 Mon Sep 17 00:00:00 2001
+From: Chen-Yu Tsai <wenst@chromium.org>
+Date: Mon, 3 Aug 2026 19:13:18 +0800
+Subject: [PATCH 11151/15333] drm/sun4i: framebuffer: Set
+ mode_config.normalize_zpos
+
+Back when support for zpos was added in commit 47a05f4a68f9 ("drm/sun4i:
+backend: Add support for zpos"), a custom atomic_check callback was also
+added in commit b8f1230dd3bf ("drm/sun4i: framebuffer: Add a custom
+atomic_check") to have a place to call drm_atomic_normalize_zpos().
+
+Commit 49efffc7fbd4 ("drm: Add drm_mode_config->normalize_zpos boolean")
+added drm_atomic_normalize_zpos() to the standard atomic_check function.
+
+Set mode_config.normalize_zpos and drop the custom atomic_check
+implementation, which at this point is just a simplified copy of the
+standard one. The standard one also checks whether async updates are
+valid and updates the self refresh state, but neither feature is
+supported by this driver.
+
+Acked-by: Jernej Skrabec <jernej.skrabec@gmail.com>
+Link: https://patch.msgid.link/20260803111319.2836240-1-wenst@chromium.org
+Signed-off-by: Chen-Yu Tsai <wenst@chromium.org>
+---
+ drivers/gpu/drm/sun4i/sun4i_framebuffer.c | 19 ++-----------------
+ 1 file changed, 2 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/gpu/drm/sun4i/sun4i_framebuffer.c b/drivers/gpu/drm/sun4i/sun4i_framebuffer.c
+index 9c8ef927d929..fc822bc2c62b 100644
+--- a/drivers/gpu/drm/sun4i/sun4i_framebuffer.c
++++ b/drivers/gpu/drm/sun4i/sun4i_framebuffer.c
+@@ -14,24 +14,8 @@
+ #include "sun4i_drv.h"
+ #include "sun4i_framebuffer.h"
+ 
+-static int sun4i_de_atomic_check(struct drm_device *dev,
+-				 struct drm_atomic_commit *state)
+-{
+-	int ret;
+-
+-	ret = drm_atomic_helper_check_modeset(dev, state);
+-	if (ret)
+-		return ret;
+-
+-	ret = drm_atomic_normalize_zpos(dev, state);
+-	if (ret)
+-		return ret;
+-
+-	return drm_atomic_helper_check_planes(dev, state);
+-}
+-
+ static const struct drm_mode_config_funcs sun4i_de_mode_config_funcs = {
+-	.atomic_check		= sun4i_de_atomic_check,
++	.atomic_check		= drm_atomic_helper_check,
+ 	.atomic_commit		= drm_atomic_helper_commit,
+ 	.fb_create		= drm_gem_fb_create,
+ };
+@@ -46,6 +30,7 @@ void sun4i_framebuffer_init(struct drm_device *drm)
+ 
+ 	drm->mode_config.max_width = 8192;
+ 	drm->mode_config.max_height = 8192;
++	drm->mode_config.normalize_zpos = true;
+ 
+ 	drm->mode_config.funcs = &sun4i_de_mode_config_funcs;
+ 	drm->mode_config.helper_private = &sun4i_de_mode_config_helpers;
+-- 
+2.55.0
+

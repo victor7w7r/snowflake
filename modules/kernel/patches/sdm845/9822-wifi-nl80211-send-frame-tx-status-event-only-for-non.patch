@@ -1,0 +1,38 @@
+From 69ab1d978efba9a242c7c7a92ccf1b643f137630 Mon Sep 17 00:00:00 2001
+From: Arend van Spriel <arend.vanspriel@broadcom.com>
+Date: Fri, 31 Jul 2026 14:35:09 +0200
+Subject: [PATCH 09822/15333] wifi: nl80211: send frame tx status event only
+ for non-zero cookie
+
+The cookie value assigned by cfg80211_assign_cookie() is guaranteed to be
+non-zero. So the zero cookie value has special use in tx_control_port where
+userspace can indicate dont_wait_for_ack, ie. not interested in status. The
+wil6210 driver also uses the zero cookie when wil_cfg80211_mgmt_tx() is
+invoked from debugfs api the driver provides so the event is also redundant
+in that scenario.
+
+Signed-off-by: Arend van Spriel <arend.vanspriel@broadcom.com>
+Link: https://patch.msgid.link/20260731123509.1975281-14-arend.vanspriel@broadcom.com
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ net/wireless/nl80211.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index d12bef11b94f..ac895e02cd41 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -22046,6 +22046,10 @@ static void nl80211_frame_tx_status(struct wireless_dev *wdev,
+ 	struct sk_buff *msg;
+ 	void *hdr;
+ 
++	/* userspace not interested in zero-cookie status */
++	if (!status->cookie)
++		return;
++
+ 	if (command == NL80211_CMD_FRAME_TX_STATUS)
+ 		trace_cfg80211_mgmt_tx_status(wdev, status->cookie,
+ 					      status->ack);
+-- 
+2.55.0
+

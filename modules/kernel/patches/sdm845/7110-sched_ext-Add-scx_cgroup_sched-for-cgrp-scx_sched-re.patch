@@ -1,0 +1,147 @@
+From 7947442047cff1d296ab615b8c6ddbc7c9b7bf21 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Thu, 23 Jul 2026 15:07:56 -1000
+Subject: [PATCH 07110/15333] sched_ext: Add scx_cgroup_sched() for
+ cgrp->scx_sched reads
+
+cgrp->scx_sched is __rcu and published with rcu_assign_pointer() but every
+reader loads it with a plain access, so sparse flags all of them. The reads
+are lock-protected: enable/disable paths rewrite the field under all of
+scx_enable_mutex, scx_fork_rwsem and cgroup_mutex, and cgroup creation
+inherits the parent's sched under cgroup_mutex before the new cgroup is
+reachable, so holding any one of the three locks makes the read stable.
+
+Add scx_cgroup_sched() which states the protection with
+rcu_dereference_check() and convert the readers. No functional changes.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ kernel/sched/ext/ext.c |  6 +++---
+ kernel/sched/ext/sub.c | 16 +++++++++-------
+ kernel/sched/ext/sub.h | 14 ++++++++++++++
+ 3 files changed, 26 insertions(+), 10 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index aca8d2380509..08cadca29c85 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -3807,7 +3807,7 @@ int scx_fork(struct task_struct *p, struct kernel_clone_args *kargs)
+ 
+ 	if (scx_init_task_enabled) {
+ #ifdef CONFIG_EXT_SUB_SCHED
+-		struct scx_sched *sch = kargs->cset->dfl_cgrp->scx_sched;
++		struct scx_sched *sch = scx_cgroup_sched(kargs->cset->dfl_cgrp);
+ #else
+ 		struct scx_sched *sch = scx_root;
+ #endif
+@@ -4461,7 +4461,7 @@ int scx_tg_online(struct task_group *tg)
+ 		 * always belongs to the root sched.
+ 		 */
+ 		if (cgroup_on_dfl(tg->css.cgroup))
+-			sch = tg->css.cgroup->scx_sched;
++			sch = scx_cgroup_sched(tg->css.cgroup);
+ 		else
+ 			sch = scx_tg_sched(&root_task_group);
+ 
+@@ -4542,7 +4542,7 @@ int scx_cgroup_can_attach(struct cgroup_taskset *tset)
+ 		 * cgroup's sched and is reported through the
+ 		 * exit_task/init_task pair that the re-homing generates.
+ 		 */
+-		if (!sch || sch != task_css_set(p)->mg_dst_cset->dfl_cgrp->scx_sched)
++		if (!sch || sch != scx_cgroup_sched(task_css_set(p)->mg_dst_cset->dfl_cgrp))
+ 			continue;
+ 
+ 		if (SCX_HAS_OP(sch, cgroup_prep_move)) {
+diff --git a/kernel/sched/ext/sub.c b/kernel/sched/ext/sub.c
+index 6da6c91e4287..2a8c979c7976 100644
+--- a/kernel/sched/ext/sub.c
++++ b/kernel/sched/ext/sub.c
+@@ -1204,7 +1204,7 @@ void scx_sub_disable(struct scx_sched *sch)
+ /* verify that a scheduler can be attached to @cgrp and return the parent */
+ static struct scx_sched *find_parent_sched(struct cgroup *cgrp)
+ {
+-	struct scx_sched *parent = cgrp->scx_sched;
++	struct scx_sched *parent = scx_cgroup_sched(cgrp);
+ 	struct scx_sched *pos;
+ 
+ 	lockdep_assert_held(&scx_sched_lock);
+@@ -1578,7 +1578,7 @@ static s32 scx_cgroup_task_migrating(struct cgroup_task_migrate_ctx *ctx)
+ 	if (!scx_cgroup_enabled)
+ 		return NOTIFY_OK;
+ 
+-	to = ctx->dst_dcgrp->scx_sched;
++	to = scx_cgroup_sched(ctx->dst_dcgrp);
+ 	if (scx_task_on_sched(to, p))
+ 		return NOTIFY_OK;
+ 
+@@ -1612,7 +1612,7 @@ static void scx_cgroup_task_migrated(struct cgroup_task_migrate_ctx *ctx)
+ 	if (!scx_cgroup_enabled)
+ 		return;
+ 
+-	to = ctx->dst_dcgrp->scx_sched;
++	to = scx_cgroup_sched(ctx->dst_dcgrp);
+ 	if (scx_task_on_sched(to, p))
+ 		return;
+ 
+@@ -1639,7 +1639,7 @@ static void scx_cgroup_task_migrate_canceled(struct cgroup_task_migrate_ctx *ctx
+ 	if (!scx_cgroup_enabled)
+ 		return;
+ 
+-	to = ctx->dst_dcgrp->scx_sched;
++	to = scx_cgroup_sched(ctx->dst_dcgrp);
+ 	if (scx_task_on_sched(to, p))
+ 		return;
+ 
+@@ -1653,6 +1653,7 @@ static s32 scx_cgroup_lifetime_notify(struct notifier_block *nb,
+ {
+ 	struct cgroup *cgrp = data;
+ 	struct cgroup *parent = cgroup_parent(cgrp);
++	struct scx_sched *sch;
+ 
+ 	if (!cgroup_on_dfl(cgrp))
+ 		return NOTIFY_OK;
+@@ -1661,12 +1662,13 @@ static s32 scx_cgroup_lifetime_notify(struct notifier_block *nb,
+ 	case CGROUP_LIFETIME_ONLINE:
+ 		/* inherit ->scx_sched from $parent */
+ 		if (parent)
+-			rcu_assign_pointer(cgrp->scx_sched, parent->scx_sched);
++			rcu_assign_pointer(cgrp->scx_sched, scx_cgroup_sched(parent));
+ 		break;
+ 	case CGROUP_LIFETIME_OFFLINE:
+ 		/* if there is a sched attached, shoot it down */
+-		if (cgrp->scx_sched && cgrp->scx_sched->cgrp == cgrp)
+-			scx_exit(cgrp->scx_sched, SCX_EXIT_UNREG_KERN,
++		sch = scx_cgroup_sched(cgrp);
++		if (sch && sch->cgrp == cgrp)
++			scx_exit(sch, SCX_EXIT_UNREG_KERN,
+ 				 SCX_ECODE_RSN_CGROUP_OFFLINE,
+ 				 "cgroup %llu going offline", cgroup_id(cgrp));
+ 		break;
+diff --git a/kernel/sched/ext/sub.h b/kernel/sched/ext/sub.h
+index 625d7ce334aa..0019b75a2560 100644
+--- a/kernel/sched/ext/sub.h
++++ b/kernel/sched/ext/sub.h
+@@ -39,6 +39,20 @@ struct scx_dispatch_q *scx_local_or_reject_dsq(struct scx_sched *sch, struct rq
+ bool scx_task_reenq_on_cap_revoke(struct rq *rq, struct task_struct *p);
+ void scx_reenq_reject(struct rq *rq);
+ 
++/*
++ * cgrp->scx_sched is written by root/sub enable/disable under all of
++ * scx_enable_mutex, scx_fork_rwsem and cgroup_mutex. A new cgroup inherits the
++ * parent's sched under just cgroup_mutex but is not yet reachable by the other
++ * two lock holders. Any one of the three locks stabilizes the association.
++ */
++static inline struct scx_sched *scx_cgroup_sched(struct cgroup *cgrp)
++{
++	return rcu_dereference_check(cgrp->scx_sched,
++				     lockdep_is_held(&cgroup_mutex) ||
++				     percpu_rwsem_is_held(&scx_fork_rwsem) ||
++				     lockdep_is_held(&scx_enable_mutex));
++}
++
+ static inline const char *sch_cgrp_path(struct scx_sched *sch)
+ {
+ 	return sch->cgrp_path;
+-- 
+2.55.0
+

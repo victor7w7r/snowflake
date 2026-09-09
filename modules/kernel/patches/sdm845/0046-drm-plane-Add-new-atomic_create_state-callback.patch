@@ -1,0 +1,177 @@
+From 1a185ddecaf9609e76ed289037afd6cb289e7bee Mon Sep 17 00:00:00 2001
+From: Maxime Ripard <mripard@kernel.org>
+Date: Tue, 26 May 2026 18:46:22 +0200
+Subject: [PATCH 00046/15333] drm/plane: Add new atomic_create_state callback
+
+Commit 47b5ac7daa46 ("drm/atomic: Add new atomic_create_state callback
+to drm_private_obj") introduced a new pattern for allocating drm object
+states.
+
+Instead of relying on the reset() callback, it created a new
+atomic_create_state hook. This is helpful because reset is a bit
+overloaded: it's used to create the initial software state, reset it,
+but also reset the hardware.
+
+It can also be used either at probe time, to create the initial state
+and possibly reset the hardware to an expected default, but also during
+suspend/resume.
+
+Both these cases come with different expectations too: during the
+initialization, we want to initialize all states, but during
+suspend/resume, drm_private_states for example are expected to be kept
+around.
+
+reset() also isn't fallible, which makes it harder to handle
+initialization errors properly. This is only really relevant for some
+drivers though, since all the helpers for reset only create a new
+state, and don't touch the hardware at all.
+
+It was thus decided to create a new hook that would allocate and
+initialize a pristine state without any side effect:
+atomic_create_state to untangle a bit some of it, and to separate the
+initialization with the actual reset one might need during a
+suspend/resume.
+
+Continue the transition to the new pattern with planes.
+
+Reviewed-by: Laurent Pinchart <laurent.pinchart+renesas@ideasonboard.com>
+Reviewed-by: Thomas Zimmermann <tzimmermann@suse.de>
+Link: https://patch.msgid.link/20260526-drm-mode-config-init-v6-10-852346394200@kernel.org
+Signed-off-by: Maxime Ripard <mripard@kernel.org>
+---
+ drivers/gpu/drm/drm_atomic_state_helper.c | 25 ++++++++++++++++++
+ drivers/gpu/drm/drm_mode_config.c         | 31 ++++++++++++++++++++++-
+ include/drm/drm_atomic_state_helper.h     |  2 ++
+ include/drm/drm_plane.h                   | 16 ++++++++++++
+ 4 files changed, 73 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/drm_atomic_state_helper.c b/drivers/gpu/drm/drm_atomic_state_helper.c
+index ee01700d4ca7..ab171bfe6e86 100644
+--- a/drivers/gpu/drm/drm_atomic_state_helper.c
++++ b/drivers/gpu/drm/drm_atomic_state_helper.c
+@@ -340,6 +340,31 @@ void drm_atomic_helper_plane_reset(struct drm_plane *plane)
+ }
+ EXPORT_SYMBOL(drm_atomic_helper_plane_reset);
+ 
++/**
++ * drm_atomic_helper_plane_create_state - default &drm_plane_funcs.atomic_create_state hook for planes
++ * @plane: plane object
++ *
++ * Allocates and initializes pristine @drm_plane_state.
++ *
++ * This is useful for drivers that don't subclass @drm_plane_state.
++ *
++ * RETURNS:
++ * Pointer to new plane state, or ERR_PTR on failure.
++ */
++struct drm_plane_state *drm_atomic_helper_plane_create_state(struct drm_plane *plane)
++{
++	struct drm_plane_state *state;
++
++	state = kzalloc_obj(*state);
++	if (!state)
++		return ERR_PTR(-ENOMEM);
++
++	__drm_atomic_helper_plane_state_init(state, plane);
++
++	return state;
++}
++EXPORT_SYMBOL(drm_atomic_helper_plane_create_state);
++
+ /**
+  * __drm_atomic_helper_plane_duplicate_state - copy atomic plane state
+  * @plane: plane object
+diff --git a/drivers/gpu/drm/drm_mode_config.c b/drivers/gpu/drm/drm_mode_config.c
+index c33382a38191..fa609357858f 100644
+--- a/drivers/gpu/drm/drm_mode_config.c
++++ b/drivers/gpu/drm/drm_mode_config.c
+@@ -182,6 +182,32 @@ int drm_mode_getresources(struct drm_device *dev, void *data,
+ 	return ret;
+ }
+ 
++static int drm_mode_config_plane_create_state(struct drm_plane *plane)
++{
++	struct drm_plane_state *plane_state;
++
++	if (!plane->funcs->atomic_create_state)
++		return 0;
++
++	plane_state = plane->funcs->atomic_create_state(plane);
++	if (IS_ERR(plane_state))
++		return PTR_ERR(plane_state);
++
++	plane->state = plane_state;
++
++	return 0;
++}
++
++static int drm_mode_config_plane_reset_with_create_state(struct drm_plane *plane)
++{
++	if (plane->state) {
++		plane->funcs->atomic_destroy_state(plane, plane->state);
++		plane->state = NULL;
++	}
++
++	return drm_mode_config_plane_create_state(plane);
++}
++
+ /**
+  * drm_mode_config_reset - call ->reset callbacks
+  * @dev: drm device
+@@ -206,9 +232,12 @@ void drm_mode_config_reset(struct drm_device *dev)
+ 	drm_for_each_colorop(colorop, dev)
+ 		drm_colorop_reset(colorop);
+ 
+-	drm_for_each_plane(plane, dev)
++	drm_for_each_plane(plane, dev) {
+ 		if (plane->funcs->reset)
+ 			plane->funcs->reset(plane);
++		else if (plane->funcs->atomic_create_state)
++			drm_mode_config_plane_reset_with_create_state(plane);
++	}
+ 
+ 	drm_for_each_crtc(crtc, dev)
+ 		if (crtc->funcs->reset)
+diff --git a/include/drm/drm_atomic_state_helper.h b/include/drm/drm_atomic_state_helper.h
+index 691c1ccfa4e0..8d1ef268fdef 100644
+--- a/include/drm/drm_atomic_state_helper.h
++++ b/include/drm/drm_atomic_state_helper.h
+@@ -55,6 +55,8 @@ void drm_atomic_helper_crtc_destroy_state(struct drm_crtc *crtc,
+ 
+ void __drm_atomic_helper_plane_state_init(struct drm_plane_state *state,
+ 					   struct drm_plane *plane);
++struct drm_plane_state *
++drm_atomic_helper_plane_create_state(struct drm_plane *plane);
+ void __drm_atomic_helper_plane_reset(struct drm_plane *plane,
+ 				     struct drm_plane_state *state);
+ void drm_atomic_helper_plane_reset(struct drm_plane *plane);
+diff --git a/include/drm/drm_plane.h b/include/drm/drm_plane.h
+index 419c88c873a6..2c5a5a70a71b 100644
+--- a/include/drm/drm_plane.h
++++ b/include/drm/drm_plane.h
+@@ -388,6 +388,22 @@ struct drm_plane_funcs {
+ 	int (*set_property)(struct drm_plane *plane,
+ 			    struct drm_property *property, uint64_t val);
+ 
++	/**
++	 * @atomic_create_state:
++	 *
++	 * Allocate a pristine, initialized, state for the plane object
++	 * and return it. This callback must have no side effects: in
++	 * particular, the returned state must not be assigned to the
++	 * object's state pointer and it must not affect the hardware
++	 * state.
++	 *
++	 * RETURNS:
++	 *
++	 * A new, pristine, plane state instance or an error pointer
++	 * on failure.
++	 */
++	struct drm_plane_state *(*atomic_create_state)(struct drm_plane *plane);
++
+ 	/**
+ 	 * @atomic_duplicate_state:
+ 	 *
+-- 
+2.55.0
+

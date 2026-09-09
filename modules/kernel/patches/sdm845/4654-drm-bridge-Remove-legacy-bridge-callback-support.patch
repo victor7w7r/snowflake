@@ -1,0 +1,446 @@
+From 3e32e6672fa30094fbf335b0da7bbeec48fca8b6 Mon Sep 17 00:00:00 2001
+From: Maxime Ripard <mripard@kernel.org>
+Date: Tue, 7 Jul 2026 17:11:44 +0200
+Subject: [PATCH 04654/15333] drm/bridge: Remove legacy bridge callback support
+
+All bridge drivers have been converted to the atomic variants of the
+enable, disable, pre_enable, and post_disable callbacks.
+
+Remove the deprecated legacy hooks from drm_bridge_funcs, the
+drm_bridge_is_atomic() helper that was only needed to distinguish
+between atomic and non-atomic bridges, and the legacy bridge test
+cases.
+
+Since all bridges are now atomic, unconditionally initialize the
+private object state at attach time.
+
+Reviewed-by: Laurent Pinchart <laurent.pinchart+renesas@ideasonboard.com>
+Reviewed-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+Link: https://patch.msgid.link/20260707-drm-all-atomic-bridges-v2-37-21d03cbca446@kernel.org
+Signed-off-by: Maxime Ripard <mripard@kernel.org>
+---
+ drivers/gpu/drm/drm_bridge.c            |  61 +++++---------
+ drivers/gpu/drm/tests/drm_bridge_test.c | 104 ------------------------
+ include/drm/drm_bridge.h                | 103 -----------------------
+ 3 files changed, 20 insertions(+), 248 deletions(-)
+
+diff --git a/drivers/gpu/drm/drm_bridge.c b/drivers/gpu/drm/drm_bridge.c
+index 07914b91a76c..83f1809a5d37 100644
+--- a/drivers/gpu/drm/drm_bridge.c
++++ b/drivers/gpu/drm/drm_bridge.c
+@@ -555,11 +555,6 @@ static const struct drm_private_state_funcs drm_bridge_priv_state_funcs = {
+ 	.atomic_destroy_state = drm_bridge_atomic_destroy_priv_state,
+ };
+ 
+-static bool drm_bridge_is_atomic(struct drm_bridge *bridge)
+-{
+-	return bridge->funcs->atomic_create_state != NULL;
+-}
+-
+ /**
+  * drm_bridge_attach - attach the bridge to an encoder's chain
+  *
+@@ -629,9 +624,8 @@ int drm_bridge_attach(struct drm_encoder *encoder, struct drm_bridge *bridge,
+ 			goto err_reset_bridge;
+ 	}
+ 
+-	if (drm_bridge_is_atomic(bridge))
+-		drm_atomic_private_obj_init(bridge->dev, &bridge->base,
+-					    &drm_bridge_priv_state_funcs);
++	drm_atomic_private_obj_init(bridge->dev, &bridge->base,
++				    &drm_bridge_priv_state_funcs);
+ 
+ 	return 0;
+ 
+@@ -664,8 +658,7 @@ void drm_bridge_detach(struct drm_bridge *bridge)
+ 	if (WARN_ON(!bridge->dev))
+ 		return;
+ 
+-	if (drm_bridge_is_atomic(bridge))
+-		drm_atomic_private_obj_fini(&bridge->base);
++	drm_atomic_private_obj_fini(&bridge->base);
+ 
+ 	if (bridge->funcs->detach)
+ 		bridge->funcs->detach(bridge);
+@@ -690,9 +683,9 @@ void drm_bridge_detach(struct drm_bridge *bridge)
+  *   disable the bridge automatically.
+  *
+  *   The enable and disable operations are split in
+- *   &drm_bridge_funcs.pre_enable, &drm_bridge_funcs.enable,
+- *   &drm_bridge_funcs.disable and &drm_bridge_funcs.post_disable to provide
+- *   finer-grained control.
++ *   &drm_bridge_funcs.atomic_pre_enable, &drm_bridge_funcs.atomic_enable,
++ *   &drm_bridge_funcs.atomic_disable and &drm_bridge_funcs.atomic_post_disable
++ *   to provide finer-grained control.
+  *
+  *   Bridge drivers may implement the legacy version of those operations, or
+  *   the atomic version (prefixed with atomic\_), in which case they shall also
+@@ -833,10 +826,9 @@ EXPORT_SYMBOL(drm_bridge_chain_mode_set);
+  * @bridge: bridge control structure
+  * @state: atomic state being committed
+  *
+- * Calls &drm_bridge_funcs.atomic_disable (falls back on
+- * &drm_bridge_funcs.disable) op for all the bridges in the encoder chain,
+- * starting from the last bridge to the first. These are called before calling
+- * &drm_encoder_helper_funcs.atomic_disable
++ * Calls &drm_bridge_funcs.atomic_disable op for all the bridges in the encoder
++ * chain, starting from the last bridge to the first. These are called before
++ * calling &drm_encoder_helper_funcs.atomic_disable
+  *
+  * Note: the bridge passed should be the one closest to the encoder
+  */
+@@ -852,11 +844,8 @@ void drm_atomic_bridge_chain_disable(struct drm_bridge *bridge,
+ 	encoder = bridge->encoder;
+ 	mutex_lock(&encoder->bridge_chain_mutex);
+ 	list_for_each_entry_reverse(iter, &encoder->bridge_chain, chain_node) {
+-		if (iter->funcs->atomic_disable) {
++		if (iter->funcs->atomic_disable)
+ 			iter->funcs->atomic_disable(iter, state);
+-		} else if (iter->funcs->disable) {
+-			iter->funcs->disable(iter);
+-		}
+ 
+ 		if (iter == bridge)
+ 			break;
+@@ -870,8 +859,6 @@ static void drm_atomic_bridge_call_post_disable(struct drm_bridge *bridge,
+ {
+ 	if (state && bridge->funcs->atomic_post_disable)
+ 		bridge->funcs->atomic_post_disable(bridge, state);
+-	else if (bridge->funcs->post_disable)
+-		bridge->funcs->post_disable(bridge);
+ }
+ 
+ /**
+@@ -880,10 +867,9 @@ static void drm_atomic_bridge_call_post_disable(struct drm_bridge *bridge,
+  * @bridge: bridge control structure
+  * @state: atomic state being committed
+  *
+- * Calls &drm_bridge_funcs.atomic_post_disable (falls back on
+- * &drm_bridge_funcs.post_disable) op for all the bridges in the encoder chain,
+- * starting from the first bridge to the last. These are called after completing
+- * &drm_encoder_helper_funcs.atomic_disable
++ * Calls &drm_bridge_funcs.atomic_post_disable op for all the bridges in the
++ * encoder chain, starting from the first bridge to the last. These are called
++ * after completing &drm_encoder_helper_funcs.atomic_disable
+  *
+  * If a bridge sets @pre_enable_prev_first, then the @post_disable for that
+  * bridge will be called before the previous one to reverse the @pre_enable
+@@ -967,8 +953,6 @@ static void drm_atomic_bridge_call_pre_enable(struct drm_bridge *bridge,
+ {
+ 	if (state && bridge->funcs->atomic_pre_enable)
+ 		bridge->funcs->atomic_pre_enable(bridge, state);
+-	else if (bridge->funcs->pre_enable)
+-		bridge->funcs->pre_enable(bridge);
+ }
+ 
+ /**
+@@ -977,10 +961,9 @@ static void drm_atomic_bridge_call_pre_enable(struct drm_bridge *bridge,
+  * @bridge: bridge control structure
+  * @state: atomic state being committed
+  *
+- * Calls &drm_bridge_funcs.atomic_pre_enable (falls back on
+- * &drm_bridge_funcs.pre_enable) op for all the bridges in the encoder chain,
+- * starting from the last bridge to the first. These are called before calling
+- * &drm_encoder_helper_funcs.atomic_enable
++ * Calls &drm_bridge_funcs.atomic_pre_enable op for all the bridges in the
++ * encoder chain, starting from the last bridge to the first. These are called
++ * before calling &drm_encoder_helper_funcs.atomic_enable
+  *
+  * If a bridge sets @pre_enable_prev_first, then the pre_enable for the
+  * prev bridge will be called before pre_enable of this bridge.
+@@ -1057,10 +1040,9 @@ EXPORT_SYMBOL(drm_atomic_bridge_chain_pre_enable);
+  * @first_bridge: bridge control structure
+  * @state: atomic state being committed
+  *
+- * Calls &drm_bridge_funcs.atomic_enable (falls back on
+- * &drm_bridge_funcs.enable) op for all the bridges in the encoder chain,
+- * starting from the first bridge to the last. These are called after completing
+- * &drm_encoder_helper_funcs.atomic_enable
++ * Calls &drm_bridge_funcs.atomic_enable op for all the bridges in the encoder
++ * chain, starting from the first bridge to the last. These are called after
++ * completing &drm_encoder_helper_funcs.atomic_enable
+  *
+  * Note: the bridge passed should be the one closest to the encoder
+  */
+@@ -1071,11 +1053,8 @@ void drm_atomic_bridge_chain_enable(struct drm_bridge *first_bridge,
+ 		return;
+ 
+ 	drm_for_each_bridge_in_chain_from(first_bridge, bridge)
+-		if (bridge->funcs->atomic_enable) {
++		if (bridge->funcs->atomic_enable)
+ 			bridge->funcs->atomic_enable(bridge, state);
+-		} else if (bridge->funcs->enable) {
+-			bridge->funcs->enable(bridge);
+-		}
+ }
+ EXPORT_SYMBOL(drm_atomic_bridge_chain_enable);
+ 
+diff --git a/drivers/gpu/drm/tests/drm_bridge_test.c b/drivers/gpu/drm/tests/drm_bridge_test.c
+index 430d9bc67a10..15583ade8494 100644
+--- a/drivers/gpu/drm/tests/drm_bridge_test.c
++++ b/drivers/gpu/drm/tests/drm_bridge_test.c
+@@ -74,26 +74,6 @@ static void drm_test_bridge_priv_destroy(struct drm_bridge *bridge)
+ 	priv->destroyed = true;
+ }
+ 
+-static void drm_test_bridge_enable(struct drm_bridge *bridge)
+-{
+-	struct drm_bridge_priv *priv = bridge_to_priv(bridge);
+-
+-	priv->enable_count++;
+-}
+-
+-static void drm_test_bridge_disable(struct drm_bridge *bridge)
+-{
+-	struct drm_bridge_priv *priv = bridge_to_priv(bridge);
+-
+-	priv->disable_count++;
+-}
+-
+-static const struct drm_bridge_funcs drm_test_bridge_legacy_funcs = {
+-	.destroy		= drm_test_bridge_priv_destroy,
+-	.enable			= drm_test_bridge_enable,
+-	.disable		= drm_test_bridge_disable,
+-};
+-
+ static void drm_test_bridge_atomic_enable(struct drm_bridge *bridge,
+ 					  struct drm_atomic_commit *state)
+ {
+@@ -695,35 +675,8 @@ static void drm_test_drm_bridge_get_current_state_atomic(struct kunit *test)
+ 	drm_modeset_acquire_fini(&ctx);
+ }
+ 
+-/*
+- * Test that drm_bridge_get_current_state() returns NULL for a
+- * non-atomic bridge.
+- */
+-static void drm_test_drm_bridge_get_current_state_legacy(struct kunit *test)
+-{
+-	struct drm_bridge_init_priv *priv;
+-	struct drm_bridge *bridge;
+-
+-	priv = drm_test_bridge_init(test, &drm_test_bridge_legacy_funcs);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, priv);
+-
+-	/*
+-	 * NOTE: Strictly speaking, we should take the bridge->base.lock
+-	 * before calling that function. However, bridge->base is only
+-	 * initialized if the bridge is atomic, while we explicitly
+-	 * initialize one that isn't there.
+-	 *
+-	 * In order to avoid unnecessary warnings, let's skip the
+-	 * locking. The function would return NULL in all cases anyway,
+-	 * so we don't really have any concurrency to worry about.
+-	 */
+-	bridge = &priv->test_bridge->bridge;
+-	KUNIT_EXPECT_NULL(test, drm_bridge_get_current_state(bridge));
+-}
+-
+ static struct kunit_case drm_bridge_get_current_state_tests[] = {
+ 	KUNIT_CASE(drm_test_drm_bridge_get_current_state_atomic),
+-	KUNIT_CASE(drm_test_drm_bridge_get_current_state_legacy),
+ 	{ }
+ };
+ 
+@@ -828,62 +781,6 @@ static void drm_test_drm_bridge_helper_reset_crtc_atomic_disabled(struct kunit *
+ 	KUNIT_EXPECT_EQ(test, bridge_priv->disable_count, 0);
+ }
+ 
+-/*
+- * Test that a non-atomic bridge is properly power-cycled when calling
+- * drm_bridge_helper_reset_crtc().
+- */
+-static void drm_test_drm_bridge_helper_reset_crtc_legacy(struct kunit *test)
+-{
+-	struct drm_modeset_acquire_ctx ctx;
+-	struct drm_bridge_init_priv *priv;
+-	struct drm_display_mode *mode;
+-	struct drm_bridge_priv *bridge_priv;
+-	int ret;
+-
+-	priv = drm_test_bridge_init(test, &drm_test_bridge_legacy_funcs);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, priv);
+-
+-	mode = drm_kunit_display_mode_from_cea_vic(test, &priv->drm, 16);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, mode);
+-
+-	drm_modeset_acquire_init(&ctx, 0);
+-
+-retry_commit:
+-	ret = drm_kunit_helper_enable_crtc_connector(test,
+-						     &priv->drm, priv->crtc,
+-						     priv->connector,
+-						     mode,
+-						     &ctx);
+-	if (ret == -EDEADLK) {
+-		drm_modeset_backoff(&ctx);
+-		goto retry_commit;
+-	}
+-	KUNIT_ASSERT_EQ(test, ret, 0);
+-
+-	drm_modeset_drop_locks(&ctx);
+-	drm_modeset_acquire_fini(&ctx);
+-
+-	bridge_priv = priv->test_bridge;
+-	KUNIT_ASSERT_EQ(test, bridge_priv->enable_count, 1);
+-	KUNIT_ASSERT_EQ(test, bridge_priv->disable_count, 0);
+-
+-	drm_modeset_acquire_init(&ctx, 0);
+-
+-retry_reset:
+-	ret = drm_bridge_helper_reset_crtc(&bridge_priv->bridge, &ctx);
+-	if (ret == -EDEADLK) {
+-		drm_modeset_backoff(&ctx);
+-		goto retry_reset;
+-	}
+-	KUNIT_ASSERT_EQ(test, ret, 0);
+-
+-	drm_modeset_drop_locks(&ctx);
+-	drm_modeset_acquire_fini(&ctx);
+-
+-	KUNIT_EXPECT_EQ(test, bridge_priv->enable_count, 2);
+-	KUNIT_EXPECT_EQ(test, bridge_priv->disable_count, 1);
+-}
+-
+ /*
+  * Test that a bridge using the drm_atomic_helper_bridge_get_hdmi_output_bus_fmts()
+  * function for &drm_bridge_funcs.atomic_get_output_bus_fmts behaves as expected
+@@ -970,7 +867,6 @@ static void drm_test_drm_bridge_helper_hdmi_output_bus_fmts(struct kunit *test)
+ static struct kunit_case drm_bridge_helper_reset_crtc_tests[] = {
+ 	KUNIT_CASE(drm_test_drm_bridge_helper_reset_crtc_atomic),
+ 	KUNIT_CASE(drm_test_drm_bridge_helper_reset_crtc_atomic_disabled),
+-	KUNIT_CASE(drm_test_drm_bridge_helper_reset_crtc_legacy),
+ 	KUNIT_CASE(drm_test_drm_bridge_helper_hdmi_output_bus_fmts),
+ 	{ }
+ };
+diff --git a/include/drm/drm_bridge.h b/include/drm/drm_bridge.h
+index 0fadc39dfc12..3ac84ed57ab2 100644
+--- a/include/drm/drm_bridge.h
++++ b/include/drm/drm_bridge.h
+@@ -173,52 +173,6 @@ struct drm_bridge_funcs {
+ 	bool (*mode_fixup)(struct drm_bridge *bridge,
+ 			   const struct drm_display_mode *mode,
+ 			   struct drm_display_mode *adjusted_mode);
+-	/**
+-	 * @disable:
+-	 *
+-	 * This callback should disable the bridge. It is called right before
+-	 * the preceding element in the display pipe is disabled. If the
+-	 * preceding element is a bridge this means it's called before that
+-	 * bridge's @disable vfunc. If the preceding element is a &drm_encoder
+-	 * it's called right before the &drm_encoder_helper_funcs.disable,
+-	 * &drm_encoder_helper_funcs.prepare or &drm_encoder_helper_funcs.dpms
+-	 * hook.
+-	 *
+-	 * The bridge can assume that the display pipe (i.e. clocks and timing
+-	 * signals) feeding it is still running when this callback is called.
+-	 *
+-	 * The @disable callback is optional.
+-	 *
+-	 * NOTE:
+-	 *
+-	 * This is deprecated, do not use!
+-	 * New drivers shall use &drm_bridge_funcs.atomic_disable.
+-	 */
+-	void (*disable)(struct drm_bridge *bridge);
+-
+-	/**
+-	 * @post_disable:
+-	 *
+-	 * This callback should disable the bridge. It is called right after the
+-	 * preceding element in the display pipe is disabled. If the preceding
+-	 * element is a bridge this means it's called after that bridge's
+-	 * @post_disable function. If the preceding element is a &drm_encoder
+-	 * it's called right after the encoder's
+-	 * &drm_encoder_helper_funcs.disable, &drm_encoder_helper_funcs.prepare
+-	 * or &drm_encoder_helper_funcs.dpms hook.
+-	 *
+-	 * The bridge must assume that the display pipe (i.e. clocks and timing
+-	 * signals) feeding it is no longer running when this callback is
+-	 * called.
+-	 *
+-	 * The @post_disable callback is optional.
+-	 *
+-	 * NOTE:
+-	 *
+-	 * This is deprecated, do not use!
+-	 * New drivers shall use &drm_bridge_funcs.atomic_post_disable.
+-	 */
+-	void (*post_disable)(struct drm_bridge *bridge);
+ 
+ 	/**
+ 	 * @mode_set:
+@@ -249,55 +203,6 @@ struct drm_bridge_funcs {
+ 	void (*mode_set)(struct drm_bridge *bridge,
+ 			 const struct drm_display_mode *mode,
+ 			 const struct drm_display_mode *adjusted_mode);
+-	/**
+-	 * @pre_enable:
+-	 *
+-	 * This callback should enable the bridge. It is called right before
+-	 * the preceding element in the display pipe is enabled. If the
+-	 * preceding element is a bridge this means it's called before that
+-	 * bridge's @pre_enable function. If the preceding element is a
+-	 * &drm_encoder it's called right before the encoder's
+-	 * &drm_encoder_helper_funcs.enable, &drm_encoder_helper_funcs.commit or
+-	 * &drm_encoder_helper_funcs.dpms hook.
+-	 *
+-	 * The display pipe (i.e. clocks and timing signals) feeding this bridge
+-	 * will not yet be running when this callback is called. The bridge must
+-	 * not enable the display link feeding the next bridge in the chain (if
+-	 * there is one) when this callback is called.
+-	 *
+-	 * The @pre_enable callback is optional.
+-	 *
+-	 * NOTE:
+-	 *
+-	 * This is deprecated, do not use!
+-	 * New drivers shall use &drm_bridge_funcs.atomic_pre_enable.
+-	 */
+-	void (*pre_enable)(struct drm_bridge *bridge);
+-
+-	/**
+-	 * @enable:
+-	 *
+-	 * This callback should enable the bridge. It is called right after
+-	 * the preceding element in the display pipe is enabled. If the
+-	 * preceding element is a bridge this means it's called after that
+-	 * bridge's @enable function. If the preceding element is a
+-	 * &drm_encoder it's called right after the encoder's
+-	 * &drm_encoder_helper_funcs.enable, &drm_encoder_helper_funcs.commit or
+-	 * &drm_encoder_helper_funcs.dpms hook.
+-	 *
+-	 * The bridge can assume that the display pipe (i.e. clocks and timing
+-	 * signals) feeding it is running when this callback is called. This
+-	 * callback must enable the display link feeding the next bridge in the
+-	 * chain if there is one.
+-	 *
+-	 * The @enable callback is optional.
+-	 *
+-	 * NOTE:
+-	 *
+-	 * This is deprecated, do not use!
+-	 * New drivers shall use &drm_bridge_funcs.atomic_enable.
+-	 */
+-	void (*enable)(struct drm_bridge *bridge);
+ 
+ 	/**
+ 	 * @atomic_pre_enable:
+@@ -1359,14 +1264,6 @@ drm_bridge_get_current_state(struct drm_bridge *bridge)
+ 	if (!bridge)
+ 		return NULL;
+ 
+-	/*
+-	 * Only atomic bridges will have bridge->base initialized by
+-	 * drm_atomic_private_obj_init(), so we need to make sure we're
+-	 * working with one before we try to use the lock.
+-	 */
+-	if (!bridge->funcs || !bridge->funcs->atomic_create_state)
+-		return NULL;
+-
+ 	drm_modeset_lock_assert_held(&bridge->base.lock);
+ 
+ 	if (!bridge->base.state)
+-- 
+2.55.0
+

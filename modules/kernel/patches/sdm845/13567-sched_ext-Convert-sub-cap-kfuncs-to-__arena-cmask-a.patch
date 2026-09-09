@@ -1,0 +1,348 @@
+From a8dc810968af02190f55cc7574bc87c93156f266 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Wed, 12 Aug 2026 09:55:33 -1000
+Subject: [PATCH 13567/15333] sched_ext: Convert sub-cap kfuncs to __arena
+ cmask arguments
+
+The sub-cap kfuncs take their cmask arguments as __ign pointers. The values
+cross the kfunc boundary as unchecked scalars and scx_cmask_ref_init()
+rebases them into the arena by hand.
+
+BPF now translates between BPF and kernel arena addresses for __arena
+arguments. Tag the cmask arguments __arena so the kfuncs receive kernel
+addresses and scx_cmask_ref_init() loses the hand-rolled conversion. The
+optional denied_out keeps its NULL not-provided signal via
+__arena__nullable. The mandatory masks use plain __arena.
+
+scx_qmap's call sites drop the (void *)(long) casts since the BPF-side
+declarations type the cmask arguments __arena and take arena pointers
+directly.
+
+The arena argument address translation is currently implemented only on
+x86-64. Schedulers calling these kfuncs load only there for now.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ kernel/sched/ext/cid.c                   | 11 +++---
+ kernel/sched/ext/ext.c                   |  8 ++--
+ kernel/sched/ext/sub.c                   | 49 ++++++++++++------------
+ kernel/sched/ext/types.h                 |  6 +--
+ tools/sched_ext/include/scx/common.bpf.h | 11 +++---
+ tools/sched_ext/scx_qmap.bpf.c           | 20 +++++-----
+ 6 files changed, 51 insertions(+), 54 deletions(-)
+
+diff --git a/kernel/sched/ext/cid.c b/kernel/sched/ext/cid.c
+index 231c8562d7c7..11fe9be80f1e 100644
+--- a/kernel/sched/ext/cid.c
++++ b/kernel/sched/ext/cid.c
+@@ -957,7 +957,7 @@ static const struct btf_kfunc_id_set scx_kfunc_set_cid = {
+ /**
+  * scx_cmask_ref_init - Bind a scx_cmask_ref to a BPF-arena cmask
+  * @sch: scheduler whose arena hosts @src
+- * @src: BPF-supplied cmask pointer
++ * @src: BPF-supplied cmask, rebased to its kernel address
+  * @ref: output ref
+  *
+  * Snapshot @src's @base, @nr_cids and @alloc_words. The snapshot is necessary
+@@ -969,20 +969,19 @@ static const struct btf_kfunc_id_set scx_kfunc_set_cid = {
+ int scx_cmask_ref_init(struct scx_sched *sch, const struct scx_cmask *src,
+ 		       struct scx_cmask_ref *ref)
+ {
+-	struct scx_cmask *kern_src = scx_arena_to_kaddr(sch, src);
+ 	u32 base, nr_cids, alloc_words, npossible = num_possible_cpus();
+ 	s32 *cid_to_shard;
+ 
+-	base = READ_ONCE(kern_src->base);
+-	nr_cids = READ_ONCE(kern_src->nr_cids);
+-	alloc_words = READ_ONCE(kern_src->alloc_words);
++	base = READ_ONCE(src->base);
++	nr_cids = READ_ONCE(src->nr_cids);
++	alloc_words = READ_ONCE(src->alloc_words);
+ 
+ 	if (unlikely(base >= npossible || nr_cids > npossible - base ||
+ 		     SCX_CMASK_NR_WORDS(nr_cids) > alloc_words))
+ 		return -EINVAL;
+ 
+ 	ref->sch = sch;
+-	ref->src = kern_src;
++	ref->src = (struct scx_cmask *)src;
+ 	ref->base = base;
+ 	ref->nr_cids = nr_cids;
+ 
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index c12327b6d541..26dbbbfe5a87 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -10677,20 +10677,20 @@ __bpf_kfunc struct cgroup *scx_bpf_task_cgroup(struct task_struct *p,
+ 
+ #ifndef CONFIG_EXT_SUB_SCHED
+ __bpf_kfunc s32 scx_bpf_sub_grant(u64 cgroup_id, u64 caps,
+-				  const struct scx_cmask *cmask__ign,
+-				  struct scx_cmask *denied_out__ign,
++				  const struct scx_cmask *cmask__arena,
++				  struct scx_cmask *denied_out__arena__nullable,
+ 				  const struct bpf_prog_aux *aux)
+ {
+ 	return -EOPNOTSUPP;
+ }
+ 
+ __bpf_kfunc void scx_bpf_sub_revoke(u64 cgroup_id, u64 caps,
+-				    const struct scx_cmask *cmask__ign,
++				    const struct scx_cmask *cmask__arena,
+ 				    const struct bpf_prog_aux *aux)
+ {
+ }
+ 
+-__bpf_kfunc s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out__ign,
++__bpf_kfunc s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out__arena,
+ 				 const struct bpf_prog_aux *aux)
+ {
+ 	return -EOPNOTSUPP;
+diff --git a/kernel/sched/ext/sub.c b/kernel/sched/ext/sub.c
+index 0978581d8c8e..d874ad41a8ed 100644
+--- a/kernel/sched/ext/sub.c
++++ b/kernel/sched/ext/sub.c
+@@ -2287,26 +2287,26 @@ static s32 sub_cap_preamble(u64 cgroup_id, u64 caps, const struct bpf_prog_aux *
+ }
+ 
+ /**
+- * scx_bpf_sub_grant - Grant @caps on @cmask__ign's cids to a direct child
++ * scx_bpf_sub_grant - Grant @caps on a cmask's cids to a direct child
+  * @cgroup_id: cgroup id of the direct child sub-sched
+  * @caps: bitmask of SCX_CAP_* to grant
+- * @cmask__ign: cid cmask to grant @caps on (arena pointer)
+- * @denied_out__ign: optional arena cmask accumulating refused cids
++ * @cmask__arena: cid cmask to grant @caps on
++ * @denied_out__arena__nullable: optional cmask accumulating refused cids
+  * @aux: implicit BPF argument
+  *
+- * A cid in @cmask__ign is granted to the child only if the parent holds every
+- * requested cap on it. Refused cids are OR'd into @denied_out__ign when
+- * provided. Refusals outside @denied_out__ign's range are not recorded.
++ * A cid in @cmask__arena is granted to the child only if the parent holds every
++ * requested cap on it. Refused cids are OR'd into the denied mask when
++ * provided. Refusals outside the denied mask's range are not recorded.
+  *
+- * All-or-nothing keeps the caller-visible result binary per cid, so
+- * @denied_out__ign is one mask to interpret rather than a per-cap matrix.
++ * All-or-nothing keeps the caller-visible result binary per cid, so the denied
++ * mask is one mask to interpret rather than a per-cap matrix.
+  *
+  * Return 0 on full success, -EPERM if any cid was refused, or a negative
+  * errno on other failures.
+  */
+ __bpf_kfunc s32 scx_bpf_sub_grant(u64 cgroup_id, u64 caps,
+-				  const struct scx_cmask *cmask__ign,
+-				  struct scx_cmask *denied_out__ign,
++				  const struct scx_cmask *cmask__arena,
++				  struct scx_cmask *denied_out__arena__nullable,
+ 				  const struct bpf_prog_aux *aux)
+ {
+ 	struct scx_cmask_ref ref, denied_ref;
+@@ -2321,14 +2321,14 @@ __bpf_kfunc s32 scx_bpf_sub_grant(u64 cgroup_id, u64 caps,
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = scx_cmask_ref_init(parent, cmask__ign, &ref);
++	ret = scx_cmask_ref_init(parent, cmask__arena, &ref);
+ 	if (ret) {
+ 		scx_error(parent, "invalid cmask (%d)", ret);
+ 		return ret;
+ 	}
+ 
+-	if (denied_out__ign) {
+-		ret = scx_cmask_ref_init(parent, denied_out__ign, &denied_ref);
++	if (denied_out__arena__nullable) {
++		ret = scx_cmask_ref_init(parent, denied_out__arena__nullable, &denied_ref);
+ 		if (ret) {
+ 			scx_error(parent, "invalid denied_out (%d)", ret);
+ 			return ret;
+@@ -2395,10 +2395,10 @@ __bpf_kfunc s32 scx_bpf_sub_grant(u64 cgroup_id, u64 caps,
+ 			}
+ 		}
+ 
+-		/* record cids that didn't make it through into @denied_out */
++		/* record cids that didn't make it into the denied mask */
+ 		if (!scx_cmask_subset(slice, granted_cids)) {
+ 			any_denied = true;
+-			if (denied_out__ign) {
++			if (denied_out__arena__nullable) {
+ 				SCX_CMASK_DEFINE_SHARD(denied, slice->base, slice->nr_cids);
+ 
+ 				scx_cmask_copy(denied, slice);
+@@ -2414,19 +2414,18 @@ __bpf_kfunc s32 scx_bpf_sub_grant(u64 cgroup_id, u64 caps,
+ }
+ 
+ /**
+- * scx_bpf_sub_revoke - Revoke @caps on @cmask__ign's cids from @child
++ * scx_bpf_sub_revoke - Revoke @caps on a cmask's cids from a direct child
+  * @cgroup_id: cgroup id of the direct child sub-sched
+  * @caps: bitmask of SCX_CAP_* to revoke
+- * @cmask__ign: cid cmask to revoke @caps on (arena pointer)
++ * @cmask__arena: cid cmask to revoke @caps on
+  * @aux: implicit BPF argument
+  *
+- * Clear @caps bits on @cmask__ign from the child named by @cgroup_id and all
++ * Clear @caps bits on @cmask__arena from the child named by @cgroup_id and all
+  * its descendants. The origin parent's pshard lock is held across the subtree
+- * walk so a concurrent grant from the origin parent observes the revoked
+- * state.
++ * walk so a concurrent grant from the origin parent observes the revoked state.
+  */
+ __bpf_kfunc void scx_bpf_sub_revoke(u64 cgroup_id, u64 caps,
+-				    const struct scx_cmask *cmask__ign,
++				    const struct scx_cmask *cmask__arena,
+ 				    const struct bpf_prog_aux *aux)
+ {
+ 	struct scx_cmask_ref ref;
+@@ -2439,7 +2438,7 @@ __bpf_kfunc void scx_bpf_sub_revoke(u64 cgroup_id, u64 caps,
+ 	if (sub_cap_preamble(cgroup_id, caps, aux, &parent, &child))
+ 		return;
+ 
+-	ret = scx_cmask_ref_init(parent, cmask__ign, &ref);
++	ret = scx_cmask_ref_init(parent, cmask__arena, &ref);
+ 	if (ret) {
+ 		scx_error(parent, "invalid cmask (%d)", ret);
+ 		return;
+@@ -2509,7 +2508,7 @@ __bpf_kfunc void scx_bpf_sub_revoke(u64 cgroup_id, u64 caps,
+  * scx_bpf_sub_caps - Read self's or a direct child's cap cmasks
+  * @cgroup_id: 0 for self, or a direct child's cgroup id
+  * @caps: one or more SCX_CAP_* bits
+- * @out__ign: arena cmask to receive the union of @caps within its range
++ * @out__arena: cmask to receive the union of @caps within its range
+  * @aux: implicit BPF argument
+  *
+  * Read the cap cmasks granted on each cid for self (@cgroup_id 0) or a direct
+@@ -2519,7 +2518,7 @@ __bpf_kfunc void scx_bpf_sub_revoke(u64 cgroup_id, u64 caps,
+  * Return 0, -ENODEV if @cgroup_id names no direct child, or -EINVAL on bad
+  * inputs.
+  */
+-__bpf_kfunc s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out__ign,
++__bpf_kfunc s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out__arena,
+ 				 const struct bpf_prog_aux *aux)
+ {
+ 	struct scx_cmask_ref ref;
+@@ -2569,7 +2568,7 @@ __bpf_kfunc s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out_
+ 		return -ENODEV;
+ 	}
+ 
+-	ret = scx_cmask_ref_init(sch, out__ign, &ref);
++	ret = scx_cmask_ref_init(sch, out__arena, &ref);
+ 	if (ret) {
+ 		scx_error(sch, "invalid out (%d)", ret);
+ 		return ret;
+diff --git a/kernel/sched/ext/types.h b/kernel/sched/ext/types.h
+index 1eb3ac8508f6..943d8d429a2c 100644
+--- a/kernel/sched/ext/types.h
++++ b/kernel/sched/ext/types.h
+@@ -187,9 +187,9 @@ struct scx_cmask {
+ /*
+  * scx_cmask_ref: validated reference to a BPF-arena cmask.
+  *
+- * scx_cmask_ref_init() normalizes the pointer into the arena and snapshots
+- * @base/@nr_cids. The snapshot is what downstream code uses for sizing - the
+- * live header can be mutated concurrently by BPF.
++ * scx_cmask_ref_init() snapshots @base/@nr_cids. The snapshot is what
++ * downstream code uses for sizing - the live header can be mutated concurrently
++ * by BPF.
+  *
+  * scx_cmask_ref_shard() reads one shard into a cmask. scx_cmask_ref_or() and
+  * scx_cmask_ref_copy() write back into the referenced arena cmask, bounded by
+diff --git a/tools/sched_ext/include/scx/common.bpf.h b/tools/sched_ext/include/scx/common.bpf.h
+index 6035d007c43f..979d4cabfaf9 100644
+--- a/tools/sched_ext/include/scx/common.bpf.h
++++ b/tools/sched_ext/include/scx/common.bpf.h
+@@ -26,6 +26,7 @@
+ #include <asm-generic/errno.h>
+ #include "user_exit_info.bpf.h"
+ #include "enum_defs.autogen.h"
++#include "bpf_arena_common.bpf.h"
+ 
+ #define PF_IDLE				0x00000002	/* I am an IDLE thread */
+ #define PF_IO_WORKER			0x00000010	/* Task is an IO worker */
+@@ -115,12 +116,10 @@ u32 scx_bpf_cidperf_cur(s32 cid) __ksym __weak;
+ s32 scx_bpf_cidperf_set(s32 cid, u32 perf) __ksym __weak;
+ 
+ /* sub-scheduler cap control, scx_bpf_sub_caps() cgroup_id 0 == self */
+-s32 scx_bpf_sub_grant(u64 cgroup_id, u64 caps, const struct scx_cmask *cmask,
+-		      struct scx_cmask *denied) __ksym __weak;
+-void scx_bpf_sub_revoke(u64 cgroup_id, u64 caps, const struct scx_cmask *cmask) __ksym __weak;
+-s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out) __ksym __weak;
+-s32 scx_bpf_sub_kill_bstr(u64 cgroup_id, char *fmt,
+-			  unsigned long long *data, u32 data__sz) __ksym __weak;
++s32 scx_bpf_sub_grant(u64 cgroup_id, u64 caps, const struct scx_cmask __arena *cmask__arena, struct scx_cmask __arena *denied_out__arena__nullable) __ksym __weak;
++void scx_bpf_sub_revoke(u64 cgroup_id, u64 caps, const struct scx_cmask __arena *cmask__arena) __ksym __weak;
++s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask __arena *out__arena) __ksym __weak;
++s32 scx_bpf_sub_kill_bstr(u64 cgroup_id, char *fmt, unsigned long long *data, u32 data__sz) __ksym __weak;
+ 
+ /*
+  * Use the following as @it__iter when calling scx_bpf_dsq_move[_vtime]() from
+diff --git a/tools/sched_ext/scx_qmap.bpf.c b/tools/sched_ext/scx_qmap.bpf.c
+index dd0434437835..61dc748742a2 100644
+--- a/tools/sched_ext/scx_qmap.bpf.c
++++ b/tools/sched_ext/scx_qmap.bpf.c
+@@ -1385,8 +1385,8 @@ __noinline void compute_partition(void)
+ 	}
+ 
+ 	/* find out the cids we hold */
+-	scx_bpf_sub_caps(0, SCX_CAP_ENQ, (void *)(long)&qa.held_excl.mask);
+-	scx_bpf_sub_caps(0, SCX_CAP_ENQ_IMMED, (void *)(long)&qa.held_shared.mask);
++	scx_bpf_sub_caps(0, SCX_CAP_ENQ, &qa.held_excl.mask);
++	scx_bpf_sub_caps(0, SCX_CAP_ENQ_IMMED, &qa.held_shared.mask);
+ 	cmask_andnot(&qa.held_shared.mask, &qa.held_excl.mask);	/* held only as ENQ_IMMED */
+ 
+ 	qa.part.nr_shared = 0;
+@@ -1613,13 +1613,13 @@ __noinline void apply_partition(void)
+ 		cmask_andnot(&qa.to_grant_cids.mask, &ssc->prev_granted.mask);
+ 
+ 		scx_bpf_sub_revoke(cgid, SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+-				   (void *)(long)&qa.prev_rr_cids.mask);
++				   &qa.prev_rr_cids.mask);
+ 		scx_bpf_sub_revoke(cgid, SCX_CAP_ENQ | SCX_CAP_PREEMPT |
+ 				   SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+-				   (void *)(long)&qa.to_revoke_cids.mask);
++				   &qa.to_revoke_cids.mask);
+ 		scx_bpf_sub_grant(cgid, SCX_CAP_ENQ | SCX_CAP_PREEMPT |
+ 				  SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+-				  (void *)(long)&qa.to_grant_cids.mask, NULL);
++				  &qa.to_grant_cids.mask, NULL);
+ 	}
+ 
+ 	/* the current holder of the shared pool gets ENQ_IMMED on all of it */
+@@ -1636,7 +1636,7 @@ __noinline void apply_partition(void)
+ 		if (holder_cgid)
+ 			scx_bpf_sub_grant(holder_cgid,
+ 					  SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+-					  (void *)(long)&qa.rr_cids.mask, NULL);
++					  &qa.rr_cids.mask, NULL);
+ 	}
+ }
+ 
+@@ -1728,11 +1728,11 @@ static void rr_advance(void)
+ 		if (old_cgid)
+ 			scx_bpf_sub_revoke(old_cgid,
+ 					   SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+-					   (void *)(long)&qa.rr_cids.mask);
++					   &qa.rr_cids.mask);
+ 		if (new_cgid)
+ 			scx_bpf_sub_grant(new_cgid,
+ 					  SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+-					  (void *)(long)&qa.rr_cids.mask, NULL);
++					  &qa.rr_cids.mask, NULL);
+ 	}
+ 
+ 	part_end();
+@@ -1840,8 +1840,8 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(qmap_init)
+ 	cmask_init(&qa.held_excl.mask, 0, nr_cids);
+ 	cmask_init(&qa.held_shared.mask, 0, nr_cids);
+ 
+-	scx_bpf_sub_caps(0, SCX_CAP_ENQ, (void *)(long)&qa.held_excl.mask);
+-	scx_bpf_sub_caps(0, SCX_CAP_ENQ_IMMED, (void *)(long)&qa.held_shared.mask);
++	scx_bpf_sub_caps(0, SCX_CAP_ENQ, &qa.held_excl.mask);
++	scx_bpf_sub_caps(0, SCX_CAP_ENQ_IMMED, &qa.held_shared.mask);
+ 	cmask_andnot(&qa.held_shared.mask, &qa.held_excl.mask);
+ 
+ 	bpf_for(i, 0, MAX_SUB_SCHEDS) {
+-- 
+2.55.0
+

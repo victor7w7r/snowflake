@@ -1,0 +1,162 @@
+From 9c62bb72a5d02795f767cf9f5e5dd781d8ccf70a Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Tue, 30 Jun 2026 13:47:19 -0700
+Subject: [PATCH 04150/15333] firmware: arm_scmi: Simplify notification
+ allocations
+
+Several SCMI notification data structures allocate a descriptor and then
+allocate a fixed-size array referenced by that descriptor.
+
+Use flexible array members for per-protocol registered events and
+per-event source refcounts so each descriptor and its array can be
+allocated together. Annotate the flexible arrays with __counted_by() and
+assign the count fields immediately after allocation, before any array
+access.
+
+The registered_protocols table has a fixed SCMI_MAX_PROTO size, so embed
+it directly in the notification instance instead of allocating it
+separately.
+
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Link: https://patch.msgid.link/20260630204719.334211-1-rosenp@gmail.com
+(sudeep.holla: Updated title and improved change description)
+Signed-off-by: Sudeep Holla <sudeep.holla@kernel.org>
+---
+ drivers/firmware/arm_scmi/notify.c | 43 ++++++++++++------------------
+ 1 file changed, 17 insertions(+), 26 deletions(-)
+
+diff --git a/drivers/firmware/arm_scmi/notify.c b/drivers/firmware/arm_scmi/notify.c
+index 0a192cf2deab..3cf706aacc11 100644
+--- a/drivers/firmware/arm_scmi/notify.c
++++ b/drivers/firmware/arm_scmi/notify.c
+@@ -209,11 +209,11 @@ struct scmi_registered_events_desc;
+  * @init_work: A work item to perform final initializations of pending handlers
+  * @notify_wq: A reference to the allocated Kernel cmwq
+  * @pending_mtx: A mutex to protect @pending_events_handlers
++ * @pending_events_handlers: An hashtable containing all pending events'
++ *			     handlers descriptors
+  * @registered_protocols: A statically allocated array containing pointers to
+  *			  all the registered protocol-level specific information
+  *			  related to events' handling
+- * @pending_events_handlers: An hashtable containing all pending events'
+- *			     handlers descriptors
+  *
+  * Each platform instance, represented by a handle, has its own instance of
+  * the notification subsystem represented by this structure.
+@@ -225,8 +225,8 @@ struct scmi_notify_instance {
+ 	struct workqueue_struct	*notify_wq;
+ 	/* lock to protect pending_events_handlers */
+ 	struct mutex		pending_mtx;
+-	struct scmi_registered_events_desc	**registered_protocols;
+ 	DECLARE_HASHTABLE(pending_events_handlers, SCMI_PENDING_HASH_SZ);
++	struct scmi_registered_events_desc	*registered_protocols[SCMI_MAX_PROTO];
+ };
+ 
+ /**
+@@ -276,13 +276,13 @@ struct scmi_registered_event;
+  * @eh_sz: Size of the pre-allocated buffer @eh
+  * @in_flight: A reference to an in flight &struct scmi_registered_event
+  * @num_events: Number of events in @registered_events
+- * @registered_events: A dynamically allocated array holding all the registered
+- *		       events' descriptors, whose fixed-size is determined at
+- *		       compile time.
+  * @registered_mtx: A mutex to protect @registered_events_handlers
+  * @ph: SCMI protocol handle reference
+  * @registered_events_handlers: An hashtable containing all events' handlers
+  *				descriptors registered for this protocol
++ * @registered_events: A dynamically allocated array holding all the registered
++ *		       events' descriptors, whose fixed-size is determined at
++ *		       compile time.
+  *
+  * All protocols that register at least one event have their protocol-specific
+  * information stored here, together with the embedded allocated events_queue.
+@@ -302,11 +302,11 @@ struct scmi_registered_events_desc {
+ 	size_t				eh_sz;
+ 	void				*in_flight;
+ 	int				num_events;
+-	struct scmi_registered_event	**registered_events;
+ 	/* mutex to protect registered_events_handlers */
+ 	struct mutex			registered_mtx;
+ 	const struct scmi_protocol_handle	*ph;
+ 	DECLARE_HASHTABLE(registered_events_handlers, SCMI_REGISTERED_HASH_SZ);
++	struct scmi_registered_event	*registered_events[] __counted_by(num_events);
+ };
+ 
+ /**
+@@ -338,9 +338,9 @@ struct scmi_registered_event {
+ 	void		*report;
+ 	u32		num_sources;
+ 	bool		not_supported_by_platform;
+-	refcount_t	*sources;
+ 	/* locking to serialize the access to sources */
+ 	struct mutex	sources_mtx;
++	refcount_t	sources[] __counted_by(num_sources);
+ };
+ 
+ /**
+@@ -706,9 +706,13 @@ scmi_allocate_registered_events_desc(struct scmi_notify_instance *ni,
+ 	if (WARN_ON(ni->registered_protocols[proto_id]))
+ 		return ERR_PTR(-EINVAL);
+ 
+-	pd = devm_kzalloc(ni->handle->dev, sizeof(*pd), GFP_KERNEL);
++	pd = devm_kzalloc(ni->handle->dev,
++			  struct_size(pd, registered_events, num_events),
++			  GFP_KERNEL);
+ 	if (!pd)
+ 		return ERR_PTR(-ENOMEM);
++
++	pd->num_events = num_events;
+ 	pd->id = proto_id;
+ 	pd->ops = ops;
+ 	pd->ni = ni;
+@@ -722,12 +726,6 @@ scmi_allocate_registered_events_desc(struct scmi_notify_instance *ni,
+ 		return ERR_PTR(-ENOMEM);
+ 	pd->eh_sz = eh_sz;
+ 
+-	pd->registered_events = devm_kcalloc(ni->handle->dev, num_events,
+-					     sizeof(char *), GFP_KERNEL);
+-	if (!pd->registered_events)
+-		return ERR_PTR(-ENOMEM);
+-	pd->num_events = num_events;
+-
+ 	/* Initialize per protocol handlers table */
+ 	mutex_init(&pd->registered_mtx);
+ 	hash_init(pd->registered_events_handlers);
+@@ -796,18 +794,16 @@ int scmi_register_protocol_events(const struct scmi_handle *handle, u8 proto_id,
+ 		int id;
+ 		struct scmi_registered_event *r_evt;
+ 
+-		r_evt = devm_kzalloc(ni->handle->dev, sizeof(*r_evt),
++		r_evt = devm_kzalloc(ni->handle->dev,
++				     struct_size(r_evt, sources, num_sources),
+ 				     GFP_KERNEL);
+ 		if (!r_evt)
+ 			return -ENOMEM;
++
++		r_evt->num_sources = num_sources;
+ 		r_evt->proto = pd;
+ 		r_evt->evt = evt;
+ 
+-		r_evt->sources = devm_kcalloc(ni->handle->dev, num_sources,
+-					      sizeof(refcount_t), GFP_KERNEL);
+-		if (!r_evt->sources)
+-			return -ENOMEM;
+-		r_evt->num_sources = num_sources;
+ 		mutex_init(&r_evt->sources_mtx);
+ 
+ 		r_evt->report = devm_kzalloc(ni->handle->dev,
+@@ -1673,11 +1669,6 @@ int scmi_notification_init(struct scmi_handle *handle)
+ 	ni->gid = gid;
+ 	ni->handle = handle;
+ 
+-	ni->registered_protocols = devm_kcalloc(handle->dev, SCMI_MAX_PROTO,
+-						sizeof(char *), GFP_KERNEL);
+-	if (!ni->registered_protocols)
+-		goto err;
+-
+ 	ni->notify_wq = alloc_workqueue(dev_name(handle->dev),
+ 					WQ_UNBOUND | WQ_FREEZABLE | WQ_SYSFS,
+ 					0);
+-- 
+2.55.0
+

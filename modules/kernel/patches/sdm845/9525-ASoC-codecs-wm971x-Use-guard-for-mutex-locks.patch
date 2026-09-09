@@ -1,0 +1,81 @@
+From a65ce15323994240d0c1f66be107db0991a8acf7 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 31 Jul 2026 10:06:46 +0700
+Subject: [PATCH 09525/15333] ASoC: codecs: wm971x: Use guard() for mutex locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Reviewed-by: Richard Fitzgerald <rf@opensource.cirrus.com>
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/20260731030648.8706-25-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/wm9712.c | 5 ++---
+ sound/soc/codecs/wm9713.c | 5 ++---
+ 2 files changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/sound/soc/codecs/wm9712.c b/sound/soc/codecs/wm9712.c
+index 83cd42fa0c28..3105b2e0556f 100644
+--- a/sound/soc/codecs/wm9712.c
++++ b/sound/soc/codecs/wm9712.c
+@@ -6,6 +6,7 @@
+  * Author: Liam Girdwood <lrg@slimlogic.co.uk>
+  */
+ 
++#include <linux/cleanup.h>
+ #include <linux/init.h>
+ #include <linux/slab.h>
+ #include <linux/mfd/wm97xx.h>
+@@ -229,7 +230,7 @@ static int wm9712_hp_mixer_put(struct snd_kcontrol *kcontrol,
+ 	shift = mc->shift & 0xff;
+ 	mask = 1 << shift;
+ 
+-	mutex_lock(&wm9712->lock);
++	guard(mutex)(&wm9712->lock);
+ 	old = wm9712->hp_mixer[mixer];
+ 	if (ucontrol->value.integer.value[0])
+ 		wm9712->hp_mixer[mixer] |= mask;
+@@ -251,8 +252,6 @@ static int wm9712_hp_mixer_put(struct snd_kcontrol *kcontrol,
+ 			&update);
+ 	}
+ 
+-	mutex_unlock(&wm9712->lock);
+-
+ 	return change;
+ }
+ 
+diff --git a/sound/soc/codecs/wm9713.c b/sound/soc/codecs/wm9713.c
+index b3bbecf074ee..3ba7ca3c1770 100644
+--- a/sound/soc/codecs/wm9713.c
++++ b/sound/soc/codecs/wm9713.c
+@@ -11,6 +11,7 @@
+  *   o Support for DAPM
+  */
+ 
++#include <linux/cleanup.h>
+ #include <linux/init.h>
+ #include <linux/slab.h>
+ #include <linux/mfd/wm97xx.h>
+@@ -238,7 +239,7 @@ static int wm9713_hp_mixer_put(struct snd_kcontrol *kcontrol,
+ 	shift = mc->shift & 0xff;
+ 	mask = (1 << shift);
+ 
+-	mutex_lock(&wm9713->lock);
++	guard(mutex)(&wm9713->lock);
+ 	old = wm9713->hp_mixer[mixer];
+ 	if (ucontrol->value.integer.value[0])
+ 		wm9713->hp_mixer[mixer] |= mask;
+@@ -260,8 +261,6 @@ static int wm9713_hp_mixer_put(struct snd_kcontrol *kcontrol,
+ 			&update);
+ 	}
+ 
+-	mutex_unlock(&wm9713->lock);
+-
+ 	return change;
+ }
+ 
+-- 
+2.55.0
+

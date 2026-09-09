@@ -1,0 +1,112 @@
+From 4d7c624a0af1fd54a270172bb9c59c0bc8269ab6 Mon Sep 17 00:00:00 2001
+From: Yongqiang Sun <Yongqiang.Sun@amd.com>
+Date: Thu, 11 Jun 2026 15:41:37 -0400
+Subject: [PATCH 00496/15333] drm/amdkfd: remove obsolete events page mmap
+ support
+
+The mmap of the events (signal) page from /dev/kfd via
+KFD_MMAP_TYPE_EVENTS was only needed on APUs using IOMMUv2, which is no
+longer supported by the kernel mode driver. For dGPUs (and modern APUs)
+the events page is allocated in user mode and mapped to the kernel
+through the event_page_offset of the create event IOCTL
+(kfd_kmap_event_page), so the KFD_MMAP_TYPE_EVENTS mmap path is no longer
+functional.
+
+Remove kfd_event_mmap() and reject KFD_MMAP_TYPE_EVENTS in kfd_mmap,
+similar to the recent removal of KFD_MMAP_TYPE_RESERVED_MEM. This also
+removes a way for user space to abuse KFD_MMAP_TYPE_EVENTS of kfd_mmap.
+
+Signed-off-by: Yongqiang Sun <Yongqiang.Sun@amd.com>
+Reviewed-by: Felix Kuehling <felix.kuehling@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdkfd/kfd_chardev.c |  3 +-
+ drivers/gpu/drm/amd/amdkfd/kfd_events.c  | 45 ------------------------
+ drivers/gpu/drm/amd/amdkfd/kfd_priv.h    |  1 -
+ 3 files changed, 2 insertions(+), 47 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
+index a2b100d14425..734a5a2a251f 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
+@@ -3762,7 +3762,8 @@ static int kfd_mmap(struct file *filep, struct vm_area_struct *vma)
+ 		return kfd_doorbell_mmap(dev, process, vma);
+ 
+ 	case KFD_MMAP_TYPE_EVENTS:
+-		return kfd_event_mmap(process, vma);
++		pr_warn("KFD_MMAP_TYPE_EVENTS is no longer supported\n");
++		return -EINVAL;
+ 
+ 	case KFD_MMAP_TYPE_RESERVED_MEM:
+ 		pr_warn("KFD_MMAP_TYPE_RESERVED_MEM is no longer supported\n");
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_events.c b/drivers/gpu/drm/amd/amdkfd/kfd_events.c
+index 71e8f9a23215..6088870b8c30 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_events.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_events.c
+@@ -1070,51 +1070,6 @@ int kfd_wait_on_events(struct kfd_process *p,
+ 	return ret;
+ }
+ 
+-int kfd_event_mmap(struct kfd_process *p, struct vm_area_struct *vma)
+-{
+-	unsigned long pfn;
+-	struct kfd_signal_page *page;
+-	int ret;
+-
+-	/* check required size doesn't exceed the allocated size */
+-	if (get_order(KFD_SIGNAL_EVENT_LIMIT * 8) <
+-			get_order(vma->vm_end - vma->vm_start)) {
+-		pr_err("Event page mmap requested illegal size\n");
+-		return -EINVAL;
+-	}
+-
+-	page = p->signal_page;
+-	if (!page) {
+-		/* Probably KFD bug, but mmap is user-accessible. */
+-		pr_debug("Signal page could not be found\n");
+-		return -EINVAL;
+-	}
+-
+-	pfn = __pa(page->kernel_address);
+-	pfn >>= PAGE_SHIFT;
+-
+-	vm_flags_set(vma, VM_IO | VM_DONTCOPY | VM_DONTEXPAND | VM_NORESERVE
+-		       | VM_DONTDUMP | VM_PFNMAP);
+-
+-	pr_debug("Mapping signal page\n");
+-	pr_debug("     start user address  == 0x%08lx\n", vma->vm_start);
+-	pr_debug("     end user address    == 0x%08lx\n", vma->vm_end);
+-	pr_debug("     pfn                 == 0x%016lX\n", pfn);
+-	pr_debug("     vm_flags            == 0x%08lX\n", vma->vm_flags);
+-	pr_debug("     size                == 0x%08lX\n",
+-			vma->vm_end - vma->vm_start);
+-
+-	page->user_address = (uint64_t __user *)vma->vm_start;
+-
+-	/* mapping the page to user process */
+-	ret = remap_pfn_range(vma, vma->vm_start, pfn,
+-			vma->vm_end - vma->vm_start, vma->vm_page_prot);
+-	if (!ret)
+-		p->signal_mapped_size = vma->vm_end - vma->vm_start;
+-
+-	return ret;
+-}
+-
+ /*
+  * Assumes that p is not going away.
+  */
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_priv.h b/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
+index 73bf7120d622..babc1116baec 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
+@@ -1540,7 +1540,6 @@ extern const struct kfd_device_global_init_class device_global_init_class_cik;
+ 
+ int kfd_event_init_process(struct kfd_process *p);
+ void kfd_event_free_process(struct kfd_process *p);
+-int kfd_event_mmap(struct kfd_process *process, struct vm_area_struct *vma);
+ int kfd_wait_on_events(struct kfd_process *p,
+ 		       uint32_t num_events, void __user *data,
+ 		       bool all, uint32_t *user_timeout_ms,
+-- 
+2.55.0
+

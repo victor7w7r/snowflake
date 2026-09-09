@@ -1,0 +1,76 @@
+From 51fe463018a311083195f95b3e4067f4b3833065 Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Thu, 14 May 2026 15:39:36 -0400
+Subject: [PATCH 00384/15333] drm/amdgpu/mes: add a MMIO queue reset helper
+
+Will be used by KFD for MMIO based resets.
+
+Reviewed-by: Jesse Zhang <jesse.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c | 30 +++++++++++++++++++++++++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h |  7 ++++++
+ 2 files changed, 37 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+index 34e040b7fb49..3aa5bd1e67c1 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+@@ -439,6 +439,36 @@ int amdgpu_mes_reset_legacy_queue(struct amdgpu_device *adev,
+ 	return r;
+ }
+ 
++int amdgpu_mes_reset_queue_mmio(struct amdgpu_device *adev,
++				int queue_type,
++				unsigned int vmid,
++				unsigned int me,
++				unsigned int pipe,
++				unsigned int queue,
++				uint32_t xcc_id)
++{
++	struct mes_reset_queue_input queue_input;
++	int r;
++
++	memset(&queue_input, 0, sizeof(queue_input));
++
++	queue_input.xcc_id = xcc_id;
++	queue_input.me_id = me;
++	queue_input.pipe_id = pipe;
++	queue_input.queue_id = queue;
++	queue_input.vmid = vmid;
++	queue_input.queue_type = queue_type;
++	queue_input.use_mmio = true;
++
++	amdgpu_mes_lock(&adev->mes);
++	r = adev->mes.funcs->reset_hw_queue(&adev->mes, &queue_input);
++	amdgpu_mes_unlock(&adev->mes);
++	if (r)
++		dev_err(adev->dev, "failed to reset legacy queue\n");
++
++	return r;
++}
++
+ int amdgpu_mes_reset_user_queue(struct amdgpu_device *adev,
+ 				int queue_type,
+ 				unsigned int doorbell_index,
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
+index 07c144c8e3b6..454a5a58863e 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
+@@ -459,6 +459,13 @@ int amdgpu_mes_reset_legacy_queue(struct amdgpu_device *adev,
+ 				  unsigned int vmid,
+ 				  bool use_mmio,
+ 				  uint32_t xcc_id);
++int amdgpu_mes_reset_queue_mmio(struct amdgpu_device *adev,
++				int queue_type,
++				unsigned int vmid,
++				unsigned int me,
++				unsigned int pipe,
++				unsigned int queue,
++				uint32_t xcc_id);
+ int amdgpu_mes_reset_user_queue(struct amdgpu_device *adev,
+ 				int queue_type,
+ 				unsigned int doorbell_index,
+-- 
+2.55.0
+

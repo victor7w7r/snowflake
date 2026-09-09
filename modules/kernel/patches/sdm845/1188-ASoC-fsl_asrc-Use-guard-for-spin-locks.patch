@@ -1,0 +1,64 @@
+From d7e261b7ad1bc96a2ee249c6694691244c099acf Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Mon, 15 Jun 2026 16:38:14 +0700
+Subject: [PATCH 01188/15333] ASoC: fsl_asrc: Use guard() for spin locks
+
+Clean up the code using guard() for spin locks.
+Merely code refactoring, and no behavior change.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260615093824.115751-2-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/fsl/fsl_asrc.c | 10 ++--------
+ 1 file changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/sound/soc/fsl/fsl_asrc.c b/sound/soc/fsl/fsl_asrc.c
+index 5fda9b647c70..0b28bcfa47fe 100644
+--- a/sound/soc/fsl/fsl_asrc.c
++++ b/sound/soc/fsl/fsl_asrc.c
+@@ -222,10 +222,9 @@ static int fsl_asrc_request_pair(int channels, struct fsl_asrc_pair *pair)
+ 	enum asrc_pair_index index = ASRC_INVALID_PAIR;
+ 	struct fsl_asrc *asrc = pair->asrc;
+ 	struct device *dev = &asrc->pdev->dev;
+-	unsigned long lock_flags;
+ 	int i, ret = 0;
+ 
+-	spin_lock_irqsave(&asrc->lock, lock_flags);
++	guard(spinlock_irqsave)(&asrc->lock);
+ 
+ 	for (i = ASRC_PAIR_A; i < ASRC_PAIR_MAX_NUM; i++) {
+ 		if (asrc->pair[i] != NULL)
+@@ -250,8 +249,6 @@ static int fsl_asrc_request_pair(int channels, struct fsl_asrc_pair *pair)
+ 		pair->index = index;
+ 	}
+ 
+-	spin_unlock_irqrestore(&asrc->lock, lock_flags);
+-
+ 	return ret;
+ }
+ 
+@@ -265,19 +262,16 @@ static void fsl_asrc_release_pair(struct fsl_asrc_pair *pair)
+ {
+ 	struct fsl_asrc *asrc = pair->asrc;
+ 	enum asrc_pair_index index = pair->index;
+-	unsigned long lock_flags;
+ 
+ 	/* Make sure the pair is disabled */
+ 	regmap_update_bits(asrc->regmap, REG_ASRCTR,
+ 			   ASRCTR_ASRCEi_MASK(index), 0);
+ 
+-	spin_lock_irqsave(&asrc->lock, lock_flags);
++	guard(spinlock_irqsave)(&asrc->lock);
+ 
+ 	asrc->channel_avail += pair->channels;
+ 	asrc->pair[index] = NULL;
+ 	pair->error = 0;
+-
+-	spin_unlock_irqrestore(&asrc->lock, lock_flags);
+ }
+ 
+ /**
+-- 
+2.55.0
+

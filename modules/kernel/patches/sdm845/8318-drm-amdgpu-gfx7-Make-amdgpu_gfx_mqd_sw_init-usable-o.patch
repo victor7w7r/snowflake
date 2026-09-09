@@ -1,0 +1,41 @@
+From 9fe8bb9bd7fabfecbe3d9f61bcf87c4e30dac4fd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Tue, 21 Jul 2026 13:43:14 +0200
+Subject: [PATCH 08318/15333] drm/amdgpu/gfx7: Make amdgpu_gfx_mqd_sw_init()
+ usable on GFX7
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+GFX7 supports KIQ, but amdgpu doesn't use it.
+Change amdgpu_gfx_mqd_sw_init() to only allocate the MQD BO
+for the KIQ on GFX8 and newer (that is, TOPAZ and newer).
+
+This makes amdgpu_gfx_mqd_sw_init() usable on GFX7 without
+any further changes to its functionality.
+
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Reviewed-by: Tvrtko Ursulin <tvrtko.ursulin@igalia.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+index 9d3b40c385c9..d763f0baf0e8 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+@@ -419,8 +419,8 @@ int amdgpu_gfx_mqd_sw_init(struct amdgpu_device *adev,
+ 		domain |= AMDGPU_GEM_DOMAIN_VRAM;
+ #endif
+ 
+-	/* create MQD for KIQ */
+-	if (!adev->enable_mes_kiq && !ring->mqd_obj) {
++	/* create MQD for KIQ (on GFX8+ where we use KIQ) */
++	if (adev->asic_type >= CHIP_TOPAZ && !adev->enable_mes_kiq && !ring->mqd_obj) {
+ 		/* originaly the KIQ MQD is put in GTT domain, but for SRIOV VRAM domain is a must
+ 		 * otherwise hypervisor trigger SAVE_VF fail after driver unloaded which mean MQD
+ 		 * deallocated and gart_unbind, to strict diverage we decide to use VRAM domain for
+-- 
+2.55.0
+

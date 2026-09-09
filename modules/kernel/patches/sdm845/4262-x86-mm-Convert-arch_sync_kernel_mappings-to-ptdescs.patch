@@ -1,0 +1,50 @@
+From 46ee485bb9dee952cab3e7b22138b9ad0e5cb468 Mon Sep 17 00:00:00 2001
+From: Vishal Moola <vishal.moola@gmail.com>
+Date: Mon, 29 Jun 2026 11:57:37 -0700
+Subject: [PATCH 04262/15333] x86/mm: Convert arch_sync_kernel_mappings() to
+ ptdescs
+
+Convert arch_sync_kernel_mappings() to ptdescs in preparation for
+the eventual splitting of ptdescs from struct page.
+
+Following this patch, we can successfully boot a 32-bit x86 kernel with
+separately allocated ptdescs.
+
+Signed-off-by: Vishal Moola <vishal.moola@gmail.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Reviewed-by: William Kucharski <william.kucharski@linux.dev>
+Acked-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Link: https://patch.msgid.link/20260629185742.126987-5-vishal.moola@gmail.com
+---
+ arch/x86/mm/fault.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/x86/mm/fault.c b/arch/x86/mm/fault.c
+index 45b99c3b1442..c31ffeac0714 100644
+--- a/arch/x86/mm/fault.c
++++ b/arch/x86/mm/fault.c
+@@ -275,17 +275,17 @@ void arch_sync_kernel_mappings(unsigned long start, unsigned long end)
+ 	for (addr = start & PMD_MASK;
+ 	     addr >= TASK_SIZE_MAX && addr < VMALLOC_END;
+ 	     addr += PMD_SIZE) {
+-		struct page *page;
++		struct ptdesc *ptdesc;
+ 
+ 		spin_lock(&pgd_lock);
+-		list_for_each_entry(page, &pgd_list, lru) {
++		list_for_each_entry(ptdesc, &pgd_list, pt_list) {
+ 			spinlock_t *pgt_lock;
+ 
+ 			/* the pgt_lock only for Xen */
+-			pgt_lock = &pgd_page_get_mm(page)->page_table_lock;
++			pgt_lock = &pgd_page_get_mm(ptdesc_page(ptdesc))->page_table_lock;
+ 
+ 			spin_lock(pgt_lock);
+-			vmalloc_sync_one(page_address(page), addr);
++			vmalloc_sync_one(ptdesc_address(ptdesc), addr);
+ 			spin_unlock(pgt_lock);
+ 		}
+ 		spin_unlock(&pgd_lock);
+-- 
+2.55.0
+

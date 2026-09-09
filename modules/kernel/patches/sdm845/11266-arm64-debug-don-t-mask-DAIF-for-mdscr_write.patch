@@ -1,0 +1,39 @@
+From 7cf2d6efb86fc98c4f5f78e438e2e32d88d76ff7 Mon Sep 17 00:00:00 2001
+From: Ada Couprie Diaz <ada.coupriediaz@arm.com>
+Date: Mon, 27 Jul 2026 17:34:10 +0100
+Subject: [PATCH 11266/15333] arm64: debug: don't mask DAIF for mdscr_write()
+
+Masking DAIF around the write to MDSCR_EL1 doesn't do anything: we can
+write to sysregs with interrupts unmasked, and writing to PSTATE is
+not a context synchronization event so it does not synchronize it.
+
+This is done in the context of a general interrupt handling cleanup,
+so it does not address the missing context synchronization for the
+MDSCR_EL1 write, staying consistent with the current state.  This
+should be addressed in a future patch.
+
+Signed-off-by: Ada Couprie Diaz <ada.coupriediaz@arm.com>
+Signed-off-by: Vladimir Murzin <vladimir.murzin@arm.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/kernel/debug-monitors.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/arch/arm64/kernel/debug-monitors.c b/arch/arm64/kernel/debug-monitors.c
+index 29307642f4c9..e271fbac5f82 100644
+--- a/arch/arm64/kernel/debug-monitors.c
++++ b/arch/arm64/kernel/debug-monitors.c
+@@ -40,10 +40,7 @@ u8 debug_monitors_arch(void)
+  */
+ static void mdscr_write(u64 mdscr)
+ {
+-	unsigned long flags;
+-	flags = local_daif_save();
+ 	write_sysreg(mdscr, mdscr_el1);
+-	local_daif_restore(flags);
+ }
+ NOKPROBE_SYMBOL(mdscr_write);
+ 
+-- 
+2.55.0
+

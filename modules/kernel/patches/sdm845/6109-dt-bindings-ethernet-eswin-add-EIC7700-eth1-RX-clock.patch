@@ -1,0 +1,140 @@
+From 3c6dfb86db07534ee34fa834c51d3608df4af197 Mon Sep 17 00:00:00 2001
+From: Zhi Li <lizhi2@eswincomputing.com>
+Date: Tue, 7 Jul 2026 14:41:59 +0800
+Subject: [PATCH 06109/15333] dt-bindings: ethernet: eswin: add EIC7700 eth1 RX
+ clock inversion variant
+
+The EIC7700 SoC integrates two GMAC instances. The eth1 MAC exhibits
+different RX clock sampling characteristics due to silicon-inherent
+timing behavior.
+
+The eth1 MAC has a fixed, non-configurable RX clock-to-data skew at the
+MAC input in the order of 4-5 ns. This cannot be compensated solely by
+the standard MAC internal delay configuration and PHY delay, and RX clock
+inversion is required at 1000Mbps for correct sampling.
+
+The eth1 TX path also includes a fixed silicon-inherent delay of
+approximately 2 ns. This delay is always present and cannot be disabled.
+It is therefore part of the effective transmit timing observed on the
+wire.
+
+For the eth1 variant, the valid tx-internal-delay-ps values include
+this fixed delay component. Consequently, the effective range becomes
+2000-4540 ps (approximately 2000 ps fixed delay plus 0-2540 ps
+programmable delay).
+
+Introduce a dedicated compatible string
+"eswin,eic7700-qos-eth-clk-inversion" to represent the eth1 variant,
+allowing the driver to apply RX clock inversion only when required by
+hardware variant selection.
+
+This keeps SoC-level differentiation without exposing silicon-fixed skew
+as configurable device tree parameters.
+
+To reflect this, model the TX internal delay as a base 0-4540 ps range,
+and constrain valid values per compatible using conditional schema rules.
+
+Update the binding schema as follows:
+
+  - Define tx-internal-delay-ps as a base range: 0-4540 ps
+  - Add compatible-specific constraints using if/then rules:
+    * eswin,eic7700-qos-eth:
+        max 2540 ps
+    * eswin,eic7700-qos-eth-clk-inversion:
+        minimum 2000 ps (effective range 2000-4540 ps)
+
+No functional change for existing "eswin,eic7700-qos-eth" users.
+
+Acked-by: Conor Dooley <conor.dooley@microchip.com>
+Signed-off-by: Zhi Li <lizhi2@eswincomputing.com>
+Link: https://patch.msgid.link/20260707064159.1299-1-lizhi2@eswincomputing.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ .../bindings/net/eswin,eic7700-eth.yaml       | 51 ++++++++++++++++++-
+ 1 file changed, 49 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/net/eswin,eic7700-eth.yaml b/Documentation/devicetree/bindings/net/eswin,eic7700-eth.yaml
+index 4e02fedae5c6..ba49fd6a086c 100644
+--- a/Documentation/devicetree/bindings/net/eswin,eic7700-eth.yaml
++++ b/Documentation/devicetree/bindings/net/eswin,eic7700-eth.yaml
+@@ -20,16 +20,37 @@ select:
+       contains:
+         enum:
+           - eswin,eic7700-qos-eth
++          - eswin,eic7700-qos-eth-clk-inversion
+   required:
+     - compatible
+ 
+ allOf:
+   - $ref: snps,dwmac.yaml#
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: eswin,eic7700-qos-eth
++    then:
++      properties:
++        tx-internal-delay-ps:
++          maximum: 2540
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: eswin,eic7700-qos-eth-clk-inversion
++    then:
++      properties:
++        tx-internal-delay-ps:
++          minimum: 2000
+ 
+ properties:
+   compatible:
+     items:
+-      - const: eswin,eic7700-qos-eth
++      - enum:
++          - eswin,eic7700-qos-eth
++          - eswin,eic7700-qos-eth-clk-inversion
+       - const: snps,dwmac-5.20
+ 
+   reg:
+@@ -69,7 +90,7 @@ properties:
+ 
+   tx-internal-delay-ps:
+     minimum: 0
+-    maximum: 2540
++    maximum: 4540
+     multipleOf: 20
+ 
+   eswin,hsp-sp-csr:
+@@ -140,3 +161,29 @@ examples:
+             snps,wr_osr_lmt = <2>;
+         };
+     };
++
++    ethernet@50410000 {
++        compatible = "eswin,eic7700-qos-eth-clk-inversion", "snps,dwmac-5.20";
++        reg = <0x50410000 0x10000>;
++        interrupt-parent = <&plic>;
++        interrupts = <70>;
++        interrupt-names = "macirq";
++        clocks = <&d0_clock 186>, <&d0_clock 171>, <&d0_clock 40>,
++                <&d0_clock 194>;
++        clock-names = "axi", "cfg", "stmmaceth", "tx";
++        resets = <&reset 94>;
++        reset-names = "stmmaceth";
++        eswin,hsp-sp-csr = <&hsp_sp_csr 0x200 0x208 0x218 0x214 0x21c>;
++        phy-handle = <&gmac1_phy0>;
++        phy-mode = "rgmii-id";
++        snps,aal;
++        snps,fixed-burst;
++        snps,tso;
++        snps,axi-config = <&stmmac_axi_setup_gmac1>;
++
++        stmmac_axi_setup_gmac1: stmmac-axi-config {
++            snps,blen = <0 0 0 0 16 8 4>;
++            snps,rd_osr_lmt = <2>;
++            snps,wr_osr_lmt = <2>;
++        };
++    };
+-- 
+2.55.0
+

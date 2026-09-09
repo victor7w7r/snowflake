@@ -1,0 +1,270 @@
+From a7f62506df941a506a138caa3849f48c11af22ec Mon Sep 17 00:00:00 2001
+From: Ning Ding <dingning04@gmail.com>
+Date: Wed, 5 Aug 2026 16:39:34 -0700
+Subject: [PATCH 11325/15333] selftests/bpf: Test overlapping RCU protection
+
+Add task kptr tests that keep RCU protection active after a spin or RCU
+unlock when preemption or IRQs remain disabled.
+
+Also test the reverse order with explicit RCU. Verify that task kptrs are
+rejected after leaving the final preemption-disabled or IRQ-disabled
+region.
+
+Signed-off-by: Ning Ding <dingning04@gmail.com>
+Link: https://lore.kernel.org/bpf/20260805233940.3966981-3-dingning04@gmail.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ .../selftests/bpf/prog_tests/task_kfunc.c     |   6 +
+ .../selftests/bpf/progs/task_kfunc_common.h   |   2 +
+ .../selftests/bpf/progs/task_kfunc_failure.c  |  49 ++++++
+ .../selftests/bpf/progs/task_kfunc_success.c  | 147 ++++++++++++++++++
+ 4 files changed, 204 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/task_kfunc.c b/tools/testing/selftests/bpf/prog_tests/task_kfunc.c
+index fbd7855712c1..30d403028f98 100644
+--- a/tools/testing/selftests/bpf/prog_tests/task_kfunc.c
++++ b/tools/testing/selftests/bpf/prog_tests/task_kfunc.c
+@@ -178,6 +178,12 @@ static const char * const success_tests[] = {
+ 	"task_kfunc_acquire_trusted_walked",
+ 	"task_kfunc_acquire_after_spin_unlock_non_sleepable",
+ 	"task_kfunc_acquire_after_spin_unlock_explicit_rcu",
++	"task_kfunc_acquire_after_spin_unlock_preempt_disabled",
++	"task_kfunc_acquire_after_spin_unlock_irq_disabled",
++	"task_kfunc_acquire_after_rcu_unlock_preempt_disabled",
++	"task_kfunc_acquire_after_rcu_unlock_irq_disabled",
++	"task_kfunc_acquire_after_preempt_enable_explicit_rcu",
++	"task_kfunc_acquire_after_irq_restore_explicit_rcu",
+ 	"test_task_kfunc_flavor_relo",
+ 	"test_task_kfunc_flavor_relo_not_found",
+ };
+diff --git a/tools/testing/selftests/bpf/progs/task_kfunc_common.h b/tools/testing/selftests/bpf/progs/task_kfunc_common.h
+index 052c9d0e3e2a..a0c599b58c29 100644
+--- a/tools/testing/selftests/bpf/progs/task_kfunc_common.h
++++ b/tools/testing/selftests/bpf/progs/task_kfunc_common.h
+@@ -38,6 +38,8 @@ struct task_struct *bpf_task_from_pid(s32 pid) __ksym;
+ struct task_struct *bpf_task_from_vpid(s32 vpid) __ksym;
+ void bpf_rcu_read_lock(void) __ksym;
+ void bpf_rcu_read_unlock(void) __ksym;
++void bpf_local_irq_save(unsigned long *flags) __weak __ksym;
++void bpf_local_irq_restore(unsigned long *flags) __weak __ksym;
+ 
+ static inline struct __tasks_kfunc_map_value *tasks_kfunc_map_value_lookup(struct task_struct *p)
+ {
+diff --git a/tools/testing/selftests/bpf/progs/task_kfunc_failure.c b/tools/testing/selftests/bpf/progs/task_kfunc_failure.c
+index c0e7216b3419..f96b0c13ed1a 100644
+--- a/tools/testing/selftests/bpf/progs/task_kfunc_failure.c
++++ b/tools/testing/selftests/bpf/progs/task_kfunc_failure.c
+@@ -402,3 +402,52 @@ int BPF_PROG(task_kfunc_acquire_after_final_spin_unlock)
+ 		bpf_task_release(acquired);
+ 	return 0;
+ }
++
++SEC("?fentry.s/" SYS_PREFIX "sys_getpgid")
++__failure __msg("R1 must be a rcu pointer")
++int BPF_PROG(task_kfunc_acquire_after_preempt_enable)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_preempt_disable();
++	task = v->task;
++	bpf_preempt_enable();
++	if (!task)
++		return 0;
++
++	acquired = bpf_task_acquire(task);
++	if (acquired)
++		bpf_task_release(acquired);
++	return 0;
++}
++
++SEC("?fentry.s/" SYS_PREFIX "sys_getpgid")
++__failure __msg("R1 must be a rcu pointer")
++int BPF_PROG(task_kfunc_acquire_after_irq_restore)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	unsigned long flags;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_local_irq_save(&flags);
++	task = v->task;
++	bpf_local_irq_restore(&flags);
++	if (!task)
++		return 0;
++
++	acquired = bpf_task_acquire(task);
++	if (acquired)
++		bpf_task_release(acquired);
++	return 0;
++}
+diff --git a/tools/testing/selftests/bpf/progs/task_kfunc_success.c b/tools/testing/selftests/bpf/progs/task_kfunc_success.c
+index 2bab7634c9df..6545b124dee1 100644
+--- a/tools/testing/selftests/bpf/progs/task_kfunc_success.c
++++ b/tools/testing/selftests/bpf/progs/task_kfunc_success.c
+@@ -414,6 +414,153 @@ int BPF_PROG(task_kfunc_acquire_after_spin_unlock_explicit_rcu)
+ 	return 0;
+ }
+ 
++SEC("fentry.s/" SYS_PREFIX "sys_getpgid")
++int BPF_PROG(task_kfunc_acquire_after_spin_unlock_preempt_disabled)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_preempt_disable();
++	bpf_spin_lock(&v->lock);
++	task = v->task;
++	bpf_spin_unlock(&v->lock);
++	if (task) {
++		acquired = bpf_task_acquire(task);
++		if (acquired)
++			bpf_task_release(acquired);
++	}
++	bpf_preempt_enable();
++	return 0;
++}
++
++SEC("fentry.s/" SYS_PREFIX "sys_getpgid")
++int BPF_PROG(task_kfunc_acquire_after_spin_unlock_irq_disabled)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	unsigned long flags;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_local_irq_save(&flags);
++	bpf_spin_lock(&v->lock);
++	task = v->task;
++	bpf_spin_unlock(&v->lock);
++	if (task) {
++		acquired = bpf_task_acquire(task);
++		if (acquired)
++			bpf_task_release(acquired);
++	}
++	bpf_local_irq_restore(&flags);
++	return 0;
++}
++
++SEC("fentry.s/" SYS_PREFIX "sys_getpgid")
++int BPF_PROG(task_kfunc_acquire_after_rcu_unlock_preempt_disabled)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_preempt_disable();
++	bpf_rcu_read_lock();
++	task = v->task;
++	bpf_rcu_read_unlock();
++	if (task) {
++		acquired = bpf_task_acquire(task);
++		if (acquired)
++			bpf_task_release(acquired);
++	}
++	bpf_preempt_enable();
++	return 0;
++}
++
++SEC("fentry.s/" SYS_PREFIX "sys_getpgid")
++int BPF_PROG(task_kfunc_acquire_after_rcu_unlock_irq_disabled)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	unsigned long flags;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_local_irq_save(&flags);
++	bpf_rcu_read_lock();
++	task = v->task;
++	bpf_rcu_read_unlock();
++	if (task) {
++		acquired = bpf_task_acquire(task);
++		if (acquired)
++			bpf_task_release(acquired);
++	}
++	bpf_local_irq_restore(&flags);
++	return 0;
++}
++
++SEC("fentry.s/" SYS_PREFIX "sys_getpgid")
++int BPF_PROG(task_kfunc_acquire_after_preempt_enable_explicit_rcu)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_preempt_disable();
++	task = v->task;
++	bpf_rcu_read_lock();
++	bpf_preempt_enable();
++	if (task) {
++		acquired = bpf_task_acquire(task);
++		if (acquired)
++			bpf_task_release(acquired);
++	}
++	bpf_rcu_read_unlock();
++	return 0;
++}
++
++SEC("fentry.s/" SYS_PREFIX "sys_getpgid")
++int BPF_PROG(task_kfunc_acquire_after_irq_restore_explicit_rcu)
++{
++	struct task_kptr_lock_value *v;
++	struct task_struct *task, *acquired;
++	unsigned long flags;
++	int key = 0;
++
++	v = bpf_map_lookup_elem(&task_kptr_lock_map, &key);
++	if (!v)
++		return 0;
++
++	bpf_local_irq_save(&flags);
++	task = v->task;
++	bpf_rcu_read_lock();
++	bpf_local_irq_restore(&flags);
++	if (task) {
++		acquired = bpf_task_acquire(task);
++		if (acquired)
++			bpf_task_release(acquired);
++	}
++	bpf_rcu_read_unlock();
++	return 0;
++}
++
+ SEC("syscall")
+ int test_task_from_vpid_current(const void *ctx)
+ {
+-- 
+2.55.0
+

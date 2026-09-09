@@ -1,0 +1,160 @@
+From 5a9f4c535ae05facd4f6ef116b18062f9f2ad768 Mon Sep 17 00:00:00 2001
+From: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Date: Wed, 20 May 2026 17:51:31 +0300
+Subject: [PATCH 02519/15333] soc: qcom: ubwc: drop ubwc_bank_spread
+
+According to the documentation, UBWC bank spreading should be enabled
+for all targets. It's just not all targets have separate bit to control
+it. Drop the bit from the database and make the helper always return
+true. If we need to change it later, the helper can be adjusted
+according to the programming guides.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260520-ubwc-rework-v5-24-72f2749bc807@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ drivers/soc/qcom/ubwc_config.c | 14 --------------
+ include/linux/soc/qcom/ubwc.h  |  3 +--
+ 2 files changed, 1 insertion(+), 16 deletions(-)
+
+diff --git a/drivers/soc/qcom/ubwc_config.c b/drivers/soc/qcom/ubwc_config.c
+index 1344cda0fb75..35cde4e9a238 100644
+--- a/drivers/soc/qcom/ubwc_config.c
++++ b/drivers/soc/qcom/ubwc_config.c
+@@ -20,7 +20,6 @@ static const struct qcom_ubwc_cfg_data eliza_data = {
+ 	.ubwc_enc_version = UBWC_5_0,
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	/* TODO: highest_bank_bit = 14 for LP_DDR4 */
+ 	.highest_bank_bit = 15,
+ 	.macrotile_mode = true,
+@@ -30,7 +29,6 @@ static const struct qcom_ubwc_cfg_data kaanapali_data = {
+ 	.ubwc_enc_version = UBWC_6_0,
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	.highest_bank_bit = 16,
+ 	.macrotile_mode = true,
+ };
+@@ -59,7 +57,6 @@ static const struct qcom_ubwc_cfg_data qcm2290_data = {
+ static const struct qcom_ubwc_cfg_data sa8775p_data = {
+ 	.ubwc_enc_version = UBWC_4_0,
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	.highest_bank_bit = 13,
+ 	.macrotile_mode = true,
+ };
+@@ -68,7 +65,6 @@ static const struct qcom_ubwc_cfg_data sar2130p_data = {
+ 	.ubwc_enc_version = UBWC_3_0, /* 4.0.2 in hw */
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	.highest_bank_bit = 13,
+ 	.macrotile_mode = true,
+ };
+@@ -77,7 +73,6 @@ static const struct qcom_ubwc_cfg_data sc7180_data = {
+ 	.ubwc_enc_version = UBWC_2_0,
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	.highest_bank_bit = 14,
+ };
+ 
+@@ -85,7 +80,6 @@ static const struct qcom_ubwc_cfg_data sc7280_data = {
+ 	.ubwc_enc_version = UBWC_3_0,
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	.highest_bank_bit = 14,
+ 	.macrotile_mode = true,
+ };
+@@ -102,7 +96,6 @@ static const struct qcom_ubwc_cfg_data sc8280xp_data = {
+ 	.ubwc_enc_version = UBWC_4_0,
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	.highest_bank_bit = 16,
+ 	.macrotile_mode = true,
+ };
+@@ -126,7 +119,6 @@ static const struct qcom_ubwc_cfg_data sm6115_data = {
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL1 |
+ 			UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	.highest_bank_bit = 14,
+ };
+ 
+@@ -149,7 +141,6 @@ static const struct qcom_ubwc_cfg_data sm6350_data = {
+ 	.ubwc_enc_version = UBWC_2_0,
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	.highest_bank_bit = 14,
+ };
+ 
+@@ -171,7 +162,6 @@ static const struct qcom_ubwc_cfg_data sm8250_data = {
+ 	.ubwc_enc_version = UBWC_4_0,
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	/* TODO: highest_bank_bit = 15 for LP_DDR4 */
+ 	.highest_bank_bit = 16,
+ 	.macrotile_mode = true,
+@@ -181,7 +171,6 @@ static const struct qcom_ubwc_cfg_data sm8350_data = {
+ 	.ubwc_enc_version = UBWC_4_0,
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	/* TODO: highest_bank_bit = 15 for LP_DDR4 */
+ 	.highest_bank_bit = 16,
+ 	.macrotile_mode = true,
+@@ -191,7 +180,6 @@ static const struct qcom_ubwc_cfg_data sm8550_data = {
+ 	.ubwc_enc_version = UBWC_4_0,
+ 	.ubwc_swizzle = UBWC_SWIZZLE_ENABLE_LVL2 |
+ 			UBWC_SWIZZLE_ENABLE_LVL3,
+-	.ubwc_bank_spread = true,
+ 	/* TODO: highest_bank_bit = 15 for LP_DDR4 */
+ 	.highest_bank_bit = 16,
+ 	.macrotile_mode = true,
+@@ -200,7 +188,6 @@ static const struct qcom_ubwc_cfg_data sm8550_data = {
+ static const struct qcom_ubwc_cfg_data sm8750_data = {
+ 	.ubwc_enc_version = UBWC_5_0,
+ 	.ubwc_swizzle = 6,
+-	.ubwc_bank_spread = true,
+ 	/* TODO: highest_bank_bit = 15 for LP_DDR4 */
+ 	.highest_bank_bit = 16,
+ 	.macrotile_mode = true,
+@@ -209,7 +196,6 @@ static const struct qcom_ubwc_cfg_data sm8750_data = {
+ static const struct qcom_ubwc_cfg_data glymur_data = {
+ 	.ubwc_enc_version = UBWC_5_0,
+ 	.ubwc_swizzle = 0,
+-	.ubwc_bank_spread = true,
+ 	/* TODO: highest_bank_bit = 15 for LP_DDR4 */
+ 	.highest_bank_bit = 16,
+ 	.macrotile_mode = true,
+diff --git a/include/linux/soc/qcom/ubwc.h b/include/linux/soc/qcom/ubwc.h
+index c3f9efae5db8..254721f5ea3c 100644
+--- a/include/linux/soc/qcom/ubwc.h
++++ b/include/linux/soc/qcom/ubwc.h
+@@ -33,7 +33,6 @@ struct qcom_ubwc_cfg_data {
+ 	 * DDR bank.  This should ideally use DRAM type detection.
+ 	 */
+ 	int highest_bank_bit;
+-	bool ubwc_bank_spread;
+ 
+ 	/**
+ 	 * @macrotile_mode: Macrotile Mode
+@@ -85,7 +84,7 @@ static inline bool qcom_ubwc_macrotile_mode(const struct qcom_ubwc_cfg_data *cfg
+ 
+ static inline bool qcom_ubwc_bank_spread(const struct qcom_ubwc_cfg_data *cfg)
+ {
+-	return cfg->ubwc_bank_spread;
++	return true;
+ }
+ 
+ static inline u32 qcom_ubwc_swizzle(const struct qcom_ubwc_cfg_data *cfg)
+-- 
+2.55.0
+

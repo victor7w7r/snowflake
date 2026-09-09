@@ -1,0 +1,35 @@
+From 0f4c52073b2e45986c4845ac70d668b294fbb877 Mon Sep 17 00:00:00 2001
+From: Yaxiong Tian <tianyaxiong@kylinos.cn>
+Date: Wed, 1 Apr 2026 11:31:28 +0800
+Subject: [PATCH 00007/15333] PM / devfreq: Optimize error return value of
+ governor_show()
+
+When df->governor is NULL, governor_show() returns -EINVAL, which
+confuses users.
+
+To fix this issue, return -ENOENT to indicate that no governor is
+currently set for the device.
+
+Signed-off-by: Yaxiong Tian <tianyaxiong@kylinos.cn>
+Signed-off-by: Chanwoo Choi <cw00.choi@samsung.com>
+Link: https://patchwork.kernel.org/project/linux-pm/patch/20260401033128.67925-1-tianyaxiong@kylinos.cn/
+---
+ drivers/devfreq/devfreq.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/devfreq/devfreq.c b/drivers/devfreq/devfreq.c
+index 2977b07be939..e5d3f9cf94dc 100644
+--- a/drivers/devfreq/devfreq.c
++++ b/drivers/devfreq/devfreq.c
+@@ -1377,7 +1377,7 @@ static ssize_t governor_show(struct device *dev,
+ 	struct devfreq *df = to_devfreq(dev);
+ 
+ 	if (!df->governor)
+-		return -EINVAL;
++		return -ENOENT;
+ 
+ 	return sprintf(buf, "%s\n", df->governor->name);
+ }
+-- 
+2.55.0
+

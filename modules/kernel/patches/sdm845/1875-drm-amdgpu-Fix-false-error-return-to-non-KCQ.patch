@@ -1,0 +1,63 @@
+From 9d5f1c0db1d37db24bb9556dd1e433eb30fbd3b6 Mon Sep 17 00:00:00 2001
+From: Amber Lin <amber.lin@amd.com>
+Date: Thu, 25 Jun 2026 23:09:10 -0400
+Subject: [PATCH 01875/15333] drm/amdgpu: Fix false error return to non-KCQ
+
+amdgpu_gfx_reset_mes_compute is used to coordinate suspend_all, reset,
+and resume_all between KCQ and compute user queues. When a hung queue
+comes from the compute user queues and the reset is successful, the KCQ
+failure after reset should be sent to KCQ only and not the compute user
+queues. Compute user queues can operate after a successful reset without
+a mode reset.
+
+Fixes: a4e4d945cba8 ("drm/amdgpu/gfx: defer per-queue helper_end until after MES resume")
+Signed-off-by: Amber Lin <amber.lin@amd.com>
+Acked-by: Jesse Zhang <Jesse.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+index 982b41606d48..419992589df3 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+@@ -2282,6 +2282,7 @@ int amdgpu_gfx_reset_mes_compute(struct amdgpu_device *adev,
+ 	struct mes_remove_queue_input *queue_input = (struct mes_remove_queue_input *)faulty_queue_input;
+ 	struct amdgpu_gfx_deferred_entry deferred_end[AMDGPU_MAX_COMPUTE_RINGS + 1];
+ 	int n_deferred = 0;
++	int ring_err;
+ 
+ 	guard(mutex)(&adev->gfx.mec.reset_mutex);
+ 	/* stop the drm schedulers for all compute queues */
+@@ -2375,17 +2376,23 @@ int amdgpu_gfx_reset_mes_compute(struct amdgpu_device *adev,
+ 	/* Now CP is running again — replay backed-up commands and ring
+ 	 * doorbells on each reset queue.
+ 	 */
++	ring_err = r;
+ 	for (i = 0; i < n_deferred; i++) {
+ 		int er = amdgpu_ring_reset_helper_end(deferred_end[i].ring,
+ 						      deferred_end[i].fence);
+-		if (er && !r)
+-			r = er;
++
++		if (er && !ring_err)
++			ring_err = er;
+ 	}
+ 
+-	if (!r)
++	if (!ring_err)
+ 		amdgpu_gfx_reset_start_compute_scheds(adev, ring);
+ 
+-	return r;
++	/* If this reset is triggered by non-KCQ, the KCQ result after resume must
++	 * not override the reset result; otherwise a false reset failure is returned
++	 * to the non-KCQ caller
++	 */
++	return ring ? ring_err : r;
+ }
+ 
+ int amdgpu_gfx_cleaner_shader_sw_init(struct amdgpu_device *adev,
+-- 
+2.55.0
+

@@ -1,0 +1,50 @@
+From e435696d57593248fce921a7a3ec2b57b61ac5fe Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Mon, 1 Jun 2026 15:56:55 +0200
+Subject: [PATCH 01005/15333] nullfs: make nullfs multi-instance
+
+Allow multiple instances of nullfs to be created. Right now we're only
+going to use it for kernel-internal purposes but ultimately we can allow
+userspace to use it too to e.g., safely overmount stuff.
+
+Link: https://patch.msgid.link/20260601-work-kthread-nullfs-v4-22-77ee053060e0@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/nullfs.c | 12 +++---------
+ 1 file changed, 3 insertions(+), 9 deletions(-)
+
+diff --git a/fs/nullfs.c b/fs/nullfs.c
+index fdbd3e5d3d71..c6f5b9493e26 100644
+--- a/fs/nullfs.c
++++ b/fs/nullfs.c
+@@ -40,14 +40,9 @@ static int nullfs_fs_fill_super(struct super_block *s, struct fs_context *fc)
+ 	return 0;
+ }
+ 
+-/*
+- * For now this is a single global instance. If needed we can make it
+- * mountable by userspace at which point we will need to make it
+- * multi-instance.
+- */
+ static int nullfs_fs_get_tree(struct fs_context *fc)
+ {
+-	return get_tree_single(fc, nullfs_fs_fill_super);
++	return get_tree_nodev(fc, nullfs_fs_fill_super);
+ }
+ 
+ static const struct fs_context_operations nullfs_fs_context_ops = {
+@@ -57,9 +52,8 @@ static const struct fs_context_operations nullfs_fs_context_ops = {
+ static int nullfs_init_fs_context(struct fs_context *fc)
+ {
+ 	fc->ops		= &nullfs_fs_context_ops;
+-	fc->global	= true;
+-	fc->sb_flags	= SB_NOUSER;
+-	fc->s_iflags	= SB_I_NOEXEC | SB_I_NODEV;
++	fc->sb_flags	|= SB_NOUSER;
++	fc->s_iflags	|= SB_I_NOEXEC | SB_I_NODEV;
+ 	return 0;
+ }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,159 @@
+From da729ddd4a1bc7c9f119bf7dfcc2c173b887cafa Mon Sep 17 00:00:00 2001
+From: Mike Snitzer <snitzer@hammerspace.com>
+Date: Mon, 6 Jul 2026 12:05:47 -0400
+Subject: [PATCH 14498/15333] NFS/localio: issue IO inline when not in a
+ memory-reclaim context
+
+Every LOCALIO read and write is currently bounced through the dedicated
+!WQ_MEM_RECLAIM nfslocaliod_workqueue.  That bounce is only actually
+required when the submitting context is a memory-reclaim context: LOCALIO
+issues IO directly into a stacked local filesystem (e.g. XFS) which may in
+turn flush its own !WQ_MEM_RECLAIM workqueue.  Doing that from a
+WQ_MEM_RECLAIM worker (most importantly writeback's wb_workfn on bdi_wq) or
+an explicit PF_MEMALLOC reclaim task trips check_flush_dependency() and
+risks a forward-progress deadlock, which is why commit b9f5dd57f4a5
+("nfs/localio: use dedicated workqueues for filesystem read and write")
+introduced the intermediate workqueue.
+
+Outside of reclaim context -- ordinary application/task submission such as
+O_DIRECT or fsync-driven writeback -- the workqueue hop buys nothing and
+merely adds a context switch and scheduling latency per IO while discarding
+the NFS client's inherent application-context parallelism.
+
+Add current_is_workqueue_mem_reclaim(), which reports whether %current is a
+WQ_MEM_RECLAIM worker using the same predicate check_flush_dependency()
+warns on.  Use it, together with the PF_MEMALLOC check, in the new
+nfs_local_defer_io() helper to decide per-IO whether nfs_local_do_read()
+and nfs_local_do_write() must defer to nfslocaliod_workqueue or may issue
+the IO inline.  Buffered writeback continues to bounce (wb_workfn is a
+WQ_MEM_RECLAIM worker); O_DIRECT and app-context submission now run inline.
+
+Running nfs_local_call_write() inline is safe: it already saves and
+restores current->flags around the PF_LOCAL_THROTTLE|PF_MEMALLOC_NOIO it
+sets and scopes the file opener's creds.  The async O_DIRECT completion
+path is likewise unaffected: when the underlying filesystem returns
+-EIOCBQUEUED, the kiocb ki_complete callback (nfs_local_read_aio_complete /
+nfs_local_write_aio_complete) can run in bottom-half context and so must
+still defer the pgio completion (nfs_local_pgio_release -> rpc_call_done) to
+nfsiod_workqueue via nfs_local_pgio_aio_complete().  That completion hop is
+independent of how the IO was submitted, and this change leaves it as-is;
+only the submission side stops unconditionally hopping through
+nfslocaliod_workqueue.
+
+Assisted-by: Claude:claude-opus-4-8
+Signed-off-by: Mike Snitzer <snitzer@kernel.org>
+Signed-off-by: Trond Myklebust <trond.myklebust@hammerspace.com>
+---
+ fs/nfs/localio.c          | 33 +++++++++++++++++++++++++++++++--
+ include/linux/workqueue.h |  1 +
+ kernel/workqueue.c        | 24 ++++++++++++++++++++++++
+ 3 files changed, 56 insertions(+), 2 deletions(-)
+
+diff --git a/fs/nfs/localio.c b/fs/nfs/localio.c
+index e55c5977fcc3..d3e480888eb1 100644
+--- a/fs/nfs/localio.c
++++ b/fs/nfs/localio.c
+@@ -699,6 +699,29 @@ static void nfs_local_call_read(struct work_struct *work)
+ 	}
+ }
+ 
++/*
++ * Decide whether LOCALIO must defer submission to the dedicated
++ * !WQ_MEM_RECLAIM nfslocaliod_workqueue rather than issue the IO inline.
++ *
++ * LOCALIO issues IO directly into a stacked local filesystem (e.g. XFS),
++ * which may in turn flush its own !WQ_MEM_RECLAIM workqueue.  Doing so from a
++ * memory-reclaim context -- either a WQ_MEM_RECLAIM worker (most importantly
++ * writeback's wb_workfn running on bdi_wq) or an explicit reclaim task
++ * (PF_MEMALLOC) -- would trip check_flush_dependency() and risks a
++ * forward-progress deadlock; see commit b9f5dd57f4a5 ("nfs/localio: use
++ * dedicated workqueues for filesystem read and write").  In that case defer
++ * to nfslocaliod_workqueue.
++ *
++ * Otherwise (ordinary application/task context, e.g. O_DIRECT or fsync-driven
++ * submission) issue the IO inline: this preserves the NFS client's inherent
++ * application-context parallelism and avoids the per-IO workqueue hop.
++ */
++static inline bool nfs_local_defer_io(void)
++{
++	return (current->flags & PF_MEMALLOC) ||
++		current_is_workqueue_mem_reclaim();
++}
++
+ static void nfs_local_do_read(struct nfs_local_kiocb *iocb,
+ 			      const struct rpc_call_ops *call_ops)
+ {
+@@ -711,7 +734,10 @@ static void nfs_local_do_read(struct nfs_local_kiocb *iocb,
+ 	hdr->res.eof = false;
+ 
+ 	INIT_WORK(&iocb->work, nfs_local_call_read);
+-	queue_work(nfslocaliod_workqueue, &iocb->work);
++	if (nfs_local_defer_io())
++		queue_work(nfslocaliod_workqueue, &iocb->work);
++	else
++		nfs_local_call_read(&iocb->work);
+ }
+ 
+ static void
+@@ -929,7 +955,10 @@ static void nfs_local_do_write(struct nfs_local_kiocb *iocb,
+ 	nfs_set_local_verifier(hdr->inode, hdr->res.verf, hdr->args.stable);
+ 
+ 	INIT_WORK(&iocb->work, nfs_local_call_write);
+-	queue_work(nfslocaliod_workqueue, &iocb->work);
++	if (nfs_local_defer_io())
++		queue_work(nfslocaliod_workqueue, &iocb->work);
++	else
++		nfs_local_call_write(&iocb->work);
+ }
+ 
+ static struct nfs_local_kiocb *
+diff --git a/include/linux/workqueue.h b/include/linux/workqueue.h
+index a283766a192a..c8a36423cb34 100644
+--- a/include/linux/workqueue.h
++++ b/include/linux/workqueue.h
+@@ -661,6 +661,7 @@ extern void workqueue_set_min_active(struct workqueue_struct *wq,
+ 				     int min_active);
+ extern struct work_struct *current_work(void);
+ extern bool current_is_workqueue_rescuer(void);
++extern bool current_is_workqueue_mem_reclaim(void);
+ extern bool workqueue_congested(int cpu, struct workqueue_struct *wq);
+ extern unsigned int work_busy(struct work_struct *work);
+ extern __printf(1, 2) void set_worker_desc(const char *fmt, ...);
+diff --git a/kernel/workqueue.c b/kernel/workqueue.c
+index 78068ae8f28a..7bb41bec621f 100644
+--- a/kernel/workqueue.c
++++ b/kernel/workqueue.c
+@@ -6215,6 +6215,30 @@ bool current_is_workqueue_rescuer(void)
+ 	return worker && worker->rescue_wq;
+ }
+ 
++/**
++ * current_is_workqueue_mem_reclaim - is %current a %WQ_MEM_RECLAIM worker?
++ *
++ * Determine whether %current is a workqueue worker executing on a workqueue
++ * created with %WQ_MEM_RECLAIM.  This mirrors the condition that
++ * check_flush_dependency() warns on: flushing (or otherwise waiting on) a
++ * !WQ_MEM_RECLAIM workqueue from such a context breaks the forward-progress
++ * guarantee and can deadlock.  Callers that may recurse into such a flush --
++ * e.g. NFS LOCALIO submitting into a stacked filesystem that flushes its own
++ * !WQ_MEM_RECLAIM workqueue -- can use this to decide whether they must defer
++ * the work to a !WQ_MEM_RECLAIM workqueue rather than run it inline.
++ *
++ * Return: %true if %current is a %WQ_MEM_RECLAIM worker.  %false otherwise.
++ */
++bool current_is_workqueue_mem_reclaim(void)
++{
++	struct worker *worker = current_wq_worker();
++
++	return worker &&
++		((worker->current_pwq->wq->flags &
++		  (WQ_MEM_RECLAIM | __WQ_LEGACY)) == WQ_MEM_RECLAIM);
++}
++EXPORT_SYMBOL_GPL(current_is_workqueue_mem_reclaim);
++
+ /**
+  * workqueue_congested - test whether a workqueue is congested
+  * @cpu: CPU in question
+-- 
+2.55.0
+

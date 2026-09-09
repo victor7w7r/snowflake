@@ -1,0 +1,64 @@
+From 894a6e16abbec9a523078dbd5f4701fe3c11c283 Mon Sep 17 00:00:00 2001
+From: Yongxing Mou <yongxing.mou@oss.qualcomm.com>
+Date: Tue, 28 Jul 2026 18:21:41 +0800
+Subject: [PATCH 09466/15333] drm/msm/dp: simplify link and clock disable
+ sequence
+
+Move the common disable steps out of the sink_count check to make the
+flow easier to follow.
+
+No functional change intended.
+
+Signed-off-by: Yongxing Mou <yongxing.mou@oss.qualcomm.com>
+Reviewed-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Patchwork: https://patchwork.freedesktop.org/patch/742749/
+Link: https://lore.kernel.org/r/20260728-dp_mstclean-v9-12-f7779fce10f4@oss.qualcomm.com
+Signed-off-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+---
+ drivers/gpu/drm/msm/dp/dp_display.c | 26 +++++++++-----------------
+ 1 file changed, 9 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dp/dp_display.c b/drivers/gpu/drm/msm/dp/dp_display.c
+index 44f4c2312fc3..b4e1feead765 100644
+--- a/drivers/gpu/drm/msm/dp/dp_display.c
++++ b/drivers/gpu/drm/msm/dp/dp_display.c
+@@ -718,27 +718,19 @@ static int msm_dp_display_disable(struct msm_dp_display_private *dp)
+ 
+ 	msm_dp_panel_disable_vsc_sdp(dp->panel);
+ 
+-	/* dongle is still connected but sinks are disconnected */
+-	if (dp->link->sink_count == 0) {
+-		/*
+-		 * irq_hpd with sink_count = 0
+-		 * hdmi unplugged out of dongle
+-		 */
++	msm_dp_ctrl_off_pixel_clk(dp->ctrl);
+ 
+-		/* set dongle to D3 (power off) mode */
++	/* dongle is still connected but sinks are disconnected */
++	if (dp->link->sink_count == 0)
+ 		msm_dp_link_psm_config(dp->link, &dp->panel->link_info, true);
+-		msm_dp_ctrl_off_pixel_clk(dp->ctrl);
+-		msm_dp_ctrl_off_link(dp->ctrl, dp->panel);
++
++	msm_dp_ctrl_off_link(dp->ctrl, dp->panel);
++
++	if (dp->link->sink_count == 0)
++		/* re-init the PHY so that we can listen to Dongle disconnect */
+ 		msm_dp_ctrl_reinit_phy(dp->ctrl);
+-	} else {
+-		/*
+-		 * unplugged interrupt
+-		 * dongle unplugged out of DUT
+-		 */
+-		msm_dp_ctrl_off_pixel_clk(dp->ctrl);
+-		msm_dp_ctrl_off_link(dp->ctrl, dp->panel);
++	else
+ 		msm_dp_display_host_phy_exit(dp);
+-	}
+ 
+ 	msm_dp_display->power_on = false;
+ 
+-- 
+2.55.0
+

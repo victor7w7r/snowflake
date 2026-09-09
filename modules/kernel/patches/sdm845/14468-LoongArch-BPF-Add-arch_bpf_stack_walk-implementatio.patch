@@ -1,0 +1,75 @@
+From e7103e5e3bde91e573f19bd70aed359fd7e17d5a Mon Sep 17 00:00:00 2001
+From: George Guo <guodongtai@kylinos.cn>
+Date: Mon, 17 Aug 2026 22:07:40 +0800
+Subject: [PATCH 14468/15333] LoongArch: BPF: Add arch_bpf_stack_walk()
+ implementation
+
+Implement arch_bpf_stack_walk() on top of the ORC unwinder within
+the LoongArch BPF JIT backend to provide generic BPF stack walking
+capabilities.
+
+This function is required by advanced BPF features, including timed
+may_goto timeout tracing and BPF exceptions. It will be invoked in
+the BPF core subsystem unwinding paths: bpf_prog_find_from_stack(),
+bpf_stream_stage_dump_stack(), and bpf_throw().
+
+Co-developed-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Signed-off-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Signed-off-by: George Guo <guodongtai@kylinos.cn>
+Signed-off-by: Huacai Chen <chenhuacai@loongson.cn>
+---
+ arch/loongarch/net/bpf_jit.c | 38 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 38 insertions(+)
+
+diff --git a/arch/loongarch/net/bpf_jit.c b/arch/loongarch/net/bpf_jit.c
+index 7533917c6d47..1eb588e443c9 100644
+--- a/arch/loongarch/net/bpf_jit.c
++++ b/arch/loongarch/net/bpf_jit.c
+@@ -2366,6 +2366,44 @@ void bpf_jit_free(struct bpf_prog *prog)
+ 	bpf_prog_unlock_free(prog);
+ }
+ 
++#if defined(CONFIG_UNWINDER_ORC)
++#include <asm/unwind.h>
++
++static noinline void walk_bpf_stackframe(bool (*consume_fn)(void *cookie, u64 ip, u64 sp, u64 bp),
++					 void *cookie, unsigned long fp)
++{
++	unsigned long addr;
++	struct unwind_state state;
++	struct pt_regs dummyregs;
++	struct pt_regs *regs = &dummyregs;
++
++	regs->regs[1] = 0;
++	regs->regs[22] = fp;
++	regs->regs[3] = (unsigned long)__builtin_frame_address(0);
++	regs->csr_era = (unsigned long)__builtin_return_address(0);
++
++	for (unwind_start(&state, current, regs);
++	     !unwind_done(&state); unwind_next_frame(&state)) {
++		addr = unwind_get_return_address(&state);
++		if (!addr || !consume_fn(cookie, (u64)addr, (u64)state.sp, (u64)state.fp))
++			break;
++	}
++}
++
++void arch_bpf_stack_walk(bool (*consume_fn)(void *cookie, u64 ip, u64 sp, u64 bp), void *cookie)
++{
++	unsigned long fp;
++
++	/*
++	 * Capture the live frame pointer ($r22) at the very front-line before
++	 * any kernel C code clobbers it. This must be a thin wrapper with no
++	 * large stack locals to prevent the compiler from reusing $r22 early.
++	 */
++	asm volatile("move %0, $r22" : "=r"(fp));
++	walk_bpf_stackframe(consume_fn, cookie, fp);
++}
++#endif /* CONFIG_UNWINDER_ORC */
++
+ bool bpf_jit_bypass_spec_v1(void)
+ {
+ 	return true;
+-- 
+2.55.0
+

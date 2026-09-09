@@ -1,0 +1,61 @@
+From 5686f2bed02d98d03e3f38f4b5569804510fba31 Mon Sep 17 00:00:00 2001
+From: "Kiryl Shutsemau (Meta)" <kas@kernel.org>
+Date: Mon, 29 Jun 2026 16:07:15 +0100
+Subject: [PATCH 09775/15333] firmware: arm_sdei: add sdei_is_present()
+
+invoke_sdei_fn() returns -EIO when no SDEI conduit was probed, and the
+core warns ("Failed to create event ...") on any registration that hits
+that. An optional consumer that registers an event from an unconditional
+initcall would therefore make every boot on a non-SDEI system emit that
+warning for what is simply absent firmware.
+
+Expose whether SDEI firmware is present so such a consumer can skip
+registration -- and the warning -- when there is nothing to talk to.
+
+Signed-off-by: Kiryl Shutsemau (Meta) <kas@kernel.org>
+Reviewed-by: Douglas Anderson <dianders@chromium.org>
+Tested-by: Yin Fengwei <fengwei_yin@linux.alibaba.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ drivers/firmware/arm_sdei.c | 10 ++++++++++
+ include/linux/arm_sdei.h    |  3 +++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/drivers/firmware/arm_sdei.c b/drivers/firmware/arm_sdei.c
+index f39ed7ba3a38..c161cf263547 100644
+--- a/drivers/firmware/arm_sdei.c
++++ b/drivers/firmware/arm_sdei.c
+@@ -339,6 +339,16 @@ static void _ipi_unmask_cpu(void *ignored)
+ 	sdei_unmask_local_cpu();
+ }
+ 
++/*
++ * Was SDEI firmware probed and is it usable?  Lets optional consumers skip
++ * registering an event -- and the warning a failed registration emits -- on
++ * systems with no SDEI.
++ */
++bool sdei_is_present(void)
++{
++	return sdei_firmware_call;
++}
++
+ static void _ipi_private_reset(void *ignored)
+ {
+ 	int err;
+diff --git a/include/linux/arm_sdei.h b/include/linux/arm_sdei.h
+index f652a5028b59..b07113eeeff7 100644
+--- a/include/linux/arm_sdei.h
++++ b/include/linux/arm_sdei.h
+@@ -37,6 +37,9 @@ int sdei_event_unregister(u32 event_num);
+ int sdei_event_enable(u32 event_num);
+ int sdei_event_disable(u32 event_num);
+ 
++/* Was SDEI firmware probed and usable? */
++bool sdei_is_present(void);
++
+ /* GHES register/unregister helpers */
+ int sdei_register_ghes(struct ghes *ghes, sdei_event_callback *normal_cb,
+ 		       sdei_event_callback *critical_cb);
+-- 
+2.55.0
+

@@ -1,0 +1,46 @@
+From d7f0b6a15dde2e87a617095fa273f7d9c6e2d87b Mon Sep 17 00:00:00 2001
+From: "Jiri Slaby (SUSE)" <jirislaby@kernel.org>
+Date: Wed, 8 Jul 2026 11:57:33 +0200
+Subject: [PATCH 05580/15333] misc: rp1: Switch to irq_domain_create_linear()
+
+irq_domain_add_linear() is going away as being obsolete now. Switch to
+the preferred irq_domain_create_linear(). That differs in the first
+parameter: It takes more generic struct fwnode_handle instead of struct
+device_node. Therefore, of_fwnode_handle() is added around the
+parameter.
+
+Note some of the users can likely use dev->fwnode directly instead of
+indirect of_fwnode_handle(dev->of_node). But dev->fwnode is not
+guaranteed to be set for all, so this has to be investigated on case to
+case basis (by people who can actually test with the HW).
+
+Signed-off-by: Jiri Slaby (SUSE) <jirislaby@kernel.org>
+Cc: Thomas Gleixner <tglx@kernel.org>
+Cc: Andrea della Porta <andrea.porta@suse.com>
+Cc: Arnd Bergmann <arnd@arndb.de>
+Cc: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Tested-by: Andrea della Porta <andrea.porta@suse.com>
+Link: https://patch.msgid.link/20260708095733.385396-1-jirislaby@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/misc/rp1/rp1_pci.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/misc/rp1/rp1_pci.c b/drivers/misc/rp1/rp1_pci.c
+index 0e87633fe4f8..94ad022cd138 100644
+--- a/drivers/misc/rp1/rp1_pci.c
++++ b/drivers/misc/rp1/rp1_pci.c
+@@ -241,8 +241,8 @@ static int rp1_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 	}
+ 
+ 	pci_set_drvdata(pdev, rp1);
+-	rp1->domain = irq_domain_add_linear(rp1_node, RP1_INT_END,
+-					    &rp1_domain_ops, rp1);
++	rp1->domain = irq_domain_create_linear(of_fwnode_handle(rp1_node), RP1_INT_END,
++					       &rp1_domain_ops, rp1);
+ 	if (!rp1->domain) {
+ 		dev_err(&pdev->dev, "Error creating IRQ domain\n");
+ 		err = -ENOMEM;
+-- 
+2.55.0
+

@@ -1,0 +1,60 @@
+From 7bdcb5b3a9c5ea63aaea75adfc1ffd30dee969f0 Mon Sep 17 00:00:00 2001
+From: "Borislav Petkov (AMD)" <bp@alien8.de>
+Date: Fri, 19 Jun 2026 21:37:57 -0700
+Subject: [PATCH 03660/15333] x86/boot/compressed/head_64.S: Clean up
+ SEV-related comments
+
+Move the comment about setting the encryption mask above the line which
+does that and, especially, inside the ifdeffery, where it belongs.
+
+Move comments on top of the code lines they refer to and not on the
+side, which impairs readability.
+
+No functional changes.
+
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Reviewed-by: Tom Lendacky <thomas.lendacky@amd.com>
+Link: https://patch.msgid.link/20260620043757.347076-1-bp@kernel.org
+---
+ arch/x86/boot/compressed/head_64.S | 18 +++++++++++-------
+ 1 file changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/boot/compressed/head_64.S b/arch/x86/boot/compressed/head_64.S
+index d9dab940ff62..1aca51390f73 100644
+--- a/arch/x86/boot/compressed/head_64.S
++++ b/arch/x86/boot/compressed/head_64.S
+@@ -172,19 +172,23 @@ SYM_FUNC_START(startup_32)
+  /*
+   * Build early 4G boot pagetable
+   */
+-	/*
+-	 * If SEV is active then set the encryption mask in the page tables.
+-	 * This will ensure that when the kernel is copied and decompressed
+-	 * it will be done so encrypted.
+-	 */
+ 	xorl	%edx, %edx
+ #ifdef	CONFIG_AMD_MEM_ENCRYPT
+ 	call	get_sev_encryption_bit
+ 	xorl	%edx, %edx
+ 	testl	%eax, %eax
+ 	jz	1f
+-	subl	$32, %eax	/* Encryption bit is always above bit 31 */
+-	bts	%eax, %edx	/* Set encryption mask for page tables */
++
++	/* Encryption bit is always above bit 31 */
++	subl	$32, %eax
++
++	/*
++	 * If SEV is active then set the encryption mask in the page tables.
++	 * This will ensure that when the kernel is copied and decompressed it
++	 * will be done so encrypted.
++	 */
++	bts	%eax, %edx
++
+ 	/*
+ 	 * Set MSR_AMD64_SEV_ENABLED_BIT in sev_status so that
+ 	 * startup32_check_sev_cbit() will do a check. sev_enable() will
+-- 
+2.55.0
+

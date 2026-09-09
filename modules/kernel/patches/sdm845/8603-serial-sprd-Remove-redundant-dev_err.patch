@@ -1,0 +1,37 @@
+From 846a6422d2a8dc4e8d20744b9ae9b681a96b36cb Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Wed, 22 Jul 2026 11:43:33 +0800
+Subject: [PATCH 08603/15333] serial: sprd: Remove redundant dev_err()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() automatically logs
+detailed error messages on failure. Remove the now-redundant
+driver-specific dev_err() call.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://patch.msgid.link/20260722034342.316755-6-panchuang@vivo.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/sprd_serial.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/drivers/tty/serial/sprd_serial.c b/drivers/tty/serial/sprd_serial.c
+index 092755f35683..3fdf5939a62c 100644
+--- a/drivers/tty/serial/sprd_serial.c
++++ b/drivers/tty/serial/sprd_serial.c
+@@ -741,11 +741,8 @@ static int sprd_startup(struct uart_port *port)
+ 
+ 	ret = devm_request_irq(port->dev, port->irq, sprd_handle_irq,
+ 			       IRQF_SHARED, sp->name, port);
+-	if (ret) {
+-		dev_err(port->dev, "fail to request serial irq %d, ret=%d\n",
+-			port->irq, ret);
++	if (ret)
+ 		return ret;
+-	}
+ 	fc = serial_in(port, SPRD_CTL1);
+ 	fc |= RX_TOUT_THLD_DEF | RX_HFC_THLD_DEF;
+ 	serial_out(port, SPRD_CTL1, fc);
+-- 
+2.55.0
+

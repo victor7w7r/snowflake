@@ -1,0 +1,54 @@
+From 65be90af275675a65deed133ef67c81168e12bc9 Mon Sep 17 00:00:00 2001
+From: Li Qiang <liqiang01@kylinos.cn>
+Date: Thu, 16 Jul 2026 16:47:29 +0800
+Subject: [PATCH 12133/15333] Bluetooth: btmrvl: validate event packet lengths
+
+The Marvell event handlers access the HCI event header, command
+complete payload, and driver-specific event header before validating
+that the received skb contains them. A truncated event can consequently
+cause an out-of-bounds read.
+
+Validate each header and the command-complete payload length before
+dereferencing the corresponding fields.
+
+Signed-off-by: Li Qiang <liqiang01@kylinos.cn>
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ drivers/bluetooth/btmrvl_main.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/bluetooth/btmrvl_main.c b/drivers/bluetooth/btmrvl_main.c
+index d6f0ad0b4b6e..aaf1614ccfd7 100644
+--- a/drivers/bluetooth/btmrvl_main.c
++++ b/drivers/bluetooth/btmrvl_main.c
+@@ -43,10 +43,17 @@ bool btmrvl_check_evtpkt(struct btmrvl_private *priv, struct sk_buff *skb)
+ {
+ 	struct hci_event_hdr *hdr = (void *) skb->data;
+ 
++	if (skb->len < sizeof(*hdr))
++		return true;
++
+ 	if (hdr->evt == HCI_EV_CMD_COMPLETE) {
+ 		struct hci_ev_cmd_complete *ec;
+ 		u16 opcode;
+ 
++		if (hdr->plen < sizeof(*ec) ||
++		    skb->len < HCI_EVENT_HDR_SIZE + sizeof(*ec))
++			return true;
++
+ 		ec = (void *) (skb->data + HCI_EVENT_HDR_SIZE);
+ 		opcode = __le16_to_cpu(ec->opcode);
+ 
+@@ -74,6 +81,9 @@ int btmrvl_process_event(struct btmrvl_private *priv, struct sk_buff *skb)
+ 	struct btmrvl_event *event;
+ 	int ret = 0;
+ 
++	if (skb->len < sizeof(*event))
++		return -EINVAL;
++
+ 	event = (struct btmrvl_event *) skb->data;
+ 	if (event->ec != 0xff) {
+ 		BT_DBG("Not Marvell Event=%x", event->ec);
+-- 
+2.55.0
+

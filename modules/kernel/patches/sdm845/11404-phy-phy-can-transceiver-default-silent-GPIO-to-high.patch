@@ -1,0 +1,46 @@
+From c3b0bb15ef001703b00d79bc4928e7421e24280d Mon Sep 17 00:00:00 2001
+From: Haibo Chen <haibo.chen@nxp.com>
+Date: Thu, 30 Jul 2026 12:33:26 +0800
+Subject: [PATCH 11404/15333] phy: phy-can-transceiver: default silent GPIO to
+ high during probe
+
+The silent pin of the CAN transceiver is active high, asserting it puts
+the transceiver into silent (listen-only) mode where the transmitter is
+disabled.
+
+At probe time, and before the PHY is powered on, the transceiver should
+default to silent mode. This is the correct and lower-power state: the
+transceiver should not actively drive the CAN bus until the PHY is
+explicitly powered on. Requesting the silent GPIO as GPIOD_OUT_LOW leaves
+the transceiver in normal mode by default, which is both incorrect and
+wastes power.
+
+Request the silent GPIO as GPIOD_OUT_HIGH so the transceiver starts in
+silent mode, and let the power_on/power_off callbacks manage the mode
+afterwards.
+
+Signed-off-by: Haibo Chen <haibo.chen@nxp.com>
+Reviewed-by: Marc Kleine-Budde <mkl@pengutronix.de>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260730-can-share-silent-v1-1-63fd603f943d@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/phy/phy-can-transceiver.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/phy/phy-can-transceiver.c b/drivers/phy/phy-can-transceiver.c
+index 75dc49e75ca0..9aa30662105f 100644
+--- a/drivers/phy/phy-can-transceiver.c
++++ b/drivers/phy/phy-can-transceiver.c
+@@ -198,7 +198,7 @@ static int can_transceiver_phy_probe(struct platform_device *pdev)
+ 
+ 		if (drvdata->flags & CAN_TRANSCEIVER_SILENT_PRESENT) {
+ 			silent_gpio = devm_gpiod_get_index_optional(dev, "silent", i,
+-								    GPIOD_OUT_LOW);
++								    GPIOD_OUT_HIGH);
+ 			if (IS_ERR(silent_gpio))
+ 				return PTR_ERR(silent_gpio);
+ 			can_transceiver_phy->silent_gpio = silent_gpio;
+-- 
+2.55.0
+

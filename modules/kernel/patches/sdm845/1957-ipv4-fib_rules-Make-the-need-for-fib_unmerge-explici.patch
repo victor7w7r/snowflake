@@ -1,0 +1,51 @@
+From 5cb890ff73573f2924877d9a6b4a298f021a9cc5 Mon Sep 17 00:00:00 2001
+From: Kuniyuki Iwashima <kuniyu@google.com>
+Date: Mon, 29 Jun 2026 18:10:54 +0000
+Subject: [PATCH 01957/15333] ipv4: fib_rules: Make the need for fib_unmerge()
+ explicit.
+
+IPv4 local and main route tables are merged by default to avoid
+unnecessary rule lookups.
+
+When the first IPv4 rule is created, fib_unmerge() splits the
+two tables.
+
+However, fib4_rule_configure() currently always calls fib_unmerge(),
+and even fetching a table via fib_get_table() requires RTNL (or RCU).
+
+We will drop RTNL from fib_newrule() if not needed.
+
+Let's call fib_unmerge() only once for the first rule.
+
+Signed-off-by: Kuniyuki Iwashima <kuniyu@google.com>
+Link: https://patch.msgid.link/20260629181226.1929658-3-kuniyu@google.com
+Reviewed-by: Ido Schimmel <idosch@nvidia.com>
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ net/ipv4/fib_rules.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/net/ipv4/fib_rules.c b/net/ipv4/fib_rules.c
+index 51d0ab423ed4..16d202246a36 100644
+--- a/net/ipv4/fib_rules.c
++++ b/net/ipv4/fib_rules.c
+@@ -301,10 +301,12 @@ static int fib4_rule_configure(struct fib_rule *rule, struct sk_buff *skb,
+ 	    fib4_nl2rule_dscp_mask(tb[FRA_DSCP_MASK], rule4, extack) < 0)
+ 		goto errout;
+ 
+-	/* split local/main if they are not already split */
+-	err = fib_unmerge(net);
+-	if (err)
+-		goto errout;
++	if (!net->ipv4.fib_has_custom_rules) {
++		/* split local/main if they are not already split */
++		err = fib_unmerge(net);
++		if (err)
++			goto errout;
++	}
+ 
+ 	if (rule->table == RT_TABLE_UNSPEC && !rule->l3mdev) {
+ 		if (rule->action == FR_ACT_TO_TBL) {
+-- 
+2.55.0
+

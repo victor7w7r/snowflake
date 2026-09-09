@@ -1,0 +1,47 @@
+From 9f69d05b5a85c417c73fa2d5c7a2d507ac81cf4b Mon Sep 17 00:00:00 2001
+From: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Date: Fri, 24 Jul 2026 16:00:15 -0700
+Subject: [PATCH 13284/15333] nfc: st95hf: switch to using sleeping variants of
+ gpiod API
+
+The driver does not use gpiod API calls in an atomic context. Switch
+to gpiod_set_value_cansleep() calls to allow using the driver with GPIO
+controllers that might need process context to operate.
+
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+Link: https://patch.msgid.link/amPsnh9wDIG2CeSi@google.com
+Signed-off-by: David Heidelberg <david@ixit.cz>
+---
+ drivers/nfc/st95hf/core.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/nfc/st95hf/core.c b/drivers/nfc/st95hf/core.c
+index 321fbe8aeca8..4d772a308bff 100644
+--- a/drivers/nfc/st95hf/core.c
++++ b/drivers/nfc/st95hf/core.c
+@@ -450,19 +450,19 @@ static int st95hf_select_protocol(struct st95hf_context *stcontext, int type)
+ static void st95hf_send_st95enable_negativepulse(struct st95hf_context *st95con)
+ {
+ 	/* First make irq_in pin high */
+-	gpiod_set_value(st95con->enable_gpiod, HIGH);
++	gpiod_set_value_cansleep(st95con->enable_gpiod, HIGH);
+ 
+ 	/* wait for 1 milisecond */
+ 	usleep_range(1000, 2000);
+ 
+ 	/* Make irq_in pin low */
+-	gpiod_set_value(st95con->enable_gpiod, LOW);
++	gpiod_set_value_cansleep(st95con->enable_gpiod, LOW);
+ 
+ 	/* wait for minimum interrupt pulse to make st95 active */
+ 	usleep_range(1000, 2000);
+ 
+ 	/* At end make it high */
+-	gpiod_set_value(st95con->enable_gpiod, HIGH);
++	gpiod_set_value_cansleep(st95con->enable_gpiod, HIGH);
+ }
+ 
+ /*
+-- 
+2.55.0
+

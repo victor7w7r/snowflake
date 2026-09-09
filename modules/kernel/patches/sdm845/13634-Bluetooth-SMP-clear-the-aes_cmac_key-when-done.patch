@@ -1,0 +1,44 @@
+From 053baab47d17b769e4feb7d5216df36dc5f057a6 Mon Sep 17 00:00:00 2001
+From: Thomas Huth <thuth@redhat.com>
+Date: Fri, 7 Aug 2026 14:58:41 +0200
+Subject: [PATCH 13634/15333] Bluetooth: SMP: clear the aes_cmac_key when done
+
+Clear the local aes_cmac_key structure via __cleanup() function
+when we're done with it to avoid that sensitive data could leak on
+the stack.
+
+While we're at it, also clear the tmp[] array here that is populated
+with a raw version of the original key and thus would leak the same
+information via the stack otherwise.
+
+Signed-off-by: Thomas Huth <thuth@redhat.com>
+Link: https://patch.msgid.link/20260807125845.1477067-5-thuth@redhat.com
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+---
+ net/bluetooth/smp.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/net/bluetooth/smp.c b/net/bluetooth/smp.c
+index c4470958b0d5..4a32e4f80b48 100644
+--- a/net/bluetooth/smp.c
++++ b/net/bluetooth/smp.c
+@@ -164,7 +164,7 @@ static inline void swap_buf(const u8 *src, u8 *dst, size_t len)
+ static int smp_aes_cmac(const u8 k[16], const u8 *m, size_t len, u8 mac[16])
+ {
+ 	uint8_t tmp[16], mac_msb[16], msg_msb[CMAC_MSG_MAX];
+-	struct aes_cmac_key key;
++	struct aes_cmac_key key __cleanup(aes_cmac_zeroize_key);
+ 	int err;
+ 
+ 	if (len > CMAC_MSG_MAX)
+@@ -178,6 +178,7 @@ static int smp_aes_cmac(const u8 k[16], const u8 *m, size_t len, u8 mac[16])
+ 	SMP_DBG("key %16phN", k);
+ 
+ 	err = aes_cmac_preparekey(&key, tmp, 16);
++	memzero_explicit(tmp, sizeof(tmp));
+ 	if (WARN_ON_ONCE(err)) /* Should never happen, as 16 is valid keylen */
+ 		return err;
+ 	aes_cmac(&key, msg_msb, len, mac_msb);
+-- 
+2.55.0
+

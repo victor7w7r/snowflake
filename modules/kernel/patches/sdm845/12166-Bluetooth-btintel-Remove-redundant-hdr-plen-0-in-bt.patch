@@ -1,0 +1,33 @@
+From d39667cb0472843d25d414ee1cb8f02cbb263be3 Mon Sep 17 00:00:00 2001
+From: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Date: Sat, 1 Aug 2026 23:31:37 -0700
+Subject: [PATCH 12166/15333] Bluetooth: btintel: Remove redundant (hdr->plen >
+ 0) in btintel_recv_event()
+
+Drop the check since:
+- it is already implied by the existing (skb->len > HCI_EVENT_HDR_SIZE)
+- hdr->plen is then not used by the function at all
+
+Signed-off-by: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ drivers/bluetooth/btintel.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/bluetooth/btintel.c b/drivers/bluetooth/btintel.c
+index d06a335ff1db..bcb2514b7bc0 100644
+--- a/drivers/bluetooth/btintel.c
++++ b/drivers/bluetooth/btintel.c
+@@ -3991,8 +3991,7 @@ int btintel_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
+ 	struct hci_event_hdr *hdr = (void *)skb->data;
+ 	const char diagnostics_hdr[] = { 0x87, 0x80, 0x03 };
+ 
+-	if (skb->len > HCI_EVENT_HDR_SIZE && hdr->evt == 0xff &&
+-	    hdr->plen > 0) {
++	if (skb->len > HCI_EVENT_HDR_SIZE && hdr->evt == 0xff) {
+ 		const void *ptr = skb->data + HCI_EVENT_HDR_SIZE + 1;
+ 		unsigned int len = skb->len - HCI_EVENT_HDR_SIZE - 1;
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,39 @@
+From 06529560b0acee761bfc8fa1ef82edb2596596ef Mon Sep 17 00:00:00 2001
+From: Sriman Achanta <srimanachanta@gmail.com>
+Date: Mon, 3 Aug 2026 15:15:49 -0400
+Subject: [PATCH 10207/15333] HID: steelseries: Report POWER_SUPPLY_STATUS_FULL
+ when full
+
+Report POWER_SUPPLY_STATUS_FULL when the headset is connected, charging,
+and at 100% capacity. It reported CHARGING in that case before.
+
+The charging flag doubles as a power-present signal: the headset keeps
+reporting charging while it sits docked at 100%, and clears the flag as
+soon as it runs on battery. Gating FULL on the charging flag therefore
+avoids reporting FULL for an unplugged headset that merely happens to be
+at 100%, which would otherwise hide the discharge state from userspace.
+
+Signed-off-by: Sriman Achanta <srimanachanta@gmail.com>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ drivers/hid/hid-steelseries-arctis.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/hid/hid-steelseries-arctis.c b/drivers/hid/hid-steelseries-arctis.c
+index c54c56db9ddd..7b8f5f2623b0 100644
+--- a/drivers/hid/hid-steelseries-arctis.c
++++ b/drivers/hid/hid-steelseries-arctis.c
+@@ -214,7 +214,9 @@ static int steelseries_battery_get_property(struct power_supply *psy,
+ 		if (!sd->headset_connected)
+ 			val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
+ 		else if (sd->battery_charging)
+-			val->intval = POWER_SUPPLY_STATUS_CHARGING;
++			val->intval = sd->battery_capacity >= 100 ?
++				POWER_SUPPLY_STATUS_FULL :
++				POWER_SUPPLY_STATUS_CHARGING;
+ 		else
+ 			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+ 		break;
+-- 
+2.55.0
+

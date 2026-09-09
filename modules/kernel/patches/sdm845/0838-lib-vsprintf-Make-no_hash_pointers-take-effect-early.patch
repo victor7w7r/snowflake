@@ -1,0 +1,53 @@
+From 3a341cb3a2c2879732bc9cf006caa6a087b82241 Mon Sep 17 00:00:00 2001
+From: Kaitao Cheng <chengkaitao@kylinos.cn>
+Date: Thu, 18 Jun 2026 19:06:40 +0800
+Subject: [PATCH 00838/15333] lib/vsprintf: Make no_hash_pointers take effect
+ early
+
+The no_hash_pointers boot parameter is now handled as an alias for
+hash_pointers=never. However, hash_pointers=never only records the
+selected mode during early parameter parsing, and no_hash_pointers is
+not updated until hash_pointers_finalize() runs later from SLUB init.
+
+This leaves a window during very early boot where %p output is still
+hashed even though the user explicitly requested unhashed pointers with
+no_hash_pointers or hash_pointers=never.
+
+Set no_hash_pointers as soon as the "never" mode is parsed. The later
+hash_pointers_finalize() call still keeps the final policy decision in
+one place, but explicit requests to disable pointer hashing now take
+effect for early boot users too.
+
+Signed-off-by: Kaitao Cheng <chengkaitao@kylinos.cn>
+Reviewed-by: Petr Mladek <pmladek@suse.com>
+Link: https://patch.msgid.link/20260618110640.82749-1-kaitao.cheng@linux.dev
+Signed-off-by: Petr Mladek <pmladek@suse.com>
+---
+ lib/vsprintf.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/lib/vsprintf.c b/lib/vsprintf.c
+index 2bc6ef483576..e285e8bc4712 100644
+--- a/lib/vsprintf.c
++++ b/lib/vsprintf.c
+@@ -2360,6 +2360,9 @@ void __init hash_pointers_finalize(bool slub_debug)
+ 
+ static int __init hash_pointers_mode_parse(char *str)
+ {
++	/* Avoid stale no_hash_pointers state when hash_pointers overrides it */
++	no_hash_pointers = false;
++
+ 	if (!str) {
+ 		pr_warn("Hash pointers mode empty; falling back to auto.\n");
+ 		hash_pointers_mode = HASH_PTR_AUTO;
+@@ -2369,6 +2372,7 @@ static int __init hash_pointers_mode_parse(char *str)
+ 	} else if (strcmp(str, "never") == 0) {
+ 		pr_info("Hash pointers mode set to never.\n");
+ 		hash_pointers_mode = HASH_PTR_NEVER;
++		no_hash_pointers = true;
+ 	} else if (strcmp(str, "always") == 0) {
+ 		pr_info("Hash pointers mode set to always.\n");
+ 		hash_pointers_mode = HASH_PTR_ALWAYS;
+-- 
+2.55.0
+

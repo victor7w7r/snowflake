@@ -1,0 +1,48 @@
+From e7f4c05a8307701da8bc8d0391540adf6c13fcfe Mon Sep 17 00:00:00 2001
+From: Qu Wenruo <wqu@suse.com>
+Date: Tue, 28 Jul 2026 18:41:23 +0930
+Subject: [PATCH 12027/15333] btrfs: use aligned range for locking in reflink
+
+In btrfs_extent_same_range() and btrfs_clone_files(), the range passed
+into btrfs_lock_extent() is not aligned at its end, because we can
+reflink until the EOF, which may not be block aligned.
+
+Although this is not a big deal, for the sake of consistency, and to
+prepare for the upcoming stricter alignment check, pass an aligned range
+end to btrfs_lock_extent() and btrfs_unlock_extent().
+
+Reviewed-by: Filipe Manana <fdmanana@suse.com>
+Signed-off-by: Qu Wenruo <wqu@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/reflink.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/fs/btrfs/reflink.c b/fs/btrfs/reflink.c
+index ec6a760519d9..d2a4101912bd 100644
+--- a/fs/btrfs/reflink.c
++++ b/fs/btrfs/reflink.c
+@@ -687,10 +687,10 @@ static void btrfs_double_mmap_unlock(struct btrfs_inode *inode1, struct btrfs_in
+ static int btrfs_extent_same_range(struct btrfs_inode *src, u64 loff, u64 len,
+ 				   struct btrfs_inode *dst, u64 dst_loff)
+ {
+-	const u64 end = dst_loff + len - 1;
+ 	struct extent_state *cached_state = NULL;
+ 	struct btrfs_fs_info *fs_info = src->root->fs_info;
+ 	const u32 bs = fs_info->sectorsize;
++	const u64 end = round_up(dst_loff + len, bs) - 1;
+ 	int ret;
+ 
+ 	/*
+@@ -799,7 +799,7 @@ static noinline int btrfs_clone_files(struct file *file, struct file *file_src,
+ 	 * because we have already locked the inode's i_mmap_lock in exclusive
+ 	 * mode.
+ 	 */
+-	end = destoff + len - 1;
++	end = round_up(destoff + len, bs) - 1;
+ 	btrfs_lock_extent(&inode->io_tree, destoff, end, &cached_state);
+ 	ret = btrfs_clone(src, inode, off, olen, len, destoff, false);
+ 	btrfs_unlock_extent(&inode->io_tree, destoff, end, &cached_state);
+-- 
+2.55.0
+

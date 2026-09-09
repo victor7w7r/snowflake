@@ -1,0 +1,62 @@
+From bae85cd758fe30b3837c6dcfc0572db34aecea45 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 26 Jun 2026 14:35:17 -0700
+Subject: [PATCH 02964/15333] KVM: selftests: Initialize the default/global
+ pRNG during kvm_selftest_init()
+
+Initialize the default kvm_rng during selftest initialization so that the
+pRNG can be used by tests before creating a VM.  As pointed out by Sashiko,
+failure to actually initialize the generate makes it decidedly not random.
+
+Link: https://patch.msgid.link/20260626213534.3866178-5-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ tools/testing/selftests/kvm/lib/kvm_util.c | 18 +++++++++++-------
+ 1 file changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/tools/testing/selftests/kvm/lib/kvm_util.c b/tools/testing/selftests/kvm/lib/kvm_util.c
+index 875030c22d07..1016865d3f7a 100644
+--- a/tools/testing/selftests/kvm/lib/kvm_util.c
++++ b/tools/testing/selftests/kvm/lib/kvm_util.c
+@@ -24,6 +24,13 @@ u32 kvm_random_seed;
+ struct kvm_random_state kvm_rng;
+ static u32 last_kvm_seed;
+ 
++static void kvm_seed_rng(u32 seed)
++{
++	kvm_random_seed = last_kvm_seed = seed;
++	pr_info("Random seed: 0x%x\n", kvm_random_seed);
++	kvm_rng = new_kvm_random_state(kvm_random_seed);
++}
++
+ static size_t vcpu_mmap_sz(void);
+ 
+ int __open_path_or_exit(const char *path, int flags, const char *enoent_help)
+@@ -515,11 +522,9 @@ struct kvm_vm *__vm_create(struct vm_shape shape, u32 nr_runnable_vcpus,
+ 	slot0 = memslot2region(vm, 0);
+ 	ucall_init(vm, slot0->region.guest_phys_addr + slot0->region.memory_size);
+ 
+-	if (kvm_random_seed != last_kvm_seed) {
+-		pr_info("Random seed: 0x%x\n", kvm_random_seed);
+-		last_kvm_seed = kvm_random_seed;
+-	}
+-	kvm_rng = new_kvm_random_state(kvm_random_seed);
++	if (kvm_random_seed != last_kvm_seed)
++		kvm_seed_rng(kvm_random_seed);
++
+ 	sync_global_to_guest(vm, kvm_rng);
+ 
+ 	kvm_arch_vm_post_create(vm, nr_runnable_vcpus);
+@@ -2279,8 +2284,7 @@ void __attribute((constructor)) kvm_selftest_init(void)
+ 	sigaction(SIGILL, &sig_sa, NULL);
+ 	sigaction(SIGFPE, &sig_sa, NULL);
+ 
+-	kvm_random_seed = last_kvm_seed = random();
+-	pr_info("Random seed: 0x%x\n", kvm_random_seed);
++	kvm_seed_rng(random());
+ 
+ 	kvm_selftest_arch_init();
+ }
+-- 
+2.55.0
+

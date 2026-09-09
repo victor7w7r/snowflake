@@ -1,0 +1,38 @@
+From 92f95300474b9f72a12c5896bea767d011cd847e Mon Sep 17 00:00:00 2001
+From: Adrian Ng Ho Yin <adrian.ho.yin.ng@altera.com>
+Date: Thu, 23 Jul 2026 17:23:10 +0800
+Subject: [PATCH 09103/15333] i3c: master: require dests for read CCC commands
+
+Read CCC commands (rnw set) always need a destination array to store
+payload data. Extend the existing direct-CCC validation so cmd->dests
+is guaranteed non-NULL when cmd->rnw is set.
+
+Reported-by: kernel test robot <lkp@intel.com>
+Reported-by: Dan Carpenter <error27@gmail.com>
+Closes: https://lore.kernel.org/r/202607222347.TXH6r6ie-lkp@intel.com/
+Signed-off-by: Adrian Ng Ho Yin <adrian.ho.yin.ng@altera.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Acked-by: Mukesh Kumar Savaliya <mukesh.savaliya@oss.qualcomm.com>
+Link: https://patch.msgid.link/153608c2ff6504fe29f5f727a23c53c41768a44a.1784796086.git.adrian.ho.yin.ng@altera.com
+Signed-off-by: Alexandre Belloni <alexandre.belloni@bootlin.com>
+---
+ drivers/i3c/master.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/i3c/master.c b/drivers/i3c/master.c
+index b66729c7c3ec..16c47df67e3a 100644
+--- a/drivers/i3c/master.c
++++ b/drivers/i3c/master.c
+@@ -1039,7 +1039,8 @@ static int i3c_master_send_ccc_cmd_locked(struct i3c_master_controller *master,
+ 	if (!master->ops->send_ccc_cmd)
+ 		return -EOPNOTSUPP;
+ 
+-	if ((cmd->id & I3C_CCC_DIRECT) && (!cmd->dests || !cmd->ndests))
++	if ((cmd->rnw || (cmd->id & I3C_CCC_DIRECT)) &&
++	    (!cmd->dests || !cmd->ndests))
+ 		return -EINVAL;
+ 
+ 	if (master->ops->supports_ccc_cmd &&
+-- 
+2.55.0
+

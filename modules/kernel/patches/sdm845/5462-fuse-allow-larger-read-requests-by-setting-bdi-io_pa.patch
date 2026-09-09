@@ -1,0 +1,60 @@
+From 98b4ca2378e1f6b6c06a74f699623ebecfb3549d Mon Sep 17 00:00:00 2001
+From: Jim Harris <jim.harris@nvidia.com>
+Date: Mon, 22 Jun 2026 17:42:27 -0700
+Subject: [PATCH 05462/15333] fuse: allow larger read requests by setting
+ bdi->io_pages
+
+A FUSE server that advertises a large max_pages and max_write (e.g.
+max_pages=256, max_write=1MB) cannot currently obtain matching
+FUSE_READ request sizes from the kernel.  Buffered sequential writes
+arrive at the server at the negotiated max_write size, but a large
+buffered read() is split into several smaller FUSE_READ requests.
+
+For a buffered read, filemap_get_pages() -> page_cache_sync_ra() sizes
+the read against ractl_max_pages():
+
+	max_pages = ractl->ra->ra_pages;
+	if (req_size > max_pages && bdi->io_pages > max_pages)
+		max_pages = min(req_size, bdi->io_pages);
+
+fuse leaves bdi->io_pages at the default VM_READAHEAD_PAGES (128KB), so
+a 1MB read() (req_size = 256 pages) is clamped to the readahead window
+(128KB, or 256KB for POSIX_FADV_SEQUENTIAL), producing four 256KB
+FUSE_READ round-trips instead of one.
+
+Set bdi->io_pages to fc->max_pages after feature negotiation.  As the
+code above shows, io_pages only raises the limit when the request size
+already exceeds the readahead window, so it enlarges explicitly
+requested reads without enlarging the speculative readahead window.
+This avoids increasing speculative page-cache readahead on behalf of
+an unprivileged server.  NFS does the same, setting io_pages from
+rpages while leaving ra_pages at the default.
+
+fc->max_pages is already bounded by fc->max_pages_limit (and, for
+virtio-fs, by the virtqueue descriptor count), so io_pages inherits
+the same bound.
+
+Suggested-by: Joanne Koong <joannelkoong@gmail.com>
+Signed-off-by: Jim Harris <jim.harris@nvidia.com>
+Assisted-by: Cursor:claude-opus-4.8
+Reviewed-by: Joanne Koong <joannelkoong@gmail.com>
+Signed-off-by: Miklos Szeredi <mszeredi@redhat.com>
+---
+ fs/fuse/inode.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fs/fuse/inode.c b/fs/fuse/inode.c
+index d975073c6029..f7a0a0860a04 100644
+--- a/fs/fuse/inode.c
++++ b/fs/fuse/inode.c
+@@ -1416,6 +1416,7 @@ static void process_init_reply(struct fuse_args *args, int error)
+ 
+ 		fm->sb->s_bdi->ra_pages =
+ 				min(fm->sb->s_bdi->ra_pages, ra_pages);
++		fm->sb->s_bdi->io_pages = fc->max_pages;
+ 		fc->minor = arg->minor;
+ 		fc->max_write = arg->minor < 5 ? 4096 : arg->max_write;
+ 		fc->max_write = max_t(unsigned, 4096, fc->max_write);
+-- 
+2.55.0
+

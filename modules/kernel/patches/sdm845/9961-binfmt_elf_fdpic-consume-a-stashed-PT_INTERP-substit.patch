@@ -1,0 +1,62 @@
+From 08e4b1c05ed0d77480301a996fab33baca8201a2 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 21 Jul 2026 16:13:59 +0200
+Subject: [PATCH 09961/15333] binfmt_elf_fdpic: consume a stashed PT_INTERP
+ substitute
+
+Do what binfmt_elf does. When a binfmt_misc loader entry stashed
+bprm->loader use it in place of the path named in PT_INTERP, and drop the
+override when the binary names no interpreter at all.
+
+Without this 'L' is unusable on nommu, where fdpic is the only ELF
+loader. On ARM with an MMU both loaders are registered but split the ELF
+space between them along elf_check_fdpic(), so an fdpic binary is never
+picked up by binfmt_elf either.
+
+Declining is what fdpic did so far, but it declined late. The pending
+override was only caught in begin_new_exec(), by which point the segment
+scan had opened the interpreter the binary itself names and overwritten
+bprm->buf with its header, leaving the next format in the round to
+inspect a buffer that no longer describes the file it is offered. The
+scan consumes the override now, so of the in-tree formats only
+binfmt_flat still relies on the refusal, and it reads bprm->buf without
+writing it.
+
+Transparent dispatch needs nothing on top of the AT_FLAGS translation
+both loaders already share. The binary travels in AT_EXECFD, which
+create_elf_fdpic_tables() emits, and the exe and comm labelling is done
+in exec.c for every format.
+
+Link: https://patch.msgid.link/20260721-work-bpf-binfmt_misc-ptinterp-v2-17-e57866e4ae0f@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/binfmt_elf_fdpic.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/fs/binfmt_elf_fdpic.c b/fs/binfmt_elf_fdpic.c
+index 0a3cdf280307..068c46875c74 100644
+--- a/fs/binfmt_elf_fdpic.c
++++ b/fs/binfmt_elf_fdpic.c
+@@ -263,7 +263,8 @@ static int load_elf_fdpic_binary(struct linux_binprm *bprm)
+ 			kdebug("Using ELF interpreter %s", interpreter_name);
+ 
+ 			/* replace the program with the interpreter */
+-			interpreter = open_exec(interpreter_name);
++			interpreter = bprm_open_interpreter(bprm,
++							    interpreter_name);
+ 			retval = PTR_ERR(interpreter);
+ 			if (IS_ERR(interpreter)) {
+ 				interpreter = NULL;
+@@ -299,6 +300,9 @@ static int load_elf_fdpic_binary(struct linux_binprm *bprm)
+ 
+ 	}
+ 
++	/* No PT_INTERP to substitute for: the override does not apply. */
++	bprm_drop_loader(bprm);
++
+ 	if (is_constdisp(&exec_params.hdr))
+ 		exec_params.flags |= ELF_FDPIC_FLAG_CONSTDISP;
+ 
+-- 
+2.55.0
+

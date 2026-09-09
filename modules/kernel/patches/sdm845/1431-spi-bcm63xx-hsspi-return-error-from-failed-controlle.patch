@@ -1,0 +1,41 @@
+From 3b5414d76a0381db77b9694537254af7acfa187a Mon Sep 17 00:00:00 2001
+From: Jiawen Liu <1298662399@qq.com>
+Date: Thu, 18 Jun 2026 20:45:17 +0400
+Subject: [PATCH 01431/15333] spi: bcm63xx-hsspi: return error from failed
+ controller suspend
+
+spi_controller_suspend() can fail if the SPI core cannot stop the
+controller. bcm63xx_hsspi_suspend() ignored that error, disabled the
+PLL and core clocks, and returned success.
+
+Return the suspend error before disabling the clocks.
+
+Signed-off-by: Jiawen Liu <1298662399@qq.com>
+Acked-by: William Zhang <william.zhang@broadcom.com>
+Link: https://patch.msgid.link/tencent_B5A06807924A77C8690730EBF7A052AABE05@qq.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-bcm63xx-hsspi.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/spi/spi-bcm63xx-hsspi.c b/drivers/spi/spi-bcm63xx-hsspi.c
+index 58012e1b5ae7..37b3534d0b0a 100644
+--- a/drivers/spi/spi-bcm63xx-hsspi.c
++++ b/drivers/spi/spi-bcm63xx-hsspi.c
+@@ -889,8 +889,12 @@ static int bcm63xx_hsspi_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+ 	struct bcm63xx_hsspi *bs = spi_controller_get_devdata(host);
++	int ret;
++
++	ret = spi_controller_suspend(host);
++	if (ret)
++		return ret;
+ 
+-	spi_controller_suspend(host);
+ 	clk_disable_unprepare(bs->pll_clk);
+ 	clk_disable_unprepare(bs->clk);
+ 
+-- 
+2.55.0
+

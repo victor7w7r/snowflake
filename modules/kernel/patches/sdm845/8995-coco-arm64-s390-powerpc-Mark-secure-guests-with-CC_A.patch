@@ -1,0 +1,65 @@
+From d4b9d593180c72cafa2f586379b99517f251e6bb Mon Sep 17 00:00:00 2001
+From: "Aneesh Kumar K.V (Arm)" <aneesh.kumar@kernel.org>
+Date: Fri, 17 Jul 2026 23:34:26 +0530
+Subject: [PATCH 08995/15333] coco: arm64: s390: powerpc: Mark secure guests
+ with CC_ATTR_GUEST_MEM_ENCRYPT
+
+arm64 Realms, powerpc secure guests and s390 protected virtualization
+guests currently report CC_ATTR_MEM_ENCRYPT, but not
+CC_ATTR_GUEST_MEM_ENCRYPT.
+
+These environments are all secure guest configurations. Their
+force_dma_unencrypted() implementations also treat the same secure guest
+state as requiring unencrypted DMA. Report CC_ATTR_GUEST_MEM_ENCRYPT for
+the same condition so generic confidential-computing code can distinguish
+guest memory encryption from host memory encryption instead of relying only
+on CC_ATTR_MEM_ENCRYPT.
+
+Signed-off-by: Aneesh Kumar K.V (Arm) <aneesh.kumar@kernel.org>
+Link: https://lore.kernel.org/r/20260717180442.110954-9-aneesh.kumar@kernel.org
+Signed-off-by: Marek Szyprowski <m.szyprowski@samsung.com>
+---
+ arch/arm64/mm/init.c                         | 1 +
+ arch/powerpc/platforms/pseries/cc_platform.c | 1 +
+ arch/s390/mm/init.c                          | 1 +
+ 3 files changed, 3 insertions(+)
+
+diff --git a/arch/arm64/mm/init.c b/arch/arm64/mm/init.c
+index 3b9e1b8de6cb..8ab8349d6126 100644
+--- a/arch/arm64/mm/init.c
++++ b/arch/arm64/mm/init.c
+@@ -418,6 +418,7 @@ bool cc_platform_has(enum cc_attr attr)
+ {
+ 	switch (attr) {
+ 	case CC_ATTR_MEM_ENCRYPT:
++	case CC_ATTR_GUEST_MEM_ENCRYPT:
+ 		return is_realm_world() || is_protected_kvm_guest();
+ 	default:
+ 		return false;
+diff --git a/arch/powerpc/platforms/pseries/cc_platform.c b/arch/powerpc/platforms/pseries/cc_platform.c
+index e8021af83a19..46e110a5a717 100644
+--- a/arch/powerpc/platforms/pseries/cc_platform.c
++++ b/arch/powerpc/platforms/pseries/cc_platform.c
+@@ -17,6 +17,7 @@ bool cc_platform_has(enum cc_attr attr)
+ {
+ 	switch (attr) {
+ 	case CC_ATTR_MEM_ENCRYPT:
++	case CC_ATTR_GUEST_MEM_ENCRYPT:
+ 		return is_secure_guest();
+ 
+ 	default:
+diff --git a/arch/s390/mm/init.c b/arch/s390/mm/init.c
+index c29326c44af0..6b1c5a4fa9ce 100644
+--- a/arch/s390/mm/init.c
++++ b/arch/s390/mm/init.c
+@@ -148,6 +148,7 @@ bool cc_platform_has(enum cc_attr attr)
+ {
+ 	switch (attr) {
+ 	case CC_ATTR_MEM_ENCRYPT:
++	case CC_ATTR_GUEST_MEM_ENCRYPT:
+ 		return is_prot_virt_guest();
+ 
+ 	default:
+-- 
+2.55.0
+

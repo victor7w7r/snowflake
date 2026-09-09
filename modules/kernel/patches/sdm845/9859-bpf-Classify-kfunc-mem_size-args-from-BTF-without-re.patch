@@ -1,0 +1,96 @@
+From ea5ab2389801ca82018024b7cfe156b050f69f1c Mon Sep 17 00:00:00 2001
+From: Amery Hung <ameryhung@gmail.com>
+Date: Sat, 1 Aug 2026 00:46:27 -0700
+Subject: [PATCH 09859/15333] bpf: Classify kfunc mem_size args from BTF
+ without register state
+
+check_kfunc_args() already makes sure a scalar value is passed to a
+scalar kfunc argument. Drop the check in is_kfunc_arg_mem_size() and
+is_kfunc_arg_const_mem_size() to further decouple
+get_kfunc_ptr_arg_type() from register state (a prerequisite for
+generating a helper-like prototype from kfunc's BTF).
+
+Signed-off-by: Amery Hung <ameryhung@gmail.com>
+Reviewed-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://lore.kernel.org/bpf/20260801074633.1595644-13-ameryhung@gmail.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ kernel/bpf/verifier.c | 20 +++++++++-----------
+ 1 file changed, 9 insertions(+), 11 deletions(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 6fc22a4e38b2..d65da54f9c0f 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -10785,26 +10785,24 @@ static bool is_kfunc_rcu_protected(struct bpf_call_arg_meta *meta)
+ }
+ 
+ static bool is_kfunc_arg_mem_size(const struct btf *btf,
+-				  const struct btf_param *arg,
+-				  const struct bpf_reg_state *reg)
++				  const struct btf_param *arg)
+ {
+ 	const struct btf_type *t;
+ 
+ 	t = btf_type_skip_modifiers(btf, arg->type, NULL);
+-	if (!btf_type_is_scalar(t) || reg->type != SCALAR_VALUE)
++	if (!btf_type_is_scalar(t))
+ 		return false;
+ 
+ 	return btf_param_match_suffix(btf, arg, "__sz");
+ }
+ 
+ static bool is_kfunc_arg_const_mem_size(const struct btf *btf,
+-					const struct btf_param *arg,
+-					const struct bpf_reg_state *reg)
++					const struct btf_param *arg)
+ {
+ 	const struct btf_type *t;
+ 
+ 	t = btf_type_skip_modifiers(btf, arg->type, NULL);
+-	if (!btf_type_is_scalar(t) || reg->type != SCALAR_VALUE)
++	if (!btf_type_is_scalar(t))
+ 		return false;
+ 
+ 	return btf_param_match_suffix(btf, arg, "__szk");
+@@ -11338,7 +11336,7 @@ bool bpf_is_kfunc_pkt_changing(struct bpf_call_arg_meta *meta)
+ }
+ 
+ static enum kfunc_ptr_arg_type
+-get_kfunc_ptr_arg_type(struct bpf_verifier_env *env, struct bpf_func_state *caller,
++get_kfunc_ptr_arg_type(struct bpf_verifier_env *env,
+ 		       struct bpf_reg_state *regs, struct bpf_call_arg_meta *meta,
+ 		       const struct btf_type *t, const struct btf_type *ref_t,
+ 		       const char *ref_tname, const struct btf_param *args,
+@@ -11352,8 +11350,8 @@ get_kfunc_ptr_arg_type(struct bpf_verifier_env *env, struct bpf_func_state *call
+ 		return KF_ARG_PTR_TO_CTX;
+ 
+ 	if (arg + 1 < nargs &&
+-	    (is_kfunc_arg_mem_size(meta->btf, &args[arg + 1], get_func_arg_reg(caller, regs, arg + 1)) ||
+-	     is_kfunc_arg_const_mem_size(meta->btf, &args[arg + 1], get_func_arg_reg(caller, regs, arg + 1))))
++	    (is_kfunc_arg_mem_size(meta->btf, &args[arg + 1]) ||
++	     is_kfunc_arg_const_mem_size(meta->btf, &args[arg + 1])))
+ 		arg_mem_size = true;
+ 
+ 	/* In this function, we verify the kfunc's BTF as per the argument type,
+@@ -12084,7 +12082,7 @@ static int check_kfunc_args(struct bpf_verifier_env *env, struct bpf_call_arg_me
+ 			}
+ 
+ 			if (is_kfunc_arg_constant(meta->btf, &args[i]) ||
+-			    is_kfunc_arg_const_mem_size(meta->btf, &args[i], reg)) {
++			    is_kfunc_arg_const_mem_size(meta->btf, &args[i])) {
+ 				ret = process_const_arg(env, reg, argno, meta);
+ 				if (ret < 0)
+ 					return ret;
+@@ -12129,7 +12127,7 @@ static int check_kfunc_args(struct bpf_verifier_env *env, struct bpf_call_arg_me
+ 		ref_t = btf_type_skip_modifiers(btf, t->type, &ref_id);
+ 		ref_tname = btf_name_by_offset(btf, ref_t->name_off);
+ 
+-		kf_arg_type = get_kfunc_ptr_arg_type(env, caller, regs, meta, t, ref_t, ref_tname,
++		kf_arg_type = get_kfunc_ptr_arg_type(env, regs, meta, t, ref_t, ref_tname,
+ 						     args, i, nargs, argno, reg);
+ 		if (kf_arg_type < 0)
+ 			return kf_arg_type;
+-- 
+2.55.0
+

@@ -1,0 +1,40 @@
+From f4bb5a75bba373fb62864476b79f360a2b901c04 Mon Sep 17 00:00:00 2001
+From: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Date: Sun, 5 Jul 2026 19:23:54 +0200
+Subject: [PATCH 03247/15333] remoteproc: ti_k3_r5: Drop redundant NULL check
+ on reset control get
+
+devm_reset_control_get_exclusive() does not return NULL (only valid
+clock or ERR pointer in case for non-optional get), so simplify the code
+to drop redundant IS_ERR_OR_NULL().
+
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Reviewed-by: Philipp Zabel <p.zabel@pengutronix.de>
+Link: https://lore.kernel.org/r/20260705172353.119031-2-krzysztof.kozlowski@oss.qualcomm.com
+Signed-off-by: Mathieu Poirier <mathieu.poirier@linaro.org>
+---
+ drivers/remoteproc/ti_k3_r5_remoteproc.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/remoteproc/ti_k3_r5_remoteproc.c b/drivers/remoteproc/ti_k3_r5_remoteproc.c
+index 04f23295ffc1..b1d04d082e44 100644
+--- a/drivers/remoteproc/ti_k3_r5_remoteproc.c
++++ b/drivers/remoteproc/ti_k3_r5_remoteproc.c
+@@ -1074,11 +1074,9 @@ static int k3_r5_cluster_rproc_init(struct platform_device *pdev)
+ 		}
+ 
+ 		kproc->reset = devm_reset_control_get_exclusive(cdev, NULL);
+-		if (IS_ERR_OR_NULL(kproc->reset)) {
+-			ret = PTR_ERR_OR_ZERO(kproc->reset);
+-			if (!ret)
+-				ret = -ENODEV;
+-			dev_err_probe(cdev, ret, "failed to get reset handle\n");
++		if (IS_ERR(kproc->reset)) {
++			ret = dev_err_probe(cdev, PTR_ERR(kproc->reset),
++					    "failed to get reset handle\n");
+ 			goto out;
+ 		}
+ 
+-- 
+2.55.0
+

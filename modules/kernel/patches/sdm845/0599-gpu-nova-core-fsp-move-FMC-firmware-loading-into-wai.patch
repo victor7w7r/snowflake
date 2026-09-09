@@ -1,0 +1,90 @@
+From 44396428978789e148172d083e90e380d38fb538 Mon Sep 17 00:00:00 2001
+From: Eliot Courtney <ecourtney@nvidia.com>
+Date: Mon, 15 Jun 2026 23:40:46 +0900
+Subject: [PATCH 00599/15333] gpu: nova-core: fsp: move FMC firmware loading
+ into wait_secure_boot
+
+`FspFirmware` is constructed and immediately passed into `Fsp`. It makes
+sense for `Fsp` to ask to load its firmware, so move it there.
+
+Signed-off-by: Eliot Courtney <ecourtney@nvidia.com>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Link: https://patch.msgid.link/20260615-blackwell-fixes-v1-6-f2853e49ff7d@nvidia.com
+[acourbot: fix minor merge conflict.]
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/fsp.rs           | 11 +++++++----
+ drivers/gpu/nova-core/gsp/hal/gh100.rs |  8 +-------
+ 2 files changed, 8 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/fsp.rs b/drivers/gpu/nova-core/fsp.rs
+index d949c03dd304..4b97d1fb505e 100644
+--- a/drivers/gpu/nova-core/fsp.rs
++++ b/drivers/gpu/nova-core/fsp.rs
+@@ -31,9 +31,12 @@
+         Falcon, //
+     },
+     fb::FbLayout,
+-    firmware::fsp::{
+-        FmcSignatures,
+-        FspFirmware, //
++    firmware::{
++        fsp::{
++            FmcSignatures,
++            FspFirmware, //
++        },
++        FIRMWARE_VERSION, //
+     },
+     gpu::Chipset,
+     gsp::GspFmcBootParams,
+@@ -236,13 +239,13 @@ pub(crate) fn wait_secure_boot(
+         dev: &device::Device<device::Bound>,
+         bar: Bar0<'_>,
+         chipset: Chipset,
+-        fsp_fw: FspFirmware,
+     ) -> Result<Fsp> {
+         /// FSP secure boot completion timeout in milliseconds.
+         const FSP_SECURE_BOOT_TIMEOUT_MS: i64 = 5000;
+ 
+         let hal = hal::fsp_hal(chipset).ok_or(ENOTSUPP)?;
+         let falcon = Falcon::<FspEngine>::new(dev, chipset)?;
++        let fsp_fw = FspFirmware::new(dev, chipset, FIRMWARE_VERSION)?;
+ 
+         read_poll_timeout(
+             || Ok(hal.fsp_boot_status(bar)),
+diff --git a/drivers/gpu/nova-core/gsp/hal/gh100.rs b/drivers/gpu/nova-core/gsp/hal/gh100.rs
+index c9fdc8cacedc..2187e11168b2 100644
+--- a/drivers/gpu/nova-core/gsp/hal/gh100.rs
++++ b/drivers/gpu/nova-core/gsp/hal/gh100.rs
+@@ -18,10 +18,6 @@
+         Falcon, //
+     },
+     fb::FbLayout,
+-    firmware::{
+-        fsp::FspFirmware,
+-        FIRMWARE_VERSION, //
+-    },
+     fsp::{
+         FmcBootArgs,
+         Fsp, //
+@@ -162,8 +158,6 @@ fn boot<'a>(
+         let gsp_falcon = ctx.gsp_falcon;
+         let sec2_falcon = ctx.sec2_falcon;
+ 
+-        let fsp_fw = FspFirmware::new(dev, chipset, FIRMWARE_VERSION)?;
+-
+         let unload_bundle = crate::gsp::UnloadBundle(
+             KBox::new(FspUnloadBundle, GFP_KERNEL)? as KBox<dyn UnloadBundle>
+         );
+@@ -172,7 +166,7 @@ fn boot<'a>(
+         let unload_guard =
+             BootUnloadGuard::new(gsp, dev, bar, gsp_falcon, sec2_falcon, Some(unload_bundle));
+ 
+-        let mut fsp = Fsp::wait_secure_boot(dev, bar, chipset, fsp_fw)?;
++        let mut fsp = Fsp::wait_secure_boot(dev, bar, chipset)?;
+ 
+         let args = FmcBootArgs::new(
+             dev,
+-- 
+2.55.0
+

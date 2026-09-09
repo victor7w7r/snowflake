@@ -1,0 +1,51 @@
+From aefcde780b39c11d4ac9e191299b281af99dab3f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig=20=28The=20Capable=20Hub=29?=
+ <u.kleine-koenig@baylibre.com>
+Date: Tue, 26 May 2026 10:52:09 +0200
+Subject: [PATCH 05549/15333] misc: pch_phub: Make MAC address configuration
+ more robust
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The comment in pch_phub_write_gbe_mac_addr() suggests that only EG20T,
+ML7831 and ML7223 are handled. Replace the code construct using an if
+with a switch that has the same semantics but issues a warning if a new
+device type is added to the driver without adapting this function.
+
+Signed-off-by: Uwe Kleine-König (The Capable Hub) <u.kleine-koenig@baylibre.com>
+Link: https://patch.msgid.link/796b3667ea49d9156ecc03d1ce9668972316d90b.1779785111.git.u.kleine-koenig@baylibre.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/misc/pch_phub.c | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/misc/pch_phub.c b/drivers/misc/pch_phub.c
+index 5adf7f0c84ab..15785597da40 100644
+--- a/drivers/misc/pch_phub.c
++++ b/drivers/misc/pch_phub.c
+@@ -324,10 +324,19 @@ static int pch_phub_write_gbe_mac_addr(struct pch_phub_reg *chip, u8 *data)
+ 	int retval;
+ 	int i;
+ 
+-	if (chip->ioh_type == PCH_EG20T || chip->ioh_type == PCH_ML7831)
++	switch (chip->ioh_type) {
++	case PCH_EG20T:
++	case PCH_ML7831:
+ 		retval = pch_phub_gbe_serial_rom_conf(chip);
+-	else	/* ML7223 */
++		break;
++
++	case PCH_ML7213:
++	case PCH_ML7223M:
++	case PCH_ML7223N:
+ 		retval = pch_phub_gbe_serial_rom_conf_mp(chip);
++		break;
++	}
++
+ 	if (retval)
+ 		return retval;
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,105 @@
+From 6c646d053f61133f3185b0904a12f6b38a3465d4 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Mon, 13 Jul 2026 22:18:42 -1000
+Subject: [PATCH 04292/15333] sched_ext: Assert per-task ops run on the task's
+ owner
+
+A per-task op must be dispatched on the scheduler that owns the task.
+SCX_CALL_OP_TASK() and its _RET twin take @sch explicitly, and a caller that
+passes the wrong scheduler would silently run the op on it. Add a
+WARN_ON_ONCE() that @sch matches the task's owner so such a mismatch is
+caught rather than hidden.
+
+Two sites legitimately target a scheduler other than the task's owner:
+cgroup_move() runs on the root sched, and scx_sub_init_cancel_task() fires
+exit_task() on a task not yet associated with @sch. Both switch to the inner
+__SCX_CALL_OP_TASK(), which dispatches on the explicit @sch without the
+assert.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/ext.c      | 20 +++++++++++++-------
+ kernel/sched/ext/internal.h | 10 +++++++++-
+ 2 files changed, 22 insertions(+), 8 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 9aeb378fa894..b4cc097def72 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -1436,8 +1436,12 @@ static void scx_dispatch_enqueue(struct scx_sched *sch, struct rq *rq,
+ 		local_dsq_post_enq(sch, dsq, p, enq_flags);
+ 	} else {
+ 		/*
+-		 * Task on global/bypass DSQ: leave custody, task on
+-		 * non-terminal DSQ: enter custody.
++		 * Global and bypass DSQs are terminal - the task leaves the
++		 * scheduler's custody, so ops.dequeue() fires here. It can run
++		 * without @p's rq lock (finish_dispatch() passes the dispatch
++		 * rq); that's safe because dequeue_task_scx() waits on
++		 * SCX_OPSS_DISPATCHING (see the ops_state note above) and so
++		 * can't race it. A non-terminal DSQ keeps the task in custody.
+ 		 */
+ 		if (dsq->id == SCX_DSQ_GLOBAL || dsq->id == SCX_DSQ_BYPASS)
+ 			call_task_dequeue(sch, rq, p, 0);
+@@ -3446,8 +3450,9 @@ void scx_sub_init_cancel_task(struct scx_sched *sch, struct task_struct *p)
+ 	lockdep_assert_held(&p->pi_lock);
+ 	lockdep_assert_rq_held(task_rq(p));
+ 
++	/* @p was never associated with @sch, dispatch on the explicit @sch */
+ 	if (SCX_HAS_OP(sch, exit_task))
+-		SCX_CALL_OP_TASK(sch, exit_task, task_rq(p), p, &args);
++		__SCX_CALL_OP_TASK(sch, ops, exit_task, task_rq(p), p, &args);
+ }
+ 
+ void scx_disable_and_exit_task(struct scx_sched *sch, struct task_struct *p)
+@@ -4184,12 +4189,13 @@ void scx_cgroup_move_task(struct task_struct *p)
+ 	 * cgroup changes. Migration keys off css rather than cgroup identity,
+ 	 * so it can hand an unchanged-cgroup task here with cgrp_moving_from
+ 	 * NULL. Nothing to report to the BPF scheduler then, so skip it and
+-	 * keep prep_move and move paired.
++	 * keep prep_move and move paired. Cgroup ops run on the root sched,
++	 * dispatch on the explicit @sch.
+ 	 */
+ 	if (SCX_HAS_OP(sch, cgroup_move) && p->scx.cgrp_moving_from)
+-		SCX_CALL_OP_TASK(sch, cgroup_move, task_rq(p),
+-				 p, p->scx.cgrp_moving_from,
+-				 tg_cgrp(task_group(p)));
++		__SCX_CALL_OP_TASK(sch, ops, cgroup_move, task_rq(p),
++				   p, p->scx.cgrp_moving_from,
++				   tg_cgrp(task_group(p)));
+ 	p->scx.cgrp_moving_from = NULL;
+ }
+ 
+diff --git a/kernel/sched/ext/internal.h b/kernel/sched/ext/internal.h
+index 5ca44ad88786..8aabd92fae3b 100644
+--- a/kernel/sched/ext/internal.h
++++ b/kernel/sched/ext/internal.h
+@@ -1810,8 +1810,15 @@ do {										\
+ 	current->scx.kf_tasks[0] = NULL;					\
+ } while (0)
+ 
++/*
++ * A per-task op runs on @task's owner - WARN if @sch isn't it. Sites that must
++ * target a different scheduler call __SCX_CALL_OP_TASK() directly.
++ */
+ #define SCX_CALL_OP_TASK(sch, op, locked_rq, task, args...)			\
+-	__SCX_CALL_OP_TASK(sch, ops, op, locked_rq, task, ##args)
++do {										\
++	WARN_ON_ONCE((sch) != scx_task_sched_rcu(task));			\
++	__SCX_CALL_OP_TASK((sch), ops, op, locked_rq, task, ##args);		\
++} while (0)
+ 
+ /*
+  * Dispatch a task op through the cid-form ops_cid table. Only set_cmask() needs
+@@ -1824,6 +1831,7 @@ do {										\
+ #define SCX_CALL_OP_TASK_RET(sch, op, locked_rq, task, args...)			\
+ ({										\
+ 	__typeof__((sch)->ops.op(task, ##args)) __ret;				\
++	WARN_ON_ONCE((sch) != scx_task_sched_rcu(task));			\
+ 	WARN_ON_ONCE(current->scx.kf_tasks[0]);					\
+ 	current->scx.kf_tasks[0] = task;					\
+ 	__ret = SCX_CALL_OP_RET((sch), op, locked_rq, task, ##args);		\
+-- 
+2.55.0
+

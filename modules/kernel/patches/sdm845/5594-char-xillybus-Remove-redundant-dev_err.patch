@@ -1,0 +1,56 @@
+From 2cedf2272f1bb42471e646868ac572cc5752bd91 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Fri, 10 Jul 2026 18:53:08 +0800
+Subject: [PATCH 05594/15333] char: xillybus: Remove redundant dev_err()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() automatically logs
+detailed error messages on failure. Remove the now-redundant
+driver-specific dev_err() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Acked-by: Eli Billauer <eli.billauer@gmail.com>
+Link: https://patch.msgid.link/20260710105318.376496-4-panchuang@vivo.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/char/xillybus/xillybus_of.c   | 5 +----
+ drivers/char/xillybus/xillybus_pcie.c | 5 +----
+ 2 files changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/char/xillybus/xillybus_of.c b/drivers/char/xillybus/xillybus_of.c
+index 1a1e64133315..46e1046abfca 100644
+--- a/drivers/char/xillybus/xillybus_of.c
++++ b/drivers/char/xillybus/xillybus_of.c
+@@ -55,11 +55,8 @@ static int xilly_drv_probe(struct platform_device *op)
+ 
+ 	rc = devm_request_irq(dev, irq, xillybus_isr, 0, xillyname, endpoint);
+ 
+-	if (rc) {
+-		dev_err(endpoint->dev,
+-			"Failed to register IRQ handler. Aborting.\n");
++	if (rc)
+ 		return -ENODEV;
+-	}
+ 
+ 	return xillybus_endpoint_discovery(endpoint);
+ }
+diff --git a/drivers/char/xillybus/xillybus_pcie.c b/drivers/char/xillybus/xillybus_pcie.c
+index 9858711e3e79..32064b6c7627 100644
+--- a/drivers/char/xillybus/xillybus_pcie.c
++++ b/drivers/char/xillybus/xillybus_pcie.c
+@@ -83,11 +83,8 @@ static int xilly_probe(struct pci_dev *pdev,
+ 	}
+ 	rc = devm_request_irq(&pdev->dev, pdev->irq, xillybus_isr, 0,
+ 			      xillyname, endpoint);
+-	if (rc) {
+-		dev_err(endpoint->dev,
+-			"Failed to register MSI handler. Aborting.\n");
++	if (rc)
+ 		return -ENODEV;
+-	}
+ 
+ 	/*
+ 	 * Some (old and buggy?) hardware drops 64-bit addressed PCIe packets,
+-- 
+2.55.0
+

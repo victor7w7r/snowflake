@@ -1,0 +1,195 @@
+From 2cc7ba6b168f2d0bd79f47ccc14168352a3c6cd2 Mon Sep 17 00:00:00 2001
+From: Frank Li <Frank.Li@nxp.com>
+Date: Mon, 13 Jul 2026 13:03:24 -0400
+Subject: [PATCH 04400/15333] dmaengine: dw-edma: Add callbacks to fill link
+ list entries
+
+Introduce four new callbacks to fill link list entries in preparation for
+replacing dw_(edma|hdma)_v0_core_start().
+
+Filling link list entries is expected to become more complex, and without
+this abstraction both eDMA and HDMA paths would need to duplicate the same
+logic. Add fill-entry callbacks so the code can be shared cleanly between
+eDMA and HDMA implementations.
+
+Tested-by: Koichiro Den <den@valinux.co.jp>
+Tested-By: Devendra Verma <devendra.verma@amd.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260713-edma_ll-v7-6-6fb7498c901e@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dw-edma/dw-edma-core.h    | 29 +++++++++++++++++
+ drivers/dma/dw-edma/dw-edma-v0-core.c | 46 +++++++++++++++++++++++++++
+ drivers/dma/dw-edma/dw-hdma-v0-core.c | 38 ++++++++++++++++++++++
+ 3 files changed, 113 insertions(+)
+
+diff --git a/drivers/dma/dw-edma/dw-edma-core.h b/drivers/dma/dw-edma/dw-edma-core.h
+index b96089baf0f9..bab4d49c92fe 100644
+--- a/drivers/dma/dw-edma/dw-edma-core.h
++++ b/drivers/dma/dw-edma/dw-edma-core.h
+@@ -126,6 +126,12 @@ struct dw_edma_core_ops {
+ 	irqreturn_t (*handle_int)(struct dw_edma_irq *dw_irq, enum dw_edma_dir dir,
+ 				  dw_edma_handler_t done, dw_edma_handler_t abort);
+ 	void (*start)(struct dw_edma_chunk *chunk, bool first);
++	void (*ll_data)(struct dw_edma_chan *chan, struct dw_edma_burst *burst,
++			u32 idx, bool cb, bool irq);
++	void (*ll_link)(struct dw_edma_chan *chan, u32 idx, bool cb, u64 addr);
++	void (*ch_doorbell)(struct dw_edma_chan *chan);
++	void (*ch_enable)(struct dw_edma_chan *chan);
++
+ 	void (*ch_config)(struct dw_edma_chan *chan);
+ 	void (*debugfs_on)(struct dw_edma *dw);
+ 	void (*ack_emulated_irq)(struct dw_edma *dw);
+@@ -204,6 +210,29 @@ void dw_edma_core_ch_config(struct dw_edma_chan *chan)
+ 	chan->dw->core->ch_config(chan);
+ }
+ 
++static inline void
++dw_edma_core_ll_data(struct dw_edma_chan *chan, struct dw_edma_burst *burst,
++		     u32 idx, bool cb, bool irq)
++{
++	chan->dw->core->ll_data(chan, burst, idx, cb, irq);
++}
++
++static inline void
++dw_edma_core_ll_link(struct dw_edma_chan *chan, u32 idx, bool cb, u64 addr)
++{
++	chan->dw->core->ll_link(chan, idx, cb, addr);
++}
++
++static inline void dw_edma_core_ch_doorbell(struct dw_edma_chan *chan)
++{
++	chan->dw->core->ch_doorbell(chan);
++}
++
++static inline void dw_edma_core_ch_enable(struct dw_edma_chan *chan)
++{
++	chan->dw->core->ch_enable(chan);
++}
++
+ static inline
+ void dw_edma_core_debugfs_on(struct dw_edma *dw)
+ {
+diff --git a/drivers/dma/dw-edma/dw-edma-v0-core.c b/drivers/dma/dw-edma/dw-edma-v0-core.c
+index 8d38867cd998..c0746e535141 100644
+--- a/drivers/dma/dw-edma/dw-edma-v0-core.c
++++ b/drivers/dma/dw-edma/dw-edma-v0-core.c
+@@ -509,6 +509,48 @@ static void dw_edma_v0_core_ch_config(struct dw_edma_chan *chan)
+ 	}
+ }
+ 
++static void
++dw_edma_v0_core_ll_data(struct dw_edma_chan *chan, struct dw_edma_burst *burst,
++			u32 idx, bool cb, bool irq)
++{
++	u32 control = 0;
++
++	if (cb)
++		control |= DW_EDMA_V0_CB;
++
++	if (irq) {
++		control |= DW_EDMA_V0_LIE;
++
++		if (!(chan->dw->chip->flags & DW_EDMA_CHIP_LOCAL))
++			control |= DW_EDMA_V0_RIE;
++	}
++
++	dw_edma_v0_write_ll_data(chan, idx, control, burst->sz, burst->sar,
++				 burst->dar);
++}
++
++static void
++dw_edma_v0_core_ll_link(struct dw_edma_chan *chan, u32 idx, bool cb, u64 addr)
++{
++	u32 control = DW_EDMA_V0_LLP | DW_EDMA_V0_TCB;
++
++	if (!cb)
++		control |= DW_EDMA_V0_CB;
++
++	dw_edma_v0_write_ll_link(chan, idx, control, addr);
++}
++
++static void dw_edma_v0_core_ch_doorbell(struct dw_edma_chan *chan)
++{
++	struct dw_edma *dw = chan->dw;
++
++	dw_edma_v0_sync_ll_data(chan);
++
++	/* Doorbell */
++	SET_RW_32(dw, chan->dir, doorbell,
++		  FIELD_PREP(EDMA_V0_DOORBELL_CH_MASK, chan->id));
++}
++
+ /* eDMA debugfs callbacks */
+ static void dw_edma_v0_core_debugfs_on(struct dw_edma *dw)
+ {
+@@ -540,6 +582,10 @@ static const struct dw_edma_core_ops dw_edma_v0_core = {
+ 	.ch_status = dw_edma_v0_core_ch_status,
+ 	.handle_int = dw_edma_v0_core_handle_int,
+ 	.start = dw_edma_v0_core_start,
++	.ll_data = dw_edma_v0_core_ll_data,
++	.ll_link = dw_edma_v0_core_ll_link,
++	.ch_doorbell = dw_edma_v0_core_ch_doorbell,
++	.ch_enable = dw_edma_v0_core_ch_enable,
+ 	.ch_config = dw_edma_v0_core_ch_config,
+ 	.debugfs_on = dw_edma_v0_core_debugfs_on,
+ 	.ack_emulated_irq = dw_edma_v0_core_ack_emulated_irq,
+diff --git a/drivers/dma/dw-edma/dw-hdma-v0-core.c b/drivers/dma/dw-edma/dw-hdma-v0-core.c
+index 31bbdc6a4064..16fe3ef43948 100644
+--- a/drivers/dma/dw-edma/dw-hdma-v0-core.c
++++ b/drivers/dma/dw-edma/dw-hdma-v0-core.c
+@@ -348,6 +348,40 @@ static void dw_hdma_v0_core_ch_config(struct dw_edma_chan *chan)
+ 	SET_CH_32(dw, chan->dir, chan->id, msi_msgdata, chan->msi.data);
+ }
+ 
++static void
++dw_hdma_v0_core_ll_data(struct dw_edma_chan *chan, struct dw_edma_burst *burst,
++			u32 idx, bool cb, bool irq)
++{
++	u32 control = 0;
++
++	if (cb)
++		control |= DW_HDMA_V0_CB;
++
++	dw_hdma_v0_write_ll_data(chan, idx, control, burst->sz, burst->sar,
++				 burst->dar);
++}
++
++static void
++dw_hdma_v0_core_ll_link(struct dw_edma_chan *chan, u32 idx, bool cb, u64 addr)
++{
++	u32 control = DW_HDMA_V0_LLP | DW_HDMA_V0_TCB;
++
++	if (!cb)
++		control |= DW_HDMA_V0_CB;
++
++	dw_hdma_v0_write_ll_link(chan, idx, control, addr);
++}
++
++static void dw_hdma_v0_core_ch_doorbell(struct dw_edma_chan *chan)
++{
++	struct dw_edma *dw = chan->dw;
++
++	dw_hdma_v0_sync_ll_data(chan);
++
++	/* Doorbell */
++	SET_CH_32(dw, chan->dir, chan->id, doorbell, HDMA_V0_DOORBELL_START);
++}
++
+ /* HDMA debugfs callbacks */
+ static void dw_hdma_v0_core_debugfs_on(struct dw_edma *dw)
+ {
+@@ -366,6 +400,10 @@ static const struct dw_edma_core_ops dw_hdma_v0_core = {
+ 	.ch_status = dw_hdma_v0_core_ch_status,
+ 	.handle_int = dw_hdma_v0_core_handle_int,
+ 	.start = dw_hdma_v0_core_start,
++	.ll_data = dw_hdma_v0_core_ll_data,
++	.ll_link = dw_hdma_v0_core_ll_link,
++	.ch_doorbell = dw_hdma_v0_core_ch_doorbell,
++	.ch_enable = dw_hdma_v0_core_ch_enable,
+ 	.ch_config = dw_hdma_v0_core_ch_config,
+ 	.debugfs_on = dw_hdma_v0_core_debugfs_on,
+ 	.db_offset = dw_hdma_v0_core_db_offset,
+-- 
+2.55.0
+

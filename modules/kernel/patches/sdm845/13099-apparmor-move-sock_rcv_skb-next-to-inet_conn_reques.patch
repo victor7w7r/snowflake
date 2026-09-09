@@ -1,0 +1,105 @@
+From 27908a4356f02f06ca4d5d25f456091aa44167d2 Mon Sep 17 00:00:00 2001
+From: John Johansen <john.johansen@canonical.com>
+Date: Mon, 9 Feb 2026 03:31:35 -0800
+Subject: [PATCH 13099/15333] apparmor: move sock_rcv_skb() next to
+ inet_conn_request
+
+both of these fns are using ifdef CONFIG_NETWORK_SECMARK and related
+to AppArmor's secmark based mediation, so move them together.
+
+Reviewed-by: Georgia Garcia <georgia.garcia@canonical.com>
+Signed-off-by: John Johansen <john.johansen@canonical.com>
+---
+ security/apparmor/lsm.c | 69 ++++++++++++++++++++---------------------
+ 1 file changed, 33 insertions(+), 36 deletions(-)
+
+diff --git a/security/apparmor/lsm.c b/security/apparmor/lsm.c
+index 9d28cbe396fc..9c5dcaf2fec3 100644
+--- a/security/apparmor/lsm.c
++++ b/security/apparmor/lsm.c
+@@ -1553,42 +1553,6 @@ static int apparmor_socket_shutdown(struct socket *sock, int how)
+ 	return aa_sock_perm(OP_SHUTDOWN, AA_MAY_SHUTDOWN, sock);
+ }
+ 
+-#ifdef CONFIG_NETWORK_SECMARK
+-/**
+- * apparmor_socket_sock_rcv_skb - check perms before associating skb to sk
+- * @sk: sk to associate @skb with
+- * @skb: skb to check for perms
+- *
+- * Note: can not sleep may be called with locks held
+- *
+- * don't want protocol specific in __skb_recv_datagram()
+- * to deny an incoming connection  socket_sock_rcv_skb()
+- */
+-static int apparmor_socket_sock_rcv_skb(struct sock *sk, struct sk_buff *skb)
+-{
+-	struct aa_sk_ctx *ctx = aa_sock(sk);
+-	int error;
+-
+-	if (!skb->secmark)
+-		return 0;
+-
+-	/*
+-	 * If reach here before socket_post_create hook is called, in which
+-	 * case label is null, drop the packet.
+-	 */
+-	if (!rcu_access_pointer(ctx->label))
+-		return -EACCES;
+-
+-	rcu_read_lock();
+-	error = apparmor_secmark_check(rcu_dereference(ctx->label), OP_RECVMSG,
+-				       AA_MAY_RECEIVE, skb->secmark, sk);
+-	rcu_read_unlock();
+-
+-	return error;
+-}
+-#endif
+-
+-
+ static struct aa_label *sk_peer_get_label(struct sock *sk)
+ {
+ 	struct aa_sk_ctx *ctx = aa_sock(sk);
+@@ -1689,6 +1653,39 @@ static void apparmor_sock_graft(struct sock *sk, struct socket *parent)
+ }
+ 
+ #ifdef CONFIG_NETWORK_SECMARK
++/**
++ * apparmor_socket_sock_rcv_skb - check perms before associating skb to sk
++ * @sk: sk to associate @skb with
++ * @skb: skb to check for perms
++ *
++ * Note: can not sleep may be called with locks held
++ *
++ * don't want protocol specific in __skb_recv_datagram()
++ * to deny an incoming connection  socket_sock_rcv_skb()
++ */
++static int apparmor_socket_sock_rcv_skb(struct sock *sk, struct sk_buff *skb)
++{
++	struct aa_sk_ctx *ctx = aa_sock(sk);
++	int error;
++
++	if (!skb->secmark)
++		return 0;
++
++	/*
++	 * If reach here before socket_post_create hook is called, in which
++	 * case label is null, drop the packet.
++	 */
++	if (!rcu_access_pointer(ctx->label))
++		return -EACCES;
++
++	rcu_read_lock();
++	error = apparmor_secmark_check(rcu_dereference(ctx->label), OP_RECVMSG,
++				       AA_MAY_RECEIVE, skb->secmark, sk);
++	rcu_read_unlock();
++
++	return error;
++}
++
+ static int apparmor_inet_conn_request(const struct sock *sk, struct sk_buff *skb,
+ 				      struct request_sock *req)
+ {
+-- 
+2.55.0
+

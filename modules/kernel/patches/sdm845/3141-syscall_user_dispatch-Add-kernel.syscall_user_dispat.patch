@@ -1,0 +1,129 @@
+From 5b6e32ba7b5967a2787fafaa9f4740c590e1e00b Mon Sep 17 00:00:00 2001
+From: Gregory Price <gourry@gourry.net>
+Date: Mon, 6 Jul 2026 10:00:19 -0400
+Subject: [PATCH 03141/15333] syscall_user_dispatch: Add
+ kernel.syscall_user_dispatch sysctl
+
+Add a matching sysctl to go with CONFIG_SYSCALL_USER_DISPATCH.
+
+kernel.syscall_user_dispatch (default 1 - allow) controls whether
+userspace may arm syscall user dispatch (both via prctl and ptrace).
+
+Disarming is always permitted - same semantics as comparable knobs.
+
+Disabling while a task has armed syscall user dispatch does not
+cause it to become inactive - instead it remains active until the
+user attempts to disable/re-enable via prctl or ptrace.  On the
+next attempt to re-enable, the prctl/ptrace call fails gracefully.
+
+The alternative would cause programs translating non-linux syscalls
+to interpret those syscalls as linux syscalls, resulting in undefined
+userland behavior.
+
+Signed-off-by: Gregory Price <gourry@gourry.net>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/20260706140020.873735-3-gourry@gourry.net
+---
+ Documentation/admin-guide/sysctl/kernel.rst | 17 +++++++++
+ kernel/entry/syscall_user_dispatch.c        | 38 +++++++++++++++++----
+ 2 files changed, 48 insertions(+), 7 deletions(-)
+
+diff --git a/Documentation/admin-guide/sysctl/kernel.rst b/Documentation/admin-guide/sysctl/kernel.rst
+index c6994e55d141..b6328cd0f43e 100644
+--- a/Documentation/admin-guide/sysctl/kernel.rst
++++ b/Documentation/admin-guide/sysctl/kernel.rst
+@@ -1402,6 +1402,23 @@ Note that if you change this from 0 to 1, already created segments
+ without users and with a dead originative process will be destroyed.
+ 
+ 
++syscall_user_dispatch
++=====================
++
++Controls whether userspace may arm Syscall User Dispatch via
++``prctl(PR_SET_SYSCALL_USER_DISPATCH, ...)`` or the
++``PTRACE_SET_SYSCALL_USER_DISPATCH_CONFIG`` ptrace request:
++
++  ==  ===================================================================
++  0   Arming syscall user dispatch is denied with ``-EPERM``.  Tasks that
++      already armed it keep it, and disabling it is always permitted.
++  1   (default) Arming syscall user dispatch is permitted.
++  ==  ===================================================================
++
++Only present when the kernel is built with ``CONFIG_SYSCALL_USER_DISPATCH``
++and ``CONFIG_PROC_SYSCTL``.
++
++
+ sysctl_writes_strict
+ ====================
+ 
+diff --git a/kernel/entry/syscall_user_dispatch.c b/kernel/entry/syscall_user_dispatch.c
+index d89dffcc2d64..2002c7aae435 100644
+--- a/kernel/entry/syscall_user_dispatch.c
++++ b/kernel/entry/syscall_user_dispatch.c
+@@ -2,21 +2,22 @@
+ /*
+  * Copyright (C) 2020 Collabora Ltd.
+  */
+-
++#include <linux/elf.h>
+ #include <linux/entry-common.h>
+-#include <linux/sched.h>
+ #include <linux/prctl.h>
+ #include <linux/ptrace.h>
+-#include <linux/syscall_user_dispatch.h>
+-#include <linux/uaccess.h>
+-#include <linux/signal.h>
+-#include <linux/elf.h>
+-
++#include <linux/sched.h>
+ #include <linux/sched/signal.h>
+ #include <linux/sched/task_stack.h>
++#include <linux/signal.h>
++#include <linux/syscall_user_dispatch.h>
++#include <linux/sysctl.h>
++#include <linux/uaccess.h>
+ 
+ #include <asm/syscall.h>
+ 
++static bool syscall_user_dispatch_allowed __read_mostly = true;
++
+ static void trigger_sigsys(struct pt_regs *regs)
+ {
+ 	struct kernel_siginfo info;
+@@ -102,6 +103,10 @@ static int task_set_syscall_user_dispatch(struct task_struct *task, unsigned lon
+ 		return -EINVAL;
+ 	}
+ 
++	/* Arming can be denied at runtime via sysctl, disarming is allowed */
++	if (mode != PR_SYS_DISPATCH_OFF && !syscall_user_dispatch_allowed)
++		return -EPERM;
++
+ 	/*
+ 	 * access_ok() will clear memory tags for tagged addresses
+ 	 * if current has memory tagging enabled.
+@@ -172,3 +177,22 @@ int syscall_user_dispatch_set_config(struct task_struct *task, unsigned long siz
+ 	return task_set_syscall_user_dispatch(task, cfg.mode, cfg.offset, cfg.len,
+ 					      (char __user *)(uintptr_t)cfg.selector);
+ }
++
++#ifdef CONFIG_PROC_SYSCTL
++static const struct ctl_table syscall_user_dispatch_sysctls[] = {
++	{
++		.procname	= "syscall_user_dispatch",
++		.data		= &syscall_user_dispatch_allowed,
++		.maxlen		= sizeof(syscall_user_dispatch_allowed),
++		.mode		= 0644,
++		.proc_handler	= proc_dobool,
++	},
++};
++
++static int __init syscall_user_dispatch_sysctl_init(void)
++{
++	register_sysctl_init("kernel", syscall_user_dispatch_sysctls);
++	return 0;
++}
++late_initcall(syscall_user_dispatch_sysctl_init);
++#endif /* CONFIG_PROC_SYSCTL */
+-- 
+2.55.0
+

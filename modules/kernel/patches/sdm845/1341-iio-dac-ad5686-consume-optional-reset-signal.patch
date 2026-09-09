@@ -1,0 +1,62 @@
+From a1f417cc59eb6401411cc5b4bb70fdcf31df07c7 Mon Sep 17 00:00:00 2001
+From: Rodrigo Alencar <rodrigo.alencar@analog.com>
+Date: Sun, 28 Jun 2026 15:08:13 +0100
+Subject: [PATCH 01341/15333] iio: dac: ad5686: consume optional reset signal
+
+Add RESET pin GPIO support through an optional reset control, which is
+local to the probe function. A reset pulse is manually generated after
+the device is powered up.
+
+Signed-off-by: Rodrigo Alencar <rodrigo.alencar@analog.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/dac/ad5686.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/drivers/iio/dac/ad5686.c b/drivers/iio/dac/ad5686.c
+index e2ebabca6887..8ad8931a3d7f 100644
+--- a/drivers/iio/dac/ad5686.c
++++ b/drivers/iio/dac/ad5686.c
+@@ -15,6 +15,7 @@
+ #include <linux/kstrtox.h>
+ #include <linux/module.h>
+ #include <linux/regulator/consumer.h>
++#include <linux/reset.h>
+ #include <linux/sysfs.h>
+ #include <linux/wordpart.h>
+ 
+@@ -472,6 +473,7 @@ int ad5686_probe(struct device *dev,
+ 		 const struct ad5686_chip_info *chip_info,
+ 		 const char *name, const struct ad5686_bus_ops *ops)
+ {
++	struct reset_control *rstc;
+ 	struct ad5686_state *st;
+ 	struct iio_dev *indio_dev;
+ 	int ret, i;
+@@ -486,6 +488,11 @@ int ad5686_probe(struct device *dev,
+ 	st->ops = ops;
+ 	st->chip_info = chip_info;
+ 
++	rstc = devm_reset_control_get_optional_exclusive(dev, NULL);
++	if (IS_ERR(rstc))
++		return dev_err_probe(dev, PTR_ERR(rstc),
++				     "Failed to get reset control\n");
++
+ 	ret = devm_regulator_get_enable(dev, "vdd");
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "failed to enable vdd supply\n");
+@@ -509,6 +516,11 @@ int ad5686_probe(struct device *dev,
+ 	/* 4.5us power-up time: Datasheet Table 4: Timing Characteristics */
+ 	fsleep(5);
+ 
++	/* 1us >> 30ns reset pulse activation time: Datasheet Table 4 */
++	reset_control_assert(rstc);
++	fsleep(1);
++	reset_control_deassert(rstc);
++
+ 	/* Initialize masks to all ones */
+ 	st->pwr_down_mask = ~0;
+ 	st->pwr_down_mode = ~0;
+-- 
+2.55.0
+

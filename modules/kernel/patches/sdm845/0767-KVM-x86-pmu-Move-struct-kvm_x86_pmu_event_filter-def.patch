@@ -1,0 +1,97 @@
+From 95ac6a63d23e2c597d5274ba35ac7bf43f50b4bd Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 12 Jun 2026 17:03:18 -0700
+Subject: [PATCH 00767/15333] KVM: x86/pmu: Move "struct
+ kvm_x86_pmu_event_filter" definition to pmu.c
+
+Move the definition of "struct kvm_x86_pmu_event_filter" to pmu.c, as the
+as the details of the filters are very much implementation details that can
+and should be buried in pmu.c.  While the _existence_ of filters is public
+knowledge, almost by definition, the contents don't need to be exposed
+outside of the PMU code as the filter data is provided by userspace, i.e.
+it pretty much has to be dynamically allocated, and thus never should be
+fully embedded in a globally visible structure.
+
+No functional change intended
+
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+Reviewed-by: Kai Huang <kai.huang@intel.com>
+Reviewed-by: Binbin Wu <binbin.wu@linux.intel.com>
+Message-ID: <20260613000329.732085-20-seanjc@google.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/kvm_host.h | 13 +------------
+ arch/x86/kvm/pmu.c              | 12 ++++++++++++
+ arch/x86/kvm/x86.c              |  2 +-
+ 3 files changed, 14 insertions(+), 13 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 2b2cdbd00585..1d0fc473c865 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -316,6 +316,7 @@ struct kvm_kernel_irqfd;
+ struct kvm_kernel_irq_routing_entry;
+ 
+ struct kvm_x86_msr_filter;
++struct kvm_x86_pmu_event_filter;
+ 
+ struct kvm_caps {
+ 	/* control of guest tsc rate supported? */
+@@ -1322,18 +1323,6 @@ enum kvm_suppress_eoi_broadcast_mode {
+ 	KVM_SUPPRESS_EOI_BROADCAST_DISABLED /* Disable Suppress EOI broadcast */
+ };
+ 
+-struct kvm_x86_pmu_event_filter {
+-	__u32 action;
+-	__u32 nevents;
+-	__u32 fixed_counter_bitmap;
+-	__u32 flags;
+-	__u32 nr_includes;
+-	__u32 nr_excludes;
+-	__u64 *includes;
+-	__u64 *excludes;
+-	__u64 events[] __counted_by(nevents);
+-};
+-
+ enum kvm_apicv_inhibit {
+ 
+ 	/********************************************************************/
+diff --git a/arch/x86/kvm/pmu.c b/arch/x86/kvm/pmu.c
+index b92dd2e58335..62d0ed99ebe9 100644
+--- a/arch/x86/kvm/pmu.c
++++ b/arch/x86/kvm/pmu.c
+@@ -43,6 +43,18 @@ module_param(enable_pmu, bool, 0444);
+ bool __read_mostly enable_mediated_pmu;
+ EXPORT_SYMBOL_FOR_KVM_INTERNAL(enable_mediated_pmu);
+ 
++struct kvm_x86_pmu_event_filter {
++	__u32 action;
++	__u32 nevents;
++	__u32 fixed_counter_bitmap;
++	__u32 flags;
++	__u32 nr_includes;
++	__u32 nr_excludes;
++	__u64 *includes;
++	__u64 *excludes;
++	__u64 events[] __counted_by(nevents);
++};
++
+ struct kvm_pmu_emulated_event_selectors {
+ 	u64 INSTRUCTIONS_RETIRED;
+ 	u64 BRANCH_INSTRUCTIONS_RETIRED;
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index a43669b5f723..43ae05585556 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -9927,7 +9927,7 @@ void kvm_arch_destroy_vm(struct kvm *kvm)
+ 	kvm_ioapic_destroy(kvm);
+ #endif
+ 	kvfree(rcu_dereference_check(kvm->arch.apic_map, 1));
+-	kfree(srcu_dereference_check(kvm->arch.pmu_event_filter, &kvm->srcu, 1));
++	kfree((void * __force)kvm->arch.pmu_event_filter);
+ 	kvm_mmu_uninit_vm(kvm);
+ 	kvm_page_track_cleanup(kvm);
+ 	kvm_xen_destroy_vm(kvm);
+-- 
+2.55.0
+

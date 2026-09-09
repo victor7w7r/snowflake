@@ -1,0 +1,88 @@
+From c016f2405cec3809c4be960ab6c3a9c3ee82ef71 Mon Sep 17 00:00:00 2001
+From: Crescent Hsieh <crescentcy.hsieh@moxa.com>
+Date: Fri, 31 Jul 2026 15:48:13 +0800
+Subject: [PATCH 10076/15333] serial: 8250_mxpcie: speed up RX using
+ memory-mapped FIFO window
+
+The MUEx50 UART provides a memory-mapped RX FIFO data window along with
+an RX FIFO byte counter.
+
+When no break or error conditions are present, read received data in
+bulk via the MMIO FIFO window and push it to the tty layer in one
+operation. Fall back to the generic 8250 RX path for break and error
+handling.
+
+Signed-off-by: Crescent Hsieh <crescentcy.hsieh@moxa.com>
+Link: https://patch.msgid.link/20260731074820.735619-8-crescentcy.hsieh@moxa.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/8250/8250_mxpcie.c | 32 +++++++++++++++++++++++++--
+ 1 file changed, 30 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/tty/serial/8250/8250_mxpcie.c b/drivers/tty/serial/8250/8250_mxpcie.c
+index 9190825ff3d3..415468a02d0d 100644
+--- a/drivers/tty/serial/8250/8250_mxpcie.c
++++ b/drivers/tty/serial/8250/8250_mxpcie.c
+@@ -13,6 +13,7 @@
+ #include <linux/ioport.h>
+ #include <linux/module.h>
+ #include <linux/pci.h>
++#include <linux/tty_flip.h>
+ #include <linux/types.h>
+ 
+ #include <linux/8250_pci.h>
+@@ -79,6 +80,9 @@
+ #define MOXA_PUART_RTL		0x11	/* Rx Interrupt Trigger Level */
+ #define MOXA_PUART_FCL		0x12	/* Flow Control Low Trigger Level */
+ #define MOXA_PUART_FCH		0x13	/* Flow Control High Trigger Level */
++#define MOXA_PUART_RX_FIFO_CNT	0x15	/* Rx FIFO Data Counter */
++
++#define MOXA_PUART_RX_FIFO_MEM	0x100	/* Memory Space to Rx FIFO Data Register */
+ 
+ #define MOXA_GPIO_DIRECTION	0x09
+ #define MOXA_GPIO_OUTPUT	0x0A
+@@ -263,6 +267,26 @@ static void mxpcie8250_unthrottle(struct uart_port *port)
+ 	serial_out(up, UART_IER, up->ier);
+ }
+ 
++static void mxpcie8250_rx_chars(struct uart_8250_port *up)
++{
++	struct uart_port *port = &up->port;
++	struct tty_port *tport = &port->state->port;
++	unsigned int count;
++	u8 *buf;
++
++	count = serial_in(up, MOXA_PUART_RX_FIFO_CNT);
++	count = min(count, port->fifosize);
++	count = tty_prepare_flip_string(tport, &buf, count);
++	if (!count)
++		return;
++
++	for (unsigned int i = 0; i < count; ++i)
++		buf[i] = serial_in(up, MOXA_PUART_RX_FIFO_MEM + i);
++
++	port->icount.rx += count;
++	tty_flip_buffer_push(tport);
++}
++
+ static bool mxpcie8250_should_rx(struct uart_8250_port *up, u16 lsr)
+ {
+ 	struct uart_port *port = &up->port;
+@@ -293,8 +317,12 @@ static int mxpcie8250_handle_irq(struct uart_port *port)
+ 	guard(uart_port_lock_check_sysrq_irqsave)(port);
+ 
+ 	lsr = serial_lsr_in(up);
+-	if (mxpcie8250_should_rx(up, lsr))
+-		lsr = serial8250_rx_chars(up, lsr);
++	if (mxpcie8250_should_rx(up, lsr)) {
++		if (!(lsr & UART_LSR_BRK_ERROR_BITS))
++			mxpcie8250_rx_chars(up);
++		else
++			lsr = serial8250_rx_chars(up, lsr);
++	}
+ 
+ 	serial8250_modem_status(up);
+ 
+-- 
+2.55.0
+

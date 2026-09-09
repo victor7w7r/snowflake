@@ -1,0 +1,42 @@
+From cefb2f905bb13aea37e5cbab179b602c5817a1c3 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Wed, 29 Jul 2026 10:37:32 +0200
+Subject: [PATCH 09200/15333] ALSA: sh: Use auto-cleanup for firmware loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260729083735.120219-15-tiwai@suse.de
+---
+ sound/sh/aica.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sound/sh/aica.c b/sound/sh/aica.c
+index 8196e1bf0416..078fc7fc08f9 100644
+--- a/sound/sh/aica.c
++++ b/sound/sh/aica.c
+@@ -518,8 +518,9 @@ static const struct snd_kcontrol_new snd_aica_pcmvolume_control = {
+ static int load_aica_firmware(void)
+ {
+ 	int err;
+-	const struct firmware *fw_entry;
+ 	spu_reset();
++
++	const struct firmware *fw_entry __free(firmware) = NULL;
+ 	err = request_firmware(&fw_entry, "aica_firmware.bin", &pd->dev);
+ 	if (unlikely(err))
+ 		return err;
+@@ -527,7 +528,6 @@ static int load_aica_firmware(void)
+ 	spu_disable();
+ 	spu_memload(0, fw_entry->data, fw_entry->size);
+ 	spu_enable();
+-	release_firmware(fw_entry);
+ 	return err;
+ }
+ 
+-- 
+2.55.0
+

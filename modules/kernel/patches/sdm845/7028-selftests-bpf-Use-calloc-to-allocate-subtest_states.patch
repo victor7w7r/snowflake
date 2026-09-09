@@ -1,0 +1,41 @@
+From a813ad2185cd9f653a79b96b7c8a24240118c4e1 Mon Sep 17 00:00:00 2001
+From: Feng Yang <yangfeng@kylinos.cn>
+Date: Thu, 23 Jul 2026 16:50:59 +0800
+Subject: [PATCH 07028/15333] selftests/bpf: Use calloc to allocate
+ subtest_states
+
+An early return triggered by read_prog_test_msg leaves uninitialized elements,
+which leads to memory corruption during free_test_states cleanup.
+
+Signed-off-by: Feng Yang <yangfeng@kylinos.cn>
+Link: https://lore.kernel.org/bpf/20260723085100.482147-5-yangfeng59949@163.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ tools/testing/selftests/bpf/test_progs.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/test_progs.c b/tools/testing/selftests/bpf/test_progs.c
+index 301c6e11ceaf..07da45230c4b 100644
+--- a/tools/testing/selftests/bpf/test_progs.c
++++ b/tools/testing/selftests/bpf/test_progs.c
+@@ -1516,7 +1516,7 @@ static int dispatch_thread_send_subtests(int sock_fd, struct test_state *state)
+ 	struct subtest_state *subtest_state;
+ 	int subtest_num = state->subtest_num;
+ 
+-	state->subtest_states = malloc(subtest_num * sizeof(*subtest_state));
++	state->subtest_states = calloc(subtest_num, sizeof(*subtest_state));
+ 	if (!state->subtest_states) {
+ 		state->subtest_num = 0;
+ 		return -ENOMEM;
+@@ -1525,8 +1525,6 @@ static int dispatch_thread_send_subtests(int sock_fd, struct test_state *state)
+ 	for (int i = 0; i < subtest_num; i++) {
+ 		subtest_state = &state->subtest_states[i];
+ 
+-		memset(subtest_state, 0, sizeof(*subtest_state));
+-
+ 		if (read_prog_test_msg(sock_fd, &msg, MSG_SUBTEST_DONE))
+ 			return 1;
+ 
+-- 
+2.55.0
+

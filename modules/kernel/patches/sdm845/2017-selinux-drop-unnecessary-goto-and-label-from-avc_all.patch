@@ -1,0 +1,41 @@
+From d3e4784c2bfda39fb78b037bac3785f4effc1743 Mon Sep 17 00:00:00 2001
+From: Kalevi Kolttonen <kalevi@kolttonen.fi>
+Date: Mon, 22 Jun 2026 23:39:12 +0300
+Subject: [PATCH 02017/15333] selinux: drop unnecessary goto and label from
+ avc_alloc_node()
+
+Since avc_alloc_node() doesn't need to perform any cleanup on
+its exit paths, there is no benefit to keeping the out
+label and goto statement. Drop it.
+
+Signed-off-by: Kalevi Kolttonen <kalevi@kolttonen.fi>
+Acked-by: Stephen Smalley <stephen.smalley.work@gmail.com>
+Signed-off-by: Paul Moore <paul@paul-moore.com>
+---
+ security/selinux/avc.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/security/selinux/avc.c b/security/selinux/avc.c
+index 813e82bcfc27..a9401d6c2e5f 100644
+--- a/security/selinux/avc.c
++++ b/security/selinux/avc.c
+@@ -497,7 +497,7 @@ static struct avc_node *avc_alloc_node(void)
+ 
+ 	node = kmem_cache_zalloc(avc_node_cachep, GFP_NOWAIT);
+ 	if (!node)
+-		goto out;
++		return NULL;
+ 
+ 	INIT_HLIST_NODE(&node->list);
+ 	avc_cache_stats_incr(allocations);
+@@ -506,7 +506,6 @@ static struct avc_node *avc_alloc_node(void)
+ 	    selinux_avc.avc_cache_threshold)
+ 		avc_reclaim_node();
+ 
+-out:
+ 	return node;
+ }
+ 
+-- 
+2.55.0
+

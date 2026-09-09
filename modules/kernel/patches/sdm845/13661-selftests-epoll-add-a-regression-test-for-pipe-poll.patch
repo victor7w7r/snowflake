@@ -1,0 +1,57 @@
+From ab018b7733bd8f5f998d476528c24924ebeb9959 Mon Sep 17 00:00:00 2001
+From: Oleg Nesterov <oleg@redhat.com>
+Date: Wed, 29 Jul 2026 13:33:45 +0200
+Subject: [PATCH 13661/15333] selftests/epoll: add a regression test for
+ pipe->poll_usage
+
+pipe->poll_usage was added to ensure that edge-triggered epoll consumers
+get a wakeup on every write, even if the pipe was already non-empty.
+However, none of the existing epoll_wakeup_test cases cover this; the
+test suite passes even with WRITE_ONCE(pipe->poll_usage, true) removed.
+
+Add a test that writes twice to a pipe and verifies that epoll_wait with
+EPOLLET reports data each time. This covers the pipe-specific per-write
+wakeup behavior that edge-triggered consumers depend on.
+
+Signed-off-by: Oleg Nesterov <oleg@redhat.com>
+Link: https://patch.msgid.link/amnlGZesXu-SUK2H@redhat.com
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ .../filesystems/epoll/epoll_wakeup_test.c     | 23 +++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/tools/testing/selftests/filesystems/epoll/epoll_wakeup_test.c b/tools/testing/selftests/filesystems/epoll/epoll_wakeup_test.c
+index f6f1a7ff01b0..81a994943e12 100644
+--- a/tools/testing/selftests/filesystems/epoll/epoll_wakeup_test.c
++++ b/tools/testing/selftests/filesystems/epoll/epoll_wakeup_test.c
+@@ -3538,4 +3538,27 @@ TEST(epoll65)
+ 	close(ctx.efd[1]);
+ }
+ 
++TEST(epoll66)
++{
++	struct epoll_event event;
++	int pfd[2], efd;
++
++	ASSERT_EQ(pipe(pfd), 0);
++
++	efd = epoll_create1(0);
++	ASSERT_GE(efd, 0);
++
++	event.events = EPOLLIN | EPOLLET;
++	ASSERT_EQ(epoll_ctl(efd, EPOLL_CTL_ADD, pfd[0], &event), 0);
++
++	for (int i = 0; i < 2; ++i) {
++		ASSERT_EQ(write(pfd[1], "", 1), 1);
++		EXPECT_EQ(epoll_wait(efd, &event, 1, 0), 1);
++	}
++
++	close(pfd[0]);
++	close(pfd[1]);
++	close(efd);
++}
++
+ TEST_HARNESS_MAIN
+-- 
+2.55.0
+

@@ -1,0 +1,105 @@
+From 395e142b43dd2e9bc79de05339eb152fd260c39a Mon Sep 17 00:00:00 2001
+From: Jesse Zhang <Jesse.Zhang@amd.com>
+Date: Mon, 22 Jun 2026 10:40:11 +0800
+Subject: [PATCH 01760/15333] drm/amdgpu/userq: add reset helper and identify
+ guilty user queue
+
+If we get an interrupt for a bad user queue (bad opcode, etc.), add
+a helper to handle the reset for user queues.
+
+v2: squash in fixes
+v3:
+ - schedule the reset via amdgpu_userq_start_hang_detect_work() instead
+   of open-coding mod_delayed_work()
+ - drop the per-queue guilty flag; always reset the queue the hang
+   detect work belongs to, matching the non-compute reset path
+
+Co-developed-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Jesse Zhang <jesse.zhang@amd.com>
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c | 22 +++++++++++++++++++++-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h | 11 +++++++++++
+ 2 files changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
+index cd168a51c165..fb4cc6bfb5ac 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
+@@ -142,7 +142,8 @@ static void amdgpu_userq_hang_detect_work(struct work_struct *work)
+ 		int r;
+ 
+ 		if (queue->queue_type == AMDGPU_HW_IP_COMPUTE)
+-			r = amdgpu_gfx_reset_mes_compute(adev, NULL, NULL, NULL, NULL, NULL);
++			r = amdgpu_gfx_reset_mes_compute(adev, NULL, NULL,
++							 queue, NULL, NULL);
+ 		else
+ 			r = userq_funcs->reset(queue);
+ 		if (r)
+@@ -690,6 +691,7 @@ amdgpu_userq_create(struct drm_file *filp, union drm_amdgpu_userq *args)
+ 	}
+ 
+ 	queue->doorbell_index = index;
++	queue->doorbell_offset = (u32)args->in.doorbell_offset;
+ 	trace_amdgpu_userq_create_start(queue);
+ 	r = uq_funcs->mqd_create(queue, &args->in);
+ 	if (r) {
+@@ -1131,6 +1133,24 @@ static void amdgpu_userq_restore_worker(struct work_struct *work)
+ 	dma_fence_put(ev_fence);
+ }
+ 
++void amdgpu_userq_process_reset_irq(struct amdgpu_device *adev,
++				    u32 pasid, u32 doorbell_offset)
++{
++	struct xarray *xa = &adev->userq_doorbell_xa;
++	struct amdgpu_usermode_queue *queue;
++	unsigned long flags, idx;
++
++	xa_lock_irqsave(xa, flags);
++	xa_for_each(xa, idx, queue) {
++		if (queue->vm && queue->vm->pasid == pasid &&
++		    queue->doorbell_offset == doorbell_offset) {
++			amdgpu_userq_start_hang_detect_work(queue);
++			break;
++		}
++	}
++	xa_unlock_irqrestore(xa, flags);
++}
++
+ static int
+ amdgpu_userq_evict_all(struct amdgpu_userq_mgr *uq_mgr)
+ {
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h
+index 7a5f8ed794b8..61e5f8a06eb2 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h
+@@ -53,6 +53,7 @@ struct amdgpu_usermode_queue {
+ 	enum amdgpu_userq_state state;
+ 	uint64_t		doorbell_handle;
+ 	uint64_t		doorbell_index;
++	u32			doorbell_offset;
+ 	uint64_t		flags;
+ 	struct amdgpu_mqd_prop	*userq_prop;
+ 	struct amdgpu_userq_mgr *userq_mgr;
+@@ -178,6 +179,16 @@ int amdgpu_userq_post_reset(struct amdgpu_device *adev, bool vram_lost);
+ void amdgpu_userq_start_hang_detect_work(struct amdgpu_usermode_queue *queue);
+ void amdgpu_userq_process_fence_irq(struct amdgpu_device *adev, u32 doorbell);
+ 
++/*
++ * CP packs the per-process doorbell_id of the queue in
++ * CTXID0[9:0] on priv-fault (same encoding KFD uses via
++ * KFD_CTXID0_DOORBELL_ID_MASK)
++ */
++#define AMDGPU_CTXID0_DOORBELL_ID_MASK	0x3ff
++
++void amdgpu_userq_process_reset_irq(struct amdgpu_device *adev,
++				    u32 pasid, u32 doorbell_offset);
++
+ int amdgpu_userq_input_va_validate(struct amdgpu_device *adev,
+ 				   struct amdgpu_usermode_queue *queue,
+ 				   u64 addr, u64 expected_size, u64 *va_out);
+-- 
+2.55.0
+

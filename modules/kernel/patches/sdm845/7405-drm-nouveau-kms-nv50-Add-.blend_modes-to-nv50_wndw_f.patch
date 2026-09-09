@@ -1,0 +1,194 @@
+From a7e8cf887ada1173641042b67ee4bc571417957e Mon Sep 17 00:00:00 2001
+From: Lyude Paul <lyude@redhat.com>
+Date: Mon, 20 Jul 2026 17:36:16 -0400
+Subject: [PATCH 07405/15333] drm/nouveau/kms/nv50-: Add .blend_modes to
+ nv50_wndw_func
+
+At the moment, we currently (incorrectly) only expose a blend property on
+the plane if we have a nv50_wndw_func->blend_set function for the given
+wndw type. But we need to expose a blend property for all types of planes
+that can display color formats with an alpha channel.
+
+Prepare for doing this by introducing a way of looking up the supported
+blend modes for a type of wndw by introducing .blend_modes, which describes
+all possible blending modes nouveau currently supports for a type of wndw.
+
+Signed-off-by: Lyude Paul <lyude@redhat.com>
+Reviewed-by: Dave Airlie <airlied@redhat.com>
+Fixes: 860e748bddcc ("drm: ensure blend mode supported if pixel format with alpha exposed")
+Link: https://patch.msgid.link/20260720215058.398210-2-lyude@redhat.com
+---
+ drivers/gpu/drm/nouveau/dispnv50/base.h     |  6 ++++++
+ drivers/gpu/drm/nouveau/dispnv50/base507c.c |  1 +
+ drivers/gpu/drm/nouveau/dispnv50/base827c.c |  1 +
+ drivers/gpu/drm/nouveau/dispnv50/base907c.c |  1 +
+ drivers/gpu/drm/nouveau/dispnv50/curs507a.c |  3 +++
+ drivers/gpu/drm/nouveau/dispnv50/wndw.h     | 10 ++++++++++
+ drivers/gpu/drm/nouveau/dispnv50/wndwc37e.c |  1 +
+ drivers/gpu/drm/nouveau/dispnv50/wndwc57e.c |  1 +
+ drivers/gpu/drm/nouveau/dispnv50/wndwc67e.c |  1 +
+ drivers/gpu/drm/nouveau/dispnv50/wndwca7e.c |  1 +
+ 10 files changed, 26 insertions(+)
+
+diff --git a/drivers/gpu/drm/nouveau/dispnv50/base.h b/drivers/gpu/drm/nouveau/dispnv50/base.h
+index 085bd3aeb40b..fbfd62d8fc79 100644
+--- a/drivers/gpu/drm/nouveau/dispnv50/base.h
++++ b/drivers/gpu/drm/nouveau/dispnv50/base.h
+@@ -1,5 +1,7 @@
+ #ifndef __NV50_KMS_BASE_H__
+ #define __NV50_KMS_BASE_H__
++#include <drm/drm_blend.h>
++
+ #include "wndw.h"
+ 
+ int base507c_new(struct nouveau_drm *, int, s32, struct nv50_wndw **);
+@@ -24,4 +26,8 @@ extern const struct nv50_wndw_func base907c;
+ int base917c_new(struct nouveau_drm *, int, s32, struct nv50_wndw **);
+ 
+ int nv50_base_new(struct nouveau_drm *, int head, struct nv50_wndw **);
++
++/* The only blend mode supported by base channels */
++#define BASE_BLEND_MODES BIT(DRM_MODE_BLEND_PIXEL_NONE)
++
+ #endif
+diff --git a/drivers/gpu/drm/nouveau/dispnv50/base507c.c b/drivers/gpu/drm/nouveau/dispnv50/base507c.c
+index a431f6c5f6fa..41b648ab3c5e 100644
+--- a/drivers/gpu/drm/nouveau/dispnv50/base507c.c
++++ b/drivers/gpu/drm/nouveau/dispnv50/base507c.c
+@@ -297,6 +297,7 @@ base507c = {
+ 	.image_set = base507c_image_set,
+ 	.image_clr = base507c_image_clr,
+ 	.update = base507c_update,
++	.blend_modes = BASE_BLEND_MODES,
+ };
+ 
+ int
+diff --git a/drivers/gpu/drm/nouveau/dispnv50/base827c.c b/drivers/gpu/drm/nouveau/dispnv50/base827c.c
+index 4545cc5f3a14..6c290324b4f3 100644
+--- a/drivers/gpu/drm/nouveau/dispnv50/base827c.c
++++ b/drivers/gpu/drm/nouveau/dispnv50/base827c.c
+@@ -93,6 +93,7 @@ base827c = {
+ 	.image_set = base827c_image_set,
+ 	.image_clr = base507c_image_clr,
+ 	.update = base507c_update,
++	.blend_modes = BASE_BLEND_MODES,
+ };
+ 
+ int
+diff --git a/drivers/gpu/drm/nouveau/dispnv50/base907c.c b/drivers/gpu/drm/nouveau/dispnv50/base907c.c
+index 4a2d5a259e15..a94d8350224b 100644
+--- a/drivers/gpu/drm/nouveau/dispnv50/base907c.c
++++ b/drivers/gpu/drm/nouveau/dispnv50/base907c.c
+@@ -205,6 +205,7 @@ base907c = {
+ 	.image_set = base907c_image_set,
+ 	.image_clr = base507c_image_clr,
+ 	.update = base507c_update,
++	.blend_modes = BASE_BLEND_MODES,
+ };
+ 
+ int
+diff --git a/drivers/gpu/drm/nouveau/dispnv50/curs507a.c b/drivers/gpu/drm/nouveau/dispnv50/curs507a.c
+index 1a889139cb05..5f2ff40388e7 100644
+--- a/drivers/gpu/drm/nouveau/dispnv50/curs507a.c
++++ b/drivers/gpu/drm/nouveau/dispnv50/curs507a.c
+@@ -29,6 +29,7 @@
+ #include <nvhw/class/cl507a.h>
+ 
+ #include <drm/drm_atomic_helper.h>
++#include <drm/drm_blend.h>
+ #include <drm/drm_fourcc.h>
+ 
+ bool
+@@ -164,6 +165,8 @@ curs507a_wndw = {
+ 	.acquire = curs507a_acquire,
+ 	.release = curs507a_release,
+ 	.prepare = curs507a_prepare,
++	// TODO: Cursors also support premulti, but we haven't hooked it up anywhere yet.
++	.blend_modes = BIT(DRM_MODE_BLEND_COVERAGE),
+ };
+ 
+ int
+diff --git a/drivers/gpu/drm/nouveau/dispnv50/wndw.h b/drivers/gpu/drm/nouveau/dispnv50/wndw.h
+index 90d100514bef..d12043b756c8 100644
+--- a/drivers/gpu/drm/nouveau/dispnv50/wndw.h
++++ b/drivers/gpu/drm/nouveau/dispnv50/wndw.h
+@@ -1,6 +1,8 @@
+ #ifndef __NV50_KMS_WNDW_H__
+ #define __NV50_KMS_WNDW_H__
+ #define nv50_wndw(p) container_of((p), struct nv50_wndw, plane)
++#include <drm/drm_blend.h>
++
+ #include "disp.h"
+ #include "atom.h"
+ #include "lut.h"
+@@ -74,6 +76,7 @@ struct nv50_wndw_func {
+ 	int (*image_clr)(struct nv50_wndw *);
+ 	int (*scale_set)(struct nv50_wndw *, struct nv50_wndw_atom *);
+ 	int (*blend_set)(struct nv50_wndw *, struct nv50_wndw_atom *);
++	unsigned int blend_modes;
+ 
+ 	int (*update)(struct nv50_wndw *, u32 *interlock);
+ };
+@@ -139,4 +142,11 @@ int wndwca7e_new(struct nouveau_drm *, enum drm_plane_type, int, s32,
+ 
+ int nv50_wndw_new(struct nouveau_drm *, enum drm_plane_type, int index,
+ 		  struct nv50_wndw **);
++
++/* A set of blend modes supported by all wndws */
++#define WNDW_BLEND_MODES                \
++	(  BIT(DRM_MODE_BLEND_COVERAGE) \
++	 | BIT(DRM_MODE_BLEND_PREMULTI) \
++	 | BIT(DRM_MODE_BLEND_PIXEL_NONE))
++
+ #endif
+diff --git a/drivers/gpu/drm/nouveau/dispnv50/wndwc37e.c b/drivers/gpu/drm/nouveau/dispnv50/wndwc37e.c
+index 554c4f91f8be..7ab4d532118e 100644
+--- a/drivers/gpu/drm/nouveau/dispnv50/wndwc37e.c
++++ b/drivers/gpu/drm/nouveau/dispnv50/wndwc37e.c
+@@ -343,6 +343,7 @@ wndwc37e = {
+ 	.image_set = wndwc37e_image_set,
+ 	.image_clr = wndwc37e_image_clr,
+ 	.blend_set = wndwc37e_blend_set,
++	.blend_modes = WNDW_BLEND_MODES,
+ 	.update = wndwc37e_update,
+ };
+ 
+diff --git a/drivers/gpu/drm/nouveau/dispnv50/wndwc57e.c b/drivers/gpu/drm/nouveau/dispnv50/wndwc57e.c
+index d1ca51aae58c..e220f43b5bca 100644
+--- a/drivers/gpu/drm/nouveau/dispnv50/wndwc57e.c
++++ b/drivers/gpu/drm/nouveau/dispnv50/wndwc57e.c
+@@ -231,6 +231,7 @@ wndwc57e = {
+ 	.image_set = wndwc57e_image_set,
+ 	.image_clr = wndwc37e_image_clr,
+ 	.blend_set = wndwc37e_blend_set,
++	.blend_modes = WNDW_BLEND_MODES,
+ 	.update = wndwc37e_update,
+ };
+ 
+diff --git a/drivers/gpu/drm/nouveau/dispnv50/wndwc67e.c b/drivers/gpu/drm/nouveau/dispnv50/wndwc67e.c
+index 52af293c98f4..580cf7abd819 100644
+--- a/drivers/gpu/drm/nouveau/dispnv50/wndwc67e.c
++++ b/drivers/gpu/drm/nouveau/dispnv50/wndwc67e.c
+@@ -95,6 +95,7 @@ wndwc67e = {
+ 	.image_set = wndwc67e_image_set,
+ 	.image_clr = wndwc37e_image_clr,
+ 	.blend_set = wndwc37e_blend_set,
++	.blend_modes = WNDW_BLEND_MODES,
+ 	.update = wndwc37e_update,
+ };
+ 
+diff --git a/drivers/gpu/drm/nouveau/dispnv50/wndwca7e.c b/drivers/gpu/drm/nouveau/dispnv50/wndwca7e.c
+index 2cec8cfbd546..d65ec438b434 100644
+--- a/drivers/gpu/drm/nouveau/dispnv50/wndwca7e.c
++++ b/drivers/gpu/drm/nouveau/dispnv50/wndwca7e.c
+@@ -231,6 +231,7 @@ wndwca7e = {
+ 	.image_set = wndwca7e_image_set,
+ 	.image_clr = wndwca7e_image_clr,
+ 	.blend_set = wndwc37e_blend_set,
++	.blend_modes = WNDW_BLEND_MODES,
+ 	.update = wndwc37e_update,
+ };
+ 
+-- 
+2.55.0
+

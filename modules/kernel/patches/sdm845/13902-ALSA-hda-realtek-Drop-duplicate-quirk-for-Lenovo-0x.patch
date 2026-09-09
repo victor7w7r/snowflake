@@ -1,0 +1,42 @@
+From e5b03754d2707d89b8cc857f9c9c13efb1c6671d Mon Sep 17 00:00:00 2001
+From: Zhang Heng <zhangheng@kylinos.cn>
+Date: Fri, 14 Aug 2026 16:41:01 +0800
+Subject: [PATCH 13902/15333] ALSA: hda/realtek: Drop duplicate quirk for
+ Lenovo 0x17aa:0x38df
+
+The PCI SSID 17aa:38df is listed twice in alc269_fixup_tbl[], both mapping
+to the same fixup ALC287_FIXUP_TAS2781_I2C:
+
+  SND_PCI_QUIRK(0x17aa, 0x38df, "Yoga Y990 Intel YC Dual", ALC287_FIXUP_TAS2781_I2C),
+  ...
+  SND_PCI_QUIRK(0x17aa, 0x38df, "Y990 YG DUAL", ALC287_FIXUP_TAS2781_I2C),
+
+The HDA quirk lookup (hda_quirk_lookup_id()) returns the first matching
+entry, so the second occurrence never takes effect; it is dead code.
+
+Drop the second entry.  The retained "Yoga Y990 Intel YC Dual" label also
+follows the naming of the neighbouring 0x38e0 entry ("Yoga Y990 Intel VECO
+Dual").
+
+Signed-off-by: Zhang Heng <zhangheng@kylinos.cn>
+Link: https://patch.msgid.link/20260814084101.504471-1-zhangheng@kylinos.cn
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/hda/codecs/realtek/alc269.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index be7287ea24ec..3f0e276fc606 100644
+--- a/sound/hda/codecs/realtek/alc269.c
++++ b/sound/hda/codecs/realtek/alc269.c
+@@ -8101,7 +8101,6 @@ static const struct hda_quirk alc269_fixup_tbl[] = {
+ 	SND_PCI_QUIRK(0x17aa, 0x38df, "Yoga Y990 Intel YC Dual", ALC287_FIXUP_TAS2781_I2C),
+ 	SND_PCI_QUIRK(0x17aa, 0x38e0, "Yoga Y990 Intel VECO Dual", ALC287_FIXUP_TAS2781_I2C),
+ 	SND_PCI_QUIRK(0x17aa, 0x38f8, "Yoga Book 9i", ALC287_FIXUP_TAS2781_I2C),
+-	SND_PCI_QUIRK(0x17aa, 0x38df, "Y990 YG DUAL", ALC287_FIXUP_TAS2781_I2C),
+ 	/* Legion 7 15ASH11 shares PCI SSID 17aa:38f9 with Thinkbook 16P Gen5;
+ 	 * use codec SSID to distinguish them
+ 	 */
+-- 
+2.55.0
+

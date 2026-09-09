@@ -1,0 +1,35 @@
+From 1207dbb91c111e2422e94b2e75091367369e6476 Mon Sep 17 00:00:00 2001
+From: Marek Szyprowski <m.szyprowski@samsung.com>
+Date: Wed, 12 Aug 2026 08:05:08 +0200
+Subject: [PATCH 14214/15333] blk-mq: add missing call to srcu_barrier() in
+ blk_mq_free_tag_set()
+
+Commit 05c3e88488ed ("srcu: Queue sdp->work when the delay timer is
+successfully deleted") added a check in cleanup_srcu_struct() if the
+call to srcu_barrier() has been made before calling it, which
+revealed a missing call to srcu_barrier() before calling
+cleanup_srcu_struct(set->srcu). Fix this.
+
+Signed-off-by: Marek Szyprowski <m.szyprowski@samsung.com>
+Reviewed-by: Paul E. McKenney <paulmck@kernel.org>
+Link: https://patch.msgid.link/20260812060510.3220294-1-m.szyprowski@samsung.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ block/blk-mq.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/block/blk-mq.c b/block/blk-mq.c
+index 2c850330a32b..a26a11c73ee3 100644
+--- a/block/blk-mq.c
++++ b/block/blk-mq.c
+@@ -4975,6 +4975,7 @@ void blk_mq_free_tag_set(struct blk_mq_tag_set *set)
+ 	srcu_barrier(&set->tags_srcu);
+ 	cleanup_srcu_struct(&set->tags_srcu);
+ 	if (set->flags & BLK_MQ_F_BLOCKING) {
++		srcu_barrier(set->srcu);
+ 		cleanup_srcu_struct(set->srcu);
+ 		kfree(set->srcu);
+ 	}
+-- 
+2.55.0
+

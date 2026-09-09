@@ -1,0 +1,35 @@
+From 5abf1b281d26ad893d24ac8c03099ae97f88c7a7 Mon Sep 17 00:00:00 2001
+From: Ricardo Robaina <rrobaina@redhat.com>
+Date: Tue, 28 Jul 2026 11:14:24 -0300
+Subject: [PATCH 07830/15333] audit: drop BUG_ON() from
+ audit_signal_info_syscall()
+
+The BUG_ON(axp->pid_count >= AUDIT_AUX_PIDS) check in
+audit_signal_info_syscall() will panic the kernel if the signal target
+pid array overflows, which is too severe for this situation.
+
+Replace it with a WARN_ON_ONCE() and return of -EINVAL, instead.
+
+Signed-off-by: Ricardo Robaina <rrobaina@redhat.com>
+Signed-off-by: Paul Moore <paul@paul-moore.com>
+---
+ kernel/auditsc.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/auditsc.c b/kernel/auditsc.c
+index 6610e667c728..2b9ce0b52511 100644
+--- a/kernel/auditsc.c
++++ b/kernel/auditsc.c
+@@ -2712,7 +2712,8 @@ int audit_signal_info_syscall(struct task_struct *t)
+ 		axp->d.next = ctx->aux_pids;
+ 		ctx->aux_pids = (void *)axp;
+ 	}
+-	BUG_ON(axp->pid_count >= AUDIT_AUX_PIDS);
++	if (WARN_ON_ONCE(axp->pid_count >= AUDIT_AUX_PIDS))
++		return -EINVAL;
+ 
+ 	axp->target_pid[axp->pid_count] = task_tgid_nr(t);
+ 	axp->target_auid[axp->pid_count] = audit_get_loginuid(t);
+-- 
+2.55.0
+

@@ -1,0 +1,53 @@
+From 2b240733f27c8dd7e192f36540a10dcb88339222 Mon Sep 17 00:00:00 2001
+From: Thomas Huth <thuth@redhat.com>
+Date: Fri, 7 Aug 2026 14:58:39 +0200
+Subject: [PATCH 13633/15333] smb: clear the aes_cmac_key and aes_cmac_ctx when
+ done
+
+Clear the local crypto-related structures via __cleanup() functions
+when we're done with them to avoid that sensitive data could leak on
+the stack.
+
+Note: cmac_ctx in ksmbd_sign_smb3_pdu() gets cleared in aes_cmac_final()
+already, so this does not need a __cleanup() marker.
+
+Signed-off-by: Thomas Huth <thuth@redhat.com>
+Acked-by: Namjae Jeon <linkinjeon@kernel.org>
+Link: https://patch.msgid.link/20260807125845.1477067-3-thuth@redhat.com
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+---
+ fs/smb/client/smb2transport.c | 4 ++--
+ fs/smb/server/auth.c          | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/fs/smb/client/smb2transport.c b/fs/smb/client/smb2transport.c
+index 1143ee52470a..d23566da2ac8 100644
+--- a/fs/smb/client/smb2transport.c
++++ b/fs/smb/client/smb2transport.c
+@@ -464,8 +464,8 @@ smb3_calc_signature(struct smb_rqst *rqst, struct TCP_Server_Info *server)
+ 	unsigned char smb3_signature[SMB2_CMACAES_SIZE];
+ 	struct kvec *iov = rqst->rq_iov;
+ 	struct smb2_hdr *shdr = (struct smb2_hdr *)iov[0].iov_base;
+-	struct aes_cmac_key cmac_key;
+-	struct aes_cmac_ctx cmac_ctx;
++	struct aes_cmac_key cmac_key __cleanup(aes_cmac_zeroize_key);
++	struct aes_cmac_ctx cmac_ctx __cleanup(aes_cmac_zeroize_ctx);
+ 	struct smb_rqst drqst;
+ 	u8 key[SMB3_SIGN_KEY_SIZE];
+ 
+diff --git a/fs/smb/server/auth.c b/fs/smb/server/auth.c
+index 4e7b6f0e6b8c..e8d1c068a43e 100644
+--- a/fs/smb/server/auth.c
++++ b/fs/smb/server/auth.c
+@@ -509,7 +509,7 @@ void ksmbd_sign_smb2_pdu(struct ksmbd_conn *conn, char *key, struct kvec *iov,
+ void ksmbd_sign_smb3_pdu(struct ksmbd_conn *conn, char *key, struct kvec *iov,
+ 			 int n_vec, char *sig)
+ {
+-	struct aes_cmac_key cmac_key;
++	struct aes_cmac_key cmac_key __cleanup(aes_cmac_zeroize_key);
+ 	struct aes_cmac_ctx cmac_ctx;
+ 	int i;
+ 
+-- 
+2.55.0
+

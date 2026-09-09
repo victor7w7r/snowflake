@@ -1,0 +1,209 @@
+From f69946f6d891aca1614233573741543b3bab4e6a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Wed, 15 Jul 2026 15:09:26 +0300
+Subject: [PATCH 05608/15333] drm/i915/cdclk: Deal with 2 PPC hscale issues
+ when calculating min CDCLK
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Double the fractional part of the horizontal scale factor
+for the purposes of min_cdck calculation. This bumps the min
+CDCLK sufficiently to overcome some kind of 2 PPC granularity
+issue. Without this CDCLK may end up being too low and we get
+underruns with certain horizontal downscale factors.
+
+The current Bspec formula calls for doubling only the
+fractional part below 0.5, and rounding it down to a
+unit fraction. But that formula does not result in a
+sufficient CDCLK bump in a lot of cases. Empirical evidence
+supports doubling the entire fractional part, so let's just
+do that while we wait for further analysis from the hardware
+team.
+
+Also note that the position of the scaler output window also
+seems to matter. If the output is near the left edge of the
+screen then lower CDCLK is sufficient, but moving the output
+window further to the right causes underruns unless CDCLK is
+also bumped. Some prefill happening during hblank already?
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20260715120926.10786-5-ville.syrjala@linux.intel.com
+Reviewed-by: Nemesa Garg <nemesa.garg@intel.com>
+Tested-by: Vidya Srinivas <vidya.srinivas@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_display.c  | 26 ++++++++-
+ drivers/gpu/drm/i915/display/intel_plane.c    | 55 +++++++++++++++++++
+ drivers/gpu/drm/i915/display/intel_plane.h    |  5 ++
+ .../drm/i915/display/skl_universal_plane.c    |  6 +-
+ 4 files changed, 88 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display.c b/drivers/gpu/drm/i915/display/intel_display.c
+index df43be51b3ba..2c55a4818ad7 100644
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -2234,6 +2234,29 @@ static u32 ilk_pipe_pixel_rate(const struct intel_crtc_state *crtc_state)
+ 				   pixel_rate);
+ }
+ 
++static u32 ilk_pipe_pixel_rate_cdclk(const struct intel_crtc_state *crtc_state)
++{
++	struct intel_display *display = to_intel_display(crtc_state);
++	u32 pixel_rate = crtc_state->hw.pipe_mode.crtc_clock;
++	unsigned int ppc = HAS_2PPC(display) ? 2 : 1;
++	struct drm_rect src;
++
++	/*
++	 * We only use IF-ID interlacing. If we ever use
++	 * PF-ID we'll need to adjust the pixel_rate here.
++	 */
++
++	if (!crtc_state->pch_pfit.enabled)
++		return pixel_rate;
++
++	drm_rect_init(&src, 0, 0,
++		      drm_rect_width(&crtc_state->pipe_src) << 16,
++		      drm_rect_height(&crtc_state->pipe_src) << 16);
++
++	return intel_adjusted_rate_cdclk(&src, &crtc_state->pch_pfit.dst,
++					 pixel_rate, ppc);
++}
++
+ static void intel_mode_from_crtc_timings(struct drm_display_mode *mode,
+ 					 const struct drm_display_mode *timings)
+ {
+@@ -2267,7 +2290,8 @@ static void intel_crtc_compute_pixel_rate(struct intel_crtc_state *crtc_state)
+ 	} else {
+ 		crtc_state->pixel_rate =
+ 			ilk_pipe_pixel_rate(crtc_state);
+-		crtc_state->pixel_rate_cdclk = crtc_state->pixel_rate;
++		crtc_state->pixel_rate_cdclk =
++			ilk_pipe_pixel_rate_cdclk(crtc_state);
+ 	}
+ }
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_plane.c b/drivers/gpu/drm/i915/display/intel_plane.c
+index 667343bed5eb..c87885a32917 100644
+--- a/drivers/gpu/drm/i915/display/intel_plane.c
++++ b/drivers/gpu/drm/i915/display/intel_plane.c
+@@ -264,6 +264,50 @@ unsigned int intel_adjusted_rate(const struct drm_rect *src,
+ 				dst_w * dst_h);
+ }
+ 
++static unsigned int hscale_cdclk(const struct drm_rect *src,
++				 const struct drm_rect *dst,
++				 unsigned int ppc)
++{
++	unsigned int hscale;
++
++	hscale = drm_rect_calc_hscale(src, dst, 0, INT_MAX);
++	hscale = max(hscale, 0x10000);
++
++	/*
++	 * Double the fractional part due to some 2 PPC granularity issue
++	 *
++	 * FIXME: BSpec calls for doubling only the <0.5 fractional part,
++	 * and rounding it down to a unit fraction. In practice that is
++	 * not sufficient, and we need a more aggressive CDCLK bump in
++	 * many cases. The updated formula was derived empirically.
++	 * This may need to be updated once we have better undestading
++	 * of what's happening in the hardware...
++	 */
++	return (hscale & ~0xffff) + ppc * (hscale & 0xffff);
++}
++
++static unsigned int vscale_cdclk(const struct drm_rect *src,
++				 const struct drm_rect *dst)
++{
++	unsigned int vscale;
++
++	vscale = drm_rect_calc_vscale(src, dst, 0, INT_MAX);
++	vscale = max(vscale, 0x10000);
++
++	return vscale;
++}
++
++unsigned int intel_adjusted_rate_cdclk(const struct drm_rect *src,
++				       const struct drm_rect *dst,
++				       unsigned int rate,
++				       unsigned int ppc)
++{
++	unsigned int hscale = hscale_cdclk(src, dst, ppc);
++	unsigned int vscale = vscale_cdclk(src, dst);
++
++	return DIV64_U64_ROUND_UP((u64)rate * hscale * vscale, 1ull << 32);
++}
++
+ unsigned int intel_plane_pixel_rate(const struct intel_crtc_state *crtc_state,
+ 				    const struct intel_plane_state *plane_state)
+ {
+@@ -284,6 +328,17 @@ unsigned int intel_plane_pixel_rate(const struct intel_crtc_state *crtc_state,
+ 				   crtc_state->pixel_rate);
+ }
+ 
++unsigned int intel_plane_pixel_rate_cdclk(const struct intel_crtc_state *crtc_state,
++					  const struct intel_plane_state *plane_state)
++{
++	struct intel_display *display = to_intel_display(crtc_state);
++	unsigned int ppc = HAS_2PPC(display) ? 2 : 1;
++
++	return intel_adjusted_rate_cdclk(&plane_state->uapi.src,
++					 &plane_state->uapi.dst,
++					 crtc_state->pixel_rate_cdclk, ppc);
++}
++
+ unsigned int intel_plane_data_rate(const struct intel_crtc_state *crtc_state,
+ 				   const struct intel_plane_state *plane_state,
+ 				   int color_plane)
+diff --git a/drivers/gpu/drm/i915/display/intel_plane.h b/drivers/gpu/drm/i915/display/intel_plane.h
+index 31a6229aea73..dba2be24aae2 100644
+--- a/drivers/gpu/drm/i915/display/intel_plane.h
++++ b/drivers/gpu/drm/i915/display/intel_plane.h
+@@ -29,8 +29,13 @@ bool intel_plane_can_async_flip(struct intel_plane *plane,
+ unsigned int intel_adjusted_rate(const struct drm_rect *src,
+ 				 const struct drm_rect *dst,
+ 				 unsigned int rate);
++unsigned int intel_adjusted_rate_cdclk(const struct drm_rect *src,
++				       const struct drm_rect *dst,
++				       unsigned int rate, unsigned int ppc);
+ unsigned int intel_plane_pixel_rate(const struct intel_crtc_state *crtc_state,
+ 				    const struct intel_plane_state *plane_state);
++unsigned int intel_plane_pixel_rate_cdclk(const struct intel_crtc_state *crtc_state,
++					  const struct intel_plane_state *plane_state);
+ 
+ unsigned int intel_plane_data_rate(const struct intel_crtc_state *crtc_state,
+ 				   const struct intel_plane_state *plane_state,
+diff --git a/drivers/gpu/drm/i915/display/skl_universal_plane.c b/drivers/gpu/drm/i915/display/skl_universal_plane.c
+index 164b7d61c9a3..b246fc48558b 100644
+--- a/drivers/gpu/drm/i915/display/skl_universal_plane.c
++++ b/drivers/gpu/drm/i915/display/skl_universal_plane.c
+@@ -266,7 +266,7 @@ bool icl_is_hdr_plane(struct intel_display *display, enum plane_id plane_id)
+ static int icl_plane_min_cdclk(const struct intel_crtc_state *crtc_state,
+ 			       const struct intel_plane_state *plane_state)
+ {
+-	unsigned int pixel_rate = intel_plane_pixel_rate(crtc_state, plane_state);
++	unsigned int pixel_rate = intel_plane_pixel_rate_cdclk(crtc_state, plane_state);
+ 
+ 	/* two pixels per clock */
+ 	return DIV_ROUND_UP(pixel_rate, 2);
+@@ -290,7 +290,7 @@ glk_plane_ratio(const struct intel_plane_state *plane_state,
+ static int glk_plane_min_cdclk(const struct intel_crtc_state *crtc_state,
+ 			       const struct intel_plane_state *plane_state)
+ {
+-	unsigned int pixel_rate = intel_plane_pixel_rate(crtc_state, plane_state);
++	unsigned int pixel_rate = intel_plane_pixel_rate_cdclk(crtc_state, plane_state);
+ 	unsigned int num, den;
+ 
+ 	glk_plane_ratio(plane_state, &num, &den);
+@@ -317,7 +317,7 @@ skl_plane_ratio(const struct intel_plane_state *plane_state,
+ static int skl_plane_min_cdclk(const struct intel_crtc_state *crtc_state,
+ 			       const struct intel_plane_state *plane_state)
+ {
+-	unsigned int pixel_rate = intel_plane_pixel_rate(crtc_state, plane_state);
++	unsigned int pixel_rate = intel_plane_pixel_rate_cdclk(crtc_state, plane_state);
+ 	unsigned int num, den;
+ 
+ 	skl_plane_ratio(plane_state, &num, &den);
+-- 
+2.55.0
+

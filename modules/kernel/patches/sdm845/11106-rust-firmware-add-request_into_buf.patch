@@ -1,0 +1,89 @@
+From e6c2c62655211e2ad507209b02b99db6dec05630 Mon Sep 17 00:00:00 2001
+From: Timur Tabi <ttabi@nvidia.com>
+Date: Fri, 31 Jul 2026 15:10:11 -0500
+Subject: [PATCH 11106/15333] rust: firmware: add request_into_buf()
+
+Add request_into_buf(), a Rust wrapper around the
+request_firmware_into_buf() function. This variant loads the firmware
+image directly into a caller-provided buffer rather than a
+kernel-allocated one.
+
+Signed-off-by: Timur Tabi <ttabi@nvidia.com>
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Tested-by: Alexandre Courbot <acourbot@nvidia.com>
+Link: https://patch.msgid.link/20260731201017.2580713-3-ttabi@nvidia.com
+[ Declare fw as *const to match the FFI out-parameter type and pass
+  &raw mut directly, removing the redundant cast chain. - Danilo ]
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/kernel/firmware.rs | 46 +++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 44 insertions(+), 2 deletions(-)
+
+diff --git a/rust/kernel/firmware.rs b/rust/kernel/firmware.rs
+index 71168d8004e2..6a6b392ffc4e 100644
+--- a/rust/kernel/firmware.rs
++++ b/rust/kernel/firmware.rs
+@@ -7,9 +7,9 @@
+ use crate::{
+     bindings,
+     device::Device,
+-    error::Error,
+-    error::Result,
++    error::to_result,
+     ffi,
++    prelude::*,
+     str::{CStr, CStrExt as _},
+ };
+ use core::ptr::NonNull;
+@@ -120,6 +120,48 @@ fn drop(&mut self) {
+     }
+ }
+ 
++/// Load firmware directly into the caller-provided `buf`.
++///
++/// On success the firmware image has been copied into `buf`; the caller accesses the data
++/// through `buf` itself.
++///
++/// This is intentionally a stand-alone function rather than a `Firmware` constructor. For
++/// the `into_buf` path, the firmware data lives in the caller's `buf`, not in a
++/// kernel-owned buffer, so returning a `Firmware` would expose `Firmware::data()` as a
++/// second handle aliasing `buf` (and `release_firmware()` does not free `buf` anyway).
++pub fn request_into_buf(name: &CStr, dev: &Device, buf: &mut [u8]) -> Result {
++    // `as_mut_ptr()` on an empty slice returns a non-NULL pointer to
++    // memory which the loader does not own. Passing that pointer with `size == 0`
++    // makes the loader believe that it is buffer it allocated itself, so when
++    // `release_firmware()` is called, it will vfree the pointer and trigger a
++    // bug. Reject empty slices to avoid this situation.
++    if buf.is_empty() {
++        return Err(EINVAL);
++    }
++
++    let mut fw: *const bindings::firmware = core::ptr::null();
++
++    // SAFETY: `&raw mut fw` is a valid pointer to a NULL initialized `bindings::firmware` pointer.
++    // `name` and `dev` are valid as by their type invariants. `buf` is a valid writable
++    // buffer of `buf.len()` bytes.
++    to_result(unsafe {
++        bindings::request_firmware_into_buf(
++            &raw mut fw,
++            name.as_char_ptr(),
++            dev.as_raw(),
++            buf.as_mut_ptr().cast(),
++            buf.len(),
++        )
++    })?;
++
++    // The firmware bytes are now in `buf`, which the caller owns, so we don't need
++    // the kernel to hang on to it any more.
++    // SAFETY: `fw` is a valid pointer returned by `request_firmware_into_buf`.
++    unsafe { bindings::release_firmware(fw) };
++
++    Ok(())
++}
++
+ // SAFETY: `Firmware` only holds a pointer to a C `struct firmware`, which is safe to be used from
+ // any thread.
+ unsafe impl Send for Firmware {}
+-- 
+2.55.0
+

@@ -1,0 +1,107 @@
+From 3fc7867a95c01de51f9c7d22adc117c3202e7bb7 Mon Sep 17 00:00:00 2001
+From: Marc Zyngier <maz@kernel.org>
+Date: Thu, 30 Jul 2026 08:10:12 +0100
+Subject: [PATCH 09058/15333] KVM: arm64: Make HCR_EL2 a non-VNCR register
+
+FEAT_NV3 makes a fundamental change to the architecture, by moving
+guest-initiated HCR_EL2 accesses to the NVHCR_EL2 register. As the
+names suggests, this is HCR_EL2 for a NV guest.
+
+But where do NVHCR_EL2 accesses from a guest go? The are redirected
+to the VNCR page, right where HCR_EL2 is stored in the NV2 case.
+Does it hurt? Good. There's more coming.
+
+The challenge here is to make KVM work seamlessly, without rewriting
+everything. Which implies that things such as __vcpu_sys_reg(HCR_EL2)
+must work, no matter the underlying NV implementation.
+
+A simple way to deal with it is to move HCR_EL2's canonical storage
+outside of VNCR for the vast majority of the KVM code, and only have
+a copy at entry/exit times. Given that we don't really support NV3
+yet, this is pretty simple.
+
+In the process, advertise NVHCR_EL2 as the register that now holds
+offset 0x78 in the VNCR page.
+
+Reviewed-by: Joey Gouly <joey.gouly@arm.com>
+Reviewed-by: Yuan Yao <yaoyuan@linux.alibaba.com>
+Signed-off-by: Marc Zyngier <maz@kernel.org>
+Link: https://patch.msgid.link/20260730071022.296811-20-maz@kernel.org
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/include/asm/kvm_host.h     | 3 ++-
+ arch/arm64/include/asm/vncr_mapping.h | 2 +-
+ arch/arm64/kvm/hyp/vhe/switch.c       | 9 +++++++++
+ 3 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/include/asm/kvm_host.h b/arch/arm64/include/asm/kvm_host.h
+index bae2c4f92ef5..2648c8a717ba 100644
+--- a/arch/arm64/include/asm/kvm_host.h
++++ b/arch/arm64/include/asm/kvm_host.h
+@@ -543,6 +543,7 @@ enum vcpu_sysreg {
+ 	MDCR_EL2,	/* Monitor Debug Configuration Register (EL2) */
+ 	CNTHCTL_EL2,	/* Counter-timer Hypervisor Control register */
+ 	ZCR_EL2,	/* SVE Control Register (EL2) */
++	HCR_EL2,	/* Hypervisor Control Register */
+ 
+ 	/* Any VNCR-capable reg goes after this point */
+ 	MARKER(__VNCR_START__),
+@@ -571,7 +572,7 @@ enum vcpu_sysreg {
+ 	VNCR(TFSR_EL1),	/* Tag Fault Status Register (EL1) */
+ 	VNCR(VPIDR_EL2),/* Virtualization Processor ID Register */
+ 	VNCR(VMPIDR_EL2),/* Virtualization Multiprocessor ID Register */
+-	VNCR(HCR_EL2),	/* Hypervisor Configuration Register */
++	VNCR(NVHCR_EL2),/* NV Hypervisor Configuration Register */
+ 	VNCR(HSTR_EL2),	/* Hypervisor System Trap Register */
+ 	VNCR(VTTBR_EL2),/* Virtualization Translation Table Base Register */
+ 	VNCR(VTCR_EL2),	/* Virtualization Translation Control Register */
+diff --git a/arch/arm64/include/asm/vncr_mapping.h b/arch/arm64/include/asm/vncr_mapping.h
+index 14366d35ce82..9e8a49fa8b63 100644
+--- a/arch/arm64/include/asm/vncr_mapping.h
++++ b/arch/arm64/include/asm/vncr_mapping.h
+@@ -11,7 +11,7 @@
+ #define VNCR_VTCR_EL2           0x040
+ #define VNCR_VMPIDR_EL2         0x050
+ #define VNCR_CNTVOFF_EL2        0x060
+-#define VNCR_HCR_EL2            0x078
++#define VNCR_NVHCR_EL2          0x078
+ #define VNCR_HSTR_EL2           0x080
+ #define VNCR_VPIDR_EL2          0x088
+ #define VNCR_TPIDR_EL2          0x090
+diff --git a/arch/arm64/kvm/hyp/vhe/switch.c b/arch/arm64/kvm/hyp/vhe/switch.c
+index 53af19212895..e5a51dc3cbe5 100644
+--- a/arch/arm64/kvm/hyp/vhe/switch.c
++++ b/arch/arm64/kvm/hyp/vhe/switch.c
+@@ -70,6 +70,9 @@ static u64 __compute_hcr(struct kvm_vcpu *vcpu)
+ 		if (!vcpu_el2_e2h_is_set(vcpu))
+ 			hcr |= HCR_NV1;
+ 
++		/* Publish the guest's view of HCR_EL2 to the HW */
++		__vcpu_assign_sys_reg(vcpu, NVHCR_EL2, __vcpu_sys_reg(vcpu, HCR_EL2));
++
+ 		/*
+ 		 * Nothing in HCR_EL2 should impact running in hypervisor
+ 		 * context, apart from bits we have defined as RESx (E2H,
+@@ -549,6 +552,7 @@ static void fixup_nv_guest_exit(struct kvm_vcpu *vcpu)
+ 	 */
+ 	if (unlikely(host_data_test_flag(VCPU_IN_HYP_CONTEXT))) {
+ 		u64 mode = *vcpu_cpsr(vcpu) & (PSR_MODE_MASK | PSR_MODE32_BIT);
++		u64 hcr;
+ 
+ 		switch (mode) {
+ 		case PSR_MODE_EL1t:
+@@ -561,6 +565,11 @@ static void fixup_nv_guest_exit(struct kvm_vcpu *vcpu)
+ 
+ 		*vcpu_cpsr(vcpu) &= ~(PSR_MODE_MASK | PSR_MODE32_BIT);
+ 		*vcpu_cpsr(vcpu) |= mode;
++
++		/* Publish the latest HCR_EL2 to the emulation */
++		hcr = __vcpu_sys_reg(vcpu, NVHCR_EL2);
++
++		__vcpu_assign_sys_reg(vcpu, HCR_EL2, hcr);
+ 	}
+ 
+ 	/* Apply extreme paranoia! */
+-- 
+2.55.0
+

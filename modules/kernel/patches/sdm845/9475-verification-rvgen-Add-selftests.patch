@@ -1,0 +1,216 @@
+From 36c1af42e794bd33732eaa90deee40ced894908e Mon Sep 17 00:00:00 2001
+From: Gabriele Monaco <gmonaco@redhat.com>
+Date: Thu, 23 Jul 2026 09:45:25 +0200
+Subject: [PATCH 09475/15333] verification/rvgen: Add selftests
+
+The rvgen code generator needs validation to ensure it produces correct
+monitor implementations from input specifications.
+
+Add selftests with golden reference outputs covering all monitor classes
+(DA, HA, LTL) and types (global, per_cpu, per_task, per_obj), including
+optional features like descriptions and parent monitors. Container
+generation and error handling (missing files, invalid specifications,
+missing arguments) are also validated against expected output.
+
+Acked-by: Nam Cao <namcao@linutronix.de>
+Reviewed-by: Wen Yang <wen.yang@linux.dev>
+Link: https://lore.kernel.org/r/20260723074534.43521-9-gmonaco@redhat.com
+Signed-off-by: Gabriele Monaco <gmonaco@redhat.com>
+---
+ tools/verification/rvgen/Makefile             |  4 +
+ .../rvgen/tests/rvgen_container.t             | 20 +++++
+ .../verification/rvgen/tests/rvgen_monitor.t  | 87 +++++++++++++++++++
+ tools/verification/tests/engine.sh            | 34 ++++++++
+ 4 files changed, 145 insertions(+)
+ create mode 100644 tools/verification/rvgen/tests/rvgen_container.t
+ create mode 100644 tools/verification/rvgen/tests/rvgen_monitor.t
+
+diff --git a/tools/verification/rvgen/Makefile b/tools/verification/rvgen/Makefile
+index cfc4056c1e87..2a2b9e64ea42 100644
+--- a/tools/verification/rvgen/Makefile
++++ b/tools/verification/rvgen/Makefile
+@@ -13,6 +13,10 @@ all:
+ .PHONY: clean
+ clean:
+ 
++.PHONY: check
++check:
++	prove -o --directives -f tests/
++
+ .PHONY: install
+ install:
+ 	$(INSTALL) rvgen/automata.py -D -m 644 $(DESTDIR)$(PYLIB)/rvgen/automata.py
+diff --git a/tools/verification/rvgen/tests/rvgen_container.t b/tools/verification/rvgen/tests/rvgen_container.t
+new file mode 100644
+index 000000000000..fa4fb3db8288
+--- /dev/null
++++ b/tools/verification/rvgen/tests/rvgen_container.t
+@@ -0,0 +1,20 @@
++#!/bin/bash
++# SPDX-License-Identifier: GPL-2.0
++source ../tests/engine.sh
++test_begin
++
++set_timeout 30s
++
++# Help tests
++check "verify container subcommand help" \
++	"$RVGEN container -h" 0 "model_name" "class"
++
++check_and_compare_folder "container with description" \
++	"$RVGEN container -n test_container -D 'Test container for grouping monitors'" \
++	"test_container" "Writing the monitor into the directory test_container"
++
++# Error handling tests
++check "missing required model_name" \
++	"$RVGEN container" 2 "the following arguments are required: -n/--model_name"
++
++test_end
+diff --git a/tools/verification/rvgen/tests/rvgen_monitor.t b/tools/verification/rvgen/tests/rvgen_monitor.t
+new file mode 100644
+index 000000000000..5f2562600bad
+--- /dev/null
++++ b/tools/verification/rvgen/tests/rvgen_monitor.t
+@@ -0,0 +1,87 @@
++#!/bin/bash
++# SPDX-License-Identifier: GPL-2.0
++source ../tests/engine.sh
++test_begin
++
++set_timeout 30s
++
++# Help and basic tests
++check "verify help page" \
++	"$RVGEN --help" 0 "Generate kernel rv monitor"
++
++check "verify monitor subcommand help" \
++	"$RVGEN monitor --help" 0 "Monitor class"
++
++# DA monitor tests - test all monitor types
++check_and_compare_folder "DA per_cpu (default name)" \
++	"$RVGEN monitor -c da -s tests/specs/test_da.dot -t per_cpu" \
++	"test_da" "obj-\$(CONFIG_RV_MON_TEST_DA) += monitors/test_da/test_da.o"
++
++check_and_compare_folder "DA global type" \
++	"$RVGEN monitor -c da -s tests/specs/test_da.dot -t global -n da_global" \
++	"da_global" "DA_MON_EVENTS_IMPLICIT"
++
++check_and_compare_folder "DA per_task with description" \
++	"$RVGEN monitor -c da -s tests/specs/test_da2.dot -t per_task -n da_pertask_desc -D 'Custom description for testing'" \
++	"da_pertask_desc" "#include <monitors/da_pertask_desc/da_pertask_desc_trace.h>"
++
++check_and_compare_folder "DA per_obj with parent" \
++	"$RVGEN monitor -c da -s tests/specs/test_da2.dot -t per_obj -n da_perobj_parent -p parent_mon" \
++	"da_perobj_parent" "DA_MON_EVENTS_ID"
++
++# HA monitor tests
++check_and_compare_folder "HA per_task (default name)" \
++	"$RVGEN monitor -c ha -s tests/specs/test_ha.dot -t per_task" \
++	"test_ha" "HA_MON_EVENTS_ID"
++
++check_and_compare_folder "HA per_cpu type" \
++	"$RVGEN monitor -c ha -s tests/specs/test_ha.dot -t per_cpu -n ha_percpu" \
++	"ha_percpu" "HA_MON_EVENTS_IMPLICIT"
++
++# LTL monitor test
++check_and_compare_folder "LTL per_task" \
++	"$RVGEN monitor -c ltl -s tests/specs/test_ltl.ltl -t per_task -n ltl_pertask" \
++	"ltl_pertask" "source \"kernel/trace/rv/monitors/ltl_pertask/Kconfig\""
++
++check_and_compare_folder "LTL per_task with parent and description (default name)" \
++	"$RVGEN monitor -c ltl -s tests/specs/test_ltl.ltl -t per_task -p ltl_parent -D 'Simple description'" \
++	"test_ltl" "LTL_MON_EVENTS_ID"
++
++# Error handling tests
++check "missing required spec argument" \
++	"$RVGEN monitor -c da -t per_cpu" 2 \
++	"the following arguments are required: -s/--spec" "Traceback (most recent call last)"
++
++check "missing required monitor type" \
++	"$RVGEN monitor -c da -s tests/specs/test_da.dot" 2 \
++	"the following arguments are required: -t/--monitor_type" "Traceback (most recent call last)"
++
++check "missing required monitor class" \
++	"$RVGEN monitor -s tests/specs/test_da.dot -t per_cpu" 2 \
++	"the following arguments are required: -c/--class" "Traceback (most recent call last)"
++
++check "invalid monitor class" \
++	"$RVGEN monitor -c invalid -s tests/specs/test_da.dot -t per_cpu" 1 \
++	"Unknown monitor class" "Traceback (most recent call last)"
++
++check "missing dot file" \
++	"$RVGEN monitor -c da -s tests/specs/nonexistent.dot -t per_cpu" 1 \
++	"No such file or directory" "Traceback (most recent call last)"
++
++check "missing ltl file" \
++	"$RVGEN monitor -c ltl -s tests/specs/nonexistent.ltl -t per_task" 1 \
++	"No such file or directory" "Traceback (most recent call last)"
++
++check "invalid dot file syntax" \
++	"$RVGEN monitor -c da -s tests/specs/test_invalid.dot -t per_cpu" 1 \
++	"The automaton doesn't have an initial state" "Traceback (most recent call last)"
++
++check "invalid ha file syntax" \
++	"$RVGEN monitor -c ha -s tests/specs/test_invalid_ha.dot -t per_obj" 1 \
++	"Unrecognised event" "Traceback (most recent call last)"
++
++check "invalid ltl file syntax" \
++	"$RVGEN monitor -c ltl -s tests/specs/test_invalid.ltl -t per_task" 1 \
++	"No terminal matches 'i'" "Traceback (most recent call last)"
++
++test_end
+diff --git a/tools/verification/tests/engine.sh b/tools/verification/tests/engine.sh
+index 57e16dc980b1..cfdf2180aad8 100644
+--- a/tools/verification/tests/engine.sh
++++ b/tools/verification/tests/engine.sh
+@@ -5,6 +5,8 @@ test_begin() {
+ 	# included correctly.
+ 	ctr=0
+ 	[ -z "$RV" ] && RV="../rv/rv"
++	[ -z "$RVGEN" ] && RVGEN="python3 ../rvgen"
++	[ -z "$GOLDEN_DIR" ] && GOLDEN_DIR="tests/golden"
+ 	[ -n "$TEST_COUNT" ] && echo "1..$TEST_COUNT"
+ }
+ 
+@@ -118,6 +120,38 @@ check_if_exists() {
+ 	fi
+ }
+ 
++check_and_compare_folder() {
++	# Run command, compare generated folder to golden, and cleanup
++	local desc=$1
++	local command=$2
++	local generated_dir=$3
++	local expected_output=$4
++	local unexpected_output=$5
++	local golden_dir="$GOLDEN_DIR/$generated_dir"
++
++	ctr=$((ctr + 1))
++	if [ -n "$TEST_COUNT" ]; then
++		rm -rf "$generated_dir"
++		_check "$desc" "$command" 0 "$expected_output" "$unexpected_output"
++
++		if [ "$fail" -eq 0 ] && [ ! -d "$generated_dir" ]; then
++			failure "# Generated directory not found: $generated_dir"
++		fi
++
++		if [ "$fail" -ne 0 ]; then
++			:
++		elif ! diff -r "$generated_dir" "$golden_dir" &> /dev/null; then
++			failure "# Directories differ:"
++			failbuf+=$(diff -r "$generated_dir" "$golden_dir" 2>&1 | sed 's/^/#   /')
++			failbuf+=$'\n'
++		fi
++
++		report "$1"
++
++		rm -rf "$generated_dir"
++	fi
++}
++
+ set_timeout() {
+ 	TIMEOUT="timeout -v -k 30s $1"
+ }
+-- 
+2.55.0
+

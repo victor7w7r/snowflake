@@ -1,0 +1,120 @@
+From df0ecbc497de851891847260f45805ca6ccb393f Mon Sep 17 00:00:00 2001
+From: Zqiang <qiang.zhang@linux.dev>
+Date: Thu, 23 Jul 2026 18:04:30 +0800
+Subject: [PATCH 08650/15333] rcu: Reduce stack usage in show_rcu_gp_kthreads()
+
+When CONFIG_KASAN=y and CONFIG_KASAN_STACK=y builds, the
+show_rcu_gp_kthreads() exceeds the 1024-byte frame-size limit:
+
+make kernel/rcu/tree.o KCFLAGS="-fstack-usage"
+  DESCEND objtool
+  DESCEND bpf/resolve_btfids
+  INSTALL libsubcmd_headers
+  CC      kernel/rcu/tree.o
+In file included from kernel/rcu/tree.c:4998:
+kernel/rcu/tree_stall.h: In function 'show_rcu_gp_kthreads':
+kernel/rcu/tree_stall.h:994:1: warning: the frame size of 1656 bytes is larger than 1024 bytes [-Wframe-larger-than=]
+
+grep show_rcu kernel/rcu/tree.su
+tree_nocb.h:1622:13:show_rcu_nocb_state 896     dynamic,bounded
+tree_stall.h:933:6:show_rcu_gp_kthreads 1784    dynamic,bounded
+tree_stall.h:1102:13:sysrq_show_rcu     16      static
+
+Wrap the pr_info() into two noinline_for_stack helpers function:
+show_rcu_state() print rcu_state status, and show_rcu_node()
+print single rcu_node status.
+
+After apply this change:
+
+grep show_rcu kernel/rcu/tree.su
+tree_stall.h:955:22:show_rcu_node	696	dynamic,bounded
+tree_stall.h:930:22:show_rcu_state	872	dynamic,bounded
+tree_nocb.h:1622:13:show_rcu_nocb_state	896	dynamic,bounded
+tree_stall.h:972:6:show_rcu_gp_kthreads	544	static
+tree_stall.h:1113:13:sysrq_show_rcu	16	static
+
+Signed-off-by: Zqiang <qiang.zhang@linux.dev>
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ kernel/rcu/tree_stall.h | 47 +++++++++++++++++++++++++----------------
+ 1 file changed, 29 insertions(+), 18 deletions(-)
+
+diff --git a/kernel/rcu/tree_stall.h b/kernel/rcu/tree_stall.h
+index 02684dadb4ee..20634edfb44d 100644
+--- a/kernel/rcu/tree_stall.h
++++ b/kernel/rcu/tree_stall.h
+@@ -927,20 +927,13 @@ bool rcu_check_boost_fail(unsigned long gp_state, int *cpup)
+ }
+ EXPORT_SYMBOL_GPL(rcu_check_boost_fail);
+ 
+-/*
+- * Show the state of the grace-period kthreads.
+- */
+-void show_rcu_gp_kthreads(void)
++static noinline_for_stack void show_rcu_state(void)
+ {
+-	unsigned long cbs = 0;
+-	int cpu;
+ 	unsigned long j;
+ 	unsigned long ja;
+ 	unsigned long jr;
+ 	unsigned long js;
+ 	unsigned long jw;
+-	struct rcu_data *rdp;
+-	struct rcu_node *rnp;
+ 	struct task_struct *t = READ_ONCE(rcu_state.gp_kthread);
+ 
+ 	j = jiffies;
+@@ -957,21 +950,39 @@ void show_rcu_gp_kthreads(void)
+ 		(long)data_race(READ_ONCE(rcu_get_root()->gp_seq_needed)),
+ 		data_race(READ_ONCE(rcu_state.gp_max)),
+ 		data_race(READ_ONCE(rcu_state.gp_flags)));
++}
++
++static noinline_for_stack void show_rcu_node(struct rcu_node *rnp)
++{
++	pr_info("\trcu_node %d:%d ->gp_seq %ld ->gp_seq_needed %ld ->qsmask %#lx %c%c%c%c ->n_boosts %ld\n",
++		rnp->grplo, rnp->grphi,
++		(long)data_race(READ_ONCE(rnp->gp_seq)),
++		(long)data_race(READ_ONCE(rnp->gp_seq_needed)),
++		data_race(READ_ONCE(rnp->qsmask)),
++		".b"[!!data_race(READ_ONCE(rnp->boost_kthread_task))],
++		".B"[!!data_race(READ_ONCE(rnp->boost_tasks))],
++		".E"[!!data_race(READ_ONCE(rnp->exp_tasks))],
++		".G"[!!data_race(READ_ONCE(rnp->gp_tasks))],
++		data_race(READ_ONCE(rnp->n_boosts)));
++}
++
++/*
++ * Show the state of the grace-period kthreads.
++ */
++void show_rcu_gp_kthreads(void)
++{
++	unsigned long cbs = 0;
++	int cpu;
++	struct rcu_data *rdp;
++	struct rcu_node *rnp;
++
++	show_rcu_state();
+ 	rcu_for_each_node_breadth_first(rnp) {
+ 		if (ULONG_CMP_GE(READ_ONCE(rcu_state.gp_seq), READ_ONCE(rnp->gp_seq_needed)) &&
+ 		    !data_race(READ_ONCE(rnp->qsmask)) && !data_race(READ_ONCE(rnp->boost_tasks)) &&
+ 		    !data_race(READ_ONCE(rnp->exp_tasks)) && !data_race(READ_ONCE(rnp->gp_tasks)))
+ 			continue;
+-		pr_info("\trcu_node %d:%d ->gp_seq %ld ->gp_seq_needed %ld ->qsmask %#lx %c%c%c%c ->n_boosts %ld\n",
+-			rnp->grplo, rnp->grphi,
+-			(long)data_race(READ_ONCE(rnp->gp_seq)),
+-			(long)data_race(READ_ONCE(rnp->gp_seq_needed)),
+-			data_race(READ_ONCE(rnp->qsmask)),
+-			".b"[!!data_race(READ_ONCE(rnp->boost_kthread_task))],
+-			".B"[!!data_race(READ_ONCE(rnp->boost_tasks))],
+-			".E"[!!data_race(READ_ONCE(rnp->exp_tasks))],
+-			".G"[!!data_race(READ_ONCE(rnp->gp_tasks))],
+-			data_race(READ_ONCE(rnp->n_boosts)));
++		show_rcu_node(rnp);
+ 		if (!rcu_is_leaf_node(rnp))
+ 			continue;
+ 		for_each_leaf_node_possible_cpu(rnp, cpu) {
+-- 
+2.55.0
+

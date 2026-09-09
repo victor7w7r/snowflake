@@ -1,0 +1,120 @@
+From dca82e209e5ced94b9e53c004a935bc44162073d Mon Sep 17 00:00:00 2001
+From: Tzung-Bi Shih <tzungbi@kernel.org>
+Date: Mon, 20 Jul 2026 03:08:21 +0000
+Subject: [PATCH 06737/15333] PM: sleep: Allow disabling DPM watchdog by
+ default
+
+Introduce the "dpm_watchdog_enabled" module parameter to allow the DPM
+watchdog to be enabled or disabled at boot time and runtime.
+
+Additionally, introduce the CONFIG_DPM_WATCHDOG_ENABLED Kconfig option
+to set the default value of the module parameter at compile time.
+
+The primary motivation for this configurability resolves around Android
+GKI (Generic Kernel Image).  We want to enable CONFIG_DPM_WATCHDOG in
+the GKI so the feature is available.  However, because the GKI is shared
+across many different devices, we don't want to inadvertently affect
+devices that are unaware of this feature.  This provides a way to
+compile it in, but keep it disabled by default for those devices via the
+kernel command line or module parameters.
+
+To maintain backward compatibility, CONFIG_DPM_WATCHDOG_ENABLED relies
+on `default y`.  Previously, the DPM watchdog was always active if
+CONFIG_DPM_WATCHDOG was set.  Defaulting this new option to 'y' ensures
+that the behavior remains unchanged for existing users and defconfigs
+when they upgrade.
+
+Signed-off-by: Tzung-Bi Shih <tzungbi@kernel.org>
+Link: https://patch.msgid.link/20260720030821.2780257-3-tzungbi@kernel.org
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ Documentation/admin-guide/kernel-parameters.txt |  7 +++++++
+ drivers/base/power/main.c                       | 11 +++++++++++
+ kernel/power/Kconfig                            | 10 ++++++++++
+ 3 files changed, 28 insertions(+)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index b5493a7f8f22..ea0b70f87472 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -47,6 +47,7 @@
+ 	PCI	PCI bus support is enabled.
+ 	PCIE	PCI Express support is enabled.
+ 	PCMCIA	The PCMCIA subsystem is enabled.
++	PM	Power Management support is enabled.
+ 	PNP	Plug & Play support is enabled.
+ 	PPC	PowerPC architecture is enabled.
+ 	PPT	Parallel port support is enabled.
+@@ -5354,6 +5355,12 @@ Kernel parameters
+ 	pm_debug_messages	[SUSPEND,KNL]
+ 			Enable suspend/resume debug messages during boot up.
+ 
++	pm.dpm_watchdog_enabled=
++			[PM] Enable or disable the DPM watchdog.  Requires
++			CONFIG_PM_SLEEP and CONFIG_DPM_WATCHDOG enabled.
++			Format: <bool>
++			Default value is set by CONFIG_DPM_WATCHDOG_ENABLED.
++
+ 	pnp.debug=1	[PNP]
+ 			Enable PNP debug messages (depends on the
+ 			CONFIG_PNP_DEBUG_MESSAGES option).  Change at run-time
+diff --git a/drivers/base/power/main.c b/drivers/base/power/main.c
+index 49ea6e2cd735..184dc4b3b938 100644
+--- a/drivers/base/power/main.c
++++ b/drivers/base/power/main.c
+@@ -535,6 +535,11 @@ module_param(dpm_watchdog_all_cpu_backtrace, bool, 0644);
+ MODULE_PARM_DESC(dpm_watchdog_all_cpu_backtrace,
+ 		 "Backtrace all CPUs on DPM watchdog timeout");
+ 
++static bool __read_mostly dpm_watchdog_enabled =
++				IS_ENABLED(CONFIG_DPM_WATCHDOG_ENABLED);
++module_param(dpm_watchdog_enabled, bool, 0644);
++MODULE_PARM_DESC(dpm_watchdog_enabled, "Enable DPM watchdog");
++
+ static unsigned int __read_mostly dpm_watchdog_timeout = CONFIG_DPM_WATCHDOG_TIMEOUT;
+ static unsigned int __read_mostly dpm_watchdog_warning_timeout =
+ 						CONFIG_DPM_WATCHDOG_WARNING_TIMEOUT;
+@@ -630,6 +635,9 @@ static void dpm_watchdog_set(struct dpm_watchdog *wd, struct device *dev)
+ {
+ 	struct timer_list *timer = &wd->timer;
+ 
++	if (!dpm_watchdog_enabled)
++		return;
++
+ 	wd->dev = dev;
+ 	wd->tsk = current;
+ 	wd->fatal = dpm_watchdog_timeout == dpm_watchdog_warning_timeout;
+@@ -648,6 +656,9 @@ static void dpm_watchdog_clear(struct dpm_watchdog *wd)
+ {
+ 	struct timer_list *timer = &wd->timer;
+ 
++	if (!dpm_watchdog_enabled)
++		return;
++
+ 	timer_delete_sync(timer);
+ 	timer_destroy_on_stack(timer);
+ }
+diff --git a/kernel/power/Kconfig b/kernel/power/Kconfig
+index 530c897311d4..71165e7f04f4 100644
+--- a/kernel/power/Kconfig
++++ b/kernel/power/Kconfig
+@@ -268,6 +268,16 @@ config DPM_WATCHDOG
+ 	  captured in pstore device for inspection in subsequent
+ 	  boot session.
+ 
++config DPM_WATCHDOG_ENABLED
++	bool "Enable DPM watchdog by default"
++	depends on DPM_WATCHDOG
++	default y
++	help
++	  If you say Y here, the DPM watchdog will be enabled by default.
++	  If you say N, it will be compiled in but disabled.  It can be
++	  enabled at boot time via the "pm.dpm_watchdog_enabled" kernel
++	  parameter or at runtime via sysfs.
++
+ config DPM_WATCHDOG_TIMEOUT
+ 	int "Watchdog timeout to panic in seconds"
+ 	range 1 120
+-- 
+2.55.0
+

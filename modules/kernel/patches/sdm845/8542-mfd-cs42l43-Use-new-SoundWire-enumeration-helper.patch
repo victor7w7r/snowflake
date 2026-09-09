@@ -1,0 +1,114 @@
+From 4d8ba321a7867bfb91426e9f54518d040fb04ebc Mon Sep 17 00:00:00 2001
+From: Charles Keepax <ckeepax@opensource.cirrus.com>
+Date: Mon, 8 Jun 2026 11:27:07 +0100
+Subject: [PATCH 08542/15333] mfd: cs42l43: Use new SoundWire enumeration
+ helper
+
+Now the new wait for SoundWire enumeration helper no longer depends on
+unattach_request it is safe to use from probe time. Update the driver
+to use the new core helper.
+
+Signed-off-by: Charles Keepax <ckeepax@opensource.cirrus.com>
+Reviewed-by: Srinivas Kandagatla <srinivas.kandagatla@oss.qualcomm.com>
+Tested-by: Srinivas Kandagatla <srinivas.kandagatla@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260608102714.2503120-4-ckeepax@opensource.cirrus.com
+Signed-off-by: Lee Jones <lee@kernel.org>
+---
+ drivers/mfd/cs42l43-i2c.c   |  2 --
+ drivers/mfd/cs42l43-sdw.c   |  7 -------
+ drivers/mfd/cs42l43.c       | 15 ++++++---------
+ include/linux/mfd/cs42l43.h |  2 --
+ 4 files changed, 6 insertions(+), 20 deletions(-)
+
+diff --git a/drivers/mfd/cs42l43-i2c.c b/drivers/mfd/cs42l43-i2c.c
+index 0a0ab5e549a5..4db452b41220 100644
+--- a/drivers/mfd/cs42l43-i2c.c
++++ b/drivers/mfd/cs42l43-i2c.c
+@@ -45,8 +45,6 @@ static int cs42l43_i2c_probe(struct i2c_client *i2c)
+ 
+ 	cs42l43->dev = &i2c->dev;
+ 	cs42l43->irq = i2c->irq;
+-	/* A device on an I2C is always attached by definition. */
+-	cs42l43->attached = true;
+ 	cs42l43->variant_id = (long)device_get_match_data(cs42l43->dev);
+ 
+ 	cs42l43->regmap = devm_regmap_init_i2c(i2c, &cs42l43_i2c_regmap);
+diff --git a/drivers/mfd/cs42l43-sdw.c b/drivers/mfd/cs42l43-sdw.c
+index 794c98378175..2b87ae2d79c5 100644
+--- a/drivers/mfd/cs42l43-sdw.c
++++ b/drivers/mfd/cs42l43-sdw.c
+@@ -100,17 +100,10 @@ static int cs42l43_sdw_update_status(struct sdw_slave *sdw, enum sdw_slave_statu
+ 
+ 		sdw_write_no_pm(sdw, CS42L43_GEN_INT_MASK_1,
+ 				CS42L43_INT_STAT_GEN1_MASK);
+-
+-		cs42l43->attached = true;
+-
+-		complete(&cs42l43->device_attach);
+ 		break;
+ 	case SDW_SLAVE_UNATTACHED:
+ 		dev_dbg(cs42l43->dev, "Device detach\n");
+ 
+-		cs42l43->attached = false;
+-
+-		reinit_completion(&cs42l43->device_attach);
+ 		complete(&cs42l43->device_detach);
+ 		break;
+ 	default:
+diff --git a/drivers/mfd/cs42l43.c b/drivers/mfd/cs42l43.c
+index ed6d93893de0..d2bbd2f18af7 100644
+--- a/drivers/mfd/cs42l43.c
++++ b/drivers/mfd/cs42l43.c
+@@ -586,15 +586,13 @@ static int cs42l43_soft_reset(struct cs42l43 *cs42l43)
+  */
+ static int cs42l43_wait_for_attach(struct cs42l43 *cs42l43)
+ {
+-	if (!cs42l43->attached) {
+-		unsigned long timeout = msecs_to_jiffies(CS42L43_SDW_ATTACH_TIMEOUT_MS);
+-		unsigned long time;
++	int ret;
+ 
+-		time = wait_for_completion_timeout(&cs42l43->device_attach, timeout);
+-		if (!time) {
+-			dev_err(cs42l43->dev, "Timed out waiting for device re-attach\n");
+-			return -ETIMEDOUT;
+-		}
++	if (cs42l43->sdw) {
++		ret = sdw_slave_wait_for_init(cs42l43->sdw,
++					      CS42L43_SDW_ATTACH_TIMEOUT_MS);
++		if (ret)
++			return ret;
+ 	}
+ 
+ 	regcache_cache_only(cs42l43->regmap, false);
+@@ -1120,7 +1118,6 @@ int cs42l43_dev_probe(struct cs42l43 *cs42l43)
+ 	dev_set_drvdata(cs42l43->dev, cs42l43);
+ 
+ 	mutex_init(&cs42l43->pll_lock);
+-	init_completion(&cs42l43->device_attach);
+ 	init_completion(&cs42l43->device_detach);
+ 	init_completion(&cs42l43->firmware_download);
+ 	INIT_WORK(&cs42l43->boot_work, cs42l43_boot_work);
+diff --git a/include/linux/mfd/cs42l43.h b/include/linux/mfd/cs42l43.h
+index ff0f7e365a19..8e993fb535e6 100644
+--- a/include/linux/mfd/cs42l43.h
++++ b/include/linux/mfd/cs42l43.h
+@@ -86,7 +86,6 @@ struct cs42l43 {
+ 	struct regmap_irq_chip_data *irq_data;
+ 
+ 	struct work_struct boot_work;
+-	struct completion device_attach;
+ 	struct completion device_detach;
+ 	struct completion firmware_download;
+ 	int firmware_error;
+@@ -96,7 +95,6 @@ struct cs42l43 {
+ 	struct mutex pll_lock;
+ 
+ 	bool sdw_pll_active;
+-	bool attached;
+ 	bool hw_lock;
+ 	long variant_id;
+ };
+-- 
+2.55.0
+

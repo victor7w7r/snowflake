@@ -1,0 +1,40 @@
+From 50be6cb15f15006477332a20c4a4adba59a55163 Mon Sep 17 00:00:00 2001
+From: Nilay Shroff <nilay@linux.ibm.com>
+Date: Mon, 13 Jul 2026 17:24:15 +0530
+Subject: [PATCH 07796/15333] nvme: add context annotations in fabric.c
+
+The global nvmf_transports list is protected by nvmf_transports_rwsem
+and the global nvmf_hosts list is protected by nvmf_hosts_mutex.
+
+Define both lists using LIST_HEAD_GUARDED() so that Clang's context
+analysis can validate accesses to the lists against the corresponding
+locking requirements.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Nilay Shroff <nilay@linux.ibm.com>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/fabrics.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/nvme/host/fabrics.c b/drivers/nvme/host/fabrics.c
+index ac3d4f400601..fd5abd04e080 100644
+--- a/drivers/nvme/host/fabrics.c
++++ b/drivers/nvme/host/fabrics.c
+@@ -14,11 +14,11 @@
+ #include "fabrics.h"
+ #include <linux/nvme-keyring.h>
+ 
+-static LIST_HEAD(nvmf_transports);
+ static DECLARE_RWSEM(nvmf_transports_rwsem);
++static LIST_HEAD_GUARDED(nvmf_transports, nvmf_transports_rwsem);
+ 
+-static LIST_HEAD(nvmf_hosts);
+ static DEFINE_MUTEX(nvmf_hosts_mutex);
++static LIST_HEAD_GUARDED(nvmf_hosts, nvmf_hosts_mutex);
+ 
+ static struct nvmf_host *nvmf_default_host;
+ 
+-- 
+2.55.0
+

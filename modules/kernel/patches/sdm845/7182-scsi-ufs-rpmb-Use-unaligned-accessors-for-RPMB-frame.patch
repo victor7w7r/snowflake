@@ -1,0 +1,42 @@
+From 2f434f815ee2e051f9ccadfbe5db531e6fbe34ad Mon Sep 17 00:00:00 2001
+From: Li Qiang <liqiang01@kylinos.cn>
+Date: Fri, 17 Jul 2026 23:39:12 +0800
+Subject: [PATCH 07182/15333] scsi: ufs: rpmb: Use unaligned accessors for RPMB
+ frames
+
+RPMB frame buffers are passed as u8 pointers and do not have an alignment
+guarantee. Use unaligned accessors for the req_resp field.
+
+Signed-off-by: Li Qiang <liqiang01@kylinos.cn>
+Reviewed-by: Peter Wang <peter.wang@mediatek.com>
+Link: https://patch.msgid.link/20260717153914.26321-6-liqiang01@kylinos.cn
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+---
+ drivers/ufs/core/ufs-rpmb.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/ufs/core/ufs-rpmb.c b/drivers/ufs/core/ufs-rpmb.c
+index 431f85b36876..53f66b274aca 100644
+--- a/drivers/ufs/core/ufs-rpmb.c
++++ b/drivers/ufs/core/ufs-rpmb.c
+@@ -73,7 +73,7 @@ static int ufs_rpmb_route_frames(struct device *dev, u8 *req, unsigned int req_l
+ 	if (req_len < sizeof(*frm_out))
+ 		return -EINVAL;
+ 
+-	req_type = be16_to_cpu(frm_out->req_resp);
++	req_type = get_unaligned_be16(&frm_out->req_resp);
+ 
+ 	switch (req_type) {
+ 	case RPMB_PROGRAM_KEY:
+@@ -111,7 +111,7 @@ static int ufs_rpmb_route_frames(struct device *dev, u8 *req, unsigned int req_l
+ 		struct rpmb_frame *frm_resp = (struct rpmb_frame *)resp;
+ 
+ 		memset(frm_resp, 0, sizeof(*frm_resp));
+-		frm_resp->req_resp = cpu_to_be16(RPMB_RESULT_READ);
++		put_unaligned_be16(RPMB_RESULT_READ, &frm_resp->req_resp);
+ 		ret = ufs_sec_submit(hba, protocol_id, resp, resp_len, true);
+ 		if (ret) {
+ 			dev_err(dev, "Result read request failed with ret=%d\n", ret);
+-- 
+2.55.0
+

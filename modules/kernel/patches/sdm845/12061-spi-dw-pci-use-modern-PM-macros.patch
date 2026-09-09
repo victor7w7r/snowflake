@@ -1,0 +1,55 @@
+From 65172b5d381a37801c982892a784ad3df246a28d Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:35 +0800
+Subject: [PATCH 12061/15333] spi: dw-pci: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use #ifdef guards.
+
+This has the advantage of always compiling these functions in,
+independently of any Kconfig option. Thanks to that, bugs and other
+regressions are subsequently easier to catch.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-12-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-dw-pci.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/spi/spi-dw-pci.c b/drivers/spi/spi-dw-pci.c
+index bfb874f96a26..2f3bea51f1e6 100644
+--- a/drivers/spi/spi-dw-pci.c
++++ b/drivers/spi/spi-dw-pci.c
+@@ -154,7 +154,6 @@ static void dw_spi_pci_remove(struct pci_dev *pdev)
+ 	dw_spi_remove_controller(dws);
+ }
+ 
+-#ifdef CONFIG_PM_SLEEP
+ static int dw_spi_pci_suspend(struct device *dev)
+ {
+ 	struct dw_spi *dws = dev_get_drvdata(dev);
+@@ -168,9 +167,8 @@ static int dw_spi_pci_resume(struct device *dev)
+ 
+ 	return dw_spi_resume_controller(dws);
+ }
+-#endif
+ 
+-static SIMPLE_DEV_PM_OPS(dw_spi_pci_pm_ops, dw_spi_pci_suspend, dw_spi_pci_resume);
++static DEFINE_SIMPLE_DEV_PM_OPS(dw_spi_pci_pm_ops, dw_spi_pci_suspend, dw_spi_pci_resume);
+ 
+ static const struct pci_device_id dw_spi_pci_ids[] = {
+ 	/* Intel MID platform SPI controller 0 */
+@@ -197,7 +195,7 @@ static struct pci_driver dw_spi_pci_driver = {
+ 	.probe =	dw_spi_pci_probe,
+ 	.remove =	dw_spi_pci_remove,
+ 	.driver         = {
+-		.pm     = &dw_spi_pci_pm_ops,
++		.pm     = pm_sleep_ptr(&dw_spi_pci_pm_ops),
+ 	},
+ };
+ module_pci_driver(dw_spi_pci_driver);
+-- 
+2.55.0
+

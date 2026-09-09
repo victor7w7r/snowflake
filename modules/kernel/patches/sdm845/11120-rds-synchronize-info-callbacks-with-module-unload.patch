@@ -1,0 +1,130 @@
+From 2bb824660ef8116ca74bbbc265bfc2d716cd4708 Mon Sep 17 00:00:00 2001
+From: Chengfeng Ye <nicoyip.dev@gmail.com>
+Date: Sat, 1 Aug 2026 13:42:34 +0800
+Subject: [PATCH 11120/15333] rds: synchronize info callbacks with module
+ unload
+
+rds_info_getsockopt() reads a callback from rds_info_funcs and invokes it
+without protecting the callback's lifetime.  Transport modules register
+functions stored in this array.  For example, rds_tcp.ko registers
+rds_tcp_tc_info() for RDS_INFO_TCP_SOCKETS.
+
+This permits the following interleaving:
+
+  CPU0                             CPU1
+  rds_info_getsockopt()
+    func = rds_tcp_tc_info
+                                   rmmod rds_tcp
+                                     rds_tcp_exit()
+                                       rds_info_deregister_func()
+                                         rds_info_funcs[offset] = NULL
+                                     free rds_tcp module text
+    func()
+
+The reader can therefore branch to an address in unloaded module text.
+
+Protect callback invocation with SRCU.  Enter the SRCU read-side critical
+section before loading the callback and leave it only after the callback
+returns.  Clear the callback with WRITE_ONCE() and call
+synchronize_srcu() before deregistration returns, preventing module unload
+from freeing its text while an old reader is still executing it.  SRCU is
+required because callbacks such as RDS_INFO_COUNTERS can sleep.
+
+Keep the callback array unannotated and use READ_ONCE() and WRITE_ONCE()
+for concurrent slot access so sparse does not have to apply __rcu through
+the function-pointer typedef.  Replace the two callback-slot BUG_ON()
+checks with WARN_ON_ONCE() and return without changing the slot on
+mismatch.
+
+Link: https://lore.kernel.org/netdev/20260720184955.3008978-1-nicoyip.dev@gmail.com/
+Suggested-by: Allison Henderson <achender@kernel.org>
+Suggested-by: Kuniyuki Iwashima <kuniyu@google.com>
+Reviewed-by: Allison Henderson <achender@kernel.org>
+Signed-off-by: Chengfeng Ye <nicoyip.dev@gmail.com>
+Link: https://patch.msgid.link/20260801054234.3535077-1-nicoyip.dev@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/rds/info.c | 23 ++++++++++++++++++-----
+ 1 file changed, 18 insertions(+), 5 deletions(-)
+
+diff --git a/net/rds/info.c b/net/rds/info.c
+index 21b32eb16559..31e7ad108459 100644
+--- a/net/rds/info.c
++++ b/net/rds/info.c
+@@ -32,6 +32,7 @@
+  */
+ #include <linux/percpu.h>
+ #include <linux/seq_file.h>
++#include <linux/srcu.h>
+ #include <linux/slab.h>
+ #include <linux/proc_fs.h>
+ #include <linux/export.h>
+@@ -68,6 +69,7 @@ struct rds_info_iterator {
+ 	unsigned long offset;
+ };
+ 
++DEFINE_STATIC_SRCU(rds_info_srcu);
+ static DEFINE_SPINLOCK(rds_info_lock);
+ static rds_info_func rds_info_funcs[RDS_INFO_LAST - RDS_INFO_FIRST + 1];
+ 
+@@ -78,8 +80,11 @@ void rds_info_register_func(int optname, rds_info_func func)
+ 	BUG_ON(optname < RDS_INFO_FIRST || optname > RDS_INFO_LAST);
+ 
+ 	spin_lock(&rds_info_lock);
+-	BUG_ON(rds_info_funcs[offset]);
+-	rds_info_funcs[offset] = func;
++	if (WARN_ON_ONCE(rds_info_funcs[offset])) {
++		spin_unlock(&rds_info_lock);
++		return;
++	}
++	WRITE_ONCE(rds_info_funcs[offset], func);
+ 	spin_unlock(&rds_info_lock);
+ }
+ EXPORT_SYMBOL_GPL(rds_info_register_func);
+@@ -91,9 +96,13 @@ void rds_info_deregister_func(int optname, rds_info_func func)
+ 	BUG_ON(optname < RDS_INFO_FIRST || optname > RDS_INFO_LAST);
+ 
+ 	spin_lock(&rds_info_lock);
+-	BUG_ON(rds_info_funcs[offset] != func);
+-	rds_info_funcs[offset] = NULL;
++	if (WARN_ON_ONCE(rds_info_funcs[offset] != func)) {
++		spin_unlock(&rds_info_lock);
++		return;
++	}
++	WRITE_ONCE(rds_info_funcs[offset], NULL);
+ 	spin_unlock(&rds_info_lock);
++	synchronize_srcu(&rds_info_srcu);
+ }
+ EXPORT_SYMBOL_GPL(rds_info_deregister_func);
+ 
+@@ -162,6 +171,7 @@ int rds_info_getsockopt(struct socket *sock, int optname, sockopt_t *opt)
+ 	rds_info_func func;
+ 	struct page **pages = NULL;
+ 	size_t offset0 = 0;
++	int srcu_idx;
+ 	int npages = 0;
+ 	int ret;
+ 	int len;
+@@ -214,8 +224,10 @@ int rds_info_getsockopt(struct socket *sock, int optname, sockopt_t *opt)
+ 	rdsdebug("len %d nr_pages %lu\n", len, nr_pages);
+ 
+ call_func:
+-	func = rds_info_funcs[optname - RDS_INFO_FIRST];
++	srcu_idx = srcu_read_lock(&rds_info_srcu);
++	func = READ_ONCE(rds_info_funcs[optname - RDS_INFO_FIRST]);
+ 	if (!func) {
++		srcu_read_unlock(&rds_info_srcu, srcu_idx);
+ 		ret = -ENOPROTOOPT;
+ 		goto out;
+ 	}
+@@ -225,6 +237,7 @@ int rds_info_getsockopt(struct socket *sock, int optname, sockopt_t *opt)
+ 	iter.offset = offset0;
+ 
+ 	func(sock, len, &iter, &lens);
++	srcu_read_unlock(&rds_info_srcu, srcu_idx);
+ 	BUG_ON(lens.each == 0);
+ 
+ 	total = lens.nr * lens.each;
+-- 
+2.55.0
+

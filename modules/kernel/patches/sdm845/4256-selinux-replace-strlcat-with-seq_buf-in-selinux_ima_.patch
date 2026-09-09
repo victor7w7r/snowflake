@@ -1,0 +1,97 @@
+From 00f73e2a48548b1410a2403cd2d268a7d5ab0618 Mon Sep 17 00:00:00 2001
+From: Ian Bridges <icb@fastmail.org>
+Date: Fri, 26 Jun 2026 10:57:10 -0500
+Subject: [PATCH 04256/15333] selinux: replace strlcat() with seq_buf in
+ selinux_ima_collect_state()
+
+In preparation for removing the deprecated strlcat() API[1], replace the
+strscpy()/strlcat() chain in selinux_ima_collect_state() with a struct
+seq_buf, which tracks the write position and remaining space internally.
+
+Each field is written with seq_buf_printf() using a "=%d;" format, which
+removes the open-coded "=1;"/"=0;" constants. The seven per-append
+WARN_ON(rc >= buf_len) truncation checks are replaced by a single
+seq_buf_has_overflowed() check after the string is built.
+
+Link: https://github.com/KSPP/linux/issues/370 [1]
+Signed-off-by: Ian Bridges <icb@fastmail.org>
+Reviewed-by: Stephen Smalley <stephen.smalley.work@gmail.com>
+Signed-off-by: Paul Moore <paul@paul-moore.com>
+---
+ security/selinux/ima.c | 40 +++++++++++++---------------------------
+ 1 file changed, 13 insertions(+), 27 deletions(-)
+
+diff --git a/security/selinux/ima.c b/security/selinux/ima.c
+index aa34da9b0aeb..cb0efa2fc1ad 100644
+--- a/security/selinux/ima.c
++++ b/security/selinux/ima.c
+@@ -9,6 +9,7 @@
+  */
+ #include <linux/vmalloc.h>
+ #include <linux/ima.h>
++#include <linux/seq_buf.h>
+ #include "security.h"
+ #include "ima.h"
+ 
+@@ -20,46 +21,31 @@
+  */
+ static char *selinux_ima_collect_state(void)
+ {
+-	const char *on = "=1;", *off = "=0;";
++	struct seq_buf s;
+ 	char *buf;
+-	int buf_len, len, i, rc;
++	int buf_len, suffix_len, i;
+ 
+ 	buf_len = strlen("initialized=0;enforcing=0;checkreqprot=0;") + 1;
++	suffix_len = strlen("=0;");
+ 
+-	len = strlen(on);
+ 	for (i = 0; i < __POLICYDB_CAP_MAX; i++)
+-		buf_len += strlen(selinux_policycap_names[i]) + len;
++		buf_len += strlen(selinux_policycap_names[i]) + suffix_len;
+ 
+ 	buf = kzalloc(buf_len, GFP_KERNEL);
+ 	if (!buf)
+ 		return NULL;
+ 
+-	rc = strscpy(buf, "initialized", buf_len);
+-	WARN_ON(rc < 0);
++	seq_buf_init(&s, buf, buf_len);
+ 
+-	rc = strlcat(buf, selinux_initialized() ? on : off, buf_len);
+-	WARN_ON(rc >= buf_len);
++	seq_buf_printf(&s, "initialized=%d;enforcing=%d;checkreqprot=%d;",
++		       selinux_initialized(), enforcing_enabled(),
++		       checkreqprot_get());
+ 
+-	rc = strlcat(buf, "enforcing", buf_len);
+-	WARN_ON(rc >= buf_len);
+-
+-	rc = strlcat(buf, enforcing_enabled() ? on : off, buf_len);
+-	WARN_ON(rc >= buf_len);
+-
+-	rc = strlcat(buf, "checkreqprot", buf_len);
+-	WARN_ON(rc >= buf_len);
+-
+-	rc = strlcat(buf, checkreqprot_get() ? on : off, buf_len);
+-	WARN_ON(rc >= buf_len);
+-
+-	for (i = 0; i < __POLICYDB_CAP_MAX; i++) {
+-		rc = strlcat(buf, selinux_policycap_names[i], buf_len);
+-		WARN_ON(rc >= buf_len);
++	for (i = 0; i < __POLICYDB_CAP_MAX; i++)
++		seq_buf_printf(&s, "%s=%d;", selinux_policycap_names[i],
++			       selinux_state.policycap[i]);
+ 
+-		rc = strlcat(buf, selinux_state.policycap[i] ? on : off,
+-			buf_len);
+-		WARN_ON(rc >= buf_len);
+-	}
++	WARN_ON(seq_buf_has_overflowed(&s));
+ 
+ 	return buf;
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,37 @@
+From 5efbced92ec19514528ce6b18ae8e1b755cc4552 Mon Sep 17 00:00:00 2001
+From: Subasri S <subasris1210@gmail.com>
+Date: Thu, 25 Jun 2026 19:01:24 +0530
+Subject: [PATCH 02063/15333] netfilter: remove redundant null check before
+ kvfree()
+
+kvfree() internally performs NULL check on the pointer
+handed to it and takes no action if it indeed is NULL.
+Hence there is no need for a pre-check of the memory
+pointer before handing it to kvfree().
+
+Issue reported by ifnullfree.cocci Coccinelle semantic
+patch script.
+
+Signed-off-by: Subasri S <subasris1210@gmail.com>
+Signed-off-by: Florian Westphal <fw@strlen.de>
+---
+ net/netfilter/nft_set_rbtree.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/net/netfilter/nft_set_rbtree.c b/net/netfilter/nft_set_rbtree.c
+index 018bbb6df4ce..efc25e788a1c 100644
+--- a/net/netfilter/nft_set_rbtree.c
++++ b/net/netfilter/nft_set_rbtree.c
+@@ -544,8 +544,7 @@ static int nft_array_intervals_alloc(struct nft_array *array, u32 max_intervals)
+ 	if (!intervals)
+ 		return -ENOMEM;
+ 
+-	if (array->intervals)
+-		kvfree(array->intervals);
++	kvfree(array->intervals);
+ 
+ 	array->intervals = intervals;
+ 	array->max_intervals = max_intervals;
+-- 
+2.55.0
+

@@ -1,0 +1,63 @@
+From eb606a24386389d6f707a872f2e899cf5875c2c5 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Tue, 30 Jun 2026 14:37:11 -0700
+Subject: [PATCH 03328/15333] KVM: TDX: Return EINVAL, not EOPNOTSUPP, for NULL
+ INIT_MEM_REGION source
+
+Return EINVAL instead of EOPNOTSUPP if userspace attempts to pass a NULL
+pointer for the source page of INIT_MEM_REGION, so that KVM's ABI is
+consistent between TDX and SNP (for LAUNCH_UPDATE).  EOPNOTSUPP was chosen
+to be a forward-looking error code for when guest_memfd supports in-place
+conversion, but even when in-place conversion comes along, it's an awkward
+error code as KVM is deliberately choosing to disallow virtual address '0',
+which is technically a legal userspace address.  I.e. it's not so much a
+lack of support as it is that KVM reserves address '0' to simplify KVM's
+internal implementation.
+
+Opportunistically move the check so that it's co-located with the other
+checks on the userspace address, and so that it's more obvious that a NULL
+source address is explicitly disallowed.
+
+Fixes: 2a62345b3052 ("KVM: guest_memfd: GUP source pages prior to populating guest memory")
+Cc: Yan Zhao <yan.y.zhao@intel.com>
+Cc: Ackerley Tng <ackerleytng@google.com>
+Reviewed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Acked-by: Kiryl Shutsemau (Meta) <kas@kernel.org>
+Reviewed-by: Binbin Wu <binbin.wu@linxu.intel.com>
+Reviewed-by: Yan Zhao <yan.y.zhao@intel.com>
+Tested-by: Yan Zhao <yan.y.zhao@intel.com>
+Reviewed-by: Ackerley Tng <ackerleytng@google.com>
+Link: https://patch.msgid.link/20260630213711.479692-3-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/vmx/tdx.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/arch/x86/kvm/vmx/tdx.c b/arch/x86/kvm/vmx/tdx.c
+index ffe9d0db58c5..b0ec054732b9 100644
+--- a/arch/x86/kvm/vmx/tdx.c
++++ b/arch/x86/kvm/vmx/tdx.c
+@@ -3198,9 +3198,6 @@ static int tdx_gmem_post_populate(struct kvm *kvm, gfn_t gfn, kvm_pfn_t pfn,
+ 	if (KVM_BUG_ON(kvm_tdx->page_add_src, kvm))
+ 		return -EIO;
+ 
+-	if (!src_page)
+-		return -EOPNOTSUPP;
+-
+ 	kvm_tdx->page_add_src = src_page;
+ 	ret = kvm_tdp_mmu_map_private_pfn(arg->vcpu, gfn, pfn);
+ 	kvm_tdx->page_add_src = NULL;
+@@ -3247,8 +3244,8 @@ static int tdx_vcpu_init_mem_region(struct kvm_vcpu *vcpu, struct kvm_tdx_cmd *c
+ 	if (copy_from_user(&region, u64_to_user_ptr(cmd->data), sizeof(region)))
+ 		return -EFAULT;
+ 
+-	if (!PAGE_ALIGNED(region.source_addr) || !PAGE_ALIGNED(region.gpa) ||
+-	    !region.nr_pages ||
++	if (!PAGE_ALIGNED(region.source_addr) || !region.source_addr ||
++	    !PAGE_ALIGNED(region.gpa) || !region.nr_pages ||
+ 	    region.gpa + (region.nr_pages << PAGE_SHIFT) <= region.gpa ||
+ 	    !vt_is_tdx_private_gpa(kvm, region.gpa) ||
+ 	    !vt_is_tdx_private_gpa(kvm, region.gpa + (region.nr_pages << PAGE_SHIFT) - 1))
+-- 
+2.55.0
+

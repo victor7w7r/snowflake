@@ -1,0 +1,63 @@
+From 62a3aa000055efcc86483e8953775943513fe44d Mon Sep 17 00:00:00 2001
+From: Sneh Mankad <sneh.mankad@oss.qualcomm.com>
+Date: Wed, 10 Jun 2026 11:46:58 +0530
+Subject: [PATCH 00876/15333] pinctrl: qcom: Avoid assigning unused private
+ context in test cases
+
+tlmm_test_rising_while_disabled() sets thread_op_remain to 10, but this
+variable is only used by the threaded IRQ handler to control the number
+of GPIO pin toggles. Since tlmm_test_rising_while_disabled() does not
+register a threaded IRQ handler, the assignment is never used.
+
+Similarly, tlmm_test_high() and tlmm_test_low() set intr_op_remain to 9,
+but the variable is used to denote the IRQ handler the number of times
+GPIO signal has to be toggled from the hard IRQ handler.
+
+Since tlmm_test_high() and tlmm_test_low() themselves toggle the
+signal and do not require the hard IRQ handler to do it, the assignment is
+never used.
+
+Remove the thread_op_remain assignment from
+tlmm_test_rising_while_disabled() and intr_op_remain assignment from
+tlmm_test_high() and tlmm_test_low() test cases.
+
+This does not cause any change in functionality.
+
+Signed-off-by: Sneh Mankad <sneh.mankad@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260610-tlmm_test_changes-v2-1-f34536da4717@oss.qualcomm.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/pinctrl/qcom/tlmm-test.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/drivers/pinctrl/qcom/tlmm-test.c b/drivers/pinctrl/qcom/tlmm-test.c
+index 007d6539cece..13c417731be7 100644
+--- a/drivers/pinctrl/qcom/tlmm-test.c
++++ b/drivers/pinctrl/qcom/tlmm-test.c
+@@ -273,7 +273,6 @@ static void tlmm_test_low(struct kunit *test)
+ 	int i;
+ 
+ 	priv->intr_op = TLMM_TEST_COUNT | TLMM_TEST_OUTPUT_HIGH;
+-	atomic_set(&priv->intr_op_remain, 9);
+ 
+ 	tlmm_output_high();
+ 
+@@ -298,7 +297,6 @@ static void tlmm_test_high(struct kunit *test)
+ 	int i;
+ 
+ 	priv->intr_op = TLMM_TEST_COUNT | TLMM_TEST_OUTPUT_LOW;
+-	atomic_set(&priv->intr_op_remain, 9);
+ 
+ 	tlmm_output_low();
+ 
+@@ -521,7 +519,6 @@ static void tlmm_test_rising_while_disabled(struct kunit *test)
+ 	unsigned int before_edge;
+ 
+ 	priv->intr_op = TLMM_TEST_COUNT;
+-	atomic_set(&priv->thread_op_remain, 10);
+ 
+ 	tlmm_output_low();
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,80 @@
+From bec2ec4186d0ce0a921ca23fc03969305fc76564 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:20:03 +0800
+Subject: [PATCH 12089/15333] spi: zynqmp-gqspi: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use __maybe_unused.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-40-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-zynqmp-gqspi.c | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/spi/spi-zynqmp-gqspi.c b/drivers/spi/spi-zynqmp-gqspi.c
+index f9a1427dabad..4d55090fa443 100644
+--- a/drivers/spi/spi-zynqmp-gqspi.c
++++ b/drivers/spi/spi-zynqmp-gqspi.c
+@@ -935,7 +935,7 @@ static int zynqmp_qspi_read_op(struct zynqmp_qspi *xqspi, u8 rx_nbits,
+  *
+  * Return:	Always 0
+  */
+-static int __maybe_unused zynqmp_qspi_suspend(struct device *dev)
++static int zynqmp_qspi_suspend(struct device *dev)
+ {
+ 	struct zynqmp_qspi *xqspi = dev_get_drvdata(dev);
+ 	struct spi_controller *ctlr = xqspi->ctlr;
+@@ -959,7 +959,7 @@ static int __maybe_unused zynqmp_qspi_suspend(struct device *dev)
+  *
+  * Return:	0 on success; error value otherwise
+  */
+-static int __maybe_unused zynqmp_qspi_resume(struct device *dev)
++static int zynqmp_qspi_resume(struct device *dev)
+ {
+ 	struct zynqmp_qspi *xqspi = dev_get_drvdata(dev);
+ 	struct spi_controller *ctlr = xqspi->ctlr;
+@@ -979,7 +979,7 @@ static int __maybe_unused zynqmp_qspi_resume(struct device *dev)
+  *
+  * Return:	Always 0
+  */
+-static int __maybe_unused zynqmp_runtime_suspend(struct device *dev)
++static int zynqmp_runtime_suspend(struct device *dev)
+ {
+ 	struct zynqmp_qspi *xqspi = dev_get_drvdata(dev);
+ 
+@@ -997,7 +997,7 @@ static int __maybe_unused zynqmp_runtime_suspend(struct device *dev)
+  *
+  * Return:	0 on success and error value on error
+  */
+-static int __maybe_unused zynqmp_runtime_resume(struct device *dev)
++static int zynqmp_runtime_resume(struct device *dev)
+ {
+ 	struct zynqmp_qspi *xqspi = dev_get_drvdata(dev);
+ 	int ret;
+@@ -1186,9 +1186,8 @@ static int zynqmp_qspi_exec_op(struct spi_mem *mem,
+ }
+ 
+ static const struct dev_pm_ops zynqmp_qspi_dev_pm_ops = {
+-	SET_RUNTIME_PM_OPS(zynqmp_runtime_suspend,
+-			   zynqmp_runtime_resume, NULL)
+-	SET_SYSTEM_SLEEP_PM_OPS(zynqmp_qspi_suspend, zynqmp_qspi_resume)
++	RUNTIME_PM_OPS(zynqmp_runtime_suspend, zynqmp_runtime_resume, NULL)
++	SYSTEM_SLEEP_PM_OPS(zynqmp_qspi_suspend, zynqmp_qspi_resume)
+ };
+ 
+ static const struct qspi_platform_data versal_qspi_def = {
+@@ -1382,7 +1381,7 @@ static struct platform_driver zynqmp_qspi_driver = {
+ 	.driver = {
+ 		.name = "zynqmp-qspi",
+ 		.of_match_table = zynqmp_qspi_of_match,
+-		.pm = &zynqmp_qspi_dev_pm_ops,
++		.pm = pm_ptr(&zynqmp_qspi_dev_pm_ops),
+ 	},
+ };
+ 
+-- 
+2.55.0
+

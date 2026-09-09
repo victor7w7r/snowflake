@@ -1,0 +1,36 @@
+From 9c65eeeb26b1d614787deec36faec81e45b8f8e8 Mon Sep 17 00:00:00 2001
+From: Nilay Shroff <nilay@linux.ibm.com>
+Date: Mon, 13 Jul 2026 17:24:11 +0530
+Subject: [PATCH 07792/15333] nvme: remove redundant initialization of
+ delayed_removal_secs
+
+nvme_ns_head is allocated with kzalloc(), so explicitly initializing
+nvme_ns_head::delayed_removal_secs to 0 in nvme_mpath_alloc_disk() is
+redundant.
+
+Removing the redundant initialization also avoids a false positive from
+Clang's context analysis once nvme_ns_head::delayed_removal_secs is
+annotated with __guarded_by(nvme_subsystem::lock).
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Nilay Shroff <nilay@linux.ibm.com>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/multipath.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/nvme/host/multipath.c b/drivers/nvme/host/multipath.c
+index fac6ea2311c1..091aceb9b1d8 100644
+--- a/drivers/nvme/host/multipath.c
++++ b/drivers/nvme/host/multipath.c
+@@ -740,7 +740,6 @@ int nvme_mpath_alloc_disk(struct nvme_ctrl *ctrl, struct nvme_ns_head *head)
+ 	INIT_WORK(&head->requeue_work, nvme_requeue_work);
+ 	INIT_WORK(&head->partition_scan_work, nvme_partition_scan_work);
+ 	INIT_DELAYED_WORK(&head->remove_work, nvme_remove_head_work);
+-	head->delayed_removal_secs = 0;
+ 
+ 	/*
+ 	 * If "multipath_always_on" is enabled, a multipath node is added
+-- 
+2.55.0
+

@@ -1,0 +1,55 @@
+From 0adc93b85374277514e5145970037e3a287b62dd Mon Sep 17 00:00:00 2001
+From: Gary Guo <gary@garyguo.net>
+Date: Mon, 6 Jul 2026 13:44:23 +0100
+Subject: [PATCH 03942/15333] pwm: th1520: remove unnecessary `deref`
+
+`Deref` is automatic and should normally not be used directly.
+Also, `IoMem` is going to be implementing `Io` directly, so it will no
+longer to be implementing `Deref`.
+
+Reported-by: Andreas Hindborg <a.hindborg@kernel.org>
+Link: https://rust-for-linux.zulipchat.com/#narrow/channel/291565-Help/topic/.E2.9C.94.20Projection.20in.20dma.20bus.20address.20space/near/606672061
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Signed-off-by: Gary Guo <gary@garyguo.net>
+Reviewed-by: Daniel Almeida <daniel.almeida@collabora.com>
+Link: https://patch.msgid.link/20260706-io_projection-v6-10-72cd5d055d54@garyguo.net
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/pwm/pwm_th1520.rs | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/pwm/pwm_th1520.rs b/drivers/pwm/pwm_th1520.rs
+index 3e3fa51ccef9..022338d17218 100644
+--- a/drivers/pwm/pwm_th1520.rs
++++ b/drivers/pwm/pwm_th1520.rs
+@@ -20,7 +20,6 @@
+ //!   this method is not used in this driver.
+ //!
+ 
+-use core::ops::Deref;
+ use kernel::{
+     clk::Clk,
+     device::{Bound, Core, Device},
+@@ -213,8 +212,7 @@ fn read_waveform(
+     ) -> Result<Self::WfHw> {
+         let data = chip.drvdata();
+         let hwpwm = pwm.hwpwm();
+-        let iomem_accessor = data.iomem.access(parent_dev)?;
+-        let iomap = iomem_accessor.deref();
++        let iomap = data.iomem.access(parent_dev)?;
+ 
+         let ctrl = iomap.try_read32(th1520_pwm_ctrl(hwpwm))?;
+         let period_cycles = iomap.try_read32(th1520_pwm_per(hwpwm))?;
+@@ -248,8 +246,7 @@ fn write_waveform(
+     ) -> Result {
+         let data = chip.drvdata();
+         let hwpwm = pwm.hwpwm();
+-        let iomem_accessor = data.iomem.access(parent_dev)?;
+-        let iomap = iomem_accessor.deref();
++        let iomap = data.iomem.access(parent_dev)?;
+         let duty_cycles = iomap.try_read32(th1520_pwm_fp(hwpwm))?;
+         let was_enabled = duty_cycles != 0;
+ 
+-- 
+2.55.0
+

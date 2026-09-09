@@ -1,0 +1,74 @@
+From 17ba75a0db653b10f9bdfe58673bad0c37b3cd21 Mon Sep 17 00:00:00 2001
+From: Austin Zheng <Austin.Zheng@amd.com>
+Date: Wed, 3 Jun 2026 16:38:51 -0400
+Subject: [PATCH 07852/15333] drm/amd/display: Add Writeback Watermarks and
+ Latency Fields
+
+Add fields that can used for writeback watermarks and latency margin
+
+Signed-off-by: Austin Zheng <Austin.Zheng@amd.com>
+Reviewed-by: Wayne Lin <Wayne.Lin@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/dc/dml2_0/dml21/inc/dml_top_types.h    | 1 +
+ .../dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.c       | 3 +++
+ .../dc/dml2_0/dml21/src/dml2_core/dml2_core_shared_types.h     | 2 ++
+ 3 files changed, 6 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/inc/dml_top_types.h b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/inc/dml_top_types.h
+index 8d7960a340c2..cdfb5cd09edb 100644
+--- a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/inc/dml_top_types.h
++++ b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/inc/dml_top_types.h
+@@ -457,6 +457,7 @@ struct dml2_display_cfg_programming {
+ 			double fclk_pstate_change_us;
+ 			double usr_retraining_us;
+ 			double temp_read_or_ppt_watermark_us;
++			double writeback_temp_read_or_ppt_watermark_us;
+ 		} watermarks;
+ 
+ 		struct {
+diff --git a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.c b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.c
+index 51a66e1be7a1..b667fc9ad75f 100644
+--- a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.c
++++ b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_dcn4_calcs.c
+@@ -317,6 +317,7 @@ dml_get_var_func(meta_trip_memory_us, double, mode_lib->mp.MetaTripToMemory);
+ dml_get_var_func(wm_fclk_change, double, mode_lib->mp.Watermark.FCLKChangeWatermark);
+ dml_get_var_func(wm_usr_retraining, double, mode_lib->mp.Watermark.USRRetrainingWatermark);
+ dml_get_var_func(wm_temp_read_or_ppt, double, mode_lib->mp.Watermark.temp_read_or_ppt_watermark_us);
++dml_get_var_func(wm_writeback_temp_read_or_ppt, double, mode_lib->mp.Watermark.writeback_temp_read_or_ppt_watermark_us);
+ dml_get_var_func(wm_dram_clock_change, double, mode_lib->mp.Watermark.DRAMClockChangeWatermark);
+ dml_get_var_func(fraction_of_urgent_bandwidth, double, mode_lib->mp.FractionOfUrgentBandwidth);
+ dml_get_var_func(fraction_of_urgent_bandwidth_imm_flip, double, mode_lib->mp.FractionOfUrgentBandwidthImmediateFlip);
+@@ -13230,6 +13231,8 @@ void dml2_core_calcs_get_informative(const struct dml2_core_internal_display_mod
+ 	out->informative.watermarks.fclk_pstate_change_us = dml_get_wm_fclk_change(mode_lib);
+ 	out->informative.watermarks.usr_retraining_us = dml_get_wm_usr_retraining(mode_lib);
+ 	out->informative.watermarks.temp_read_or_ppt_watermark_us = dml_get_wm_temp_read_or_ppt(mode_lib);
++	out->informative.watermarks.writeback_temp_read_or_ppt_watermark_us = dml_get_wm_writeback_temp_read_or_ppt(mode_lib);
++
+ 
+ 	out->informative.mall.total_surface_size_in_mall_bytes = 0;
+ 	out->informative.dpp.total_num_dpps_required = 0;
+diff --git a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_shared_types.h b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_shared_types.h
+index e9f970794488..131cec64aa48 100644
+--- a/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_shared_types.h
++++ b/drivers/gpu/drm/amd/display/dc/dml2_0/dml21/src/dml2_core/dml2_core_shared_types.h
+@@ -212,6 +212,7 @@ struct dml2_core_internal_watermarks {
+ 	double Z8StutterEnterPlusExitWatermark;
+ 	double USRRetrainingWatermark;
+ 	double temp_read_or_ppt_watermark_us;
++	double writeback_temp_read_or_ppt_watermark_us;
+ };
+ 
+ struct dml2_core_internal_mode_support_info {
+@@ -1269,6 +1270,7 @@ struct dml2_core_calcs_CalculateWatermarksMALLUseAndDRAMSpeedChangeSupport_local
+ 	double FullDETBufferingTimeC;
+ 	double WritebackDRAMClockChangeLatencyMargin;
+ 	double WritebackFCLKChangeLatencyMargin;
++	double WritebackTempReadOrPptLatencyMargin;
+ 	double WritebackLatencyHiding;
+ 
+ 	unsigned int TotalActiveWriteback;
+-- 
+2.55.0
+

@@ -1,0 +1,104 @@
+From de60121a08799c4db503d44a9028856976f1cfff Mon Sep 17 00:00:00 2001
+From: Frank Li <Frank.Li@nxp.com>
+Date: Mon, 13 Jul 2026 13:03:25 -0400
+Subject: [PATCH 04401/15333] dmaengine: dw-edma: Add non_ll_start() callback
+
+Add a non_ll_start() callback and move the common non-linked-list channel
+handling into the EDMA core so it can be shared by both the EDMA and HDMA.
+Prepare for the upcoming reorganization of the burst and chunk structures.
+
+Tested-by: Koichiro Den <den@valinux.co.jp>
+Tested-By: Devendra Verma <devendra.verma@amd.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260713-edma_ll-v7-7-6fb7498c901e@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dw-edma/dw-edma-core.h    | 12 +++++++++++-
+ drivers/dma/dw-edma/dw-hdma-v0-core.c | 23 ++++-------------------
+ 2 files changed, 15 insertions(+), 20 deletions(-)
+
+diff --git a/drivers/dma/dw-edma/dw-edma-core.h b/drivers/dma/dw-edma/dw-edma-core.h
+index bab4d49c92fe..e18d6e827c2c 100644
+--- a/drivers/dma/dw-edma/dw-edma-core.h
++++ b/drivers/dma/dw-edma/dw-edma-core.h
+@@ -126,6 +126,7 @@ struct dw_edma_core_ops {
+ 	irqreturn_t (*handle_int)(struct dw_edma_irq *dw_irq, enum dw_edma_dir dir,
+ 				  dw_edma_handler_t done, dw_edma_handler_t abort);
+ 	void (*start)(struct dw_edma_chunk *chunk, bool first);
++	void (*non_ll_start)(struct dw_edma_chan *chan, struct dw_edma_burst *child);
+ 	void (*ll_data)(struct dw_edma_chan *chan, struct dw_edma_burst *burst,
+ 			u32 idx, bool cb, bool irq);
+ 	void (*ll_link)(struct dw_edma_chan *chan, u32 idx, bool cb, u64 addr);
+@@ -201,7 +202,16 @@ dw_edma_core_handle_int(struct dw_edma_irq *dw_irq, enum dw_edma_dir dir,
+ static inline
+ void dw_edma_core_start(struct dw_edma *dw, struct dw_edma_chunk *chunk, bool first)
+ {
+-	dw->core->start(chunk, first);
++	if (chunk->chan->non_ll) {
++		struct dw_edma_burst *child;
++
++		child = list_first_entry_or_null(&chunk->burst->list,
++						 struct dw_edma_burst, list);
++		if (child)
++			dw->core->non_ll_start(chunk->chan, child);
++	} else {
++		dw->core->start(chunk, first);
++	}
+ }
+ 
+ static inline
+diff --git a/drivers/dma/dw-edma/dw-hdma-v0-core.c b/drivers/dma/dw-edma/dw-hdma-v0-core.c
+index 16fe3ef43948..641a513bc52e 100644
+--- a/drivers/dma/dw-edma/dw-hdma-v0-core.c
++++ b/drivers/dma/dw-edma/dw-hdma-v0-core.c
+@@ -272,18 +272,12 @@ static void dw_hdma_v0_core_ll_start(struct dw_edma_chunk *chunk, bool first)
+ 	SET_CH_32(dw, chan->dir, chan->id, doorbell, HDMA_V0_DOORBELL_START);
+ }
+ 
+-static void dw_hdma_v0_core_non_ll_start(struct dw_edma_chunk *chunk)
++static void dw_hdma_v0_core_non_ll_start(struct dw_edma_chan *chan,
++					 struct dw_edma_burst *child)
+ {
+-	struct dw_edma_chan *chan = chunk->chan;
+ 	struct dw_edma *dw = chan->dw;
+-	struct dw_edma_burst *child;
+ 	u32 val;
+ 
+-	child = list_first_entry_or_null(&chunk->burst->list,
+-					 struct dw_edma_burst, list);
+-	if (!child)
+-		return;
+-
+ 	SET_CH_32(dw, chan->dir, chan->id, ch_en, HDMA_V0_CH_EN);
+ 
+ 	/* Source address */
+@@ -324,16 +318,6 @@ static void dw_hdma_v0_core_non_ll_start(struct dw_edma_chunk *chunk)
+ 		  HDMA_V0_DOORBELL_START);
+ }
+ 
+-static void dw_hdma_v0_core_start(struct dw_edma_chunk *chunk, bool first)
+-{
+-	struct dw_edma_chan *chan = chunk->chan;
+-
+-	if (chan->non_ll)
+-		dw_hdma_v0_core_non_ll_start(chunk);
+-	else
+-		dw_hdma_v0_core_ll_start(chunk, first);
+-}
+-
+ static void dw_hdma_v0_core_ch_config(struct dw_edma_chan *chan)
+ {
+ 	struct dw_edma *dw = chan->dw;
+@@ -399,7 +383,8 @@ static const struct dw_edma_core_ops dw_hdma_v0_core = {
+ 	.ch_count = dw_hdma_v0_core_ch_count,
+ 	.ch_status = dw_hdma_v0_core_ch_status,
+ 	.handle_int = dw_hdma_v0_core_handle_int,
+-	.start = dw_hdma_v0_core_start,
++	.start = dw_hdma_v0_core_ll_start,
++	.non_ll_start = dw_hdma_v0_core_non_ll_start,
+ 	.ll_data = dw_hdma_v0_core_ll_data,
+ 	.ll_link = dw_hdma_v0_core_ll_link,
+ 	.ch_doorbell = dw_hdma_v0_core_ch_doorbell,
+-- 
+2.55.0
+

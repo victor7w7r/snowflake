@@ -1,0 +1,43 @@
+From 28b0d6897484aa6119ac63d813afd6f31d1b8246 Mon Sep 17 00:00:00 2001
+From: Jaehoon Kim <jhkim@linux.ibm.com>
+Date: Tue, 19 May 2026 11:49:33 -0500
+Subject: [PATCH 08354/15333] s390/pv: Enable SWIOTLB_ANY for s390 PV
+
+In s390 protected virtualization (PV) environments, guests use SWIOTLB
+for virtio DMA. Because SWIOTLB_ANY is currently not passed to
+swiotlb_init(), the SWIOTLB buffer is allocated from low memory, i.e.
+from the first 2G of the physical address space on s390.
+
+This restriction is unnecessary for s390 PV guests and limits the
+available address range for the SWIOTLB buffer. In turn, that can limit
+the maximum practical SWIOTLB size and make larger allocations more
+likely to fail at boot, especially under memory fragmentation.
+
+Pass SWIOTLB_ANY in pv_init() so the SWIOTLB buffer can be allocated
+from any suitable memory instead of being restricted to low memory.
+
+Signed-off-by: Jaehoon Kim <jhkim@linux.ibm.com>
+Acked-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+Reviewed-by: Halil Pasic <pasic@linux.ibm.com>
+Tested-by: Joshua Daley <jdaley@linux.ibm.com>
+Signed-off-by: Vasily Gorbik <gor@linux.ibm.com>
+---
+ arch/s390/mm/init.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/s390/mm/init.c b/arch/s390/mm/init.c
+index f07168a0d3dd..01050a8e7e05 100644
+--- a/arch/s390/mm/init.c
++++ b/arch/s390/mm/init.c
+@@ -151,7 +151,7 @@ static void __init pv_init(void)
+ 	virtio_set_mem_acc_cb(virtio_require_restricted_mem_acc);
+ 
+ 	/* make sure bounce buffers are shared */
+-	swiotlb_init(true, SWIOTLB_FORCE | SWIOTLB_VERBOSE);
++	swiotlb_init(true, SWIOTLB_FORCE | SWIOTLB_VERBOSE | SWIOTLB_ANY);
+ 	swiotlb_update_mem_attributes();
+ }
+ 
+-- 
+2.55.0
+

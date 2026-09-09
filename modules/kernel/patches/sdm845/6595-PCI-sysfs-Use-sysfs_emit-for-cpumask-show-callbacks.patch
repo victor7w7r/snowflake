@@ -1,0 +1,52 @@
+From 9e368c54216433b735456fc13058e49b7810f31f Mon Sep 17 00:00:00 2001
+From: Yury Norov <ynorov@nvidia.com>
+Date: Thu, 2 Jul 2026 11:47:22 -0400
+Subject: [PATCH 06595/15333] PCI/sysfs: Use sysfs_emit() for cpumask show
+ callbacks
+
+These callbacks are sysfs show paths.
+
+Use sysfs_emit() and cpumask_pr_args() to emit the masks.
+
+This prepares for removing cpumap_print_to_pagebuf().
+
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ drivers/pci/pci-sysfs.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/pci/pci-sysfs.c b/drivers/pci/pci-sysfs.c
+index 5ec0b245a69b..d6083552b287 100644
+--- a/drivers/pci/pci-sysfs.c
++++ b/drivers/pci/pci-sysfs.c
+@@ -112,7 +112,8 @@ static ssize_t pci_dev_show_local_cpu(struct device *dev, bool list,
+ #else
+ 	mask = cpumask_of_pcibus(to_pci_dev(dev)->bus);
+ #endif
+-	return cpumap_print_to_pagebuf(list, buf, mask);
++	return sysfs_emit(buf, list ? "%*pbl\n" : "%*pb\n",
++			  cpumask_pr_args(mask));
+ }
+ 
+ static ssize_t local_cpus_show(struct device *dev,
+@@ -137,7 +138,7 @@ static ssize_t cpuaffinity_show(struct device *dev,
+ {
+ 	const struct cpumask *cpumask = cpumask_of_pcibus(to_pci_bus(dev));
+ 
+-	return cpumap_print_to_pagebuf(false, buf, cpumask);
++	return sysfs_emit(buf, "%*pb\n", cpumask_pr_args(cpumask));
+ }
+ static DEVICE_ATTR_RO(cpuaffinity);
+ 
+@@ -146,7 +147,7 @@ static ssize_t cpulistaffinity_show(struct device *dev,
+ {
+ 	const struct cpumask *cpumask = cpumask_of_pcibus(to_pci_bus(dev));
+ 
+-	return cpumap_print_to_pagebuf(true, buf, cpumask);
++	return sysfs_emit(buf, "%*pbl\n", cpumask_pr_args(cpumask));
+ }
+ static DEVICE_ATTR_RO(cpulistaffinity);
+ 
+-- 
+2.55.0
+

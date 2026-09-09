@@ -1,0 +1,71 @@
+From 0510cb5b23037dbaaf57b8ddd6af32cbfc173ef2 Mon Sep 17 00:00:00 2001
+From: "Aneesh Kumar K.V (Arm)" <aneesh.kumar@kernel.org>
+Date: Fri, 17 Jul 2026 23:34:20 +0530
+Subject: [PATCH 08989/15333] dma-pool: fix page leak in atomic_pool_expand()
+ cleanup
+
+atomic_pool_expand() frees the allocated pages from the remove_mapping
+error path only when CONFIG_DMA_DIRECT_REMAP is enabled.
+
+When CONFIG_DMA_DIRECT_REMAP is disabled, failures after page allocation,
+such as gen_pool_add_virt(), jump to remove_mapping and return without
+freeing the pages.
+
+Move __free_pages(page, order) out of the CONFIG_DMA_DIRECT_REMAP block so
+that cleanup paths always release the allocation.
+
+Reviewed-by: Jason Gunthorpe <jgg@nvidia.com>
+Tested-by: Michael Kelley <mhklinux@outlook.com>
+Tested-by: Mostafa Saleh <smostafa@google.com>
+Signed-off-by: Aneesh Kumar K.V (Arm) <aneesh.kumar@kernel.org>
+Link: https://lore.kernel.org/r/20260717180442.110954-3-aneesh.kumar@kernel.org
+Signed-off-by: Marek Szyprowski <m.szyprowski@samsung.com>
+---
+ kernel/dma/pool.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/kernel/dma/pool.c b/kernel/dma/pool.c
+index 2b2fbb709242..b0303efbc153 100644
+--- a/kernel/dma/pool.c
++++ b/kernel/dma/pool.c
+@@ -81,6 +81,7 @@ static int atomic_pool_expand(struct gen_pool *pool, size_t pool_size,
+ {
+ 	unsigned int order;
+ 	struct page *page = NULL;
++	bool leak_pages = false;
+ 	void *addr;
+ 	int ret = -ENOMEM;
+ 
+@@ -115,8 +116,10 @@ static int atomic_pool_expand(struct gen_pool *pool, size_t pool_size,
+ 	 */
+ 	ret = set_memory_decrypted((unsigned long)page_to_virt(page),
+ 				   1 << order);
+-	if (ret)
++	if (ret) {
++		leak_pages = true;
+ 		goto remove_mapping;
++	}
+ 	ret = gen_pool_add_virt(pool, (unsigned long)addr, page_to_phys(page),
+ 				pool_size, NUMA_NO_NODE);
+ 	if (ret)
+@@ -130,14 +133,15 @@ static int atomic_pool_expand(struct gen_pool *pool, size_t pool_size,
+ 				   1 << order);
+ 	if (WARN_ON_ONCE(ret)) {
+ 		/* Decrypt succeeded but encrypt failed, purposely leak */
+-		goto out;
++		leak_pages = true;
+ 	}
+ remove_mapping:
+ #ifdef CONFIG_DMA_DIRECT_REMAP
+ 	dma_common_free_remap(addr, pool_size);
+ free_page:
+-	__free_pages(page, order);
+ #endif
++	if (!leak_pages)
++		__free_pages(page, order);
+ out:
+ 	return ret;
+ }
+-- 
+2.55.0
+

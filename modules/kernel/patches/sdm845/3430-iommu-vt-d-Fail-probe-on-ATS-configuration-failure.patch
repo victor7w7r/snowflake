@@ -1,0 +1,62 @@
+From eab000d501af568fe98d760f16eadd43d219df50 Mon Sep 17 00:00:00 2001
+From: Pranjal Shrivastava <praan@google.com>
+Date: Mon, 15 Jun 2026 23:50:37 +0000
+Subject: [PATCH 03430/15333] iommu/vt-d: Fail probe on ATS configuration
+ failure
+
+Update the Intel VT-d driver to handle ATS configuration and enablement
+more strictly. Specifically, update the device probe to fail if
+pci_prepare_ats() returns an error. This ensures that any ATS-capable
+master reaching the attach phase is guaranteed to have a valid config.
+
+Additionally, update iommu_enable_pci_ats() to WARN() if pci_enable_ats
+fails. Since earlier checks in the probe phase preclude config-related
+failures, any failure during hardware enablement is considered a kernel
+bug.
+
+Reviewed-by: Lu Baolu <baolu.lu@linux.intel.com>
+Reviewed-by: Kevin Tian <kevin.tian@intel.com>
+Reviewed-by: Samiullah Khawaja <skhawaja@google.com>
+Reviewed-by: Jason Gunthorpe <jgg@nvidia.com>
+Signed-off-by: Pranjal Shrivastava <praan@google.com>
+Signed-off-by: Joerg Roedel <joerg.roedel@amd.com>
+---
+ drivers/iommu/intel/iommu.c | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 849d06dfe1ae..f39451323553 100644
+--- a/drivers/iommu/intel/iommu.c
++++ b/drivers/iommu/intel/iommu.c
+@@ -876,8 +876,14 @@ static void iommu_enable_pci_ats(struct device_domain_info *info)
+ 	if (!pci_ats_page_aligned(pdev))
+ 		return;
+ 
+-	if (!pci_enable_ats(pdev, VTD_PAGE_SHIFT))
+-		info->ats_enabled = 1;
++	/*
++	 * pci_enable_ats() should not fail here because earlier checks
++	 * have already verified support and configuration.
++	 */
++	if (WARN_ON(pci_enable_ats(pdev, VTD_PAGE_SHIFT)))
++		return;
++
++	info->ats_enabled = 1;
+ }
+ 
+ static void iommu_disable_pci_ats(struct device_domain_info *info)
+@@ -3292,7 +3298,10 @@ static struct iommu_device *intel_iommu_probe_device(struct device *dev)
+ 
+ 	dev_iommu_priv_set(dev, info);
+ 	if (pdev && pci_ats_supported(pdev)) {
+-		pci_prepare_ats(pdev, VTD_PAGE_SHIFT);
++		ret = pci_prepare_ats(pdev, VTD_PAGE_SHIFT);
++		if (ret)
++			goto free;
++
+ 		ret = device_rbtree_insert(iommu, info);
+ 		if (ret)
+ 			goto free;
+-- 
+2.55.0
+

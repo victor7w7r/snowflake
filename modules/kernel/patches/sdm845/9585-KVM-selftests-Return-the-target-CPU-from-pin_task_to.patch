@@ -1,0 +1,60 @@
+From 8de0e85f654ee3f5d2db5d69a9ece040e7de0301 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 31 Jul 2026 12:56:04 -0700
+Subject: [PATCH 09585/15333] KVM: selftests: Return the target CPU from
+ pin_task_to_random_cpu()
+
+When pinning a task to a random CPU, return which CPU the task was pinned
+to so that the caller can do things like avoid running other tasks on the
+target CPU.
+
+Link: https://patch.msgid.link/20260731195612.2697986-5-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ tools/testing/selftests/kvm/include/kvm_util.h | 2 +-
+ tools/testing/selftests/kvm/lib/kvm_util.c     | 5 +++--
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/tools/testing/selftests/kvm/include/kvm_util.h b/tools/testing/selftests/kvm/include/kvm_util.h
+index b39e713c30a4..61d72e1e7601 100644
+--- a/tools/testing/selftests/kvm/include/kvm_util.h
++++ b/tools/testing/selftests/kvm/include/kvm_util.h
+@@ -1094,7 +1094,7 @@ static inline void pin_task_to_cpu(pthread_t task, int cpu)
+ 	TEST_ASSERT(!r, "Failed to set thread affinity to pCPU '%u'", cpu);
+ }
+ 
+-void pin_task_to_random_cpu(pthread_t task, cpu_set_t *possible_cpus);
++int pin_task_to_random_cpu(pthread_t task, cpu_set_t *possible_cpus);
+ 
+ static inline int pin_task_to_any_cpu(pthread_t task)
+ {
+diff --git a/tools/testing/selftests/kvm/lib/kvm_util.c b/tools/testing/selftests/kvm/lib/kvm_util.c
+index 3794575d2ca0..af2bad0553f9 100644
+--- a/tools/testing/selftests/kvm/lib/kvm_util.c
++++ b/tools/testing/selftests/kvm/lib/kvm_util.c
+@@ -668,7 +668,7 @@ void kvm_print_vcpu_pinning_help(void)
+ 	       "     (default: no pinning)\n", name, name);
+ }
+ 
+-void pin_task_to_random_cpu(pthread_t task, cpu_set_t *possible_cpus)
++int pin_task_to_random_cpu(pthread_t task, cpu_set_t *possible_cpus)
+ {
+ 	int target_idx;
+ 	int nr_cpus;
+@@ -682,11 +682,12 @@ void pin_task_to_random_cpu(pthread_t task, cpu_set_t *possible_cpus)
+ 	for (cpu = 0; cpu < CPU_SETSIZE; cpu++) {
+ 		if (CPU_ISSET(cpu, possible_cpus) && target_idx-- == 0) {
+ 			pin_task_to_cpu(task, cpu);
+-			return;
++			return cpu;
+ 		}
+ 	}
+ 
+ 	TEST_FAIL("Failed to find random CPU in possible_cpus");
++	return -1;
+ }
+ 
+ void kvm_parse_vcpu_pinning(const char *pcpus_string, u32 vcpu_to_pcpu[],
+-- 
+2.55.0
+

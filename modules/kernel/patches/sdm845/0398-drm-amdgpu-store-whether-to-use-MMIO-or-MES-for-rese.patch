@@ -1,0 +1,104 @@
+From 026825998817993c354c581e163a4fb59121907f Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Tue, 19 May 2026 17:36:09 -0400
+Subject: [PATCH 00398/15333] drm/amdgpu: store whether to use MMIO or MES for
+ reset
+
+Separate settings for gfx (ME) and compute (MEC).
+Use this rather than explicitly specifying it.
+
+Reviewed-by: Jesse Zhang <jesse.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.h | 2 ++
+ drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c  | 7 +++++--
+ drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c  | 7 +++++--
+ 3 files changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.h
+index ab54dc46e4e3..60679615c317 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.h
+@@ -116,6 +116,7 @@ struct amdgpu_mec {
+ 	u32 num_pipe_per_mec;
+ 	u32 num_queue_per_pipe;
+ 	void			*mqd_backup[AMDGPU_MAX_COMPUTE_RINGS * AMDGPU_MAX_GC_INSTANCES];
++	bool use_mmio_for_reset;
+ };
+ 
+ struct amdgpu_mec_bitmap {
+@@ -401,6 +402,7 @@ struct amdgpu_me {
+ 	uint32_t			num_pipe_per_me;
+ 	uint32_t			num_queue_per_pipe;
+ 	void				*mqd_backup[AMDGPU_MAX_GFX_RINGS];
++	bool				use_mmio_for_reset;
+ 
+ 	/* These are the resources for which amdgpu takes ownership */
+ 	DECLARE_BITMAP(queue_bitmap, AMDGPU_MAX_GFX_QUEUES);
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
+index 2594fadb26ac..0751199b8e42 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v11_0.c
+@@ -1911,6 +1911,9 @@ static int gfx_v11_0_sw_init(struct amdgpu_ip_block *ip_block)
+ 	if (r)
+ 		return r;
+ 
++	adev->gfx.me.use_mmio_for_reset = false;
++	adev->gfx.mec.use_mmio_for_reset = true;
++
+ 	return 0;
+ }
+ 
+@@ -6819,7 +6822,7 @@ static int gfx_v11_0_reset_kgq(struct amdgpu_ring *ring,
+ 			       struct amdgpu_fence *timedout_fence)
+ {
+ 	struct amdgpu_device *adev = ring->adev;
+-	bool use_mmio = false;
++	bool use_mmio = adev->gfx.me.use_mmio_for_reset;
+ 	int r;
+ 
+ 	amdgpu_ring_reset_helper_begin(ring, timedout_fence);
+@@ -6850,7 +6853,7 @@ static int gfx_v11_0_reset_kcq(struct amdgpu_ring *ring,
+ 			       struct amdgpu_fence *timedout_fence)
+ {
+ 	struct amdgpu_device *adev = ring->adev;
+-	bool use_mmio = true;
++	bool use_mmio = adev->gfx.mec.use_mmio_for_reset;
+ 	int r = 0;
+ 
+ 	amdgpu_ring_reset_helper_begin(ring, timedout_fence);
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c
+index af15908c9b19..14ce595a5df9 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v12_0.c
+@@ -1603,6 +1603,9 @@ static int gfx_v12_0_sw_init(struct amdgpu_ip_block *ip_block)
+ 	if (r)
+ 		return r;
+ 
++	adev->gfx.me.use_mmio_for_reset = false;
++	adev->gfx.mec.use_mmio_for_reset = true;
++
+ 	return 0;
+ }
+ 
+@@ -5245,7 +5248,7 @@ static int gfx_v12_0_reset_kgq(struct amdgpu_ring *ring,
+ 			       struct amdgpu_fence *timedout_fence)
+ {
+ 	struct amdgpu_device *adev = ring->adev;
+-	bool use_mmio = false;
++	bool use_mmio = adev->gfx.me.use_mmio_for_reset;
+ 	int r;
+ 
+ 	amdgpu_ring_reset_helper_begin(ring, timedout_fence);
+@@ -5276,7 +5279,7 @@ static int gfx_v12_0_reset_kcq(struct amdgpu_ring *ring,
+ 			       struct amdgpu_fence *timedout_fence)
+ {
+ 	struct amdgpu_device *adev = ring->adev;
+-	bool use_mmio = true;
++	bool use_mmio = adev->gfx.mec.use_mmio_for_reset;
+ 	int r;
+ 
+ 	amdgpu_ring_reset_helper_begin(ring, timedout_fence);
+-- 
+2.55.0
+

@@ -1,0 +1,63 @@
+From 0f1dabb7af982dae9325a005297785a792b51223 Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Wed, 24 Jun 2026 13:56:12 +0800
+Subject: [PATCH 03617/15333] usb: dwc3: am62: Propagate USB2 refclk enable
+ failures
+
+The AM62 wrapper requires the USB2 ref clock, but dwc3_ti_init() ignores
+clk_prepare_enable() failures before marking the mode valid.  Probe can
+then populate the child DWC3 device even though the wrapper clock
+transition failed.
+
+Resume has the same issue after context loss or direct refclk re-enable.
+Check and propagate the refclk enable errors so the wrapper does not
+publish or resume a child provider without parent readiness.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Acked-by: Thinh Nguyen <Thinh.Nguyen@synopsys.com>
+Link: https://patch.msgid.link/20260624055612.43319-1-pengpeng@iscas.ac.cn
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/usb/dwc3/dwc3-am62.c | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/usb/dwc3/dwc3-am62.c b/drivers/usb/dwc3/dwc3-am62.c
+index e11d7643f966..632634d6e81e 100644
+--- a/drivers/usb/dwc3/dwc3-am62.c
++++ b/drivers/usb/dwc3/dwc3-am62.c
+@@ -205,7 +205,9 @@ static int dwc3_ti_init(struct dwc3_am62 *am62)
+ 
+ 	dwc3_ti_writel(am62, USBSS_PHY_CONFIG, reg);
+ 
+-	clk_prepare_enable(am62->usb2_refclk);
++	ret = clk_prepare_enable(am62->usb2_refclk);
++	if (ret)
++		return ret;
+ 
+ 	/* Set mode valid bit to indicate role is valid */
+ 	reg = dwc3_ti_readl(am62, USBSS_MODE_CONTROL);
+@@ -361,14 +363,19 @@ static int dwc3_ti_resume_common(struct device *dev)
+ {
+ 	struct dwc3_am62 *am62 = dev_get_drvdata(dev);
+ 	u32 reg;
++	int ret;
+ 
+ 	reg = dwc3_ti_readl(am62, USBSS_DEBUG_CFG);
+ 	if (reg != USBSS_DEBUG_CFG_DISABLED) {
+ 		/* lost power/context */
+-		dwc3_ti_init(am62);
++		ret = dwc3_ti_init(am62);
++		if (ret)
++			return ret;
+ 	} else {
+ 		dwc3_ti_writel(am62, USBSS_DEBUG_CFG, USBSS_DEBUG_CFG_OFF);
+-		clk_prepare_enable(am62->usb2_refclk);
++		ret = clk_prepare_enable(am62->usb2_refclk);
++		if (ret)
++			return ret;
+ 	}
+ 
+ 	if (device_may_wakeup(dev)) {
+-- 
+2.55.0
+

@@ -1,0 +1,74 @@
+From d6c5e4accf3897a5e4565da73da0387b3d2a944a Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 31 Jul 2026 10:06:25 +0700
+Subject: [PATCH 09505/15333] ASoC: codecs: sta32x: Use guard() for mutex locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/20260731030648.8706-4-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/sta32x.c | 21 +++++++++------------
+ 1 file changed, 9 insertions(+), 12 deletions(-)
+
+diff --git a/sound/soc/codecs/sta32x.c b/sound/soc/codecs/sta32x.c
+index 652c6e3a9e63..d6de739212f9 100644
+--- a/sound/soc/codecs/sta32x.c
++++ b/sound/soc/codecs/sta32x.c
+@@ -17,6 +17,7 @@
+ #include <linux/module.h>
+ #include <linux/moduleparam.h>
+ #include <linux/init.h>
++#include <linux/cleanup.h>
+ #include <linux/clk.h>
+ #include <linux/delay.h>
+ #include <linux/pm.h>
+@@ -269,9 +270,9 @@ static int sta32x_coefficient_get(struct snd_kcontrol *kcontrol,
+ 	int numcoef = kcontrol->private_value >> 16;
+ 	int index = kcontrol->private_value & 0xffff;
+ 	unsigned int cfud, val;
+-	int i, ret = 0;
++	int i;
+ 
+-	mutex_lock(&sta32x->coeff_lock);
++	guard(mutex)(&sta32x->coeff_lock);
+ 
+ 	/* preserve reserved bits in STA32X_CFUD */
+ 	regmap_read(sta32x->regmap, STA32X_CFUD, &cfud);
+@@ -283,24 +284,20 @@ static int sta32x_coefficient_get(struct snd_kcontrol *kcontrol,
+ 	regmap_write(sta32x->regmap, STA32X_CFUD, cfud);
+ 
+ 	regmap_write(sta32x->regmap, STA32X_CFADDR2, index);
+-	if (numcoef == 1) {
++	if (numcoef == 1)
+ 		regmap_write(sta32x->regmap, STA32X_CFUD, cfud | 0x04);
+-	} else if (numcoef == 5) {
++	else if (numcoef == 5)
+ 		regmap_write(sta32x->regmap, STA32X_CFUD, cfud | 0x08);
+-	} else {
+-		ret = -EINVAL;
+-		goto exit_unlock;
+-	}
++	else
++		return -EINVAL;
++
+ 
+ 	for (i = 0; i < 3 * numcoef; i++) {
+ 		regmap_read(sta32x->regmap, STA32X_B1CF1 + i, &val);
+ 		ucontrol->value.bytes.data[i] = val;
+ 	}
+ 
+-exit_unlock:
+-	mutex_unlock(&sta32x->coeff_lock);
+-
+-	return ret;
++	return 0;
+ }
+ 
+ static int sta32x_coefficient_put(struct snd_kcontrol *kcontrol,
+-- 
+2.55.0
+

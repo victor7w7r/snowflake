@@ -1,0 +1,37 @@
+From 0c277410f5314bab45f92051b246d39d02923b64 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Tue, 9 Jun 2026 17:30:29 -0700
+Subject: [PATCH 00570/15333] KVM: selftests: Add a helper to query
+ enable_mediated_pmu module param
+
+Add a utility to check whether or not the mediated PMU is enabled, pivoting
+on Intel vs. AMD since the module param is defined by vendor code.
+
+Link: https://patch.msgid.link/20260610003030.2957261-5-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ tools/testing/selftests/kvm/include/x86/processor.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/tools/testing/selftests/kvm/include/x86/processor.h b/tools/testing/selftests/kvm/include/x86/processor.h
+index e5a602c87273..7d3a27bc0d84 100644
+--- a/tools/testing/selftests/kvm/include/x86/processor.h
++++ b/tools/testing/selftests/kvm/include/x86/processor.h
+@@ -1394,6 +1394,14 @@ static inline bool kvm_is_pmu_enabled(void)
+ 	return get_kvm_param_bool("enable_pmu");
+ }
+ 
++static inline bool kvm_is_mediated_pmu_enabled(void)
++{
++	if (host_cpu_is_intel)
++		return get_kvm_intel_param_bool("enable_mediated_pmu");
++
++	return get_kvm_amd_param_bool("enable_mediated_pmu");
++}
++
+ static inline bool kvm_is_forced_emulation_enabled(void)
+ {
+ 	return !!get_kvm_param_integer("force_emulation_prefix");
+-- 
+2.55.0
+

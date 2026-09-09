@@ -1,0 +1,121 @@
+From bfad9937de98755fa73bba4181e1de05069e7d54 Mon Sep 17 00:00:00 2001
+From: Marcelo Mendes Spessoto Junior <marcelomspessoto@gmail.com>
+Date: Fri, 7 Aug 2026 19:09:38 -0300
+Subject: [PATCH 13403/15333] selftests: net: test IPV6_FL_A_RENEW
+
+RENEW was the only flow label action without selftests coverage.
+
+Assert renew returns no error on correct usage and fails for labels
+that do not exist.
+
+This test is based on the previously implemented EXCL share test,
+which demonstrates that a new flow label with the same value can be
+created after the linger period. Renew is used here to show that a
+flow label can last longer and block a new flow label creation after
+the previous linger time. This test, however, demands sleep during
+execution, and should be placed as a conditional test under the -l
+option.
+
+The addition of the expect_fail_errno helper is necessary to assert
+the corresponding error when a function can fail in multiple ways.
+
+Signed-off-by: Marcelo Mendes Spessoto Junior <marcelomspessoto@gmail.com>
+Link: https://patch.msgid.link/20260807220942.421382-2-marcelomspessoto@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ .../selftests/net/ipv6_flowlabel_mgr.c        | 58 ++++++++++++++++++-
+ 1 file changed, 57 insertions(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/net/ipv6_flowlabel_mgr.c b/tools/testing/selftests/net/ipv6_flowlabel_mgr.c
+index af95b48acea9..ec187890a1ed 100644
+--- a/tools/testing/selftests/net/ipv6_flowlabel_mgr.c
++++ b/tools/testing/selftests/net/ipv6_flowlabel_mgr.c
+@@ -42,6 +42,23 @@
+ #define expect_pass(x)	__expect(x)
+ #define expect_fail(x)	__expect(!(x))
+ 
++#define expect_fail_errno(x, e)						\
++	do {								\
++		int __exp = (e);					\
++		int __ret = (x);					\
++		int __err = errno;					\
++		if (__ret && __err == __exp)				\
++			fprintf(stderr, "[OK]   " #x "\n");		\
++		else if (!__ret)					\
++			error(1, 0, "[ERR]  " #x			\
++			      " (line %d): unexpectedly succeeded",	\
++			      __LINE__);				\
++		else							\
++			error(1, 0, "[ERR]  " #x			\
++			      " (line %d): expected errno %d, got %d",	\
++			      __LINE__, __exp, __err);			\
++	} while (0)
++
+ static bool cfg_long_running;
+ static bool cfg_verbose;
+ 
+@@ -71,6 +88,19 @@ static int flowlabel_put(int fd, uint32_t label)
+ 	return setsockopt(fd, SOL_IPV6, IPV6_FLOWLABEL_MGR, &req, sizeof(req));
+ }
+ 
++static int flowlabel_renew(int fd, uint32_t label, uint8_t share,
++			   uint16_t linger)
++{
++	struct in6_flowlabel_req req = {
++		.flr_action = IPV6_FL_A_RENEW,
++		.flr_label = htonl(label),
++		.flr_share = share,
++		.flr_linger = linger,
++	};
++
++	return setsockopt(fd, SOL_IPV6, IPV6_FLOWLABEL_MGR, &req, sizeof(req));
++}
++
+ static void run_tests(int fd)
+ {
+ 	int wstatus;
+@@ -94,7 +124,7 @@ static void run_tests(int fd)
+ 	expect_pass(flowlabel_get(fd, 1, IPV6_FL_S_ANY, IPV6_FL_F_CREATE));
+ 	explain("cannot get it again with the exclusive (FL_FL_EXCL) flag");
+ 	expect_fail(flowlabel_get(fd, 1, IPV6_FL_S_ANY,
+-					 IPV6_FL_F_CREATE | IPV6_FL_F_EXCL));
++				  IPV6_FL_F_CREATE | IPV6_FL_F_EXCL));
+ 	explain("can now put exactly three references");
+ 	expect_pass(flowlabel_put(fd, 1));
+ 	expect_pass(flowlabel_put(fd, 1));
+@@ -160,6 +190,32 @@ static void run_tests(int fd)
+ 		error(1, errno, "wait");
+ 	if (!WIFEXITED(wstatus) || WEXITSTATUS(wstatus) != 0)
+ 		error(1, errno, "wait: unexpected child result");
++
++	explain("It is not possible to renew a label that does not exist");
++	expect_fail_errno(flowlabel_renew(fd, 5, IPV6_FL_S_EXCL,
++					  2 * (FL_MIN_LINGER * 2 + 1)),
++			  ESRCH);
++
++	explain("Create a label for basic renew validation");
++	expect_pass(flowlabel_get(fd, 5, IPV6_FL_S_EXCL, IPV6_FL_F_CREATE));
++	explain("renew does not error for an existing, valid label");
++	expect_pass(flowlabel_renew(fd, 5, IPV6_FL_S_EXCL,
++				    2 * (FL_MIN_LINGER * 2 + 1)));
++
++	if (cfg_long_running) {
++		explain("create a new label with FL_MIN_LINGER linger time");
++		expect_pass(flowlabel_get(fd, 6, IPV6_FL_S_EXCL,
++					  IPV6_FL_F_CREATE));
++		explain("renew the label to extend linger, then put it");
++		expect_pass(flowlabel_renew(fd, 6, IPV6_FL_S_EXCL,
++					    2 * (FL_MIN_LINGER * 2 + 1)));
++		expect_pass(flowlabel_put(fd, 6));
++		sleep(FL_MIN_LINGER * 2 + 1);
++		explain("cannot create: new linger time not over yet");
++		expect_fail_errno(flowlabel_get(fd, 6, IPV6_FL_S_ANY,
++						IPV6_FL_F_CREATE),
++				  EPERM);
++	}
+ }
+ 
+ static void parse_opts(int argc, char **argv)
+-- 
+2.55.0
+

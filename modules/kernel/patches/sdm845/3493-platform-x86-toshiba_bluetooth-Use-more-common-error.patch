@@ -1,0 +1,42 @@
+From 71eb3db934d779c3a2e397025068088994afb94e Mon Sep 17 00:00:00 2001
+From: Markus Elfring <elfring@users.sourceforge.net>
+Date: Wed, 17 Jun 2026 10:50:15 +0200
+Subject: [PATCH 03493/15333] platform/x86: toshiba_bluetooth: Use more common
+ error handling code in toshiba_bt_rfkill_probe()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use an existing label once more so that a bit of exception handling can be
+better reused at the end of this function implementation.
+
+This issue was detected by using the Coccinelle software.
+
+Signed-off-by: Markus Elfring <elfring@users.sourceforge.net>
+Link: https://patch.msgid.link/fa7a5865-6dda-4305-ab48-e0c9310520c8@web.de
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/x86/toshiba_bluetooth.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/platform/x86/toshiba_bluetooth.c b/drivers/platform/x86/toshiba_bluetooth.c
+index e00abba58c7c..bf199fba4999 100644
+--- a/drivers/platform/x86/toshiba_bluetooth.c
++++ b/drivers/platform/x86/toshiba_bluetooth.c
+@@ -252,10 +252,8 @@ static int toshiba_bt_rfkill_probe(struct platform_device *pdev)
+ 	platform_set_drvdata(pdev, bt_dev);
+ 
+ 	result = toshiba_bluetooth_sync_status(bt_dev);
+-	if (result) {
+-		kfree(bt_dev);
+-		return result;
+-	}
++	if (result)
++		goto err_free_bt_dev;
+ 
+ 	bt_dev->rfk = rfkill_alloc("Toshiba Bluetooth",
+ 				   &pdev->dev,
+-- 
+2.55.0
+

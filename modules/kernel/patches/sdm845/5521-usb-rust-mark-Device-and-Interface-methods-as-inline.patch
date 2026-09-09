@@ -1,0 +1,79 @@
+From caad28c0816fe212564362cdc176aea5c506f839 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Nicol=C3=A1s=20Antinori?= <nico.antinori.7@gmail.com>
+Date: Tue, 16 Jun 2026 19:36:06 -0300
+Subject: [PATCH 05521/15333] usb: rust: mark Device and Interface methods as
+ inline
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When building the kernel using llvm-19.1.7-rust-1.85.1-x86_64, the
+following symbols are generated:
+
+$ nm vmlinux | grep ' _R'.*usb.*Device | rustfilt
+...
+ffffffff823f2490 T <kernel::usb::Device as kernel::sync::aref::AlwaysRefCounted>::dec_ref
+ffffffff823f2470 T <kernel::usb::Device as kernel::sync::aref::AlwaysRefCounted>::inc_ref
+...
+
+$ nm vmlinux | grep ' _R'.*usb.*Interface | rustfilt
+ffffffff823f2450 T <kernel::usb::Interface as kernel::sync::aref::AlwaysRefCounted>::dec_ref
+ffffffff823f2430 T <kernel::usb::Interface as kernel::sync::aref::AlwaysRefCounted>::inc_ref
+...
+
+However, these Rust symbols are trivial wrappers around the
+`usb_get_dev`, `usb_put_dev`, `usb_get_intf` and `usb_put_intf`
+functions. It doesn't make sense to go through a trivial wrapper
+for these functions.
+
+Link: https://github.com/Rust-for-Linux/linux/issues/1145
+Suggested-by: Alice Ryhl <aliceryhl@google.com>
+Signed-off-by: Nicolás Antinori <nico.antinori.7@gmail.com>
+Reviewed-by: Daniel Almeida <daniel.almeida@collabora.com>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Link: https://patch.msgid.link/20260616223614.16444-1-nico.antinori.7@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ rust/kernel/usb.rs | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/rust/kernel/usb.rs b/rust/kernel/usb.rs
+index bbf85366d2c9..6dfdd64dd617 100644
+--- a/rust/kernel/usb.rs
++++ b/rust/kernel/usb.rs
+@@ -382,6 +382,7 @@ fn as_ref(&self) -> &Device {
+ 
+ // SAFETY: Instances of `Interface` are always reference-counted.
+ unsafe impl AlwaysRefCounted for Interface {
++    #[inline]
+     fn inc_ref(&self) {
+         // SAFETY: The invariants of `Interface` guarantee that `self.as_raw()`
+         // returns a valid `struct usb_interface` pointer, for which we will
+@@ -389,6 +390,7 @@ fn inc_ref(&self) {
+         unsafe { bindings::usb_get_intf(self.as_raw()) };
+     }
+ 
++    #[inline]
+     unsafe fn dec_ref(obj: NonNull<Self>) {
+         // SAFETY: The safety requirements guarantee that the refcount is non-zero.
+         unsafe { bindings::usb_put_intf(obj.cast().as_ptr()) }
+@@ -433,6 +435,7 @@ fn as_raw(&self) -> *mut bindings::usb_device {
+ 
+ // SAFETY: Instances of `Device` are always reference-counted.
+ unsafe impl AlwaysRefCounted for Device {
++    #[inline]
+     fn inc_ref(&self) {
+         // SAFETY: The invariants of `Device` guarantee that `self.as_raw()`
+         // returns a valid `struct usb_device` pointer, for which we will
+@@ -440,6 +443,7 @@ fn inc_ref(&self) {
+         unsafe { bindings::usb_get_dev(self.as_raw()) };
+     }
+ 
++    #[inline]
+     unsafe fn dec_ref(obj: NonNull<Self>) {
+         // SAFETY: The safety requirements guarantee that the refcount is non-zero.
+         unsafe { bindings::usb_put_dev(obj.cast().as_ptr()) }
+-- 
+2.55.0
+

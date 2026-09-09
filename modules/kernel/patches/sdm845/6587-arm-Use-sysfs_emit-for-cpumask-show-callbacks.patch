@@ -1,0 +1,46 @@
+From 1a9adacbbb1b034bfd6de9a552134423f0e41658 Mon Sep 17 00:00:00 2001
+From: Yury Norov <ynorov@nvidia.com>
+Date: Thu, 2 Jul 2026 11:47:14 -0400
+Subject: [PATCH 06587/15333] arm: Use sysfs_emit() for cpumask show callbacks
+
+These callbacks are sysfs show paths.
+
+Use sysfs_emit() and cpumask_pr_args() to emit the masks.
+
+This prepares for removing cpumap_print_to_pagebuf().
+
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ arch/arm/mach-imx/mmdc.c     | 2 +-
+ arch/arm/mm/cache-l2x0-pmu.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/mach-imx/mmdc.c b/arch/arm/mach-imx/mmdc.c
+index b71467c48b87..f6d993b9b1d4 100644
+--- a/arch/arm/mach-imx/mmdc.c
++++ b/arch/arm/mach-imx/mmdc.c
+@@ -127,7 +127,7 @@ static ssize_t mmdc_pmu_cpumask_show(struct device *dev,
+ {
+ 	struct mmdc_pmu *pmu_mmdc = dev_get_drvdata(dev);
+ 
+-	return cpumap_print_to_pagebuf(true, buf, &pmu_mmdc->cpu);
++	return sysfs_emit(buf, "%*pbl\n", cpumask_pr_args(&pmu_mmdc->cpu));
+ }
+ 
+ static struct device_attribute mmdc_pmu_cpumask_attr =
+diff --git a/arch/arm/mm/cache-l2x0-pmu.c b/arch/arm/mm/cache-l2x0-pmu.c
+index 3d9caf7464bf..478227078837 100644
+--- a/arch/arm/mm/cache-l2x0-pmu.c
++++ b/arch/arm/mm/cache-l2x0-pmu.c
+@@ -390,7 +390,7 @@ static struct attribute_group l2x0_pmu_event_attrs_group = {
+ static ssize_t l2x0_pmu_cpumask_show(struct device *dev,
+ 				     struct device_attribute *attr, char *buf)
+ {
+-	return cpumap_print_to_pagebuf(true, buf, &pmu_cpu);
++	return sysfs_emit(buf, "%*pbl\n", cpumask_pr_args(&pmu_cpu));
+ }
+ 
+ static struct device_attribute l2x0_pmu_cpumask_attr =
+-- 
+2.55.0
+

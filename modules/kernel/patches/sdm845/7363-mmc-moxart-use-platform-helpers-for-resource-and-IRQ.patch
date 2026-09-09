@@ -1,0 +1,108 @@
+From 08f4661d40f41d6bfb94da1907eb3f7f172e652f Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Wed, 22 Jul 2026 13:46:43 -0700
+Subject: [PATCH 07363/15333] mmc: moxart: use platform helpers for resource
+ and IRQ
+
+Replace of_address_to_resource() and the following devm_ioremap_resource()
+with a single devm_platform_get_and_ioremap_resource() call in
+moxart_probe(). This requests the register region and maps it once, which
+is equivalent to the previous devm_ioremap_resource() behavior, and drops
+the now-redundant separate resource lookup.
+
+Similarly replace irq_of_parse_and_map() with platform_get_irq(), which
+returns a negative errno on failure (including -EPROBE_DEFER) instead of
+0, and tighten the error check to irq < 0.
+
+Both substitutions are equivalent for a DT-backed platform device. The
+remaining OF usage (mmc_of_parse() and the of_device_id table) is covered
+by already-included headers, so linux/of_address.h and linux/of_irq.h
+are dropped.
+
+No functional change; the MMC register window is requested and mapped
+exactly once, so there is no overlapping region claim.
+
+Built for ARM (allmodconfig + CONFIG_MMC_MOXART) with LLVM=1;
+drivers/mmc/host/moxart-mmc.o compiles cleanly.
+
+Assisted-by: opencode:hy3-free
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Signed-off-by: Ulf Hansson <ulfh@kernel.org>
+---
+ drivers/mmc/host/moxart-mmc.c | 29 ++++++++++-------------------
+ 1 file changed, 10 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/mmc/host/moxart-mmc.c b/drivers/mmc/host/moxart-mmc.c
+index 4a4d8b19b18c..28aed13549a6 100644
+--- a/drivers/mmc/host/moxart-mmc.c
++++ b/drivers/mmc/host/moxart-mmc.c
+@@ -26,8 +26,6 @@
+ #include <linux/mmc/sd.h>
+ #include <linux/sched.h>
+ #include <linux/io.h>
+-#include <linux/of_address.h>
+-#include <linux/of_irq.h>
+ #include <linux/clk.h>
+ #include <linux/bitops.h>
+ #include <linux/of_dma.h>
+@@ -555,8 +553,7 @@ static const struct mmc_host_ops moxart_ops = {
+ static int moxart_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+-	struct device_node *node = dev->of_node;
+-	struct resource res_mmc;
++	struct resource *res_mmc;
+ 	struct mmc_host *mmc;
+ 	struct moxart_host *host = NULL;
+ 	struct dma_slave_config cfg;
+@@ -565,30 +562,24 @@ static int moxart_probe(struct platform_device *pdev)
+ 	int irq, ret;
+ 	u32 i;
+ 
++	reg_mmc = devm_platform_get_and_ioremap_resource(pdev, 0, &res_mmc);
++	if (IS_ERR(reg_mmc))
++		return PTR_ERR(reg_mmc);
++
++	irq = platform_get_irq(pdev, 0);
++	if (irq < 0)
++		return irq;
++
+ 	mmc = devm_mmc_alloc_host(dev, sizeof(*host));
+ 	if (!mmc) {
+ 		dev_err(dev, "devm_mmc_alloc_host failed\n");
+ 		return -ENOMEM;
+ 	}
+ 
+-	ret = of_address_to_resource(node, 0, &res_mmc);
+-	if (ret)
+-		return dev_err_probe(dev, ret,
+-				     "of_address_to_resource failed\n");
+-
+-	irq = irq_of_parse_and_map(node, 0);
+-	if (irq <= 0)
+-		return dev_err_probe(dev, -EINVAL,
+-				     "irq_of_parse_and_map failed\n");
+-
+ 	clk = devm_clk_get(dev, NULL);
+ 	if (IS_ERR(clk))
+ 		return PTR_ERR(clk);
+ 
+-	reg_mmc = devm_ioremap_resource(dev, &res_mmc);
+-	if (IS_ERR(reg_mmc))
+-		return PTR_ERR(reg_mmc);
+-
+ 	ret = mmc_of_parse(mmc);
+ 	if (ret)
+ 		return ret;
+@@ -596,7 +587,7 @@ static int moxart_probe(struct platform_device *pdev)
+ 	host = mmc_priv(mmc);
+ 	host->mmc = mmc;
+ 	host->base = reg_mmc;
+-	host->reg_phys = res_mmc.start;
++	host->reg_phys = res_mmc->start;
+ 	host->timeout = msecs_to_jiffies(1000);
+ 	host->sysclk = clk_get_rate(clk);
+ 	host->fifo_width = readl(host->base + REG_FEATURE) << 2;
+-- 
+2.55.0
+

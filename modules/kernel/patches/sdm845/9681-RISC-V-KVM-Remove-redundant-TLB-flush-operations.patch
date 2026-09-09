@@ -1,0 +1,57 @@
+From 6854a0f4d9bee9f0fa51dfc3898ce1e6d88b05a8 Mon Sep 17 00:00:00 2001
+From: Wang Yechao <wang.yechao255@zte.com.cn>
+Date: Fri, 31 Jul 2026 17:12:08 +0800
+Subject: [PATCH 09681/15333] RISC-V: KVM: Remove redundant TLB flush
+ operations
+
+The function kvm_arch_mmu_enable_log_dirty_pt_masked() is invoked from
+two distinct call paths:
+
+kvm_clear_dirty_log_protect()
+  kvm_arch_mmu_enable_log_dirty_pt_masked()
+
+kvm_vm_ioctl_reset_dirty_pages()
+  kvm_dirty_ring_reset()
+    kvm_reset_dirty_gfn()
+        kvm_arch_mmu_enable_log_dirty_pt_masked()
+
+In both scenarios, the caller already performs a remote TLB flush after
+dirty logging is enabled, so the TLB flush inside
+kvm_arch_mmu_enable_log_dirty_pt_masked() is unnecessary. Remove it.
+
+Signed-off-by: Wang Yechao <wang.yechao255@zte.com.cn>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+Link: https://lore.kernel.org/r/20260731091215.1549430-4-wang.yechao255@zte.com.cn
+Signed-off-by: Anup Patel <anup@brainfault.org>
+---
+ arch/riscv/kvm/mmu.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/arch/riscv/kvm/mmu.c b/arch/riscv/kvm/mmu.c
+index 8954860bab59..b8c22d507c93 100644
+--- a/arch/riscv/kvm/mmu.c
++++ b/arch/riscv/kvm/mmu.c
+@@ -163,14 +163,15 @@ void kvm_arch_mmu_enable_log_dirty_pt_masked(struct kvm *kvm,
+ 	phys_addr_t start = (base_gfn +  __ffs(mask)) << PAGE_SHIFT;
+ 	phys_addr_t end = (base_gfn + __fls(mask) + 1) << PAGE_SHIFT;
+ 	struct kvm_gstage gstage;
+-	bool flush;
+ 
+ 	kvm_riscv_gstage_init(&gstage, kvm);
+ 
+-	flush = kvm_riscv_gstage_wp_range(&gstage, start, end);
+-	if (flush)
+-		kvm_flush_remote_tlbs_range(kvm, start >> PAGE_SHIFT,
+-					    (end - start) >> PAGE_SHIFT);
++	kvm_riscv_gstage_wp_range(&gstage, start, end);
++
++	/*
++	 * Remote TLB flush is not needed here since callers of
++	 * kvm_arch_mmu_enable_log_dirty_pt_masked() already do it.
++	 */
+ }
+ 
+ void kvm_arch_sync_dirty_log(struct kvm *kvm, struct kvm_memory_slot *memslot)
+-- 
+2.55.0
+

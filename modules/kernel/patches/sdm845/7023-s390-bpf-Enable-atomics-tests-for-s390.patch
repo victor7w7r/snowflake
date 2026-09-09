@@ -1,0 +1,84 @@
+From 2925f8deeadedfe42bcbac9b560babe8b1640e4b Mon Sep 17 00:00:00 2001
+From: Maxim Khmelevskii <max@linux.ibm.com>
+Date: Thu, 23 Jul 2026 16:03:51 +0200
+Subject: [PATCH 07023/15333] s390/bpf: Enable atomics tests for s390
+
+Add s390 to the if statement, that defines CAN_USE_LOAD_ACQ_STORE_REL.
+Reuse CAN_USE_LOAD_ACQ_STORE_REL in arena_atomics selftest,
+to remove code duplication.
+
+Signed-off-by: Maxim Khmelevskii <max@linux.ibm.com>
+Reviewed-by: Ilya Leoshkevich <iii@linux.ibm.com>
+Link: https://lore.kernel.org/bpf/20260723140648.583055-8-max@linux.ibm.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ .../selftests/bpf/progs/arena_atomics.c        | 18 ++++++++++++------
+ tools/testing/selftests/bpf/progs/bpf_misc.h   |  9 ++++++---
+ 2 files changed, 18 insertions(+), 9 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/progs/arena_atomics.c b/tools/testing/selftests/bpf/progs/arena_atomics.c
+index 2e7751a85399..73bc2b835f3f 100644
+--- a/tools/testing/selftests/bpf/progs/arena_atomics.c
++++ b/tools/testing/selftests/bpf/progs/arena_atomics.c
+@@ -28,8 +28,10 @@ bool skip_all_tests = true;
+ 
+ #if defined(ENABLE_ATOMICS_TESTS) &&		  \
+ 	defined(__BPF_FEATURE_ADDR_SPACE_CAST) && \
+-	(defined(__TARGET_ARCH_arm64) || defined(__TARGET_ARCH_x86) || \
+-	 (defined(__TARGET_ARCH_riscv) && __riscv_xlen == 64))
++	(defined(__TARGET_ARCH_arm64) || \
++	 defined(__TARGET_ARCH_x86) || \
++	 (defined(__TARGET_ARCH_riscv) && __riscv_xlen == 64) || \
++	 defined(__TARGET_ARCH_s390))
+ bool skip_lacq_srel_tests __attribute((__section__(".data"))) = false;
+ #else
+ bool skip_lacq_srel_tests = true;
+@@ -315,8 +317,10 @@ int load_acquire(const void *ctx)
+ {
+ #if defined(ENABLE_ATOMICS_TESTS) &&		  \
+ 	defined(__BPF_FEATURE_ADDR_SPACE_CAST) && \
+-	(defined(__TARGET_ARCH_arm64) || defined(__TARGET_ARCH_x86) || \
+-	 (defined(__TARGET_ARCH_riscv) && __riscv_xlen == 64))
++	(defined(__TARGET_ARCH_arm64) || \
++	 defined(__TARGET_ARCH_x86) || \
++	 (defined(__TARGET_ARCH_riscv) && __riscv_xlen == 64) || \
++	 defined(__TARGET_ARCH_s390))
+ 
+ #define LOAD_ACQUIRE_ARENA(SIZEOP, SIZE, SRC, DST)	\
+ 	{ asm volatile (				\
+@@ -367,8 +371,10 @@ int store_release(const void *ctx)
+ {
+ #if defined(ENABLE_ATOMICS_TESTS) &&		  \
+ 	defined(__BPF_FEATURE_ADDR_SPACE_CAST) && \
+-	(defined(__TARGET_ARCH_arm64) || defined(__TARGET_ARCH_x86) || \
+-	 (defined(__TARGET_ARCH_riscv) && __riscv_xlen == 64))
++	(defined(__TARGET_ARCH_arm64) || \
++	 defined(__TARGET_ARCH_x86) || \
++	 (defined(__TARGET_ARCH_riscv) && __riscv_xlen == 64) || \
++	 defined(__TARGET_ARCH_s390))
+ 
+ #define STORE_RELEASE_ARENA(SIZEOP, DST, VAL)	\
+ 	{ asm volatile (			\
+diff --git a/tools/testing/selftests/bpf/progs/bpf_misc.h b/tools/testing/selftests/bpf/progs/bpf_misc.h
+index b0c441384f20..5eacf1b43252 100644
+--- a/tools/testing/selftests/bpf/progs/bpf_misc.h
++++ b/tools/testing/selftests/bpf/progs/bpf_misc.h
+@@ -264,9 +264,12 @@
+ #endif
+ 
+ #if __clang_major__ >= 18 && defined(ENABLE_ATOMICS_TESTS) &&		\
+-	(defined(__TARGET_ARCH_arm64) || defined(__TARGET_ARCH_x86) ||	\
+-	(defined(__TARGET_ARCH_riscv) && __riscv_xlen == 64) || \
+-	defined(__TARGET_ARCH_powerpc) || defined(__TARGET_ARCH_loongarch))
++	(defined(__TARGET_ARCH_arm64) ||				\
++	 defined(__TARGET_ARCH_x86) ||					\
++	 (defined(__TARGET_ARCH_riscv) && __riscv_xlen == 64) ||	\
++	 defined(__TARGET_ARCH_s390) ||					\
++	 defined(__TARGET_ARCH_powerpc) ||				\
++	 defined(__TARGET_ARCH_loongarch))
+ #define CAN_USE_LOAD_ACQ_STORE_REL
+ #endif
+ 
+-- 
+2.55.0
+

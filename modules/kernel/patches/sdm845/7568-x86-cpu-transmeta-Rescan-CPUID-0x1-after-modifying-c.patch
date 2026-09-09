@@ -1,0 +1,37 @@
+From bec89bf9eacbfdcaead88e9a611215fcad3c5cf4 Mon Sep 17 00:00:00 2001
+From: "Ahmed S. Darwish" <darwi@linutronix.de>
+Date: Thu, 28 May 2026 17:37:30 +0200
+Subject: [PATCH 07568/15333] x86/cpu/transmeta: Rescan CPUID(0x1) after
+ modifying capabilities
+
+Transmeta CPUs allow masking CPUID(0x1).EDX feature flags via MSR writes.  If
+a bit is cleared in the 0x80860004 MSR, its corresponding feature flag is not
+reported by CPUID.
+
+Refresh the CPUID parser's CPUID(0x1) cache after all MSR bits are unmasked.
+
+Note, the MSR 0x80860004 semantics are documented in the "BIOS Programmer's
+Guide: Transmeta Crusoe Processor" document, dated June 14, 2002.
+
+Signed-off-by: Ahmed S. Darwish <darwi@linutronix.de>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Link: https://patch.msgid.link/20260528153923.403473-9-darwi@linutronix.de
+---
+ arch/x86/kernel/cpu/transmeta.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/x86/kernel/cpu/transmeta.c b/arch/x86/kernel/cpu/transmeta.c
+index 1fdcd69c625c..d9e0edb379b8 100644
+--- a/arch/x86/kernel/cpu/transmeta.c
++++ b/arch/x86/kernel/cpu/transmeta.c
+@@ -88,6 +88,7 @@ static void init_transmeta(struct cpuinfo_x86 *c)
+ 	/* Unhide possibly hidden capability flags */
+ 	rdmsr(0x80860004, cap_mask, uk);
+ 	wrmsr(0x80860004, ~0, uk);
++	cpuid_refresh_leaf(c, 0x1);
+ 	c->x86_capability[CPUID_1_EDX] = cpuid_edx(0x00000001);
+ 	wrmsr(0x80860004, cap_mask, uk);
+ 
+-- 
+2.55.0
+

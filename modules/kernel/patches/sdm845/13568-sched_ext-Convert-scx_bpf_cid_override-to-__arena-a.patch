@@ -1,0 +1,330 @@
+From a05c5b5cb5cfc2c2b27ce05a690dd0af1bcdf099 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Wed, 12 Aug 2026 09:55:33 -1000
+Subject: [PATCH 13568/15333] sched_ext: Convert scx_bpf_cid_override() to
+ __arena array arguments
+
+scx_bpf_cid_override() predates the cid-form arena transition and takes its
+arrays as verifier-checked mem+size buffers, forcing scx_qmap to keep the
+cpu_to_cid and shard_start arrays in writable bss while the rest of its
+state lives in the arena. Unify on arena arguments before cid-form
+schedulers start seeing real use.
+
+BPF now translates between BPF and kernel arena addresses for __arena
+arguments. Take the arrays as __arena arguments, with the counts passed in
+entries. The counts now size the snapshot copies and are bounds-checked
+before them.
+
+scx_qmap moves the arrays into struct qmap_arena. As the arena is mmapped at
+load, the loader populates them between load and attach instead of before
+load.
+
+The arena argument address translation is currently implemented only on
+x86-64. Schedulers calling this kfunc load only there for now.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ kernel/sched/ext/cid.c                   | 49 +++++++++--------
+ tools/sched_ext/include/scx/compat.bpf.h | 14 ++---
+ tools/sched_ext/scx_qmap.bpf.c           | 16 ++----
+ tools/sched_ext/scx_qmap.c               | 68 ++++++++++++++----------
+ tools/sched_ext/scx_qmap.h               |  4 ++
+ 5 files changed, 84 insertions(+), 67 deletions(-)
+
+diff --git a/kernel/sched/ext/cid.c b/kernel/sched/ext/cid.c
+index 11fe9be80f1e..39f88deb94bc 100644
+--- a/kernel/sched/ext/cid.c
++++ b/kernel/sched/ext/cid.c
+@@ -449,10 +449,10 @@ __bpf_kfunc_start_defs();
+ 
+ /**
+  * scx_bpf_cid_override - Install an explicit cpu->cid mapping with shard info
+- * @cpu_to_cid_src: array of nr_cpu_ids s32 entries (cid for each cpu)
+- * @cpu_to_cid_src__sz: must be nr_cpu_ids * sizeof(s32) bytes
+- * @shard_start_src: array of first-cid-of-each-shard, strictly increasing from 0
+- * @shard_start_src__sz: nr_shards * sizeof(s32) bytes
++ * @cpu_to_cid__arena: array of nr_cpu_ids s32 entries (cid for each cpu)
++ * @cpu_to_cid_cnt: number of entries, must be nr_cpu_ids
++ * @shard_start__arena: array of first-cid-of-each-shard, one entry per shard
++ * @shard_start_cnt: number of shards
+  * @aux: implicit BPF argument to access bpf_prog_aux hidden from BPF progs
+  *
+  * May only be called from ops.init_cids() of the root scheduler. Replace the
+@@ -464,9 +464,9 @@ __bpf_kfunc_start_defs();
+  * (core/LLC/node) is cleared and the shard layout is set from the input. On
+  * invalid input, abort the scheduler.
+  */
+-__bpf_kfunc void scx_bpf_cid_override(const s32 *cpu_to_cid_src, u32 cpu_to_cid_src__sz,
+-				       const s32 *shard_start_src, u32 shard_start_src__sz,
+-				       const struct bpf_prog_aux *aux)
++__bpf_kfunc void scx_bpf_cid_override(const s32 *cpu_to_cid__arena, u32 cpu_to_cid_cnt,
++				      const s32 *shard_start__arena, u32 shard_start_cnt,
++				      const struct bpf_prog_aux *aux)
+ {
+ 	cpumask_var_t seen __free(free_cpumask_var) = CPUMASK_VAR_NULL;
+ 	u32 *node_counts __free(kfree) = NULL;
+@@ -475,19 +475,28 @@ __bpf_kfunc void scx_bpf_cid_override(const s32 *cpu_to_cid_src, u32 cpu_to_cid_
+ 	u32 npossible = num_possible_cpus();
+ 	struct scx_cid_tables *tbls;
+ 	struct scx_sched *sch;
+-	u32 nr_shards;
++	u32 nr_shards = shard_start_cnt;
+ 	bool alloced;
+ 	s32 cpu, cid, si;
+ 
+ 	/*
+ 	 * GFP_KERNEL allocs must happen before the rcu read section. Snapshot
+-	 * the BPF-supplied arrays so a concurrent map mutation can't change
++	 * the BPF-supplied arrays so a concurrent arena write can't change
+ 	 * them between validation and use.
++	 *
++	 * The BPF-supplied counts size the snapshots and thus the arena reads.
++	 * Gate the copies on the count bounds, reported below once @sch is
++	 * available. The bounded reads, at most 32KB, stay within the guard
++	 * region that arena fault recovery covers.
+ 	 */
+ 	alloced = zalloc_cpumask_var(&seen, GFP_KERNEL);
+ 	node_counts = kcalloc(nr_node_ids, sizeof(*node_counts), GFP_KERNEL);
+-	cpu_to_cid = kmemdup(cpu_to_cid_src, cpu_to_cid_src__sz, GFP_KERNEL);
+-	shard_start = kmemdup(shard_start_src, shard_start_src__sz, GFP_KERNEL);
++	if (cpu_to_cid_cnt == nr_cpu_ids)
++		cpu_to_cid = kmemdup(cpu_to_cid__arena, cpu_to_cid_cnt * sizeof(s32),
++				     GFP_KERNEL);
++	if (nr_shards && nr_shards <= npossible)
++		shard_start = kmemdup(shard_start__arena, nr_shards * sizeof(s32),
++				      GFP_KERNEL);
+ 
+ 	guard(rcu)();
+ 
+@@ -499,25 +508,23 @@ __bpf_kfunc void scx_bpf_cid_override(const s32 *cpu_to_cid_src, u32 cpu_to_cid_
+ 	lockdep_assert_held(&scx_enable_mutex);
+ 	tbls = scx_cid_tables;
+ 
+-	if (!alloced || !node_counts || !cpu_to_cid || !shard_start) {
+-		scx_error(sch, "scx_bpf_cid_override: allocation failed");
++	if (cpu_to_cid_cnt != nr_cpu_ids) {
++		scx_error(sch, "scx_bpf_cid_override: cpu_to_cid expected %u entries, got %u",
++			  nr_cpu_ids, cpu_to_cid_cnt);
+ 		return;
+ 	}
+ 
+-	if (cpu_to_cid_src__sz != nr_cpu_ids * sizeof(s32)) {
+-		scx_error(sch, "scx_bpf_cid_override: cpu_to_cid expected %zu bytes, got %u",
+-			  nr_cpu_ids * sizeof(s32), cpu_to_cid_src__sz);
++	if (!nr_shards || nr_shards > npossible) {
++		scx_error(sch, "scx_bpf_cid_override: invalid shard_start count %u",
++			  nr_shards);
+ 		return;
+ 	}
+ 
+-	if (!shard_start_src__sz || shard_start_src__sz % sizeof(s32)) {
+-		scx_error(sch, "scx_bpf_cid_override: invalid shard_start size %u",
+-			  shard_start_src__sz);
++	if (!alloced || !node_counts || !cpu_to_cid || !shard_start) {
++		scx_error(sch, "scx_bpf_cid_override: allocation failed");
+ 		return;
+ 	}
+ 
+-	nr_shards = shard_start_src__sz / sizeof(s32);
+-
+ 	/* validate shard_start[]: starts at 0, strictly increasing, in range */
+ 	if (shard_start[0] != 0) {
+ 		scx_error(sch, "scx_bpf_cid_override: shard_start[0] must be 0, got %d",
+diff --git a/tools/sched_ext/include/scx/compat.bpf.h b/tools/sched_ext/include/scx/compat.bpf.h
+index 1b45655a64a3..7c735eb09c07 100644
+--- a/tools/sched_ext/include/scx/compat.bpf.h
++++ b/tools/sched_ext/include/scx/compat.bpf.h
+@@ -125,15 +125,17 @@ static inline bool scx_bpf_sub_dispatch(u64 cgroup_id)
+  * v7.3: scx_bpf_cid_override() for explicit cid and shard mapping. Ignore if
+  * missing.
+  */
+-void scx_bpf_cid_override___compat(const s32 *cpu_to_cid, u32 cpu_to_cid__sz,
+-				    const s32 *shard_start, u32 shard_start__sz) __ksym __weak;
++void scx_bpf_cid_override___compat(const s32 __arena *cpu_to_cid__arena,
++				   u32 cpu_to_cid_cnt,
++				   const s32 __arena *shard_start__arena,
++				   u32 shard_start_cnt) __ksym __weak;
+ 
+-static inline void scx_bpf_cid_override(const s32 *cpu_to_cid, u32 cpu_to_cid__sz,
+-					 const s32 *shard_start, u32 shard_start__sz)
++static inline void scx_bpf_cid_override(const s32 __arena *cpu_to_cid, u32 cpu_to_cid_cnt,
++					const s32 __arena *shard_start, u32 shard_start_cnt)
+ {
+ 	if (bpf_ksym_exists(scx_bpf_cid_override___compat))
+-		scx_bpf_cid_override___compat(cpu_to_cid, cpu_to_cid__sz,
+-					      shard_start, shard_start__sz);
++		scx_bpf_cid_override___compat(cpu_to_cid, cpu_to_cid_cnt,
++					      shard_start, shard_start_cnt);
+ }
+ 
+ /**
+diff --git a/tools/sched_ext/scx_qmap.bpf.c b/tools/sched_ext/scx_qmap.bpf.c
+index 61dc748742a2..d9ca9106a5ce 100644
+--- a/tools/sched_ext/scx_qmap.bpf.c
++++ b/tools/sched_ext/scx_qmap.bpf.c
+@@ -80,14 +80,6 @@ const volatile u64 round_robin_ns;
+  */
+ const volatile u32 cid_override_mode;
+ const volatile u32 cid_override_nr_shards;
+-/*
+- * Arrays live in bss (writable) because scx_bpf_cid_override()'s BPF
+- * verifier signature treats its len-paired pointers as read/write - rodata
+- * fails verification with "write into map forbidden". Userspace populates
+- * them before SCX_OPS_LOAD, same as rodata, and nothing writes them after.
+- */
+-s32 cid_override_cpu_to_cid[SCX_QMAP_MAX_CPUS];
+-s32 cid_override_shard_start[SCX_QMAP_MAX_CPUS];
+ 
+ UEI_DEFINE(uei);
+ 
+@@ -1761,17 +1753,15 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(qmap_init_cids)
+ 	if (!cid_override_mode)
+ 		return 0;
+ 
+-	/* bound the count so the verifier accepts cpu_to_cid's mem/len pair */
++	/* the arena arrays are sized SCX_QMAP_MAX_CPUS */
+ 	if (nr_cpu_ids > SCX_QMAP_MAX_CPUS) {
+ 		scx_bpf_error("nr_cpu_ids=%u exceeds SCX_QMAP_MAX_CPUS=%d",
+ 			      nr_cpu_ids, SCX_QMAP_MAX_CPUS);
+ 		return -EINVAL;
+ 	}
+ 
+-	scx_bpf_cid_override((const s32 *)cid_override_cpu_to_cid,
+-			     nr_cpu_ids * sizeof(s32),
+-			     (const s32 *)cid_override_shard_start,
+-			     cid_override_nr_shards * sizeof(s32));
++	scx_bpf_cid_override(qa.cid_override_cpu_to_cid, nr_cpu_ids,
++			     qa.cid_override_shard_start, cid_override_nr_shards);
+ 	return 0;
+ }
+ 
+diff --git a/tools/sched_ext/scx_qmap.c b/tools/sched_ext/scx_qmap.c
+index 988b6931633e..5bb5f687e579 100644
+--- a/tools/sched_ext/scx_qmap.c
++++ b/tools/sched_ext/scx_qmap.c
+@@ -242,6 +242,7 @@ int main(int argc, char **argv)
+ 	char tbuf[32];
+ 	u32 inject_mode = 0;
+ 	u64 own_cgid = 0;
++	s32 cid_override_shard_sz = 4;
+ 
+ 	libbpf_set_print(libbpf_print_fn);
+ 	signal(SIGINT, sigint_handler);
+@@ -328,8 +329,7 @@ int main(int argc, char **argv)
+ 			break;
+ 		case 'C': {
+ 			u32 nr_cpus = libbpf_num_possible_cpus();
+-			u32 mode, i;
+-			s32 shard_sz = 4;
++			u32 mode;
+ 
+ 			if (!strcmp(optarg, "shuffle"))
+ 				mode = QMAP_CID_OVR_SHUFFLE;
+@@ -344,18 +344,7 @@ int main(int argc, char **argv)
+ 				return 1;
+ 			}
+ 			skel->rodata->cid_override_mode = mode;
+-
+-			/* shuffle: reversed cpu_to_cid; others: identity */
+-			for (i = 0; i < nr_cpus; i++) {
+-				if (mode == QMAP_CID_OVR_SHUFFLE)
+-					skel->bss->cid_override_cpu_to_cid[i] = nr_cpus - 1 - i;
+-				else
+-					skel->bss->cid_override_cpu_to_cid[i] = i;
+-			}
+-			if (mode == QMAP_CID_OVR_BAD_DUP && nr_cpus >= 2)
+-				skel->bss->cid_override_cpu_to_cid[1] = 0;
+-			if (mode == QMAP_CID_OVR_BAD_RANGE)
+-				skel->bss->cid_override_cpu_to_cid[0] = (s32)nr_cpus;
++			cid_override_shard_sz = 4;
+ 
+ 			/*
+ 			 * bad-mono needs >= 3 shards to build a 0-based but
+@@ -368,21 +357,12 @@ int main(int argc, char **argv)
+ 						nr_cpus);
+ 					return 1;
+ 				}
+-				shard_sz = nr_cpus / 3;
++				cid_override_shard_sz = nr_cpus / 3;
+ 			}
+ 
+ 			/* shards of shard_sz each */
+-			skel->rodata->cid_override_nr_shards = (nr_cpus + shard_sz - 1) / shard_sz;
+-			for (i = 0; i < skel->rodata->cid_override_nr_shards; i++)
+-				skel->bss->cid_override_shard_start[i] = i * shard_sz;
+-
+-			if (mode == QMAP_CID_OVR_BAD_MONO) {
+-				/* swap [1] and [2] to break monotonicity */
+-				s32 tmp = skel->bss->cid_override_shard_start[1];
+-				skel->bss->cid_override_shard_start[1] =
+-					skel->bss->cid_override_shard_start[2];
+-				skel->bss->cid_override_shard_start[2] = tmp;
+-			}
++			skel->rodata->cid_override_nr_shards =
++				(nr_cpus + cid_override_shard_sz - 1) / cid_override_shard_sz;
+ 			break;
+ 		}
+ 		case 'i':
+@@ -428,9 +408,43 @@ int main(int argc, char **argv)
+ 	skel->rodata->round_robin_ns = (u64)round_robin_ms * 1000000;
+ 
+ 	SCX_OPS_LOAD(skel, qmap_ops, scx_qmap, uei);
+-	link = SCX_OPS_ATTACH(skel, qmap_ops, scx_qmap);
+ 
+ 	qa = &skel->arena->qa;
++
++	/*
++	 * The cid-override arrays live in the arena, which is mmapped at load.
++	 * Populate them before qmap_init_cids() consumes them at attach.
++	 */
++	if (skel->rodata->cid_override_mode) {
++		u32 mode = skel->rodata->cid_override_mode;
++		u32 nr_cpus = libbpf_num_possible_cpus();
++		u32 i;
++
++		/* shuffle: reversed cpu_to_cid; others: identity */
++		for (i = 0; i < nr_cpus; i++) {
++			if (mode == QMAP_CID_OVR_SHUFFLE)
++				qa->cid_override_cpu_to_cid[i] = nr_cpus - 1 - i;
++			else
++				qa->cid_override_cpu_to_cid[i] = i;
++		}
++		if (mode == QMAP_CID_OVR_BAD_DUP && nr_cpus >= 2)
++			qa->cid_override_cpu_to_cid[1] = 0;
++		if (mode == QMAP_CID_OVR_BAD_RANGE)
++			qa->cid_override_cpu_to_cid[0] = (s32)nr_cpus;
++
++		for (i = 0; i < skel->rodata->cid_override_nr_shards; i++)
++			qa->cid_override_shard_start[i] = i * cid_override_shard_sz;
++
++		if (mode == QMAP_CID_OVR_BAD_MONO) {
++			/* swap [1] and [2] to break monotonicity */
++			s32 tmp = qa->cid_override_shard_start[1];
++			qa->cid_override_shard_start[1] = qa->cid_override_shard_start[2];
++			qa->cid_override_shard_start[2] = tmp;
++		}
++	}
++
++	link = SCX_OPS_ATTACH(skel, qmap_ops, scx_qmap);
++
+ 	qa->test_error_cnt = test_error_cnt;
+ 	qa->inject_mode = inject_mode;
+ 
+diff --git a/tools/sched_ext/scx_qmap.h b/tools/sched_ext/scx_qmap.h
+index c8f602d58ca3..c78d61806b39 100644
+--- a/tools/sched_ext/scx_qmap.h
++++ b/tools/sched_ext/scx_qmap.h
+@@ -131,6 +131,10 @@ struct qmap_arena {
+ 
+ 	struct cpu_ctx cpu_ctxs[SCX_QMAP_MAX_CPUS];
+ 
++	/* cid-override test input, populated by the loader before attach */
++	__s32 cid_override_cpu_to_cid[SCX_QMAP_MAX_CPUS];
++	__s32 cid_override_shard_start[SCX_QMAP_MAX_CPUS];
++
+ 	/* task_ctx slab; allocated and threaded by qmap_init() */
+ 	struct task_ctx __arena *task_ctxs;
+ 	struct task_ctx __arena *task_free_head;
+-- 
+2.55.0
+

@@ -1,0 +1,61 @@
+From cc2ca4296f72519686a9f949e725275f497f90ae Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Tue, 30 Jun 2026 21:27:05 -0700
+Subject: [PATCH 06835/15333] fs/resctrl: Pass error reading event through to
+ user space
+
+Reading of event data is managed through populating a struct rmid_read with
+properties of event needing to be read. This data is dispatched to an
+appropriate CPU and upon completion any error can be found in rmid_read::err,
+or on success the event data will be in rmid_read::val.
+
+rmid_read::err is not updated in the unlikely scenario that the reading of the
+event was dispatched to a wrong CPU. If this ever occurs due to a bug in
+resctrl the user space read will return "success" but the data reported will
+be invalid.
+
+Ensure accurate error reporting so that if there may be an issue with how
+resctrl picks a CPU it could be learned with an error to user space instead of
+silent failure.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Reviewed-by: Ben Horgan <ben.horgan@arm.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Tested-by: Babu Moger <babu.moger@amd.com>
+Link: https://patch.msgid.link/6b3c66a49788828bd8c04a6911bd74c91ccd56f3.1782857711.git.reinette.chatre@intel.com
+---
+ fs/resctrl/monitor.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/fs/resctrl/monitor.c b/fs/resctrl/monitor.c
+index 29b13a690cf3..7f3fe055f7c9 100644
+--- a/fs/resctrl/monitor.c
++++ b/fs/resctrl/monitor.c
+@@ -458,8 +458,10 @@ static int __l3_mon_event_count(struct rdtgroup *rdtgrp, struct rmid_read *rr)
+ 	}
+ 
+ 	/* Reading a single domain, must be on a CPU in that domain. */
+-	if (!cpumask_test_cpu(cpu, &d->hdr.cpu_mask))
++	if (!cpumask_test_cpu(cpu, &d->hdr.cpu_mask)) {
++		rr->err = -EIO;
+ 		return -EINVAL;
++	}
+ 	if (rr->is_mbm_cntr)
+ 		rr->err = resctrl_arch_cntr_read(rr->r, d, closid, rmid, cntr_id,
+ 						 rr->evt->evtid, &tval);
+@@ -496,8 +498,10 @@ static int __l3_mon_event_count_sum(struct rdtgroup *rdtgrp, struct rmid_read *r
+ 	}
+ 
+ 	/* Summing domains that share a cache, must be on a CPU for that cache. */
+-	if (!cpumask_test_cpu(cpu, &rr->ci->shared_cpu_map))
++	if (!cpumask_test_cpu(cpu, &rr->ci->shared_cpu_map)) {
++		rr->err = -EIO;
+ 		return -EINVAL;
++	}
+ 
+ 	/*
+ 	 * Legacy files must report the sum of an event across all
+-- 
+2.55.0
+

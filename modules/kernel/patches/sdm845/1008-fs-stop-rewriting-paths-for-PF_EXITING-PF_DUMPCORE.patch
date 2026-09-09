@@ -1,0 +1,42 @@
+From 272fa19991cd6c40602b0d27d4f07117d25792c0 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Mon, 1 Jun 2026 15:56:58 +0200
+Subject: [PATCH 01008/15333] fs: stop rewriting paths for PF_EXITING |
+ PF_DUMPCORE
+
+Skip exiting and core-dumping tasks when rewriting fs_struct paths in
+chroot_fs_refs(). Such a task is about to release its fs_struct via
+exit_fs() anyway, so the worst case is that it lingers on a stale
+root/pwd until it does.
+
+This isn't entirely free: a skipped task keeps its reference on the old
+root, so after a pivot_root() the old root can't be torn down until the
+task is gone. With umount2(MNT_DETACH) that only defers destruction of
+the old rootfs; a plain umount() could in principle fail with -EBUSY.
+In practice this doesn't matter -- pivot_root(2) is meant to be paired
+with MNT_DETACH and isn't issued while other tasks are actively using
+the mount namespace -- so the transient pin is harmless.
+
+Link: https://patch.msgid.link/20260601-work-kthread-nullfs-v4-25-77ee053060e0@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/fs_struct.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/fs/fs_struct.c b/fs/fs_struct.c
+index 2a98cfbedd32..34699f3b6f88 100644
+--- a/fs/fs_struct.c
++++ b/fs/fs_struct.c
+@@ -61,8 +61,7 @@ void chroot_fs_refs(const struct path *old_root, const struct path *new_root)
+ 
+ 	read_lock(&tasklist_lock);
+ 	for_each_process_thread(g, p) {
+-		/* leave kthreads alone */
+-		if (p->flags & PF_KTHREAD)
++		if (p->flags & (PF_KTHREAD | PF_EXITING | PF_DUMPCORE))
+ 			continue;
+ 
+ 		task_lock(p);
+-- 
+2.55.0
+

@@ -1,0 +1,62 @@
+From 0bc5f998e18d295a168408e35fe34e21c4a74178 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Thu, 25 Jun 2026 15:04:48 -0700
+Subject: [PATCH 03356/15333] KVM: x86: Move KVM's arbitrary task switch reason
+ enums to x86.h
+
+Relocate KVM's TASK_SWITCH_<reason> enums from kvm_host.h to x86.h, as the
+enums are arbitrary values, i.e. not architectural, and are intended to be
+used only to translate vendor specific information to a common x86 reason
+when invoking kvm_task_switch().
+
+Opportunistically name the overall enum to help document the role of the
+values.
+
+No functional change intended.
+
+Reviewed-by: Kai Huang <kai.huang@intel.com>
+Link: https://patch.msgid.link/20260625220450.3354415-8-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/include/asm/kvm_host.h | 7 -------
+ arch/x86/kvm/x86.h              | 6 ++++++
+ 2 files changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index f24e0de00692..c7d53d46763b 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1960,13 +1960,6 @@ static inline unsigned long read_msr(unsigned long msr)
+ }
+ #endif
+ 
+-enum {
+-	TASK_SWITCH_CALL = 0,
+-	TASK_SWITCH_IRET = 1,
+-	TASK_SWITCH_JMP = 2,
+-	TASK_SWITCH_GATE = 3,
+-};
+-
+ #define HF_GUEST_MASK		(1 << 0) /* VCPU is in guest-mode */
+ 
+ #ifdef CONFIG_KVM_SMM
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index 8ece468087a8..494d97e9a9c9 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -482,6 +482,12 @@ int kvm_emulate_wbinvd(struct kvm_vcpu *vcpu);
+ 
+ void kvm_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector);
+ 
++enum kvm_task_switch_reason {
++	TASK_SWITCH_CALL = 0,
++	TASK_SWITCH_IRET = 1,
++	TASK_SWITCH_JMP = 2,
++	TASK_SWITCH_GATE = 3,
++};
+ int kvm_task_switch(struct kvm_vcpu *vcpu, u16 tss_selector, int idt_index,
+ 		    int reason, bool has_error_code, u32 error_code);
+ 
+-- 
+2.55.0
+

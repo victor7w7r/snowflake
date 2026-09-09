@@ -1,0 +1,40 @@
+From 40c58b4fb5bd823d61f998b37e393af7d496485f Mon Sep 17 00:00:00 2001
+From: Jesse Zhang <Jesse.Zhang@amd.com>
+Date: Tue, 14 Jul 2026 09:31:05 +0800
+Subject: [PATCH 04813/15333] drm/amdgpu/mes11: set remove_queue_after_reset
+ for reset unmap path
+
+In mes_v11_0_unmap_legacy_queue(), set
+remove_queue_after_reset=1 for RESET_QUEUES.
+The queue may already be MMIO-reset. This flag
+tells MES to drop internal queue state directly
+instead of issuing another CP unmap flow, reducing
+timeout risk during recovery.
+
+Reviewed-by: Amber Lin <amber.lin@amd.com>
+Suggested-by: Shaoyun Liu <shaoyun.liu@amd.com>
+Signed-off-by: Jesse Zhang <Jesse.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/mes_v11_0.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
+index e119e743f489..805e662faaff 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
+@@ -770,6 +770,11 @@ static int mes_v11_0_unmap_legacy_queue(struct amdgpu_mes *mes,
+ 			convert_to_mes_queue_type(input->queue_type);
+ 	}
+ 
++	if (input->action == RESET_QUEUES &&
++	   (mes->sched_version & AMDGPU_MES_VERSION_MASK) >= 0x60)
++		mes_remove_queue_pkt.remove_queue_after_reset = 1;
++
++
+ 	return mes_v11_0_submit_pkt_and_poll_completion(mes,
+ 			&mes_remove_queue_pkt, sizeof(mes_remove_queue_pkt),
+ 			offsetof(union MESAPI__REMOVE_QUEUE, api_status));
+-- 
+2.55.0
+

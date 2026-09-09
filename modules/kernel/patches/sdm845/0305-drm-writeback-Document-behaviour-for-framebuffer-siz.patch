@@ -1,0 +1,47 @@
+From a2646fdfbc66da4556868ed94159b36bda9968bd Mon Sep 17 00:00:00 2001
+From: Derek Foreman <derek.foreman@collabora.com>
+Date: Tue, 2 Jun 2026 14:17:53 -0500
+Subject: [PATCH 00305/15333] drm: writeback: Document behaviour for
+ framebuffer size mismatch
+
+Currently we have not explicitly defined the behaviour when the width
+and height of the writeback framebuffer do not match the width and
+height of the attached CRTC.
+
+Allow the driver to perform a scale operation to fit the content, so
+systems with scaling blocks in the writeback path can easily expose them.
+A partially filled buffer should never be returned, so failure remains
+an option for all the systems that don't have a scaler, or when scaler
+limits are exceeded.
+
+Cropping would make less sense, as the region to crop is underspecified
+without some other properties to define an origin.
+
+Signed-off-by: Derek Foreman <derek.foreman@collabora.com>
+Link: https://patch.msgid.link/20260602191754.79047-1-derek.foreman@collabora.com
+Signed-off-by: Daniel Stone <daniels@collabora.com>
+Reviewed-by: Daniel Stone <daniels@collabora.com>
+---
+ drivers/gpu/drm/drm_writeback.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/gpu/drm/drm_writeback.c b/drivers/gpu/drm/drm_writeback.c
+index 4da5d6094721..b4a002e6d043 100644
+--- a/drivers/gpu/drm/drm_writeback.c
++++ b/drivers/gpu/drm/drm_writeback.c
+@@ -58,6 +58,12 @@
+  *	framebuffer to be written by the writeback connector. This property is
+  *	similar to the FB_ID property on planes, but will always read as zero
+  *	and is not preserved across commits.
++ *	If the width and height of the framebuffer do not match those of the
++ *	attached CRTC, the driver must either fail or scale (not crop) the
++ *	content to exactly fit the framebuffer.
++ *	If the driver is unable to exactly fill the framebuffer for any reason,
++ *	such as hardware scaler constraints or an odd width for a sub-sampled
++ *	format, the writeback must fail instead of partially filling the buffer.
+  *	Userspace must set this property to an output buffer every time it
+  *	wishes the buffer to get filled.
+  *
+-- 
+2.55.0
+

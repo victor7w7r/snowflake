@@ -1,0 +1,65 @@
+From 9835f031f08f087485d27a87e3cd2ef5841851d9 Mon Sep 17 00:00:00 2001
+From: Ziran Zhang <zhangcoder@yeah.net>
+Date: Sat, 27 Jun 2026 21:13:54 +0800
+Subject: [PATCH 04832/15333] drm/amd/display: Remove redundant NULL check
+ before kfree() in mod_power_create()
+
+kfree() safely handles NULL pointers, so there is no need to check for
+NULL before calling kfree().
+
+Remove redundant NULL check.
+
+Found by Coccinelle ifnullfree script.
+
+Signed-off-by: Ziran Zhang <zhangcoder@yeah.net>
+Reviewed-by: George Zhang <george.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/modules/power/power.c    | 16 ++++++----------
+ 1 file changed, 6 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/modules/power/power.c b/drivers/gpu/drm/amd/display/modules/power/power.c
+index db101fdb11f0..ee15c14a899e 100644
+--- a/drivers/gpu/drm/amd/display/modules/power/power.c
++++ b/drivers/gpu/drm/amd/display/modules/power/power.c
+@@ -270,13 +270,11 @@ struct mod_power *mod_power_create(struct dc *dc,
+ fail_bad_brightness_range:
+ fail_alloc_backlight_array:
+ 	for (inst = 0; inst < edp_num; inst++)
+-		if (core_power->bl_prop[inst].backlight_lut)
+-			kfree(core_power->bl_prop[inst].backlight_lut);
++		kfree(core_power->bl_prop[inst].backlight_lut);
+ fail_construct:
+-	for (i = 0; i < MOD_POWER_MAX_CONCURRENT_STREAMS; i++) {
+-		if (core_power->map[i].psr_context)
+-			kfree(core_power->map[i].psr_context);
+-	}
++	for (i = 0; i < MOD_POWER_MAX_CONCURRENT_STREAMS; i++)
++		kfree(core_power->map[i].psr_context);
++
+ 	kfree(core_power->map);
+ 
+ fail_alloc_map:
+@@ -295,8 +293,7 @@ void mod_power_destroy(struct mod_power *mod_power)
+ 				MOD_POWER_TO_CORE(mod_power);
+ 
+ 		for (i = 0; i < MOD_POWER_MAX_CONCURRENT_STREAMS; i++)
+-			if (core_power->map[i].psr_context)
+-				kfree(core_power->map[i].psr_context);
++			kfree(core_power->map[i].psr_context);
+ 
+ 		for (i = 0; i < core_power->num_entities; i++)
+ 			if (core_power->map[i].stream)
+@@ -305,8 +302,7 @@ void mod_power_destroy(struct mod_power *mod_power)
+ 		kfree(core_power->map);
+ 
+ 		for (i = 0; i < MAX_NUM_EDP; i++)
+-			if (core_power->bl_prop[i].backlight_lut)
+-				kfree(core_power->bl_prop[i].backlight_lut);
++			kfree(core_power->bl_prop[i].backlight_lut);
+ 
+ 		kfree(core_power);
+ 	}
+-- 
+2.55.0
+

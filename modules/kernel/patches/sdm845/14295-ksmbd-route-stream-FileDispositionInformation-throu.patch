@@ -1,0 +1,150 @@
+From 445b2244b6990c91655f9032b2bccad802711f99 Mon Sep 17 00:00:00 2001
+From: Gael Blivet <gael.blivet@gmail.com>
+Date: Fri, 10 Jul 2026 09:17:06 +0900
+Subject: [PATCH 14295/15333] ksmbd: route stream FileDispositionInformation
+ through stream delete flag
+
+ksmbd_fd_set_delete_pending()/ksmbd_fd_clear_delete_pending()
+to keep a stream's FileDispositionInformation from marking the whole
+file for deletion, but used the inode-wide S_DEL_ON_CLS_STREAM flag to
+do it -- the exact same problem class the commit was fixing, one level
+up.
+
+S_DEL_ON_CLS_STREAM lives on the shared ksmbd_inode, not on any
+specific stream handle. If a file has multiple stream handles open and
+one gets marked delete-pending via FileDispositionInformation, the
+flag can't record *which* stream should be deleted: whichever stream
+handle happens to close first (not necessarily the one that was
+actually marked) sees S_DEL_ON_CLS_STREAM set and has its xattr
+removed. Two clients (or two handles from the same client) touching
+different streams on the same file can end up deleting the wrong one.
+
+ksmbd_inode_pending_delete() has the same issue: it only checks
+S_DEL_PENDING, which is never set for a stream handle, so a client
+querying FileStandardInformation.DeletePending on a stream marked via
+this path would incorrectly see 0.
+
+Track this per-handle instead (stream_del_pending on struct
+ksmbd_file), matching the file itself rather than the shared inode.
+ksmbd_fd_set_delete_on_close() (the CREATE-time FILE_DELETE_ON_CLOSE
+option, a separate call path from FileDispositionInformation) still
+uses the inode-wide flag; __ksmbd_inode_close() now checks both, since
+either one should trigger removing the stream's xattr on close.
+
+Assisted-by: Claude:claude-sonnet-5
+Signed-off-by: Gael Blivet <gael.blivet@gmail.com>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/vfs_cache.c | 51 +++++++++++++++++++++++++++++++--------
+ fs/smb/server/vfs_cache.h |  7 ++++++
+ 2 files changed, 48 insertions(+), 10 deletions(-)
+
+diff --git a/fs/smb/server/vfs_cache.c b/fs/smb/server/vfs_cache.c
+index b53912ce5e2a..e014c880b88b 100644
+--- a/fs/smb/server/vfs_cache.c
++++ b/fs/smb/server/vfs_cache.c
+@@ -229,6 +229,22 @@ bool ksmbd_inode_pending_delete(struct ksmbd_file *fp)
+ 	struct ksmbd_inode *ci = fp->f_ci;
+ 	int ret;
+ 
++	/*
++	 * Stream delete-pending is tracked per-handle (see
++	 * ksmbd_fd_set_delete_pending()), not on the shared inode -- the
++	 * whole-file flags checked below would never see it set, and would
++	 * also incorrectly report a whole-file pending-delete as applying
++	 * to an unrelated stream handle on the same inode.
++	 */
++	if (ksmbd_stream_fd(fp)) {
++		bool pending;
++
++		spin_lock(&fp->f_lock);
++		pending = fp->stream_del_pending;
++		spin_unlock(&fp->f_lock);
++		return pending;
++	}
++
+ 	down_read(&ci->m_lock);
+ 	ret = (ci->m_flags & S_DEL_PENDING);
+ 	up_read(&ci->m_lock);
+@@ -299,15 +315,19 @@ void ksmbd_fd_set_delete_on_close(struct ksmbd_file *fp,
+  * mark the stream for deletion, not the whole file -- otherwise
+  * deleting a single alternate data stream (e.g. AFP_AfpInfo) deletes
+  * the entire file's data along with it.
++ *
++ * This is tracked on fp itself (stream_del_pending), not the shared
++ * ksmbd_inode: the inode-wide S_DEL_ON_CLS_STREAM flag used by
++ * ksmbd_fd_set_delete_on_close() can't record *which* stream should be
++ * deleted, so if a different stream handle on the same file closed
++ * first, it would delete the wrong stream.
+  */
+ void ksmbd_fd_set_delete_pending(struct ksmbd_file *fp)
+ {
+-	struct ksmbd_inode *ci = fp->f_ci;
+-
+ 	if (ksmbd_stream_fd(fp)) {
+-		down_write(&ci->m_lock);
+-		ci->m_flags |= S_DEL_ON_CLS_STREAM;
+-		up_write(&ci->m_lock);
++		spin_lock(&fp->f_lock);
++		fp->stream_del_pending = true;
++		spin_unlock(&fp->f_lock);
+ 	} else {
+ 		ksmbd_set_inode_pending_delete(fp);
+ 	}
+@@ -315,12 +335,10 @@ void ksmbd_fd_set_delete_pending(struct ksmbd_file *fp)
+ 
+ void ksmbd_fd_clear_delete_pending(struct ksmbd_file *fp)
+ {
+-	struct ksmbd_inode *ci = fp->f_ci;
+-
+ 	if (ksmbd_stream_fd(fp)) {
+-		down_write(&ci->m_lock);
+-		ci->m_flags &= ~S_DEL_ON_CLS_STREAM;
+-		up_write(&ci->m_lock);
++		spin_lock(&fp->f_lock);
++		fp->stream_del_pending = false;
++		spin_unlock(&fp->f_lock);
+ 	} else {
+ 		ksmbd_clear_inode_pending_delete(fp);
+ 	}
+@@ -446,6 +464,19 @@ static void __ksmbd_inode_close(struct ksmbd_file *fp)
+ 		}
+ 		up_write(&ci->m_lock);
+ 
++		/*
++		 * Per-handle delete-pending from ksmbd_fd_set_delete_pending()
++		 * (FileDispositionInformation on this stream) -- separate from
++		 * the inode-wide flag above, which only ever meant "some
++		 * stream on this file" with no way to say which one.
++		 */
++		spin_lock(&fp->f_lock);
++		if (fp->stream_del_pending) {
++			fp->stream_del_pending = false;
++			remove_stream_xattr = true;
++		}
++		spin_unlock(&fp->f_lock);
++
+ 		if (remove_stream_xattr) {
+ 			const struct cred *saved_cred;
+ 
+diff --git a/fs/smb/server/vfs_cache.h b/fs/smb/server/vfs_cache.h
+index 111a4e315499..f796b6edc69b 100644
+--- a/fs/smb/server/vfs_cache.h
++++ b/fs/smb/server/vfs_cache.h
+@@ -118,6 +118,13 @@ struct ksmbd_file {
+ 	struct list_head		node;
+ 	struct list_head		blocked_works;
+ 	struct list_head		lock_list;
++	/*
++	 * Per-handle FileDispositionInformation delete-pending state for a
++	 * stream handle -- separate from ksmbd_inode's inode-wide m_flags,
++	 * which have no way to record which stream on a multi-stream file
++	 * was actually marked for deletion. See ksmbd_fd_set_delete_pending().
++	 */
++	bool				stream_del_pending;
+ 
+ 	unsigned int			durable_timeout;
+ 	unsigned int			durable_scavenger_timeout;
+-- 
+2.55.0
+

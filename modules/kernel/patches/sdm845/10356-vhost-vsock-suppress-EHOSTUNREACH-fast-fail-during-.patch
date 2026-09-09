@@ -1,0 +1,106 @@
+From 7c4fedf10a831b471dd94ab7bed499c305db27c9 Mon Sep 17 00:00:00 2001
+From: Andrey Drobyshev <andrey.drobyshev@virtuozzo.com>
+Date: Mon, 20 Jul 2026 13:22:38 +0300
+Subject: [PATCH 10356/15333] vhost/vsock: suppress EHOSTUNREACH fast-fail
+ during CPR pause
+
+Earlier commit bb26ed5f3a8b ("vhost/vsock: Refuse the connection
+immediately when guest isn't ready") added a fast-fail in
+vhost_transport_send_pkt().  It rejects every host send with -EHOSTUNREACH
+until the destination calls SET_RUNNING(1).  The fast-fail condition checks
+whether device's backends are dropped, and if they're, the guest is
+considered to be not ready.
+
+However, there might be other reasons for backends to be nulled.  In
+particular, when QEMU is performing CPR (checkpoint-restore) migration,
+device ownership is being RESET and SET again, which leads to backends
+drop and reattach.  If we end up connecting during this window, an
+AF_VSOCK client gets -EHOSTUNREACH, which is wrong.
+
+Add an 'ever_started' flag which is set once in vhost_vsock_start() and is
+never cleared.  The behaviour changes to:
+
+  * When device was never started -> flag is unset -> no listener can
+    exist yet -> fast-fail;
+  * Once the device starts -> flag is set -> we don't fast-fail ->
+    we queue and preserve during any later stop / CPR pause.
+
+The VHOST_RESET_OWNER ioctl is implemented in a following patch, and
+without RESET_OWNER the problem we fix here isn't manifesting - thus
+this patch is a preparation to support RESET_OWNER.
+
+Important caveat: after the first start, a connect during any stopped
+window is queued instead of fast-failed.  That was the behaviour before
+the patch bb26ed5f3a8b, and we're restoring it now.  However we still
+keep the behaviour originally intended by that commit (i.e. fast-fail if
+there's no real listener yet) while fixing the CPR path.
+
+Suggested-by: Stefano Garzarella <sgarzare@redhat.com>
+Signed-off-by: Denis V. Lunev <den@openvz.org>
+Signed-off-by: Andrey Drobyshev <andrey.drobyshev@virtuozzo.com>
+Reviewed-by: Pavel Tikhomirov <ptikhomirov@virtuozzo.com>
+Reviewed-by: Stefano Garzarella <sgarzare@redhat.com>
+Message-ID: <20260720102241.371610-3-andrey.drobyshev@virtuozzo.com>
+Signed-off-by: Michael S. Tsirkin <mst@redhat.com>
+---
+ drivers/vhost/vsock.c | 22 ++++++++++++----------
+ 1 file changed, 12 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/vhost/vsock.c b/drivers/vhost/vsock.c
+index b12221ce6faf..27169a09e87e 100644
+--- a/drivers/vhost/vsock.c
++++ b/drivers/vhost/vsock.c
+@@ -61,6 +61,7 @@ struct vhost_vsock {
+ 
+ 	u32 guest_cid;
+ 	bool seqpacket_allow;
++	bool ever_started; /* set on first SET_RUNNING(1); never cleared */
+ };
+ 
+ static u32 vhost_transport_get_local_cid(void)
+@@ -302,17 +303,12 @@ vhost_transport_send_pkt(struct sk_buff *skb, struct net *net)
+ 		return -ENODEV;
+ 	}
+ 
+-	/* Fast-fail if the guest hasn't enabled the RX vq yet. Queuing the packet
+-	 * and making the caller wait is pointless: even if the guest manages to init
+-	 * within the timeout, it'll immediately reply with RST, because there's no
+-	 * listener on the port yet.
+-	 *
+-	 * vhost_vq_get_backend() without vq->mutex is acceptable here: locking
+-	 * the mutex would be too expensive in this hot path, and we already have
+-	 * all the outcomes covered: if the backend becomes NULL right after the check,
+-	 * vhost_transport_do_send_pkt() will check it under the mutex anyway.
++	/* Fast-fail until the guest first enables the device (SET_RUNNING(1)).
++	 * Before that there is no listener, so queuing is pointless.
++	 * 'ever_started' is never cleared, so once we're up we keep queuing
++	 * across later stop / CPR-pause windows.
+ 	 */
+-	if (unlikely(!data_race(vhost_vq_get_backend(&vsock->vqs[VSOCK_VQ_RX])))) {
++	if (unlikely(!READ_ONCE(vsock->ever_started))) {
+ 		rcu_read_unlock();
+ 		kfree_skb(skb);
+ 		return -EHOSTUNREACH;
+@@ -640,6 +636,11 @@ static int vhost_vsock_start(struct vhost_vsock *vsock)
+ 		mutex_unlock(&vq->mutex);
+ 	}
+ 
++	/* Set 'ever_started' flag on the first start; never cleared, so send_pkt
++	 * keeps queuing (instead of fast-failing) on later stop / CPR pauses.
++	 */
++	WRITE_ONCE(vsock->ever_started, true);
++
+ 	/* Some packets may have been queued before the device was started,
+ 	 * let's kick the send worker to send them.
+ 	 */
+@@ -728,6 +729,7 @@ static int vhost_vsock_dev_open(struct inode *inode, struct file *file)
+ 
+ 	vsock->guest_cid = 0; /* no CID assigned yet */
+ 	vsock->seqpacket_allow = false;
++	vsock->ever_started = false;
+ 
+ 	atomic_set(&vsock->queued_replies, 0);
+ 
+-- 
+2.55.0
+

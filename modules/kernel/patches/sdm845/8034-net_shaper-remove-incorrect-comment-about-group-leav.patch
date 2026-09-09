@@ -1,0 +1,60 @@
+From 16812d9674d4991ebbae80769b15f7342dbfa988 Mon Sep 17 00:00:00 2001
+From: Jakub Kicinski <kuba@kernel.org>
+Date: Fri, 24 Jul 2026 14:07:54 -0700
+Subject: [PATCH 08034/15333] net_shaper: remove incorrect comment about group
+ leaves
+
+It is true that the user-facing group() operation can only
+be invoked with queues as leaves (see net_shaper_parse_leaf()),
+but the driver facing op is also called when we delete a node.
+When we delete a node we conceptually call
+
+    group(parent, node.list_of_leaves)
+
+to add node's leaves to the parent. Node deletion "mid-hierarchy"
+is supported so some of the leaves may themselves be nodes.
+Therefore the driver facing group() may be called with nodes.
+
+Remove the incorrect comment, and add a comment about differences
+between the Netlink API and driver facing API.
+
+Link: https://patch.msgid.link/20260724210756.1553565-2-kuba@kernel.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ include/net/net_shaper.h | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/include/net/net_shaper.h b/include/net/net_shaper.h
+index 3939b816b001..0fcca29207ac 100644
+--- a/include/net/net_shaper.h
++++ b/include/net/net_shaper.h
+@@ -72,6 +72,18 @@ struct net_shaper {
+  *
+  * Each shaper is uniquely identified within the device with a 'handle'
+  * comprising the shaper scope and a scope-specific id.
++ *
++ * Driver ops vs uAPI
++ * ------------------
++ * Members of the driver ops mirror the Netlink uAPI but driver calls do not
++ * map 1:1 to user calls. Drivers need to be careful when assuming that calls
++ * disallowed at the uAPI level will never be made at the driver level.
++ * The shaper core performs automatic reparenting and cleanup, generating
++ * additional calls. Notably:
++ *  - @group calls in the driver facing API may have nodes as leaves (user is
++ *    only allowed to construct groups with queues as leaves)
++ *  - @group calls may update leaf's parent if the parent is about
++ *    to be removed (re-parenting nodes explicitly is not supported in the uAPI)
+  */
+ struct net_shaper_ops {
+ 	/**
+@@ -82,7 +94,6 @@ struct net_shaper_ops {
+ 	 * The @leaves arrays size is specified by @leaves_count.
+ 	 * Create either the @leaves and the @node shaper; or if they already
+ 	 * exists, links them together in the desired way.
+-	 * @leaves scope must be NET_SHAPER_SCOPE_QUEUE.
+ 	 */
+ 	int (*group)(struct net_shaper_binding *binding, int leaves_count,
+ 		     const struct net_shaper *leaves,
+-- 
+2.55.0
+

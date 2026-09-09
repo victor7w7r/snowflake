@@ -1,0 +1,80 @@
+From 9037f07dfc09769c2f64713ab4a8e0c069280097 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Thu, 28 May 2026 13:34:54 +0300
+Subject: [PATCH 00223/15333] drm/i915/bw: Move psf_bw[] out from the plane
+ group
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The PSF bandwidth doesn't depend on the number of planes, so there
+is no need to repeat the same information for each plane group.
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20260528103458.18069-8-ville.syrjala@linux.intel.com
+Reviewed-by: Vinod Govindapillai <vinod.govindapillai@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_bw.c         | 17 ++++++-----------
+ .../gpu/drm/i915/display/intel_display_core.h   |  4 ++--
+ 2 files changed, 8 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_bw.c b/drivers/gpu/drm/i915/display/intel_bw.c
+index 6495924d0be8..ef86fac8e664 100644
+--- a/drivers/gpu/drm/i915/display/intel_bw.c
++++ b/drivers/gpu/drm/i915/display/intel_bw.c
+@@ -673,16 +673,14 @@ static int tgl_get_bw_info(struct intel_display *display,
+ 				    i, j, bi->num_planes, bi->deratedbw[j],
+ 				    bi->peakbw[j]);
+ 		}
++	}
+ 
+-		for (j = 0; j < qi.num_psf_points; j++) {
+-			const struct intel_psf_gv_point *sp = &qi.psf_points[j];
++	for (i = 0; i < qi.num_psf_points; i++) {
++		const struct intel_psf_gv_point *sp = &qi.psf_points[i];
+ 
+-			bi->psf_bw[j] = adl_calc_psf_bw(sp->clk);
++		display->bw.psf_bw[i] = adl_calc_psf_bw(sp->clk);
+ 
+-			drm_dbg_kms(display->drm,
+-				    "BW%d / PSF GV %d: num_planes=%d bw=%u\n",
+-				    i, j, bi->num_planes, bi->psf_bw[j]);
+-		}
++		drm_dbg_kms(display->drm, "PSF GV %d: bw=%u\n", i, display->bw.psf_bw[i]);
+ 	}
+ 
+ 	/*
+@@ -810,10 +808,7 @@ static unsigned int tgl_max_bw_index(struct intel_display *display,
+ static unsigned int adl_psf_bw(struct intel_display *display,
+ 			       int psf_gv_point)
+ {
+-	const struct intel_bw_info *bi =
+-			&display->bw.max[0];
+-
+-	return bi->psf_bw[psf_gv_point];
++	return display->bw.psf_bw[psf_gv_point];
+ }
+ 
+ static unsigned int icl_qgv_bw(struct intel_display *display,
+diff --git a/drivers/gpu/drm/i915/display/intel_display_core.h b/drivers/gpu/drm/i915/display/intel_display_core.h
+index f13fa810ccca..58cd0961031b 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_core.h
++++ b/drivers/gpu/drm/i915/display/intel_display_core.h
+@@ -325,12 +325,12 @@ struct intel_display {
+ 		struct intel_bw_info {
+ 			/* for each QGV point */
+ 			unsigned int deratedbw[I915_NUM_QGV_POINTS];
+-			/* for each PSF GV point */
+-			unsigned int psf_bw[I915_NUM_PSF_GV_POINTS];
+ 			/* Peak BW for each QGV point */
+ 			unsigned int peakbw[I915_NUM_QGV_POINTS];
+ 			u8 num_planes;
+ 		} max[6];
++		/* for each PSF GV point */
++		unsigned int psf_bw[I915_NUM_PSF_GV_POINTS];
+ 		u8 num_qgv_points;
+ 		u8 num_psf_gv_points;
+ 	} bw;
+-- 
+2.55.0
+

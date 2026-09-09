@@ -1,0 +1,62 @@
+From f4a1b63ed5202f1bec3d641b2456d97303623a49 Mon Sep 17 00:00:00 2001
+From: Geliang Tang <tanggeliang@kylinos.cn>
+Date: Wed, 12 Aug 2026 16:55:45 +0200
+Subject: [PATCH 14644/15333] selftests: mptcp: fix const qualifier warnings in
+ strchr usage
+
+In mptcp_connect.c, strchr() returns a pointer to a character within
+the input string, which is declared as const char *. Assigning this
+return value to a non-const char * discards the const qualifier,
+triggering compiler warnings:
+
+ make: Entering directory 'tools/testing/selftests/net/mptcp'
+   CC       mptcp_connect
+ mptcp_connect.c: In function 'parse_cmsg_types':
+ mptcp_connect.c:1267:22: warning: initialization discards 'const'
+	qualifier from pointer target type [-Wdiscarded-qualifiers]
+  1267 |         char *next = strchr(type, ',');
+       |                      ^~~~~~
+ mptcp_connect.c: In function 'parse_setsock_options':
+ mptcp_connect.c:1295:22: warning: initialization discards 'const'
+	qualifier from pointer target type [-Wdiscarded-qualifiers]
+  1295 |         char *next = strchr(name, ',');
+       |                      ^~~~~~
+ make: Leaving directory 'tools/testing/selftests/net/mptcp'
+
+Fix these warnings by declaring the 'next' variable as const char *,
+as it is only used for read-only parsing.
+
+Signed-off-by: Geliang Tang <tanggeliang@kylinos.cn>
+Reviewed-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+Signed-off-by: Matthieu Baerts (NGI0) <matttbe@kernel.org>
+Link: https://patch.msgid.link/20260812-net-next-mptcp-misc-feat-7-3-v1-10-1905a818f6cb@kernel.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ tools/testing/selftests/net/mptcp/mptcp_connect.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/tools/testing/selftests/net/mptcp/mptcp_connect.c b/tools/testing/selftests/net/mptcp/mptcp_connect.c
+index cbe573c4ab3a..ea4cb6c1bd5e 100644
+--- a/tools/testing/selftests/net/mptcp/mptcp_connect.c
++++ b/tools/testing/selftests/net/mptcp/mptcp_connect.c
+@@ -1264,7 +1264,7 @@ static void apply_cmsg_types(int fd, const struct cfg_cmsg_types *cmsg)
+ 
+ static void parse_cmsg_types(const char *type)
+ {
+-	char *next = strchr(type, ',');
++	const char *next = strchr(type, ',');
+ 	unsigned int len = 0;
+ 
+ 	cfg_cmsg_types.cmsg_enabled = 1;
+@@ -1292,7 +1292,7 @@ static void parse_cmsg_types(const char *type)
+ 
+ static void parse_setsock_options(const char *name)
+ {
+-	char *next = strchr(name, ',');
++	const char *next = strchr(name, ',');
+ 	unsigned int len = 0;
+ 
+ 	if (next) {
+-- 
+2.55.0
+

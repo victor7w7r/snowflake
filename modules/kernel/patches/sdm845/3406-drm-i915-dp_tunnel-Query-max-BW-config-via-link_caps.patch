@@ -1,0 +1,74 @@
+From 9fe6cae318e44c9a34454aa3337b8124e1cfa33a Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Wed, 1 Jul 2026 18:31:44 +0300
+Subject: [PATCH 03406/15333] drm/i915/dp_tunnel: Query max BW config via
+ link_caps for BW computation
+
+Query the maximum link BW configuration via the link caps interface to
+compute the available TBT bandwidth. Unlike the max common link params
+used so far for this, the max BW config also accounts for any forced
+link parameters.
+
+This makes the max BW link config query uniform across mode validation
+and TBT BW calculation, and allows unexporting the
+intel_dp_link_caps_max_common_lane_count() helper.
+
+v2: Use the max BW link configuration, instead of the max link limits.
+
+Reviewed-by: Luca Coelho <luciano.coelho@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260701153204.4124150-16-imre.deak@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_dp_link_caps.c | 2 +-
+ drivers/gpu/drm/i915/display/intel_dp_link_caps.h | 1 -
+ drivers/gpu/drm/i915/display/intel_dp_tunnel.c    | 8 +++++---
+ 3 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+index c209c8a93523..8dfb7f4f703b 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+@@ -290,7 +290,7 @@ void intel_dp_link_caps_print_common_rates(struct intel_dp_link_caps *link_caps)
+ 	drm_dbg_kms(display->drm, "common rates: %s\n", seq_buf_str(&s));
+ }
+ 
+-int intel_dp_link_caps_max_common_lane_count(struct intel_dp_link_caps *link_caps)
++static int intel_dp_link_caps_max_common_lane_count(struct intel_dp_link_caps *link_caps)
+ {
+ 	return link_caps->max_lane_count;
+ }
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+index 667bd70b2396..07002d745d38 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+@@ -125,7 +125,6 @@ int intel_dp_common_rate(struct intel_dp_link_caps *link_caps, int index);
+ int intel_dp_link_caps_common_rate_idx(struct intel_dp_link_caps *link_caps, int rate);
+ int intel_dp_max_common_rate(struct intel_dp_link_caps *link_caps);
+ int intel_dp_link_caps_num_common_rates(struct intel_dp_link_caps *link_caps);
+-int intel_dp_link_caps_max_common_lane_count(struct intel_dp_link_caps *link_caps);
+ 
+ void intel_dp_link_caps_print_common_rates(struct intel_dp_link_caps *link_caps);
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_tunnel.c b/drivers/gpu/drm/i915/display/intel_dp_tunnel.c
+index 76e9753766b9..49fa4c9699b6 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_tunnel.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_tunnel.c
+@@ -58,10 +58,12 @@ static int kbytes_to_mbits(int kbytes)
+ static int get_current_link_bw(struct intel_dp *intel_dp)
+ {
+ 	struct intel_dp_link_caps *link_caps = intel_dp->link.caps;
+-	int rate = intel_dp_max_common_rate(link_caps);
+-	int lane_count = intel_dp_link_caps_max_common_lane_count(link_caps);
++	struct intel_dp_link_config max_bw_config;
+ 
+-	return intel_dp_max_link_data_rate(intel_dp, rate, lane_count);
++	intel_dp_link_caps_get_max_bw_config(link_caps, &max_bw_config);
++
++	return intel_dp_max_link_data_rate(intel_dp, max_bw_config.rate,
++						     max_bw_config.lane_count);
+ }
+ 
+ static int __update_tunnel_state(struct intel_dp *intel_dp, bool force_sink_update)
+-- 
+2.55.0
+

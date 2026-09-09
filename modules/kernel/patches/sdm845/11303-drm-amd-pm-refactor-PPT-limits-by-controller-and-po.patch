@@ -1,0 +1,2547 @@
+From 6c9e0328d1dee58cd2ebbcc34b43eefc342d6d62 Mon Sep 17 00:00:00 2001
+From: Yang Wang <kevinyang.wang@amd.com>
+Date: Thu, 30 Jul 2026 11:21:06 +0800
+Subject: [PATCH 11303/15333] drm/amd/pm: refactor PPT limits by controller and
+ power source
+
+The scalar PPT model has several structural limitations:
+
+- Controller identity, power source, capability, and PMFW state share
+  the same fields.
+- Combined callbacks cannot address PPT0 and PPT1 independently.
+- Cached current limits can become stale after PMFW reset.
+
+Refactor the model around these rules:
+
+- Index ranges by AC/DC source and PPT0/PPT1 controller.
+- Store normal and overdrive capabilities separately.
+- Pass the controller to get and set callbacks.
+- Keep slow and fast names as semantic aliases.
+
+Assign each value to a single owner:
+
+- PPTable or platform initialization supplies constant capabilities.
+- PMFW supplies runtime state.
+- Common code selects the active source and overdrive range.
+
+Van Gogh defaults are initialized once, while firmware without PPT query
+support remains usable. Capable SMU 13.0.6 and SMU 15.0.8 platforms
+expose PPT1 through the same interface. A writable controller must also
+provide a setter callback.
+
+Signed-off-by: Yang Wang <kevinyang.wang@amd.com>
+Reviewed-by: Kenneth Feng <kenneth.feng@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c     | 150 +++++++++---------
+ drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h |  60 +++----
+ drivers/gpu/drm/amd/pm/swsmu/inc/smu_v11_0.h  |  15 +-
+ drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h  |  11 +-
+ drivers/gpu/drm/amd/pm/swsmu/inc/smu_v14_0.h  |  11 +-
+ drivers/gpu/drm/amd/pm/swsmu/inc/smu_v15_0.h  |  11 +-
+ .../gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c |  52 +++---
+ .../gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c   |  78 ++++-----
+ .../amd/pm/swsmu/smu11/sienna_cichlid_ppt.c   | 122 +++++++-------
+ .../gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c    |  23 +--
+ .../gpu/drm/amd/pm/swsmu/smu11/vangogh_ppt.c  | 118 ++++++--------
+ .../drm/amd/pm/swsmu/smu13/aldebaran_ppt.c    |  93 +++++------
+ .../gpu/drm/amd/pm/swsmu/smu13/smu_v13_0.c    |  23 +--
+ .../drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c  | 114 +++++++------
+ .../drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c  | 124 +++++++--------
+ .../drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c  | 114 +++++++------
+ .../gpu/drm/amd/pm/swsmu/smu14/smu_v14_0.c    |  23 +--
+ .../drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c  | 112 +++++++------
+ .../gpu/drm/amd/pm/swsmu/smu15/smu_v15_0.c    |  23 +--
+ .../drm/amd/pm/swsmu/smu15/smu_v15_0_8_ppt.c  | 122 +++++++-------
+ drivers/gpu/drm/amd/pm/swsmu/smu_internal.h   |   3 +-
+ 21 files changed, 707 insertions(+), 695 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+index f4e817885e54..3fb677248700 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+@@ -70,7 +70,7 @@ static int smu_handle_task(struct smu_context *smu,
+ static int smu_reset(struct smu_context *smu);
+ static int smu_set_fan_speed_pwm(void *handle, u32 speed);
+ static int smu_set_fan_control_mode(void *handle, u32 value);
+-static int smu_set_power_limit(void *handle, uint32_t limit_type, uint32_t limit);
++static int smu_set_ppt_limit(void *handle, uint32_t limit_type, uint32_t limit);
+ static int smu_set_fan_speed_rpm(void *handle, uint32_t speed);
+ static int smu_set_gfx_cgpg(struct smu_context *smu, bool enabled);
+ static int smu_set_mp1_state(void *handle, enum pp_mp1_state mp1_state);
+@@ -493,8 +493,7 @@ static void smu_set_user_clk_dependencies(struct smu_context *smu, enum smu_clk_
+  *
+  * @smu:	smu_context pointer
+  *
+- * Restore the saved user power configurations include power limit,
+- * clock frequencies, fan control mode and fan speed.
++ * Restore saved user power limits, clock frequencies and fan settings.
+  */
+ static void smu_restore_dpm_user_profile(struct smu_context *smu)
+ {
+@@ -511,13 +510,14 @@ static void smu_restore_dpm_user_profile(struct smu_context *smu)
+ 	smu->user_dpm_profile.flags |= SMU_DPM_USER_PROFILE_RESTORE;
+ 
+ 	/* set the user dpm power limits */
+-	for (int i = SMU_DEFAULT_PPT_LIMIT; i < SMU_LIMIT_TYPE_COUNT; i++) {
+-		if (!smu->user_dpm_profile.power_limits[i])
++	for (int i = SMU_PPT_LIMIT_PPT0; i < SMU_LIMIT_TYPE_COUNT; i++) {
++		if (!smu->user_dpm_profile.ppt_limits[i])
+ 			continue;
+-		ret = smu_set_power_limit(smu, i,
+-					  smu->user_dpm_profile.power_limits[i]);
++		ret = smu_set_ppt_limit(smu, i,
++					    smu->user_dpm_profile.ppt_limits[i]);
+ 		if (ret)
+-			dev_err(smu->adev->dev, "Failed to set %d power limit value\n", i);
++			dev_err(smu->adev->dev,
++				"Failed to set %d PPT limit value\n", i);
+ 	}
+ 
+ 	/* set the user dpm clock configurations */
+@@ -687,6 +687,7 @@ static int smu_sys_set_pp_table(void *handle,
+ 	smu_table->hardcode_pptable = hardcode_pptable;
+ 	smu_table->power_play_table = smu_table->hardcode_pptable;
+ 	smu_table->power_play_table_size = size;
++	memset(&smu->ppt_limits, 0, sizeof(smu->ppt_limits));
+ 
+ 	/*
+ 	 * Special hw_fini action(for Navi1x, the DPMs disablement will be
+@@ -949,16 +950,6 @@ static int smu_late_init(struct amdgpu_ip_block *ip_block)
+ 		return ret;
+ 	}
+ 
+-	ret = smu_get_asic_power_limits(smu,
+-					&smu->current_power_limit,
+-					&smu->default_power_limit,
+-					&smu->max_power_limit,
+-					&smu->min_power_limit);
+-	if (ret) {
+-		dev_err(adev->dev, "Failed to get asic power limits!\n");
+-		return ret;
+-	}
+-
+ 	if (!amdgpu_sriov_vf(adev))
+ 		smu_get_unique_id(smu);
+ 
+@@ -2900,7 +2891,7 @@ static int smu_set_fan_speed_rpm(void *handle, uint32_t speed)
+ }
+ 
+ /**
+- * smu_get_power_limit - Request one of the SMU Power Limits
++ * smu_get_ppt_limit - Request one of the SMU PPT limits
+  *
+  * @handle: pointer to smu context
+  * @limit: requested limit is written back to this variable
+@@ -2909,13 +2900,13 @@ static int smu_set_fan_speed_rpm(void *handle, uint32_t speed)
+  * Return:  0 on success, <0 on error
+  *
+  */
+-int smu_get_power_limit(void *handle,
++int smu_get_ppt_limit(void *handle,
+ 			uint32_t *limit,
+ 			enum pp_power_limit_level pp_limit_level,
+ 			enum pp_power_type pp_power_type)
+ {
+ 	struct smu_context *smu = handle;
+-	struct amdgpu_device *adev = smu->adev;
++	enum smu_power_src_type power_source;
+ 	enum smu_ppt_limit_level limit_level;
+ 	uint32_t limit_type;
+ 	int ret = 0;
+@@ -2926,9 +2917,12 @@ int smu_get_power_limit(void *handle,
+ 	if  (!limit)
+ 		return -EINVAL;
+ 
++	power_source = smu->adev->pm.ac_power ?
++		SMU_POWER_SOURCE_AC : SMU_POWER_SOURCE_DC;
++
+ 	switch (pp_power_type) {
+ 	case PP_PWR_TYPE_SUSTAINED:
+-		limit_type = SMU_DEFAULT_PPT_LIMIT;
++		limit_type = SMU_SLOW_PPT_LIMIT;
+ 		break;
+ 	case PP_PWR_TYPE_FAST:
+ 		limit_type = SMU_FAST_PPT_LIMIT;
+@@ -2954,77 +2948,77 @@ int smu_get_power_limit(void *handle,
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+-	if (limit_type != SMU_DEFAULT_PPT_LIMIT) {
+-		if (smu->ppt_funcs->get_ppt_limit)
+-			ret = smu->ppt_funcs->get_ppt_limit(smu, limit, limit_type, limit_level);
+-		else
+-			return -EOPNOTSUPP;
+-	} else {
+-		switch (limit_level) {
+-		case SMU_PPT_LIMIT_CURRENT:
+-			switch (amdgpu_ip_version(adev, MP1_HWIP, 0)) {
+-			case IP_VERSION(13, 0, 2):
+-			case IP_VERSION(13, 0, 6):
+-			case IP_VERSION(13, 0, 12):
+-			case IP_VERSION(13, 0, 14):
+-			case IP_VERSION(11, 0, 7):
+-			case IP_VERSION(11, 0, 11):
+-			case IP_VERSION(11, 0, 12):
+-			case IP_VERSION(11, 0, 13):
+-			case IP_VERSION(15, 0, 8):
+-				ret = smu_get_asic_power_limits(smu,
+-								&smu->current_power_limit,
+-								NULL, NULL, NULL);
+-				break;
+-			default:
+-				break;
+-			}
+-			*limit = smu->current_power_limit;
+-			break;
+-		case SMU_PPT_LIMIT_DEFAULT:
+-			*limit = smu->default_power_limit;
+-			break;
+-		case SMU_PPT_LIMIT_MAX:
+-			*limit = smu->max_power_limit;
+-			break;
+-		case SMU_PPT_LIMIT_MIN:
+-			*limit = smu->min_power_limit;
+-			break;
+-		default:
+-			return -EINVAL;
+-		}
++	if (!(smu->ppt_limits.supported_mask & BIT(limit_type)))
++		return -EOPNOTSUPP;
++
++	switch (limit_level) {
++	case SMU_PPT_LIMIT_CURRENT:
++		ret = smu_get_asic_ppt_limit(smu, limit_type, limit);
++		break;
++	case SMU_PPT_LIMIT_DEFAULT:
++		*limit = smu->ppt_limits.range[power_source][limit_type].default_value;
++		break;
++	case SMU_PPT_LIMIT_MAX:
++		*limit = smu->od_enabled ?
++			smu->ppt_limits.range[power_source][limit_type].od_max :
++			smu->ppt_limits.range[power_source][limit_type].max;
++		break;
++	case SMU_PPT_LIMIT_MIN:
++		*limit = smu->od_enabled ?
++			smu->ppt_limits.range[power_source][limit_type].od_min :
++			smu->ppt_limits.range[power_source][limit_type].min;
++		break;
++	default:
++		return -EINVAL;
+ 	}
+ 
+ 	return ret;
+ }
+ 
+-static int smu_set_power_limit(void *handle, uint32_t limit_type, uint32_t limit)
++static int smu_set_ppt_limit(void *handle, uint32_t limit_type, uint32_t limit)
+ {
+ 	struct smu_context *smu = handle;
++	enum smu_power_src_type power_source;
++	struct smu_ppt_limit_range *range;
++	uint32_t min_limit, max_limit;
+ 	int ret = 0;
+ 
+ 	if (!smu->pm_enabled || !smu->adev->pm.dpm_enabled)
+ 		return -EOPNOTSUPP;
++	if (limit_type >= SMU_LIMIT_TYPE_COUNT)
++		return -EINVAL;
+ 
+-	if (limit_type == SMU_DEFAULT_PPT_LIMIT) {
+-		if (!limit)
+-			limit = smu->current_power_limit;
+-		if ((limit > smu->max_power_limit) || (limit < smu->min_power_limit)) {
+-			dev_err(smu->adev->dev,
+-				"New power limit (%d) is out of range [%d,%d]\n",
+-				limit, smu->min_power_limit, smu->max_power_limit);
+-			return -EINVAL;
+-		}
+-	}
++	power_source = smu->adev->pm.ac_power ?
++		SMU_POWER_SOURCE_AC : SMU_POWER_SOURCE_DC;
++	range = &smu->ppt_limits.range[power_source][limit_type];
++	min_limit = smu->od_enabled ? range->od_min : range->min;
++	max_limit = smu->od_enabled ? range->od_max : range->max;
+ 
+-	if (smu->ppt_funcs->set_power_limit) {
+-		ret = smu->ppt_funcs->set_power_limit(smu, limit_type, limit);
++	if (!(smu->ppt_limits.supported_mask & BIT(limit_type)))
++		return -EOPNOTSUPP;
++
++	if (limit_type == SMU_DEFAULT_PPT_LIMIT && !limit) {
++		ret = smu_get_asic_ppt_limit(smu, limit_type, &limit);
+ 		if (ret)
+ 			return ret;
+-		if (!(smu->user_dpm_profile.flags & SMU_DPM_USER_PROFILE_RESTORE))
+-			smu->user_dpm_profile.power_limits[limit_type] = limit;
+ 	}
+ 
++	if (limit > max_limit || limit < min_limit) {
++		dev_err(smu->adev->dev,
++			"New PPT limit (%d) is out of range [%d,%d]\n",
++			limit, min_limit, max_limit);
++		return -EINVAL;
++	}
++
++	if (!smu->ppt_funcs->set_ppt_limit)
++		return -EOPNOTSUPP;
++
++	ret = smu->ppt_funcs->set_ppt_limit(smu, limit_type, limit);
++	if (ret)
++		return ret;
++	if (!(smu->user_dpm_profile.flags & SMU_DPM_USER_PROFILE_RESTORE))
++		smu->user_dpm_profile.ppt_limits[limit_type] = limit;
++
+ 	return 0;
+ }
+ 
+@@ -3970,8 +3964,8 @@ static const struct amd_pm_funcs swsmu_pm_funcs = {
+ 	.dispatch_tasks          = smu_handle_dpm_task,
+ 	.load_firmware           = smu_load_microcode,
+ 	.set_powergating_by_smu  = smu_dpm_set_power_gate,
+-	.set_power_limit         = smu_set_power_limit,
+-	.get_power_limit         = smu_get_power_limit,
++	.set_power_limit         = smu_set_ppt_limit,
++	.get_power_limit         = smu_get_ppt_limit,
+ 	.get_power_profile_mode  = smu_get_power_profile_mode,
+ 	.set_power_profile_mode  = smu_set_power_profile_mode,
+ 	.odn_edit_dpm_table      = smu_od_edit_dpm_table,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h b/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
+index eb945f1805ed..b86c5da38b10 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
+@@ -212,9 +212,12 @@ enum smu_power_src_type {
+ };
+ 
+ enum smu_ppt_limit_type {
+-	SMU_DEFAULT_PPT_LIMIT = 0,
+-	SMU_FAST_PPT_LIMIT,
++	SMU_PPT_LIMIT_PPT0 = 0,
++	SMU_PPT_LIMIT_PPT1,
+ 	SMU_LIMIT_TYPE_COUNT,
++	SMU_DEFAULT_PPT_LIMIT = SMU_PPT_LIMIT_PPT0,
++	SMU_SLOW_PPT_LIMIT = SMU_PPT_LIMIT_PPT0,
++	SMU_FAST_PPT_LIMIT = SMU_PPT_LIMIT_PPT1,
+ };
+ 
+ enum smu_ppt_limit_level {
+@@ -224,6 +227,20 @@ enum smu_ppt_limit_level {
+ 	SMU_PPT_LIMIT_MAX,
+ };
+ 
++struct smu_ppt_limit_range {
++	uint32_t default_value;
++	uint32_t min;
++	uint32_t max;
++	uint32_t od_min;
++	uint32_t od_max;
++};
++
++struct smu_ppt_limit_context {
++	struct smu_ppt_limit_range
++		range[SMU_POWER_SOURCE_COUNT][SMU_LIMIT_TYPE_COUNT];
++	uint32_t supported_mask;
++};
++
+ enum smu_memory_pool_size {
+     SMU_MEMORY_POOL_SIZE_ZERO   = 0,
+     SMU_MEMORY_POOL_SIZE_256_MB = 0x10000000,
+@@ -234,7 +251,7 @@ enum smu_memory_pool_size {
+ 
+ struct smu_user_dpm_profile {
+ 	uint32_t fan_mode;
+-	uint32_t power_limits[SMU_LIMIT_TYPE_COUNT];
++	uint32_t ppt_limits[SMU_LIMIT_TYPE_COUNT];
+ 	uint32_t fan_speed_pwm;
+ 	uint32_t fan_speed_rpm;
+ 	uint32_t flags;
+@@ -719,10 +736,7 @@ struct smu_context {
+ 	uint32_t pstate_mclk;
+ 
+ 	bool od_enabled;
+-	uint32_t current_power_limit;
+-	uint32_t default_power_limit;
+-	uint32_t max_power_limit;
+-	uint32_t min_power_limit;
++	struct smu_ppt_limit_context ppt_limits;
+ 
+ 	/* soft pptable */
+ 	uint32_t ppt_offset_bytes;
+@@ -1045,19 +1059,11 @@ struct pptable_funcs {
+ 	int (*display_disable_memory_clock_switch)(struct smu_context *smu, bool disable_memory_clock_switch);
+ 
+ 	/**
+-	 * @get_power_limit: Get the device's power limits.
+-	 */
+-	int (*get_power_limit)(struct smu_context *smu,
+-					uint32_t *current_power_limit,
+-					uint32_t *default_power_limit,
+-					uint32_t *max_power_limit,
+-					uint32_t *min_power_limit);
+-
+-	/**
+-	 * @get_ppt_limit: Get the device's ppt limits.
++	 * @get_ppt_limit: Get the effective runtime PPT0 or PPT1 limit.
+ 	 */
+-	int (*get_ppt_limit)(struct smu_context *smu, uint32_t *ppt_limit,
+-			enum smu_ppt_limit_type limit_type, enum smu_ppt_limit_level limit_level);
++	int (*get_ppt_limit)(struct smu_context *smu,
++			     enum smu_ppt_limit_type limit_type,
++			     uint32_t *current_ppt_limit);
+ 
+ 	/**
+ 	 * @set_df_cstate: Set data fabric cstate.
+@@ -1245,11 +1251,11 @@ struct pptable_funcs {
+ 	int (*notify_display_change)(struct smu_context *smu);
+ 
+ 	/**
+-	 * @set_power_limit: Set power limit in watts.
++	 * @set_ppt_limit: Set the PPT0 or PPT1 limit in watts.
+ 	 */
+-	int (*set_power_limit)(struct smu_context *smu,
+-			       enum smu_ppt_limit_type limit_type,
+-			       uint32_t limit);
++	int (*set_ppt_limit)(struct smu_context *smu,
++			     enum smu_ppt_limit_type limit_type,
++			     uint32_t limit);
+ 
+ 	/**
+ 	 * @init_max_sustainable_clocks: Populate max sustainable clock speed
+@@ -1915,10 +1921,10 @@ smu_driver_table_update_cache_time(struct smu_context *smu,
+ }
+ 
+ #if !defined(SWSMU_CODE_LAYER_L2) && !defined(SWSMU_CODE_LAYER_L3) && !defined(SWSMU_CODE_LAYER_L4)
+-int smu_get_power_limit(void *handle,
+-			uint32_t *limit,
+-			enum pp_power_limit_level pp_limit_level,
+-			enum pp_power_type pp_power_type);
++int smu_get_ppt_limit(void *handle,
++		      uint32_t *limit,
++		      enum pp_power_limit_level pp_limit_level,
++		      enum pp_power_type pp_power_type);
+ 
+ bool smu_mode1_reset_is_support(struct smu_context *smu);
+ bool smu_link_reset_is_support(struct smu_context *smu);
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v11_0.h b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v11_0.h
+index c0accee9a9c8..9f20c631d2b7 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v11_0.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v11_0.h
+@@ -108,10 +108,6 @@ struct smu_11_5_power_context {
+ 	uint32_t	power_source;
+ 	uint8_t		in_power_limit_boost_mode;
+ 	enum smu_11_0_power_state power_state;
+-
+-	uint32_t	current_fast_ppt_limit;
+-	uint32_t	default_fast_ppt_limit;
+-	uint32_t	max_fast_ppt_limit;
+ };
+ 
+ #if defined(SWSMU_CODE_LAYER_L2) || defined(SWSMU_CODE_LAYER_L3)
+@@ -151,12 +147,13 @@ int smu_v11_0_set_allowed_mask(struct smu_context *smu);
+ 
+ int smu_v11_0_notify_display_change(struct smu_context *smu);
+ 
+-int smu_v11_0_get_current_power_limit(struct smu_context *smu,
+-				      uint32_t *power_limit);
++int smu_v11_0_get_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t *ppt_limit);
+ 
+-int smu_v11_0_set_power_limit(struct smu_context *smu,
+-			      enum smu_ppt_limit_type limit_type,
+-			      uint32_t limit);
++int smu_v11_0_set_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t limit);
+ 
+ int smu_v11_0_init_max_sustainable_clocks(struct smu_context *smu);
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h
+index 7f21f867d73c..5e7d80e8b26b 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h
+@@ -145,12 +145,13 @@ int smu_v13_0_set_allowed_mask(struct smu_context *smu);
+ 
+ int smu_v13_0_notify_display_change(struct smu_context *smu);
+ 
+-int smu_v13_0_get_current_power_limit(struct smu_context *smu,
+-				      uint32_t *power_limit);
++int smu_v13_0_get_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t *ppt_limit);
+ 
+-int smu_v13_0_set_power_limit(struct smu_context *smu,
+-			      enum smu_ppt_limit_type limit_type,
+-			      uint32_t limit);
++int smu_v13_0_set_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t limit);
+ 
+ int smu_v13_0_init_max_sustainable_clocks(struct smu_context *smu);
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v14_0.h b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v14_0.h
+index dc8e13a7c879..dc222f3b3655 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v14_0.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v14_0.h
+@@ -132,12 +132,13 @@ int smu_v14_0_set_allowed_mask(struct smu_context *smu);
+ 
+ int smu_v14_0_notify_display_change(struct smu_context *smu);
+ 
+-int smu_v14_0_get_current_power_limit(struct smu_context *smu,
+-				      uint32_t *power_limit);
++int smu_v14_0_get_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t *ppt_limit);
+ 
+-int smu_v14_0_set_power_limit(struct smu_context *smu,
+-			      enum smu_ppt_limit_type limit_type,
+-			      uint32_t limit);
++int smu_v14_0_set_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t limit);
+ 
+ int smu_v14_0_gfx_off_control(struct smu_context *smu, bool enable);
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v15_0.h b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v15_0.h
+index 38e625cda97d..ec96dc775485 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v15_0.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v15_0.h
+@@ -142,12 +142,13 @@ int smu_v15_0_set_allowed_mask(struct smu_context *smu);
+ 
+ int smu_v15_0_notify_display_change(struct smu_context *smu);
+ 
+-int smu_v15_0_get_current_power_limit(struct smu_context *smu,
+-				      uint32_t *power_limit);
++int smu_v15_0_get_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t *ppt_limit);
+ 
+-int smu_v15_0_set_power_limit(struct smu_context *smu,
+-			      enum smu_ppt_limit_type limit_type,
+-			      uint32_t limit);
++int smu_v15_0_set_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t limit);
+ 
+ int smu_v15_0_gfx_off_control(struct smu_context *smu, bool enable);
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c
+index 978f86ac12fb..edb0393505ba 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c
+@@ -67,6 +67,8 @@
+ 
+ #define SMU11_DRIVER_IF_VERSION_ARCT 0x17
+ 
++static int arcturus_init_ppt_limits(struct smu_context *smu);
++
+ static const struct smu_feature_bits arcturus_dpm_features = {
+ 	.bits = { SMU_FEATURE_BIT_INIT(FEATURE_DPM_PREFETCHER_BIT),
+ 		  SMU_FEATURE_BIT_INIT(FEATURE_DPM_GFXCLK_BIT),
+@@ -544,7 +546,7 @@ static int arcturus_setup_pptable(struct smu_context *smu)
+ 	if (ret)
+ 		return ret;
+ 
+-	return ret;
++	return arcturus_init_ppt_limits(smu);
+ }
+ 
+ static int arcturus_run_btc(struct smu_context *smu)
+@@ -1259,14 +1261,21 @@ static int arcturus_get_fan_parameters(struct smu_context *smu)
+ 	return 0;
+ }
+ 
+-static int arcturus_get_power_limit(struct smu_context *smu,
+-					uint32_t *current_power_limit,
+-					uint32_t *default_power_limit,
+-					uint32_t *max_power_limit,
+-					uint32_t *min_power_limit)
++static int arcturus_get_ppt_limit(struct smu_context *smu,
++				 enum smu_ppt_limit_type limit_type,
++				 uint32_t *ppt_limit)
++{
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
++
++	return smu_v11_0_get_ppt_limit(smu, limit_type, ppt_limit);
++}
++
++static int arcturus_init_ppt_limits(struct smu_context *smu)
+ {
+ 	PPTable_t *pptable = smu->smu_table.driver_pptable;
+-	uint32_t current_limit, default_limit;
++	uint32_t default_limit;
++	int i;
+ 
+ 	if (!pptable) {
+ 		dev_err(smu->adev->dev,
+@@ -1276,21 +1285,18 @@ static int arcturus_get_power_limit(struct smu_context *smu,
+ 
+ 	default_limit = pptable->SocketPowerLimitAc[PPT_THROTTLER_PPT0];
+ 
+-	if (smu_v11_0_get_current_power_limit(smu, &current_limit))
+-		current_limit = default_limit;
++	for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].default_value =
++			default_limit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].max =
++			default_limit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min = 0;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_max =
++			default_limit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_min = 0;
++	}
+ 
+-	if (current_power_limit)
+-		*current_power_limit = current_limit;
+-	if (default_power_limit)
+-		*default_power_limit = default_limit;
+-	if (max_power_limit)
+-		*max_power_limit = default_limit;
+-	/*
+-	 * No lower bound is imposed on the limit. Any unreasonable limit set
+-	 * will result in frequent throttling.
+-	 */
+-	if (min_power_limit)
+-		*min_power_limit = 0;
++	smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT0);
+ 
+ 	return 0;
+ }
+@@ -1892,7 +1898,7 @@ static const struct pptable_funcs arcturus_ppt_funcs = {
+ 	.get_power_profile_mode = arcturus_get_power_profile_mode,
+ 	.set_power_profile_mode = arcturus_set_power_profile_mode,
+ 	.set_performance_level = arcturus_set_performance_level,
+-	.get_power_limit = arcturus_get_power_limit,
++	.get_ppt_limit = arcturus_get_ppt_limit,
+ 	.is_dpm_running = arcturus_is_dpm_running,
+ 	.dpm_set_vcn_enable = arcturus_dpm_set_vcn_enable,
+ 	.i2c_init = arcturus_i2c_control_init,
+@@ -1921,7 +1927,7 @@ static const struct pptable_funcs arcturus_ppt_funcs = {
+ 	.feature_is_enabled = smu_cmn_feature_is_enabled,
+ 	.disable_all_features_with_exception = smu_cmn_disable_all_features_with_exception,
+ 	.notify_display_change = NULL,
+-	.set_power_limit = smu_v11_0_set_power_limit,
++	.set_ppt_limit = smu_v11_0_set_ppt_limit,
+ 	.init_max_sustainable_clocks = smu_v11_0_init_max_sustainable_clocks,
+ 	.enable_thermal_alert = smu_v11_0_enable_thermal_alert,
+ 	.disable_thermal_alert = smu_v11_0_disable_thermal_alert,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
+index a47d49dd3ff0..f8ca5eb9adc6 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
+@@ -58,6 +58,8 @@
+ #undef pr_info
+ #undef pr_debug
+ 
++static int navi10_init_ppt_limits(struct smu_context *smu);
++
+ static const struct smu_feature_bits navi10_dpm_features = {
+ 	.bits = {
+ 		SMU_FEATURE_BIT_INIT(FEATURE_DPM_PREFETCHER_BIT),
+@@ -488,7 +490,7 @@ static int navi10_setup_pptable(struct smu_context *smu)
+ 	if (ret)
+ 		return ret;
+ 
+-	return ret;
++	return navi10_init_ppt_limits(smu);
+ }
+ 
+ static int navi10_tables_init(struct smu_context *smu)
+@@ -2134,18 +2136,25 @@ static int navi10_display_disable_memory_clock_switch(struct smu_context *smu,
+ 	return ret;
+ }
+ 
+-static int navi10_get_power_limit(struct smu_context *smu,
+-					uint32_t *current_power_limit,
+-					uint32_t *default_power_limit,
+-					uint32_t *max_power_limit,
+-					uint32_t *min_power_limit)
++static int navi10_get_ppt_limit(struct smu_context *smu,
++				enum smu_ppt_limit_type limit_type,
++				uint32_t *ppt_limit)
++{
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
++
++	return smu_v11_0_get_ppt_limit(smu, limit_type, ppt_limit);
++}
++
++static int navi10_init_ppt_limits(struct smu_context *smu)
+ {
+ 	struct smu_11_0_powerplay_table *powerplay_table =
+ 		(struct smu_11_0_powerplay_table *)smu->smu_table.power_play_table;
+ 	struct smu_11_0_overdrive_table *od_settings = smu->od_settings;
+ 	PPTable_t *pptable = smu->smu_table.driver_pptable;
+-	uint32_t current_limit, default_limit;
++	uint32_t default_limit[SMU_POWER_SOURCE_COUNT];
+ 	uint32_t od_percent_upper = 0, od_percent_lower = 0;
++	int i;
+ 
+ 	if (!pptable) {
+ 		dev_err(smu->adev->dev,
+@@ -2153,41 +2162,34 @@ static int navi10_get_power_limit(struct smu_context *smu,
+ 		return -EINVAL;
+ 	}
+ 
+-	default_limit = smu->adev->pm.ac_power ?
+-		pptable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
++	default_limit[SMU_POWER_SOURCE_AC] =
++		pptable->SocketPowerLimitAc[PPT_THROTTLER_PPT0];
++	default_limit[SMU_POWER_SOURCE_DC] =
+ 		pptable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
+ 
+-	if (smu_v11_0_get_current_power_limit(smu, &current_limit))
+-		current_limit = default_limit;
+-
+-	if (current_power_limit)
+-		*current_power_limit = current_limit;
+-	if (default_power_limit)
+-		*default_power_limit = default_limit;
+-
+-	if (powerplay_table) {
+-		if (smu->od_enabled &&
+-			    navi10_od_feature_is_supported(od_settings, SMU_11_0_ODCAP_POWER_LIMIT)) {
+-			od_percent_upper = le32_to_cpu(powerplay_table->overdrive_table.max[SMU_11_0_ODSETTING_POWERPERCENTAGE]);
+-			od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[SMU_11_0_ODSETTING_POWERPERCENTAGE]);
+-		} else if (navi10_od_feature_is_supported(od_settings, SMU_11_0_ODCAP_POWER_LIMIT)) {
+-			od_percent_upper = 0;
+-			od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[SMU_11_0_ODSETTING_POWERPERCENTAGE]);
+-		}
++	if (powerplay_table &&
++	    navi10_od_feature_is_supported(od_settings,
++					   SMU_11_0_ODCAP_POWER_LIMIT)) {
++		od_percent_upper = le32_to_cpu(powerplay_table->overdrive_table.max[
++			SMU_11_0_ODSETTING_POWERPERCENTAGE]);
++		od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[
++			SMU_11_0_ODSETTING_POWERPERCENTAGE]);
+ 	}
+ 
+-	dev_dbg(smu->adev->dev, "od percent upper:%d, od percent lower:%d (default power: %d)\n",
+-		 od_percent_upper, od_percent_lower, default_limit);
+-
+-	if (max_power_limit) {
+-		*max_power_limit = default_limit * (100 + od_percent_upper);
+-		*max_power_limit /= 100;
++	for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].default_value =
++			default_limit[i];
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].max =
++			default_limit[i];
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min =
++			default_limit[i] * (100 - od_percent_lower) / 100;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_max =
++			default_limit[i] * (100 + od_percent_upper) / 100;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_min =
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min;
+ 	}
+ 
+-	if (min_power_limit) {
+-		*min_power_limit = default_limit * (100 - od_percent_lower);
+-		*min_power_limit /= 100;
+-	}
++	smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT0);
+ 
+ 	return 0;
+ }
+@@ -3305,7 +3307,7 @@ static const struct pptable_funcs navi10_ppt_funcs = {
+ 	.set_performance_level = smu_v11_0_set_performance_level,
+ 	.get_thermal_temperature_range = navi10_get_thermal_temperature_range,
+ 	.display_disable_memory_clock_switch = navi10_display_disable_memory_clock_switch,
+-	.get_power_limit = navi10_get_power_limit,
++	.get_ppt_limit = navi10_get_ppt_limit,
+ 	.update_pcie_parameters = navi10_update_pcie_parameters,
+ 	.init_microcode = smu_v11_0_init_microcode,
+ 	.load_microcode = smu_v11_0_load_microcode,
+@@ -3329,7 +3331,7 @@ static const struct pptable_funcs navi10_ppt_funcs = {
+ 	.feature_is_enabled = smu_cmn_feature_is_enabled,
+ 	.disable_all_features_with_exception = smu_cmn_disable_all_features_with_exception,
+ 	.notify_display_change = smu_v11_0_notify_display_change,
+-	.set_power_limit = smu_v11_0_set_power_limit,
++	.set_ppt_limit = smu_v11_0_set_ppt_limit,
+ 	.init_max_sustainable_clocks = smu_v11_0_init_max_sustainable_clocks,
+ 	.enable_thermal_alert = smu_v11_0_enable_thermal_alert,
+ 	.disable_thermal_alert = smu_v11_0_disable_thermal_alert,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c
+index b90878c2c8ef..b42897e7c066 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c
+@@ -60,6 +60,8 @@
+ #undef pr_info
+ #undef pr_debug
+ 
++static int sienna_cichlid_init_ppt_limits(struct smu_context *smu);
++
+ static const struct smu_feature_bits sienna_cichlid_dpm_features = {
+ 	.bits = {
+ 		SMU_FEATURE_BIT_INIT(FEATURE_DPM_PREFETCHER_BIT),
+@@ -524,7 +526,11 @@ static int sienna_cichlid_setup_pptable(struct smu_context *smu)
+ 	if (ret)
+ 		return ret;
+ 
+-	return sienna_cichlid_patch_pptable_quirk(smu);
++	ret = sienna_cichlid_patch_pptable_quirk(smu);
++	if (ret)
++		return ret;
++
++	return sienna_cichlid_init_ppt_limits(smu);
+ }
+ 
+ static int sienna_cichlid_tables_init(struct smu_context *smu)
+@@ -624,57 +630,58 @@ static bool sienna_cichlid_is_od_feature_supported(struct smu_11_0_7_overdrive_t
+ 	return od_table->cap[cap];
+ }
+ 
+-static int sienna_cichlid_get_power_limit(struct smu_context *smu,
+-					  uint32_t *current_power_limit,
+-					  uint32_t *default_power_limit,
+-					  uint32_t *max_power_limit,
+-					  uint32_t *min_power_limit)
++static int sienna_cichlid_get_ppt_limit(struct smu_context *smu,
++					enum smu_ppt_limit_type limit_type,
++					uint32_t *ppt_limit)
++{
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
++
++	return smu_v11_0_get_ppt_limit(smu, limit_type, ppt_limit);
++}
++
++static int sienna_cichlid_init_ppt_limits(struct smu_context *smu)
+ {
+ 	struct smu_11_0_7_powerplay_table *powerplay_table =
+ 		(struct smu_11_0_7_powerplay_table *)smu->smu_table.power_play_table;
+ 	struct smu_11_0_7_overdrive_table *od_settings = smu->od_settings;
+-	uint32_t current_limit, default_limit;
++	uint32_t default_limit[SMU_POWER_SOURCE_COUNT];
+ 	uint32_t od_percent_upper = 0, od_percent_lower = 0;
+-	u16 *power_limit_ac, *power_limit_dc;
+-
+-	GET_PPTABLE_MEMBER(SocketPowerLimitAc, &power_limit_ac);
+-	GET_PPTABLE_MEMBER(SocketPowerLimitDc, &power_limit_dc);
+-
+-	default_limit = smu->adev->pm.ac_power ?
+-		power_limit_ac[PPT_THROTTLER_PPT0] :
+-		power_limit_dc[PPT_THROTTLER_PPT0];
+-
+-	if (smu_v11_0_get_current_power_limit(smu, &current_limit))
+-		current_limit = default_limit;
+-
+-	if (current_power_limit)
+-		*current_power_limit = current_limit;
+-	if (default_power_limit)
+-		*default_power_limit = default_limit;
+-
+-	if (powerplay_table) {
+-		if (smu->od_enabled &&
+-				sienna_cichlid_is_od_feature_supported(od_settings, SMU_11_0_7_ODCAP_POWER_LIMIT)) {
+-			od_percent_upper = le32_to_cpu(powerplay_table->overdrive_table.max[SMU_11_0_7_ODSETTING_POWERPERCENTAGE]);
+-			od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[SMU_11_0_7_ODSETTING_POWERPERCENTAGE]);
+-		} else if ((sienna_cichlid_is_od_feature_supported(od_settings, SMU_11_0_7_ODCAP_POWER_LIMIT))) {
+-			od_percent_upper = 0;
+-			od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[SMU_11_0_7_ODSETTING_POWERPERCENTAGE]);
+-		}
+-	}
++	uint16_t *ppt_limit_ac, *ppt_limit_dc;
++	int i;
++
++	GET_PPTABLE_MEMBER(SocketPowerLimitAc, &ppt_limit_ac);
++	GET_PPTABLE_MEMBER(SocketPowerLimitDc, &ppt_limit_dc);
+ 
+-	dev_dbg(smu->adev->dev, "od percent upper:%d, od percent lower:%d (default power: %d)\n",
+-		 od_percent_upper, od_percent_lower, default_limit);
++	default_limit[SMU_POWER_SOURCE_AC] =
++		ppt_limit_ac[PPT_THROTTLER_PPT0];
++	default_limit[SMU_POWER_SOURCE_DC] =
++		ppt_limit_dc[PPT_THROTTLER_PPT0];
+ 
+-	if (max_power_limit) {
+-		*max_power_limit = default_limit * (100 + od_percent_upper);
+-		*max_power_limit /= 100;
++	if (powerplay_table &&
++	    sienna_cichlid_is_od_feature_supported(od_settings,
++						     SMU_11_0_7_ODCAP_POWER_LIMIT)) {
++		od_percent_upper = le32_to_cpu(powerplay_table->overdrive_table.max[
++			SMU_11_0_7_ODSETTING_POWERPERCENTAGE]);
++		od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[
++			SMU_11_0_7_ODSETTING_POWERPERCENTAGE]);
+ 	}
+ 
+-	if (min_power_limit) {
+-		*min_power_limit = default_limit * (100 - od_percent_lower);
+-		*min_power_limit /= 100;
++	for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].default_value =
++			default_limit[i];
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].max =
++			default_limit[i];
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min =
++			default_limit[i] * (100 - od_percent_lower) / 100;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_max =
++			default_limit[i] * (100 + od_percent_upper) / 100;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_min =
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min;
+ 	}
++
++	smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT0);
++
+ 	return 0;
+ }
+ 
+@@ -687,22 +694,29 @@ static void sienna_cichlid_get_smartshift_power_percentage(struct smu_context *s
+ 		&(((SmuMetricsExternal_t *)(smu_table->metrics_table))->SmuMetrics_V4);
+ 	uint16_t powerRatio = 0;
+ 	uint16_t apu_power_limit = 0;
+-	uint16_t dgpu_power_limit = 0;
++	uint16_t dgpu_ppt_limit = 0;
+ 	uint32_t apu_boost = 0;
+ 	uint32_t dgpu_boost = 0;
+-	uint32_t cur_power_limit;
++	uint32_t cur_ppt_limit;
++	enum smu_power_src_type power_source;
+ 
+ 	if (metrics_v4->ApuSTAPMSmartShiftLimit != 0) {
+-		sienna_cichlid_get_power_limit(smu, &cur_power_limit, NULL, NULL, NULL);
++		if (sienna_cichlid_get_ppt_limit(smu, SMU_PPT_LIMIT_PPT0,
++						 &cur_ppt_limit)) {
++			power_source = smu->adev->pm.ac_power ?
++				SMU_POWER_SOURCE_AC : SMU_POWER_SOURCE_DC;
++			cur_ppt_limit = smu->ppt_limits.range[power_source]
++				[SMU_PPT_LIMIT_PPT0].default_value;
++		}
+ 		apu_power_limit = metrics_v4->ApuSTAPMLimit;
+-		dgpu_power_limit = cur_power_limit;
++		dgpu_ppt_limit = cur_ppt_limit;
+ 		powerRatio = (((apu_power_limit +
+-						  dgpu_power_limit) * 100) /
++						  dgpu_ppt_limit) * 100) /
+ 						  metrics_v4->ApuSTAPMSmartShiftLimit);
+ 		if (powerRatio > 100) {
+ 			apu_power_limit = (apu_power_limit * 100) /
+ 									 powerRatio;
+-			dgpu_power_limit = (dgpu_power_limit * 100) /
++			dgpu_ppt_limit = (dgpu_ppt_limit * 100) /
+ 									  powerRatio;
+ 		}
+ 		if (metrics_v4->AverageApuSocketPower > apu_power_limit &&
+@@ -714,11 +728,11 @@ static void sienna_cichlid_get_smartshift_power_percentage(struct smu_context *s
+ 				apu_boost = 100;
+ 		}
+ 
+-		if (metrics_v4->AverageSocketPower > dgpu_power_limit &&
+-			 dgpu_power_limit != 0) {
++		if (metrics_v4->AverageSocketPower > dgpu_ppt_limit &&
++			 dgpu_ppt_limit != 0) {
+ 			dgpu_boost = ((metrics_v4->AverageSocketPower -
+-							 dgpu_power_limit) * 100) /
+-							 dgpu_power_limit;
++							 dgpu_ppt_limit) * 100) /
++							 dgpu_ppt_limit;
+ 			if (dgpu_boost > 100)
+ 				dgpu_boost = 100;
+ 		}
+@@ -3113,7 +3127,7 @@ static const struct pptable_funcs sienna_cichlid_ppt_funcs = {
+ 	.set_performance_level = smu_v11_0_set_performance_level,
+ 	.get_thermal_temperature_range = sienna_cichlid_get_thermal_temperature_range,
+ 	.display_disable_memory_clock_switch = sienna_cichlid_display_disable_memory_clock_switch,
+-	.get_power_limit = sienna_cichlid_get_power_limit,
++	.get_ppt_limit = sienna_cichlid_get_ppt_limit,
+ 	.update_pcie_parameters = sienna_cichlid_update_pcie_parameters,
+ 	.init_microcode = smu_v11_0_init_microcode,
+ 	.load_microcode = smu_v11_0_load_microcode,
+@@ -3137,7 +3151,7 @@ static const struct pptable_funcs sienna_cichlid_ppt_funcs = {
+ 	.feature_is_enabled = smu_cmn_feature_is_enabled,
+ 	.disable_all_features_with_exception = smu_cmn_disable_all_features_with_exception,
+ 	.notify_display_change = NULL,
+-	.set_power_limit = smu_v11_0_set_power_limit,
++	.set_ppt_limit = smu_v11_0_set_ppt_limit,
+ 	.init_max_sustainable_clocks = smu_v11_0_init_max_sustainable_clocks,
+ 	.enable_thermal_alert = smu_v11_0_enable_thermal_alert,
+ 	.disable_thermal_alert = smu_v11_0_disable_thermal_alert,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c
+index a889d846e9c5..f0b2e7da67b1 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c
+@@ -770,14 +770,17 @@ int smu_v11_0_init_max_sustainable_clocks(struct smu_context *smu)
+ 	return 0;
+ }
+ 
+-int smu_v11_0_get_current_power_limit(struct smu_context *smu,
+-				      uint32_t *power_limit)
++int smu_v11_0_get_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t *ppt_limit)
+ {
+ 	int power_src;
+ 	int ret = 0;
+ 
+ 	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT))
+ 		return -EINVAL;
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
+ 
+ 	power_src = smu_cmn_to_asic_specific_index(smu,
+ 					CMN2ASIC_MAPPING_PWR,
+@@ -794,26 +797,26 @@ int smu_v11_0_get_current_power_limit(struct smu_context *smu,
+ 	ret = smu_cmn_send_smc_msg_with_param(smu,
+ 					  SMU_MSG_GetPptLimit,
+ 					  (0 << 24) | (power_src << 16),
+-					  power_limit);
++					  ppt_limit);
+ 	if (ret)
+ 		dev_err(smu->adev->dev, "[%s] get PPT limit failed!", __func__);
+ 
+ 	return ret;
+ }
+ 
+-int smu_v11_0_set_power_limit(struct smu_context *smu,
+-			      enum smu_ppt_limit_type limit_type,
+-			      uint32_t limit)
++int smu_v11_0_set_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t limit)
+ {
+ 	int power_src;
+ 	int ret = 0;
+ 	uint32_t limit_param;
+ 
+-	if (limit_type != SMU_DEFAULT_PPT_LIMIT)
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EINVAL;
+ 
+ 	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT)) {
+-		dev_err(smu->adev->dev, "Setting new power limit is not supported!\n");
++		dev_err(smu->adev->dev, "Setting new PPT limit is not supported!\n");
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+@@ -835,12 +838,10 @@ int smu_v11_0_set_power_limit(struct smu_context *smu,
+ 	limit_param |= (power_src) << 16;
+ 	ret = smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_SetPptLimit, limit_param, NULL);
+ 	if (ret) {
+-		dev_err(smu->adev->dev, "[%s] Set power limit Failed!\n", __func__);
++		dev_err(smu->adev->dev, "[%s] Set PPT limit failed!\n", __func__);
+ 		return ret;
+ 	}
+ 
+-	smu->current_power_limit = limit;
+-
+ 	return 0;
+ }
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/vangogh_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/vangogh_ppt.c
+index 3e3c68448ba9..b38bc49c43dd 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/vangogh_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/vangogh_ppt.c
+@@ -58,6 +58,8 @@
+ #define SMUIO_GFX_MISC_CNTL__SMU_GFX_cold_vs_gfxoff_MASK	0x00000001L
+ #define SMUIO_GFX_MISC_CNTL__PWR_GFXOFF_STATUS_MASK		0x00000006L
+ 
++static int vangogh_init_ppt_limits(struct smu_context *smu);
++
+ static const struct smu_feature_bits vangogh_dpm_features = {
+ 	.bits = {
+ 		SMU_FEATURE_BIT_INIT(FEATURE_CCLK_DPM_BIT),
+@@ -2243,6 +2245,10 @@ static int vangogh_post_smu_init(struct smu_context *smu)
+ 	if (adev->in_s0ix)
+ 		return 0;
+ 
++	ret = vangogh_init_ppt_limits(smu);
++	if (ret)
++		return ret;
++
+ 	/* allow message will be sent after enable message on Vangogh*/
+ 	if (smu_cmn_feature_is_enabled(smu, SMU_FEATURE_DPM_GFXCLK_BIT) &&
+ 			(adev->pg_flags & AMD_PG_SUPPORT_GFX_PG)) {
+@@ -2322,91 +2328,75 @@ static u32 vangogh_get_gfxoff_status(struct smu_context *smu)
+ 	return gfxoff_status;
+ }
+ 
+-static int vangogh_get_power_limit(struct smu_context *smu,
+-				   uint32_t *current_power_limit,
+-				   uint32_t *default_power_limit,
+-				   uint32_t *max_power_limit,
+-				   uint32_t *min_power_limit)
++static int vangogh_get_ppt_limit(struct smu_context *smu,
++				 enum smu_ppt_limit_type limit_type,
++				 uint32_t *ppt_limit)
+ {
+-	struct smu_11_5_power_context *power_context = smu->smu_power.power_context;
+-	uint32_t ppt_limit;
+-	int ret = 0;
++	enum smu_message_type msg;
++	uint32_t raw_limit;
++	int ret;
+ 
+ 	if (smu->adev->pm.fw_version < 0x43f1e00)
+-		return ret;
++		return -EOPNOTSUPP;
+ 
+-	ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetSlowPPTLimit, &ppt_limit);
+-	if (ret) {
+-		dev_err(smu->adev->dev, "Get slow PPT limit failed!\n");
+-		return ret;
+-	}
+-	/* convert from milliwatt to watt */
+-	if (current_power_limit)
+-		*current_power_limit = ppt_limit / 1000;
+-	if (default_power_limit)
+-		*default_power_limit = ppt_limit / 1000;
+-	if (max_power_limit)
+-		*max_power_limit = 29;
+-	if (min_power_limit)
+-		*min_power_limit = 0;
+-
+-	ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetFastPPTLimit, &ppt_limit);
++	msg = limit_type == SMU_PPT_LIMIT_PPT1 ?
++		SMU_MSG_GetFastPPTLimit : SMU_MSG_GetSlowPPTLimit;
++	ret = smu_cmn_send_smc_msg(smu, msg, &raw_limit);
+ 	if (ret) {
+-		dev_err(smu->adev->dev, "Get fast PPT limit failed!\n");
++		dev_err(smu->adev->dev, "Get PPT%d limit failed!\n",
++			limit_type);
+ 		return ret;
+ 	}
+-	/* convert from milliwatt to watt */
+-	power_context->current_fast_ppt_limit =
+-			power_context->default_fast_ppt_limit = ppt_limit / 1000;
+-	power_context->max_fast_ppt_limit = 30;
+ 
+-	return ret;
++	*ppt_limit = raw_limit / 1000;
++
++	return 0;
+ }
+ 
+-static int vangogh_get_ppt_limit(struct smu_context *smu,
+-				 uint32_t *ppt_limit,
+-				 enum smu_ppt_limit_type type,
+-				 enum smu_ppt_limit_level level)
++static int vangogh_init_ppt_limits(struct smu_context *smu)
+ {
+-	struct smu_11_5_power_context *power_context = smu->smu_power.power_context;
++	struct smu_ppt_limit_range *range;
++	uint32_t default_limit;
++	int i, j, ret;
+ 
+-	if (!power_context)
+-		return -EOPNOTSUPP;
++	if (smu->adev->pm.fw_version < 0x43f1e00)
++		return 0;
+ 
+-	if (type == SMU_FAST_PPT_LIMIT) {
+-		switch (level) {
+-		case SMU_PPT_LIMIT_MAX:
+-			*ppt_limit = power_context->max_fast_ppt_limit;
+-			break;
+-		case SMU_PPT_LIMIT_CURRENT:
+-			*ppt_limit = power_context->current_fast_ppt_limit;
+-			break;
+-		case SMU_PPT_LIMIT_DEFAULT:
+-			*ppt_limit = power_context->default_fast_ppt_limit;
+-			break;
+-		default:
+-			break;
++	for (i = SMU_PPT_LIMIT_PPT0; i < SMU_LIMIT_TYPE_COUNT; i++) {
++		if (smu->ppt_limits.supported_mask & BIT(i))
++			continue;
++
++		ret = vangogh_get_ppt_limit(smu, i, &default_limit);
++		if (ret)
++			return ret;
++
++		for (j = SMU_POWER_SOURCE_AC; j < SMU_POWER_SOURCE_COUNT; j++) {
++			range = &smu->ppt_limits.range[j][i];
++			range->default_value = default_limit;
++			range->min = 0;
++			range->max = i == SMU_PPT_LIMIT_PPT1 ? 30 : 29;
++			range->od_min = range->min;
++			range->od_max = range->max;
+ 		}
++		smu->ppt_limits.supported_mask |= BIT(i);
+ 	}
+ 
+ 	return 0;
+ }
+ 
+-static int vangogh_set_power_limit(struct smu_context *smu,
+-				   enum smu_ppt_limit_type limit_type,
+-				   uint32_t ppt_limit)
++static int vangogh_set_ppt_limit(struct smu_context *smu,
++				 enum smu_ppt_limit_type limit_type,
++				 uint32_t ppt_limit)
+ {
+-	struct smu_11_5_power_context *power_context =
+-			smu->smu_power.power_context;
+ 	int ret = 0;
+ 
+ 	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT)) {
+-		dev_err(smu->adev->dev, "Setting new power limit is not supported!\n");
++		dev_err(smu->adev->dev, "Setting new PPT limit is not supported!\n");
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	switch (limit_type) {
+-	case SMU_DEFAULT_PPT_LIMIT:
++	case SMU_SLOW_PPT_LIMIT:
+ 		ret = smu_cmn_send_smc_msg_with_param(smu,
+ 				SMU_MSG_SetSlowPPTLimit,
+ 				ppt_limit * 1000, /* convert from watt to milliwatt */
+@@ -2414,16 +2404,8 @@ static int vangogh_set_power_limit(struct smu_context *smu,
+ 		if (ret)
+ 			return ret;
+ 
+-		smu->current_power_limit = ppt_limit;
+ 		break;
+ 	case SMU_FAST_PPT_LIMIT:
+-		if (ppt_limit > power_context->max_fast_ppt_limit) {
+-			dev_err(smu->adev->dev,
+-				"New power limit (%d) is over the max allowed %d\n",
+-				ppt_limit, power_context->max_fast_ppt_limit);
+-			return ret;
+-		}
+-
+ 		ret = smu_cmn_send_smc_msg_with_param(smu,
+ 				SMU_MSG_SetFastPPTLimit,
+ 				ppt_limit * 1000, /* convert from watt to milliwatt */
+@@ -2431,7 +2413,6 @@ static int vangogh_set_power_limit(struct smu_context *smu,
+ 		if (ret)
+ 			return ret;
+ 
+-		power_context->current_fast_ppt_limit = ppt_limit;
+ 		break;
+ 	default:
+ 		return -EINVAL;
+@@ -2577,8 +2558,7 @@ static const struct pptable_funcs vangogh_ppt_funcs = {
+ 	.get_gfx_off_residency = vangogh_get_gfxoff_residency,
+ 	.set_gfx_off_residency = vangogh_set_gfxoff_residency,
+ 	.get_ppt_limit = vangogh_get_ppt_limit,
+-	.get_power_limit = vangogh_get_power_limit,
+-	.set_power_limit = vangogh_set_power_limit,
++	.set_ppt_limit = vangogh_set_ppt_limit,
+ 	.get_vbios_bootup_values = smu_v11_0_get_vbios_bootup_values,
+ };
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/aldebaran_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/aldebaran_ppt.c
+index 5dee4cdbb971..1b1ffe19d002 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/aldebaran_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/aldebaran_ppt.c
+@@ -61,6 +61,9 @@
+ 	[smu_feature] = {1, (aldebaran_feature)}
+ 
+ #define FEATURE_MASK(feature) (1ULL << feature)
++
++static int aldebaran_init_ppt_limits(struct smu_context *smu);
++
+ static const struct smu_feature_bits aldebaran_dpm_features = {
+ 	.bits = {
+ 		SMU_FEATURE_BIT_INIT(FEATURE_DATA_CALCULATIONS),
+@@ -537,7 +540,7 @@ static int aldebaran_setup_pptable(struct smu_context *smu)
+ 	if (ret)
+ 		return ret;
+ 
+-	return ret;
++	return aldebaran_init_ppt_limits(smu);
+ }
+ 
+ static bool aldebaran_is_primary(struct smu_context *smu)
+@@ -1111,28 +1114,17 @@ static int aldebaran_read_sensor(struct smu_context *smu,
+ 	return ret;
+ }
+ 
+-static int aldebaran_get_power_limit(struct smu_context *smu,
+-						uint32_t *current_power_limit,
+-						uint32_t *default_power_limit,
+-						uint32_t *max_power_limit,
+-						uint32_t *min_power_limit)
++static int aldebaran_get_ppt_limit(struct smu_context *smu,
++				   enum smu_ppt_limit_type limit_type,
++				   uint32_t *ppt_limit)
+ {
+-	PPTable_t *pptable = smu->smu_table.driver_pptable;
+-	uint32_t power_limit = 0;
+ 	int ret;
+ 
+-	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT)) {
+-		if (current_power_limit)
+-			*current_power_limit = 0;
+-		if (default_power_limit)
+-			*default_power_limit = 0;
+-		if (max_power_limit)
+-			*max_power_limit = 0;
+-		if (min_power_limit)
+-			*min_power_limit = 0;
+-		dev_warn(smu->adev->dev,
+-			"PPT feature is not enabled, power values can't be fetched.");
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
+ 
++	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT)) {
++		*ppt_limit = 0;
+ 		return 0;
+ 	}
+ 
+@@ -1141,46 +1133,47 @@ static int aldebaran_get_power_limit(struct smu_context *smu,
+ 	 */
+ 	if (aldebaran_is_primary(smu)) {
+ 		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetPptLimit,
+-					   &power_limit);
+-
+-		if (ret) {
+-			/* the last hope to figure out the ppt limit */
+-			if (!pptable) {
+-				dev_err(smu->adev->dev,
+-					"Cannot get PPT limit due to pptable missing!");
+-				return -EINVAL;
+-			}
+-			power_limit = pptable->PptLimit;
+-		}
++					   ppt_limit);
++		if (ret)
++			return ret;
++	} else {
++		*ppt_limit = 0;
+ 	}
+ 
+-	if (current_power_limit)
+-		*current_power_limit = power_limit;
+-	if (default_power_limit) {
+-		if (pptable)
+-			*default_power_limit = pptable->PptLimit;
+-		else
+-			*default_power_limit = power_limit;
+-	}
++	return 0;
++}
++
++static int aldebaran_init_ppt_limits(struct smu_context *smu)
++{
++	PPTable_t *pptable = smu->smu_table.driver_pptable;
++	int i;
++
++	if (!pptable)
++		return -EINVAL;
+ 
+-	if (max_power_limit) {
+-		if (pptable)
+-			*max_power_limit = pptable->PptLimit;
++	for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].default_value =
++			pptable->PptLimit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min = 0;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].max =
++			pptable->PptLimit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_min = 0;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_max =
++			pptable->PptLimit;
+ 	}
+ 
+-	if (min_power_limit)
+-		*min_power_limit = 0;
++	smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT0);
+ 
+ 	return 0;
+ }
+ 
+-static int aldebaran_set_power_limit(struct smu_context *smu,
+-				     enum smu_ppt_limit_type limit_type,
+-				     uint32_t limit)
++static int aldebaran_set_ppt_limit(struct smu_context *smu,
++				   enum smu_ppt_limit_type limit_type,
++				   uint32_t limit)
+ {
+-	/* Power limit can be set only through primary die */
++	/* PPT limit can be set only through primary die */
+ 	if (aldebaran_is_primary(smu))
+-		return smu_v13_0_set_power_limit(smu, limit_type, limit);
++		return smu_v13_0_set_ppt_limit(smu, limit_type, limit);
+ 
+ 	return -EINVAL;
+ }
+@@ -1980,7 +1973,7 @@ static const struct pptable_funcs aldebaran_ppt_funcs = {
+ 	.force_clk_levels = aldebaran_force_clk_levels,
+ 	.read_sensor = aldebaran_read_sensor,
+ 	.set_performance_level = aldebaran_set_performance_level,
+-	.get_power_limit = aldebaran_get_power_limit,
++	.get_ppt_limit = aldebaran_get_ppt_limit,
+ 	.is_dpm_running = aldebaran_is_dpm_running,
+ 	.get_unique_id = aldebaran_get_unique_id,
+ 	.init_microcode = smu_v13_0_init_microcode,
+@@ -2003,7 +1996,7 @@ static const struct pptable_funcs aldebaran_ppt_funcs = {
+ 	.get_enabled_mask = smu_cmn_get_enabled_mask,
+ 	.feature_is_enabled = smu_cmn_feature_is_enabled,
+ 	.disable_all_features_with_exception = smu_cmn_disable_all_features_with_exception,
+-	.set_power_limit = aldebaran_set_power_limit,
++	.set_ppt_limit = aldebaran_set_ppt_limit,
+ 	.init_max_sustainable_clocks = smu_v13_0_init_max_sustainable_clocks,
+ 	.enable_thermal_alert = smu_v13_0_enable_thermal_alert,
+ 	.disable_thermal_alert = smu_v13_0_disable_thermal_alert,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0.c
+index 4f10bce36756..c4b2fe60da62 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0.c
+@@ -815,14 +815,17 @@ int smu_v13_0_init_max_sustainable_clocks(struct smu_context *smu)
+ 	return 0;
+ }
+ 
+-int smu_v13_0_get_current_power_limit(struct smu_context *smu,
+-				      uint32_t *power_limit)
++int smu_v13_0_get_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t *ppt_limit)
+ {
+ 	int power_src;
+ 	int ret = 0;
+ 
+ 	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT))
+ 		return -EINVAL;
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
+ 
+ 	power_src = smu_cmn_to_asic_specific_index(smu,
+ 						   CMN2ASIC_MAPPING_PWR,
+@@ -835,35 +838,33 @@ int smu_v13_0_get_current_power_limit(struct smu_context *smu,
+ 	ret = smu_cmn_send_smc_msg_with_param(smu,
+ 					      SMU_MSG_GetPptLimit,
+ 					      power_src << 16,
+-					      power_limit);
++					      ppt_limit);
+ 	if (ret)
+ 		dev_err(smu->adev->dev, "[%s] get PPT limit failed!", __func__);
+ 
+ 	return ret;
+ }
+ 
+-int smu_v13_0_set_power_limit(struct smu_context *smu,
+-			      enum smu_ppt_limit_type limit_type,
+-			      uint32_t limit)
++int smu_v13_0_set_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t limit)
+ {
+ 	int ret = 0;
+ 
+-	if (limit_type != SMU_DEFAULT_PPT_LIMIT)
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EINVAL;
+ 
+ 	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT)) {
+-		dev_err(smu->adev->dev, "Setting new power limit is not supported!\n");
++		dev_err(smu->adev->dev, "Setting new PPT limit is not supported!\n");
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	ret = smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_SetPptLimit, limit, NULL);
+ 	if (ret) {
+-		dev_err(smu->adev->dev, "[%s] Set power limit Failed!\n", __func__);
++		dev_err(smu->adev->dev, "[%s] Set PPT limit failed!\n", __func__);
+ 		return ret;
+ 	}
+ 
+-	smu->current_power_limit = limit;
+-
+ 	return 0;
+ }
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c
+index 48e54881a5d0..35c5a64a89c2 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c
+@@ -62,6 +62,7 @@
+ static void smu_v13_0_0_get_od_setting_limits(struct smu_context *smu,
+ 					      int od_feature_bit,
+ 					      int32_t *min, int32_t *max);
++static int smu_v13_0_0_init_ppt_limits(struct smu_context *smu);
+ 
+ static const struct smu_feature_bits smu_v13_0_0_dpm_features = {
+ 	.bits = {
+@@ -467,7 +468,7 @@ static int smu_v13_0_0_setup_pptable(struct smu_context *smu)
+ 	if (ret)
+ 		return ret;
+ 
+-	return ret;
++	return smu_v13_0_0_init_ppt_limits(smu);
+ }
+ 
+ static int smu_v13_0_0_tables_init(struct smu_context *smu)
+@@ -2389,58 +2390,65 @@ static int smu_v13_0_0_enable_mgpu_fan_boost(struct smu_context *smu)
+ 					       NULL);
+ }
+ 
+-static int smu_v13_0_0_get_power_limit(struct smu_context *smu,
+-				       uint32_t *current_power_limit,
+-				       uint32_t *default_power_limit,
+-				       uint32_t *max_power_limit,
+-				       uint32_t *min_power_limit)
++static int smu_v13_0_0_get_ppt_limit(struct smu_context *smu,
++				     enum smu_ppt_limit_type limit_type,
++				     uint32_t *ppt_limit)
++{
++	PPTable_t *pptable = smu->smu_table.driver_pptable;
++	SkuTable_t *skutable = &pptable->SkuTable;
++	uint32_t pp_limit = smu->adev->pm.ac_power ?
++		skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
++		skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
++
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
++
++	if (smu_v13_0_get_ppt_limit(smu, limit_type, ppt_limit))
++		*ppt_limit = pp_limit;
++
++	return 0;
++}
++
++static int smu_v13_0_0_init_ppt_limits(struct smu_context *smu)
+ {
+ 	struct smu_table_context *table_context = &smu->smu_table;
+ 	struct smu_13_0_0_powerplay_table *powerplay_table =
+ 		(struct smu_13_0_0_powerplay_table *)table_context->power_play_table;
+ 	PPTable_t *pptable = table_context->driver_pptable;
+ 	SkuTable_t *skutable = &pptable->SkuTable;
+-	uint32_t pp_limit = smu->adev->pm.ac_power ?
+-			      skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
+-			      skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
+-	uint32_t msg_limit = skutable->MsgLimits.Power[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
+-	uint32_t min_limit = min_t(uint32_t, pp_limit, msg_limit);
+-	uint32_t max_limit = max_t(uint32_t, pp_limit, msg_limit);
+ 	uint32_t od_percent_upper = 0, od_percent_lower = 0;
+-	int ret;
+-
+-	if (current_power_limit) {
+-		ret = smu_v13_0_get_current_power_limit(smu, current_power_limit);
+-		if (ret)
+-			*current_power_limit = pp_limit;
+-	}
++	uint32_t pp_limit, msg_limit, min_limit, max_limit;
++	int i;
+ 
+-	if (default_power_limit)
+-		*default_power_limit = pp_limit;
+-
+-	if (powerplay_table) {
+-		if (smu->od_enabled &&
+-				smu_v13_0_0_is_od_feature_supported(smu, PP_OD_FEATURE_PPT_BIT)) {
+-			od_percent_upper = le32_to_cpu(powerplay_table->overdrive_table.max[SMU_13_0_0_ODSETTING_POWERPERCENTAGE]);
+-			od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[SMU_13_0_0_ODSETTING_POWERPERCENTAGE]);
+-		} else if (smu_v13_0_0_is_od_feature_supported(smu, PP_OD_FEATURE_PPT_BIT)) {
+-			od_percent_upper = 0;
+-			od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[SMU_13_0_0_ODSETTING_POWERPERCENTAGE]);
+-		}
++	if (powerplay_table &&
++	    smu_v13_0_0_is_od_feature_supported(smu, PP_OD_FEATURE_PPT_BIT)) {
++		od_percent_upper = le32_to_cpu(powerplay_table->overdrive_table.max[
++			SMU_13_0_0_ODSETTING_POWERPERCENTAGE]);
++		od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[
++			SMU_13_0_0_ODSETTING_POWERPERCENTAGE]);
+ 	}
+ 
+-	dev_dbg(smu->adev->dev, "od percent upper:%d, od percent lower:%d (default power: %d)\n",
+-		od_percent_upper, od_percent_lower, pp_limit);
+-
+-	if (max_power_limit) {
+-		*max_power_limit = max_limit * (100 + od_percent_upper);
+-		*max_power_limit /= 100;
++	for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++		pp_limit = i == SMU_POWER_SOURCE_AC ?
++			skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
++			skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
++		msg_limit = skutable->MsgLimits.Power[PPT_THROTTLER_PPT0][i];
++		min_limit = min(pp_limit, msg_limit);
++		max_limit = max(pp_limit, msg_limit);
++
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].default_value =
++			pp_limit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].max =
++			max_limit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min =
++			min_limit * (100 - od_percent_lower) / 100;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_max =
++			max_limit * (100 + od_percent_upper) / 100;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_min =
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min;
+ 	}
+ 
+-	if (min_power_limit) {
+-		*min_power_limit = min_limit * (100 - od_percent_lower);
+-		*min_power_limit /= 100;
+-	}
++	smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT0);
+ 
+ 	return 0;
+ }
+@@ -3031,9 +3039,9 @@ static bool smu_v13_0_0_wbrf_support_check(struct smu_context *smu)
+ 	}
+ }
+ 
+-static int smu_v13_0_0_set_power_limit(struct smu_context *smu,
+-				       enum smu_ppt_limit_type limit_type,
+-				       uint32_t limit)
++static int smu_v13_0_0_set_ppt_limit(struct smu_context *smu,
++				     enum smu_ppt_limit_type limit_type,
++				     uint32_t limit)
+ {
+ 	PPTable_t *pptable = smu->smu_table.driver_pptable;
+ 	SkuTable_t *skutable = &pptable->SkuTable;
+@@ -3041,13 +3049,18 @@ static int smu_v13_0_0_set_power_limit(struct smu_context *smu,
+ 	struct smu_table_context *table_context = &smu->smu_table;
+ 	OverDriveTableExternal_t *od_table =
+ 		(OverDriveTableExternal_t *)table_context->overdrive_table;
++	uint32_t current_limit;
+ 	int ret = 0;
+ 
+-	if (limit_type != SMU_DEFAULT_PPT_LIMIT)
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EINVAL;
+ 
++	ret = smu_v13_0_0_get_ppt_limit(smu, limit_type, &current_limit);
++	if (ret)
++		return ret;
++
+ 	if (limit <= msg_limit) {
+-		if (smu->current_power_limit > msg_limit) {
++		if (current_limit > msg_limit) {
+ 			od_table->OverDriveTable.Ppt = 0;
+ 			od_table->OverDriveTable.FeatureCtrlMask |= 1U << PP_OD_FEATURE_PPT_BIT;
+ 
+@@ -3057,9 +3070,9 @@ static int smu_v13_0_0_set_power_limit(struct smu_context *smu,
+ 				return ret;
+ 			}
+ 		}
+-		return smu_v13_0_set_power_limit(smu, limit_type, limit);
++			return smu_v13_0_set_ppt_limit(smu, limit_type, limit);
+ 	} else if (smu->od_enabled) {
+-		ret = smu_v13_0_set_power_limit(smu, limit_type, msg_limit);
++		ret = smu_v13_0_set_ppt_limit(smu, limit_type, msg_limit);
+ 		if (ret)
+ 			return ret;
+ 
+@@ -3072,7 +3085,6 @@ static int smu_v13_0_0_set_power_limit(struct smu_context *smu,
+ 		  return ret;
+ 		}
+ 
+-		smu->current_power_limit = limit;
+ 	} else {
+ 		return -EINVAL;
+ 	}
+@@ -3215,8 +3227,8 @@ static const struct pptable_funcs smu_v13_0_0_ppt_funcs = {
+ 	.get_fan_control_mode = smu_v13_0_get_fan_control_mode,
+ 	.set_fan_control_mode = smu_v13_0_set_fan_control_mode,
+ 	.enable_mgpu_fan_boost = smu_v13_0_0_enable_mgpu_fan_boost,
+-	.get_power_limit = smu_v13_0_0_get_power_limit,
+-	.set_power_limit = smu_v13_0_0_set_power_limit,
++	.get_ppt_limit = smu_v13_0_0_get_ppt_limit,
++	.set_ppt_limit = smu_v13_0_0_set_ppt_limit,
+ 	.set_power_source = smu_v13_0_set_power_source,
+ 	.get_power_profile_mode = smu_v13_0_0_get_power_profile_mode,
+ 	.set_power_profile_mode = smu_v13_0_0_set_power_profile_mode,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c
+index db94de88add2..39f5ed5da58f 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c
+@@ -74,6 +74,9 @@ MODULE_FIRMWARE("amdgpu/smu_13_0_14.bin");
+ 	[smu_feature] = { 1, (smu_13_0_6_feature) }
+ 
+ #define FEATURE_MASK(feature) (1ULL << feature)
++
++static int smu_v13_0_6_init_ppt_limits(struct smu_context *smu);
++
+ static const struct smu_feature_bits smu_v13_0_6_dpm_features = {
+ 	.bits = {
+ 		SMU_FEATURE_BIT_INIT(FEATURE_DATA_CALCULATION),
+@@ -1150,7 +1153,7 @@ static int smu_v13_0_6_set_default_dpm_table(struct smu_context *smu)
+ 		}
+ 	}
+ 
+-	return 0;
++	return smu_v13_0_6_init_ppt_limits(smu);
+ }
+ 
+ static int smu_v13_0_6_setup_pptable(struct smu_context *smu)
+@@ -1699,54 +1702,82 @@ static int smu_v13_0_6_read_sensor(struct smu_context *smu,
+ 	return ret;
+ }
+ 
+-static int smu_v13_0_6_get_power_limit(struct smu_context *smu,
+-						uint32_t *current_power_limit,
+-						uint32_t *default_power_limit,
+-						uint32_t *max_power_limit,
+-						uint32_t *min_power_limit)
++static int smu_v13_0_6_get_ppt_limit(struct smu_context *smu,
++				     enum smu_ppt_limit_type limit_type,
++				     uint32_t *ppt_limit)
+ {
+-	struct smu_table_context *smu_table = &smu->smu_table;
+-	struct PPTable_t *pptable =
+-		(struct PPTable_t *)smu_table->driver_pptable;
+-	uint32_t power_limit = 0;
+ 	int ret;
+ 
+-	ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetPptLimit, &power_limit);
+-
++	if (limit_type == SMU_PPT_LIMIT_PPT1) {
++		if (!smu_v13_0_6_cap_supported(smu, SMU_CAP(FAST_PPT)))
++			return -EOPNOTSUPP;
++		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetFastPptLimit,
++					       ppt_limit);
++	} else {
++		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetPptLimit,
++					       ppt_limit);
++	}
+ 	if (ret) {
+ 		dev_err(smu->adev->dev, "Couldn't get PPT limit");
+ 		return -EINVAL;
+ 	}
+ 
+-	if (current_power_limit)
+-		*current_power_limit = power_limit;
+-	if (default_power_limit)
+-		*default_power_limit = pptable->MaxSocketPowerLimit;
++	return 0;
++}
+ 
+-	if (max_power_limit) {
+-		*max_power_limit = pptable->MaxSocketPowerLimit;
++static int smu_v13_0_6_init_ppt_limits(struct smu_context *smu)
++{
++	struct smu_table_context *smu_table = &smu->smu_table;
++	struct PPTable_t *pptable =
++		(struct PPTable_t *)smu_table->driver_pptable;
++	int i;
++
++	for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].default_value =
++			pptable->MaxSocketPowerLimit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].max =
++			pptable->MaxSocketPowerLimit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min = 0;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_max =
++			pptable->MaxSocketPowerLimit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_min = 0;
++	}
++	smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT0);
++
++	if (smu_v13_0_6_cap_supported(smu, SMU_CAP(FAST_PPT))) {
++		for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT1].default_value =
++				pptable->PPT1Default;
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT1].max =
++				pptable->PPT1Max;
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT1].min =
++				pptable->PPT1Min;
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT1].od_max =
++				pptable->PPT1Max;
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT1].od_min =
++				pptable->PPT1Min;
++		}
++		smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT1);
+ 	}
+ 
+-	if (min_power_limit)
+-		*min_power_limit = 0;
+ 	return 0;
+ }
+ 
+-static int smu_v13_0_6_set_power_limit(struct smu_context *smu,
+-				       enum smu_ppt_limit_type limit_type,
+-				       uint32_t limit)
++static int smu_v13_0_6_set_ppt_limit(struct smu_context *smu,
++				     enum smu_ppt_limit_type limit_type,
++				     uint32_t limit)
+ {
+ 	struct smu_table_context *smu_table = &smu->smu_table;
+ 	struct PPTable_t *pptable =
+ 		(struct PPTable_t *)smu_table->driver_pptable;
+ 	int ret;
+ 
+-	if (limit_type == SMU_FAST_PPT_LIMIT) {
++	if (limit_type == SMU_PPT_LIMIT_PPT1) {
+ 		if (!smu_v13_0_6_cap_supported(smu, SMU_CAP(FAST_PPT)))
+ 			return -EOPNOTSUPP;
+ 		if (limit > pptable->PPT1Max || limit < pptable->PPT1Min) {
+ 			dev_err(smu->adev->dev,
+-				"New power limit (%d) should be between min %d max %d\n",
++				"New PPT limit (%d) should be between min %d max %d\n",
+ 				limit, pptable->PPT1Min, pptable->PPT1Max);
+ 			return -EINVAL;
+ 		}
+@@ -1757,43 +1788,7 @@ static int smu_v13_0_6_set_power_limit(struct smu_context *smu,
+ 		return ret;
+ 	}
+ 
+-	return smu_v13_0_set_power_limit(smu, limit_type, limit);
+-}
+-
+-static int smu_v13_0_6_get_ppt_limit(struct smu_context *smu,
+-				     uint32_t *ppt_limit,
+-				     enum smu_ppt_limit_type type,
+-				     enum smu_ppt_limit_level level)
+-{
+-	struct smu_table_context *smu_table = &smu->smu_table;
+-	struct PPTable_t *pptable =
+-		(struct PPTable_t *)smu_table->driver_pptable;
+-	int ret = 0;
+-
+-	if (type == SMU_FAST_PPT_LIMIT) {
+-		if (!smu_v13_0_6_cap_supported(smu, SMU_CAP(FAST_PPT)))
+-			return -EOPNOTSUPP;
+-		switch (level) {
+-		case SMU_PPT_LIMIT_MAX:
+-			*ppt_limit = pptable->PPT1Max;
+-			break;
+-		case SMU_PPT_LIMIT_CURRENT:
+-			ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetFastPptLimit, ppt_limit);
+-			if (ret)
+-				dev_err(smu->adev->dev, "Get fast PPT limit failed!\n");
+-			break;
+-		case SMU_PPT_LIMIT_DEFAULT:
+-			*ppt_limit = pptable->PPT1Default;
+-			break;
+-		case SMU_PPT_LIMIT_MIN:
+-			*ppt_limit = pptable->PPT1Min;
+-			break;
+-		default:
+-			return -EOPNOTSUPP;
+-		}
+-		return ret;
+-	}
+-	return -EOPNOTSUPP;
++	return smu_v13_0_set_ppt_limit(smu, limit_type, limit);
+ }
+ 
+ static int smu_v13_0_6_irq_process(struct amdgpu_device *adev,
+@@ -3284,7 +3279,7 @@ static const struct pptable_funcs smu_v13_0_6_ppt_funcs = {
+ 	.force_clk_levels = smu_v13_0_6_force_clk_levels,
+ 	.read_sensor = smu_v13_0_6_read_sensor,
+ 	.set_performance_level = smu_v13_0_6_set_performance_level,
+-	.get_power_limit = smu_v13_0_6_get_power_limit,
++	.get_ppt_limit = smu_v13_0_6_get_ppt_limit,
+ 	.is_dpm_running = smu_v13_0_6_is_dpm_running,
+ 	.get_unique_id = smu_v13_0_6_get_unique_id,
+ 	.init_microcode = smu_v13_0_6_init_microcode,
+@@ -3302,8 +3297,7 @@ static const struct pptable_funcs smu_v13_0_6_ppt_funcs = {
+ 	.system_features_control = smu_v13_0_6_system_features_control,
+ 	.get_enabled_mask = smu_v13_0_6_get_enabled_mask,
+ 	.feature_is_enabled = smu_cmn_feature_is_enabled,
+-	.set_power_limit = smu_v13_0_6_set_power_limit,
+-	.get_ppt_limit = smu_v13_0_6_get_ppt_limit,
++	.set_ppt_limit = smu_v13_0_6_set_ppt_limit,
+ 	.set_xgmi_pstate = smu_v13_0_set_xgmi_pstate,
+ 	.register_irq_handler = smu_v13_0_6_register_irq_handler,
+ 	.enable_thermal_alert = smu_v13_0_enable_thermal_alert,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c
+index 4deb987e43e0..6e0a27eec610 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c
+@@ -62,6 +62,7 @@
+ static void smu_v13_0_7_get_od_setting_limits(struct smu_context *smu,
+ 					      int od_feature_bit,
+ 					      int32_t *min, int32_t *max);
++static int smu_v13_0_7_init_ppt_limits(struct smu_context *smu);
+ 
+ static const struct smu_feature_bits smu_v13_0_7_dpm_features = {
+ 	.bits = {
+@@ -503,7 +504,7 @@ static int smu_v13_0_7_setup_pptable(struct smu_context *smu)
+ 	if (ret)
+ 		return ret;
+ 
+-	return ret;
++	return smu_v13_0_7_init_ppt_limits(smu);
+ }
+ 
+ static int smu_v13_0_7_tables_init(struct smu_context *smu)
+@@ -2371,58 +2372,65 @@ static int smu_v13_0_7_enable_mgpu_fan_boost(struct smu_context *smu)
+ 					       NULL);
+ }
+ 
+-static int smu_v13_0_7_get_power_limit(struct smu_context *smu,
+-				       uint32_t *current_power_limit,
+-				       uint32_t *default_power_limit,
+-				       uint32_t *max_power_limit,
+-				       uint32_t *min_power_limit)
++static int smu_v13_0_7_get_ppt_limit(struct smu_context *smu,
++				     enum smu_ppt_limit_type limit_type,
++				     uint32_t *ppt_limit)
++{
++	PPTable_t *pptable = smu->smu_table.driver_pptable;
++	SkuTable_t *skutable = &pptable->SkuTable;
++	uint32_t pp_limit = smu->adev->pm.ac_power ?
++		skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
++		skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
++
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
++
++	if (smu_v13_0_get_ppt_limit(smu, limit_type, ppt_limit))
++		*ppt_limit = pp_limit;
++
++	return 0;
++}
++
++static int smu_v13_0_7_init_ppt_limits(struct smu_context *smu)
+ {
+ 	struct smu_table_context *table_context = &smu->smu_table;
+ 	struct smu_13_0_7_powerplay_table *powerplay_table =
+ 		(struct smu_13_0_7_powerplay_table *)table_context->power_play_table;
+ 	PPTable_t *pptable = table_context->driver_pptable;
+ 	SkuTable_t *skutable = &pptable->SkuTable;
+-	uint32_t pp_limit = smu->adev->pm.ac_power ?
+-			      skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
+-			      skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
+-	uint32_t msg_limit = skutable->MsgLimits.Power[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
+-	uint32_t min_limit = min_t(uint32_t, pp_limit, msg_limit);
+-	uint32_t max_limit = max_t(uint32_t, pp_limit, msg_limit);
+ 	uint32_t od_percent_upper = 0, od_percent_lower = 0;
+-	int ret;
+-
+-	if (current_power_limit) {
+-		ret = smu_v13_0_get_current_power_limit(smu, current_power_limit);
+-		if (ret)
+-			*current_power_limit = pp_limit;
+-	}
++	uint32_t pp_limit, msg_limit, min_limit, max_limit;
++	int i;
+ 
+-	if (default_power_limit)
+-		*default_power_limit = pp_limit;
+-
+-	if (powerplay_table) {
+-		if (smu->od_enabled &&
+-				(smu_v13_0_7_is_od_feature_supported(smu, PP_OD_FEATURE_PPT_BIT))) {
+-			od_percent_upper = le32_to_cpu(powerplay_table->overdrive_table.max[SMU_13_0_7_ODSETTING_POWERPERCENTAGE]);
+-			od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[SMU_13_0_7_ODSETTING_POWERPERCENTAGE]);
+-		} else if (smu_v13_0_7_is_od_feature_supported(smu, PP_OD_FEATURE_PPT_BIT)) {
+-			od_percent_upper = 0;
+-			od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[SMU_13_0_7_ODSETTING_POWERPERCENTAGE]);
+-		}
++	if (powerplay_table &&
++	    smu_v13_0_7_is_od_feature_supported(smu, PP_OD_FEATURE_PPT_BIT)) {
++		od_percent_upper = le32_to_cpu(powerplay_table->overdrive_table.max[
++			SMU_13_0_7_ODSETTING_POWERPERCENTAGE]);
++		od_percent_lower = le32_to_cpu(powerplay_table->overdrive_table.min[
++			SMU_13_0_7_ODSETTING_POWERPERCENTAGE]);
+ 	}
+ 
+-	dev_dbg(smu->adev->dev, "od percent upper:%d, od percent lower:%d (default power: %d)\n",
+-		od_percent_upper, od_percent_lower, pp_limit);
+-
+-	if (max_power_limit) {
+-		*max_power_limit = max_limit * (100 + od_percent_upper);
+-		*max_power_limit /= 100;
++	for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++		pp_limit = i == SMU_POWER_SOURCE_AC ?
++			skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
++			skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
++		msg_limit = skutable->MsgLimits.Power[PPT_THROTTLER_PPT0][i];
++		min_limit = min(pp_limit, msg_limit);
++		max_limit = max(pp_limit, msg_limit);
++
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].default_value =
++			pp_limit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].max =
++			max_limit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min =
++			min_limit * (100 - od_percent_lower) / 100;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_max =
++			max_limit * (100 + od_percent_upper) / 100;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_min =
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min;
+ 	}
+ 
+-	if (min_power_limit) {
+-		*min_power_limit = min_limit * (100 - od_percent_lower);
+-		*min_power_limit /= 100;
+-	}
++	smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT0);
+ 
+ 	return 0;
+ }
+@@ -2651,9 +2659,9 @@ static bool smu_v13_0_7_wbrf_support_check(struct smu_context *smu)
+ 	return smu->smc_fw_version > 0x00524600;
+ }
+ 
+-static int smu_v13_0_7_set_power_limit(struct smu_context *smu,
+-				       enum smu_ppt_limit_type limit_type,
+-				       uint32_t limit)
++static int smu_v13_0_7_set_ppt_limit(struct smu_context *smu,
++				     enum smu_ppt_limit_type limit_type,
++				     uint32_t limit)
+ {
+ 	PPTable_t *pptable = smu->smu_table.driver_pptable;
+ 	SkuTable_t *skutable = &pptable->SkuTable;
+@@ -2661,13 +2669,18 @@ static int smu_v13_0_7_set_power_limit(struct smu_context *smu,
+ 	struct smu_table_context *table_context = &smu->smu_table;
+ 	OverDriveTableExternal_t *od_table =
+ 		(OverDriveTableExternal_t *)table_context->overdrive_table;
++	uint32_t current_limit;
+ 	int ret = 0;
+ 
+-	if (limit_type != SMU_DEFAULT_PPT_LIMIT)
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EINVAL;
+ 
++	ret = smu_v13_0_7_get_ppt_limit(smu, limit_type, &current_limit);
++	if (ret)
++		return ret;
++
+ 	if (limit <= msg_limit) {
+-		if (smu->current_power_limit > msg_limit) {
++		if (current_limit > msg_limit) {
+ 			od_table->OverDriveTable.Ppt = 0;
+ 			od_table->OverDriveTable.FeatureCtrlMask |= 1U << PP_OD_FEATURE_PPT_BIT;
+ 
+@@ -2677,9 +2690,9 @@ static int smu_v13_0_7_set_power_limit(struct smu_context *smu,
+ 				return ret;
+ 			}
+ 		}
+-		return smu_v13_0_set_power_limit(smu, limit_type, limit);
++		return smu_v13_0_set_ppt_limit(smu, limit_type, limit);
+ 	} else if (smu->od_enabled) {
+-		ret = smu_v13_0_set_power_limit(smu, limit_type, msg_limit);
++		ret = smu_v13_0_set_ppt_limit(smu, limit_type, msg_limit);
+ 		if (ret)
+ 			return ret;
+ 
+@@ -2692,7 +2705,6 @@ static int smu_v13_0_7_set_power_limit(struct smu_context *smu,
+ 		  return ret;
+ 		}
+ 
+-		smu->current_power_limit = limit;
+ 	} else {
+ 		return -EINVAL;
+ 	}
+@@ -2861,8 +2873,8 @@ static const struct pptable_funcs smu_v13_0_7_ppt_funcs = {
+ 	.get_fan_control_mode = smu_v13_0_get_fan_control_mode,
+ 	.set_fan_control_mode = smu_v13_0_set_fan_control_mode,
+ 	.enable_mgpu_fan_boost = smu_v13_0_7_enable_mgpu_fan_boost,
+-	.get_power_limit = smu_v13_0_7_get_power_limit,
+-	.set_power_limit = smu_v13_0_7_set_power_limit,
++	.get_ppt_limit = smu_v13_0_7_get_ppt_limit,
++	.set_ppt_limit = smu_v13_0_7_set_ppt_limit,
+ 	.set_power_source = smu_v13_0_set_power_source,
+ 	.get_power_profile_mode = smu_v13_0_7_get_power_profile_mode,
+ 	.set_power_profile_mode = smu_v13_0_7_set_power_profile_mode,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0.c b/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0.c
+index 2a0c7cde938d..80dac277d1ae 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0.c
+@@ -667,14 +667,17 @@ int smu_v14_0_notify_display_change(struct smu_context *smu)
+ 	return ret;
+ }
+ 
+-int smu_v14_0_get_current_power_limit(struct smu_context *smu,
+-				      uint32_t *power_limit)
++int smu_v14_0_get_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t *ppt_limit)
+ {
+ 	int power_src;
+ 	int ret = 0;
+ 
+ 	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT))
+ 		return -EINVAL;
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
+ 
+ 	power_src = smu_cmn_to_asic_specific_index(smu,
+ 						   CMN2ASIC_MAPPING_PWR,
+@@ -687,35 +690,33 @@ int smu_v14_0_get_current_power_limit(struct smu_context *smu,
+ 	ret = smu_cmn_send_smc_msg_with_param(smu,
+ 					      SMU_MSG_GetPptLimit,
+ 					      power_src << 16,
+-					      power_limit);
++					      ppt_limit);
+ 	if (ret)
+ 		dev_err(smu->adev->dev, "[%s] get PPT limit failed!", __func__);
+ 
+ 	return ret;
+ }
+ 
+-int smu_v14_0_set_power_limit(struct smu_context *smu,
+-			      enum smu_ppt_limit_type limit_type,
+-			      uint32_t limit)
++int smu_v14_0_set_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t limit)
+ {
+ 	int ret = 0;
+ 
+-	if (limit_type != SMU_DEFAULT_PPT_LIMIT)
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EINVAL;
+ 
+ 	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT)) {
+-		dev_err(smu->adev->dev, "Setting new power limit is not supported!\n");
++		dev_err(smu->adev->dev, "Setting new PPT limit is not supported!\n");
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	ret = smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_SetPptLimit, limit, NULL);
+ 	if (ret) {
+-		dev_err(smu->adev->dev, "[%s] Set power limit Failed!\n", __func__);
++		dev_err(smu->adev->dev, "[%s] Set PPT limit failed!\n", __func__);
+ 		return ret;
+ 	}
+ 
+-	smu->current_power_limit = limit;
+-
+ 	return 0;
+ }
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
+index 2fa4ce26e950..824367cf4667 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
+@@ -59,6 +59,7 @@
+ static void smu_v14_0_2_get_od_setting_limits(struct smu_context *smu,
+ 					      int od_feature_bit,
+ 					      int32_t *min, int32_t *max);
++static int smu_v14_0_2_init_ppt_limits(struct smu_context *smu);
+ 
+ static const struct smu_feature_bits smu_v14_0_2_dpm_features = {
+ 	.bits = { SMU_FEATURE_BIT_INIT(FEATURE_DPM_GFXCLK_BIT),
+@@ -370,7 +371,7 @@ static int smu_v14_0_2_setup_pptable(struct smu_context *smu)
+ 	if (ret)
+ 		return ret;
+ 
+-	return ret;
++	return smu_v14_0_2_init_ppt_limits(smu);
+ }
+ 
+ static int smu_v14_0_2_tables_init(struct smu_context *smu)
+@@ -1610,59 +1611,64 @@ static int smu_v14_0_2_get_fan_speed_rpm(struct smu_context *smu,
+ 						speed);
+ }
+ 
+-static int smu_v14_0_2_get_power_limit(struct smu_context *smu,
+-				       uint32_t *current_power_limit,
+-				       uint32_t *default_power_limit,
+-				       uint32_t *max_power_limit,
+-				       uint32_t *min_power_limit)
++static int smu_v14_0_2_get_ppt_limit(struct smu_context *smu,
++				     enum smu_ppt_limit_type limit_type,
++				     uint32_t *ppt_limit)
+ {
+-	struct smu_table_context *table_context = &smu->smu_table;
+-	struct smu_14_0_2_powerplay_table *powerplay_table =
+-		table_context->power_play_table;
+-	PPTable_t *pptable = table_context->driver_pptable;
++	PPTable_t *pptable = smu->smu_table.driver_pptable;
+ 	CustomSkuTable_t *skutable = &pptable->CustomSkuTable;
+ 	uint32_t pp_limit = smu->adev->pm.ac_power ?
+ 		skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
+ 		skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
+-	uint32_t msg_limit = pptable->SkuTable.MsgLimits.Power[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
+-	uint32_t min_limit = min_t(uint32_t, pp_limit, msg_limit);
+-	uint32_t max_limit = max_t(uint32_t, pp_limit, msg_limit);
+-	int16_t od_percent_upper = 0, od_percent_lower = 0;
+-	int ret;
+ 
+-	if (current_power_limit) {
+-		ret = smu_v14_0_get_current_power_limit(smu, current_power_limit);
+-		if (ret)
+-			*current_power_limit = pp_limit;
+-	}
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
+ 
+-	if (default_power_limit)
+-		*default_power_limit = pp_limit;
+-
+-	if (powerplay_table) {
+-		if (smu->od_enabled &&
+-		    smu_v14_0_2_is_od_feature_supported(smu, PP_OD_FEATURE_PPT_BIT)) {
+-			od_percent_upper = pptable->SkuTable.OverDriveLimitsBasicMax.Ppt;
+-			od_percent_lower = pptable->SkuTable.OverDriveLimitsBasicMin.Ppt;
+-		} else if (smu_v14_0_2_is_od_feature_supported(smu, PP_OD_FEATURE_PPT_BIT)) {
+-			od_percent_upper = 0;
+-			od_percent_lower = pptable->SkuTable.OverDriveLimitsBasicMin.Ppt;
+-		}
+-	}
++	if (smu_v14_0_get_ppt_limit(smu, limit_type, ppt_limit))
++		*ppt_limit = pp_limit;
+ 
+-	dev_dbg(smu->adev->dev, "od percent upper:%d, od percent lower:%d (default power: %d)\n",
+-					od_percent_upper, od_percent_lower, pp_limit);
++	return 0;
++}
++
++static int smu_v14_0_2_init_ppt_limits(struct smu_context *smu)
++{
++	struct smu_table_context *table_context = &smu->smu_table;
++	struct smu_14_0_2_powerplay_table *powerplay_table =
++		table_context->power_play_table;
++	PPTable_t *pptable = table_context->driver_pptable;
++	CustomSkuTable_t *skutable = &pptable->CustomSkuTable;
++	int16_t od_percent_upper = 0, od_percent_lower = 0;
++	uint32_t pp_limit, msg_limit, min_limit, max_limit;
++	int i;
+ 
+-	if (max_power_limit) {
+-		*max_power_limit = max_limit * (100 + od_percent_upper);
+-		*max_power_limit /= 100;
++	if (powerplay_table &&
++	    smu_v14_0_2_is_od_feature_supported(smu, PP_OD_FEATURE_PPT_BIT)) {
++		od_percent_upper = pptable->SkuTable.OverDriveLimitsBasicMax.Ppt;
++		od_percent_lower = pptable->SkuTable.OverDriveLimitsBasicMin.Ppt;
+ 	}
+ 
+-	if (min_power_limit) {
+-		*min_power_limit = min_limit * (100 + od_percent_lower);
+-		*min_power_limit /= 100;
++	for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++		pp_limit = i == SMU_POWER_SOURCE_AC ?
++			skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
++			skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
++		msg_limit = pptable->SkuTable.MsgLimits.Power
++			[PPT_THROTTLER_PPT0][i];
++		min_limit = min(pp_limit, msg_limit);
++		max_limit = max(pp_limit, msg_limit);
++
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].default_value =
++			pp_limit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].max = max_limit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min =
++			min_limit * (100 + od_percent_lower) / 100;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_max =
++			max_limit * (100 + od_percent_upper) / 100;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_min =
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min;
+ 	}
+ 
++	smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT0);
++
+ 	return 0;
+ }
+ 
+@@ -2789,22 +2795,27 @@ static int smu_v14_0_2_od_edit_dpm_table(struct smu_context *smu,
+ 	return ret;
+ }
+ 
+-static int smu_v14_0_2_set_power_limit(struct smu_context *smu,
+-				       enum smu_ppt_limit_type limit_type,
+-				       uint32_t limit)
++static int smu_v14_0_2_set_ppt_limit(struct smu_context *smu,
++				     enum smu_ppt_limit_type limit_type,
++				     uint32_t limit)
+ {
+ 	PPTable_t *pptable = smu->smu_table.driver_pptable;
+ 	uint32_t msg_limit = pptable->SkuTable.MsgLimits.Power[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
+ 	struct smu_table_context *table_context = &smu->smu_table;
+ 	OverDriveTableExternal_t *od_table =
+ 		(OverDriveTableExternal_t *)table_context->overdrive_table;
++	uint32_t current_limit;
+ 	int ret = 0;
+ 
+-	if (limit_type != SMU_DEFAULT_PPT_LIMIT)
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EINVAL;
+ 
++	ret = smu_v14_0_2_get_ppt_limit(smu, limit_type, &current_limit);
++	if (ret)
++		return ret;
++
+ 	if (limit <= msg_limit) {
+-		if (smu->current_power_limit > msg_limit) {
++		if (current_limit > msg_limit) {
+ 			od_table->OverDriveTable.Ppt = 0;
+ 			od_table->OverDriveTable.FeatureCtrlMask |= 1U << PP_OD_FEATURE_PPT_BIT;
+ 
+@@ -2814,9 +2825,9 @@ static int smu_v14_0_2_set_power_limit(struct smu_context *smu,
+ 				return ret;
+ 			}
+ 		}
+-		return smu_v14_0_set_power_limit(smu, limit_type, limit);
++		return smu_v14_0_set_ppt_limit(smu, limit_type, limit);
+ 	} else if (smu->od_enabled) {
+-		ret = smu_v14_0_set_power_limit(smu, limit_type, msg_limit);
++		ret = smu_v14_0_set_ppt_limit(smu, limit_type, msg_limit);
+ 		if (ret)
+ 			return ret;
+ 
+@@ -2829,7 +2840,6 @@ static int smu_v14_0_2_set_power_limit(struct smu_context *smu,
+ 		  return ret;
+ 		}
+ 
+-		smu->current_power_limit = limit;
+ 	} else {
+ 		return -EINVAL;
+ 	}
+@@ -2883,8 +2893,8 @@ static const struct pptable_funcs smu_v14_0_2_ppt_funcs = {
+ 	.get_unique_id = smu_v14_0_2_get_unique_id,
+ 	.get_fan_speed_pwm = smu_v14_0_2_get_fan_speed_pwm,
+ 	.get_fan_speed_rpm = smu_v14_0_2_get_fan_speed_rpm,
+-	.get_power_limit = smu_v14_0_2_get_power_limit,
+-	.set_power_limit = smu_v14_0_2_set_power_limit,
++	.get_ppt_limit = smu_v14_0_2_get_ppt_limit,
++	.set_ppt_limit = smu_v14_0_2_set_ppt_limit,
+ 	.get_power_profile_mode = smu_v14_0_2_get_power_profile_mode,
+ 	.set_power_profile_mode = smu_v14_0_2_set_power_profile_mode,
+ 	.run_btc = smu_v14_0_run_btc,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0.c b/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0.c
+index 046069e93854..14d0eb296a00 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0.c
+@@ -618,14 +618,17 @@ int smu_v15_0_notify_display_change(struct smu_context *smu)
+ 	return ret;
+ }
+ 
+-int smu_v15_0_get_current_power_limit(struct smu_context *smu,
+-				      uint32_t *power_limit)
++int smu_v15_0_get_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t *ppt_limit)
+ {
+ 	int power_src;
+ 	int ret = 0;
+ 
+ 	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT))
+ 		return -EINVAL;
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
++		return -EOPNOTSUPP;
+ 
+ 	power_src = smu_cmn_to_asic_specific_index(smu,
+ 						   CMN2ASIC_MAPPING_PWR,
+@@ -638,35 +641,33 @@ int smu_v15_0_get_current_power_limit(struct smu_context *smu,
+ 	ret = smu_cmn_send_smc_msg_with_param(smu,
+ 					      SMU_MSG_GetPptLimit,
+ 					      power_src << 16,
+-					      power_limit);
++					      ppt_limit);
+ 	if (ret)
+ 		dev_err(smu->adev->dev, "[%s] get PPT limit failed!", __func__);
+ 
+ 	return ret;
+ }
+ 
+-int smu_v15_0_set_power_limit(struct smu_context *smu,
+-			      enum smu_ppt_limit_type limit_type,
+-			      uint32_t limit)
++int smu_v15_0_set_ppt_limit(struct smu_context *smu,
++			    enum smu_ppt_limit_type limit_type,
++			    uint32_t limit)
+ {
+ 	int ret = 0;
+ 
+-	if (limit_type != SMU_DEFAULT_PPT_LIMIT)
++	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EINVAL;
+ 
+ 	if (!smu_cmn_feature_is_enabled(smu, SMU_FEATURE_PPT_BIT)) {
+-		dev_err(smu->adev->dev, "Setting new power limit is not supported!\n");
++		dev_err(smu->adev->dev, "Setting new PPT limit is not supported!\n");
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+ 	ret = smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_SetPptLimit, limit, NULL);
+ 	if (ret) {
+-		dev_err(smu->adev->dev, "[%s] Set power limit Failed!\n", __func__);
++		dev_err(smu->adev->dev, "[%s] Set PPT limit failed!\n", __func__);
+ 		return ret;
+ 	}
+ 
+-	smu->current_power_limit = limit;
+-
+ 	return 0;
+ }
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0_8_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0_8_ppt.c
+index 59fdd2319b66..01b91c9e3c28 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0_8_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu15/smu_v15_0_8_ppt.c
+@@ -72,6 +72,8 @@
+ 
+ #define FEATURE_MASK(feature) (1ULL << feature)
+ 
++static int smu_v15_0_8_init_ppt_limits(struct smu_context *smu);
++
+ static const struct smu_feature_bits smu_v15_0_8_dpm_features = {
+ 	.bits = { SMU_FEATURE_BIT_INIT(FEATURE_ID_DATA_CALCULATION),
+ 		  SMU_FEATURE_BIT_INIT(FEATURE_ID_DPM_GFXCLK),
+@@ -1153,7 +1155,7 @@ static int smu_v15_0_8_set_default_dpm_table(struct smu_context *smu)
+ 	if (ret)
+ 		return ret;
+ 
+-	return 0;
++	return smu_v15_0_8_init_ppt_limits(smu);
+ }
+ 
+ static int smu_v15_0_8_irq_process(struct amdgpu_device *adev,
+@@ -1848,34 +1850,59 @@ static void smu_v15_0_8_get_unique_id(struct smu_context *smu)
+ 	adev->unique_id = pptable->PublicSerialNumberMID;
+ }
+ 
+-static int smu_v15_0_8_get_power_limit(struct smu_context *smu,
+-				       uint32_t *current_power_limit,
+-				       uint32_t *default_power_limit,
+-				       uint32_t *max_power_limit,
+-				       uint32_t *min_power_limit)
++static int smu_v15_0_8_get_ppt_limit(struct smu_context *smu,
++				     enum smu_ppt_limit_type limit_type,
++				     uint32_t *ppt_limit)
+ {
+-	struct smu_table_context *smu_table = &smu->smu_table;
+-	PPTable_t *pptable = (PPTable_t *)smu_table->driver_pptable;
+-	uint32_t power_limit = 0;
+ 	int ret;
+ 
+-	ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetPptLimit, &power_limit);
++	if (limit_type == SMU_PPT_LIMIT_PPT1)
++		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetFastPptLimit,
++					       ppt_limit);
++	else
++		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetPptLimit,
++					       ppt_limit);
+ 	if (ret) {
+ 		dev_err(smu->adev->dev, "Couldn't get PPT limit");
+ 		return -EINVAL;
+ 	}
+ 
+-	if (current_power_limit)
+-		*current_power_limit = power_limit;
+-
+-	if (default_power_limit)
+-		*default_power_limit = pptable->MaxSocketPowerLimit;
+-
+-	if (max_power_limit)
+-		*max_power_limit = pptable->MaxSocketPowerLimit;
++	return 0;
++}
+ 
+-	if (min_power_limit)
+-		*min_power_limit = 0;
++static int smu_v15_0_8_init_ppt_limits(struct smu_context *smu)
++{
++	struct smu_table_context *smu_table = &smu->smu_table;
++	PPTable_t *pptable = (PPTable_t *)smu_table->driver_pptable;
++	int i;
++
++	for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].default_value =
++			pptable->MaxSocketPowerLimit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].max =
++			pptable->MaxSocketPowerLimit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].min = 0;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_max =
++			pptable->MaxSocketPowerLimit;
++		smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT0].od_min = 0;
++	}
++	smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT0);
++
++	if (pptable->PPT1Max) {
++		for (i = SMU_POWER_SOURCE_AC; i < SMU_POWER_SOURCE_COUNT; i++) {
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT1].default_value =
++				pptable->PPT1Default;
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT1].max =
++				pptable->PPT1Max;
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT1].min =
++				pptable->PPT1Min;
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT1].od_max =
++				pptable->PPT1Max;
++			smu->ppt_limits.range[i][SMU_PPT_LIMIT_PPT1].od_min =
++				pptable->PPT1Min;
++		}
++		smu->ppt_limits.supported_mask |= BIT(SMU_PPT_LIMIT_PPT1);
++	}
+ 
+ 	return 0;
+ }
+@@ -2213,15 +2240,15 @@ static int smu_v15_0_8_get_thermal_temperature_range(struct smu_context *smu,
+ 	return 0;
+ }
+ 
+-static int smu_v15_0_8_set_power_limit(struct smu_context *smu,
+-				       enum smu_ppt_limit_type limit_type,
+-				       uint32_t limit)
++static int smu_v15_0_8_set_ppt_limit(struct smu_context *smu,
++				     enum smu_ppt_limit_type limit_type,
++				     uint32_t limit)
+ {
+ 	struct smu_table_context *smu_table = &smu->smu_table;
+ 	PPTable_t *pptable = (PPTable_t *)smu_table->driver_pptable;
+ 	int ret;
+ 
+-	if (limit_type == SMU_FAST_PPT_LIMIT) {
++	if (limit_type == SMU_PPT_LIMIT_PPT1) {
+ 		if (!pptable->PPT1Max)
+ 			return -EOPNOTSUPP;
+ 
+@@ -2240,49 +2267,7 @@ static int smu_v15_0_8_set_power_limit(struct smu_context *smu,
+ 		return ret;
+ 	}
+ 
+-	return smu_v15_0_set_power_limit(smu, limit_type, limit);
+-}
+-
+-static int smu_v15_0_8_get_ppt_limit(struct smu_context *smu,
+-				     uint32_t *ppt_limit,
+-				     enum smu_ppt_limit_type type,
+-				     enum smu_ppt_limit_level level)
+-{
+-	struct smu_table_context *smu_table = &smu->smu_table;
+-	PPTable_t *pptable = (PPTable_t *)smu_table->driver_pptable;
+-	int ret = 0;
+-
+-	if (!ppt_limit)
+-		return -EINVAL;
+-
+-	if (type == SMU_FAST_PPT_LIMIT) {
+-		if (!pptable->PPT1Max)
+-			return -EOPNOTSUPP;
+-
+-		switch (level) {
+-		case SMU_PPT_LIMIT_MAX:
+-			*ppt_limit = pptable->PPT1Max;
+-			break;
+-		case SMU_PPT_LIMIT_CURRENT:
+-			ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetFastPptLimit,
+-						   ppt_limit);
+-			if (ret)
+-				dev_err(smu->adev->dev,
+-					"Get fast PPT limit failed!\n");
+-			break;
+-		case SMU_PPT_LIMIT_DEFAULT:
+-			*ppt_limit = pptable->PPT1Default;
+-			break;
+-		case SMU_PPT_LIMIT_MIN:
+-			*ppt_limit = pptable->PPT1Min;
+-			break;
+-		default:
+-			return -EOPNOTSUPP;
+-		}
+-		return ret;
+-	}
+-
+-	return -EOPNOTSUPP;
++	return smu_v15_0_set_ppt_limit(smu, limit_type, limit);
+ }
+ 
+ static uint32_t smu_v15_0_8_get_throttler_status(struct smu_context *smu)
+@@ -2379,9 +2364,8 @@ static const struct pptable_funcs smu_v15_0_8_ppt_funcs = {
+ 	.get_dpm_ultimate_freq = smu_v15_0_8_get_dpm_ultimate_freq,
+ 	.get_gpu_metrics = smu_v15_0_8_get_gpu_metrics,
+ 	.get_unique_id = smu_v15_0_8_get_unique_id,
+-	.get_power_limit = smu_v15_0_8_get_power_limit,
+-	.set_power_limit = smu_v15_0_8_set_power_limit,
+ 	.get_ppt_limit = smu_v15_0_8_get_ppt_limit,
++	.set_ppt_limit = smu_v15_0_8_set_ppt_limit,
+ 	.emit_clk_levels = smu_v15_0_8_emit_clk_levels,
+ 	.read_sensor = smu_v15_0_8_read_sensor,
+ 	.populate_umd_state_clk = smu_v15_0_8_populate_umd_state_clk,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu_internal.h b/drivers/gpu/drm/amd/pm/swsmu/smu_internal.h
+index 45e3758e9ed8..6244f8895668 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu_internal.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu_internal.h
+@@ -82,7 +82,8 @@
+ #define smu_i2c_fini(smu)                                               smu_ppt_funcs(i2c_fini, 0, smu)
+ #define smu_get_unique_id(smu)						smu_ppt_funcs(get_unique_id, 0, smu)
+ #define smu_log_thermal_throttling(smu)					smu_ppt_funcs(log_thermal_throttling_event, 0, smu)
+-#define smu_get_asic_power_limits(smu, current, default, max, min)		smu_ppt_funcs(get_power_limit, 0, smu, current, default, max, min)
++#define smu_get_asic_ppt_limit(smu, type, current) \
++	smu_ppt_funcs(get_ppt_limit, -EOPNOTSUPP, smu, type, current)
+ #define smu_get_pp_feature_mask(smu, buf)				smu_ppt_funcs(get_pp_feature_mask, 0, smu, buf)
+ #define smu_set_pp_feature_mask(smu, new_mask)				smu_ppt_funcs(set_pp_feature_mask, 0, smu, new_mask)
+ #define smu_gfx_ulv_control(smu, enablement)				smu_ppt_funcs(gfx_ulv_control, 0, smu, enablement)
+-- 
+2.55.0
+

@@ -1,0 +1,87 @@
+From 9c61998c9c858839664bdf0b1457639b0b6c5e4c Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Tue, 21 Jul 2026 17:25:39 +0700
+Subject: [PATCH 06756/15333] ASoC: codecs: hdmi-codec: Use guard() for mutex
+ locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260721102600.523199-9-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/hdmi-codec.c | 15 ++++++---------
+ 1 file changed, 6 insertions(+), 9 deletions(-)
+
+diff --git a/sound/soc/codecs/hdmi-codec.c b/sound/soc/codecs/hdmi-codec.c
+index 13ae9e83bc21..bc2c22436ba6 100644
+--- a/sound/soc/codecs/hdmi-codec.c
++++ b/sound/soc/codecs/hdmi-codec.c
+@@ -4,6 +4,7 @@
+  * Copyright (C) 2015 Texas Instruments Incorporated - https://www.ti.com/
+  * Author: Jyri Sarha <jsarha@ti.com>
+  */
++#include <linux/cleanup.h>
+ #include <linux/module.h>
+ #include <linux/string.h>
+ #include <sound/core.h>
+@@ -452,31 +453,30 @@ static int hdmi_codec_startup(struct snd_pcm_substream *substream,
+ 	if (!((has_playback && tx) || (has_capture && !tx)))
+ 		return 0;
+ 
+-	mutex_lock(&hcp->lock);
++	guard(mutex)(&hcp->lock);
+ 	if (hcp->busy) {
+ 		dev_err(dai->dev, "Only one simultaneous stream supported!\n");
+-		mutex_unlock(&hcp->lock);
+ 		return -EINVAL;
+ 	}
+ 
+ 	if (hcp->hcd.ops->audio_startup) {
+ 		ret = hcp->hcd.ops->audio_startup(dai->dev->parent, hcp->hcd.data);
+ 		if (ret)
+-			goto err;
++			return ret;
+ 	}
+ 
+ 	if (tx && hcp->hcd.ops->get_eld) {
+ 		ret = hcp->hcd.ops->get_eld(dai->dev->parent, hcp->hcd.data,
+ 					    hcp->eld, sizeof(hcp->eld));
+ 		if (ret)
+-			goto err;
++			return ret;
+ 
+ 		snd_parse_eld(dai->dev, &hcp->eld_parsed,
+ 			      hcp->eld, sizeof(hcp->eld));
+ 
+ 		ret = snd_pcm_hw_constraint_eld(substream->runtime, hcp->eld);
+ 		if (ret)
+-			goto err;
++			return ret;
+ 
+ 		/* Select chmap supported */
+ 		hdmi_codec_eld_chmap(hcp);
+@@ -484,8 +484,6 @@ static int hdmi_codec_startup(struct snd_pcm_substream *substream,
+ 
+ 	hcp->busy = true;
+ 
+-err:
+-	mutex_unlock(&hcp->lock);
+ 	return ret;
+ }
+ 
+@@ -503,9 +501,8 @@ static void hdmi_codec_shutdown(struct snd_pcm_substream *substream,
+ 	hcp->chmap_idx = HDMI_CODEC_CHMAP_IDX_UNKNOWN;
+ 	hcp->hcd.ops->audio_shutdown(dai->dev->parent, hcp->hcd.data);
+ 
+-	mutex_lock(&hcp->lock);
++	guard(mutex)(&hcp->lock);
+ 	hcp->busy = false;
+-	mutex_unlock(&hcp->lock);
+ }
+ 
+ static int hdmi_codec_fill_codec_params(struct snd_soc_dai *dai,
+-- 
+2.55.0
+

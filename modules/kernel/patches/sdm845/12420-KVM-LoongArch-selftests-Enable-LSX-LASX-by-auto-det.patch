@@ -1,0 +1,69 @@
+From 7513f2298c9248ceb38dd82979e9f90567925ee7 Mon Sep 17 00:00:00 2001
+From: Bibo Mao <maobibo@loongson.cn>
+Date: Mon, 10 Aug 2026 12:21:58 +0800
+Subject: [PATCH 12420/15333] KVM: LoongArch: selftests: Enable LSX/LASX by
+ auto detection
+
+Add LSX and LASX features when VM is created. These features are detected
+firstly, enable it if it is available on host machine.
+
+Signed-off-by: Bibo Mao <maobibo@loongson.cn>
+Signed-off-by: Huacai Chen <chenhuacai@loongson.cn>
+---
+ .../selftests/kvm/include/loongarch/processor.h       | 10 ++++++++++
+ tools/testing/selftests/kvm/lib/loongarch/processor.c | 11 ++++++++++-
+ 2 files changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/kvm/include/loongarch/processor.h b/tools/testing/selftests/kvm/include/loongarch/processor.h
+index 93dc1fbd2e79..6ca6e7f53004 100644
+--- a/tools/testing/selftests/kvm/include/loongarch/processor.h
++++ b/tools/testing/selftests/kvm/include/loongarch/processor.h
+@@ -70,6 +70,16 @@
+ #define PS_64K				0x00000010
+ #define PS_DEFAULT_SIZE			PS_16K
+ 
++#define LOONGARCH_CPUCFG2		0x2
++#define  CPUCFG2_FP			BIT(0)
++#define  CPUCFG2_FPSP			BIT(1)
++#define  CPUCFG2_FPDP			BIT(2)
++#define  CPUCFG2_FPVERS			GENMASK(5, 3)
++#define  CPUCFG2_LSX			BIT(6)
++#define  CPUCFG2_LASX			BIT(7)
++#define  CPUCFG2_LLFTP			BIT(14)
++#define  CPUCFG2_LLFTPREV		GENMASK(17, 15)
++
+ /* LoongArch Basic CSR registers */
+ #define LOONGARCH_CSR_CRMD		0x0 /* Current mode info */
+ #define  CSR_CRMD_PG_SHIFT		4
+diff --git a/tools/testing/selftests/kvm/lib/loongarch/processor.c b/tools/testing/selftests/kvm/lib/loongarch/processor.c
+index 64d91fb76522..47bbde3e205a 100644
+--- a/tools/testing/selftests/kvm/lib/loongarch/processor.c
++++ b/tools/testing/selftests/kvm/lib/loongarch/processor.c
+@@ -278,7 +278,7 @@ static void loongarch_set_csr(struct kvm_vcpu *vcpu, u64 id, u64 val)
+ 
+ void loongarch_vcpu_setup(struct kvm_vcpu *vcpu)
+ {
+-	int width;
++	int ret, width;
+ 	unsigned int cfg;
+ 	unsigned long val;
+ 	struct kvm_vm *vm = vcpu->vm;
+@@ -292,6 +292,15 @@ void loongarch_vcpu_setup(struct kvm_vcpu *vcpu)
+ 		TEST_FAIL("Unknown guest mode, mode: 0x%x", vm->mode);
+ 	}
+ 
++	/* Enable LSX/LASX feature by detecting host capability */
++	cfg = CPUCFG2_FP | CPUCFG2_FPSP | CPUCFG2_FPDP | CPUCFG2_LLFTP;
++	ret = __kvm_has_device_attr(vm->fd, KVM_LOONGARCH_VM_FEAT_CTRL, KVM_LOONGARCH_VM_FEAT_LSX);
++	if (!ret)
++		cfg |= CPUCFG2_LSX;
++	ret = __kvm_has_device_attr(vm->fd, KVM_LOONGARCH_VM_FEAT_CTRL, KVM_LOONGARCH_VM_FEAT_LASX);
++	if (!ret)
++		cfg |= CPUCFG2_LASX;
++	loongarch_set_cpucfg(vcpu, LOONGARCH_CPUCFG2, cfg);
+ 	cfg = read_cpucfg(LOONGARCH_CPUCFG6);
+ 	loongarch_set_cpucfg(vcpu, LOONGARCH_CPUCFG6, cfg);
+ 
+-- 
+2.55.0
+

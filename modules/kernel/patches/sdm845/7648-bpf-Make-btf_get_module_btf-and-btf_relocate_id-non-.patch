@@ -1,0 +1,59 @@
+From f8c9b3051ded5a397172aee79271cc46529ca8f2 Mon Sep 17 00:00:00 2001
+From: Mykyta Yatsenko <yatsenko@meta.com>
+Date: Mon, 18 May 2026 08:23:15 -0700
+Subject: [PATCH 07648/15333] bpf: Make btf_get_module_btf() and
+ btf_relocate_id() non-static
+
+Drop the static qualifier and add prototypes to <linux/btf.h> so the
+tracing core can look up module BTF and translate ids stored by
+resolve_btfids (which are local to a module's split BTF) into the
+runtime ids used by the kernel.
+
+Used by the upcoming events/<sys>/<event>/btf_ids tracefs interface.
+
+Link: https://patch.msgid.link/20260518-generic_tracepoint-v2-1-b755a5cf67bb@meta.com
+Signed-off-by: Mykyta Yatsenko <yatsenko@meta.com>
+Signed-off-by: Steven Rostedt <rostedt@goodmis.org>
+---
+ include/linux/btf.h | 2 ++
+ kernel/bpf/btf.c    | 4 ++--
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/include/linux/btf.h b/include/linux/btf.h
+index c09b7994de4e..8f8d3f7a8929 100644
+--- a/include/linux/btf.h
++++ b/include/linux/btf.h
+@@ -235,6 +235,8 @@ int btf_check_and_fixup_fields(const struct btf *btf, struct btf_record *rec);
+ bool btf_type_is_void(const struct btf_type *t);
+ s32 btf_find_by_name_kind(const struct btf *btf, const char *name, u8 kind);
+ s32 bpf_find_btf_id(const char *name, u32 kind, struct btf **btf_p);
++struct btf *btf_get_module_btf(const struct module *module);
++__u32 btf_relocate_id(const struct btf *btf, __u32 id);
+ const struct btf_type *btf_type_skip_modifiers(const struct btf *btf,
+ 					       u32 id, u32 *res_id);
+ const struct btf_type *btf_type_resolve_ptr(const struct btf *btf,
+diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
+index c4673a54c4ba..3dbf33c0799a 100644
+--- a/kernel/bpf/btf.c
++++ b/kernel/bpf/btf.c
+@@ -6467,7 +6467,7 @@ struct btf *btf_parse_vmlinux(void)
+  * split BTF ids will need to be mapped to actual base/split ids for
+  * BTF now that it has been relocated.
+  */
+-static __u32 btf_relocate_id(const struct btf *btf, __u32 id)
++__u32 btf_relocate_id(const struct btf *btf, __u32 id)
+ {
+ 	if (!btf->base_btf || !btf->base_id_map)
+ 		return id;
+@@ -8630,7 +8630,7 @@ struct module *btf_try_get_module(const struct btf *btf)
+ /* Returns struct btf corresponding to the struct module.
+  * This function can return NULL or ERR_PTR.
+  */
+-static struct btf *btf_get_module_btf(const struct module *module)
++struct btf *btf_get_module_btf(const struct module *module)
+ {
+ #ifdef CONFIG_DEBUG_INFO_BTF_MODULES
+ 	struct btf_module *btf_mod, *tmp;
+-- 
+2.55.0
+

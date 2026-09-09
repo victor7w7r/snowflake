@@ -1,0 +1,95 @@
+From 278a3731c9d08bc6ea489c1987c6b7a7020f5d2b Mon Sep 17 00:00:00 2001
+From: Dapeng Mi <dapeng1.mi@linux.intel.com>
+Date: Fri, 17 Jul 2026 16:03:37 +0800
+Subject: [PATCH 12611/15333] perf/x86: Guard intel_pmu_cpu_dead() against
+ invalid hybrid PMU casts
+
+In failure paths, cpuc->pmu can still point to the global static pmu
+instead of an embedded x86_hybrid_pmu::pmu. Calling hybrid_pmu() on
+that pointer causes an invalid container conversion and may lead to
+out-of-bounds access.
+
+This can happen in at least two cases:
+- init_hybrid_pmu() fails check_hw_exists() and leaves cpuc->pmu as-is.
+- CPU hotplug fails between CPUHP_PERF_X86_PREPARE and
+CPUHP_AP_PERF_X86_STARTING, and rollback invokes intel_pmu_cpu_dead().
+
+Fix both paths by:
+- Clear cpuc->pmu to NULL when check_hw_exists() fails.
+- Validat that cpuc->pmu is not the global static pmu before calling
+  hybrid_pmu() in intel_pmu_cpu_dead().
+
+A new helper x86_get_static_pmu() is added to get the global static pmu.
+
+Signed-off-by: Dapeng Mi <dapeng1.mi@linux.intel.com>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Reviewed-by: Thomas Falcon <thomas.falcon@intel.com>
+Reviewed-by: Zide Chen <zide.chen@intel.com>
+Link: https://patch.msgid.link/20260717080342.1879573-4-dapeng1.mi@linux.intel.com
+---
+ arch/x86/events/core.c       | 5 +++++
+ arch/x86/events/intel/core.c | 7 +++++--
+ arch/x86/events/perf_event.h | 1 +
+ 3 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/arch/x86/events/core.c b/arch/x86/events/core.c
+index 6c63b27e11e6..a02f303a9151 100644
+--- a/arch/x86/events/core.c
++++ b/arch/x86/events/core.c
+@@ -790,6 +790,11 @@ int is_x86_event(struct perf_event *event)
+ 	return false;
+ }
+ 
++inline struct pmu *x86_get_static_pmu(void)
++{
++	return &pmu;
++}
++
+ struct pmu *x86_get_pmu(unsigned int cpu)
+ {
+ 	struct cpu_hw_events *cpuc = &per_cpu(cpu_hw_events, cpu);
+diff --git a/arch/x86/events/intel/core.c b/arch/x86/events/intel/core.c
+index b39c6ce0efb5..a991fc4f1575 100644
+--- a/arch/x86/events/intel/core.c
++++ b/arch/x86/events/intel/core.c
+@@ -6329,8 +6329,10 @@ static bool init_hybrid_pmu(int cpu)
+ 
+ 	intel_pmu_check_hybrid_pmus(pmu);
+ 
+-	if (!check_hw_exists(&pmu->pmu, pmu->cntr_mask, pmu->fixed_cntr_mask))
++	if (!check_hw_exists(&pmu->pmu, pmu->cntr_mask, pmu->fixed_cntr_mask)) {
++		cpuc->pmu = NULL;
+ 		return false;
++	}
+ 
+ 	pr_info("%s PMU driver: ", pmu->name);
+ 
+@@ -6475,11 +6477,12 @@ void intel_cpuc_finish(struct cpu_hw_events *cpuc)
+ static void intel_pmu_cpu_dead(int cpu)
+ {
+ 	struct cpu_hw_events *cpuc = &per_cpu(cpu_hw_events, cpu);
++	struct pmu *pmu = x86_get_static_pmu();
+ 
+ 	release_arch_pebs_buf_on_cpu(cpu);
+ 	intel_cpuc_finish(cpuc);
+ 
+-	if (is_hybrid() && cpuc->pmu)
++	if (is_hybrid() && cpuc->pmu && cpuc->pmu != pmu)
+ 		cpumask_clear_cpu(cpu, &hybrid_pmu(cpuc->pmu)->supported_cpus);
+ }
+ 
+diff --git a/arch/x86/events/perf_event.h b/arch/x86/events/perf_event.h
+index a8afea8d38f0..01ae287cde16 100644
+--- a/arch/x86/events/perf_event.h
++++ b/arch/x86/events/perf_event.h
+@@ -1161,6 +1161,7 @@ static struct perf_pmu_format_hybrid_attr format_attr_hybrid_##_name = {\
+ 	.pmu_type	= _pmu,						\
+ }
+ 
++struct pmu *x86_get_static_pmu(void);
+ struct pmu *x86_get_pmu(unsigned int cpu);
+ extern struct x86_pmu x86_pmu __read_mostly;
+ 
+-- 
+2.55.0
+

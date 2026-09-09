@@ -1,0 +1,181 @@
+From 2131c4f763d2e4cbbe5c227a406488c38e23f806 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Thu, 23 Jul 2026 14:08:09 -0700
+Subject: [PATCH 07414/15333] KVM: guest_memfd: Rename prepare() hook and
+ Kconfig to make_private() / CONVERT
+
+Rework guest_memfd's prepare() hook into a more accurate make_private(),
+and rework its Kconfig from PREPARE to a more generic CONVERT.  This will
+allow x86 to share (pun intended) a kvm_x86_ops.gmem_make_shared() hook
+between the "convert to shared" and "reclaim" flows, which are one and the
+same for SNP.
+
+No functional change intended.
+
+Reviewed-by: Ackerley Tng <ackerleytng@google.com>
+Reviewed-by: Fuad Tabba <fuad.tabba@linux.dev>
+Link: https://patch.msgid.link/20260723210811.72720-8-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/include/asm/kvm-x86-ops.h | 4 ++--
+ arch/x86/include/asm/kvm_host.h    | 4 ++--
+ arch/x86/kvm/Kconfig               | 2 +-
+ arch/x86/kvm/svm/sev.c             | 2 +-
+ arch/x86/kvm/svm/svm.c             | 2 +-
+ arch/x86/kvm/svm/svm.h             | 2 +-
+ arch/x86/kvm/x86.c                 | 6 +++---
+ include/linux/kvm_host.h           | 5 +++--
+ virt/kvm/Kconfig                   | 2 +-
+ virt/kvm/guest_memfd.c             | 4 ++--
+ 10 files changed, 17 insertions(+), 16 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm-x86-ops.h b/arch/x86/include/asm/kvm-x86-ops.h
+index 210cb95d0a0b..a4d872ddef9d 100644
+--- a/arch/x86/include/asm/kvm-x86-ops.h
++++ b/arch/x86/include/asm/kvm-x86-ops.h
+@@ -146,8 +146,8 @@ KVM_X86_OP(vcpu_deliver_sipi_vector)
+ KVM_X86_OP_OPTIONAL_RET0(vcpu_get_apicv_inhibit_reasons);
+ KVM_X86_OP_OPTIONAL(get_untagged_addr)
+ KVM_X86_OP_OPTIONAL(alloc_apic_backing_page)
+-#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_PREPARE
+-KVM_X86_OP_OPTIONAL_RET0(gmem_prepare)
++#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_CONVERT
++KVM_X86_OP_OPTIONAL_RET0(gmem_make_private)
+ #endif
+ #ifdef CONFIG_HAVE_KVM_ARCH_GMEM_RECLAIM
+ KVM_X86_OP_OPTIONAL(gmem_make_shared)
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 693be16abd95..ae9a229c6b11 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -1903,8 +1903,8 @@ struct kvm_x86_ops {
+ 
+ 	gva_t (*get_untagged_addr)(struct kvm_vcpu *vcpu, gva_t gva, unsigned int flags);
+ 	void *(*alloc_apic_backing_page)(struct kvm_vcpu *vcpu);
+-#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_PREPARE
+-	int (*gmem_prepare)(struct kvm *kvm, kvm_pfn_t pfn, gfn_t gfn, int max_order);
++#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_CONVERT
++	int (*gmem_make_private)(struct kvm *kvm, kvm_pfn_t pfn, gfn_t gfn, int max_order);
+ #endif
+ #ifdef CONFIG_HAVE_KVM_ARCH_GMEM_RECLAIM
+ 	void (*gmem_make_shared)(kvm_pfn_t pfn, kvm_pfn_t nr_pages);
+diff --git a/arch/x86/kvm/Kconfig b/arch/x86/kvm/Kconfig
+index e0e7ad015839..538ed1e80332 100644
+--- a/arch/x86/kvm/Kconfig
++++ b/arch/x86/kvm/Kconfig
+@@ -160,7 +160,7 @@ config KVM_AMD_SEV
+ 	depends on CRYPTO_DEV_SP_PSP && !(KVM_AMD=y && CRYPTO_DEV_CCP_DD=m)
+ 	select ARCH_HAS_CC_PLATFORM
+ 	select KVM_GENERIC_MEMORY_ATTRIBUTES
+-	select HAVE_KVM_ARCH_GMEM_PREPARE
++	select HAVE_KVM_ARCH_GMEM_CONVERT
+ 	select HAVE_KVM_ARCH_GMEM_RECLAIM
+ 	select HAVE_KVM_ARCH_GMEM_INVALIDATE
+ 	select HAVE_KVM_ARCH_GMEM_POPULATE
+diff --git a/arch/x86/kvm/svm/sev.c b/arch/x86/kvm/svm/sev.c
+index 4c46081889a6..779889f5e994 100644
+--- a/arch/x86/kvm/svm/sev.c
++++ b/arch/x86/kvm/svm/sev.c
+@@ -5112,7 +5112,7 @@ static bool is_large_rmp_possible(struct kvm *kvm, kvm_pfn_t pfn, int order)
+ 	return false;
+ }
+ 
+-int sev_gmem_prepare(struct kvm *kvm, kvm_pfn_t pfn, gfn_t gfn, int max_order)
++int sev_gmem_make_private(struct kvm *kvm, kvm_pfn_t pfn, gfn_t gfn, int max_order)
+ {
+ 	struct kvm_sev_info *sev = to_kvm_sev_info(kvm);
+ 	kvm_pfn_t pfn_aligned;
+diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c
+index 44c3af6f71d8..d9f632ea8057 100644
+--- a/arch/x86/kvm/svm/svm.c
++++ b/arch/x86/kvm/svm/svm.c
+@@ -5450,7 +5450,7 @@ struct kvm_x86_ops svm_x86_ops __initdata = {
+ 	.vm_copy_enc_context_from = sev_vm_copy_enc_context_from,
+ 	.vm_move_enc_context_from = sev_vm_move_enc_context_from,
+ 
+-	.gmem_prepare = sev_gmem_prepare,
++	.gmem_make_private = sev_gmem_make_private,
+ 	.gmem_make_shared = sev_gmem_make_shared,
+ 	.gmem_invalidate_range = sev_gmem_invalidate_range,
+ 	.gmem_max_mapping_level = sev_gmem_max_mapping_level,
+diff --git a/arch/x86/kvm/svm/svm.h b/arch/x86/kvm/svm/svm.h
+index 51e3494e7802..b5cd8437988f 100644
+--- a/arch/x86/kvm/svm/svm.h
++++ b/arch/x86/kvm/svm/svm.h
+@@ -1009,7 +1009,7 @@ int sev_cpu_init(struct svm_cpu_data *sd);
+ int sev_dev_get_attr(u32 group, u64 attr, u64 *val);
+ extern unsigned int max_sev_asid;
+ void sev_handle_rmp_fault(struct kvm_vcpu *vcpu, gpa_t gpa, u64 error_code);
+-int sev_gmem_prepare(struct kvm *kvm, kvm_pfn_t pfn, gfn_t gfn, int max_order);
++int sev_gmem_make_private(struct kvm *kvm, kvm_pfn_t pfn, gfn_t gfn, int max_order);
+ void sev_gmem_make_shared(kvm_pfn_t pfn, kvm_pfn_t nr_pages);
+ void sev_gmem_invalidate_range(struct kvm *kvm, struct kvm_gfn_range *range);
+ int sev_gmem_max_mapping_level(struct kvm *kvm, kvm_pfn_t pfn, bool is_private);
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 0075815acdd5..512bcc35507a 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -10589,10 +10589,10 @@ bool kvm_arch_supports_gmem_init_shared(struct kvm *kvm)
+ 	return !kvm_arch_has_private_mem(kvm);
+ }
+ 
+-#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_PREPARE
+-int kvm_arch_gmem_prepare(struct kvm *kvm, gfn_t gfn, kvm_pfn_t pfn, int max_order)
++#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_CONVERT
++int kvm_arch_gmem_make_private(struct kvm *kvm, gfn_t gfn, kvm_pfn_t pfn, int max_order)
+ {
+-	return kvm_x86_call(gmem_prepare)(kvm, pfn, gfn, max_order);
++	return kvm_x86_call(gmem_make_private)(kvm, pfn, gfn, max_order);
+ }
+ #endif
+ 
+diff --git a/include/linux/kvm_host.h b/include/linux/kvm_host.h
+index 46c8d18fd043..ecdda1f00c6c 100644
+--- a/include/linux/kvm_host.h
++++ b/include/linux/kvm_host.h
+@@ -2572,8 +2572,9 @@ static inline int kvm_gmem_get_pfn(struct kvm *kvm,
+ }
+ #endif /* CONFIG_KVM_GUEST_MEMFD */
+ 
+-#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_PREPARE
+-int kvm_arch_gmem_prepare(struct kvm *kvm, gfn_t gfn, kvm_pfn_t pfn, int max_order);
++#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_CONVERT
++int kvm_arch_gmem_make_private(struct kvm *kvm, gfn_t gfn, kvm_pfn_t pfn,
++			       int max_order);
+ #endif
+ 
+ #ifdef CONFIG_HAVE_KVM_ARCH_GMEM_POPULATE
+diff --git a/virt/kvm/Kconfig b/virt/kvm/Kconfig
+index 617876993225..c3c0ee253fc7 100644
+--- a/virt/kvm/Kconfig
++++ b/virt/kvm/Kconfig
+@@ -107,7 +107,7 @@ config KVM_GUEST_MEMFD
+        select XARRAY_MULTI
+        bool
+ 
+-config HAVE_KVM_ARCH_GMEM_PREPARE
++config HAVE_KVM_ARCH_GMEM_CONVERT
+        bool
+        depends on KVM_GUEST_MEMFD
+ 
+diff --git a/virt/kvm/guest_memfd.c b/virt/kvm/guest_memfd.c
+index 25da7778af01..6635ed05f411 100644
+--- a/virt/kvm/guest_memfd.c
++++ b/virt/kvm/guest_memfd.c
+@@ -73,11 +73,11 @@ static bool kvm_gmem_is_shared_mem(struct inode *inode, pgoff_t index)
+ static int __kvm_gmem_prepare_folio(struct kvm *kvm, struct kvm_memory_slot *slot,
+ 				    pgoff_t index, struct folio *folio)
+ {
+-#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_PREPARE
++#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_CONVERT
+ 	kvm_pfn_t pfn = folio_file_pfn(folio, index);
+ 	gfn_t gfn = slot->base_gfn + index - slot->gmem.pgoff;
+ 
+-	return kvm_arch_gmem_prepare(kvm, gfn, pfn, folio_order(folio));
++	return kvm_arch_gmem_make_private(kvm, gfn, pfn, folio_order(folio));
+ #else
+ 	return 0;
+ #endif
+-- 
+2.55.0
+

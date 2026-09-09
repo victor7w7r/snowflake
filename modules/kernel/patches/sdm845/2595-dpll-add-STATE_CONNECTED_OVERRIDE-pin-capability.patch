@@ -1,0 +1,103 @@
+From b1d0c412088e3908821ef2ec52e2c0e5e7f5a535 Mon Sep 17 00:00:00 2001
+From: Ivan Vecera <ivecera@redhat.com>
+Date: Tue, 30 Jun 2026 14:55:32 +0200
+Subject: [PATCH 02595/15333] dpll: add STATE_CONNECTED_OVERRIDE pin capability
+
+Add DPLL_PIN_CAPABILITIES_STATE_CONNECTED_OVERRIDE capability flag
+that indicates a pin can be set to connected regardless of the
+current DPLL device mode, overriding the active input selection.
+This is useful for automatic-only DPLL devices where mode cannot
+be switched to manual, allowing userspace to directly connect
+such pin from automatic mode.
+
+The capability requires STATE_CAN_CHANGE to be set as well;
+dpll_pin_register() warns if a driver violates this.
+
+Document the new capability in the Pin selection section of
+Documentation/driver-api/dpll.rst.
+
+Signed-off-by: Ivan Vecera <ivecera@redhat.com>
+Link: https://patch.msgid.link/20260630125536.720717-2-ivecera@redhat.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ Documentation/driver-api/dpll.rst     | 7 +++++++
+ Documentation/netlink/specs/dpll.yaml | 6 ++++++
+ drivers/dpll/dpll_core.c              | 6 +++++-
+ include/uapi/linux/dpll.h             | 4 ++++
+ 4 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/driver-api/dpll.rst b/Documentation/driver-api/dpll.rst
+index bae14766d4f7..f83150917814 100644
+--- a/Documentation/driver-api/dpll.rst
++++ b/Documentation/driver-api/dpll.rst
+@@ -91,6 +91,13 @@ following pin states:
+ - ``DPLL_PIN_STATE_DISCONNECTED`` - the pin shall be not considered as
+   a valid input for automatic selection algorithm
+ 
++Pins that have the ``DPLL_PIN_CAPABILITIES_STATE_CONNECTED_OVERRIDE``
++capability can additionally be set to ``DPLL_PIN_STATE_CONNECTED`` in
++automatic mode, overriding the active input selection. This is useful
++for automatic-only DPLL devices where mode cannot be switched to manual.
++When such a pin is disconnected, the device returns to automatic input
++selection.
++
+ The actual hardware status of a pin is reported via the operational
+ state (``DPLL_A_PIN_OPERSTATE``) attribute nested under the parent
+ device:
+diff --git a/Documentation/netlink/specs/dpll.yaml b/Documentation/netlink/specs/dpll.yaml
+index 2bf83f6732ab..526a5b2df2bd 100644
+--- a/Documentation/netlink/specs/dpll.yaml
++++ b/Documentation/netlink/specs/dpll.yaml
+@@ -252,6 +252,12 @@ definitions:
+       -
+         name: state-can-change
+         doc: pin state can be changed
++      -
++        name: state-connected-override
++        doc: |
++          pin state can be set to connected regardless of current
++          DPLL device mode, overriding the active input selection.
++          Requires state-can-change to be set as well.
+   -
+     type: const
+     name: phase-offset-divider
+diff --git a/drivers/dpll/dpll_core.c b/drivers/dpll/dpll_core.c
+index 2e8690cb3c16..bb1e8650c9d5 100644
+--- a/drivers/dpll/dpll_core.c
++++ b/drivers/dpll/dpll_core.c
+@@ -884,7 +884,11 @@ dpll_pin_register(struct dpll_device *dpll, struct dpll_pin *pin,
+ 	    WARN_ON(ops->measured_freq_get &&
+ 		    (!dpll_device_ops(dpll)->freq_monitor_get ||
+ 		     !dpll_device_ops(dpll)->freq_monitor_set)) ||
+-	    WARN_ON(ops->supported_ffo && !ops->ffo_get))
++	    WARN_ON(ops->supported_ffo && !ops->ffo_get) ||
++	    WARN_ON((pin->prop.capabilities &
++		     DPLL_PIN_CAPABILITIES_STATE_CONNECTED_OVERRIDE) &&
++		    !(pin->prop.capabilities &
++		      DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE)))
+ 		return -EINVAL;
+ 
+ 	mutex_lock(&dpll_lock);
+diff --git a/include/uapi/linux/dpll.h b/include/uapi/linux/dpll.h
+index 55eaa82f5f98..5d7ca6a413cd 100644
+--- a/include/uapi/linux/dpll.h
++++ b/include/uapi/linux/dpll.h
+@@ -208,11 +208,15 @@ enum dpll_pin_operstate {
+  * @DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE: pin direction can be changed
+  * @DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE: pin priority can be changed
+  * @DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE: pin state can be changed
++ * @DPLL_PIN_CAPABILITIES_STATE_CONNECTED_OVERRIDE: pin state can be set to
++ *   connected regardless of current DPLL device mode, overriding the active
++ *   input selection. Requires state-can-change to be set as well.
+  */
+ enum dpll_pin_capabilities {
+ 	DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE = 1,
+ 	DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE = 2,
+ 	DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE = 4,
++	DPLL_PIN_CAPABILITIES_STATE_CONNECTED_OVERRIDE = 8,
+ };
+ 
+ #define DPLL_PHASE_OFFSET_DIVIDER		1000
+-- 
+2.55.0
+

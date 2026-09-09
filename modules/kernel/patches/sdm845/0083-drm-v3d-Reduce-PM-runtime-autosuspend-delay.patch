@@ -1,0 +1,40 @@
+From e1696f1fc99dc0ff761a012230587b23dec064fb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ma=C3=ADra=20Canal?= <mcanal@igalia.com>
+Date: Sat, 30 May 2026 15:37:45 -0300
+Subject: [PATCH 00083/15333] drm/v3d: Reduce PM runtime autosuspend delay
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The 100ms autosuspend delay was only ever a workaround: shorter delays
+caused more frequent runtime suspend/resume cycles on the BCM2711
+(Raspberry Pi 4), which exposed the cache and MMU coherency bugs as
+random GPU hangs.
+
+With those hangs resolved, the inflated delay is no longer necessary.
+Reduce it from 100ms to 50ms so the GPU power domain can be released
+sooner once the GPU goes idle.
+
+Link: https://patch.msgid.link/20260530-v3d-fix-rpi4-freezes-v1-4-c2c8307da6ce@igalia.com
+Signed-off-by: Maíra Canal <mcanal@igalia.com>
+Reviewed-by: Iago Toral Quiroga <itoral@igalia.com>
+---
+ drivers/gpu/drm/v3d/v3d_drv.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/v3d/v3d_drv.c b/drivers/gpu/drm/v3d/v3d_drv.c
+index fc81dd1247e3..805d84435ee0 100644
+--- a/drivers/gpu/drm/v3d/v3d_drv.c
++++ b/drivers/gpu/drm/v3d/v3d_drv.c
+@@ -420,7 +420,7 @@ static int v3d_platform_drm_probe(struct platform_device *pdev)
+ 	ident3 = V3D_READ(V3D_HUB_IDENT3);
+ 	v3d->rev = V3D_GET_FIELD(ident3, V3D_HUB_IDENT3_IPREV);
+ 
+-	pm_runtime_set_autosuspend_delay(dev, 100);
++	pm_runtime_set_autosuspend_delay(dev, 50);
+ 	pm_runtime_use_autosuspend(dev);
+ 
+ 	ret = drm_dev_register(drm, 0);
+-- 
+2.55.0
+

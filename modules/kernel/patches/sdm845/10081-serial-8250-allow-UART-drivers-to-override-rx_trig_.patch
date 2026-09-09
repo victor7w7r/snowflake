@@ -1,0 +1,96 @@
+From 8a6c543cf8b3630a3db714e1be99931ab5f98513 Mon Sep 17 00:00:00 2001
+From: Crescent Hsieh <crescentcy.hsieh@moxa.com>
+Date: Fri, 31 Jul 2026 15:48:18 +0800
+Subject: [PATCH 10081/15333] serial: 8250: allow UART drivers to override
+ rx_trig_bytes handling
+
+The rx_trig_bytes sysfs attribute currently relies on 8250-internal
+helper functions and assumes a fixed mapping between trigger levels and
+FIFO behavior.
+
+Some UARTs provide hardware-specific RX trigger mechanisms that do not
+fit this model. Add optional uart_port callbacks for setting and getting
+the RX trigger level, and use them when provided, while preserving the
+existing 8250 helpers as the default fallback.
+
+Signed-off-by: Crescent Hsieh <crescentcy.hsieh@moxa.com>
+Link: https://patch.msgid.link/20260731074820.735619-13-crescentcy.hsieh@moxa.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/8250/8250_core.c |  4 ++++
+ drivers/tty/serial/8250/8250_port.c | 14 ++++++++++++--
+ include/linux/serial_core.h         |  2 ++
+ 3 files changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/tty/serial/8250/8250_core.c b/drivers/tty/serial/8250/8250_core.c
+index adb5d8a55a14..b875d394796f 100644
+--- a/drivers/tty/serial/8250/8250_core.c
++++ b/drivers/tty/serial/8250/8250_core.c
+@@ -845,6 +845,10 @@ int serial8250_register_8250_port(const struct uart_8250_port *up)
+ 		uart->port.get_divisor = up->port.get_divisor;
+ 	if (up->port.set_divisor)
+ 		uart->port.set_divisor = up->port.set_divisor;
++	if (up->port.get_rxtrig)
++		uart->port.get_rxtrig = up->port.get_rxtrig;
++	if (up->port.set_rxtrig)
++		uart->port.set_rxtrig = up->port.set_rxtrig;
+ 	if (up->port.startup)
+ 		uart->port.startup = up->port.startup;
+ 	if (up->port.shutdown)
+diff --git a/drivers/tty/serial/8250/8250_port.c b/drivers/tty/serial/8250/8250_port.c
+index 926d46821c70..38fa45e74a37 100644
+--- a/drivers/tty/serial/8250/8250_port.c
++++ b/drivers/tty/serial/8250/8250_port.c
+@@ -3035,9 +3035,14 @@ static ssize_t rx_trig_bytes_show(struct device *dev,
+ 	struct device_attribute *attr, char *buf)
+ {
+ 	struct tty_port *port = dev_get_drvdata(dev);
++	struct uart_state *state = container_of(port, struct uart_state, port);
++	struct uart_port *uport = state->uart_port;
+ 	int rxtrig_bytes;
+ 
+-	rxtrig_bytes = do_serial8250_get_rxtrig(port);
++	if (uport->get_rxtrig)
++		rxtrig_bytes = uport->get_rxtrig(uport);
++	else
++		rxtrig_bytes = do_serial8250_get_rxtrig(port);
+ 	if (rxtrig_bytes < 0)
+ 		return rxtrig_bytes;
+ 
+@@ -3080,6 +3085,8 @@ static ssize_t rx_trig_bytes_store(struct device *dev,
+ 	struct device_attribute *attr, const char *buf, size_t count)
+ {
+ 	struct tty_port *port = dev_get_drvdata(dev);
++	struct uart_state *state = container_of(port, struct uart_state, port);
++	struct uart_port *uport = state->uart_port;
+ 	unsigned char bytes;
+ 	int ret;
+ 
+@@ -3090,7 +3097,10 @@ static ssize_t rx_trig_bytes_store(struct device *dev,
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	ret = do_serial8250_set_rxtrig(port, bytes);
++	if (uport->set_rxtrig)
++		ret = uport->set_rxtrig(uport, bytes);
++	else
++		ret = do_serial8250_set_rxtrig(port, bytes);
+ 	if (ret < 0)
+ 		return ret;
+ 
+diff --git a/include/linux/serial_core.h b/include/linux/serial_core.h
+index a7fd24f9e908..904760876ca8 100644
+--- a/include/linux/serial_core.h
++++ b/include/linux/serial_core.h
+@@ -460,6 +460,8 @@ struct uart_port {
+ 					       unsigned int baud,
+ 					       unsigned int quot,
+ 					       unsigned int quot_frac);
++	int			(*get_rxtrig)(struct uart_port *port);
++	int			(*set_rxtrig)(struct uart_port *port, unsigned char bytes);
+ 	int			(*startup)(struct uart_port *port);
+ 	void			(*shutdown)(struct uart_port *port);
+ 	void			(*throttle)(struct uart_port *port);
+-- 
+2.55.0
+

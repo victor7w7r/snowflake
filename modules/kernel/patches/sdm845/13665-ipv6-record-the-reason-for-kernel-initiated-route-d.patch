@@ -1,0 +1,86 @@
+From e8636445b771c0936cf3c2fe3bbdb281b4cf6acf Mon Sep 17 00:00:00 2001
+From: Yuyang Huang <sigefriedhyy@gmail.com>
+Date: Sat, 8 Aug 2026 09:56:35 +0900
+Subject: [PATCH 13665/15333] ipv6: record the reason for kernel-initiated
+ route deletions
+
+Record why the kernel deletes an IPv6 route on its own:
+
+- RT_DEL_REASON_EXPIRED for routes reaped by the FIB6 garbage
+  collector after their RTF_EXPIRES lifetime ran out.
+- RT_DEL_REASON_RA_WITHDRAWN for default routes, prefix routes and
+  RFC 4191 route information routes withdrawn by a zero-lifetime
+  Router Advertisement.
+
+Deleting a default route because its metric changed is not a
+withdrawal, so it keeps RT_DEL_REASON_UNSPEC.
+
+Signed-off-by: Yuyang Huang <sigefriedhyy@gmail.com>
+Reviewed-by: Ido Schimmel <idosch@nvidia.com>
+Link: https://patch.msgid.link/20260808005642.26901-4-sigefriedhyy@gmail.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ net/ipv6/addrconf.c | 3 ++-
+ net/ipv6/ip6_fib.c  | 2 +-
+ net/ipv6/ndisc.c    | 4 +++-
+ net/ipv6/route.c    | 2 +-
+ 4 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/net/ipv6/addrconf.c b/net/ipv6/addrconf.c
+index f6fa2715b450..9d89be7e0544 100644
+--- a/net/ipv6/addrconf.c
++++ b/net/ipv6/addrconf.c
+@@ -2874,7 +2874,8 @@ void addrconf_prefix_rcv(struct net_device *dev, u8 *opt, int len, bool sllao)
+ 		if (rt) {
+ 			/* Autoconf prefix route */
+ 			if (valid_lft == 0) {
+-				ip6_del_rt(net, rt, false);
++				ip6_del_rt_reason(net, rt,
++						  RT_DEL_REASON_RA_WITHDRAWN);
+ 				rt = NULL;
+ 			} else {
+ 				table = rt->fib6_table;
+diff --git a/net/ipv6/ip6_fib.c b/net/ipv6/ip6_fib.c
+index 1f6f6f33ded1..f8a9ec7fa616 100644
+--- a/net/ipv6/ip6_fib.c
++++ b/net/ipv6/ip6_fib.c
+@@ -2403,7 +2403,7 @@ static void fib6_gc_table(struct net *net,
+ 
+ 	hlist_for_each_entry_safe(rt, n, &tb6->tb6_gc_hlist, gc_link)
+ 		if (fib6_age(rt, gc_args) == -1)
+-			fib6_del(rt, &info, RT_DEL_REASON_UNSPEC);
++			fib6_del(rt, &info, RT_DEL_REASON_EXPIRED);
+ }
+ 
+ static void fib6_gc_all(struct net *net, struct fib6_gc_args *gc_args)
+diff --git a/net/ipv6/ndisc.c b/net/ipv6/ndisc.c
+index 2ceb655c4229..75515fd99383 100644
+--- a/net/ipv6/ndisc.c
++++ b/net/ipv6/ndisc.c
+@@ -1362,7 +1362,9 @@ static enum skb_drop_reason ndisc_router_discovery(struct sk_buff *skb)
+ 	defrtr_usr_metric = in6_dev->cnf.ra_defrtr_metric;
+ 	/* delete the route if lifetime is 0 or if metric needs change */
+ 	if (rt && (lifetime == 0 || rt->fib6_metric != defrtr_usr_metric)) {
+-		ip6_del_rt(net, rt, false);
++		ip6_del_rt_reason(net, rt,
++				  lifetime == 0 ? RT_DEL_REASON_RA_WITHDRAWN :
++						  RT_DEL_REASON_UNSPEC);
+ 		rt = NULL;
+ 	}
+ 
+diff --git a/net/ipv6/route.c b/net/ipv6/route.c
+index 26cdf141666c..4f1e521b89ae 100644
+--- a/net/ipv6/route.c
++++ b/net/ipv6/route.c
+@@ -1020,7 +1020,7 @@ int rt6_route_rcv(struct net_device *dev, u8 *opt, int len,
+ 					gwaddr, dev);
+ 
+ 	if (rt && !lifetime) {
+-		ip6_del_rt(net, rt, false);
++		ip6_del_rt_reason(net, rt, RT_DEL_REASON_RA_WITHDRAWN);
+ 		rt = NULL;
+ 	}
+ 
+-- 
+2.55.0
+

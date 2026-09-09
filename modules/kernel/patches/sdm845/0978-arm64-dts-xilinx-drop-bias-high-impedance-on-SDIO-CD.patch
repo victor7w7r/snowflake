@@ -1,0 +1,209 @@
+From bc7b17594a17dbd752c42e203d3669f08bf0a4f9 Mon Sep 17 00:00:00 2001
+From: Michal Simek <michal.simek@amd.com>
+Date: Wed, 3 Jun 2026 16:19:52 +0200
+Subject: [PATCH 00978/15333] arm64: dts: xilinx: drop bias-high-impedance on
+ SDIO CD/WP pins
+
+Since commit 9c105255108b ("pinctrl: pinconf-generic: perform basic
+checks on pincfg properties"), the generic pinconf parser logs an error
+when a pin configuration node specifies more than one bias mode.
+Several ZynqMP boards described SDIO card-detect and write-protect pins
+with both bias-high-impedance and bias-pull-up, which triggers at
+pinctrl probe:
+
+  generic pinconfig core: /firmware/zynqmp-firmware/pinctrl/.../conf-cd:
+    cannot have multiple bias configurations
+
+On ZynqMP, bias-high-impedance enables tri-state while bias-pull-up
+enables the internal pull resistor; these are mutually exclusive bias
+settings and only pull-up is needed for CD/WP inputs. Drop the redundant
+bias-high-impedance property and keep bias-pull-up.
+
+Reported-by: Mikko Rapeli (Linaro) <mikko.rapeli@linaro.org>
+Closes: https://bugzilla.kernel.org/show_bug.cgi?id=221586
+Link: https://patch.msgid.link/e01c8e60e1d9ed68c347f1a3741f89149109d8b7.1780496388.git.michal.simek@amd.com
+Signed-off-by: Michal Simek <michal.simek@amd.com>
+---
+ arch/arm64/boot/dts/xilinx/zynqmp-sck-kv-g-revA.dtso   | 1 -
+ arch/arm64/boot/dts/xilinx/zynqmp-sck-kv-g-revB.dtso   | 1 -
+ arch/arm64/boot/dts/xilinx/zynqmp-zc1751-xm015-dc1.dts | 4 ----
+ arch/arm64/boot/dts/xilinx/zynqmp-zc1751-xm019-dc5.dts | 2 --
+ arch/arm64/boot/dts/xilinx/zynqmp-zcu100-revC.dts      | 1 -
+ arch/arm64/boot/dts/xilinx/zynqmp-zcu102-revA.dts      | 2 --
+ arch/arm64/boot/dts/xilinx/zynqmp-zcu104-revA.dts      | 1 -
+ arch/arm64/boot/dts/xilinx/zynqmp-zcu104-revC.dts      | 1 -
+ arch/arm64/boot/dts/xilinx/zynqmp-zcu106-revA.dts      | 2 --
+ arch/arm64/boot/dts/xilinx/zynqmp-zcu111-revA.dts      | 1 -
+ 10 files changed, 16 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-sck-kv-g-revA.dtso b/arch/arm64/boot/dts/xilinx/zynqmp-sck-kv-g-revA.dtso
+index 923a70d750bf..44834bf1c19c 100644
+--- a/arch/arm64/boot/dts/xilinx/zynqmp-sck-kv-g-revA.dtso
++++ b/arch/arm64/boot/dts/xilinx/zynqmp-sck-kv-g-revA.dtso
+@@ -374,7 +374,6 @@ conf {
+ 
+ 		conf-cd {
+ 			groups = "sdio1_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-sck-kv-g-revB.dtso b/arch/arm64/boot/dts/xilinx/zynqmp-sck-kv-g-revB.dtso
+index 563e750b0e08..49732de5fa4b 100644
+--- a/arch/arm64/boot/dts/xilinx/zynqmp-sck-kv-g-revB.dtso
++++ b/arch/arm64/boot/dts/xilinx/zynqmp-sck-kv-g-revB.dtso
+@@ -365,7 +365,6 @@ conf {
+ 
+ 		conf-cd {
+ 			groups = "sdio1_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-zc1751-xm015-dc1.dts b/arch/arm64/boot/dts/xilinx/zynqmp-zc1751-xm015-dc1.dts
+index 6aff22d43361..f57987dad50f 100644
+--- a/arch/arm64/boot/dts/xilinx/zynqmp-zc1751-xm015-dc1.dts
++++ b/arch/arm64/boot/dts/xilinx/zynqmp-zc1751-xm015-dc1.dts
+@@ -270,7 +270,6 @@ mux-cd {
+ 
+ 		conf-cd {
+ 			groups = "sdio0_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+@@ -283,7 +282,6 @@ mux-wp {
+ 
+ 		conf-wp {
+ 			groups = "sdio0_wp_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+@@ -310,7 +308,6 @@ mux-cd {
+ 
+ 		conf-cd {
+ 			groups = "sdio1_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+@@ -323,7 +320,6 @@ mux-wp {
+ 
+ 		conf-wp {
+ 			groups = "sdio1_wp_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-zc1751-xm019-dc5.dts b/arch/arm64/boot/dts/xilinx/zynqmp-zc1751-xm019-dc5.dts
+index 53aa3dca1dca..737d445dc16b 100644
+--- a/arch/arm64/boot/dts/xilinx/zynqmp-zc1751-xm019-dc5.dts
++++ b/arch/arm64/boot/dts/xilinx/zynqmp-zc1751-xm019-dc5.dts
+@@ -270,7 +270,6 @@ mux-cd {
+ 
+ 		conf-cd {
+ 			groups = "sdio0_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+@@ -283,7 +282,6 @@ mux-wp {
+ 
+ 		conf-wp {
+ 			groups = "sdio0_wp_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-zcu100-revC.dts b/arch/arm64/boot/dts/xilinx/zynqmp-zcu100-revC.dts
+index 4ec8a400494e..41f312a82bb4 100644
+--- a/arch/arm64/boot/dts/xilinx/zynqmp-zcu100-revC.dts
++++ b/arch/arm64/boot/dts/xilinx/zynqmp-zcu100-revC.dts
+@@ -320,7 +320,6 @@ mux-cd {
+ 
+ 		conf-cd {
+ 			groups = "sdio0_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-zcu102-revA.dts b/arch/arm64/boot/dts/xilinx/zynqmp-zcu102-revA.dts
+index e172a30e7b21..a5bc521ab679 100644
+--- a/arch/arm64/boot/dts/xilinx/zynqmp-zcu102-revA.dts
++++ b/arch/arm64/boot/dts/xilinx/zynqmp-zcu102-revA.dts
+@@ -896,7 +896,6 @@ mux-cd {
+ 
+ 		conf-cd {
+ 			groups = "sdio1_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+@@ -909,7 +908,6 @@ mux-wp {
+ 
+ 		conf-wp {
+ 			groups = "sdio1_wp_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-zcu104-revA.dts b/arch/arm64/boot/dts/xilinx/zynqmp-zcu104-revA.dts
+index fe8f151ed706..32509083e54f 100644
+--- a/arch/arm64/boot/dts/xilinx/zynqmp-zcu104-revA.dts
++++ b/arch/arm64/boot/dts/xilinx/zynqmp-zcu104-revA.dts
+@@ -359,7 +359,6 @@ mux-cd {
+ 
+ 		conf-cd {
+ 			groups = "sdio1_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-zcu104-revC.dts b/arch/arm64/boot/dts/xilinx/zynqmp-zcu104-revC.dts
+index 3ee8ab224722..96699be8430f 100644
+--- a/arch/arm64/boot/dts/xilinx/zynqmp-zcu104-revC.dts
++++ b/arch/arm64/boot/dts/xilinx/zynqmp-zcu104-revC.dts
+@@ -371,7 +371,6 @@ mux-cd {
+ 
+ 		conf-cd {
+ 			groups = "sdio1_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-zcu106-revA.dts b/arch/arm64/boot/dts/xilinx/zynqmp-zcu106-revA.dts
+index 7f6c87d4d77e..52441e5c8739 100644
+--- a/arch/arm64/boot/dts/xilinx/zynqmp-zcu106-revA.dts
++++ b/arch/arm64/boot/dts/xilinx/zynqmp-zcu106-revA.dts
+@@ -895,7 +895,6 @@ mux-cd {
+ 
+ 		conf-cd {
+ 			groups = "sdio1_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+@@ -908,7 +907,6 @@ mux-wp {
+ 
+ 		conf-wp {
+ 			groups = "sdio1_wp_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-zcu111-revA.dts b/arch/arm64/boot/dts/xilinx/zynqmp-zcu111-revA.dts
+index 428b5558fbba..b34e4c93d249 100644
+--- a/arch/arm64/boot/dts/xilinx/zynqmp-zcu111-revA.dts
++++ b/arch/arm64/boot/dts/xilinx/zynqmp-zcu111-revA.dts
+@@ -750,7 +750,6 @@ mux-cd {
+ 
+ 		conf-cd {
+ 			groups = "sdio1_cd_0_grp";
+-			bias-high-impedance;
+ 			bias-pull-up;
+ 			slew-rate = <SLEW_RATE_SLOW>;
+ 			power-source = <IO_STANDARD_LVCMOS18>;
+-- 
+2.55.0
+

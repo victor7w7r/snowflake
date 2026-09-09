@@ -1,0 +1,105 @@
+From d68559164b6e91cdadd3c029a2f4db6088923f9d Mon Sep 17 00:00:00 2001
+From: Animesh Manna <animesh.manna@intel.com>
+Date: Tue, 16 Jun 2026 01:33:27 +0530
+Subject: [PATCH 00321/15333] drm/i915/vrr: Pass transcoder to
+ intel_vrr_set_fixed_rr_timings()
+
+Take the target transcoder as an explicit parameter so the helper can
+program VRR VMIN/VMAX/FLIPLINE registers for transcoders other than the
+crtc_state->cpu_transcoder (e.g. the CMTG transcoder).
+
+No functional change: all existing callers pass crtc_state->cpu_transcoder.
+
+v2:
+- Add separate patch for renaming the cpu_transcoder variable. [Ville]
+
+Reviewed-by: Uma Shankar <uma.shankar@intel.com>
+Signed-off-by: Animesh Manna <animesh.manna@intel.com>
+Link: https://patch.msgid.link/20260615200339.885190-11-animesh.manna@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_display.c | 2 +-
+ drivers/gpu/drm/i915/display/intel_vrr.c     | 9 +++++----
+ drivers/gpu/drm/i915/display/intel_vrr.h     | 4 +++-
+ 3 files changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display.c b/drivers/gpu/drm/i915/display/intel_display.c
+index 8455ad878e66..8f6acddac6a9 100644
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -6694,7 +6694,7 @@ static void intel_pipe_fastset(const struct intel_crtc_state *old_crtc_state,
+ 	if (new_crtc_state->update_lrr) {
+ 		intel_set_transcoder_timings_lrr(new_crtc_state, new_crtc_state->cpu_transcoder);
+ 		intel_cmtg_set_timings(new_crtc_state, LRR);
+-		intel_vrr_set_fixed_rr_timings(new_crtc_state);
++		intel_vrr_set_fixed_rr_timings(new_crtc_state, new_crtc_state->cpu_transcoder);
+ 		intel_vrr_transcoder_enable(new_crtc_state);
+ 	}
+ }
+diff --git a/drivers/gpu/drm/i915/display/intel_vrr.c b/drivers/gpu/drm/i915/display/intel_vrr.c
+index e03b5daac5be..60a92e8b1094 100644
+--- a/drivers/gpu/drm/i915/display/intel_vrr.c
++++ b/drivers/gpu/drm/i915/display/intel_vrr.c
+@@ -9,6 +9,7 @@
+ #include "intel_alpm.h"
+ #include "intel_crtc.h"
+ #include "intel_de.h"
++#include "intel_display_limits.h"
+ #include "intel_display_regs.h"
+ #include "intel_display_types.h"
+ #include "intel_dmc.h"
+@@ -318,10 +319,10 @@ int intel_vrr_fixed_rr_hw_flipline(const struct intel_crtc_state *crtc_state)
+ 	return intel_vrr_fixed_rr_hw_vtotal(crtc_state);
+ }
+ 
+-void intel_vrr_set_fixed_rr_timings(const struct intel_crtc_state *crtc_state)
++void intel_vrr_set_fixed_rr_timings(const struct intel_crtc_state *crtc_state,
++				    enum transcoder cpu_transcoder)
+ {
+ 	struct intel_display *display = to_intel_display(crtc_state);
+-	enum transcoder cpu_transcoder = crtc_state->cpu_transcoder;
+ 
+ 	if (!intel_vrr_possible(crtc_state))
+ 		return;
+@@ -645,7 +646,7 @@ void intel_vrr_set_transcoder_timings(const struct intel_crtc_state *crtc_state)
+ 			       lower_32_bits(crtc_state->cmrr.cmrr_n));
+ 	}
+ 
+-	intel_vrr_set_fixed_rr_timings(crtc_state);
++	intel_vrr_set_fixed_rr_timings(crtc_state, cpu_transcoder);
+ 
+ 	if (!intel_vrr_always_use_vrr_tg(display))
+ 		intel_de_write(display, TRANS_VRR_CTL(display, cpu_transcoder),
+@@ -974,7 +975,7 @@ void intel_vrr_disable(const struct intel_crtc_state *old_crtc_state)
+ 		intel_vrr_tg_disable(old_crtc_state);
+ 
+ 	intel_vrr_disable_dc_balancing(old_crtc_state);
+-	intel_vrr_set_fixed_rr_timings(old_crtc_state);
++	intel_vrr_set_fixed_rr_timings(old_crtc_state, old_crtc_state->cpu_transcoder);
+ }
+ 
+ void intel_vrr_transcoder_enable(const struct intel_crtc_state *crtc_state)
+diff --git a/drivers/gpu/drm/i915/display/intel_vrr.h b/drivers/gpu/drm/i915/display/intel_vrr.h
+index 4f16ca4af91f..57c5e28378db 100644
+--- a/drivers/gpu/drm/i915/display/intel_vrr.h
++++ b/drivers/gpu/drm/i915/display/intel_vrr.h
+@@ -15,6 +15,7 @@ struct intel_crtc;
+ struct intel_crtc_state;
+ struct intel_dsb;
+ struct intel_display;
++enum transcoder;
+ 
+ bool intel_vrr_is_capable(struct intel_connector *connector);
+ bool intel_vrr_is_in_range(struct intel_connector *connector, int vrefresh);
+@@ -42,7 +43,8 @@ int intel_vrr_vmin_vblank_start(const struct intel_crtc_state *crtc_state);
+ bool intel_vrr_is_fixed_rr(const struct intel_crtc_state *crtc_state);
+ void intel_vrr_transcoder_enable(const struct intel_crtc_state *crtc_state);
+ void intel_vrr_transcoder_disable(const struct intel_crtc_state *crtc_state);
+-void intel_vrr_set_fixed_rr_timings(const struct intel_crtc_state *crtc_state);
++void intel_vrr_set_fixed_rr_timings(const struct intel_crtc_state *crtc_state,
++				    enum transcoder cpu_transcoder);
+ void intel_vrr_dcb_reset(const struct intel_crtc_state *old_crtc_state,
+ 			 struct intel_crtc *crtc);
+ bool intel_vrr_always_use_vrr_tg(struct intel_display *display);
+-- 
+2.55.0
+

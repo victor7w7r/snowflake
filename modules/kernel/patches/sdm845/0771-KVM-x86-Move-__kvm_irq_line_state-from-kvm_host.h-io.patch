@@ -1,0 +1,71 @@
+From bc61fbab310a9e8f01421eb3632ca7a02636779c Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 12 Jun 2026 17:03:22 -0700
+Subject: [PATCH 00771/15333] KVM: x86: Move __kvm_irq_line_state() from
+ kvm_host.h => ioapic.h
+
+Bury __kvm_irq_line_state() in CONFIG_KVM_IOAPIC=y code, as it's only used
+by PIC and I/O APIC code.
+
+No functional change intended.
+
+Reviewed-by: Yosry Ahmed <yosry@kernel.org>
+Reviewed-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+Reviewed-by: Binbin Wu <binbin.wu@linux.intel.com>
+Message-ID: <20260613000329.732085-24-seanjc@google.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/kvm_host.h | 12 ------------
+ arch/x86/kvm/ioapic.h           | 12 ++++++++++++
+ 2 files changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 24d3140690a0..4080cbe59012 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -2252,18 +2252,6 @@ static inline void kvm_inject_emulated_page_fault(struct kvm_vcpu *vcpu,
+ 
+ bool kvm_require_dr(struct kvm_vcpu *vcpu, int dr);
+ 
+-static inline int __kvm_irq_line_state(unsigned long *irq_state,
+-				       int irq_source_id, int level)
+-{
+-	/* Logical OR for level trig interrupt */
+-	if (level)
+-		__set_bit(irq_source_id, irq_state);
+-	else
+-		__clear_bit(irq_source_id, irq_state);
+-
+-	return !!(*irq_state);
+-}
+-
+ void kvm_inject_nmi(struct kvm_vcpu *vcpu);
+ int kvm_get_nr_pending_nmis(struct kvm_vcpu *vcpu);
+ 
+diff --git a/arch/x86/kvm/ioapic.h b/arch/x86/kvm/ioapic.h
+index 3dadae093690..81b576513116 100644
+--- a/arch/x86/kvm/ioapic.h
++++ b/arch/x86/kvm/ioapic.h
+@@ -113,6 +113,18 @@ void kvm_get_ioapic(struct kvm *kvm, struct kvm_ioapic_state *state);
+ void kvm_set_ioapic(struct kvm *kvm, struct kvm_ioapic_state *state);
+ void kvm_ioapic_scan_entry(struct kvm_vcpu *vcpu,
+ 			   ulong *ioapic_handled_vectors);
++
++static inline int __kvm_irq_line_state(unsigned long *irq_state,
++				       int irq_source_id, int level)
++{
++	/* Logical OR for level trig interrupt */
++	if (level)
++		__set_bit(irq_source_id, irq_state);
++	else
++		__clear_bit(irq_source_id, irq_state);
++
++	return !!(*irq_state);
++}
+ #endif /* CONFIG_KVM_IOAPIC */
+ 
+ static inline int ioapic_in_kernel(struct kvm *kvm)
+-- 
+2.55.0
+

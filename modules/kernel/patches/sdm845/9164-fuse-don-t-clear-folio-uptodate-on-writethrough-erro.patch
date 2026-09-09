@@ -1,0 +1,82 @@
+From 1a061c5542533515886d5bb5ee0f1676e83048ba Mon Sep 17 00:00:00 2001
+From: Joanne Koong <joannelkoong@gmail.com>
+Date: Tue, 7 Jul 2026 15:04:48 -0700
+Subject: [PATCH 09164/15333] fuse: don't clear folio uptodate on writethrough
+ errors
+
+In the writethrough path (fuse_send_write_pages()), if the write to the
+server failed or was a short write, the uptodate flag on the folios are
+cleared.
+
+As explained by Matthew in [1], this is dangerous because the folio may
+be mapped into userspace. The mm code has the invariant that a
+non-uptodate folio must never be visible to userspace (to avoid
+potentially leaking confidental information to userspace) and has checks
+in place for this that if violated can bring down the whole machine.
+
+Practically speaking, the effect of this change for the fuse
+writethrough error path is that if an application does a write and then
+the server fails to persist the data or only services a short write, the
+page cache folio keeps the data the application wrote instead of being
+reverted to the server's contents on the next read. The failure is still
+reported to the application synchronously through the short count /
+error return of the write() syscall. Folios that were only partially
+written are unaffected since they were never marked uptodate in the
+first place (fuse_fill_write_page() only marks a folio as uptodate if
+the whole folio was written to).
+
+[1] https://lore.kernel.org/linux-fsdevel/ajtPMgO65FA1TXhi@casper.infradead.org/
+
+Suggested-by: Matthew Wilcox <willy@infradead.org>
+Reviewed-by: Darrick J. Wong <djwong@kernel.org>
+Signed-off-by: Joanne Koong <joannelkoong@gmail.com>
+Link: https://patch.msgid.link/20260707220450.1200943-2-joannelkoong@gmail.com
+Acked-by: Miklos Szeredi <mszeredi@redhat.com>
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/fuse/file.c | 18 +-----------------
+ 1 file changed, 1 insertion(+), 17 deletions(-)
+
+diff --git a/fs/fuse/file.c b/fs/fuse/file.c
+index e052a0d44dee..a72959dbcf12 100644
+--- a/fs/fuse/file.c
++++ b/fs/fuse/file.c
+@@ -1227,8 +1227,7 @@ static ssize_t fuse_send_write_pages(struct fuse_io_args *ia,
+ 	struct file *file = iocb->ki_filp;
+ 	struct fuse_file *ff = file->private_data;
+ 	struct fuse_mount *fm = ff->fm;
+-	unsigned int offset, i;
+-	bool short_write;
++	unsigned int i;
+ 	int err;
+ 
+ 	for (i = 0; i < ap->num_folios; i++)
+@@ -1243,24 +1242,9 @@ static ssize_t fuse_send_write_pages(struct fuse_io_args *ia,
+ 	if (!err && ia->write.out.size > count)
+ 		err = -EIO;
+ 
+-	short_write = ia->write.out.size < count;
+-	offset = ap->descs[0].offset;
+-	count = ia->write.out.size;
+ 	for (i = 0; i < ap->num_folios; i++) {
+ 		struct folio *folio = ap->folios[i];
+ 
+-		if (err) {
+-			folio_clear_uptodate(folio);
+-		} else {
+-			if (count >= folio_size(folio) - offset)
+-				count -= folio_size(folio) - offset;
+-			else {
+-				if (short_write)
+-					folio_clear_uptodate(folio);
+-				count = 0;
+-			}
+-			offset = 0;
+-		}
+ 		if (ia->write.folio_locked && (i == ap->num_folios - 1))
+ 			folio_unlock(folio);
+ 		folio_put(folio);
+-- 
+2.55.0
+

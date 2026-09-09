@@ -1,0 +1,35 @@
+From 483932d86b0063a9a7f0eefa4b2e557d753fe086 Mon Sep 17 00:00:00 2001
+From: Yu-Chun Lin <eleanor.lin@realtek.com>
+Date: Sun, 31 May 2026 21:18:25 +0800
+Subject: [PATCH 01129/15333] clk: bcm: kona: Stop defaulting to parent index 0
+ on error
+
+Stop defaulting to 0 on BAD_CLK_INDEX (U8_MAX). Passing the out-of-bounds
+index directly allows the clk core to fail gracefully during parent
+lookup.
+
+Link: https://lore.kernel.org/lkml/177431305509.5403.15386021337517970667@lazor/
+Signed-off-by: Yu-Chun Lin <eleanor.lin@realtek.com>
+Reviewed-by: Brian Masney <bmasney@redhat.com>
+Signed-off-by: Brian Masney <bmasney@redhat.com>
+---
+ drivers/clk/bcm/clk-kona.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/clk/bcm/clk-kona.c b/drivers/clk/bcm/clk-kona.c
+index 0171e6b2bfca..d6f5872d7d6a 100644
+--- a/drivers/clk/bcm/clk-kona.c
++++ b/drivers/clk/bcm/clk-kona.c
+@@ -1098,8 +1098,7 @@ static u8 kona_peri_clk_get_parent(struct clk_hw *hw)
+ 
+ 	index = selector_read_index(bcm_clk->ccu, &data->sel);
+ 
+-	/* Not all callers would handle an out-of-range value gracefully */
+-	return index == BAD_CLK_INDEX ? 0 : index;
++	return index;
+ }
+ 
+ static int kona_peri_clk_set_rate(struct clk_hw *hw, unsigned long rate,
+-- 
+2.55.0
+

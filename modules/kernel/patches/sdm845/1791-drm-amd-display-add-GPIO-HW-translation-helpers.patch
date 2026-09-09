@@ -1,0 +1,217 @@
+From 21b62d3a52fe130ae40f4ad361d7ab9663c933b8 Mon Sep 17 00:00:00 2001
+From: Guilherme Ivo Bozi <guilherme.bozi@usp.br>
+Date: Thu, 11 Jun 2026 16:49:01 -0300
+Subject: [PATCH 01791/15333] drm/amd/display: add GPIO HW translation helpers
+
+Add generic helpers and lookup table types for GPIO hardware
+translation.
+
+The new helpers provide reusable conversions between GPIO IDs,
+register offsets and DDC lines, allowing ASIC-specific drivers
+to replace large switch statements with static lookup tables.
+
+No functional changes intended.
+
+Signed-off-by: Guilherme Ivo Bozi <guilherme.bozi@usp.br>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Acked-by: George Zhang <george.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../drm/amd/display/dc/gpio/hw_translate.c    | 86 +++++++++++++++++++
+ .../drm/amd/display/dc/gpio/hw_translate.h    | 21 +++++
+ .../gpu/drm/amd/display/include/gpio_types.h  | 48 +++++++++++
+ 3 files changed, 155 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/gpio/hw_translate.c b/drivers/gpu/drm/amd/display/dc/gpio/hw_translate.c
+index 64a5e11fce5c..b58af86dee10 100644
+--- a/drivers/gpu/drm/amd/display/dc/gpio/hw_translate.c
++++ b/drivers/gpu/drm/amd/display/dc/gpio/hw_translate.c
+@@ -133,3 +133,89 @@ bool dal_hw_translate_init(
+ 		return false;
+ 	}
+ }
++
++bool dal_hw_translate_gpio_offset_to_id(
++	const struct gpio_id_offset_entry *table,
++	uint32_t table_size,
++	uint32_t offset,
++	uint32_t mask,
++	enum gpio_id *id,
++	uint32_t *en)
++{
++	uint32_t i;
++
++	for (i = 0; i < table_size; i++) {
++		const struct gpio_id_offset_entry *entry = &table[i];
++
++		if (entry->offset != offset)
++			continue;
++
++		if (entry->check_mask && entry->mask != mask)
++			continue;
++
++		*id = entry->id;
++		*en = entry->en;
++
++		return true;
++	}
++
++	return false;
++}
++
++/* we don't care about the GPIO_ID for DDC
++ * in DdcHandle it will use GPIO_ID_DDC_DATA/GPIO_ID_DDC_CLOCK
++ * directly in the create method
++ */
++bool dal_hw_translate_gpio_ddc_offset_to_id(
++	const struct gpio_ddc_offset_entry *table,
++	uint32_t table_size,
++	uint32_t offset,
++	uint32_t *en)
++{
++	uint32_t i;
++
++	for (i = 0; i < table_size; i++) {
++		const struct gpio_ddc_offset_entry *entry = &table[i];
++
++		if (entry->offset != offset)
++			continue;
++
++		*en = entry->en;
++
++		return true;
++	}
++
++	return false;
++}
++
++bool dal_hw_translate_id_to_offset(
++	const struct gpio_pin_entry *table,
++	uint32_t table_size,
++	enum gpio_id id,
++	uint32_t en,
++	struct gpio_pin_info *info)
++{
++	uint32_t i;
++
++	for (i = 0; i < table_size; i++) {
++		const struct gpio_pin_entry *entry = &table[i];
++
++		if (entry->id != id || entry->en != en)
++			continue;
++
++		info->offset = entry->offset;
++		info->mask = entry->mask;
++
++		info->offset_y = info->offset + 2;
++		info->offset_en = info->offset + 1;
++		info->offset_mask = info->offset - 1;
++
++		info->mask_y = info->mask;
++		info->mask_en = info->mask;
++		info->mask_mask = info->mask;
++
++		return true;
++	}
++
++	return false;
++}
+diff --git a/drivers/gpu/drm/amd/display/dc/gpio/hw_translate.h b/drivers/gpu/drm/amd/display/dc/gpio/hw_translate.h
+index 3a7d89ca1605..339e381f8fde 100644
+--- a/drivers/gpu/drm/amd/display/dc/gpio/hw_translate.h
++++ b/drivers/gpu/drm/amd/display/dc/gpio/hw_translate.h
+@@ -47,4 +47,25 @@ bool dal_hw_translate_init(
+ 	enum dce_version dce_version,
+ 	enum dce_environment dce_environment);
+ 
++bool dal_hw_translate_gpio_offset_to_id(
++	const struct gpio_id_offset_entry *table,
++	uint32_t table_size,
++	uint32_t offset,
++	uint32_t mask,
++	enum gpio_id *id,
++	uint32_t *en);
++
++bool dal_hw_translate_gpio_ddc_offset_to_id(
++	const struct gpio_ddc_offset_entry *table,
++	uint32_t table_size,
++	uint32_t offset,
++	uint32_t *en);
++
++bool dal_hw_translate_id_to_offset(
++	const struct gpio_pin_entry *table,
++	uint32_t table_size,
++	enum gpio_id id,
++	uint32_t en,
++	struct gpio_pin_info *info);
++
+ #endif
+diff --git a/drivers/gpu/drm/amd/display/include/gpio_types.h b/drivers/gpu/drm/amd/display/include/gpio_types.h
+index 8dd46ed799e5..afd3fc73a911 100644
+--- a/drivers/gpu/drm/amd/display/include/gpio_types.h
++++ b/drivers/gpu/drm/amd/display/include/gpio_types.h
+@@ -277,6 +277,49 @@ enum gpio_config_type {
+ 	GPIO_CONFIG_TYPE_I2C_AUX_DUAL_MODE
+ };
+ 
++struct gpio_id_offset_entry {
++	uint32_t offset;
++	uint32_t mask;
++
++	bool check_mask;
++
++	enum gpio_id id;
++	uint32_t en;
++};
++
++#define GPIO_ENTRY(_offset, _id, _en) \
++	{ \
++		.offset = REG(_offset), \
++		.check_mask = false, \
++		.id = (_id), \
++		.en = (_en), \
++	}
++
++#define GPIO_MASK_ENTRY(_offset, _mask, _id, _en) \
++	{ \
++		.offset = REG(_offset), \
++		.mask = (_mask), \
++		.check_mask = true, \
++		.id = (_id), \
++		.en = (_en), \
++	}
++
++struct gpio_pin_entry {
++	enum gpio_id id;
++	uint32_t en;
++
++	uint32_t offset;
++	uint32_t mask;
++};
++
++#define GPIO_PIN_ENTRY(_id, _en, _offset, _mask) \
++	{ \
++		.id = (_id), \
++		.en = (_en), \
++		.offset = REG(_offset), \
++		.mask = (_mask), \
++	}
++
+ /* DDC configuration */
+ 
+ enum gpio_ddc_config_type {
+@@ -293,6 +336,11 @@ struct gpio_ddc_config {
+ 	bool clock_en_bit_present;
+ };
+ 
++struct gpio_ddc_offset_entry {
++	uint32_t offset;
++	uint32_t en;
++};
++
+ /* HPD configuration */
+ 
+ struct gpio_hpd_config {
+-- 
+2.55.0
+

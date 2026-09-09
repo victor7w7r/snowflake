@@ -1,0 +1,42 @@
+From 2b366b833f52a37f70be845892c1f5fe1d993051 Mon Sep 17 00:00:00 2001
+From: Zhang Heng <zhangheng@kylinos.cn>
+Date: Thu, 20 Aug 2026 15:37:44 +0800
+Subject: [PATCH 15108/15333] ALSA: hda/conexant: Simplify headset plugin type
+ handling
+
+Both the CTIA and OMTP branches of cx_process_headset_plugin() write the
+same value to the headset-mic pin, differing only in the debug message.
+Merge the two branches into a single one, leaving the codec write
+unchanged.
+
+No functional change.
+
+Signed-off-by: Zhang Heng <zhangheng@kylinos.cn>
+Link: https://patch.msgid.link/20260820073744.521680-1-zhangheng@kylinos.cn
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/hda/codecs/conexant.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/sound/hda/codecs/conexant.c b/sound/hda/codecs/conexant.c
+index c517334b56fd..8e950c796209 100644
+--- a/sound/hda/codecs/conexant.c
++++ b/sound/hda/codecs/conexant.c
+@@ -223,11 +223,9 @@ static void cx_process_headset_plugin(struct hda_codec *codec)
+ 		count++;
+ 	} while (count < 3);
+ 	val = snd_hda_codec_read(codec, 0x1c, 0, 0xcb0, 0x0);
+-	if (val & 0x800) {
+-		codec_dbg(codec, "headset plugin, type is CTIA\n");
+-		snd_hda_codec_write(codec, 0x19, 0, AC_VERB_SET_PIN_WIDGET_CONTROL, 0x24);
+-	} else if (val & 0x400) {
+-		codec_dbg(codec, "headset plugin, type is OMTP\n");
++	if (val & 0xc00) {
++		codec_dbg(codec, "headset plugin, type is %s\n",
++			  val & 0x800 ? "CTIA" : "OMTP");
+ 		snd_hda_codec_write(codec, 0x19, 0, AC_VERB_SET_PIN_WIDGET_CONTROL, 0x24);
+ 	} else {
+ 		codec_dbg(codec, "headphone plugin\n");
+-- 
+2.55.0
+

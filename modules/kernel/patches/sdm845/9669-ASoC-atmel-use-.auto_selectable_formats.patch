@@ -1,0 +1,115 @@
+From f7726b460010c59f5af5a82897cbcf3192d2454d Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Tue, 21 Jul 2026 01:00:23 +0000
+Subject: [PATCH 09669/15333] ASoC: atmel: use .auto_selectable_formats
+
+We can use .auto_selectable_formats. Let's adds it.
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Link: https://patch.msgid.link/87wlupjgwp.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/atmel/atmel-i2s.c     | 4 ++++
+ sound/soc/atmel/atmel_ssc_dai.c | 7 +++++++
+ sound/soc/atmel/mchp-i2s-mcc.c  | 9 +++++++++
+ sound/soc/atmel/mchp-pdmc.c     | 4 ++++
+ 4 files changed, 24 insertions(+)
+
+diff --git a/sound/soc/atmel/atmel-i2s.c b/sound/soc/atmel/atmel-i2s.c
+index 762199faf872..d9ad262ec44d 100644
+--- a/sound/soc/atmel/atmel-i2s.c
++++ b/sound/soc/atmel/atmel-i2s.c
+@@ -540,12 +540,16 @@ static int atmel_i2s_dai_probe(struct snd_soc_dai *dai)
+ 	return 0;
+ }
+ 
++static const u64 atmel_i2s_selectable_formats = SND_SOC_POSSIBLE_DAIFMT_I2S;
++
+ static const struct snd_soc_dai_ops atmel_i2s_dai_ops = {
+ 	.probe		= atmel_i2s_dai_probe,
+ 	.prepare	= atmel_i2s_prepare,
+ 	.trigger	= atmel_i2s_trigger,
+ 	.hw_params	= atmel_i2s_hw_params,
+ 	.set_fmt	= atmel_i2s_set_dai_fmt,
++	.auto_selectable_formats	= &atmel_i2s_selectable_formats,
++	.num_auto_selectable_formats	= 1,
+ };
+ 
+ static struct snd_soc_dai_driver atmel_i2s_dai = {
+diff --git a/sound/soc/atmel/atmel_ssc_dai.c b/sound/soc/atmel/atmel_ssc_dai.c
+index 89098f41679c..f4f886bf678d 100644
+--- a/sound/soc/atmel/atmel_ssc_dai.c
++++ b/sound/soc/atmel/atmel_ssc_dai.c
+@@ -825,6 +825,11 @@ static int atmel_ssc_resume(struct snd_soc_component *component)
+ #define ATMEL_SSC_FORMATS (SNDRV_PCM_FMTBIT_S8     | SNDRV_PCM_FMTBIT_S16_LE |\
+ 			   SNDRV_PCM_FMTBIT_S32_LE)
+ 
++static const u64 atmel_ssc_selectable_formats =
++	SND_SOC_POSSIBLE_DAIFMT_I2S	|
++	SND_SOC_POSSIBLE_DAIFMT_LEFT_J	|
++	SND_SOC_POSSIBLE_DAIFMT_DSP_A;
++
+ static const struct snd_soc_dai_ops atmel_ssc_dai_ops = {
+ 	.startup	= atmel_ssc_startup,
+ 	.shutdown	= atmel_ssc_shutdown,
+@@ -833,6 +838,8 @@ static const struct snd_soc_dai_ops atmel_ssc_dai_ops = {
+ 	.hw_params	= atmel_ssc_hw_params,
+ 	.set_fmt	= atmel_ssc_set_dai_fmt,
+ 	.set_clkdiv	= atmel_ssc_set_dai_clkdiv,
++	.auto_selectable_formats	= &atmel_ssc_selectable_formats,
++	.num_auto_selectable_formats	= 1,
+ };
+ 
+ static struct snd_soc_dai_driver atmel_ssc_dai = {
+diff --git a/sound/soc/atmel/mchp-i2s-mcc.c b/sound/soc/atmel/mchp-i2s-mcc.c
+index 17d138bb9064..a832dee73ac7 100644
+--- a/sound/soc/atmel/mchp-i2s-mcc.c
++++ b/sound/soc/atmel/mchp-i2s-mcc.c
+@@ -912,6 +912,13 @@ static int mchp_i2s_mcc_dai_probe(struct snd_soc_dai *dai)
+ 	return 0;
+ }
+ 
++static const u64 mchp_i2s_selectable_formats =
++	SND_SOC_POSSIBLE_DAIFMT_I2S	|
++	SND_SOC_POSSIBLE_DAIFMT_LEFT_J	|
++	SND_SOC_POSSIBLE_DAIFMT_DSP_A	|
++	SND_SOC_POSSIBLE_DAIFMT_GATED	|
++	SND_SOC_POSSIBLE_DAIFMT_NB_NF;
++
+ static const struct snd_soc_dai_ops mchp_i2s_mcc_dai_ops = {
+ 	.probe		= mchp_i2s_mcc_dai_probe,
+ 	.set_sysclk	= mchp_i2s_mcc_set_sysclk,
+@@ -922,6 +929,8 @@ static const struct snd_soc_dai_ops mchp_i2s_mcc_dai_ops = {
+ 	.hw_free	= mchp_i2s_mcc_hw_free,
+ 	.set_fmt	= mchp_i2s_mcc_set_dai_fmt,
+ 	.set_tdm_slot	= mchp_i2s_mcc_set_dai_tdm_slot,
++	.auto_selectable_formats	= &mchp_i2s_selectable_formats,
++	.num_auto_selectable_formats	= 1,
+ };
+ 
+ #define MCHP_I2SMCC_RATES              SNDRV_PCM_RATE_8000_192000
+diff --git a/sound/soc/atmel/mchp-pdmc.c b/sound/soc/atmel/mchp-pdmc.c
+index ec7233ce1f78..a6a9b5e6cd95 100644
+--- a/sound/soc/atmel/mchp-pdmc.c
++++ b/sound/soc/atmel/mchp-pdmc.c
+@@ -741,6 +741,8 @@ static int mchp_pdmc_pcm_new(struct snd_soc_pcm_runtime *rtd,
+ 	return ret;
+ }
+ 
++static const u64 mchp_selectable_formats = SND_SOC_POSSIBLE_DAIFMT_PDM;
++
+ static const struct snd_soc_dai_ops mchp_pdmc_dai_ops = {
+ 	.probe		= mchp_pdmc_dai_probe,
+ 	.set_fmt	= mchp_pdmc_set_fmt,
+@@ -748,6 +750,8 @@ static const struct snd_soc_dai_ops mchp_pdmc_dai_ops = {
+ 	.hw_params	= mchp_pdmc_hw_params,
+ 	.trigger	= mchp_pdmc_trigger,
+ 	.pcm_new	= &mchp_pdmc_pcm_new,
++	.auto_selectable_formats	= &mchp_selectable_formats,
++	.num_auto_selectable_formats	= 1,
+ };
+ 
+ static struct snd_soc_dai_driver mchp_pdmc_dai = {
+-- 
+2.55.0
+

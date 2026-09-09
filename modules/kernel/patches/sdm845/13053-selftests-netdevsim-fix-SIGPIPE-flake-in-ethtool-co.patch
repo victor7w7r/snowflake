@@ -1,0 +1,49 @@
+From 4d2cbd620a7f3a02e59a4e65eaf30acee56e613c Mon Sep 17 00:00:00 2001
+From: Jakub Kicinski <kuba@kernel.org>
+Date: Sat, 8 Aug 2026 09:34:16 -0700
+Subject: [PATCH 13053/15333] selftests: netdevsim: fix SIGPIPE flake in
+ ethtool-coalesce
+
+The adaptive-rx and adaptive-tx checks use 'ethtool -c | grep -q' under
+'set -o pipefail'. grep -q exits as soon as it finds a match, which can
+happen before ethtool finishes writing its output. When that occurs,
+ethtool receives SIGPIPE causing (uninformative):
+
+ # selftests: drivers/net/netdevsim: ethtool-coalesce.sh
+ # FAILED 1/22 checks
+ not ok 1 selftests: drivers/net/netdevsim: ethtool-coalesce.sh # exit=1
+
+This happens on debug kernels in NIPA, ~4% of the time.
+
+Link: https://patch.msgid.link/20260808163416.2456810-1-kuba@kernel.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ .../drivers/net/netdevsim/ethtool-coalesce.sh          | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/tools/testing/selftests/drivers/net/netdevsim/ethtool-coalesce.sh b/tools/testing/selftests/drivers/net/netdevsim/ethtool-coalesce.sh
+index 9adfba8f87e6..b9fcafad4258 100755
+--- a/tools/testing/selftests/drivers/net/netdevsim/ethtool-coalesce.sh
++++ b/tools/testing/selftests/drivers/net/netdevsim/ethtool-coalesce.sh
+@@ -116,12 +116,14 @@ done
+ 
+ # bool settings which ethtool displays on the same line
+ ethtool -C $NSIM_NETDEV adaptive-rx on
+-s=$(ethtool -c $NSIM_NETDEV | grep -q "Adaptive RX: on  TX: off")
+-check $? "$s" ""
++s=$(ethtool -c $NSIM_NETDEV)
++echo "$s" | grep -q "Adaptive RX: on  TX: off"
++check $? "" ""
+ 
+ ethtool -C $NSIM_NETDEV adaptive-tx on
+-s=$(ethtool -c $NSIM_NETDEV | grep -q "Adaptive RX: on  TX: on")
+-check $? "$s" ""
++s=$(ethtool -c $NSIM_NETDEV)
++echo "$s" | grep -q "Adaptive RX: on  TX: on"
++check $? "" ""
+ 
+ if [ $num_errors -eq 0 ]; then
+     echo "PASSED all $((num_passes)) checks"
+-- 
+2.55.0
+

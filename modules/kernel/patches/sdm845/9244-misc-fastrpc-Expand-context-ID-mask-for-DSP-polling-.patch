@@ -1,0 +1,56 @@
+From 62373b7879ada744ea4fc6766b2fb55229eac11f Mon Sep 17 00:00:00 2001
+From: Ekansh Gupta <ekansh.gupta@oss.qualcomm.com>
+Date: Wed, 29 Jul 2026 10:43:48 +0100
+Subject: [PATCH 09244/15333] misc: fastrpc: Expand context ID mask for DSP
+ polling mode support
+
+Current FastRPC context uses a 12-bit mask:
+  [ID(8 bits)][PD type(4 bits)] = GENMASK(11, 4)
+
+This works for normal calls but fails for DSP polling mode.
+Polling mode expects a 16-bit layout:
+  [15:8] = context ID (8 bits)
+  [7:5]  = reserved
+  [4]    = async mode bit
+  [3:0]  = PD type (4 bits)
+
+If async bit (bit 4) is set, DSP disables polling. With current
+mask, odd IDs can set this bit, causing DSP to skip poll updates.
+
+Update FASTRPC_CTXID_MASK to GENMASK(15, 8) so IDs occupy upper
+byte and lower byte is left for DSP flags and PD type.
+
+Reserved bits remain unused. This change is compatible with
+polling mode and does not break non-polling behavior.
+
+Bit layout:
+  [15:8] = CCCCCCCC (context ID)
+  [7:5]  = xxx (reserved)
+  [4]    = A (async mode)
+  [3:0]  = PPPP (PD type)
+
+Reviewed-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Signed-off-by: Ekansh Gupta <ekansh.gupta@oss.qualcomm.com>
+Signed-off-by: Srinivas Kandagatla <srini@kernel.org>
+Link: https://patch.msgid.link/20260729094352.111065-7-srini@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/misc/fastrpc.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/misc/fastrpc.c b/drivers/misc/fastrpc.c
+index 9d8dcd836a75..d42b3e9e2a07 100644
+--- a/drivers/misc/fastrpc.c
++++ b/drivers/misc/fastrpc.c
+@@ -39,7 +39,7 @@
+ #define FASTRPC_CTX_MAX (256)
+ #define FASTRPC_INIT_HANDLE	1
+ #define FASTRPC_DSP_UTILITIES_HANDLE	2
+-#define FASTRPC_CTXID_MASK GENMASK(11, 4)
++#define FASTRPC_CTXID_MASK GENMASK(15, 8)
+ #define INIT_FILELEN_MAX (2 * 1024 * 1024)
+ #define INIT_FILE_NAMELEN_MAX (128)
+ #define FASTRPC_DEVICE_NAME	"fastrpc"
+-- 
+2.55.0
+

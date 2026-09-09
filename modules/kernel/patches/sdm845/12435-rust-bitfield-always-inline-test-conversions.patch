@@ -1,0 +1,55 @@
+From 359af525750d3c13f2d500bf9425c945c9467ce3 Mon Sep 17 00:00:00 2001
+From: Antoni Boucher <bouanto@zoho.com>
+Date: Fri, 7 Aug 2026 19:50:12 +0200
+Subject: [PATCH 12435/15333] rust: bitfield: always inline test conversions
+
+When using the Rust GCC backend (i.e. `rustc_codegen_gcc`), GCC does not
+inline enough these `Bounded::from_expr` calls:
+
+    /usr/bin/x86_64-linux-gnu-ld.bfd: rust/kernel.o: in function `<kernel::num::bounded::Bounded<u16, 2> as core::convert::From<kernel::bitfield::tests::Priority>>::from':
+    fake.c:(.text.unlikely+0x7be): undefined reference to `rust_build_error'
+
+    /usr/bin/x86_64-linux-gnu-ld.bfd: rust/kernel.o: in function `<kernel::num::bounded::Bounded<u64, 4> as core::convert::From<kernel::bitfield::tests::MemoryType>>::from':
+    fake.c:(.text.unlikely+0x90d): undefined reference to `rust_build_error'
+
+Thus, similar to commit bc197e24a3ac ("rust: num: bounded: Always inline
+fits_within and from_expr"), mark them as `#[inline(always)]`.
+
+[ Reworded to add the error and to follow our usual style and sent on
+  behalf of Antoni, who found this during his work to support Rust for
+  Linux with the GCC backend, i.e. with `rustc_codegen_gcc`. - Miguel ]
+
+Assisted-by: Claude:claude-opus-4-8
+Signed-off-by: Antoni Boucher <bouanto@zoho.com>
+Acked-by: Alexandre Courbot <acourbot@nvidia.com>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Reviewed-by: Danilo Krummrich <dakr@kernel.org>
+Link: https://patch.msgid.link/20260807175012.142083-1-ojeda@kernel.org
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ rust/kernel/bitfield.rs | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/rust/kernel/bitfield.rs b/rust/kernel/bitfield.rs
+index 35ede53f2b8e..a0d089423f21 100644
+--- a/rust/kernel/bitfield.rs
++++ b/rust/kernel/bitfield.rs
+@@ -581,6 +581,7 @@ fn try_from(value: Bounded<u64, 4>) -> Result<Self, Self::Error> {
+     }
+ 
+     impl From<MemoryType> for Bounded<u64, 4> {
++        #[inline(always)]
+         fn from(mt: MemoryType) -> Bounded<u64, 4> {
+             Bounded::from_expr(mt as u64)
+         }
+@@ -606,6 +607,7 @@ fn from(value: Bounded<u16, 2>) -> Self {
+     }
+ 
+     impl From<Priority> for Bounded<u16, 2> {
++        #[inline(always)]
+         fn from(p: Priority) -> Bounded<u16, 2> {
+             Bounded::from_expr(p as u16)
+         }
+-- 
+2.55.0
+

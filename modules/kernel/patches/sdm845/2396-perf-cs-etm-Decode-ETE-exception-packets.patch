@@ -1,0 +1,52 @@
+From 5cf3ea0f2616fea7d91e4b45b6bca872e09205c3 Mon Sep 17 00:00:00 2001
+From: Leo Yan <leo.yan@arm.com>
+Date: Thu, 2 Jul 2026 20:51:38 +0100
+Subject: [PATCH 02396/15333] perf cs-etm: Decode ETE exception packets
+
+ETE shares the same packet format as ETMv4, but exception decoding
+handled ETMv4 packets only. As a result, ETE exception packets were
+not classified.
+
+Recognize the ETE magic for exception number decoding.
+
+Reviewed-by: James Clark <james.clark@linaro.org>
+Signed-off-by: Leo Yan <leo.yan@arm.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/util/cs-etm.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/tools/perf/util/cs-etm.c b/tools/perf/util/cs-etm.c
+index 95530e10e010..0ad6cccc292d 100644
+--- a/tools/perf/util/cs-etm.c
++++ b/tools/perf/util/cs-etm.c
+@@ -2202,7 +2202,7 @@ static bool cs_etm__is_syscall(struct cs_etm_queue *etmq,
+ 	 * HVC cases; need to check if it's SVC instruction based on
+ 	 * packet address.
+ 	 */
+-	if (magic == __perf_cs_etmv4_magic) {
++	if (magic == __perf_cs_etmv4_magic || magic == __perf_cs_ete_magic) {
+ 		if (packet->exception_number == CS_ETMV4_EXC_CALL &&
+ 		    cs_etm__is_svc_instr(etmq, tidq, prev_packet,
+ 					 prev_packet->end_addr))
+@@ -2225,7 +2225,7 @@ static bool cs_etm__is_async_exception(struct cs_etm_traceid_queue *tidq,
+ 		    packet->exception_number == CS_ETMV3_EXC_FIQ)
+ 			return true;
+ 
+-	if (magic == __perf_cs_etmv4_magic)
++	if (magic == __perf_cs_etmv4_magic || magic == __perf_cs_ete_magic)
+ 		if (packet->exception_number == CS_ETMV4_EXC_RESET ||
+ 		    packet->exception_number == CS_ETMV4_EXC_DEBUG_HALT ||
+ 		    packet->exception_number == CS_ETMV4_EXC_SYSTEM_ERROR ||
+@@ -2255,7 +2255,7 @@ static bool cs_etm__is_sync_exception(struct cs_etm_queue *etmq,
+ 		    packet->exception_number == CS_ETMV3_EXC_GENERIC)
+ 			return true;
+ 
+-	if (magic == __perf_cs_etmv4_magic) {
++	if (magic == __perf_cs_etmv4_magic || magic == __perf_cs_ete_magic) {
+ 		if (packet->exception_number == CS_ETMV4_EXC_TRAP ||
+ 		    packet->exception_number == CS_ETMV4_EXC_ALIGNMENT ||
+ 		    packet->exception_number == CS_ETMV4_EXC_INST_FAULT ||
+-- 
+2.55.0
+

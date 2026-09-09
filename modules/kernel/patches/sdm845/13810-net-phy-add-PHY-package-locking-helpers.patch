@@ -1,0 +1,71 @@
+From ebb16fca011ce08fa710cec42ee43a33bf331893 Mon Sep 17 00:00:00 2001
+From: Xuanqiang Luo <luoxuanqiang@kylinos.cn>
+Date: Tue, 11 Aug 2026 23:13:42 +0800
+Subject: [PATCH 13810/15333] net: phy: add PHY package locking helpers
+
+The PHY package API provides private data shared by all PHYs in a
+package. Drivers are responsible for synchronizing access to this data,
+but the API does not provide a lock for that purpose.
+
+Add phy_package_lock() and phy_package_unlock() for drivers to serialize
+access to package-private data, including its initialization.
+
+Reviewed-by: Andrew Lunn <andrew@lunn.ch>
+Signed-off-by: Xuanqiang Luo <luoxuanqiang@kylinos.cn>
+Link: https://patch.msgid.link/20260811151345.73582-2-xuanqiang.luo@linux.dev
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/phy/phy_package.c | 23 +++++++++++++++++++++++
+ drivers/net/phy/phylib.h      |  2 ++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/drivers/net/phy/phy_package.c b/drivers/net/phy/phy_package.c
+index 16ae8d1c1f89..735806c5bea8 100644
+--- a/drivers/net/phy/phy_package.c
++++ b/drivers/net/phy/phy_package.c
+@@ -52,6 +52,29 @@ void *phy_package_get_priv(struct phy_device *phydev)
+ }
+ EXPORT_SYMBOL_GPL(phy_package_get_priv);
+ 
++/**
++ * phy_package_lock - acquire the PHY package lock
++ * @phydev: PHY device that has joined the package
++ *
++ * Use this to serialize access to package-private data. Release the lock
++ * with phy_package_unlock().
++ */
++void phy_package_lock(struct phy_device *phydev)
++{
++	mutex_lock(&phydev->mdio.bus->shared_lock);
++}
++EXPORT_SYMBOL_GPL(phy_package_lock);
++
++/**
++ * phy_package_unlock - release the PHY package lock
++ * @phydev: PHY device that has joined the package
++ */
++void phy_package_unlock(struct phy_device *phydev)
++{
++	mutex_unlock(&phydev->mdio.bus->shared_lock);
++}
++EXPORT_SYMBOL_GPL(phy_package_unlock);
++
+ static int phy_package_address(struct phy_device *phydev,
+ 			       unsigned int addr_offset)
+ {
+diff --git a/drivers/net/phy/phylib.h b/drivers/net/phy/phylib.h
+index 0fba245f9745..c6e26ac6b28f 100644
+--- a/drivers/net/phy/phylib.h
++++ b/drivers/net/phy/phylib.h
+@@ -12,6 +12,8 @@ struct mii_bus;
+ 
+ struct device_node *phy_package_get_node(struct phy_device *phydev);
+ void *phy_package_get_priv(struct phy_device *phydev);
++void phy_package_lock(struct phy_device *phydev);
++void phy_package_unlock(struct phy_device *phydev);
+ int __phy_package_read(struct phy_device *phydev, unsigned int addr_offset,
+ 		       u32 regnum);
+ int __phy_package_write(struct phy_device *phydev, unsigned int addr_offset,
+-- 
+2.55.0
+

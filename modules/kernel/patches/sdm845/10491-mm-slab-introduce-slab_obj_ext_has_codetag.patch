@@ -1,0 +1,133 @@
+From 580258a19284fce98de9013baa81633ab9d93515 Mon Sep 17 00:00:00 2001
+From: "Vlastimil Babka (SUSE)" <vbabka@kernel.org>
+Date: Mon, 27 Jul 2026 14:54:03 +0200
+Subject: [PATCH 10491/15333] mm/slab: introduce slab_obj_ext_has_codetag()
+
+mem_alloc_profiling_enabled() allows evaluating (with a static key) if
+memory profiling is currently enabled. mem_profiling_support is a
+variable where false means it's not possible to enable it anymore,
+because the system was booted with "never" or it was later shut down.
+This is possible to query by mem_alloc_profiling_permanently_disabled().
+
+To make slabobj_ext array size handling dynamic, we need a snapshot of
+mem_alloc_profiling_permanently_disabled() early in boot, so that's not
+affected by a later shutdown. We also need it to be static key based for
+performance. Neither mem_alloc_profiling_enabled() nor
+mem_alloc_profiling_permanently_disabled() satisfy this.
+
+Therefore introduce slab_obj_ext_has_codetag() with an underlying static
+key for that use case. Its state is made to reflect the result of
+mem_alloc_profiling_permanently_disabled() during kmem_cache_init(),
+which does happen after setup_early_mem_profiling().
+
+Reviewed-by: Suren Baghdasaryan <surenb@google.com>
+Link: https://patch.msgid.link/20260727-b4-objext_split-v3-9-c29ef0f1f257@kernel.org
+Reviewed-by: Hao Li <hao.li@linux.dev>
+Reviewed-by: Harry Yoo <harry@kernel.org>
+Signed-off-by: Vlastimil Babka (SUSE) <vbabka@kernel.org>
+---
+ mm/slab.h | 18 ++++++++++++++++++
+ mm/slub.c | 30 ++++++++++++++++++++++++++++++
+ 2 files changed, 48 insertions(+)
+
+diff --git a/mm/slab.h b/mm/slab.h
+index ef25c89b52d0..60e0df5bc5c2 100644
+--- a/mm/slab.h
++++ b/mm/slab.h
+@@ -568,6 +568,22 @@ struct slabobj_ext {
+ 	};
+ } __aligned(8);
+ 
++#ifdef CONFIG_MEM_ALLOC_PROFILING
++DECLARE_STATIC_KEY_MAYBE(CONFIG_MEM_ALLOC_PROFILING_ENABLED_BY_DEFAULT,
++			 slab_obj_ext_has_codetag_key);
++
++static inline bool slab_obj_ext_has_codetag(void)
++{
++	return static_branch_maybe(CONFIG_MEM_ALLOC_PROFILING_ENABLED_BY_DEFAULT,
++				   &slab_obj_ext_has_codetag_key);
++}
++#else
++static inline bool slab_obj_ext_has_codetag(void)
++{
++	return false;
++}
++#endif
++
+ static inline size_t cache_obj_ext_size(struct kmem_cache *s)
+ {
+ 	size_t sz = 0;
+@@ -712,6 +728,8 @@ slab_obj_ext_set_objcg(struct slab *slab, struct slabobj_ext *obj_ext,
+ static inline union codetag_ref *
+ slab_obj_ext_codetag_ref(struct slab *slab, struct slabobj_ext *obj_ext)
+ {
++	VM_WARN_ON_ONCE(!slab_obj_ext_has_codetag());
++
+ 	if (IS_ENABLED(CONFIG_MEMCG))
+ 		obj_ext += 1;
+ 
+diff --git a/mm/slub.c b/mm/slub.c
+index cfa370bc8130..d2cbca1ade22 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -213,6 +213,11 @@ DEFINE_STATIC_KEY_FALSE(slub_debug_enabled);
+ static DEFINE_STATIC_KEY_FALSE(strict_numa);
+ #endif
+ 
++#ifdef CONFIG_MEM_ALLOC_PROFILING
++DEFINE_STATIC_KEY_MAYBE(CONFIG_MEM_ALLOC_PROFILING_ENABLED_BY_DEFAULT,
++			slab_obj_ext_has_codetag_key);
++#endif
++
+ /* Structure holding extra parameters for slab allocations */
+ struct slab_alloc_context {
+ 	unsigned long caller_addr;
+@@ -2420,6 +2425,25 @@ alloc_tagging_slab_free_hook(struct kmem_cache *s, struct slab *slab, void **p,
+ 		__alloc_tagging_slab_free_hook(s, slab, p, objects);
+ }
+ 
++/*
++ * Make sure the static key used by slab_obj_ext_has_codetag() reflects the
++ * value of !mem_alloc_profiling_permanently_disabled()
++ *
++ * Any later mem alloc profiling shutdown won't be reflected in the static key
++ * because obj_exts with codetags might already exist.
++ */
++static void __init slab_obj_ext_has_codetag_init(void)
++{
++	bool need_codetag = !mem_alloc_profiling_permanently_disabled();
++
++	if (need_codetag != static_key_enabled(&slab_obj_ext_has_codetag_key)) {
++		if (need_codetag)
++			static_branch_enable(&slab_obj_ext_has_codetag_key);
++		else
++			static_branch_disable(&slab_obj_ext_has_codetag_key);
++	}
++}
++
+ #else /* CONFIG_MEM_ALLOC_PROFILING */
+ 
+ static inline void
+@@ -2434,6 +2458,10 @@ alloc_tagging_slab_free_hook(struct kmem_cache *s, struct slab *slab, void **p,
+ {
+ }
+ 
++static inline void slab_obj_ext_has_codetag_init(void)
++{
++}
++
+ #endif /* CONFIG_MEM_ALLOC_PROFILING */
+ 
+ 
+@@ -8546,6 +8574,8 @@ void __init kmem_cache_init(void)
+ 		boot_kmem_cache_node;
+ 	int node;
+ 
++	slab_obj_ext_has_codetag_init();
++
+ 	if (debug_guardpage_minorder())
+ 		slub_max_order = 0;
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,93 @@
+From af1ba61b62be975902c5a4babcc7952f6dfdbd29 Mon Sep 17 00:00:00 2001
+From: Crescent Hsieh <crescentcy.hsieh@moxa.com>
+Date: Fri, 31 Jul 2026 15:48:16 +0800
+Subject: [PATCH 10079/15333] serial: 8250: allow low-level drivers to override
+ break control
+
+Some UARTs require driver-specific handling for break signaling, which
+cannot be expressed by the generic 8250 break implementation alone.
+
+Add an optional uart_port break_ctl callback and route
+serial8250_break_ctl() through it when provided. Rename the existing
+8250 implementation to serial8250_do_break_ctl() and export it so
+low-level drivers can reuse the default 8250 behavior when appropriate.
+
+Signed-off-by: Crescent Hsieh <crescentcy.hsieh@moxa.com>
+Link: https://patch.msgid.link/20260731074820.735619-11-crescentcy.hsieh@moxa.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/8250/8250_core.c |  2 ++
+ drivers/tty/serial/8250/8250_port.c | 11 ++++++++++-
+ include/linux/serial_8250.h         |  1 +
+ include/linux/serial_core.h         |  1 +
+ 4 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/tty/serial/8250/8250_core.c b/drivers/tty/serial/8250/8250_core.c
+index 2f569c370856..adb5d8a55a14 100644
+--- a/drivers/tty/serial/8250/8250_core.c
++++ b/drivers/tty/serial/8250/8250_core.c
+@@ -849,6 +849,8 @@ int serial8250_register_8250_port(const struct uart_8250_port *up)
+ 		uart->port.startup = up->port.startup;
+ 	if (up->port.shutdown)
+ 		uart->port.shutdown = up->port.shutdown;
++	if (up->port.break_ctl)
++		uart->port.break_ctl = up->port.break_ctl;
+ 	if (up->port.pm)
+ 		uart->port.pm = up->port.pm;
+ 	if (up->port.handle_break)
+diff --git a/drivers/tty/serial/8250/8250_port.c b/drivers/tty/serial/8250/8250_port.c
+index 12902036e511..926d46821c70 100644
+--- a/drivers/tty/serial/8250/8250_port.c
++++ b/drivers/tty/serial/8250/8250_port.c
+@@ -1972,7 +1972,7 @@ static void serial8250_set_mctrl(struct uart_port *port, unsigned int mctrl)
+ 		serial8250_do_set_mctrl(port, mctrl);
+ }
+ 
+-static void serial8250_break_ctl(struct uart_port *port, int break_state)
++void serial8250_do_break_ctl(struct uart_port *port, int break_state)
+ {
+ 	struct uart_8250_port *up = up_to_u8250p(port);
+ 
+@@ -1985,6 +1985,15 @@ static void serial8250_break_ctl(struct uart_port *port, int break_state)
+ 		up->lcr &= ~UART_LCR_SBC;
+ 	serial_port_out(port, UART_LCR, up->lcr);
+ }
++EXPORT_SYMBOL_GPL(serial8250_do_break_ctl);
++
++static void serial8250_break_ctl(struct uart_port *port, int break_state)
++{
++	if (port->break_ctl)
++		port->break_ctl(port, break_state);
++	else
++		serial8250_do_break_ctl(port, break_state);
++}
+ 
+ /* Returns true if @bits were set, false on timeout */
+ static bool wait_for_lsr(struct uart_8250_port *up, int bits)
+diff --git a/include/linux/serial_8250.h b/include/linux/serial_8250.h
+index eba36710bc47..eeb868e93e15 100644
+--- a/include/linux/serial_8250.h
++++ b/include/linux/serial_8250.h
+@@ -204,6 +204,7 @@ void serial8250_do_shutdown(struct uart_port *port);
+ void serial8250_do_pm(struct uart_port *port, unsigned int state,
+ 		      unsigned int oldstate);
+ void serial8250_do_set_mctrl(struct uart_port *port, unsigned int mctrl);
++void serial8250_do_break_ctl(struct uart_port *port, int break_state);
+ void serial8250_do_set_divisor(struct uart_port *port, unsigned int baud,
+ 			       unsigned int quot);
+ int fsl8250_handle_irq(struct uart_port *port);
+diff --git a/include/linux/serial_core.h b/include/linux/serial_core.h
+index c4cc4f66af4b..a7fd24f9e908 100644
+--- a/include/linux/serial_core.h
++++ b/include/linux/serial_core.h
+@@ -464,6 +464,7 @@ struct uart_port {
+ 	void			(*shutdown)(struct uart_port *port);
+ 	void			(*throttle)(struct uart_port *port);
+ 	void			(*unthrottle)(struct uart_port *port);
++	void			(*break_ctl)(struct uart_port *port, int break_state);
+ 	int			(*handle_irq)(struct uart_port *);
+ 	void			(*pm)(struct uart_port *, unsigned int state,
+ 				      unsigned int old);
+-- 
+2.55.0
+

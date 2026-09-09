@@ -1,0 +1,236 @@
+From 93bd6de5518da2fe11f3895b70b03753032ad72d Mon Sep 17 00:00:00 2001
+From: Yang Wang <kevinyang.wang@amd.com>
+Date: Fri, 31 Jul 2026 06:11:42 +0800
+Subject: [PATCH 11305/15333] drm/amd/pm: account for OD percentage in
+ effective PPT limits
+
+SMU 13.0.0, SMU 13.0.7, and SMU 14.0.2 represent limits above the
+message limit as a base value plus an overdrive percentage. GetPptLimit
+returns only the base, which causes two incorrect results:
+
+- hwmon reports the message limit instead of the effective limit.
+- Lowering the cap can leave the previous OD percentage active.
+
+Export the active overdrive table from PMFW and combine its PPT
+percentage with the message result. Use the exported percentage to clear
+OD state before programming a limit within the message range.
+
+Signed-off-by: Yang Wang <kevinyang.wang@amd.com>
+Reviewed-by: Kenneth Feng <kenneth.feng@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c  | 35 +++++++++++-------
+ .../drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c  | 35 +++++++++++-------
+ .../drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c  | 37 ++++++++++++-------
+ 3 files changed, 65 insertions(+), 42 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c
+index 35c5a64a89c2..6e741ec4a71e 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_0_ppt.c
+@@ -2394,17 +2394,23 @@ static int smu_v13_0_0_get_ppt_limit(struct smu_context *smu,
+ 				     enum smu_ppt_limit_type limit_type,
+ 				     uint32_t *ppt_limit)
+ {
+-	PPTable_t *pptable = smu->smu_table.driver_pptable;
+-	SkuTable_t *skutable = &pptable->SkuTable;
+-	uint32_t pp_limit = smu->adev->pm.ac_power ?
+-		skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
+-		skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
++	OverDriveTableExternal_t od_table;
++	int ret;
+ 
+ 	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EOPNOTSUPP;
+ 
+-	if (smu_v13_0_get_ppt_limit(smu, limit_type, ppt_limit))
+-		*ppt_limit = pp_limit;
++	ret = smu_v13_0_get_ppt_limit(smu, limit_type, ppt_limit);
++	if (ret)
++		return ret;
++
++	ret = smu_v13_0_0_get_overdrive_table(smu, &od_table);
++	if (ret)
++		return ret;
++
++	if (od_table.OverDriveTable.Ppt > 0)
++		*ppt_limit = *ppt_limit *
++			(100 + od_table.OverDriveTable.Ppt) / 100;
+ 
+ 	return 0;
+ }
+@@ -3045,22 +3051,23 @@ static int smu_v13_0_0_set_ppt_limit(struct smu_context *smu,
+ {
+ 	PPTable_t *pptable = smu->smu_table.driver_pptable;
+ 	SkuTable_t *skutable = &pptable->SkuTable;
+-	uint32_t msg_limit = skutable->MsgLimits.Power[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
++	uint32_t msg_limit = skutable->MsgLimits.Power
++		[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
+ 	struct smu_table_context *table_context = &smu->smu_table;
+ 	OverDriveTableExternal_t *od_table =
+ 		(OverDriveTableExternal_t *)table_context->overdrive_table;
+-	uint32_t current_limit;
++	OverDriveTableExternal_t current_od_table;
+ 	int ret = 0;
+ 
+ 	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EINVAL;
+ 
+-	ret = smu_v13_0_0_get_ppt_limit(smu, limit_type, &current_limit);
+-	if (ret)
+-		return ret;
+-
+ 	if (limit <= msg_limit) {
+-		if (current_limit > msg_limit) {
++		ret = smu_v13_0_0_get_overdrive_table(smu, &current_od_table);
++		if (ret)
++			return ret;
++
++		if (current_od_table.OverDriveTable.Ppt) {
+ 			od_table->OverDriveTable.Ppt = 0;
+ 			od_table->OverDriveTable.FeatureCtrlMask |= 1U << PP_OD_FEATURE_PPT_BIT;
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c
+index 6e0a27eec610..b94ae43586df 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_7_ppt.c
+@@ -2376,17 +2376,23 @@ static int smu_v13_0_7_get_ppt_limit(struct smu_context *smu,
+ 				     enum smu_ppt_limit_type limit_type,
+ 				     uint32_t *ppt_limit)
+ {
+-	PPTable_t *pptable = smu->smu_table.driver_pptable;
+-	SkuTable_t *skutable = &pptable->SkuTable;
+-	uint32_t pp_limit = smu->adev->pm.ac_power ?
+-		skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
+-		skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
++	OverDriveTableExternal_t od_table;
++	int ret;
+ 
+ 	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EOPNOTSUPP;
+ 
+-	if (smu_v13_0_get_ppt_limit(smu, limit_type, ppt_limit))
+-		*ppt_limit = pp_limit;
++	ret = smu_v13_0_get_ppt_limit(smu, limit_type, ppt_limit);
++	if (ret)
++		return ret;
++
++	ret = smu_v13_0_7_get_overdrive_table(smu, &od_table);
++	if (ret)
++		return ret;
++
++	if (od_table.OverDriveTable.Ppt > 0)
++		*ppt_limit = *ppt_limit *
++			(100 + od_table.OverDriveTable.Ppt) / 100;
+ 
+ 	return 0;
+ }
+@@ -2665,22 +2671,23 @@ static int smu_v13_0_7_set_ppt_limit(struct smu_context *smu,
+ {
+ 	PPTable_t *pptable = smu->smu_table.driver_pptable;
+ 	SkuTable_t *skutable = &pptable->SkuTable;
+-	uint32_t msg_limit = skutable->MsgLimits.Power[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
++	uint32_t msg_limit = skutable->MsgLimits.Power
++		[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
+ 	struct smu_table_context *table_context = &smu->smu_table;
+ 	OverDriveTableExternal_t *od_table =
+ 		(OverDriveTableExternal_t *)table_context->overdrive_table;
+-	uint32_t current_limit;
++	OverDriveTableExternal_t current_od_table;
+ 	int ret = 0;
+ 
+ 	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EINVAL;
+ 
+-	ret = smu_v13_0_7_get_ppt_limit(smu, limit_type, &current_limit);
+-	if (ret)
+-		return ret;
+-
+ 	if (limit <= msg_limit) {
+-		if (current_limit > msg_limit) {
++		ret = smu_v13_0_7_get_overdrive_table(smu, &current_od_table);
++		if (ret)
++			return ret;
++
++		if (current_od_table.OverDriveTable.Ppt) {
+ 			od_table->OverDriveTable.Ppt = 0;
+ 			od_table->OverDriveTable.FeatureCtrlMask |= 1U << PP_OD_FEATURE_PPT_BIT;
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
+index 824367cf4667..1054c4b4b03e 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
+@@ -60,6 +60,8 @@ static void smu_v14_0_2_get_od_setting_limits(struct smu_context *smu,
+ 					      int od_feature_bit,
+ 					      int32_t *min, int32_t *max);
+ static int smu_v14_0_2_init_ppt_limits(struct smu_context *smu);
++static int smu_v14_0_2_get_overdrive_table(struct smu_context *smu,
++					   OverDriveTableExternal_t *od_table);
+ 
+ static const struct smu_feature_bits smu_v14_0_2_dpm_features = {
+ 	.bits = { SMU_FEATURE_BIT_INIT(FEATURE_DPM_GFXCLK_BIT),
+@@ -1615,17 +1617,23 @@ static int smu_v14_0_2_get_ppt_limit(struct smu_context *smu,
+ 				     enum smu_ppt_limit_type limit_type,
+ 				     uint32_t *ppt_limit)
+ {
+-	PPTable_t *pptable = smu->smu_table.driver_pptable;
+-	CustomSkuTable_t *skutable = &pptable->CustomSkuTable;
+-	uint32_t pp_limit = smu->adev->pm.ac_power ?
+-		skutable->SocketPowerLimitAc[PPT_THROTTLER_PPT0] :
+-		skutable->SocketPowerLimitDc[PPT_THROTTLER_PPT0];
++	OverDriveTableExternal_t od_table;
++	int ret;
+ 
+ 	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EOPNOTSUPP;
+ 
+-	if (smu_v14_0_get_ppt_limit(smu, limit_type, ppt_limit))
+-		*ppt_limit = pp_limit;
++	ret = smu_v14_0_get_ppt_limit(smu, limit_type, ppt_limit);
++	if (ret)
++		return ret;
++
++	ret = smu_v14_0_2_get_overdrive_table(smu, &od_table);
++	if (ret)
++		return ret;
++
++	if (od_table.OverDriveTable.Ppt > 0)
++		*ppt_limit = *ppt_limit *
++			(100 + od_table.OverDriveTable.Ppt) / 100;
+ 
+ 	return 0;
+ }
+@@ -2800,22 +2808,23 @@ static int smu_v14_0_2_set_ppt_limit(struct smu_context *smu,
+ 				     uint32_t limit)
+ {
+ 	PPTable_t *pptable = smu->smu_table.driver_pptable;
+-	uint32_t msg_limit = pptable->SkuTable.MsgLimits.Power[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
++	uint32_t msg_limit = pptable->SkuTable.MsgLimits.Power
++		[PPT_THROTTLER_PPT0][POWER_SOURCE_AC];
+ 	struct smu_table_context *table_context = &smu->smu_table;
+ 	OverDriveTableExternal_t *od_table =
+ 		(OverDriveTableExternal_t *)table_context->overdrive_table;
+-	uint32_t current_limit;
++	OverDriveTableExternal_t current_od_table;
+ 	int ret = 0;
+ 
+ 	if (limit_type != SMU_PPT_LIMIT_PPT0)
+ 		return -EINVAL;
+ 
+-	ret = smu_v14_0_2_get_ppt_limit(smu, limit_type, &current_limit);
+-	if (ret)
+-		return ret;
+-
+ 	if (limit <= msg_limit) {
+-		if (current_limit > msg_limit) {
++		ret = smu_v14_0_2_get_overdrive_table(smu, &current_od_table);
++		if (ret)
++			return ret;
++
++		if (current_od_table.OverDriveTable.Ppt) {
+ 			od_table->OverDriveTable.Ppt = 0;
+ 			od_table->OverDriveTable.FeatureCtrlMask |= 1U << PP_OD_FEATURE_PPT_BIT;
+ 
+-- 
+2.55.0
+

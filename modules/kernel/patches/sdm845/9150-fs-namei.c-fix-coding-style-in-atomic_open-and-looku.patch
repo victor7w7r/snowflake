@@ -1,0 +1,65 @@
+From b89b75f362518c7555f67d38774194832304471b Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Fri, 31 Jul 2026 10:36:07 +0200
+Subject: [PATCH 09150/15333] fs/namei.c: fix coding style in atomic_open() and
+ lookup_open()
+
+Commit 4886c80eef20 ("vfs: call audit_inode_child() in lookup_open() on
+failure") indented a continuation line with spaces, left three
+declarations without a following blank line and used a trailing */ on the
+last line of a block comment.  Clean all of that up, no functional change.
+
+Link: https://patch.msgid.link/20260731-work-lookup-fixes-v1-3-2412b85cf65c@kernel.org
+Fixes: 4886c80eef20 ("vfs: call audit_inode_child() in lookup_open() on failure")
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/namei.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/fs/namei.c b/fs/namei.c
+index e31905dfeb20..c0da9b5dd47a 100644
+--- a/fs/namei.c
++++ b/fs/namei.c
+@@ -4377,6 +4377,7 @@ static struct dentry *atomic_open(const struct path *path, struct dentry *dentry
+ 		if (file->f_mode & FMODE_OPENED) {
+ 			/* finish_open() called */
+ 			struct dentry *opened = file->f_path.dentry;
++
+ 			if (unlikely(opened != dentry)) {
+ 				dput(dentry);
+ 				dentry = dget(opened);
+@@ -4384,6 +4385,7 @@ static struct dentry *atomic_open(const struct path *path, struct dentry *dentry
+ 		} else if (likely(file->f_path.dentry != DENTRY_NOT_SET)) {
+ 			/* finish_no_open() called */
+ 			struct dentry *replaced = file->f_path.dentry;
++
+ 			if (replaced) {
+ 				dput(dentry);
+ 				dentry = replaced;
+@@ -4392,8 +4394,9 @@ static struct dentry *atomic_open(const struct path *path, struct dentry *dentry
+ 				error = -ENOENT;
+ 		} else {
+ 			const char *fsname = dentry->d_sb->s_type->name;
++
+ 			WARN(1, "%s: ->atomic_open() left file->f_path.dentry unset!\n",
+-			        fsname);
++			     fsname);
+ 			error = -EIO;
+ 		}
+ 	}
+@@ -4540,8 +4543,10 @@ static struct dentry *lookup_open(struct nameidata *nd, struct file *file,
+ 		}
+ 	}
+ 	if (dentry->d_inode || !(op->open_flag & O_CREAT)) {
+-		/* No need to create a file. If lookup returned a positive
+-		 * dentry, the file will be opened in do_open(). */
++		/*
++		 * No need to create a file.  If lookup returned a positive
++		 * dentry, the file will be opened in do_open().
++		 */
+ 		goto out;
+ 	}
+ 
+-- 
+2.55.0
+

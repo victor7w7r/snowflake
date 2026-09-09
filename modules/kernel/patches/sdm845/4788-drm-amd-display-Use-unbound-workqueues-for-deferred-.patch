@@ -1,0 +1,140 @@
+From 4a209ac6749138ec0ca926b1a04d8e786df23697 Mon Sep 17 00:00:00 2001
+From: Geoffrey McRae <geoffrey.mcrae@amd.com>
+Date: Tue, 30 Jun 2026 02:14:49 +1000
+Subject: [PATCH 04788/15333] drm/amd/display: Use unbound workqueues for
+ deferred DM work
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+DM currently queues some deferred display work on system workqueues.
+Low-context IRQ handlers are queued on system_highpri_wq, while deferred
+vmin/vmax updates are queued on system_percpu_wq.
+
+Both paths can execute long-running display work. HPD and HPD RX handling
+may involve link detection, AUX transactions, connector state updates, and
+hotplug notification. The vmin/vmax update path calls into DC under
+dc_lock to adjust stream timing. These paths can therefore trigger the
+workqueue CPU hog detector when run from per-CPU workers:
+
+  workqueue: dm_irq_work_func [amdgpu] hogged CPU for >10000us
+  workqueue: dm_handle_vmin_vmax_update [amdgpu] hogged CPU for >10000us
+
+Move the deferred low-context IRQ work to a dedicated high-priority
+unbound workqueue, preserving the priority of the previous
+system_highpri_wq usage while avoiding long-running work on per-CPU
+workers.
+
+Move deferred vmin/vmax updates to a separate normal-priority unbound
+workqueue.
+
+High-context IRQ handlers remain unchanged and continue to run directly
+from the IRQ path.
+
+Signed-off-by: Geoffrey McRae <geoffrey.mcrae@amd.com>
+Reviewed-by: Leo Li <sunpeng.li@amd.com>
+Cc: Harry Wentland <harry.wentland@amd.com>
+Cc: Leo Li <sunpeng.li@amd.com>
+Cc: Alex Deucher <alexander.deucher@amd.com>
+Cc: Christian König <christian.koenig@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h |  4 +++
+ .../drm/amd/display/amdgpu_dm/amdgpu_dm_irq.c | 31 +++++++++++++++++--
+ 2 files changed, 32 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+index a04c7f26672b..f396803d1485 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+@@ -324,6 +324,8 @@ struct hpd_rx_irq_offload_work {
+  * @ddev: DRM base driver structure
+  * @display_indexes_num: Max number of display streams supported
+  * @irq_handler_list_table_lock: Synchronizes access to IRQ tables
++ * @irq_wq: Dedicated high-priority unbound workqueue for deferred IRQ work
++ * @vmin_vmax_wq: Dedicated unbound workqueue for deferred vmin/vmax updates
+  * @backlight_dev: Backlight control device
+  * @backlight_link: Link on which to control backlight
+  * @backlight_caps: Capabilities of the backlight device
+@@ -563,6 +565,8 @@ struct amdgpu_display_manager {
+ 	dmub_outbox_params[1];
+ 
+ 	spinlock_t irq_handler_list_table_lock;
++	struct workqueue_struct *irq_wq;
++	struct workqueue_struct *vmin_vmax_wq;
+ 
+ 	struct backlight_device *backlight_dev[AMDGPU_DM_MAX_NUM_EDP];
+ 
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_irq.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_irq.c
+index 7e375ad137d8..ad30cae2af42 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_irq.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_irq.c
+@@ -397,6 +397,21 @@ int amdgpu_dm_irq_init(struct amdgpu_device *adev)
+ 
+ 	spin_lock_init(&adev->dm.irq_handler_list_table_lock);
+ 
++	adev->dm.irq_wq = alloc_workqueue("amdgpu_dm_irq",
++		WQ_UNBOUND | WQ_HIGHPRI, 0);
++
++	if (!adev->dm.irq_wq)
++		return -ENOMEM;
++
++	adev->dm.vmin_vmax_wq = alloc_workqueue("amdgpu_dm_vmin_vmax",
++		WQ_UNBOUND, 0);
++
++	if (!adev->dm.vmin_vmax_wq) {
++		destroy_workqueue(adev->dm.irq_wq);
++		adev->dm.irq_wq = NULL;
++		return -ENOMEM;
++	}
++
+ 	for (src = 0; src < DAL_IRQ_SOURCES_NUMBER; src++) {
+ 		/* low context handler list init */
+ 		lh = &adev->dm.irq_handler_list_low_tab[src];
+@@ -478,6 +493,16 @@ void amdgpu_dm_irq_fini(struct amdgpu_device *adev)
+ 		list_del(&handler->list);
+ 		kfree(handler);
+ 	}
++
++	if (adev->dm.vmin_vmax_wq) {
++		destroy_workqueue(adev->dm.vmin_vmax_wq);
++		adev->dm.vmin_vmax_wq = NULL;
++	}
++
++	if (adev->dm.irq_wq) {
++		destroy_workqueue(adev->dm.irq_wq);
++		adev->dm.irq_wq = NULL;
++	}
+ }
+ EXPORT_IF_KUNIT(amdgpu_dm_irq_fini);
+ 
+@@ -597,7 +622,7 @@ STATIC_IFN_KUNIT void amdgpu_dm_irq_schedule_work(struct amdgpu_device *adev,
+ 		goto out_unlock;
+ 
+ 	list_for_each_entry(handler_data, handler_list, list) {
+-		if (queue_work(system_highpri_wq, &handler_data->work)) {
++		if (queue_work(adev->dm.irq_wq, &handler_data->work)) {
+ 			work_queued = true;
+ 			break;
+ 		}
+@@ -625,7 +650,7 @@ STATIC_IFN_KUNIT void amdgpu_dm_irq_schedule_work(struct amdgpu_device *adev,
+ 
+ 		INIT_WORK(&handler_data_add->work, dm_irq_work_func);
+ 
+-		if (queue_work(system_highpri_wq, &handler_data_add->work))
++		if (queue_work(adev->dm.irq_wq, &handler_data_add->work))
+ 			DRM_DEBUG("Queued work for handling interrupt from "
+ 				  "display for IRQ source %d\n",
+ 				  irq_source);
+@@ -1913,7 +1938,7 @@ static void schedule_dc_vmin_vmax(struct amdgpu_device *adev,
+ 	offload_work->stream = stream;
+ 	offload_work->adjust = adjust_copy;
+ 
+-	queue_work(system_percpu_wq, &offload_work->work);
++	queue_work(adev->dm.vmin_vmax_wq, &offload_work->work);
+ }
+ 
+ STATIC_IFN_KUNIT void dm_vupdate_high_irq(void *interrupt_params)
+-- 
+2.55.0
+

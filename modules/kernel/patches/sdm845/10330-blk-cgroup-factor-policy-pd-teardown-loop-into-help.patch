@@ -1,0 +1,114 @@
+From d3f775718a66e4242b3b344d6b3fc836a390785b Mon Sep 17 00:00:00 2001
+From: Zheng Qixing <zhengqixing@huawei.com>
+Date: Sun, 2 Aug 2026 19:25:20 +0800
+Subject: [PATCH 10330/15333] blk-cgroup: factor policy pd teardown loop into
+ helper
+
+Move the teardown sequence which offlines and frees per-policy
+blkg_policy_data (pd) into a helper for readability.
+
+No functional change intended.
+
+Signed-off-by: Zheng Qixing <zhengqixing@huawei.com>
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Reviewed-by: Tang Yizhou <yizhou.tang@shopee.com>
+Signed-off-by: Yu Kuai <yukuai@fygo.io>
+Reviewed-by: Nilay Shroff <nilay@linux.ibm.com>
+Link: https://patch.msgid.link/20260802112525.3933753-5-yukuai@kernel.org
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ block/blk-cgroup.c | 57 ++++++++++++++++++++++------------------------
+ 1 file changed, 27 insertions(+), 30 deletions(-)
+
+diff --git a/block/blk-cgroup.c b/block/blk-cgroup.c
+index d1895bc60fcf..354637f3b158 100644
+--- a/block/blk-cgroup.c
++++ b/block/blk-cgroup.c
+@@ -1529,6 +1529,31 @@ struct cgroup_subsys io_cgrp_subsys = {
+ };
+ EXPORT_SYMBOL_GPL(io_cgrp_subsys);
+ 
++/*
++ * Tear down per-blkg policy data for @pol on @q.
++ */
++static void blkcg_policy_teardown_pds(struct request_queue *q,
++				      const struct blkcg_policy *pol)
++{
++	struct blkcg_gq *blkg;
++
++	list_for_each_entry(blkg, &q->blkg_list, q_node) {
++		struct blkcg *blkcg = blkg->blkcg;
++		struct blkg_policy_data *pd;
++
++		spin_lock(&blkcg->lock);
++		pd = blkg->pd[pol->plid];
++		if (pd) {
++			if (pd->online && pol->pd_offline_fn)
++				pol->pd_offline_fn(pd);
++			pd->online = false;
++			pol->pd_free_fn(pd);
++			WRITE_ONCE(blkg->pd[pol->plid], NULL);
++		}
++		spin_unlock(&blkcg->lock);
++	}
++}
++
+ /**
+  * blkcg_activate_policy - activate a blkcg policy on a gendisk
+  * @disk: gendisk of interest
+@@ -1644,21 +1669,7 @@ int blkcg_activate_policy(struct gendisk *disk, const struct blkcg_policy *pol)
+ enomem:
+ 	/* alloc failed, take down everything */
+ 	spin_lock_irq(&q->queue_lock);
+-	list_for_each_entry(blkg, &q->blkg_list, q_node) {
+-		struct blkcg *blkcg = blkg->blkcg;
+-		struct blkg_policy_data *pd;
+-
+-		spin_lock(&blkcg->lock);
+-		pd = blkg->pd[pol->plid];
+-		if (pd) {
+-			if (pd->online && pol->pd_offline_fn)
+-				pol->pd_offline_fn(pd);
+-			pd->online = false;
+-			pol->pd_free_fn(pd);
+-			WRITE_ONCE(blkg->pd[pol->plid], NULL);
+-		}
+-		spin_unlock(&blkcg->lock);
+-	}
++	blkcg_policy_teardown_pds(q, pol);
+ 	spin_unlock_irq(&q->queue_lock);
+ 	ret = -ENOMEM;
+ 	goto out;
+@@ -1677,7 +1688,6 @@ void blkcg_deactivate_policy(struct gendisk *disk,
+ 			     const struct blkcg_policy *pol)
+ {
+ 	struct request_queue *q = disk->queue;
+-	struct blkcg_gq *blkg;
+ 	unsigned int memflags;
+ 
+ 	if (!blkcg_policy_enabled(q, pol))
+@@ -1690,20 +1700,7 @@ void blkcg_deactivate_policy(struct gendisk *disk,
+ 	spin_lock_irq(&q->queue_lock);
+ 
+ 	__clear_bit(pol->plid, q->blkcg_pols);
+-
+-	list_for_each_entry(blkg, &q->blkg_list, q_node) {
+-		struct blkcg *blkcg = blkg->blkcg;
+-
+-		spin_lock(&blkcg->lock);
+-		if (blkg->pd[pol->plid]) {
+-			if (blkg->pd[pol->plid]->online && pol->pd_offline_fn)
+-				pol->pd_offline_fn(blkg->pd[pol->plid]);
+-			pol->pd_free_fn(blkg->pd[pol->plid]);
+-			blkg->pd[pol->plid] = NULL;
+-		}
+-		spin_unlock(&blkcg->lock);
+-	}
+-
++	blkcg_policy_teardown_pds(q, pol);
+ 	spin_unlock_irq(&q->queue_lock);
+ 	mutex_unlock(&q->blkcg_mutex);
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,43 @@
+From 8b5ffb43ae9d27eed9165e1962963d685d879219 Mon Sep 17 00:00:00 2001
+From: Tal Zussman <tz2294@columbia.edu>
+Date: Thu, 30 Jul 2026 02:57:55 -0400
+Subject: [PATCH 09499/15333] block: enable RWF_DONTCACHE for block devices
+
+Block device buffered reads and writes already pass through
+filemap_read() and iomap_file_buffered_write() respectively, both of
+which handle IOCB_DONTCACHE. Enable RWF_DONTCACHE for block device files
+by setting FOP_DONTCACHE in def_blk_fops.
+
+For CONFIG_BUFFER_HEAD=y, writeback goes through buffer_head's
+__bh_submit() which sets BIO_COMPLETE_IN_TASK on dropbehind folios. For
+CONFIG_BUFFER_HEAD=n, writeback goes through iomap which handles it via
+BIO_COMPLETE_IN_TASK on the ioend bio.
+
+This support is useful for databases that operate on raw block devices,
+among other userspace applications.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Tal Zussman <tz2294@columbia.edu>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260730-blk-dontcache-v7-5-3e8e6850068d@columbia.edu
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ block/fops.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/fops.c b/block/fops.c
+index e519d7f43b31..3c2099dfef1d 100644
+--- a/block/fops.c
++++ b/block/fops.c
+@@ -943,7 +943,7 @@ const struct file_operations def_blk_fops = {
+ 	.splice_write	= iter_file_splice_write,
+ 	.fallocate	= blkdev_fallocate,
+ 	.uring_cmd	= blkdev_uring_cmd,
+-	.fop_flags	= FOP_BUFFER_RASYNC,
++	.fop_flags	= FOP_BUFFER_RASYNC | FOP_DONTCACHE,
+ };
+ 
+ static __init int blkdev_init(void)
+-- 
+2.55.0
+

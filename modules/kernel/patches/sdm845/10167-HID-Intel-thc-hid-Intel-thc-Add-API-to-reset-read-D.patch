@@ -1,0 +1,93 @@
+From 1d46b8d406550896a2f996eb36823be1f72e939a Mon Sep 17 00:00:00 2001
+From: Even Xu <even.xu@intel.com>
+Date: Wed, 29 Jul 2026 13:01:43 +0800
+Subject: [PATCH 10167/15333] HID: Intel-thc-hid: Intel-thc: Add API to reset
+ read DMA
+
+Add a helper function thc_rxdma_reset() to do read DMA reset, it can be
+called when fatal DMA error happens.
+
+Signed-off-by: Even Xu <even.xu@intel.com>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ .../intel-thc-hid/intel-thc/intel-thc-dma.c   | 51 +++++++++++++++++++
+ .../intel-thc-hid/intel-thc/intel-thc-dma.h   |  1 +
+ 2 files changed, 52 insertions(+)
+
+diff --git a/drivers/hid/intel-thc-hid/intel-thc/intel-thc-dma.c b/drivers/hid/intel-thc-hid/intel-thc/intel-thc-dma.c
+index 6ee675e0a738..7ceb8aeeccd3 100644
+--- a/drivers/hid/intel-thc-hid/intel-thc/intel-thc-dma.c
++++ b/drivers/hid/intel-thc-hid/intel-thc/intel-thc-dma.c
+@@ -561,6 +561,57 @@ static int thc_wait_for_dma_pause(struct thc_device *dev, enum thc_dma_channel c
+ 	return 0;
+ }
+ 
++/**
++ * thc_rxdma_reset - Reset all read DMA engines
++ *
++ * @dev: The pointer of THC private device context
++ *
++ * This is a helper function to reset RxDMA configure. It's typically used
++ * for RxDMA recovery when fatal error happens.
++ *
++ * Return: 0 if successful or error code on failure.
++ */
++int thc_rxdma_reset(struct thc_device *dev)
++{
++	int ret;
++
++	if (mutex_lock_interruptible(&dev->thc_bus_lock))
++		return -EINTR;
++
++	ret = thc_interrupt_quiesce(dev, true);
++	if (ret) {
++		dev_err(dev->dev, "Quiesce interrupt failed during RxDMA reset\n");
++		goto end;
++	}
++
++	ret = thc_wait_for_dma_pause(dev, THC_RXDMA1);
++	if (ret) {
++		dev_err(dev->dev, "Wait for RxDMA1 pause failed during RxDMA reset\n");
++		goto end;
++	}
++
++	ret = thc_wait_for_dma_pause(dev, THC_RXDMA2);
++	if (ret) {
++		dev_err(dev->dev, "Wait for RxDMA2 pause failed during RxDMA reset\n");
++		goto end;
++	}
++
++	thc_dma_unconfigure(dev);
++
++	ret = thc_dma_configure(dev);
++	if (ret) {
++		dev_err(dev->dev, "Re-config DMA failed during RxDMA reset\n");
++		goto end;
++	}
++
++	thc_interrupt_quiesce(dev, false);
++
++end:
++	mutex_unlock(&dev->thc_bus_lock);
++	return ret;
++}
++EXPORT_SYMBOL_NS_GPL(thc_rxdma_reset, "INTEL_THC");
++
+ static int read_dma_buffer(struct thc_device *dev,
+ 			   struct thc_dma_configuration *read_config,
+ 			   u8 prd_table_index, void *read_buff)
+diff --git a/drivers/hid/intel-thc-hid/intel-thc/intel-thc-dma.h b/drivers/hid/intel-thc-hid/intel-thc/intel-thc-dma.h
+index 541d33995baf..715423453a9d 100644
+--- a/drivers/hid/intel-thc-hid/intel-thc/intel-thc-dma.h
++++ b/drivers/hid/intel-thc-hid/intel-thc/intel-thc-dma.h
+@@ -145,6 +145,7 @@ int  thc_dma_allocate(struct thc_device *dev);
+ int  thc_dma_configure(struct thc_device *dev);
+ void thc_dma_unconfigure(struct thc_device *dev);
+ void thc_dma_release(struct thc_device *dev);
++int  thc_rxdma_reset(struct thc_device *dev);
+ int  thc_rxdma_read(struct thc_device *dev, enum thc_dma_channel dma_channel,
+ 		    void *read_buff, size_t *read_len, int *read_finished);
+ int  thc_swdma_read(struct thc_device *dev, void *write_buff, size_t write_len,
+-- 
+2.55.0
+

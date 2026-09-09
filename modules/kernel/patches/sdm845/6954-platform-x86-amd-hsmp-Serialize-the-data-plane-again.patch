@@ -1,0 +1,225 @@
+From c7acedb2db001160b1ec41cdcc759dd664150666 Mon Sep 17 00:00:00 2001
+From: Muralidhara M K <muralidhara.mk@amd.com>
+Date: Thu, 23 Jul 2026 15:16:56 +0530
+Subject: [PATCH 06954/15333] platform/x86/amd/hsmp: Serialize the data plane
+ against socket teardown
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Before this change the HSMP data plane runs without any coordination with
+driver teardown: open /dev/hsmp fds and hwmon sysfs reads call
+hsmp_send_message() while probe and remove bring sockets up and down.
+misc_deregister() does not drain already-open fds, so an in-flight message
+can race a concurrent unbind and touch a freed socket array or an unmapped
+mailbox.
+
+Add the read side of hsmp_sock_rwsem to the data plane. Split the message
+send into hsmp_send_message_locked(), which does the bounds check and MMIO
+access and asserts the rwsem is held, and hsmp_send_message(), which wraps
+it in guard(rwsem_read). Probe and remove hold the rwsem for write, so they
+drain in-flight messages and keep new ones out while they tear a socket
+down.
+
+The probe-time senders run under the probe write lock and so must not take
+the rwsem again: route hsmp_test(), hsmp_cache_proto_ver() and
+hsmp_get_tbl_dram_base() through hsmp_send_message_locked() to avoid
+recursive locking. A single rwsem therefore covers both the data plane and
+the probe/remove handshake, with no separate probe lock:
+
+ - acpi.c already holds it for write across probe for the socket-array and
+   misc-registration handshake, so the mailbox handshake now nests under
+   that same lock.
+
+ - plat.c takes it for write around init_platform_device(). It is not held
+   across devm_add_action_or_reset() so the release action, which also
+   takes it for write, cannot deadlock if that registration fails.
+
+Signed-off-by: Muralidhara M K <muralidhara.mk@amd.com>
+Link: https://patch.msgid.link/20260723094656.3806028-7-muralidhara.mk@amd.com
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/x86/amd/hsmp/hsmp.c | 41 ++++++++++++++++++++++------
+ drivers/platform/x86/amd/hsmp/hsmp.h |  4 +--
+ drivers/platform/x86/amd/hsmp/plat.c | 24 +++++++++++++---
+ 3 files changed, 55 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/platform/x86/amd/hsmp/hsmp.c b/drivers/platform/x86/amd/hsmp/hsmp.c
+index 967307abe641..a457831c9c6b 100644
+--- a/drivers/platform/x86/amd/hsmp/hsmp.c
++++ b/drivers/platform/x86/amd/hsmp/hsmp.c
+@@ -45,9 +45,12 @@
+ static struct hsmp_plat_device hsmp_pdev;
+ 
+ /*
+- * Serializes AMD HSMP socket bring-up and teardown: ACPI probe and remove take
+- * it for write so concurrent per-socket probes cannot race the is_probed
+- * handshake or the one-time socket-array allocation.
++ * Gates the AMD HSMP data plane against socket bring-up and teardown.
++ *
++ * hsmp_send_message() takes it for read, so open /dev/hsmp fds and hwmon reads
++ * run concurrently. Probe and remove take it for write: probe brings sockets
++ * up (running the mailbox handshake via hsmp_send_message_locked()) and remove
++ * tears them down, both excluding and draining the data plane.
+  */
+ DECLARE_RWSEM(hsmp_sock_rwsem);
+ EXPORT_SYMBOL_NS_GPL(hsmp_sock_rwsem, "AMD_HSMP");
+@@ -211,12 +214,20 @@ static int validate_message(struct hsmp_message *msg)
+ 	return 0;
+ }
+ 
+-int hsmp_send_message(struct hsmp_message *msg)
++/*
++ * Core message send. The caller must hold hsmp_sock_rwsem: the data plane
++ * takes it for read so many messages run concurrently, while the probe-time
++ * senders run under the write lock taken by probe. Holding it here serializes
++ * every message against socket teardown, which also holds it for write.
++ */
++static int hsmp_send_message_locked(struct hsmp_message *msg)
+ {
+ 	struct hsmp_socket *sock;
+ 	unsigned int sock_ind;
+ 	int ret;
+ 
++	lockdep_assert_held(&hsmp_sock_rwsem);
++
+ 	if (!msg)
+ 		return -EINVAL;
+ 	ret = validate_message(msg);
+@@ -243,7 +254,8 @@ int hsmp_send_message(struct hsmp_message *msg)
+ 	 * non-NULL dev also guarantees virt_base_addr, the mailbox offsets and
+ 	 * the semaphore are visible.
+ 	 *
+-	 * Pairs with smp_store_release(&sock->dev) in hsmp_parse_acpi_table().
++	 * Held under hsmp_sock_rwsem; pairs with smp_store_release(&sock->dev)
++	 * in hsmp_parse_acpi_table().
+ 	 */
+ 	if (!smp_load_acquire(&sock->dev))
+ 		return -ENODEV;
+@@ -258,6 +270,19 @@ int hsmp_send_message(struct hsmp_message *msg)
+ 
+ 	return ret;
+ }
++
++int hsmp_send_message(struct hsmp_message *msg)
++{
++	/*
++	 * Data-plane entry point: open /dev/hsmp fds and hwmon sysfs reads issue
++	 * messages from here. Take hsmp_sock_rwsem for read so messages run
++	 * concurrently with each other but are drained and kept out while
++	 * probe/remove hold it for write to tear a socket down.
++	 */
++	guard(rwsem_read)(&hsmp_sock_rwsem);
++
++	return hsmp_send_message_locked(msg);
++}
+ EXPORT_SYMBOL_NS_GPL(hsmp_send_message, "AMD_HSMP");
+ 
+ int hsmp_msg_get_nargs(u16 sock_ind, u32 msg_id, u32 *data, u8 num_args)
+@@ -298,7 +323,7 @@ int hsmp_test(u16 sock_ind, u32 value)
+ 	msg.args[0]	= value;
+ 	msg.sock_ind	= sock_ind;
+ 
+-	ret = hsmp_send_message(&msg);
++	ret = hsmp_send_message_locked(&msg);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -478,7 +503,7 @@ int hsmp_get_tbl_dram_base(u16 sock_ind)
+ 	msg.response_sz	= hsmp_msg_desc_table[HSMP_GET_METRIC_TABLE_DRAM_ADDR].response_sz;
+ 	msg.msg_id	= HSMP_GET_METRIC_TABLE_DRAM_ADDR;
+ 
+-	ret = hsmp_send_message(&msg);
++	ret = hsmp_send_message_locked(&msg);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -521,7 +546,7 @@ int hsmp_cache_proto_ver(u16 sock_ind)
+ 	msg.sock_ind	= sock_ind;
+ 	msg.response_sz = hsmp_msg_desc_table[HSMP_GET_PROTO_VER].response_sz;
+ 
+-	ret = hsmp_send_message(&msg);
++	ret = hsmp_send_message_locked(&msg);
+ 	if (!ret)
+ 		hsmp_pdev.proto_ver = msg.args[0];
+ 
+diff --git a/drivers/platform/x86/amd/hsmp/hsmp.h b/drivers/platform/x86/amd/hsmp/hsmp.h
+index 45dab9253c13..cfd1a8cbd459 100644
+--- a/drivers/platform/x86/amd/hsmp/hsmp.h
++++ b/drivers/platform/x86/amd/hsmp/hsmp.h
+@@ -79,8 +79,8 @@ static inline int hsmp_create_sensor(struct device *dev, u16 sock_ind) { return
+ int hsmp_msg_get_nargs(u16 sock_ind, u32 msg_id, u32 *data, u8 num_args);
+ 
+ /*
+- * Serializes HSMP socket bring-up and teardown. ACPI probe and remove take it
+- * for write.
++ * Gates the HSMP data plane: hsmp_send_message() takes it for read; probe and
++ * remove take it for write to bring sockets up and tear them down.
+  */
+ extern struct rw_semaphore hsmp_sock_rwsem;
+ #endif /* HSMP_H */
+diff --git a/drivers/platform/x86/amd/hsmp/plat.c b/drivers/platform/x86/amd/hsmp/plat.c
+index 7a16d1ab463b..e9b2b809c0f5 100644
+--- a/drivers/platform/x86/amd/hsmp/plat.c
++++ b/drivers/platform/x86/amd/hsmp/plat.c
+@@ -13,12 +13,14 @@
+ 
+ #include <linux/acpi.h>
+ #include <linux/build_bug.h>
++#include <linux/cleanup.h>
+ #include <linux/device.h>
+ #include <linux/dev_printk.h>
+ #include <linux/kconfig.h>
+ #include <linux/module.h>
+ #include <linux/pci.h>
+ #include <linux/platform_device.h>
++#include <linux/rwsem.h>
+ #include <linux/sysfs.h>
+ 
+ #include <asm/amd/node.h>
+@@ -204,15 +206,20 @@ static int init_platform_device(struct device *dev)
+ /*
+  * The socket array is devm-managed and freed by the driver core, but the
+  * metric-table DRAM regions are mapped with plain ioremap() during probe and
+- * are therefore not covered by devres.
++ * the per-socket mutexes need an explicit mutex_destroy(), neither of which
++ * devres covers.
+  *
+- * Drop those mappings from a devres action so both remove and probe failure
+- * unmap them exactly once, before the socket array they refer to is freed.
++ * Take the data-plane rwsem for write to drain any in-flight
++ * hsmp_send_message(), unmap the metric tables, destroy the mutexes and drop
++ * the global socket pointer, all before devres frees the array. Registered as
++ * a devres action so it runs on both remove and probe failure.
+  */
+ static void hsmp_pltdrv_release(void *data)
+ {
++	guard(rwsem_write)(&hsmp_sock_rwsem);
+ 	hsmp_unmap_metric_tbls(hsmp_pdev);
+ 	hsmp_destroy_metric_read_locks(hsmp_pdev);
++	hsmp_pdev->sock = NULL;
+ }
+ 
+ static int hsmp_pltdrv_probe(struct platform_device *pdev)
+@@ -231,7 +238,16 @@ static int hsmp_pltdrv_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = init_platform_device(&pdev->dev);
++	/*
++	 * init_platform_device() runs the mailbox handshake via the probe-only
++	 * senders, which issue messages through hsmp_send_message_locked() and
++	 * so require hsmp_sock_rwsem held. Hold it for write, matching probe's
++	 * role as a socket bring-up path. The lock is not held across
++	 * devm_add_action_or_reset() above so the release action, which also
++	 * takes it for write, does not deadlock if that registration fails.
++	 */
++	scoped_guard(rwsem_write, &hsmp_sock_rwsem)
++		ret = init_platform_device(&pdev->dev);
+ 	if (ret) {
+ 		dev_err(&pdev->dev, "Failed to init HSMP mailbox\n");
+ 		return ret;
+-- 
+2.55.0
+

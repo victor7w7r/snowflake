@@ -1,0 +1,32 @@
+From 9041d5897d8a22bc9249a958c64ccfe1bc5de4d5 Mon Sep 17 00:00:00 2001
+From: Yury Norov <ynorov@nvidia.com>
+Date: Thu, 2 Jul 2026 11:47:20 -0400
+Subject: [PATCH 06593/15333] hwtracing: hisi_ptt: Use sysfs_emit() for cpumask
+ show
+
+cpumask_show() is a sysfs show callback. Use sysfs_emit() and
+cpumask_pr_args() to emit the mask.
+
+This prepares for removing cpumap_print_to_pagebuf().
+
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ drivers/hwtracing/ptt/hisi_ptt.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/hwtracing/ptt/hisi_ptt.c b/drivers/hwtracing/ptt/hisi_ptt.c
+index 94c371c49135..233c4c32513c 100644
+--- a/drivers/hwtracing/ptt/hisi_ptt.c
++++ b/drivers/hwtracing/ptt/hisi_ptt.c
+@@ -780,7 +780,7 @@ static ssize_t cpumask_show(struct device *dev, struct device_attribute *attr,
+ 	struct hisi_ptt *hisi_ptt = to_hisi_ptt(dev_get_drvdata(dev));
+ 	const cpumask_t *cpumask = cpumask_of_node(dev_to_node(&hisi_ptt->pdev->dev));
+ 
+-	return cpumap_print_to_pagebuf(true, buf, cpumask);
++	return sysfs_emit(buf, "%*pbl\n", cpumask_pr_args(cpumask));
+ }
+ static DEVICE_ATTR_RO(cpumask);
+ 
+-- 
+2.55.0
+

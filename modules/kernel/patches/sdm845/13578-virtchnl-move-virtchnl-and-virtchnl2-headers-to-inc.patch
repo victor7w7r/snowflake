@@ -1,0 +1,301 @@
+From e44908175d50111f5283583b0c7606fbc2bed364 Mon Sep 17 00:00:00 2001
+From: Victor Raj <victor.raj@intel.com>
+Date: Thu, 25 Jun 2026 18:01:55 +0200
+Subject: [PATCH 13578/15333] virtchnl: move virtchnl and virtchnl2 headers to
+ 'include/linux/net/intel'
+
+virtchnl2 headers will be used by both idpf and ixd drivers, so they have
+to be moved to an include directory. On top of that, it would be useful to
+place all iavf headers together with other intel networking headers.
+
+Move abovementioned intel header files into 'include/linux/net/intel'.
+
+While at it, remove the self-include from iavf_types.h.
+
+Suggested-by: Alexander Lobakin <aleksander.lobakin@intel.com>
+Reviewed-by: Sridhar Samudrala <sridhar.samudrala@intel.com>
+Signed-off-by: Victor Raj <victor.raj@intel.com>
+Tested-by: Samuel Salin <Samuel.salin@intel.com>
+Signed-off-by: Larysa Zaremba <larysa.zaremba@intel.com>
+Signed-off-by: Tony Nguyen <anthony.l.nguyen@intel.com>
+---
+ MAINTAINERS                                                   | 3 +--
+ drivers/net/ethernet/intel/i40e/i40e.h                        | 2 +-
+ drivers/net/ethernet/intel/i40e/i40e_common.c                 | 2 +-
+ drivers/net/ethernet/intel/i40e/i40e_prototype.h              | 2 +-
+ drivers/net/ethernet/intel/i40e/i40e_virtchnl_pf.h            | 2 +-
+ drivers/net/ethernet/intel/iavf/iavf.h                        | 2 +-
+ drivers/net/ethernet/intel/iavf/iavf_common.c                 | 2 +-
+ drivers/net/ethernet/intel/iavf/iavf_prototype.h              | 3 ++-
+ drivers/net/ethernet/intel/iavf/iavf_types.h                  | 4 +---
+ drivers/net/ethernet/intel/ice/ice.h                          | 2 +-
+ drivers/net/ethernet/intel/ice/ice_common.h                   | 2 +-
+ drivers/net/ethernet/intel/ice/ice_vf_lib.h                   | 2 +-
+ drivers/net/ethernet/intel/ice/virt/virtchnl.h                | 2 +-
+ drivers/net/ethernet/intel/idpf/idpf.h                        | 2 +-
+ drivers/net/ethernet/intel/idpf/idpf_txrx.h                   | 2 +-
+ drivers/net/ethernet/intel/idpf/idpf_virtchnl.h               | 2 +-
+ include/linux/{avf => net/intel}/virtchnl.h                   | 0
+ .../intel/idpf => include/linux/net/intel}/virtchnl2.h        | 0
+ .../idpf => include/linux/net/intel}/virtchnl2_lan_desc.h     | 0
+ 19 files changed, 17 insertions(+), 19 deletions(-)
+ rename include/linux/{avf => net/intel}/virtchnl.h (100%)
+ rename {drivers/net/ethernet/intel/idpf => include/linux/net/intel}/virtchnl2.h (100%)
+ rename {drivers/net/ethernet/intel/idpf => include/linux/net/intel}/virtchnl2_lan_desc.h (100%)
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index e0e7fae5b92f..0f29ea109db5 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -13033,8 +13033,7 @@ T:	git git://git.kernel.org/pub/scm/linux/kernel/git/tnguy/next-queue.git
+ F:	Documentation/networking/device_drivers/ethernet/intel/
+ F:	drivers/net/ethernet/intel/
+ F:	drivers/net/ethernet/intel/*/
+-F:	include/linux/avf/virtchnl.h
+-F:	include/linux/net/intel/*/
++F:	include/linux/net/intel/
+ 
+ INTEL ETHERNET PROTOCOL DRIVER FOR RDMA
+ M:	Tatyana Nikolova <tatyana.e.nikolova@intel.com>
+diff --git a/drivers/net/ethernet/intel/i40e/i40e.h b/drivers/net/ethernet/intel/i40e/i40e.h
+index 83e780919ac9..1b6a8fbaa648 100644
+--- a/drivers/net/ethernet/intel/i40e/i40e.h
++++ b/drivers/net/ethernet/intel/i40e/i40e.h
+@@ -8,8 +8,8 @@
+ #include <linux/pci.h>
+ #include <linux/ptp_clock_kernel.h>
+ #include <linux/types.h>
+-#include <linux/avf/virtchnl.h>
+ #include <linux/net/intel/i40e_client.h>
++#include <linux/net/intel/virtchnl.h>
+ #include <net/devlink.h>
+ #include <net/pkt_cls.h>
+ #include <net/udp_tunnel.h>
+diff --git a/drivers/net/ethernet/intel/i40e/i40e_common.c b/drivers/net/ethernet/intel/i40e/i40e_common.c
+index 59f5c1e810eb..8dadfef2c09f 100644
+--- a/drivers/net/ethernet/intel/i40e/i40e_common.c
++++ b/drivers/net/ethernet/intel/i40e/i40e_common.c
+@@ -1,10 +1,10 @@
+ // SPDX-License-Identifier: GPL-2.0
+ /* Copyright(c) 2013 - 2021 Intel Corporation. */
+ 
+-#include <linux/avf/virtchnl.h>
+ #include <linux/bitfield.h>
+ #include <linux/delay.h>
+ #include <linux/etherdevice.h>
++#include <linux/net/intel/virtchnl.h>
+ #include <linux/pci.h>
+ #include "i40e_adminq_cmd.h"
+ #include "i40e_devids.h"
+diff --git a/drivers/net/ethernet/intel/i40e/i40e_prototype.h b/drivers/net/ethernet/intel/i40e/i40e_prototype.h
+index 26bb7bffe361..e3d57550090e 100644
+--- a/drivers/net/ethernet/intel/i40e/i40e_prototype.h
++++ b/drivers/net/ethernet/intel/i40e/i40e_prototype.h
+@@ -5,7 +5,7 @@
+ #define _I40E_PROTOTYPE_H_
+ 
+ #include <linux/ethtool.h>
+-#include <linux/avf/virtchnl.h>
++#include <linux/net/intel/virtchnl.h>
+ #include "i40e_debug.h"
+ #include "i40e_type.h"
+ 
+diff --git a/drivers/net/ethernet/intel/i40e/i40e_virtchnl_pf.h b/drivers/net/ethernet/intel/i40e/i40e_virtchnl_pf.h
+index f558b45725c8..4e119c0502f3 100644
+--- a/drivers/net/ethernet/intel/i40e/i40e_virtchnl_pf.h
++++ b/drivers/net/ethernet/intel/i40e/i40e_virtchnl_pf.h
+@@ -4,7 +4,7 @@
+ #ifndef _I40E_VIRTCHNL_PF_H_
+ #define _I40E_VIRTCHNL_PF_H_
+ 
+-#include <linux/avf/virtchnl.h>
++#include <linux/net/intel/virtchnl.h>
+ #include <linux/netdevice.h>
+ #include "i40e_type.h"
+ 
+diff --git a/drivers/net/ethernet/intel/iavf/iavf.h b/drivers/net/ethernet/intel/iavf/iavf.h
+index 050f8241ef5e..dc31202b2a94 100644
+--- a/drivers/net/ethernet/intel/iavf/iavf.h
++++ b/drivers/net/ethernet/intel/iavf/iavf.h
+@@ -27,6 +27,7 @@
+ #include <linux/etherdevice.h>
+ #include <linux/socket.h>
+ #include <linux/jiffies.h>
++#include <linux/net/intel/virtchnl.h>
+ #include <net/ip6_checksum.h>
+ #include <net/pkt_cls.h>
+ #include <net/pkt_sched.h>
+@@ -37,7 +38,6 @@
+ #include <net/net_shaper.h>
+ 
+ #include "iavf_type.h"
+-#include <linux/avf/virtchnl.h>
+ #include "iavf_txrx.h"
+ #include "iavf_fdir.h"
+ #include "iavf_adv_rss.h"
+diff --git a/drivers/net/ethernet/intel/iavf/iavf_common.c b/drivers/net/ethernet/intel/iavf/iavf_common.c
+index 614a886bca99..277193a97d91 100644
+--- a/drivers/net/ethernet/intel/iavf/iavf_common.c
++++ b/drivers/net/ethernet/intel/iavf/iavf_common.c
+@@ -1,7 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0
+ /* Copyright(c) 2013 - 2018 Intel Corporation. */
+ 
+-#include <linux/avf/virtchnl.h>
++#include <linux/net/intel/virtchnl.h>
+ #include <linux/bitfield.h>
+ #include "iavf_type.h"
+ #include "iavf_adminq.h"
+diff --git a/drivers/net/ethernet/intel/iavf/iavf_prototype.h b/drivers/net/ethernet/intel/iavf/iavf_prototype.h
+index 7f9f9dbf959a..1b1f6ede3920 100644
+--- a/drivers/net/ethernet/intel/iavf/iavf_prototype.h
++++ b/drivers/net/ethernet/intel/iavf/iavf_prototype.h
+@@ -4,9 +4,10 @@
+ #ifndef _IAVF_PROTOTYPE_H_
+ #define _IAVF_PROTOTYPE_H_
+ 
++#include <linux/net/intel/virtchnl.h>
++
+ #include "iavf_type.h"
+ #include "iavf_alloc.h"
+-#include <linux/avf/virtchnl.h>
+ 
+ /* Prototypes for shared code functions that are not in
+  * the standard function pointer structures.  These are
+diff --git a/drivers/net/ethernet/intel/iavf/iavf_types.h b/drivers/net/ethernet/intel/iavf/iavf_types.h
+index a095855122bf..35d6d8fcca04 100644
+--- a/drivers/net/ethernet/intel/iavf/iavf_types.h
++++ b/drivers/net/ethernet/intel/iavf/iavf_types.h
+@@ -4,9 +4,7 @@
+ #ifndef _IAVF_TYPES_H_
+ #define _IAVF_TYPES_H_
+ 
+-#include "iavf_types.h"
+-
+-#include <linux/avf/virtchnl.h>
++#include <linux/net/intel/virtchnl.h>
+ #include <linux/ptp_clock_kernel.h>
+ 
+ /* structure used to queue PTP commands for processing */
+diff --git a/drivers/net/ethernet/intel/ice/ice.h b/drivers/net/ethernet/intel/ice/ice.h
+index fc91b6665f90..db3c7015c56c 100644
+--- a/drivers/net/ethernet/intel/ice/ice.h
++++ b/drivers/net/ethernet/intel/ice/ice.h
+@@ -36,7 +36,7 @@
+ #include <linux/bpf.h>
+ #include <linux/btf.h>
+ #include <linux/auxiliary_bus.h>
+-#include <linux/avf/virtchnl.h>
++#include <linux/net/intel/virtchnl.h>
+ #include <linux/cpu_rmap.h>
+ #include <linux/dim.h>
+ #include <linux/gnss.h>
+diff --git a/drivers/net/ethernet/intel/ice/ice_common.h b/drivers/net/ethernet/intel/ice/ice_common.h
+index 9f5344212195..d1d674ca644f 100644
+--- a/drivers/net/ethernet/intel/ice/ice_common.h
++++ b/drivers/net/ethernet/intel/ice/ice_common.h
+@@ -5,13 +5,13 @@
+ #define _ICE_COMMON_H_
+ 
+ #include <linux/bitfield.h>
++#include <linux/net/intel/virtchnl.h>
+ 
+ #include "ice.h"
+ #include "ice_type.h"
+ #include "ice_nvm.h"
+ #include "ice_flex_pipe.h"
+ #include "ice_parser.h"
+-#include <linux/avf/virtchnl.h>
+ #include "ice_switch.h"
+ #include "ice_fdir.h"
+ 
+diff --git a/drivers/net/ethernet/intel/ice/ice_vf_lib.h b/drivers/net/ethernet/intel/ice/ice_vf_lib.h
+index 7a9c75d1d07c..fa436b3b1eac 100644
+--- a/drivers/net/ethernet/intel/ice/ice_vf_lib.h
++++ b/drivers/net/ethernet/intel/ice/ice_vf_lib.h
+@@ -8,9 +8,9 @@
+ #include <linux/hashtable.h>
+ #include <linux/bitmap.h>
+ #include <linux/mutex.h>
++#include <linux/net/intel/virtchnl.h>
+ #include <linux/pci.h>
+ #include <net/devlink.h>
+-#include <linux/avf/virtchnl.h>
+ #include "ice_type.h"
+ #include "ice_flow.h"
+ #include "virt/fdir.h"
+diff --git a/drivers/net/ethernet/intel/ice/virt/virtchnl.h b/drivers/net/ethernet/intel/ice/virt/virtchnl.h
+index 71bb456e2d71..d11789b3ae1f 100644
+--- a/drivers/net/ethernet/intel/ice/virt/virtchnl.h
++++ b/drivers/net/ethernet/intel/ice/virt/virtchnl.h
+@@ -7,7 +7,7 @@
+ #include <linux/types.h>
+ #include <linux/bitops.h>
+ #include <linux/if_ether.h>
+-#include <linux/avf/virtchnl.h>
++#include <linux/net/intel/virtchnl.h>
+ #include "ice_vf_lib.h"
+ 
+ /* Restrict number of MAC Addr and VLAN that non-trusted VF can programmed */
+diff --git a/drivers/net/ethernet/intel/idpf/idpf.h b/drivers/net/ethernet/intel/idpf/idpf.h
+index ec1b75f039bb..984944bab28b 100644
+--- a/drivers/net/ethernet/intel/idpf/idpf.h
++++ b/drivers/net/ethernet/intel/idpf/idpf.h
+@@ -23,8 +23,8 @@ struct idpf_rss_data;
+ 
+ #include <linux/net/intel/iidc_rdma.h>
+ #include <linux/net/intel/iidc_rdma_idpf.h>
++#include <linux/net/intel/virtchnl2.h>
+ 
+-#include "virtchnl2.h"
+ #include "idpf_txrx.h"
+ #include "idpf_controlq.h"
+ 
+diff --git a/drivers/net/ethernet/intel/idpf/idpf_txrx.h b/drivers/net/ethernet/intel/idpf/idpf_txrx.h
+index 908dfa28674e..9103580c0a3d 100644
+--- a/drivers/net/ethernet/intel/idpf/idpf_txrx.h
++++ b/drivers/net/ethernet/intel/idpf/idpf_txrx.h
+@@ -5,6 +5,7 @@
+ #define _IDPF_TXRX_H_
+ 
+ #include <linux/dim.h>
++#include <linux/net/intel/virtchnl2_lan_desc.h>
+ 
+ #include <net/libeth/cache.h>
+ #include <net/libeth/types.h>
+@@ -13,7 +14,6 @@
+ #include <net/xdp.h>
+ 
+ #include "idpf_lan_txrx.h"
+-#include "virtchnl2_lan_desc.h"
+ 
+ #define IDPF_LARGE_MAX_Q			256
+ #define IDPF_MAX_Q				16
+diff --git a/drivers/net/ethernet/intel/idpf/idpf_virtchnl.h b/drivers/net/ethernet/intel/idpf/idpf_virtchnl.h
+index 9b1c9c86f6ea..5f8ae8c5be20 100644
+--- a/drivers/net/ethernet/intel/idpf/idpf_virtchnl.h
++++ b/drivers/net/ethernet/intel/idpf/idpf_virtchnl.h
+@@ -4,7 +4,7 @@
+ #ifndef _IDPF_VIRTCHNL_H_
+ #define _IDPF_VIRTCHNL_H_
+ 
+-#include "virtchnl2.h"
++#include <linux/net/intel/virtchnl2.h>
+ 
+ #define IDPF_VC_XN_DEFAULT_TIMEOUT_MSEC	(60 * 1000)
+ #define IDPF_VC_XN_IDX_M		GENMASK(7, 0)
+diff --git a/include/linux/avf/virtchnl.h b/include/linux/net/intel/virtchnl.h
+similarity index 100%
+rename from include/linux/avf/virtchnl.h
+rename to include/linux/net/intel/virtchnl.h
+diff --git a/drivers/net/ethernet/intel/idpf/virtchnl2.h b/include/linux/net/intel/virtchnl2.h
+similarity index 100%
+rename from drivers/net/ethernet/intel/idpf/virtchnl2.h
+rename to include/linux/net/intel/virtchnl2.h
+diff --git a/drivers/net/ethernet/intel/idpf/virtchnl2_lan_desc.h b/include/linux/net/intel/virtchnl2_lan_desc.h
+similarity index 100%
+rename from drivers/net/ethernet/intel/idpf/virtchnl2_lan_desc.h
+rename to include/linux/net/intel/virtchnl2_lan_desc.h
+-- 
+2.55.0
+

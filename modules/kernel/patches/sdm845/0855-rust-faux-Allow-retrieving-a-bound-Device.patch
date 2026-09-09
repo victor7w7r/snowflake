@@ -1,0 +1,60 @@
+From fa8cc4e3067f958ea2057f37a8a6f9c6b10a9c03 Mon Sep 17 00:00:00 2001
+From: Lyude Paul <lyude@redhat.com>
+Date: Fri, 12 Jun 2026 15:43:35 -0400
+Subject: [PATCH 00855/15333] rust: faux: Allow retrieving a bound Device
+
+When writing up some rust code that used faux devices for unit testing, I
+noticed that we never actually added the Bound device context to
+faux::Registration's AsRef<device::Device> implementation. This being said:
+the Registration object itself is proof that a driver is bound to the
+device - so this should be safe.
+
+Signed-off-by: Lyude Paul <lyude@redhat.com>
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Acked-by: Danilo Krummrich <dakr@kernel.org>
+Link: https://patch.msgid.link/20260612194436.585385-4-lyude@redhat.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/kernel/faux.rs | 18 +++++++++++++-----
+ 1 file changed, 13 insertions(+), 5 deletions(-)
+
+diff --git a/rust/kernel/faux.rs b/rust/kernel/faux.rs
+index 43b4974f48cd..36c92ae2943c 100644
+--- a/rust/kernel/faux.rs
++++ b/rust/kernel/faux.rs
+@@ -25,7 +25,8 @@
+ ///
+ /// # Invariants
+ ///
+-/// `self.0` always holds a valid pointer to an initialized and registered [`struct faux_device`].
++/// - `self.0` always holds a valid pointer to an initialized and registered [`struct faux_device`].
++/// - This object is proof that the object described by this `Registration` is bound to a device.
+ ///
+ /// [`struct faux_device`]: srctree/include/linux/device/faux.h
+ pub struct Registration(NonNull<bindings::faux_device>);
+@@ -59,10 +60,17 @@ fn as_raw(&self) -> *mut bindings::faux_device {
+     }
+ }
+ 
+-impl AsRef<device::Device> for Registration {
+-    fn as_ref(&self) -> &device::Device {
+-        // SAFETY: The underlying `device` in `faux_device` is guaranteed by the C API to be
+-        // a valid initialized `device`.
++impl AsRef<device::Device<device::Bound>> for Registration {
++    fn as_ref(&self) -> &device::Device<device::Bound> {
++        // SAFETY:
++        // - The underlying `device` in `faux_device` is guaranteed by the C API to be a valid
++        //   initialized `device`.
++        // - `faux_match()` always returns 1, and probe runs synchronously
++        //   (PROBE_FORCE_SYNCHRONOUS).
++        // - `suppress_bind_attrs = true` on faux_driver prevents userspace-triggered unbind via
++        //   sysfs.
++        // - `mem::forget(Registration)` is not a problem; if the `Registration` is leaked, the faux
++        //   device stays bound forever.
+         unsafe { device::Device::from_raw(addr_of_mut!((*self.as_raw()).dev)) }
+     }
+ }
+-- 
+2.55.0
+

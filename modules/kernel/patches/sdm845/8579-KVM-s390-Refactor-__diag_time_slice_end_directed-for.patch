@@ -1,0 +1,73 @@
+From a3928021b93006f857c365dc6ac3c1a84cb7a9ee Mon Sep 17 00:00:00 2001
+From: Ciunas Bennett <ciunas@linux.ibm.com>
+Date: Fri, 24 Jul 2026 12:39:57 +0200
+Subject: [PATCH 08579/15333] KVM: s390: Refactor
+ __diag_time_slice_end_directed for single exit point
+
+Refactor the DIAG 9c (directed yield) handler to use a unified exit path,
+improving code maintainability and reducing duplication.
+Changes:
+ - Consolidate all exit paths to use a single 'out' label
+ - Replace multiple VCPU_EVENT logging calls with one unified call
+ - Introduce 'result' string variable to track operation outcome
+ - Initialize tcpu_cpu to -1 for safe handling across all code paths
+ - Ensure statistics updates occur before the common exit point
+
+This refactoring maintains identical functionality while making the control
+flow clearer and easier to maintain. All three possible outcomes (yield
+forwarded, done, ignored) now converge at a single logging point
+
+Signed-off-by: Ciunas Bennett <ciunas@linux.ibm.com>
+Reviewed-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+Signed-off-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+---
+ arch/s390/kvm/diag.c | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/arch/s390/kvm/diag.c b/arch/s390/kvm/diag.c
+index d89d1c381522..85c84421b510 100644
+--- a/arch/s390/kvm/diag.c
++++ b/arch/s390/kvm/diag.c
+@@ -186,7 +186,8 @@ static int diag9c_forwarding_overrun(void)
+ static int __diag_time_slice_end_directed(struct kvm_vcpu *vcpu)
+ {
+ 	struct kvm_vcpu *tcpu;
+-	int tcpu_cpu;
++	const char *result;
++	int tcpu_cpu = -1;
+ 	int tid;
+ 
+ 	tid = vcpu->run->s.regs.gprs[(vcpu->arch.sie_block->ipa & 0xf0) >> 4];
+@@ -211,21 +212,22 @@ static int __diag_time_slice_end_directed(struct kvm_vcpu *vcpu)
+ 		if (!vcpu_is_preempted(tcpu_cpu))
+ 			goto no_yield;
+ 		smp_yield_cpu(tcpu_cpu);
+-		VCPU_EVENT(vcpu, 5,
+-			   "diag time slice end directed to %d: yield forwarded",
+-			   tid);
+ 		vcpu->stat.diag_9c_forward++;
+-		return 0;
++		result = "yield forwarded";
++		goto out;
+ 	}
+ 
+ 	if (kvm_vcpu_yield_to(tcpu) <= 0)
+ 		goto no_yield;
+ 
+-	VCPU_EVENT(vcpu, 5, "diag time slice end directed to %d: done", tid);
+-	return 0;
++	result = "done";
++	goto out;
+ no_yield:
+-	VCPU_EVENT(vcpu, 5, "diag time slice end directed to %d: ignored", tid);
+ 	vcpu->stat.diag_9c_ignored++;
++	result = "ignored";
++out:
++	VCPU_EVENT(vcpu, 5, "diag time slice end directed to %d: %s", tid,
++		   result);
+ 	return 0;
+ }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,40 @@
+From 7a68b818d56e5c48b90232d59148ef8e716082ae Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Wed, 17 Jun 2026 11:25:15 +0200
+Subject: [PATCH 03711/15333] serdev: acpi: Free resource list at appropriate
+ time
+
+We do unneeded "double free" (emptying an empty list) in one case.
+
+This is not a critical issue at all, the fix just makes code robust
+against any possible future changes in the flow.
+
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Acked-by: Rob Herring (Arm) <robh@kernel.org>
+Link: https://patch.msgid.link/20260617092515.2649521-1-andriy.shevchenko@linux.intel.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serdev/core.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/tty/serdev/core.c b/drivers/tty/serdev/core.c
+index e9d044a331b0..7500efcdfc21 100644
+--- a/drivers/tty/serdev/core.c
++++ b/drivers/tty/serdev/core.c
+@@ -651,11 +651,11 @@ static int acpi_serdev_do_lookup(struct acpi_device *adev,
+ 	INIT_LIST_HEAD(&resource_list);
+ 	ret = acpi_dev_get_resources(adev, &resource_list,
+ 				     acpi_serdev_parse_resource, lookup);
+-	acpi_dev_free_resource_list(&resource_list);
+-
+ 	if (ret < 0)
+ 		return -EINVAL;
+ 
++	acpi_dev_free_resource_list(&resource_list);
++
+ 	return 0;
+ }
+ 
+-- 
+2.55.0
+

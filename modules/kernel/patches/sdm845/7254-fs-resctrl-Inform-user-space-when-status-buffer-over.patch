@@ -1,0 +1,49 @@
+From 854db793d4073087fa799d886ed84a342e3f484a Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Tue, 30 Jun 2026 21:27:10 -0700
+Subject: [PATCH 07254/15333] fs/resctrl: Inform user space when status buffer
+ overflowed
+
+resctrl fs commands are becoming more powerful with, for example, a user able
+to use syntax like '*' to make broad configuration changes. Such commands that
+span multiple domains may result in more than one message printed to the
+last_cmd_status buffer with more planned.
+
+Issue "[truncated]" when displaying the last_cmd_status buffer to communicate
+if it overflowed. Upon encountering this, user space is expected to combine
+details about the failure found in info/last_cmd_status with related resctrl
+files to learn the accurate system state after the command failure.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Reviewed-by: Ben Horgan <ben.horgan@arm.com>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Tested-by: Babu Moger <babu.moger@amd.com>
+Link: https://patch.msgid.link/eb3d1aaa41d1f2bf6b1bb26ceafd52f04912121d.1782857711.git.reinette.chatre@intel.com
+---
+ fs/resctrl/rdtgroup.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/fs/resctrl/rdtgroup.c b/fs/resctrl/rdtgroup.c
+index 08d58c4e9acb..5dcbb0a964e8 100644
+--- a/fs/resctrl/rdtgroup.c
++++ b/fs/resctrl/rdtgroup.c
+@@ -979,10 +979,13 @@ static int rdt_last_cmd_status_show(struct kernfs_open_file *of,
+ 	if (!info_kn_lock(of->kn))
+ 		return -ENOENT;
+ 	len = seq_buf_used(&last_cmd_status);
+-	if (len)
++	if (len) {
+ 		seq_printf(seq, "%.*s", len, last_cmd_status_buf);
+-	else
++		if (seq_buf_has_overflowed(&last_cmd_status))
++			seq_puts(seq, "[truncated]\n");
++	} else {
+ 		seq_puts(seq, "ok\n");
++	}
+ 	info_kn_unlock(of->kn);
+ 	return 0;
+ }
+-- 
+2.55.0
+

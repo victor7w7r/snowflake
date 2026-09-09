@@ -1,0 +1,91 @@
+From 98a1e65ca455d6366ca171dacdf1e3737f6fea14 Mon Sep 17 00:00:00 2001
+From: Wang Yechao <wang.yechao255@zte.com.cn>
+Date: Fri, 31 Jul 2026 17:12:10 +0800
+Subject: [PATCH 09683/15333] RISC-V: KVM: Add the eager_page_split module
+ parameter
+
+Add an eager_page_split module parameter for RISC-V KVM, following
+the same approach as on x86. This parameter controls whether eager
+page splitting is enabled. The default value is on.
+
+When eager page splitting is enabled, KVM proactively splits large
+pages (huge pages) into smaller pages when needed for dirty logging
+or other operations. Disabling it can be beneficial for VM workloads
+that rarely perform writes, or that only write to a small region of
+memory, as it allows huge pages to remain intact for read accesses.
+
+Signed-off-by: Wang Yechao <wang.yechao255@zte.com.cn>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+Link: https://lore.kernel.org/r/20260731091215.1549430-6-wang.yechao255@zte.com.cn
+Signed-off-by: Anup Patel <anup@brainfault.org>
+---
+ Documentation/admin-guide/kernel-parameters.txt |  7 +++++--
+ arch/riscv/kvm/mmu.c                            | 13 ++++++++++---
+ 2 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index b5493a7f8f22..d78eda7ee23a 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -3047,7 +3047,7 @@ Kernel parameters
+ 			Default is 0 (don't ignore, but inject #GP)
+ 
+ 	kvm.eager_page_split=
+-			[KVM,X86] Controls whether or not KVM will try to
++			[KVM,X86,RISCV] Controls whether or not KVM will try to
+ 			proactively split all huge pages during dirty logging.
+ 			Eager page splitting reduces interruptions to vCPU
+ 			execution by eliminating the write-protection faults
+@@ -3067,7 +3067,10 @@ Kernel parameters
+ 			the KVM_CLEAR_DIRTY ioctl, and only for the pages being
+ 			cleared.
+ 
+-			Eager page splitting is only supported when kvm.tdp_mmu=Y.
++			On x86, eager page splitting is only supported when
++			kvm.tdp_mmu=Y.
++
++			On RISCV, eager page splitting is supported by default.
+ 
+ 			Default is Y (on).
+ 
+diff --git a/arch/riscv/kvm/mmu.c b/arch/riscv/kvm/mmu.c
+index 9ae10f5b2984..154f3afaf1c9 100644
+--- a/arch/riscv/kvm/mmu.c
++++ b/arch/riscv/kvm/mmu.c
+@@ -16,6 +16,9 @@
+ #include <asm/kvm_mmu.h>
+ #include <asm/kvm_nacl.h>
+ 
++static bool __read_mostly eager_page_split = true;
++module_param(eager_page_split, bool, 0644);
++
+ static void mmu_wp_memory_region(struct kvm *kvm, int slot)
+ {
+ 	struct kvm_memslots *slots = kvm_memslots(kvm);
+@@ -168,8 +171,10 @@ void kvm_arch_mmu_enable_log_dirty_pt_masked(struct kvm *kvm,
+ 
+ 	kvm_riscv_gstage_wp_range(&gstage, start, end);
+ 
+-	if (kvm_dirty_log_manual_protect_and_init_set(kvm))
+-		mmu_split_huge_pages(&gstage, start, end);
++	if (kvm_dirty_log_manual_protect_and_init_set(kvm)) {
++		if (READ_ONCE(eager_page_split))
++			mmu_split_huge_pages(&gstage, start, end);
++	}
+ 
+ 	/*
+ 	 * Remote TLB flush is not needed here since callers of
+@@ -244,7 +249,9 @@ void kvm_arch_commit_memory_region(struct kvm *kvm,
+ 		if (kvm_dirty_log_manual_protect_and_init_set(kvm))
+ 			return;
+ 		mmu_wp_memory_region(kvm, new->id);
+-		mmu_split_memory_region(kvm, new->id);
++
++		if (READ_ONCE(eager_page_split))
++			mmu_split_memory_region(kvm, new->id);
+ 	}
+ }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,135 @@
+From 53191cc449db1cf4f25db275978c61b1c6aaeba9 Mon Sep 17 00:00:00 2001
+From: Frank Li <Frank.Li@nxp.com>
+Date: Thu, 21 May 2026 11:32:54 -0400
+Subject: [PATCH 01426/15333] PCI: epf-mhi: Use dmaengine_prep_config_single()
+ to simplify code
+
+Use dmaengine_prep_config_single() to simplify
+pci_epf_mhi_edma_read[_sync]() and pci_epf_mhi_edma_write[_sync]().
+
+No functional change.
+
+Tested-by: Niklas Cassel <cassel@kernel.org>
+Acked-by: Manivannan Sadhasivam <mani@kernel.org>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260521-dma_prep_config-v7-8-1f73f4899883@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/pci/endpoint/functions/pci-epf-mhi.c | 52 ++++++--------------
+ 1 file changed, 16 insertions(+), 36 deletions(-)
+
+diff --git a/drivers/pci/endpoint/functions/pci-epf-mhi.c b/drivers/pci/endpoint/functions/pci-epf-mhi.c
+index 7f5326925ed5..c3e3b58fb86c 100644
+--- a/drivers/pci/endpoint/functions/pci-epf-mhi.c
++++ b/drivers/pci/endpoint/functions/pci-epf-mhi.c
+@@ -328,12 +328,6 @@ static int pci_epf_mhi_edma_read(struct mhi_ep_cntrl *mhi_cntrl,
+ 	config.direction = DMA_DEV_TO_MEM;
+ 	config.src_addr = buf_info->host_addr;
+ 
+-	ret = dmaengine_slave_config(chan, &config);
+-	if (ret) {
+-		dev_err(dev, "Failed to configure DMA channel\n");
+-		goto err_unlock;
+-	}
+-
+ 	dst_addr = dma_map_single(dma_dev, buf_info->dev_addr, buf_info->size,
+ 				  DMA_FROM_DEVICE);
+ 	ret = dma_mapping_error(dma_dev, dst_addr);
+@@ -342,9 +336,10 @@ static int pci_epf_mhi_edma_read(struct mhi_ep_cntrl *mhi_cntrl,
+ 		goto err_unlock;
+ 	}
+ 
+-	desc = dmaengine_prep_slave_single(chan, dst_addr, buf_info->size,
+-					   DMA_DEV_TO_MEM,
+-					   DMA_CTRL_ACK | DMA_PREP_INTERRUPT);
++	desc = dmaengine_prep_config_single(chan, dst_addr, buf_info->size,
++					    DMA_DEV_TO_MEM,
++					    DMA_CTRL_ACK | DMA_PREP_INTERRUPT,
++					    &config);
+ 	if (!desc) {
+ 		dev_err(dev, "Failed to prepare DMA\n");
+ 		ret = -EIO;
+@@ -401,12 +396,6 @@ static int pci_epf_mhi_edma_write(struct mhi_ep_cntrl *mhi_cntrl,
+ 	config.direction = DMA_MEM_TO_DEV;
+ 	config.dst_addr = buf_info->host_addr;
+ 
+-	ret = dmaengine_slave_config(chan, &config);
+-	if (ret) {
+-		dev_err(dev, "Failed to configure DMA channel\n");
+-		goto err_unlock;
+-	}
+-
+ 	src_addr = dma_map_single(dma_dev, buf_info->dev_addr, buf_info->size,
+ 				  DMA_TO_DEVICE);
+ 	ret = dma_mapping_error(dma_dev, src_addr);
+@@ -415,9 +404,10 @@ static int pci_epf_mhi_edma_write(struct mhi_ep_cntrl *mhi_cntrl,
+ 		goto err_unlock;
+ 	}
+ 
+-	desc = dmaengine_prep_slave_single(chan, src_addr, buf_info->size,
+-					   DMA_MEM_TO_DEV,
+-					   DMA_CTRL_ACK | DMA_PREP_INTERRUPT);
++	desc = dmaengine_prep_config_single(chan, src_addr, buf_info->size,
++					    DMA_MEM_TO_DEV,
++					    DMA_CTRL_ACK | DMA_PREP_INTERRUPT,
++					    &config);
+ 	if (!desc) {
+ 		dev_err(dev, "Failed to prepare DMA\n");
+ 		ret = -EIO;
+@@ -506,12 +496,6 @@ static int pci_epf_mhi_edma_read_async(struct mhi_ep_cntrl *mhi_cntrl,
+ 	config.direction = DMA_DEV_TO_MEM;
+ 	config.src_addr = buf_info->host_addr;
+ 
+-	ret = dmaengine_slave_config(chan, &config);
+-	if (ret) {
+-		dev_err(dev, "Failed to configure DMA channel\n");
+-		goto err_unlock;
+-	}
+-
+ 	dst_addr = dma_map_single(dma_dev, buf_info->dev_addr, buf_info->size,
+ 				  DMA_FROM_DEVICE);
+ 	ret = dma_mapping_error(dma_dev, dst_addr);
+@@ -520,9 +504,10 @@ static int pci_epf_mhi_edma_read_async(struct mhi_ep_cntrl *mhi_cntrl,
+ 		goto err_unlock;
+ 	}
+ 
+-	desc = dmaengine_prep_slave_single(chan, dst_addr, buf_info->size,
+-					   DMA_DEV_TO_MEM,
+-					   DMA_CTRL_ACK | DMA_PREP_INTERRUPT);
++	desc = dmaengine_prep_config_single(chan, dst_addr, buf_info->size,
++					    DMA_DEV_TO_MEM,
++					    DMA_CTRL_ACK | DMA_PREP_INTERRUPT,
++					    &config);
+ 	if (!desc) {
+ 		dev_err(dev, "Failed to prepare DMA\n");
+ 		ret = -EIO;
+@@ -585,12 +570,6 @@ static int pci_epf_mhi_edma_write_async(struct mhi_ep_cntrl *mhi_cntrl,
+ 	config.direction = DMA_MEM_TO_DEV;
+ 	config.dst_addr = buf_info->host_addr;
+ 
+-	ret = dmaengine_slave_config(chan, &config);
+-	if (ret) {
+-		dev_err(dev, "Failed to configure DMA channel\n");
+-		goto err_unlock;
+-	}
+-
+ 	src_addr = dma_map_single(dma_dev, buf_info->dev_addr, buf_info->size,
+ 				  DMA_TO_DEVICE);
+ 	ret = dma_mapping_error(dma_dev, src_addr);
+@@ -599,9 +578,10 @@ static int pci_epf_mhi_edma_write_async(struct mhi_ep_cntrl *mhi_cntrl,
+ 		goto err_unlock;
+ 	}
+ 
+-	desc = dmaengine_prep_slave_single(chan, src_addr, buf_info->size,
+-					   DMA_MEM_TO_DEV,
+-					   DMA_CTRL_ACK | DMA_PREP_INTERRUPT);
++	desc = dmaengine_prep_config_single(chan, src_addr, buf_info->size,
++					    DMA_MEM_TO_DEV,
++					    DMA_CTRL_ACK | DMA_PREP_INTERRUPT,
++					    &config);
+ 	if (!desc) {
+ 		dev_err(dev, "Failed to prepare DMA\n");
+ 		ret = -EIO;
+-- 
+2.55.0
+

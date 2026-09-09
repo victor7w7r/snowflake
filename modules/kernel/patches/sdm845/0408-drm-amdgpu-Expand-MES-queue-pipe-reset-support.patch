@@ -1,0 +1,37 @@
+From c847c557bba84edb3286549aee18cf3a34182e08 Mon Sep 17 00:00:00 2001
+From: Amber Lin <Amber.Lin@amd.com>
+Date: Wed, 6 May 2026 15:02:35 -0400
+Subject: [PATCH 00408/15333] drm/amdgpu: Expand MES queue/pipe reset support
+
+MES in newer versions on gfx11 and gfx12 can support queue/pipe reset via
+MES.
+
+v2: update the fw version check (Jesse)
+
+Signed-off-by: Amber Lin <Amber.Lin@amd.com>
+Reviewed-by: Jesse Zhang <jesse.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+index b1b7f69bcff3..020d9c512306 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+@@ -865,7 +865,11 @@ bool amdgpu_mes_suspend_resume_all_supported(struct amdgpu_device *adev)
+ bool amdgpu_mes_queue_reset_by_mes_supported(struct amdgpu_device *adev)
+ {
+ 	return (amdgpu_ip_version(adev, GC_HWIP, 0) == IP_VERSION(12, 1, 0) &&
+-		(adev->mes.sched_version & AMDGPU_MES_VERSION_MASK) >= 0x73);
++			(adev->mes.sched_version & AMDGPU_MES_VERSION_MASK) >= 0x73) ||
++		(IP_VERSION_MAJ(amdgpu_ip_version(adev, GC_HWIP, 0)) == 11 &&
++			(adev->mes.sched_version & AMDGPU_MES_VERSION_MASK) >= 0x8c) ||
++		(amdgpu_ip_version(adev, GC_HWIP, 0) == IP_VERSION(12, 0, 0) &&
++			(adev->mes.sched_version & AMDGPU_MES_VERSION_MASK) >= 0x8d);
+ }
+ 
+ /* Fix me -- node_id is used to identify the correct MES instances in the future */
+-- 
+2.55.0
+

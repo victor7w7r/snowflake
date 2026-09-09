@@ -1,0 +1,43 @@
+From 1d21691540a1872710c2deb9bc8e555bd189a181 Mon Sep 17 00:00:00 2001
+From: Hans Verkuil <hverkuil+cisco@kernel.org>
+Date: Fri, 17 Jul 2026 15:42:46 +0200
+Subject: [PATCH 07682/15333] media: v4l2-core: v4l2-dev: add comments on
+ device_register fail.
+
+If device_register fails, then we are supposed to call put_device.
+Explain why we do not do that.
+
+Reviewed-by: Laurent Pinchart <laurent.pinchart+renesas@ideasonboard.com>
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+---
+ drivers/media/v4l2-core/v4l2-dev.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/drivers/media/v4l2-core/v4l2-dev.c b/drivers/media/v4l2-core/v4l2-dev.c
+index d750bf10febe..fd267fb74905 100644
+--- a/drivers/media/v4l2-core/v4l2-dev.c
++++ b/drivers/media/v4l2-core/v4l2-dev.c
+@@ -1075,6 +1075,20 @@ int __video_register_device(struct video_device *vdev,
+ 	mutex_lock(&videodev_lock);
+ 	ret = device_register(&vdev->dev);
+ 	if (ret < 0) {
++		/*
++		 * We should do a put_device() here, but the problem is that
++		 * the V4L2 API expects drivers to call video_device_release()
++		 * on error, and so both put_device() and video_device_release
++		 * would kfree vdev.
++		 *
++		 * The proper solution would be to split this function into
++		 * two parts: initialization and registration, and then rework
++		 * all drivers.
++		 *
++		 * Until then just skip the put_device and free everything.
++		 * This will result in a small memory leak, which is better
++		 * than a double-free.
++		 */
+ 		mutex_unlock(&videodev_lock);
+ 		pr_err("%s: device_register failed\n", __func__);
+ 		goto cleanup;
+-- 
+2.55.0
+

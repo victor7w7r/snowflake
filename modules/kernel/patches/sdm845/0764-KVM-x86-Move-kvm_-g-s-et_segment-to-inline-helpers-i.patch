@@ -1,0 +1,85 @@
+From dd164f5ce83cb209b309550da486f35b0ec740e3 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 12 Jun 2026 17:03:15 -0700
+Subject: [PATCH 00764/15333] KVM: x86: Move kvm_{g,s}et_segment() to inline
+ helpers in regs.h
+
+Define kvm_{g,s}et_segment() as inline functions in regs.h, as they are
+literally one-line wrappers to invoke vendor code.
+
+No functional change intended.
+
+Reviewed-by: Yosry Ahmed <yosry@kernel.org>
+Reviewed-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+Reviewed-by: Binbin Wu <binbin.wu@linux.intel.com>
+Message-ID: <20260613000329.732085-17-seanjc@google.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/kvm_host.h |  2 --
+ arch/x86/kvm/regs.h             | 12 ++++++++++++
+ arch/x86/kvm/x86.c              | 12 ------------
+ 3 files changed, 12 insertions(+), 14 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index f3ccac0c9306..950f8daa2499 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -2302,8 +2302,6 @@ int kvm_emulate_halt_noskip(struct kvm_vcpu *vcpu);
+ int kvm_emulate_ap_reset_hold(struct kvm_vcpu *vcpu);
+ int kvm_emulate_wbinvd(struct kvm_vcpu *vcpu);
+ 
+-void kvm_get_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var, int seg);
+-void kvm_set_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var, int seg);
+ void kvm_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector);
+ 
+ int kvm_task_switch(struct kvm_vcpu *vcpu, u16 tss_selector, int idt_index,
+diff --git a/arch/x86/kvm/regs.h b/arch/x86/kvm/regs.h
+index de507c6e2eba..94fd86728fed 100644
+--- a/arch/x86/kvm/regs.h
++++ b/arch/x86/kvm/regs.h
+@@ -445,6 +445,18 @@ static inline unsigned long kvm_get_segment_base(struct kvm_vcpu *vcpu, int seg)
+ 	return kvm_x86_call(get_segment_base)(vcpu, seg);
+ }
+ 
++static inline void kvm_set_segment(struct kvm_vcpu *vcpu,
++				   struct kvm_segment *var, int seg)
++{
++	kvm_x86_call(set_segment)(vcpu, var, seg);
++}
++
++static inline void kvm_get_segment(struct kvm_vcpu *vcpu,
++				   struct kvm_segment *var, int seg)
++{
++	kvm_x86_call(get_segment)(vcpu, var, seg);
++}
++
+ unsigned long kvm_get_linear_rip(struct kvm_vcpu *vcpu);
+ bool kvm_is_linear_rip(struct kvm_vcpu *vcpu, unsigned long linear_rip);
+ 
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index fe61d024e6dc..a8b21c076273 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -4720,18 +4720,6 @@ static int vcpu_mmio_read(struct kvm_vcpu *vcpu, gpa_t addr, int len, void *v)
+ 	return handled;
+ }
+ 
+-void kvm_set_segment(struct kvm_vcpu *vcpu,
+-		     struct kvm_segment *var, int seg)
+-{
+-	kvm_x86_call(set_segment)(vcpu, var, seg);
+-}
+-
+-void kvm_get_segment(struct kvm_vcpu *vcpu,
+-		     struct kvm_segment *var, int seg)
+-{
+-	kvm_x86_call(get_segment)(vcpu, var, seg);
+-}
+-
+ gpa_t kvm_mmu_gva_to_gpa_read(struct kvm_vcpu *vcpu, gva_t gva,
+ 			      struct x86_exception *exception)
+ {
+-- 
+2.55.0
+

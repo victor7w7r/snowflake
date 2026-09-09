@@ -1,0 +1,470 @@
+From 5acc6f649a687526bd42c4242098a2582689587b Mon Sep 17 00:00:00 2001
+From: Eric Biggers <ebiggers@kernel.org>
+Date: Sun, 12 Jul 2026 22:36:56 -0400
+Subject: [PATCH 06042/15333] fscrypt: Always use blk-crypto for contents on
+ block-based filesystems
+
+For encrypting and decrypting file contents on block-based filesystems
+(i.e., ext4 and f2fs, but not ceph and ubifs), always use blk-crypto
+instead of fs-layer crypto (direct use of crypto_skcipher).
+
+Since the blk-crypto API provides a fallback to CPU-based encryption,
+it's all that's needed on block-based filesystems.  The support for two
+alternative block-based file contents encryption implementations,
+fs-layer and blk-crypto, existed mainly for historical reasons, as the
+fs-layer path came first.  Some of it is also still needed for the
+non-block-based filesystems, but a lot of it isn't.
+
+Removing the duplicate fs-layer code paths greatly simplifies the code,
+most of which is done in later commits.
+
+Specific implementation details:
+
+- SB_INLINECRYPT now controls whether blk_crypto_config::allow_hw is set
+  to true, instead of whether blk-crypto is used at all.  The effect is
+  that the semantics are preserved: the inlinecrypt mount option selects
+  the use of inline encryption hardware instead of the CPU.
+
+- Set up a blk_crypto_key iff the file is a regular file on a
+  block-based filesystem.  To determine whether the filesystem is
+  block-based, add a bit fscrypt_operations::is_block_based.
+
+- Remove fscrypt_select_encryption_impl().  Move the logging logic that
+  was previously there into fscrypt_prepare_inline_crypt_key().  Note
+  that blk_crypto_config_supported() is no longer needed.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Link: https://patch.msgid.link/20260713023708.9245-6-ebiggers@kernel.org
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+---
+ arch/loongarch/configs/loongson32_defconfig |   1 -
+ arch/loongarch/configs/loongson64_defconfig |   1 -
+ fs/crypto/Kconfig                           |   8 +-
+ fs/crypto/fscrypt_private.h                 |  21 +---
+ fs/crypto/inline_crypt.c                    | 105 ++++++--------------
+ fs/crypto/keysetup.c                        |  31 +-----
+ fs/ext4/crypto.c                            |   1 +
+ fs/f2fs/super.c                             |   1 +
+ include/linux/fscrypt.h                     |  28 ++----
+ 9 files changed, 57 insertions(+), 140 deletions(-)
+
+diff --git a/arch/loongarch/configs/loongson32_defconfig b/arch/loongarch/configs/loongson32_defconfig
+index 7c8f01513ed2..6bf2867dbdc6 100644
+--- a/arch/loongarch/configs/loongson32_defconfig
++++ b/arch/loongarch/configs/loongson32_defconfig
+@@ -969,7 +969,6 @@ CONFIG_F2FS_FS_SECURITY=y
+ CONFIG_F2FS_CHECK_FS=y
+ CONFIG_F2FS_FS_COMPRESSION=y
+ CONFIG_FS_ENCRYPTION=y
+-CONFIG_FS_ENCRYPTION_INLINE_CRYPT=y
+ CONFIG_FS_VERITY=y
+ CONFIG_FANOTIFY=y
+ CONFIG_FANOTIFY_ACCESS_PERMISSIONS=y
+diff --git a/arch/loongarch/configs/loongson64_defconfig b/arch/loongarch/configs/loongson64_defconfig
+index 8e3906d3bd70..def104c9d405 100644
+--- a/arch/loongarch/configs/loongson64_defconfig
++++ b/arch/loongarch/configs/loongson64_defconfig
+@@ -1000,7 +1000,6 @@ CONFIG_F2FS_FS_SECURITY=y
+ CONFIG_F2FS_CHECK_FS=y
+ CONFIG_F2FS_FS_COMPRESSION=y
+ CONFIG_FS_ENCRYPTION=y
+-CONFIG_FS_ENCRYPTION_INLINE_CRYPT=y
+ CONFIG_FS_VERITY=y
+ CONFIG_FANOTIFY=y
+ CONFIG_FANOTIFY_ACCESS_PERMISSIONS=y
+diff --git a/fs/crypto/Kconfig b/fs/crypto/Kconfig
+index 983d8ad1f417..cd934e31dec4 100644
+--- a/fs/crypto/Kconfig
++++ b/fs/crypto/Kconfig
+@@ -1,6 +1,8 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+ config FS_ENCRYPTION
+ 	bool "FS Encryption (Per-file encryption)"
++	select BLK_INLINE_ENCRYPTION if BLOCK
++	select BLK_INLINE_ENCRYPTION_FALLBACK if BLOCK
+ 	select CRYPTO
+ 	select CRYPTO_SKCIPHER
+ 	select CRYPTO_LIB_AES
+@@ -34,7 +36,5 @@ config FS_ENCRYPTION_ALGS
+ 	select CRYPTO_XTS
+ 
+ config FS_ENCRYPTION_INLINE_CRYPT
+-	bool "Enable fscrypt to use inline crypto"
+-	depends on FS_ENCRYPTION && BLK_INLINE_ENCRYPTION
+-	help
+-	  Enable fscrypt to use inline encryption hardware if available.
++	bool
++	default y if FS_ENCRYPTION && BLOCK
+diff --git a/fs/crypto/fscrypt_private.h b/fs/crypto/fscrypt_private.h
+index 8234ee542476..57b7ae2cfafc 100644
+--- a/fs/crypto/fscrypt_private.h
++++ b/fs/crypto/fscrypt_private.h
+@@ -266,14 +266,6 @@ struct fscrypt_inode_info {
+ 	/* True if ci_enc_key should be freed when this struct is freed */
+ 	u8 ci_owns_key : 1;
+ 
+-#ifdef CONFIG_FS_ENCRYPTION_INLINE_CRYPT
+-	/*
+-	 * True if this inode will use inline encryption (blk-crypto) instead of
+-	 * the traditional filesystem-layer encryption.
+-	 */
+-	u8 ci_inlinecrypt : 1;
+-#endif
+-
+ 	/* True if ci_dirhash_key is initialized */
+ 	u8 ci_dirhash_key_initialized : 1;
+ 
+@@ -410,13 +402,12 @@ void fscrypt_hkdf_expand(const struct hmac_sha512_key *hkdf, u8 context,
+ 
+ /* inline_crypt.c */
+ #ifdef CONFIG_FS_ENCRYPTION_INLINE_CRYPT
+-int fscrypt_select_encryption_impl(struct fscrypt_inode_info *ci,
+-				   bool is_hw_wrapped_key);
+-
+ static inline bool
+ fscrypt_using_inline_encryption(const struct fscrypt_inode_info *ci)
+ {
+-	return ci->ci_inlinecrypt;
++	const struct inode *inode = ci->ci_inode;
++
++	return S_ISREG(inode->i_mode) && inode->i_sb->s_cop->is_block_based;
+ }
+ 
+ int fscrypt_prepare_inline_crypt_key(struct fscrypt_prepared_key *prep_key,
+@@ -446,12 +437,6 @@ fscrypt_is_key_prepared(const struct fscrypt_prepared_key *prep_key,
+ 
+ #else /* CONFIG_FS_ENCRYPTION_INLINE_CRYPT */
+ 
+-static inline int fscrypt_select_encryption_impl(struct fscrypt_inode_info *ci,
+-						 bool is_hw_wrapped_key)
+-{
+-	return 0;
+-}
+-
+ static inline bool
+ fscrypt_using_inline_encryption(const struct fscrypt_inode_info *ci)
+ {
+diff --git a/fs/crypto/inline_crypt.c b/fs/crypto/inline_crypt.c
+index 118e29ccb1d7..500ee9079a2a 100644
+--- a/fs/crypto/inline_crypt.c
++++ b/fs/crypto/inline_crypt.c
+@@ -62,72 +62,19 @@ static unsigned int fscrypt_get_dun_bytes(const struct fscrypt_inode_info *ci)
+  * helpful for debugging problems where the "wrong" implementation is used.
+  */
+ static void fscrypt_log_blk_crypto_impl(struct fscrypt_mode *mode,
+-					struct block_device **devs,
+-					unsigned int num_devs,
+-					const struct blk_crypto_config *cfg)
++					struct block_device *dev,
++					const struct blk_crypto_key *blk_key)
+ {
+-	unsigned int i;
+-
+-	for (i = 0; i < num_devs; i++) {
+-		if (!IS_ENABLED(CONFIG_BLK_INLINE_ENCRYPTION_FALLBACK) ||
+-		    blk_crypto_config_supported_natively(devs[i], cfg)) {
+-			if (!xchg(&mode->logged_blk_crypto_native, 1))
+-				pr_info("fscrypt: %s using blk-crypto (native)\n",
+-					mode->friendly_name);
+-		} else if (!xchg(&mode->logged_blk_crypto_fallback, 1)) {
+-			pr_info("fscrypt: %s using blk-crypto-fallback\n",
++	if (blk_crypto_config_supported_natively(dev, &blk_key->crypto_cfg)) {
++		if (!xchg(&mode->logged_blk_crypto_native, 1))
++			pr_info("fscrypt: %s using blk-crypto (native)\n",
+ 				mode->friendly_name);
+-		}
++	} else if (!xchg(&mode->logged_blk_crypto_fallback, 1)) {
++		pr_info("fscrypt: %s using blk-crypto-fallback\n",
++			mode->friendly_name);
+ 	}
+ }
+ 
+-/* Enable inline encryption for this file if supported. */
+-int fscrypt_select_encryption_impl(struct fscrypt_inode_info *ci,
+-				   bool is_hw_wrapped_key)
+-{
+-	const struct inode *inode = ci->ci_inode;
+-	struct super_block *sb = inode->i_sb;
+-	struct blk_crypto_config crypto_cfg;
+-	struct block_device *devs[FSCRYPT_MAX_DEVICES];
+-	unsigned int num_devs;
+-	unsigned int i;
+-
+-	/* The file must need contents encryption, not filenames encryption */
+-	if (!S_ISREG(inode->i_mode))
+-		return 0;
+-
+-	/* The crypto mode must have a blk-crypto counterpart */
+-	if (ci->ci_mode->blk_crypto_mode == BLK_ENCRYPTION_MODE_INVALID)
+-		return 0;
+-
+-	/* The filesystem must be mounted with -o inlinecrypt */
+-	if (!(sb->s_flags & SB_INLINECRYPT))
+-		return 0;
+-
+-	/*
+-	 * On all the filesystem's block devices, blk-crypto must support the
+-	 * crypto configuration that the file would use.
+-	 */
+-	crypto_cfg.crypto_mode = ci->ci_mode->blk_crypto_mode;
+-	crypto_cfg.data_unit_size = 1U << ci->ci_data_unit_bits;
+-	crypto_cfg.dun_bytes = fscrypt_get_dun_bytes(ci);
+-	crypto_cfg.key_type = is_hw_wrapped_key ?
+-		BLK_CRYPTO_KEY_TYPE_HW_WRAPPED : BLK_CRYPTO_KEY_TYPE_RAW;
+-	crypto_cfg.flags = BLK_CRYPTO_CFG_ALLOW_HW;
+-
+-	num_devs = fscrypt_get_devices(sb, devs);
+-	for (i = 0; i < num_devs; i++) {
+-		if (!blk_crypto_config_supported(devs[i], &crypto_cfg))
+-			return 0;
+-	}
+-
+-	fscrypt_log_blk_crypto_impl(ci->ci_mode, devs, num_devs, &crypto_cfg);
+-
+-	ci->ci_inlinecrypt = true;
+-
+-	return 0;
+-}
+-
+ int fscrypt_prepare_inline_crypt_key(struct fscrypt_prepared_key *prep_key,
+ 				     const u8 *key_bytes, size_t key_size,
+ 				     bool is_hw_wrapped,
+@@ -135,7 +82,8 @@ int fscrypt_prepare_inline_crypt_key(struct fscrypt_prepared_key *prep_key,
+ {
+ 	const struct inode *inode = ci->ci_inode;
+ 	struct super_block *sb = inode->i_sb;
+-	enum blk_crypto_mode_num crypto_mode = ci->ci_mode->blk_crypto_mode;
++	bool inlinecrypt = sb->s_flags & SB_INLINECRYPT;
++	struct fscrypt_mode *mode = ci->ci_mode;
+ 	enum blk_crypto_key_type key_type = is_hw_wrapped ?
+ 		BLK_CRYPTO_KEY_TYPE_HW_WRAPPED : BLK_CRYPTO_KEY_TYPE_RAW;
+ 	struct blk_crypto_key *blk_key;
+@@ -144,16 +92,28 @@ int fscrypt_prepare_inline_crypt_key(struct fscrypt_prepared_key *prep_key,
+ 	unsigned int i;
+ 	int err;
+ 
++	if (is_hw_wrapped && !inlinecrypt) {
++		/*
++		 * blk_crypto_init_key() would catch this anyway, but this
++		 * provides a clearer error message.
++		 */
++		fscrypt_err(
++			inode,
++			"Hardware-wrapped keys require inline encryption (-o inlinecrypt)");
++		return -EINVAL;
++	}
++
+ 	blk_key = kmalloc_obj(*blk_key);
+ 	if (!blk_key)
+ 		return -ENOMEM;
+ 
+ 	err = blk_crypto_init_key(blk_key, key_bytes, key_size, key_type,
+-				  crypto_mode, fscrypt_get_dun_bytes(ci),
++				  mode->blk_crypto_mode,
++				  fscrypt_get_dun_bytes(ci),
+ 				  1U << ci->ci_data_unit_bits,
+-				  BLK_CRYPTO_CFG_ALLOW_HW);
++				  inlinecrypt ? BLK_CRYPTO_CFG_ALLOW_HW : 0);
+ 	if (err) {
+-		fscrypt_err(inode, "error %d initializing blk-crypto key", err);
++		fscrypt_err(inode, "Error %d initializing blk-crypto key", err);
+ 		goto fail;
+ 	}
+ 
+@@ -163,9 +123,16 @@ int fscrypt_prepare_inline_crypt_key(struct fscrypt_prepared_key *prep_key,
+ 		err = blk_crypto_start_using_key(devs[i], blk_key);
+ 		if (err)
+ 			break;
++		fscrypt_log_blk_crypto_impl(mode, devs[i], blk_key);
+ 	}
+ 	if (err) {
+-		fscrypt_err(inode, "error %d starting to use blk-crypto", err);
++		if (err == -EOPNOTSUPP && is_hw_wrapped)
++			fscrypt_err(
++				inode,
++				"Hardware-wrapped key required, but no suitable inline encryption capabilities are available");
++		else
++			fscrypt_err(inode,
++				    "Error %d starting to use blk-crypto", err);
+ 		goto fail;
+ 	}
+ 
+@@ -227,12 +194,6 @@ int fscrypt_derive_sw_secret(struct super_block *sb,
+ 	return err;
+ }
+ 
+-bool __fscrypt_inode_uses_inline_crypto(const struct inode *inode)
+-{
+-	return fscrypt_get_inode_info_raw(inode)->ci_inlinecrypt;
+-}
+-EXPORT_SYMBOL_GPL(__fscrypt_inode_uses_inline_crypto);
+-
+ static void fscrypt_generate_dun(const struct fscrypt_inode_info *ci,
+ 				 loff_t pos, u64 dun[BLK_CRYPTO_DUN_ARRAY_SIZE])
+ {
+diff --git a/fs/crypto/keysetup.c b/fs/crypto/keysetup.c
+index cfd348e2252e..c9041f245246 100644
+--- a/fs/crypto/keysetup.c
++++ b/fs/crypto/keysetup.c
+@@ -144,9 +144,9 @@ fscrypt_allocate_skcipher(struct fscrypt_mode *mode, const u8 *raw_key,
+ 
+ /*
+  * Prepare the crypto transform object or blk-crypto key in @prep_key, given the
+- * raw key, encryption mode (@ci->ci_mode), flag indicating which encryption
+- * implementation (fs-layer or blk-crypto) will be used (@ci->ci_inlinecrypt),
+- * and IV generation method (@ci->ci_policy.flags).
++ * raw key, encryption mode (@ci->ci_mode), predicate indicating which style of
++ * key is needed (fscrypt_using_inline_encryption(ci)), IV generation method
++ * (@ci->ci_policy.flags), and data unit size (@ci->ci_data_unit_bits).
+  */
+ int fscrypt_prepare_key(struct fscrypt_prepared_key *prep_key,
+ 			const u8 *raw_key, const struct fscrypt_inode_info *ci)
+@@ -224,23 +224,8 @@ static int setup_per_mode_enc_key(struct fscrypt_inode_info *ci,
+ 	u8 raw_mode_key[FSCRYPT_MAX_RAW_KEY_SIZE];
+ 	u8 hkdf_info[sizeof(mode_num) + sizeof(sb->s_uuid)];
+ 	unsigned int hkdf_infolen = 0;
+-	bool use_hw_wrapped_key = false;
+ 	int err;
+ 
+-	if (mk->mk_secret.is_hw_wrapped && S_ISREG(inode->i_mode)) {
+-		/* Using a hardware-wrapped key for file contents encryption */
+-		if (!fscrypt_using_inline_encryption(ci)) {
+-			if (sb->s_flags & SB_INLINECRYPT)
+-				fscrypt_warn(ci->ci_inode,
+-					     "Hardware-wrapped key required, but no suitable inline encryption capabilities are available");
+-			else
+-				fscrypt_warn(ci->ci_inode,
+-					     "Hardware-wrapped keys require inline encryption (-o inlinecrypt)");
+-			return -EINVAL;
+-		}
+-		use_hw_wrapped_key = true;
+-	}
+-
+ 	prep_key = fscrypt_find_mode_key(mk, hkdf_context, mode_num, ci);
+ 	if (prep_key) {
+ 		ci->ci_enc_key = *prep_key;
+@@ -263,7 +248,7 @@ static int setup_per_mode_enc_key(struct fscrypt_inode_info *ci,
+ 	new_node->data_unit_bits = ci->ci_data_unit_bits;
+ 	prep_key = &new_node->key;
+ 
+-	if (use_hw_wrapped_key) {
++	if (mk->mk_secret.is_hw_wrapped && S_ISREG(inode->i_mode)) {
+ 		err = fscrypt_prepare_inline_crypt_key(prep_key,
+ 						       mk->mk_secret.bytes,
+ 						       mk->mk_secret.size, true,
+@@ -509,10 +494,6 @@ static int setup_file_encryption_key(struct fscrypt_inode_info *ci,
+ 		if (ci->ci_policy.version != FSCRYPT_POLICY_V1)
+ 			return -ENOKEY;
+ 
+-		err = fscrypt_select_encryption_impl(ci, false);
+-		if (err)
+-			return err;
+-
+ 		/*
+ 		 * As a legacy fallback for v1 policies, search for the key in
+ 		 * the current task's subscribed keyrings too.  Don't move this
+@@ -534,10 +515,6 @@ static int setup_file_encryption_key(struct fscrypt_inode_info *ci,
+ 		goto out_release_key;
+ 	}
+ 
+-	err = fscrypt_select_encryption_impl(ci, mk->mk_secret.is_hw_wrapped);
+-	if (err)
+-		goto out_release_key;
+-
+ 	switch (ci->ci_policy.version) {
+ 	case FSCRYPT_POLICY_V1:
+ 		if (WARN_ON_ONCE(mk->mk_secret.is_hw_wrapped)) {
+diff --git a/fs/ext4/crypto.c b/fs/ext4/crypto.c
+index f41f320f4437..6b809ac80ef7 100644
+--- a/fs/ext4/crypto.c
++++ b/fs/ext4/crypto.c
+@@ -236,6 +236,7 @@ static bool ext4_has_stable_inodes(struct super_block *sb)
+ const struct fscrypt_operations ext4_cryptops = {
+ 	.inode_info_offs	= (int)offsetof(struct ext4_inode_info, i_crypt_info) -
+ 				  (int)offsetof(struct ext4_inode_info, vfs_inode),
++	.is_block_based		= 1,
+ 	.needs_bounce_pages	= 1,
+ 	.has_32bit_inodes	= 1,
+ 	.supports_subblock_data_units = 1,
+diff --git a/fs/f2fs/super.c b/fs/f2fs/super.c
+index 9760e4efeffe..06e8ae1e5c38 100644
+--- a/fs/f2fs/super.c
++++ b/fs/f2fs/super.c
+@@ -3775,6 +3775,7 @@ f2fs_get_devices(struct super_block *sb,
+ static const struct fscrypt_operations f2fs_cryptops = {
+ 	.inode_info_offs	= (int)offsetof(struct f2fs_inode_info, i_crypt_info) -
+ 				  (int)offsetof(struct f2fs_inode_info, vfs_inode),
++	.is_block_based		= 1,
+ 	.needs_bounce_pages	= 1,
+ 	.has_32bit_inodes	= 1,
+ 	.supports_subblock_data_units = 1,
+diff --git a/include/linux/fscrypt.h b/include/linux/fscrypt.h
+index f6b235cd72b4..f57aa9b4faca 100644
+--- a/include/linux/fscrypt.h
++++ b/include/linux/fscrypt.h
+@@ -72,14 +72,15 @@ struct fscrypt_operations {
+ 	ptrdiff_t inode_info_offs;
+ 
+ 	/*
+-	 * If set, then fs/crypto/ will allocate a global bounce page pool the
+-	 * first time an encryption key is set up for a file.  The bounce page
+-	 * pool is required by the following functions:
+-	 *
+-	 * - fscrypt_encrypt_pagecache_blocks()
+-	 * - fscrypt_zeroout_range() for files not using inline crypto
+-	 *
+-	 * If the filesystem doesn't use those, it doesn't need to set this.
++	 * Set to 1 if the filesystem is block-based.  This causes fs/crypto/ to
++	 * set up the key for regular files as a blk_crypto_key.  The filesystem
++	 * then uses fscrypt_set_bio_crypt_ctx() and similar functions.
++	 */
++	unsigned int is_block_based : 1;
++
++	/*
++	 * Set to 1 if the filesystem uses fscrypt_encrypt_pagecache_blocks().
++	 * This enables the allocation of the bounce page pool it requires.
+ 	 */
+ 	unsigned int needs_bounce_pages : 1;
+ 
+@@ -865,8 +866,6 @@ static inline void fscrypt_set_ops(struct super_block *sb,
+ /* inline_crypt.c */
+ #ifdef CONFIG_FS_ENCRYPTION_INLINE_CRYPT
+ 
+-bool __fscrypt_inode_uses_inline_crypto(const struct inode *inode);
+-
+ void fscrypt_set_bio_crypt_ctx(struct bio *bio, const struct inode *inode,
+ 			       loff_t pos, gfp_t gfp_mask);
+ 
+@@ -879,11 +878,6 @@ u64 fscrypt_limit_io_blocks(const struct inode *inode, u64 lblk, u64 nr_blocks);
+ 
+ #else /* CONFIG_FS_ENCRYPTION_INLINE_CRYPT */
+ 
+-static inline bool __fscrypt_inode_uses_inline_crypto(const struct inode *inode)
+-{
+-	return false;
+-}
+-
+ static inline void fscrypt_set_bio_crypt_ctx(struct bio *bio,
+ 					     const struct inode *inode,
+ 					     loff_t pos, gfp_t gfp_mask) { }
+@@ -919,7 +913,7 @@ static inline u64 fscrypt_limit_io_blocks(const struct inode *inode, u64 lblk,
+ static inline bool fscrypt_inode_uses_inline_crypto(const struct inode *inode)
+ {
+ 	return fscrypt_needs_contents_encryption(inode) &&
+-	       __fscrypt_inode_uses_inline_crypto(inode);
++	       inode->i_sb->s_cop->is_block_based;
+ }
+ 
+ /**
+@@ -934,7 +928,7 @@ static inline bool fscrypt_inode_uses_inline_crypto(const struct inode *inode)
+ static inline bool fscrypt_inode_uses_fs_layer_crypto(const struct inode *inode)
+ {
+ 	return fscrypt_needs_contents_encryption(inode) &&
+-	       !__fscrypt_inode_uses_inline_crypto(inode);
++	       !inode->i_sb->s_cop->is_block_based;
+ }
+ 
+ /**
+-- 
+2.55.0
+

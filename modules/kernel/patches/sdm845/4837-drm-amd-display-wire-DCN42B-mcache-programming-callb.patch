@@ -1,0 +1,47 @@
+From 85453fb4ff726e1ddb9984ee83dca260903c5353 Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Thu, 25 Jun 2026 14:06:47 +0800
+Subject: [PATCH 04837/15333] drm/amd/display: wire DCN42B mcache programming
+ callback
+
+DCN42B enables DML2 and DML21 by default and defines
+dcn42b_prepare_mcache_programming(), but the resource function table only
+wires the callback when CONFIG_DRM_AMD_DC_DML21 is defined.
+
+There is no in-tree Kconfig symbol named DRM_AMD_DC_DML21, so the
+preprocessor always removes the callback entry.  Sibling DCN42 and DCN401
+resource tables wire their prepare_mcache_programming callbacks
+unconditionally, and the core DC code already checks whether the callback
+pointer is present before calling it.
+
+Remove the stale guard so DCN42B exposes the callback relation that its
+source and DML21 build world already provide.
+
+This is an RFC patch draft from static conditional callback legality
+auditing.  It needs AMD display maintainer review before submission as a
+final fix.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Reviewed-by: George Zhang <george.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/dc/resource/dcn42b/dcn42b_resource.c    | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn42b/dcn42b_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn42b/dcn42b_resource.c
+index 343e10b4e096..2334bc5b75b8 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn42b/dcn42b_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn42b/dcn42b_resource.c
+@@ -1915,9 +1915,7 @@ static struct resource_funcs dcn42b_res_pool_funcs = {
+ 	.update_soc_for_wm_a = dcn30_update_soc_for_wm_a,
+ 	.add_phantom_pipes = dcn32_add_phantom_pipes,
+ 	.calculate_mall_ways_from_bytes = dcn32_calculate_mall_ways_from_bytes,
+-#ifdef CONFIG_DRM_AMD_DC_DML21
+ 	.prepare_mcache_programming = dcn42b_prepare_mcache_programming,
+-#endif
+ 	.build_pipe_pix_clk_params = dcn42b_build_pipe_pix_clk_params,
+ 	.get_power_profile = dcn401_get_power_profile,
+ 	.get_vstartup_for_pipe = dcn401_get_vstartup_for_pipe,
+-- 
+2.55.0
+

@@ -1,0 +1,53 @@
+From 0eb24ad05a6a31a3b25c091820ac5cd8ee5e5ae8 Mon Sep 17 00:00:00 2001
+From: Yang Wen <anmuxixixi@gmail.com>
+Date: Tue, 28 Jul 2026 23:07:04 +0800
+Subject: [PATCH 11264/15333] exfat: fix overflow in cluster-to-dentry
+ conversion
+
+The cluster-to-dentry calculation is performed as u32 and may overflow
+and wrap around on large volumes. This can result in an incorrect
+max_dentries value, causing readdir to stop early and omit directory
+entries.
+
+Cast nr_clusters to u64 before shifting to avoid the overflow.
+
+Signed-off-by: Yang Wen <anmuxixixi@gmail.com>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/exfat/dir.c      | 2 +-
+ fs/exfat/exfat_fs.h | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/fs/exfat/dir.c b/fs/exfat/dir.c
+index 8d2ae6e33cbf..fe73b1380c5d 100644
+--- a/fs/exfat/dir.c
++++ b/fs/exfat/dir.c
+@@ -87,7 +87,7 @@ static int exfat_readdir(struct inode *inode, loff_t *cpos, struct exfat_dir_ent
+ 		exfat_bytes_to_cluster(sbi, i_size_read(inode)), ei->flags);
+ 
+ 	dentries_per_clu = sbi->dentries_per_clu;
+-	max_dentries = min(MAX_EXFAT_DENTRIES,
++	max_dentries = (unsigned int)min_t(u64, MAX_EXFAT_DENTRIES,
+ 			exfat_cluster_to_dentries(sbi, sbi->num_clusters));
+ 
+ 	clu_offset = exfat_dentries_to_cluster(sbi, dentry);
+diff --git a/fs/exfat/exfat_fs.h b/fs/exfat/exfat_fs.h
+index 1f020b041a3d..fa30ab9d8564 100644
+--- a/fs/exfat/exfat_fs.h
++++ b/fs/exfat/exfat_fs.h
+@@ -487,10 +487,10 @@ static inline u32 exfat_dentries_to_bytes(u32 dentry)
+ /*
+  * helpers for cluster size to dentry size conversion.
+  */
+-static inline u32 exfat_cluster_to_dentries(struct exfat_sb_info *sbi,
++static inline u64 exfat_cluster_to_dentries(struct exfat_sb_info *sbi,
+ 		u32 nr_clusters)
+ {
+-	return nr_clusters << (sbi->cluster_size_bits - DENTRY_SIZE_BITS);
++	return (u64)nr_clusters << (sbi->cluster_size_bits - DENTRY_SIZE_BITS);
+ }
+ 
+ static inline u32 exfat_dentries_to_cluster(struct exfat_sb_info *sbi,
+-- 
+2.55.0
+

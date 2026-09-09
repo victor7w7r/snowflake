@@ -1,0 +1,36 @@
+From 872df0c80f93d1da030863133f24fc3ed70c067c Mon Sep 17 00:00:00 2001
+From: Filipe Manana <fdmanana@suse.com>
+Date: Mon, 8 Jun 2026 11:44:11 +0100
+Subject: [PATCH 11967/15333] btrfs: don't over reserve metadata space for
+ property in btrfs_fileattr_set()
+
+We are using 2 units for properties but we only set one property.
+Fix this by using the correct amount: 1 unit.
+
+Reviewed-by: Qu Wenruo <wqu@suse.com>
+Signed-off-by: Filipe Manana <fdmanana@suse.com>
+Reviewed-by: David Sterba <dsterba@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/ioctl.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/fs/btrfs/ioctl.c b/fs/btrfs/ioctl.c
+index 6607e505dd68..7e97a6aebf9b 100644
+--- a/fs/btrfs/ioctl.c
++++ b/fs/btrfs/ioctl.c
+@@ -393,9 +393,9 @@ int btrfs_fileattr_set(struct mnt_idmap *idmap,
+ 
+ 	/*
+ 	 * 1 for inode item
+-	 * 2 for properties
++	 * 1 for property
+ 	 */
+-	trans = btrfs_start_transaction(root, 3);
++	trans = btrfs_start_transaction(root, 2);
+ 	if (IS_ERR(trans))
+ 		return PTR_ERR(trans);
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,105 @@
+From c6963f393a12e6a68de1a5af8e97a02f87bea583 Mon Sep 17 00:00:00 2001
+From: Andreas Gruenbacher <agruenba@redhat.com>
+Date: Wed, 8 May 2024 11:57:08 +0200
+Subject: [PATCH 05798/15333] gfs2: Skip dlm unlocks earlier
+
+When we were still caching unreferenced glocks, evicting all the cached inodes
+in gfs2_kill_sb() did put the unreferenced glocks onto the glock lru list, and
+they would be freed in gfs2_gl_hash_clear().  We could set the
+SDF_SKIP_DLM_UNLOCK flag in gfs2_gl_hash_clear() to indicate to gdlm_put_lock()
+to skip unlocking glocks explicitly when possible.  Now, glocks are demoted and
+dropped immediately though, so to allow gdlm_put_lock() to skip unnecessary
+unlocking, we need to set some "unmount" flag before calling
+gfs2_evict_inodes().  We can use the existing SDF_KILL flag for that if we set
+it before calling gfs2_evict_inodes() in gfs2_kill_sb().
+
+Signed-off-by: Andreas Gruenbacher <agruenba@redhat.com>
+---
+ fs/gfs2/glock.c      | 2 --
+ fs/gfs2/incore.h     | 1 -
+ fs/gfs2/lock_dlm.c   | 2 +-
+ fs/gfs2/ops_fstype.c | 2 +-
+ fs/gfs2/sys.c        | 2 --
+ 5 files changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/fs/gfs2/glock.c b/fs/gfs2/glock.c
+index f00dcae426c5..eee1f31a41f0 100644
+--- a/fs/gfs2/glock.c
++++ b/fs/gfs2/glock.c
+@@ -2152,8 +2152,6 @@ void gfs2_gl_hash_clear(struct gfs2_sbd *sdp)
+ 	unsigned long start = jiffies;
+ 	bool timed_out = false;
+ 
+-	set_bit(SDF_SKIP_DLM_UNLOCK, &sdp->sd_flags);
+-	flush_workqueue(sdp->sd_glock_wq);
+ 	glock_hash_walk(clear_glock, sdp);
+ 	flush_workqueue(sdp->sd_glock_wq);
+ 
+diff --git a/fs/gfs2/incore.h b/fs/gfs2/incore.h
+index 61465777826a..6098447866d9 100644
+--- a/fs/gfs2/incore.h
++++ b/fs/gfs2/incore.h
+@@ -601,7 +601,6 @@ enum {
+ 	SDF_DEMOTE		= 5,
+ 	SDF_NOJOURNALID		= 6,
+ 	SDF_RORECOVERY		= 7, /* read only recovery */
+-	SDF_SKIP_DLM_UNLOCK	= 8,
+ 	SDF_FORCE_AIL_FLUSH     = 9,
+ 	SDF_FREEZE_INITIATOR	= 10,
+ 	SDF_KILL		= 15,
+diff --git a/fs/gfs2/lock_dlm.c b/fs/gfs2/lock_dlm.c
+index 7828ad0b6f5a..ab7ac8e634bf 100644
+--- a/fs/gfs2/lock_dlm.c
++++ b/fs/gfs2/lock_dlm.c
+@@ -347,7 +347,7 @@ static void gdlm_put_lock(struct gfs2_glock *gl)
+ 	 * DLM_LOCK_PW mode, the lock value block (LVB) would be lost.
+ 	 */
+ 
+-	if (test_bit(SDF_SKIP_DLM_UNLOCK, &sdp->sd_flags) &&
++	if (test_bit(SDF_KILL, &sdp->sd_flags) &&
+ 	    (!gl->gl_lksb.sb_lvbptr || gl->gl_state != LM_ST_EXCLUSIVE)) {
+ 		gfs2_glock_free_later(gl);
+ 		return;
+diff --git a/fs/gfs2/ops_fstype.c b/fs/gfs2/ops_fstype.c
+index 9b9e70f14d25..71e9dedd8b88 100644
+--- a/fs/gfs2/ops_fstype.c
++++ b/fs/gfs2/ops_fstype.c
+@@ -1783,6 +1783,7 @@ static void gfs2_kill_sb(struct super_block *sb)
+ 	sdp->sd_master_dir = NULL;
+ 	shrink_dcache_sb(sb);
+ 
++	set_bit(SDF_KILL, &sdp->sd_flags);
+ 	gfs2_evict_inodes(sb);
+ 
+ 	/*
+@@ -1790,7 +1791,6 @@ static void gfs2_kill_sb(struct super_block *sb)
+ 	 * destroy_workqueue()) to ensure that any delete work that
+ 	 * may be running will also see the SDF_KILL flag.
+ 	 */
+-	set_bit(SDF_KILL, &sdp->sd_flags);
+ 	gfs2_flush_delete_work(sdp);
+ 	destroy_workqueue(sdp->sd_delete_wq);
+ 
+diff --git a/fs/gfs2/sys.c b/fs/gfs2/sys.c
+index 7051db9dbea0..ea2c7b9e4a77 100644
+--- a/fs/gfs2/sys.c
++++ b/fs/gfs2/sys.c
+@@ -80,7 +80,6 @@ static ssize_t status_show(struct gfs2_sbd *sdp, char *buf)
+ 		     "No Journal ID:            %d\n"
+ 		     "Mounted RO:               %d\n"
+ 		     "RO Recovery:              %d\n"
+-		     "Skip DLM Unlock:          %d\n"
+ 		     "Force AIL Flush:          %d\n"
+ 		     "FS Freeze Initiator:      %d\n"
+ 		     "FS Frozen:                %d\n"
+@@ -109,7 +108,6 @@ static ssize_t status_show(struct gfs2_sbd *sdp, char *buf)
+ 		     test_bit(SDF_NOJOURNALID, &f),
+ 		     (sb_rdonly(sdp->sd_vfs) ? 1 : 0),
+ 		     test_bit(SDF_RORECOVERY, &f),
+-		     test_bit(SDF_SKIP_DLM_UNLOCK, &f),
+ 		     test_bit(SDF_FORCE_AIL_FLUSH, &f),
+ 		     test_bit(SDF_FREEZE_INITIATOR, &f),
+ 		     test_bit(SDF_FROZEN, &f),
+-- 
+2.55.0
+

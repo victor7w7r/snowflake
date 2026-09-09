@@ -1,0 +1,151 @@
+From a39b3336943e7f4180812e10c035b939153d9079 Mon Sep 17 00:00:00 2001
+From: Laszlo Ersek <laszlo.ersek@arm.com>
+Date: Wed, 29 Jul 2026 23:54:27 +0200
+Subject: [PATCH 12911/15333] hwmon: remove tautological dependency expressions
+ from Kconfig
+
+Commit 554b3529fe01 ("thermal/drivers/core: Remove the module Kconfig's
+option") [1] obviated some of the "Optional dependencies" (as described in
+"Documentation/kbuild/kconfig-language.rst") in "drivers/hwmon/Kconfig".
+
+Namely, said commit restricted the valid/possible subset of the full
+Cartesian product "CONFIG_THERMAL x CONFIG_THERMAL_OF" to
+
+  { (n, n), (y, n), (y, y) }
+
+through "drivers/thermal/Kconfig". Numerically (using tristate values),
+this set can be expressed as:
+
+  { (0, 0), (2, 0), (2, 2) }
+
+Over this set, the "drivers/hwmon/Kconfig" tristate expression
+
+  THERMAL || !THERMAL_OF
+
+or equivalently,
+
+  max(THERMAL, 2-THERMAL_OF)
+
+invariably evaluates to "y" (2).
+
+Similarly, with THERMAL having been restricted to
+
+  { n, y }
+
+or numerically,
+
+  { 0, 2 }
+
+the "drivers/hwmon/Kconfig" tristate expression
+
+  THERMAL || THERMAL=n
+
+or equivalently,
+
+  max(THERMAL, THERMAL=0)
+
+invariably evaluates to "y" (2). (Note that "THERMAL=0" returns either "y"
+(2) or "n" (0).)
+
+Commit f37353320ee9 ("hwmon/drivers/core: Simplify complex dependency")
+[2], which is the final commit of the series that [1] is the beginning of,
+cleaned up the hwmon C source code in fact; however, it missed the
+now-collapsed dependencies in Kconfig. At the time of [2], six of today's
+such dependencies were present in Kconfig. Since then, two more have been
+added (such that they persist, anyway): one by commit 4f8d374b770a
+("hwmon: (max6650) add thermal cooling device capability"), which was
+independent of the above-noted series, and another by commit 9855caf5d4eb
+("hwmon: add driver for the hwmon parts of qnap-mcu devices"), which was a
+descendant of the series.
+
+Remove these always-"y" dependencies.
+
+Cc: Andrew Jeffery <andrew@codeconstruct.com.au>
+Cc: Cristian Marussi <cristian.marussi@arm.com>
+Cc: Guenter Roeck <linux@roeck-us.net>
+Cc: Heiko Stuebner <heiko@sntech.de>
+Cc: Joel Stanley <joel@jms.id.au>
+Cc: Sudeep Holla <sudeep.holla@kernel.org>
+Cc: arm-scmi@vger.kernel.org
+Cc: linux-arm-kernel@lists.infradead.org
+Cc: linux-aspeed@lists.ozlabs.org
+Cc: linux-hwmon@vger.kernel.org
+Cc: linux-kernel@vger.kernel.org
+Signed-off-by: Laszlo Ersek <laszlo.ersek@arm.com>
+Link: https://lore.kernel.org/r/20260729215436.2103380-1-laszlo.ersek@arm.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/hwmon/Kconfig | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
+index 6b71e3304b4f..e51269fd9de3 100644
+--- a/drivers/hwmon/Kconfig
++++ b/drivers/hwmon/Kconfig
+@@ -414,7 +414,6 @@ config SENSORS_ARCTIC_FAN_CONTROLLER
+ config SENSORS_ARM_SCMI
+ 	tristate "ARM SCMI Sensors"
+ 	depends on ARM_SCMI_PROTOCOL
+-	depends on THERMAL || !THERMAL_OF
+ 	help
+ 	  This driver provides support for temperature, voltage, current
+ 	  and power sensors available on SCMI based platforms. The actual
+@@ -426,7 +425,6 @@ config SENSORS_ARM_SCMI
+ config SENSORS_ARM_SCPI
+ 	tristate "ARM SCPI Sensors"
+ 	depends on ARM_SCPI_PROTOCOL
+-	depends on THERMAL || !THERMAL_OF
+ 	help
+ 	  This driver provides support for temperature, voltage, current
+ 	  and power sensors available on ARM Ltd's SCP based platforms. The
+@@ -446,7 +444,6 @@ config SENSORS_ASB100
+ config SENSORS_ASPEED
+ 	tristate "ASPEED AST2400/AST2500 PWM and Fan tach driver"
+ 	depends on ARCH_ASPEED || COMPILE_TEST
+-	depends on THERMAL || THERMAL=n
+ 	select REGMAP
+ 	help
+ 	  This driver provides support for ASPEED AST2400/AST2500 PWM
+@@ -799,7 +796,6 @@ config SENSORS_G762
+ config SENSORS_GPIO_FAN
+ 	tristate "GPIO fan"
+ 	depends on GPIOLIB || COMPILE_TEST
+-	depends on THERMAL || THERMAL=n
+ 	help
+ 	  If you say yes here you get support for fans connected to GPIO lines.
+ 
+@@ -1381,7 +1377,6 @@ config SENSORS_MAX6639
+ config SENSORS_MAX6650
+ 	tristate "Maxim MAX6650 sensor chip"
+ 	depends on I2C
+-	depends on THERMAL || THERMAL=n
+ 	help
+ 	  If you say yes here you get support for the MAX6650 / MAX6651
+ 	  sensor chips.
+@@ -1756,7 +1751,6 @@ config SENSORS_PC87427
+ config SENSORS_NTC_THERMISTOR
+ 	tristate "NTC thermistor support"
+ 	depends on IIO
+-	depends on THERMAL || !THERMAL_OF
+ 	help
+ 	  This driver supports NTC thermistors sensor reading and its
+ 	  interpretation. The driver can also monitor the temperature and
+@@ -1957,7 +1951,6 @@ config SENSORS_PT5161L
+ config SENSORS_PWM_FAN
+ 	tristate "PWM fan"
+ 	depends on PWM || COMPILE_TEST
+-	depends on THERMAL || THERMAL=n
+ 	help
+ 	  If you say yes here you get support for fans connected to PWM lines.
+ 	  The driver uses the generic PWM interface, thus it will work on a
+@@ -1969,7 +1962,6 @@ config SENSORS_PWM_FAN
+ config SENSORS_QNAP_MCU_HWMON
+ 	tristate "QNAP MCU hardware monitoring"
+ 	depends on MFD_QNAP_MCU
+-	depends on THERMAL || THERMAL=n
+ 	help
+ 	  Say yes here to enable support for fan and temperature sensor
+ 	  connected to a QNAP MCU, as found in a number of QNAP network
+-- 
+2.55.0
+

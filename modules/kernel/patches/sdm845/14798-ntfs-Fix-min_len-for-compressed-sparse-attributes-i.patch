@@ -1,0 +1,60 @@
+From ffc755828de12d115b5386687b0487e3ba838df7 Mon Sep 17 00:00:00 2001
+From: Alexandro Calo <alexandro.calo@nozominetworks.com>
+Date: Wed, 15 Jul 2026 23:50:29 +0900
+Subject: [PATCH 14798/15333] ntfs: Fix min_len for compressed/sparse
+ attributes in ntfs_non_resident_attr_value_is_valid()
+
+Here the attribute validator computes a single min_len = 64 (as the end of
+initialized_size) for all non-resident attributes regardless of the flags
+field. This is correct for regular non-resident attributes but for sparse
+or compressed non-resident attributes the fixed header is 8 bytes longer,
+it includes a compressed_size field at bytes 64-71, min_len should be 72.
+
+Since the validator lets a sparse/compressed attr_record be less than the
+correct length, caller's accesses to compressed_size
+(e.g., ntfs_read_locked_inode() or ntfs_attr_update_mapping_pairs()) can
+extend past the attribute declared boundary.
+This can cause OOB reads or OOB writes past the MFT record buffer if the
+attribute is positioned near the end of the MFT record.
+
+The compressed_size field is accessed from:
+- ntfs_read_locked_inode()
+- ntfs_read_locked_attr_inode()
+- ntfs_attr_open()
+- ntfs_attr_update_mapping_pairs()
+
+ntfs_attr_make_non_resident() seems to be safe.
+
+Fixing this by raising min_len for sparse/compressed attributes in the
+validator.
+
+The OOB reads and the OOB writes require a crafted filesystem image, which
+is not in the kernel threat model, anyway, fixing memory errors would be
+nice to keep things secure.
+
+Signed-off-by: Alexandro Calo <alexandro.calo@nozominetworks.com>
+Reviewed-by: Hyunchul Lee <hyc.lee@gmail.com>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/ntfs/attrib.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/fs/ntfs/attrib.c b/fs/ntfs/attrib.c
+index 58f32aac5f61..d354c3b0fae1 100644
+--- a/fs/ntfs/attrib.c
++++ b/fs/ntfs/attrib.c
+@@ -697,6 +697,11 @@ static bool ntfs_non_resident_attr_value_is_valid(const struct attr_record *a)
+ 	attr_len = le32_to_cpu(a->length);
+ 	min_len = offsetof(struct attr_record, data.non_resident.initialized_size) +
+ 		  sizeof(a->data.non_resident.initialized_size);
++
++	/* Sparse and compressed attributes have the extra compressed_size field */
++	if (a->flags & (ATTR_IS_SPARSE | ATTR_COMPRESSION_MASK))
++		min_len += sizeof(a->data.non_resident.compressed_size);
++
+ 	if (attr_len < min_len)
+ 		return false;
+ 
+-- 
+2.55.0
+

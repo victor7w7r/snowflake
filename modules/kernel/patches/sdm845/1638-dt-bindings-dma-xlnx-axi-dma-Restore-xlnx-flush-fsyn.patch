@@ -1,0 +1,53 @@
+From 287bdea77529e6abac5fe15461d93c1acdcb07e9 Mon Sep 17 00:00:00 2001
+From: Suraj Gupta <suraj.gupta2@amd.com>
+Date: Thu, 25 Jun 2026 21:40:16 +0530
+Subject: [PATCH 01638/15333] dt-bindings: dma: xlnx,axi-dma: Restore
+ xlnx,flush-fsync as u32
+
+The DT schema conversion incorrectly changed xlnx,flush-fsync from a u32
+property to a boolean. The original binding documented values 1, 2, and 3
+to select which VDMA channel(s) flush on frame sync.
+Restore the uint32 type with the documented enum values and fix the
+example accordingly.
+
+Fixes: 2d5c2952b972 ("dt-bindings: dma: xlnx,axi-dma: Convert to DT schema")
+Signed-off-by: Suraj Gupta <suraj.gupta2@amd.com>
+Acked-by: Conor Dooley <conor.dooley@microchip.com>
+Link: https://patch.msgid.link/20260625161016.1249570-1-suraj.gupta2@amd.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ .../devicetree/bindings/dma/xilinx/xlnx,axi-dma.yaml  | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/dma/xilinx/xlnx,axi-dma.yaml b/Documentation/devicetree/bindings/dma/xilinx/xlnx,axi-dma.yaml
+index 340ae9e91cb0..95b951eea1b7 100644
+--- a/Documentation/devicetree/bindings/dma/xilinx/xlnx,axi-dma.yaml
++++ b/Documentation/devicetree/bindings/dma/xilinx/xlnx,axi-dma.yaml
+@@ -81,8 +81,13 @@ properties:
+     description: Should be the number of framebuffers as configured in h/w.
+ 
+   xlnx,flush-fsync:
+-    type: boolean
+-    description: Tells which channel to Flush on Frame sync.
++    $ref: /schemas/types.yaml#/definitions/uint32
++    enum: [1, 2, 3]
++    description:
++      Tells which channel to flush on frame sync.
++      1 - flush both channels
++      2 - flush mm2s channel
++      3 - flush s2mm channel
+ 
+   xlnx,sg-length-width:
+     $ref: /schemas/types.yaml#/definitions/uint32
+@@ -251,7 +256,7 @@ examples:
+                       "m_axi_s2mm_aclk", "m_axis_mm2s_aclk",
+                       "s_axis_s2mm_aclk";
+         xlnx,num-fstores = <8>;
+-        xlnx,flush-fsync;
++        xlnx,flush-fsync = <1>;
+         xlnx,addrwidth = <32>;
+ 
+         dma-channel-mm2s {
+-- 
+2.55.0
+

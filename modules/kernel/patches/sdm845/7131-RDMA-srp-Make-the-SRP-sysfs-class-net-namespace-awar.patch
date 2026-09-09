@@ -1,0 +1,49 @@
+From e9153a2671194ed5c86d5432f0207d9320a8320c Mon Sep 17 00:00:00 2001
+From: Jiri Pirko <jiri@nvidia.com>
+Date: Thu, 16 Jul 2026 15:23:08 +0200
+Subject: [PATCH 07131/15333] RDMA/srp: Make the SRP sysfs class net namespace
+ aware
+
+Tag srp_class by the RDMA device's net namespace so SRP hosts derived from
+same-named RDMA devices can coexist across namespaces.
+
+Signed-off-by: Jiri Pirko <jiri@nvidia.com>
+Link: https://patch.msgid.link/20260716132316.1495242-8-jiri@resnulli.us
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/ulp/srp/ib_srp.c | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/infiniband/ulp/srp/ib_srp.c b/drivers/infiniband/ulp/srp/ib_srp.c
+index 0caebbc2810f..2fc8e133c70f 100644
+--- a/drivers/infiniband/ulp/srp/ib_srp.c
++++ b/drivers/infiniband/ulp/srp/ib_srp.c
+@@ -3189,10 +3189,24 @@ static struct attribute *srp_class_attrs[];
+ 
+ ATTRIBUTE_GROUPS(srp_class);
+ 
++/*
++ * SRP hosts are named after their ib device, so tag the class by the ib
++ * device's net namespace.
++ */
++static const struct ns_common *srp_net_namespace(const struct device *dev)
++{
++	struct srp_host *host = container_of(dev, struct srp_host, dev);
++	struct net *net = rdma_dev_net(host->srp_dev->dev);
++
++	return net ? to_ns_common(net) : NULL;
++}
++
+ static struct class srp_class = {
+ 	.name    = "infiniband_srp",
+ 	.dev_groups = srp_class_groups,
+-	.dev_release = srp_release_dev
++	.dev_release = srp_release_dev,
++	.ns_type = &net_ns_type_operations,
++	.namespace = srp_net_namespace,
+ };
+ 
+ /**
+-- 
+2.55.0
+

@@ -1,0 +1,68 @@
+From 596824de8c10458653f0951d4a345858a1329767 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Sat, 8 Aug 2026 02:39:31 +0200
+Subject: [PATCH 12345/15333] bpf, x86: Fix stack-passed arguments for indirect
+ trampolines
+
+save_args() reads stack-passed arguments relative to rbp assuming two
+return addresses sit between the saved rbp and the arguments, which
+holds when the trampoline is entered through the fentry call from a
+traced function. An indirect trampoline is called through a function
+pointer, so only the caller's return address is on the stack and the
+arguments start at rbp + 16, not rbp + 24. Every stack-passed argument
+of a struct_ops callback with more than six argument slots is read one
+slot off.
+
+This has gone unnoticed because no in-tree struct_ops member passes
+arguments on the stack. The jmp-entry form already accounts for having
+a single return address; treat BPF_TRAMP_F_INDIRECT the same way.
+
+Fixes: 473e3150e30a ("bpf, x86: allow function arguments up to 12 for TRACING")
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Tested-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://patch.msgid.link/20260808003938.3486067-12-memxor@gmail.com
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ arch/x86/net/bpf_jit_comp.c | 15 ++++++++-------
+ 1 file changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/arch/x86/net/bpf_jit_comp.c b/arch/x86/net/bpf_jit_comp.c
+index 162fbd2ba1df..8dddb5d7af21 100644
+--- a/arch/x86/net/bpf_jit_comp.c
++++ b/arch/x86/net/bpf_jit_comp.c
+@@ -3080,6 +3080,7 @@ static void save_args(const struct btf_func_model *m, u8 **prog,
+ {
+ 	int arg_regs, first_off = 0, nr_regs = 0, nr_stack_slots = 0;
+ 	bool use_jmp = bpf_trampoline_use_jmp(flags);
++	int stack_args_off = (use_jmp || (flags & BPF_TRAMP_F_INDIRECT)) ? 16 : 24;
+ 	int i, j;
+ 
+ 	/* Store function arguments to stack.
+@@ -3114,16 +3115,16 @@ static void save_args(const struct btf_func_model *m, u8 **prog,
+ 			/* copy function arguments from origin stack frame
+ 			 * into current stack frame.
+ 			 *
+-			 * The starting address of the arguments on-stack
+-			 * is:
+-			 *   rbp + 8(push rbp) +
+-			 *   8(return addr of origin call) +
+-			 *   8(return addr of the caller)
+-			 * which means: rbp + 24
++			 * The arguments on-stack start above the saved rbp
++			 * and the return addresses: two return addresses
++			 * (origin call and caller) when the trampoline is
++			 * entered through the fentry call, so rbp + 24, and
++			 * a single one when it is entered with a jmp or
++			 * called indirectly, so rbp + 16.
+ 			 */
+ 			for (j = 0; j < arg_regs; j++) {
+ 				emit_ldx(prog, BPF_DW, BPF_REG_0, BPF_REG_FP,
+-					 nr_stack_slots * 8 + 16 + (!use_jmp) * 8);
++					 nr_stack_slots * 8 + stack_args_off);
+ 				if (arena_arg)
+ 					emit_arena_arg_conv(prog, BPF_REG_0, nullable,
+ 							    (u32)arena_base);
+-- 
+2.55.0
+

@@ -1,0 +1,57 @@
+From c39c3d231f42ba50cc3a2b9161e075f4f1b7d9e0 Mon Sep 17 00:00:00 2001
+From: Heiko Carstens <hca@linux.ibm.com>
+Date: Thu, 6 Aug 2026 17:38:47 +0200
+Subject: [PATCH 11802/15333] s390/vfio_ccw: Add __must_hold() attribute to
+ vfio_ccw_sch_quiesce()
+
+Add __must_hold() attribute to vfio_ccw_sch_quiesce() in order to let
+clang's context analysis know that sch->lock must be held on function
+entry. This can also be easily verified when inspecting the function.
+
+Without this annotation this leads to a valid warning when context
+analysis is enabled:
+
+drivers/s390/cio/vfio_ccw_drv.c:55:9: warning:
+  expecting spinlock 'sch->lock' to be held at start of each loop [-Wthread-safety-analysis]
+   55 |                 ret = cio_cancel_halt_clear(sch, &iretry);
+      |                       ^
+
+Signed-off-by: Heiko Carstens <hca@linux.ibm.com>
+Acked-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+Reviewed-by: Matthew Rosato <mjrosato@linux.ibm.com>
+[borntraeger@linux.ibm.com: fix spurious ;]
+Signed-off-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+---
+ drivers/s390/cio/vfio_ccw_drv.c     | 1 +
+ drivers/s390/cio/vfio_ccw_private.h | 3 ++-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/s390/cio/vfio_ccw_drv.c b/drivers/s390/cio/vfio_ccw_drv.c
+index 1a095085bc72..ef4c69d70afb 100644
+--- a/drivers/s390/cio/vfio_ccw_drv.c
++++ b/drivers/s390/cio/vfio_ccw_drv.c
+@@ -35,6 +35,7 @@ debug_info_t *vfio_ccw_debug_trace_id;
+  * Helpers
+  */
+ int vfio_ccw_sch_quiesce(struct subchannel *sch)
++	__must_hold(&sch->lock)
+ {
+ 	struct vfio_ccw_parent *parent = dev_get_drvdata(&sch->dev);
+ 	struct vfio_ccw_private *private = dev_get_drvdata(&parent->dev);
+diff --git a/drivers/s390/cio/vfio_ccw_private.h b/drivers/s390/cio/vfio_ccw_private.h
+index 0501d4bbcdbd..8db29519dbfd 100644
+--- a/drivers/s390/cio/vfio_ccw_private.h
++++ b/drivers/s390/cio/vfio_ccw_private.h
+@@ -127,7 +127,8 @@ struct vfio_ccw_private {
+ 	struct work_struct	crw_work;
+ } __aligned(8);
+ 
+-int vfio_ccw_sch_quiesce(struct subchannel *sch);
++int vfio_ccw_sch_quiesce(struct subchannel *sch)
++	__must_hold(&sch->lock);
+ void vfio_ccw_sch_io_todo(struct work_struct *work);
+ void vfio_ccw_crw_todo(struct work_struct *work);
+ 
+-- 
+2.55.0
+

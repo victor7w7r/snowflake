@@ -1,0 +1,122 @@
+From 355efa360ba3b9ed242f444c69fbafa84a29a525 Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Mon, 13 Jul 2026 16:17:22 -0700
+Subject: [PATCH 05643/15333] mtd: mpc5121_nfc: use platform for irq and
+ ioremap
+
+Replace the open-coded of_address_to_resource() plus devm_request_mem_region()
+and devm_ioremap() sequence with a single devm_platform_ioremap_resource()
+call, which folds the resource lookup, region reservation and mapping into
+one step and returns an ERR_PTR on failure, checked with IS_ERR() and
+propagated via PTR_ERR().
+
+Switch IRQ acquisition from irq_of_parse_and_map() to platform_get_irq(),
+which only retrieves the interrupt the OF/platform core has already set up
+rather than transferring mapping ownership to the driver. Drop the now
+unneeded of_irq.h include.
+
+This is behaviorally equivalent: the driver already reserved the region
+with devm_request_mem_region(), so the non-overlapping reg requirement of
+devm_platform_ioremap_resource() was already satisfied.
+
+Drop the now-unused regs_paddr / regs_size locals, which previously only
+fed the open-coded request/ioremap calls. Keep the linux/of_address.h
+include, as of_iomap() is still used elsewhere in the driver.
+
+Built for PowerPC (mpc512x_defconfig + CONFIG_MTD_NAND_MPC5121_NFC) with
+LLVM=1; drivers/mtd/nand/raw/mpc5121_nfc.o compiles cleanly.
+
+Assisted-by: opencode:hy3-free
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
+---
+ drivers/mtd/nand/raw/mpc5121_nfc.c | 39 +++++++++---------------------
+ 1 file changed, 12 insertions(+), 27 deletions(-)
+
+diff --git a/drivers/mtd/nand/raw/mpc5121_nfc.c b/drivers/mtd/nand/raw/mpc5121_nfc.c
+index 97b4e7f3e1bb..e6594548b7e0 100644
+--- a/drivers/mtd/nand/raw/mpc5121_nfc.c
++++ b/drivers/mtd/nand/raw/mpc5121_nfc.c
+@@ -23,7 +23,6 @@
+ #include <linux/mtd/partitions.h>
+ #include <linux/of.h>
+ #include <linux/of_address.h>
+-#include <linux/of_irq.h>
+ #include <linux/platform_device.h>
+ 
+ #include <asm/mpc5121.h>
+@@ -618,14 +617,14 @@ static int mpc5121_nfc_probe(struct platform_device *op)
+ 	struct clk *clk;
+ 	struct device *dev = &op->dev;
+ 	struct mpc5121_nfc_prv *prv;
+-	struct resource res;
+ 	struct mtd_info *mtd;
+ 	struct nand_chip *chip;
+-	unsigned long regs_paddr, regs_size;
+ 	const __be32 *chips_no;
++	void __iomem *regs;
+ 	int resettime = 0;
+ 	int retval = 0;
+ 	int rev, len;
++	int irq;
+ 
+ 	/*
+ 	 * Check SoC revision. This driver supports only NFC
+@@ -637,6 +636,14 @@ static int mpc5121_nfc_probe(struct platform_device *op)
+ 		return -ENXIO;
+ 	}
+ 
++	regs = devm_platform_ioremap_resource(op, 0);
++	if (IS_ERR(regs))
++		return PTR_ERR(regs);
++
++	irq = platform_get_irq(op, 0);
++	if (irq < 0)
++		return irq;
++
+ 	prv = devm_kzalloc(dev, sizeof(*prv), GFP_KERNEL);
+ 	if (!prv)
+ 		return -ENOMEM;
+@@ -660,17 +667,7 @@ static int mpc5121_nfc_probe(struct platform_device *op)
+ 		return retval;
+ 	}
+ 
+-	prv->irq = irq_of_parse_and_map(dn, 0);
+-	if (!prv->irq) {
+-		dev_err(dev, "Error mapping IRQ!\n");
+-		return -EINVAL;
+-	}
+-
+-	retval = of_address_to_resource(dn, 0, &res);
+-	if (retval) {
+-		dev_err(dev, "Error parsing memory region!\n");
+-		return retval;
+-	}
++	prv->irq = irq;
+ 
+ 	chips_no = of_get_property(dn, "chips", &len);
+ 	if (!chips_no || len != sizeof(*chips_no)) {
+@@ -678,19 +675,7 @@ static int mpc5121_nfc_probe(struct platform_device *op)
+ 		return -EINVAL;
+ 	}
+ 
+-	regs_paddr = res.start;
+-	regs_size = resource_size(&res);
+-
+-	if (!devm_request_mem_region(dev, regs_paddr, regs_size, DRV_NAME)) {
+-		dev_err(dev, "Error requesting memory region!\n");
+-		return -EBUSY;
+-	}
+-
+-	prv->regs = devm_ioremap(dev, regs_paddr, regs_size);
+-	if (!prv->regs) {
+-		dev_err(dev, "Error mapping memory region!\n");
+-		return -ENOMEM;
+-	}
++	prv->regs = regs;
+ 
+ 	mtd->name = "MPC5121 NAND";
+ 	chip->legacy.dev_ready = mpc5121_nfc_dev_ready;
+-- 
+2.55.0
+

@@ -1,0 +1,61 @@
+From cf37bb44cd8817039ba5e790413f69de0a96fe55 Mon Sep 17 00:00:00 2001
+From: Namhyung Kim <namhyung@kernel.org>
+Date: Fri, 10 Jul 2026 17:04:18 -0700
+Subject: [PATCH 05148/15333] perf evsel: Arrange some fields that should be
+ cloned
+
+In the evsel, there's an internal struct to put fields need copy when
+the evsel is cloned.  This is purely to make it easier track those
+fields even if it sometimes failed to do so. :)
+
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/util/evsel.h | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/tools/perf/util/evsel.h b/tools/perf/util/evsel.h
+index 27af0c4f294e..42b95933632a 100644
+--- a/tools/perf/util/evsel.h
++++ b/tools/perf/util/evsel.h
+@@ -74,6 +74,10 @@ struct evsel {
+ 		const char		*unit;
+ 		struct cgroup		*cgrp;
+ 		const char		*metric_id;
++
++		/* The PMU the event is from. Used for missing_features, PMU name, etc. */
++		struct perf_pmu		*pmu;
++
+ 		/*
+ 		 * This point to the first evsel with the same name, intended to store the
+ 		 * aggregated counts in aggregation mode.
+@@ -94,6 +98,8 @@ struct evsel {
+ 		bool			skippable;
+ 		bool			retire_lat;
+ 		bool			dont_regroup;
++		bool			default_metricgroup; /* A member of the Default metricgroup */
++		bool			default_show_events; /* If a default group member, show the event */
+ 		struct list_head	config_terms;
+ 		u64			alternate_hw_config;
+ 	};
+@@ -123,8 +129,6 @@ struct evsel {
+ 	bool			cmdline_group_boundary;
+ 	bool			reset_group;
+ 	bool			needs_auxtrace_mmap;
+-	bool			default_metricgroup; /* A member of the Default metricgroup */
+-	bool			default_show_events; /* If a default group member, show the event */
+ 	bool			needs_uniquify;
+ 	bool			fallenback_eacces;
+ 	bool			fallenback_eopnotsupp;
+@@ -180,9 +184,6 @@ struct evsel {
+ 	unsigned long		open_flags;
+ 	int			precise_ip_original;
+ 
+-	/* The PMU the event is from. Used for missing_features, PMU name, etc. */
+-	struct perf_pmu		*pmu;
+-
+ 	/* For tool events */
+ 	/* Beginning time subtracted when the counter is read. */
+ 	union {
+-- 
+2.55.0
+

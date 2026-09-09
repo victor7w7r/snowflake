@@ -1,0 +1,65 @@
+From 9fd18a865591d981c0081a3e663a65dbe4a64eb9 Mon Sep 17 00:00:00 2001
+From: Adrian Hunter <adrian.hunter@intel.com>
+Date: Fri, 7 Aug 2026 17:56:32 +0300
+Subject: [PATCH 12358/15333] i3c: master: Support IBI-based wakeup capability
+
+An I3C controller acts as a bus controller for one or more I3C devices.
+If the controller can wake the system in response to an In-Band
+Interrupt (IBI), then any device on that bus that is capable of
+generating IBIs can potentially be used as a wakeup source.
+
+Add an ibi_wakeup flag to struct i3c_master_controller so controller
+drivers can advertise support for IBI-based wakeup.
+
+If set, mark IBI-capable I3C devices as wakeup capable when they are
+registered, allowing wakeup management through the standard device
+wakeup framework.
+
+Signed-off-by: Adrian Hunter <adrian.hunter@intel.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Acked-by: Mukesh Savaliya <mukesh.savaliya@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260807145638.168865-9-adrian.hunter@intel.com
+Signed-off-by: Alexandre Belloni <alexandre.belloni@bootlin.com>
+---
+ drivers/i3c/master.c       | 4 ++++
+ include/linux/i3c/master.h | 2 ++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/drivers/i3c/master.c b/drivers/i3c/master.c
+index 83e04a2c202a..2616354dbe54 100644
+--- a/drivers/i3c/master.c
++++ b/drivers/i3c/master.c
+@@ -2110,6 +2110,10 @@ i3c_master_register_new_i3c_devs(struct i3c_master_controller *master)
+ 		if (desc->boardinfo)
+ 			device_set_node(&desc->dev->dev, desc->boardinfo->fwnode);
+ 
++		/* If the device has IBI capability, set as wakeup capable */
++		if (master->ibi_wakeup && (desc->info.bcr & I3C_BCR_IBI_REQ_CAP))
++			device_set_wakeup_capable(&desc->dev->dev, true);
++
+ 		list_add_tail(&desc->dev->node, &i3c_unreg_devs);
+ 	}
+ 
+diff --git a/include/linux/i3c/master.h b/include/linux/i3c/master.h
+index 26535beb1e77..9d675d01522c 100644
+--- a/include/linux/i3c/master.h
++++ b/include/linux/i3c/master.h
+@@ -524,6 +524,7 @@ struct i3c_master_controller_ops {
+  * @hotjoin: true if the master support hotjoin
+  * @rpm_allowed: true if Runtime PM allowed
+  * @rpm_ibi_allowed: true if IBI and Hot-Join allowed while runtime suspended
++ * @ibi_wakeup: IBI can wakeup the system
+  * @shutting_down: set to true when master begins shutdown or unregister
+  * @boardinfo.i3c: list of I3C  boardinfo objects
+  * @boardinfo.i2c: list of I2C boardinfo objects
+@@ -563,6 +564,7 @@ struct i3c_master_controller {
+ 	unsigned int hotjoin: 1;
+ 	unsigned int rpm_allowed: 1;
+ 	unsigned int rpm_ibi_allowed: 1;
++	unsigned int ibi_wakeup: 1;
+ 	bool shutting_down;
+ 	struct {
+ 		struct list_head i3c;
+-- 
+2.55.0
+

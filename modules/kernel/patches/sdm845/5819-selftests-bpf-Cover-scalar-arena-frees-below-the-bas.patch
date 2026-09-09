@@ -1,0 +1,86 @@
+From 770b62a6d38906e65759bf95be7ffb488b4af006 Mon Sep 17 00:00:00 2001
+From: Yiyang Chen <chenyy23@mails.tsinghua.edu.cn>
+Date: Fri, 17 Jul 2026 12:53:48 +0000
+Subject: [PATCH 05819/15333] selftests/bpf: Cover scalar arena frees below the
+ base
+
+Add a verifier_arena case that fills a two-page arena, calls
+bpf_arena_free_pages() with a scalar address one page below the arena
+base, and then verifies that another allocation is still rejected.
+
+Before the runtime guard, the invalid free can repopulate the free
+tree with an out-of-domain offset and the final allocation succeeds.
+
+Signed-off-by: Yiyang Chen <chenyy23@mails.tsinghua.edu.cn>
+Reviewed-by: Emil Tsalapatis <emil@etsalapatis.com>
+Link: https://lore.kernel.org/bpf/20260717-c10-031-public-bpf-next-v2-b4-v2-2-54b555443a7c@mails.tsinghua.edu.cn
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ .../selftests/bpf/progs/verifier_arena.c      | 40 ++++++++++++++++---
+ 1 file changed, 35 insertions(+), 5 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/progs/verifier_arena.c b/tools/testing/selftests/bpf/progs/verifier_arena.c
+index df0e22d1a29b..b241bbcf54a8 100644
+--- a/tools/testing/selftests/bpf/progs/verifier_arena.c
++++ b/tools/testing/selftests/bpf/progs/verifier_arena.c
+@@ -12,15 +12,17 @@
+ 
+ #define private(name) SEC(".bss." #name) __hidden __attribute__((aligned(8)))
+ 
++#ifdef __TARGET_ARCH_arm64
++#define ARENA_VM_START ((1ull << 32) | (~0u - __PAGE_SIZE * 2 + 1))
++#else
++#define ARENA_VM_START ((1ull << 44) | (~0u - __PAGE_SIZE * 2 + 1))
++#endif
++
+ struct {
+ 	__uint(type, BPF_MAP_TYPE_ARENA);
+ 	__uint(map_flags, BPF_F_MMAPABLE);
+ 	__uint(max_entries, 2); /* arena of two pages close to 32-bit boundary*/
+-#ifdef __TARGET_ARCH_arm64
+-        __ulong(map_extra, (1ull << 32) | (~0u - __PAGE_SIZE * 2 + 1)); /* start of mmap() region */
+-#else
+-        __ulong(map_extra, (1ull << 44) | (~0u - __PAGE_SIZE * 2 + 1)); /* start of mmap() region */
+-#endif
++	__ulong(map_extra, ARENA_VM_START); /* start of mmap() region */
+ } arena SEC(".maps");
+ 
+ SEC("socket")
+@@ -93,6 +95,34 @@ int basic_alloc1(void *ctx)
+ 	return 0;
+ }
+ 
++SEC("syscall")
++__success __retval(0)
++int free_scalar_below_arena(void *ctx)
++{
++	void __arena *page1, *page2, *page3;
++	__u64 bad_addr = ARENA_VM_START - __PAGE_SIZE;
++
++	page1 = bpf_arena_alloc_pages(&arena, NULL, 1, NUMA_NO_NODE, 0);
++	if (!page1)
++		return 1;
++
++	page2 = bpf_arena_alloc_pages(&arena, NULL, 1, NUMA_NO_NODE, 0);
++	if (!page2)
++		return 2;
++
++	page3 = bpf_arena_alloc_pages(&arena, NULL, 1, NUMA_NO_NODE, 0);
++	if (page3)
++		return 3;
++
++	bpf_arena_free_pages(&arena, (void __arena *)bad_addr, 1);
++
++	page3 = bpf_arena_alloc_pages(&arena, NULL, 1, NUMA_NO_NODE, 0);
++	if (page3)
++		return 4;
++
++	return 0;
++}
++
+ SEC("socket")
+ __success __retval(0)
+ int basic_alloc2_nosleep(void *ctx)
+-- 
+2.55.0
+

@@ -1,0 +1,59 @@
+From d3b78c9e1f79bc57d81ccac6b26a4bd6141a62b2 Mon Sep 17 00:00:00 2001
+From: Jun Yan <jerrysteve1101@gmail.com>
+Date: Wed, 17 Jun 2026 23:02:40 +0800
+Subject: [PATCH 00714/15333] Input: cap11xx - clean up duplicate log and add
+ probe error logs
+
+Duplicated device detection log exists at line 537 and line 542,
+which brings redundant kernel print messages. Drop one redundant
+log entry to clean up dmesg output.
+
+Meanwhile add missing error logs when I2C communication fails
+during driver probe(), helping debug.
+
+Signed-off-by: Jun Yan <jerrysteve1101@gmail.com>
+Link: https://patch.msgid.link/20260617150318.753148-2-jerrysteve1101@gmail.com
+Signed-off-by: Dmitry Torokhov <dmitry.torokhov@gmail.com>
+---
+ drivers/input/keyboard/cap11xx.c | 11 ++++-------
+ 1 file changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/input/keyboard/cap11xx.c b/drivers/input/keyboard/cap11xx.c
+index 2447c1ae2166..485d8ba97723 100644
+--- a/drivers/input/keyboard/cap11xx.c
++++ b/drivers/input/keyboard/cap11xx.c
+@@ -512,7 +512,7 @@ static int cap11xx_i2c_probe(struct i2c_client *i2c_client)
+ 
+ 	error = regmap_read(priv->regmap, CAP11XX_REG_PRODUCT_ID, &val);
+ 	if (error)
+-		return error;
++		return dev_err_probe(dev, error, "Failed to read product ID\n");
+ 
+ 	if (val != cap->product_id) {
+ 		dev_err(dev, "Product ID: Got 0x%02x, expected 0x%02x\n",
+@@ -522,7 +522,7 @@ static int cap11xx_i2c_probe(struct i2c_client *i2c_client)
+ 
+ 	error = regmap_read(priv->regmap, CAP11XX_REG_MANUFACTURER_ID, &val);
+ 	if (error)
+-		return error;
++		return dev_err_probe(dev, error, "Failed to read manufacturer ID\n");
+ 
+ 	if (val != CAP11XX_MANUFACTURER_ID) {
+ 		dev_err(dev, "Manufacturer ID: Got 0x%02x, expected 0x%02x\n",
+@@ -531,11 +531,8 @@ static int cap11xx_i2c_probe(struct i2c_client *i2c_client)
+ 	}
+ 
+ 	error = regmap_read(priv->regmap, CAP11XX_REG_REVISION, &rev);
+-	if (error < 0)
+-		return error;
+-
+-	dev_info(dev, "CAP11XX detected, model %s, revision 0x%02x\n",
+-			 id->name, rev);
++	if (error)
++		return dev_err_probe(dev, error, "Failed to read revision\n");
+ 
+ 	priv->model = cap;
+ 
+-- 
+2.55.0
+

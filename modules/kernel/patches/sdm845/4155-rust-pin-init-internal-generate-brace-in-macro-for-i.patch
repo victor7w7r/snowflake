@@ -1,0 +1,44 @@
+From 751ecd5a19cf2c55807bf30f35bafc32e179a19c Mon Sep 17 00:00:00 2001
+From: Gary Guo <gary@garyguo.net>
+Date: Fri, 10 Jul 2026 17:20:35 +0100
+Subject: [PATCH 04155/15333] rust: pin-init: internal: generate brace in macro
+ for init code blocks
+
+`init!` support interleaving code execution and initialization, and code
+execution is done using `_: { ... }` syntax. If the code inside block is a
+single statement, Rust may add a lint about unused braces, but the
+suggestion will be incorrect as block is required by pin-init.
+
+Currently we use `unused_brace` to suppress this, but this affect
+everything nested inside as well. Use an alternative approach by generating
+the block from the macro, then rustc will know to not emit the lint.
+
+Reviewed-by: Benno Lossin <lossin@kernel.org>
+Link: https://patch.msgid.link/20260710-pin-init-sync-v1-5-8fa16cde87ae@garyguo.net
+Signed-off-by: Gary Guo <gary@garyguo.net>
+---
+ rust/pin-init/internal/src/init.rs | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/rust/pin-init/internal/src/init.rs b/rust/pin-init/internal/src/init.rs
+index c1197a994c82..fd0b5ea4a0a3 100644
+--- a/rust/pin-init/internal/src/init.rs
++++ b/rust/pin-init/internal/src/init.rs
+@@ -233,10 +233,12 @@ fn init_fields(
+             InitializerKind::Value { ident, .. } => ident,
+             InitializerKind::Init { ident, .. } => ident,
+             InitializerKind::Code { block, .. } => {
++                let stmt = &block.stmts;
+                 res.extend(quote! {
+                     #(#attrs)*
+-                    #[allow(unused_braces)]
+-                    #block
++                    {
++                        #(#stmt)*
++                    }
+                 });
+                 continue;
+             }
+-- 
+2.55.0
+

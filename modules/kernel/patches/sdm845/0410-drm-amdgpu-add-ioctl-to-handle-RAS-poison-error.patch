@@ -1,0 +1,352 @@
+From 445075e199526096bc6f47dace4391efec88cf7e Mon Sep 17 00:00:00 2001
+From: Yifan Zhang <yifan1.zhang@amd.com>
+Date: Wed, 6 May 2026 21:45:05 +0800
+Subject: [PATCH 00410/15333] drm/amdgpu: add ioctl to handle RAS poison error
+
+Add a new DRM_IOCTL_AMDGPU_PROC_OPTIONS ioctl with the
+AMDGPU_PROC_OPTIONS_OP_KFD_SIGBUS_DELAY option, allowing userspace (ROCr)
+to control per-process SIGBUS delivery.
+
+Userspace for this can be found at:
+https://github.com/ROCm/rocm-systems/pull/6190
+
+Reviewed-by: Lijo Lazar <lijo.lazar@amd.com>
+Reviewed-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Yifan Zhang <yifan1.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu.h        |  2 +
+ drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.h |  6 ++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c    |  1 +
+ drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c    | 27 +++++++++
+ drivers/gpu/drm/amd/amdkfd/kfd_events.c    | 69 +++++++++++++++++++++-
+ drivers/gpu/drm/amd/amdkfd/kfd_priv.h      | 15 +++++
+ drivers/gpu/drm/amd/amdkfd/kfd_process.c   | 33 +++++++++++
+ include/uapi/drm/amdgpu_drm.h              | 21 +++++++
+ 8 files changed, 173 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+index 7b09410d6d8f..5f775c6e9240 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+@@ -1468,6 +1468,8 @@ int amdgpu_enable_vblank_kms(struct drm_crtc *crtc);
+ void amdgpu_disable_vblank_kms(struct drm_crtc *crtc);
+ int amdgpu_info_ioctl(struct drm_device *dev, void *data,
+ 		      struct drm_file *filp);
++int amdgpu_proc_options_ioctl(struct drm_device *dev, void *data,
++			      struct drm_file *filp);
+ 
+ /*
+  * functions used by amdgpu_encoder.c
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.h
+index d403af5fb552..32132be6e683 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.h
+@@ -210,6 +210,7 @@ int amdgpu_amdkfd_evict_userptr(struct mmu_interval_notifier *mni,
+ int amdgpu_amdkfd_bo_validate_and_fence(struct amdgpu_bo *bo,
+ 					uint32_t domain,
+ 					struct dma_fence *fence);
++int amdgpu_amdkfd_set_sigbus_delay(struct task_struct *task, u32 ms);
+ #else
+ static inline
+ bool amdkfd_fence_check_mm(struct dma_fence *f, struct mm_struct *mm)
+@@ -241,6 +242,11 @@ int amdgpu_amdkfd_bo_validate_and_fence(struct amdgpu_bo *bo,
+ {
+ 	return 0;
+ }
++static inline
++int amdgpu_amdkfd_set_sigbus_delay(struct task_struct *task, u32 ms)
++{
++	return -EOPNOTSUPP;
++}
+ #endif
+ /* Shared API */
+ int amdgpu_amdkfd_alloc_kernel_mem(struct amdgpu_device *adev, size_t size,
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index bf4260269681..503bb64c1e55 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -3076,6 +3076,7 @@ const struct drm_ioctl_desc amdgpu_ioctls_kms[] = {
+ 	DRM_IOCTL_DEF_DRV(AMDGPU_USERQ_SIGNAL, amdgpu_userq_signal_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
+ 	DRM_IOCTL_DEF_DRV(AMDGPU_USERQ_WAIT, amdgpu_userq_wait_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
+ 	DRM_IOCTL_DEF_DRV(AMDGPU_GEM_LIST_HANDLES, amdgpu_gem_list_handles_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
++	DRM_IOCTL_DEF_DRV(AMDGPU_PROC_OPTIONS, amdgpu_proc_options_ioctl, DRM_AUTH|DRM_RENDER_ALLOW),
+ };
+ 
+ static const struct drm_driver amdgpu_kms_driver = {
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c
+index 71272f40feef..72b6f55699a4 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c
+@@ -1423,6 +1423,33 @@ int amdgpu_info_ioctl(struct drm_device *dev, void *data, struct drm_file *filp)
+ 	return 0;
+ }
+ 
++/**
++ * amdgpu_proc_options_ioctl - set per-fd user options
++ *
++ * @dev: drm dev pointer
++ * @data: pointer to struct drm_amdgpu_proc_options
++ * @filp: drm file
++ *
++ * Sets options stored on the per-file amdgpu_fpriv. Currently the only
++ * supported option is %AMDGPU_PROC_OPTIONS_OP_KFD_SIGBUS_DELAY which
++ * controls how KFD delivers SIGBUS for poison/RAS events to the calling
++ * process (immediate, suppressed, or delayed by N milliseconds).
++ */
++int amdgpu_proc_options_ioctl(struct drm_device *dev, void *data,
++			      struct drm_file *filp)
++{
++	struct drm_amdgpu_proc_options *args = data;
++
++	switch (args->op) {
++	case AMDGPU_PROC_OPTIONS_OP_KFD_SIGBUS_DELAY:
++		return amdgpu_amdkfd_set_sigbus_delay(current,
++						      args->kfd_sigbus_delay.value);
++	default:
++		DRM_DEBUG_KMS("Invalid user option op %u\n", args->op);
++		return -EINVAL;
++	}
++}
++
+ /**
+  * amdgpu_driver_open_kms - drm callback for open
+  *
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_events.c b/drivers/gpu/drm/amd/amdkfd/kfd_events.c
+index 81900b49d9d5..71e8f9a23215 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_events.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_events.c
+@@ -29,10 +29,12 @@
+ #include <linux/uaccess.h>
+ #include <linux/mman.h>
+ #include <linux/memory.h>
++#include <linux/workqueue.h>
+ #include "kfd_priv.h"
+ #include "kfd_events.h"
+ #include "kfd_device_queue_manager.h"
+ #include <linux/device.h>
++#include <drm/amdgpu_drm.h>
+ 
+ /*
+  * Wrapper around wait_queue_entry_t
+@@ -1338,6 +1340,71 @@ void kfd_signal_reset_event(struct kfd_node *dev)
+ 	srcu_read_unlock(&kfd_processes_srcu, idx);
+ }
+ 
++/*
++ * Per-process opt-in for poison-consumption SIGBUS handling.
++ *
++ * Default: kernel sends SIGBUS to the process immediately when poison is
++ * consumed, in addition to delivering the KFD HW/MEMORY exception events.
++ *
++ * Userspace (ROCr) can opt-in per-process via the
++ * DRM_IOCTL_AMDGPU_PROC_OPTIONS / AMDGPU_PROC_OPTIONS_OP_KFD_SIGBUS_DELAY
++ * option. This lets the app's registered system-event callback handle the
++ * RAS error first, instead of being killed by SIGBUS.
++ *
++ * Encoded value (stored on the kfd_process):
++ *   0          - default: SIGBUS immediately (no opt-in)
++ *   0xFFFFFFFF - opt-in, never escalate to SIGBUS
++ *   N (other)  - opt-in, escalate to SIGBUS after N ms if app does not
++ *                handle the error in time (safety timeout)
++ */
++
++void kfd_signal_sigbus_delayed_fn(struct work_struct *work)
++{
++	struct kfd_process *p = container_of(to_delayed_work(work),
++				struct kfd_process, signal_work);
++
++	if (p->lead_thread)
++		send_sig(SIGBUS, p->lead_thread, 0);
++
++	kfd_unref_process(p);
++}
++
++static void kfd_signal_sigbus_with_delay(struct kfd_node *dev,
++					 struct kfd_process *p)
++{
++	u32 delay_ms = atomic_read(&p->kfd_sigbus_delay_ms);
++
++	if (delay_ms == AMDGPU_PROC_OPTIONS_KFD_SIGBUS_DELAY_DISABLED) {
++		dev_info(dev->adev->dev,
++			 "SIGBUS suppressed for process %s(pid:%d): app opted in to handle RAS error\n",
++			 p->lead_thread->comm, p->lead_thread->pid);
++		return;
++	}
++
++	if (delay_ms == 0)
++		goto send_now;
++
++	/*
++	 * Take an extra reference for the delayed worker. If the work is
++	 * already pending (e.g. another device of this process consumed poison
++	 * just before), drop the reference and skip rescheduling - the process
++	 * only needs to be notified once.
++	 */
++	kref_get(&p->ref);
++	if (!schedule_delayed_work(&p->signal_work, msecs_to_jiffies(delay_ms))) {
++		kfd_unref_process(p);
++		return;
++	}
++
++	dev_info(dev->adev->dev,
++		 "Deferring SIGBUS to process %s(pid:%d) by %u ms (RAS error opt-in safety timeout)\n",
++		 p->lead_thread->comm, p->lead_thread->pid, delay_ms);
++	return;
++
++send_now:
++	send_sig(SIGBUS, p->lead_thread, 0);
++}
++
+ void kfd_signal_poison_consumed_event(struct kfd_node *dev, u32 pasid)
+ {
+ 	struct kfd_process *p = kfd_lookup_process_by_pasid(pasid, NULL);
+@@ -1392,7 +1459,7 @@ void kfd_signal_poison_consumed_event(struct kfd_node *dev, u32 pasid)
+ 	rcu_read_unlock();
+ 
+ 	/* user application will handle SIGBUS signal */
+-	send_sig(SIGBUS, p->lead_thread, 0);
++	kfd_signal_sigbus_with_delay(dev, p);
+ 
+ 	kfd_unref_process(p);
+ }
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_priv.h b/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
+index acd0e41e744c..591f41eadae2 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
+@@ -957,6 +957,20 @@ struct kfd_process {
+ 	size_t signal_event_count;
+ 	bool signal_event_limit_reached;
+ 
++	/**
++	 * @kfd_sigbus_delay_ms: Per-process KFD SIGBUS delivery option for
++	 * poison/RAS events (set via DRM_IOCTL_AMDGPU_PROC_OPTIONS /
++	 * AMDGPU_PROC_OPTIONS_OP_KFD_SIGBUS_DELAY).
++	 *
++	 *   0          - send SIGBUS immediately (default)
++	 *   0xFFFFFFFF - suppress SIGBUS delivery
++	 *   other      - delay SIGBUS delivery by this many milliseconds
++	 */
++	atomic_t kfd_sigbus_delay_ms;
++
++	/* Delayed signal delivery to user */
++	struct delayed_work signal_work;
++
+ 	/* Information used for memory eviction */
+ 	void *kgd_process_info;
+ 	/* Eviction fence that is attached to all the BOs of this process. The
+@@ -1554,6 +1568,7 @@ void kfd_signal_vm_fault_event(struct kfd_process_device *pdd,
+ void kfd_signal_reset_event(struct kfd_node *dev);
+ 
+ void kfd_signal_poison_consumed_event(struct kfd_node *dev, u32 pasid);
++void kfd_signal_sigbus_delayed_fn(struct work_struct *work);
+ void kfd_signal_process_terminate_event(struct kfd_process *p);
+ 
+ static inline void kfd_flush_tlb(struct kfd_process_device *pdd)
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_process.c b/drivers/gpu/drm/amd/amdkfd/kfd_process.c
+index 368283d53077..9838954d77da 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_process.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_process.c
+@@ -986,6 +986,33 @@ struct kfd_process *kfd_create_process(struct task_struct *thread)
+ 	return process;
+ }
+ 
++/**
++ * amdgpu_amdkfd_set_sigbus_delay - Set per-process KFD SIGBUS delay
++ * @task: task in the target process
++ * @ms:   encoded delay value (0 = immediate, 0xFFFFFFFF = suppress,
++ *        otherwise delay in milliseconds)
++ *
++ * Stores the SIGBUS delivery option on the kfd_process associated with
++ * @task. If the calling process has not opened /dev/kfd yet (no
++ * kfd_process exists), this is a no-op - the option only applies to
++ * processes that actually use KFD.
++ */
++int amdgpu_amdkfd_set_sigbus_delay(struct task_struct *task, u32 ms)
++{
++	struct kfd_process *p;
++
++	if (!task->mm)
++		return -EINVAL;
++
++	p = kfd_lookup_process_by_mm(task->mm);
++	if (!p)
++		return 0;
++
++	atomic_set(&p->kfd_sigbus_delay_ms, ms);
++	kfd_unref_process(p);
++	return 0;
++}
++
+ static struct kfd_process *find_process_by_mm(const struct mm_struct *mm)
+ {
+ 	struct kfd_process *process;
+@@ -1322,6 +1349,11 @@ void kfd_process_notifier_release_internal(struct kfd_process *p)
+ 	kfd_process_table_remove(p);
+ 	cancel_delayed_work_sync(&p->eviction_work);
+ 	cancel_delayed_work_sync(&p->restore_work);
++	/*
++	 * If work pending, cancel it and drop the extra ref
++	 */
++	if (cancel_delayed_work_sync(&p->signal_work))
++		kfd_unref_process(p);
+ 
+ 	/*
+ 	 * Dequeue and destroy user queues, it is not safe for GPU to access
+@@ -1578,6 +1610,7 @@ struct kfd_process *create_process(const struct task_struct *thread, bool primar
+ 
+ 	INIT_DELAYED_WORK(&process->eviction_work, evict_process_worker);
+ 	INIT_DELAYED_WORK(&process->restore_work, restore_process_worker);
++	INIT_DELAYED_WORK(&process->signal_work, kfd_signal_sigbus_delayed_fn);
+ 	process->last_restore_timestamp = get_jiffies_64();
+ 	err = kfd_event_init_process(process);
+ 	if (err)
+diff --git a/include/uapi/drm/amdgpu_drm.h b/include/uapi/drm/amdgpu_drm.h
+index 9f3090db2f16..b32c72a662b6 100644
+--- a/include/uapi/drm/amdgpu_drm.h
++++ b/include/uapi/drm/amdgpu_drm.h
+@@ -58,6 +58,7 @@ extern "C" {
+ #define DRM_AMDGPU_USERQ_SIGNAL		0x17
+ #define DRM_AMDGPU_USERQ_WAIT		0x18
+ #define DRM_AMDGPU_GEM_LIST_HANDLES	0x19
++#define DRM_AMDGPU_PROC_OPTIONS		0x1A
+ 
+ #define DRM_IOCTL_AMDGPU_GEM_CREATE	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_CREATE, union drm_amdgpu_gem_create)
+ #define DRM_IOCTL_AMDGPU_GEM_MMAP	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_MMAP, union drm_amdgpu_gem_mmap)
+@@ -79,6 +80,7 @@ extern "C" {
+ #define DRM_IOCTL_AMDGPU_USERQ_SIGNAL	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_USERQ_SIGNAL, struct drm_amdgpu_userq_signal)
+ #define DRM_IOCTL_AMDGPU_USERQ_WAIT	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_USERQ_WAIT, struct drm_amdgpu_userq_wait)
+ #define DRM_IOCTL_AMDGPU_GEM_LIST_HANDLES DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_GEM_LIST_HANDLES, struct drm_amdgpu_gem_list_handles)
++#define DRM_IOCTL_AMDGPU_PROC_OPTIONS	DRM_IOWR(DRM_COMMAND_BASE + DRM_AMDGPU_PROC_OPTIONS, struct drm_amdgpu_proc_options)
+ 
+ /**
+  * DOC: memory domains
+@@ -1673,6 +1675,25 @@ struct drm_amdgpu_info_uq_metadata {
+ #define AMDGPU_FAMILY_GC_11_5_4			154 /* GC 11.5.4 */
+ #define AMDGPU_FAMILY_GC_12_0_0			152 /* GC 12.0.0 */
+ 
++/*
++ * Definition of user options
++ *
++ * option: AMDGPU_PROC_OPTIONS_OP_KFD_SIGBUS_DELAY
++ *    0:          Disable sigbus delay - SIGBUS will be raised immediately
++ *    0xFFFFFFFF: SIGBUS will not be raised
++ *    other:      Set the sigbus delay in milliseconds
++ */
++#define AMDGPU_PROC_OPTIONS_OP_KFD_SIGBUS_DELAY		0
++
++#define AMDGPU_PROC_OPTIONS_KFD_SIGBUS_DELAY_DISABLED	0xFFFFFFFFu
++
++struct drm_amdgpu_proc_options {
++	__u32 op;
++	struct {
++		__u32 value;
++	} kfd_sigbus_delay;
++};
++
+ #if defined(__cplusplus)
+ }
+ #endif
+-- 
+2.55.0
+

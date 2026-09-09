@@ -1,0 +1,40 @@
+From 26a92a696897a1746e507febc0b00ecd4ceaa165 Mon Sep 17 00:00:00 2001
+From: Ivaylo Dimitrov <ivo.g.dimitrov.75@gmail.com>
+Date: Wed, 5 Aug 2026 17:44:34 +0300
+Subject: [PATCH 11103/15333] ASoC: codecs: cpcap: set voice DAI format as
+ specified in DT
+
+We can have port endpoints with different DAI formats, make sure those are
+actually set-up
+
+Signed-off-by: Ivaylo Dimitrov <ivo.g.dimitrov.75@gmail.com>
+Link: https://patch.msgid.link/20260805144434.1290261-3-ivo.g.dimitrov.75@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/cpcap.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/sound/soc/codecs/cpcap.c b/sound/soc/codecs/cpcap.c
+index 987c63fc5fa4..fc41e1547bda 100644
+--- a/sound/soc/codecs/cpcap.c
++++ b/sound/soc/codecs/cpcap.c
+@@ -1256,6 +1256,7 @@ static int cpcap_voice_hw_params(struct snd_pcm_substream *substream,
+ 				 struct snd_pcm_hw_params *params,
+ 				 struct snd_soc_dai *dai)
+ {
++	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
+ 	struct snd_soc_component *component = dai->component;
+ 	struct device *dev = component->dev;
+ 	struct cpcap_audio *cpcap = snd_soc_component_get_drvdata(component);
+@@ -1289,7 +1290,7 @@ static int cpcap_voice_hw_params(struct snd_pcm_substream *substream,
+ 			return err;
+ 	}
+ 
+-	return 0;
++	return snd_soc_runtime_set_dai_fmt(rtd, rtd->dai_link->dai_fmt);
+ }
+ 
+ static int cpcap_voice_set_dai_sysclk(struct snd_soc_dai *codec_dai, int clk_id,
+-- 
+2.55.0
+

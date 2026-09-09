@@ -1,0 +1,57 @@
+From 19e612cd59bf447df63b77cda7feb7d82ed74f7a Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Thu, 23 Jul 2026 14:08:07 -0700
+Subject: [PATCH 07412/15333] KVM: guest_memfd: Add helpers to query SHARED vs.
+ PRIVATE for a given page
+
+Add helpers to check if a given page in a guest_memfd instance is PRIVATE
+versus SHARED, and use the "is shared" helper instead of an open-coded
+equivalent in the user pagefault handler.  In addition to the immediate
+usage, providing an "is private" helper will allow cleaning up the so
+called prepare() code, and eventually will be heavily used once in-place
+conversion support comes along.
+
+No functional change intended.
+
+Reviewed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Reviewed-by: Ackerley Tng <ackerleytng@google.com>
+Reviewed-by: Fuad Tabba <fuad.tabba@linux.dev>
+Link: https://patch.msgid.link/20260723210811.72720-6-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ virt/kvm/guest_memfd.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/virt/kvm/guest_memfd.c b/virt/kvm/guest_memfd.c
+index 3e4273f60a8c..3fa4969b38f9 100644
+--- a/virt/kvm/guest_memfd.c
++++ b/virt/kvm/guest_memfd.c
+@@ -60,6 +60,16 @@ static pgoff_t kvm_gmem_get_index(struct kvm_memory_slot *slot, gfn_t gfn)
+ 	return gfn - slot->base_gfn + slot->gmem.pgoff;
+ }
+ 
++static bool kvm_gmem_is_private_mem(struct inode *inode, pgoff_t index)
++{
++	return !(GMEM_I(inode)->flags & GUEST_MEMFD_FLAG_INIT_SHARED);
++}
++
++static bool kvm_gmem_is_shared_mem(struct inode *inode, pgoff_t index)
++{
++	return !kvm_gmem_is_private_mem(inode, index);
++}
++
+ static int __kvm_gmem_prepare_folio(struct kvm *kvm, struct kvm_memory_slot *slot,
+ 				    pgoff_t index, struct folio *folio)
+ {
+@@ -397,7 +407,7 @@ static vm_fault_t kvm_gmem_fault_user_mapping(struct vm_fault *vmf)
+ 	if (((loff_t)vmf->pgoff << PAGE_SHIFT) >= i_size_read(inode))
+ 		return VM_FAULT_SIGBUS;
+ 
+-	if (!(GMEM_I(inode)->flags & GUEST_MEMFD_FLAG_INIT_SHARED))
++	if (!kvm_gmem_is_shared_mem(inode, vmf->pgoff))
+ 		return VM_FAULT_SIGBUS;
+ 
+ 	folio = kvm_gmem_get_folio(inode, vmf->pgoff);
+-- 
+2.55.0
+

@@ -1,0 +1,41 @@
+From d1c656df36d00aad9c810e563f918dbbaf41a7b9 Mon Sep 17 00:00:00 2001
+From: Miles Krause <mileskrause5200@gmail.com>
+Date: Sat, 11 Jul 2026 22:47:12 -0400
+Subject: [PATCH 06077/15333] selftests/futex: Give circular-list nodes static
+ storage
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The registered robust-list head has static storage but points at three
+automatic lock nodes. GCC warns about storing the address of a local
+variable in the static head when building the selftest with -Wall.
+
+Give the nodes static storage as well. This keeps every object in the
+circular list alive through child exit without changing the list topology.
+
+Signed-off-by: Miles Krause <mileskrause5200@gmail.com>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Reviewed-by: André Almeida <andrealmeid@igalia.com>
+Link: https://patch.msgid.link/20260711-futex-robust-list-static-nodes-v1-1-723754d75cf5@gmail.com
+---
+ tools/testing/selftests/futex/functional/robust_list.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/futex/functional/robust_list.c b/tools/testing/selftests/futex/functional/robust_list.c
+index 3f713bd31f4c..87217c549361 100644
+--- a/tools/testing/selftests/futex/functional/robust_list.c
++++ b/tools/testing/selftests/futex/functional/robust_list.c
+@@ -536,8 +536,8 @@ static int child_circular_list(void *arg)
+ {
+ 	struct child_args *cargs = arg;
+ 	struct __test_metadata *_metadata = cargs->_metadata;
++	static struct lock_struct a, b, c;
+ 	struct robust_list_head head;
+-	struct lock_struct a, b, c;
+ 	int ret;
+ 
+ 	free(cargs);
+-- 
+2.55.0
+

@@ -1,0 +1,46 @@
+From cbabe7774ad77ef6fcb088077f6331c2c7fdf7e4 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Wed, 29 Jul 2026 10:37:30 +0200
+Subject: [PATCH 09198/15333] ALSA: mixart: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260729083735.120219-13-tiwai@suse.de
+---
+ sound/pci/mixart/mixart_hwdep.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/sound/pci/mixart/mixart_hwdep.c b/sound/pci/mixart/mixart_hwdep.c
+index 439e3ff05fe1..aa8d5bae30d0 100644
+--- a/sound/pci/mixart/mixart_hwdep.c
++++ b/sound/pci/mixart/mixart_hwdep.c
+@@ -560,12 +560,11 @@ int snd_mixart_setup_firmware(struct mixart_mgr *mgr)
+ 		"miXart8.xlx", "miXart8.elf", "miXart8AES.xlx"
+ 	};
+ 	char path[32];
+-
+-	const struct firmware *fw_entry;
+ 	int i, err;
+ 
+ 	for (i = 0; i < 3; i++) {
+ 		sprintf(path, "mixart/%s", fw_files[i]);
++		const struct firmware *fw_entry __free(firmware) = NULL;
+ 		if (request_firmware(&fw_entry, path, &mgr->pci->dev)) {
+ 			dev_err(&mgr->pci->dev,
+ 				"miXart: can't load firmware %s\n", path);
+@@ -573,7 +572,6 @@ int snd_mixart_setup_firmware(struct mixart_mgr *mgr)
+ 		}
+ 		/* fake hwdep dsp record */
+ 		err = mixart_dsp_load(mgr, i, fw_entry);
+-		release_firmware(fw_entry);
+ 		if (err < 0)
+ 			return err;
+ 		mgr->dsp_loaded |= 1 << i;
+-- 
+2.55.0
+

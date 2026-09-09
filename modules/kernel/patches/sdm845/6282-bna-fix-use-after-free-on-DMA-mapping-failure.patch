@@ -1,0 +1,52 @@
+From be9381d5776c9b790d0b3429846c46bca3b8634a Mon Sep 17 00:00:00 2001
+From: Xuanqiang Luo <luoxuanqiang@kylinos.cn>
+Date: Fri, 10 Jul 2026 17:05:22 +0800
+Subject: [PATCH 06282/15333] bna: fix use-after-free on DMA mapping failure
+
+If dma_map_single() fails in bnad_start_xmit(), the skb is freed, but
+head_unmap->skb was set before the mapping attempt and is not cleared. The
+producer index is not advanced, so later transmissions normally overwrite
+the entry.
+
+However, if the interface is brought down first, bnad_txq_cleanup() scans
+the entire unmap queue, finds the stale pointer, and calls
+bnad_tx_buff_unmap() on it. That function dereferences the freed skb in
+skb_headlen(). Its zero nvecs count is decremented to -1, causing its
+while (nvecs) loop to repeatedly unmap entries around the TX ring and
+potentially hang cleanup.
+
+Set head_unmap->skb after the first DMA mapping succeeds. This prevents the
+stale entry from reaching bnad_tx_buff_unmap().
+
+Cc: stable+noautosel@kernel.org # untested fix to unlikely error path
+Signed-off-by: Xuanqiang Luo <luoxuanqiang@kylinos.cn>
+Reviewed-by: Simon Horman <horms@kernel.org>
+Link: https://patch.msgid.link/20260710090527.58354-2-xuanqiang.luo@linux.dev
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/brocade/bna/bnad.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/brocade/bna/bnad.c b/drivers/net/ethernet/brocade/bna/bnad.c
+index 8e19add764db..8b75004ba7c9 100644
+--- a/drivers/net/ethernet/brocade/bna/bnad.c
++++ b/drivers/net/ethernet/brocade/bna/bnad.c
+@@ -3006,7 +3006,6 @@ bnad_start_xmit(struct sk_buff *skb, struct net_device *netdev)
+ 	txqent->hdr.wi.reserved = 0;
+ 	txqent->hdr.wi.num_vectors = vectors;
+ 
+-	head_unmap->skb = skb;
+ 	head_unmap->nvecs = 0;
+ 
+ 	/* Program the vectors */
+@@ -3018,6 +3017,7 @@ bnad_start_xmit(struct sk_buff *skb, struct net_device *netdev)
+ 		BNAD_UPDATE_CTR(bnad, tx_skb_map_failed);
+ 		return NETDEV_TX_OK;
+ 	}
++	head_unmap->skb = skb;
+ 	BNA_SET_DMA_ADDR(dma_addr, &txqent->vector[0].host_addr);
+ 	txqent->vector[0].length = htons(len);
+ 	dma_unmap_addr_set(&unmap->vectors[0], dma_addr, dma_addr);
+-- 
+2.55.0
+

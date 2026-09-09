@@ -1,0 +1,188 @@
+From 5ab89b491f215f69b750130ead2ff6bbde6c0e2e Mon Sep 17 00:00:00 2001
+From: Prike Liang <Prike.Liang@amd.com>
+Date: Thu, 9 Jul 2026 10:42:55 +0800
+Subject: [PATCH 04839/15333] drm/amdgpu: add mes gang contex alloc/free helper
+
+Implement the MES gang contex alloc and free heplers.
+
+Signed-off-by: Prike Liang <Prike.Liang@amd.com>
+Reviewed-by: Michael Chen <michael.chen@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c       | 41 +++++++++++++++++++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h       |  7 ++++
+ drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h     |  1 +
+ drivers/gpu/drm/amd/amdgpu/mes_userqueue.c    |  7 +++-
+ drivers/gpu/drm/amd/amdgpu/mes_v11_0.c        |  2 +
+ drivers/gpu/drm/amd/include/mes_v11_api_def.h |  1 +
+ 6 files changed, 58 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+index 699c6db4ea36..1e3a23c81552 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.c
+@@ -1080,6 +1080,47 @@ void amdgpu_mes_free_proc_ctx_index(struct amdgpu_mes *mes,
+ 	amdgpu_mes_unlock(mes);
+ }
+ 
++/**
++ * amdgpu_mes_alloc_gang_ctx_index - allocate a gang context slot
++ */
++int amdgpu_mes_alloc_gang_ctx_index(struct amdgpu_mes *mes,
++				    struct amdgpu_usermode_queue *queue)
++{
++	unsigned long bit;
++
++	if (!mes->use_rs64mem || !mes->gang_ctx_bitmap)
++		return -EOPNOTSUPP;
++
++	amdgpu_mes_lock(mes);
++	bit = find_first_zero_bit(mes->gang_ctx_bitmap,
++				  mes->gang_ctx_array_size);
++	if (bit >= mes->gang_ctx_array_size) {
++		amdgpu_mes_unlock(mes);
++		return -ENOSPC;
++	}
++	set_bit(bit, mes->gang_ctx_bitmap);
++	queue->gang_ctx_array_index = bit;
++	amdgpu_mes_unlock(mes);
++
++	return 0;
++}
++
++/**
++ * amdgpu_mes_free_gang_ctx_index - free a gang context slot
++ */
++void amdgpu_mes_free_gang_ctx_index(struct amdgpu_mes *mes,
++				    struct amdgpu_usermode_queue *queue)
++{
++	if (!mes->use_rs64mem || !mes->gang_ctx_bitmap)
++		return;
++	if (queue->gang_ctx_array_index >= mes->gang_ctx_array_size)
++		return;
++
++	amdgpu_mes_lock(mes);
++	clear_bit(queue->gang_ctx_array_index, mes->gang_ctx_bitmap);
++	amdgpu_mes_unlock(mes);
++}
++
+ #if defined(CONFIG_DEBUG_FS)
+ 
+ static int amdgpu_debugfs_mes_event_log_show(struct seq_file *m, void *unused)
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
+index 33a426f58e72..c67db2d6e122 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mes.h
+@@ -181,6 +181,7 @@ struct amdgpu_mes {
+ 	uint32_t			proc_ctx_array_size;
+ 	unsigned long			*proc_ctx_bitmap;
+ 	uint32_t			gang_ctx_array_size;
++	uint32_t			gang_ctx_array_index;
+ 	unsigned long			*gang_ctx_bitmap;
+ };
+ 
+@@ -280,6 +281,7 @@ struct mes_add_queue_input {
+ 	uint32_t	sh_mem_config_data;
+ 	uint32_t	vm_cntx_cntl;
+ 	uint32_t	process_context_array_index;
++	uint32_t	gang_context_array_index;
+ };
+ 
+ struct mes_remove_queue_input {
+@@ -288,6 +290,7 @@ struct mes_remove_queue_input {
+ 	uint64_t	gang_context_addr;
+ 	uint32_t	queue_type;
+ 	bool		remove_queue_after_reset;
++	uint32_t	gang_context_array_index;
+ };
+ 
+ struct mes_map_legacy_queue_input {
+@@ -636,4 +639,8 @@ int amdgpu_mes_alloc_proc_ctx_index(struct amdgpu_mes *mes,
+ 				    struct amdgpu_usermode_queue *queue);
+ void amdgpu_mes_free_proc_ctx_index(struct amdgpu_mes *mes,
+ 				    struct amdgpu_usermode_queue *queue);
++int amdgpu_mes_alloc_gang_ctx_index(struct amdgpu_mes *mes,
++				    struct amdgpu_usermode_queue *queue);
++void amdgpu_mes_free_gang_ctx_index(struct amdgpu_mes *mes,
++				    struct amdgpu_usermode_queue *queue);
+ #endif /* __AMDGPU_MES_H__ */
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h
+index 8bb0d3213abf..8333bab537d4 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.h
+@@ -102,6 +102,7 @@ struct amdgpu_usermode_queue {
+ 	} userq_vas;
+ 
+ 	uint32_t	proc_ctx_array_index;
++	uint32_t	gang_ctx_array_index;
+ };
+ 
+ struct amdgpu_userq_funcs {
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c b/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
+index c5b01a552592..e099304b4ac4 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
+@@ -150,6 +150,8 @@ static int mes_userq_map(struct amdgpu_usermode_queue *queue)
+ 	if (mes->use_rs64mem) {
+ 		amdgpu_mes_alloc_proc_ctx_index(mes, queue);
+ 		queue_input.process_context_array_index = queue->proc_ctx_array_index;
++		amdgpu_mes_alloc_gang_ctx_index(mes, queue);
++		queue_input.gang_context_array_index = queue->gang_ctx_array_index;
+ 	}
+ 	amdgpu_mes_lock(&adev->mes);
+ 	r = adev->mes.funcs->add_hw_queue(&adev->mes, &queue_input);
+@@ -173,6 +175,7 @@ static int mes_userq_unmap(struct amdgpu_usermode_queue *queue)
+ 	int r;
+ 
+ 	memset(&queue_input, 0x0, sizeof(struct mes_remove_queue_input));
++	queue_input.gang_context_array_index = queue->gang_ctx_array_index;
+ 	queue_input.doorbell_offset = queue->doorbell_index;
+ 	queue_input.gang_context_addr = ctx->gpu_addr;
+ 	queue_input.queue_type = queue->queue_type;
+@@ -180,8 +183,10 @@ static int mes_userq_unmap(struct amdgpu_usermode_queue *queue)
+ 	amdgpu_mes_lock(&adev->mes);
+ 	r = adev->mes.funcs->remove_hw_queue(&adev->mes, &queue_input);
+ 	amdgpu_mes_unlock(&adev->mes);
+-	if (mes->use_rs64mem)
++	if (mes->use_rs64mem) {
+ 		amdgpu_mes_free_proc_ctx_index(mes, queue);
++		amdgpu_mes_free_gang_ctx_index(mes, queue);
++	}
+ 	if (r)
+ 		DRM_ERROR("Failed to unmap queue in HW, err (%d)\n", r);
+ 	return r;
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
+index d8b4d3deff60..b72da75dd851 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
+@@ -338,6 +338,7 @@ static int mes_v11_0_add_hw_queue(struct amdgpu_mes *mes,
+ 	mes_add_queue_pkt.process_context_array_index = input->process_context_array_index;
+ 	mes_add_queue_pkt.gang_quantum = input->gang_quantum;
+ 	mes_add_queue_pkt.gang_context_addr = input->gang_context_addr;
++	mes_add_queue_pkt.gang_context_array_index = input->gang_context_array_index;
+ 	mes_add_queue_pkt.inprocess_gang_priority =
+ 		convert_to_mes_priority_level(input->inprocess_gang_priority);
+ 	mes_add_queue_pkt.gang_global_priority_level =
+@@ -388,6 +389,7 @@ static int mes_v11_0_remove_hw_queue(struct amdgpu_mes *mes,
+ 
+ 	mes_remove_queue_pkt.doorbell_offset = input->doorbell_offset;
+ 	mes_remove_queue_pkt.gang_context_addr = input->gang_context_addr;
++	mes_remove_queue_pkt.gang_context_array_index = input->gang_context_array_index;
+ 	mes_remove_queue_pkt.queue_type =
+ 		convert_to_mes_queue_type(input->queue_type);
+ 
+diff --git a/drivers/gpu/drm/amd/include/mes_v11_api_def.h b/drivers/gpu/drm/amd/include/mes_v11_api_def.h
+index 1fe824b41f2a..a8e6ccc7817c 100644
+--- a/drivers/gpu/drm/amd/include/mes_v11_api_def.h
++++ b/drivers/gpu/drm/amd/include/mes_v11_api_def.h
+@@ -360,6 +360,7 @@ union MESAPI__REMOVE_QUEUE {
+ 
+ 		enum MES_QUEUE_TYPE         queue_type;
+ 		uint64_t                    timestamp;
++		uint32_t                    gang_context_array_index;
+ 	};
+ 
+ 	uint32_t	max_dwords_in_api[API_FRAME_SIZE_IN_DWORDS];
+-- 
+2.55.0
+

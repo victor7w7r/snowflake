@@ -1,0 +1,50 @@
+From 0982666c1bb02792970a7f3ba27f0b4af68e6245 Mon Sep 17 00:00:00 2001
+From: Joe Damato <joe@dama.to>
+Date: Tue, 28 Jul 2026 09:09:26 -0700
+Subject: [PATCH 08394/15333] selftests/net: psock: Generalize psock bind
+
+Generalize packet socket binding so that types other than ETH_P_IP can
+be used.
+
+Signed-off-by: Joe Damato <joe@dama.to>
+Reviewed-by: Willem de Bruijn <willemb@google.com>
+Link: https://patch.msgid.link/20260728160935.4128982-2-joe@dama.to
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ tools/testing/selftests/net/psock_snd.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/tools/testing/selftests/net/psock_snd.c b/tools/testing/selftests/net/psock_snd.c
+index 3313a15e0ca1..bb9a9cfdbe95 100644
+--- a/tools/testing/selftests/net/psock_snd.c
++++ b/tools/testing/selftests/net/psock_snd.c
+@@ -171,12 +171,12 @@ static int build_packet(int payload_len)
+ 	return off + payload_len;
+ }
+ 
+-static void do_bind(int fd)
++static void do_bind_proto(int fd, uint16_t proto)
+ {
+ 	struct sockaddr_ll laddr = {0};
+ 
+ 	laddr.sll_family = AF_PACKET;
+-	laddr.sll_protocol = htons(ETH_P_IP);
++	laddr.sll_protocol = htons(proto);
+ 	laddr.sll_ifindex = if_nametoindex(cfg_ifname);
+ 	if (!laddr.sll_ifindex)
+ 		error(1, errno, "if_nametoindex");
+@@ -185,6 +185,11 @@ static void do_bind(int fd)
+ 		error(1, errno, "bind");
+ }
+ 
++static void do_bind(int fd)
++{
++	do_bind_proto(fd, ETH_P_IP);
++}
++
+ static void do_send(int fd, char *buf, int len)
+ {
+ 	int ret;
+-- 
+2.55.0
+

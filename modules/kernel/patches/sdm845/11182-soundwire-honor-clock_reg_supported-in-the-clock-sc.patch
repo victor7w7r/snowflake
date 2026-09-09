@@ -1,0 +1,64 @@
+From b3d27039466292faebbfd83ed9c4a7d2c39e79eb Mon Sep 17 00:00:00 2001
+From: Jorijn van der Graaf <jorijnvdgraaf@catcrafts.net>
+Date: Tue, 28 Jul 2026 19:35:42 +0200
+Subject: [PATCH 11182/15333] soundwire: honor clock_reg_supported in the clock
+ scaling check
+
+sdw_slave_set_frequency() treats class_id and prop.clock_reg_supported
+as equivalent evidence that a slave implements the bus-clock base and
+scale registers, but the bank-switch reprogramming path checks class_id
+alone, so a class-0 slave that declared the registers never gets the
+next-bank scale written there. The registers are SoundWire 1.2, not
+SDCA, so a device may well implement them without setting the class
+field.
+
+Extend the helper to honor clock_reg_supported, as discussed with
+Pierre-Louis in the WCD9378 review. This also makes a link whose
+peripherals all declare clock_reg_supported eligible for dynamic clock
+scaling in the generic bandwidth allocation, which is what declaring
+the registers means.
+
+With the helper extended, sdw_slave_set_frequency()'s open-coded test
+computes the same predicate; call the helper there instead, so future
+quirks or updates land in one place.
+
+Link: https://lore.kernel.org/all/5717102b-f7ab-42b2-8065-064d94dd2bee@linux.dev/
+Link: https://lore.kernel.org/all/6991398d-4ae4-45ee-85d0-3b66462fec1d@linux.dev/
+Assisted-by: Claude:claude-fable-5
+Signed-off-by: Jorijn van der Graaf <jorijnvdgraaf@catcrafts.net>
+Reviewed-by: Pierre-Louis Bossart <pierre-louis.bossart@linux.dev>
+Link: https://patch.msgid.link/20260728173542.61146-2-jorijnvdgraaf@catcrafts.net
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/soundwire/bus.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/soundwire/bus.c b/drivers/soundwire/bus.c
+index 0490777fa406..0c1cdd603926 100644
+--- a/drivers/soundwire/bus.c
++++ b/drivers/soundwire/bus.c
+@@ -817,8 +817,11 @@ bool is_clock_scaling_supported_by_slave(struct sdw_slave *slave)
+ 	/*
+ 	 * Dynamic scaling is a defined by SDCA. However, some devices expose the class ID but
+ 	 * can't support dynamic scaling. We might need a quirk to handle such devices.
++	 * The clock base and scale registers themselves are SoundWire 1.2, so a device
++	 * may implement them without setting the class field; the driver says so with
++	 * clock_reg_supported.
+ 	 */
+-	return slave->id.class_id;
++	return slave->id.class_id || slave->prop.clock_reg_supported;
+ }
+ EXPORT_SYMBOL(is_clock_scaling_supported_by_slave);
+ 
+@@ -1385,7 +1388,7 @@ static int sdw_slave_set_frequency(struct sdw_slave *slave)
+ 	 * DisCo property to discover support for the scaling registers
+ 	 * from platform firmware.
+ 	 */
+-	if (!slave->id.class_id && !slave->prop.clock_reg_supported)
++	if (!is_clock_scaling_supported_by_slave(slave))
+ 		return 0;
+ 
+ 	scale_index = sdw_slave_get_scale_index(slave, &base);
+-- 
+2.55.0
+

@@ -1,0 +1,119 @@
+From b4343aebd3a4dd255b15b2e5b1363d6399da302f Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Wed, 1 Jul 2026 16:54:23 +0200
+Subject: [PATCH 09201/15333] initramfs_test: use test init/exit hooks to
+ override init fs
+
+Most initramfs kunit tests interact with initramfs via
+unpack_to_rootfs() and subsequently init_stat(), init_unlink(), etc.
+
+It's cleaner and less error-prone to override current->fs with
+userspace_init_fs for all initramfs_test_suite tests.
+
+Link: https://patch.msgid.link/20260701-work-kunit-nullfs-v1-1-dfa60270434f@kernel.org [1]
+Link: https://patch.msgid.link/20260729151320.21001-2-ddiss@suse.de # folded into [1]
+Fixes: 32750c77e811 ("fs: start all kthreads in nullfs")
+Reported-by: Mark Brown <broonie@kernel.org>
+Closes: https://lore.kernel.org/r/akOrbOsKUqgZarGw@sirena.org.uk
+Signed-off-by: David Disseldorp <ddiss@suse.de>
+Co-developed-by: David Disseldorp <ddiss@suse.de>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ drivers/char/misc_minor_kunit.c | 25 +++++++++++++++----------
+ init/initramfs_test.c           | 19 +++++++++++++++++--
+ 2 files changed, 32 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/char/misc_minor_kunit.c b/drivers/char/misc_minor_kunit.c
+index e930c78e1ef9..e85210cbb640 100644
+--- a/drivers/char/misc_minor_kunit.c
++++ b/drivers/char/misc_minor_kunit.c
+@@ -5,6 +5,7 @@
+ #include <linux/miscdevice.h>
+ #include <linux/fs.h>
+ #include <linux/file.h>
++#include <linux/fs_struct.h>
+ #include <linux/init_syscalls.h>
+ 
+ /* static minor (LCD_MINOR) */
+@@ -160,18 +161,22 @@ static void __init miscdev_test_can_open(struct kunit *test, struct miscdevice *
+ 	char *devname;
+ 
+ 	devname = kasprintf(GFP_KERNEL, "/dev/%s", misc->name);
+-	ret = init_mknod(devname, S_IFCHR | 0600,
+-			 new_encode_dev(MKDEV(MISC_MAJOR, misc->minor)));
+-	if (ret != 0)
+-		KUNIT_FAIL(test, "failed to create node\n");
+ 
+-	filp = filp_open(devname, O_RDONLY, 0);
+-	if (IS_ERR(filp))
+-		KUNIT_FAIL(test, "failed to open misc device: %ld\n", PTR_ERR(filp));
+-	else
+-		fput(filp);
++	/* Tests run in a nullfs kthread; borrow the init fs to resolve /dev. */
++	scoped_with_init_fs() {
++		ret = init_mknod(devname, S_IFCHR | 0600,
++				 new_encode_dev(MKDEV(MISC_MAJOR, misc->minor)));
++		if (ret != 0)
++			KUNIT_FAIL(test, "failed to create node\n");
++
++		filp = filp_open(devname, O_RDONLY, 0);
++		if (IS_ERR(filp))
++			KUNIT_FAIL(test, "failed to open misc device: %ld\n", PTR_ERR(filp));
++		else
++			fput(filp);
+ 
+-	init_unlink(devname);
++		init_unlink(devname);
++	}
+ 	kfree(devname);
+ }
+ 
+diff --git a/init/initramfs_test.c b/init/initramfs_test.c
+index bc55306d226d..9cf316c13ffa 100644
+--- a/init/initramfs_test.c
++++ b/init/initramfs_test.c
+@@ -3,6 +3,7 @@
+ #include <linux/fcntl.h>
+ #include <linux/file.h>
+ #include <linux/fs.h>
++#include <linux/fs_struct.h>
+ #include <linux/init.h>
+ #include <linux/init_syscalls.h>
+ #include <linux/initrd.h>
+@@ -562,7 +563,7 @@ static struct kunit_case __refdata initramfs_test_cases[] = {
+ 	{},
+ };
+ 
+-static int __init initramfs_test_init(struct kunit_suite *suite)
++static int __init initramfs_suite_init(struct kunit_suite *suite)
+ {
+ 	/*
+ 	 * unpack_to_rootfs() uses module-static state (victim, byte_count,
+@@ -574,9 +575,23 @@ static int __init initramfs_test_init(struct kunit_suite *suite)
+ 	return 0;
+ }
+ 
++/* Tests run in a nullfs kthread; always use the init fs for path resolution. */
++static int __init initramfs_test_init(struct kunit *test)
++{
++	test->priv = __override_init_fs();
++	return 0;
++}
++
++static void __init initramfs_test_exit(struct kunit *test)
++{
++	__revert_init_fs(test->priv);
++}
++
+ static struct kunit_suite __refdata initramfs_test_suite = {
+ 	.name = "initramfs",
+-	.suite_init = initramfs_test_init,
++	.suite_init = initramfs_suite_init,
++	.init = initramfs_test_init,
++	.exit = initramfs_test_exit,
+ 	.test_cases = initramfs_test_cases,
+ };
+ kunit_test_init_section_suites(&initramfs_test_suite);
+-- 
+2.55.0
+

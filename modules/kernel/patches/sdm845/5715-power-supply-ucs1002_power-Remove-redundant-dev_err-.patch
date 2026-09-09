@@ -1,0 +1,49 @@
+From 5a6b9c36c56340812d49817524a5d96f7522c74d Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Thu, 9 Jul 2026 11:34:22 +0800
+Subject: [PATCH 05715/15333] power: supply: ucs1002_power: Remove redundant
+ dev_err()/dev_err_probe()
+
+The devm_request_threaded_irq() and devm_request_irq() now automatically
+log detailed error messages on failure. This eliminates the need for
+driver-specific dev_err() and dev_err_probe() calls that previously
+printed generic messages.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://patch.msgid.link/20260709033428.362970-44-panchuang@vivo.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/ucs1002_power.c | 10 ++--------
+ 1 file changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/power/supply/ucs1002_power.c b/drivers/power/supply/ucs1002_power.c
+index 3f44cc902f84..735880ed1cc8 100644
+--- a/drivers/power/supply/ucs1002_power.c
++++ b/drivers/power/supply/ucs1002_power.c
+@@ -647,21 +647,15 @@ static int ucs1002_probe(struct i2c_client *client)
+ 						ucs1002_charger_irq,
+ 						IRQF_ONESHOT,
+ 						"ucs1002-a_det", info);
+-		if (ret) {
+-			dev_err(dev, "Failed to request A_DET threaded irq: %d\n",
+-				ret);
++		if (ret)
+ 			return ret;
+-		}
+ 	}
+ 
+ 	if (irq_alert > 0) {
+ 		ret = devm_request_irq(dev, irq_alert, ucs1002_alert_irq,
+ 				       0,"ucs1002-alert", info);
+-		if (ret) {
+-			dev_err(dev, "Failed to request ALERT threaded irq: %d\n",
+-				ret);
++		if (ret)
+ 			return ret;
+-		}
+ 	}
+ 
+ 	return 0;
+-- 
+2.55.0
+

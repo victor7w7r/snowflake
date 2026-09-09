@@ -1,0 +1,68 @@
+From d98b2d445fc530aa34bfc7abce7e06d2e761dc01 Mon Sep 17 00:00:00 2001
+From: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Date: Sat, 8 Aug 2026 02:39:23 +0200
+Subject: [PATCH 12337/15333] bpf: Collect kfuncs after resolving program
+ resources
+
+The kfunc descriptors include argument prototypes generated while calls are
+collected. Some argument classifications need program auxiliary state derived
+from referenced maps, such as the arena associated with the program.
+
+This avoids a footgun in get_kfunc_arg_type() checks where we do
+validation on whether program has prog->aux->arena and it hasn't been
+resolved yet.
+
+check_and_resolve_insns() records used maps and populates that state. It must
+remain after bpf_check_btf_info(), which applies kernel-side CO-RE relocations,
+so that instruction validation and the program tag observe the relocated
+instruction stream.
+
+Move only add_kfuncs() after instruction and resource resolution. Subprogram
+discovery and validation remain before the full BTF phase because that phase
+needs the complete subprogram layout. Add a short comment describing the
+resource resolution phase at the call site.
+
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Reviewed-by: Amery Hung <ameryhung@gmail.com>
+Link: https://patch.msgid.link/20260808003938.3486067-4-memxor@gmail.com
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ kernel/bpf/verifier.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index a54f7b63eaba..e17084666041 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -20162,11 +20162,6 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr,
+ 	if (ret < 0)
+ 		goto skip_full_check;
+ 
+-	/* Collect the kfunc descriptors used during verification. */
+-	ret = add_kfuncs(env);
+-	if (ret < 0)
+-		goto skip_full_check;
+-
+ 	ret = check_subprogs(env);
+ 	if (ret < 0)
+ 		goto skip_full_check;
+@@ -20176,10 +20171,16 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr,
+ 	if (ret < 0)
+ 		goto skip_full_check;
+ 
++	/* Validate instructions and resolve the program's referenced resources. */
+ 	ret = check_and_resolve_insns(env);
+ 	if (ret < 0)
+ 		goto skip_full_check;
+ 
++	/* Build kfunc prototypes after resolving program resources. */
++	ret = add_kfuncs(env);
++	if (ret < 0)
++		goto skip_full_check;
++
+ 	if (bpf_prog_is_offloaded(env->prog->aux)) {
+ 		ret = bpf_prog_offload_verifier_prep(env->prog);
+ 		if (ret)
+-- 
+2.55.0
+

@@ -1,0 +1,33 @@
+From 5c39d53bf5c3967b1b64ea310ddd1d42a8cc365e Mon Sep 17 00:00:00 2001
+From: Jori Koolstra <jkoolstra@xs4all.nl>
+Date: Tue, 30 Jun 2026 12:53:36 +0200
+Subject: [PATCH 01656/15333] ceph: drop redundant S_IFDIR from mkdir
+
+vfs_mkdir() now sets the S_IFDIR type bit in the mode it passes to
+->mkdir(), so OR-ing S_IFDIR into the mode again in ceph_mkdir() is
+redundant. Drop it.
+
+Assisted-by: LLM
+Signed-off-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Link: https://patch.msgid.link/20260630105400.68459-8-jkoolstra@xs4all.nl
+Reviewed-by: NeilBrown <neil@brown.name>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/ceph/dir.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/fs/ceph/dir.c b/fs/ceph/dir.c
+index 27ce9e55e947..32a48550eacf 100644
+--- a/fs/ceph/dir.c
++++ b/fs/ceph/dir.c
+@@ -1142,7 +1142,6 @@ static struct dentry *ceph_mkdir(struct mnt_idmap *idmap, struct inode *dir,
+ 		goto out;
+ 	}
+ 
+-	mode |= S_IFDIR;
+ 	req->r_new_inode = ceph_new_inode(dir, dentry, &mode, &as_ctx);
+ 	if (IS_ERR(req->r_new_inode)) {
+ 		ret = ERR_CAST(req->r_new_inode);
+-- 
+2.55.0
+

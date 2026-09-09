@@ -1,0 +1,87 @@
+From 0f474ee80c7ba1cab784c12a12232c53db5ad1fb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh=20=28Schneider=20Electric=29?=
+ <thomas.weissschuh@linutronix.de>
+Date: Mon, 3 Aug 2026 12:04:47 +0200
+Subject: [PATCH 13265/15333] selftests: timers: nsleep-lat: Reuse kselftest
+ error numbers
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The test currently defines its own custom error numbers.
+These mirror the semantics from the standard KFST_* constants.
+
+To make the code easier to read, use the standard result constants.
+
+Signed-off-by: Thomas Weißschuh (Schneider Electric) <thomas.weissschuh@linutronix.de>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Acked-by: John Stultz <jstultz@google.com>
+Link: https://patch.msgid.link/20260803-auxclock-nanosleep-prep-v2-16-910cbd485390@linutronix.de
+---
+ tools/testing/selftests/timers/nsleep-lat.c | 19 ++++++-------------
+ 1 file changed, 6 insertions(+), 13 deletions(-)
+
+diff --git a/tools/testing/selftests/timers/nsleep-lat.c b/tools/testing/selftests/timers/nsleep-lat.c
+index af47c28f086b..266ca0cc37ec 100644
+--- a/tools/testing/selftests/timers/nsleep-lat.c
++++ b/tools/testing/selftests/timers/nsleep-lat.c
+@@ -29,8 +29,6 @@
+ 
+ #define UNRESONABLE_LATENCY (40 * NSEC_PER_MSEC)
+ 
+-#define UNSUPPORTED 0xf00f
+-
+ struct timespec timespec_add(struct timespec ts, unsigned long long ns)
+ {
+ 	ts.tv_nsec += ns;
+@@ -60,9 +58,9 @@ int nanosleep_lat_test(int clockid, long long ns)
+ 	target.tv_nsec = ns%NSEC_PER_SEC;
+ 
+ 	if (clock_gettime(clockid, &start))
+-		return UNSUPPORTED;
++		return KSFT_SKIP;
+ 	if (clock_nanosleep(clockid, 0, &target, NULL))
+-		return UNSUPPORTED;
++		return KSFT_SKIP;
+ 
+ 	count = 10;
+ 
+@@ -74,7 +72,7 @@ int nanosleep_lat_test(int clockid, long long ns)
+ 
+ 	if (((timespec_sub(start, end)/count)-ns) > UNRESONABLE_LATENCY) {
+ 		ksft_print_msg("Large rel latency: %lld ns :", (timespec_sub(start, end)/count)-ns);
+-		return -1;
++		return KSFT_FAIL;
+ 	}
+ 
+ 	/* Next check absolute latency */
+@@ -88,10 +86,10 @@ int nanosleep_lat_test(int clockid, long long ns)
+ 
+ 	if (latency/count > UNRESONABLE_LATENCY) {
+ 		ksft_print_msg("Large abs latency: %lld ns :", latency/count);
+-		return -1;
++		return KSFT_FAIL;
+ 	}
+ 
+-	return 0;
++	return KSFT_PASS;
+ }
+ 
+ int main(int argc, char **argv)
+@@ -123,12 +121,7 @@ int main(int argc, char **argv)
+ 
+ 		}
+ 
+-		if (ret == UNSUPPORTED) {
+-			ksft_test_result_skip("%s\n", clock_name(clockid));
+-		} else {
+-			ksft_test_result(ret >= 0, "%s\n",
+-					 clock_name(clockid));
+-		}
++		ksft_test_result_report(ret, "%s\n", clock_name(clockid));
+ 	}
+ 
+ 	ksft_finished();
+-- 
+2.55.0
+

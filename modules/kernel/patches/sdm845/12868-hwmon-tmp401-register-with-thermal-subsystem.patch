@@ -1,0 +1,36 @@
+From a3b61ba2558ea8fe936193c2c2c925ad8c4a1d36 Mon Sep 17 00:00:00 2001
+From: Vincent Jardin <vjardin@free.fr>
+Date: Mon, 13 Jul 2026 23:07:54 +0200
+Subject: [PATCH 12868/15333] hwmon: (tmp401) register with thermal subsystem
+
+tmp401 is missing HWMON_C_REGISTER_TZ. So a devicetree thermal
+zone referencing a such sensor ('thermal-sensors = <&tmp411 N>')
+fails to register it. Then its cooling-maps is not set, which means
+that the fans are not managed.
+
+Same as lm90 or jc42, set HWMON_C_REGISTER_TZ.
+Boards without the property into the DT keep the same behavior.
+
+Signed-off-by: Vincent Jardin <vjardin@free.fr>
+Link: https://lore.kernel.org/r/20260713-for-upstream-hwmon-tmp401-register-tz-v1-1-47315d8617bc@free.fr
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/hwmon/tmp401.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/hwmon/tmp401.c b/drivers/hwmon/tmp401.c
+index ca0ff525ea29..83aafe4bd3e7 100644
+--- a/drivers/hwmon/tmp401.c
++++ b/drivers/hwmon/tmp401.c
+@@ -695,7 +695,7 @@ static int tmp401_probe(struct i2c_client *client)
+ 	info->type = hwmon_chip;
+ 	info->config = data->chip_channel_config;
+ 
+-	data->chip_channel_config[0] = HWMON_C_UPDATE_INTERVAL;
++	data->chip_channel_config[0] = HWMON_C_REGISTER_TZ | HWMON_C_UPDATE_INTERVAL;
+ 
+ 	info = &data->temp_info;
+ 	info->type = hwmon_temp;
+-- 
+2.55.0
+

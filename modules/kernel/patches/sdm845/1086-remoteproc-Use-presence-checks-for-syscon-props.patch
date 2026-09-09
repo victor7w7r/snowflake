@@ -1,0 +1,50 @@
+From 738a5c60c37460a09dbd5c3c85f4207e5938ca5e Mon Sep 17 00:00:00 2001
+From: "Rob Herring (Arm)" <robh@kernel.org>
+Date: Fri, 12 Jun 2026 16:49:58 -0500
+Subject: [PATCH 01086/15333] remoteproc: Use presence checks for syscon props
+
+The OMAP and Keystone remoteproc drivers only need to know whether
+"ti,bootreg" and "ti,syscon-dev" are present before parsing them.
+Reading those properties as booleans misrepresents their DT encoding.
+
+Use of_property_present() for the presence tests and keep the existing
+phandle parsing for the actual property values.
+
+Assisted-by: Codex:gpt-5-5
+Signed-off-by: Rob Herring (Arm) <robh@kernel.org>
+Link: https://lore.kernel.org/r/20260612214959.1884404-1-robh@kernel.org
+Signed-off-by: Mathieu Poirier <mathieu.poirier@linaro.org>
+---
+ drivers/remoteproc/keystone_remoteproc.c | 2 +-
+ drivers/remoteproc/omap_remoteproc.c     | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/remoteproc/keystone_remoteproc.c b/drivers/remoteproc/keystone_remoteproc.c
+index e7fde5509786..83763d640c4e 100644
+--- a/drivers/remoteproc/keystone_remoteproc.c
++++ b/drivers/remoteproc/keystone_remoteproc.c
+@@ -317,7 +317,7 @@ static int keystone_rproc_of_get_dev_syscon(struct platform_device *pdev,
+ 	struct device_node *np = pdev->dev.of_node;
+ 	struct device *dev = &pdev->dev;
+ 
+-	if (!of_property_read_bool(np, "ti,syscon-dev")) {
++	if (!of_property_present(np, "ti,syscon-dev")) {
+ 		dev_err(dev, "ti,syscon-dev property is absent\n");
+ 		return -EINVAL;
+ 	}
+diff --git a/drivers/remoteproc/omap_remoteproc.c b/drivers/remoteproc/omap_remoteproc.c
+index cb01354248af..6ed0f28edac9 100644
+--- a/drivers/remoteproc/omap_remoteproc.c
++++ b/drivers/remoteproc/omap_remoteproc.c
+@@ -1140,7 +1140,7 @@ static int omap_rproc_get_boot_data(struct platform_device *pdev,
+ 	if (!data)
+ 		return -ENODEV;
+ 
+-	if (!of_property_read_bool(np, "ti,bootreg"))
++	if (!of_property_present(np, "ti,bootreg"))
+ 		return 0;
+ 
+ 	oproc->boot_data = devm_kzalloc(&pdev->dev, sizeof(*oproc->boot_data),
+-- 
+2.55.0
+

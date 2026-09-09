@@ -1,0 +1,144 @@
+From 00211ede62facec2915a7e6cfc17f8ce987a0078 Mon Sep 17 00:00:00 2001
+From: Samuel Moelius <sam.moelius@trailofbits.com>
+Date: Wed, 15 Jul 2026 00:18:00 +0000
+Subject: [PATCH 04841/15333] dm cache: parse invalidate_cblocks with
+ kstrtouint()
+
+invalidate_cblocks parses cache block numbers with sscanf() and then
+stores them in the narrower dm_cblock_t type.  Values larger than the
+cblock representation are truncated before invalidation, so a request
+for one cache block can invalidate a different block.
+
+Checking the parsed value after sscanf() is not sufficient because
+sscanf() does not reliably reject values beyond U64_MAX before storing
+into the destination.  Such inputs can still be converted to a wrapped
+u64 value and then pass a later range check.
+
+Split ranges in place and parse each single value or range endpoint
+directly with kstrtouint() instead.  This rejects malformed values and
+values that do not fit in dm_cblock_t before they can be converted to
+cblock values.  The existing range validation continues to reject empty
+or out-of-cache ranges, including the single-value U32_MAX case whose
+exclusive end wraps to zero.
+
+Assisted-by: Codex:gpt-5.5-cyber-preview
+Signed-off-by: Samuel Moelius <sam.moelius@trailofbits.com>
+Signed-off-by: Mikulas Patocka <mpatocka@redhat.com>
+Reviewed-by: Ming-Hung Tsai <mtsai@redhat.com>
+---
+ drivers/md/dm-cache-target.c | 56 ++++++++++++++++++------------------
+ 1 file changed, 28 insertions(+), 28 deletions(-)
+
+diff --git a/drivers/md/dm-cache-target.c b/drivers/md/dm-cache-target.c
+index 097315a9bf0f..33dbc71b730f 100644
+--- a/drivers/md/dm-cache-target.c
++++ b/drivers/md/dm-cache-target.c
+@@ -16,6 +16,7 @@
+ #include <linux/dm-kcopyd.h>
+ #include <linux/jiffies.h>
+ #include <linux/init.h>
++#include <linux/kstrtox.h>
+ #include <linux/mempool.h>
+ #include <linux/module.h>
+ #include <linux/rwsem.h>
+@@ -3311,42 +3312,46 @@ struct cblock_range {
+ 	dm_cblock_t end;
+ };
+ 
++static inline dm_cblock_t cblock_succ(dm_cblock_t b)
++{
++	return to_cblock(from_cblock(b) + 1);
++}
++
+ /*
+  * A cache block range can take two forms:
+  *
+  * i) A single cblock, eg. '3456'
+  * ii) A begin and end cblock with a dash between, eg. 123-234
+  */
+-static int parse_cblock_range(struct cache *cache, const char *str,
++static int parse_cblock_range(struct cache *cache, char *str,
+ 			      struct cblock_range *result)
+ {
+-	char dummy;
+-	uint64_t b, e;
++	char *blocknr = strsep(&str, "-");
++	unsigned int b, e;
+ 	int r;
+ 
+-	/*
+-	 * Try and parse form (ii) first.
+-	 */
+-	r = sscanf(str, "%llu-%llu%c", &b, &e, &dummy);
++	r = kstrtouint(blocknr, 10, &b);
++	if (r)
++		goto bad;
+ 
+-	if (r == 2) {
+-		result->begin = to_cblock(b);
+-		result->end = to_cblock(e);
+-		return 0;
+-	}
++	result->begin = to_cblock(b);
+ 
+-	/*
+-	 * That didn't work, try form (i).
+-	 */
+-	r = sscanf(str, "%llu%c", &b, &dummy);
++	if (str) {
++		blocknr = str;
+ 
+-	if (r == 1) {
+-		result->begin = to_cblock(b);
+-		result->end = to_cblock(from_cblock(result->begin) + 1u);
+-		return 0;
++		r = kstrtouint(blocknr, 10, &e);
++		if (r)
++			goto bad;
++
++		result->end = to_cblock(e);
++	} else {
++		result->end = cblock_succ(result->begin);
+ 	}
+ 
+-	DMERR("%s: invalid cblock range '%s'", cache_device_name(cache), str);
++	return 0;
++
++bad:
++	DMERR("%s: invalid cblock range '%s'", cache_device_name(cache), blocknr);
+ 	return -EINVAL;
+ }
+ 
+@@ -3377,11 +3382,6 @@ static int validate_cblock_range(struct cache *cache, struct cblock_range *range
+ 	return 0;
+ }
+ 
+-static inline dm_cblock_t cblock_succ(dm_cblock_t b)
+-{
+-	return to_cblock(from_cblock(b) + 1);
+-}
+-
+ static int request_invalidation(struct cache *cache, struct cblock_range *range)
+ {
+ 	int r = 0;
+@@ -3405,7 +3405,7 @@ static int request_invalidation(struct cache *cache, struct cblock_range *range)
+ }
+ 
+ static int process_invalidate_cblocks_message(struct cache *cache, unsigned int count,
+-					      const char **cblock_ranges)
++					      char **cblock_ranges)
+ {
+ 	int r = 0;
+ 	unsigned int i;
+@@ -3460,7 +3460,7 @@ static int cache_message(struct dm_target *ti, unsigned int argc, char **argv,
+ 	}
+ 
+ 	if (!strcasecmp(argv[0], "invalidate_cblocks"))
+-		return process_invalidate_cblocks_message(cache, argc - 1, (const char **) argv + 1);
++		return process_invalidate_cblocks_message(cache, argc - 1, argv + 1);
+ 
+ 	if (argc != 2)
+ 		return -EINVAL;
+-- 
+2.55.0
+

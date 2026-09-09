@@ -1,0 +1,45 @@
+From 7cdbd4c7436d3c744002825f6001bf90c81c2242 Mon Sep 17 00:00:00 2001
+From: Christoph Schlameuss <schlameuss@linux.ibm.com>
+Date: Fri, 7 Aug 2026 11:57:45 +0200
+Subject: [PATCH 12606/15333] KVM: s390: vsie: Assert mcck_info offset in
+ vsie_page
+
+Ensure that the backup info for machine check is the same offset as that
+in struct sie_page!
+
+With the assertion in place we do not need the comment anymore.
+
+Signed-off-by: Christoph Schlameuss <schlameuss@linux.ibm.com>
+Reviewed-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+Signed-off-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+---
+ arch/s390/kvm/vsie.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/arch/s390/kvm/vsie.c b/arch/s390/kvm/vsie.c
+index 937f9c99bc00..7c3b5e11b301 100644
+--- a/arch/s390/kvm/vsie.c
++++ b/arch/s390/kvm/vsie.c
+@@ -33,10 +33,7 @@ enum vsie_page_flags {
+ 
+ struct vsie_page {
+ 	struct kvm_s390_sie_block scb_s;	/* 0x0000 */
+-	/*
+-	 * the backup info for machine check. ensure it's at
+-	 * the same offset as that in struct sie_page!
+-	 */
++	/* backup info for machine check */
+ 	struct mcck_volatile_info mcck_info;    /* 0x0200 */
+ 	/*
+ 	 * The pinned original scb. Be aware that other VCPUs can modify
+@@ -71,6 +68,7 @@ struct vsie_page {
+ };
+ 
+ static_assert(sizeof(struct vsie_page) == PAGE_SIZE);
++static_assert(offsetof(struct vsie_page, mcck_info) == offsetof(struct sie_page, mcck_info));
+ 
+ /* trigger a validity icpt for the given scb */
+ static int set_validity_icpt(struct kvm_s390_sie_block *scb,
+-- 
+2.55.0
+

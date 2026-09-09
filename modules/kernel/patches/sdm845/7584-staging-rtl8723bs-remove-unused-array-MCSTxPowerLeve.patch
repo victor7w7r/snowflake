@@ -1,0 +1,67 @@
+From f113eff26fffd4179e271e09ea588cca4aa83c18 Mon Sep 17 00:00:00 2001
+From: Nikolay Kulikov <nikolayof23@gmail.com>
+Date: Fri, 17 Jul 2026 21:52:01 +0300
+Subject: [PATCH 07584/15333] staging: rtl8723bs: remove unused array
+ MCSTxPowerLevelOriginalOffset
+
+Remove the 'MCSTxPowerLevelOriginalOffset' array and the 'pwrGroupCnt'
+field (which is used as an index for that array), as values are being
+written to it but are no longer used.
+
+Signed-off-by: Nikolay Kulikov <nikolayof23@gmail.com>
+Link: https://patch.msgid.link/20260717185407.56513-3-nikolayof23@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/hal/hal_com_phycfg.c | 13 -------------
+ drivers/staging/rtl8723bs/include/hal_data.h   |  4 ----
+ 2 files changed, 17 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/hal/hal_com_phycfg.c b/drivers/staging/rtl8723bs/hal/hal_com_phycfg.c
+index f886699104e5..df0eaff4c841 100644
+--- a/drivers/staging/rtl8723bs/hal/hal_com_phycfg.c
++++ b/drivers/staging/rtl8723bs/hal/hal_com_phycfg.c
+@@ -329,16 +329,6 @@ static void PHY_StoreTxPowerByRateNew(struct adapter *padapter,	u32 RfPath,
+ 	}
+ }
+ 
+-static void PHY_StoreTxPowerByRateOld(
+-	struct adapter *padapter, u32	RegAddr, u32 BitMask, u32 Data
+-)
+-{
+-	struct hal_com_data	*pHalData = GET_HAL_DATA(padapter);
+-	u8	index = PHY_GetRateSectionIndexOfTxPowerByRate(padapter, RegAddr, BitMask);
+-
+-	pHalData->MCSTxPowerLevelOriginalOffset[pHalData->pwrGroupCnt][index] = Data;
+-}
+-
+ void PHY_InitTxPowerByRate(struct adapter *padapter)
+ {
+ 	struct hal_com_data	*pHalData = GET_HAL_DATA(padapter);
+@@ -362,9 +352,6 @@ void PHY_StoreTxPowerByRate(
+ 
+ 	if (pDM_Odm->PhyRegPgVersion > 0)
+ 		PHY_StoreTxPowerByRateNew(padapter, RfPath, RegAddr, BitMask, Data);
+-	else if (pDM_Odm->PhyRegPgVersion == 0) {
+-		PHY_StoreTxPowerByRateOld(padapter, RegAddr, BitMask, Data);
+-	}
+ }
+ 
+ static void
+diff --git a/drivers/staging/rtl8723bs/include/hal_data.h b/drivers/staging/rtl8723bs/include/hal_data.h
+index b88ae2eb1072..8b1b61e78fee 100644
+--- a/drivers/staging/rtl8723bs/include/hal_data.h
++++ b/drivers/staging/rtl8723bs/include/hal_data.h
+@@ -198,10 +198,6 @@ struct hal_com_data {
+ 	/*  Store the original power by rate value of the base of each rate section of rf path A & B */
+ 	u8 TxPwrByRateBase2_4G[MAX_RF_PATH_NUM][MAX_RATE_SECTION_NUM];
+ 
+-	/*  Read/write are allow for following hardware information variables */
+-	u8 pwrGroupCnt;
+-	u32 MCSTxPowerLevelOriginalOffset[MAX_PG_GROUP][16];
+-
+ 	u8 CrystalCap;
+ 
+ 	u8 TypeGLNA;
+-- 
+2.55.0
+

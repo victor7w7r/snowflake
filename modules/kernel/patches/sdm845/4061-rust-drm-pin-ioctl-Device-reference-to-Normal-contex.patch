@@ -1,0 +1,38 @@
+From 499eb35cd4776b7c1ac8c6bb2ea6e693b7519a11 Mon Sep 17 00:00:00 2001
+From: Danilo Krummrich <dakr@kernel.org>
+Date: Sun, 28 Jun 2026 16:53:30 +0200
+Subject: [PATCH 04061/15333] rust: drm: pin ioctl Device reference to Normal
+ context
+
+Explicitly annotate the Device reference produced by from_raw() in the
+ioctl dispatch macro as Device<_, Normal>. Without this annotation, the
+context is inferred from the handler's first parameter type, which would
+allow a handler declaring &Device<T, Registered> to obtain a Registered
+reference without runtime proof via RegistrationGuard.
+
+Reviewed-by: Lyude Paul <lyude@redhat.com>
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Tested-by: Deborah Brouwer <deborah.brouwer@collabora.com>
+Link: https://patch.msgid.link/20260628145406.2107056-11-dakr@kernel.org
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/kernel/drm/ioctl.rs | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/rust/kernel/drm/ioctl.rs b/rust/kernel/drm/ioctl.rs
+index ccf4150d83b6..6f5a9877bdae 100644
+--- a/rust/kernel/drm/ioctl.rs
++++ b/rust/kernel/drm/ioctl.rs
+@@ -134,7 +134,8 @@ macro_rules! declare_drm_ioctls {
+                             // FIXME: Currently there is nothing enforcing that the types of the
+                             // dev/file match the current driver these ioctls are being declared
+                             // for, and it's not clear how to enforce this within the type system.
+-                            let dev = $crate::drm::device::Device::from_raw(raw_dev);
++                            let dev: &$crate::drm::device::Device<_, $crate::drm::Normal> =
++                                $crate::drm::device::Device::from_raw(raw_dev);
+ 
+                             // Enforce that the handler accepts higher-ranked
+                             // lifetimes, preventing it from requiring 'static
+-- 
+2.55.0
+

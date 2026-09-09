@@ -1,0 +1,35 @@
+From c67573b37c3522be2841d4530c1729c37ea89dcb Mon Sep 17 00:00:00 2001
+From: Wang Yechao <wang.yechao255@zte.com.cn>
+Date: Fri, 31 Jul 2026 17:12:09 +0800
+Subject: [PATCH 09682/15333] RISC-V: KVM: Split huge pages during
+ KVM_CLEAR_DIRTY_LOG
+
+Split huge pages on the range specified using KVM_CLEAR_DIRTY_LOG.
+And do not split when enabling dirty logging if
+KVM_DIRTY_LOG_INITIALLY_SET is set.
+
+Signed-off-by: Wang Yechao <wang.yechao255@zte.com.cn>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+Link: https://lore.kernel.org/r/20260731091215.1549430-5-wang.yechao255@zte.com.cn
+Signed-off-by: Anup Patel <anup@brainfault.org>
+---
+ arch/riscv/kvm/mmu.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/riscv/kvm/mmu.c b/arch/riscv/kvm/mmu.c
+index b8c22d507c93..9ae10f5b2984 100644
+--- a/arch/riscv/kvm/mmu.c
++++ b/arch/riscv/kvm/mmu.c
+@@ -168,6 +168,9 @@ void kvm_arch_mmu_enable_log_dirty_pt_masked(struct kvm *kvm,
+ 
+ 	kvm_riscv_gstage_wp_range(&gstage, start, end);
+ 
++	if (kvm_dirty_log_manual_protect_and_init_set(kvm))
++		mmu_split_huge_pages(&gstage, start, end);
++
+ 	/*
+ 	 * Remote TLB flush is not needed here since callers of
+ 	 * kvm_arch_mmu_enable_log_dirty_pt_masked() already do it.
+-- 
+2.55.0
+

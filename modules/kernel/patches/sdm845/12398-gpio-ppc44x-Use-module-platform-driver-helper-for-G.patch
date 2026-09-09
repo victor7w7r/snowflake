@@ -1,0 +1,45 @@
+From f17b0ef8593d2c9f38197c396146b63e918e46fc Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Mon, 3 Aug 2026 15:35:34 -0700
+Subject: [PATCH 12398/15333] gpio: ppc44x: Use module platform driver helper
+ for GPIO
+
+Replace the open-coded arch initcall registration with
+module_platform_driver(). The initcall level changes from
+arch_initcall to device_initcall, which is safe since the
+driver no longer needs architecture-specific ordering.
+
+Added MODULE info as a result, otherwise these warnings appear
+
+ERROR: modpost: missing MODULE_LICENSE() in drivers/gpio/gpio-ppc4xx.o
+WARNING: modpost: missing MODULE_DESCRIPTION() in drivers/gpio/gpio-ppc4xx.o
+
+Assisted-by: Codex:GPT-5.5
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Signed-off-by: Madhavan Srinivasan <maddy@linux.ibm.com>
+Link: https://patch.msgid.link/20260803223539.86303-4-rosenp@gmail.com
+---
+ drivers/gpio/gpio-ppc44x.c | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpio/gpio-ppc44x.c b/drivers/gpio/gpio-ppc44x.c
+index 9b874ff8b124..99fb11cd7966 100644
+--- a/drivers/gpio/gpio-ppc44x.c
++++ b/drivers/gpio/gpio-ppc44x.c
+@@ -204,8 +204,7 @@ static struct platform_driver ppc44x_gpio_driver = {
+ 	},
+ };
+ 
+-static int __init ppc44x_gpio_init(void)
+-{
+-	return platform_driver_register(&ppc44x_gpio_driver);
+-}
+-arch_initcall(ppc44x_gpio_init);
++MODULE_DESCRIPTION("PPC44x gpio driver");
++MODULE_LICENSE("GPL");
++
++module_platform_driver(ppc44x_gpio_driver);
+-- 
+2.55.0
+

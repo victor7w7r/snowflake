@@ -1,0 +1,40 @@
+From a57beee8f816cc43fe0e78b794fa6cb54b3a2034 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 15:59:40 +0200
+Subject: [PATCH 12794/15333] ASoC: hdac_hda: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-9-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/hdac_hda.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/sound/soc/codecs/hdac_hda.c b/sound/soc/codecs/hdac_hda.c
+index 1ab5f8a26e03..1c06fdbf0e71 100644
+--- a/sound/soc/codecs/hdac_hda.c
++++ b/sound/soc/codecs/hdac_hda.c
+@@ -437,7 +437,7 @@ static int hdac_hda_codec_probe(struct snd_soc_component *component)
+ 
+ #ifdef CONFIG_SND_HDA_PATCH_LOADER
+ 	if (loadable_patch[hda_pvt->dev_index] && *loadable_patch[hda_pvt->dev_index]) {
+-		const struct firmware *fw;
++		const struct firmware *fw __free(firmware) = NULL;
+ 
+ 		dev_info(&hdev->dev, "Applying patch firmware '%s'\n",
+ 			 loadable_patch[hda_pvt->dev_index]);
+@@ -451,7 +451,6 @@ static int hdac_hda_codec_probe(struct snd_soc_component *component)
+ 				dev_err(&hdev->dev, "%s: failed to load hda patch %d\n", __func__, ret);
+ 				goto error_no_pm;
+ 			}
+-			release_firmware(fw);
+ 		}
+ 	}
+ #endif
+-- 
+2.55.0
+

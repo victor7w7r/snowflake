@@ -1,0 +1,253 @@
+From 50ca555d6ae8205374e406b411ae0e8e9447568d Mon Sep 17 00:00:00 2001
+From: Lad Prabhakar <prabhakar.mahadev-lad.rj@bp.renesas.com>
+Date: Tue, 2 Jun 2026 21:02:42 +0100
+Subject: [PATCH 01124/15333] clk: divider: Add KUnit tests for
+ clk_divider_bestdiv() ULONG_MAX handling
+
+Add KUnit tests to verify the behaviour of clk_divider_bestdiv() when
+clk_round_rate() is called with ULONG_MAX, which is the canonical way
+to probe the maximum rate a clock can produce.
+
+Two test cases are introduced:
+
+- clk_divider_bestdiv_ulong_max_returns_max_rate: registers a 1 GHz
+  fixed-rate parent driving a table-based divider whose smallest entry
+  is div=2 (entries: 2, 4, 8). Calls clk_hw_round_rate(div_hw, ULONG_MAX)
+  and checks the result.
+
+- clk_divider_bestdiv_mux_ulong_max_returns_max_rate: places a two-input
+  mux (4 GHz and 2 GHz fixed-rate parents, CLK_SET_RATE_PARENT) ahead of
+  the same table-based divider to verify correct parent selection under
+  ULONG_MAX.
+
+Both tests use an explicit clk_div_table with a minimum divider of 2 so
+that the pre-loop maxdiv clamping in clk_divider_bestdiv():
+
+    maxdiv = min(ULONG_MAX / rate, maxdiv);
+
+clamps maxdiv to 1, causing _next_div() to return 2 on the first
+iteration and skip the loop body entirely. This makes bestdiv fall back
+to the maximum divider, returning the minimum rate rather than the
+maximum.
+
+The expected values intentionally reflect the buggy output:
+  - test 1: PARENT_RATE_1GHZ / 8  (minimum rate, not maximum)
+  - test 2: 0                      (invalid, loop never populated bestdiv)
+
+These will be corrected to PARENT_RATE_1GHZ / 2 and PARENT_RATE_4GHZ / 2
+respectively once the fix to clk_divider_bestdiv() is applied.
+
+Signed-off-by: Lad Prabhakar <prabhakar.mahadev-lad.rj@bp.renesas.com>
+Reviewed-by: Brian Masney <bmasney@redhat.com>
+Signed-off-by: Brian Masney <bmasney@redhat.com>
+---
+ drivers/clk/.kunitconfig       |   1 +
+ drivers/clk/Kconfig            |   8 ++
+ drivers/clk/Makefile           |   1 +
+ drivers/clk/clk-divider_test.c | 153 +++++++++++++++++++++++++++++++++
+ 4 files changed, 163 insertions(+)
+ create mode 100644 drivers/clk/clk-divider_test.c
+
+diff --git a/drivers/clk/.kunitconfig b/drivers/clk/.kunitconfig
+index 8a0ea41934a2..ea05b9a28c80 100644
+--- a/drivers/clk/.kunitconfig
++++ b/drivers/clk/.kunitconfig
+@@ -4,6 +4,7 @@ CONFIG_OF=y
+ CONFIG_OF_OVERLAY=y
+ CONFIG_COMMON_CLK=y
+ CONFIG_CLK_KUNIT_TEST=y
++CONFIG_CLK_DIVIDER_KUNIT_TEST=y
+ CONFIG_CLK_FIXED_RATE_KUNIT_TEST=y
+ CONFIG_CLK_GATE_KUNIT_TEST=y
+ CONFIG_CLK_FD_KUNIT_TEST=y
+diff --git a/drivers/clk/Kconfig b/drivers/clk/Kconfig
+index 1717ce75a907..3d94c7611356 100644
+--- a/drivers/clk/Kconfig
++++ b/drivers/clk/Kconfig
+@@ -579,4 +579,12 @@ config CLK_FD_KUNIT_TEST
+ 	help
+ 	  Kunit test for the clk-fractional-divider type.
+ 
++config CLK_DIVIDER_KUNIT_TEST
++	tristate "KUnit tests for clk divider bestdiv" if !KUNIT_ALL_TESTS
++	depends on KUNIT
++	depends on !S390
++	default KUNIT_ALL_TESTS
++	help
++	  Kunit test for the clk-divider type.
++
+ endif
+diff --git a/drivers/clk/Makefile b/drivers/clk/Makefile
+index c2ae700ec0f2..d042b4aa9c0f 100644
+--- a/drivers/clk/Makefile
++++ b/drivers/clk/Makefile
+@@ -31,6 +31,7 @@ clk-test-y			:= clk_test.o \
+ 				   kunit_clk_hw_get_dev_of_node.dtbo.o \
+ 				   kunit_clk_parent_data_test.dtbo.o
+ obj-$(CONFIG_COMMON_CLK)	+= clk-divider.o
++obj-$(CONFIG_CLK_DIVIDER_KUNIT_TEST) += clk-divider_test.o
+ obj-$(CONFIG_COMMON_CLK)	+= clk-fixed-factor.o
+ obj-$(CONFIG_COMMON_CLK)	+= clk-fixed-rate.o
+ obj-$(CONFIG_CLK_FIXED_RATE_KUNIT_TEST)	+= clk-fixed-rate-test.o
+diff --git a/drivers/clk/clk-divider_test.c b/drivers/clk/clk-divider_test.c
+new file mode 100644
+index 000000000000..cb56931456b8
+--- /dev/null
++++ b/drivers/clk/clk-divider_test.c
+@@ -0,0 +1,153 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * KUnit tests for clk_divider_bestdiv()
++ */
++#include <kunit/test.h>
++#include <linux/clk.h>
++#include <linux/clk-provider.h>
++#include <linux/limits.h>
++#include <linux/units.h>
++
++#define PARENT_RATE_1GHZ	GIGA
++#define PARENT_RATE_2GHZ	(2 * GIGA)
++#define PARENT_RATE_4GHZ	(4 * GIGA)
++
++KUNIT_DEFINE_ACTION_WRAPPER(clk_hw_unregister_fixed_rate_wrapper,
++			    clk_hw_unregister_fixed_rate, struct clk_hw *);
++KUNIT_DEFINE_ACTION_WRAPPER(clk_hw_unregister_divider_wrapper,
++			    clk_hw_unregister_divider, struct clk_hw *);
++KUNIT_DEFINE_ACTION_WRAPPER(clk_hw_unregister_mux_wrapper,
++			    clk_hw_unregister_mux, struct clk_hw *);
++
++static const struct clk_div_table bestdiv_table[] = {
++	{ .val = 0, .div = 2 },
++	{ .val = 1, .div = 4 },
++	{ .val = 2, .div = 8 },
++	{ /* sentinel */ }
++};
++
++/*
++ * Test that clk_round_rate(clk, ULONG_MAX) returns the maximum achievable
++ * rate for a divider clock.
++ */
++static void clk_divider_bestdiv_ulong_max_returns_max_rate(struct kunit *test)
++{
++	struct clk_hw *parent_hw, *div_hw;
++	unsigned long rate;
++	u32 *fake_reg;
++
++	fake_reg = kunit_kzalloc(test, sizeof(*fake_reg), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, fake_reg);
++
++	parent_hw = clk_hw_register_fixed_rate(NULL, "bestdiv-parent",
++					       NULL, 0, PARENT_RATE_1GHZ);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, parent_hw);
++	KUNIT_ASSERT_EQ(test, 0,
++			kunit_add_action_or_reset(test, clk_hw_unregister_fixed_rate_wrapper,
++						  parent_hw));
++
++	div_hw = clk_hw_register_divider_table(NULL, "bestdiv-div",
++					       "bestdiv-parent",
++					       CLK_SET_RATE_PARENT,
++					       (void __iomem __force *)fake_reg,
++					       0, 2, 0, bestdiv_table, NULL);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, div_hw);
++	KUNIT_ASSERT_EQ(test, 0,
++			kunit_add_action_or_reset(test, clk_hw_unregister_divider_wrapper,
++						  div_hw));
++
++	/*
++	 * ULONG_MAX is the canonical way to probe the maximum rate a clock
++	 * can produce.
++	 */
++	rate = clk_hw_round_rate(div_hw, ULONG_MAX);
++	KUNIT_EXPECT_EQ(test, rate, PARENT_RATE_1GHZ / 8);
++}
++
++/*
++ * Test that clk_round_rate(clk, ULONG_MAX) returns the correct maximum rate
++ * when a mux clock sits between a divider and its parent candidates.
++ *
++ * Topology:
++ *
++ *   [fixed 4 GHz] --\
++ *                    +--> [mux CLK_SET_RATE_PARENT] --> [div {2,4,8} CLK_SET_RATE_PARENT]
++ *   [fixed 2 GHz] --/
++ *
++ */
++static void clk_divider_bestdiv_mux_ulong_max_returns_max_rate(struct kunit *test)
++{
++	static const char * const mux_parents[] = {
++		"bestdiv-mux-parent-a",
++		"bestdiv-mux-parent-b",
++	};
++	struct clk_hw *parent_a_hw, *parent_b_hw, *mux_hw, *div_hw;
++	u32 *fake_reg_mux, *fake_reg_div;
++	unsigned long rate;
++
++	fake_reg_mux = kunit_kzalloc(test, sizeof(*fake_reg_mux), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, fake_reg_mux);
++
++	fake_reg_div = kunit_kzalloc(test, sizeof(*fake_reg_div), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, fake_reg_div);
++
++	/* Higher-rate parent: the mux should select this for ULONG_MAX. */
++	parent_a_hw = clk_hw_register_fixed_rate(NULL, "bestdiv-mux-parent-a",
++						 NULL, 0, PARENT_RATE_4GHZ);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, parent_a_hw);
++	KUNIT_ASSERT_EQ(test, 0,
++			kunit_add_action_or_reset(test, clk_hw_unregister_fixed_rate_wrapper,
++						  parent_a_hw));
++
++	/* Lower-rate parent: should not be selected. */
++	parent_b_hw = clk_hw_register_fixed_rate(NULL, "bestdiv-mux-parent-b",
++						 NULL, 0, PARENT_RATE_2GHZ);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, parent_b_hw);
++	KUNIT_ASSERT_EQ(test, 0,
++			kunit_add_action_or_reset(test, clk_hw_unregister_fixed_rate_wrapper,
++						  parent_b_hw));
++
++	/*
++	 * 1-bit mux register selects between the two parents.
++	 * CLK_SET_RATE_PARENT allows the divider's rate request to
++	 * propagate into clk_mux_determine_rate().
++	 */
++	mux_hw = clk_hw_register_mux(NULL, "bestdiv-mux",
++				     mux_parents, ARRAY_SIZE(mux_parents),
++				     CLK_SET_RATE_PARENT,
++				     (void __iomem __force *)fake_reg_mux,
++				     0, 1, 0, NULL);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, mux_hw);
++	KUNIT_ASSERT_EQ(test, 0,
++			kunit_add_action_or_reset(test, clk_hw_unregister_mux_wrapper,
++						  mux_hw));
++
++	div_hw = clk_hw_register_divider_table(NULL, "bestdiv-mux-div",
++					       "bestdiv-mux",
++					       CLK_SET_RATE_PARENT,
++					       (void __iomem __force *)fake_reg_div,
++					       0, 2, 0, bestdiv_table, NULL);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, div_hw);
++	KUNIT_ASSERT_EQ(test, 0,
++			kunit_add_action_or_reset(test, clk_hw_unregister_divider_wrapper,
++						  div_hw));
++
++	rate = clk_hw_round_rate(div_hw, ULONG_MAX);
++	KUNIT_EXPECT_EQ(test, rate, 0);
++}
++
++static struct kunit_case clk_divider_bestdiv_test_cases[] = {
++	KUNIT_CASE(clk_divider_bestdiv_ulong_max_returns_max_rate),
++	KUNIT_CASE(clk_divider_bestdiv_mux_ulong_max_returns_max_rate),
++	{}
++};
++
++static struct kunit_suite clk_divider_bestdiv_test_suite = {
++	.name = "clk_divider_bestdiv",
++	.test_cases = clk_divider_bestdiv_test_cases,
++};
++
++kunit_test_suite(clk_divider_bestdiv_test_suite);
++
++MODULE_DESCRIPTION("KUnit tests for clk divider");
++MODULE_LICENSE("GPL");
+-- 
+2.55.0
+

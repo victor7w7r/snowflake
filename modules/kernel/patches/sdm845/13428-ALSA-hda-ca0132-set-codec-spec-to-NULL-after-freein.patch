@@ -1,0 +1,40 @@
+From 3cd6cb2dc9598278235b9c76bc188cd4fbc320e5 Mon Sep 17 00:00:00 2001
+From: Bob Song <songxiebing@kylinos.cn>
+Date: Wed, 12 Aug 2026 11:30:19 +0800
+Subject: [PATCH 13428/15333] ALSA: hda/ca0132: set codec->spec to NULL after
+ freeing
+
+ca0132_free() and dbpro_free() call kfree(codec->spec) without
+setting codec->spec to NULL afterward, leaving a dangling pointer.
+Set it to NULL.
+
+Signed-off-by: Bob Song <songxiebing@kylinos.cn>
+Link: https://patch.msgid.link/20260812033019.635010-1-songxiebing@kylinos.cn
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/hda/codecs/ca0132.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/sound/hda/codecs/ca0132.c b/sound/hda/codecs/ca0132.c
+index 61c9fb42b1de..aa2635d8ab92 100644
+--- a/sound/hda/codecs/ca0132.c
++++ b/sound/hda/codecs/ca0132.c
+@@ -9628,6 +9628,7 @@ static void ca0132_free(struct hda_codec *codec)
+ #endif
+ 	kfree(spec->spec_init_verbs);
+ 	kfree(codec->spec);
++	codec->spec = NULL;
+ }
+ 
+ static void dbpro_free(struct hda_codec *codec)
+@@ -9638,6 +9639,7 @@ static void dbpro_free(struct hda_codec *codec)
+ 
+ 	kfree(spec->spec_init_verbs);
+ 	kfree(codec->spec);
++	codec->spec = NULL;
+ }
+ 
+ static void ca0132_config(struct hda_codec *codec)
+-- 
+2.55.0
+

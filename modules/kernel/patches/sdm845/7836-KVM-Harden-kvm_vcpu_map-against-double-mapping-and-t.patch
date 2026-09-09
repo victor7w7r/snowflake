@@ -1,0 +1,36 @@
+From e186d4e34ad515f8ec45831f4386c677b3967092 Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Thu, 23 Jul 2026 17:47:57 -0700
+Subject: [PATCH 07836/15333] KVM: Harden kvm_vcpu_map() against double-mapping
+ and thus leaking references
+
+Now that all on-stack maps use CLASS(kvm_vcpu_map_local), i.e. now that all
+maps are zero-allocated, explicitly put any existing mappings/references
+when establishing a new mapping to harden against KVM bugs leaking memory,
+but yell loudly as the owner of the map is still ultimately responsible for
+the lifecycle of the mapping.
+
+Suggested-by: Yosry Ahmed <yosry@kernel.org>
+Link: https://patch.msgid.link/20260724004757.131420-7-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ virt/kvm/kvm_main.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
+index 2df8ee9ecf6c..e9e32686e41b 100644
+--- a/virt/kvm/kvm_main.c
++++ b/virt/kvm/kvm_main.c
+@@ -3118,6 +3118,9 @@ int __kvm_vcpu_map(struct kvm_vcpu *vcpu, gfn_t gfn, struct kvm_host_map *map,
+ 		.pin = true,
+ 	};
+ 
++	if (WARN_ON_ONCE(map->hva))
++		kvm_vcpu_unmap(vcpu, map);
++
+ 	map->pinned_page = NULL;
+ 	map->page = NULL;
+ 	map->hva = NULL;
+-- 
+2.55.0
+

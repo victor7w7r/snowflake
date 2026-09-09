@@ -1,0 +1,76 @@
+From 8877c06885ce43780f7630973dc47cd3a625524b Mon Sep 17 00:00:00 2001
+From: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Date: Mon, 6 Jul 2026 14:44:15 +0200
+Subject: [PATCH 03779/15333] driver core: platform: provide
+ platform_device_set_fwnode()
+
+Provide a helper function encapsulating the logic of assigning firmware
+nodes to platform devices created with platform_device_alloc(). Make the
+kerneldoc state that this is the proper interface for assigning firmware
+nodes to dynamically allocated platform devices. This will allow us to
+switch to counting the references of the device's firmware nodes in the
+future, not only the OF nodes.
+
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260706-pdev-fwnode-ref-v3-3-1ff028e33779@oss.qualcomm.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/base/platform.c         | 19 +++++++++++++++++++
+ include/linux/platform_device.h |  3 +++
+ 2 files changed, 22 insertions(+)
+
+diff --git a/drivers/base/platform.c b/drivers/base/platform.c
+index 3188d5aba5f9..6520b70cf305 100644
+--- a/drivers/base/platform.c
++++ b/drivers/base/platform.c
+@@ -711,6 +711,25 @@ void platform_device_set_of_node(struct platform_device *pdev,
+ }
+ EXPORT_SYMBOL_GPL(platform_device_set_of_node);
+ 
++/**
++ * platform_device_set_fwnode - assign a firmware node to device
++ * @pdev: platform device to set the node for
++ * @fwnode: new firmware node
++ *
++ * Assign a firmware node to this platform device. Internally keep track of the
++ * reference count. Devices created with platform_device_alloc() must use this
++ * function instead of assigning the node manually.
++ */
++void platform_device_set_fwnode(struct platform_device *pdev,
++				struct fwnode_handle *fwnode)
++{
++	if (is_of_node(fwnode))
++		platform_device_set_of_node(pdev, to_of_node(fwnode));
++	else
++		pdev->dev.fwnode = fwnode;
++}
++EXPORT_SYMBOL_GPL(platform_device_set_fwnode);
++
+ /**
+  * platform_device_add - add a platform device to device hierarchy
+  * @pdev: platform device we're adding
+diff --git a/include/linux/platform_device.h b/include/linux/platform_device.h
+index 870d168aeff8..c463d46b7b9a 100644
+--- a/include/linux/platform_device.h
++++ b/include/linux/platform_device.h
+@@ -20,6 +20,7 @@ struct mfd_cell;
+ struct property_entry;
+ struct platform_device_id;
+ struct device_node;
++struct fwnode_handle;
+ 
+ struct platform_device {
+ 	const char	*name;
+@@ -265,6 +266,8 @@ extern int platform_device_add_data(struct platform_device *pdev,
+ 				    const void *data, size_t size);
+ void platform_device_set_of_node(struct platform_device *pdev,
+ 				 struct device_node *np);
++void platform_device_set_fwnode(struct platform_device *pdev,
++				struct fwnode_handle *fwnode);
+ extern int platform_device_add(struct platform_device *pdev);
+ extern void platform_device_del(struct platform_device *pdev);
+ extern void platform_device_put(struct platform_device *pdev);
+-- 
+2.55.0
+

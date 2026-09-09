@@ -1,0 +1,125 @@
+From 36a6518e746dcd2e30391c61ce6a8c4bcafd7bb7 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Mon, 13 Jul 2026 21:15:10 +0800
+Subject: [PATCH 06481/15333] EDAC: Remove redundant dev_err()
+
+Since
+
+  55b48e23f5c4 ("genirq/devres: Add error handling in devm_request_*_irq()"),
+
+devm_request_irq() and devm_request_threaded_irq() automatically log detailed
+error messages on failure. Remove the now-redundant driver-specific dev_err()
+calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Reviewed-by: Andrew Jeffery <andrew@codeconstruct.com.au> # aspeed
+Link: https://patch.msgid.link/20260713131510.332386-1-panchuang@vivo.com
+---
+ drivers/edac/al_mc_edac.c       | 12 ++----------
+ drivers/edac/aspeed_edac.c      |  4 +---
+ drivers/edac/highbank_mc_edac.c |  4 +---
+ drivers/edac/thunderx_edac.c    |  4 +---
+ drivers/edac/xgene_edac.c       |  5 +----
+ 5 files changed, 6 insertions(+), 23 deletions(-)
+
+diff --git a/drivers/edac/al_mc_edac.c b/drivers/edac/al_mc_edac.c
+index 178b9e581a72..bf6921d8890b 100644
+--- a/drivers/edac/al_mc_edac.c
++++ b/drivers/edac/al_mc_edac.c
+@@ -302,12 +302,8 @@ static int al_mc_edac_probe(struct platform_device *pdev)
+ 				       IRQF_SHARED,
+ 				       pdev->name,
+ 				       pdev);
+-		if (ret != 0) {
+-			dev_err(&pdev->dev,
+-				"failed to request UE IRQ %d (%d)\n",
+-				al_mc->irq_ue, ret);
++		if (ret != 0)
+ 			return ret;
+-		}
+ 	}
+ 
+ 	if (al_mc->irq_ce > 0) {
+@@ -317,12 +313,8 @@ static int al_mc_edac_probe(struct platform_device *pdev)
+ 				       IRQF_SHARED,
+ 				       pdev->name,
+ 				       pdev);
+-		if (ret != 0) {
+-			dev_err(&pdev->dev,
+-				"failed to request CE IRQ %d (%d)\n",
+-				al_mc->irq_ce, ret);
++		if (ret != 0)
+ 			return ret;
+-		}
+ 	}
+ 
+ 	return 0;
+diff --git a/drivers/edac/aspeed_edac.c b/drivers/edac/aspeed_edac.c
+index dadb8acbee3d..6e069b255595 100644
+--- a/drivers/edac/aspeed_edac.c
++++ b/drivers/edac/aspeed_edac.c
+@@ -214,10 +214,8 @@ static int config_irq(void *ctx, struct platform_device *pdev)
+ 
+ 	rc = devm_request_irq(&pdev->dev, irq, mcr_isr, IRQF_TRIGGER_HIGH,
+ 			      DRV_NAME, ctx);
+-	if (rc) {
+-		dev_err(&pdev->dev, "unable to request irq %d\n", irq);
++	if (rc)
+ 		return rc;
+-	}
+ 
+ 	/* enable interrupts */
+ 	regmap_update_bits(aspeed_regmap, ASPEED_MCR_INTR_CTRL,
+diff --git a/drivers/edac/highbank_mc_edac.c b/drivers/edac/highbank_mc_edac.c
+index a8879d72d064..68d16cc8298d 100644
+--- a/drivers/edac/highbank_mc_edac.c
++++ b/drivers/edac/highbank_mc_edac.c
+@@ -235,10 +235,8 @@ static int highbank_mc_probe(struct platform_device *pdev)
+ 	irq = platform_get_irq(pdev, 0);
+ 	res = devm_request_irq(&pdev->dev, irq, highbank_mc_err_handler,
+ 			       0, dev_name(&pdev->dev), mci);
+-	if (res < 0) {
+-		dev_err(&pdev->dev, "Unable to request irq %d\n", irq);
++	if (res < 0)
+ 		goto err2;
+-	}
+ 
+ 	devres_close_group(&pdev->dev, NULL);
+ 	return 0;
+diff --git a/drivers/edac/thunderx_edac.c b/drivers/edac/thunderx_edac.c
+index 75c04dfc3962..9c0a1e48f96f 100644
+--- a/drivers/edac/thunderx_edac.c
++++ b/drivers/edac/thunderx_edac.c
+@@ -729,10 +729,8 @@ static int thunderx_lmc_probe(struct pci_dev *pdev,
+ 					thunderx_lmc_err_isr,
+ 					thunderx_lmc_threaded_isr, 0,
+ 					"[EDAC] ThunderX LMC", mci);
+-	if (ret) {
+-		dev_err(&pdev->dev, "Cannot set ISR: %d\n", ret);
++	if (ret)
+ 		goto err_free;
+-	}
+ 
+ 	lmc->node = FIELD_GET(THUNDERX_NODE, pci_resource_start(pdev, 0));
+ 
+diff --git a/drivers/edac/xgene_edac.c b/drivers/edac/xgene_edac.c
+index 9955396c9a52..62b8166dc287 100644
+--- a/drivers/edac/xgene_edac.c
++++ b/drivers/edac/xgene_edac.c
+@@ -1924,11 +1924,8 @@ static int xgene_edac_probe(struct platform_device *pdev)
+ 			rc = devm_request_irq(&pdev->dev, irq,
+ 					      xgene_edac_isr, IRQF_SHARED,
+ 					      dev_name(&pdev->dev), edac);
+-			if (rc) {
+-				dev_err(&pdev->dev,
+-					"Could not request IRQ %d\n", irq);
++			if (rc)
+ 				goto out_err;
+-			}
+ 		}
+ 	}
+ 
+-- 
+2.55.0
+

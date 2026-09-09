@@ -1,0 +1,119 @@
+From 6d6dd3863aa35f1873c7e8b82b1ee66244255a3a Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Mon, 13 Jul 2026 21:07:39 +0800
+Subject: [PATCH 13748/15333] clocksource: Remove redundant
+ dev_err()/dev_err_probe()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() automatically logs
+detailed error messages on failure. Remove the now-redundant
+driver-specific dev_err() and dev_err_probe() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Signed-off-by: Daniel Lezcano <daniel.lezcano@kernel.org>
+Link: https://patch.msgid.link/20260713130740.293502-1-panchuang@vivo.com
+---
+ drivers/clocksource/arm_arch_timer_mmio.c | 4 +---
+ drivers/clocksource/em_sti.c              | 4 +---
+ drivers/clocksource/timer-nxp-stm.c       | 2 +-
+ drivers/clocksource/timer-sun5i.c         | 4 +---
+ drivers/clocksource/timer-tegra186.c      | 4 +---
+ drivers/clocksource/timer-ti-dm.c         | 4 +---
+ 6 files changed, 6 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/clocksource/arm_arch_timer_mmio.c b/drivers/clocksource/arm_arch_timer_mmio.c
+index d10362692fdd..d678f764d3bb 100644
+--- a/drivers/clocksource/arm_arch_timer_mmio.c
++++ b/drivers/clocksource/arm_arch_timer_mmio.c
+@@ -313,10 +313,8 @@ static int arch_timer_mmio_frame_register(struct platform_device *pdev,
+ 	ret = devm_request_irq(&pdev->dev, irq, arch_timer_mmio_handler,
+ 			       IRQF_TIMER | IRQF_NO_AUTOEN, "arch_mem_timer",
+ 			       &at->evt);
+-	if (ret) {
+-		dev_err(&pdev->dev, "Failed to request mem timer irq\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	/* Afer this point, we're not allowed to fail anymore */
+ 	arch_timer_mmio_setup(at, irq);
+diff --git a/drivers/clocksource/em_sti.c b/drivers/clocksource/em_sti.c
+index ca8d29ab70da..73a3357d173d 100644
+--- a/drivers/clocksource/em_sti.c
++++ b/drivers/clocksource/em_sti.c
+@@ -300,10 +300,8 @@ static int em_sti_probe(struct platform_device *pdev)
+ 	ret = devm_request_irq(&pdev->dev, irq, em_sti_interrupt,
+ 			       IRQF_TIMER | IRQF_IRQPOLL | IRQF_NOBALANCING,
+ 			       dev_name(&pdev->dev), p);
+-	if (ret) {
+-		dev_err(&pdev->dev, "failed to request low IRQ\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	/* get hold of clock */
+ 	p->clk = devm_clk_get(&pdev->dev, "sclk");
+diff --git a/drivers/clocksource/timer-nxp-stm.c b/drivers/clocksource/timer-nxp-stm.c
+index 1ab907233f48..6fe098a4a33f 100644
+--- a/drivers/clocksource/timer-nxp-stm.c
++++ b/drivers/clocksource/timer-nxp-stm.c
+@@ -441,7 +441,7 @@ static int nxp_stm_timer_probe(struct platform_device *pdev)
+ 	ret = devm_request_irq(dev, irq, nxp_stm_module_interrupt,
+ 			       IRQF_TIMER | IRQF_NOBALANCING, name, stm_timer);
+ 	if (ret)
+-		return dev_err_probe(dev, ret, "Unable to allocate interrupt line\n");
++		return ret;
+ 
+ 	ret = nxp_stm_clocksource_init(dev, stm_timer, name, base, clk);
+ 	if (ret)
+diff --git a/drivers/clocksource/timer-sun5i.c b/drivers/clocksource/timer-sun5i.c
+index 6ab300d22621..bcf155fb9cac 100644
+--- a/drivers/clocksource/timer-sun5i.c
++++ b/drivers/clocksource/timer-sun5i.c
+@@ -247,10 +247,8 @@ static int sun5i_setup_clockevent(struct platform_device *pdev,
+ 	ret = devm_request_irq(dev, irq, sun5i_timer_interrupt,
+ 			       IRQF_TIMER | IRQF_IRQPOLL,
+ 			       "sun5i_timer0", ce);
+-	if (ret) {
+-		dev_err(dev, "Unable to register interrupt\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	return 0;
+ }
+diff --git a/drivers/clocksource/timer-tegra186.c b/drivers/clocksource/timer-tegra186.c
+index 78600ddeb1c6..0f626ecf61b0 100644
+--- a/drivers/clocksource/timer-tegra186.c
++++ b/drivers/clocksource/timer-tegra186.c
+@@ -532,10 +532,8 @@ static int tegra186_timer_probe(struct platform_device *pdev)
+ 	if (kernel_wdt) {
+ 		err = devm_request_irq(dev, irq, tegra186_wdt_irq, 0,
+ 				       dev_name(dev), kernel_wdt);
+-		if (err < 0) {
+-			dev_err(dev, "failed to request kernel WDT IRQ: %d\n", err);
++		if (err < 0)
+ 			goto unregister_usec;
+-		}
+ 
+ 		tegra186_wdt_set_timeout(&kernel_wdt->base, TEGRA186_KERNEL_WDT_TIMEOUT);
+ 		tegra186_wdt_enable(kernel_wdt);
+diff --git a/drivers/clocksource/timer-ti-dm.c b/drivers/clocksource/timer-ti-dm.c
+index bd06afb7d522..6787acac9a43 100644
+--- a/drivers/clocksource/timer-ti-dm.c
++++ b/drivers/clocksource/timer-ti-dm.c
+@@ -1375,10 +1375,8 @@ static int omap_dm_timer_setup_clockevent(struct dmtimer *timer)
+ 
+ 	ret = devm_request_irq(dev, timer->irq, omap_dm_timer_evt_interrupt,
+ 			       IRQF_TIMER, "omap_dm_timer_clockevent", clkevt);
+-	if (ret) {
+-		dev_err(dev, "Failed to request interrupt: %d\n", ret);
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	__omap_dm_timer_int_enable(timer, OMAP_TIMER_INT_OVERFLOW);
+ 
+-- 
+2.55.0
+

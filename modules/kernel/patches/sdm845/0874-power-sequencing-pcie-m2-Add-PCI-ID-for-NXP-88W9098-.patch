@@ -1,0 +1,46 @@
+From fe55485138e80d3344b6920019f011d845570443 Mon Sep 17 00:00:00 2001
+From: Sherry Sun <sherry.sun@nxp.com>
+Date: Fri, 26 Jun 2026 10:31:20 +0800
+Subject: [PATCH 00874/15333] power: sequencing: pcie-m2: Add PCI ID for NXP
+ 88W9098 and AW693 Bluetooth
+
+88W9098 is a NXP Wi-Fi/BT combo chip with PCI device ID 0x2b43 under
+Marvell Extended vendor ID. AW693 is a NXP Wi-Fi/BT combo chip with
+PCI device ID 0x3003 under NXP/Philips vendor ID.
+
+Add both chips to pwrseq_m2_pci_ids[] so that the pwrseq-pcie-m2 driver
+can create the Bluetooth serdev device when these cards are inserted into
+a PCIe M.2 Key E connector.
+
+Both chips use "nxp,88w8987-bt" as the serdev compatible string, which
+is the entry point for the btnxpuart driver. The driver identifies the
+actual chip variant at runtime via chip ID auto-detection and loads the
+appropriate firmware accordingly.
+
+Signed-off-by: Sherry Sun <sherry.sun@nxp.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Reviewed-by: Manivannan Sadhasivam <mani@kernel.org>
+Link: https://patch.msgid.link/20260626023126.2189931-3-sherry.sun@oss.nxp.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/power/sequencing/pwrseq-pcie-m2.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/power/sequencing/pwrseq-pcie-m2.c b/drivers/power/sequencing/pwrseq-pcie-m2.c
+index b5ed80d03953..e3ba9169144d 100644
+--- a/drivers/power/sequencing/pwrseq-pcie-m2.c
++++ b/drivers/power/sequencing/pwrseq-pcie-m2.c
+@@ -186,6 +186,10 @@ static int pwrseq_pcie_m2_match(struct pwrseq_device *pwrseq,
+ }
+ 
+ static const struct pci_device_id pwrseq_m2_pci_ids[] = {
++	{ PCI_DEVICE(PCI_VENDOR_ID_MARVELL_EXT, 0x2b43),
++	  .driver_data = (kernel_ulong_t)"nxp,88w8987-bt" },
++	{ PCI_DEVICE(PCI_VENDOR_ID_PHILIPS, 0x3003),
++	  .driver_data = (kernel_ulong_t)"nxp,88w8987-bt" },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x1103),
+ 	  .driver_data = (kernel_ulong_t)"qcom,wcn6855-bt" },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x1107),
+-- 
+2.55.0
+

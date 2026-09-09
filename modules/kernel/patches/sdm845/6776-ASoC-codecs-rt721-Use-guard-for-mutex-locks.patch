@@ -1,0 +1,104 @@
+From 219fbaa1b6d1b9ac2e8bc29fc2e904d51c6f8b17 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Tue, 21 Jul 2026 17:25:59 +0700
+Subject: [PATCH 06776/15333] ASoC: codecs: rt721: Use guard() for mutex locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260721102600.523199-29-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/rt721-sdca-sdw.c | 29 ++++++++++++++++-------------
+ sound/soc/codecs/rt721-sdca.c     |  5 ++---
+ 2 files changed, 18 insertions(+), 16 deletions(-)
+
+diff --git a/sound/soc/codecs/rt721-sdca-sdw.c b/sound/soc/codecs/rt721-sdca-sdw.c
+index 6411df4eede7..eae7d662efae 100644
+--- a/sound/soc/codecs/rt721-sdca-sdw.c
++++ b/sound/soc/codecs/rt721-sdca-sdw.c
+@@ -6,6 +6,7 @@
+ //
+ //
+ 
++#include <linux/cleanup.h>
+ #include <linux/delay.h>
+ #include <linux/device.h>
+ #include <linux/module.h>
+@@ -466,13 +467,13 @@ static int rt721_sdca_dev_system_suspend(struct device *dev)
+ 	 * deferred work completes and before the parent disables
+ 	 * interrupts on the link
+ 	 */
+-	mutex_lock(&rt721_sdca->disable_irq_lock);
+-	rt721_sdca->disable_irq = true;
+-	ret1 = sdw_update_no_pm(slave, SDW_SCP_SDCA_INTMASK1,
+-				SDW_SCP_SDCA_INTMASK_SDCA_0, 0);
+-	ret2 = sdw_update_no_pm(slave, SDW_SCP_SDCA_INTMASK2,
+-				SDW_SCP_SDCA_INTMASK_SDCA_8, 0);
+-	mutex_unlock(&rt721_sdca->disable_irq_lock);
++	scoped_guard(mutex, &rt721_sdca->disable_irq_lock) {
++		rt721_sdca->disable_irq = true;
++		ret1 = sdw_update_no_pm(slave, SDW_SCP_SDCA_INTMASK1,
++					SDW_SCP_SDCA_INTMASK_SDCA_0, 0);
++		ret2 = sdw_update_no_pm(slave, SDW_SCP_SDCA_INTMASK2,
++					SDW_SCP_SDCA_INTMASK_SDCA_8, 0);
++	}
+ 
+ 	if (ret1 < 0 || ret2 < 0) {
+ 		/* log but don't prevent suspend from happening */
+@@ -494,13 +495,15 @@ static int rt721_sdca_dev_resume(struct device *dev)
+ 		return 0;
+ 
+ 	if (!slave->unattach_request) {
+-		mutex_lock(&rt721->disable_irq_lock);
+-		if (rt721->disable_irq == true) {
+-			sdw_write_no_pm(slave, SDW_SCP_SDCA_INTMASK1, SDW_SCP_SDCA_INTMASK_SDCA_0);
+-			sdw_write_no_pm(slave, SDW_SCP_SDCA_INTMASK2, SDW_SCP_SDCA_INTMASK_SDCA_8);
+-			rt721->disable_irq = false;
++		scoped_guard(mutex, &rt721->disable_irq_lock) {
++			if (rt721->disable_irq) {
++				sdw_write_no_pm(slave, SDW_SCP_SDCA_INTMASK1,
++						SDW_SCP_SDCA_INTMASK_SDCA_0);
++				sdw_write_no_pm(slave, SDW_SCP_SDCA_INTMASK2,
++						SDW_SCP_SDCA_INTMASK_SDCA_8);
++				rt721->disable_irq = false;
++			}
+ 		}
+-		mutex_unlock(&rt721->disable_irq_lock);
+ 	}
+ 
+ 	ret = sdw_slave_wait_for_init(slave, RT721_PROBE_TIMEOUT);
+diff --git a/sound/soc/codecs/rt721-sdca.c b/sound/soc/codecs/rt721-sdca.c
+index 35960c225224..159c35d19dba 100644
+--- a/sound/soc/codecs/rt721-sdca.c
++++ b/sound/soc/codecs/rt721-sdca.c
+@@ -5,7 +5,7 @@
+ // Copyright(c) 2024 Realtek Semiconductor Corp.
+ //
+ //
+-
++#include <linux/cleanup.h>
+ #include <linux/bitops.h>
+ #include <sound/core.h>
+ #include <linux/delay.h>
+@@ -289,7 +289,7 @@ static void rt721_sdca_jack_preset(struct rt721_sdca_priv *rt721)
+ 
+ static void rt721_sdca_jack_init(struct rt721_sdca_priv *rt721)
+ {
+-	mutex_lock(&rt721->calibrate_mutex);
++	guard(mutex)(&rt721->calibrate_mutex);
+ 	if (rt721->hs_jack) {
+ 		sdw_write_no_pm(rt721->slave, SDW_SCP_SDCA_INTMASK1,
+ 			SDW_SCP_SDCA_INTMASK_SDCA_0);
+@@ -309,7 +309,6 @@ static void rt721_sdca_jack_init(struct rt721_sdca_priv *rt721)
+ 		rt_sdca_index_update_bits(rt721->mbq_regmap, RT721_HDA_SDCA_FLOAT,
+ 			RT721_GE_REL_CTRL1, 0x4000, 0x4000);
+ 	}
+-	mutex_unlock(&rt721->calibrate_mutex);
+ }
+ 
+ static int rt721_sdca_set_jack_detect(struct snd_soc_component *component,
+-- 
+2.55.0
+

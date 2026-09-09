@@ -1,0 +1,51 @@
+From 1ccbfc99ce9e4b0ac8e4c038bd504c70cb0357c4 Mon Sep 17 00:00:00 2001
+From: Heiko Carstens <hca@linux.ibm.com>
+Date: Mon, 27 Jul 2026 16:05:09 +0200
+Subject: [PATCH 10978/15333] s390/tools/relocs: Ignore __kcfi_typeid_
+ relocations
+
+This is the s390 variant of commit ca7e10bff196 ("x86/tools/relocs: Ignore
+__kcfi_typeid_ relocations"):
+
+"The compiler generates __kcfi_typeid_ symbols for annotating assembly
+functions with type information. These are constants that can be referenced
+in assembly code and are resolved by the linker. Ignore them in relocs."
+
+Reviewed-by: Jens Remus <jremus@linux.ibm.com>
+Signed-off-by: Heiko Carstens <hca@linux.ibm.com>
+Tested-by: Nathan Chancellor <nathan@kernel.org>
+Signed-off-by: Vasily Gorbik <gor@linux.ibm.com>
+---
+ arch/s390/tools/relocs.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/arch/s390/tools/relocs.c b/arch/s390/tools/relocs.c
+index a2774176d38f..72178dc90a4c 100644
+--- a/arch/s390/tools/relocs.c
++++ b/arch/s390/tools/relocs.c
+@@ -405,6 +405,22 @@ static int do_reloc(struct section *sec, Elf_Rel *rel, ElfW(Sym) *sym,
+ 	case R_390_GOTPCDBL:
+ 	case R_390_GOTOFF64:
+ 		break;
++	case R_390_32: {
++		static const char kcfipfx[] = "__kcfi_typeid_";
++
++		if (sym->st_shndx != SHN_ABS)
++			die("Unsupported relocation type: %d\n", r_type);
++		/*
++		 * Symbols with __kcfi_typeid_ prefix have constant values,
++		 * which do not change if bzImage is loaded at a different
++		 * physical address than the address for which it has been
++		 * compiled.
++		 */
++		if (!strncmp(kcfipfx, symname, sizeof(kcfipfx) - 1))
++			break;
++		die("Invalid absolute R_390_32 relocation: %s\n", symname);
++		break;
++	}
+ 	case R_390_64:
+ 		add_reloc(&relocs64, offset);
+ 		break;
+-- 
+2.55.0
+

@@ -1,0 +1,207 @@
+From 1c37d1b6c74116f2e6adcb675426eb36e60ae4d1 Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Mon, 25 May 2026 14:48:34 -0600
+Subject: [PATCH 00439/15333] drm/amd/display: Add KUnit tests for
+ amdgpu_dm_mst_types
+
+[WHAT]
+Add KUnit test coverage for needs_dsc_aux_workaround() in
+amdgpu_dm_mst_types.c. Tests verify the function correctly
+identifies links requiring the DSC AUX workaround based on
+branch device ID, DPCD revision, and sink count.
+
+Assisted-by: Copilot:Claude-Opus-4.6
+Reviewed-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Aurabindo Pillai <aurabindo.pillai@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../display/amdgpu_dm/amdgpu_dm_mst_types.c   |   2 +
+ .../display/amdgpu_dm/amdgpu_dm_mst_types.h   |   6 +
+ .../drm/amd/display/amdgpu_dm/tests/Makefile  |   1 +
+ .../tests/amdgpu_dm_mst_types_test.c          | 124 ++++++++++++++++++
+ 4 files changed, 133 insertions(+)
+ create mode 100644 drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_mst_types_test.c
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.c
+index 99b78dd50caf..ff3afeb0ec07 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.c
+@@ -39,6 +39,7 @@
+ 
+ #include "dc.h"
+ #include "dm_helpers.h"
++#include "amdgpu_dm_kunit_helpers.h"
+ 
+ #include "ddc_service_types.h"
+ #include "dpcd_defs.h"
+@@ -248,6 +249,7 @@ bool needs_dsc_aux_workaround(struct dc_link *link)
+ 
+ 	return false;
+ }
++EXPORT_IF_KUNIT(needs_dsc_aux_workaround);
+ 
+ #if defined(CONFIG_DRM_AMD_DC_FP)
+ static bool is_synaptics_cascaded_panamera(struct dc_link *link, struct drm_dp_mst_port *port)
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.h
+index 0e8eef5bdb74..208629ca3721 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_mst_types.h
+@@ -57,8 +57,14 @@ enum mst_msg_ready_type {
+ 	DOWN_OR_UP_MSG_RDY_EVENT = 3
+ };
+ 
++struct amdgpu_device;
+ struct amdgpu_display_manager;
+ struct amdgpu_dm_connector;
++struct dc_state;
++struct dc_stream_state;
++struct dm_atomic_state;
++struct drm_atomic_state;
++struct drm_dp_mst_topology_mgr;
+ 
+ uint32_t dm_mst_get_pbn_divider(struct dc_link *link);
+ 
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/Makefile b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/Makefile
+index ce1e46acb7af..fe9f32c9bdde 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/Makefile
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/Makefile
+@@ -17,3 +17,4 @@ obj-$(CONFIG_DRM_AMD_DC_KUNIT_TEST) += amdgpu_dm_psr_test.o
+ obj-$(CONFIG_DRM_AMD_DC_KUNIT_TEST) += amdgpu_dm_replay_test.o
+ obj-$(CONFIG_DRM_AMD_DC_KUNIT_TEST) += amdgpu_dm_ism_test.o
+ obj-$(CONFIG_DRM_AMD_DC_KUNIT_TEST) += amdgpu_dm_wb_test.o
++obj-$(CONFIG_DRM_AMD_DC_KUNIT_TEST) += amdgpu_dm_mst_types_test.o
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_mst_types_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_mst_types_test.c
+new file mode 100644
+index 000000000000..e21386819ea1
+--- /dev/null
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_mst_types_test.c
+@@ -0,0 +1,124 @@
++// SPDX-License-Identifier: GPL-2.0 OR MIT
++/*
++ * KUnit tests for amdgpu_dm_mst_types.c
++ *
++ * Copyright 2026 Advanced Micro Devices, Inc.
++ */
++
++#include <kunit/test.h>
++
++#include "dc.h"
++#include "dpcd_defs.h"
++#include "amdgpu_dm_mst_types.h"
++
++/* Tests for needs_dsc_aux_workaround */
++
++/**
++ * dm_mst_test_needs_dsc_aux_workaround_match - Test workaround triggers for matching device
++ * @test: KUnit test context
++ *
++ * Verify that needs_dsc_aux_workaround() returns true when the link has
++ * the specific branch device ID, DPCD rev 1.4, and sink count >= 2.
++ */
++static void dm_mst_test_needs_dsc_aux_workaround_match(struct kunit *test)
++{
++	struct dc_link link = {0};
++
++	link.dpcd_caps.branch_dev_id = DP_BRANCH_DEVICE_ID_90CC24;
++	link.dpcd_caps.dpcd_rev.raw = DPCD_REV_14;
++	link.dpcd_caps.sink_count.bits.SINK_COUNT = 2;
++
++	KUNIT_EXPECT_TRUE(test, needs_dsc_aux_workaround(&link));
++}
++
++/**
++ * dm_mst_test_needs_dsc_aux_workaround_rev12 - Test workaround triggers for DPCD rev 1.2
++ * @test: KUnit test context
++ *
++ * Verify that needs_dsc_aux_workaround() returns true when the link has
++ * the specific branch device ID, DPCD rev 1.2, and sink count >= 2.
++ */
++static void dm_mst_test_needs_dsc_aux_workaround_rev12(struct kunit *test)
++{
++	struct dc_link link = {0};
++
++	link.dpcd_caps.branch_dev_id = DP_BRANCH_DEVICE_ID_90CC24;
++	link.dpcd_caps.dpcd_rev.raw = DPCD_REV_12;
++	link.dpcd_caps.sink_count.bits.SINK_COUNT = 3;
++
++	KUNIT_EXPECT_TRUE(test, needs_dsc_aux_workaround(&link));
++}
++
++/**
++ * dm_mst_test_needs_dsc_aux_workaround_wrong_dev_id - Test workaround skipped for wrong device
++ * @test: KUnit test context
++ *
++ * Verify that needs_dsc_aux_workaround() returns false when the branch
++ * device ID does not match DP_BRANCH_DEVICE_ID_90CC24.
++ */
++static void dm_mst_test_needs_dsc_aux_workaround_wrong_dev_id(struct kunit *test)
++{
++	struct dc_link link = {0};
++
++	link.dpcd_caps.branch_dev_id = 0x123456;
++	link.dpcd_caps.dpcd_rev.raw = DPCD_REV_14;
++	link.dpcd_caps.sink_count.bits.SINK_COUNT = 2;
++
++	KUNIT_EXPECT_FALSE(test, needs_dsc_aux_workaround(&link));
++}
++
++/**
++ * dm_mst_test_needs_dsc_aux_workaround_wrong_rev - Test workaround skipped for unsupported rev
++ * @test: KUnit test context
++ *
++ * Verify that needs_dsc_aux_workaround() returns false when the DPCD
++ * revision is neither 1.2 nor 1.4.
++ */
++static void dm_mst_test_needs_dsc_aux_workaround_wrong_rev(struct kunit *test)
++{
++	struct dc_link link = {0};
++
++	link.dpcd_caps.branch_dev_id = DP_BRANCH_DEVICE_ID_90CC24;
++	link.dpcd_caps.dpcd_rev.raw = 0x11; /* DPCD 1.1 */
++	link.dpcd_caps.sink_count.bits.SINK_COUNT = 2;
++
++	KUNIT_EXPECT_FALSE(test, needs_dsc_aux_workaround(&link));
++}
++
++/**
++ * dm_mst_test_needs_dsc_aux_workaround_low_sink_count - Test workaround skipped for single sink
++ * @test: KUnit test context
++ *
++ * Verify that needs_dsc_aux_workaround() returns false when the sink
++ * count is less than 2, even if device ID and DPCD rev match.
++ */
++static void dm_mst_test_needs_dsc_aux_workaround_low_sink_count(struct kunit *test)
++{
++	struct dc_link link = {0};
++
++	link.dpcd_caps.branch_dev_id = DP_BRANCH_DEVICE_ID_90CC24;
++	link.dpcd_caps.dpcd_rev.raw = DPCD_REV_14;
++	link.dpcd_caps.sink_count.bits.SINK_COUNT = 1;
++
++	KUNIT_EXPECT_FALSE(test, needs_dsc_aux_workaround(&link));
++}
++
++static struct kunit_case dm_mst_types_test_cases[] = {
++	/* needs_dsc_aux_workaround tests */
++	KUNIT_CASE(dm_mst_test_needs_dsc_aux_workaround_match),
++	KUNIT_CASE(dm_mst_test_needs_dsc_aux_workaround_rev12),
++	KUNIT_CASE(dm_mst_test_needs_dsc_aux_workaround_wrong_dev_id),
++	KUNIT_CASE(dm_mst_test_needs_dsc_aux_workaround_wrong_rev),
++	KUNIT_CASE(dm_mst_test_needs_dsc_aux_workaround_low_sink_count),
++	{}
++};
++
++static struct kunit_suite dm_mst_types_test_suite = {
++	.name = "amdgpu_dm_mst_types",
++	.test_cases = dm_mst_types_test_cases,
++};
++
++kunit_test_suite(dm_mst_types_test_suite);
++
++MODULE_LICENSE("Dual MIT/GPL");
++MODULE_DESCRIPTION("KUnit tests for amdgpu_dm_mst_types");
+-- 
+2.55.0
+

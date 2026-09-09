@@ -1,0 +1,105 @@
+From 3ba210061c2960380007e6475d1c1119216f5c83 Mon Sep 17 00:00:00 2001
+From: Danilo Krummrich <dakr@kernel.org>
+Date: Sun, 28 Jun 2026 16:53:38 +0200
+Subject: [PATCH 04069/15333] rust: drm: Pass registration data to ioctl
+ handlers
+
+Pass registration data to ioctl handlers via
+drm::Device<Registered>::registration_data_with(). The closure's HRTB
+ties the lifetime to the closure scope, and the pointer cast shortens it
+from 'static internally. The reference is valid for the duration of the
+drm_dev_enter/exit critical section held by RegistrationGuard.
+
+Reviewed-by: Lyude Paul <lyude@redhat.com>
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Tested-by: Deborah Brouwer <deborah.brouwer@collabora.com>
+Link: https://patch.msgid.link/20260628145406.2107056-19-dakr@kernel.org
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/gpu/drm/nova/file.rs | 3 +++
+ drivers/gpu/drm/tyr/file.rs  | 1 +
+ rust/kernel/drm/ioctl.rs     | 8 ++++++--
+ 3 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/nova/file.rs b/drivers/gpu/drm/nova/file.rs
+index 19fb89b28984..208be4e38188 100644
+--- a/drivers/gpu/drm/nova/file.rs
++++ b/drivers/gpu/drm/nova/file.rs
+@@ -28,6 +28,7 @@ impl File {
+     /// IOCTL: get_param: Query GPU / driver metadata.
+     pub(crate) fn get_param(
+         dev: &NovaDevice<Registered>,
++        _reg_data: &(),
+         getparam: &mut uapi::drm_nova_getparam,
+         _file: &drm::File<File>,
+     ) -> Result<u32> {
+@@ -48,6 +49,7 @@ pub(crate) fn get_param(
+     /// IOCTL: gem_create: Create a new DRM GEM object.
+     pub(crate) fn gem_create(
+         dev: &NovaDevice<Registered>,
++        _reg_data: &(),
+         req: &mut uapi::drm_nova_gem_create,
+         file: &drm::File<File>,
+     ) -> Result<u32> {
+@@ -61,6 +63,7 @@ pub(crate) fn gem_create(
+     /// IOCTL: gem_info: Query GEM metadata.
+     pub(crate) fn gem_info(
+         _dev: &NovaDevice<Registered>,
++        _reg_data: &(),
+         req: &mut uapi::drm_nova_gem_info,
+         file: &drm::File<File>,
+     ) -> Result<u32> {
+diff --git a/drivers/gpu/drm/tyr/file.rs b/drivers/gpu/drm/tyr/file.rs
+index fb9233eae01c..b686041d5d6b 100644
+--- a/drivers/gpu/drm/tyr/file.rs
++++ b/drivers/gpu/drm/tyr/file.rs
+@@ -32,6 +32,7 @@ fn open(_dev: &drm::Device<Self::Driver>) -> Result<Pin<KBox<Self>>> {
+ impl TyrDrmFileData {
+     pub(crate) fn dev_query(
+         ddev: &TyrDrmDevice<Registered>,
++        _reg_data: &(),
+         devquery: &mut uapi::drm_panthor_dev_query,
+         _file: &TyrDrmFile,
+     ) -> Result<u32> {
+diff --git a/rust/kernel/drm/ioctl.rs b/rust/kernel/drm/ioctl.rs
+index c70ad5e2e5a1..64af9eacc306 100644
+--- a/rust/kernel/drm/ioctl.rs
++++ b/rust/kernel/drm/ioctl.rs
+@@ -95,6 +95,7 @@ pub const fn __dev_ctx_cast<T: crate::drm::Driver>(
+ ///
+ /// ```ignore
+ /// fn foo(device: &kernel::drm::Device<Self, kernel::drm::Registered>,
++///        reg_data: &Self::RegistrationData<'_>,
+ ///        data: &mut uapi::argument_type,
+ ///        file: &kernel::drm::File<Self::File>,
+ /// ) -> Result<u32>
+@@ -169,13 +170,14 @@ macro_rules! declare_drm_ioctls {
+                                     unsafe { &*__ptr },
+                                     unreachable!(),
+                                     unreachable!(),
++                                    unreachable!(),
+                                 )
+                             };
+ 
+                             // Enforce that the handler accepts higher-ranked
+                             // lifetimes, preventing it from requiring 'static
+                             // references that could escape this scope.
+-                            let _: for<'a> fn(&'a _, &'a mut _, &'a _) -> _ = $func;
++                            let _: for<'a> fn(&'a _, &'a _, &'a mut _, &'a _) -> _ = $func;
+ 
+                             let Some(guard) = dev.registration_guard() else {
+                                 return $crate::error::code::ENODEV.to_errno();
+@@ -193,7 +195,9 @@ macro_rules! declare_drm_ioctls {
+                             // SAFETY: This is just the DRM file structure
+                             let file = unsafe { $crate::drm::File::from_raw(raw_file) };
+ 
+-                            match $func(&*guard, data, file) {
++                            match guard.registration_data_with(|reg_data| {
++                                $func(&*guard, reg_data, data, file)
++                            }) {
+                                 Err(e) => e.to_errno(),
+                                 Ok(i) => i.try_into()
+                                             .unwrap_or($crate::error::code::ERANGE.to_errno()),
+-- 
+2.55.0
+

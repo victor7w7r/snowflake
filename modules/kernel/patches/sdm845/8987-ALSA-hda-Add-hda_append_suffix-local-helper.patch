@@ -1,0 +1,75 @@
+From ebc60f85331979a73772da07e6356cf4155d677d Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 30 Jul 2026 18:14:03 +0200
+Subject: [PATCH 08987/15333] ALSA: hda: Add hda_append_suffix() local helper
+
+As strlcat() shall be deprecated in future, provide an alternative
+just for a simple purpose -- append a suffix string to the given
+string buffer -- and use it at appropriate places.  The code isn't
+really efficient, but we don't ask for speed here, so let it be.
+
+Link: https://lore.kernel.org/amolHJpiluNmBsDU@dev
+Reviewed-by: Ian Bridges <icb@fastmail.org>
+Tested-by: Ian Bridges <icb@fastmail.org>
+Link: https://patch.msgid.link/20260730161518.641254-1-tiwai@suse.de
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/hda/codecs/generic.c   | 4 ++--
+ sound/hda/common/hda_local.h | 7 +++++++
+ sound/hda/common/jack.c      | 2 +-
+ 3 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/sound/hda/codecs/generic.c b/sound/hda/codecs/generic.c
+index a4623dd67f81..6120f797b45a 100644
+--- a/sound/hda/codecs/generic.c
++++ b/sound/hda/codecs/generic.c
+@@ -2701,7 +2701,7 @@ static void get_jack_mode_name(struct hda_codec *codec, hda_nid_t pin,
+ 	struct hda_gen_spec *spec = codec->spec;
+ 
+ 	snd_hda_get_pin_label(codec, pin, &spec->autocfg, name, name_len);
+-	strlcat(name, " Jack Mode", name_len);
++	hda_append_suffix(name, " Jack Mode", name_len);
+ }
+ 
+ static int get_out_jack_num_items(struct hda_codec *codec, hda_nid_t pin)
+@@ -5678,7 +5678,7 @@ static void fill_pcm_stream_name(char *str, size_t len, const char *sfx,
+ 			break;
+ 		}
+ 	}
+-	strlcat(str, sfx, len);
++	hda_append_suffix(str, sfx, len);
+ }
+ 
+ /* copy PCM stream info from @default_str, and override non-NULL entries
+diff --git a/sound/hda/common/hda_local.h b/sound/hda/common/hda_local.h
+index 98b2c4acebc2..947a3152fdb5 100644
+--- a/sound/hda/common/hda_local.h
++++ b/sound/hda/common/hda_local.h
+@@ -723,4 +723,11 @@ void snd_hda_codec_display_power(struct hda_codec *codec, bool enable);
+ #define codec_dbg(codec, fmt, args...) \
+ 	dev_dbg(hda_codec_dev(codec), fmt, ##args)
+ 
++/* append a suffix string safely; equivalent with strlcat() */
++static inline void hda_append_suffix(char *str, const char *suffix, size_t size)
++{
++	size_t len = strnlen(str, size);
++	strscpy(str + len, suffix, size - len);
++}
++
+ #endif /* __SOUND_HDA_LOCAL_H */
+diff --git a/sound/hda/common/jack.c b/sound/hda/common/jack.c
+index c4338f03a54d..1d6b0f0e6f27 100644
+--- a/sound/hda/common/jack.c
++++ b/sound/hda/common/jack.c
+@@ -615,7 +615,7 @@ static int add_jack_kctl(struct hda_codec *codec, hda_nid_t nid,
+ 		snd_hda_get_pin_label(codec, nid, cfg, name, sizeof(name));
+ 	if (phantom_jack)
+ 		/* Example final name: "Internal Mic Phantom Jack" */
+-		strncat(name, " Phantom", sizeof(name) - strlen(name) - 1);
++		hda_append_suffix(name, " Phantom", sizeof(name));
+ 	err = snd_hda_jack_add_kctl(codec, nid, name, phantom_jack, 0, NULL);
+ 	if (err < 0)
+ 		return err;
+-- 
+2.55.0
+

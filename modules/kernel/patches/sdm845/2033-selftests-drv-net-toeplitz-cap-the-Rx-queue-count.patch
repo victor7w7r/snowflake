@@ -1,0 +1,71 @@
+From 07d3aaa046ceffb2ed72010d88cb6071717c4906 Mon Sep 17 00:00:00 2001
+From: Jakub Kicinski <kuba@kernel.org>
+Date: Mon, 29 Jun 2026 16:43:53 -0700
+Subject: [PATCH 02033/15333] selftests: drv-net: toeplitz: cap the Rx queue
+ count
+
+The RPS test needs a free CPU within the first RPS_MAX_CPUS (16)
+cores. This is easily violated if the NIC or env allocates the
+IRQs to cores linearly.
+
+Cap the Rx queues at 8, we don't need more. This makes the test
+pass on CX7 in NIPA.
+
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+Reviewed-by: Willem de Bruijn <willemb@google.com>
+Link: https://patch.msgid.link/20260629234354.2154541-1-kuba@kernel.org
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ .../selftests/drivers/net/hw/toeplitz.py      | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/tools/testing/selftests/drivers/net/hw/toeplitz.py b/tools/testing/selftests/drivers/net/hw/toeplitz.py
+index cd7e080e6f84..571732198b93 100755
+--- a/tools/testing/selftests/drivers/net/hw/toeplitz.py
++++ b/tools/testing/selftests/drivers/net/hw/toeplitz.py
+@@ -21,6 +21,8 @@ from lib.py import ksft_variants, KsftNamedVariant, KsftSkipEx, KsftFailEx
+ ETH_RSS_HASH_TOP = 1
+ # Must match RPS_MAX_CPUS in toeplitz.c
+ RPS_MAX_CPUS = 16
++# Cap Rx queues so IRQ pinning leaves free CPUs in the RPS_MAX_CPUS range
++QUEUE_CAP = 8
+ 
+ 
+ def _check_rps_and_rfs_not_configured(cfg):
+@@ -48,6 +50,25 @@ def _get_cpu_for_irq(irq):
+         return int(data)
+ 
+ 
++def _cap_queue_count(cfg):
++    ehdr = {"header": {"dev-index": cfg.ifindex}}
++    chans = cfg.ethnl.channels_get(ehdr)
++
++    config = {}
++    restore = {}
++    for key in ("combined-count", "rx-count"):
++        cur = chans.get(key, 0)
++        if cur > QUEUE_CAP:
++            config[key] = QUEUE_CAP
++            restore[key] = cur
++
++    if not config:
++        return
++
++    cfg.ethnl.channels_set(ehdr | config)
++    defer(cfg.ethnl.channels_set, ehdr | restore)
++
++
+ def _get_irq_cpus(cfg):
+     """
+     Read the list of IRQs for the device Rx queues.
+@@ -177,6 +198,7 @@ def test(cfg, proto_flag, ipver, grp):
+     ]
+ 
+     if grp:
++        _cap_queue_count(cfg)
+         _check_rps_and_rfs_not_configured(cfg)
+     if grp == "rss":
+         irq_cpus = ",".join([str(x) for x in _get_irq_cpus(cfg)])
+-- 
+2.55.0
+

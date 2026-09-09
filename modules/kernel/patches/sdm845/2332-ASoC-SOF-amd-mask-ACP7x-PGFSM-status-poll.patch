@@ -1,0 +1,60 @@
+From 237efba38c4f93d049299eca45b6ab9a643331d7 Mon Sep 17 00:00:00 2001
+From: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Date: Wed, 1 Jul 2026 15:25:04 +0530
+Subject: [PATCH 02332/15333] ASoC: SOF: amd: mask ACP7x PGFSM status poll
+
+For ACP7.B/7.F, poll only the PGFSM tile status bits (P0-P4) and
+consider the tiles powered on when the masked status becomes 0.
+
+Signed-off-by: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Link: https://patch.msgid.link/20260701095759.1012929-4-Vijendar.Mukunda@amd.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/amd/acp.c | 16 +++++++++++++---
+ 1 file changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/sound/soc/sof/amd/acp.c b/sound/soc/sof/amd/acp.c
+index bb3766aacf0e..f7b22f9979f6 100644
+--- a/sound/soc/sof/amd/acp.c
++++ b/sound/soc/sof/amd/acp.c
+@@ -577,6 +577,7 @@ static int acp_power_on(struct snd_sof_dev *sdev)
+ 	unsigned int base = desc->pgfsm_base;
+ 	unsigned int val;
+ 	unsigned int acp_pgfsm_status_mask, acp_pgfsm_cntl_mask;
++	bool use_masked_status = false;
+ 	int ret;
+ 
+ 	val = snd_sof_dsp_read(sdev, ACP_DSP_BAR, base + PGFSM_STATUS_OFFSET);
+@@ -605,6 +606,7 @@ static int acp_power_on(struct snd_sof_dev *sdev)
+ 	case ACP7F_PCI_ID:
+ 		acp_pgfsm_status_mask = ACP7X_PGFSM_STATUS_MASK;
+ 		acp_pgfsm_cntl_mask = ACP7X_PGFSM_CNTL_POWER_ON_MASK;
++		use_masked_status = true;
+ 		break;
+ 	default:
+ 		return -EINVAL;
+@@ -614,9 +616,17 @@ static int acp_power_on(struct snd_sof_dev *sdev)
+ 		snd_sof_dsp_write(sdev, ACP_DSP_BAR, base + PGFSM_CONTROL_OFFSET,
+ 				  acp_pgfsm_cntl_mask);
+ 
+-	ret = snd_sof_dsp_read_poll_timeout(sdev, ACP_DSP_BAR, base + PGFSM_STATUS_OFFSET, val,
+-					    !val, ACP_REG_POLL_INTERVAL,
+-					    ACP_REG_POLL_TIMEOUT_US);
++	if (use_masked_status)
++		ret = snd_sof_dsp_read_poll_timeout(sdev, ACP_DSP_BAR,
++						    base + PGFSM_STATUS_OFFSET, val,
++						    !(val & acp_pgfsm_status_mask),
++						    ACP_REG_POLL_INTERVAL,
++						    ACP_REG_POLL_TIMEOUT_US);
++	else
++		ret = snd_sof_dsp_read_poll_timeout(sdev, ACP_DSP_BAR,
++						    base + PGFSM_STATUS_OFFSET, val,
++						    !val, ACP_REG_POLL_INTERVAL,
++						    ACP_REG_POLL_TIMEOUT_US);
+ 	if (ret < 0)
+ 		dev_err(sdev->dev, "timeout in ACP_PGFSM_STATUS read\n");
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,82 @@
+From 572f3d94fd4fb7ffb0f6918fc7f98548817f476d Mon Sep 17 00:00:00 2001
+From: Gabriele Monaco <gmonaco@redhat.com>
+Date: Thu, 23 Jul 2026 09:45:33 +0200
+Subject: [PATCH 09483/15333] selftests/verification: Rearrange the wwnr_printk
+ test
+
+The wwnr_printk test expects no reactions in some situations, after
+fixing the bash assertion, the test is failing because expecting no
+reaction after a previous step had reactions is flaky without making
+sure all buffers are flushed.
+
+Wait for reactions to be over when expected by polling dmesg for an
+interval without any rv message.
+Also simplify the load function to stop loads as soon as a reaction
+occurs, this limits the number of lines to flush and makes tests overall
+faster and more stable.
+
+Reviewed-by: Wen Yang <wen.yang@linux.dev>
+Reviewed-by: Nam Cao <namcao@linutronix.de>
+Link: https://lore.kernel.org/r/20260723074534.43521-17-gmonaco@redhat.com
+Signed-off-by: Gabriele Monaco <gmonaco@redhat.com>
+---
+ .../verification/test.d/rv_wwnr_printk.tc     | 28 +++++++++++++++++--
+ 1 file changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/tools/testing/selftests/verification/test.d/rv_wwnr_printk.tc b/tools/testing/selftests/verification/test.d/rv_wwnr_printk.tc
+index 96de95edb530..17e1edfb3902 100644
+--- a/tools/testing/selftests/verification/test.d/rv_wwnr_printk.tc
++++ b/tools/testing/selftests/verification/test.d/rv_wwnr_printk.tc
+@@ -4,11 +4,29 @@
+ # requires: available_reactors wwnr:monitor printk:reactor stress-ng:program
+ 
+ load() { # returns true if there was a reaction
+-	local lines_before num
++	local lines_before num load_pid ret
+ 	num=$((($(nproc) + 1) / 2))
+ 	lines_before=$(dmesg | wc -l)
+-	stress-ng --cpu-sched "$num" --timer "$num" -t 5 -q
+-	dmesg | tail -n $((lines_before + 1)) | grep -q "rv: monitor wwnr does not allow event"
++	stress-ng --cpu-sched "$num" --timer "$num" -t 5 -q &
++	load_pid=$!
++	timeout 5 dmesg -w | tail -n +$((lines_before + 1)) | \
++		grep -m 1 -q "rv: monitor wwnr does not allow event"
++	ret=$?
++	kill "$load_pid" || true
++	wait "$load_pid" || true
++	return $ret
++}
++
++# loads may flood the ringbuffer, wait for all pending printks (timeout at 2 minutes)
++wait_dmesg_flush() {
++	local last_before last_after
++	for _ in $(seq 400); do
++		last_before=$last_after
++		last_after=$(dmesg | grep "rv:" | tail -n 1 || true)
++		[ "$last_before" = "$last_after" ] && return 0
++		sleep .3
++	done
++	return 1
+ }
+ 
+ echo 1 > monitors/wwnr/enable
+@@ -17,12 +35,16 @@ echo printk > monitors/wwnr/reactors
+ load
+ 
+ echo 0 > monitoring_on
++wait_dmesg_flush
++
+ ! load || false
+ echo 1 > monitoring_on
+ 
+ load
+ 
+ echo 0 > reacting_on
++wait_dmesg_flush
++
+ ! load || false
+ echo 1 > reacting_on
+ 
+-- 
+2.55.0
+

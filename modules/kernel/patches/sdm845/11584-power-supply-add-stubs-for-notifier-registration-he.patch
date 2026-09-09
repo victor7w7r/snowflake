@@ -1,0 +1,56 @@
+From 99b38cda3f4c486cfbc40f3c8ede1703594e9f13 Mon Sep 17 00:00:00 2001
+From: Elson Serrao <elson.serrao@oss.qualcomm.com>
+Date: Wed, 5 Aug 2026 11:54:01 -0700
+Subject: [PATCH 11584/15333] power: supply: add stubs for notifier
+ registration helpers
+
+power_supply_reg_notifier() and power_supply_unreg_notifier() are declared
+unconditionally, with no fallback when CONFIG_POWER_SUPPLY is disabled.
+Any driver that calls them unconditionally fails to link:
+
+ERROR: modpost: "power_supply_unreg_notifier" [drivers/usb/dwc3/dwc3.ko]
+undefined!
+ERROR: modpost: "power_supply_reg_notifier" [drivers/usb/dwc3/dwc3.ko]
+undefined!
+
+Fix this by adding stub functions for these calls.
+
+Fixes: 7c87ef27af79 ("usb: dwc3: avoid probe deferral when USB power supply is not available")
+Reported-by: Randy Dunlap <rdunlap@infradead.org>
+Closes: https://lore.kernel.org/all/a9dd53b3-0666-404a-99e0-76617ae3f944@infradead.org/
+Signed-off-by: Elson Serrao <elson.serrao@oss.qualcomm.com>
+Tested-by: Randy Dunlap <rdunlap@infradead.org>
+Acked-by: Randy Dunlap <rdunlap@infradead.org>
+Link: https://patch.msgid.link/20260805185401.3625514-1-elson.serrao@oss.qualcomm.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ include/linux/power_supply.h | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/power_supply.h b/include/linux/power_supply.h
+index a9c056f13077..e749d2189335 100644
+--- a/include/linux/power_supply.h
++++ b/include/linux/power_supply.h
+@@ -816,15 +816,18 @@ struct power_supply_battery_info {
+ 	int bti_resistance_tolerance;
+ };
+ 
++#if IS_ENABLED(CONFIG_POWER_SUPPLY)
+ extern int power_supply_reg_notifier(struct notifier_block *nb);
+ extern void power_supply_unreg_notifier(struct notifier_block *nb);
+-#if IS_ENABLED(CONFIG_POWER_SUPPLY)
+ extern struct power_supply *power_supply_get_by_name(const char *name);
+ extern int __must_check power_supply_get_system_batteries(struct device *dev,
+ 							  struct power_supply ***psys);
+ extern void power_supply_put_system_batteries(struct power_supply **psys, int count);
+ extern void power_supply_put(struct power_supply *psy);
+ #else
++static inline int power_supply_reg_notifier(struct notifier_block *nb)
++{ return -EOPNOTSUPP; }
++static inline void power_supply_unreg_notifier(struct notifier_block *nb) {}
+ static inline void power_supply_put(struct power_supply *psy) {}
+ static inline struct power_supply *power_supply_get_by_name(const char *name)
+ { return NULL; }
+-- 
+2.55.0
+

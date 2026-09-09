@@ -1,0 +1,147 @@
+From 438a8d6a82931f12305f80bc3e7ef067c2ac0551 Mon Sep 17 00:00:00 2001
+From: "Masami Hiramatsu (Google)" <mhiramat@kernel.org>
+Date: Thu, 2 Jul 2026 21:12:40 +0900
+Subject: [PATCH 04432/15333] tracing/probes: Support typecast for various
+ probe events
+
+Support BTF typecast feature on other probe events, but only if it is
+kernel function entry or return, and must use function parameter name
+or $retval. This means you can do:
+
+  (STRUCT)PARAM->MEMBER
+
+Note: you can not use other variables like $stackN, %reg etc. That
+needs nesting support.
+
+To support other probe events, we just need to use last_struct type
+when we find a function parameter in parse_btf_arg().
+
+This also updates <tracefs>/README file to show struct typecast.
+
+Link: https://lore.kernel.org/all/178271362928.1176915.12235759508786922490.stgit@devnote2/
+
+Signed-off-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+---
+ Documentation/trace/fprobetrace.rst |  3 +++
+ Documentation/trace/kprobetrace.rst |  4 ++++
+ kernel/trace/trace.c                |  2 +-
+ kernel/trace/trace_probe.c          | 23 +++++++++++++++++------
+ kernel/trace/trace_probe.h          |  5 +++++
+ 5 files changed, 30 insertions(+), 7 deletions(-)
+
+diff --git a/Documentation/trace/fprobetrace.rst b/Documentation/trace/fprobetrace.rst
+index b4c2ca3d02c1..7435ded2d66d 100644
+--- a/Documentation/trace/fprobetrace.rst
++++ b/Documentation/trace/fprobetrace.rst
+@@ -57,6 +57,9 @@ Synopsis of fprobe-events
+                   (u8/u16/u32/u64/s8/s16/s32/s64), hexadecimal types
+                   (x8/x16/x32/x64), "char", "string", "ustring", "symbol", "symstr"
+                   and bitfield are supported.
++  (STRUCT)FIELD->MEMBER[->MEMBER] : If BTF is supported, typecast FIELD to
++                  a pointer to STRUCT and then derference the pointer defined by
++                  ->MEMBER.
+ 
+   (\*1) This is available only when BTF is enabled.
+   (\*2) only for the probe on function entry (offs == 0). Note, this argument access
+diff --git a/Documentation/trace/kprobetrace.rst b/Documentation/trace/kprobetrace.rst
+index 3b6791c17e9b..f73614997d52 100644
+--- a/Documentation/trace/kprobetrace.rst
++++ b/Documentation/trace/kprobetrace.rst
+@@ -61,6 +61,10 @@ Synopsis of kprobe_events
+ 		  (x8/x16/x32/x64), VFS layer common type(%pd/%pD), "char",
+                   "string", "ustring", "symbol", "symstr" and bitfield are
+                   supported.
++  (STRUCT)FIELD->MEMBER[->MEMBER] : If BTF is supported, typecast FIELD to
++                  a pointer to STRUCT and then derference the pointer defined by
++                  ->MEMBER. Note that this is available only when the probe is
++		   on function entry.
+ 
+   (\*1) only for the probe on function entry (offs == 0). Note, this argument access
+         is best effort, because depending on the argument type, it may be passed on
+diff --git a/kernel/trace/trace.c b/kernel/trace/trace.c
+index 1146b83b711a..280a3dccd13f 100644
+--- a/kernel/trace/trace.c
++++ b/kernel/trace/trace.c
+@@ -4322,7 +4322,7 @@ static const char readme_msg[] =
+ #ifdef CONFIG_HAVE_FUNCTION_ARG_ACCESS_API
+ 	"\t           $stack<index>, $stack, $retval, $comm, $arg<N>,\n"
+ #ifdef CONFIG_PROBE_EVENTS_BTF_ARGS
+-	"\t           <argname>[->field[->field|.field...]],\n"
++	"\t           [(structname)]<argname>[->field[->field|.field...]],\n"
+ #endif
+ #else
+ 	"\t           $stack<index>, $stack, $retval, $comm,\n"
+diff --git a/kernel/trace/trace_probe.c b/kernel/trace/trace_probe.c
+index 0908019aea12..e6cc9f3d6c8b 100644
+--- a/kernel/trace/trace_probe.c
++++ b/kernel/trace/trace_probe.c
+@@ -699,7 +699,7 @@ static int parse_btf_arg(char *varname,
+ 
+ 	if (ctx->flags & TPARG_FL_RETURN && !strcmp(varname, "$retval")) {
+ 		code->op = FETCH_OP_RETVAL;
+-		/* Check whether the function return type is not void */
++		/* Check whether the function return type is not void, even with typecast. */
+ 		if (query_btf_context(ctx) == 0) {
+ 			if (ctx->proto->type == 0) {
+ 				trace_probe_log_err(ctx->offset, NO_RETVAL);
+@@ -708,6 +708,13 @@ static int parse_btf_arg(char *varname,
+ 			tid = ctx->proto->type;
+ 			goto found;
+ 		}
++		/*
++		 * Even if we can not find appropriate BTF info, we can still access
++		 * the field via typecast.
++		 */
++		if (ctx->struct_btf)
++			goto found;
++
+ 		if (field) {
+ 			trace_probe_log_err(ctx->offset + field - varname,
+ 					    NO_BTF_ENTRY);
+@@ -752,7 +759,10 @@ static int parse_btf_arg(char *varname,
+ 	return -ENOENT;
+ 
+ found:
+-	type = btf_type_skip_modifiers(ctx->btf, tid, NULL);
++	if (ctx->struct_btf)
++		type = ctx->last_struct;
++	else
++		type = btf_type_skip_modifiers(ctx->btf, tid, NULL);
+ found_type:
+ 	if (!type) {
+ 		trace_probe_log_err(ctx->offset, BAD_BTF_TID);
+@@ -829,10 +839,11 @@ static int handle_typecast(char *arg, struct fetch_insn **pcode,
+ 	char *tmp;
+ 	int ret;
+ 
+-	/* Currently this only works for eprobes */
+-	if (!(ctx->flags & TPARG_FL_TEVENT)) {
+-		trace_probe_log_err(ctx->offset, TYPECAST_NOT_EVENT);
+-		return -EINVAL;
++	if (!(tparg_is_event_probe(ctx->flags) ||
++	      tparg_is_function_entry(ctx->flags) ||
++	      tparg_is_function_return(ctx->flags))) {
++		trace_probe_log_err(ctx->offset, NOSUP_BTFARG);
++		return -EOPNOTSUPP;
+ 	}
+ 
+ 	tmp = strchr(arg, ')');
+diff --git a/kernel/trace/trace_probe.h b/kernel/trace/trace_probe.h
+index e36cfe39e9a8..aa72e2ffdd93 100644
+--- a/kernel/trace/trace_probe.h
++++ b/kernel/trace/trace_probe.h
+@@ -429,6 +429,11 @@ static inline bool tparg_is_function_return(unsigned int flags)
+ 	return (flags & TPARG_FL_LOC_MASK) == (TPARG_FL_KERNEL | TPARG_FL_RETURN);
+ }
+ 
++static inline bool tparg_is_event_probe(unsigned int flags)
++{
++	return !!(flags & TPARG_FL_TEVENT);
++}
++
+ struct traceprobe_parse_context {
+ 	struct trace_event_call *event;
+ 	/* BTF related parameters */
+-- 
+2.55.0
+

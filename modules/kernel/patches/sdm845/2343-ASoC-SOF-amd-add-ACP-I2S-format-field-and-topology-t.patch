@@ -1,0 +1,74 @@
+From 08c5e98b7b5ff5aa0c2774bf58a5a71e2741f603 Mon Sep 17 00:00:00 2001
+From: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Date: Wed, 1 Jul 2026 15:25:15 +0530
+Subject: [PATCH 02343/15333] ASoC: SOF: amd: add ACP I2S format field and
+ topology token
+
+Add format field to sof_ipc_dai_acp_params for ACP I2S format selection.
+Add SOF_TKN_AMD_ACPI2S_FORMAT (1703) to the existing SOF_ACPI2S_TOKENS
+tuple and wire it into acpi2s_tokens[] so integrators continue using the
+same ACPI2S token group as earlier ACP I2S topologies, not a separate
+ACPTDM-specific token set.
+
+Signed-off-by: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Link: https://patch.msgid.link/20260701095759.1012929-15-Vijendar.Mukunda@amd.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/sof/dai-amd.h     | 1 +
+ include/uapi/sound/sof/tokens.h | 1 +
+ sound/soc/sof/ipc3-topology.c   | 7 ++++++-
+ 3 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/include/sound/sof/dai-amd.h b/include/sound/sof/dai-amd.h
+index 59cd014392c1..e2107da6558f 100644
+--- a/include/sound/sof/dai-amd.h
++++ b/include/sound/sof/dai-amd.h
+@@ -18,6 +18,7 @@ struct sof_ipc_dai_acp_params {
+ 	uint32_t fsync_rate;    /* FSYNC frequency in Hz */
+ 	uint32_t tdm_slots;
+ 	uint32_t tdm_mode;
++	uint32_t format;
+ } __packed;
+ 
+ /* ACPDMIC Configuration Request - SOF_IPC_DAI_AMD_CONFIG */
+diff --git a/include/uapi/sound/sof/tokens.h b/include/uapi/sound/sof/tokens.h
+index f4a7baadb44d..cc694a397987 100644
+--- a/include/uapi/sound/sof/tokens.h
++++ b/include/uapi/sound/sof/tokens.h
+@@ -223,6 +223,7 @@
+ #define SOF_TKN_AMD_ACPI2S_RATE			1700
+ #define SOF_TKN_AMD_ACPI2S_CH			1701
+ #define SOF_TKN_AMD_ACPI2S_TDM_MODE		1702
++#define SOF_TKN_AMD_ACPI2S_FORMAT		1703
+ 
+ /* MICFIL PDM */
+ #define SOF_TKN_IMX_MICFIL_RATE			2000
+diff --git a/sound/soc/sof/ipc3-topology.c b/sound/soc/sof/ipc3-topology.c
+index 4e066bbded91..9eb8335a3c07 100644
+--- a/sound/soc/sof/ipc3-topology.c
++++ b/sound/soc/sof/ipc3-topology.c
+@@ -281,7 +281,10 @@ static const struct sof_topology_token acpdmic_tokens[] = {
+ 		offsetof(struct sof_ipc_dai_acpdmic_params, pdm_ch)},
+ };
+ 
+-/* ACPI2S */
++/*
++ * ACPI2S tokens fill struct sof_ipc_dai_acp_params; SOF_DAI_AMD_I2S (ACPTDM
++ * on ACP7.B/7.F) reuses this tuple group rather than defining a parallel set.
++ */
+ static const struct sof_topology_token acpi2s_tokens[] = {
+ 	{SOF_TKN_AMD_ACPI2S_RATE, SND_SOC_TPLG_TUPLE_TYPE_WORD, get_token_u32,
+ 		offsetof(struct sof_ipc_dai_acp_params, fsync_rate)},
+@@ -289,6 +292,8 @@ static const struct sof_topology_token acpi2s_tokens[] = {
+ 		offsetof(struct sof_ipc_dai_acp_params, tdm_slots)},
+ 	{SOF_TKN_AMD_ACPI2S_TDM_MODE, SND_SOC_TPLG_TUPLE_TYPE_WORD, get_token_u32,
+ 		offsetof(struct sof_ipc_dai_acp_params, tdm_mode)},
++	{SOF_TKN_AMD_ACPI2S_FORMAT, SND_SOC_TPLG_TUPLE_TYPE_WORD, get_token_u32,
++		offsetof(struct sof_ipc_dai_acp_params, format)},
+ };
+ 
+ /* MICFIL PDM */
+-- 
+2.55.0
+

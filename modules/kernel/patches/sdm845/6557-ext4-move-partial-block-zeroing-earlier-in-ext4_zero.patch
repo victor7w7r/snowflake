@@ -1,0 +1,60 @@
+From b16e9d27a643a3cf8907c994d25ed52717f36418 Mon Sep 17 00:00:00 2001
+From: Zhang Yi <yi.zhang@huawei.com>
+Date: Tue, 14 Jul 2026 16:00:39 +0800
+Subject: [PATCH 06557/15333] ext4: move partial block zeroing earlier in
+ ext4_zero_range()
+
+In ext4_zero_range(), move the ext4_zero_partial_blocks() call, which
+handles unaligned edges, into the same branch where the unaligned range
+is preallocated, immediately after ext4_alloc_file_blocks(). This is
+safe because there is no dependency between partial block handling and
+the subsequent full block handling.
+
+This change will be used by later patches that handle unaligned
+FALLOC_FL_WRITE_ZEROES operations, which will need to check the partial
+zeroed result.
+
+Signed-off-by: Zhang Yi <yi.zhang@huawei.com>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260714080044.4038124-5-yi.zhang@huaweicloud.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/extents.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/fs/ext4/extents.c b/fs/ext4/extents.c
+index 91c97af64b31..ea4c43983752 100644
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -4734,10 +4734,16 @@ static long ext4_zero_range(struct file *file, loff_t offset,
+ 	}
+ 
+ 	flags = EXT4_GET_BLOCKS_CREATE_UNWRIT_EXT;
+-	/* Preallocate the range including the unaligned edges */
++	/*
++	 * Preallocate the range including the unaligned edges, and zero
++	 * out partial blocks if they already contain data.
++	 */
+ 	if (!IS_ALIGNED(offset | end, blocksize)) {
+ 		ret = ext4_alloc_file_blocks(file, offset, len, new_size,
+ 					     flags);
++		if (!ret)
++			ret = ext4_zero_partial_blocks(inode, offset, len,
++						       &partial_zeroed);
+ 		if (ret)
+ 			return ret;
+ 	}
+@@ -4770,10 +4776,6 @@ static long ext4_zero_range(struct file *file, loff_t offset,
+ 	if (IS_ALIGNED(offset | end, blocksize))
+ 		return ret;
+ 
+-	/* Zero out partial block at the edges of the range */
+-	ret = ext4_zero_partial_blocks(inode, offset, len, &partial_zeroed);
+-	if (ret)
+-		return ret;
+ 	if (((file->f_flags & O_SYNC) || IS_SYNC(inode)) && partial_zeroed) {
+ 		ret = filemap_write_and_wait_range(inode->i_mapping, offset,
+ 						   end - 1);
+-- 
+2.55.0
+

@@ -1,0 +1,70 @@
+From d7fc133bf91f713df72facebd41ae9dfc83e35f7 Mon Sep 17 00:00:00 2001
+From: Dennis Moshegov <dennis@xzync.uk>
+Date: Fri, 24 Jul 2026 16:43:55 +0100
+Subject: [PATCH 12834/15333] timekeeping: Use READ_ONCE/WRITE_ONCE() for
+ xtime_sec to prevent tearing
+
+The timekeeper update path uses a bulk memcpy() to synchronize the
+timekeeper structure, which is not guaranteed to be atomic. This allows for
+torn reads in ktime_get_real_seconds() on 64-bit systems, where the
+sequence counter protection is bypassed for performance.
+
+To prevent reading a torn 64-bit xtime_sec value, enforce atomic-like
+access by using WRITE_ONCE() for the critical field before the bulk
+memcpy() in timekeeping_update_from_shadow(). Correspondingly, use
+READ_ONCE() in ktime_get_real_seconds() to ensure a fresh, consistent load
+from memory.
+
+[ tglx: Format changelog and add comment ]
+
+Reported-by: syzbot+72789cd1697965e714ca@syzkaller.appspotmail.com
+Signed-off-by: Dennis Moshegov <dennis@xzync.uk>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/20260724154405.70-1-dennis@xzync.uk
+Closes: https://syzkaller.appspot.com/bug?extid=72789cd1697965e714ca
+---
+ kernel/time/timekeeping.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/kernel/time/timekeeping.c b/kernel/time/timekeeping.c
+index 97db2e9393f9..c4230f44e1ea 100644
+--- a/kernel/time/timekeeping.c
++++ b/kernel/time/timekeeping.c
+@@ -858,7 +858,11 @@ static void timekeeping_update_from_shadow(struct tk_data *tkd, unsigned int act
+ 	 * the downside that the reader side does not longer benefit from
+ 	 * the cacheline optimized data layout of the timekeeper and requires
+ 	 * another indirection.
++	 *
++	 * Write xtime_sec first so that even if the memcpy() tears the store
++	 * data integrity is provided for ktime_get_real_seconds().
+ 	 */
++	WRITE_ONCE(tkd->timekeeper.xtime_sec, tk->xtime_sec);
+ 	memcpy(&tkd->timekeeper, tk, sizeof(*tk));
+ 	write_seqcount_end(&tkd->seq);
+ }
+@@ -1186,11 +1190,11 @@ time64_t ktime_get_real_seconds(void)
+ 	unsigned int seq;
+ 
+ 	if (IS_ENABLED(CONFIG_64BIT))
+-		return tk->xtime_sec;
++		return READ_ONCE(tk->xtime_sec);
+ 
+ 	do {
+ 		seq = read_seqcount_begin(&tk_core.seq);
+-		seconds = tk->xtime_sec;
++		seconds = READ_ONCE(tk->xtime_sec);
+ 
+ 	} while (read_seqcount_retry(&tk_core.seq, seq));
+ 
+@@ -1212,7 +1216,7 @@ noinstr time64_t __ktime_get_real_seconds(void)
+ {
+ 	struct timekeeper *tk = &tk_core.timekeeper;
+ 
+-	return tk->xtime_sec;
++	return READ_ONCE(tk->xtime_sec);
+ }
+ 
+ static inline u64 tk_clock_read_snapshot(const struct tk_read_base *tkr,
+-- 
+2.55.0
+

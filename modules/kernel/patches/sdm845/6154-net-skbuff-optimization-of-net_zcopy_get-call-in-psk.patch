@@ -1,0 +1,60 @@
+From b9ecdfda4d48b7cb33bff3bd924ded7019aa4df2 Mon Sep 17 00:00:00 2001
+From: Yun Lu <luyun@kylinos.cn>
+Date: Wed, 8 Jul 2026 13:54:54 +0800
+Subject: [PATCH 06154/15333] net: skbuff: optimization of net_zcopy_get() call
+ in pskb_carve helpers
+
+Commit 98d0912e9f84 ("net: skbuff: fix missing zerocopy reference in
+pskb_carve helpers") introduced two calls of net_zcopy_get(skb_zcopy(skb)).
+In fact, skb_zcopy() has already been executed once before. When calling
+net_zcopy_get(), skb_zcopy() always returns skb_uarg(skb), which results
+in adding some unnecessary instructions in skb_zcopy. So, change these
+two calls to directly use skb_uarg(skb) instead of skb_zcopy.
+
+In addition, also use net_zcopy_get() instead of refcount_inc() in
+pskb_expand_head() for code consistency.
+
+No functional change intended.
+
+Signed-off-by: Yun Lu <luyun@kylinos.cn>
+Reviewed-by: Willem de Bruijn <willemb@google.com>
+Link: https://patch.msgid.link/20260708055454.9167-1-luyun_611@163.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ net/core/skbuff.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/net/core/skbuff.c b/net/core/skbuff.c
+index 18dabb4e9cfa..d798fbdc3da7 100644
+--- a/net/core/skbuff.c
++++ b/net/core/skbuff.c
+@@ -2326,7 +2326,7 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
+ 		if (skb_orphan_frags(skb, gfp_mask))
+ 			goto nofrags;
+ 		if (skb_zcopy(skb))
+-			refcount_inc(&skb_uarg(skb)->refcnt);
++			net_zcopy_get(skb_uarg(skb));
+ 		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
+ 			skb_frag_ref(skb, i);
+ 
+@@ -6842,7 +6842,7 @@ static int pskb_carve_inside_header(struct sk_buff *skb, const u32 off,
+ 			return -ENOMEM;
+ 		}
+ 		if (skb_zcopy(skb))
+-			net_zcopy_get(skb_zcopy(skb));
++			net_zcopy_get(skb_uarg(skb));
+ 		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
+ 			skb_frag_ref(skb, i);
+ 		if (skb_has_frag_list(skb))
+@@ -6992,7 +6992,7 @@ static int pskb_carve_inside_nonlinear(struct sk_buff *skb, const u32 off,
+ 		return -ENOMEM;
+ 	}
+ 	if (skb_zcopy(skb))
+-		net_zcopy_get(skb_zcopy(skb));
++		net_zcopy_get(skb_uarg(skb));
+ 	skb_release_data(skb, SKB_CONSUMED);
+ 
+ 	skb->head = data;
+-- 
+2.55.0
+

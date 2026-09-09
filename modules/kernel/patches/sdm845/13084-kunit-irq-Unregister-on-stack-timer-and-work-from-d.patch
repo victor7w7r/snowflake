@@ -1,0 +1,39 @@
+From d1a5224851bec09c10b1ee0e1c46778a3d4accad Mon Sep 17 00:00:00 2001
+From: Eric Biggers <ebiggers@kernel.org>
+Date: Wed, 5 Aug 2026 22:38:04 -0700
+Subject: [PATCH 13084/15333] kunit: irq: Unregister on-stack timer and work
+ from debugobjects
+
+In kunit_run_irq_test(), call destroy_hrtimer_on_stack() and
+destroy_work_on_stack() to unregister the hrtimer and work from the
+debugobjects infrastructure (when CONFIG_DEBUG_OBJECTS_TIMERS=y and
+CONFIG_DEBUG_OBJECTS_WORK=y) before the function returns.
+
+Found via code review; the lack of the unregistrations didn't actually
+cause a warning, since the objects are inactive upon return anyway.  But
+they should be there, otherwise debugobjects keeps tracking the objects.
+
+Fixes: 950a81224e8b ("lib/crypto: tests: Add hash-test-template.h and gen-hash-testvecs.py")
+Reviewed-by: David Gow <david@davidgow.net>
+Link: https://patch.msgid.link/20260806053804.106724-1-ebiggers@kernel.org
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+---
+ include/kunit/run-in-irq-context.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/include/kunit/run-in-irq-context.h b/include/kunit/run-in-irq-context.h
+index 3802b6fb218e..b46fa1696360 100644
+--- a/include/kunit/run-in-irq-context.h
++++ b/include/kunit/run-in-irq-context.h
+@@ -137,6 +137,8 @@ static inline void kunit_run_irq_test(struct kunit *test, bool (*func)(void *),
+ 	/* Cancel the timer and work. */
+ 	hrtimer_cancel(&state.timer);
+ 	flush_work(&state.bh_work);
++	destroy_hrtimer_on_stack(&state.timer);
++	destroy_work_on_stack(&state.bh_work);
+ 
+ 	/* Sanity check: the timer and BH functions should have been run. */
+ 	KUNIT_EXPECT_GT_MSG(test, atomic_read(&state.hardirq_func_calls), 0,
+-- 
+2.55.0
+

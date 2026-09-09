@@ -1,0 +1,129 @@
+From 52447180f4fb095390477ba541bb08f24aeb4e92 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh?= <thomas.weissschuh@linutronix.de>
+Date: Thu, 9 Jul 2026 09:28:41 +0200
+Subject: [PATCH 04688/15333] vdso: Drop HAVE_GENERIC_VDSO from architecture
+ kconfig files
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Now that GENERIC_GETTIMEOFDAY and VDSO_GETRANDOM enable
+HAVE_GENERIC_VDSO automatically, the architecture specific kconfig files
+do not need to do so anymore.
+
+Remove the corresponding lines.
+
+Keep them for riscv, loongarch and powerpc as those have their own
+explicit usage of the vDSO datastore provided by HAVE_GENERIC_VDSO.
+
+Signed-off-by: Thomas Weißschuh <thomas.weissschuh@linutronix.de>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Reviewed-by: Vincenzo Frascino <vincenzo.frascino@arm.com>
+Link: https://patch.msgid.link/20260709-vdso-have_generic_vdso-v1-5-d2e1061f268b@linutronix.de
+---
+ arch/arm/mm/Kconfig | 1 -
+ arch/arm64/Kconfig  | 1 -
+ arch/mips/Kconfig   | 1 -
+ arch/riscv/Kconfig  | 4 ++--
+ arch/s390/Kconfig   | 1 -
+ arch/sparc/Kconfig  | 1 -
+ arch/x86/Kconfig    | 1 -
+ 7 files changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/arch/arm/mm/Kconfig b/arch/arm/mm/Kconfig
+index 871bd58d2ccc..f7bea397a201 100644
+--- a/arch/arm/mm/Kconfig
++++ b/arch/arm/mm/Kconfig
+@@ -924,7 +924,6 @@ config VDSO
+ 	bool "Enable VDSO for acceleration of some system calls"
+ 	depends on AEABI && MMU && CPU_V7
+ 	default y if ARM_ARCH_TIMER
+-	select HAVE_GENERIC_VDSO
+ 	select GENERIC_GETTIMEOFDAY
+ 	help
+ 	  Place in the process address space an ELF shared object
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index b3afe0688919..11e733b6a3cf 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -229,7 +229,6 @@ config ARM64
+ 	select HAVE_SYSCALL_TRACEPOINTS
+ 	select HAVE_KPROBES
+ 	select HAVE_KRETPROBES
+-	select HAVE_GENERIC_VDSO
+ 	select HOTPLUG_CORE_SYNC_DEAD if HOTPLUG_CPU
+ 	select HOTPLUG_SMT if HOTPLUG_CPU
+ 	select IRQ_DOMAIN
+diff --git a/arch/mips/Kconfig b/arch/mips/Kconfig
+index 8555bbf47c63..a06f24317306 100644
+--- a/arch/mips/Kconfig
++++ b/arch/mips/Kconfig
+@@ -3163,7 +3163,6 @@ config MIPS_EXTERNAL_TIMER
+ config MIPS_GENERIC_GETTIMEOFDAY
+ 	def_bool y
+ 	select GENERIC_GETTIMEOFDAY
+-	select HAVE_GENERIC_VDSO
+ 	depends on CSRC_R4K || CLKSRC_MIPS_GIC
+ 	# GCC (at least up to version 9.2) appears to emit function calls that make use
+ 	# of the GOT when targeting microMIPS, which we can't use in the VDSO due to
+diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
+index 353cbfcff783..9aa8c4df0cd8 100644
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -110,7 +110,7 @@ config RISCV
+ 	select GENERIC_CPU_VULNERABILITIES
+ 	select GENERIC_EARLY_IOREMAP
+ 	select GENERIC_ENTRY
+-	select GENERIC_GETTIMEOFDAY if HAVE_GENERIC_VDSO && 64BIT
++	select GENERIC_GETTIMEOFDAY if MMU && 64BIT
+ 	select GENERIC_IDLE_POLL_SETUP
+ 	select GENERIC_IOREMAP if MMU
+ 	select HAVE_IOREMAP_PROT if MMU
+@@ -227,7 +227,7 @@ config RISCV
+ 	select THREAD_INFO_IN_TASK
+ 	select TRACE_IRQFLAGS_SUPPORT
+ 	select UACCESS_MEMCPY if !MMU
+-	select VDSO_GETRANDOM if HAVE_GENERIC_VDSO && 64BIT
++	select VDSO_GETRANDOM if MMU && 64BIT
+ 	select USER_STACKTRACE_SUPPORT
+ 	select ZONE_DMA32 if 64BIT
+ 
+diff --git a/arch/s390/Kconfig b/arch/s390/Kconfig
+index 84404e6778d5..c9c55e3ddf1d 100644
+--- a/arch/s390/Kconfig
++++ b/arch/s390/Kconfig
+@@ -215,7 +215,6 @@ config S390
+ 	select HAVE_FUNCTION_GRAPH_TRACER
+ 	select HAVE_FUNCTION_TRACER
+ 	select HAVE_GCC_PLUGINS
+-	select HAVE_GENERIC_VDSO
+ 	select HAVE_IOREMAP_PROT if PCI
+ 	select HAVE_KERNEL_BZIP2
+ 	select HAVE_KERNEL_GZIP
+diff --git a/arch/sparc/Kconfig b/arch/sparc/Kconfig
+index 0e9c906c4b5d..4dd79311133f 100644
+--- a/arch/sparc/Kconfig
++++ b/arch/sparc/Kconfig
+@@ -113,7 +113,6 @@ config SPARC64
+ 	select ARCH_SUPPORTS_SCHED_SMT if SMP
+ 	select ARCH_SUPPORTS_SCHED_MC  if SMP
+ 	select ARCH_HAS_LAZY_MMU_MODE
+-	select HAVE_GENERIC_VDSO
+ 	select GENERIC_GETTIMEOFDAY
+ 
+ config ARCH_PROC_KCORE_TEXT
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index bdad90f210e4..2f4a78024a96 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -302,7 +302,6 @@ config X86
+ 	select HAVE_UNSTABLE_SCHED_CLOCK
+ 	select HAVE_UNWIND_USER_FP		if X86_64
+ 	select HAVE_USER_RETURN_NOTIFIER
+-	select HAVE_GENERIC_VDSO
+ 	select VDSO_GETRANDOM			if X86_64
+ 	select HOTPLUG_PARALLEL			if SMP && X86_64
+ 	select HOTPLUG_SMT			if SMP
+-- 
+2.55.0
+

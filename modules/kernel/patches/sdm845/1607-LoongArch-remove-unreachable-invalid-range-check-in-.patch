@@ -1,0 +1,39 @@
+From 68d3b7d58237b8794d9343210d4c90b8381cfa96 Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Wed, 1 Jul 2026 00:04:07 +0900
+Subject: [PATCH 01607/15333] LoongArch: remove unreachable invalid range check
+ in kasan_init()
+
+kasan_init() populates the linear mapping shadow with for_each_mem_range()
+and breaks the loop when start >= end. for_each_mem_range() never returns
+an invalid range, so start < end always.
+
+Therefore the start >= end check is unreachable, so remove it.
+
+No functional change.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Reviewed-by: Andrey Ryabinin <ryabinin.a.a@gmail.com>
+Link: https://patch.msgid.link/20260630150413.1718632-3-ekffu200098@gmail.com
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+---
+ arch/loongarch/mm/kasan_init.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/arch/loongarch/mm/kasan_init.c b/arch/loongarch/mm/kasan_init.c
+index 0fc02ca06457..92ca0ba86406 100644
+--- a/arch/loongarch/mm/kasan_init.c
++++ b/arch/loongarch/mm/kasan_init.c
+@@ -305,9 +305,6 @@ void __init kasan_init(void)
+ 		void *start = (void *)phys_to_virt(pa_start);
+ 		void *end   = (void *)phys_to_virt(pa_end);
+ 
+-		if (start >= end)
+-			break;
+-
+ 		kasan_map_populate((unsigned long)mem_to_shadow(start),
+ 			(unsigned long)mem_to_shadow(end), NUMA_NO_NODE);
+ 	}
+-- 
+2.55.0
+

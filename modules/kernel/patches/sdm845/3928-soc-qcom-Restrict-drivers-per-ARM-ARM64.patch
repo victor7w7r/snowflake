@@ -1,0 +1,60 @@
+From e10b198a94c66f7105dbd535f66631c96579c903 Mon Sep 17 00:00:00 2001
+From: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Date: Sat, 11 Jul 2026 15:25:02 +0200
+Subject: [PATCH 03928/15333] soc: qcom: Restrict drivers per ARM/ARM64
+
+There is no point to allow selecting core SoC drivers for Qualcomm ARMv7
+SoCs when building ARM64 kernel, and vice versa.
+
+This makes kernel configuration more difficult as many do not remember
+the Qualcomm SoCs model names/numbers and their properties like
+architecture.  No features should be lost because:
+1. There won't be a single image for ARMv7 and ARMv8/9 SoCs.
+2. Newer ARMv8/9 SoCs won't be running in arm32 emulation mode.
+
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260711-qcom-soc-kconfig-v2-2-4a907e064281@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ drivers/soc/qcom/Kconfig | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/soc/qcom/Kconfig b/drivers/soc/qcom/Kconfig
+index f3d9c9d776e5..7207814cac85 100644
+--- a/drivers/soc/qcom/Kconfig
++++ b/drivers/soc/qcom/Kconfig
+@@ -37,6 +37,7 @@ config QCOM_COMMAND_DB
+ 
+ config QCOM_GENI_SE
+ 	tristate "Qualcomm GENI Serial Engine Driver"
++	depends on ARM64 || COMPILE_TEST
+ 	help
+ 	  This driver is used to manage Generic Interface (GENI) firmware based
+ 	  Qualcomm Technologies, Inc. Universal Peripheral (QUP) Wrapper. This
+@@ -45,6 +46,7 @@ config QCOM_GENI_SE
+ 
+ config QCOM_GSBI
+ 	tristate "Qualcomm General Serial Bus Interface"
++	depends on ARM || COMPILE_TEST
+ 	select MFD_SYSCON
+ 	help
+ 	  Say y here to enable GSBI support.  The GSBI provides control
+@@ -104,6 +106,7 @@ config QCOM_PMIC_GLINK
+ 	depends on DRM
+ 	depends on NET
+ 	depends on OF
++	depends on ARM64 || COMPILE_TEST
+ 	select AUXILIARY_BUS
+ 	select QCOM_PDR_HELPERS
+ 	select DRM_AUX_HPD_BRIDGE
+@@ -247,6 +250,7 @@ config QCOM_APR
+ 
+ config QCOM_ICC_BWMON
+ 	tristate "Qualcomm Interconnect Bandwidth Monitor driver"
++	depends on ARM64 || COMPILE_TEST
+ 	select PM_OPP
+ 	select REGMAP_MMIO
+ 	help
+-- 
+2.55.0
+

@@ -1,0 +1,58 @@
+From 99607da19b66ca6649088176ecaaa83eeae780b7 Mon Sep 17 00:00:00 2001
+From: Tim Wiederhake <twiederh@redhat.com>
+Date: Wed, 8 Jul 2026 15:38:55 +0200
+Subject: [PATCH 09606/15333] KVM: x86: Document APIC base address constraint
+ for in-kernel irqchip
+
+When virtual APIC access acceleration is enabled (APICv on Intel, AVIC
+on AMD), vcpu creation installs a private memory slot at the default
+APIC base address (0xfee00000).  If a user memory region overlaps this
+address, vcpu creation fails with EEXIST.  The same error occurs when
+installing an overlapping user memory region after vcpu creation.
+
+This also applies when using KVM_CAP_SPLIT_IRQCHIP.
+
+This constraint is not documented anywhere.  Add a note to the
+KVM_CREATE_IRQCHIP and KVM_CAP_SPLIT_IRQCHIP documentation.
+
+Signed-off-by: Tim Wiederhake <twiederh@redhat.com>
+Link: https://patch.msgid.link/20260708133856.302151-3-twiederh@redhat.com
+[sean: call out "subsequent vcpu creation"]
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ Documentation/virt/kvm/api.rst | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/Documentation/virt/kvm/api.rst b/Documentation/virt/kvm/api.rst
+index 14121315d4a5..62afc031897c 100644
+--- a/Documentation/virt/kvm/api.rst
++++ b/Documentation/virt/kvm/api.rst
+@@ -863,6 +863,14 @@ KVM_CREATE_DEVICE, which also supports creating a GICv2.  Using
+ KVM_CREATE_DEVICE is preferred over KVM_CREATE_IRQCHIP for GICv2.
+ On s390, a dummy irq routing table is created.
+ 
++On x86, subsequent vcpu creation may install a private 4 KiB memory slot at the
++default APIC base address (0xfee00000).  User memory regions must not overlap
++this address; doing so will cause vcpu creation to fail with ``EEXIST``, or the
++memory region to be rejected if created after the vcpu.  This occurs when
++APIC access acceleration is enabled (APICv on Intel, AVIC on AMD), which is
++the default on supported hardware.  The same constraint applies when using
++``KVM_CAP_SPLIT_IRQCHIP``.
++
+ Note that on s390 the KVM_CAP_S390_IRQCHIP vm capability needs to be enabled
+ before KVM_CREATE_IRQCHIP can be used.
+ 
+@@ -7934,6 +7942,10 @@ used in the IRQ routing table.  The first args[0] MSI routes are reserved
+ for the IOAPIC pins.  Whenever the LAPIC receives an EOI for these routes,
+ a KVM_EXIT_IOAPIC_EOI vmexit will be reported to userspace.
+ 
++As with ``KVM_CREATE_IRQCHIP``, subsequent vcpu creation may install a private
++memory slot at the APIC base address (0xfee00000) that must not overlap user
++memory regions.  See ``KVM_CREATE_IRQCHIP`` for details.
++
+ Fails if VCPU has already been created, or if the irqchip is already in the
+ kernel (i.e. KVM_CREATE_IRQCHIP has already been called).
+ 
+-- 
+2.55.0
+

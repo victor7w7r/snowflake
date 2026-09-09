@@ -1,0 +1,71 @@
+From c3306dd3bd4c4eb3d8452f21a4487c05facd4d4a Mon Sep 17 00:00:00 2001
+From: Mukesh Ojha <mukesh.ojha@oss.qualcomm.com>
+Date: Wed, 29 Jul 2026 10:43:43 +0100
+Subject: [PATCH 09239/15333] misc: fastrpc: Move prints outside spinlock in
+ fastrpc_cb_probe
+
+dev_err() and dev_info() were called while holding a spinlock with
+IRQs disabled, which is incorrect as printk can be slow and should
+not be called in atomic context.
+
+Move the dev_err() for the FASTRPC_MAX_SESSIONS check to after the
+spinlock is released, and save the return value of of_property_read_u32()
+to print dev_info() after the lock is dropped. Minor variable style
+correction in probe function.
+
+Signed-off-by: Mukesh Ojha <mukesh.ojha@oss.qualcomm.com>
+Reviewed-by: Bjorn Andersson <andersson@kernel.org>
+Signed-off-by: Srinivas Kandagatla <srini@kernel.org>
+Link: https://patch.msgid.link/20260729094352.111065-2-srini@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/misc/fastrpc.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/misc/fastrpc.c b/drivers/misc/fastrpc.c
+index f3a49384586d..a9b2ae44c06f 100644
+--- a/drivers/misc/fastrpc.c
++++ b/drivers/misc/fastrpc.c
+@@ -2223,19 +2223,22 @@ static int fastrpc_cb_probe(struct platform_device *pdev)
+ 	struct device *dev = &pdev->dev;
+ 	int i, sessions = 0;
+ 	unsigned long flags;
+-	int rc;
+ 	u32 dma_bits;
++	u32 sid = 0;
++	int rc;
+ 
+ 	cctx = dev_get_drvdata(dev->parent);
+ 	if (!cctx)
+ 		return -EINVAL;
+ 
+ 	of_property_read_u32(dev->of_node, "qcom,nsessions", &sessions);
++	if (of_property_read_u32(dev->of_node, "reg", &sid))
++		dev_info(dev, "FastRPC Session ID not specified in DT\n");
+ 
+ 	spin_lock_irqsave(&cctx->lock, flags);
+ 	if (cctx->sesscount >= FASTRPC_MAX_SESSIONS) {
+-		dev_err(&pdev->dev, "too many sessions\n");
+ 		spin_unlock_irqrestore(&cctx->lock, flags);
++		dev_err(&pdev->dev, "too many sessions\n");
+ 		return -ENOSPC;
+ 	}
+ 	dma_bits = cctx->soc_data->dma_addr_bits_default;
+@@ -2244,13 +2247,11 @@ static int fastrpc_cb_probe(struct platform_device *pdev)
+ 	sess->valid = true;
+ 	sess->dev = dev;
+ 	dev_set_drvdata(dev, sess);
++	sess->sid = sid;
+ 
+ 	if (cctx->domain_id == CDSP_DOMAIN_ID)
+ 		dma_bits = cctx->soc_data->dma_addr_bits_cdsp;
+ 
+-	if (of_property_read_u32(dev->of_node, "reg", &sess->sid))
+-		dev_info(dev, "FastRPC Session ID not specified in DT\n");
+-
+ 	if (sessions > 0) {
+ 		struct fastrpc_session_ctx *dup_sess;
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,91 @@
+From 53113fbfb93166179370b8cd0d579e417a2739fd Mon Sep 17 00:00:00 2001
+From: Prashant Rahul <prashantrahul23@gmail.com>
+Date: Thu, 2 Jul 2026 12:36:16 +0530
+Subject: [PATCH 02814/15333] staging: octeon: Propagate tx initialization
+ failures
+
+Instead of calling panic(), log and propagate the error upwards for
+better error handling.
+
+Pass platform_device to tx initializer to match the rx
+initializer interface and to log device specific failures.
+
+Signed-off-by: Prashant Rahul <prashantrahul23@gmail.com>
+Tested-by: Klara Modin <klarasmodin@gmail.com>
+Tested-by: Klara Modin <klarasomdin@gmail.com>
+Link: https://patch.msgid.link/20260702-staging-driver-octeon-panic-v2-3-2c2b6ae086dd@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/octeon/ethernet-tx.c | 17 +++++++++--------
+ drivers/staging/octeon/ethernet-tx.h |  2 +-
+ drivers/staging/octeon/ethernet.c    |  2 +-
+ 3 files changed, 11 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/staging/octeon/ethernet-tx.c b/drivers/staging/octeon/ethernet-tx.c
+index 785c6492f170..cc20c1e6791f 100644
+--- a/drivers/staging/octeon/ethernet-tx.c
++++ b/drivers/staging/octeon/ethernet-tx.c
+@@ -5,6 +5,7 @@
+  * Copyright (c) 2003-2010 Cavium Networks
+  */
+ 
++#include <linux/platform_device.h>
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+ #include <linux/netdevice.h>
+@@ -649,19 +650,19 @@ static irqreturn_t cvm_oct_tx_cleanup_watchdog(int cpl, void *dev_id)
+ 	return IRQ_HANDLED;
+ }
+ 
+-void cvm_oct_tx_initialize(void)
++int cvm_oct_tx_initialize(struct platform_device *pdev)
+ {
+-	int i;
++	int ret;
+ 
+ 	/* Disable the interrupt.  */
+ 	cvmx_write_csr(CVMX_CIU_TIMX(1), 0);
+ 	/* Register an IRQ handler to receive CIU_TIMX(1) interrupts */
+-	i = request_irq(OCTEON_IRQ_TIMER1,
+-			cvm_oct_tx_cleanup_watchdog, 0,
+-			"Ethernet", cvm_oct_device);
+-
+-	if (i)
+-		panic("Could not acquire Ethernet IRQ %d\n", OCTEON_IRQ_TIMER1);
++	ret = request_irq(OCTEON_IRQ_TIMER1, cvm_oct_tx_cleanup_watchdog, 0,
++			  "Ethernet", cvm_oct_device);
++	if (ret)
++		dev_warn(&pdev->dev, "Could not acquire Ethernet IRQ %d\n",
++			 OCTEON_IRQ_TIMER1);
++	return ret;
+ }
+ 
+ void cvm_oct_tx_shutdown(void)
+diff --git a/drivers/staging/octeon/ethernet-tx.h b/drivers/staging/octeon/ethernet-tx.h
+index 6c524668f65a..b03d56b0d2b6 100644
+--- a/drivers/staging/octeon/ethernet-tx.h
++++ b/drivers/staging/octeon/ethernet-tx.h
+@@ -9,6 +9,6 @@ netdev_tx_t cvm_oct_xmit(struct sk_buff *skb, struct net_device *dev);
+ netdev_tx_t cvm_oct_xmit_pow(struct sk_buff *skb, struct net_device *dev);
+ int cvm_oct_transmit_qos(struct net_device *dev, void *work_queue_entry,
+ 			 int do_free, int qos);
+-void cvm_oct_tx_initialize(void);
++int cvm_oct_tx_initialize(struct platform_device *pdev);
+ void cvm_oct_tx_shutdown(void);
+ void cvm_oct_tx_shutdown_dev(struct net_device *dev);
+diff --git a/drivers/staging/octeon/ethernet.c b/drivers/staging/octeon/ethernet.c
+index 21f3e27aabf2..56ea84818753 100644
+--- a/drivers/staging/octeon/ethernet.c
++++ b/drivers/staging/octeon/ethernet.c
+@@ -934,7 +934,7 @@ static int cvm_oct_probe(struct platform_device *pdev)
+ 		}
+ 	}
+ 
+-	cvm_oct_tx_initialize();
++	cvm_oct_tx_initialize(pdev);
+ 	cvm_oct_rx_initialize(pdev);
+ 
+ 	/*
+-- 
+2.55.0
+

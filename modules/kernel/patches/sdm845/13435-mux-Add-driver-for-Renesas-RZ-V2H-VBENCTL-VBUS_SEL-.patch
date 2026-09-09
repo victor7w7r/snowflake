@@ -1,0 +1,157 @@
+From ac7bde3c53166656d80e3aacc7d274d3c60a6de4 Mon Sep 17 00:00:00 2001
+From: Tommaso Merciai <tommaso.merciai.xr@bp.renesas.com>
+Date: Mon, 10 Aug 2026 09:51:41 +0200
+Subject: [PATCH 13435/15333] mux: Add driver for Renesas RZ/V2H VBENCTL
+ VBUS_SEL mux
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+As per the RZ/V2H(P) HW manual, VBUSEN can be controlled by the VBUS_SEL
+bit of the VBENCTL Control Register. This register is mapped in the
+reset framework. The reset driver expose this register as mux-controller
+and instantiates this driver. The consumer will use the mux API to
+control the VBUS_SEL bit.
+
+Reviewed-by: Lad Prabhakar <prabhakar.mahadev-lad.rj@bp.renesas.com>
+Reviewed-by: Alvin Šipraga <alvin.sipraga@analog.com>
+Reviewed-by: Philipp Zabel <p.zabel@pengutronix.de>
+Signed-off-by: Tommaso Merciai <tommaso.merciai.xr@bp.renesas.com>
+Signed-off-by: Peter Rosin <peda@lysator.liu.se>
+---
+ drivers/mux/Kconfig         | 13 ++++++
+ drivers/mux/Makefile        |  2 +
+ drivers/mux/rzv2h-vbenctl.c | 81 +++++++++++++++++++++++++++++++++++++
+ 3 files changed, 96 insertions(+)
+ create mode 100644 drivers/mux/rzv2h-vbenctl.c
+
+diff --git a/drivers/mux/Kconfig b/drivers/mux/Kconfig
+index 6d17dfa25dad..eb34457beaab 100644
+--- a/drivers/mux/Kconfig
++++ b/drivers/mux/Kconfig
+@@ -70,6 +70,19 @@ config MUX_MMIO
+ 	  To compile the driver as a module, choose M here: the module will
+ 	  be called mux-mmio.
+ 
++config MUX_RZV2H_VBENCTL
++	tristate "Renesas RZ/V2H VBENCTL VBUS_SEL mux driver"
++	depends on RESET_RZV2H_USB2PHY || COMPILE_TEST
++	select REGMAP
++	select AUXILIARY_BUS
++	default RESET_RZV2H_USB2PHY
++	help
++	  Support for the VBENCTL VBUS_SEL mux implemented on Renesas
++	  RZ/V2H SoCs.
++
++	  To compile the driver as a module, choose M here: the module will
++	  be called mux-rzv2h-vbenctl.
++
+ endmenu
+ 
+ endif # MULTIPLEXER
+diff --git a/drivers/mux/Makefile b/drivers/mux/Makefile
+index 6e9fa47daf56..0854c04613b9 100644
+--- a/drivers/mux/Makefile
++++ b/drivers/mux/Makefile
+@@ -8,9 +8,11 @@ mux-adg792a-objs		:= adg792a.o
+ mux-adgs1408-objs		:= adgs1408.o
+ mux-gpio-objs			:= gpio.o
+ mux-mmio-objs			:= mmio.o
++mux-rzv2h-vbenctl-objs		:= rzv2h-vbenctl.o
+ 
+ obj-$(CONFIG_MULTIPLEXER)	+= mux-core.o
+ obj-$(CONFIG_MUX_ADG792A)	+= mux-adg792a.o
+ obj-$(CONFIG_MUX_ADGS1408)	+= mux-adgs1408.o
+ obj-$(CONFIG_MUX_GPIO)		+= mux-gpio.o
+ obj-$(CONFIG_MUX_MMIO)		+= mux-mmio.o
++obj-$(CONFIG_MUX_RZV2H_VBENCTL)	+= mux-rzv2h-vbenctl.o
+diff --git a/drivers/mux/rzv2h-vbenctl.c b/drivers/mux/rzv2h-vbenctl.c
+new file mode 100644
+index 000000000000..2699458045f3
+--- /dev/null
++++ b/drivers/mux/rzv2h-vbenctl.c
+@@ -0,0 +1,81 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Renesas RZ/V2H(P) VBENCTL VBUS_SEL mux driver
++ *
++ * Copyright (C) 2026 Renesas Electronics Corp.
++ */
++
++#include <linux/auxiliary_bus.h>
++#include <linux/err.h>
++#include <linux/module.h>
++#include <linux/mux/driver.h>
++#include <linux/regmap.h>
++
++#define RZV2H_VBENCTL		0xf0c
++
++struct mux_rzv2h_vbenctl_priv {
++	struct regmap_field *field;
++};
++
++static int mux_rzv2h_vbenctl_set(struct mux_control *mux, int state)
++{
++	struct mux_rzv2h_vbenctl_priv *priv = mux_chip_priv(mux->chip);
++
++	return regmap_field_write(priv->field, state);
++}
++
++static const struct mux_control_ops mux_rzv2h_vbenctl_ops = {
++	.set = mux_rzv2h_vbenctl_set,
++};
++
++static int mux_rzv2h_vbenctl_probe(struct auxiliary_device *adev,
++				   const struct auxiliary_device_id *id)
++{
++	const struct reg_field reg_field = REG_FIELD(RZV2H_VBENCTL, 0, 0);
++	struct mux_rzv2h_vbenctl_priv *priv;
++	struct device *dev = &adev->dev;
++	struct mux_chip *mux_chip;
++	struct regmap *regmap;
++	int ret;
++
++	regmap = dev_get_regmap(dev->parent, NULL);
++	if (!regmap)
++		return -ENODEV;
++
++	mux_chip = devm_mux_chip_alloc(dev, 1, sizeof(*priv));
++	if (IS_ERR(mux_chip))
++		return PTR_ERR(mux_chip);
++
++	priv = mux_chip_priv(mux_chip);
++
++	priv->field = devm_regmap_field_alloc(dev, regmap, reg_field);
++	if (IS_ERR(priv->field))
++		return PTR_ERR(priv->field);
++
++	mux_chip->ops = &mux_rzv2h_vbenctl_ops;
++	mux_chip->mux[0].states = 2;
++	mux_chip->mux[0].idle_state = MUX_IDLE_AS_IS;
++
++	ret = devm_mux_chip_register(dev, mux_chip);
++	if (ret < 0)
++		return dev_err_probe(dev, ret, "Failed to register mux chip\n");
++
++	return 0;
++}
++
++static const struct auxiliary_device_id mux_rzv2h_vbenctl_ids[] = {
++	{ .name = "rzv2h_usb2phy_reset.vbenctl" },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(auxiliary, mux_rzv2h_vbenctl_ids);
++
++static struct auxiliary_driver mux_rzv2h_vbenctl_driver = {
++	.name		= "vbenctl",
++	.probe		= mux_rzv2h_vbenctl_probe,
++	.id_table	= mux_rzv2h_vbenctl_ids,
++};
++module_auxiliary_driver(mux_rzv2h_vbenctl_driver);
++
++MODULE_DESCRIPTION("RZ/V2H VBENCTL VBUS_SEL mux driver");
++MODULE_AUTHOR("Tommaso Merciai <tommaso.merciai.xr@bp.renesas.com>");
++MODULE_LICENSE("GPL");
+-- 
+2.55.0
+

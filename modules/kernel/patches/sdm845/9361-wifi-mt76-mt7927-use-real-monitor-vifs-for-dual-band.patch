@@ -1,0 +1,40 @@
+From 7673a2a159d74e7b1227be1d09f3e1040edf66ea Mon Sep 17 00:00:00 2001
+From: Sean Wang <sean.wang@mediatek.com>
+Date: Sat, 13 Jun 2026 17:51:44 -0500
+Subject: [PATCH 09361/15333] wifi: mt76: mt7927: use real monitor vifs for
+ dual-band monitors
+
+MT7927 needs monitor interfaces to be passed to the driver as real vifs
+so each monitor interface can be configured with its own band context.
+
+This is required to support concurrent 2 GHz and 5 GHz monitor operation
+on the same hw.
+
+Keep the existing virtual monitor behavior for older chips.
+
+Signed-off-by: Sean Wang <sean.wang@mediatek.com>
+Link: https://patch.msgid.link/20260613225144.2414283-2-sean.wang@kernel.org
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+---
+ drivers/net/wireless/mediatek/mt76/mt792x_core.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_core.c b/drivers/net/wireless/mediatek/mt76/mt792x_core.c
+index 2a8384a44d9f..837d7af984e8 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_core.c
++++ b/drivers/net/wireless/mediatek/mt76/mt792x_core.c
+@@ -833,7 +833,10 @@ int mt792x_init_wiphy(struct ieee80211_hw *hw)
+ 	ieee80211_hw_set(hw, HAS_RATE_CONTROL);
+ 	ieee80211_hw_set(hw, SUPPORTS_TX_ENCAP_OFFLOAD);
+ 	ieee80211_hw_set(hw, SUPPORTS_RX_DECAP_OFFLOAD);
+-	ieee80211_hw_set(hw, WANT_MONITOR_VIF);
++	if (is_mt7927(&dev->mt76))
++		ieee80211_hw_set(hw, NO_VIRTUAL_MONITOR);
++	else
++		ieee80211_hw_set(hw, WANT_MONITOR_VIF);
+ 	ieee80211_hw_set(hw, SUPPORTS_PS);
+ 	ieee80211_hw_set(hw, SUPPORTS_DYNAMIC_PS);
+ 	ieee80211_hw_set(hw, SUPPORTS_VHT_EXT_NSS_BW);
+-- 
+2.55.0
+

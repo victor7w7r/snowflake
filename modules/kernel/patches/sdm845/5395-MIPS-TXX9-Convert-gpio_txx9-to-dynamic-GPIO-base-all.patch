@@ -1,0 +1,76 @@
+From 1d6f300c8edc7b364000bbdd389eca6f2b1f9508 Mon Sep 17 00:00:00 2001
+From: Geert Uytterhoeven <geert@linux-m68k.org>
+Date: Wed, 1 Jul 2026 12:11:43 +0200
+Subject: [PATCH 05395/15333] MIPS: TXX9: Convert gpio_txx9 to dynamic GPIO
+ base allocation
+
+Static allocation of GPIO base is deprecated, use dynamic allocation.
+
+Signed-off-by: Geert Uytterhoeven <geert@linux-m68k.org>
+Reviewed-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/include/asm/txx9pio.h | 3 +--
+ arch/mips/kernel/gpio_txx9.c    | 5 ++---
+ arch/mips/txx9/rbtx4927/setup.c | 4 ++--
+ 3 files changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/arch/mips/include/asm/txx9pio.h b/arch/mips/include/asm/txx9pio.h
+index 3d6fa9f8d513..c33a97724400 100644
+--- a/arch/mips/include/asm/txx9pio.h
++++ b/arch/mips/include/asm/txx9pio.h
+@@ -23,7 +23,6 @@ struct txx9_pio_reg {
+ 	__u32 maskext;
+ };
+ 
+-int txx9_gpio_init(unsigned long baseaddr,
+-		   unsigned int base, unsigned int num);
++int txx9_gpio_init(unsigned long baseaddr, unsigned int num);
+ 
+ #endif /* __ASM_TXX9PIO_H */
+diff --git a/arch/mips/kernel/gpio_txx9.c b/arch/mips/kernel/gpio_txx9.c
+index 96ac40d20c23..b2e73263d94c 100644
+--- a/arch/mips/kernel/gpio_txx9.c
++++ b/arch/mips/kernel/gpio_txx9.c
+@@ -76,13 +76,12 @@ static struct gpio_chip txx9_gpio_chip = {
+ 	.label = "TXx9",
+ };
+ 
+-int __init txx9_gpio_init(unsigned long baseaddr,
+-			  unsigned int base, unsigned int num)
++int __init txx9_gpio_init(unsigned long baseaddr, unsigned int num)
+ {
+ 	txx9_pioptr = ioremap(baseaddr, sizeof(struct txx9_pio_reg));
+ 	if (!txx9_pioptr)
+ 		return -ENODEV;
+-	txx9_gpio_chip.base = base;
++	txx9_gpio_chip.base = -1;
+ 	txx9_gpio_chip.ngpio = num;
+ 	return gpiochip_add_data(&txx9_gpio_chip, NULL);
+ }
+diff --git a/arch/mips/txx9/rbtx4927/setup.c b/arch/mips/txx9/rbtx4927/setup.c
+index 75674b4cc91d..e904217a5fb2 100644
+--- a/arch/mips/txx9/rbtx4927/setup.c
++++ b/arch/mips/txx9/rbtx4927/setup.c
+@@ -178,7 +178,7 @@ static void __init rbtx4927_gpio_init(void)
+ 
+ static void __init rbtx4927_arch_init(void)
+ {
+-	txx9_gpio_init(TX4927_PIO_REG & 0xfffffffffULL, 0, TX4927_NUM_PIO);
++	txx9_gpio_init(TX4927_PIO_REG & 0xfffffffffULL, TX4927_NUM_PIO);
+ 
+ 	rbtx4927_gpio_init();
+ 
+@@ -187,7 +187,7 @@ static void __init rbtx4927_arch_init(void)
+ 
+ static void __init rbtx4937_arch_init(void)
+ {
+-	txx9_gpio_init(TX4938_PIO_REG & 0xfffffffffULL, 0, TX4938_NUM_PIO);
++	txx9_gpio_init(TX4938_PIO_REG & 0xfffffffffULL, TX4938_NUM_PIO);
+ 
+ 	rbtx4927_gpio_init();
+ 
+-- 
+2.55.0
+

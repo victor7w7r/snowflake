@@ -1,0 +1,131 @@
+From 7b8529e70a11ed110a15568f6b391a5f32eef67f Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Thu, 23 Jul 2026 14:08:04 -0700
+Subject: [PATCH 07409/15333] KVM: guest_memfd: Rename invalidate() arch hook
+ to reclaim() and isolate it
+
+Rename guest_memfd's invalidate() hook to reclaim() and isolate it via its
+own RECLAIM Kconfig, as the hook is called when a folio is freed, which is
+far too late and lacks sufficient information for KVM to actually
+invalidate its usage of the memory.  E.g. SNP uses the hook to convert
+memory back to SHARED so that it can be safely accessed by the host, there
+is no invalidation of guest mappings anywhere.  Isolating the hook will
+also allow pKVM on arm64 to opt-in to reclaim() without also having to
+differentiate between reclaim and conversions to shared for active VMs.
+
+Keep guest_memfd's trampoline, even though it would be trivial to wire up
+.free_folio() directly to an arch callback, to avoid bleeding guest_memfd
+internals into arch code (specifically, avoid referencing folios in arch
+code).
+
+Leave the kvm_x86_ops hook as-is for the moment, as "reclaim" on SNP is
+the same as convert-to-shared, i.e. using a different name for the x86 hook
+will allow reusing it for in-place conversion.
+
+Reviewed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Reviewed-by: Fuad Tabba <fuad.tabba@linux.dev>
+Reviewed-by: Ackerley Tng <ackerleytng@google.com>
+Link: https://patch.msgid.link/20260723210811.72720-3-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/Kconfig     | 1 +
+ arch/x86/kvm/x86.c       | 7 +++++--
+ include/linux/kvm_host.h | 5 ++++-
+ virt/kvm/Kconfig         | 4 ++++
+ virt/kvm/guest_memfd.c   | 6 +++---
+ 5 files changed, 17 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/kvm/Kconfig b/arch/x86/kvm/Kconfig
+index 801bf9e520db..e0e7ad015839 100644
+--- a/arch/x86/kvm/Kconfig
++++ b/arch/x86/kvm/Kconfig
+@@ -161,6 +161,7 @@ config KVM_AMD_SEV
+ 	select ARCH_HAS_CC_PLATFORM
+ 	select KVM_GENERIC_MEMORY_ATTRIBUTES
+ 	select HAVE_KVM_ARCH_GMEM_PREPARE
++	select HAVE_KVM_ARCH_GMEM_RECLAIM
+ 	select HAVE_KVM_ARCH_GMEM_INVALIDATE
+ 	select HAVE_KVM_ARCH_GMEM_POPULATE
+ 	help
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 3519fca53cfc..befba27672c7 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -10596,11 +10596,14 @@ int kvm_arch_gmem_prepare(struct kvm *kvm, gfn_t gfn, kvm_pfn_t pfn, int max_ord
+ }
+ #endif
+ 
+-#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_INVALIDATE
+-void kvm_arch_gmem_invalidate(kvm_pfn_t pfn, kvm_pfn_t nr_pages)
++#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_RECLAIM
++void kvm_arch_gmem_reclaim(kvm_pfn_t pfn, kvm_pfn_t nr_pages)
+ {
+ 	kvm_x86_call(gmem_invalidate)(pfn, nr_pages);
+ }
++#endif
++
++#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_INVALIDATE
+ void kvm_arch_gmem_invalidate_range(struct kvm *kvm, struct kvm_gfn_range *range)
+ {
+ 	kvm_x86_call(gmem_invalidate_range)(kvm, range);
+diff --git a/include/linux/kvm_host.h b/include/linux/kvm_host.h
+index 79868ebfc113..46c8d18fd043 100644
+--- a/include/linux/kvm_host.h
++++ b/include/linux/kvm_host.h
+@@ -2606,8 +2606,11 @@ long kvm_gmem_populate(struct kvm *kvm, gfn_t start_gfn, void __user *src,
+ 		       kvm_gmem_populate_cb post_populate, void *opaque);
+ #endif
+ 
++#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_RECLAIM
++void kvm_arch_gmem_reclaim(kvm_pfn_t pfn, kvm_pfn_t nr_pages);
++#endif
++
+ #ifdef CONFIG_HAVE_KVM_ARCH_GMEM_INVALIDATE
+-void kvm_arch_gmem_invalidate(kvm_pfn_t pfn, kvm_pfn_t nr_pages);
+ void kvm_arch_gmem_invalidate_range(struct kvm *kvm, struct kvm_gfn_range *range);
+ #endif
+ 
+diff --git a/virt/kvm/Kconfig b/virt/kvm/Kconfig
+index 794976b88c6f..617876993225 100644
+--- a/virt/kvm/Kconfig
++++ b/virt/kvm/Kconfig
+@@ -111,6 +111,10 @@ config HAVE_KVM_ARCH_GMEM_PREPARE
+        bool
+        depends on KVM_GUEST_MEMFD
+ 
++config HAVE_KVM_ARCH_GMEM_RECLAIM
++       bool
++       depends on KVM_GUEST_MEMFD
++
+ config HAVE_KVM_ARCH_GMEM_INVALIDATE
+        bool
+        depends on KVM_GUEST_MEMFD
+diff --git a/virt/kvm/guest_memfd.c b/virt/kvm/guest_memfd.c
+index c96a2ef5f2ce..c086cfcd0257 100644
+--- a/virt/kvm/guest_memfd.c
++++ b/virt/kvm/guest_memfd.c
+@@ -527,10 +527,10 @@ static int kvm_gmem_error_folio(struct address_space *mapping, struct folio *fol
+ 	return MF_DELAYED;
+ }
+ 
+-#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_INVALIDATE
++#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_RECLAIM
+ static void kvm_gmem_free_folio(struct folio *folio)
+ {
+-	kvm_arch_gmem_invalidate(folio_file_pfn(folio, 0), folio_nr_pages(folio));
++	kvm_arch_gmem_reclaim(folio_file_pfn(folio, 0), folio_nr_pages(folio));
+ }
+ #endif
+ 
+@@ -538,7 +538,7 @@ static const struct address_space_operations kvm_gmem_aops = {
+ 	.dirty_folio = noop_dirty_folio,
+ 	.migrate_folio	= kvm_gmem_migrate_folio,
+ 	.error_remove_folio = kvm_gmem_error_folio,
+-#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_INVALIDATE
++#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_RECLAIM
+ 	.free_folio = kvm_gmem_free_folio,
+ #endif
+ };
+-- 
+2.55.0
+

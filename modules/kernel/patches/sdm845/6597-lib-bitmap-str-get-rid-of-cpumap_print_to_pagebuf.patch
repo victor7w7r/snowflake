@@ -1,0 +1,82 @@
+From be9eae3e839e8b1b687d4d0f3399c3db1cf796f0 Mon Sep 17 00:00:00 2001
+From: Yury Norov <ynorov@nvidia.com>
+Date: Thu, 2 Jul 2026 11:47:24 -0400
+Subject: [PATCH 06597/15333] lib/bitmap-str: get rid of
+ cpumap_print_to_pagebuf()
+
+Now that all users of the function are switched to the alternatives,
+drop the function.
+
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ include/linux/cpumask.h | 19 -------------------
+ lib/bitmap-str.c        |  9 ++++-----
+ 2 files changed, 4 insertions(+), 24 deletions(-)
+
+diff --git a/include/linux/cpumask.h b/include/linux/cpumask.h
+index d3cda0544954..4c8bb6953107 100644
+--- a/include/linux/cpumask.h
++++ b/include/linux/cpumask.h
+@@ -13,7 +13,6 @@
+ #include <linux/cpumask_types.h>
+ #include <linux/gfp_types.h>
+ #include <linux/numa.h>
+-#include <linux/sprintf.h>
+ #include <linux/threads.h>
+ #include <linux/types.h>
+ #include <vdso/page.h>
+@@ -1315,24 +1314,6 @@ static __always_inline bool cpu_dying(unsigned int cpu)
+ }
+ #endif /* NR_CPUS > BITS_PER_LONG */
+ 
+-/**
+- * cpumap_print_to_pagebuf  - copies the cpumask into the buffer either
+- *	as comma-separated list of cpus or hex values of cpumask
+- * @list: indicates whether the cpumap must be list
+- * @mask: the cpumask to copy
+- * @buf: the buffer to copy into
+- *
+- * Return: the length of the (null-terminated) @buf string, zero if
+- * nothing is copied.
+- */
+-static __always_inline ssize_t
+-cpumap_print_to_pagebuf(bool list, char *buf, const struct cpumask *mask)
+-{
+-	/* Opencode offset_in_page(buf) to not include linux/mm.h */
+-	return scnprintf(buf, PAGE_SIZE - ((unsigned long)buf & ~PAGE_MASK),
+-			 list ? "%*pbl\n" : "%*pb\n", cpumask_pr_args(mask));
+-}
+-
+ /**
+  * cpumap_print_bitmask_to_buf  - copies the cpumask into the buffer as
+  *	hex values of cpumask
+diff --git a/lib/bitmap-str.c b/lib/bitmap-str.c
+index 26d36c938c6a..dd9aa0635fa5 100644
+--- a/lib/bitmap-str.c
++++ b/lib/bitmap-str.c
+@@ -75,8 +75,7 @@ static int bitmap_print_to_buf(bool list, char *buf, const unsigned long *maskp,
+  * @off: in the string from which we are copying, We copy to @buf
+  * @count: the maximum number of bytes to print
+  *
+- * The sprintf("%*pb[l]") is used indirectly via its cpumap wrapper
+- * cpumap_print_to_pagebuf() or directly by drivers to export hexadecimal
++ * The sprintf("%*pb[l]") format is used by drivers to export hexadecimal
+  * bitmask and decimal list to userspace by sysfs ABI.
+  * Drivers might be using a normal attribute for this kind of ABIs. A
+  * normal attribute typically has show entry as below::
+@@ -115,9 +114,9 @@ static int bitmap_print_to_buf(bool list, char *buf, const unsigned long *maskp,
+  * parameters such as off, count from bin_attribute show entry to this API.
+  *
+  * The role of cpumap_print_bitmask_to_buf() and cpumap_print_list_to_buf()
+- * is similar with cpumap_print_to_pagebuf(),  the difference is that
+- * scnprintf("%*pb[l]") mainly serves sysfs attribute with the assumption
+- * the destination buffer is exactly one page and won't be more than one page.
++ * is similar to direct sysfs_emit("%*pb[l]") formatting, but the latter
++ * assumes the destination buffer is exactly one page and won't be more than
++ * one page.
+  * cpumap_print_bitmask_to_buf() and cpumap_print_list_to_buf(), on the other
+  * hand, mainly serves bin_attribute which doesn't work with exact one page,
+  * and it can break the size limit of converted decimal list and hexadecimal
+-- 
+2.55.0
+

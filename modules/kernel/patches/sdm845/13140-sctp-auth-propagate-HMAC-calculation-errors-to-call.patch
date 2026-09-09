@@ -1,0 +1,139 @@
+From 5d3ae80ecddeb82b492a2cf31ac3e44412b426f4 Mon Sep 17 00:00:00 2001
+From: Qing Luo <luoqing@kylinos.cn>
+Date: Fri, 7 Aug 2026 14:43:14 +0800
+Subject: [PATCH 13140/15333] sctp: auth: propagate HMAC calculation errors to
+ callers
+
+sctp_auth_calculate_hmac() can fail when building the association secret
+under memory pressure, but its void return silently leaves the HMAC digest
+zeroed.  On the receive path, sctp_sf_authenticate() compares this zeroed
+digest against the peer-supplied one using crypto_memneq(), potentially
+accepting an all-zero HMAC from the peer if the allocation failed.  On the
+send path, sctp_packet_pack() transmits a packet with a zeroed HMAC that
+the peer would reject.
+
+Improve error handling by making sctp_auth_calculate_hmac() return int:
+- sctp_sf_authenticate() returns SCTP_IERROR_NOMEM instead of accepting
+  a zero HMAC.
+- sctp_packet_pack() drops the packet on failure instead of transmitting
+  a zeroed HMAC.
+
+Update the declaration in auth.h accordingly.
+
+Assisted-by: LLM
+Signed-off-by: Qing Luo <luoqing@kylinos.cn>
+Acked-by: Xin Long <lucien.xin@gmail.com>
+Link: https://patch.msgid.link/20260807064314.500742-1-l1138897701@163.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ include/net/sctp/auth.h |  6 +++---
+ net/sctp/auth.c         | 10 ++++++----
+ net/sctp/output.c       | 12 +++++++++---
+ net/sctp/sm_statefuns.c |  9 ++++++---
+ 4 files changed, 24 insertions(+), 13 deletions(-)
+
+diff --git a/include/net/sctp/auth.h b/include/net/sctp/auth.h
+index 6f2cd562b1de..eeb3297fe97d 100644
+--- a/include/net/sctp/auth.h
++++ b/include/net/sctp/auth.h
+@@ -83,9 +83,9 @@ int sctp_auth_send_cid(enum sctp_cid chunk,
+ 		       const struct sctp_association *asoc);
+ int sctp_auth_recv_cid(enum sctp_cid chunk,
+ 		       const struct sctp_association *asoc);
+-void sctp_auth_calculate_hmac(const struct sctp_association *asoc,
+-			      struct sk_buff *skb, struct sctp_auth_chunk *auth,
+-			      struct sctp_shared_key *ep_key, gfp_t gfp);
++int sctp_auth_calculate_hmac(const struct sctp_association *asoc,
++			     struct sk_buff *skb, struct sctp_auth_chunk *auth,
++			     struct sctp_shared_key *ep_key, gfp_t gfp);
+ void sctp_auth_shkey_release(struct sctp_shared_key *sh_key);
+ void sctp_auth_shkey_hold(struct sctp_shared_key *sh_key);
+ 
+diff --git a/net/sctp/auth.c b/net/sctp/auth.c
+index c901d373af80..6de66f56c41c 100644
+--- a/net/sctp/auth.c
++++ b/net/sctp/auth.c
+@@ -613,9 +613,9 @@ int sctp_auth_recv_cid(enum sctp_cid chunk, const struct sctp_association *asoc)
+  *    zero (as shown in Figure 6) followed by all chunks that are placed
+  *    after the AUTH chunk in the SCTP packet.
+  */
+-void sctp_auth_calculate_hmac(const struct sctp_association *asoc,
+-			      struct sk_buff *skb, struct sctp_auth_chunk *auth,
+-			      struct sctp_shared_key *ep_key, gfp_t gfp)
++int sctp_auth_calculate_hmac(const struct sctp_association *asoc,
++			     struct sk_buff *skb, struct sctp_auth_chunk *auth,
++			     struct sctp_shared_key *ep_key, gfp_t gfp)
+ {
+ 	struct sctp_auth_bytes *asoc_key;
+ 	__u16 key_id, hmac_id;
+@@ -636,7 +636,7 @@ void sctp_auth_calculate_hmac(const struct sctp_association *asoc,
+ 		/* ep_key can't be NULL here */
+ 		asoc_key = sctp_auth_asoc_create_secret(asoc, ep_key, gfp);
+ 		if (!asoc_key)
+-			return;
++			return -ENOMEM;
+ 
+ 		free_key = 1;
+ 	}
+@@ -654,6 +654,8 @@ void sctp_auth_calculate_hmac(const struct sctp_association *asoc,
+ 
+ 	if (free_key)
+ 		sctp_auth_key_put(asoc_key);
++
++	return 0;
+ }
+ 
+ /* API Helpers */
+diff --git a/net/sctp/output.c b/net/sctp/output.c
+index 23e96305cad7..3d7ead9d40e1 100644
+--- a/net/sctp/output.c
++++ b/net/sctp/output.c
+@@ -517,8 +517,14 @@ static int sctp_packet_pack(struct sctp_packet *packet,
+ 		}
+ 
+ 		if (auth) {
+-			sctp_auth_calculate_hmac(tp->asoc, nskb, auth,
+-						 packet->auth->shkey, gfp);
++			if (sctp_auth_calculate_hmac(tp->asoc, nskb, auth,
++						     packet->auth->shkey, gfp)) {
++				sctp_chunk_free(packet->auth);
++				packet->auth = NULL;
++				if (gso)
++					kfree_skb(nskb);
++				return -ENOMEM;
++			}
+ 			/* free auth if no more chunks, or add it back */
+ 			if (list_empty(&packet->chunk_list))
+ 				sctp_chunk_free(packet->auth);
+@@ -619,7 +625,7 @@ int sctp_packet_transmit(struct sctp_packet *packet, gfp_t gfp)
+ 
+ 	/* pack up chunks */
+ 	pkt_count = sctp_packet_pack(packet, head, gso, gfp);
+-	if (!pkt_count) {
++	if (pkt_count <= 0) {
+ 		kfree_skb(head);
+ 		goto out;
+ 	}
+diff --git a/net/sctp/sm_statefuns.c b/net/sctp/sm_statefuns.c
+index 708fa07d5fff..bb89c9b52e0b 100644
+--- a/net/sctp/sm_statefuns.c
++++ b/net/sctp/sm_statefuns.c
+@@ -4455,9 +4455,12 @@ static enum sctp_ierror sctp_sf_authenticate(
+ 
+ 	memset(digest, 0, sig_len);
+ 
+-	sctp_auth_calculate_hmac(asoc, chunk->skb,
+-				 (struct sctp_auth_chunk *)chunk->chunk_hdr,
+-				 sh_key, GFP_ATOMIC);
++	if (sctp_auth_calculate_hmac(asoc, chunk->skb,
++				     (struct sctp_auth_chunk *)chunk->chunk_hdr,
++				     sh_key, GFP_ATOMIC)) {
++		kfree(save_digest);
++		return SCTP_IERROR_NOMEM;
++	}
+ 
+ 	/* Discard the packet if the digests do not match */
+ 	if (crypto_memneq(save_digest, digest, sig_len)) {
+-- 
+2.55.0
+

@@ -1,0 +1,58 @@
+From 3f78a256230bc61002a83cd5ad6995fe44f2addb Mon Sep 17 00:00:00 2001
+From: Chanwoo Lee <cw9316.lee@samsung.com>
+Date: Tue, 2 Jun 2026 18:40:55 +0900
+Subject: [PATCH 02607/15333] mmc: core: Remove unused buffer allocation in
+ sd_enable_cache()
+
+sd_enable_cache() allocates a 512-byte buffer that is never used, hence
+let's just drop it.
+
+Signed-off-by: Chanwoo Lee <cw9316.lee@samsung.com>
+Reviewed-by: Avri Altman <avri.altman@sandisk.com>
+Reviewed-by: Shawn Lin <shawn.lin@linux.dev>
+Signed-off-by: Ulf Hansson <ulfh@kernel.org>
+---
+ drivers/mmc/core/sd.c | 9 +--------
+ 1 file changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/drivers/mmc/core/sd.c b/drivers/mmc/core/sd.c
+index 948948ca9b4a..c763efb10f64 100644
+--- a/drivers/mmc/core/sd.c
++++ b/drivers/mmc/core/sd.c
+@@ -1379,15 +1379,10 @@ static int sd_flush_cache(struct mmc_host *host)
+ 
+ static int sd_enable_cache(struct mmc_card *card)
+ {
+-	u8 *reg_buf;
+ 	int err;
+ 
+ 	card->ext_perf.feature_enabled &= ~SD_EXT_PERF_CACHE;
+ 
+-	reg_buf = kzalloc(512, GFP_KERNEL);
+-	if (!reg_buf)
+-		return -ENOMEM;
+-
+ 	/*
+ 	 * Set Cache Enable at bit 0 in the performance enhancement register at
+ 	 * 260 bytes offset.
+@@ -1397,7 +1392,7 @@ static int sd_enable_cache(struct mmc_card *card)
+ 	if (err) {
+ 		pr_warn("%s: error %d writing Cache Enable bit\n",
+ 			mmc_hostname(card->host), err);
+-		goto out;
++		return err;
+ 	}
+ 
+ 	err = mmc_poll_for_busy(card, SD_WRITE_EXTR_SINGLE_TIMEOUT_MS, false,
+@@ -1405,8 +1400,6 @@ static int sd_enable_cache(struct mmc_card *card)
+ 	if (!err)
+ 		card->ext_perf.feature_enabled |= SD_EXT_PERF_CACHE;
+ 
+-out:
+-	kfree(reg_buf);
+ 	return err;
+ }
+ 
+-- 
+2.55.0
+

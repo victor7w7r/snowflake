@@ -1,0 +1,47 @@
+From 402684c39cb911bc772ffc13bfee95ab57cdd2f1 Mon Sep 17 00:00:00 2001
+From: "Rob Herring (Arm)" <robh@kernel.org>
+Date: Fri, 12 Jun 2026 16:53:24 -0500
+Subject: [PATCH 06313/15333] power: reset: syscon-reboot: Read "priority" as
+ unsigned
+
+The restart-handler binding documents "priority" as a uint32 value in
+the range 0 to 255. The syscon reboot driver stored it in an int and
+used the signed DT helper, which makes the helper type disagree with
+the schema.
+
+Read "priority" as u32 so the driver follows the binding while
+preserving the same default value.
+
+Assisted-by: Codex:gpt-5-5
+Signed-off-by: Rob Herring (Arm) <robh@kernel.org>
+Link: https://patch.msgid.link/20260612215325.1889302-1-robh@kernel.org
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/reset/syscon-reboot.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/power/reset/syscon-reboot.c b/drivers/power/reset/syscon-reboot.c
+index 2e2cf5f62d73..60e855cae68e 100644
+--- a/drivers/power/reset/syscon-reboot.c
++++ b/drivers/power/reset/syscon-reboot.c
+@@ -67,7 +67,7 @@ static int syscon_reboot_probe(struct platform_device *pdev)
+ {
+ 	struct syscon_reboot_context *ctx;
+ 	struct device *dev = &pdev->dev;
+-	int priority;
++	u32 priority;
+ 	int err;
+ 
+ 	ctx = devm_kzalloc(&pdev->dev, sizeof(*ctx), GFP_KERNEL);
+@@ -81,7 +81,7 @@ static int syscon_reboot_probe(struct platform_device *pdev)
+ 			return PTR_ERR(ctx->map);
+ 	}
+ 
+-	if (of_property_read_s32(pdev->dev.of_node, "priority", &priority))
++	if (of_property_read_u32(pdev->dev.of_node, "priority", &priority))
+ 		priority = 192;
+ 
+ 	ctx->rd = of_device_get_match_data(dev);
+-- 
+2.55.0
+

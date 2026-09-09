@@ -1,0 +1,301 @@
+From 35dac1daeb3c8208515047d32f22c4a162e8de5f Mon Sep 17 00:00:00 2001
+From: Avinash Duduskar <avinash.duduskar@gmail.com>
+Date: Mon, 13 Jul 2026 21:53:03 +0530
+Subject: [PATCH 04690/15333] bpf: Add BPF_FIB_LOOKUP_VLAN flag to
+ bpf_fib_lookup() helper
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+bpf_fib_lookup() returns the FIB-resolved egress ifindex straight
+from the fib result. When the egress is a VLAN device, the returned
+ifindex is the VLAN netdev's, which has no XDP xmit handler; XDP
+programs that want to forward the frame (e.g. xdp-forward) must
+instead target the underlying physical device and push the VLAN tag
+themselves. Today the program has no way to learn either the
+underlying ifindex or the VLAN tag without maintaining its own
+VLAN-to-ifindex map in userspace and refreshing it on netlink
+events.
+
+Add BPF_FIB_LOOKUP_VLAN. When the caller sets this flag and the fib
+result is a VLAN device whose immediate parent is a real (non-VLAN)
+device in the same network namespace, populate the existing output
+fields params->h_vlan_proto and params->h_vlan_TCI from the VLAN
+device and replace params->ifindex with the parent's ifindex.
+params->h_vlan_TCI carries the VID only, with PCP and DEI bits zero; a
+consumer wanting to set egress priority writes PCP itself.
+params->smac is the VLAN device's own address, which can differ from
+the parent's.
+
+Only the immediate parent is resolved, via vlan_dev_priv(dev)->real_dev
+and not vlan_dev_real_dev(), which walks to the bottom of a stack. When
+the immediate parent is not a real device in the same namespace, the
+lookup returns BPF_FIB_LKUP_RET_VLAN_FAILURE and leaves params->ifindex
+at the input. This covers a stacked VLAN (QinQ), where the immediate
+parent is itself a VLAN device and one h_vlan_proto/h_vlan_TCI pair
+cannot describe two tags, and a parent in another network namespace (a
+VLAN device can be moved while its parent stays), whose ifindex would
+be meaningless in the caller's namespace. A program that wants the
+VLAN device's own ifindex re-issues the lookup, with a re-initialized
+params, without BPF_FIB_LOOKUP_VLAN, so the unreducible case stays
+distinct from a physical egress. That distinction matters for XDP: a
+program cannot xmit on a VLAN device, so a success carrying the VLAN
+ifindex would make it redirect to a device with no ndo_xdp_xmit and
+drop the frame at xdp_do_flush(). The swap and the vlan fields are
+written only on the reduce path; other output fields keep their
+existing behaviour, so a frag-needed result still reports the route
+mtu in params->mtu_result.
+
+BPF_FIB_LOOKUP_VLAN is only useful to XDP, which cannot redirect to a
+VLAN device. A tc program can redirect to the VLAN device directly, so
+bpf_skb_fib_lookup() rejects the flag with -EINVAL; bpf_xdp_fib_lookup()
+accepts it. When the flag is not set, behaviour is unchanged:
+h_vlan_proto and h_vlan_TCI are zeroed and ifindex is left at the FIB
+result.
+
+The new block is compiled only under CONFIG_VLAN_8021Q since
+vlan_dev_priv() is not defined otherwise; without that config
+is_vlan_dev() is constant false and the flag is accepted but never
+acts. That is safe because no VLAN device can exist there, so every
+egress is already physical.
+
+This lets an XDP redirect target the physical device and learn the
+tag to push in a single lookup, which xdp-forward's optional VLAN
+mode (xdp-project/xdp-tools#504) wants from the kernel side.
+
+The helper's input semantics are unchanged; the reverse direction
+(supplying a tag as lookup input) is added in the following patch.
+
+Suggested-by: Toke Høiland-Jørgensen <toke@redhat.com>
+Signed-off-by: Avinash Duduskar <avinash.duduskar@gmail.com>
+Reviewed-by: Toke Høiland-Jørgensen <toke@redhat.com>
+Reviewed-by: Emil Tsalapatis <emil@etsalapatis.com>
+Acked-by: David Ahern <dsahern@kernel.org>
+Link: https://lore.kernel.org/bpf/20260713162305.1237211-2-avinash.duduskar@gmail.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ include/uapi/linux/bpf.h       | 33 ++++++++++++++++++++++++++++++++-
+ net/core/filter.c              | 33 +++++++++++++++++++++++++++++----
+ tools/include/uapi/linux/bpf.h | 33 ++++++++++++++++++++++++++++++++-
+ 3 files changed, 93 insertions(+), 6 deletions(-)
+
+diff --git a/include/uapi/linux/bpf.h b/include/uapi/linux/bpf.h
+index 2f1d24fef857..8b41c365ddf9 100644
+--- a/include/uapi/linux/bpf.h
++++ b/include/uapi/linux/bpf.h
+@@ -3532,6 +3532,31 @@ union bpf_attr {
+  *			Use the mark present in *params*->mark for the fib lookup.
+  *			This option should not be used with BPF_FIB_LOOKUP_DIRECT,
+  *			as it only has meaning for full lookups.
++ *		**BPF_FIB_LOOKUP_VLAN**
++ *			If the fib lookup resolves to a VLAN device whose
++ *			parent is a real (non-VLAN) device, set
++ *			*params*->h_vlan_proto and *params*->h_vlan_TCI from
++ *			the VLAN device and replace *params*->ifindex with the
++ *			parent's ifindex. *params*->h_vlan_TCI carries the VID
++ *			only, with PCP and DEI bits zero; a consumer wanting to
++ *			set egress priority writes PCP itself. *params*->smac is
++ *			the VLAN device's own address, which can differ from the
++ *			parent's. Only the immediate parent is resolved; if it
++ *			is itself a VLAN device (QinQ) or in another namespace,
++ *			the egress cannot be reduced to a physical device plus
++ *			one tag and the lookup returns
++ *			**BPF_FIB_LKUP_RET_VLAN_FAILURE** with *params*->ifindex
++ *			left at the input. To obtain the VLAN device's own
++ *			ifindex, repeat the lookup without
++ *			**BPF_FIB_LOOKUP_VLAN**, re-initializing *params*
++ *			first: output fields overwrite the inputs they share
++ *			storage with. The swap and the vlan fields
++ *			are written only on success; other output fields keep
++ *			the helper's existing behaviour, so a frag-needed result
++ *			still reports the route mtu in *params*->mtu_result.
++ *			This flag is only valid for XDP programs; tc programs
++ *			receive -EINVAL since they can redirect to the VLAN
++ *			device directly.
+  *
+  *		*ctx* is either **struct xdp_md** for XDP programs or
+  *		**struct sk_buff** tc cls_act programs.
+@@ -7339,6 +7364,7 @@ enum {
+ 	BPF_FIB_LOOKUP_TBID    = (1U << 3),
+ 	BPF_FIB_LOOKUP_SRC     = (1U << 4),
+ 	BPF_FIB_LOOKUP_MARK    = (1U << 5),
++	BPF_FIB_LOOKUP_VLAN    = (1U << 6),
+ };
+ 
+ enum {
+@@ -7352,6 +7378,7 @@ enum {
+ 	BPF_FIB_LKUP_RET_NO_NEIGH,     /* no neighbor entry for nh */
+ 	BPF_FIB_LKUP_RET_FRAG_NEEDED,  /* fragmentation required to fwd */
+ 	BPF_FIB_LKUP_RET_NO_SRC_ADDR,  /* failed to derive IP src addr */
++	BPF_FIB_LKUP_RET_VLAN_FAILURE, /* VLAN egress, parent unresolvable */
+ };
+ 
+ struct bpf_fib_lookup {
+@@ -7405,7 +7432,11 @@ struct bpf_fib_lookup {
+ 
+ 	union {
+ 		struct {
+-			/* output */
++			/*
++			 * output with BPF_FIB_LOOKUP_VLAN: set from the
++			 * resolved egress VLAN device (see the flag); zeroed
++			 * on other successful lookups.
++			 */
+ 			__be16	h_vlan_proto;
+ 			__be16	h_vlan_TCI;
+ 		};
+diff --git a/net/core/filter.c b/net/core/filter.c
+index 056deb9b3fc3..b8f2595ff582 100644
+--- a/net/core/filter.c
++++ b/net/core/filter.c
+@@ -6206,10 +6206,29 @@ static const struct bpf_func_proto bpf_skb_get_xfrm_state_proto = {
+ #endif
+ 
+ #if IS_ENABLED(CONFIG_INET) || IS_ENABLED(CONFIG_IPV6)
+-static int bpf_fib_set_fwd_params(struct bpf_fib_lookup *params, u32 mtu)
++static int bpf_fib_set_fwd_params(struct net_device *dev,
++				  struct bpf_fib_lookup *params,
++				  u32 flags, u32 mtu, u32 in_ifindex)
+ {
+ 	params->h_vlan_TCI = 0;
+ 	params->h_vlan_proto = 0;
++
++#if IS_ENABLED(CONFIG_VLAN_8021Q)
++	if ((flags & BPF_FIB_LOOKUP_VLAN) && is_vlan_dev(dev)) {
++		struct net_device *real_dev = vlan_dev_priv(dev)->real_dev;
++
++		if (!is_vlan_dev(real_dev) &&
++		    net_eq(dev_net(real_dev), dev_net(dev))) {
++			params->h_vlan_proto = vlan_dev_vlan_proto(dev);
++			params->h_vlan_TCI = htons(vlan_dev_vlan_id(dev));
++			params->ifindex = real_dev->ifindex;
++		} else {
++			params->ifindex = in_ifindex;
++			return BPF_FIB_LKUP_RET_VLAN_FAILURE;
++		}
++	}
++#endif
++
+ 	if (mtu)
+ 		params->mtu_result = mtu; /* union with tot_len */
+ 
+@@ -6221,6 +6240,7 @@ static int bpf_fib_set_fwd_params(struct bpf_fib_lookup *params, u32 mtu)
+ static int bpf_ipv4_fib_lookup(struct net *net, struct bpf_fib_lookup *params,
+ 			       u32 flags, bool check_mtu)
+ {
++	u32 in_ifindex = params->ifindex;
+ 	struct neighbour *neigh = NULL;
+ 	struct fib_nh_common *nhc;
+ 	struct in_device *in_dev;
+@@ -6352,7 +6372,7 @@ static int bpf_ipv4_fib_lookup(struct net *net, struct bpf_fib_lookup *params,
+ 	memcpy(params->smac, dev->dev_addr, ETH_ALEN);
+ 
+ set_fwd_params:
+-	return bpf_fib_set_fwd_params(params, mtu);
++	return bpf_fib_set_fwd_params(dev, params, flags, mtu, in_ifindex);
+ }
+ #endif
+ 
+@@ -6362,6 +6382,7 @@ static int bpf_ipv6_fib_lookup(struct net *net, struct bpf_fib_lookup *params,
+ {
+ 	struct in6_addr *src = (struct in6_addr *) params->ipv6_src;
+ 	struct in6_addr *dst = (struct in6_addr *) params->ipv6_dst;
++	u32 in_ifindex = params->ifindex;
+ 	struct fib6_result res = {};
+ 	struct neighbour *neigh;
+ 	struct net_device *dev;
+@@ -6491,13 +6512,14 @@ static int bpf_ipv6_fib_lookup(struct net *net, struct bpf_fib_lookup *params,
+ 	memcpy(params->smac, dev->dev_addr, ETH_ALEN);
+ 
+ set_fwd_params:
+-	return bpf_fib_set_fwd_params(params, mtu);
++	return bpf_fib_set_fwd_params(dev, params, flags, mtu, in_ifindex);
+ }
+ #endif
+ 
+ #define BPF_FIB_LOOKUP_MASK (BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT | \
+ 			     BPF_FIB_LOOKUP_SKIP_NEIGH | BPF_FIB_LOOKUP_TBID | \
+-			     BPF_FIB_LOOKUP_SRC | BPF_FIB_LOOKUP_MARK)
++			     BPF_FIB_LOOKUP_SRC | BPF_FIB_LOOKUP_MARK | \
++			     BPF_FIB_LOOKUP_VLAN)
+ 
+ BPF_CALL_4(bpf_xdp_fib_lookup, struct xdp_buff *, ctx,
+ 	   struct bpf_fib_lookup *, params, int, plen, u32, flags)
+@@ -6546,6 +6568,9 @@ BPF_CALL_4(bpf_skb_fib_lookup, struct sk_buff *, skb,
+ 	if (flags & ~BPF_FIB_LOOKUP_MASK)
+ 		return -EINVAL;
+ 
++	if (flags & BPF_FIB_LOOKUP_VLAN)
++		return -EINVAL;
++
+ 	if (params->tot_len)
+ 		check_mtu = true;
+ 
+diff --git a/tools/include/uapi/linux/bpf.h b/tools/include/uapi/linux/bpf.h
+index 2f1d24fef857..8b41c365ddf9 100644
+--- a/tools/include/uapi/linux/bpf.h
++++ b/tools/include/uapi/linux/bpf.h
+@@ -3532,6 +3532,31 @@ union bpf_attr {
+  *			Use the mark present in *params*->mark for the fib lookup.
+  *			This option should not be used with BPF_FIB_LOOKUP_DIRECT,
+  *			as it only has meaning for full lookups.
++ *		**BPF_FIB_LOOKUP_VLAN**
++ *			If the fib lookup resolves to a VLAN device whose
++ *			parent is a real (non-VLAN) device, set
++ *			*params*->h_vlan_proto and *params*->h_vlan_TCI from
++ *			the VLAN device and replace *params*->ifindex with the
++ *			parent's ifindex. *params*->h_vlan_TCI carries the VID
++ *			only, with PCP and DEI bits zero; a consumer wanting to
++ *			set egress priority writes PCP itself. *params*->smac is
++ *			the VLAN device's own address, which can differ from the
++ *			parent's. Only the immediate parent is resolved; if it
++ *			is itself a VLAN device (QinQ) or in another namespace,
++ *			the egress cannot be reduced to a physical device plus
++ *			one tag and the lookup returns
++ *			**BPF_FIB_LKUP_RET_VLAN_FAILURE** with *params*->ifindex
++ *			left at the input. To obtain the VLAN device's own
++ *			ifindex, repeat the lookup without
++ *			**BPF_FIB_LOOKUP_VLAN**, re-initializing *params*
++ *			first: output fields overwrite the inputs they share
++ *			storage with. The swap and the vlan fields
++ *			are written only on success; other output fields keep
++ *			the helper's existing behaviour, so a frag-needed result
++ *			still reports the route mtu in *params*->mtu_result.
++ *			This flag is only valid for XDP programs; tc programs
++ *			receive -EINVAL since they can redirect to the VLAN
++ *			device directly.
+  *
+  *		*ctx* is either **struct xdp_md** for XDP programs or
+  *		**struct sk_buff** tc cls_act programs.
+@@ -7339,6 +7364,7 @@ enum {
+ 	BPF_FIB_LOOKUP_TBID    = (1U << 3),
+ 	BPF_FIB_LOOKUP_SRC     = (1U << 4),
+ 	BPF_FIB_LOOKUP_MARK    = (1U << 5),
++	BPF_FIB_LOOKUP_VLAN    = (1U << 6),
+ };
+ 
+ enum {
+@@ -7352,6 +7378,7 @@ enum {
+ 	BPF_FIB_LKUP_RET_NO_NEIGH,     /* no neighbor entry for nh */
+ 	BPF_FIB_LKUP_RET_FRAG_NEEDED,  /* fragmentation required to fwd */
+ 	BPF_FIB_LKUP_RET_NO_SRC_ADDR,  /* failed to derive IP src addr */
++	BPF_FIB_LKUP_RET_VLAN_FAILURE, /* VLAN egress, parent unresolvable */
+ };
+ 
+ struct bpf_fib_lookup {
+@@ -7405,7 +7432,11 @@ struct bpf_fib_lookup {
+ 
+ 	union {
+ 		struct {
+-			/* output */
++			/*
++			 * output with BPF_FIB_LOOKUP_VLAN: set from the
++			 * resolved egress VLAN device (see the flag); zeroed
++			 * on other successful lookups.
++			 */
+ 			__be16	h_vlan_proto;
+ 			__be16	h_vlan_TCI;
+ 		};
+-- 
+2.55.0
+

@@ -1,0 +1,41 @@
+From 008ea7a6aa01877a2439bc911426c27a03a6d9e3 Mon Sep 17 00:00:00 2001
+From: Fuad Tabba <fuad.tabba@linux.dev>
+Date: Mon, 6 Jul 2026 11:31:29 +0100
+Subject: [PATCH 04272/15333] KVM: arm64: Drop redundant READ_ONCE() in
+ pkvm_hyp_vm_is_created()
+
+is_created is written under config_lock. Every concurrent reader is
+serialised against that write: pkvm_create_hyp_vm() under config_lock,
+and the memslot path (kvm_arch_prepare_memory_region) via slots_lock,
+which the creation writer also holds. The teardown-path accesses have no
+concurrent writer. The read is therefore serialised, and the READ_ONCE()
+is unnecessary.
+
+Reviewed-by: Keir Fraser <keirf@google.com>
+Signed-off-by: Fuad Tabba <fuad.tabba@linux.dev>
+Link: https://patch.msgid.link/20260706103129.706974-4-fuad.tabba@linux.dev
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/pkvm.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/kvm/pkvm.c b/arch/arm64/kvm/pkvm.c
+index 67b90a58fbea..008766273912 100644
+--- a/arch/arm64/kvm/pkvm.c
++++ b/arch/arm64/kvm/pkvm.c
+@@ -185,7 +185,11 @@ static int __pkvm_create_hyp_vm(struct kvm *kvm)
+ 
+ bool pkvm_hyp_vm_is_created(struct kvm *kvm)
+ {
+-	return READ_ONCE(kvm->arch.pkvm.is_created);
++	/*
++	 * Serialised by config_lock/slots_lock, or by VM lifecycle at
++	 * teardown, so a plain read suffices.
++	 */
++	return kvm->arch.pkvm.is_created;
+ }
+ 
+ int pkvm_create_hyp_vm(struct kvm *kvm)
+-- 
+2.55.0
+

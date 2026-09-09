@@ -1,0 +1,46 @@
+From 9091c97be34083587a75db174aab51551d8e8543 Mon Sep 17 00:00:00 2001
+From: Jan Kara <jack@suse.cz>
+Date: Wed, 5 Aug 2026 17:35:49 +0200
+Subject: [PATCH 11714/15333] ext4: fix estimate extent index blocks in
+ ext4_ext_index_trans_blocks()
+
+The estimate of the number of impacted extent tree index blocks could be
+one-too-low. If we modify say 2 extents, already two leaf index blocks
+could be impacted, not just one the current estimate counts with. Fix
+the estimate.
+
+Signed-off-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260805153605.166545-6-jack@suse.cz
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/extents.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/fs/ext4/extents.c b/fs/ext4/extents.c
+index aec34de8d79d..836396ea7912 100644
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -2427,9 +2427,17 @@ int ext4_ext_index_trans_blocks(struct inode *inode, int extents)
+ 	 */
+ 	if (extents <= 1)
+ 		index = (EXT4_MAX_EXTENT_DEPTH * 2) + extents;
+-	else
+-		index = (EXT4_MAX_EXTENT_DEPTH * 3) +
+-			DIV_ROUND_UP(extents, ext4_ext_space_block(inode, 0));
++	else {
++		int ext_max = ext4_ext_space_block(inode, 0);
++
++		index = EXT4_MAX_EXTENT_DEPTH * 3;
++		/*
++		 * Modified extents need not start at the beginning of the
++		 * leaf. Already two extents may need two leaf block
++		 * modifications...
++		 */
++		index += DIV_ROUND_UP(extents + ext_max - 1, ext_max);
++	}
+ 
+ 	return index;
+ }
+-- 
+2.55.0
+

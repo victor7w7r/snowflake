@@ -1,0 +1,77 @@
+From c18eb1244741ac37b66ac526969132181608ed0c Mon Sep 17 00:00:00 2001
+From: Avi Fenesh <aviarchi1994@gmail.com>
+Date: Sun, 21 Jun 2026 16:02:04 +0300
+Subject: [PATCH 03512/15333] platform/x86: asus-armoury: Add power limits for
+ ROG Strix SCAR 16 (G635LX)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add the AC and DC power limit definitions for the ASUS ROG Strix SCAR 16
+2025 (G635LX), enabling the nv_tgp, nv_dynamic_boost and ppt_pl*_* tuning
+attributes on this model. Without an entry in the power_limits table the
+attributes are not exposed (has_valid_limit() returns false) and the
+firmware power knobs cannot be controlled.
+
+The G635LX ships an NVIDIA RTX 5090 Laptop GPU (150 W base TGP + 25 W
+Dynamic Boost = 175 W max, per the ASUS specification) and an Intel Core
+Ultra 9 275HX, matching the ROG Strix SCAR 18 (G835LW). The limits are
+therefore taken from the G835LW sibling entry and the ASUS specification
+rather than dumped from this board's firmware.
+
+Testing on a G635LX confirmed the attributes populate with this entry and
+that writing nv_dynamic_boost changes the measured GPU power draw
+(~151 W at minimum, ~169 W at maximum during inference), i.e. the limits
+reach firmware.
+
+Signed-off-by: Avi Fenesh <aviarchi1994@gmail.com>
+Link: https://patch.msgid.link/20260621130204.103566-1-aviarchi1994@gmail.com
+Reviewed-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+Signed-off-by: Ilpo Järvinen <ilpo.jarvinen@linux.intel.com>
+---
+ drivers/platform/x86/asus-armoury.h | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/drivers/platform/x86/asus-armoury.h b/drivers/platform/x86/asus-armoury.h
+index 81bcd2f109ca..53f9e2349816 100644
+--- a/drivers/platform/x86/asus-armoury.h
++++ b/drivers/platform/x86/asus-armoury.h
+@@ -2111,6 +2111,35 @@ static const struct dmi_system_id power_limits[] = {
+ 			.requires_fan_curve = true,
+ 		},
+ 	},
++	{
++		.matches = {
++			DMI_MATCH(DMI_BOARD_NAME, "G635LX"),
++		},
++		.driver_data = &(struct power_data) {
++			.ac_data = &(struct power_limits) {
++				.ppt_pl1_spl_min = 28,
++				.ppt_pl1_spl_def = 140,
++				.ppt_pl1_spl_max = 175,
++				.ppt_pl2_sppt_min = 28,
++				.ppt_pl2_sppt_max = 175,
++				.nv_dynamic_boost_min = 5,
++				.nv_dynamic_boost_max = 25,
++				.nv_temp_target_min = 75,
++				.nv_temp_target_max = 87,
++				.nv_tgp_min = 80,
++				.nv_tgp_max = 150,
++			},
++			.dc_data = &(struct power_limits) {
++				.ppt_pl1_spl_min = 25,
++				.ppt_pl1_spl_max = 55,
++				.ppt_pl2_sppt_min = 25,
++				.ppt_pl2_sppt_max = 70,
++				.nv_temp_target_min = 75,
++				.nv_temp_target_max = 87,
++			},
++			.requires_fan_curve = true,
++		},
++	},
+ 	{
+ 		.matches = {
+ 			DMI_MATCH(DMI_BOARD_NAME, "G713PV"),
+-- 
+2.55.0
+

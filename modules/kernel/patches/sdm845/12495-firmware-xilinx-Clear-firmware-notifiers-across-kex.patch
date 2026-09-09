@@ -1,0 +1,73 @@
+From 0e8860367da261116cd290bcd6a54d2e597a0c5c Mon Sep 17 00:00:00 2001
+From: Jay Buddhabhatti <jay.buddhabhatti@amd.com>
+Date: Wed, 29 Jul 2026 05:25:22 -0700
+Subject: [PATCH 12495/15333] firmware: xilinx: Clear firmware notifiers across
+ kexec transitions
+
+During a kexec restart, only the kernel is reloaded but notifier callbacks
+in firmware persist, causing state mismatches between kernel and firmware.
+
+To address this, introduce PM_ALL_NOTIFIERS node ID to unregister all
+notifier callbacks during kexec. On a graceful kexec restart, this occurs
+in zynqmp_firmware_shutdown(). On a crash kernel restart, it happens in
+zynqmp_firmware_probe() in the reloaded kernel.
+
+Unregistering all notifiers depends on firmware support for the
+PM_ALL_NOTIFIERS node ID. On firmware that does not implement it (the
+feature check reports a version below PM_API_VERSION_3) the step is
+skipped and a warning such as "Firmware doesn't support unregister all
+notifiers at once" is logged, e.g. on Versal NET firmware that predates
+this API.
+
+Signed-off-by: Jay Buddhabhatti <jay.buddhabhatti@amd.com>
+Reviewed-by: Radhey Shyam Pandey <radhey.shyam.pandey@amd.com>
+Reviewed-by: Prasanna Kumar T S M <ptsm@linux.microsoft.com>
+Link: https://patch.msgid.link/20260729122522.3732875-4-jay.buddhabhatti@amd.com
+Signed-off-by: Michal Simek <michal.simek@amd.com>
+---
+ drivers/firmware/xilinx/zynqmp.c     | 14 ++++++++++++++
+ include/linux/firmware/xlnx-zynqmp.h |  3 +++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/drivers/firmware/xilinx/zynqmp.c b/drivers/firmware/xilinx/zynqmp.c
+index 4bf6c9eabebc..f44785aee808 100644
+--- a/drivers/firmware/xilinx/zynqmp.c
++++ b/drivers/firmware/xilinx/zynqmp.c
+@@ -2115,6 +2115,20 @@ static int zynqmp_clear_pm_state(struct device *dev)
+ 				 "Bulk device release is not supported by firmware: %d\n", ret);
+ 			ret = 0;
+ 		}
++
++		/* Check if the firmware supports the PM_ALL_NOTIFIERS node ID */
++		ret = do_feature_check_call(PM_REGISTER_NOTIFIER);
++		if (ret >= 0 && ((ret & FIRMWARE_VERSION_MASK) >= PM_API_VERSION_3)) {
++			/* Attempt to unregister all notifier callbacks via firmware */
++			ret = zynqmp_pm_register_notifier(PM_ALL_NOTIFIERS, 0, 0, 0);
++			if (ret)
++				dev_err(dev, "Failed to unregister all notifiers: %d\n", ret);
++		} else {
++			dev_warn(dev,
++				 "Firmware doesn't support unregister all notifiers at once: %d\n",
++				 ret);
++			ret = 0;
++		}
+ 	}
+ 
+ 	return ret;
+diff --git a/include/linux/firmware/xlnx-zynqmp.h b/include/linux/firmware/xlnx-zynqmp.h
+index ac39e5492961..69a2f74269f3 100644
+--- a/include/linux/firmware/xlnx-zynqmp.h
++++ b/include/linux/firmware/xlnx-zynqmp.h
+@@ -149,6 +149,9 @@
+ /* Node ID for all peripheral devices */
+ #define PM_DEV_ALL_PERIPH	0x18224FFFU
+ 
++/* Node ID for all notifier callbacks */
++#define PM_ALL_NOTIFIERS	0xFFFFFFFFU
++
+ enum pm_module_id {
+ 	PM_MODULE_ID = 0x0,
+ 	XPM_MODULE_ID = 0x2,
+-- 
+2.55.0
+

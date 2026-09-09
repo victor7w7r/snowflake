@@ -1,0 +1,96 @@
+From 77877bf570ffb9756a20e602fba81ca0155468d0 Mon Sep 17 00:00:00 2001
+From: Tiezhu Yang <yangtiezhu@loongson.cn>
+Date: Thu, 13 Aug 2026 15:09:06 +0800
+Subject: [PATCH 14402/15333] selftests/bpf: Enable timed may_goto tests for
+ LoongArch
+
+Enable stream_cond_break, may_goto_interaction, and verifier_may_goto_1
+tests for LoongArch, aligning with recent architectural infrastructure
+support (timed may_goto and arch_bpf_stack_walk JIT).
+
+With this patch, the following tests passed on LoongArch:
+
+  sudo ./test_progs -a stream_success/stream_cond_break
+  sudo ./test_progs -a verifier_bpf_fastcall/may_goto_interaction
+  sudo ./test_progs -a verifier_may_goto_1
+
+Signed-off-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Link: https://lore.kernel.org/bpf/20260813070906.5164-1-yangtiezhu@loongson.cn
+---
+ tools/testing/selftests/bpf/progs/stream.c                | 1 +
+ tools/testing/selftests/bpf/progs/verifier_bpf_fastcall.c | 1 +
+ tools/testing/selftests/bpf/progs/verifier_may_goto_1.c   | 5 +++++
+ 3 files changed, 7 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/progs/stream.c b/tools/testing/selftests/bpf/progs/stream.c
+index 00a37933e411..8e8e1339dc74 100644
+--- a/tools/testing/selftests/bpf/progs/stream.c
++++ b/tools/testing/selftests/bpf/progs/stream.c
+@@ -65,6 +65,7 @@ __arch_x86_64
+ __arch_arm64
+ __arch_s390x
+ __arch_riscv64
++__arch_loongarch
+ __success __retval(0)
+ __stderr("ERROR: Timeout detected for may_goto instruction")
+ __stderr("CPU: {{[0-9]+}} UID: 0 PID: {{[0-9]+}} Comm: {{.*}}")
+diff --git a/tools/testing/selftests/bpf/progs/verifier_bpf_fastcall.c b/tools/testing/selftests/bpf/progs/verifier_bpf_fastcall.c
+index 4cfaa6b4ab40..328cf630210a 100644
+--- a/tools/testing/selftests/bpf/progs/verifier_bpf_fastcall.c
++++ b/tools/testing/selftests/bpf/progs/verifier_bpf_fastcall.c
+@@ -665,6 +665,7 @@ __naked void may_goto_interaction_x86_64(void)
+ SEC("raw_tp")
+ __arch_arm64
+ __arch_riscv64
++__arch_loongarch
+ __log_level(4)
+ __msg("subprog 0 (may_goto_interaction) main {{.*}} stack 24")
+ /* may_goto counter at -24 */
+diff --git a/tools/testing/selftests/bpf/progs/verifier_may_goto_1.c b/tools/testing/selftests/bpf/progs/verifier_may_goto_1.c
+index 0e211f030d0d..db7e30da234f 100644
+--- a/tools/testing/selftests/bpf/progs/verifier_may_goto_1.c
++++ b/tools/testing/selftests/bpf/progs/verifier_may_goto_1.c
+@@ -12,6 +12,7 @@ __arch_x86_64
+ __arch_s390x
+ __arch_arm64
+ __arch_riscv64
++__arch_loongarch
+ __xlated("0: r0 = 1")
+ __xlated("1: exit")
+ __success
+@@ -33,6 +34,7 @@ __arch_x86_64
+ __arch_s390x
+ __arch_arm64
+ __arch_riscv64
++__arch_loongarch
+ __xlated("0: r0 = 1")
+ __xlated("1: exit")
+ __success
+@@ -56,6 +58,7 @@ __arch_x86_64
+ __arch_s390x
+ __arch_arm64
+ __arch_riscv64
++__arch_loongarch
+ __xlated("0: r0 = 1")
+ __xlated("1: exit")
+ __success
+@@ -83,6 +86,7 @@ __arch_x86_64
+ __arch_s390x
+ __arch_arm64
+ __arch_riscv64
++__arch_loongarch
+ __xlated("0: *(u64 *)(r10 -16) = 65535")
+ __xlated("1: *(u64 *)(r10 -8) = 0")
+ __xlated("2: r12 = *(u64 *)(r10 -16)")
+@@ -120,6 +124,7 @@ __arch_x86_64
+ __arch_s390x
+ __arch_arm64
+ __arch_riscv64
++__arch_loongarch
+ __success
+ __retval(0)
+ __naked void timed_may_goto_preserves_regs(void)
+-- 
+2.55.0
+

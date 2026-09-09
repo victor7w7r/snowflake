@@ -1,0 +1,47 @@
+From 05a194d8bd005e0887a1e089bbbbd2e1a641638f Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@kernel.org>
+Date: Tue, 7 Jul 2026 21:06:23 +0200
+Subject: [PATCH 04038/15333] s390/syscall: Use
+ enter_from_user_mode_randomize_stack()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+enter_from_user_mode_randomize_stack() replaces enter_from_user_mode() and
+the subsequent invocation of add_random_kstack_offset_irqsoff().
+
+As a bonus this avoids the overhead of get/put_cpu_var() in
+add_random_kstack_offset().
+
+No functional change.
+
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Tested-by: Mukesh Kumar Chaurasiya (IBM) <mkchauras@gmail.com>
+Reviewed-by: Sven Schnelle <svens@linux.ibm.com>
+Reviewed-by: Radu Rendec <radu@rendec.net>
+Reviewed-by: Jinjie Ruan <ruanjinjie@huawei.com>
+Reviewed-by: Mukesh Kumar Chaurasiya (IBM) <mkchauras@gmail.com>
+Reviewed-by: Philippe Mathieu-Daudé <philmd@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260707190254.030598804@kernel.org
+---
+ arch/s390/kernel/syscall.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/s390/kernel/syscall.c b/arch/s390/kernel/syscall.c
+index 75d5a3cab14e..73abda2a9080 100644
+--- a/arch/s390/kernel/syscall.c
++++ b/arch/s390/kernel/syscall.c
+@@ -97,8 +97,8 @@ void noinstr __do_syscall(struct pt_regs *regs, int per_trap)
+ {
+ 	unsigned long nr;
+ 
+-	enter_from_user_mode(regs);
+-	add_random_kstack_offset();
++	enter_from_user_mode_randomize_stack(regs);
++
+ 	regs->psw = get_lowcore()->svc_old_psw;
+ 	regs->int_code = get_lowcore()->svc_int_code;
+ 	update_timer_sys();
+-- 
+2.55.0
+

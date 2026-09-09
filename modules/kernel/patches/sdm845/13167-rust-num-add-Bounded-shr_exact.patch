@@ -1,0 +1,63 @@
+From 8fe5e5f62bdb9660999449a4b5eaebcc37d7f842 Mon Sep 17 00:00:00 2001
+From: Eliot Courtney <ecourtney@nvidia.com>
+Date: Mon, 10 Aug 2026 22:55:25 +0900
+Subject: [PATCH 13167/15333] rust: num: add Bounded::shr_exact
+
+Add `shr_exact` in the vein of `try_shrink` which shifts a bounded right
+only if it loses no set bits. This is useful for getting a shifted down
+integer while simultaneously checking that it's aligned.
+
+Signed-off-by: Eliot Courtney <ecourtney@nvidia.com>
+Acked-by: Alexandre Courbot <acourbot@nvidia.com>
+Reviewed-by: Danilo Krummrich <dakr@kernel.org>
+Link: https://patch.msgid.link/20260810-pramin-split-v2-3-65a00b3c7309@nvidia.com
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ rust/kernel/num/bounded.rs | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/rust/kernel/num/bounded.rs b/rust/kernel/num/bounded.rs
+index 90483d2c5374..d192610a687d 100644
+--- a/rust/kernel/num/bounded.rs
++++ b/rust/kernel/num/bounded.rs
+@@ -493,6 +493,37 @@ pub fn shr<const SHIFT: u32, const RES: u32>(self) -> Bounded<T, RES> {
+         unsafe { Bounded::__new(self.0 >> SHIFT) }
+     }
+ 
++    /// Right-shifts `self` by `SHIFT` if that loses no set bits, and returns the result as a
++    /// `Bounded<_, RES>`, where `RES >= N - SHIFT`.
++    ///
++    /// Returns [`None`] if any of the `SHIFT` least significant bits of `self` is set.
++    ///
++    /// # Examples
++    ///
++    /// ```
++    /// use kernel::num::Bounded;
++    ///
++    /// let v = Bounded::<u32, 16>::new::<0xff00>();
++    /// let v_shifted: Option<Bounded<u32, 8>> = v.shr_exact::<8, _>();
++    ///
++    /// assert_eq!(v_shifted.map(|v| v.get()), Some(0xff));
++    ///
++    /// // A set bit would be shifted out.
++    /// let v = Bounded::<u32, 16>::new::<0xff01>();
++    /// let v_shifted: Option<Bounded<u32, 8>> = v.shr_exact::<8, _>();
++    ///
++    /// assert!(v_shifted.is_none());
++    /// ```
++    #[inline]
++    pub fn shr_exact<const SHIFT: u32, const RES: u32>(self) -> Option<Bounded<T, RES>> {
++        let shifted = self.shr::<SHIFT, RES>();
++        if shifted.get() << SHIFT == self.0 {
++            Some(shifted)
++        } else {
++            None
++        }
++    }
++
+     /// Left-shifts `self` by `SHIFT` and returns the result as a `Bounded<_, RES>`, where `RES >=
+     /// N + SHIFT`.
+     ///
+-- 
+2.55.0
+

@@ -1,0 +1,50 @@
+From b6a89c8ef34f84488f877e29b14f0c843bfdff51 Mon Sep 17 00:00:00 2001
+From: Maxime Chevallier <maxime.chevallier@bootlin.com>
+Date: Sun, 2 Aug 2026 13:40:13 +0200
+Subject: [PATCH 10324/15333] net: stmmac: ethtool: Comment the magic numbers
+ in RIWT computation
+
+Receive Interrupt Watchdog Timer is an RX interrupt coalescing mechanism
+used by some variants of dwmac. It allows waiting a bit before
+triggering the rx interrupts, allowing for batch processing.
+
+The RIWT is configured with a granularity of 256 stmmac clk ticks. Let's
+add a comment for that and wrap the raw "1000000" into USEC_PER_SEC, as
+we're computing "how many clock cycles in one microsec" with that step.
+
+Signed-off-by: Maxime Chevallier <maxime.chevallier@bootlin.com>
+Reviewed-by: Andrew Lunn <andrew@lunn.ch>
+Link: https://patch.msgid.link/20260802114015.214212-2-maxime.chevallier@bootlin.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+index 92585d27ab88..eebfd6976aaa 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+@@ -759,7 +759,10 @@ static u32 stmmac_usec2riwt(u32 usec, struct stmmac_priv *priv)
+ 			return 0;
+ 	}
+ 
+-	return (usec * (clk / 1000000)) / 256;
++	/* Receive Interrupt Watchdog Timer (riwt) has a resolution of 256
++	 * ticks.
++	 */
++	return (usec * (clk / USEC_PER_SEC)) / 256;
+ }
+ 
+ static u32 stmmac_riwt2usec(u32 riwt, struct stmmac_priv *priv)
+@@ -772,7 +775,7 @@ static u32 stmmac_riwt2usec(u32 riwt, struct stmmac_priv *priv)
+ 			return 0;
+ 	}
+ 
+-	return (riwt * 256) / (clk / 1000000);
++	return (riwt * 256) / (clk / USEC_PER_SEC);
+ }
+ 
+ static int __stmmac_get_coalesce(struct net_device *dev,
+-- 
+2.55.0
+

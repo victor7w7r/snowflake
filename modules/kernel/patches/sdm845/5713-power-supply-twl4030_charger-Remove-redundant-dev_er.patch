@@ -1,0 +1,47 @@
+From ca5cb9488b800a5b39954391530244da41076f79 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Thu, 9 Jul 2026 11:34:20 +0800
+Subject: [PATCH 05713/15333] power: supply: twl4030_charger: Remove redundant
+ dev_err()/dev_err_probe()
+
+The devm_request_threaded_irq() and devm_request_irq() now automatically
+log detailed error messages on failure. This eliminates the need for
+driver-specific dev_err() and dev_err_probe() calls that previously
+printed generic messages.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://patch.msgid.link/20260709033428.362970-42-panchuang@vivo.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/twl4030_charger.c | 10 ++--------
+ 1 file changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/power/supply/twl4030_charger.c b/drivers/power/supply/twl4030_charger.c
+index 04216b2bfb6c..1cace8f73927 100644
+--- a/drivers/power/supply/twl4030_charger.c
++++ b/drivers/power/supply/twl4030_charger.c
+@@ -1055,19 +1055,13 @@ static int twl4030_bci_probe(struct platform_device *pdev)
+ 	ret = devm_request_threaded_irq(&pdev->dev, bci->irq_chg, NULL,
+ 			twl4030_charger_interrupt, IRQF_ONESHOT, pdev->name,
+ 			bci);
+-	if (ret < 0) {
+-		dev_err(&pdev->dev, "could not request irq %d, status %d\n",
+-			bci->irq_chg, ret);
++	if (ret < 0)
+ 		return ret;
+-	}
+ 
+ 	ret = devm_request_threaded_irq(&pdev->dev, bci->irq_bci, NULL,
+ 			twl4030_bci_interrupt, IRQF_ONESHOT, pdev->name, bci);
+-	if (ret < 0) {
+-		dev_err(&pdev->dev, "could not request irq %d, status %d\n",
+-			bci->irq_bci, ret);
++	if (ret < 0)
+ 		return ret;
+-	}
+ 
+ 	/* Enable interrupts now. */
+ 	reg = ~(u32)(TWL4030_ICHGLOW | TWL4030_ICHGEOC | TWL4030_TBATOR2 |
+-- 
+2.55.0
+

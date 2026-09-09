@@ -1,0 +1,66 @@
+From 9d2da45b1d0a33683364b39fa16bd50121f8f8e2 Mon Sep 17 00:00:00 2001
+From: Jesse Zhang <Jesse.Zhang@amd.com>
+Date: Mon, 30 Mar 2026 09:33:28 +0800
+Subject: [PATCH 00378/15333] drm/amdgpu/mes_v12_1: use mes schedule pipe for
+ legacy queues on unified MES
+
+when suspend_all_gangs is issued to pipe0 MES during system suspend or runtime PM, pipe0 can only suspend and resume queues it has tracked.
+KCQs registered with a non-zero pipe slot may not be correctly handled, leaving them in an inconsistent state after resume.
+
+v3: fix the schedule pipe issue
+
+Suggested-by: Michael Chen <michael.chen@amd.com>
+Suggested-by: Alex Deucher <alexander.deucher@amd.com>
+Suggested-by: Shaoyun Liu <shaoyun.liu@amd.com>
+Signed-off-by: Jesse Zhang <jesse.zhang@amd.com>
+Reviewed-by: Prike Liang <Prike.Liang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/mes_v12_1.c | 22 ++++++++++++++++------
+ 1 file changed, 16 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v12_1.c b/drivers/gpu/drm/amd/amdgpu/mes_v12_1.c
+index 8a90ad5a51b8..8007a6e69305 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_v12_1.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_v12_1.c
+@@ -417,10 +417,15 @@ static int mes_v12_1_map_legacy_queue(struct amdgpu_mes *mes,
+ 		convert_to_mes_queue_type(input->queue_type);
+ 	mes_add_queue_pkt.map_legacy_kq = 1;
+ 
+-	if (mes->adev->enable_uni_mes)
+-		pipe = AMDGPU_MES_KIQ_PIPE;
+-	else
++	if (mes->adev->enable_uni_mes) {
++		/* Keep scheduler queue on KIQ pipe; map all other kernel queues on sched pipe. */
++		if (input->queue_type == AMDGPU_RING_TYPE_MES)
++			pipe = AMDGPU_MES_KIQ_PIPE;
++		else
++			pipe = AMDGPU_MES_SCHED_PIPE;
++	} else {
+ 		pipe = AMDGPU_MES_SCHED_PIPE;
++	}
+ 
+ 	return mes_v12_1_submit_pkt_and_poll_completion(mes,
+ 			input->xcc_id, pipe,
+@@ -457,10 +462,15 @@ static int mes_v12_1_unmap_legacy_queue(struct amdgpu_mes *mes,
+ 			convert_to_mes_queue_type(input->queue_type);
+ 	}
+ 
+-	if (mes->adev->enable_uni_mes)
+-		pipe = AMDGPU_MES_KIQ_PIPE;
+-	else
++	if (mes->adev->enable_uni_mes) {
++		/* Keep scheduler queue on KIQ pipe; map all other kernel queues on sched pipe. */
++		if (input->queue_type == AMDGPU_RING_TYPE_MES)
++			pipe = AMDGPU_MES_KIQ_PIPE;
++		else
++			pipe = AMDGPU_MES_SCHED_PIPE;
++	} else {
+ 		pipe = AMDGPU_MES_SCHED_PIPE;
++	}
+ 
+ 	return mes_v12_1_submit_pkt_and_poll_completion(mes,
+ 			input->xcc_id, pipe,
+-- 
+2.55.0
+

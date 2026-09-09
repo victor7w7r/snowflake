@@ -1,0 +1,227 @@
+From 0d91b71af94734a10f1dcc0ae317923f84ca43ee Mon Sep 17 00:00:00 2001
+From: Juergen Gross <jgross@suse.com>
+Date: Wed, 5 Aug 2026 10:21:35 +0200
+Subject: [PATCH 11206/15333] xen: Drop CONFIG_XEN_PVHVM
+
+On x86 CONFIG_XEN_PVHVM is now a synonym of CONFIG_XEN.
+
+In Xen specific x86 code it can be just dropped, in non-Xen specific
+x86 code it can be replaced with CONFIG_XEN.
+
+In architecture independent code it is used only where CONFIG_XEN is
+defined, so it can be replaced with CONFIG_X86 there.
+
+Reviewed-by: Stefano Stabellini <sstabellini@kernel.org>
+Signed-off-by: Juergen Gross <jgross@suse.com>
+Message-ID: <20260805082137.1214967-3-jgross@suse.com>
+---
+ arch/x86/include/asm/idtentry.h   |  2 +-
+ arch/x86/kernel/cpu/hypervisor.c  |  2 +-
+ arch/x86/xen/Kconfig              | 10 +++-------
+ arch/x86/xen/Makefile             |  9 ++++-----
+ arch/x86/xen/time.c               |  2 --
+ arch/x86/xen/xen-ops.h            |  4 ----
+ drivers/xen/Kconfig               |  2 +-
+ drivers/xen/events/events_base.c  |  7 -------
+ drivers/xen/xenbus/xenbus_probe.c |  2 +-
+ include/xen/platform_pci.h        |  6 +++---
+ 10 files changed, 14 insertions(+), 32 deletions(-)
+
+diff --git a/arch/x86/include/asm/idtentry.h b/arch/x86/include/asm/idtentry.h
+index 20f548702404..f400cfac69a6 100644
+--- a/arch/x86/include/asm/idtentry.h
++++ b/arch/x86/include/asm/idtentry.h
+@@ -745,7 +745,7 @@ DECLARE_IDTENTRY_SYSVEC(HYPERV_STIMER0_VECTOR,		sysvec_hyperv_stimer0);
+ DECLARE_IDTENTRY_SYSVEC(HYPERVISOR_CALLBACK_VECTOR,	sysvec_acrn_hv_callback);
+ #endif
+ 
+-#ifdef CONFIG_XEN_PVHVM
++#ifdef CONFIG_XEN
+ DECLARE_IDTENTRY_SYSVEC(HYPERVISOR_CALLBACK_VECTOR,	sysvec_xen_hvm_callback);
+ #endif
+ 
+diff --git a/arch/x86/kernel/cpu/hypervisor.c b/arch/x86/kernel/cpu/hypervisor.c
+index f3e9219845e8..73428afca796 100644
+--- a/arch/x86/kernel/cpu/hypervisor.c
++++ b/arch/x86/kernel/cpu/hypervisor.c
+@@ -31,7 +31,7 @@ static const __initconst struct hypervisor_x86 * const hypervisors[] =
+ #ifdef CONFIG_XEN_PV
+ 	&x86_hyper_xen_pv,
+ #endif
+-#ifdef CONFIG_XEN_PVHVM
++#ifdef CONFIG_XEN
+ 	&x86_hyper_xen_hvm,
+ #endif
+ 	&x86_hyper_vmware,
+diff --git a/arch/x86/xen/Kconfig b/arch/x86/xen/Kconfig
+index bb420a4cb75f..9e5bb51eecf4 100644
+--- a/arch/x86/xen/Kconfig
++++ b/arch/x86/xen/Kconfig
+@@ -50,24 +50,20 @@ config XEN_PV_DOM0
+ 	def_bool y
+ 	depends on XEN_PV && XEN_DOM0
+ 
+-config XEN_PVHVM
+-	def_bool y
+-	depends on XEN
+-
+ config XEN_PVHVM_SMP
+ 	def_bool y
+-	depends on XEN_PVHVM && SMP
++	depends on XEN && SMP
+ 
+ config XEN_PVHVM_GUEST
+ 	bool "Xen PVHVM guest support"
+ 	default y
+-	depends on XEN_PVHVM && PCI
++	depends on XEN && PCI
+ 	help
+ 	  Support running as a Xen PVHVM guest.
+ 
+ config XEN_PVH
+ 	bool "Xen PVH guest support"
+-	depends on XEN && XEN_PVHVM && ACPI
++	depends on XEN && ACPI
+ 	select PVH
+ 	help
+ 	  Support for running as a Xen PVH guest.
+diff --git a/arch/x86/xen/Makefile b/arch/x86/xen/Makefile
+index 717264ae269b..32d651aa9bc2 100644
+--- a/arch/x86/xen/Makefile
++++ b/arch/x86/xen/Makefile
+@@ -16,11 +16,10 @@ obj-y				+= mmu.o
+ obj-y				+= time.o
+ obj-y				+= grant-table.o
+ obj-y				+= suspend.o
+-
+-obj-$(CONFIG_XEN_PVHVM)		+= enlighten_hvm.o
+-obj-$(CONFIG_XEN_PVHVM)		+= mmu_hvm.o
+-obj-$(CONFIG_XEN_PVHVM)		+= suspend_hvm.o
+-obj-$(CONFIG_XEN_PVHVM)		+= platform-pci-unplug.o
++obj-y				+= enlighten_hvm.o
++obj-y				+= mmu_hvm.o
++obj-y				+= suspend_hvm.o
++obj-y				+= platform-pci-unplug.o
+ 
+ obj-$(CONFIG_XEN_PV)		+= setup.o
+ obj-$(CONFIG_XEN_PV)		+= apic.o
+diff --git a/arch/x86/xen/time.c b/arch/x86/xen/time.c
+index d62c14334b35..5c7822254a01 100644
+--- a/arch/x86/xen/time.c
++++ b/arch/x86/xen/time.c
+@@ -586,7 +586,6 @@ void __init xen_init_time_ops(void)
+ 		x86_platform.set_wallclock = xen_set_wallclock;
+ }
+ 
+-#ifdef CONFIG_XEN_PVHVM
+ static void xen_hvm_setup_cpu_clockevents(void)
+ {
+ 	int cpu = smp_processor_id();
+@@ -643,7 +642,6 @@ void __init xen_hvm_init_time_ops(void)
+ 
+ 	hvm_time_initialized = true;
+ }
+-#endif
+ 
+ /* Kernel parameter to specify Xen timer slop */
+ static int __init parse_xen_timer_slop(char *ptr)
+diff --git a/arch/x86/xen/xen-ops.h b/arch/x86/xen/xen-ops.h
+index dc265bdda24d..47eebbb3684a 100644
+--- a/arch/x86/xen/xen-ops.h
++++ b/arch/x86/xen/xen-ops.h
+@@ -236,11 +236,7 @@ void xen_pin_vcpu(int cpu);
+ 
+ void xen_emergency_restart(void);
+ 
+-#ifdef CONFIG_XEN_PVHVM
+ void xen_hvm_post_suspend(int suspend_cancelled);
+-#else
+-static inline void xen_hvm_post_suspend(int suspend_cancelled) {}
+-#endif
+ 
+ /*
+  * The maximum amount of extra memory compared to the base size.  The
+diff --git a/drivers/xen/Kconfig b/drivers/xen/Kconfig
+index f9a35ed266ec..cfb517cd77dc 100644
+--- a/drivers/xen/Kconfig
++++ b/drivers/xen/Kconfig
+@@ -311,7 +311,7 @@ config XEN_EFI
+ 
+ config XEN_AUTO_XLATE
+ 	def_bool y
+-	depends on ARM || ARM64 || XEN_PVHVM
++	depends on ARM || ARM64 || X86
+ 	help
+ 	  Support for auto-translated physmap guests.
+ 
+diff --git a/drivers/xen/events/events_base.c b/drivers/xen/events/events_base.c
+index 6ea945508a89..fd16d652c81f 100644
+--- a/drivers/xen/events/events_base.c
++++ b/drivers/xen/events/events_base.c
+@@ -2180,7 +2180,6 @@ static struct irq_chip xen_percpu_chip __read_mostly = {
+ };
+ 
+ #ifdef CONFIG_X86
+-#ifdef CONFIG_XEN_PVHVM
+ /* Vector callbacks are better than PCI interrupts to receive event
+  * channel notifications because we can receive vector callbacks on any
+  * vcpu and we don't need PCI support or APIC interactions. */
+@@ -2242,12 +2241,6 @@ static __init void xen_alloc_callback_vector(void)
+ 	pr_info("Xen HVM callback vector for event delivery is enabled\n");
+ 	sysvec_install(HYPERVISOR_CALLBACK_VECTOR, sysvec_xen_hvm_callback);
+ }
+-#else
+-void xen_setup_callback_vector(void) {}
+-static inline void xen_init_setup_upcall_vector(void) {}
+-int xen_set_upcall_vector(unsigned int cpu) {}
+-static inline void xen_alloc_callback_vector(void) {}
+-#endif /* CONFIG_XEN_PVHVM */
+ #endif /* CONFIG_X86 */
+ 
+ bool xen_fifo_events = true;
+diff --git a/drivers/xen/xenbus/xenbus_probe.c b/drivers/xen/xenbus/xenbus_probe.c
+index 59d106818536..9a8c83326f91 100644
+--- a/drivers/xen/xenbus/xenbus_probe.c
++++ b/drivers/xen/xenbus/xenbus_probe.c
+@@ -833,7 +833,7 @@ static void xenbus_probe(void)
+  */
+ static bool xs_hvm_defer_init_for_callback(void)
+ {
+-#ifdef CONFIG_XEN_PVHVM
++#ifdef CONFIG_X86
+ 	return xen_store_domain_type == XS_HVM &&
+ 		!xen_have_vector_callback;
+ #else
+diff --git a/include/xen/platform_pci.h b/include/xen/platform_pci.h
+index e51e7cb71a85..267040c1f504 100644
+--- a/include/xen/platform_pci.h
++++ b/include/xen/platform_pci.h
+@@ -30,7 +30,7 @@
+ static inline int xen_must_unplug_nics(void) {
+ #if (defined(CONFIG_XEN_NETDEV_FRONTEND) || \
+ 		defined(CONFIG_XEN_NETDEV_FRONTEND_MODULE)) && \
+-		defined(CONFIG_XEN_PVHVM)
++		defined(CONFIG_X86)
+         return 1;
+ #else
+         return 0;
+@@ -40,14 +40,14 @@ static inline int xen_must_unplug_nics(void) {
+ static inline int xen_must_unplug_disks(void) {
+ #if (defined(CONFIG_XEN_BLKDEV_FRONTEND) || \
+ 		defined(CONFIG_XEN_BLKDEV_FRONTEND_MODULE)) && \
+-		defined(CONFIG_XEN_PVHVM)
++		defined(CONFIG_X86)
+         return 1;
+ #else
+         return 0;
+ #endif
+ }
+ 
+-#if defined(CONFIG_XEN_PVHVM)
++#if defined(CONFIG_X86)
+ extern bool xen_has_pv_devices(void);
+ extern bool xen_has_pv_disk_devices(void);
+ extern bool xen_has_pv_nic_devices(void);
+-- 
+2.55.0
+

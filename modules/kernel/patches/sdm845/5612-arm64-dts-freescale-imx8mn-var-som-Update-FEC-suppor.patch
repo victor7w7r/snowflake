@@ -1,0 +1,126 @@
+From a6c8d4f9c2db6254681d78ec93f5bd944a0cf89d Mon Sep 17 00:00:00 2001
+From: Stefano Radaelli <stefano.r@variscite.com>
+Date: Mon, 6 Jul 2026 11:34:34 +0200
+Subject: [PATCH 05612/15333] arm64: dts: freescale: imx8mn-var-som: Update FEC
+ support with MaxLinear PHY
+
+Update the FEC Ethernet controller on the i.MX8MN VAR-SOM to match the
+latest SOM hardware revision using the integrated MaxLinear MXL86110 PHY.
+
+Add the PHY VDDIO supply regulator and adjust reset timings.
+
+The PHY LED signals originate on the SOM, but the actual LEDs are part
+of the carrier implementation (RJ45 connector). Move the LED
+configuration to the Symphony carrier device tree, matching the
+evaluation board LED wiring.
+
+Wake-on-LAN via magic packet is not supported at the VAR-SOM level and
+is therefore not enabled in the SOM device tree nor in the official
+evaluation carrier board configuration (symphony).
+Designs requiring WoL support may enable it in their own carrier-specific
+device trees if properly integrated at the hardware level.
+
+Signed-off-by: Stefano Radaelli <stefano.r@variscite.com>
+Reviewed-by: Peng Fan <peng.fan@nxp.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+---
+ .../dts/freescale/imx8mn-var-som-symphony.dts | 20 ++++++++++++++++++-
+ .../boot/dts/freescale/imx8mn-var-som.dtsi    | 20 ++++++++++---------
+ 2 files changed, 30 insertions(+), 10 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/freescale/imx8mn-var-som-symphony.dts b/arch/arm64/boot/dts/freescale/imx8mn-var-som-symphony.dts
+index 7308613a48b2..520aff23e587 100644
+--- a/arch/arm64/boot/dts/freescale/imx8mn-var-som-symphony.dts
++++ b/arch/arm64/boot/dts/freescale/imx8mn-var-som-symphony.dts
+@@ -8,6 +8,7 @@
+ 
+ /dts-v1/;
+ 
++#include <dt-bindings/leds/common.h>
+ #include <dt-bindings/usb/pd.h>
+ #include "imx8mn-var-som.dtsi"
+ 
+@@ -74,7 +75,24 @@ reg_per_3v3: regulator-peripheral-3v3 {
+ };
+ 
+ &ethphy {
+-	reset-gpios = <&pca9534 5 GPIO_ACTIVE_HIGH>;
++	leds {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		led@0 {
++			reg = <0>;
++			color = <LED_COLOR_ID_YELLOW>;
++			function = LED_FUNCTION_LAN;
++			linux,default-trigger = "netdev";
++		};
++
++		led@1 {
++			reg = <1>;
++			color = <LED_COLOR_ID_GREEN>;
++			function = LED_FUNCTION_LAN;
++			linux,default-trigger = "netdev";
++		};
++	};
+ };
+ 
+ &i2c2 {
+diff --git a/arch/arm64/boot/dts/freescale/imx8mn-var-som.dtsi b/arch/arm64/boot/dts/freescale/imx8mn-var-som.dtsi
+index 71a2f0866822..09146ab76385 100644
+--- a/arch/arm64/boot/dts/freescale/imx8mn-var-som.dtsi
++++ b/arch/arm64/boot/dts/freescale/imx8mn-var-som.dtsi
+@@ -35,6 +35,13 @@ reg_3v3_fixed: regulator-3v3-fixed {
+ 		regulator-max-microvolt = <3300000>;
+ 		regulator-always-on;
+ 	};
++
++	reg_phy_vddio: regulator-phy-vddio {
++		compatible = "regulator-fixed";
++		regulator-name = "vddio-1v8";
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++	};
+ };
+ 
+ &A53_0 {
+@@ -96,24 +103,19 @@ &fec1 {
+ 	phy-mode = "rgmii";
+ 	phy-handle = <&ethphy>;
+ 	phy-supply = <&reg_eth_phy>;
+-	fsl,magic-packet;
+ 	status = "okay";
+ 
+ 	mdio {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+ 
+-		ethphy: ethernet-phy@4 { /* AR8033 or ADIN1300 */
++		ethphy: ethernet-phy@4 {
+ 			compatible = "ethernet-phy-ieee802.3-c22";
+ 			reg = <4>;
+ 			reset-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
+ 			reset-assert-us = <10000>;
+-			/*
+-			 * Deassert delay:
+-			 * ADIN1300 requires 5ms.
+-			 * AR8033   requires 1ms.
+-			 */
+-			reset-deassert-us = <20000>;
++			reset-deassert-us = <100000>;
++			vddio-supply = <&reg_phy_vddio>;
+ 		};
+ 	};
+ };
+@@ -342,7 +344,7 @@ MX8MN_IOMUXC_ENET_TXC_ENET1_RGMII_TXC		0x1f
+ 			MX8MN_IOMUXC_ENET_RXC_ENET1_RGMII_RXC		0x91
+ 			MX8MN_IOMUXC_ENET_RX_CTL_ENET1_RGMII_RX_CTL	0x91
+ 			MX8MN_IOMUXC_ENET_TX_CTL_ENET1_RGMII_TX_CTL	0x1f
+-			MX8MN_IOMUXC_GPIO1_IO09_GPIO1_IO9		0x159
++			MX8MN_IOMUXC_GPIO1_IO09_GPIO1_IO9		0x19
+ 		>;
+ 	};
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,172 @@
+From 796bdb33e86aec8504bf8868e0665f120638ac72 Mon Sep 17 00:00:00 2001
+From: Frank Li <Frank.Li@nxp.com>
+Date: Thu, 21 May 2026 11:32:47 -0400
+Subject: [PATCH 01419/15333] dmaengine: Add API to combine configuration and
+ preparation (sg and single)
+
+Previously, configuration and preparation required two separate calls. This
+works well when configuration is done only once during initialization.
+
+However, in cases where the burst length or source/destination address must
+be adjusted for each transfer, calling two functions is verbose and
+requires additional locking to ensure both steps complete atomically.
+
+Add a new API dmaengine_prep_config_single() and dmaengine_prep_config_sg()
+and callback device_prep_config_sg() that combines configuration and
+preparation into a single operation. If the configuration argument is
+passed as NULL, fall back to the existing implementation.
+
+Tested-by: Niklas Cassel <cassel@kernel.org>
+Acked-by: Manivannan Sadhasivam <mani@kernel.org>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260521-dma_prep_config-v7-1-1f73f4899883@nxp.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ Documentation/driver-api/dmaengine/client.rst |  9 +++
+ include/linux/dmaengine.h                     | 63 ++++++++++++++++---
+ 2 files changed, 64 insertions(+), 8 deletions(-)
+
+diff --git a/Documentation/driver-api/dmaengine/client.rst b/Documentation/driver-api/dmaengine/client.rst
+index d491e385d61a..5ee5d4a3596d 100644
+--- a/Documentation/driver-api/dmaengine/client.rst
++++ b/Documentation/driver-api/dmaengine/client.rst
+@@ -80,6 +80,10 @@ The details of these operations are:
+ 
+   - slave_sg: DMA a list of scatter gather buffers from/to a peripheral
+ 
++  - config_sg: Similar with slave_sg, just pass down dma_slave_config
++    struct to avoid calling dmaengine_slave_config() every time adjusting the
++    burst length or the FIFO address is needed.
++
+   - peripheral_dma_vec: DMA an array of scatter gather buffers from/to a
+     peripheral. Similar to slave_sg, but uses an array of dma_vec
+     structures instead of a scatterlist.
+@@ -106,6 +110,11 @@ The details of these operations are:
+ 		unsigned int sg_len, enum dma_data_direction direction,
+ 		unsigned long flags);
+ 
++     struct dma_async_tx_descriptor *dmaengine_prep_config_sg(
++		struct dma_chan *chan, struct scatterlist *sgl,
++		unsigned int sg_len, enum dma_transfer_direction dir,
++		unsigned long flags, struct dma_slave_config *config);
++
+      struct dma_async_tx_descriptor *dmaengine_prep_peripheral_dma_vec(
+ 		struct dma_chan *chan, const struct dma_vec *vecs,
+ 		size_t nents, enum dma_data_direction direction,
+diff --git a/include/linux/dmaengine.h b/include/linux/dmaengine.h
+index b3d251c9734e..defa377d2ef5 100644
+--- a/include/linux/dmaengine.h
++++ b/include/linux/dmaengine.h
+@@ -835,6 +835,7 @@ struct dma_filter {
+  *	where the address and size of each segment is located in one entry of
+  *	the dma_vec array.
+  * @device_prep_slave_sg: prepares a slave dma operation
++ * @device_prep_config_sg: prepares a slave DMA operation with dma_slave_config
+  * @device_prep_dma_cyclic: prepare a cyclic dma operation suitable for audio.
+  *	The function takes a buffer of size buf_len. The callback function will
+  *	be called after period_len bytes have been transferred.
+@@ -934,6 +935,10 @@ struct dma_device {
+ 		struct dma_chan *chan, struct scatterlist *sgl,
+ 		unsigned int sg_len, enum dma_transfer_direction direction,
+ 		unsigned long flags, void *context);
++	struct dma_async_tx_descriptor *(*device_prep_config_sg)(
++		struct dma_chan *chan, struct scatterlist *sgl,
++		unsigned int sg_len, enum dma_transfer_direction direction,
++		unsigned long flags, struct dma_slave_config *config);
+ 	struct dma_async_tx_descriptor *(*device_prep_dma_cyclic)(
+ 		struct dma_chan *chan, dma_addr_t buf_addr, size_t buf_len,
+ 		size_t period_len, enum dma_transfer_direction direction,
+@@ -974,22 +979,44 @@ static inline bool is_slave_direction(enum dma_transfer_direction direction)
+ 	       (direction == DMA_DEV_TO_DEV);
+ }
+ 
+-static inline struct dma_async_tx_descriptor *dmaengine_prep_slave_single(
+-	struct dma_chan *chan, dma_addr_t buf, size_t len,
+-	enum dma_transfer_direction dir, unsigned long flags)
++static inline struct dma_async_tx_descriptor *
++dmaengine_prep_config_single(struct dma_chan *chan, dma_addr_t buf, size_t len,
++			     enum dma_transfer_direction dir,
++			     unsigned long flags,
++			     struct dma_slave_config *config)
+ {
+ 	struct scatterlist sg;
++
++	if (!chan || !chan->device)
++		return NULL;
++
+ 	sg_init_table(&sg, 1);
+ 	sg_dma_address(&sg) = buf;
+ 	sg_dma_len(&sg) = len;
+ 
+-	if (!chan || !chan->device || !chan->device->device_prep_slave_sg)
++	if (chan->device->device_prep_config_sg)
++		return chan->device->device_prep_config_sg(chan, &sg, 1, dir,
++							   flags, config);
++
++	if (config)
++		if (dmaengine_slave_config(chan, config))
++			return NULL;
++
++	if (!chan->device->device_prep_slave_sg)
+ 		return NULL;
+ 
+ 	return chan->device->device_prep_slave_sg(chan, &sg, 1,
+ 						  dir, flags, NULL);
+ }
+ 
++static inline struct dma_async_tx_descriptor *
++dmaengine_prep_slave_single(struct dma_chan *chan, dma_addr_t buf, size_t len,
++			    enum dma_transfer_direction dir,
++			    unsigned long flags)
++{
++	return dmaengine_prep_config_single(chan, buf, len, dir, flags, NULL);
++}
++
+ /**
+  * dmaengine_prep_peripheral_dma_vec() - Prepare a DMA scatter-gather descriptor
+  * @chan: The channel to be used for this descriptor
+@@ -1010,17 +1037,37 @@ static inline struct dma_async_tx_descriptor *dmaengine_prep_peripheral_dma_vec(
+ 							    dir, flags);
+ }
+ 
+-static inline struct dma_async_tx_descriptor *dmaengine_prep_slave_sg(
+-	struct dma_chan *chan, struct scatterlist *sgl,	unsigned int sg_len,
+-	enum dma_transfer_direction dir, unsigned long flags)
++static inline struct dma_async_tx_descriptor *
++dmaengine_prep_config_sg(struct dma_chan *chan, struct scatterlist *sgl,
++			 unsigned int sg_len, enum dma_transfer_direction dir,
++			 unsigned long flags, struct dma_slave_config *config)
+ {
+-	if (!chan || !chan->device || !chan->device->device_prep_slave_sg)
++	if (!chan || !chan->device)
++		return NULL;
++
++	if (chan->device->device_prep_config_sg)
++		return chan->device->device_prep_config_sg(chan, sgl, sg_len,
++				dir, flags, config);
++
++	if (config)
++		if (dmaengine_slave_config(chan, config))
++			return NULL;
++
++	if (!chan->device->device_prep_slave_sg)
+ 		return NULL;
+ 
+ 	return chan->device->device_prep_slave_sg(chan, sgl, sg_len,
+ 						  dir, flags, NULL);
+ }
+ 
++static inline struct dma_async_tx_descriptor *
++dmaengine_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
++			unsigned int sg_len, enum dma_transfer_direction dir,
++			unsigned long flags)
++{
++	return dmaengine_prep_config_sg(chan, sgl, sg_len, dir, flags, NULL);
++}
++
+ #ifdef CONFIG_RAPIDIO_DMA_ENGINE
+ struct rio_dma_ext;
+ static inline struct dma_async_tx_descriptor *dmaengine_prep_rio_sg(
+-- 
+2.55.0
+

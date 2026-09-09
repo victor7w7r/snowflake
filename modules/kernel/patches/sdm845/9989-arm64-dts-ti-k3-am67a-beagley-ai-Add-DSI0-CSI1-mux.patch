@@ -1,0 +1,60 @@
+From 7859b66bfaac20198805fa6d69f477888e14a09e Mon Sep 17 00:00:00 2001
+From: Jai Luthra <jai.luthra@ideasonboard.com>
+Date: Tue, 2 Jun 2026 18:29:28 +0530
+Subject: [PATCH 09989/15333] arm64: dts: ti: k3-am67a-beagley-ai: Add
+ DSI0/CSI1 mux
+
+The DSI0 connector is shared with the CSI1 and selectable via the
+TMUX646 switch present on the board. Model it using a gpio-mux so that
+camera sensor or DSI panel overlays can override it.
+
+Link: https://docs.beagle.cc/boards/beagley/ai/03-design.html#dsi
+Reviewed-by: Rishikesh Donadkar <r-donadkar@ti.com>
+Signed-off-by: Jai Luthra <jai.luthra@ideasonboard.com>
+Link: https://patch.msgid.link/20260602-beagley-cameras-v3-2-fe6ae35b7eda@ideasonboard.com
+Signed-off-by: Vignesh Raghavendra <vigneshr@ti.com>
+---
+ .../arm64/boot/dts/ti/k3-am67a-beagley-ai.dts | 20 +++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/ti/k3-am67a-beagley-ai.dts b/arch/arm64/boot/dts/ti/k3-am67a-beagley-ai.dts
+index 890d3a745375..bb1db8c6a91f 100644
+--- a/arch/arm64/boot/dts/ti/k3-am67a-beagley-ai.dts
++++ b/arch/arm64/boot/dts/ti/k3-am67a-beagley-ai.dts
+@@ -146,6 +146,19 @@ led-1 {
+ 			default-state = "on";
+ 		};
+ 	};
++
++	dsi_csi_mux: mux-controller {
++		compatible = "gpio-mux";
++		#mux-state-cells = <1>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&dsi_csi_mux_pins_default>;
++
++		mux-gpios = <&main_gpio0 2 GPIO_ACTIVE_HIGH>,
++			    <&main_gpio0 1 GPIO_ACTIVE_HIGH>;
++
++		/* state = SEL + 2*OE : 0 = DSI0, 1 = CSI1, 2,3 = off */
++		idle-state = <2>;
++	};
+ };
+ 
+ &main_pmx0 {
+@@ -199,6 +212,13 @@ J722S_IOPAD(0x015c, PIN_INPUT, 0) /* (AD25) MDIO0_MDIO */
+ 		>;
+ 	};
+ 
++	dsi_csi_mux_pins_default: dsi-csi-mux-default-pins {
++		pinctrl-single,pins = <
++			J722S_IOPAD(0x0004, PIN_OUTPUT, 7) /* (L23) OSPI0_LBCLKO.GPIO0_1 */
++			J722S_IOPAD(0x0008, PIN_OUTPUT, 7) /* (L22) OSPI0_DQS.GPIO0_2 */
++		>;
++	};
++
+ 	rgmii1_pins_default: rgmii1-default-pins {
+ 		pinctrl-single,pins = <
+ 			J722S_IOPAD(0x014c, PIN_INPUT, 0) /* (AC25) RGMII1_RD0 */
+-- 
+2.55.0
+

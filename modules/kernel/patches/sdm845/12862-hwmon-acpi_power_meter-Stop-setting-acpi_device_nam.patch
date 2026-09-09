@@ -1,0 +1,60 @@
+From 2d2f6ce9f84abbad27387c4629211135fea66836 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Mon, 6 Jul 2026 14:35:51 +0200
+Subject: [PATCH 12862/15333] hwmon: (acpi_power_meter) Stop setting
+ acpi_device_name/class()
+
+The driver populates acpi_device_name() and acpi_device_class() that are
+never read afterward, so make it stop doing that and drop the symbols
+defined for this purpose.
+
+Since ACPI_POWER_METER_CLASS is also used for generating ACPI netlink
+events, use the "pwr_meter_resource" string literal directly instead of
+it for that.
+
+No intentional functional impact.
+
+This will facilitate the removal of device_name and device_class from
+struct acpi_device_pnp in the future.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Link: https://lore.kernel.org/r/2297496.irdbgypaU6@rafael.j.wysocki
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/hwmon/acpi_power_meter.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/drivers/hwmon/acpi_power_meter.c b/drivers/hwmon/acpi_power_meter.c
+index 0c9b9f4180fb..8a539e8d1334 100644
+--- a/drivers/hwmon/acpi_power_meter.c
++++ b/drivers/hwmon/acpi_power_meter.c
+@@ -21,8 +21,6 @@
+ #include <linux/platform_device.h>
+ 
+ #define ACPI_POWER_METER_NAME		"power_meter"
+-#define ACPI_POWER_METER_DEVICE_NAME	"Power Meter"
+-#define ACPI_POWER_METER_CLASS		"pwr_meter_resource"
+ 
+ #define NUM_SENSORS			17
+ 
+@@ -877,7 +875,7 @@ static void acpi_power_meter_notify(acpi_handle handle, u32 event, void *data)
+ 		break;
+ 	}
+ 
+-	acpi_bus_generate_netlink_event(ACPI_POWER_METER_CLASS,
++	acpi_bus_generate_netlink_event("pwr_meter_resource",
+ 					dev_name(&resource->acpi_dev->dev),
+ 					event, 0);
+ }
+@@ -899,8 +897,6 @@ static int acpi_power_meter_probe(struct platform_device *pdev)
+ 	resource->sensors_valid = 0;
+ 	resource->acpi_dev = device;
+ 	mutex_init(&resource->lock);
+-	strscpy(acpi_device_name(device), ACPI_POWER_METER_DEVICE_NAME);
+-	strscpy(acpi_device_class(device), ACPI_POWER_METER_CLASS);
+ 
+ 	platform_set_drvdata(pdev, resource);
+ 
+-- 
+2.55.0
+

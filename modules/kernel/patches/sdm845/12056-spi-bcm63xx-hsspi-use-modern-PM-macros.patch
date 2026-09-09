@@ -1,0 +1,58 @@
+From 408ba1d06ee1c0e413ed841532074222e82621f2 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:30 +0800
+Subject: [PATCH 12056/15333] spi: bcm63xx-hsspi: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use #ifdef guards.
+
+This has the advantage of always compiling these functions in,
+independently of any Kconfig option. Thanks to that, bugs and other
+regressions are subsequently easier to catch.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Acked-by: William Zhang <william.zhang@broadcom.com>
+Link: https://patch.msgid.link/20260803142003.12857-7-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-bcm63xx-hsspi.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/spi/spi-bcm63xx-hsspi.c b/drivers/spi/spi-bcm63xx-hsspi.c
+index 37b3534d0b0a..b0b65783265f 100644
+--- a/drivers/spi/spi-bcm63xx-hsspi.c
++++ b/drivers/spi/spi-bcm63xx-hsspi.c
+@@ -884,7 +884,6 @@ static void bcm63xx_hsspi_remove(struct platform_device *pdev)
+ 	sysfs_remove_group(&pdev->dev.kobj, &bcm63xx_hsspi_group);
+ }
+ 
+-#ifdef CONFIG_PM_SLEEP
+ static int bcm63xx_hsspi_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+@@ -923,10 +922,9 @@ static int bcm63xx_hsspi_resume(struct device *dev)
+ 
+ 	return 0;
+ }
+-#endif
+ 
+-static SIMPLE_DEV_PM_OPS(bcm63xx_hsspi_pm_ops, bcm63xx_hsspi_suspend,
+-			 bcm63xx_hsspi_resume);
++static DEFINE_SIMPLE_DEV_PM_OPS(bcm63xx_hsspi_pm_ops, bcm63xx_hsspi_suspend,
++				bcm63xx_hsspi_resume);
+ 
+ static const struct of_device_id bcm63xx_hsspi_of_match[] = {
+ 	{ .compatible = "brcm,bcm6328-hsspi", },
+@@ -938,7 +936,7 @@ MODULE_DEVICE_TABLE(of, bcm63xx_hsspi_of_match);
+ static struct platform_driver bcm63xx_hsspi_driver = {
+ 	.driver = {
+ 		.name	= "bcm63xx-hsspi",
+-		.pm	= &bcm63xx_hsspi_pm_ops,
++		.pm	= pm_sleep_ptr(&bcm63xx_hsspi_pm_ops),
+ 		.of_match_table = bcm63xx_hsspi_of_match,
+ 	},
+ 	.probe		= bcm63xx_hsspi_probe,
+-- 
+2.55.0
+

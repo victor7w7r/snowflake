@@ -1,0 +1,71 @@
+From dd55a3a9a7a808257bb5d4a1208a814f10107b6b Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 14 Jul 2026 21:58:06 +0200
+Subject: [PATCH 09937/15333] exec: stash bpf-selected interpreter state in
+ struct linux_binprm
+
+The upcoming bpf-backed binfmt_misc handlers decide how a binary is run
+programmatically at exec time: the interpreter itself, an optional
+single argument to pass to it, and the invocation flags that a static
+binfmt_misc entry fixes at registration time. The selection runs before
+load_misc_binary() has copied the binary path from bprm->interp into
+the argument vector, so the selecting program cannot go through
+bprm_change_interp() directly without clobbering argv[1].
+
+Stage the selected state in the bprm instead, grouped in struct
+binfmt_misc_bpf and embedded anonymously in struct linux_binprm so the
+bprm->bpf_* accesses stay direct. The bprm is exclusively owned by the
+task doing the exec so no synchronization is needed. The consumers
+free and clear the fields once the exec attempt that set them is
+finished; free_bprm() covers all error paths.
+
+Link: https://patch.msgid.link/20260714-work-bpf-binfmt_misc-v2-1-57b7529c002c@kernel.org
+Reviewed-by: Farid Zakaria <farid.m.zakaria@gmail.com>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/exec.c               | 2 ++
+ include/linux/binfmts.h | 8 ++++++++
+ 2 files changed, 10 insertions(+)
+
+diff --git a/fs/exec.c b/fs/exec.c
+index c7b8f2d6366c..41e1684d999c 100644
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1418,6 +1418,8 @@ static void free_bprm(struct linux_binprm *bprm)
+ 	/* If a binfmt changed the interp, free it. */
+ 	if (bprm->interp != bprm->filename)
+ 		kfree(bprm->interp);
++	kfree(bprm->bpf_interp);
++	kfree(bprm->bpf_interp_arg);
+ 	kfree(bprm->fdpath);
+ 	kfree(bprm);
+ }
+diff --git a/include/linux/binfmts.h b/include/linux/binfmts.h
+index 7e7333b7bb0f..03e1794b5cbb 100644
+--- a/include/linux/binfmts.h
++++ b/include/linux/binfmts.h
+@@ -12,6 +12,13 @@ struct coredump_params;
+ 
+ #define CORENAME_MAX_SIZE 128
+ 
++/* Interpreter selection staged by a bpf binfmt_misc handler. */
++struct binfmt_misc_bpf {
++	const char *bpf_interp;		/* interpreter selected by a bpf handler */
++	const char *bpf_interp_arg;	/* interpreter argument from a bpf handler */
++	u64 bpf_flags;			/* enum bpf_binprm_flags from a bpf handler */
++};
++
+ /*
+  * This structure is used to hold the arguments that are used when loading binaries.
+  */
+@@ -65,6 +72,7 @@ struct linux_binprm {
+ 				   of the time same as filename, but could be
+ 				   different for binfmt_{misc,script} */
+ 	const char *fdpath;	/* generated filename for execveat */
++	struct binfmt_misc_bpf;	/* bpf handler interpreter selection */
+ 	unsigned interp_flags;
+ 	int execfd;		/* File descriptor of the executable */
+ 	unsigned long exec;
+-- 
+2.55.0
+

@@ -1,0 +1,347 @@
+From 7f8029591bed054aceba18ca333e6ab20064441f Mon Sep 17 00:00:00 2001
+From: Namjae Jeon <linkinjeon@kernel.org>
+Date: Tue, 14 Jul 2026 21:41:06 +0900
+Subject: [PATCH 14317/15333] ksmbd: synchronize lease breaks before renaming
+ files
+
+Break read and handle caching leases before entering the VFS rename path.
+This keeps the destination name hidden until the lease holder acknowledges
+the break.
+
+Send the break synchronously before returning STATUS_PENDING for a rename.
+This avoids a race between the interim response and notification handling.
+Keep the existing asynchronous notification flow for all other lease break
+paths so chained breaks retain their ordering.
+
+Use the connection which owns the open for the notification.  A lease table
+is shared by connections using the same client GUID.  Its saved connection
+may belong to another active channel.  Use it only when the owning channel
+is being released.
+
+Check directory sharing before issuing a break to avoid unnecessary lease
+breaks for a rename that must fail with a sharing violation.
+
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/oplock.c  | 73 +++++++++++++++++++++++++----------------
+ fs/smb/server/oplock.h  |  3 +-
+ fs/smb/server/smb2pdu.c |  7 ++--
+ fs/smb/server/vfs.c     | 38 +++++++++++++--------
+ fs/smb/server/vfs.h     |  4 ++-
+ 5 files changed, 78 insertions(+), 47 deletions(-)
+
+diff --git a/fs/smb/server/oplock.c b/fs/smb/server/oplock.c
+index 5b46af94cd82..74bd2fadc757 100644
+--- a/fs/smb/server/oplock.c
++++ b/fs/smb/server/oplock.c
+@@ -994,22 +994,28 @@ static void __smb2_lease_break_noti(struct work_struct *wk)
+  * smb2_lease_break_noti() - break lease when a new client request
+  *			write lease
+  * @opinfo:		contains lease state information
+- * @wait_ack:		wait for lease break acknowledgment from the client
++ * @sync:		send the lease break notification synchronously
+  * @inc_epoch:		increment the lease epoch before sending the break
+  *
+  * Return:	0 on success, otherwise error
+  */
+-static int smb2_lease_break_noti(struct oplock_info *opinfo, bool wait_ack,
++static int smb2_lease_break_noti(struct oplock_info *opinfo, bool sync,
+ 				 bool inc_epoch)
+ {
+ 	struct ksmbd_conn *conn;
+ 	struct ksmbd_work *work;
+ 	struct lease_break_info *br_info;
+ 	struct lease *lease = opinfo->o_lease;
+-	int ret = 0;
+ 
+ 	conn = READ_ONCE(opinfo->conn);
+-	if (lease->version == 2 && lease->l_lb && lease->l_lb->conn &&
++	/*
++	 * Keep a break on the channel which owns this open.  A lease table is
++	 * shared by connections with the same client GUID, so its connection
++	 * can belong to another active channel.  Only use it after the owning
++	 * channel is being released.
++	 */
++	if ((!conn || ksmbd_conn_releasing(conn)) && lease->version == 2 &&
++	    lease->l_lb && lease->l_lb->conn &&
+ 	    !ksmbd_conn_releasing(lease->l_lb->conn))
+ 		conn = lease->l_lb->conn;
+ 	if (!conn)
+@@ -1042,11 +1048,11 @@ static int smb2_lease_break_noti(struct oplock_info *opinfo, bool wait_ack,
+ 
+ 	ksmbd_conn_r_count_inc(conn);
+ 	if (opinfo->op_state == OPLOCK_ACK_WAIT) {
+-		INIT_WORK(&work->work, __smb2_lease_break_noti);
+-		ksmbd_queue_work(work);
+-		if (wait_ack) {
+-			if (wait_for_break_ack(opinfo))
+-				ret = ksmbd_invalidate_durable_fd(opinfo->fid);
++		if (sync) {
++			__smb2_lease_break_noti(&work->work);
++		} else {
++			INIT_WORK(&work->work, __smb2_lease_break_noti);
++			ksmbd_queue_work(work);
+ 		}
+ 	} else {
+ 		__smb2_lease_break_noti(&work->work);
+@@ -1055,7 +1061,7 @@ static int smb2_lease_break_noti(struct oplock_info *opinfo, bool wait_ack,
+ 			lease_update_oplock_levels(opinfo->o_lease);
+ 		}
+ 	}
+-	return ret;
++	return 0;
+ }
+ 
+ static void wait_lease_breaking(struct oplock_info *opinfo)
+@@ -1076,7 +1082,8 @@ static void wait_lease_breaking(struct oplock_info *opinfo)
+ }
+ 
+ static int oplock_break(struct oplock_info *brk_opinfo, int req_op_level,
+-			struct ksmbd_work *in_work, bool share_break)
++			struct ksmbd_work *in_work, bool share_break,
++			bool sync_lease_break)
+ {
+ 	int err = 0;
+ 	bool sent_interim = false;
+@@ -1137,13 +1144,6 @@ static int oplock_break(struct oplock_info *brk_opinfo, int req_op_level,
+ 			}
+ 		}
+ 
+-		if (in_work && !sent_interim) {
+-			setup_async_work(in_work, NULL, NULL);
+-			smb2_send_interim_resp(in_work, STATUS_PENDING);
+-			release_async_work(in_work);
+-			sent_interim = true;
+-		}
+-
+ 		if (lease->state & (SMB2_LEASE_WRITE_CACHING_LE |
+ 				SMB2_LEASE_HANDLE_CACHING_LE)) {
+ 			brk_opinfo->op_state = OPLOCK_ACK_WAIT;
+@@ -1157,8 +1157,16 @@ static int oplock_break(struct oplock_info *brk_opinfo, int req_op_level,
+ 			inc_epoch = false;
+ 			lease->reuse_epoch = false;
+ 		}
+-		err = smb2_lease_break_noti(brk_opinfo, wait_ack, inc_epoch);
++		err = smb2_lease_break_noti(brk_opinfo, sync_lease_break, inc_epoch);
+ 		inc_epoch = false;
++		if (in_work && !sent_interim) {
++			setup_async_work(in_work, NULL, NULL);
++			smb2_send_interim_resp(in_work, STATUS_PENDING);
++			release_async_work(in_work);
++			sent_interim = true;
++		}
++		if (wait_ack && !err && wait_for_break_ack(brk_opinfo))
++			err = ksmbd_invalidate_durable_fd(brk_opinfo->fid);
+ 
+ 		ksmbd_debug(OPLOCK, "oplock granted = %d\n", brk_opinfo->level);
+ 		if (brk_opinfo->op_state == OPLOCK_CLOSING)
+@@ -1230,7 +1238,8 @@ static void oplock_break_drain_none(struct list_head *head)
+ 	struct oplock_break_entry *ent, *tmp;
+ 
+ 	list_for_each_entry_safe(ent, tmp, head, list) {
+-		oplock_break(ent->opinfo, SMB2_OPLOCK_LEVEL_NONE, NULL, false);
++		oplock_break(ent->opinfo, SMB2_OPLOCK_LEVEL_NONE, NULL, false,
++			     false);
+ 		list_del(&ent->list);
+ 		opinfo_put(ent->opinfo);
+ 		kfree(ent);
+@@ -1547,7 +1556,7 @@ int smb_grant_oplock(struct ksmbd_work *work, int req_op_level, u64 pid,
+ 	prev_fid = prev_op_snapshot.fid;
+ 
+ 	err = oplock_break(prev_opinfo, break_level, work,
+-			   share_ret < 0 && prev_opinfo->is_lease);
++			   share_ret < 0 && prev_opinfo->is_lease, false);
+ 	if (prev_durable_detached || (prev_durable_open && err == -ENOENT))
+ 		ksmbd_invalidate_durable_fd(prev_fid);
+ 	opinfo_put(prev_opinfo);
+@@ -1645,7 +1654,7 @@ static bool smb_break_all_write_oplock(struct ksmbd_work *work,
+ 	}
+ 
+ 	brk_opinfo->open_trunc = is_trunc;
+-	oplock_break(brk_opinfo, SMB2_OPLOCK_LEVEL_II, work, false);
++	oplock_break(brk_opinfo, SMB2_OPLOCK_LEVEL_II, work, false, false);
+ 	sent_break = true;
+ 	opinfo_put(brk_opinfo);
+ 
+@@ -1660,10 +1669,12 @@ static bool smb_break_all_write_oplock(struct ksmbd_work *work,
+  * @is_trunc:		truncate on open
+  * @send_interim:	send interim response to the client
+  * @send_oplock_break:	send oplock break notification to the client
++ * @sync_lease_break:	send the lease break notification synchronously
+  */
+ static void __smb_break_all_levII_oplock(struct ksmbd_work *work,
+ 					 struct ksmbd_file *fp, int is_trunc,
+-					 bool send_interim, bool send_oplock_break)
++					 bool send_interim, bool send_oplock_break,
++					 bool sync_lease_break)
+ {
+ 	struct oplock_info *op, *brk_op;
+ 	struct oplock_break_entry *ent, *tmp;
+@@ -1736,7 +1747,7 @@ static void __smb_break_all_levII_oplock(struct ksmbd_work *work,
+ 				     brk_op->is_lease && !is_trunc ?
+ 				     SMB2_OPLOCK_LEVEL_II : SMB2_OPLOCK_LEVEL_NONE,
+ 				     send_interim && !sent_interim ? work : NULL,
+-				     false);
++				     false, sync_lease_break);
+ 		}
+ 		sent_interim = true;
+ 		list_del(&ent->list);
+@@ -1751,19 +1762,24 @@ static void __smb_break_all_levII_oplock(struct ksmbd_work *work,
+ void smb_break_all_levII_oplock(struct ksmbd_work *work, struct ksmbd_file *fp,
+ 				int is_trunc)
+ {
+-	__smb_break_all_levII_oplock(work, fp, is_trunc, true, true);
++	__smb_break_all_levII_oplock(work, fp, is_trunc, true, true, false);
++}
++
++void smb_break_all_levII_oplock_rename(struct ksmbd_work *work, struct ksmbd_file *fp)
++{
++	__smb_break_all_levII_oplock(work, fp, 0, true, true, true);
+ }
+ 
+ void smb_break_all_levII_oplock_no_interim(struct ksmbd_work *work,
+ 					   struct ksmbd_file *fp, int is_trunc)
+ {
+-	__smb_break_all_levII_oplock(work, fp, is_trunc, false, true);
++	__smb_break_all_levII_oplock(work, fp, is_trunc, false, true, false);
+ }
+ 
+ void smb_break_all_levII_oplock_for_delete(struct ksmbd_work *work,
+ 					   struct ksmbd_file *fp)
+ {
+-	__smb_break_all_levII_oplock(work, fp, 0, false, false);
++	__smb_break_all_levII_oplock(work, fp, 0, false, false, false);
+ }
+ 
+ /**
+@@ -1780,7 +1796,7 @@ void smb_break_all_oplock(struct ksmbd_work *work, struct ksmbd_file *fp)
+ 		return;
+ 
+ 	sent_break = smb_break_all_write_oplock(work, fp, 1);
+-	__smb_break_all_levII_oplock(work, fp, 1, !sent_break, true);
++	__smb_break_all_levII_oplock(work, fp, 1, !sent_break, true, false);
+ }
+ 
+ /**
+@@ -2271,7 +2287,6 @@ struct oplock_info *lookup_lease_in_table(struct ksmbd_conn *conn,
+ 			if (!atomic_inc_not_zero(&opinfo->refcount))
+ 				continue;
+ 			ret_op = opinfo;
+-			break;
+ 		}
+ 		spin_unlock(&lease->lock);
+ 		if (ret_op) {
+diff --git a/fs/smb/server/oplock.h b/fs/smb/server/oplock.h
+index aef296b21395..ee1550f5c177 100644
+--- a/fs/smb/server/oplock.h
++++ b/fs/smb/server/oplock.h
+@@ -98,7 +98,8 @@ int smb_grant_oplock(struct ksmbd_work *work, int req_op_level,
+ 		     u64 pid, struct ksmbd_file *fp, __u16 tid,
+ 		     struct lease_ctx_info *lctx, int share_ret);
+ void smb_break_all_levII_oplock(struct ksmbd_work *work,
+-				struct ksmbd_file *fp, int is_trunc);
++					struct ksmbd_file *fp, int is_trunc);
++void smb_break_all_levII_oplock_rename(struct ksmbd_work *work, struct ksmbd_file *fp);
+ void smb_break_all_levII_oplock_no_interim(struct ksmbd_work *work,
+ 					   struct ksmbd_file *fp, int is_trunc);
+ void smb_break_all_levII_oplock_for_delete(struct ksmbd_work *work,
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index 91abbb90f262..685746c2b501 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -7135,9 +7135,12 @@ static int smb2_rename(struct ksmbd_work *work,
+ 	if (!file_info->ReplaceIfExists)
+ 		flags = RENAME_NOREPLACE;
+ 
++	rc = ksmbd_vfs_check_rename_share(work, &fp->filp->f_path);
++	if (rc)
++		goto out;
++
++	smb_break_all_levII_oplock_rename(work, fp);
+ 	rc = ksmbd_vfs_rename(work, &fp->filp->f_path, new_name, flags);
+-	if (!rc)
+-		smb_break_all_levII_oplock(work, fp, 0);
+ out:
+ 	kfree(new_name);
+ 	return rc;
+diff --git a/fs/smb/server/vfs.c b/fs/smb/server/vfs.c
+index 33d47f9f1d69..854a09020a97 100644
+--- a/fs/smb/server/vfs.c
++++ b/fs/smb/server/vfs.c
+@@ -658,15 +658,34 @@ int ksmbd_vfs_link(struct ksmbd_work *work, const char *oldname,
+ 	return err;
+ }
+ 
++int ksmbd_vfs_check_rename_share(struct ksmbd_work *work,
++				 const struct path *old_path)
++{
++	struct ksmbd_file *parent_fp;
++	int err = 0;
++
++	parent_fp = ksmbd_lookup_fd_inode(old_path->dentry->d_parent);
++	if (!parent_fp)
++		return 0;
++
++	if ((parent_fp->daccess & FILE_DELETE_LE) ||
++	    (!parent_fp->attrib_only &&
++	     !(parent_fp->saccess & FILE_SHARE_DELETE_LE))) {
++		ksmbd_debug(VFS, "parent dir blocks delete sharing\n");
++		err = -ESHARE;
++	}
++	ksmbd_fd_put(work, parent_fp);
++	return err;
++}
++
+ int ksmbd_vfs_rename(struct ksmbd_work *work, const struct path *old_path,
+-		     char *newname, int flags)
++			     char *newname, int flags)
+ {
+ 	struct dentry *old_child = old_path->dentry;
+ 	struct path new_path;
+ 	struct qstr new_last;
+ 	struct renamedata rd;
+ 	struct ksmbd_share_config *share_conf = work->tcon->share_conf;
+-	struct ksmbd_file *parent_fp;
+ 	int err, lookup_flags = LOOKUP_NO_SYMLINKS;
+ 
+ 	if (ksmbd_override_fsids(work))
+@@ -704,18 +723,9 @@ int ksmbd_vfs_rename(struct ksmbd_work *work, const struct path *old_path,
+ 		goto out3;
+ 	}
+ 
+-	parent_fp = ksmbd_lookup_fd_inode(old_child->d_parent);
+-	if (parent_fp) {
+-		if ((parent_fp->daccess & FILE_DELETE_LE) ||
+-		    (!parent_fp->attrib_only &&
+-		     !(parent_fp->saccess & FILE_SHARE_DELETE_LE))) {
+-			pr_err("parent dir blocks delete sharing\n");
+-			err = -ESHARE;
+-			ksmbd_fd_put(work, parent_fp);
+-			goto out3;
+-		}
+-		ksmbd_fd_put(work, parent_fp);
+-	}
++	err = ksmbd_vfs_check_rename_share(work, old_path);
++	if (err)
++		goto out3;
+ 
+ 	if (d_is_symlink(rd.new_dentry)) {
+ 		err = -EACCES;
+diff --git a/fs/smb/server/vfs.h b/fs/smb/server/vfs.h
+index 022b78268a7e..10cb37a78c0d 100644
+--- a/fs/smb/server/vfs.h
++++ b/fs/smb/server/vfs.h
+@@ -89,7 +89,9 @@ int ksmbd_vfs_link(struct ksmbd_work *work,
+ 		   const char *oldname, const char *newname);
+ int ksmbd_vfs_getattr(const struct path *path, struct kstat *stat);
+ int ksmbd_vfs_rename(struct ksmbd_work *work, const struct path *old_path,
+-		     char *newname, int flags);
++			     char *newname, int flags);
++int ksmbd_vfs_check_rename_share(struct ksmbd_work *work,
++				 const struct path *old_path);
+ int ksmbd_vfs_truncate(struct ksmbd_work *work,
+ 		       struct ksmbd_file *fp, loff_t size);
+ struct srv_copychunk;
+-- 
+2.55.0
+

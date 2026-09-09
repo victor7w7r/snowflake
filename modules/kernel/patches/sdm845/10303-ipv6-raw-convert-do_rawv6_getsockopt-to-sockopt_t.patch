@@ -1,0 +1,91 @@
+From 8472b68c2497922c94ff820f95f73d491e0c6a13 Mon Sep 17 00:00:00 2001
+From: Breno Leitao <leitao@debian.org>
+Date: Wed, 29 Jul 2026 02:29:45 -0700
+Subject: [PATCH 10303/15333] ipv6: raw: convert do_rawv6_getsockopt to
+ sockopt_t
+
+Convert do_rawv6_getsockopt to the new sockopt_t model, mirroring what
+we have in ipv4. The overall goal is to move these callbacks gradually
+from __user points to use sockopt_t, and this part touches
+do_rawv6_getsockopt.
+
+No functional change.
+
+Reviewed-by: Joe Damato <joe@dama.to>
+Acked-by: Stanislav Fomichev <sdf@fomichev.me>
+Signed-off-by: Breno Leitao <leitao@debian.org>
+Link: https://patch.msgid.link/20260729-getsockopt_phase4-v4-2-c44576757c17@debian.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/ipv6/raw.c | 29 ++++++++++++++++++++---------
+ 1 file changed, 20 insertions(+), 9 deletions(-)
+
+diff --git a/net/ipv6/raw.c b/net/ipv6/raw.c
+index cb109ac956cb..b965258cf9e5 100644
+--- a/net/ipv6/raw.c
++++ b/net/ipv6/raw.c
+@@ -1051,14 +1051,12 @@ static int rawv6_setsockopt(struct sock *sk, int level, int optname,
+ 	return do_rawv6_setsockopt(sk, level, optname, optval, optlen);
+ }
+ 
+-static int do_rawv6_getsockopt(struct sock *sk, int optname,
+-			       char __user *optval, int __user *optlen)
++static int do_rawv6_getsockopt(struct sock *sk, int optname, sockopt_t *opt)
+ {
+ 	struct raw6_sock *rp = raw6_sk(sk);
+ 	int val, len;
+ 
+-	if (get_user(len, optlen))
+-		return -EFAULT;
++	len = opt->optlen;
+ 
+ 	switch (optname) {
+ 	case IPV6_HDRINCL:
+@@ -1080,11 +1078,10 @@ static int do_rawv6_getsockopt(struct sock *sk, int optname,
+ 		return -ENOPROTOOPT;
+ 	}
+ 
+-	len = min_t(unsigned int, sizeof(int), len);
++	len = umin(sizeof(int), len);
+ 
+-	if (put_user(len, optlen))
+-		return -EFAULT;
+-	if (copy_to_user(optval, &val, len))
++	opt->optlen = len;
++	if (copy_to_iter(&val, len, &opt->iter_out) != len)
+ 		return -EFAULT;
+ 	return 0;
+ }
+@@ -1092,6 +1089,9 @@ static int do_rawv6_getsockopt(struct sock *sk, int optname,
+ static int rawv6_getsockopt(struct sock *sk, int level, int optname,
+ 			  char __user *optval, int __user *optlen)
+ {
++	sockopt_t opt;
++	int err;
++
+ 	switch (level) {
+ 	case SOL_RAW:
+ 		break;
+@@ -1109,7 +1109,18 @@ static int rawv6_getsockopt(struct sock *sk, int level, int optname,
+ 		return ipv6_getsockopt(sk, level, optname, optval, optlen);
+ 	}
+ 
+-	return do_rawv6_getsockopt(sk, optname, optval, optlen);
++	err = sockopt_init_user(&opt, optval, optlen);
++	if (err)
++		return err;
++
++	err = do_rawv6_getsockopt(sk, optname, &opt);
++	if (err)
++		return err;
++
++	if (put_user(opt.optlen, optlen))
++		return -EFAULT;
++
++	return 0;
+ }
+ 
+ static int rawv6_ioctl(struct sock *sk, int cmd, int *karg)
+-- 
+2.55.0
+

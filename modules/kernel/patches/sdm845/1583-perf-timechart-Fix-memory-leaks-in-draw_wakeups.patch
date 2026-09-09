@@ -1,0 +1,38 @@
+From fcc9159fc82625bf5f8e8fb5fde48709b631bebe Mon Sep 17 00:00:00 2001
+From: Namhyung Kim <namhyung@kernel.org>
+Date: Wed, 24 Jun 2026 13:58:33 -0700
+Subject: [PATCH 01583/15333] perf timechart: Fix memory leaks in
+ draw_wakeups()
+
+The second loop for per_pidcommd is meaningful only when it doesn't have
+from and to tasks.  Also make sure c->Y is set before copying the comm
+string otherwise it will be overwritten by next one.
+
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/builtin-timechart.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/tools/perf/builtin-timechart.c b/tools/perf/builtin-timechart.c
+index a73f0ab22fd6..3f9153d5ecfb 100644
+--- a/tools/perf/builtin-timechart.c
++++ b/tools/perf/builtin-timechart.c
+@@ -1110,12 +1110,12 @@ static void draw_wakeups(struct timechart *tchart)
+ 					c = c->next;
+ 				}
+ 				c = p->all;
+-				while (c) {
+-					if (p->pid == we->waker && !from) {
++				while (c && (!from || !to)) {
++					if (c->Y && p->pid == we->waker && !from) {
+ 						from = c->Y;
+ 						task_from = strdup(c->comm);
+ 					}
+-					if (p->pid == we->wakee && !to) {
++					if (c->Y && p->pid == we->wakee && !to) {
+ 						to = c->Y;
+ 						task_to = strdup(c->comm);
+ 					}
+-- 
+2.55.0
+

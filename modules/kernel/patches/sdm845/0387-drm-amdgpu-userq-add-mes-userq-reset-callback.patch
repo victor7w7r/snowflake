@@ -1,0 +1,54 @@
+From 5f98f9d1a2d423ef5adcaa6783a351f728b7f373 Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Thu, 30 Apr 2026 12:49:06 -0400
+Subject: [PATCH 00387/15333] drm/amdgpu/userq: add mes userq reset callback
+
+Enable per queue reset for MES managed queues.
+
+Reviewed-by: Jesse Zhang <jesse.zhang@amd.com>
+Reviewed-by: Prike Liang <Prike.Liang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/mes_userqueue.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c b/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
+index 16625c31bfd3..ebcb829f7d04 100644
+--- a/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
++++ b/drivers/gpu/drm/amd/amdgpu/mes_userqueue.c
+@@ -179,6 +179,26 @@ static int mes_userq_unmap(struct amdgpu_usermode_queue *queue)
+ 	return r;
+ }
+ 
++static int mes_userq_reset(struct amdgpu_usermode_queue *queue)
++{
++	struct amdgpu_userq_mgr *uq_mgr = queue->userq_mgr;
++	struct amdgpu_device *adev = uq_mgr->adev;
++	struct mes_reset_queue_input queue_input;
++	int r;
++
++	/* XXX: add a FW version check for SDMA per queue reset */
++	memset(&queue_input, 0x0, sizeof(struct mes_reset_queue_input));
++	queue_input.doorbell_offset = queue->doorbell_index;
++	queue_input.queue_type = queue->queue_type;
++
++	amdgpu_mes_lock(&adev->mes);
++	r = adev->mes.funcs->reset_hw_queue(&adev->mes, &queue_input);
++	amdgpu_mes_unlock(&adev->mes);
++	if (r)
++		return r;
++	return mes_userq_unmap(queue);
++}
++
+ static int mes_userq_create_ctx_space(struct amdgpu_userq_mgr *uq_mgr,
+ 				      struct amdgpu_usermode_queue *queue,
+ 				      struct drm_amdgpu_userq_in *mqd_user)
+@@ -552,4 +572,5 @@ const struct amdgpu_userq_funcs userq_mes_funcs = {
+ 	.detect_and_reset = mes_userq_detect_and_reset,
+ 	.preempt = mes_userq_preempt,
+ 	.restore = mes_userq_restore,
++	.reset = mes_userq_reset,
+ };
+-- 
+2.55.0
+

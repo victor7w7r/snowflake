@@ -1,0 +1,320 @@
+From c03f0b9a7d9966b1846f561e4f49ed481c524a0a Mon Sep 17 00:00:00 2001
+From: Charles Keepax <ckeepax@opensource.cirrus.com>
+Date: Wed, 5 Aug 2026 13:42:00 +0100
+Subject: [PATCH 11254/15333] ASoC: SDCA: Move HID registration to IRQ time
+
+Currently, the SDCA code registers the HID device whilst parsing
+the DisCo information. This necessitates storing the HID device
+in the DisCo structs, which are intended to only store the parsed
+DisCo. Having the HID device registered so early in the process
+also causes some issues with cleaning up.
+
+Update the code to register the HID device as the IRQs are handled,
+this alleviates the previous concerns and brings the support inline
+with the other SDCA event handling.
+
+As part of this move the naming for the SDCA HID is also updated,
+it saves some complexity around the passing of the SoundWire device
+to include this in this patch. Update to using the dev_name for
+the phys, which is more consistent with other HID users, and use
+the actual function name/address for the HID name itself.
+
+Signed-off-by: Charles Keepax <ckeepax@opensource.cirrus.com>
+Reviewed-by: Pierre-Louis Bossart <pierre-louis.bossart@linux.dev>
+Link: https://patch.msgid.link/20260805124205.4152543-4-ckeepax@opensource.cirrus.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/sdca_function.h    |  2 --
+ include/sound/sdca_hid.h         |  6 ++----
+ sound/soc/codecs/rt766-sdca.c    | 22 +++++++++++++++++++---
+ sound/soc/codecs/rt766-sdca.h    |  2 ++
+ sound/soc/sdca/sdca_functions.c  | 24 ++++++------------------
+ sound/soc/sdca/sdca_hid.c        | 21 ++++++++++-----------
+ sound/soc/sdca/sdca_interrupts.c |  4 ++++
+ 7 files changed, 43 insertions(+), 38 deletions(-)
+
+diff --git a/include/sound/sdca_function.h b/include/sound/sdca_function.h
+index fb931ae735a2..35799a977145 100644
+--- a/include/sound/sdca_function.h
++++ b/include/sound/sdca_function.h
+@@ -1116,7 +1116,6 @@ struct sdca_entity_ge {
+ 
+ /**
+  * struct sdca_entity_hide - information specific to HIDE Entities
+- * @hid: HID device structure
+  * @num_hidtx_ids: number of HIDTx Report ID
+  * @num_hidrx_ids: number of HIDRx Report ID
+  * @hidtx_ids: HIDTx Report ID
+@@ -1131,7 +1130,6 @@ struct sdca_entity_ge {
+  * @hid_desc: HID descriptor for the HIDE Entity
+  */
+ struct sdca_entity_hide {
+-	struct hid_device *hid;
+ 	unsigned int *hidtx_ids;
+ 	unsigned int *hidrx_ids;
+ 	int num_hidtx_ids;
+diff --git a/include/sound/sdca_hid.h b/include/sound/sdca_hid.h
+index 18bebbe428c9..83d1c7768133 100644
+--- a/include/sound/sdca_hid.h
++++ b/include/sound/sdca_hid.h
+@@ -16,14 +16,12 @@ struct sdca_interrupt;
+ 
+ #if IS_ENABLED(CONFIG_SND_SOC_SDCA_HID)
+ 
+-int sdca_add_hid_device(struct device *dev, struct sdw_slave *sdw,
+-			struct sdca_entity *entity);
++int sdca_add_hid_device(struct sdca_interrupt *interrupt);
+ int sdca_hid_process_report(struct sdca_interrupt *interrupt);
+ 
+ #else
+ 
+-static inline int sdca_add_hid_device(struct device *dev, struct sdw_slave *sdw,
+-				      struct sdca_entity *entity)
++static inline int sdca_add_hid_device(struct sdca_interrupt *interrupt)
+ {
+ 	return 0;
+ }
+diff --git a/sound/soc/codecs/rt766-sdca.c b/sound/soc/codecs/rt766-sdca.c
+index 4c5acd950d70..54ed0c42fba2 100644
+--- a/sound/soc/codecs/rt766-sdca.c
++++ b/sound/soc/codecs/rt766-sdca.c
+@@ -22,6 +22,7 @@
+ #include <sound/sdca.h>
+ #include <sound/sdca_asoc.h>
+ #include <sound/sdca_function.h>
++#include <sound/sdca_hid.h>
+ #include <sound/sdca_regmap.h>
+ #include <sound/sdca_interrupts.h>
+ #include <linux/slab.h>
+@@ -33,7 +34,6 @@
+ static int rt766_sdca_btn_detect(struct sdca_interrupt *interrupt)
+ {
+ 	struct rt766_sdca_priv *rt766 = interrupt->priv;
+-	struct sdca_entity *ent_hid = interrupt->entity;
+ 	unsigned char *buf = NULL;
+ 	unsigned int offset, owner, length;
+ 	unsigned int det_mode, idx, val;
+@@ -85,8 +85,8 @@ static int rt766_sdca_btn_detect(struct sdca_interrupt *interrupt)
+ 			buf[idx] = val & 0xff;
+ 		}
+ 
+-		if (ent_hid)
+-			hid_input_report(ent_hid->hide.hid, HID_INPUT_REPORT,
++		if (rt766->hid)
++			hid_input_report(rt766->hid, HID_INPUT_REPORT,
+ 				buf, length, 1);
+ 	}
+ 
+@@ -191,6 +191,13 @@ static irqreturn_t rt766_sdca_irq_jd_handler(int irq, void *data)
+ 	return IRQ_HANDLED;
+ }
+ 
++static void rt766_sdca_destroy_hid_device(struct sdca_interrupt *interrupt)
++{
++	struct rt766_sdca_priv *rt766 = interrupt->priv;
++
++	hid_destroy_device(rt766->hid);
++}
++
+ static int rt766_sdca_irq_ctl(struct rt766_sdca_priv *rt766,
+ 							  struct sdca_function_data *function,
+ 							  struct snd_soc_component *component,
+@@ -231,6 +238,15 @@ static int rt766_sdca_irq_ctl(struct rt766_sdca_priv *rt766,
+ 				if (ret)
+ 					return ret;
+ 
++				if (handler == rt766_sdca_irq_btn_handler) {
++					ret = sdca_add_hid_device(interrupt);
++					if (ret)
++						return ret;
++
++					interrupt->free_priv = rt766_sdca_destroy_hid_device;
++					rt766->hid = interrupt->priv;
++				}
++
+ 				interrupt->priv = rt766;
+ 				ret = sdca_irq_request(dev, info, irq, interrupt->name,
+ 								handler, interrupt);
+diff --git a/sound/soc/codecs/rt766-sdca.h b/sound/soc/codecs/rt766-sdca.h
+index 5acdb83a42fb..de4064007eb9 100644
+--- a/sound/soc/codecs/rt766-sdca.h
++++ b/sound/soc/codecs/rt766-sdca.h
+@@ -8,6 +8,7 @@
+ #ifndef __RT766_H__
+ #define __RT766_H__
+ 
++#include <linux/hid.h>
+ #include <linux/pm.h>
+ #include <linux/regmap.h>
+ #include <linux/soundwire/sdw.h>
+@@ -41,6 +42,7 @@ struct  rt766_sdca_priv {
+ 	struct sdca_function_data *sa_func_data;
+ 	struct sdca_function_data *hid_func_data;
+ 	struct sdca_interrupt_info *irq_info;
++	struct hid_device *hid;
+ };
+ 
+ /* vendor registers */
+diff --git a/sound/soc/sdca/sdca_functions.c b/sound/soc/sdca/sdca_functions.c
+index cdf1e68d60ac..e9b449b67033 100644
+--- a/sound/soc/sdca/sdca_functions.c
++++ b/sound/soc/sdca/sdca_functions.c
+@@ -18,7 +18,6 @@
+ #include <linux/types.h>
+ #include <sound/sdca.h>
+ #include <sound/sdca_function.h>
+-#include <sound/sdca_hid.h>
+ 
+ /*
+  * Should be long enough to encompass all the MIPI DisCo properties.
+@@ -1366,8 +1365,7 @@ static int find_sdca_entity_ge(struct device *dev,
+ }
+ 
+ static int
+-find_sdca_entity_hide(struct device *dev, struct sdw_slave *sdw,
+-		      struct fwnode_handle *function_node,
++find_sdca_entity_hide(struct device *dev, struct fwnode_handle *function_node,
+ 		      struct fwnode_handle *entity_node, struct sdca_entity *entity)
+ {
+ 	struct sdca_entity_hide *hide = &entity->hide;
+@@ -1440,13 +1438,6 @@ find_sdca_entity_hide(struct device *dev, struct sdw_slave *sdw,
+ 			hide->hid_report_desc = report_desc;
+ 			fwnode_property_read_u8_array(function_node, "mipi-sdca-report-descriptor",
+ 						      report_desc, nval);
+-
+-			/* add HID device */
+-			ret = sdca_add_hid_device(dev, sdw, entity);
+-			if (ret) {
+-				dev_err(dev, "%pfwP: failed to add HID device: %d\n", entity_node, ret);
+-				return ret;
+-			}
+ 		}
+ 	}
+ 
+@@ -1475,8 +1466,7 @@ static int find_sdca_entity_xu(struct device *dev,
+ 	return 0;
+ }
+ 
+-static int find_sdca_entity(struct device *dev, struct sdw_slave *sdw,
+-			    struct sdca_function_data *function,
++static int find_sdca_entity(struct device *dev, struct sdca_function_data *function,
+ 			    struct fwnode_handle *function_node,
+ 			    struct fwnode_handle *entity_node,
+ 			    struct sdca_entity *entity)
+@@ -1528,8 +1518,7 @@ static int find_sdca_entity(struct device *dev, struct sdw_slave *sdw,
+ 		ret = find_sdca_entity_ge(dev, entity_node, entity);
+ 		break;
+ 	case SDCA_ENTITY_TYPE_HIDE:
+-		ret = find_sdca_entity_hide(dev, sdw, function_node,
+-					    entity_node, entity);
++		ret = find_sdca_entity_hide(dev, function_node, entity_node, entity);
+ 		break;
+ 	default:
+ 		break;
+@@ -1544,8 +1533,7 @@ static int find_sdca_entity(struct device *dev, struct sdw_slave *sdw,
+ 	return 0;
+ }
+ 
+-static int find_sdca_entities(struct device *dev, struct sdw_slave *sdw,
+-			      struct fwnode_handle *function_node,
++static int find_sdca_entities(struct device *dev, struct fwnode_handle *function_node,
+ 			      struct sdca_function_data *function)
+ {
+ 	struct sdca_entity *entities;
+@@ -1596,7 +1584,7 @@ static int find_sdca_entities(struct device *dev, struct sdw_slave *sdw,
+ 			return -EINVAL;
+ 		}
+ 
+-		ret = find_sdca_entity(dev, sdw, function, function_node,
++		ret = find_sdca_entity(dev, function, function_node,
+ 				       entity_node, &entities[i]);
+ 		fwnode_handle_put(entity_node);
+ 		if (ret)
+@@ -2214,7 +2202,7 @@ int sdca_parse_function(struct device *dev, struct sdw_slave *sdw,
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = find_sdca_entities(dev, sdw, node, function);
++	ret = find_sdca_entities(dev, node, function);
+ 	if (ret)
+ 		return ret;
+ 
+diff --git a/sound/soc/sdca/sdca_hid.c b/sound/soc/sdca/sdca_hid.c
+index abbd56a3d297..ea511c6f9798 100644
+--- a/sound/soc/sdca/sdca_hid.c
++++ b/sound/soc/sdca/sdca_hid.c
+@@ -14,6 +14,7 @@
+ #include <linux/module.h>
+ #include <linux/property.h>
+ #include <linux/soundwire/sdw.h>
++#include <linux/string.h>
+ #include <linux/types.h>
+ #include <sound/sdca.h>
+ #include <sound/sdca_function.h>
+@@ -85,10 +86,11 @@ static const struct hid_ll_driver sdw_hid_driver = {
+ 	.raw_request = sdwhid_raw_request,
+ };
+ 
+-int sdca_add_hid_device(struct device *dev, struct sdw_slave *sdw,
+-			struct sdca_entity *entity)
++int sdca_add_hid_device(struct sdca_interrupt *interrupt)
+ {
+-	struct sdw_bus *bus = sdw->bus;
++	struct device *dev = interrupt->dev;
++	struct sdca_function_data *function = interrupt->function;
++	struct sdca_entity *entity = interrupt->entity;
+ 	struct hid_device *hid;
+ 	int ret;
+ 
+@@ -102,12 +104,9 @@ int sdca_add_hid_device(struct device *dev, struct sdw_slave *sdw,
+ 	hid->bus = BUS_SDW;
+ 	hid->version = le16_to_cpu(entity->hide.hid_desc.bcdHID);
+ 
+-	snprintf(hid->name, sizeof(hid->name),
+-		 "HID sdw:%01x:%01x:%04x:%04x:%02x",
+-		 bus->controller_id, bus->link_id, sdw->id.mfg_id,
+-		 sdw->id.part_id, sdw->id.class_id);
+-
+-	snprintf(hid->phys, sizeof(hid->phys), "%s", dev->bus->name);
++	strscpy(hid->phys, dev_name(dev));
++	snprintf(hid->name, sizeof(hid->name), "SDCA %s:%02x",
++		 function->desc->name, function->desc->adr);
+ 
+ 	hid->driver_data = entity;
+ 
+@@ -118,7 +117,7 @@ int sdca_add_hid_device(struct device *dev, struct sdw_slave *sdw,
+ 		return ret;
+ 	}
+ 
+-	entity->hide.hid = hid;
++	interrupt->priv = hid;
+ 
+ 	return 0;
+ }
+@@ -133,7 +132,7 @@ EXPORT_SYMBOL_NS(sdca_add_hid_device, "SND_SOC_SDCA");
+ int sdca_hid_process_report(struct sdca_interrupt *interrupt)
+ {
+ 	struct device *dev = interrupt->dev;
+-	struct hid_device *hid = interrupt->entity->hide.hid;
++	struct hid_device *hid = interrupt->priv;
+ 	void *val __free(kfree) = NULL;
+ 	int len, ret;
+ 
+diff --git a/sound/soc/sdca/sdca_interrupts.c b/sound/soc/sdca/sdca_interrupts.c
+index 42fbd3af8a75..71037189a057 100644
+--- a/sound/soc/sdca/sdca_interrupts.c
++++ b/sound/soc/sdca/sdca_interrupts.c
+@@ -487,6 +487,10 @@ int sdca_irq_populate_early(struct device *dev, struct regmap *regmap,
+ 				}
+ 				break;
+ 			case SDCA_CTL_TYPE_S(HIDE, HIDTX_CURRENTOWNER):
++				ret = sdca_add_hid_device(interrupt);
++				if (ret)
++					return ret;
++
+ 				interrupt->handler = hid_handler;
+ 				break;
+ 			default:
+-- 
+2.55.0
+

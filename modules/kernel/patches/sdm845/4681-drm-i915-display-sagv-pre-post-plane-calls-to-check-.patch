@@ -1,0 +1,47 @@
+From 490de57216725dc9ae3de85d46dfd4eb73dbd233 Mon Sep 17 00:00:00 2001
+From: Vinod Govindapillai <vinod.govindapillai@intel.com>
+Date: Mon, 15 Jun 2026 23:33:51 +0300
+Subject: [PATCH 04681/15333] drm/i915/display: sagv pre/post plane calls to
+ check pmdemand support
+
+For pmdemand cases, no need to even calculate the masks based
+on the qgv points index. Though the current logic avoids setting
+the registers based on the pmdemand support, some qgv point masks
+are compared in vain and do nothing. So leave early if pmdemand
+is supported.
+
+Signed-off-by: Vinod Govindapillai <vinod.govindapillai@intel.com>
+Reviewed-by: Mika Kahola <mika.kahola@intel.com>
+Reviewed-by: Suraj Kandpal <suraj.kandpal@intel.com>
+Link: https://patch.msgid.link/20260615203355.218578-4-vinod.govindapillai@intel.com
+---
+ drivers/gpu/drm/i915/display/skl_watermark.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/skl_watermark.c b/drivers/gpu/drm/i915/display/skl_watermark.c
+index a4ce21d4c024..ec1bfe46edef 100644
+--- a/drivers/gpu/drm/i915/display/skl_watermark.c
++++ b/drivers/gpu/drm/i915/display/skl_watermark.c
+@@ -275,6 +275,9 @@ void intel_sagv_pre_plane_update(struct intel_atomic_state *state)
+ 	if (!intel_has_sagv(display))
+ 		return;
+ 
++	if (HAS_PMDEMAND(display))
++		return;
++
+ 	if (DISPLAY_VER(display) >= 11)
+ 		icl_sagv_pre_plane_update(state);
+ 	else
+@@ -295,6 +298,9 @@ void intel_sagv_post_plane_update(struct intel_atomic_state *state)
+ 	if (!intel_has_sagv(display))
+ 		return;
+ 
++	if (HAS_PMDEMAND(display))
++		return;
++
+ 	if (DISPLAY_VER(display) >= 11)
+ 		icl_sagv_post_plane_update(state);
+ 	else
+-- 
+2.55.0
+

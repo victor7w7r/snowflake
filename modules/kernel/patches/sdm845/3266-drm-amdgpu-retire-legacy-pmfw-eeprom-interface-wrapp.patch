@@ -1,0 +1,160 @@
+From 3dbf9b502bed00248ed07fcf63b22a0a4ec16331 Mon Sep 17 00:00:00 2001
+From: Ce Sun <cesun102@amd.com>
+Date: Fri, 3 Apr 2026 10:55:22 +0800
+Subject: [PATCH 03266/15333] drm/amdgpu: retire legacy pmfw eeprom interface
+ wrapper
+
+retire legacy pmfw eeprom interface wrapper functions
+
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Ce Sun <cesun102@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.c    | 98 -------------------
+ .../gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.h    | 21 ----
+ 2 files changed, 119 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.c
+index baa8cc3646d5..8c398c2e6709 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.c
+@@ -1740,104 +1740,6 @@ bool amdgpu_ras_smu_eeprom_supported(struct amdgpu_device *adev)
+ 	return !!(flags & RAS_SMU_FEATURE_BIT__RAS_EEPROM);
+ }
+ 
+-int amdgpu_ras_smu_get_table_version(struct amdgpu_device *adev,
+-				     uint32_t *table_version)
+-{
+-	const struct ras_smu_drv *smu_ras_drv = amdgpu_ras_get_smu_ras_drv(adev);
+-
+-	if (!amdgpu_ras_smu_eeprom_supported(adev))
+-		return -EOPNOTSUPP;
+-
+-	if (smu_ras_drv->smu_eeprom_funcs->get_ras_table_version)
+-		return smu_ras_drv->smu_eeprom_funcs->get_ras_table_version(adev,
+-										 table_version);
+-	return -EOPNOTSUPP;
+-}
+-
+-int amdgpu_ras_smu_get_badpage_count(struct amdgpu_device *adev,
+-				     uint32_t *count, uint32_t timeout)
+-{
+-	const struct ras_smu_drv *smu_ras_drv = amdgpu_ras_get_smu_ras_drv(adev);
+-
+-	if (!amdgpu_ras_smu_eeprom_supported(adev))
+-		return -EOPNOTSUPP;
+-
+-	if (smu_ras_drv->smu_eeprom_funcs->get_badpage_count)
+-		return smu_ras_drv->smu_eeprom_funcs->get_badpage_count(adev,
+-									     count, timeout);
+-	return -EOPNOTSUPP;
+-}
+-
+-int amdgpu_ras_smu_get_badpage_mca_addr(struct amdgpu_device *adev,
+-					uint16_t index, uint64_t *mca_addr)
+-{
+-	const struct ras_smu_drv *smu_ras_drv = amdgpu_ras_get_smu_ras_drv(adev);
+-
+-	if (!amdgpu_ras_smu_eeprom_supported(adev))
+-		return -EOPNOTSUPP;
+-
+-	if (smu_ras_drv->smu_eeprom_funcs->get_badpage_mca_addr)
+-		return smu_ras_drv->smu_eeprom_funcs->get_badpage_mca_addr(adev,
+-										index, mca_addr);
+-	return -EOPNOTSUPP;
+-}
+-
+-int amdgpu_ras_smu_set_timestamp(struct amdgpu_device *adev,
+-				 uint64_t timestamp)
+-{
+-	const struct ras_smu_drv *smu_ras_drv = amdgpu_ras_get_smu_ras_drv(adev);
+-
+-	if (!amdgpu_ras_smu_eeprom_supported(adev))
+-		return -EOPNOTSUPP;
+-
+-	if (smu_ras_drv->smu_eeprom_funcs->set_timestamp)
+-		return smu_ras_drv->smu_eeprom_funcs->set_timestamp(adev,
+-									 timestamp);
+-	return -EOPNOTSUPP;
+-}
+-
+-int amdgpu_ras_smu_get_timestamp(struct amdgpu_device *adev,
+-				 uint16_t index, uint64_t *timestamp)
+-{
+-	const struct ras_smu_drv *smu_ras_drv = amdgpu_ras_get_smu_ras_drv(adev);
+-
+-	if (!amdgpu_ras_smu_eeprom_supported(adev))
+-		return -EOPNOTSUPP;
+-
+-	if (smu_ras_drv->smu_eeprom_funcs->get_timestamp)
+-		return smu_ras_drv->smu_eeprom_funcs->get_timestamp(adev,
+-									 index, timestamp);
+-	return -EOPNOTSUPP;
+-}
+-
+-int amdgpu_ras_smu_get_badpage_ipid(struct amdgpu_device *adev,
+-				    uint16_t index, uint64_t *ipid)
+-{
+-	const struct ras_smu_drv *smu_ras_drv = amdgpu_ras_get_smu_ras_drv(adev);
+-
+-	if (!amdgpu_ras_smu_eeprom_supported(adev))
+-		return -EOPNOTSUPP;
+-
+-	if (smu_ras_drv->smu_eeprom_funcs->get_badpage_ipid)
+-		return smu_ras_drv->smu_eeprom_funcs->get_badpage_ipid(adev,
+-									    index, ipid);
+-	return -EOPNOTSUPP;
+-}
+-
+-int amdgpu_ras_smu_erase_ras_table(struct amdgpu_device *adev,
+-				   uint32_t *result)
+-{
+-	const struct ras_smu_drv *smu_ras_drv = amdgpu_ras_get_smu_ras_drv(adev);
+-
+-	if (!amdgpu_ras_smu_eeprom_supported(adev))
+-		return -EOPNOTSUPP;
+-
+-	if (smu_ras_drv->smu_eeprom_funcs->erase_ras_table)
+-		return smu_ras_drv->smu_eeprom_funcs->erase_ras_table(adev,
+-									   result);
+-	return -EOPNOTSUPP;
+-}
+-
+ void amdgpu_ras_check_bad_page_status(struct amdgpu_device *adev)
+ {
+ 	struct amdgpu_ras *ras = amdgpu_ras_get_context(adev);
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.h
+index 3c7fcce5fe8b..5e5275ae7aab 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.h
+@@ -165,27 +165,6 @@ void amdgpu_ras_eeprom_check_and_recover(struct amdgpu_device *adev);
+ 
+ bool amdgpu_ras_smu_eeprom_supported(struct amdgpu_device *adev);
+ 
+-int amdgpu_ras_smu_get_table_version(struct amdgpu_device *adev,
+-							uint32_t *table_version);
+-
+-int amdgpu_ras_smu_get_badpage_count(struct amdgpu_device *adev,
+-								uint32_t *count, uint32_t timeout);
+-
+-int amdgpu_ras_smu_get_badpage_mca_addr(struct amdgpu_device *adev,
+-								uint16_t index, uint64_t *mca_addr);
+-
+-int amdgpu_ras_smu_set_timestamp(struct amdgpu_device *adev,
+-										uint64_t timestamp);
+-
+-int amdgpu_ras_smu_get_timestamp(struct amdgpu_device *adev,
+-							uint16_t index, uint64_t *timestamp);
+-
+-int amdgpu_ras_smu_get_badpage_ipid(struct amdgpu_device *adev,
+-								uint16_t index, uint64_t *ipid);
+-
+-int amdgpu_ras_smu_erase_ras_table(struct amdgpu_device *adev,
+-									uint32_t *result);
+-
+ int amdgpu_ras_eeprom_read_idx(struct amdgpu_ras_eeprom_control *control,
+ 			struct eeprom_table_record *record, u32 rec_idx,
+ 			const u32 num);
+-- 
+2.55.0
+

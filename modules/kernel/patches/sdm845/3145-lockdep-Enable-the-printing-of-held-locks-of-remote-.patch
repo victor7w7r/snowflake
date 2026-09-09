@@ -1,0 +1,163 @@
+From 051f5d223dfc1806e216f60e4b29c1bf35f5c2d3 Mon Sep 17 00:00:00 2001
+From: Ingo Molnar <mingo@kernel.org>
+Date: Sun, 5 Jul 2026 11:05:17 +0200
+Subject: [PATCH 03145/15333] lockdep: Enable the printing of held locks of
+ remote running tasks and print task CPU
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Background:
+==========
+
+Currently lockdep does not print out the held locks of non-current
+tasks that are running on some other CPU, due to the fact that
+the held locks array is in flux and may be unreliable to print.
+
+Syzkaller on the other hand found it that the analysis of locking
+bugs is easier if we print this information too, because the
+more locking information the merrier. In particular races are
+bound to have multiple tasks running on different CPUs, and
+the exclusion of their held locks information is unnecessarily
+limiting.
+
+So while it's still true that printing out their held locks
+array is racy, it's not as bad as it seems.
+
+There's 16 internal callers to lockdep_print_held_locks():
+
+ - 14 callers call it with the current task, which should be
+   safe out of box.
+
+ - 1 caller, debug_show_all_locks(), calls it with RCU held,
+   which should guarantee that 'p' cannot go away under us.
+
+ - 1 caller, debug_show_held_locks(), exposes the internal API
+   with the constraint that it should only be called by drivers
+   or platform code if the task isn't actively running - we can
+   assume that if it nevertheless does, it will be Their Problem™.
+
+As for held locks being changed from under debug_show_held_locks(),
+while the task cannot go away, so the held-locks array itself is
+safe (although potentially non-stable), AFAICS the worst-case race
+can be garbage printed out by print_lock(), not any actual crashes.
+
+In particular:
+
+        unsigned int class_idx = hlock->class_idx;
+
+may be stale (belong to a lock that already got released on another
+CPU), but it should still be a valid class index bound by
+MAX_LOCKDEP_KEYS, and thus the lock_classes_in_use bitmap use
+should be safe.
+
+The other two accesses are ::acquire_ip and ::instance:
+
+       printk(KERN_CONT "%px", hlock->instance);
+       print_lock_name(hlock, lock);
+       printk(KERN_CONT ", at: %pS\n", (void *)hlock->acquire_ip);
+
+But both are printed out as pointers, so no risk of dereference
+of a dangling pointer. We may print a garbage pointer.
+
+Also note that the check itself doesn't protect debug_show_held_locks()
+from printing garbage, as there's nothing that keeps a task from
+becoming runnable a nanosecond after we've run the task_is_running()
+check. In fact I'd argue that it's better to make this function
+*more* racy, for the simple robustness reason that we absolutely
+do not want it to crash even in the racy case.
+
+TL;DR: it should be fine to print the held locks of running
+tasks too, as long as we print out the information as well
+that a task is running, so that users are aware of any
+racy output.
+
+Implementation:
+==============
+
+Implement that change.
+
+Also re-flow the function and streamline the printout into
+a single statement for all cases, which changes
+the 'no locks held by' / '%d lock[s] held by' phrasing that had a
+dependency on English spelling of plurals, to a uniform:
+
+	locks held by bash/1234: %d
+
+Which spells correctly for 0, 1 and higher values, and should also
+be easier to parse both for humans and for scripts.
+
+Finally, print out the last CPU a task has ran on. This is very
+useful information for races and for locking bugs in particular.
+This basically extends the 'on CPU#%d' message we print for
+running tasks to all tasks we print.
+
+Reported-by: Tetsuo Handa <penguin-kernel@I-love.SAKURA.ne.jp>
+Suggested-by: Tetsuo Handa <penguin-kernel@I-love.SAKURA.ne.jp>
+Tested-by: Tetsuo Handa <penguin-kernel@I-love.SAKURA.ne.jp>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Cc: Boqun Feng <boqun@kernel.org>
+Cc: Gary Guo <gary@garyguo.net>
+Cc: Mark Brown <broonie@kernel.org>
+Cc: Theodore Tso <tytso@mit.edu>
+Cc: Miguel Ojeda <ojeda@kernel.org>
+Cc: Linus Torvalds <torvalds@linux-foundation.org>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Will Deacon <will@kernel.org>
+Cc: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Cc: Waiman Long <longman@redhat.com>
+Link: https://patch.msgid.link/akoeSIQGwqd9cZwd@gmail.com
+---
+ kernel/locking/lockdep.c | 34 +++++++++++++++++++++++++---------
+ 1 file changed, 25 insertions(+), 9 deletions(-)
+
+diff --git a/kernel/locking/lockdep.c b/kernel/locking/lockdep.c
+index 2d4c5bab5af8..ff4bbf14665e 100644
+--- a/kernel/locking/lockdep.c
++++ b/kernel/locking/lockdep.c
+@@ -787,17 +787,33 @@ static void lockdep_print_held_locks(struct task_struct *p)
+ {
+ 	int i, depth = READ_ONCE(p->lockdep_depth);
+ 
+-	if (!depth)
+-		printk("no locks held by %s/%d.\n", p->comm, task_pid_nr(p));
+-	else
+-		printk("%d lock%s held by %s/%d:\n", depth,
+-		       str_plural(depth), p->comm, task_pid_nr(p));
+ 	/*
+-	 * It's not reliable to print a task's held locks if it's not sleeping
+-	 * and it's not the current task.
++	 * Note that it's always somewhat unreliable to print held locks
++	 * of a task that is running on another CPU, but we cannot guarantee
++	 * the stability of ->held_locks without actually stopping all active
++	 * remote CPUs, which we absolutely do not want to do because it's
++	 * very intrusive and thus slow.
++	 *
++	 * So we do the next best thing here: we print out the held lock
++	 * array on a best-effort basis, without crashing even if the
++	 * fields are being modified on another CPU. Note the careful
++	 * construction of print_lock() so that it never crashes.
++	 *
++	 * We also print out the CPU the task is or was last running on, with
++	 * the message saying 'on CPU...' if the task is running, and
++	 * 'last CPU' if it's not.
++	 *
++	 * Also note that the task_is_running(p) information is fundamentally
++	 * racy: even if the message says the task is 'on CPU', the task may
++	 * have scheduled out already, or if it says 'last CPU', it may just
++	 * have scheduled in on another CPU. But even with these limitations
++	 * it's still useful debuggining information.
+ 	 */
+-	if (p != current && task_is_running(p))
+-		return;
++	printk("locks held by %s/%d: %d, %s CPU#%d%s\n",
++		p->comm, task_pid_nr(p), depth,
++		task_is_running(p) ? "last" : "on", task_cpu(p),
++		depth > 0 ? ":" : "");
++
+ 	for (i = 0; i < depth; i++) {
+ 		printk(" #%d: ", i);
+ 		print_lock(p->held_locks + i);
+-- 
+2.55.0
+

@@ -1,0 +1,56 @@
+From dd7858bbdfa84beddf7d08bb82eacc8010221493 Mon Sep 17 00:00:00 2001
+From: Stefano Radaelli <stefano.r@variscite.com>
+Date: Mon, 8 Jun 2026 16:41:07 +0200
+Subject: [PATCH 01226/15333] arm64: dts: imx8mp-var-som-symphony: enable PCIe
+
+Add the PCIe reference clock and enable the PCIe controller and PHY on
+the Symphony carrier board.
+
+Describe the PERST# reset GPIO and configure the PHY to use an external
+reference clock input.
+
+Signed-off-by: Stefano Radaelli <stefano.r@variscite.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+---
+ .../dts/freescale/imx8mp-var-som-symphony.dts  | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/freescale/imx8mp-var-som-symphony.dts b/arch/arm64/boot/dts/freescale/imx8mp-var-som-symphony.dts
+index fdac4ceb4c19..698f02fc39a5 100644
+--- a/arch/arm64/boot/dts/freescale/imx8mp-var-som-symphony.dts
++++ b/arch/arm64/boot/dts/freescale/imx8mp-var-som-symphony.dts
+@@ -48,6 +48,12 @@ led-0 {
+ 		};
+ 	};
+ 
++	pcie0_refclk: pcie0-refclk {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <100000000>;
++	};
++
+ 	reg_usdhc2_vmmc: regulator-usdhc2-vmmc {
+ 		compatible = "regulator-fixed";
+ 		regulator-name = "VSD_3V3";
+@@ -146,6 +152,18 @@ rtc@68 {
+ 	};
+ };
+ 
++&pcie {
++	reset-gpios = <&pcal6408 1 GPIO_ACTIVE_LOW>;
++	status = "okay";
++};
++
++&pcie_phy {
++	clocks = <&pcie0_refclk>;
++	clock-names = "ref";
++	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
++	status = "okay";
++};
++
+ &snvs_pwrkey {
+ 	status = "okay";
+ };
+-- 
+2.55.0
+

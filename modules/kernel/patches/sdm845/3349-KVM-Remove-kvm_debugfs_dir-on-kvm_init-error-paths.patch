@@ -1,0 +1,39 @@
+From b31e7c24b475128de7d685c294c34c09ff802258 Mon Sep 17 00:00:00 2001
+From: leixiang <leixiang@kylinos.cn>
+Date: Mon, 6 Jul 2026 17:59:06 +0800
+Subject: [PATCH 03349/15333] KVM: Remove kvm_debugfs_dir on kvm_init() error
+ paths
+
+kvm_init_debug() runs before several steps that can fail
+(kvm_vfio_ops_init(), kvm_gmem_init(), kvm_init_virtualization() and
+misc_register()), but none of the corresponding error labels remove the
+"kvm" debugfs directory.  Any failure after kvm_init_debug() therefore
+leaks the directory and its stat files for the lifetime of the boot.
+
+kvm_exit() already calls debugfs_remove_recursive(kvm_debugfs_dir); add
+the same at the err_vfio label, whose fall-through covers every path
+taken after kvm_init_debug().
+
+Fixes: 2b0128127373 ("KVM: Register /dev/kvm as the _very_ last thing during initialization")
+Signed-off-by: leixiang <leixiang@kylinos.cn>
+Link: https://patch.msgid.link/20260706095910.39798-1-leixiang@kylinos.cn
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ virt/kvm/kvm_main.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c
+index 05275d318bfb..2df8ee9ecf6c 100644
+--- a/virt/kvm/kvm_main.c
++++ b/virt/kvm/kvm_main.c
+@@ -6567,6 +6567,7 @@ int kvm_init(unsigned vcpu_size, unsigned vcpu_align, struct module *module)
+ err_gmem:
+ 	kvm_vfio_ops_exit();
+ err_vfio:
++	debugfs_remove_recursive(kvm_debugfs_dir);
+ 	kvm_async_pf_deinit();
+ err_async_pf:
+ 	kvm_irqfd_exit();
+-- 
+2.55.0
+

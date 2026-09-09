@@ -1,0 +1,34 @@
+From 38d8af9d314da7952f6876a2f5e07fa79bb1c459 Mon Sep 17 00:00:00 2001
+From: Jori Koolstra <jkoolstra@xs4all.nl>
+Date: Tue, 30 Jun 2026 12:53:52 +0200
+Subject: [PATCH 01672/15333] omfs: drop redundant S_IFDIR from mkdir
+
+vfs_mkdir() now sets the S_IFDIR type bit in the mode it passes to
+->mkdir(), so OR-ing S_IFDIR into the mode again in omfs_mkdir() is
+redundant. Drop it.
+
+Assisted-by: LLM
+Signed-off-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Link: https://patch.msgid.link/20260630105400.68459-24-jkoolstra@xs4all.nl
+Reviewed-by: NeilBrown <neil@brown.name>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/omfs/dir.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/omfs/dir.c b/fs/omfs/dir.c
+index 2ed541fccf33..418906614f89 100644
+--- a/fs/omfs/dir.c
++++ b/fs/omfs/dir.c
+@@ -282,7 +282,7 @@ static int omfs_add_node(struct inode *dir, struct dentry *dentry, umode_t mode)
+ static struct dentry *omfs_mkdir(struct mnt_idmap *idmap, struct inode *dir,
+ 				 struct dentry *dentry, umode_t mode)
+ {
+-	return ERR_PTR(omfs_add_node(dir, dentry, mode | S_IFDIR));
++	return ERR_PTR(omfs_add_node(dir, dentry, mode));
+ }
+ 
+ static int omfs_create(struct mnt_idmap *idmap, struct inode *dir,
+-- 
+2.55.0
+

@@ -1,0 +1,131 @@
+From 2d99fbd7ad36ef288700f00102aaee11bcae04b4 Mon Sep 17 00:00:00 2001
+From: ChenXiaoSong <chenxiaosong@kylinos.cn>
+Date: Mon, 3 Aug 2026 17:21:17 +0900
+Subject: [PATCH 14364/15333] smb/server: fix posix state check for directory
+ rename
+
+Pass the source ksmbd_file to the rename helpers and use the per-handle
+POSIX create-context state when deciding whether open children block a
+directory rename.
+
+work->tcon->posix_extensions only records whether POSIX extensions were
+negotiated on the connection.  It does not indicate that the handles were
+opened with POSIX create contexts.
+
+Reproducer:
+
+  1. server: systemctl start ksmbd
+  2. client: mount -t cifs //${server_ip}/export /mnt
+     # without posix option
+  3. client: mkdir /mnt/dir1/; touch /mnt/dir1/file
+  4. client: tail -f /mnt/dir1/file # open file
+  5. client: mv /mnt/dir1 /mnt/dir2
+
+Without this fix, the rename can succeed when it should fail with
+"Permission denied".
+
+Fixes: c841bd3d8dec ("ksmbd: deny renaming directory with open children")
+Signed-off-by: ChenXiaoSong <chenxiaosong@kylinos.cn>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/smb2pdu.c   | 2 +-
+ fs/smb/server/vfs.c       | 6 +++---
+ fs/smb/server/vfs.h       | 4 ++--
+ fs/smb/server/vfs_cache.c | 5 ++++-
+ fs/smb/server/vfs_cache.h | 2 +-
+ 5 files changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index e214d27e4d37..80f5791c687b 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -7690,7 +7690,7 @@ static int smb2_rename(struct ksmbd_work *work,
+ 		goto out;
+ 
+ 	smb_break_all_levII_oplock_rename(work, fp);
+-	rc = ksmbd_vfs_rename(work, &fp->filp->f_path, new_name, flags);
++	rc = ksmbd_vfs_rename(work, fp, new_name, flags);
+ out:
+ 	kfree(new_name);
+ 	return rc;
+diff --git a/fs/smb/server/vfs.c b/fs/smb/server/vfs.c
+index ff86e0e88177..0e7d66b0e899 100644
+--- a/fs/smb/server/vfs.c
++++ b/fs/smb/server/vfs.c
+@@ -678,9 +678,10 @@ int ksmbd_vfs_check_rename_share(struct ksmbd_work *work,
+ 	return err;
+ }
+ 
+-int ksmbd_vfs_rename(struct ksmbd_work *work, const struct path *old_path,
++int ksmbd_vfs_rename(struct ksmbd_work *work, struct ksmbd_file *old_fp,
+ 			     char *newname, int flags)
+ {
++	const struct path *old_path = &old_fp->filp->f_path;
+ 	struct dentry *old_child = old_path->dentry;
+ 	struct path new_path;
+ 	struct qstr new_last;
+@@ -717,8 +718,7 @@ int ksmbd_vfs_rename(struct ksmbd_work *work, const struct path *old_path,
+ 	if (err)
+ 		goto out_drop_write;
+ 
+-	if (!work->tcon->posix_extensions && d_is_dir(old_child) &&
+-	    ksmbd_has_open_files(old_child)) {
++	if (d_is_dir(old_child) && ksmbd_has_open_files(old_fp)) {
+ 		err = -EACCES;
+ 		goto out3;
+ 	}
+diff --git a/fs/smb/server/vfs.h b/fs/smb/server/vfs.h
+index 1818b3f1971c..55d099de71f5 100644
+--- a/fs/smb/server/vfs.h
++++ b/fs/smb/server/vfs.h
+@@ -88,8 +88,8 @@ int ksmbd_vfs_remove_file(struct ksmbd_work *work, const struct path *path);
+ int ksmbd_vfs_link(struct ksmbd_work *work,
+ 		   const char *oldname, const char *newname);
+ int ksmbd_vfs_getattr(const struct path *path, struct kstat *stat);
+-int ksmbd_vfs_rename(struct ksmbd_work *work, const struct path *old_path,
+-			     char *newname, int flags);
++int ksmbd_vfs_rename(struct ksmbd_work *work, struct ksmbd_file *old_fp,
++			 char *newname, int flags);
+ int ksmbd_vfs_check_rename_share(struct ksmbd_work *work,
+ 				 const struct path *old_path);
+ int ksmbd_vfs_truncate(struct ksmbd_work *work,
+diff --git a/fs/smb/server/vfs_cache.c b/fs/smb/server/vfs_cache.c
+index a35df2ab59c9..eac9886eb6e3 100644
+--- a/fs/smb/server/vfs_cache.c
++++ b/fs/smb/server/vfs_cache.c
+@@ -1137,8 +1137,9 @@ struct ksmbd_file *ksmbd_lookup_fd_inode(struct dentry *dentry)
+ 	return NULL;
+ }
+ 
+-bool ksmbd_has_open_files(struct dentry *dentry)
++bool ksmbd_has_open_files(struct ksmbd_file *old_fp)
+ {
++	struct dentry *dentry = old_fp->filp->f_path.dentry;
+ 	struct ksmbd_file *fp;
+ 	unsigned int id;
+ 	bool ret = false;
+@@ -1151,6 +1152,8 @@ bool ksmbd_has_open_files(struct dentry *dentry)
+ 			continue;
+ 		if (fp_dentry == dentry)
+ 			continue;
++		if (old_fp->is_posix_ctxt && fp->is_posix_ctxt)
++			continue;
+ 		if (is_subdir(fp_dentry, dentry)) {
+ 			ret = true;
+ 			break;
+diff --git a/fs/smb/server/vfs_cache.h b/fs/smb/server/vfs_cache.h
+index d80f379d4e12..127ea4987e3f 100644
+--- a/fs/smb/server/vfs_cache.h
++++ b/fs/smb/server/vfs_cache.h
+@@ -212,7 +212,7 @@ bool ksmbd_has_stream_without_delete_share(struct ksmbd_file *fp);
+ int ksmbd_close_fd_app_instance_id(char *app_instance_id);
+ struct ksmbd_file *ksmbd_lookup_fd_cguid(char *cguid);
+ struct ksmbd_file *ksmbd_lookup_fd_inode(struct dentry *dentry);
+-bool ksmbd_has_open_files(struct dentry *dentry);
++bool ksmbd_has_open_files(struct ksmbd_file *old_fp);
+ unsigned int ksmbd_open_durable_fd(struct ksmbd_file *fp);
+ struct ksmbd_file *ksmbd_open_fd(struct ksmbd_work *work, struct file *filp);
+ void ksmbd_launch_ksmbd_durable_scavenger(void);
+-- 
+2.55.0
+

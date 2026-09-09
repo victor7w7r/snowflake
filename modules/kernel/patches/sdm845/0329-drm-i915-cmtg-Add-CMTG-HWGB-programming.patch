@@ -1,0 +1,94 @@
+From 9570e945f2b6c9cc39b707022185110d957d4499 Mon Sep 17 00:00:00 2001
+From: Dibin Moolakadan Subrahmanian <dibin.moolakadan.subrahmanian@intel.com>
+Date: Tue, 16 Jun 2026 01:33:35 +0530
+Subject: [PATCH 00329/15333] drm/i915/cmtg: Add CMTG HWGB programming
+
+Program CMTG guardband to generate the Lower/Upper and early entry
+guardband indicators to the DMC for DC3co control.
+
+v2:
+- Specify the unit for DC3CO entry/exit latency. [Uma]
+- Add code comment for default line_time_us. [Uma]
+
+Bspec: 75253
+Reviewed-by: Uma Shankar <uma.shankar@intel.com>
+Signed-off-by: Dibin Moolakadan Subrahmanian <dibin.moolakadan.subrahmanian@intel.com>
+Signed-off-by: Animesh Manna <animesh.manna@intel.com>
+Link: https://patch.msgid.link/20260615200339.885190-19-animesh.manna@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_cmtg.c     | 32 +++++++++++++++++++
+ drivers/gpu/drm/i915/display/intel_cmtg.h     |  1 +
+ .../gpu/drm/i915/display/intel_cmtg_regs.h    |  8 +++++
+ 3 files changed, 41 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_cmtg.c b/drivers/gpu/drm/i915/display/intel_cmtg.c
+index ea39daded18a..89df0167f667 100644
+--- a/drivers/gpu/drm/i915/display/intel_cmtg.c
++++ b/drivers/gpu/drm/i915/display/intel_cmtg.c
+@@ -364,3 +364,35 @@ void intel_cmtg_enable_ddi(const struct intel_crtc_state *crtc_state)
+ 	crtc->cmtg.enabled = true;
+ 	drm_dbg_kms(display->drm, "CMTG: %s enabled\n", transcoder_name(cpu_transcoder));
+ }
++
++/* Bspec: 75253 */
++#define DC3CO_ENTRY_LATENCY_US	55
++#define DC3CO_EXIT_LATENCY_US	40
++
++void intel_cmtg_set_hwgb(const struct intel_crtc_state *crtc_state)
++{
++	struct intel_display *display = to_intel_display(crtc_state);
++	enum transcoder cpu_transcoder = crtc_state->cpu_transcoder;
++	u32 breakeven_gb;
++	u32 dc5_exit_latency;
++	u32 line_time_us = 75;	/* Max default initialization value */
++	u32 val;
++
++	if (!intel_cmtg_is_allowed(crtc_state))
++		return;
++
++	if (crtc_state->linetime)
++		line_time_us = DIV_ROUND_UP(crtc_state->linetime, 8);
++
++	/* Break Even Guardband - DC3co Entry Latency / linetime */
++	breakeven_gb = DIV_ROUND_UP(DC3CO_ENTRY_LATENCY_US, line_time_us);
++
++	/* DC5 Exit Latency - DC3co Exit Latency / linetime */
++	dc5_exit_latency = DIV_ROUND_UP(DC3CO_EXIT_LATENCY_US, line_time_us);
++
++	val = REG_FIELD_PREP(CMTG_HW_GB_BREAKEVEN_MASK, breakeven_gb) |
++	      REG_FIELD_PREP(CMTG_HW_GB_DC5_EXIT_LATENCY_MASK, dc5_exit_latency) |
++	      REG_FIELD_PREP(CMTG_HW_GB_UP_LW_BG_DIFF_MASK, 1);
++
++	intel_de_write(display, CMTG_HW_GB(cpu_transcoder), val);
++}
+diff --git a/drivers/gpu/drm/i915/display/intel_cmtg.h b/drivers/gpu/drm/i915/display/intel_cmtg.h
+index 1b59deb38f2f..b2b68b38b7e3 100644
+--- a/drivers/gpu/drm/i915/display/intel_cmtg.h
++++ b/drivers/gpu/drm/i915/display/intel_cmtg.h
+@@ -26,5 +26,6 @@ void intel_cmtg_set_timings(const struct intel_crtc_state *crtc_state, enum set_
+ void intel_cmtg_set_clk_select(const struct intel_crtc_state *crtc_state);
+ void intel_cmtg_sanitize(struct intel_display *display);
+ bool intel_cmtg_is_allowed(const struct intel_crtc_state *crtc_state);
++void intel_cmtg_set_hwgb(const struct intel_crtc_state *crtc_state);
+ 
+ #endif /* __INTEL_CMTG_H__ */
+diff --git a/drivers/gpu/drm/i915/display/intel_cmtg_regs.h b/drivers/gpu/drm/i915/display/intel_cmtg_regs.h
+index 240a02cd4a3a..a4a2a2fe6b66 100644
+--- a/drivers/gpu/drm/i915/display/intel_cmtg_regs.h
++++ b/drivers/gpu/drm/i915/display/intel_cmtg_regs.h
+@@ -24,4 +24,12 @@
+ #define  CMTG_SYNC_TO_PORT		REG_BIT(29)
+ #define  CMTG_STATE			REG_BIT(23)
+ 
++#define _CMTG_HW_GB_A				0x6fa8c
++#define _CMTG_HW_GB_B				0x6fb8c
++#define CMTG_HW_GB(trans)			_MMIO_TRANS((trans), \
++							    _CMTG_HW_GB_A, _CMTG_HW_GB_B)
++#define CMTG_HW_GB_BREAKEVEN_MASK		REG_GENMASK(11, 0)
++#define CMTG_HW_GB_DC5_EXIT_LATENCY_MASK	REG_GENMASK(27, 16)
++#define CMTG_HW_GB_UP_LW_BG_DIFF_MASK		REG_GENMASK(31, 28)
++
+ #endif /* __INTEL_CMTG_REGS_H__ */
+-- 
+2.55.0
+

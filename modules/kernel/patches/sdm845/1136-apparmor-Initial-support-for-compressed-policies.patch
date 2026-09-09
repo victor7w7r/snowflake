@@ -1,0 +1,293 @@
+From 17b5758bf35c7a113363cd7a350b7e6a251b80f4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Maxime=20B=C3=A9lair?= <maxime.belair@canonical.com>
+Date: Thu, 1 Feb 2024 09:09:50 +0100
+Subject: [PATCH 01136/15333] apparmor: Initial support for compressed policies
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This patch allows policies to be compressed in userspace and be sent to
+the kernel through the existing ".load" and ".replace" kernel interfaces.
+
+The benefits of this approach are:
+ - Save kernel time when loading policies
+ - Allow userspace to provide a higher level of compression than the one
+   provided by the kernel (ZSTD_CLEVEL_DEFAULT), thus saving space.
+ - Allow small embedded systems to only store the compressed version of
+   policies in userspace, saving memory.
+
+Userspace-compressed policies improve system time by up to ~30% for big
+profiles.
+
+Signed-off-by: Maxime Bélair <maxime.belair@canonical.com>
+Signed-off-by: John Johansen <john.johansen@canonical.com>
+---
+ security/apparmor/apparmorfs.c            | 97 ++++++++++++++++++++++-
+ security/apparmor/include/policy.h        |  3 +-
+ security/apparmor/include/policy_unpack.h |  3 +-
+ security/apparmor/policy.c                |  7 +-
+ security/apparmor/policy_unpack.c         | 23 +++++-
+ 5 files changed, 123 insertions(+), 10 deletions(-)
+
+diff --git a/security/apparmor/apparmorfs.c b/security/apparmor/apparmorfs.c
+index c0203d65715b..514ec34975a4 100644
+--- a/security/apparmor/apparmorfs.c
++++ b/security/apparmor/apparmorfs.c
+@@ -482,6 +482,69 @@ static struct aa_loaddata *aa_simple_write_to_buffer(const char __user *userbuf,
+ 
+ 	return data;
+ }
++static int decompress_zstd(char *src, size_t slen, char *dst, size_t dlen);
++/**
++ * aa_get_data_from_compressed - common routine for getting compressed policy
++ * from user and get both compressed and uncompressed version.
++ * @userbuf: user buffer to copy data from  (NOT NULL)
++ * @buffer_size: size of user buffer
++ * @pos: position write is at in the file (NOT NULL)
++ * @compressed_data Ptr on compressed data. *compressed_data is allocated there
++ *
++ * Returns: kernel buffer containing copy of user buffer data or an
++ *          ERR_PTR on failure.
++ */
++
++static struct aa_loaddata *aa_get_data_from_compressed(const char __user *userbuf,
++						  size_t buffer_size,
++						  loff_t *pos,
++						  char **compressed_data)
++{
++	struct aa_loaddata *data;
++	zstd_frame_header header;
++	int error;
++
++	if (!userbuf || !pos)
++		return ERR_PTR(-EINVAL);
++	if (*pos)
++		return ERR_PTR(-ESPIPE);
++
++	*compressed_data = kvmalloc(buffer_size, GFP_KERNEL);
++	if (!*compressed_data)
++		return ERR_PTR(-ENOMEM);
++	error = copy_from_user(*compressed_data, userbuf, buffer_size);
++	if (error)
++		goto fail;
++
++	error = zstd_get_frame_header(&header, *compressed_data, buffer_size);
++	if (error || header.frameContentSize == ZSTD_CONTENTSIZE_UNKNOWN ||
++	    header.frameContentSize == ZSTD_CONTENTSIZE_ERROR) {
++		error = -EINVAL;
++		goto fail;
++	}
++
++	data = aa_loaddata_alloc(header.frameContentSize);
++	if (IS_ERR(data)) {
++		error = PTR_ERR(data);
++		goto fail;
++	}
++
++	// We then decompress the data
++	error = decompress_zstd(*compressed_data, buffer_size, data->data,
++				header.frameContentSize);
++	if (error)
++		goto fail_decompress;
++
++	data->size = header.frameContentSize;
++	return data;
++
++fail_decompress:
++	aa_put_i_loaddata(data);
++fail:
++	kvfree(*compressed_data);
++	return ERR_PTR(error);
++
++}
+ 
+ static ssize_t policy_update(u32 mask, const char __user *buf, size_t size,
+ 			     loff_t *pos, struct aa_ns *ns,
+@@ -490,6 +553,9 @@ static ssize_t policy_update(u32 mask, const char __user *buf, size_t size,
+ 	struct aa_loaddata *data;
+ 	struct aa_label *label;
+ 	ssize_t error;
++	char *compressed_data = NULL;
++	__le32 magic_le;
++	bool is_compressed;
+ 
+ 	label = begin_current_label_crit_section();
+ 
+@@ -500,10 +566,33 @@ static ssize_t policy_update(u32 mask, const char __user *buf, size_t size,
+ 	if (error)
+ 		goto end_section;
+ 
+-	data = aa_simple_write_to_buffer(buf, size, size, pos);
+-	error = PTR_ERR(data);
++	/* If the policy is userspace compressed we start by decompressing it
++	 * to make the required checks (computing hash, verifying profile, ...)
++	 *
++	 * Getting a userspace-compressed version then decompressing it in the
++	 * kernel actually makes sense since zstd decompression is ~3.5x faster
++	 * than compression. This also allow to increase the compression level.
++	 */
++
++	if (size >= sizeof(__le32) &&
++	    !copy_from_user(&magic_le, buf, sizeof(magic_le)) &&
++	    le32_to_cpu(magic_le) == ZSTD_MAGICNUMBER)
++		is_compressed = true;
++	else
++		is_compressed = false;
++
++	if (is_compressed) {
++
++		data = aa_get_data_from_compressed(buf, size, pos, &compressed_data);
++		error = PTR_ERR(data);
++	} else {
++		data = aa_simple_write_to_buffer(buf, size, size, pos);
++		error = PTR_ERR(data);
++	}
++
+ 	if (!IS_ERR(data)) {
+-		error = aa_replace_profiles(ns, label, mask, data);
++		error = aa_replace_profiles(ns, label, mask, data,
++					    compressed_data, size);
+ 		/* put pcount, which will put count and free if no
+ 		 * profiles referencing it.
+ 		 */
+@@ -550,6 +639,7 @@ static const struct file_operations aa_fs_profile_replace = {
+ 	.llseek = default_llseek,
+ };
+ 
++
+ /* .remove file hook fn to remove loaded policy */
+ static ssize_t profile_remove(struct file *f, const char __user *buf,
+ 			      size_t size, loff_t *pos)
+@@ -2484,6 +2574,7 @@ static struct aa_sfs_entry aa_sfs_entry_policy[] = {
+ 	AA_SFS_FILE_STRING("permstable32", PERMS32STR),
+ 	AA_SFS_FILE_U64("state32",	1),
+ 	AA_SFS_DIR("unconfined_restrictions",   aa_sfs_entry_unconfined),
++	AA_SFS_FILE_BOOLEAN("compressed_load",	1),
+ 	{ }
+ };
+ 
+diff --git a/security/apparmor/include/policy.h b/security/apparmor/include/policy.h
+index 169349beda34..240b2eba7687 100644
+--- a/security/apparmor/include/policy.h
++++ b/security/apparmor/include/policy.h
+@@ -304,7 +304,8 @@ struct aa_profile *aa_fqlookupn_profile(struct aa_label *base,
+ 					const char *fqname, size_t n);
+ 
+ ssize_t aa_replace_profiles(struct aa_ns *view, struct aa_label *label,
+-			    u32 mask, struct aa_loaddata *udata);
++			    u32 mask, struct aa_loaddata *udata,
++			    char *compressed_profile, size_t compressed_size);
+ ssize_t aa_remove_profiles(struct aa_ns *view, struct aa_label *label,
+ 			   char *name, size_t size);
+ void __aa_profile_list_release(struct list_head *head);
+diff --git a/security/apparmor/include/policy_unpack.h b/security/apparmor/include/policy_unpack.h
+index 24afa061a43a..c01f6885dbe3 100644
+--- a/security/apparmor/include/policy_unpack.h
++++ b/security/apparmor/include/policy_unpack.h
+@@ -129,7 +129,8 @@ struct aa_loaddata {
+ 	char *data;
+ };
+ 
+-int aa_unpack(struct aa_loaddata *udata, struct list_head *lh, const char **ns);
++int aa_unpack(struct aa_loaddata *udata, struct list_head *lh, const char **ns,
++	      char *compressed_data, size_t compressed_size);
+ 
+ /**
+  * aa_get_i_loaddata - get a reference count from a counted data reference
+diff --git a/security/apparmor/policy.c b/security/apparmor/policy.c
+index cc279fb6f40e..f6f1b72d7c3d 100644
+--- a/security/apparmor/policy.c
++++ b/security/apparmor/policy.c
+@@ -1159,6 +1159,8 @@ static struct aa_profile *update_to_newest_parent(struct aa_profile *new)
+  * @label: label that is attempting to load/replace policy
+  * @mask: permission mask
+  * @udata: serialized data stream  (NOT NULL)
++ * @compressed_profile: The userspace-provided compressed profile. May be NULL
++ * @compressed_size: If compressed_data is not NULL, the compressed data size
+  *
+  * unpack and replace a profile on the profile list and uses of that profile
+  * by any task creds via invalidating the old version of the profile, which
+@@ -1168,7 +1170,8 @@ static struct aa_profile *update_to_newest_parent(struct aa_profile *new)
+  * Returns: size of data consumed else error code on failure.
+  */
+ ssize_t aa_replace_profiles(struct aa_ns *policy_ns, struct aa_label *label,
+-			    u32 mask, struct aa_loaddata *udata)
++			    u32 mask, struct aa_loaddata *udata,
++			    char *compressed_profile, size_t compressed_size)
+ {
+ 	const char *ns_name = NULL, *info = NULL;
+ 	struct aa_ns *ns = NULL;
+@@ -1181,7 +1184,7 @@ ssize_t aa_replace_profiles(struct aa_ns *policy_ns, struct aa_label *label,
+ 	op = mask & AA_MAY_REPLACE_POLICY ? OP_PROF_REPL : OP_PROF_LOAD;
+ 	aa_get_profile_loaddata(udata);
+ 	/* released below */
+-	error = aa_unpack(udata, &lh, &ns_name);
++	error = aa_unpack(udata, &lh, &ns_name, compressed_profile, compressed_size);
+ 	if (error)
+ 		goto out;
+ 
+diff --git a/security/apparmor/policy_unpack.c b/security/apparmor/policy_unpack.c
+index bce2c47bdfe5..5969d78f16af 100644
+--- a/security/apparmor/policy_unpack.c
++++ b/security/apparmor/policy_unpack.c
+@@ -1718,6 +1718,8 @@ static int compress_loaddata(struct aa_loaddata *data)
+  * @udata: user data copied to kmem  (NOT NULL)
+  * @lh: list to place unpacked profiles in a aa_repl_ws
+  * @ns: Returns namespace profile is in if specified else NULL (NOT NULL)
++ * @compressed_data: The userspace-provided compressed data. May be NULL
++ * @compressed_size: If compressed_data is not NULL, the compressed data size
+  *
+  * Unpack user data and return refcounted allocated profile(s) stored in
+  * @lh in order of discovery, with the list chain stored in base.list
+@@ -1726,12 +1728,12 @@ static int compress_loaddata(struct aa_loaddata *data)
+  * Returns: profile(s) on @lh else error pointer if fails to unpack
+  */
+ int aa_unpack(struct aa_loaddata *udata, struct list_head *lh,
+-	      const char **ns)
++	      const char **ns, char *compressed_data, size_t compressed_size)
+ {
+ 	struct aa_load_ent *tmp, *ent;
+ 	struct aa_profile *profile = NULL;
+ 	char *ns_name = NULL;
+-	int error;
++	int error = 0;
+ 	struct aa_ext e = {
+ 		.start = udata->data,
+ 		.end = udata->data + udata->size,
+@@ -1784,10 +1786,23 @@ int aa_unpack(struct aa_loaddata *udata, struct list_head *lh,
+ 	}
+ 
+ 	if (aa_g_export_binary) {
+-		error = compress_loaddata(udata);
++		/* Do we have userspace-compressed data? */
++		if (compressed_data) {
++			kvfree(udata->data);
++			udata->data = compressed_data;
++			udata->compressed_size = compressed_size;
++			compressed_data = NULL; /* consumed */
++
++		} else
++			error = compress_loaddata(udata);
++
+ 		if (error)
+ 			goto fail;
++	} else if (compressed_data) {
++		kvfree(compressed_data);
++		compressed_data = NULL;
+ 	}
++
+ 	return 0;
+ 
+ fail_profile:
+@@ -1795,6 +1810,8 @@ int aa_unpack(struct aa_loaddata *udata, struct list_head *lh,
+ 	aa_put_profile(profile);
+ 
+ fail:
++	if (compressed_data)
++		kvfree(compressed_data);
+ 	list_for_each_entry_safe(ent, tmp, lh, list) {
+ 		list_del_init(&ent->list);
+ 		aa_load_ent_free(ent);
+-- 
+2.55.0
+

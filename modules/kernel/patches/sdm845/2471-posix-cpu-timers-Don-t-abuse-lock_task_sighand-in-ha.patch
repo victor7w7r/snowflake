@@ -1,0 +1,49 @@
+From a73d7f98e41a96d6e1bcb0e731ab185d9d67878e Mon Sep 17 00:00:00 2001
+From: Oleg Nesterov <oleg@redhat.com>
+Date: Sat, 4 Jul 2026 13:09:36 +0200
+Subject: [PATCH 02471/15333] posix-cpu-timers: Don't abuse lock_task_sighand()
+ in handle_posix_cpu_timers()
+
+After commit f90fff1e152d ("posix-cpu-timers: fix race between
+handle_posix_cpu_timers() and posix_cpu_timer_del()"), tsk->sighand is
+stable in handle_posix_cpu_timers(), so it can use the plain
+spin_lock_irqsave(&tsk->sighand->siglock).
+
+Signed-off-by: Oleg Nesterov <oleg@redhat.com>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Reviewed-by: Bradley Morgan <include@grrlz.net>
+Link: https://patch.msgid.link/akjp8AGpY8eJG5I1@redhat.com
+---
+ kernel/time/posix-cpu-timers.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/kernel/time/posix-cpu-timers.c b/kernel/time/posix-cpu-timers.c
+index 5e633d8750d1..c8a9b52cc937 100644
+--- a/kernel/time/posix-cpu-timers.c
++++ b/kernel/time/posix-cpu-timers.c
+@@ -1300,8 +1300,11 @@ static void handle_posix_cpu_timers(struct task_struct *tsk)
+ 	unsigned long flags, start;
+ 	LIST_HEAD(firing);
+ 
+-	if (!lock_task_sighand(tsk, &flags))
+-		return;
++	/*
++	 * tsk is current and ->sighand is stable, see the
++	 * tsk->exit_state check in run_posix_cpu_timers()
++	 */
++	spin_lock_irqsave(&tsk->sighand->siglock, flags);
+ 
+ 	do {
+ 		/*
+@@ -1361,7 +1364,7 @@ static void handle_posix_cpu_timers(struct task_struct *tsk)
+ 	 * that gets the timer lock before we do will give it up and
+ 	 * spin until we've taken care of that timer below.
+ 	 */
+-	unlock_task_sighand(tsk, &flags);
++	spin_unlock_irqrestore(&tsk->sighand->siglock, flags);
+ 
+ 	/*
+ 	 * Now that all the timers on our list have the firing flag,
+-- 
+2.55.0
+

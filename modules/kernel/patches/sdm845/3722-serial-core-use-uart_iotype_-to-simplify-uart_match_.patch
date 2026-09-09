@@ -1,0 +1,50 @@
+From 11f1d49122ec2227b050f4596a7422606237347e Mon Sep 17 00:00:00 2001
+From: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Date: Thu, 21 May 2026 14:16:49 -0400
+Subject: [PATCH 03722/15333] serial: core: use uart_iotype_*() to simplify
+ uart_match_port()
+
+Make use of new functions uart_iotype_mmio() and uart_iotype_legacy_io()
+to simplify and improve code readability.
+
+Signed-off-by: Hugo Villeneuve <hvilleneuve@dimonoff.com>
+Link: https://patch.msgid.link/20260521-tty-upio-v3-3-bf74567994a0@dimonoff.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/tty/serial/serial_core.c | 16 ++++------------
+ 1 file changed, 4 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/tty/serial/serial_core.c b/drivers/tty/serial/serial_core.c
+index d82f3ff44532..6a8f27718648 100644
+--- a/drivers/tty/serial/serial_core.c
++++ b/drivers/tty/serial/serial_core.c
+@@ -3237,22 +3237,14 @@ bool uart_match_port(const struct uart_port *port1,
+ {
+ 	if (port1->iotype != port2->iotype)
+ 		return false;
+-
+-	switch (port1->iotype) {
+-	case UPIO_PORT:
++	else if (port1->iotype == UPIO_PORT)
+ 		return port1->iobase == port2->iobase;
+-	case UPIO_HUB6:
++	else if (port1->iotype == UPIO_HUB6)
+ 		return hub6_match_port(port1, port2);
+-	case UPIO_MEM:
+-	case UPIO_MEM16:
+-	case UPIO_MEM32:
+-	case UPIO_MEM32BE:
+-	case UPIO_AU:
+-	case UPIO_TSI:
++	else if (uart_iotype_mmio(port1->iotype))
+ 		return port1->mapbase == port2->mapbase;
+-	default:
++	else
+ 		return false;
+-	}
+ }
+ EXPORT_SYMBOL(uart_match_port);
+ 
+-- 
+2.55.0
+

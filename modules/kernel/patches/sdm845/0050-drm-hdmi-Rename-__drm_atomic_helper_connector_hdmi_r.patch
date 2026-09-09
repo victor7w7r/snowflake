@@ -1,0 +1,146 @@
+From f029d933561e6b79b86c726db93893a54001b461 Mon Sep 17 00:00:00 2001
+From: Maxime Ripard <mripard@kernel.org>
+Date: Tue, 26 May 2026 18:46:26 +0200
+Subject: [PATCH 00050/15333] drm/hdmi: Rename
+ __drm_atomic_helper_connector_hdmi_reset()
+
+__drm_atomic_helper_connector_hdmi_reset() is typically used to
+initialize a newly allocated drm_connector_state when the connector is
+using the HDMI helpers, and is being called by the
+drm_connector_funcs.reset implementation.
+
+Since we want to consolidate DRM objects state allocation around the
+atomic_create_state callback that will only allocate and initialize a
+new drm_connector_state instance, we will need to call
+__drm_atomic_helper_connector_hdmi_reset() from both the reset and
+atomic_create hooks.
+
+To avoid any confusion, we can thus rename
+__drm_atomic_helper_connector_hdmi_reset() to
+__drm_atomic_helper_connector_hdmi_state_init().
+
+Suggested-by: Laurent Pinchart <laurent.pinchart@ideasonboard.com>
+Reviewed-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Reviewed-by: Thomas Zimmermann <tzimmermann@suse.de>
+Reviewed-by: Laurent Pinchart <laurent.pinchart+renesas@ideasonboard.com>
+Link: https://patch.msgid.link/20260526-drm-mode-config-init-v6-14-852346394200@kernel.org
+Signed-off-by: Maxime Ripard <mripard@kernel.org>
+---
+ drivers/gpu/drm/display/drm_bridge_connector.c    |  4 ++--
+ drivers/gpu/drm/display/drm_hdmi_state_helper.c   | 15 ++++++++-------
+ drivers/gpu/drm/sun4i/sun4i_hdmi_enc.c            |  2 +-
+ .../gpu/drm/tests/drm_hdmi_state_helper_test.c    |  2 +-
+ drivers/gpu/drm/vc4/vc4_hdmi.c                    |  2 +-
+ include/drm/display/drm_hdmi_state_helper.h       |  4 ++--
+ 6 files changed, 15 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/gpu/drm/display/drm_bridge_connector.c b/drivers/gpu/drm/display/drm_bridge_connector.c
+index 649969fca141..50408af746d8 100644
+--- a/drivers/gpu/drm/display/drm_bridge_connector.c
++++ b/drivers/gpu/drm/display/drm_bridge_connector.c
+@@ -272,8 +272,8 @@ static void drm_bridge_connector_reset(struct drm_connector *connector)
+ 
+ 	drm_atomic_helper_connector_reset(connector);
+ 	if (bridge_connector->bridge_hdmi)
+-		__drm_atomic_helper_connector_hdmi_reset(connector,
+-							 connector->state);
++		__drm_atomic_helper_connector_hdmi_state_init(connector,
++							      connector->state);
+ }
+ 
+ static const struct drm_connector_funcs drm_bridge_connector_funcs = {
+diff --git a/drivers/gpu/drm/display/drm_hdmi_state_helper.c b/drivers/gpu/drm/display/drm_hdmi_state_helper.c
+index 4867edbf2622..a331ebdd65af 100644
+--- a/drivers/gpu/drm/display/drm_hdmi_state_helper.c
++++ b/drivers/gpu/drm/display/drm_hdmi_state_helper.c
+@@ -306,17 +306,18 @@
+  */
+ 
+ /**
+- * __drm_atomic_helper_connector_hdmi_reset() - Initializes all HDMI @drm_connector_state resources
++ * __drm_atomic_helper_connector_hdmi_state_init() - Initialize all HDMI @drm_connector_state resources
+  * @connector: DRM connector
+- * @new_conn_state: connector state to reset
++ * @new_conn_state: connector state to initialize
+  *
+  * Initializes all HDMI resources from a @drm_connector_state without
+  * actually allocating it. This is useful for HDMI drivers, in
+- * combination with __drm_atomic_helper_connector_reset() or
+- * drm_atomic_helper_connector_reset().
++ * combination with __drm_atomic_helper_connector_state_init(),
++ * drm_atomic_helper_connector_reset(), or
++ * drm_atomic_helper_connector_create_state().
+  */
+-void __drm_atomic_helper_connector_hdmi_reset(struct drm_connector *connector,
+-					      struct drm_connector_state *new_conn_state)
++void __drm_atomic_helper_connector_hdmi_state_init(struct drm_connector *connector,
++						   struct drm_connector_state *new_conn_state)
+ {
+ 	unsigned int max_bpc = connector->max_bpc;
+ 
+@@ -324,7 +325,7 @@ void __drm_atomic_helper_connector_hdmi_reset(struct drm_connector *connector,
+ 	new_conn_state->max_requested_bpc = max_bpc;
+ 	new_conn_state->hdmi.broadcast_rgb = DRM_HDMI_BROADCAST_RGB_AUTO;
+ }
+-EXPORT_SYMBOL(__drm_atomic_helper_connector_hdmi_reset);
++EXPORT_SYMBOL(__drm_atomic_helper_connector_hdmi_state_init);
+ 
+ static enum hdmi_colorspace
+ output_color_format_to_hdmi_colorspace(const struct drm_connector *connector,
+diff --git a/drivers/gpu/drm/sun4i/sun4i_hdmi_enc.c b/drivers/gpu/drm/sun4i/sun4i_hdmi_enc.c
+index 74c7c3720ba8..8f64464621c9 100644
+--- a/drivers/gpu/drm/sun4i/sun4i_hdmi_enc.c
++++ b/drivers/gpu/drm/sun4i/sun4i_hdmi_enc.c
+@@ -285,7 +285,7 @@ sun4i_hdmi_connector_detect(struct drm_connector *connector, bool force)
+ static void sun4i_hdmi_connector_reset(struct drm_connector *connector)
+ {
+ 	drm_atomic_helper_connector_reset(connector);
+-	__drm_atomic_helper_connector_hdmi_reset(connector, connector->state);
++	__drm_atomic_helper_connector_hdmi_state_init(connector, connector->state);
+ }
+ 
+ static const struct drm_connector_funcs sun4i_hdmi_connector_funcs = {
+diff --git a/drivers/gpu/drm/tests/drm_hdmi_state_helper_test.c b/drivers/gpu/drm/tests/drm_hdmi_state_helper_test.c
+index c9819c3fc635..e89e1af7a811 100644
+--- a/drivers/gpu/drm/tests/drm_hdmi_state_helper_test.c
++++ b/drivers/gpu/drm/tests/drm_hdmi_state_helper_test.c
+@@ -168,7 +168,7 @@ static const struct drm_connector_helper_funcs dummy_connector_helper_funcs = {
+ static void dummy_hdmi_connector_reset(struct drm_connector *connector)
+ {
+ 	drm_atomic_helper_connector_reset(connector);
+-	__drm_atomic_helper_connector_hdmi_reset(connector, connector->state);
++	__drm_atomic_helper_connector_hdmi_state_init(connector, connector->state);
+ }
+ 
+ static const struct drm_connector_funcs dummy_connector_funcs = {
+diff --git a/drivers/gpu/drm/vc4/vc4_hdmi.c b/drivers/gpu/drm/vc4/vc4_hdmi.c
+index a161d3b00a25..74dce4be0c00 100644
+--- a/drivers/gpu/drm/vc4/vc4_hdmi.c
++++ b/drivers/gpu/drm/vc4/vc4_hdmi.c
+@@ -508,7 +508,7 @@ static int vc4_hdmi_connector_atomic_check(struct drm_connector *connector,
+ static void vc4_hdmi_connector_reset(struct drm_connector *connector)
+ {
+ 	drm_atomic_helper_connector_reset(connector);
+-	__drm_atomic_helper_connector_hdmi_reset(connector, connector->state);
++	__drm_atomic_helper_connector_hdmi_state_init(connector, connector->state);
+ 	drm_atomic_helper_connector_tv_margins_reset(connector);
+ }
+ 
+diff --git a/include/drm/display/drm_hdmi_state_helper.h b/include/drm/display/drm_hdmi_state_helper.h
+index 0adc30c55ec9..13375bd0f4ae 100644
+--- a/include/drm/display/drm_hdmi_state_helper.h
++++ b/include/drm/display/drm_hdmi_state_helper.h
+@@ -11,8 +11,8 @@ struct hdmi_audio_infoframe;
+ 
+ enum drm_connector_status;
+ 
+-void __drm_atomic_helper_connector_hdmi_reset(struct drm_connector *connector,
+-					      struct drm_connector_state *new_conn_state);
++void __drm_atomic_helper_connector_hdmi_state_init(struct drm_connector *connector,
++						   struct drm_connector_state *new_conn_state);
+ 
+ int drm_atomic_helper_connector_hdmi_check(struct drm_connector *connector,
+ 					   struct drm_atomic_commit *state);
+-- 
+2.55.0
+

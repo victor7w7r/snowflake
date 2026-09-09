@@ -1,0 +1,38 @@
+From 8acacfa8b0f8b17e740730b3e96f99ff726065b2 Mon Sep 17 00:00:00 2001
+From: Tyrel Datwyler <tyreld@linux.ibm.com>
+Date: Wed, 22 Jul 2026 17:01:29 -0700
+Subject: [PATCH 07199/15333] scsi: ibmvfc: add helper to check NVMe/FC support
+ with active channels
+
+It can be the case that NVMeoF is enabled on both the client and VIOS,
+but no queues are configured making the need to do NVMe target discovery
+pointless. Add a helper to short hand the capabilities check and active
+NVMe queue check.
+
+Signed-off-by: Tyrel Datwyler <tyreld@linux.ibm.com>
+Link: https://patch.msgid.link/20260723000149.969416-14-tyreld@linux.ibm.com
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+---
+ drivers/scsi/ibmvscsi/ibmvfc-core.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/scsi/ibmvscsi/ibmvfc-core.c b/drivers/scsi/ibmvscsi/ibmvfc-core.c
+index 84302f982a6a..088167ec04ff 100644
+--- a/drivers/scsi/ibmvscsi/ibmvfc-core.c
++++ b/drivers/scsi/ibmvscsi/ibmvfc-core.c
+@@ -207,6 +207,12 @@ static int ibmvfc_check_caps(struct ibmvfc_host *vhost, unsigned long cap_flags)
+ 	return (host_caps & cap_flags) ? 1 : 0;
+ }
+ 
++static int ibmvfc_nvme_active(struct ibmvfc_host *vhost)
++{
++	return (ibmvfc_check_caps(vhost, IBMVFC_SUPPORT_NVMEOF) &&
++		vhost->nvme_scrqs.active_queues);
++}
++
+ static struct ibmvfc_fcp_cmd_iu *ibmvfc_get_fcp_iu(struct ibmvfc_host *vhost,
+ 						   struct ibmvfc_cmd *vfc_cmd)
+ {
+-- 
+2.55.0
+

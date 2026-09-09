@@ -1,0 +1,52 @@
+From 8e2d7bbd6b184c0c1b0fe7cb404c9b5214d89931 Mon Sep 17 00:00:00 2001
+From: James Lin <PingLei.Lin@amd.com>
+Date: Fri, 12 Jun 2026 10:05:29 -0400
+Subject: [PATCH 00495/15333] drm/amd/display: Add IN_FORMATS_ASYNC support for
+ planes
+
+[Why]
+The DRM core exposes an IN_FORMATS_ASYNC plane property describing the
+set of format/modifier pairs that are valid for asynchronous (immediate)
+page flips. amdgpu already advertises async page flip support via
+mode_config.async_page_flip = true, but never implemented the
+.format_mod_supported_async plane callback, so the IN_FORMATS_ASYNC
+property was not created.
+
+This inconsistency (advertising async flips while exposing IN_FORMATS but
+no IN_FORMATS_ASYNC) causes userspace, such as igt-gpu-tools, to emit a
+repeated warning during plane initialization, which in turn demotes many
+otherwise passing KMS subtests to a WARN result.
+
+[How]
+Wire up .format_mod_supported_async to the existing
+amdgpu_dm_plane_format_mod_supported callback so the async format list is
+populated. amdgpu does not restrict async flips at the format/modifier
+level: the async flip constraints are enforced at atomic check and commit
+time and only require a fast update (no change to FB pitch, DCC state,
+rotation or memory type) between the old and new buffers. Therefore the
+set of formats/modifiers valid for async flips is identical to the
+regular IN_FORMATS set, and the same callback can be reused.
+
+Reviewed-by: Aurabindo Pillai <aurabindo.pillai@amd.com>
+Signed-off-by: James Lin <PingLei.Lin@amd.com>
+Signed-off-by: Ivan Lipski <ivan.lipski@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c
+index e957657b06c7..c7f8e08feaf4 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c
+@@ -1859,6 +1859,7 @@ static const struct drm_plane_funcs dm_plane_funcs = {
+ 	.atomic_duplicate_state = amdgpu_dm_plane_drm_plane_duplicate_state,
+ 	.atomic_destroy_state = amdgpu_dm_plane_drm_plane_destroy_state,
+ 	.format_mod_supported = amdgpu_dm_plane_format_mod_supported,
++	.format_mod_supported_async = amdgpu_dm_plane_format_mod_supported,
+ #ifdef AMD_PRIVATE_COLOR
+ 	.atomic_set_property = dm_atomic_plane_set_property,
+ 	.atomic_get_property = dm_atomic_plane_get_property,
+-- 
+2.55.0
+

@@ -1,0 +1,48 @@
+From 2838bdb772e4e94591a90437bf595dba485a3162 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh=20=28Schneider=20Electric=29?=
+ <thomas.weissschuh@linutronix.de>
+Date: Fri, 31 Jul 2026 16:20:15 +0200
+Subject: [PATCH 13155/15333] timekeeping: Annotate auxiliary clock accessors
+ with __must_check
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In contrast to the system time accessors, the ones for auxiliary clocks can
+fail.
+
+Make sure the callers check for this.
+
+Signed-off-by: Thomas Weißschuh (Schneider Electric) <thomas.weissschuh@linutronix.de>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/20260731-timekeeping-aux-must-check-v1-2-11ae93068497@linutronix.de
+---
+ include/linux/timekeeping.h | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/include/linux/timekeeping.h b/include/linux/timekeeping.h
+index ca4a881e622f..561313b5cb6d 100644
+--- a/include/linux/timekeeping.h
++++ b/include/linux/timekeeping.h
+@@ -267,11 +267,14 @@ extern void timekeeping_inject_sleeptime64(const struct timespec64 *delta);
+  * Auxiliary clock interfaces
+  */
+ #ifdef CONFIG_POSIX_AUX_CLOCKS
+-extern bool ktime_get_aux(clockid_t id, ktime_t *kt);
+-extern bool ktime_get_aux_ts64(clockid_t id, struct timespec64 *kt);
++extern bool __must_check ktime_get_aux(clockid_t id, ktime_t *kt);
++extern bool __must_check ktime_get_aux_ts64(clockid_t id, struct timespec64 *kt);
+ #else
+-static inline bool ktime_get_aux(clockid_t id, ktime_t *kt) { return false; }
+-static inline bool ktime_get_aux_ts64(clockid_t id, struct timespec64 *kt) { return false; }
++static inline bool __must_check ktime_get_aux(clockid_t id, ktime_t *kt) { return false; }
++static inline bool __must_check ktime_get_aux_ts64(clockid_t id, struct timespec64 *kt)
++{
++	return false;
++}
+ #endif
+ 
+ /**
+-- 
+2.55.0
+

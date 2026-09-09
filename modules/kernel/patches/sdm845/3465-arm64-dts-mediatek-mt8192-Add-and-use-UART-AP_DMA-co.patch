@@ -1,0 +1,64 @@
+From f0c918fe2469c35390def236ea1da32686461100 Mon Sep 17 00:00:00 2001
+From: AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>
+Date: Thu, 9 Jul 2026 11:09:23 +0200
+Subject: [PATCH 03465/15333] arm64: dts: mediatek: mt8192: Add and use UART
+ AP_DMA controller
+
+This SoC has a DMA controller (AP_DMA) that provides one channel
+for each data direction (transmit and receive) for all of the
+UART controllers in the SoC.
+
+In order to increase the efficiency of data TX/RX over the UART
+controllers, add the UART DMA controller and assign the right
+channels to its two uart controllers.
+
+Signed-off-by: AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>
+---
+ arch/arm64/boot/dts/mediatek/mt8192.dtsi | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt8192.dtsi b/arch/arm64/boot/dts/mediatek/mt8192.dtsi
+index 9f8f115edd4c..898953acdb61 100644
+--- a/arch/arm64/boot/dts/mediatek/mt8192.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt8192.dtsi
+@@ -741,6 +741,19 @@ spmi: spmi@10027000 {
+ 			assigned-clock-parents = <&topckgen CLK_TOP_OSC_D10>;
+ 		};
+ 
++		apdma: dma-controller@10217a80 {
++			compatible = "mediatek,mt8192-uart-dma", "mediatek,mt6835-uart-dma";
++			reg = <0 0x10217a80 0 0x80>, <0 0x10217b00 0 0x80>,
++			      <0 0x10217b80 0 0x80>, <0 0x10217c00 0 0x80>;
++			interrupts = <GIC_SPI 146 IRQ_TYPE_LEVEL_HIGH 0>,
++				     <GIC_SPI 147 IRQ_TYPE_LEVEL_HIGH 0>,
++				     <GIC_SPI 148 IRQ_TYPE_LEVEL_HIGH 0>,
++				     <GIC_SPI 149 IRQ_TYPE_LEVEL_HIGH 0>;
++			clocks = <&infracfg CLK_INFRA_AP_DMA>;
++			#dma-cells = <1>;
++			dma-requests = <4>;
++		};
++
+ 		gce: mailbox@10228000 {
+ 			compatible = "mediatek,mt8192-gce";
+ 			reg = <0 0x10228000 0 0x4000>;
+@@ -765,6 +778,8 @@ uart0: serial@11002000 {
+ 			interrupts = <GIC_SPI 109 IRQ_TYPE_LEVEL_HIGH 0>;
+ 			clocks = <&clk26m>, <&infracfg CLK_INFRA_UART0>;
+ 			clock-names = "baud", "bus";
++			dmas = <&apdma 0>, <&apdma 1>;
++			dma-names = "tx", "rx";
+ 			status = "disabled";
+ 		};
+ 
+@@ -775,6 +790,8 @@ uart1: serial@11003000 {
+ 			interrupts = <GIC_SPI 110 IRQ_TYPE_LEVEL_HIGH 0>;
+ 			clocks = <&clk26m>, <&infracfg CLK_INFRA_UART1>;
+ 			clock-names = "baud", "bus";
++			dmas = <&apdma 2>, <&apdma 3>;
++			dma-names = "tx", "rx";
+ 			status = "disabled";
+ 		};
+ 
+-- 
+2.55.0
+

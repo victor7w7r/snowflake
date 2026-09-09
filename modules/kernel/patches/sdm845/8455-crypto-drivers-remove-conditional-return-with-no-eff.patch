@@ -1,0 +1,66 @@
+From 57e599da2d3be1366214bd1d302a352dfc08d40a Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Fri, 24 Jul 2026 03:45:20 +0900
+Subject: [PATCH 08455/15333] crypto: drivers - remove conditional return with
+ no effect
+
+Both branches of the check return the same value, so the check has
+no effect. Remove it and return the value directly.
+
+This is the result of running the Coccinelle script from
+scripts/coccinelle/misc/cond_return_no_effect.cocci.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ drivers/crypto/intel/qat/qat_common/adf_gen2_config.c   | 8 ++------
+ drivers/crypto/marvell/octeontx2/otx2_cpt_mbox_common.c | 7 +------
+ 2 files changed, 3 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/crypto/intel/qat/qat_common/adf_gen2_config.c b/drivers/crypto/intel/qat/qat_common/adf_gen2_config.c
+index c27ff6d18e11..57025bffee73 100644
+--- a/drivers/crypto/intel/qat/qat_common/adf_gen2_config.c
++++ b/drivers/crypto/intel/qat/qat_common/adf_gen2_config.c
+@@ -155,12 +155,8 @@ static int adf_gen2_comp_dev_config(struct adf_accel_dev *accel_dev)
+ 	}
+ 
+ 	val = i;
+-	ret = adf_cfg_add_key_value_param(accel_dev, ADF_KERNEL_SEC, ADF_NUM_DC,
+-					  &val, ADF_DEC);
+-	if (ret)
+-		return ret;
+-
+-	return ret;
++	return adf_cfg_add_key_value_param(accel_dev, ADF_KERNEL_SEC,
++					   ADF_NUM_DC, &val, ADF_DEC);
+ 
+ err:
+ 	dev_err(&GET_DEV(accel_dev), "Failed to add configuration for compression\n");
+diff --git a/drivers/crypto/marvell/octeontx2/otx2_cpt_mbox_common.c b/drivers/crypto/marvell/octeontx2/otx2_cpt_mbox_common.c
+index 95f3de3a34eb..1542a110ba37 100644
+--- a/drivers/crypto/marvell/octeontx2/otx2_cpt_mbox_common.c
++++ b/drivers/crypto/marvell/octeontx2/otx2_cpt_mbox_common.c
+@@ -235,7 +235,6 @@ int otx2_cpt_lf_reset_msg(struct otx2_cptlfs_info *lfs, int slot)
+ 	struct otx2_mbox *mbox = lfs->mbox;
+ 	struct pci_dev *pdev = lfs->pdev;
+ 	struct cpt_lf_rst_req *req;
+-	int ret;
+ 
+ 	req = (struct cpt_lf_rst_req *)otx2_mbox_alloc_msg_rsp(mbox, 0, sizeof(*req),
+ 							       sizeof(struct msg_rsp));
+@@ -248,11 +247,7 @@ int otx2_cpt_lf_reset_msg(struct otx2_cptlfs_info *lfs, int slot)
+ 	req->hdr.sig = OTX2_MBOX_REQ_SIG;
+ 	req->hdr.pcifunc = 0;
+ 	req->slot = slot;
+-	ret = otx2_cpt_send_mbox_msg(mbox, pdev);
+-	if (ret)
+-		return ret;
+-
+-	return ret;
++	return otx2_cpt_send_mbox_msg(mbox, pdev);
+ }
+ EXPORT_SYMBOL_NS_GPL(otx2_cpt_lf_reset_msg, "CRYPTO_DEV_OCTEONTX2_CPT");
+ 
+-- 
+2.55.0
+

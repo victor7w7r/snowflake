@@ -1,0 +1,63 @@
+From d6bf11a7e8a86135193fae9908e46186796075f5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20Draszik?= <andre.draszik@linaro.org>
+Date: Tue, 28 Jul 2026 13:42:39 +0100
+Subject: [PATCH 10969/15333] kallsyms: add symbol size for kallsyms symbols
+ that can change size
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add symbol size for kallsyms symbols that can change size so that sizes
+can be determined easily without having to manually calculate them
+when inspecting the object files (.tmp_vmlinux?.kallsyms.o or
+.tmp_vmlinux?). Without, the assembler records the symbol size as 0.
+
+This is primarily useful as a debugging aid in case of linker errors as
+part of link-vmlinux.sh, and because symbol size doesn't have to align
+with the offset to the next symbol due to padding/alignment.
+
+Signed-off-by: André Draszik <andre.draszik@linaro.org>
+Tested-by: Nathan Chancellor <nathan@kernel.org>
+Reviewed-by: Nicolas Schier <nsc@kernel.org>
+Signed-off-by: Nicolas Schier <nsc@kernel.org>
+---
+ scripts/kallsyms.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/scripts/kallsyms.c b/scripts/kallsyms.c
+index 37d5c095ad22..494852ade6d8 100644
+--- a/scripts/kallsyms.c
++++ b/scripts/kallsyms.c
+@@ -398,11 +398,13 @@ static void write_src(void)
+ 		strcpy((char *)table[i]->sym, buf);
+ 		printf("\t/* %s */\n", table[i]->sym);
+ 	}
++	printf(".size kallsyms_names, . - kallsyms_names\n");
+ 	printf("\n");
+ 
+ 	output_label("kallsyms_markers");
+ 	for (i = 0; i < markers_cnt; i++)
+ 		printf("\t.long\t%u\n", markers[i]);
++	printf(".size kallsyms_markers, . - kallsyms_markers\n");
+ 	printf("\n");
+ 
+ 	free(markers);
+@@ -415,6 +417,7 @@ static void write_src(void)
+ 		printf("\t.asciz\t\"%s\"\n", buf);
+ 		off += strlen(buf) + 1;
+ 	}
++	printf(".size kallsyms_token_table, . - kallsyms_token_table\n");
+ 	printf("\n");
+ 
+ 	output_label("kallsyms_token_index");
+@@ -441,6 +444,7 @@ static void write_src(void)
+ 			       (unsigned int)table[i]->addr, table[i]->sym);
+ 		}
+ 	}
++	printf(".size kallsyms_offsets, . - kallsyms_offsets\n");
+ 	printf("\n");
+ 
+ 	sort_symbols_by_name();
+-- 
+2.55.0
+

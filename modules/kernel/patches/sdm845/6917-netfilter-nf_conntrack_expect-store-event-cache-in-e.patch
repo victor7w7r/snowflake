@@ -1,0 +1,138 @@
+From 874f455c3a2954b5b56fbedf97da39c34df9dc0e Mon Sep 17 00:00:00 2001
+From: Pablo Neira Ayuso <pablo@netfilter.org>
+Date: Mon, 13 Jul 2026 18:06:58 +0200
+Subject: [PATCH 06917/15333] netfilter: nf_conntrack_expect: store event cache
+ in expectation
+
+Store the event cache in the expectation instead of accessing the
+exp->master cache, as a step forward towards turning the exp->master
+into a cookie.
+
+Signed-off-by: Pablo Neira Ayuso <pablo@netfilter.org>
+---
+ include/net/netfilter/nf_conntrack_expect.h | 3 +++
+ net/netfilter/nf_conntrack_broadcast.c      | 6 ++++++
+ net/netfilter/nf_conntrack_ecache.c         | 7 +------
+ net/netfilter/nf_conntrack_expect.c         | 5 +++++
+ net/netfilter/nf_conntrack_netlink.c        | 5 +++++
+ 5 files changed, 20 insertions(+), 6 deletions(-)
+
+diff --git a/include/net/netfilter/nf_conntrack_expect.h b/include/net/netfilter/nf_conntrack_expect.h
+index c024345c9bd8..5d0f5b2f12a7 100644
+--- a/include/net/netfilter/nf_conntrack_expect.h
++++ b/include/net/netfilter/nf_conntrack_expect.h
+@@ -42,6 +42,9 @@ struct nf_conntrack_expect {
+ 	/* Expectation class */
+ 	unsigned int class;
+ 
++	/* Event filter mask */
++	u16 event_mask;
++
+ 	/* Function to call after setup and insertion */
+ 	void (*expectfn)(struct nf_conn *new,
+ 			 struct nf_conntrack_expect *this);
+diff --git a/net/netfilter/nf_conntrack_broadcast.c b/net/netfilter/nf_conntrack_broadcast.c
+index 6ff954f1bfb8..0922e30b6ab0 100644
+--- a/net/netfilter/nf_conntrack_broadcast.c
++++ b/net/netfilter/nf_conntrack_broadcast.c
+@@ -14,6 +14,7 @@
+ #include <net/netfilter/nf_conntrack.h>
+ #include <net/netfilter/nf_conntrack_helper.h>
+ #include <net/netfilter/nf_conntrack_expect.h>
++#include <net/netfilter/nf_conntrack_ecache.h>
+ 
+ int nf_conntrack_broadcast_help(struct sk_buff *skb,
+ 				struct nf_conn *ct,
+@@ -27,6 +28,7 @@ int nf_conntrack_broadcast_help(struct sk_buff *skb,
+ 	struct rtable *rt = skb_rtable(skb);
+ 	struct in_device *in_dev;
+ 	struct nf_conn_help *help = nfct_help(ct);
++	struct nf_conntrack_ecache *ecache;
+ 	__be32 mask = 0;
+ 
+ 	if (!help)
+@@ -79,6 +81,10 @@ int nf_conntrack_broadcast_help(struct sk_buff *skb,
+ #ifdef CONFIG_NF_CONNTRACK_ZONES
+ 	exp->zone = ct->zone;
+ #endif
++	ecache = nf_ct_ecache_find(ct);
++	if (ecache)
++		exp->event_mask = ecache->expmask;
++
+ 	nf_ct_expect_related(exp, 0);
+ 	nf_ct_expect_put(exp);
+ 
+diff --git a/net/netfilter/nf_conntrack_ecache.c b/net/netfilter/nf_conntrack_ecache.c
+index cc8d8e85169f..fb731ee235d8 100644
+--- a/net/netfilter/nf_conntrack_ecache.c
++++ b/net/netfilter/nf_conntrack_ecache.c
+@@ -245,7 +245,6 @@ void nf_ct_expect_event_report(enum ip_conntrack_expect_events event,
+ {
+ 	struct net *net = nf_ct_exp_net(exp);
+ 	struct nf_ct_event_notifier *notify;
+-	struct nf_conntrack_ecache *e;
+ 
+ 	lockdep_nfct_expect_lock_held();
+ 
+@@ -254,11 +253,7 @@ void nf_ct_expect_event_report(enum ip_conntrack_expect_events event,
+ 	if (!notify)
+ 		goto out_unlock;
+ 
+-	e = nf_ct_ecache_find(exp->master);
+-	if (!e)
+-		goto out_unlock;
+-
+-	if (e->expmask & (1 << event)) {
++	if (exp->event_mask & (1 << event)) {
+ 		struct nf_exp_event item = {
+ 			.exp	= exp,
+ 			.portid	= portid,
+diff --git a/net/netfilter/nf_conntrack_expect.c b/net/netfilter/nf_conntrack_expect.c
+index 7ae68d60586a..cd9af3620af5 100644
+--- a/net/netfilter/nf_conntrack_expect.c
++++ b/net/netfilter/nf_conntrack_expect.c
+@@ -330,6 +330,7 @@ void nf_ct_expect_init(struct nf_conntrack_expect *exp, unsigned int class,
+ 	struct nf_conntrack_helper *helper = NULL;
+ 	struct nf_conn *ct = exp->master;
+ 	struct net *net = read_pnet(&ct->ct_net);
++	struct nf_conntrack_ecache *ecache;
+ 	struct nf_conn_help *help;
+ 	int len;
+ 
+@@ -342,6 +343,10 @@ void nf_ct_expect_init(struct nf_conntrack_expect *exp, unsigned int class,
+ 	exp->class = class;
+ 	exp->expectfn = NULL;
+ 
++	ecache = nf_ct_ecache_find(ct);
++	if (ecache)
++		exp->event_mask = ecache->expmask;
++
+ 	help = nfct_help(ct);
+ 	if (help)
+ 		helper = rcu_dereference(help->helper);
+diff --git a/net/netfilter/nf_conntrack_netlink.c b/net/netfilter/nf_conntrack_netlink.c
+index 31cbb1b55b9e..fc3f60099af3 100644
+--- a/net/netfilter/nf_conntrack_netlink.c
++++ b/net/netfilter/nf_conntrack_netlink.c
+@@ -3524,6 +3524,7 @@ ctnetlink_alloc_expect(const struct nlattr * const cda[], struct nf_conn *ct,
+ {
+ 	struct net *net = read_pnet(&ct->ct_net);
+ 	struct nf_conntrack_helper *helper;
++	struct nf_conntrack_ecache *ecache;
+ 	struct nf_conntrack_expect *exp;
+ 	struct nf_conn_help *help;
+ 	u32 class = 0;
+@@ -3575,6 +3576,10 @@ ctnetlink_alloc_expect(const struct nlattr * const cda[], struct nf_conn *ct,
+ 	exp->mask.src.u3 = mask->src.u3;
+ 	exp->mask.src.u.all = mask->src.u.all;
+ 
++	ecache = nf_ct_ecache_find(ct);
++	if (ecache)
++		exp->event_mask = ecache->expmask;
++
+ 	if (cda[CTA_EXPECT_NAT]) {
+ 		err = ctnetlink_parse_expect_nat(cda[CTA_EXPECT_NAT],
+ 						 exp, nf_ct_l3num(ct));
+-- 
+2.55.0
+

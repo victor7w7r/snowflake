@@ -1,0 +1,57 @@
+From 457d4ecb47aaf7a2cb46aaadd76e8c812e4f3c9e Mon Sep 17 00:00:00 2001
+From: Yonghong Song <yonghong.song@linux.dev>
+Date: Sun, 2 Aug 2026 22:27:26 -0700
+Subject: [PATCH 10004/15333] bpf: Remove unused BTF_FMODEL_STRUCT_ARG
+
+Commit 814cba835ef6 ("bpf, x86: Fix trampoline stack size for 128-bit
+arguments") changed the x86 trampoline to compute the number of
+registers from arg_size for every argument, which removed the last user
+of BTF_FMODEL_STRUCT_ARG. No other architecture or verifier code looks
+at the flag, so remove the macro and the code in __get_type_fmodel_flags()
+which sets it.
+
+Keep BTF_FMODEL_SIGNED_ARG at BIT(1) rather than renumbering it to
+BIT(0), so BIT(0) is available for a future flag.
+
+No functional change.
+
+Signed-off-by: Yonghong Song <yonghong.song@linux.dev>
+Signed-off-by: Daniel Borkmann <daniel@iogearbox.net>
+Acked-by: Leon Hwang <leon.hwang@linux.dev>
+Acked-by: Jiri Olsa <jolsa@kernel.org>
+Link: https://lore.kernel.org/bpf/20260803052726.2821447-1-yonghong.song@linux.dev
+---
+ include/linux/bpf.h | 3 ---
+ kernel/bpf/btf.c    | 2 --
+ 2 files changed, 5 deletions(-)
+
+diff --git a/include/linux/bpf.h b/include/linux/bpf.h
+index 356884587ae1..73bacfc6444d 100644
+--- a/include/linux/bpf.h
++++ b/include/linux/bpf.h
+@@ -1207,9 +1207,6 @@ struct bpf_prog_offload {
+ 	u32			jited_len;
+ };
+ 
+-/* The argument is a structure or a union. */
+-#define BTF_FMODEL_STRUCT_ARG		BIT(0)
+-
+ /* The argument is signed. */
+ #define BTF_FMODEL_SIGNED_ARG		BIT(1)
+ 
+diff --git a/kernel/bpf/btf.c b/kernel/bpf/btf.c
+index 5e8ac45ce56a..42414633cf26 100644
+--- a/kernel/bpf/btf.c
++++ b/kernel/bpf/btf.c
+@@ -7533,8 +7533,6 @@ static u8 __get_type_fmodel_flags(const struct btf_type *t)
+ {
+ 	u8 flags = 0;
+ 
+-	if (btf_type_is_struct(t))
+-		flags |= BTF_FMODEL_STRUCT_ARG;
+ 	if (btf_type_is_signed_int(t))
+ 		flags |= BTF_FMODEL_SIGNED_ARG;
+ 
+-- 
+2.55.0
+

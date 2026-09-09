@@ -1,0 +1,41 @@
+From 61c45e4c0db8f477737597571d6b2aa4f7d493ef Mon Sep 17 00:00:00 2001
+From: Jani Nikula <jani.nikula@intel.com>
+Date: Wed, 1 Jul 2026 16:52:59 +0300
+Subject: [PATCH 02301/15333] drm/i915: call intel_uncore_runtime_resume() for
+ each gt
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+All uncore suspend/resume calls are done on each gt. Follow suit in
+vlv_suspend_complete() error path purely for completeness, even if
+VLV/CHV only have one.
+
+Cc: Rodrigo Vivi <rodrigo.vivi@intel.com>
+Cc: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Reviewed-by: Andi Shyti <andi.shyti@linux.intel.com>
+Reviewed-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/e9dde426a8f84c75a5d61857c4259e562fa8ee41.1782913901.git.jani.nikula@intel.com
+Signed-off-by: Jani Nikula <jani.nikula@intel.com>
+---
+ drivers/gpu/drm/i915/i915_driver.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/i915/i915_driver.c b/drivers/gpu/drm/i915/i915_driver.c
+index 45f2dcc5130e..c9ce2b05b787 100644
+--- a/drivers/gpu/drm/i915/i915_driver.c
++++ b/drivers/gpu/drm/i915/i915_driver.c
+@@ -1522,7 +1522,9 @@ static int i915_pm_runtime_suspend(struct device *kdev)
+ 	if (ret) {
+ 		drm_err(&dev_priv->drm,
+ 			"Runtime suspend failed, disabling it (%d)\n", ret);
+-		intel_uncore_runtime_resume(&dev_priv->uncore);
++
++		for_each_gt(gt, dev_priv, i)
++			intel_uncore_runtime_resume(gt->uncore);
+ 
+ 		intel_irq_resume(dev_priv);
+ 
+-- 
+2.55.0
+

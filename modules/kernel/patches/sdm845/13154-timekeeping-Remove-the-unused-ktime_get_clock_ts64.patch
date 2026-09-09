@@ -1,0 +1,81 @@
+From 1b515771872174553fe70eadb8efecfa49035922 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh=20=28Schneider=20Electric=29?=
+ <thomas.weissschuh@linutronix.de>
+Date: Fri, 31 Jul 2026 16:20:14 +0200
+Subject: [PATCH 13154/15333] timekeeping: Remove the unused
+ ktime_get_clock_ts64()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The last user was removed in commit a6d799608e6a ("ptp: Switch to
+ktime_get_snapshot_id() for pre/post timestamps").
+
+Signed-off-by: Thomas Weißschuh (Schneider Electric) <thomas.weissschuh@linutronix.de>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Link: https://patch.msgid.link/20260731-timekeeping-aux-must-check-v1-1-11ae93068497@linutronix.de
+---
+ include/linux/timekeeping.h |  1 -
+ kernel/time/timekeeping.c   | 34 ----------------------------------
+ 2 files changed, 35 deletions(-)
+
+diff --git a/include/linux/timekeeping.h b/include/linux/timekeeping.h
+index b4191a873c39..ca4a881e622f 100644
+--- a/include/linux/timekeeping.h
++++ b/include/linux/timekeeping.h
+@@ -44,7 +44,6 @@ extern void ktime_get_ts64(struct timespec64 *ts);
+ extern void ktime_get_real_ts64(struct timespec64 *tv);
+ extern void ktime_get_coarse_ts64(struct timespec64 *ts);
+ extern void ktime_get_coarse_real_ts64(struct timespec64 *ts);
+-extern void ktime_get_clock_ts64(clockid_t id, struct timespec64 *ts);
+ 
+ /* Multigrain timestamp interfaces */
+ extern void ktime_get_coarse_real_ts64_mg(struct timespec64 *ts);
+diff --git a/kernel/time/timekeeping.c b/kernel/time/timekeeping.c
+index c1863f2fd106..4e6d594ecfa9 100644
+--- a/kernel/time/timekeeping.c
++++ b/kernel/time/timekeeping.c
+@@ -1941,40 +1941,6 @@ void ktime_get_raw_ts64(struct timespec64 *ts)
+ }
+ EXPORT_SYMBOL(ktime_get_raw_ts64);
+ 
+-/**
+- * ktime_get_clock_ts64 - Returns time of a clock in a timespec
+- * @id:		POSIX clock ID of the clock to read
+- * @ts:		Pointer to the timespec64 to be set
+- *
+- * The timestamp is invalidated (@ts->sec is set to -1) if the
+- * clock @id is not available.
+- */
+-void ktime_get_clock_ts64(clockid_t id, struct timespec64 *ts)
+-{
+-	/* Invalidate time stamp */
+-	ts->tv_sec = -1;
+-	ts->tv_nsec = 0;
+-
+-	switch (id) {
+-	case CLOCK_REALTIME:
+-		ktime_get_real_ts64(ts);
+-		return;
+-	case CLOCK_MONOTONIC:
+-		ktime_get_ts64(ts);
+-		return;
+-	case CLOCK_MONOTONIC_RAW:
+-		ktime_get_raw_ts64(ts);
+-		return;
+-	case CLOCK_AUX ... CLOCK_AUX_LAST:
+-		if (IS_ENABLED(CONFIG_POSIX_AUX_CLOCKS))
+-			ktime_get_aux_ts64(id, ts);
+-		return;
+-	default:
+-		WARN_ON_ONCE(1);
+-	}
+-}
+-EXPORT_SYMBOL_GPL(ktime_get_clock_ts64);
+-
+ /**
+  * timekeeping_valid_for_hres - Check if timekeeping is suitable for hres
+  */
+-- 
+2.55.0
+

@@ -1,0 +1,90 @@
+From 3634e4f2dc59559c4225ffdf2b2348a7d21f19a1 Mon Sep 17 00:00:00 2001
+From: Leon Hwang <leon.hwang@linux.dev>
+Date: Thu, 13 Aug 2026 23:23:17 +0800
+Subject: [PATCH 13771/15333] libbpf: Probe percpu data feature
+
+libbpf needs a reliable way to distinguish kernels that can support
+global percpu data from those that cannot.
+
+Add a dedicated feature probe, so libbpf can make capability decisions
+early and fail predictably when global percpu data is unavailable.
+
+Signed-off-by: Leon Hwang <leon.hwang@linux.dev>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Reviewed-by: Emil Tsalapatis <emil@etsalapatis.com>
+Acked-by: Andrii Nakryiko <andrii@kernel.org>
+Link: https://lore.kernel.org/bpf/20260813152324.97937-5-leon.hwang@linux.dev
+---
+ tools/lib/bpf/features.c        | 35 +++++++++++++++++++++++++++++++++
+ tools/lib/bpf/libbpf_internal.h |  2 ++
+ 2 files changed, 37 insertions(+)
+
+diff --git a/tools/lib/bpf/features.c b/tools/lib/bpf/features.c
+index b7e388f99d0b..ef9581c11303 100644
+--- a/tools/lib/bpf/features.c
++++ b/tools/lib/bpf/features.c
+@@ -620,6 +620,38 @@ static int probe_bpf_syscall_common_attrs(int token_fd)
+ 	return probe_sys_bpf_ext();
+ }
+ 
++static int probe_kern_percpu_data(int token_fd)
++{
++	struct bpf_insn insns[] = {
++		BPF_LD_MAP_VALUE(BPF_REG_1, 0, 0),
++		BPF_LDX_MEM(BPF_DW, BPF_REG_0, BPF_REG_1, 0),
++		BPF_EXIT_INSN(),
++	};
++	LIBBPF_OPTS(bpf_map_create_opts, map_opts,
++		.token_fd = token_fd,
++		.map_flags = token_fd ? BPF_F_TOKEN_FD : 0,
++	);
++	LIBBPF_OPTS(bpf_prog_load_opts, prog_opts,
++		.token_fd = token_fd,
++		.prog_flags = token_fd ? BPF_F_TOKEN_FD : 0,
++	);
++	int ret, map, insn_cnt = ARRAY_SIZE(insns);
++
++	map = bpf_map_create(BPF_MAP_TYPE_PERCPU_ARRAY, "libbpf_percpu", sizeof(int), 8, 1,
++			     &map_opts);
++	if (map < 0) {
++		pr_warn("Error in %s(): %s. Couldn't create simple percpu_array map.\n",
++			__func__, errstr(map));
++		return map;
++	}
++
++	insns[0].imm = map;
++
++	ret = bpf_prog_load(BPF_PROG_TYPE_SOCKET_FILTER, NULL, "GPL", insns, insn_cnt, &prog_opts);
++	close(map);
++	return probe_fd(ret);
++}
++
+ typedef int (*feature_probe_fn)(int /* token_fd */);
+ 
+ static struct kern_feature_cache feature_cache;
+@@ -707,6 +739,9 @@ static struct kern_feature_desc {
+ 	[FEAT_BPF_SYSCALL_COMMON_ATTRS] = {
+ 		"BPF syscall common attributes support", probe_bpf_syscall_common_attrs,
+ 	},
++	[FEAT_PERCPU_DATA] = {
++		"kernel supports percpu data", probe_kern_percpu_data,
++	},
+ };
+ 
+ bool feat_supported(struct kern_feature_cache *cache, enum kern_feature_id feat_id)
+diff --git a/tools/lib/bpf/libbpf_internal.h b/tools/lib/bpf/libbpf_internal.h
+index 7a74abb904f8..4c46d34fc055 100644
+--- a/tools/lib/bpf/libbpf_internal.h
++++ b/tools/lib/bpf/libbpf_internal.h
+@@ -401,6 +401,8 @@ enum kern_feature_id {
+ 	FEAT_BTF_LAYOUT,
+ 	/* Kernel supports BPF syscall common attributes */
+ 	FEAT_BPF_SYSCALL_COMMON_ATTRS,
++	/* Kernel supports percpu data */
++	FEAT_PERCPU_DATA,
+ 	__FEAT_CNT,
+ };
+ 
+-- 
+2.55.0
+

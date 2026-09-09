@@ -1,0 +1,78 @@
+From b03e0f8651ca8d041cb2602be8bb701b5af83dbe Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Tue, 14 Jul 2026 18:26:57 +0300
+Subject: [PATCH 05957/15333] drm/i915/dp: Enable SST fallback between UHBR and
+ non-UHBR rates
+
+Enable link training fallback between UHBR and non-UHBR link rates on DP
+SST links. This was disabled so far to preserve the fallback behavior.
+There isn't a known issue related to such a fallback and DP MST has been
+using this for a while already. Also, enabling UHBR rates over
+Thunderbolt tunnels in a follow-up change, which at least on some links
+supports only 4 lanes and not 1 or 2 lanes on UHBR, makes a
+UHBR->non-UHBR fallback scenario more likely.
+
+At the same time align the corresponding link training fallback kunit
+test, allowing a UHBR <-> non-UHBR fallback there as well.
+
+Reviewed-by: Suraj Kandpal <suraj.kandpal@intel.comd>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260714152700.555527-4-imre.deak@intel.com
+---
+ .../gpu/drm/i915/display/intel_dp_link_training.c |  5 -----
+ .../drm/i915/display/tests/intel_dp_link_test.c   | 15 +++------------
+ 2 files changed, 3 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_training.c b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+index fa55664c9d98..cb92cff90614 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_training.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+@@ -1874,11 +1874,6 @@ static bool reduce_link_params(struct intel_dp *intel_dp, const struct intel_crt
+ 			continue;
+ 		}
+ 
+-		if (!is_mst &&
+-		    drm_dp_is_uhbr_rate(config.rate) !=
+-		    drm_dp_is_uhbr_rate(old_config.rate))
+-			continue;
+-
+ 		*new_link_rate = config.rate;
+ 		*new_lane_count = config.lane_count;
+ 		new_found = true;
+diff --git a/drivers/gpu/drm/i915/display/tests/intel_dp_link_test.c b/drivers/gpu/drm/i915/display/tests/intel_dp_link_test.c
+index e1c356ba11b5..776d93f33385 100644
+--- a/drivers/gpu/drm/i915/display/tests/intel_dp_link_test.c
++++ b/drivers/gpu/drm/i915/display/tests/intel_dp_link_test.c
+@@ -1199,11 +1199,6 @@ get_fallback_configs_for_output_type(struct kunit *test,
+ 	}
+ }
+ 
+-static bool output_type_allows_uhbr_fallback(enum intel_output_type output_type)
+-{
+-	return output_type == INTEL_OUTPUT_DP_MST;
+-}
+-
+ static void assert_config_is_supported(const struct test_config_table *expected_table,
+ 				       const struct intel_dp_link_config *config)
+ {
+@@ -1230,14 +1225,10 @@ static bool get_fallback_config(const struct test_config_table *expected_table,
+ 		const struct intel_dp_link_config *config =
+ 			&config_set->entries[i];
+ 
+-		if (output_type_allows_uhbr_fallback(output_type) ||
+-		    (drm_dp_is_uhbr_rate(target_config->rate) ==
+-		     drm_dp_is_uhbr_rate(config->rate))) {
+-			assert_config_is_supported(expected_table, config);
+-			*fallback_config = *config;
++		assert_config_is_supported(expected_table, config);
++		*fallback_config = *config;
+ 
+-			return true;
+-		}
++		return true;
+ 	}
+ 
+ 	return false;
+-- 
+2.55.0
+

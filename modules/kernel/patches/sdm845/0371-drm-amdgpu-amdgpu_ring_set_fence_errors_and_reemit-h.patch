@@ -1,0 +1,32 @@
+From 714d354479b132c411b9f1771c4868616ed0f5c0 Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Tue, 12 May 2026 10:32:29 -0400
+Subject: [PATCH 00371/15333] drm/amdgpu:
+ amdgpu_ring_set_fence_errors_and_reemit() handle NULL fence
+
+All the guilty fence parameter to be NULL.  Will be needed for
+future functionality.
+
+Reviewed-by: Jesse Zhang <jesse.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
+index 733e9b668ed8..8569c1c637a2 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c
+@@ -750,7 +750,8 @@ void amdgpu_ring_set_fence_errors_and_reemit(struct amdgpu_ring *ring,
+ 		if (unprocessed && !dma_fence_is_signaled_locked(unprocessed)) {
+ 			fence = container_of(unprocessed, struct amdgpu_fence, base);
+ 			is_guilty_fence = fence == guilty_fence;
+-			is_guilty_context = fence->context == guilty_fence->context;
++			is_guilty_context = guilty_fence ?
++				(fence->context == guilty_fence->context) : false;
+ 
+ 			/* mark all fences from the guilty context with an error */
+ 			if (is_guilty_fence)
+-- 
+2.55.0
+

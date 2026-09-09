@@ -1,0 +1,42 @@
+From ab11176bd3a76058ecafd066d0f9c718dc80f389 Mon Sep 17 00:00:00 2001
+From: "Lorenzo Stoakes (ARM)" <ljs@kernel.org>
+Date: Wed, 22 Jul 2026 19:44:43 +0100
+Subject: [PATCH 06670/15333] x86/elf: Correct comment for STACK_RND_MASK()
+
+Commit 913bd9060195 ("[PATCH] x86_64: Increase the variability of the
+process stack on 64bit architectures"), merged in 2006, increased stack
+randomisation from 8 MiB to an ostensible 1 GiB for 64-bit systems.
+
+However the commit actually introduced a mask of 0x3fffff * 4 KiB pages
+which provides 16 GiB of randomisation, not 1 GiB.
+
+It appears Andi perhaps typo'd an additional 'f', as 0x3ffff would indeed
+provide the stated 1 GiB.
+
+Since this value has been in use for 20 years it seems sensible to retain
+it, so correct the comment instead.
+
+Signed-off-by: Lorenzo Stoakes (ARM) <ljs@kernel.org>
+Acked-by: SJ Park <sj@kernel.org>
+Link: https://patch.msgid.link/20260722-fix-x86-comment-v1-1-605080af988d@kernel.org
+Signed-off-by: Kees Cook <kees@kernel.org>
+---
+ arch/x86/include/asm/elf.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/elf.h b/arch/x86/include/asm/elf.h
+index 0de9df759c99..4133c790e71a 100644
+--- a/arch/x86/include/asm/elf.h
++++ b/arch/x86/include/asm/elf.h
+@@ -322,7 +322,7 @@ extern unsigned long get_sigframe_size(void);
+ 
+ #else /* CONFIG_X86_32 */
+ 
+-/* 1GB for 64bit, 8MB for 32bit */
++/* 16GB for 64bit, 8MB for 32bit */
+ #define __STACK_RND_MASK(is32bit) ((is32bit) ? 0x7ff : 0x3fffff)
+ #define STACK_RND_MASK __STACK_RND_MASK(mmap_is_ia32())
+ 
+-- 
+2.55.0
+

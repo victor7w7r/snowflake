@@ -1,0 +1,76 @@
+From bf7f33aada102e171d3777efc55be856f5591d42 Mon Sep 17 00:00:00 2001
+From: Yury Norov <ynorov@nvidia.com>
+Date: Thu, 2 Jul 2026 11:47:15 -0400
+Subject: [PATCH 06588/15333] powerpc: Use sysfs_emit() for cpumask show
+ callbacks
+
+These callbacks are sysfs show paths.
+
+Use sysfs_emit() and cpumask_pr_args() to emit the masks.
+
+This prepares for removing cpumap_print_to_pagebuf().
+
+Signed-off-by: Yury Norov <ynorov@nvidia.com>
+---
+ arch/powerpc/kernel/cacheinfo.c | 3 ++-
+ arch/powerpc/perf/hv-24x7.c     | 2 +-
+ arch/powerpc/perf/hv-gpci.c     | 2 +-
+ arch/powerpc/perf/imc-pmu.c     | 2 +-
+ 4 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/arch/powerpc/kernel/cacheinfo.c b/arch/powerpc/kernel/cacheinfo.c
+index 04e5ea38bdc0..cb0933061006 100644
+--- a/arch/powerpc/kernel/cacheinfo.c
++++ b/arch/powerpc/kernel/cacheinfo.c
+@@ -690,7 +690,8 @@ show_shared_cpumap(struct kobject *k, struct kobj_attribute *attr, char *buf, bo
+ 
+ 	mask = &cache->shared_cpu_map;
+ 
+-	return cpumap_print_to_pagebuf(list, buf, mask);
++	return sysfs_emit(buf, list ? "%*pbl\n" : "%*pb\n",
++			  cpumask_pr_args(mask));
+ }
+ 
+ static ssize_t shared_cpu_map_show(struct kobject *k, struct kobj_attribute *attr, char *buf)
+diff --git a/arch/powerpc/perf/hv-24x7.c b/arch/powerpc/perf/hv-24x7.c
+index abb4cfb11fcc..b0eedf185960 100644
+--- a/arch/powerpc/perf/hv-24x7.c
++++ b/arch/powerpc/perf/hv-24x7.c
+@@ -429,7 +429,7 @@ static char *memdup_to_str(char *maybe_str, int max_len, gfp_t gfp)
+ static ssize_t cpumask_show(struct device *dev,
+ 			    struct device_attribute *attr, char *buf)
+ {
+-	return cpumap_print_to_pagebuf(true, buf, &hv_24x7_cpumask);
++	return sysfs_emit(buf, "%*pbl\n", cpumask_pr_args(&hv_24x7_cpumask));
+ }
+ 
+ static ssize_t sockets_show(struct device *dev,
+diff --git a/arch/powerpc/perf/hv-gpci.c b/arch/powerpc/perf/hv-gpci.c
+index 7269273d3aa8..76495744f52a 100644
+--- a/arch/powerpc/perf/hv-gpci.c
++++ b/arch/powerpc/perf/hv-gpci.c
+@@ -100,7 +100,7 @@ static ssize_t kernel_version_show(struct device *dev,
+ static ssize_t cpumask_show(struct device *dev,
+ 			    struct device_attribute *attr, char *buf)
+ {
+-	return cpumap_print_to_pagebuf(true, buf, &hv_gpci_cpumask);
++	return sysfs_emit(buf, "%*pbl\n", cpumask_pr_args(&hv_gpci_cpumask));
+ }
+ 
+ /* Interface attribute array index to store system information */
+diff --git a/arch/powerpc/perf/imc-pmu.c b/arch/powerpc/perf/imc-pmu.c
+index e3822f36c419..0be4e98f7ad1 100644
+--- a/arch/powerpc/perf/imc-pmu.c
++++ b/arch/powerpc/perf/imc-pmu.c
+@@ -117,7 +117,7 @@ static ssize_t imc_pmu_cpumask_get_attr(struct device *dev,
+ 		return 0;
+ 	}
+ 
+-	return cpumap_print_to_pagebuf(true, buf, active_mask);
++	return sysfs_emit(buf, "%*pbl\n", cpumask_pr_args(active_mask));
+ }
+ 
+ static DEVICE_ATTR(cpumask, S_IRUGO, imc_pmu_cpumask_get_attr, NULL);
+-- 
+2.55.0
+

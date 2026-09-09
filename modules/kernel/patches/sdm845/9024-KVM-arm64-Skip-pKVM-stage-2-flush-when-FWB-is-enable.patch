@@ -1,0 +1,44 @@
+From 1feb9f6af895c1ec0caed269108d6ffa1f9a31c4 Mon Sep 17 00:00:00 2001
+From: Fuad Tabba <fuad.tabba@linux.dev>
+Date: Fri, 17 Jul 2026 14:03:14 +0100
+Subject: [PATCH 09024/15333] KVM: arm64: Skip pKVM stage-2 flush when FWB is
+ enabled
+
+pkvm_pgtable_stage2_flush() cleans the D-cache for every mapping in the
+range even on hardware with stage-2 Force Write-Back, where FWB keeps
+guest memory coherent to the PoC and the maintenance is unnecessary. The
+generic kvm_pgtable_stage2_flush() returns early in that case, but the
+pKVM MMU does not, so it needlessly cleans the whole range on, e.g.,
+every set/way trap.
+
+Return early when FWB is enabled, matching the generic walker.
+
+Fixes: e912efed485a ("KVM: arm64: Introduce the EL1 pKVM MMU")
+Signed-off-by: Fuad Tabba <fuad.tabba@linux.dev>
+Reviewed-by: Bradley Morgan <include@grrlz.net>
+Tested-by: Bradley Morgan <include@grrlz.net> # On pixel 7, Android 17 CP2A.260705.006
+Test: Bradley Morgan <include@grrlz.net> # On QEMU arm64 host
+Link: https://patch.msgid.link/20260717130317.1953574-5-fuad.tabba@linux.dev
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/pkvm.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/arm64/kvm/pkvm.c b/arch/arm64/kvm/pkvm.c
+index a66105db8b11..b28d700c649e 100644
+--- a/arch/arm64/kvm/pkvm.c
++++ b/arch/arm64/kvm/pkvm.c
+@@ -515,6 +515,10 @@ int pkvm_pgtable_stage2_flush(struct kvm_pgtable *pgt, u64 addr, u64 size)
+ 	struct pkvm_mapping *mapping;
+ 
+ 	lockdep_assert_held(&kvm->mmu_lock);
++
++	if (cpus_have_final_cap(ARM64_HAS_STAGE2_FWB))
++		return 0;
++
+ 	for_each_mapping_in_range_safe(pgt, addr, addr + size, mapping) {
+ 		if (!mapping->nc)
+ 			__clean_dcache_guest_page(pfn_to_kaddr(mapping->pfn),
+-- 
+2.55.0
+

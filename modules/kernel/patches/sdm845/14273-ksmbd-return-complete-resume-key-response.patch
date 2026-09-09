@@ -1,0 +1,38 @@
+From c1c200924fd825b632ff8811c09c3d7a5dff3895 Mon Sep 17 00:00:00 2001
+From: Namjae Jeon <linkinjeon@kernel.org>
+Date: Tue, 7 Jul 2026 00:35:18 +0900
+Subject: [PATCH 14273/15333] ksmbd: return complete resume key response
+
+The FSCTL_SRV_REQUEST_RESUME_KEY response contains a mandatory
+four-byte context field after ContextLength.
+
+Defining the context as a flexible array excludes it from
+sizeof(struct resume_key_ioctl_rsp), so ksmbd sends only 28 bytes
+instead of the required 32 bytes. The truncated response cannot be
+decoded and results in an NDR buffer size error.
+
+Define the reserved context as a fixed four-byte field. This makes the
+response size match the wire format and ensures the field is zeroed and
+included in OutputCount.
+
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/common/smb2pdu.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/smb/common/smb2pdu.h b/fs/smb/common/smb2pdu.h
+index e7ff52b8aba5..653cb3579d40 100644
+--- a/fs/smb/common/smb2pdu.h
++++ b/fs/smb/common/smb2pdu.h
+@@ -1452,7 +1452,7 @@ struct resume_key_ioctl_rsp {
+ 		__u64 ResumeKeyU64[3];
+ 	};
+ 	__le32	ContextLength;	/* MBZ */
+-	char	Context[];	/* ignored, Windows sets to 4 bytes of zero */
++	char	Context[4];	/* ignored, Windows sets to 4 bytes of zero */
+ } __packed;
+ 
+ struct smb2_ioctl_rsp {
+-- 
+2.55.0
+

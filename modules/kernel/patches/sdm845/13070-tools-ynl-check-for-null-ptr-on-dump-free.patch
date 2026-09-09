@@ -1,0 +1,36 @@
+From 7c62c481bb43488147b8755cd92e467085ab106b Mon Sep 17 00:00:00 2001
+From: Thaison Phan <thaisonphan@google.com>
+Date: Fri, 7 Aug 2026 17:14:59 +0000
+Subject: [PATCH 13070/15333] tools: ynl: check for null ptr on dump free
+
+Static analysis detected code paths where freeing a dump list after early
+errors when creating the corresponding dump list like in ynl_exec_dump()
+can result in a null pointer dereference since the first node in the
+ynl_dump_state would still be zero initialized. To prevent this potential
+problem updated the ynl c generation script to check for a NULL pointer
+before continuing to free the nodes in a dump list.
+
+Signed-off-by: Thaison Phan <thaisonphan@google.com>
+Link: https://patch.msgid.link/20260807171500.7188-2-thaisonphan@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ tools/net/ynl/pyynl/ynl_gen_c.py | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/tools/net/ynl/pyynl/ynl_gen_c.py b/tools/net/ynl/pyynl/ynl_gen_c.py
+index cdc3646f2642..95502dbaec94 100755
+--- a/tools/net/ynl/pyynl/ynl_gen_c.py
++++ b/tools/net/ynl/pyynl/ynl_gen_c.py
+@@ -2747,6 +2747,9 @@ def print_dump_type_free(ri):
+     ri.cw.block_start()
+     ri.cw.p(f"{sub_type} *next = rsp;")
+     ri.cw.nl()
++    ri.cw.p('if (!next)')
++    ri.cw.p('return;')
++    ri.cw.nl()
+     ri.cw.block_start(line='while ((void *)next != YNL_LIST_END)')
+     _free_type_members_iter(ri, ri.struct['reply'])
+     ri.cw.p('rsp = next;')
+-- 
+2.55.0
+

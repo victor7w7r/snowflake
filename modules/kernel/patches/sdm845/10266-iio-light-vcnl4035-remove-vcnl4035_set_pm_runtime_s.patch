@@ -1,0 +1,74 @@
+From 434291cc8a0a01c893a18ea53f161e4d2df72a17 Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Tue, 28 Jul 2026 03:47:42 +0900
+Subject: [PATCH 10266/15333] iio: light: vcnl4035: remove
+ vcnl4035_set_pm_runtime_state() helper
+
+vcnl4035_set_pm_runtime_state() just calls pm_runtime_resume_and_get()
+or pm_runtime_put_autosuspend() depending on its bool argument. Call
+them directly and remove the helper.
+
+No functional change.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Signed-off-by: Jonathan Cameron <jonathan.cameron@oss.qualcomm.com>
+---
+ drivers/iio/light/vcnl4035.c | 18 ++++--------------
+ 1 file changed, 4 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/iio/light/vcnl4035.c b/drivers/iio/light/vcnl4035.c
+index d13c5ff33e07..ce1bd42b0c7c 100644
+--- a/drivers/iio/light/vcnl4035.c
++++ b/drivers/iio/light/vcnl4035.c
+@@ -145,16 +145,6 @@ static const struct iio_trigger_ops vcnl4035_trigger_ops = {
+ 	.set_trigger_state = vcnl4035_als_drdy_set_state,
+ };
+ 
+-static int vcnl4035_set_pm_runtime_state(struct vcnl4035_data *data, bool on)
+-{
+-	struct device *dev = &data->client->dev;
+-
+-	if (on)
+-		return pm_runtime_resume_and_get(dev);
+-
+-	return pm_runtime_put_autosuspend(dev);
+-}
+-
+ static int vcnl4035_read_info_raw(struct iio_dev *indio_dev,
+ 				  struct iio_chan_spec const *chan, int *val)
+ {
+@@ -202,11 +192,11 @@ static int vcnl4035_read_raw(struct iio_dev *indio_dev,
+ 
+ 	switch (mask) {
+ 	case IIO_CHAN_INFO_RAW:
+-		ret = vcnl4035_set_pm_runtime_state(data, true);
++		ret = pm_runtime_resume_and_get(&data->client->dev);
+ 		if  (ret < 0)
+ 			return ret;
+ 		ret = vcnl4035_read_info_raw(indio_dev, chan, val);
+-		vcnl4035_set_pm_runtime_state(data, false);
++		pm_runtime_put_autosuspend(&data->client->dev);
+ 		return ret;
+ 	case IIO_CHAN_INFO_INT_TIME:
+ 		*val = 50;
+@@ -237,7 +227,7 @@ static int vcnl4035_write_raw(struct iio_dev *indio_dev,
+ 		if (val <= 0 || val > 800)
+ 			return -EINVAL;
+ 
+-		ret = vcnl4035_set_pm_runtime_state(data, true);
++		ret = pm_runtime_resume_and_get(&data->client->dev);
+ 		if  (ret < 0)
+ 			return ret;
+ 
+@@ -247,7 +237,7 @@ static int vcnl4035_write_raw(struct iio_dev *indio_dev,
+ 		if (!ret)
+ 			data->als_it_val = val / 100;
+ 
+-		vcnl4035_set_pm_runtime_state(data, false);
++		pm_runtime_put_autosuspend(&data->client->dev);
+ 		return ret;
+ 	default:
+ 		return -EINVAL;
+-- 
+2.55.0
+

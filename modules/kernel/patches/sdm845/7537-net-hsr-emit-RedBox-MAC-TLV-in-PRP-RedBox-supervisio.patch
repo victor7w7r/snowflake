@@ -1,0 +1,132 @@
+From 852c6a8d7cbe359fff3ee439f4b908231253dc3d Mon Sep 17 00:00:00 2001
+From: Xin Xie <xiexinet@gmail.com>
+Date: Fri, 17 Jul 2026 22:14:55 +0200
+Subject: [PATCH 07537/15333] net: hsr: emit RedBox-MAC TLV in PRP RedBox
+ supervision frames
+
+A PRP RedBox must announce the SANs it proxies so peers populate their
+proxy node tables. The proxy-announce machinery (hsr_proxy_announce(),
+armed via hsr->redbox) already iterates proxy_node_db under RCU and calls
+send_sv_frame() once per SAN, but the PRP sender emitted neither the
+announced SAN MAC nor the RedBox-MAC TLV that IEC 62439-3 requires.
+
+Extend send_prp_supervision_frame() so that, for a proxy-announce
+(identified by the interlink port, an O(1) test), the frame carries the
+proxied SAN MAC as MacAddressA followed by the RedBox-MAC TLV (Type 30)
+and an explicit End-of-TLV marker before padding.
+
+hsr_get_node() must also accept the reinjected proxy-announce: a PRP
+supervision frame is an untagged ETH_P_PRP frame (mac_len == ETH_HLEN, the
+RCT is appended only on egress) sourced from macaddress_redbox, which is
+never learned from data. Exempt only PRP supervision frames from the
+hsr_ethhdr length guard; HSR (ETH_P_HSR) supervision is front-tagged and
+keeps the original guard, so HSR malformed-frame filtering is unchanged.
+
+Also align macaddress_redbox so that ether_addr_copy() and
+ether_addr_equal() on it are safe on architectures without efficient
+unaligned access.
+
+Signed-off-by: Xin Xie <xiexinet@gmail.com>
+Link: https://patch.msgid.link/20260717201457.54-3-xiexinet@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/hsr/hsr_device.c   | 33 ++++++++++++++++++++++++++++++---
+ net/hsr/hsr_framereg.c | 13 +++++++++++--
+ net/hsr/hsr_main.h     |  2 +-
+ 3 files changed, 42 insertions(+), 6 deletions(-)
+
+diff --git a/net/hsr/hsr_device.c b/net/hsr/hsr_device.c
+index 5af491ed2b72..0973f9a94f4d 100644
+--- a/net/hsr/hsr_device.c
++++ b/net/hsr/hsr_device.c
+@@ -372,10 +372,21 @@ static void send_prp_supervision_frame(struct hsr_port *master,
+ {
+ 	struct hsr_priv *hsr = master->hsr;
+ 	struct hsr_sup_payload *hsr_sp;
++	struct hsr_sup_tlv *hsr_stlv;
+ 	struct hsr_sup_tag *hsr_stag;
+ 	struct sk_buff *skb;
++	bool redbox_proxy;
++	int extra = 0;
++
++	redbox_proxy = hsr->redbox && master->type == HSR_PT_INTERLINK;
++
++	/* A proxy-announce carries a RedBox-MAC TLV and an EOT marker. */
++	if (redbox_proxy)
++		extra = sizeof(struct hsr_sup_tlv) +
++			sizeof(struct hsr_sup_payload) +
++			sizeof(struct hsr_sup_tlv);
+ 
+-	skb = hsr_init_skb(master, 0);
++	skb = hsr_init_skb(master, extra);
+ 	if (!skb) {
+ 		netdev_warn_once(master->dev, "PRP: Could not send supervision frame\n");
+ 		return;
+@@ -393,9 +404,25 @@ static void send_prp_supervision_frame(struct hsr_port *master,
+ 	hsr_stag->tlv.HSR_TLV_type = PRP_TLV_LIFE_CHECK_DD;
+ 	hsr_stag->tlv.HSR_TLV_length = sizeof(struct hsr_sup_payload);
+ 
+-	/* Payload: MacAddressA */
++	/* Payload: MacAddressA, the announced node. */
+ 	hsr_sp = skb_put(skb, sizeof(struct hsr_sup_payload));
+-	ether_addr_copy(hsr_sp->macaddress_A, master->dev->dev_addr);
++	ether_addr_copy(hsr_sp->macaddress_A, addr);
++
++	/* Proxy-announce: append the RedBox-MAC TLV (Type 30) and an explicit
++	 * EOT to terminate the TLV chain before zero padding.
++	 */
++	if (redbox_proxy) {
++		hsr_stlv = skb_put(skb, sizeof(struct hsr_sup_tlv));
++		hsr_stlv->HSR_TLV_type = PRP_TLV_REDBOX_MAC;
++		hsr_stlv->HSR_TLV_length = sizeof(struct hsr_sup_payload);
++
++		hsr_sp = skb_put(skb, sizeof(struct hsr_sup_payload));
++		ether_addr_copy(hsr_sp->macaddress_A, hsr->macaddress_redbox);
++
++		hsr_stlv = skb_put(skb, sizeof(struct hsr_sup_tlv));
++		hsr_stlv->HSR_TLV_type = HSR_TLV_EOT;
++		hsr_stlv->HSR_TLV_length = 0;
++	}
+ 
+ 	if (skb_put_padto(skb, ETH_ZLEN)) {
+ 		spin_unlock_bh(&hsr->seqnr_lock);
+diff --git a/net/hsr/hsr_framereg.c b/net/hsr/hsr_framereg.c
+index 8f708b6e6c33..b3b106be692e 100644
+--- a/net/hsr/hsr_framereg.c
++++ b/net/hsr/hsr_framereg.c
+@@ -293,8 +293,17 @@ struct hsr_node *hsr_get_node(struct hsr_port *port, struct list_head *node_db,
+ 	 */
+ 	if (ethhdr->h_proto == htons(ETH_P_PRP) ||
+ 	    ethhdr->h_proto == htons(ETH_P_HSR)) {
+-		/* Check if skb contains hsr_ethhdr */
+-		if (skb->mac_len < sizeof(struct hsr_ethhdr))
++		bool prp_sup;
++
++		/* A PRP supervision frame is an untagged ETH_P_PRP frame
++		 * (mac_len == ETH_HLEN); its RCT is appended only on egress.
++		 * HSR (ETH_P_HSR) supervision is front-tagged and still must
++		 * contain a struct hsr_ethhdr.
++		 */
++		prp_sup = hsr->prot_version == PRP_V1 &&
++			  ethhdr->h_proto == htons(ETH_P_PRP) && is_sup;
++
++		if (!prp_sup && skb->mac_len < sizeof(struct hsr_ethhdr))
+ 			return NULL;
+ 	} else {
+ 		rct = skb_get_PRP_rct(skb);
+diff --git a/net/hsr/hsr_main.h b/net/hsr/hsr_main.h
+index 134e4f3fff60..53e95bae0ee2 100644
+--- a/net/hsr/hsr_main.h
++++ b/net/hsr/hsr_main.h
+@@ -211,7 +211,7 @@ struct hsr_priv {
+ 				 */
+ 	bool fwd_offloaded;	/* Forwarding offloaded to HW */
+ 	bool redbox;            /* Device supports HSR RedBox */
+-	unsigned char		macaddress_redbox[ETH_ALEN];
++	unsigned char		macaddress_redbox[ETH_ALEN] __aligned(sizeof(u16));
+ 	unsigned char		sup_multicast_addr[ETH_ALEN] __aligned(sizeof(u16));
+ 				/* Align to u16 boundary to avoid unaligned access
+ 				 * in ether_addr_equal
+-- 
+2.55.0
+

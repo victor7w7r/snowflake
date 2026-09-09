@@ -1,0 +1,102 @@
+From 23aff4ed78c248d0e86966606c465d5505469eb5 Mon Sep 17 00:00:00 2001
+From: Kuniyuki Iwashima <kuniyu@google.com>
+Date: Fri, 31 Jul 2026 22:43:41 +0000
+Subject: [PATCH 11118/15333] pfcp: Support per-netns netdev unregistration.
+
+pfcp_net_exit_rtnl() iterates pfcp devices whose sockets
+are in the dying netns and queues them for destruction.
+
+So the devices may reside in different netns.
+
+Let's use unregister_netdevice_queue_net() to support per-netns
+device unregistration.
+
+list_del() is changed to list_del_init() to avoid queueing the
+same device twice.
+
+Even after pfcp_net_exit_rtnl() queues a cross-netns pfcp device,
+pfcp_dellink() could be called concurrently for it (once RTNL is
+removed).  In such a case, __rtnl_net_unlock() will perform the
+unregistration.
+
+We can see pfcp0 below is unregistered by the per-netns work
+instead of cleanup_net().
+
+  # bpftrace -e '#include <linux/netdevice.h>
+  kprobe:pfcp_dev_uninit {
+      $dev = (struct net_device *)arg0;
+      printf("PID: %d | DEV: %s%s\n", pid, $dev->name, kstack());
+  }
+  kprobe:pfcp_net_exit_rtnl {
+      printf("PID: %d%s\n", pid, kstack());
+  }' &
+
+  # ip netns add ns1
+  # ip netns add ns2
+  # ip -n ns1 link add pfcp0 link-netns ns2 type pfcp
+  # ip netns del ns2
+
+  PID: 12
+          pfcp_net_exit_rtnl+5
+          ops_undo_list+702
+          cleanup_net+1122
+          process_scheduled_works+2538
+  ...
+  PID: 462 | DEV: pfcp0
+          pfcp_dev_uninit+5
+          unregister_netdevice_many_notify+7129
+          unregister_netdevice_many_net+1050
+          rtnl_net_work_func+136
+          process_scheduled_works+2538
+
+Signed-off-by: Kuniyuki Iwashima <kuniyu@google.com>
+Reviewed-by: Simon Horman <horms@kernel.org>
+Link: https://patch.msgid.link/20260731224406.2444121-3-kuniyu@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/pfcp.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/net/pfcp.c b/drivers/net/pfcp.c
+index 45f9c5d3cb20..e1cca779d2ec 100644
+--- a/drivers/net/pfcp.c
++++ b/drivers/net/pfcp.c
+@@ -227,12 +227,13 @@ static int pfcp_newlink(struct net_device *dev,
+ 	return err;
+ }
+ 
+-static void __pfcp_dellink(struct net_device *dev, struct list_head *head)
++static void __pfcp_dellink(struct net *net, struct net_device *dev,
++			   struct list_head *head)
+ {
+ 	struct pfcp_dev *pfcp = netdev_priv(dev);
+ 
+-	list_del(&pfcp->list);
+-	unregister_netdevice_queue(dev, head);
++	list_del_init(&pfcp->list);
++	unregister_netdevice_queue_net(net, dev, head);
+ }
+ 
+ static void pfcp_dellink(struct net_device *dev, struct list_head *head)
+@@ -243,7 +244,8 @@ static void pfcp_dellink(struct net_device *dev, struct list_head *head)
+ 	pn = net_generic(pfcp->net, pfcp_net_id);
+ 
+ 	mutex_lock(&pn->lock);
+-	__pfcp_dellink(dev, head);
++	if (!list_empty(&pfcp->list))
++		__pfcp_dellink(dev_net(dev), dev, head);
+ 	mutex_unlock(&pn->lock);
+ }
+ 
+@@ -274,7 +276,7 @@ static void __net_exit pfcp_net_exit_rtnl(struct net *net,
+ 	mutex_lock(&pn->lock);
+ 
+ 	list_for_each_entry_safe(pfcp, pfcp_next, &pn->pfcp_dev_list, list)
+-		__pfcp_dellink(pfcp->dev, dev_to_kill);
++		__pfcp_dellink(net, pfcp->dev, dev_to_kill);
+ 
+ 	mutex_unlock(&pn->lock);
+ }
+-- 
+2.55.0
+

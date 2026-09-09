@@ -1,0 +1,51 @@
+From 61aebeadff40cded27168e53406e0120ad66e114 Mon Sep 17 00:00:00 2001
+From: Albert Esteve <aesteve@redhat.com>
+Date: Fri, 17 Jul 2026 16:02:04 +0200
+Subject: [PATCH 05973/15333] drm/panel: have drm_panel_add/remove manage a
+ list reference
+
+The global panel_list holds raw pointers to drm_panel objects.
+Nothing prevents a panel from being freed while it is still linked
+in the list: if a driver's probe calls drm_panel_add() and then
+fails at a later step, panel->list remains in panel_list. Any
+subsequent call to of_drm_find_panel() that iterates the list will
+dereference freed memory.
+
+Have drm_panel_add() acquire a reference via drm_panel_get() before
+inserting the panel into the list, and have drm_panel_remove() drop
+it via drm_panel_put() after removing the panel from the list. The
+global registry now holds a counted reference for as long as the
+panel is listed, ensuring the object outlives any concurrent lookup.
+
+Reviewed-by: Maxime Ripard <mripard@kernel.org>
+Signed-off-by: Albert Esteve <aesteve@redhat.com>
+Reviewed-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+Signed-off-by: Neil Armstrong <neil.armstrong@linaro.org>
+Link: https://patch.msgid.link/20260717-drm_refcount_wiring-v3-1-023900c32e01@redhat.com
+---
+ drivers/gpu/drm/drm_panel.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/gpu/drm/drm_panel.c b/drivers/gpu/drm/drm_panel.c
+index d7c6f4824b2d..68b5a2b7694c 100644
+--- a/drivers/gpu/drm/drm_panel.c
++++ b/drivers/gpu/drm/drm_panel.c
+@@ -82,6 +82,7 @@ static void drm_panel_init(struct drm_panel *panel, struct device *dev,
+  */
+ void drm_panel_add(struct drm_panel *panel)
+ {
++	drm_panel_get(panel);
+ 	mutex_lock(&panel_lock);
+ 	list_add_tail(&panel->list, &panel_list);
+ 	mutex_unlock(&panel_lock);
+@@ -99,6 +100,7 @@ void drm_panel_remove(struct drm_panel *panel)
+ 	mutex_lock(&panel_lock);
+ 	list_del_init(&panel->list);
+ 	mutex_unlock(&panel_lock);
++	drm_panel_put(panel);
+ }
+ EXPORT_SYMBOL(drm_panel_remove);
+ 
+-- 
+2.55.0
+

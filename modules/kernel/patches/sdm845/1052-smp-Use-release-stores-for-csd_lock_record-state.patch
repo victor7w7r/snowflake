@@ -1,0 +1,98 @@
+From ec9f57e6fefbc0497b9f047ebe60ef9adaae7480 Mon Sep 17 00:00:00 2001
+From: Usama Arif <usama.arif@linux.dev>
+Date: Mon, 29 Jun 2026 03:57:45 -0700
+Subject: [PATCH 01052/15333] smp: Use release stores for csd_lock_record()
+ state
+
+__csd_lock_record() publishes per-CPU diagnostic state (cur_csd,
+cur_csd_func, cur_csd_info) that is consumed from a remote CPU by
+csd_lock_wait_toolong() via smp_load_acquire(&cur_csd). To order the
+matching cur_csd_func/cur_csd_info stores before the cur_csd
+publication, the producer issues smp_wmb() before writing cur_csd;
+to order the publication before the subsequent callback execution or
+CSD unlock, it issues smp_mb() after the write. The clear path
+mirrors this with smp_mb() before storing NULL into cur_csd so the
+preceding callback/unlock is observed first.
+
+The smp_mb() pair is heavier than what the consumer actually
+requires (on x86 each emits a locked full barrier). The consumer
+only needs to observe the matching cur_csd_func/cur_csd_info when it
+sees a non-NULL cur_csd, and to observe the preceding callback/unlock
+when it sees NULL -- both of which a release/acquire pair provides.
+The extra two-way ordering enforced by smp_mb() -- that cur_csd
+publication be observed before callback execution or unlock becomes
+visible -- would only matter if cur_csd were an exact live-state
+marker. csd_lock_wait_toolong() does not treat it that way: it
+snapshots cur_csd via smp_load_acquire() and then prints / dumps /
+re-IPIs without an RCU-style stall-ended recheck, so the diagnostic
+already tolerates the remote CPU completing its work between snapshot
+and report. cur_csd is best-effort context, not a precise stall
+boundary.
+
+Replace the smp_wmb() + plain store + smp_mb() in the publish path,
+and the smp_mb() + plain store in the clear path, with
+smp_store_release(). This pairs with the smp_load_acquire() in
+csd_lock_wait_toolong(): preceding cur_csd_func/cur_csd_info stores
+become visible before a remote reader observes the non-NULL
+publication, and any preceding callback/unlock becomes visible before
+a reader observes the NULL clear.
+
+Signed-off-by: Usama Arif <usama.arif@linux.dev>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Reviewed-by: Dmitry Ilvokhin <d@ilvokhin.com>
+Link: https://patch.msgid.link/20260629105745.1696683-1-usama.arif@linux.dev
+---
+ kernel/smp.c | 26 +++++++++++++++++++-------
+ 1 file changed, 19 insertions(+), 7 deletions(-)
+
+diff --git a/kernel/smp.c b/kernel/smp.c
+index a0bb56bd8dda..8a847a34f132 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -182,16 +182,22 @@ static atomic_t csd_bug_count = ATOMIC_INIT(0);
+ static void __csd_lock_record(call_single_data_t *csd)
+ {
+ 	if (!csd) {
+-		smp_mb(); /* NULL cur_csd after unlock. */
+-		__this_cpu_write(cur_csd, NULL);
++		/*
++		 * Pairs with smp_load_acquire() of cur_csd in
++		 * csd_lock_wait_toolong(): orders any preceding CSD
++		 * callback/unlock before a remote reader observes NULL.
++		 */
++		smp_store_release(this_cpu_ptr(&cur_csd), NULL);
+ 		return;
+ 	}
+ 	__this_cpu_write(cur_csd_func, csd->func);
+ 	__this_cpu_write(cur_csd_info, csd->info);
+-	smp_wmb(); /* func and info before csd. */
+-	__this_cpu_write(cur_csd, csd);
+-	smp_mb(); /* Update cur_csd before function call. */
+-		  /* Or before unlock, as the case may be. */
++	/*
++	 * Pairs with smp_load_acquire() of cur_csd in
++	 * csd_lock_wait_toolong(): publishes cur_csd_func and
++	 * cur_csd_info before the non-NULL pointer becomes visible.
++	 */
++	smp_store_release(this_cpu_ptr(&cur_csd), csd);
+ }
+ 
+ static __always_inline void csd_lock_record(call_single_data_t *csd)
+@@ -272,7 +278,13 @@ static bool csd_lock_wait_toolong(call_single_data_t *csd, u64 ts0, u64 *ts1, in
+ 		cpux = 0;
+ 	else
+ 		cpux = cpu;
+-	cpu_cur_csd = smp_load_acquire(&per_cpu(cur_csd, cpux)); /* Before func and info. */
++	/*
++	 * Pairs with smp_store_release() of cur_csd in __csd_lock_record():
++	 * a non-NULL cur_csd here implies cur_csd_func and cur_csd_info
++	 * are the matching publication; a NULL value is ordered after any
++	 * preceding CSD callback/unlock on the remote CPU.
++	 */
++	cpu_cur_csd = smp_load_acquire(&per_cpu(cur_csd, cpux));
+ 	/* How long since this CSD lock was stuck. */
+ 	ts_delta = ts2 - ts0;
+ 	pr_alert("csd: %s non-responsive CSD lock (#%d) on CPU#%d, waiting %lld ns for CPU#%02d %pS(%ps).\n",
+-- 
+2.55.0
+

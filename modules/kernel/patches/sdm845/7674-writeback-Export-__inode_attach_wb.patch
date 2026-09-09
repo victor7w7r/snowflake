@@ -1,0 +1,40 @@
+From 974d0be0cb8e48d63b9d413a2e1a8fba16cd2583 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 28 Jul 2026 14:04:26 +0200
+Subject: [PATCH 07674/15333] writeback: Export __inode_attach_wb()
+
+Commit c26339e1df33 ("ext4: Fix data integrity writeout issues in
+nojournal mode") made ext4_mark_iloc_dirty() attach the inode to a wb
+before marking it for metadata writeback in nojournal mode. This is the
+first modular caller of inode_attach_wb() - all users of
+__inode_attach_wb() so far were built-in - so with CONFIG_EXT4_FS=m and
+CONFIG_CGROUP_WRITEBACK=y the build now fails at the modpost stage:
+
+  ERROR: modpost: "__inode_attach_wb" [fs/ext4/ext4.ko] undefined!
+
+Export the symbol. Use EXPORT_SYMBOL_GPL() to match the other cgroup
+writeback exports in this file.
+
+Fixes: c26339e1df33 ("ext4: Fix data integrity writeout issues in nojournal mode")
+Reported-by: kernel test robot <lkp@intel.com>
+Closes: https://lore.kernel.org/oe-kbuild-all/202607281811.F3c6kRvX-lkp@intel.com/
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/fs-writeback.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fs/fs-writeback.c b/fs/fs-writeback.c
+index 9d96357731a3..71dd618db075 100644
+--- a/fs/fs-writeback.c
++++ b/fs/fs-writeback.c
+@@ -299,6 +299,7 @@ void __inode_attach_wb(struct inode *inode, struct folio *folio)
+ 	if (unlikely(cmpxchg(&inode->i_wb, NULL, wb)))
+ 		wb_put(wb);
+ }
++EXPORT_SYMBOL_GPL(__inode_attach_wb);
+ 
+ /**
+  * inode_cgwb_move_to_attached - put the inode onto wb->b_attached list
+-- 
+2.55.0
+

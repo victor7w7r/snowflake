@@ -1,0 +1,42 @@
+From 22790c57c64068677efffc52b1c9f0005e1cc512 Mon Sep 17 00:00:00 2001
+From: Biren Pandya <birenpandya@gmail.com>
+Date: Wed, 8 Jul 2026 18:27:22 +0530
+Subject: [PATCH 03217/15333] media: i2c: ov7740: fix unbalanced
+ pm_runtime_get_sync in remove
+
+The ov7740_remove() function unconditionally called pm_runtime_get_sync()
+but completely ignored the return value. If the device was already in an
+error state or disconnected, this could lead to an unbalanced PM runtime
+usage count or attempt to communicate with an unresponsive device.
+
+Disable Runtime PM first, then see if the device is active, and if so,
+power it off.
+
+Signed-off-by: Biren Pandya <birenpandya@gmail.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/i2c/ov7740.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/media/i2c/ov7740.c b/drivers/media/i2c/ov7740.c
+index c2e02f191816..2d29147c0f64 100644
+--- a/drivers/media/i2c/ov7740.c
++++ b/drivers/media/i2c/ov7740.c
+@@ -1122,12 +1122,10 @@ static void ov7740_remove(struct i2c_client *client)
+ 	v4l2_async_unregister_subdev(sd);
+ 	ov7740_free_controls(ov7740);
+ 
+-	pm_runtime_get_sync(&client->dev);
+ 	pm_runtime_disable(&client->dev);
++	if (!pm_runtime_status_suspended(&client->dev))
++		ov7740_set_power(ov7740, 0);
+ 	pm_runtime_set_suspended(&client->dev);
+-	pm_runtime_put_noidle(&client->dev);
+-
+-	ov7740_set_power(ov7740, 0);
+ }
+ 
+ static int __maybe_unused ov7740_runtime_suspend(struct device *dev)
+-- 
+2.55.0
+

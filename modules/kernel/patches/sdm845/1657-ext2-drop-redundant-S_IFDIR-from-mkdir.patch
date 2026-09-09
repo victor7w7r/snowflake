@@ -1,0 +1,35 @@
+From 3a48f5f81af24fbf2fb5c540cb0cd1826445408a Mon Sep 17 00:00:00 2001
+From: Jori Koolstra <jkoolstra@xs4all.nl>
+Date: Tue, 30 Jun 2026 12:53:37 +0200
+Subject: [PATCH 01657/15333] ext2: drop redundant S_IFDIR from mkdir
+
+vfs_mkdir() now sets the S_IFDIR type bit in the mode it passes to
+->mkdir(), so OR-ing S_IFDIR into the mode again in ext2_mkdir() is
+redundant. Drop it.
+
+Assisted-by: LLM
+Signed-off-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Link: https://patch.msgid.link/20260630105400.68459-9-jkoolstra@xs4all.nl
+Reviewed-by: NeilBrown <neil@brown.name>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/ext2/namei.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/ext2/namei.c b/fs/ext2/namei.c
+index 0d09d22fe708..411fd09c3c7e 100644
+--- a/fs/ext2/namei.c
++++ b/fs/ext2/namei.c
+@@ -236,7 +236,7 @@ static struct dentry *ext2_mkdir(struct mnt_idmap * idmap,
+ 
+ 	inode_inc_link_count(dir);
+ 
+-	inode = ext2_new_inode(dir, S_IFDIR | mode, &dentry->d_name);
++	inode = ext2_new_inode(dir, mode, &dentry->d_name);
+ 	err = PTR_ERR(inode);
+ 	if (IS_ERR(inode))
+ 		goto out_dir;
+-- 
+2.55.0
+

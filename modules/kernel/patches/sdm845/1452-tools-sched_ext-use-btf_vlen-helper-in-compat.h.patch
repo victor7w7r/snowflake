@@ -1,0 +1,80 @@
+From 0791de4c5a77b688ab3ffd9d8152a71a596cf374 Mon Sep 17 00:00:00 2001
+From: Liang Luo <luoliang@kylinos.cn>
+Date: Tue, 30 Jun 2026 16:17:20 +0800
+Subject: [PATCH 01452/15333] tools/sched_ext: use btf_vlen() helper in
+ compat.h
+
+__COMPAT_read_enum() and __COMPAT_struct_has_field() open-code the
+vlen lookup via the raw BTF_INFO_VLEN(t->info) UAPI macro. libbpf
+exposes btf_vlen() for exactly this purpose; use it in the three
+call sites, matching the pattern in kernel/bpf/inode.c and
+tools/bpf/bpftool.
+
+btf_vlen() returns __u32 (since commit cacd6729c0923, "libbpf:
+Adjust btf_vlen() to return a __u32", which expanded the BTF vlen
+field from 16 to 24 bits). Declare the loop counters as __u32 to
+match the return type, keeping the comparison as a plain
+'__u32 < __u32' and silencing the -Wsign-compare warnings.
+
+No functional change.
+
+Suggested-by: Andrea Righi <arighi@nvidia.com>
+Signed-off-by: Liang Luo <luoliang@kylinos.cn>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ tools/sched_ext/include/scx/compat.h | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/tools/sched_ext/include/scx/compat.h b/tools/sched_ext/include/scx/compat.h
+index 602f07061ee3..23d9ef3e4c9d 100644
+--- a/tools/sched_ext/include/scx/compat.h
++++ b/tools/sched_ext/include/scx/compat.h
+@@ -28,7 +28,7 @@ static inline bool __COMPAT_read_enum(const char *type, const char *name, u64 *v
+ 	const struct btf_type *t;
+ 	const char *n;
+ 	s32 tid;
+-	int i;
++	__u32 i;
+ 
+ 	__COMPAT_load_vmlinux_btf();
+ 
+@@ -42,7 +42,7 @@ static inline bool __COMPAT_read_enum(const char *type, const char *name, u64 *v
+ 	if (btf_is_enum(t)) {
+ 		struct btf_enum *e = btf_enum(t);
+ 
+-		for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
++		for (i = 0; i < btf_vlen(t); i++) {
+ 			n = btf__name_by_offset(__COMPAT_vmlinux_btf, e[i].name_off);
+ 			SCX_BUG_ON(!n, "btf__name_by_offset()");
+ 			if (!strcmp(n, name)) {
+@@ -53,7 +53,7 @@ static inline bool __COMPAT_read_enum(const char *type, const char *name, u64 *v
+ 	} else if (btf_is_enum64(t)) {
+ 		struct btf_enum64 *e = btf_enum64(t);
+ 
+-		for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
++		for (i = 0; i < btf_vlen(t); i++) {
+ 			n = btf__name_by_offset(__COMPAT_vmlinux_btf, e[i].name_off);
+ 			SCX_BUG_ON(!n, "btf__name_by_offset()");
+ 			if (!strcmp(n, name)) {
+@@ -85,7 +85,7 @@ static inline bool __COMPAT_struct_has_field(const char *type, const char *field
+ 	const struct btf_member *m;
+ 	const char *n;
+ 	s32 tid;
+-	int i;
++	__u32 i;
+ 
+ 	__COMPAT_load_vmlinux_btf();
+ 	tid = btf__find_by_name_kind(__COMPAT_vmlinux_btf, type, BTF_KIND_STRUCT);
+@@ -97,7 +97,7 @@ static inline bool __COMPAT_struct_has_field(const char *type, const char *field
+ 
+ 	m = btf_members(t);
+ 
+-	for (i = 0; i < BTF_INFO_VLEN(t->info); i++) {
++	for (i = 0; i < btf_vlen(t); i++) {
+ 		n = btf__name_by_offset(__COMPAT_vmlinux_btf, m[i].name_off);
+ 		SCX_BUG_ON(!n, "btf__name_by_offset()");
+ 			if (!strcmp(n, field))
+-- 
+2.55.0
+

@@ -1,0 +1,81 @@
+From e9735048b91204bd8792bd7007d47d2c35ae27e3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Guido=20G=C3=BCnther?= <agx@sigxcpu.org>
+Date: Mon, 27 Apr 2026 15:56:07 +0200
+Subject: [PATCH 15243/15333] drm/panel: visionox-rm69299: Move power_on/off
+ into prepare/unprepare
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+No need to have separate functions now that prepare/unprepare only
+handle powering on & off.
+
+Signed-off-by: Guido Günther <agx@sigxcpu.org>
+---
+ .../gpu/drm/panel/panel-visionox-rm69299.c    | 36 +++++++------------
+ 1 file changed, 12 insertions(+), 24 deletions(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-visionox-rm69299.c b/drivers/gpu/drm/panel/panel-visionox-rm69299.c
+index ee7a9f1ff30d..63fa0ae54ef2 100644
+--- a/drivers/gpu/drm/panel/panel-visionox-rm69299.c
++++ b/drivers/gpu/drm/panel/panel-visionox-rm69299.c
+@@ -197,15 +197,25 @@ static int visionox_rm69299_disable(struct drm_panel *panel)
+ 	return dsi_ctx.accum_err;
+ }
+ 
+-static int visionox_rm69299_power_on(struct visionox_rm69299 *ctx)
++static int visionox_rm69299_unprepare(struct drm_panel *panel)
++{
++	struct visionox_rm69299 *ctx = panel_to_ctx(panel);
++
++	gpiod_set_value(ctx->reset_gpio, 0);
++
++	return regulator_bulk_disable(ARRAY_SIZE(visionox_rm69299_supplies),
++				      ctx->supplies);
++}
++
++static int visionox_rm69299_prepare(struct drm_panel *panel)
+ {
+ 	int ret;
++	struct visionox_rm69299 *ctx = panel_to_ctx(panel);
+ 
+ 	ret = regulator_bulk_enable(ARRAY_SIZE(visionox_rm69299_supplies),
+ 				    ctx->supplies);
+ 	if (ret < 0)
+ 		return ret;
+-
+ 	/*
+ 	 * Reset sequence of visionox panel requires the panel to be
+ 	 * out of reset for 10ms, followed by being held in reset
+@@ -221,28 +231,6 @@ static int visionox_rm69299_power_on(struct visionox_rm69299 *ctx)
+ 	return 0;
+ }
+ 
+-static int visionox_rm69299_power_off(struct visionox_rm69299 *ctx)
+-{
+-	gpiod_set_value(ctx->reset_gpio, 0);
+-
+-	return regulator_bulk_disable(ARRAY_SIZE(visionox_rm69299_supplies),
+-				      ctx->supplies);
+-}
+-
+-static int visionox_rm69299_unprepare(struct drm_panel *panel)
+-{
+-	struct visionox_rm69299 *ctx = panel_to_ctx(panel);
+-
+-	return visionox_rm69299_power_off(ctx);
+-}
+-
+-static int visionox_rm69299_prepare(struct drm_panel *panel)
+-{
+-	struct visionox_rm69299 *ctx = panel_to_ctx(panel);
+-
+-	return visionox_rm69299_power_on(ctx);
+-}
+-
+ static const struct drm_display_mode visionox_rm69299_1080x2248_60hz = {
+ 	.name = "1080x2248",
+ 	.clock = 158695,
+-- 
+2.55.0
+

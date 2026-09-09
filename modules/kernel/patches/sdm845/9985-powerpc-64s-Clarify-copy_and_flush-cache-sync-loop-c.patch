@@ -1,0 +1,60 @@
+From 76ea1257924f64521f708db91c99014ce7249bbf Mon Sep 17 00:00:00 2001
+From: Nikhil Kumar Singh <nikhilks@linux.ibm.com>
+Date: Mon, 6 Jul 2026 13:57:08 +0530
+Subject: [PATCH 09985/15333] powerpc/64s: Clarify copy_and_flush() cache sync
+ loop comment
+
+The value loaded into r0 in copy_and_flush() represents the number of
+8-byte words processed between cache synchronization operations.
+
+The existing comment refers to cache line size, which can make it appear
+that the value is a cache line size in bytes rather than a loop count.
+Clarify the comment to explain that the loop processes 8 words (64 bytes)
+per cache synchronization iteration, and that increasing the value would
+skip cache maintenance for intermediate cache lines.
+
+This is a comment-only change with no functional impact.
+
+Signed-off-by: Nikhil Kumar Singh <nikhilks@linux.ibm.com>
+Reviewed-by: Mahesh Salgaonkar <mahesh@linux.ibm.com>
+Reviewed-by: Aditya Gupta <adityag@linux.ibm.com>
+Signed-off-by: Madhavan Srinivasan <maddy@linux.ibm.com>
+Link: https://patch.msgid.link/20260706082708.43918-1-nikhilks@linux.ibm.com
+---
+ arch/powerpc/kernel/head_64.S | 20 ++++++++++++--------
+ 1 file changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/arch/powerpc/kernel/head_64.S b/arch/powerpc/kernel/head_64.S
+index 63432a33ec49..a54f6f979173 100644
+--- a/arch/powerpc/kernel/head_64.S
++++ b/arch/powerpc/kernel/head_64.S
+@@ -713,14 +713,18 @@ p_end: .8byte _end - copy_to_here
+ _GLOBAL(copy_and_flush)
+ 	addi	r5,r5,-8
+ 	addi	r6,r6,-8
+-4:	li	r0,8			/* Use the smallest common	*/
+-					/* denominator cache line	*/
+-					/* size.  This results in	*/
+-					/* extra cache line flushes	*/
+-					/* but operation is correct.	*/
+-					/* Can't get cache line size	*/
+-					/* from NACA as it is being	*/
+-					/* moved too.			*/
++4:	li	r0,8			/* r0 is the number of 8-byte words	*/
++					/* to copy per cache sync iteration.	*/
++					/* 8 words * 8 bytes = 64 bytes. 64B is	*/
++					/* the current default cache line size.	*/
++					/* This is a loop count, not a byte	*/
++					/* count. Increasing it may skip	*/
++					/* dcbst/icbi for lines in between and	*/
++					/* leave stale instructions in icache.	*/
++					/* This results in extra cache line	*/
++					/* flushes but operation is correct.	*/
++					/* Can't get cache line size from NACA	*/
++					/* as it is being moved too.		*/
+ 
+ 	mtctr	r0			/* put # words/line in ctr	*/
+ 3:	addi	r6,r6,8			/* copy a cache line		*/
+-- 
+2.55.0
+

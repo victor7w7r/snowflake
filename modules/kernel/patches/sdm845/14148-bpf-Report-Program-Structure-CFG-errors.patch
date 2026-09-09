@@ -1,0 +1,219 @@
+From a8f4278353947d019c990a77d574dfd4d1dc9b46 Mon Sep 17 00:00:00 2001
+From: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Date: Sat, 15 Aug 2026 08:46:08 +0200
+Subject: [PATCH 14148/15333] bpf: Report Program Structure CFG errors
+
+Augment selected whole-program and subprogram CFG validation failures with
+Program Structure reports. These errors are structural rather than
+path-dependent, so the reports focus on source and instruction context
+instead of causal history.
+
+Cover direct and indirect jumps outside the program or current subprogram,
+unprivileged backedges, missing and out-of-range jump tables, targets in the
+second half of an ldimm64, unreachable instructions, subprogram fallthrough,
+and recursive bpf2bpf call graph edges.
+
+Format long jump-range reasons directly in diagnostics.c, and keep the
+fallthrough suggestion aligned with the verifier check by suggesting exit or
+explicit jumps.
+
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Acked-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://patch.msgid.link/20260815064612.378577-14-memxor@gmail.com
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ kernel/bpf/cfg.c         | 35 +++++++++++++++++++++++++++++++++++
+ kernel/bpf/diagnostics.c | 19 +++++++++++++++++++
+ kernel/bpf/diagnostics.h |  3 +++
+ kernel/bpf/verifier.c    | 16 ++++++++++++++++
+ 4 files changed, 73 insertions(+)
+
+diff --git a/kernel/bpf/cfg.c b/kernel/bpf/cfg.c
+index 818f7afac83a..0f13c13f4133 100644
+--- a/kernel/bpf/cfg.c
++++ b/kernel/bpf/cfg.c
+@@ -5,6 +5,8 @@
+ #include <linux/filter.h>
+ #include <linux/sort.h>
+ 
++#include "diagnostics.h"
++
+ #define verbose(env, fmt, args...) bpf_verifier_log_write(env, fmt, ##args)
+ 
+ /* non-recursive DFS pseudo code
+@@ -112,6 +114,10 @@ static int push_insn(int t, int w, int e, struct bpf_verifier_env *env)
+ 	if (w < 0 || w >= env->prog->len) {
+ 		verbose_linfo(env, t, "%d: ", t);
+ 		verbose(env, "jump out of range from insn %d to %d\n", t, w);
++		bpf_diag_program_structure(
++			env, t, "jump out of range", "Keep branch targets inside the program.",
++			"Instruction %d jumps to instruction %d, but the program only contains instructions 0 through %d.",
++			t, w, env->prog->len - 1);
+ 		return -EINVAL;
+ 	}
+ 
+@@ -135,6 +141,11 @@ static int push_insn(int t, int w, int e, struct bpf_verifier_env *env)
+ 		verbose_linfo(env, t, "%d: ", t);
+ 		verbose_linfo(env, w, "%d: ", w);
+ 		verbose(env, "back-edge from insn %d to %d\n", t, w);
++		bpf_diag_program_structure(
++			env, t, "back-edge is not allowed",
++			"Load with privileges that allow this back-edge, or rewrite the control flow so it does not branch backward.",
++			"Instruction %d branches back to instruction %d. This program is being rejected without the privilege needed for this back-edge.",
++			t, w);
+ 		return -EINVAL;
+ 	} else if (insn_state[w] == EXPLORED) {
+ 		/* forward- or cross-edge */
+@@ -315,6 +326,11 @@ static struct bpf_iarray *jt_from_subprog(struct bpf_verifier_env *env,
+ 
+ 	if (!jt) {
+ 		verbose(env, "no jump tables found for subprog starting at %u\n", subprog_start);
++		bpf_diag_program_structure(
++			env, subprog_start, "missing jump table",
++			"Make sure subprograms containing gotox instructions are accompanied by jump tables referencing these subprograms.",
++			"No jump table was found for the subprogram that starts at instruction %u.",
++			subprog_start);
+ 		return ERR_PTR(-EINVAL);
+ 	}
+ 
+@@ -342,6 +358,11 @@ create_jt(int t, struct bpf_verifier_env *env)
+ 		if (jt->items[i] < subprog_start || jt->items[i] >= subprog_end) {
+ 			verbose(env, "jump table for insn %d points outside of the subprog [%u,%u]\n",
+ 					t, subprog_start, subprog_end);
++			bpf_diag_program_structure(
++				env, t, "jump table target out of range",
++				"Keep every jump-table target inside the same subprogram.",
++				"The jump table for instruction %d points outside subprogram range [%u,%u).",
++				t, subprog_start, subprog_end);
+ 			kvfree(jt);
+ 			return ERR_PTR(-EINVAL);
+ 		}
+@@ -373,6 +394,11 @@ static int visit_gotox_insn(int t, struct bpf_verifier_env *env)
+ 		w = jt->items[i];
+ 		if (w < 0 || w >= env->prog->len) {
+ 			verbose(env, "indirect jump out of range from insn %d to %d\n", t, w);
++			bpf_diag_program_structure(
++				env, t, "indirect jump out of range",
++				"Keep indirect jump targets inside the program.",
++				"Instruction %d can jump indirectly to instruction %d, but the program only contains instructions 0 through %d.",
++				t, w, env->prog->len - 1);
+ 			return -EINVAL;
+ 		}
+ 
+@@ -623,12 +649,21 @@ int bpf_check_cfg(struct bpf_verifier_env *env)
+ 
+ 		if (insn_state[i] != EXPLORED) {
+ 			verbose(env, "unreachable insn %d\n", i);
++			bpf_diag_program_structure(
++				env, i, "unreachable instruction",
++				"Remove the unreachable instruction or add valid control flow that reaches it.",
++				"Instruction %d is not reachable from the program entry point.", i);
+ 			ret = -EINVAL;
+ 			goto err_free;
+ 		}
+ 		if (bpf_is_ldimm64(insn)) {
+ 			if (insn_state[i + 1] != 0) {
+ 				verbose(env, "jump into the middle of ldimm64 insn %d\n", i);
++				bpf_diag_program_structure(
++					env, i, "jump into ldimm64 immediate",
++					"Target the first instruction of the ldimm64 pair, or restructure the jump target.",
++					"Control flow reaches the second half of the ldimm64 instruction pair that starts at instruction %d.",
++					i);
+ 				ret = -EINVAL;
+ 				goto err_free;
+ 			}
+diff --git a/kernel/bpf/diagnostics.c b/kernel/bpf/diagnostics.c
+index c69160f656e9..9fc1f8cf7312 100644
+--- a/kernel/bpf/diagnostics.c
++++ b/kernel/bpf/diagnostics.c
+@@ -21,6 +21,7 @@
+ #define RESOURCE_LIFETIME_SAFETY "Resource Lifetime Safety"
+ #define CALL_TYPE_SAFETY "Call Type Safety"
+ #define EXECUTION_CONTEXT_SAFETY "Execution Context Safety"
++#define PROGRAM_STRUCTURE "Program Structure"
+ 
+ #define BPF_DIAG_TEXT_WIDTH 100
+ #define BPF_DIAG_TEXT_INDENT "  "
+@@ -1192,6 +1193,24 @@ void bpf_diag_ctx_underflow(struct bpf_verifier_env *env, u32 insn_idx,
+ 	diag_suggestion(env, "%s", suggestion);
+ }
+ 
++void bpf_diag_program_structure(struct bpf_verifier_env *env, u32 insn_idx,
++				const char *problem, const char *suggestion,
++				const char *reason_fmt, ...)
++{
++	va_list args;
++
++	bpf_diag_header(env, PROGRAM_STRUCTURE, problem);
++	diag_section(env, "Reason");
++
++	va_start(args, reason_fmt);
++	diag_vprint_indented(env, reason_fmt, args);
++	va_end(args);
++
++	diag_section(env, "At");
++	bpf_diag_source(env, insn_idx, "error", "%s", problem);
++
++	diag_suggestion(env, "%s", suggestion);
++}
+ void bpf_diag_invalid_deref(struct bpf_verifier_env *env, u32 insn_idx, int regno,
+ 			    const char *reg_name, const struct bpf_reg_state *reg,
+ 			    enum bpf_diag_invalid_deref_kind kind, s64 offset)
+diff --git a/kernel/bpf/diagnostics.h b/kernel/bpf/diagnostics.h
+index 95bc654e5b3e..ab082d2d6e37 100644
+--- a/kernel/bpf/diagnostics.h
++++ b/kernel/bpf/diagnostics.h
+@@ -89,6 +89,9 @@ void bpf_diag_ctx_required(struct bpf_verifier_env *env, u32 insn_idx, const cha
+ void bpf_diag_ctx_underflow(struct bpf_verifier_env *env, u32 insn_idx,
+ 			    const char *operation, enum bpf_diag_context_kind ctx_kind,
+ 			    const char *suggestion);
++void bpf_diag_program_structure(struct bpf_verifier_env *env, u32 insn_idx,
++				const char *problem, const char *suggestion,
++				const char *reason_fmt, ...) __printf(5, 6);
+ void bpf_diag_record_branch(struct bpf_verifier_env *env, u32 insn_idx, bool cond_true);
+ void bpf_diag_mod_begin(struct bpf_verifier_env *env, const struct bpf_reg_state *reg,
+ 			const struct bpf_reg_state *origin, enum bpf_diag_mod_reason reason);
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 0f126f090a47..6a886650cc40 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -3020,6 +3020,12 @@ static int check_subprogs(struct bpf_verifier_env *env)
+ 		off = i + bpf_jmp_offset(&insn[i]) + 1;
+ 		if (off < subprog_start || off >= subprog_end) {
+ 			verbose(env, "jump out of range from insn %d to %d\n", i, off);
++			bpf_diag_program_structure(
++				env, i, "jump out of range",
++				"Keep branch targets within the same subprogram, or use an explicit subprogram call.",
++				"Instruction %d jumps to instruction %d, but subprogram %d only contains instructions %d through %d. "
++				"A branch target must stay inside the same subprogram.",
++				i, off, cur_subprog, subprog_start, subprog_end - 1);
+ 			return -EINVAL;
+ 		}
+ next:
+@@ -3032,6 +3038,11 @@ static int check_subprogs(struct bpf_verifier_env *env)
+ 			    code != (BPF_JMP32 | BPF_JA) &&
+ 			    code != (BPF_JMP | BPF_JA)) {
+ 				verbose(env, "last insn is not an exit or jmp\n");
++				bpf_diag_program_structure(
++					env, i, "subprogram can fall through",
++					"End each subprogram with an exit or an explicit jump that keeps control flow inside the subprogram.",
++					"Subprogram %d reaches its last instruction %d without an exit or jump, so control could continue into the next subprogram.",
++					cur_subprog, i);
+ 				return -EINVAL;
+ 			}
+ 			subprog_start = subprog_end;
+@@ -3104,6 +3115,11 @@ static int sort_subprogs_topo(struct bpf_verifier_env *env)
+ 					verbose(env, "recursive call from %s() to %s()\n",
+ 						bpf_subprog_name(env, cur),
+ 						bpf_subprog_name(env, callee));
++					bpf_diag_program_structure(
++						env, idx, "recursive subprogram call",
++						"Rewrite the recursion as an explicit bounded loop, or split the logic so subprogram calls do not form a cycle.",
++						"This bpf2bpf call would make the subprogram call graph recursive. "
++						"The verifier requires a finite, acyclic call graph so it can bound stack depth and analysis.");
+ 					ret = -EINVAL;
+ 					goto out;
+ 				}
+-- 
+2.55.0
+

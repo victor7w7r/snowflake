@@ -1,0 +1,246 @@
+From 9734e905119c5f7d7af9dd3e483f9a0d9ee12187 Mon Sep 17 00:00:00 2001
+From: Gary Guo <gary@garyguo.net>
+Date: Mon, 6 Jul 2026 13:44:18 +0100
+Subject: [PATCH 03937/15333] rust: io: generalize `MmioRaw` to pointer to
+ arbitrary type
+
+Conceptually, `MmioRaw` is just `__iomem *`, so it should work for any
+types. Update the existing use case where it represents a region of
+compile-time known minimum size and run-time known actual size to use the
+dynamic-sized type `Region<SIZE>` instead. Rename `maxsize` method to
+reflect that it is the actual size (not a bound) of the region.
+
+Implement `Clone` and `Copy` manually, which cannot be derived due to the
+generic parameter. The use of raw pointers also cause the `Send` and `Sync`
+auto trait implementation to be lost, so add them back by manual
+implementation.
+
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Signed-off-by: Gary Guo <gary@garyguo.net>
+Reviewed-by: Daniel Almeida <daniel.almeida@collabora.com>
+Suggested-by: Danilo Krummrich <dakr@kernel.org>
+Link: https://rust-for-linux.zulipchat.com/#narrow/channel/288089-General/topic/Generic.20I.2FO.20backends/near/571198078
+Link: https://patch.msgid.link/20260706-io_projection-v6-5-72cd5d055d54@garyguo.net
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/kernel/devres.rs |  7 +++--
+ rust/kernel/io.rs     | 67 +++++++++++++++++++++++++++++++------------
+ rust/kernel/io/mem.rs |  5 ++--
+ rust/kernel/pci/io.rs |  4 +--
+ 4 files changed, 57 insertions(+), 26 deletions(-)
+
+diff --git a/rust/kernel/devres.rs b/rust/kernel/devres.rs
+index ed30ccc6e68e..d0c677fd7932 100644
+--- a/rust/kernel/devres.rs
++++ b/rust/kernel/devres.rs
+@@ -70,14 +70,15 @@ struct Inner<T> {
+ ///         Io,
+ ///         Mmio,
+ ///         MmioRaw,
+-///         PhysAddr, //
++///         PhysAddr,
++///         Region, //
+ ///     },
+ ///     prelude::*,
+ /// };
+ /// use core::ops::Deref;
+ ///
+ /// // See also [`pci::Bar`] for a real example.
+-/// struct IoMem<const SIZE: usize>(MmioRaw<SIZE>);
++/// struct IoMem<const SIZE: usize>(MmioRaw<Region<SIZE>>);
+ ///
+ /// impl<const SIZE: usize> IoMem<SIZE> {
+ ///     /// # Safety
+@@ -92,7 +93,7 @@ struct Inner<T> {
+ ///             return Err(ENOMEM);
+ ///         }
+ ///
+-///         Ok(IoMem(MmioRaw::new(addr as usize, SIZE)?))
++///         Ok(IoMem(MmioRaw::new_region(addr as usize, SIZE)?))
+ ///     }
+ /// }
+ ///
+diff --git a/rust/kernel/io.rs b/rust/kernel/io.rs
+index a2aa6173ce87..3013d8cf39e4 100644
+--- a/rust/kernel/io.rs
++++ b/rust/kernel/io.rs
+@@ -89,37 +89,67 @@ fn size(p: *const Self) -> usize {
+ 
+ /// Raw representation of an MMIO region.
+ ///
++/// `MmioRaw<T>` is equivalent to `T __iomem *` in C.
++///
+ /// By itself, the existence of an instance of this structure does not provide any guarantees that
+ /// the represented MMIO region does exist or is properly mapped.
+ ///
+ /// Instead, the bus specific MMIO implementation must convert this raw representation into an
+ /// `Mmio` instance providing the actual memory accessors. Only by the conversion into an `Mmio`
+ /// structure any guarantees are given.
+-pub struct MmioRaw<const SIZE: usize = 0> {
+-    addr: usize,
+-    maxsize: usize,
++pub struct MmioRaw<T: ?Sized> {
++    /// Pointer is in I/O address space.
++    ///
++    /// The provenance does not matter, only the address and metadata do.
++    ptr: *mut T,
+ }
+ 
+-impl<const SIZE: usize> MmioRaw<SIZE> {
+-    /// Returns a new `MmioRaw` instance on success, an error otherwise.
+-    pub fn new(addr: usize, maxsize: usize) -> Result<Self> {
+-        if maxsize < SIZE {
+-            return Err(EINVAL);
++impl<T: ?Sized> Copy for MmioRaw<T> {}
++impl<T: ?Sized> Clone for MmioRaw<T> {
++    #[inline]
++    fn clone(&self) -> Self {
++        *self
++    }
++}
++
++// SAFETY: `MmioRaw` is just an address, so is thread-safe.
++unsafe impl<T: ?Sized> Send for MmioRaw<T> {}
++// SAFETY: `MmioRaw` is just an address, so is thread-safe.
++unsafe impl<T: ?Sized> Sync for MmioRaw<T> {}
++
++impl<T> MmioRaw<T> {
++    /// Create a `MmioRaw` from address.
++    #[inline]
++    pub fn new(addr: usize) -> Self {
++        Self {
++            ptr: core::ptr::without_provenance_mut(addr),
+         }
++    }
++}
+ 
+-        Ok(Self { addr, maxsize })
++impl<const SIZE: usize> MmioRaw<Region<SIZE>> {
++    /// Create a `MmioRaw` representing a I/O region with given size.
++    ///
++    /// The size is checked against the minimum size specified via const generics.
++    #[inline]
++    pub fn new_region(addr: usize, size: usize) -> Result<Self> {
++        Ok(Self {
++            ptr: Region::ptr_try_from_raw_parts_mut(core::ptr::without_provenance_mut(addr), size)?,
++        })
+     }
++}
+ 
++impl<T: ?Sized + KnownSize> MmioRaw<T> {
+     /// Returns the base address of the MMIO region.
+     #[inline]
+     pub fn addr(&self) -> usize {
+-        self.addr
++        self.ptr.addr()
+     }
+ 
+-    /// Returns the maximum size of the MMIO region.
++    /// Returns the size of the MMIO region.
+     #[inline]
+-    pub fn maxsize(&self) -> usize {
+-        self.maxsize
++    pub fn size(&self) -> usize {
++        KnownSize::size(self.ptr)
+     }
+ }
+ 
+@@ -144,12 +174,13 @@ pub fn maxsize(&self) -> usize {
+ ///         Mmio,
+ ///         MmioRaw,
+ ///         PhysAddr,
++///         Region,
+ ///     },
+ /// };
+ /// use core::ops::Deref;
+ ///
+ /// // See also `pci::Bar` for a real example.
+-/// struct IoMem<const SIZE: usize>(MmioRaw<SIZE>);
++/// struct IoMem<const SIZE: usize>(MmioRaw<Region<SIZE>>);
+ ///
+ /// impl<const SIZE: usize> IoMem<SIZE> {
+ ///     /// # Safety
+@@ -164,7 +195,7 @@ pub fn maxsize(&self) -> usize {
+ ///             return Err(ENOMEM);
+ ///         }
+ ///
+-///         Ok(IoMem(MmioRaw::new(addr as usize, SIZE)?))
++///         Ok(IoMem(MmioRaw::new_region(addr as usize, SIZE)?))
+ ///     }
+ /// }
+ ///
+@@ -194,7 +225,7 @@ pub fn maxsize(&self) -> usize {
+ /// # }
+ /// ```
+ #[repr(transparent)]
+-pub struct Mmio<const SIZE: usize = 0>(MmioRaw<SIZE>);
++pub struct Mmio<const SIZE: usize = 0>(MmioRaw<Region<SIZE>>);
+ 
+ /// Checks whether an access of type `U` at the given `base` and the given `offset`
+ /// is valid within this region.
+@@ -841,7 +872,7 @@ fn addr(self) -> usize {
+     /// Returns the maximum size of this mapping.
+     #[inline]
+     fn maxsize(self) -> usize {
+-        self.0.maxsize()
++        self.0.size()
+     }
+ }
+ 
+@@ -852,7 +883,7 @@ impl<const SIZE: usize> Mmio<SIZE> {
+     ///
+     /// Callers must ensure that `addr` is the start of a valid I/O mapped memory region of size
+     /// `maxsize`.
+-    pub unsafe fn from_raw(raw: &MmioRaw<SIZE>) -> &Self {
++    pub unsafe fn from_raw(raw: &MmioRaw<Region<SIZE>>) -> &Self {
+         // SAFETY: `Mmio` is a transparent wrapper around `MmioRaw`.
+         unsafe { &*core::ptr::from_ref(raw).cast() }
+     }
+diff --git a/rust/kernel/io/mem.rs b/rust/kernel/io/mem.rs
+index fc2a3e24f8d5..9e15bc8fde78 100644
+--- a/rust/kernel/io/mem.rs
++++ b/rust/kernel/io/mem.rs
+@@ -229,7 +229,7 @@ fn deref(&self) -> &Self::Target {
+ /// start of the I/O memory mapped region.
+ pub struct IoMem<'a, const SIZE: usize = 0> {
+     dev: &'a Device<Bound>,
+-    io: MmioRaw<SIZE>,
++    io: MmioRaw<super::Region<SIZE>>,
+ }
+ 
+ impl<'a, const SIZE: usize> IoMem<'a, SIZE> {
+@@ -264,8 +264,7 @@ fn ioremap(dev: &'a Device<Bound>, resource: &Resource) -> Result<Self> {
+             return Err(ENOMEM);
+         }
+ 
+-        let io = MmioRaw::new(addr as usize, size)?;
+-
++        let io = MmioRaw::new_region(addr as usize, size)?;
+         Ok(IoMem { dev, io })
+     }
+ 
+diff --git a/rust/kernel/pci/io.rs b/rust/kernel/pci/io.rs
+index 505305cd9b86..42f840d64a6f 100644
+--- a/rust/kernel/pci/io.rs
++++ b/rust/kernel/pci/io.rs
+@@ -139,7 +139,7 @@ fn maxsize(self) -> usize {
+ /// memory mapped PCI BAR and its size.
+ pub struct Bar<'a, const SIZE: usize = 0> {
+     pdev: &'a Device<device::Bound>,
+-    io: MmioRaw<SIZE>,
++    io: MmioRaw<crate::io::Region<SIZE>>,
+     num: i32,
+ }
+ 
+@@ -179,7 +179,7 @@ pub(super) fn new(
+             return Err(ENOMEM);
+         }
+ 
+-        let io = match MmioRaw::new(ioptr, len as usize) {
++        let io = match MmioRaw::new_region(ioptr, len as usize) {
+             Ok(io) => io,
+             Err(err) => {
+                 // SAFETY:
+-- 
+2.55.0
+

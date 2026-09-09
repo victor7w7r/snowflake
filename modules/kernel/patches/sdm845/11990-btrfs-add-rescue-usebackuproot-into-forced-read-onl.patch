@@ -1,0 +1,69 @@
+From ce5d6709ebfa4d188d80e149c482c89a28ca21e0 Mon Sep 17 00:00:00 2001
+From: Qu Wenruo <wqu@suse.com>
+Date: Fri, 3 Jul 2026 19:16:06 +0930
+Subject: [PATCH 11990/15333] btrfs: add "rescue=usebackuproot" into forced
+ read-only options
+
+According to btrfs(5) man page, all rescue options should require a
+read-only mount.
+
+But that read-only check is only introduced for newer rescue options,
+not for the pre-existing "usebackuproot" one.
+
+Furthermore, a filesystem that requires "rescue=" mount option already
+means it's corrupted, even if "rescue=usebackuproot" allowed the fs to
+be mounted RW, one should not trust such fs anymore until a
+comprehensive btrfs-check run and proper evaluation.
+
+Change the behavior to match the document, and since
+"rescue=usebackuproot" is now a full RO mount option, it is no longer a
+one-shot option, therefore remove it from btrfs_clear_oneshot_options().
+
+Reviewed-by: Johannes Thumshirn <johannes.thumshirn@wdc.com>
+Reviewed-by: Neal Gompa <neal@gompa.dev>
+Signed-off-by: Qu Wenruo <wqu@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/fs.h    | 3 ++-
+ fs/btrfs/super.c | 4 ++--
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/fs/btrfs/fs.h b/fs/btrfs/fs.h
+index 874fb23e4abf..dcadcf7cc813 100644
+--- a/fs/btrfs/fs.h
++++ b/fs/btrfs/fs.h
+@@ -289,7 +289,8 @@ enum {
+ 	 BTRFS_MOUNT_IGNOREBADROOTS |		\
+ 	 BTRFS_MOUNT_IGNOREDATACSUMS |		\
+ 	 BTRFS_MOUNT_IGNOREMETACSUMS |		\
+-	 BTRFS_MOUNT_IGNORESUPERFLAGS)
++	 BTRFS_MOUNT_IGNORESUPERFLAGS |		\
++	 BTRFS_MOUNT_USEBACKUPROOT)
+ 
+ /*
+  * Compat flags that we support.  If any incompat flags are set other than the
+diff --git a/fs/btrfs/super.c b/fs/btrfs/super.c
+index 41658705b4e9..11806591e077 100644
+--- a/fs/btrfs/super.c
++++ b/fs/btrfs/super.c
+@@ -669,7 +669,6 @@ static int btrfs_parse_param(struct fs_context *fc, struct fs_parameter *param)
+  */
+ static void btrfs_clear_oneshot_options(struct btrfs_fs_info *fs_info)
+ {
+-	btrfs_clear_opt(fs_info->mount_opt, USEBACKUPROOT);
+ 	btrfs_clear_opt(fs_info->mount_opt, CLEAR_CACHE);
+ 	btrfs_clear_opt(fs_info->mount_opt, NOSPACECACHE);
+ }
+@@ -693,7 +692,8 @@ bool btrfs_check_options(const struct btrfs_fs_info *info,
+ 	bool ret = true;
+ 
+ 	if (!(flags & SB_RDONLY) &&
+-	    (check_ro_option(info, *mount_opt, BTRFS_MOUNT_NOLOGREPLAY, "nologreplay") ||
++	    (check_ro_option(info, *mount_opt, BTRFS_MOUNT_USEBACKUPROOT, "usebackuproot") ||
++	     check_ro_option(info, *mount_opt, BTRFS_MOUNT_NOLOGREPLAY, "nologreplay") ||
+ 	     check_ro_option(info, *mount_opt, BTRFS_MOUNT_IGNOREBADROOTS, "ignorebadroots") ||
+ 	     check_ro_option(info, *mount_opt, BTRFS_MOUNT_IGNOREDATACSUMS, "ignoredatacsums") ||
+ 	     check_ro_option(info, *mount_opt, BTRFS_MOUNT_IGNOREMETACSUMS, "ignoremetacsums") ||
+-- 
+2.55.0
+

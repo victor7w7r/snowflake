@@ -1,0 +1,50 @@
+From c5663770970c75b168e8dff9f2b2a334d4449865 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 16:00:00 +0200
+Subject: [PATCH 12814/15333] ASoC: qcom: Use auto-cleanup for firmware loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Cc: Srinivas Kandagatla <srini@kernel.org>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-29-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/qcom/qdsp6/topology.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/sound/soc/qcom/qdsp6/topology.c b/sound/soc/qcom/qdsp6/topology.c
+index 54661bcb006c..faafbc5c0ad0 100644
+--- a/sound/soc/qcom/qdsp6/topology.c
++++ b/sound/soc/qcom/qdsp6/topology.c
+@@ -1416,7 +1416,6 @@ int audioreach_tplg_init(struct snd_soc_component *component)
+ {
+ 	struct snd_soc_card *card = component->card;
+ 	struct device *dev = component->dev;
+-	const struct firmware *fw;
+ 	int ret;
+ 
+ 	/* Inline with Qualcomm UCM configs and linux-firmware path */
+@@ -1426,6 +1425,7 @@ int audioreach_tplg_init(struct snd_soc_component *component)
+ 	if (!tplg_fw_name)
+ 		return -ENOMEM;
+ 
++	const struct firmware *fw __free(firmware) = NULL;
+ 	ret = request_firmware(&fw, tplg_fw_name, dev);
+ 	if (ret < 0) {
+ 		dev_err(dev, "tplg firmware loading %s failed %d\n", tplg_fw_name, ret);
+@@ -1438,8 +1438,6 @@ int audioreach_tplg_init(struct snd_soc_component *component)
+ 			dev_err(dev, "tplg component load failed: %d\n", ret);
+ 	}
+ 
+-	release_firmware(fw);
+-
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(audioreach_tplg_init);
+-- 
+2.55.0
+

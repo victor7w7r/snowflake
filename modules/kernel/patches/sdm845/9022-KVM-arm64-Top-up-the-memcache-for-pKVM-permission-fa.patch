@@ -1,0 +1,54 @@
+From 6bf0215c565ee122ffff7241b297a7b88f71005f Mon Sep 17 00:00:00 2001
+From: Fuad Tabba <fuad.tabba@linux.dev>
+Date: Fri, 17 Jul 2026 14:03:12 +0100
+Subject: [PATCH 09022/15333] KVM: arm64: Top up the memcache for pKVM
+ permission faults
+
+A permission fault normally only relaxes a leaf, so user_mem_abort()
+skips the memcache top-up. Under pKVM such a fault can instead collapse
+pages into a block. That needs a fresh pkvm_mapping object, and without
+it cache->mapping is NULL, so pkvm_pgtable_stage2_map() dereferences NULL
+and faults the host under mmu_lock. Staging only the object is not
+enough: the hypervisor requires kvm_mmu_cache_min_pages in the memcache
+even for the allocation-free install, so under memcache pressure the
+collapse returns -ENOMEM and trips the WARN_ON(ret) in
+pkvm_pgtable_stage2_map() where a non-pKVM guest succeeds.
+
+Top up the full memcache for pKVM permission faults so both the mapping
+object and the min-pages are staged before mmu_lock.
+
+Fixes: db14091d8f75 ("KVM: arm64: Stage-2 huge mappings for np-guests")
+Reported-by: Bradley Morgan <include@grrlz.net>
+Link: https://lore.kernel.org/all/20260623161545.EA08E1F000E9@smtp.kernel.org/
+Signed-off-by: Fuad Tabba <fuad.tabba@linux.dev>
+Tested-by: Bradley Morgan <include@grrlz.net> # On pixel 7, Android 17 CP2A.260705.006
+Test: Bradley Morgan <include@grrlz.net> # On QEMU arm64 host
+Link: https://patch.msgid.link/20260717130317.1953574-3-fuad.tabba@linux.dev
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/mmu.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/kvm/mmu.c b/arch/arm64/kvm/mmu.c
+index 6c941aaa10c6..4d7c9bdcef00 100644
+--- a/arch/arm64/kvm/mmu.c
++++ b/arch/arm64/kvm/mmu.c
+@@ -2114,10 +2114,14 @@ static int user_mem_abort(const struct kvm_s2_fault_desc *s2fd)
+ 	 * and so normally don't require allocations from the memcache. The
+ 	 * only exception to this is when dirty logging is enabled at runtime
+ 	 * and a write fault needs to collapse a block entry into a table.
++	 * Under pKVM a permission fault can also collapse pages into a block,
++	 * which needs a fresh mapping object, and the hypervisor requires the
++	 * min-pages memcache even when the install allocates nothing.
+ 	 */
+ 	memcache = get_mmu_memcache(s2fd->vcpu);
+ 	if (!perm_fault || (memslot_is_logging(s2fd->memslot) &&
+-			    kvm_is_write_fault(s2fd->vcpu))) {
++			    kvm_is_write_fault(s2fd->vcpu)) ||
++	    is_protected_kvm_enabled()) {
+ 		ret = topup_mmu_memcache(s2fd->vcpu, memcache);
+ 		if (ret)
+ 			return ret;
+-- 
+2.55.0
+

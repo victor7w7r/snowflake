@@ -1,0 +1,60 @@
+From 99542d244f534d4f3af6a76f18c99188458f8d12 Mon Sep 17 00:00:00 2001
+From: Miquel Raynal <miquel.raynal@bootlin.com>
+Date: Thu, 13 Aug 2026 10:00:23 +0200
+Subject: [PATCH 13912/15333] spi: ma35d1-qspi: Allow several command bytes
+
+The controller is capable of sending several bytes for the command, it
+does not even know this is a command. Just mimic the address steps here
+to allow double byte commands, which may be needed for DTR support.
+
+Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
+Link: https://patch.msgid.link/20260813-perso-ma35d1-upstream-qspi-v1-3-b217b9870eb1@bootlin.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-ma35d1-qspi.c | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/spi/spi-ma35d1-qspi.c b/drivers/spi/spi-ma35d1-qspi.c
+index b4fd0ab4bd31..027a9433f2b1 100644
+--- a/drivers/spi/spi-ma35d1-qspi.c
++++ b/drivers/spi/spi-ma35d1-qspi.c
+@@ -395,9 +395,6 @@ static bool nuvoton_qspi_mem_supports_op(struct spi_mem *mem,
+ 	    op->dummy.buswidth > 4 || op->data.buswidth > 4)
+ 		return false;
+ 
+-	if (op->cmd.nbytes != 1)
+-		return false;
+-
+ 	if (op->addr.nbytes > 4)
+ 		return false;
+ 
+@@ -459,8 +456,7 @@ static int nuvoton_qspi_mem_exec_op(struct spi_mem *mem,
+ {
+ 	struct spi_device *spi = mem->spi;
+ 	struct nuvoton_qspi *qspi = spi_controller_get_devdata(spi->controller);
+-	u8 opcode = op->cmd.opcode;
+-	u8 addr[4];
++	u8 cmd[2], addr[4];
+ 	int ret;
+ 	int i;
+ 
+@@ -470,12 +466,15 @@ static int nuvoton_qspi_mem_exec_op(struct spi_mem *mem,
+ 
+ 	nuvoton_qspi_mem_set_cs(spi, true);
+ 
++	for (i = 0; i < op->cmd.nbytes; i++)
++		cmd[i] = op->cmd.opcode >> (8 * (op->cmd.nbytes - i - 1));
++
+ 	ret = nuvoton_qspi_configure_bus(spi, op->cmd.buswidth, SPI_MEM_DATA_OUT,
+ 					 op->max_freq);
+ 	if (ret)
+ 		goto out_deassert_cs;
+ 
+-	ret = nuvoton_qspi_txrx(qspi, &opcode, NULL, 1);
++	ret = nuvoton_qspi_txrx(qspi, cmd, NULL, op->cmd.nbytes);
+ 	if (ret)
+ 		goto out_deassert_cs;
+ 
+-- 
+2.55.0
+

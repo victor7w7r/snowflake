@@ -1,0 +1,245 @@
+From dff03860a722e7f1d0a10bb22628d7896bd4b5ec Mon Sep 17 00:00:00 2001
+From: Chinmaya Kajagar <chinmayk@linux.ibm.com>
+Date: Tue, 28 Jul 2026 06:48:57 +0200
+Subject: [PATCH 08044/15333] scsi: zfcp: Trace return values of sysfs unit add
+ store
+
+sysfs unit add failures are seen during FCP devices manual SCSI LUN scans,
+indicating the kernel cannot add a LUN, usually because the device is
+offline, already exists, no memory or the target port is incorrectly
+configured.
+
+Add a new trace to debug zfcp sysfs unit add failures with tag id
+ZFCP_DBF_HBA_UAS. This traces wwpn, fcp lun id, return value (error
+condition) and associated hba of the device.
+
+Typical unit add store failures as seen below example syslog messages,
+
+Feb  2 10:47:25 systemd-udevd[823]: rport-1:0-2: /etc/udev/
+rules.d/41-zfcp-lun-0.0.50c0:0x500507680b26c449:0x01d2000000000000.rules:10
+Failed to write ATTR{/sys/devices/css0/0.0.0015/0.0.50c0/0x500507680b26c449
+/unit_add}, ignoring: File exists
+
+Feb  2 10:50:03 systemd-udevd[801]: rport-2:0-3: /etc/udev/
+rules.d/41-zfcp-lun-0.0.50c0:0x500507680b26c448:0x01d2000000000000.rules:10
+Failed to write ATTR{/sys/devices/css0/0.0.0015/0.0.50c0/0x500507680b26c448
+/unit_add}, ignoring: Cannot allocate memory
+
+Example zfcpdbf traces for both the errors:
+
+Timestamp      : 2026-03-05-07:28:34:029797
+Area           : HBA
+Subarea        : 00
+Level          : 3
+Exception      : -
+CPU ID         : 0002
+Caller         : 0x000001fe345e6d0e
+Record ID      : 6
+Tag            : syuast2
+Description    : syuast2 HBA, unit add, failed, unable to add unit
+Request ID     : 0x00000000ffffffff
+Request status : 0xffffffff
+FSF cmnd       : 0xffffffff
+FSF sequence no: 0xffffffff
+WWPN           : 0x500507680b25c448
+LUN            : 0x01d3000000000000
+Return Value   : 0xfffffff4
+
+Timestamp      : 2026-03-05-07:33:04:151807 <== the last record
+Area           : HBA
+Subarea        : 00
+Level          : 3
+Exception      : -
+CPU ID         : 0002
+Caller         : 0x000001fe345e6d0e
+Record ID      : 6
+Tag            : syuast2
+Description    : syuast2 HBA, unit add, failed, unable to add unit
+Request ID     : 0x00000000ffffffff
+Request status : 0xffffffff
+FSF cmnd       : 0xffffffff
+FSF sequence no: 0xffffffff
+WWPN           : 0x500507680b25c449
+LUN            : 0x01d0000000000000
+Return Value   : 0xfffffff4
+
+Link: https://patch.msgid.link/20260728044857.2532646-4-niharp@linux.ibm.com
+Signed-off-by: Chinmaya Kajagar <chinmayk@linux.ibm.com>
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+---
+ drivers/s390/scsi/zfcp_dbf.c   | 36 ++++++++++++++++++++++++++++++++++
+ drivers/s390/scsi/zfcp_dbf.h   | 16 +++++++++++++++
+ drivers/s390/scsi/zfcp_ext.h   |  4 +++-
+ drivers/s390/scsi/zfcp_sysfs.c | 19 ++++++++++++------
+ 4 files changed, 68 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/s390/scsi/zfcp_dbf.c b/drivers/s390/scsi/zfcp_dbf.c
+index 4217b74baa38..81fb8af408e9 100644
+--- a/drivers/s390/scsi/zfcp_dbf.c
++++ b/drivers/s390/scsi/zfcp_dbf.c
+@@ -265,6 +265,42 @@ void zfcp_dbf_hba_fsf_uss(char *tag, struct zfcp_fsf_req *req)
+ 	spin_unlock_irqrestore(&dbf->hba_lock, flags);
+ }
+ 
++/**
++ * zfcp_dbf_hba_uas - trace event for sysfs unit add store
++ * @tag: tag indicating which kind of unit add store condition occurred
++ * @level: debug trace level
++ * @adapter: pointer to struct zfcp_adapter
++ * @wwpn: remote port wwn
++ * @fcp_lun: FCP LUN
++ * @ret: return value
++ */
++void zfcp_dbf_hba_uas(char *tag, int level, struct zfcp_adapter *adapter,
++		      u64 wwpn, u64 fcp_lun, int ret)
++{
++	struct zfcp_dbf *dbf = adapter->dbf;
++	struct zfcp_dbf_hba *rec = &dbf->hba_buf;
++	unsigned long flags;
++
++	if (unlikely(!debug_level_enabled(dbf->hba, level)))
++		return;
++
++	spin_lock_irqsave(&dbf->hba_lock, flags);
++	memset(rec, 0, sizeof(*rec));
++
++	memcpy(rec->tag, tag, ZFCP_DBF_TAG_LEN);
++	rec->id = ZFCP_DBF_HBA_UAS;
++	rec->fsf_req_id = ~0u;
++	rec->fsf_req_status = ~0u;
++	rec->fsf_cmd = ~0u;
++	rec->fsf_seq_no = ~0u;
++	rec->u.uas.wwpn = wwpn;
++	rec->u.uas.fcp_lun = fcp_lun;
++	rec->u.uas.ret = ret;
++
++	debug_event(dbf->hba, level, rec, sizeof(*rec));
++	spin_unlock_irqrestore(&dbf->hba_lock, flags);
++}
++
+ /**
+  * zfcp_dbf_hba_bit_err - trace event for bit error conditions
+  * @tag: tag indicating which kind of bit error unsolicited status was received
+diff --git a/drivers/s390/scsi/zfcp_dbf.h b/drivers/s390/scsi/zfcp_dbf.h
+index c84f076440a8..79973fb24b1c 100644
+--- a/drivers/s390/scsi/zfcp_dbf.h
++++ b/drivers/s390/scsi/zfcp_dbf.h
+@@ -174,6 +174,18 @@ struct zfcp_dbf_hba_uss {
+ 	u8 res4[20];
+ } __packed;
+ 
++/**
++ * struct zfcp_dbf_hba_uas - trace record for sysfs unit add store
++ * @wwpn: remote port wwn
++ * @fcp_lun: FCP LUN
++ * @ret: return value
++ */
++struct zfcp_dbf_hba_uas {
++	u64 wwpn;
++	u64 fcp_lun;
++	u32 ret;
++} __packed;
++
+ /**
+  * struct zfcp_dbf_hba_fces - trace record for FC Endpoint Security
+  * @req_issued: timestamp when request was issued
+@@ -200,6 +212,7 @@ struct zfcp_dbf_hba_fces {
+  * @ZFCP_DBF_HBA_BIT: bit error trace record
+  * @ZFCP_DBF_HBA_BASIC: basic adapter event, only trace tag, no other data
+  * @ZFCP_DBF_HBA_FCES: FC Endpoint Security trace record
++ * @ZFCP_DBF_HBA_UAS: unit add store trace record
+  */
+ enum zfcp_dbf_hba_id {
+ 	ZFCP_DBF_HBA_RES	= 1,
+@@ -207,6 +220,7 @@ enum zfcp_dbf_hba_id {
+ 	ZFCP_DBF_HBA_BIT	= 3,
+ 	ZFCP_DBF_HBA_BASIC	= 4,
+ 	ZFCP_DBF_HBA_FCES	= 5,
++	ZFCP_DBF_HBA_UAS        = 6,
+ };
+ 
+ /**
+@@ -223,6 +237,7 @@ enum zfcp_dbf_hba_id {
+  * @u.uss:  data for unsolicited status buffer
+  * @u.be:   data for bit error unsolicited status buffer
+  * @u.fces: data for FC Endpoint Security
++ * @u.uas:  data for unit add store
+  */
+ struct zfcp_dbf_hba {
+ 	u8 id;
+@@ -237,6 +252,7 @@ struct zfcp_dbf_hba {
+ 		struct zfcp_dbf_hba_uss uss;
+ 		struct fsf_bit_error_payload be;
+ 		struct zfcp_dbf_hba_fces fces;
++		struct zfcp_dbf_hba_uas uas;
+ 	} u;
+ } __packed;
+ 
+diff --git a/drivers/s390/scsi/zfcp_ext.h b/drivers/s390/scsi/zfcp_ext.h
+index 9f5152b42b0e..40bd597fb4cd 100644
+--- a/drivers/s390/scsi/zfcp_ext.h
++++ b/drivers/s390/scsi/zfcp_ext.h
+@@ -4,7 +4,7 @@
+  *
+  * External function declarations.
+  *
+- * Copyright IBM Corp. 2002, 2023
++ * Copyright IBM Corp. 2002, 2026
+  */
+ 
+ #ifndef ZFCP_EXT_H
+@@ -49,6 +49,8 @@ extern void zfcp_dbf_hba_fsf_fces(char *tag, const struct zfcp_fsf_req *req,
+ extern void zfcp_dbf_hba_fsf_reqid(const char *const tag, const int level,
+ 				   struct zfcp_adapter *const adapter,
+ 				   const u64 req_id);
++extern void zfcp_dbf_hba_uas(char *tag, int level, struct zfcp_adapter *adapter,
++			     u64 wwpn, u64 fcp_lun, int ret);
+ extern void zfcp_dbf_hba_bit_err(char *, struct zfcp_fsf_req *);
+ extern void zfcp_dbf_hba_def_err(struct zfcp_adapter *, u64, u16, void **);
+ extern void zfcp_dbf_san_req(char *, struct zfcp_fsf_req *, u32);
+diff --git a/drivers/s390/scsi/zfcp_sysfs.c b/drivers/s390/scsi/zfcp_sysfs.c
+index 42423549e511..4f23d585d062 100644
+--- a/drivers/s390/scsi/zfcp_sysfs.c
++++ b/drivers/s390/scsi/zfcp_sysfs.c
+@@ -4,7 +4,7 @@
+  *
+  * sysfs attributes.
+  *
+- * Copyright IBM Corp. 2008, 2020
++ * Copyright IBM Corp. 2008, 2026
+  */
+ 
+ #define pr_fmt(fmt) "zfcp: " fmt
+@@ -442,17 +442,24 @@ static ssize_t zfcp_sysfs_unit_add_store(struct device *dev,
+ 					 const char *buf, size_t count)
+ {
+ 	struct zfcp_port *port = container_of(dev, struct zfcp_port, dev);
+-	u64 fcp_lun;
+-	int retval;
++	struct zfcp_adapter *adapter = port->adapter;
++	u64 fcp_lun = 0;
++	int retval = -EINVAL;
+ 
+-	if (kstrtoull(buf, 0, (unsigned long long *) &fcp_lun))
+-		return -EINVAL;
++	if (kstrtoull(buf, 0, (unsigned long long *)&fcp_lun)) {
++		zfcp_dbf_hba_uas("syuast1", 3, adapter, port->wwpn,
++				 fcp_lun, retval);
++		return retval;
++	}
+ 
+ 	flush_work(&port->rport_work);
+ 
+ 	retval = zfcp_unit_add(port, fcp_lun);
+-	if (retval)
++	if (retval) {
++		zfcp_dbf_hba_uas("syuast2", 3, adapter, port->wwpn,
++				 fcp_lun, retval);
+ 		return retval;
++	}
+ 
+ 	return count;
+ }
+-- 
+2.55.0
+

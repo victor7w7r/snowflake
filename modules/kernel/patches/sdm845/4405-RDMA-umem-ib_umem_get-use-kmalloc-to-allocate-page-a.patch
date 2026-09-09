@@ -1,0 +1,59 @@
+From 66073100a7b8576e5037cac117b2a3fd3d9946e7 Mon Sep 17 00:00:00 2001
+From: "Mike Rapoport (Microsoft)" <rppt@kernel.org>
+Date: Mon, 13 Jul 2026 10:17:22 +0300
+Subject: [PATCH 04405/15333] RDMA/umem: ib_umem_get(): use kmalloc() to
+ allocate page array
+
+ib_umem_get() allocates an array of pointers to struct page for
+pin_user_pages_fast() calls during memory registration.
+
+This array can be allocated with kmalloc() as there's nothing special
+about it to go directly to the page allocator.
+
+kmalloc() provides a better API that does not require ugly casts and
+kfree() does not need to know the size of the freed object.
+
+Performance difference between kmalloc() and __get_free_pages() is not
+measurable as both allocators take an object/page from a per-CPU list for
+fast path allocations.
+
+For the slow path the performance is anyway determined by the amount of
+reclaim involved rather than by what allocator is used.
+
+Replace use of __get_free_page() with kmalloc() and free_page() with
+kfree().
+
+Link: https://lore.kernel.org/all/635405e4-9423-4a25-a6e7-e03c8ea0bcbe@redhat.com
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Link: https://patch.msgid.link/20260713-b4-rdma-v2-1-65d2a1a5180c@kernel.org
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/core/umem.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/infiniband/core/umem.c b/drivers/infiniband/core/umem.c
+index 73498723a5d5..81f44dadfa52 100644
+--- a/drivers/infiniband/core/umem.c
++++ b/drivers/infiniband/core/umem.c
+@@ -209,7 +209,8 @@ static struct ib_umem *__ib_umem_get_va(struct ib_device *device,
+ 
+ 	mmgrab(mm);
+ 
+-	page_list = (struct page **) __get_free_page(GFP_KERNEL);
++	/* TODO: switch to "fast and as large as possible" allocation helper */
++	page_list = kmalloc(PAGE_SIZE, GFP_KERNEL);
+ 	if (!page_list) {
+ 		ret = -ENOMEM;
+ 		goto umem_kfree;
+@@ -269,7 +270,7 @@ static struct ib_umem *__ib_umem_get_va(struct ib_device *device,
+ 	__ib_umem_release(device, umem, 0);
+ 	atomic64_sub(ib_umem_num_pages(umem), &mm->pinned_vm);
+ out:
+-	free_page((unsigned long) page_list);
++	kfree(page_list);
+ umem_kfree:
+ 	if (ret) {
+ 		mmdrop(umem->owning_mm);
+-- 
+2.55.0
+

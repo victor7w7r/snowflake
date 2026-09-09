@@ -1,0 +1,468 @@
+From a415e3520545e2a83f9c22a45d5cbebb1b64e1f0 Mon Sep 17 00:00:00 2001
+From: Juergen Gross <jgross@suse.com>
+Date: Fri, 3 Jul 2026 13:23:44 +0200
+Subject: [PATCH 05333/15333] x86/mtrr: Stop using 32-bit MSR interfaces
+
+The 32-bit MSR interfaces rdmsr(), wrmsr(), rdmsr_safe() and
+wrmsr_safe() are planned to be removed. Use the related 64-bit variants
+instead.
+
+Signed-off-by: Juergen Gross <jgross@suse.com>
+Signed-off-by: Ingo Molnar <mingo@kernel.org>
+Cc: H. Peter Anvin <hpa@zytor.com>
+Link: https://patch.msgid.link/20260703112344.1762985-1-jgross@suse.com
+---
+ arch/x86/kernel/cpu/mtrr/amd.c     | 31 ++++++----
+ arch/x86/kernel/cpu/mtrr/centaur.c | 18 +++---
+ arch/x86/kernel/cpu/mtrr/cleanup.c | 18 +++---
+ arch/x86/kernel/cpu/mtrr/generic.c | 97 ++++++++++++++++--------------
+ arch/x86/kernel/cpu/mtrr/mtrr.c    |  4 +-
+ 5 files changed, 92 insertions(+), 76 deletions(-)
+
+diff --git a/arch/x86/kernel/cpu/mtrr/amd.c b/arch/x86/kernel/cpu/mtrr/amd.c
+index ef3e8e42b782..a73715d6f05c 100644
+--- a/arch/x86/kernel/cpu/mtrr/amd.c
++++ b/arch/x86/kernel/cpu/mtrr/amd.c
+@@ -10,20 +10,23 @@ static void
+ amd_get_mtrr(unsigned int reg, unsigned long *base,
+ 	     unsigned long *size, mtrr_type *type)
+ {
+-	unsigned long low, high;
++	unsigned long val;
++	struct msr msr;
+ 
+-	rdmsr(MSR_K6_UWCCR, low, high);
++	rdmsrq(MSR_K6_UWCCR, msr.q);
+ 	/* Upper dword is region 1, lower is region 0 */
+ 	if (reg == 1)
+-		low = high;
++		val = msr.h;
++	else
++		val = msr.l;
+ 	/* The base masks off on the right alignment */
+-	*base = (low & 0xFFFE0000) >> PAGE_SHIFT;
++	*base = (val & 0xFFFE0000) >> PAGE_SHIFT;
+ 	*type = 0;
+-	if (low & 1)
++	if (val & 1)
+ 		*type = MTRR_TYPE_UNCACHABLE;
+-	if (low & 2)
++	if (val & 2)
+ 		*type = MTRR_TYPE_WRCOMB;
+-	if (!(low & 3)) {
++	if (!(val & 3)) {
+ 		*size = 0;
+ 		return;
+ 	}
+@@ -42,8 +45,8 @@ amd_get_mtrr(unsigned int reg, unsigned long *base,
+ 	 * +1              000 0000 0000 0100
+ 	 * *128K   ...
+ 	 */
+-	low = (~low) & 0x1FFFC;
+-	*size = (low + 4) << (15 - PAGE_SHIFT);
++	val = (~val) & 0x1FFFC;
++	*size = (val + 4) << (15 - PAGE_SHIFT);
+ }
+ 
+ /**
+@@ -59,12 +62,16 @@ amd_get_mtrr(unsigned int reg, unsigned long *base,
+ static void
+ amd_set_mtrr(unsigned int reg, unsigned long base, unsigned long size, mtrr_type type)
+ {
++	struct msr msr;
+ 	u32 regs[2];
+ 
+ 	/*
+ 	 * Low is MTRR0, High MTRR 1
+ 	 */
+-	rdmsr(MSR_K6_UWCCR, regs[0], regs[1]);
++	rdmsrq(MSR_K6_UWCCR, msr.q);
++	regs[0] = msr.l;
++	regs[1] = msr.h;
++
+ 	/*
+ 	 * Blank to disable
+ 	 */
+@@ -89,7 +96,9 @@ amd_set_mtrr(unsigned int reg, unsigned long base, unsigned long size, mtrr_type
+ 	 * disable local interrupts, write back the cache, set the mtrr
+ 	 */
+ 	wbinvd();
+-	wrmsr(MSR_K6_UWCCR, regs[0], regs[1]);
++	msr.l = regs[0];
++	msr.h = regs[1];
++	wrmsrq(MSR_K6_UWCCR, msr.q);
+ }
+ 
+ static int
+diff --git a/arch/x86/kernel/cpu/mtrr/centaur.c b/arch/x86/kernel/cpu/mtrr/centaur.c
+index 6f6c3ae92943..e32cca1caf59 100644
+--- a/arch/x86/kernel/cpu/mtrr/centaur.c
++++ b/arch/x86/kernel/cpu/mtrr/centaur.c
+@@ -65,26 +65,26 @@ static void
+ centaur_set_mcr(unsigned int reg, unsigned long base,
+ 		unsigned long size, mtrr_type type)
+ {
+-	unsigned long low, high;
++	struct msr val;
+ 
+ 	if (size == 0) {
+ 		/* Disable */
+-		high = low = 0;
++		val.q = 0;
+ 	} else {
+-		high = base << PAGE_SHIFT;
++		val.h = base << PAGE_SHIFT;
+ 		if (centaur_mcr_type == 0) {
+ 			/* Only support write-combining... */
+-			low = -size << PAGE_SHIFT | 0x1f;
++			val.l = -size << PAGE_SHIFT | 0x1f;
+ 		} else {
+ 			if (type == MTRR_TYPE_UNCACHABLE)
+-				low = -size << PAGE_SHIFT | 0x02; /* NC */
++				val.l = -size << PAGE_SHIFT | 0x02; /* NC */
+ 			else
+-				low = -size << PAGE_SHIFT | 0x09; /* WWO, WC */
++				val.l = -size << PAGE_SHIFT | 0x09; /* WWO, WC */
+ 		}
+ 	}
+-	centaur_mcr[reg].high = high;
+-	centaur_mcr[reg].low = low;
+-	wrmsr(MSR_IDT_MCR0 + reg, low, high);
++	centaur_mcr[reg].high = val.h;
++	centaur_mcr[reg].low = val.l;
++	wrmsrq(MSR_IDT_MCR0 + reg, val.q);
+ }
+ 
+ static int
+diff --git a/arch/x86/kernel/cpu/mtrr/cleanup.c b/arch/x86/kernel/cpu/mtrr/cleanup.c
+index e3eee9ae4141..cd1a6dec4064 100644
+--- a/arch/x86/kernel/cpu/mtrr/cleanup.c
++++ b/arch/x86/kernel/cpu/mtrr/cleanup.c
+@@ -658,8 +658,8 @@ static int __init mtrr_search_optimal_index(void)
+ int __init mtrr_cleanup(void)
+ {
+ 	unsigned long x_remove_base, x_remove_size;
+-	unsigned long base, size, def, dummy;
+-	u64 chunk_size, gran_size;
++	u64 def, chunk_size, gran_size;
++	unsigned long base, size;
+ 	mtrr_type type;
+ 	int index_good;
+ 	int i;
+@@ -670,7 +670,7 @@ int __init mtrr_cleanup(void)
+ 	if (!cpu_feature_enabled(X86_FEATURE_MTRR) || enable_mtrr_cleanup < 1)
+ 		return 0;
+ 
+-	rdmsr(MSR_MTRRdefType, def, dummy);
++	rdmsrq(MSR_MTRRdefType, def);
+ 	def &= 0xff;
+ 	if (def != MTRR_TYPE_UNCACHABLE)
+ 		return 0;
+@@ -806,7 +806,7 @@ early_param("disable_mtrr_trim", disable_mtrr_trim_setup);
+ 
+ int __init amd_special_default_mtrr(void)
+ {
+-	u32 l, h;
++	u64 q;
+ 
+ 	if (boot_cpu_data.x86_vendor != X86_VENDOR_AMD &&
+ 	    boot_cpu_data.x86_vendor != X86_VENDOR_HYGON)
+@@ -814,13 +814,13 @@ int __init amd_special_default_mtrr(void)
+ 	if (boot_cpu_data.x86 < 0xf)
+ 		return 0;
+ 	/* In case some hypervisor doesn't pass SYSCFG through: */
+-	if (rdmsr_safe(MSR_AMD64_SYSCFG, &l, &h) < 0)
++	if (rdmsrq_safe(MSR_AMD64_SYSCFG, &q) < 0)
+ 		return 0;
+ 	/*
+ 	 * Memory between 4GB and top of mem is forced WB by this magic bit.
+ 	 * Reserved before K8RevF, but should be zero there.
+ 	 */
+-	if ((l & (Tom2Enabled | Tom2ForceMemTypeWB)) ==
++	if ((q & (Tom2Enabled | Tom2ForceMemTypeWB)) ==
+ 		 (Tom2Enabled | Tom2ForceMemTypeWB))
+ 		return 1;
+ 	return 0;
+@@ -854,9 +854,9 @@ real_trim_memory(unsigned long start_pfn, unsigned long limit_pfn)
+  */
+ int __init mtrr_trim_uncached_memory(unsigned long end_pfn)
+ {
+-	unsigned long i, base, size, highest_pfn = 0, def, dummy;
++	unsigned long i, base, size, highest_pfn = 0;
+ 	mtrr_type type;
+-	u64 total_trim_size;
++	u64 def, total_trim_size;
+ 	/* extra one for all 0 */
+ 	int num[MTRR_NUM_TYPES + 1];
+ 
+@@ -870,7 +870,7 @@ int __init mtrr_trim_uncached_memory(unsigned long end_pfn)
+ 	if (!cpu_feature_enabled(X86_FEATURE_MTRR) || disable_mtrr_trim)
+ 		return 0;
+ 
+-	rdmsr(MSR_MTRRdefType, def, dummy);
++	rdmsrq(MSR_MTRRdefType, def);
+ 	def &= MTRR_DEF_TYPE_TYPE;
+ 	if (def != MTRR_TYPE_UNCACHABLE)
+ 		return 0;
+diff --git a/arch/x86/kernel/cpu/mtrr/generic.c b/arch/x86/kernel/cpu/mtrr/generic.c
+index 3a8317060732..67cf69f24b00 100644
+--- a/arch/x86/kernel/cpu/mtrr/generic.c
++++ b/arch/x86/kernel/cpu/mtrr/generic.c
+@@ -103,7 +103,7 @@ u32 phys_hi_rsvd;
+  */
+ static inline void k8_check_syscfg_dram_mod_en(void)
+ {
+-	u32 lo, hi;
++	struct msr val;
+ 
+ 	if (!((boot_cpu_data.x86_vendor == X86_VENDOR_AMD) &&
+ 	      (boot_cpu_data.x86 >= 0x0f)))
+@@ -112,13 +112,13 @@ static inline void k8_check_syscfg_dram_mod_en(void)
+ 	if (cc_platform_has(CC_ATTR_HOST_SEV_SNP))
+ 		return;
+ 
+-	rdmsr(MSR_AMD64_SYSCFG, lo, hi);
+-	if (lo & K8_MTRRFIXRANGE_DRAM_MODIFY) {
++	rdmsrq(MSR_AMD64_SYSCFG, val.q);
++	if (val.l & K8_MTRRFIXRANGE_DRAM_MODIFY) {
+ 		pr_err(FW_WARN "MTRR: CPU %u: SYSCFG[MtrrFixDramModEn]"
+ 		       " not cleared by BIOS, clearing this bit\n",
+ 		       smp_processor_id());
+-		lo &= ~K8_MTRRFIXRANGE_DRAM_MODIFY;
+-		mtrr_wrmsr(MSR_AMD64_SYSCFG, lo, hi);
++		val.l &= ~K8_MTRRFIXRANGE_DRAM_MODIFY;
++		mtrr_wrmsr(MSR_AMD64_SYSCFG, val.l, val.h);
+ 	}
+ }
+ 
+@@ -557,8 +557,14 @@ u8 mtrr_type_lookup(u64 start, u64 end, u8 *uniform)
+ static void
+ get_mtrr_var_range(unsigned int index, struct mtrr_var_range *vr)
+ {
+-	rdmsr(MTRRphysBase_MSR(index), vr->base_lo, vr->base_hi);
+-	rdmsr(MTRRphysMask_MSR(index), vr->mask_lo, vr->mask_hi);
++	struct msr val;
++
++	rdmsrq(MTRRphysBase_MSR(index), val.q);
++	vr->base_lo = val.l;
++	vr->base_hi = val.h;
++	rdmsrq(MTRRphysMask_MSR(index), val.q);
++	vr->mask_lo = val.l;
++	vr->mask_hi = val.h;
+ }
+ 
+ /* Fill the MSR pair relating to a var range */
+@@ -577,17 +583,17 @@ void fill_mtrr_var_range(unsigned int index,
+ 
+ static void get_fixed_ranges(mtrr_type *frs)
+ {
+-	unsigned int *p = (unsigned int *)frs;
++	u64 *p = (u64 *)frs;
+ 	int i;
+ 
+ 	k8_check_syscfg_dram_mod_en();
+ 
+-	rdmsr(MSR_MTRRfix64K_00000, p[0], p[1]);
++	rdmsrq(MSR_MTRRfix64K_00000, p[0]);
+ 
+ 	for (i = 0; i < 2; i++)
+-		rdmsr(MSR_MTRRfix16K_80000 + i, p[2 + i * 2], p[3 + i * 2]);
++		rdmsrq(MSR_MTRRfix16K_80000 + i, p[1 + i]);
+ 	for (i = 0; i < 8; i++)
+-		rdmsr(MSR_MTRRfix4K_C0000 + i, p[6 + i * 2], p[7 + i * 2]);
++		rdmsrq(MSR_MTRRfix4K_C0000 + i, p[3 + i]);
+ }
+ 
+ void mtrr_save_fixed_ranges(void *info)
+@@ -689,31 +695,26 @@ static void __init print_mtrr_state(void)
+ bool __init get_mtrr_state(void)
+ {
+ 	struct mtrr_var_range *vrs;
+-	unsigned lo, dummy;
+ 	unsigned int i;
++	u64 q;
+ 
+ 	vrs = mtrr_state.var_ranges;
+ 
+-	rdmsr(MSR_MTRRcap, lo, dummy);
+-	mtrr_state.have_fixed = lo & MTRR_CAP_FIX;
++	rdmsrq(MSR_MTRRcap, q);
++	mtrr_state.have_fixed = q & MTRR_CAP_FIX;
+ 
+ 	for (i = 0; i < num_var_ranges; i++)
+ 		get_mtrr_var_range(i, &vrs[i]);
+ 	if (mtrr_state.have_fixed)
+ 		get_fixed_ranges(mtrr_state.fixed_ranges);
+ 
+-	rdmsr(MSR_MTRRdefType, lo, dummy);
+-	mtrr_state.def_type = lo & MTRR_DEF_TYPE_TYPE;
+-	mtrr_state.enabled = (lo & MTRR_DEF_TYPE_ENABLE) >> MTRR_STATE_SHIFT;
++	rdmsrq(MSR_MTRRdefType, q);
++	mtrr_state.def_type = q & MTRR_DEF_TYPE_TYPE;
++	mtrr_state.enabled = (q & MTRR_DEF_TYPE_ENABLE) >> MTRR_STATE_SHIFT;
+ 
+ 	if (amd_special_default_mtrr()) {
+-		unsigned low, high;
+-
+ 		/* TOP_MEM2 */
+-		rdmsr(MSR_K8_TOP_MEM2, low, high);
+-		mtrr_tom2 = high;
+-		mtrr_tom2 <<= 32;
+-		mtrr_tom2 |= low;
++		rdmsrq(MSR_K8_TOP_MEM2, mtrr_tom2);
+ 		mtrr_tom2 &= 0xffffff800000ULL;
+ 	}
+ 
+@@ -750,7 +751,9 @@ void __init mtrr_state_warn(void)
+  */
+ void mtrr_wrmsr(unsigned msr, unsigned a, unsigned b)
+ {
+-	if (wrmsr_safe(msr, a, b) < 0) {
++	struct msr val = { .l = a, .h = b };
++
++	if (wrmsrq_safe(msr, val.q) < 0) {
+ 		pr_err("MTRR: CPU %u: Writing MSR %x to %x:%x failed\n",
+ 			smp_processor_id(), msr, a, b);
+ 	}
+@@ -765,11 +768,11 @@ void mtrr_wrmsr(unsigned msr, unsigned a, unsigned b)
+  */
+ static void set_fixed_range(int msr, bool *changed, unsigned int *msrwords)
+ {
+-	unsigned lo, hi;
++	struct msr val;
+ 
+-	rdmsr(msr, lo, hi);
++	rdmsrq(msr, val.q);
+ 
+-	if (lo != msrwords[0] || hi != msrwords[1]) {
++	if (val.l != msrwords[0] || val.h != msrwords[1]) {
+ 		mtrr_wrmsr(msr, msrwords[0], msrwords[1]);
+ 		*changed = true;
+ 	}
+@@ -806,9 +809,8 @@ generic_get_free_region(unsigned long base, unsigned long size, int replace_reg)
+ static void generic_get_mtrr(unsigned int reg, unsigned long *base,
+ 			     unsigned long *size, mtrr_type *type)
+ {
+-	u32 mask_lo, mask_hi, base_lo, base_hi;
++	u64 tmp, mask, base_msr;
+ 	unsigned int hi;
+-	u64 tmp, mask;
+ 
+ 	/*
+ 	 * get_mtrr doesn't need to update mtrr_state, also it could be called
+@@ -816,9 +818,9 @@ static void generic_get_mtrr(unsigned int reg, unsigned long *base,
+ 	 */
+ 	get_cpu();
+ 
+-	rdmsr(MTRRphysMask_MSR(reg), mask_lo, mask_hi);
++	rdmsrq(MTRRphysMask_MSR(reg), mask);
+ 
+-	if (!(mask_lo & MTRR_PHYSMASK_V)) {
++	if (!(mask & MTRR_PHYSMASK_V)) {
+ 		/*  Invalid (i.e. free) range */
+ 		*base = 0;
+ 		*size = 0;
+@@ -826,10 +828,10 @@ static void generic_get_mtrr(unsigned int reg, unsigned long *base,
+ 		goto out_put_cpu;
+ 	}
+ 
+-	rdmsr(MTRRphysBase_MSR(reg), base_lo, base_hi);
++	rdmsrq(MTRRphysBase_MSR(reg), base_msr);
+ 
+ 	/* Work out the shifted address mask: */
+-	tmp = (u64)mask_hi << 32 | (mask_lo & PAGE_MASK);
++	tmp = mask & PAGE_MASK;
+ 	mask = (u64)phys_hi_rsvd << 32 | tmp;
+ 
+ 	/* Expand tmp with high bits to all 1s: */
+@@ -849,8 +851,8 @@ static void generic_get_mtrr(unsigned int reg, unsigned long *base,
+ 	 * contiguous range:
+ 	 */
+ 	*size = -mask >> PAGE_SHIFT;
+-	*base = (u64)base_hi << (32 - PAGE_SHIFT) | base_lo >> PAGE_SHIFT;
+-	*type = base_lo & MTRR_PHYSBASE_TYPE;
++	*base = base_msr >> PAGE_SHIFT;
++	*type = base_msr & MTRR_PHYSBASE_TYPE;
+ 
+ out_put_cpu:
+ 	put_cpu();
+@@ -884,21 +886,21 @@ static int set_fixed_ranges(mtrr_type *frs)
+  */
+ static bool set_mtrr_var_ranges(unsigned int index, struct mtrr_var_range *vr)
+ {
+-	unsigned int lo, hi;
+ 	bool changed = false;
++	struct msr val;
+ 
+-	rdmsr(MTRRphysBase_MSR(index), lo, hi);
+-	if ((vr->base_lo & ~MTRR_PHYSBASE_RSVD) != (lo & ~MTRR_PHYSBASE_RSVD)
+-	    || (vr->base_hi & ~phys_hi_rsvd) != (hi & ~phys_hi_rsvd)) {
++	rdmsrq(MTRRphysBase_MSR(index), val.q);
++	if ((vr->base_lo & ~MTRR_PHYSBASE_RSVD) != (val.l & ~MTRR_PHYSBASE_RSVD)
++	    || (vr->base_hi & ~phys_hi_rsvd) != (val.h & ~phys_hi_rsvd)) {
+ 
+ 		mtrr_wrmsr(MTRRphysBase_MSR(index), vr->base_lo, vr->base_hi);
+ 		changed = true;
+ 	}
+ 
+-	rdmsr(MTRRphysMask_MSR(index), lo, hi);
++	rdmsrq(MTRRphysMask_MSR(index), val.q);
+ 
+-	if ((vr->mask_lo & ~MTRR_PHYSMASK_RSVD) != (lo & ~MTRR_PHYSMASK_RSVD)
+-	    || (vr->mask_hi & ~phys_hi_rsvd) != (hi & ~phys_hi_rsvd)) {
++	if ((vr->mask_lo & ~MTRR_PHYSMASK_RSVD) != (val.l & ~MTRR_PHYSMASK_RSVD)
++	    || (vr->mask_hi & ~phys_hi_rsvd) != (val.h & ~phys_hi_rsvd)) {
+ 		mtrr_wrmsr(MTRRphysMask_MSR(index), vr->mask_lo, vr->mask_hi);
+ 		changed = true;
+ 	}
+@@ -947,8 +949,12 @@ static unsigned long set_mtrr_state(void)
+ 
+ void mtrr_disable(void)
+ {
++	struct msr val;
++
+ 	/* Save MTRR state */
+-	rdmsr(MSR_MTRRdefType, deftype_lo, deftype_hi);
++	rdmsrq(MSR_MTRRdefType, val.q);
++	deftype_lo = val.l;
++	deftype_hi = val.h;
+ 
+ 	/* Disable MTRRs, and set the default type to uncached */
+ 	mtrr_wrmsr(MSR_MTRRdefType, deftype_lo & MTRR_DEF_TYPE_DISABLE, deftype_hi);
+@@ -1057,8 +1063,9 @@ int generic_validate_add_page(unsigned long base, unsigned long size,
+ 
+ static int generic_have_wrcomb(void)
+ {
+-	unsigned long config, dummy;
+-	rdmsr(MSR_MTRRcap, config, dummy);
++	u64 config;
++
++	rdmsrq(MSR_MTRRcap, config);
+ 	return config & MTRR_CAP_WC;
+ }
+ 
+diff --git a/arch/x86/kernel/cpu/mtrr/mtrr.c b/arch/x86/kernel/cpu/mtrr/mtrr.c
+index 4b3d492afe17..468c53b20acf 100644
+--- a/arch/x86/kernel/cpu/mtrr/mtrr.c
++++ b/arch/x86/kernel/cpu/mtrr/mtrr.c
+@@ -547,7 +547,7 @@ void __init mtrr_bp_init(void)
+ {
+ 	bool generic_mtrrs = cpu_feature_enabled(X86_FEATURE_MTRR);
+ 	const char *why = "(not available)";
+-	unsigned long config, dummy;
++	unsigned long config;
+ 
+ 	phys_hi_rsvd = GENMASK(31, boot_cpu_data.x86_phys_bits - 32);
+ 
+@@ -571,7 +571,7 @@ void __init mtrr_bp_init(void)
+ 	if (mtrr_enabled()) {
+ 		/* Get the number of variable MTRR ranges. */
+ 		if (mtrr_if == &generic_mtrr_ops)
+-			rdmsr(MSR_MTRRcap, config, dummy);
++			rdmsrq(MSR_MTRRcap, config);
+ 		else
+ 			config = mtrr_if->var_regs;
+ 		num_var_ranges = config & MTRR_CAP_VCNT;
+-- 
+2.55.0
+

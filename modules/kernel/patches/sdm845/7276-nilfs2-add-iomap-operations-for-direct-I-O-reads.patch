@@ -1,0 +1,145 @@
+From e7b2c51c3fedd68bf97d9a49cfbe76b240aee41d Mon Sep 17 00:00:00 2001
+From: Viacheslav Dubeyko <slava@dubeyko.com>
+Date: Fri, 24 Jul 2026 15:27:44 -0700
+Subject: [PATCH 07276/15333] nilfs2: add iomap operations for direct I/O reads
+
+Add iomap.c and iomap.h with a read-only nilfs_iomap_ops,
+wrapping the existing nilfs_bmap_lookup_contig() lookup
+to report a mapped range, a real hole, or an EOF-clamped
+range to iomap core.
+
+NILFS2 is a log-structured, copy-on-write filesystem:
+newly allocated blocks are only given a real disk address
+when the segment constructor writes them out as part of a log,
+which walks buffer_head lists directly and is not integrated
+with the generic address_space writeback path. Because of that,
+only the read-only side of the mapping is added - buffered writes,
+writeback, and mmap's ->page_mkwrite() will stay on the existing
+buffer_head based path (nilfs_get_block(), nilfs_write_begin/end(),
+nilfs_writepages(), nilfs_dirty_folio(), block_page_mkwrite()).
+
+Signed-off-by: Viacheslav Dubeyko <slava@dubeyko.com>
+Link: https://patch.msgid.link/20260724222745.2107464-2-slava@dubeyko.com
+Acked-by: Ryusuke Konishi <konishi.ryusuke@gmail.com>
+cc: Christoph Hellwig <hch@lst.de>
+cc: Ryusuke Konishi <konishi.ryusuke@gmail.com>
+cc: linux-nilfs@vger.kernel.org
+cc: linux-fsdevel@vger.kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/nilfs2/Makefile |  2 +-
+ fs/nilfs2/iomap.c  | 71 ++++++++++++++++++++++++++++++++++++++++++++++
+ fs/nilfs2/iomap.h  | 13 +++++++++
+ 3 files changed, 85 insertions(+), 1 deletion(-)
+ create mode 100644 fs/nilfs2/iomap.c
+ create mode 100644 fs/nilfs2/iomap.h
+
+diff --git a/fs/nilfs2/Makefile b/fs/nilfs2/Makefile
+index 43b60b8a4d07..516e6b85a03c 100644
+--- a/fs/nilfs2/Makefile
++++ b/fs/nilfs2/Makefile
+@@ -3,4 +3,4 @@ obj-$(CONFIG_NILFS2_FS) += nilfs2.o
+ nilfs2-y := inode.o file.o dir.o super.o namei.o page.o mdt.o \
+ 	btnode.o bmap.o btree.o direct.o dat.o recovery.o \
+ 	the_nilfs.o segbuf.o segment.o cpfile.o sufile.o \
+-	ifile.o alloc.o gcinode.o ioctl.o sysfs.o
++	ifile.o alloc.o gcinode.o ioctl.o sysfs.o iomap.o
+diff --git a/fs/nilfs2/iomap.c b/fs/nilfs2/iomap.c
+new file mode 100644
+index 000000000000..3ae3bf6ed368
+--- /dev/null
++++ b/fs/nilfs2/iomap.c
+@@ -0,0 +1,71 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * NILFS iomap support implementation.
++ *
++ * Written by Viacheslav Dubeyko.
++ */
++
++#include <linux/iomap.h>
++#include <linux/pagemap.h>
++#include "nilfs.h"
++#include "mdt.h"
++#include "iomap.h"
++
++static int nilfs_iomap_begin(struct inode *inode, loff_t offset,
++			     loff_t length, unsigned int flags,
++			     struct iomap *iomap, struct iomap *srcmap)
++{
++	struct the_nilfs *nilfs = inode->i_sb->s_fs_info;
++	struct nilfs_inode_info *ii = NILFS_I(inode);
++	sector_t blkoff = offset >> inode->i_blkbits;
++	unsigned int maxblocks;
++	__u64 blknum = 0;
++	int ret;
++
++	/* Completely beyond EOF. Treat as hole */
++	if (i_size_read(inode) <= offset) {
++		iomap->type = IOMAP_HOLE;
++		iomap->addr = IOMAP_NULL_ADDR;
++		iomap->offset = offset;
++		iomap->length = length;
++		return 0;
++	}
++
++	/* Clamp length if the requested range goes beyond i_size */
++	if (offset + length > i_size_read(inode)) {
++		loff_t i_size = i_size_read(inode);
++		unsigned int blocksize = i_blocksize(inode);
++
++		length = round_up(i_size, blocksize) - offset;
++	}
++
++	maxblocks = min_t(loff_t, length >> inode->i_blkbits, INT_MAX);
++	if (maxblocks == 0)
++		maxblocks = 1;
++
++	down_read(&NILFS_MDT(nilfs->ns_dat)->mi_sem);
++	ret = nilfs_bmap_lookup_contig(ii->i_bmap, blkoff, &blknum, maxblocks);
++	up_read(&NILFS_MDT(nilfs->ns_dat)->mi_sem);
++
++	if (ret == -ENOENT) {
++		iomap->type = IOMAP_HOLE;
++		iomap->addr = IOMAP_NULL_ADDR;
++		iomap->offset = offset;
++		iomap->length = min_t(loff_t, length, i_blocksize(inode));
++		return 0;
++	} else if (ret < 0)
++		return ret;
++
++	iomap->bdev = inode->i_sb->s_bdev;
++	iomap->offset = offset;
++	iomap->length = min_t(loff_t, length, (loff_t)ret << inode->i_blkbits);
++	iomap->addr = (loff_t)blknum << inode->i_blkbits;
++	iomap->type = IOMAP_MAPPED;
++	iomap->flags = IOMAP_F_MERGED;
++
++	return 0;
++}
++
++const struct iomap_ops nilfs_iomap_ops = {
++	.iomap_begin = nilfs_iomap_begin,
++};
+diff --git a/fs/nilfs2/iomap.h b/fs/nilfs2/iomap.h
+new file mode 100644
+index 000000000000..adef3e22346d
+--- /dev/null
++++ b/fs/nilfs2/iomap.h
+@@ -0,0 +1,13 @@
++/* SPDX-License-Identifier: GPL-2.0+ */
++/*
++ * NILFS iomap support declarations.
++ *
++ * Written by Viacheslav Dubeyko.
++ */
++
++#ifndef _NILFS_IOMAP_H
++#define _NILFS_IOMAP_H
++
++extern const struct iomap_ops nilfs_iomap_ops;
++
++#endif /* _NILFS_IOMAP_H */
+-- 
+2.55.0
+

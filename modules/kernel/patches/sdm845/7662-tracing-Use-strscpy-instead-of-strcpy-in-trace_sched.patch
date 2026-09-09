@@ -1,0 +1,49 @@
+From dca6a22aee1b9fb2fe26823bc3b302e8eba8d05c Mon Sep 17 00:00:00 2001
+From: Po-Sheng Lin <posheng.lin.tw@gmail.com>
+Date: Mon, 6 Jul 2026 01:36:48 +0800
+Subject: [PATCH 07662/15333] tracing: Use strscpy() instead of strcpy() in
+ trace_sched_switch
+
+Replace strcpy() with strscpy() in __trace_find_cmdline() for
+consistency with the existing strscpy() call in the same function,
+and to avoid potential buffer overflow as flagged by the Kernel
+Self Protection Project.
+
+Link: https://patch.msgid.link/20260705173648.5418-1-posheng.lin.tw@gmail.com
+Signed-off-by: Po-Sheng Lin <posheng.lin.tw@gmail.com>
+Signed-off-by: Steven Rostedt <rostedt@goodmis.org>
+---
+ kernel/trace/trace_sched_switch.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/kernel/trace/trace_sched_switch.c b/kernel/trace/trace_sched_switch.c
+index e9f0ff962660..1bd351c1fbfb 100644
+--- a/kernel/trace/trace_sched_switch.c
++++ b/kernel/trace/trace_sched_switch.c
+@@ -286,12 +286,12 @@ static void __trace_find_cmdline(int pid, char comm[])
+ 	int tpid;
+ 
+ 	if (!pid) {
+-		strcpy(comm, "<idle>");
++		strscpy(comm, "<idle>", TASK_COMM_LEN);
+ 		return;
+ 	}
+ 
+ 	if (WARN_ON_ONCE(pid < 0)) {
+-		strcpy(comm, "<XXX>");
++		strscpy(comm, "<XXX>", TASK_COMM_LEN);
+ 		return;
+ 	}
+ 
+@@ -304,7 +304,7 @@ static void __trace_find_cmdline(int pid, char comm[])
+ 			return;
+ 		}
+ 	}
+-	strcpy(comm, "<...>");
++	strscpy(comm, "<...>", TASK_COMM_LEN);
+ }
+ 
+ void trace_find_cmdline(int pid, char comm[])
+-- 
+2.55.0
+

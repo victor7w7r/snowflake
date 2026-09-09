@@ -1,0 +1,345 @@
+From f969097d49663c1943b39c04f8e8b7c57bf8a456 Mon Sep 17 00:00:00 2001
+From: Ayyagari Ushasreevalli <aushasre@qti.qualcomm.com>
+Date: Tue, 28 Jul 2026 21:19:44 +0530
+Subject: [PATCH 08757/15333] arm64: dts: qcom: hamoa-pmics: Add ADC support
+
+Add ADC node and define channels for:
+- Die temperature for PMK8550, PM8550VE* and PMC8380* PMICs.
+- PM8550: Die temperature, VPH power, and system thermistors.
+
+Add io-channels and io-channel-names properties to the
+temp_alarm nodes so that they can get temperature reading
+from the ADC die_temp channels.
+
+Remove die_temp channel of PMC8380_6 for Purwa boards where
+this PMIC is not present.
+
+Signed-off-by: Ayyagari Ushasreevalli <aushasre@qti.qualcomm.com>
+Signed-off-by: Jishnu Prakash <jishnu.prakash@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260728-adc5_gen3_dt-v4-4-355f0edece77@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ arch/arm64/boot/dts/qcom/hamoa-pmics.dtsi     | 158 ++++++++++++++++++
+ arch/arm64/boot/dts/qcom/purwa-iot-som.dtsi   |   1 +
+ .../dts/qcom/x1p42100-asus-vivobook-s15.dts   |   1 +
+ .../dts/qcom/x1p42100-asus-zenbook-a14.dtsi   |   1 +
+ arch/arm64/boot/dts/qcom/x1p42100-crd.dts     |   1 +
+ .../dts/qcom/x1p42100-hp-omnibook-x14.dts     |   1 +
+ .../dts/qcom/x1p42100-lenovo-thinkbook-16.dts |   1 +
+ 7 files changed, 164 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/hamoa-pmics.dtsi b/arch/arm64/boot/dts/qcom/hamoa-pmics.dtsi
+index 6a31a0adf8be..17d754d57e18 100644
+--- a/arch/arm64/boot/dts/qcom/hamoa-pmics.dtsi
++++ b/arch/arm64/boot/dts/qcom/hamoa-pmics.dtsi
+@@ -6,7 +6,9 @@
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/input/linux-event-codes.h>
+ #include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
+ #include <dt-bindings/spmi/spmi.h>
++#include "qcom-adc5-gen3.h"
+ 
+ / {
+ 	thermal-zones {
+@@ -277,6 +279,134 @@ pmk8550_pwm: pwm {
+ 
+ 			status = "disabled";
+ 		};
++
++		pmk8550_vadc: adc@9000 {
++			compatible = "qcom,spmi-adc5-gen3";
++			reg = <0x9000>, <0x9100>;
++			interrupts-extended = <&spmi_bus0 0x0 0x90 0x1 IRQ_TYPE_EDGE_RISING>,
++					      <&spmi_bus0 0x0 0x91 0x1 IRQ_TYPE_EDGE_RISING>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			#io-channel-cells = <1>;
++			pinctrl-0 = <&sys_therm_0_gpio3>, <&sys_therm_1_gpio4>;
++			pinctrl-names = "default";
++
++			channel@3 {
++				reg = <ADC5_GEN3_DIE_TEMP(0)>;
++				label = "pmk8550_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@103 {
++				reg = <ADC5_GEN3_DIE_TEMP(1)>;
++				label = "pm8550_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@144 {
++				reg = <ADC5_GEN3_AMUX1_THM_100K_PU(1)>;
++				label = "pm8550_therm_2";
++				qcom,ratiometric;
++				qcom,hw-settle-time = <200>;
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@145 {
++				reg = <ADC5_GEN3_AMUX2_THM_100K_PU(1)>;
++				label = "pm8550_therm_3";
++				qcom,ratiometric;
++				qcom,hw-settle-time = <200>;
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@146 {
++				reg = <ADC5_GEN3_AMUX3_THM_100K_PU(1)>;
++				label = "pm8550_therm_4";
++				qcom,ratiometric;
++				qcom,hw-settle-time = <200>;
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@147 {
++				reg = <ADC5_GEN3_AMUX4_THM_100K_PU(1)>;
++				label = "pm8550_therm_5";
++				qcom,ratiometric;
++				qcom,hw-settle-time = <200>;
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@148 {
++				reg = <ADC5_GEN3_AMUX5_THM_100K_PU(1)>;
++				label = "pm8550_therm_6";
++				qcom,ratiometric;
++				qcom,hw-settle-time = <200>;
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@14a {
++				reg = <ADC5_GEN3_AMUX1_GPIO_100K_PU(1)>;
++				label = "pm8550_gpio_01";
++				qcom,ratiometric;
++				qcom,hw-settle-time = <200>;
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@14b {
++				reg = <ADC5_GEN3_AMUX2_GPIO_100K_PU(1)>;
++				label = "pm8550_gpio_02";
++				qcom,ratiometric;
++				qcom,hw-settle-time = <200>;
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@18e {
++				reg = <ADC5_GEN3_VPH_PWR(1)>;
++				label = "pm8550_vph_pwr";
++				qcom,pre-scaling = <1 3>;
++			};
++
++			channel@203 {
++				reg = <ADC5_GEN3_DIE_TEMP(2)>;
++				label = "pm8550ve_2_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@303 {
++				reg = <ADC5_GEN3_DIE_TEMP(3)>;
++				label = "pmc8380_3_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@403 {
++				reg = <ADC5_GEN3_DIE_TEMP(4)>;
++				label = "pmc8380_4_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@503 {
++				reg = <ADC5_GEN3_DIE_TEMP(5)>;
++				label = "pmc8380_5_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++
++			pmc8380_6_die_temp: channel@603 {
++				reg = <ADC5_GEN3_DIE_TEMP(6)>;
++				label = "pmc8380_6_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@803 {
++				reg = <ADC5_GEN3_DIE_TEMP(8)>;
++				label = "pm8550ve_8_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++
++			channel@903 {
++				reg = <ADC5_GEN3_DIE_TEMP(9)>;
++				label = "pm8550ve_9_die_temp";
++				qcom,pre-scaling = <1 1>;
++			};
++		};
+ 	};
+ 
+ 	/* PMC8380C */
+@@ -291,6 +421,8 @@ pm8550_temp_alarm: temp-alarm@a00 {
+ 			reg = <0xa00>;
+ 			interrupts = <0x1 0xa 0x0 IRQ_TYPE_EDGE_BOTH>;
+ 			#thermal-sensor-cells = <0>;
++			io-channels = <&pmk8550_vadc ADC5_GEN3_DIE_TEMP(1)>;
++			io-channel-names = "thermal";
+ 		};
+ 
+ 		pm8550_gpios: gpio@8800 {
+@@ -301,6 +433,18 @@ pm8550_gpios: gpio@8800 {
+ 			#gpio-cells = <2>;
+ 			interrupt-controller;
+ 			#interrupt-cells = <2>;
++
++			sys_therm_0_gpio3: sys-therm-0-gpio3-state {
++				pins = "gpio3";
++				function = PMIC_GPIO_FUNC_NORMAL;
++				bias-high-impedance;
++			};
++
++			sys_therm_1_gpio4: sys-therm-1-gpio4-state {
++				pins = "gpio4";
++				function = PMIC_GPIO_FUNC_NORMAL;
++				bias-high-impedance;
++			};
+ 		};
+ 
+ 		pm8550_flash: led-controller@ee00 {
+@@ -329,6 +473,8 @@ pm8550ve_2_temp_alarm: temp-alarm@a00 {
+ 			reg = <0xa00>;
+ 			interrupts = <0x2 0xa 0x0 IRQ_TYPE_EDGE_BOTH>;
+ 			#thermal-sensor-cells = <0>;
++			io-channels = <&pmk8550_vadc ADC5_GEN3_DIE_TEMP(2)>;
++			io-channel-names = "thermal";
+ 		};
+ 
+ 		pm8550ve_2_gpios: gpio@8800 {
+@@ -354,6 +500,8 @@ pmc8380_3_temp_alarm: temp-alarm@a00 {
+ 			reg = <0xa00>;
+ 			interrupts = <0x3 0xa 0x0 IRQ_TYPE_EDGE_BOTH>;
+ 			#thermal-sensor-cells = <0>;
++			io-channels = <&pmk8550_vadc ADC5_GEN3_DIE_TEMP(3)>;
++			io-channel-names = "thermal";
+ 		};
+ 
+ 		pmc8380_3_gpios: gpio@8800 {
+@@ -378,6 +526,8 @@ pmc8380_4_temp_alarm: temp-alarm@a00 {
+ 			reg = <0xa00>;
+ 			interrupts = <0x4 0xa 0x0 IRQ_TYPE_EDGE_BOTH>;
+ 			#thermal-sensor-cells = <0>;
++			io-channels = <&pmk8550_vadc ADC5_GEN3_DIE_TEMP(4)>;
++			io-channel-names = "thermal";
+ 		};
+ 
+ 		pmc8380_4_gpios: gpio@8800 {
+@@ -402,6 +552,8 @@ pmc8380_5_temp_alarm: temp-alarm@a00 {
+ 			reg = <0xa00>;
+ 			interrupts = <0x5 0xa 0x0 IRQ_TYPE_EDGE_BOTH>;
+ 			#thermal-sensor-cells = <0>;
++			io-channels = <&pmk8550_vadc ADC5_GEN3_DIE_TEMP(5)>;
++			io-channel-names = "thermal";
+ 		};
+ 
+ 		pmc8380_5_gpios: gpio@8800 {
+@@ -426,6 +578,8 @@ pmc8380_6_temp_alarm: temp-alarm@a00 {
+ 			reg = <0xa00>;
+ 			interrupts = <0x6 0xa 0x0 IRQ_TYPE_EDGE_BOTH>;
+ 			#thermal-sensor-cells = <0>;
++			io-channels = <&pmk8550_vadc ADC5_GEN3_DIE_TEMP(6)>;
++			io-channel-names = "thermal";
+ 		};
+ 
+ 		pmc8380_6_gpios: gpio@8800 {
+@@ -451,6 +605,8 @@ pm8550ve_8_temp_alarm: temp-alarm@a00 {
+ 			reg = <0xa00>;
+ 			interrupts = <0x8 0xa 0x0 IRQ_TYPE_EDGE_BOTH>;
+ 			#thermal-sensor-cells = <0>;
++			io-channels = <&pmk8550_vadc ADC5_GEN3_DIE_TEMP(8)>;
++			io-channel-names = "thermal";
+ 		};
+ 
+ 		pm8550ve_8_gpios: gpio@8800 {
+@@ -476,6 +632,8 @@ pm8550ve_9_temp_alarm: temp-alarm@a00 {
+ 			reg = <0xa00>;
+ 			interrupts = <0x9 0xa 0x0 IRQ_TYPE_EDGE_BOTH>;
+ 			#thermal-sensor-cells = <0>;
++			io-channels = <&pmk8550_vadc ADC5_GEN3_DIE_TEMP(9)>;
++			io-channel-names = "thermal";
+ 		};
+ 
+ 		pm8550ve_9_gpios: gpio@8800 {
+diff --git a/arch/arm64/boot/dts/qcom/purwa-iot-som.dtsi b/arch/arm64/boot/dts/qcom/purwa-iot-som.dtsi
+index ff8621f87505..fb2dcbc7c393 100644
+--- a/arch/arm64/boot/dts/qcom/purwa-iot-som.dtsi
++++ b/arch/arm64/boot/dts/qcom/purwa-iot-som.dtsi
+@@ -10,6 +10,7 @@
+ 
+ /delete-node/ &pmc8380_6;
+ /delete-node/ &pmc8380_6_thermal;
++/delete-node/ &pmc8380_6_die_temp;
+ 
+ / {
+ 	reserved-memory {
+diff --git a/arch/arm64/boot/dts/qcom/x1p42100-asus-vivobook-s15.dts b/arch/arm64/boot/dts/qcom/x1p42100-asus-vivobook-s15.dts
+index 63e29d2cc4ab..c754104adac7 100644
+--- a/arch/arm64/boot/dts/qcom/x1p42100-asus-vivobook-s15.dts
++++ b/arch/arm64/boot/dts/qcom/x1p42100-asus-vivobook-s15.dts
+@@ -11,6 +11,7 @@
+ 
+ /delete-node/ &pmc8380_6;
+ /delete-node/ &pmc8380_6_thermal;
++/delete-node/ &pmc8380_6_die_temp;
+ 
+ / {
+ 	model = "ASUS Vivobook S 15 X1P-42-100";
+diff --git a/arch/arm64/boot/dts/qcom/x1p42100-asus-zenbook-a14.dtsi b/arch/arm64/boot/dts/qcom/x1p42100-asus-zenbook-a14.dtsi
+index 7f5860d2b6cc..b5226c1ae370 100644
+--- a/arch/arm64/boot/dts/qcom/x1p42100-asus-zenbook-a14.dtsi
++++ b/arch/arm64/boot/dts/qcom/x1p42100-asus-zenbook-a14.dtsi
+@@ -11,6 +11,7 @@
+ 
+ /delete-node/ &pmc8380_6;
+ /delete-node/ &pmc8380_6_thermal;
++/delete-node/ &pmc8380_6_die_temp;
+ 
+ / {
+ 	wcn6855-pmu {
+diff --git a/arch/arm64/boot/dts/qcom/x1p42100-crd.dts b/arch/arm64/boot/dts/qcom/x1p42100-crd.dts
+index 7ed4116b9590..5de91bca3fd5 100644
+--- a/arch/arm64/boot/dts/qcom/x1p42100-crd.dts
++++ b/arch/arm64/boot/dts/qcom/x1p42100-crd.dts
+@@ -10,6 +10,7 @@
+ 
+ /delete-node/ &pmc8380_6;
+ /delete-node/ &pmc8380_6_thermal;
++/delete-node/ &pmc8380_6_die_temp;
+ 
+ / {
+ 	model = "Qualcomm Technologies, Inc. X1P42100 CRD";
+diff --git a/arch/arm64/boot/dts/qcom/x1p42100-hp-omnibook-x14.dts b/arch/arm64/boot/dts/qcom/x1p42100-hp-omnibook-x14.dts
+index 0f338e457abd..0e4dfb0f0a2a 100644
+--- a/arch/arm64/boot/dts/qcom/x1p42100-hp-omnibook-x14.dts
++++ b/arch/arm64/boot/dts/qcom/x1p42100-hp-omnibook-x14.dts
+@@ -7,6 +7,7 @@
+ #include "x1-hp-omnibook-x14.dtsi"
+ /delete-node/ &pmc8380_6;
+ /delete-node/ &pmc8380_6_thermal;
++/delete-node/ &pmc8380_6_die_temp;
+ 
+ / {
+ 	model = "HP Omnibook X 14-fe1";
+diff --git a/arch/arm64/boot/dts/qcom/x1p42100-lenovo-thinkbook-16.dts b/arch/arm64/boot/dts/qcom/x1p42100-lenovo-thinkbook-16.dts
+index 500809772097..9e6f679758a9 100644
+--- a/arch/arm64/boot/dts/qcom/x1p42100-lenovo-thinkbook-16.dts
++++ b/arch/arm64/boot/dts/qcom/x1p42100-lenovo-thinkbook-16.dts
+@@ -18,6 +18,7 @@
+ 
+ /delete-node/ &pmc8380_6;
+ /delete-node/ &pmc8380_6_thermal;
++/delete-node/ &pmc8380_6_die_temp;
+ 
+ / {
+ 	model = "Lenovo ThinkBook 16 Gen 7 QOY";
+-- 
+2.55.0
+

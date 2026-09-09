@@ -1,0 +1,62 @@
+From 657e5af4fe0b9696a6c7232da1727a9f37eaa04d Mon Sep 17 00:00:00 2001
+From: Andreas Gruenbacher <agruenba@redhat.com>
+Date: Wed, 12 Aug 2026 12:08:06 +0200
+Subject: [PATCH 13552/15333] gfs2: harden gfs2_glock_hold
+
+Function gfs2_glock_hold() is expected only to be called when the glock is
+held, so use lockref_get_not_zero() instead of lockref_get_not_dead().
+
+In addition, when an asynchronous callback arrives in gfs2_glock_cb(), the
+glock can already be dead (from __gfs2_glock_put()), or it can be on the glock
+lru list with refcount 0, so we cannot use gfs2_glock_hold() there.
+
+With gfs2_glock_cb() now handling dead glocks, we can remove the racy check in
+gdlm_bast().
+
+Signed-off-by: Andreas Gruenbacher <agruenba@redhat.com>
+---
+ fs/gfs2/glock.c    | 6 ++++--
+ fs/gfs2/lock_dlm.c | 3 ---
+ 2 files changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/fs/gfs2/glock.c b/fs/gfs2/glock.c
+index 558c8c660a3d..9cf59ee2f443 100644
+--- a/fs/gfs2/glock.c
++++ b/fs/gfs2/glock.c
+@@ -183,7 +183,7 @@ static void gfs2_free_dead_glocks(struct gfs2_sbd *sdp)
+ 
+ struct gfs2_glock *gfs2_glock_hold(struct gfs2_glock *gl)
+ {
+-	if (!lockref_get_not_dead(&gl->gl_lockref))
++	if (!lockref_get_not_zero(&gl->gl_lockref))
+ 		GLOCK_BUG_ON(gl, 1);
+ 	return gl;
+ }
+@@ -1769,7 +1769,9 @@ void gfs2_glock_cb(struct gfs2_glock *gl, unsigned int state)
+ {
+ 	unsigned long delay = 0;
+ 
+-	gfs2_glock_hold(gl);
++	if (!lockref_get_not_dead(&gl->gl_lockref))
++		return;
++
+ 	spin_lock(&gl->gl_lockref.lock);
+ 	if (!list_empty(&gl->gl_holders) &&
+ 	    glock_type(gl) == LM_TYPE_INODE) {
+diff --git a/fs/gfs2/lock_dlm.c b/fs/gfs2/lock_dlm.c
+index ab7ac8e634bf..babce07b84f1 100644
+--- a/fs/gfs2/lock_dlm.c
++++ b/fs/gfs2/lock_dlm.c
+@@ -182,9 +182,6 @@ static void gdlm_bast(void *arg, int mode)
+ {
+ 	struct gfs2_glock *gl = arg;
+ 
+-	if (__lockref_is_dead(&gl->gl_lockref))
+-		return;
+-
+ 	switch (mode) {
+ 	case DLM_LOCK_EX:
+ 		gfs2_glock_cb(gl, LM_ST_UNLOCKED);
+-- 
+2.55.0
+

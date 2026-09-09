@@ -1,0 +1,73 @@
+From 28cb64a67b8ff2785fc85249ae74ff475fd2ca99 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Mon, 27 Jul 2026 17:16:43 +0200
+Subject: [PATCH 07366/15333] fat: Fix persisting directory entries on fsync(2)
+ of the root directory
+
+Buffers containing the directory entries of a directory's children are
+tracked in the directory inode's metadata bh list. Before commit
+525da4f40a7c ("fat: Fix missed inode writeback during fsync(2)")
+fsync(2) of a directory wrote that list out unconditionally via
+mmb_fsync_noflush(). Now the list is written by
+fat_sync_inode_metadata() which __writeback_single_inode() only
+invokes when the inode has I_METADATA_WRITEBACK set. The root inode
+never gets I_METADATA_WRITEBACK - __fat_write_inode() returns early
+for it since the root directory has no directory entry of its own -
+and fat_sync_inode_metadata() returns early for it as well. Hence
+fsync(2) on the root directory returns success without writing out the
+directory entries of its children.
+
+Set I_METADATA_WRITEBACK for the root inode in __fat_write_inode() and
+make fat_sync_inode_metadata() only skip the nonexistent directory
+entry for the root inode but still sync the metadata bh list.
+
+Fixes: 525da4f40a7c ("fat: Fix missed inode writeback during fsync(2)")
+Reported-by: Sashiko <sashiko-bot@kernel.org>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/fat/inode.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/fs/fat/inode.c b/fs/fat/inode.c
+index ef1f826179cd..5ea6f74a2a3f 100644
+--- a/fs/fat/inode.c
++++ b/fs/fat/inode.c
+@@ -634,11 +634,12 @@ static int fat_sync_inode_metadata(struct inode *inode,
+ 	sector_t blocknr;
+ 	int offset;
+ 
++	/* The root directory has no directory entry of its own. */
+ 	if (inode->i_ino == MSDOS_ROOT_INO)
+-		return 0;
++		goto sync_bhs;
+ 	i_pos = fat_i_pos_read(sbi, inode);
+ 	if (!i_pos)
+-		return 0;
++		goto sync_bhs;
+ 
+ 	fat_get_blknr_offset(sbi, i_pos, &blocknr, &offset);
+ 	bh = sb_find_get_block_nonatomic(inode->i_sb, blocknr);
+@@ -654,6 +655,7 @@ static int fat_sync_inode_metadata(struct inode *inode,
+ 		}
+ 	}
+ 	brelse(bh);
++sync_bhs:
+ 	return mmb_sync(&MSDOS_I(inode)->i_metadata_bhs);
+ }
+ 
+@@ -897,8 +899,11 @@ static int __fat_write_inode(struct inode *inode)
+ 	sector_t blocknr;
+ 	int offset;
+ 
+-	if (inode->i_ino == MSDOS_ROOT_INO)
++	if (inode->i_ino == MSDOS_ROOT_INO) {
++		/* No entry to update but the metadata bh list may need syncing. */
++		set_inode_metadata_writeback(inode);
+ 		return 0;
++	}
+ 
+ retry:
+ 	i_pos = fat_i_pos_read(sbi, inode);
+-- 
+2.55.0
+

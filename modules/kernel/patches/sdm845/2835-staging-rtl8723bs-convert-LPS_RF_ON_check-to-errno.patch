@@ -1,0 +1,70 @@
+From b8424da6999644aca49aad2489b75172b29f99f6 Mon Sep 17 00:00:00 2001
+From: Hungyu Lin <dennylin0707@gmail.com>
+Date: Thu, 21 May 2026 10:43:16 +0000
+Subject: [PATCH 02835/15333] staging: rtl8723bs: convert LPS_RF_ON_check to
+ errno
+
+Convert LPS_RF_ON_check() to return standard kernel error codes.
+
+Replace -1 and -2 with -ETIMEDOUT and -ENODEV respectively.
+
+No functional change intended as callers currently ignore
+the return value.
+
+Signed-off-by: Hungyu Lin <dennylin0707@gmail.com>
+Link: https://patch.msgid.link/20260521104316.27739-3-dennylin0707@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/core/rtw_pwrctrl.c    | 12 ++++++------
+ drivers/staging/rtl8723bs/include/rtw_pwrctrl.h |  2 +-
+ 2 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/core/rtw_pwrctrl.c b/drivers/staging/rtl8723bs/core/rtw_pwrctrl.c
+index 9d1a81902643..500ba47a6724 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_pwrctrl.c
++++ b/drivers/staging/rtl8723bs/core/rtw_pwrctrl.c
+@@ -389,11 +389,11 @@ void rtw_set_ps_mode(struct adapter *padapter, u8 ps_mode,
+ 
+ /*
+  * Return:
+- *0:	Leave OK
+- *-1:	Timeout
+- *-2:	Other error
++ * 0:           Leave OK
++ * -ETIMEDOUT:  Timeout
++ * -ENODEV:     Other error
+  */
+-s32 LPS_RF_ON_check(struct adapter *padapter, u32 delay_ms)
++int LPS_RF_ON_check(struct adapter *padapter, u32 delay_ms)
+ {
+ 	unsigned long start_time;
+ 	u8 bAwake = false;
+@@ -405,10 +405,10 @@ s32 LPS_RF_ON_check(struct adapter *padapter, u32 delay_ms)
+ 			return 0;
+ 
+ 		if (padapter->bSurpriseRemoved)
+-			return -2;
++			return -ENODEV;
+ 
+ 		if (jiffies_to_msecs(jiffies - start_time) > delay_ms)
+-			return -1;
++			return -ETIMEDOUT;
+ 
+ 		msleep(1);
+ 	}
+diff --git a/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h b/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h
+index 6977892a5742..f72bfd93c15a 100644
+--- a/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h
++++ b/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h
+@@ -233,7 +233,7 @@ int ips_leave(struct adapter *padapter);
+ 
+ void rtw_ps_processor(struct adapter *padapter);
+ 
+-s32 LPS_RF_ON_check(struct adapter *padapter, u32 delay_ms);
++int LPS_RF_ON_check(struct adapter *padapter, u32 delay_ms);
+ void LPS_Enter(struct adapter *padapter, const char *msg);
+ void LPS_Leave(struct adapter *padapter, const char *msg);
+ void traffic_check_for_leave_lps(struct adapter *padapter, u8 tx, u32 tx_packets);
+-- 
+2.55.0
+

@@ -1,0 +1,88 @@
+From 7bddf0e9f1081935d11d01d9344dbe7c3fda07f6 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 14 Jul 2026 21:58:10 +0200
+Subject: [PATCH 09941/15333] bpf: allow fs kfuncs for binfmt_misc_ops programs
+
+The fs kfuncs are currently exclusive to LSM programs. A binfmt_misc
+handler needs a subset of them to do anything interesting: computing an
+interpreter relative to the binary's location wants bpf_path_d_path()
+on bprm->file->f_path from the load program, and matching on per-binary
+metadata wants bpf_get_file_xattr() and friends right from the match
+program.
+
+Register the fs kfunc set for struct_ops programs as well and extend
+the filter to admit binfmt_misc_ops programs. The xattr setters stay
+exclusive to LSM programs: a binary type handler decides how to run a
+binary, it has no business modifying filesystem state.
+
+This only takes effect in builds that have the fs kfunc set at all,
+i.e. CONFIG_BPF_LSM. Without it a binfmt_misc handler is limited to
+bprm fields and the file-backed dynptr, which are provided by the
+common kfunc set.
+
+Link: https://lore.kernel.org/20260704211409.1978485-1-farid.m.zakaria@gmail.com
+Link: https://patch.msgid.link/20260714-work-bpf-binfmt_misc-v2-5-57b7529c002c@kernel.org
+Reviewed-by: Farid Zakaria <farid.m.zakaria@gmail.com>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/bpf_fs_kfuncs.c | 28 +++++++++++++++++++++++++---
+ 1 file changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/fs/bpf_fs_kfuncs.c b/fs/bpf_fs_kfuncs.c
+index f1863a891db6..5b7d03e4fc6d 100644
+--- a/fs/bpf_fs_kfuncs.c
++++ b/fs/bpf_fs_kfuncs.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0
+ /* Copyright (c) 2024 Google LLC. */
+ 
++#include <linux/binfmt_misc.h>
+ #include <linux/bpf.h>
+ #include <linux/bpf_lsm.h>
+ #include <linux/btf.h>
+@@ -392,10 +393,25 @@ BTF_ID_FLAGS(func, bpf_remove_dentry_xattr, KF_SLEEPABLE)
+ BTF_ID_FLAGS(func, bpf_real_data_inode, KF_SLEEPABLE | KF_RET_NULL)
+ BTF_KFUNCS_END(bpf_fs_kfunc_set_ids)
+ 
++/* Side-effecting kfuncs that stay exclusive to LSM programs. */
++BTF_SET_START(bpf_fs_kfunc_lsm_only_ids)
++BTF_ID(func, bpf_set_dentry_xattr)
++BTF_ID(func, bpf_remove_dentry_xattr)
++BTF_SET_END(bpf_fs_kfunc_lsm_only_ids)
++
+ static int bpf_fs_kfuncs_filter(const struct bpf_prog *prog, u32 kfunc_id)
+ {
+-	if (!btf_id_set8_contains(&bpf_fs_kfunc_set_ids, kfunc_id) ||
+-	    prog->type == BPF_PROG_TYPE_LSM)
++	if (!btf_id_set8_contains(&bpf_fs_kfunc_set_ids, kfunc_id))
++		return 0;
++	if (prog->type == BPF_PROG_TYPE_LSM)
++		return 0;
++	if (prog->type != BPF_PROG_TYPE_STRUCT_OPS)
++		return -EACCES;
++	/* ->st_ops is unset during the cfg pass; enforced once it is set. */
++	if (!prog->aux->st_ops)
++		return 0;
++	if (bpf_prog_is_binfmt_misc_ops(prog) &&
++	    !btf_id_set_contains(&bpf_fs_kfunc_lsm_only_ids, kfunc_id))
+ 		return 0;
+ 	return -EACCES;
+ }
+@@ -438,7 +454,13 @@ static const struct btf_kfunc_id_set bpf_fs_kfunc_set = {
+ 
+ static int __init bpf_fs_kfuncs_init(void)
+ {
+-	return register_btf_kfunc_id_set(BPF_PROG_TYPE_LSM, &bpf_fs_kfunc_set);
++	int ret;
++
++	ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_LSM, &bpf_fs_kfunc_set);
++	if (ret || !IS_ENABLED(CONFIG_BINFMT_MISC_BPF))
++		return ret;
++	return register_btf_kfunc_id_set(BPF_PROG_TYPE_STRUCT_OPS,
++					 &bpf_fs_kfunc_set);
+ }
+ 
+ late_initcall(bpf_fs_kfuncs_init);
+-- 
+2.55.0
+

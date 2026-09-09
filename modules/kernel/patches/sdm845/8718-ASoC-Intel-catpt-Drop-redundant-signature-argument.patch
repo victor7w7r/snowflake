@@ -1,0 +1,54 @@
+From f6c65bf0acc99079e5a9b43d4079ee2a8fe68332 Mon Sep 17 00:00:00 2001
+From: Cezary Rojewski <cezary.rojewski@intel.com>
+Date: Wed, 29 Jul 2026 13:00:52 +0200
+Subject: [PATCH 08718/15333] ASoC: Intel: catpt: Drop redundant signature
+ argument
+
+Initial design assumed the mechanism could be reused for loading
+external modules with signatures differing from the Intel's constant. No
+users with such characteristics ever appeared rendering the 'signature'
+argument useless.
+
+Signed-off-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/20260729110057.342447-4-cezary.rojewski@intel.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/intel/catpt/loader.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/sound/soc/intel/catpt/loader.c b/sound/soc/intel/catpt/loader.c
+index 79742dceef53..775781489ded 100644
+--- a/sound/soc/intel/catpt/loader.c
++++ b/sound/soc/intel/catpt/loader.c
+@@ -569,8 +569,7 @@ static int catpt_load_firmware(struct catpt_dev *cdev,
+ }
+ 
+ static int catpt_load_image(struct catpt_dev *cdev, struct dma_chan *chan,
+-			    const char *name, const char *signature,
+-			    bool restore)
++			    const char *name, bool restore)
+ {
+ 	struct catpt_fw_hdr *fw;
+ 	struct firmware *img;
+@@ -583,7 +582,7 @@ static int catpt_load_image(struct catpt_dev *cdev, struct dma_chan *chan,
+ 		return ret;
+ 
+ 	fw = (struct catpt_fw_hdr *)img->data;
+-	if (strncmp(fw->signature, signature, FW_SIGNATURE_SIZE)) {
++	if (strncmp(fw->signature, FW_SIGNATURE, FW_SIGNATURE_SIZE)) {
+ 		dev_err(cdev->dev, "firmware signature mismatch\n");
+ 		ret = -EINVAL;
+ 		goto release_fw;
+@@ -617,8 +616,7 @@ static int catpt_load_images(struct catpt_dev *cdev, bool restore)
+ 	if (IS_ERR(chan))
+ 		return PTR_ERR(chan);
+ 
+-	ret = catpt_load_image(cdev, chan, cdev->spec->fw_name,
+-			       FW_SIGNATURE, restore);
++	ret = catpt_load_image(cdev, chan, cdev->spec->fw_name, restore);
+ 	if (ret)
+ 		goto release_dma_chan;
+ 
+-- 
+2.55.0
+

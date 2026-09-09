@@ -1,0 +1,54 @@
+From 51119176c2524c34b524bb63fbfa46f95775ae51 Mon Sep 17 00:00:00 2001
+From: Sudip Mukherjee <sudip.mukherjee@sifive.com>
+Date: Mon, 3 Aug 2026 05:40:40 -0700
+Subject: [PATCH 10527/15333] spi: dw: send cmd and addr to start the spi
+ transfer
+
+In enhanced spi mode, read or write will start by sending the cmd
+and address (if present).
+
+Signed-off-by: Sudip Mukherjee <sudip.mukherjee@sifive.com>
+Co-developed-by: Changhuang Liang <changhuang.liang@starfivetech.com>
+Signed-off-by: Changhuang Liang <changhuang.liang@starfivetech.com>
+Link: https://patch.msgid.link/20260803124044.156998-8-changhuang.liang@starfivetech.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-dw-core.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/drivers/spi/spi-dw-core.c b/drivers/spi/spi-dw-core.c
+index dbe8779ced86..3388f62dc695 100644
+--- a/drivers/spi/spi-dw-core.c
++++ b/drivers/spi/spi-dw-core.c
+@@ -849,6 +849,19 @@ static void dw_spi_init_enh_mem_buf(struct dw_spi *dws, const struct spi_mem_op
+ 	}
+ }
+ 
++static void dw_spi_enh_write_cmd_addr(struct dw_spi *dws, const struct spi_mem_op *op)
++{
++	/* Send cmd as 32 bit value */
++	dw_write_io_reg(dws, DW_SPI_DR, op->cmd.opcode);
++	if (op->addr.nbytes) {
++		dw_write_io_reg(dws, DW_SPI_DR, lower_32_bits(op->addr.val));
++		if (op->addr.nbytes > 4) {
++			/* address more than 32bit */
++			dw_write_io_reg(dws, DW_SPI_DR, upper_32_bits(op->addr.val));
++		}
++	}
++}
++
+ static int dw_spi_exec_enh_mem_op(struct spi_mem *mem, const struct spi_mem_op *op)
+ {
+ 	struct spi_controller *ctlr = mem->spi->controller;
+@@ -909,6 +922,8 @@ static int dw_spi_exec_enh_mem_op(struct spi_mem *mem, const struct spi_mem_op *
+ 
+ 	dw_spi_enable_chip(dws, 1);
+ 
++	dw_spi_enh_write_cmd_addr(dws, op);
++
+ 	return 0;
+ }
+ 
+-- 
+2.55.0
+

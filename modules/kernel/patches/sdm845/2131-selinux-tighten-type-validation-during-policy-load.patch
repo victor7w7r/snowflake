@@ -1,0 +1,41 @@
+From ef0740b4b75fe48fb411b2a76aafbab0cdd6b0ba Mon Sep 17 00:00:00 2001
+From: Stephen Smalley <stephen.smalley.work@gmail.com>
+Date: Thu, 7 May 2026 12:16:34 -0400
+Subject: [PATCH 02131/15333] selinux: tighten type validation during policy
+ load
+
+Tighten type validation during policy load to improve robustness in
+the face of ill-formed policies.
+
+Signed-off-by: Stephen Smalley <stephen.smalley.work@gmail.com>
+Signed-off-by: Paul Moore <paul@paul-moore.com>
+---
+ security/selinux/ss/policydb.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/security/selinux/ss/policydb.c b/security/selinux/ss/policydb.c
+index ead504a639e3..ba1c9bd9e29f 100644
+--- a/security/selinux/ss/policydb.c
++++ b/security/selinux/ss/policydb.c
+@@ -604,10 +604,15 @@ static int type_index(void *key, void *datum, void *datap)
+ 	typdatum = datum;
+ 	p = datap;
+ 
++	if (!typdatum->value || typdatum->value > p->p_types.nprim ||
++		typdatum->bounds > p->p_types.nprim) {
++		pr_err("SELinux: type %s had value %u bounds %u nprim %u\n",
++			(char *)key, typdatum->value, typdatum->bounds,
++			p->p_types.nprim);
++		return -EINVAL;
++	}
++
+ 	if (typdatum->primary) {
+-		if (!typdatum->value || typdatum->value > p->p_types.nprim ||
+-		    typdatum->bounds > p->p_types.nprim)
+-			return -EINVAL;
+ 		p->sym_val_to_name[SYM_TYPES][typdatum->value - 1] = key;
+ 		p->type_val_to_struct[typdatum->value - 1] = typdatum;
+ 	}
+-- 
+2.55.0
+

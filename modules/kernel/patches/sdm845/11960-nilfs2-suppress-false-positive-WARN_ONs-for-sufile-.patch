@@ -1,0 +1,196 @@
+From 6b38b82be46b242a64db8b3efc33cd15565efd08 Mon Sep 17 00:00:00 2001
+From: Ryusuke Konishi <konishi.ryusuke@gmail.com>
+Date: Fri, 7 Aug 2026 03:13:39 +0900
+Subject: [PATCH 11960/15333] nilfs2: suppress false positive WARN_ONs for
+ sufile after an FS error
+
+After applying the commit associated with the Fixes tag, metadata file
+buffers can be evicted from memory even after being marked dirty.
+
+Consequently, operations such as rolling back sufile changes upon
+error - which modify the buffer and were previously assumed incapable
+of failure - can now fail.
+
+This behavior causes syzbot to trigger a WARN_ON check immediately
+following sufile function calls within the log writer.
+
+Resolve this issue by introducing a macro, nilfs_sufile_warn_on_error(),
+which uses WARN_ONCE to report unexpected errors only when the filesystem
+has not degraded to read-only mode, returning -EIO or -EROFS accordingly.
+Replace existing WARN_ON checks for unexpected errors following sufile
+operations with this new macro.
+
+Additionally, for nilfs_segctor_truncate_segments() - where an error must
+be propagated to halt log writing if a sufile operation fails - modify
+the function to return the error code appropriately.
+
+Reported-by: syzbot+5957361606d7b750b874@syzkaller.appspotmail.com
+Closes: https://syzkaller.appspot.com/bug?extid=5957361606d7b750b874
+Fixes: 8c26c4e2694a ("nilfs2: fix issue with flush kernel thread after remount in RO mode because of driver's internal error or metadata corruption")
+Cc: stable+noautosel@kernel.org # Warning suppression primarily; will request backport individually if needed
+Signed-off-by: Ryusuke Konishi <konishi.ryusuke@gmail.com>
+Signed-off-by: Viacheslav Dubeyko <slava@dubeyko.com>
+---
+ fs/nilfs2/segment.c | 36 ++++++++++++++++++++----------------
+ fs/nilfs2/sufile.h  | 28 ++++++++++++++++++++++++++++
+ 2 files changed, 48 insertions(+), 16 deletions(-)
+
+diff --git a/fs/nilfs2/segment.c b/fs/nilfs2/segment.c
+index 2189267894d2..5896fdae5669 100644
+--- a/fs/nilfs2/segment.c
++++ b/fs/nilfs2/segment.c
+@@ -1433,7 +1433,7 @@ static int nilfs_segctor_extend_segments(struct nilfs_sc_info *sci,
+  failed:
+ 	list_for_each_entry(segbuf, &list, sb_list) {
+ 		ret = nilfs_sufile_free(sufile, segbuf->sb_nextnum);
+-		WARN_ON(ret); /* never fails */
++		nilfs_sufile_warn_on_error(sufile, ret);
+ 	}
+ 	nilfs_destroy_logs(&list);
+ 	return err;
+@@ -1449,7 +1449,7 @@ static void nilfs_free_incomplete_logs(struct list_head *logs,
+ 	segbuf = NILFS_FIRST_SEGBUF(logs);
+ 	if (nilfs->ns_nextnum != segbuf->sb_nextnum) {
+ 		ret = nilfs_sufile_free(sufile, segbuf->sb_nextnum);
+-		WARN_ON(ret); /* never fails */
++		nilfs_sufile_warn_on_error(sufile, ret);
+ 	}
+ 	if (atomic_read(&segbuf->sb_err)) {
+ 		/* Case 1: The first segment failed */
+@@ -1468,7 +1468,7 @@ static void nilfs_free_incomplete_logs(struct list_head *logs,
+ 	list_for_each_entry_continue(segbuf, logs, sb_list) {
+ 		if (prev->sb_nextnum != segbuf->sb_nextnum) {
+ 			ret = nilfs_sufile_free(sufile, segbuf->sb_nextnum);
+-			WARN_ON(ret); /* never fails */
++			nilfs_sufile_warn_on_error(sufile, ret);
+ 		}
+ 		if (atomic_read(&segbuf->sb_err) &&
+ 		    segbuf->sb_segnum != nilfs->ns_nextnum)
+@@ -1491,7 +1491,7 @@ static void nilfs_segctor_update_segusage(struct nilfs_sc_info *sci,
+ 		ret = nilfs_sufile_set_segment_usage(sufile, segbuf->sb_segnum,
+ 						     live_blocks,
+ 						     sci->sc_seg_ctime);
+-		WARN_ON(ret); /* always succeed because the segusage is dirty */
++		nilfs_sufile_warn_on_error(sufile, ret);
+ 	}
+ }
+ 
+@@ -1504,28 +1504,32 @@ static void nilfs_cancel_segusage(struct list_head *logs, struct inode *sufile)
+ 	ret = nilfs_sufile_set_segment_usage(sufile, segbuf->sb_segnum,
+ 					     segbuf->sb_pseg_start -
+ 					     segbuf->sb_fseg_start, 0);
+-	WARN_ON(ret); /* always succeed because the segusage is dirty */
++	nilfs_sufile_warn_on_error(sufile, ret);
+ 
+ 	list_for_each_entry_continue(segbuf, logs, sb_list) {
+ 		ret = nilfs_sufile_set_segment_usage(sufile, segbuf->sb_segnum,
+ 						     0, 0);
+-		WARN_ON(ret); /* always succeed */
++		nilfs_sufile_warn_on_error(sufile, ret);
+ 	}
+ }
+ 
+-static void nilfs_segctor_truncate_segments(struct nilfs_sc_info *sci,
+-					    struct nilfs_segment_buffer *last,
+-					    struct inode *sufile)
++static int nilfs_segctor_truncate_segments(struct nilfs_sc_info *sci,
++					struct nilfs_segment_buffer *last,
++					struct inode *sufile)
+ {
+ 	struct nilfs_segment_buffer *segbuf = last;
+-	int ret;
++	int ret, err = 0;
+ 
+ 	list_for_each_entry_continue(segbuf, &sci->sc_segbufs, sb_list) {
+ 		sci->sc_segbuf_nblocks -= segbuf->sb_rest_blocks;
+-		ret = nilfs_sufile_free(sufile, segbuf->sb_nextnum);
+-		WARN_ON(ret);
++
++		ret = nilfs_sufile_warn_on_error(
++			sufile, nilfs_sufile_free(sufile, segbuf->sb_nextnum));
++		if (unlikely(ret) && err != -EROFS)
++			err = ret;
+ 	}
+ 	nilfs_truncate_logs(&sci->sc_segbufs, last);
++	return err;
+ }
+ 
+ 
+@@ -1564,7 +1568,7 @@ static int nilfs_segctor_collect(struct nilfs_sc_info *sci,
+ 							sci->sc_freesegs,
+ 							sci->sc_nfreesegs,
+ 							NULL);
+-			WARN_ON(err); /* do not happen */
++			nilfs_sufile_warn_on_error(nilfs->ns_sufile, err);
+ 			sci->sc_stage.flags &= ~NILFS_CF_SUFREED;
+ 		}
+ 
+@@ -1576,8 +1580,8 @@ static int nilfs_segctor_collect(struct nilfs_sc_info *sci,
+ 		sci->sc_stage = prev_stage;
+ 	}
+ 	nilfs_segctor_zeropad_segsum(sci);
+-	nilfs_segctor_truncate_segments(sci, sci->sc_curseg, nilfs->ns_sufile);
+-	return 0;
++	err = nilfs_segctor_truncate_segments(sci, sci->sc_curseg,
++					nilfs->ns_sufile);
+ 
+  failed:
+ 	return err;
+@@ -1878,7 +1882,7 @@ static void nilfs_segctor_abort_construction(struct nilfs_sc_info *sci,
+ 						sci->sc_freesegs,
+ 						sci->sc_nfreesegs,
+ 						NULL);
+-		WARN_ON(ret); /* do not happen */
++		nilfs_sufile_warn_on_error(nilfs->ns_sufile, ret);
+ 	}
+ 
+ 	nilfs_destroy_logs(&logs);
+diff --git a/fs/nilfs2/sufile.h b/fs/nilfs2/sufile.h
+index cd6f28ab3521..5888ed479c8b 100644
+--- a/fs/nilfs2/sufile.h
++++ b/fs/nilfs2/sufile.h
+@@ -10,6 +10,7 @@
+ #ifndef _NILFS_SUFILE_H
+ #define _NILFS_SUFILE_H
+ 
++#include <linux/errno.h>
+ #include <linux/fs.h>
+ #include <linux/buffer_head.h>
+ #include "mdt.h"
+@@ -54,6 +55,33 @@ int nilfs_sufile_read(struct super_block *sb, size_t susize,
+ 		      struct nilfs_inode *raw_inode, struct inode **inodep);
+ int nilfs_sufile_trim_fs(struct inode *sufile, struct fstrim_range *range);
+ 
++/**
++ * nilfs_sufile_warn_on_error - warn on unexpected sufile error
++ * @sufile: inode of segment usage file
++ * @err: status code returned by a sufile function
++ *
++ * Even if buffer heads of blocks containing segment usage entries have
++ * been dirtied in advance by calling functions such as
++ * nilfs_sufile_mark_dirty() or nilfs_sufile_{alloc,free}(), those buffers
++ * can be discarded from memory after the file system detects corruption and
++ * degrades to read-only mode, which may cause sufile operations, including
++ * cancel operations, to return errors.  nilfs_sufile_warn_on_error() is used
++ * to detect unexpected errors other than during read-only degradation.
++ *
++ * Return: 0 if @err is 0, %-EROFS if in read-only degraded mode, and %-EIO
++ * otherwise.
++ */
++#define nilfs_sufile_warn_on_error(sufile, err)				\
++	({								\
++		int _err = (err);					\
++									\
++		if (unlikely(_err))					\
++			_err = WARN_ONCE(!sb_rdonly((sufile)->i_sb),	\
++				"unexpected sufile error %d\n", _err) ? \
++				-EIO : -EROFS;				\
++		_err;							\
++	})
++
+ /**
+  * nilfs_sufile_scrap - make a segment garbage
+  * @sufile: inode of segment usage file
+-- 
+2.55.0
+

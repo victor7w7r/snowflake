@@ -1,0 +1,146 @@
+From f1ec2b5604a7c5f239baf2acf894fef67b1dcc90 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 21 Jul 2026 16:13:51 +0200
+Subject: [PATCH 09953/15333] exec: label mm->exe_file with the binary for a
+ transparent dispatch
+
+When binfmt_misc dispatches a binary to an interpreter, the interpreter
+becomes bprm->file and begin_new_exec() labels mm->exe_file with it. For
+wine or qemu-user that is the point. For the transparent mode it
+defeats the point. The interpreter is an implementation detail and the
+process's identity is the binary. Relocatable programs that locate
+themselves via /proc/self/exe find the dynamic linker instead [1].
+
+Userspace cannot get this right on its own. PR_SET_MM_MAP's exe_fd is
+gated on checkpoint_restore_ns_capable() in the caller's own user
+namespace - that is how CRIU restores an exe link - so the ability to
+retarget mm->exe_file is not what this adds. What userspace cannot do
+is have the link be right from the first instruction. Credentials are
+unaffected either way: they still derive from the interpreter unless
+'C' says otherwise.
+
+bprm->executable is the file execve() access-checked and kept open for
+AT_EXECFD. It is already the file would_dump() bases the dumpability
+decision on and the file bprm->execfd_creds derives credentials from.
+Label mm->exe_file with it when the dispatch is transparent and the
+identity is correct from the start. The label names precisely the file
+the caller passed to execve().
+
+Write-denial moves along with the label. Rather than tracking per mode
+who still owes a release, the denial do_open_execat() took stays on
+bprm->executable until the file is handed over. begin_new_exec() drops
+it right before installing the descriptor - set_mm_exe_file() has taken
+its own denial on the identity file by then - and free_bprm() releases
+an unconsumed executable with do_close_execat() like the other exec
+files. For a transparent dispatch the result is exact parity with a
+direct execution: a concurrently written binary fails execve() with
+-ETXTBSY at open and a running one cannot be opened for writing. The
+interpreter consequently is not exe-pinned and matches the role it has
+in a native PT_INTERP exec. A classic execfd dispatch now keeps the
+binary write-denied until the exec completes rather than only until the
+interpreter swap; the difference is confined to the exec itself.
+
+Nothing sets BINPRM_FLAGS_TRANSPARENT_INTERP yet; the transparent
+dispatch machinery in binfmt_misc follows and raises it from birth, so
+the label and the aux vector bit that announces it appear together.
+
+Link: https://inbox.sourceware.org/libc-alpha/87ik6fymha.fsf@oldenburg.str.redhat.com [1]
+Link: https://patch.msgid.link/20260721-work-bpf-binfmt_misc-ptinterp-v2-9-e57866e4ae0f@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/exec.c | 36 +++++++++++++++++++++++++++---------
+ 1 file changed, 27 insertions(+), 9 deletions(-)
+
+diff --git a/fs/exec.c b/fs/exec.c
+index 061e0f9fb4ef..128964d1e9d6 100644
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1101,6 +1101,17 @@ void __set_task_comm(struct task_struct *tsk, const char *buf, bool exec)
+ 	perf_event_comm(tsk, exec);
+ }
+ 
++/*
++ * The file the process presents as: its exe link and comm. A transparent
++ * dispatch presents as the binary, which is bprm->executable.
++ */
++static struct file *bprm_identity_file(const struct linux_binprm *bprm)
++{
++	if (bprm->interp_flags & BINPRM_FLAGS_TRANSPARENT_INTERP)
++		return bprm->executable;
++	return bprm->file;
++}
++
+ /*
+  * Calling this is the point of no return. None of the failures will be
+  * seen by userspace since either the process is already taking a fatal
+@@ -1151,7 +1162,7 @@ int begin_new_exec(struct linux_binprm * bprm)
+ 	 * not visible until then. Doing it here also ensures
+ 	 * we don't race against replace_mm_exe_file().
+ 	 */
+-	retval = set_mm_exe_file(bprm->mm, bprm->file);
++	retval = set_mm_exe_file(bprm->mm, bprm_identity_file(bprm));
+ 	if (retval)
+ 		goto out;
+ 
+@@ -1241,6 +1252,8 @@ int begin_new_exec(struct linux_binprm * bprm)
+ 	 * Let's fix it up to be something reasonable.
+ 	 */
+ 	if (bprm->comm_from_dentry) {
++		struct file *comm_file = bprm_identity_file(bprm);
++
+ 		/*
+ 		 * Hold RCU lock to keep the name from being freed behind our back.
+ 		 * Use acquire semantics to make sure the terminating NUL from
+@@ -1250,7 +1263,7 @@ int begin_new_exec(struct linux_binprm * bprm)
+ 		 * detecting a concurrent rename and just want a terminated name.
+ 		 */
+ 		rcu_read_lock();
+-		__set_task_comm(me, smp_load_acquire(&bprm->file->f_path.dentry->d_name.name),
++		__set_task_comm(me, smp_load_acquire(&comm_file->f_path.dentry->d_name.name),
+ 				true);
+ 		rcu_read_unlock();
+ 	} else {
+@@ -1291,10 +1304,17 @@ int begin_new_exec(struct linux_binprm * bprm)
+ 
+ 	/* Pass the opened binary to the interpreter. */
+ 	if (bprm->have_execfd) {
+-		retval = FD_ADD(0, bprm->executable);
+-		if (retval < 0)
+-			goto out_unlock;
++		struct file *executable = bprm->executable;
++
++		/* mm->exe_file carries its own write denial now so drop it. */
++		exe_file_allow_write_access(executable);
+ 		bprm->executable = NULL;
++		retval = FD_ADD(0, executable);
++		if (retval < 0) {
++			/* The reference was not consumed. */
++			fput(executable);
++			goto out_unlock;
++		}
+ 		bprm->execfd = retval;
+ 	}
+ 	return 0;
+@@ -1413,8 +1433,7 @@ static void free_bprm(struct linux_binprm *bprm)
+ 	if (bprm->old_mm)
+ 		exec_mm_put_old(bprm->old_mm);
+ 	do_close_execat(bprm->file);
+-	if (bprm->executable)
+-		fput(bprm->executable);
++	do_close_execat(bprm->executable);
+ 	/* If a binfmt changed the interp, free it. */
+ 	if (bprm->interp != bprm->filename)
+ 		kfree(bprm->interp);
+@@ -1740,8 +1759,7 @@ static int exec_binprm(struct linux_binprm *bprm)
+ 				do_close_execat(exec);
+ 				return -ENOEXEC;
+ 			}
+-			/* Only the reference is kept, for AT_EXECFD. */
+-			exe_file_allow_write_access(exec);
++			/* Kept for AT_EXECFD; the write denial rides along until hand-over. */
+ 			bprm->executable = exec;
+ 		} else {
+ 			do_close_execat(exec);
+-- 
+2.55.0
+

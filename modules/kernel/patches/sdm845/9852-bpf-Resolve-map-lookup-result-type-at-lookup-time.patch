@@ -1,0 +1,198 @@
+From 341d227fa5db567ff2e3114b5be9b1051f336e34 Mon Sep 17 00:00:00 2001
+From: Eduard Zingerman <eddyz87@gmail.com>
+Date: Sat, 1 Aug 2026 00:46:20 -0700
+Subject: [PATCH 09852/15333] bpf: Resolve map lookup result type at lookup
+ time
+
+bpf_map_lookup_elem() is typed to return PTR_TO_MAP_VALUE for every
+map, but for some map kinds the looked up value is actually a
+different object: an inner map, a socket or an xsk socket.
+Until now this reinterpretation happened once the pointer was
+converted from its NULL-able form to a concrete value.
+
+Such reinterpretation logic placement led to mark_ptr_not_null_reg()
+being called for a temporary register copy in check_mem_reg() and
+check_kfunc_mem_size_reg() (check_mem_size_reg() was buggy because of
+not calling it). The temporary copy was necessary to pass
+reinterpreted parameters as nullable helper and kfunc arguments.
+
+Avoid this complication by refining map lookup result type right away.
+
+The test case verifier_map_in_map/on_the_inner_map_pointer needs an
+update because the verifier now prints a concrete NULL-able type for
+the lookup.
+
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+Signed-off-by: Amery Hung <ameryhung@gmail.com>
+Link: https://lore.kernel.org/bpf/20260801074633.1595644-6-ameryhung@gmail.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ kernel/bpf/verifier.c                         | 79 +++++++------------
+ .../selftests/bpf/progs/verifier_map_in_map.c |  2 +-
+ 2 files changed, 31 insertions(+), 50 deletions(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 3fec0afacb3f..1b6ae6e5b995 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -1854,32 +1854,34 @@ static void __mark_dynptr_reg(struct bpf_reg_state *reg, enum bpf_dynptr_type ty
+ 	reg->dynptr.first_slot = first_slot;
+ }
+ 
+-static void mark_ptr_not_null_reg(struct bpf_reg_state *reg)
++/*
++ * Refine the return type of the bpf_map_lookup_elem() for special map types:
++ * map-in-map, xskmap, sockmap and sockhash.
++ */
++static void refine_map_lookup_value(struct bpf_reg_state *reg)
+ {
+-	if (base_type(reg->type) == PTR_TO_MAP_VALUE) {
+-		const struct bpf_map *map = reg->map_ptr;
++	enum bpf_type_flag maybe_null = reg->type & PTR_MAYBE_NULL;
++	const struct bpf_map *map = reg->map_ptr;
+ 
+-		if (map->inner_map_meta) {
+-			reg->type = CONST_PTR_TO_MAP;
+-			reg->map_ptr = map->inner_map_meta;
+-			/* transfer reg's id which is unique for every map_lookup_elem
+-			 * as UID of the inner map.
+-			 */
+-			if (btf_record_has_field(map->inner_map_meta->record,
+-						 BPF_TIMER | BPF_WORKQUEUE | BPF_TASK_WORK)) {
+-				reg->map_uid = reg->id;
+-			}
+-		} else if (map->map_type == BPF_MAP_TYPE_XSKMAP) {
+-			reg->type = PTR_TO_XDP_SOCK;
+-		} else if (map->map_type == BPF_MAP_TYPE_SOCKMAP ||
+-			   map->map_type == BPF_MAP_TYPE_SOCKHASH) {
+-			reg->type = PTR_TO_SOCKET;
+-		} else {
+-			reg->type = PTR_TO_MAP_VALUE;
+-		}
+-		return;
++	if (map->inner_map_meta) {
++		reg->type = CONST_PTR_TO_MAP | maybe_null;
++		reg->map_ptr = map->inner_map_meta;
++		/* transfer reg's id which is unique for every map_lookup_elem
++		 * as UID of the inner map.
++		 */
++		if (btf_record_has_field(map->inner_map_meta->record,
++					 BPF_TIMER | BPF_WORKQUEUE | BPF_TASK_WORK))
++			reg->map_uid = reg->id;
++	} else if (map->map_type == BPF_MAP_TYPE_XSKMAP) {
++		reg->type = PTR_TO_XDP_SOCK | maybe_null;
++	} else if (map->map_type == BPF_MAP_TYPE_SOCKMAP ||
++		   map->map_type == BPF_MAP_TYPE_SOCKHASH) {
++		reg->type = PTR_TO_SOCKET | maybe_null;
+ 	}
++}
+ 
++static void mark_ptr_not_null_reg(struct bpf_reg_state *reg)
++{
+ 	reg->type &= ~PTR_MAYBE_NULL;
+ }
+ 
+@@ -6926,8 +6928,6 @@ static int check_mem_size_reg(struct bpf_verifier_env *env,
+ static int check_mem_reg(struct bpf_verifier_env *env, struct bpf_reg_state *reg,
+ 			 argno_t argno, u32 mem_size, struct bpf_call_arg_meta *meta)
+ {
+-	bool may_be_null = type_may_be_null(reg->type);
+-	struct bpf_reg_state saved_reg;
+ 	int err;
+ 
+ 	if (bpf_register_is_null(reg))
+@@ -6939,23 +6939,11 @@ static int check_mem_reg(struct bpf_verifier_env *env, struct bpf_reg_state *reg
+ 		return -EACCES;
+ 	}
+ 
+-	/* Assuming that the register contains a value check if the memory
+-	 * access is safe. Temporarily save and restore the register's state as
+-	 * the conversion shouldn't be visible to a caller.
+-	 */
+-	if (may_be_null) {
+-		saved_reg = *reg;
+-		mark_ptr_not_null_reg(reg);
+-	}
+-
+ 	int size = base_type(reg->type) == PTR_TO_STACK ? -(int)mem_size : mem_size;
+ 
+ 	err = check_helper_mem_access(env, reg, argno, size, BPF_READ, true, meta);
+ 	err = err ?: check_helper_mem_access(env, reg, argno, size, BPF_WRITE, true, meta);
+ 
+-	if (may_be_null)
+-		*reg = saved_reg;
+-
+ 	return err;
+ }
+ 
+@@ -6997,21 +6985,11 @@ static int check_kfunc_mem_size_reg(struct bpf_verifier_env *env, struct bpf_reg
+ 				    struct bpf_reg_state *size_reg, argno_t mem_argno,
+ 				    argno_t size_argno, struct bpf_call_arg_meta *meta)
+ {
+-	bool may_be_null = type_may_be_null(mem_reg->type);
+-	struct bpf_reg_state saved_reg;
+ 	int err;
+ 
+-	if (may_be_null) {
+-		saved_reg = *mem_reg;
+-		mark_ptr_not_null_reg(mem_reg);
+-	}
+-
+ 	err = check_mem_size_reg(env, mem_reg, size_reg, mem_argno, size_argno, BPF_READ, true, meta);
+ 	err = err ?: check_mem_size_reg(env, mem_reg, size_reg, mem_argno, size_argno, BPF_WRITE, true, meta);
+ 
+-	if (may_be_null)
+-		*mem_reg = saved_reg;
+-
+ 	return err;
+ }
+ 
+@@ -10522,10 +10500,12 @@ static int check_helper_call(struct bpf_verifier_env *env, struct bpf_insn *insn
+ 		regs[BPF_REG_0].map_ptr = meta.map.ptr;
+ 		regs[BPF_REG_0].map_uid = meta.map.uid;
+ 		regs[BPF_REG_0].type = PTR_TO_MAP_VALUE | ret_flag;
+-		if (!type_may_be_null(ret_flag) &&
++		if (type_may_be_null(ret_flag) ||
+ 		    btf_record_has_field(meta.map.ptr->record, BPF_SPIN_LOCK | BPF_RES_SPIN_LOCK)) {
+ 			regs[BPF_REG_0].id = ++env->id_gen;
+ 		}
++		/* requires regs[BPF_REG_0].id to be set because of the map-in-map case */
++		refine_map_lookup_value(&regs[BPF_REG_0]);
+ 		break;
+ 	case RET_PTR_TO_SOCKET:
+ 		mark_reg_known_zero(env, regs, BPF_REG_0);
+@@ -10623,7 +10603,7 @@ static int check_helper_call(struct bpf_verifier_env *env, struct bpf_insn *insn
+ 		return -EINVAL;
+ 	}
+ 
+-	if (type_may_be_null(regs[BPF_REG_0].type))
++	if (type_may_be_null(regs[BPF_REG_0].type) && !regs[BPF_REG_0].id)
+ 		regs[BPF_REG_0].id = ++env->id_gen;
+ 
+ 	if (is_ptr_cast_function(func_id) &&
+@@ -12370,7 +12350,8 @@ static int check_kfunc_args(struct bpf_verifier_env *env, struct bpf_call_arg_me
+ 				return ret;
+ 			break;
+ 		case KF_ARG_CONST_MAP_PTR:
+-			if (base_type(reg->type) != CONST_PTR_TO_MAP) {
++			if (base_type(reg->type) != CONST_PTR_TO_MAP ||
++			    type_may_be_null(reg->type)) {
+ 				verbose(env, "pointer in %s isn't map pointer\n",
+ 					reg_arg_name(env, argno));
+ 				return -EINVAL;
+diff --git a/tools/testing/selftests/bpf/progs/verifier_map_in_map.c b/tools/testing/selftests/bpf/progs/verifier_map_in_map.c
+index b606b5dca734..7918646e5bfc 100644
+--- a/tools/testing/selftests/bpf/progs/verifier_map_in_map.c
++++ b/tools/testing/selftests/bpf/progs/verifier_map_in_map.c
+@@ -154,7 +154,7 @@ l0_%=:	r0 = 0;						\
+ 
+ SEC("socket")
+ __description("forgot null checking on the inner map pointer")
+-__failure __msg("R1 type=map_value_or_null expected=map_ptr")
++__failure __msg("R1 type=map_ptr_or_null expected=map_ptr")
+ __failure_unpriv
+ __naked void on_the_inner_map_pointer(void)
+ {
+-- 
+2.55.0
+

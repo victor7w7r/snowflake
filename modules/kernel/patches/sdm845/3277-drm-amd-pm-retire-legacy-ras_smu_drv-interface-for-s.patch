@@ -1,0 +1,207 @@
+From 7a3706b47553069d835f04da522fc6aca943cda0 Mon Sep 17 00:00:00 2001
+From: Ce Sun <cesun102@amd.com>
+Date: Wed, 25 Mar 2026 10:37:04 +0800
+Subject: [PATCH 03277/15333] drm/amd/pm: retire legacy ras_smu_drv interface
+ for smu v13.0.12
+
+Remove the legacy ras_smu_drv interface implementation for SMU v13.0.12
+
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Ce Sun <cesun102@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h       |  26 ----
+ .../drm/amd/pm/swsmu/smu13/smu_v13_0_12_ppt.c | 130 ------------------
+ .../drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.h  |   1 -
+ 3 files changed, 157 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
+index 822abb638d58..739da6e1d495 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
+@@ -492,32 +492,6 @@ struct ras_critical_region {
+ 	uint64_t size;
+ };
+ 
+-struct ras_eeprom_table_version {
+-	uint32_t minor    : 16;
+-	uint32_t major    : 16;
+-};
+-
+-struct ras_eeprom_smu_funcs {
+-	int (*get_ras_table_version)(struct amdgpu_device *adev,
+-							uint32_t *table_version);
+-	int (*get_badpage_count)(struct amdgpu_device *adev, uint32_t *count, uint32_t timeout);
+-	int (*get_badpage_mca_addr)(struct amdgpu_device *adev, uint16_t index, uint64_t *mca_addr);
+-	int (*set_timestamp)(struct amdgpu_device *adev, uint64_t timestamp);
+-	int (*get_timestamp)(struct amdgpu_device *adev,
+-							uint16_t index, uint64_t *timestamp);
+-	int (*get_badpage_ipid)(struct amdgpu_device *adev, uint16_t index, uint64_t *ipid);
+-	int (*erase_ras_table)(struct amdgpu_device *adev, uint32_t *result);
+-};
+-
+-enum ras_smu_feature_flags {
+-	RAS_SMU_FEATURE_BIT__RAS_EEPROM = BIT_ULL(0),
+-};
+-
+-struct ras_smu_drv {
+-	const struct ras_eeprom_smu_funcs *smu_eeprom_funcs;
+-	void (*ras_smu_feature_flags)(struct amdgpu_device *adev, uint64_t *flags);
+-};
+-
+ struct amdgpu_ras {
+ 	void *ras_mgr;
+ 	/* ras infrastructure */
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_12_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_12_ppt.c
+index dea27fcb2b20..ecdbf9bb8eb7 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_12_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_12_ppt.c
+@@ -1017,133 +1017,3 @@ const struct smu_temp_funcs smu_v13_0_12_temp_funcs = {
+ 	.temp_metrics_is_supported = smu_v13_0_12_is_temp_metrics_supported,
+ 	.get_temp_metrics = smu_v13_0_12_get_temp_metrics,
+ };
+-
+-static int smu_v13_0_12_get_ras_table_version(struct amdgpu_device *adev,
+-					      uint32_t *table_version)
+-{
+-	struct smu_context *smu = adev->powerplay.pp_handle;
+-
+-	return smu_cmn_send_smc_msg_with_param(smu,
+-			SMU_MSG_GetRASTableVersion, 0, table_version);
+-}
+-
+-static int smu_v13_0_12_get_badpage_count(struct amdgpu_device *adev, uint32_t *count,
+-					  uint32_t timeout)
+-{
+-	struct smu_context *smu = adev->powerplay.pp_handle;
+-	uint64_t end, now;
+-	int ret = 0;
+-
+-	now = (uint64_t)ktime_to_ms(ktime_get());
+-	end = now + timeout;
+-	do {
+-		ret = smu_cmn_send_smc_msg_with_param(smu,
+-			SMU_MSG_GetBadPageCount, 0, count);
+-		/* eeprom is not ready */
+-		if (ret != -EBUSY)
+-			return ret;
+-		usleep_range(10000, 15000);
+-		now = (uint64_t)ktime_to_ms(ktime_get());
+-	} while (now < end);
+-
+-	dev_err(adev->dev,
+-			 "smu get bad page count timeout!\n");
+-	return ret;
+-}
+-
+-static int smu_v13_0_12_set_timestamp(struct amdgpu_device *adev, uint64_t timestamp)
+-{
+-	struct smu_context *smu = adev->powerplay.pp_handle;
+-
+-	return smu_cmn_send_smc_msg_with_param(smu,
+-			SMU_MSG_SetTimestamp, (uint32_t)timestamp, 0);
+-}
+-
+-static int smu_v13_0_12_get_timestamp(struct amdgpu_device *adev,
+-				      uint16_t index, uint64_t *timestamp)
+-{
+-	struct smu_context *smu = adev->powerplay.pp_handle;
+-	uint32_t temp;
+-	int ret;
+-
+-	ret = smu_cmn_send_smc_msg_with_param(smu,
+-			SMU_MSG_GetTimestamp, index, &temp);
+-	if (!ret)
+-		*timestamp = temp;
+-
+-	return ret;
+-}
+-
+-static int smu_v13_0_12_get_badpage_ipid(struct amdgpu_device *adev,
+-					 uint16_t index, uint64_t *ipid)
+-{
+-	struct smu_context *smu = adev->powerplay.pp_handle;
+-	uint32_t temp_arg, temp_ipid_lo, temp_ipid_high;
+-	int ret;
+-
+-	temp_arg = index | (1 << 16);
+-	ret = smu_cmn_send_smc_msg_with_param(smu,
+-			SMU_MSG_GetBadPageIpid, temp_arg, &temp_ipid_lo);
+-	if (ret)
+-		return ret;
+-
+-	temp_arg = index | (2 << 16);
+-	ret = smu_cmn_send_smc_msg_with_param(smu,
+-			SMU_MSG_GetBadPageIpid, temp_arg, &temp_ipid_high);
+-	if (!ret)
+-		*ipid = (uint64_t)temp_ipid_high << 32 | temp_ipid_lo;
+-	return ret;
+-}
+-
+-static int smu_v13_0_12_erase_ras_table(struct amdgpu_device *adev,
+-					uint32_t *result)
+-{
+-	struct smu_context *smu = adev->powerplay.pp_handle;
+-
+-	return smu_cmn_send_smc_msg_with_param(smu,
+-			SMU_MSG_EraseRasTable, 0, result);
+-}
+-
+-static int smu_v13_0_12_get_badpage_mca_addr(struct amdgpu_device *adev,
+-					     uint16_t index, uint64_t *mca_addr)
+-{
+-	struct smu_context *smu = adev->powerplay.pp_handle;
+-	uint32_t temp_arg, temp_addr_lo, temp_addr_high;
+-	int ret;
+-
+-	temp_arg = index | (1 << 16);
+-	ret = smu_cmn_send_smc_msg_with_param(smu,
+-			SMU_MSG_GetBadPageMcaAddr, temp_arg, &temp_addr_lo);
+-	if (ret)
+-		return ret;
+-
+-	temp_arg = index | (2 << 16);
+-	ret = smu_cmn_send_smc_msg_with_param(smu,
+-			SMU_MSG_GetBadPageMcaAddr, temp_arg, &temp_addr_high);
+-	if (!ret)
+-		*mca_addr = (uint64_t)temp_addr_high << 32 | temp_addr_lo;
+-	return ret;
+-}
+-
+-static const struct ras_eeprom_smu_funcs smu_v13_0_12_eeprom_smu_funcs = {
+-	.get_ras_table_version = smu_v13_0_12_get_ras_table_version,
+-	.get_badpage_count = smu_v13_0_12_get_badpage_count,
+-	.get_badpage_mca_addr = smu_v13_0_12_get_badpage_mca_addr,
+-	.set_timestamp = smu_v13_0_12_set_timestamp,
+-	.get_timestamp = smu_v13_0_12_get_timestamp,
+-	.get_badpage_ipid = smu_v13_0_12_get_badpage_ipid,
+-	.erase_ras_table = smu_v13_0_12_erase_ras_table,
+-};
+-
+-static void smu_v13_0_12_ras_smu_feature_flags(struct amdgpu_device *adev, uint64_t *flags)
+-{
+-	if (!flags)
+-		return;
+-
+-	*flags = 0ULL;
+-}
+-
+-const struct ras_smu_drv smu_v13_0_12_ras_smu_drv = {
+-	.smu_eeprom_funcs = &smu_v13_0_12_eeprom_smu_funcs,
+-	.ras_smu_feature_flags = smu_v13_0_12_ras_smu_feature_flags,
+-};
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.h b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.h
+index a150fc88902c..a66bf33dbb58 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.h
+@@ -117,7 +117,6 @@ int smu_v13_0_12_get_system_power(struct smu_context *smu,
+ extern const struct cmn2asic_mapping smu_v13_0_12_feature_mask_map[];
+ extern const struct cmn2asic_msg_mapping smu_v13_0_12_message_map[];
+ extern const struct smu_temp_funcs smu_v13_0_12_temp_funcs;
+-extern const struct ras_smu_drv smu_v13_0_12_ras_smu_drv;
+ 
+ #if defined(SWSMU_CODE_LAYER_L2)
+ #include "smu_cmn.h"
+-- 
+2.55.0
+

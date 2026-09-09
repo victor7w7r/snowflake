@@ -1,0 +1,88 @@
+From c92d632f8638df0c5b644739b1fd06e36a7630fb Mon Sep 17 00:00:00 2001
+From: "Jiangong.Han" <jiangong.han@windriver.com>
+Date: Wed, 1 Jul 2026 16:21:02 +0800
+Subject: [PATCH 04845/15333] dm: use `clear_and_wake_up_bit()` in device
+ mapper
+
+The helper was introduced in 'commit 8236b0ae31c83 ("bdi: wake up
+concurrent wb_shutdown() callers.")' as a generic way of doing the same
+sequence of operations:
+	clear_bit_unlock();
+	smp_mb__after_atomic();
+	wake_up_bit();
+
+The helper was first implemented to avoid bugs caused by forgetting to
+call `wake_up_bit()` after `clear_bit_unlock()`. Replace the open-coded
+sequence with the helper to avoid duplicate code and reduce code paths
+to maintain.
+
+Suggested-by: code@agatha.dev
+Link: https://kernelnewbies.org/Beginner%20Cleanup%20and%20Refactor%20Tasks%20by%20Agatha%20Isabelle%20Moreira#task_001
+Link: https://kernelnewbies.org/Beginner%20Cleanup%20and%20Refactor%20Tasks%20by%20Agatha%20Isabelle%20Moreira#task_002
+Signed-off-by: Jiangong.Han <jiangong.han@windriver.com>
+Signed-off-by: Mikulas Patocka <mpatocka@redhat.com>
+---
+ drivers/md/dm-snap.c           | 4 +---
+ drivers/md/dm-zoned-metadata.c | 8 ++------
+ drivers/md/dm-zoned-reclaim.c  | 4 +---
+ 3 files changed, 4 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/md/dm-snap.c b/drivers/md/dm-snap.c
+index 1489fda9d24a..c8a9ca1eeae7 100644
+--- a/drivers/md/dm-snap.c
++++ b/drivers/md/dm-snap.c
+@@ -911,9 +911,7 @@ static int init_hash_tables(struct dm_snapshot *s)
+ 
+ static void merge_shutdown(struct dm_snapshot *s)
+ {
+-	clear_bit_unlock(RUNNING_MERGE, &s->state_bits);
+-	smp_mb__after_atomic();
+-	wake_up_bit(&s->state_bits, RUNNING_MERGE);
++	clear_and_wake_up_bit(RUNNING_MERGE, &s->state_bits);
+ }
+ 
+ static struct bio *__release_queued_bios_after_merge(struct dm_snapshot *s)
+diff --git a/drivers/md/dm-zoned-metadata.c b/drivers/md/dm-zoned-metadata.c
+index f4f81c79a080..094b63215882 100644
+--- a/drivers/md/dm-zoned-metadata.c
++++ b/drivers/md/dm-zoned-metadata.c
+@@ -519,9 +519,7 @@ static void dmz_mblock_bio_end_io(struct bio *bio)
+ 	else
+ 		flag = DMZ_META_READING;
+ 
+-	clear_bit_unlock(flag, &mblk->state);
+-	smp_mb__after_atomic();
+-	wake_up_bit(&mblk->state, flag);
++	clear_and_wake_up_bit(flag, &mblk->state);
+ 
+ 	bio_put(bio);
+ }
+@@ -1910,9 +1908,7 @@ void dmz_unlock_zone_reclaim(struct dm_zone *zone)
+ 	WARN_ON(dmz_is_active(zone));
+ 	WARN_ON(!dmz_in_reclaim(zone));
+ 
+-	clear_bit_unlock(DMZ_RECLAIM, &zone->flags);
+-	smp_mb__after_atomic();
+-	wake_up_bit(&zone->flags, DMZ_RECLAIM);
++	clear_and_wake_up_bit(DMZ_RECLAIM, &zone->flags);
+ }
+ 
+ /*
+diff --git a/drivers/md/dm-zoned-reclaim.c b/drivers/md/dm-zoned-reclaim.c
+index ad9c7bc21d54..c041413c729e 100644
+--- a/drivers/md/dm-zoned-reclaim.c
++++ b/drivers/md/dm-zoned-reclaim.c
+@@ -106,9 +106,7 @@ static void dmz_reclaim_kcopy_end(int read_err, unsigned long write_err,
+ 	else
+ 		zrc->kc_err = 0;
+ 
+-	clear_bit_unlock(DMZ_RECLAIM_KCOPY, &zrc->flags);
+-	smp_mb__after_atomic();
+-	wake_up_bit(&zrc->flags, DMZ_RECLAIM_KCOPY);
++	clear_and_wake_up_bit(DMZ_RECLAIM_KCOPY, &zrc->flags);
+ }
+ 
+ /*
+-- 
+2.55.0
+

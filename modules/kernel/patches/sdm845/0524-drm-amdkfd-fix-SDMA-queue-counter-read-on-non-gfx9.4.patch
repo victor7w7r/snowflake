@@ -1,0 +1,107 @@
+From 296ebc46de22f412e6bcacae99cc5cbf516cb461 Mon Sep 17 00:00:00 2001
+From: Jesse Zhang <Jesse.Zhang@amd.com>
+Date: Mon, 15 Jun 2026 18:58:09 +0800
+Subject: [PATCH 00524/15333] drm/amdkfd: fix SDMA queue counter read on
+ non-gfx9.4.3 ASICs
+
+The SDMA queue counter read was dispatched by GC version: anything newer
+than gfx 9.4.2 was routed to the kfd2kgd->hqd_sdma_get_counter hook.
+However that hook is only implemented for gfx 9.4.3, so gfx 10.3, gfx 11
+and gfx 12 fell into the else branch with a NULL hook and got
+-EOPNOTSUPP. This spammed "Failed to read SDMA queue counter" on every
+SDMA queue teardown and left sdma_val at 0, so the per-process SDMA
+activity accounting stopped working on those ASICs.
+
+Dispatch based on whether the hook is implemented instead of the GC
+version, so ASICs without the hook keep using read_sdma_queue_counter()
+as before.
+
+Fixes: 8f09c0ec21cf ("drm/amdkfd: add sdma queue counter for gfxv9.4.3")
+Reviewed-by: Eric Huang <jinhuieric.huang@amd.com>
+Signed-off-by: Jesse Zhang <Jesse.Zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../drm/amd/amdkfd/kfd_device_queue_manager.c | 28 ++++++++-----------
+ drivers/gpu/drm/amd/amdkfd/kfd_process.c      | 12 ++++----
+ 2 files changed, 17 insertions(+), 23 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c b/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c
+index 4ae7f4c6365e..5c9dfb0c424f 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c
+@@ -1027,17 +1027,15 @@ static int destroy_queue_nocpsch(struct device_queue_manager *dqm,
+ 	/* Get the SDMA queue stats */
+ 	if ((q->properties.type == KFD_QUEUE_TYPE_SDMA) ||
+ 	    (q->properties.type == KFD_QUEUE_TYPE_SDMA_XGMI)) {
+-		if (KFD_GC_VERSION(dqm->dev) <= IP_VERSION(9, 4, 2))
++		if (dqm->dev->kfd2kgd->hqd_sdma_get_counter)
++			retval = dqm->dev->kfd2kgd->hqd_sdma_get_counter(
++					dqm->dev->adev, q->mqd,
++					dqm->dev->kfd->device_info.num_sdma_queues_per_engine,
++					&sdma_val);
++		else
+ 			retval = read_sdma_queue_counter(
+ 					(uint64_t __user *)q->properties.read_ptr,
+ 					&sdma_val);
+-		else
+-			retval = dqm->dev->kfd2kgd->hqd_sdma_get_counter ?
+-				 dqm->dev->kfd2kgd->hqd_sdma_get_counter(
+-					dqm->dev->adev, q->mqd,
+-					dqm->dev->kfd->device_info.num_sdma_queues_per_engine,
+-					&sdma_val) :
+-				 -EOPNOTSUPP;
+ 		if (retval)
+ 			dev_err(dev, "Failed to read SDMA queue counter for queue: %d\n",
+ 				q->properties.queue_id);
+@@ -2675,17 +2673,15 @@ static int destroy_queue_cpsch(struct device_queue_manager *dqm,
+ 	/* Get the SDMA queue stats */
+ 	if ((q->properties.type == KFD_QUEUE_TYPE_SDMA) ||
+ 	    (q->properties.type == KFD_QUEUE_TYPE_SDMA_XGMI)) {
+-		if (KFD_GC_VERSION(dqm->dev) <= IP_VERSION(9, 4, 2))
++		if (dqm->dev->kfd2kgd->hqd_sdma_get_counter)
++			retval = dqm->dev->kfd2kgd->hqd_sdma_get_counter(
++					dqm->dev->adev, q->mqd,
++					dqm->dev->kfd->device_info.num_sdma_queues_per_engine,
++					&sdma_val);
++		else
+ 			retval = read_sdma_queue_counter(
+ 					(uint64_t __user *)q->properties.read_ptr,
+ 					&sdma_val);
+-		else
+-			retval = dqm->dev->kfd2kgd->hqd_sdma_get_counter ?
+-				 dqm->dev->kfd2kgd->hqd_sdma_get_counter(
+-					dqm->dev->adev, q->mqd,
+-					dqm->dev->kfd->device_info.num_sdma_queues_per_engine,
+-					&sdma_val) :
+-				 -EOPNOTSUPP;
+ 
+ 		if (retval)
+ 			dev_err(dev, "Failed to read SDMA queue counter for queue: %d\n",
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_process.c b/drivers/gpu/drm/amd/amdkfd/kfd_process.c
+index 9b7b00154c69..303b2b26f1cc 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_process.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_process.c
+@@ -192,15 +192,13 @@ static void kfd_sdma_activity_worker(struct work_struct *work)
+ 	list_for_each_entry(sdma_q, &sdma_q_list.list, list) {
+ 		val = 0;
+ 
+-		if (KFD_GC_VERSION(dqm->dev) <= IP_VERSION(9, 4, 2))
+-			ret = read_sdma_queue_counter(sdma_q->rptr, &val);
+-		else
+-			ret = dqm->dev->kfd2kgd->hqd_sdma_get_counter ?
+-			      dqm->dev->kfd2kgd->hqd_sdma_get_counter(
++		if (dqm->dev->kfd2kgd->hqd_sdma_get_counter)
++			ret = dqm->dev->kfd2kgd->hqd_sdma_get_counter(
+ 					dqm->dev->adev, sdma_q->mqd,
+ 					dqm->dev->kfd->device_info.num_sdma_queues_per_engine,
+-					&val) :
+-			      -EOPNOTSUPP;
++					&val);
++		else
++			ret = read_sdma_queue_counter(sdma_q->rptr, &val);
+ 
+ 		if (ret) {
+ 			pr_debug("Failed to read SDMA queue active counter for queue id: %d",
+-- 
+2.55.0
+

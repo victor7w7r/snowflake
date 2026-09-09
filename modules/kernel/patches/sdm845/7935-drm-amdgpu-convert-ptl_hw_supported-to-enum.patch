@@ -1,0 +1,182 @@
+From 6085f8289ef1f8ee1409992aa4e8fa7331192e58 Mon Sep 17 00:00:00 2001
+From: Victor Zhao <Victor.Zhao@amd.com>
+Date: Thu, 18 Dec 2025 18:42:04 +0800
+Subject: [PATCH 07935/15333] drm/amdgpu: convert ptl_hw_supported to enum
+
+Convert ptl_hw_supported to enum with three states:
+- AMDGPU_PTL_HW_UNINIT: not yet initialized
+- AMDGPU_PTL_HW_SUPPORTED: initialized and supported
+- AMDGPU_PTL_HW_NOT_SUPPORTED: initialized and not supported
+
+This allows skipping PTL initialization attempts when hardware is
+known to not support it, avoiding repeated initialization failures
+after GPU resets.
+
+v2:move ptl_hw_supported_state to AMDGPU_PTL_HW_NOT_SUPPORTED regardless
+of error code during first time initialization. Print init fail log when
+error code is not EOPNOTSUPP.
+
+Signed-off-by: Victor Zhao <Victor.Zhao@amd.com>
+Reviewed-by: Lijo Lazar <lijo.lazar@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c  |  6 +++---
+ drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c  | 19 +++++++++++++++----
+ drivers/gpu/drm/amd/amdkfd/kfd_chardev.c | 11 +++++++----
+ drivers/gpu/drm/amd/include/amdgpu_ptl.h |  9 ++++++++-
+ 4 files changed, 33 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
+index e03b94dc111d..04f6ebf31cca 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
+@@ -1613,7 +1613,7 @@ static umode_t amdgpu_ptl_is_visible(struct kobject *kobj, struct attribute *att
+ 	struct amdgpu_device *adev = drm_to_adev(ddev);
+ 
+ 	/* Only show PTL sysfs files if PTL hardware is supported */
+-	if (!adev->psp.ptl.hw_supported)
++	if (adev->psp.ptl.hw_supported_state != AMDGPU_PTL_HW_SUPPORTED)
+ 		return 0;
+ 
+ 	return attr->mode;
+@@ -1624,7 +1624,7 @@ int amdgpu_ptl_sysfs_init(struct amdgpu_device *adev)
+ 	struct amdgpu_ptl *ptl = &adev->psp.ptl;
+ 	int ret;
+ 
+-	if (!ptl->hw_supported)
++	if (ptl->hw_supported_state != AMDGPU_PTL_HW_SUPPORTED)
+ 		return 0;
+ 
+ 	if (ptl->ptl_sysfs_created)
+@@ -1641,7 +1641,7 @@ void amdgpu_ptl_sysfs_fini(struct amdgpu_device *adev)
+ {
+ 	struct amdgpu_ptl *ptl = &adev->psp.ptl;
+ 
+-	if (!ptl->hw_supported)
++	if (ptl->hw_supported_state != AMDGPU_PTL_HW_SUPPORTED)
+ 		return;
+ 
+ 	if (!ptl->ptl_sysfs_created)
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c b/drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c
+index 9512fef81d84..b086fabb8e1e 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v9_4_3.c
+@@ -2400,7 +2400,10 @@ static int gfx_v9_4_3_perf_monitor_ptl_init(struct amdgpu_device *adev, bool ena
+ 	if (!adev->psp.funcs)
+ 		return -EOPNOTSUPP;
+ 
+-	if (!ptl->hw_supported) {
++	if (ptl->hw_supported_state == AMDGPU_PTL_HW_NOT_SUPPORTED)
++		return -EOPNOTSUPP;
++
++	if (ptl->hw_supported_state == AMDGPU_PTL_HW_UNINIT) {
+ 		fmt1 = GFX_FTYPE_VECTOR;
+ 		fmt2 = GFX_FTYPE_F8;
+ 	} else {
+@@ -2411,10 +2414,17 @@ static int gfx_v9_4_3_perf_monitor_ptl_init(struct amdgpu_device *adev, bool ena
+ 	/* initialize PTL with default formats: GFX_FTYPE_VECTOR & GFX_FTYPE_F8 */
+ 	r = amdgpu_ptl_perf_monitor_ctrl(adev, PSP_PTL_PERF_MON_SET, &ptl_state,
+ 							&fmt1, &fmt2);
+-	if (r)
++	if (r) {
++		if (ptl->hw_supported_state == AMDGPU_PTL_HW_UNINIT)
++			ptl->hw_supported_state = AMDGPU_PTL_HW_NOT_SUPPORTED;
++
++		if (r != -EOPNOTSUPP)
++			dev_err(adev->dev, "PTL initialization failed (%d)\n", r);
++
+ 		return r;
++	}
+ 
+-	ptl->hw_supported = true;
++	ptl->hw_supported_state = AMDGPU_PTL_HW_SUPPORTED;
+ 
+ 	atomic_set(&ptl->disable_ref, 0);
+ 	if (!enable && !amdgpu_in_reset(adev) && !adev->in_suspend) {
+@@ -2459,7 +2469,8 @@ static int gfx_v9_4_3_hw_fini(struct amdgpu_ip_block *ip_block)
+ 	struct amdgpu_device *adev = ip_block->adev;
+ 	int i, num_xcc;
+ 
+-	if (adev->psp.ptl.hw_supported && !amdgpu_in_reset(adev))
++	if (adev->psp.ptl.hw_supported_state == AMDGPU_PTL_HW_SUPPORTED &&
++			!amdgpu_in_reset(adev))
+ 		gfx_v9_4_3_perf_monitor_ptl_init(adev, false);
+ 
+ 	amdgpu_irq_put(adev, &adev->gfx.bad_op_irq, 0);
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
+index 6b681d948c04..dd7a7a18466d 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
+@@ -1783,6 +1783,9 @@ static int kfd_ptl_control(struct kfd_process_device *pdd, bool enable)
+ 	uint32_t ptl_state = enable ? 1 : 0;
+ 	int ret;
+ 
++	if (ptl->hw_supported_state != AMDGPU_PTL_HW_SUPPORTED)
++		return -EOPNOTSUPP;
++
+ 	if (!pdd->dev->kfd2kgd || !pdd->dev->kfd2kgd->ptl_ctrl)
+ 		return -EOPNOTSUPP;
+ 
+@@ -1801,7 +1804,7 @@ int kfd_ptl_disable_request(struct kfd_process_device *pdd,
+ 	struct amdgpu_ptl *ptl = &adev->psp.ptl;
+ 	int ret = 0;
+ 
+-	if (!ptl->hw_supported)
++	if (ptl->hw_supported_state != AMDGPU_PTL_HW_SUPPORTED)
+ 		return -EOPNOTSUPP;
+ 
+ 	mutex_lock(&ptl->mutex);
+@@ -1833,7 +1836,7 @@ int kfd_ptl_disable_release(struct kfd_process_device *pdd,
+ 	struct amdgpu_ptl *ptl = &adev->psp.ptl;
+ 	int ret = 0;
+ 
+-	if (!ptl->hw_supported)
++	if (ptl->hw_supported_state != AMDGPU_PTL_HW_SUPPORTED)
+ 		return -EOPNOTSUPP;
+ 
+ 	mutex_lock(&ptl->mutex);
+@@ -3353,7 +3356,7 @@ static inline uint32_t profile_lock_device(struct kfd_process *p,
+ 			kfd->profiler_process = p;
+ 			status = 0;
+ 			mutex_unlock(&kfd->profiler_lock);
+-			if (ptl->hw_supported) {
++			if (ptl->hw_supported_state == AMDGPU_PTL_HW_SUPPORTED) {
+ 				status = kfd_ptl_disable_request(pdd, p);
+ 				if (status != 0)
+ 					dev_err(kfd_device,
+@@ -3371,7 +3374,7 @@ static inline uint32_t profile_lock_device(struct kfd_process *p,
+ 		status = 0;
+ 		mutex_unlock(&kfd->profiler_lock);
+ 
+-		if (ptl->hw_supported) {
++		if (ptl->hw_supported_state == AMDGPU_PTL_HW_SUPPORTED) {
+ 			status = kfd_ptl_disable_release(pdd, p);
+ 			if (status)
+ 				dev_err(kfd_device,
+diff --git a/drivers/gpu/drm/amd/include/amdgpu_ptl.h b/drivers/gpu/drm/amd/include/amdgpu_ptl.h
+index 154b8da3bfa9..eead62b4b327 100644
+--- a/drivers/gpu/drm/amd/include/amdgpu_ptl.h
++++ b/drivers/gpu/drm/amd/include/amdgpu_ptl.h
+@@ -39,11 +39,18 @@ enum amdgpu_ptl_disable_source {
+ 	AMDGPU_PTL_DISABLE_PROFILER,
+ 	AMDGPU_PTL_DISABLE_MAX,
+ };
++
++enum amdgpu_ptl_hw_supported_state {
++	AMDGPU_PTL_HW_UNINIT = 0,       /* Not yet initialized */
++	AMDGPU_PTL_HW_SUPPORTED,        /* Initialized and supported */
++	AMDGPU_PTL_HW_NOT_SUPPORTED,    /* Initialized and not supported */
++};
++
+ struct amdgpu_ptl {
+ 	enum amdgpu_ptl_fmt		fmt1;
+ 	enum amdgpu_ptl_fmt		fmt2;
+ 	bool				enabled;
+-	bool				hw_supported;
++	enum amdgpu_ptl_hw_supported_state hw_supported_state;
+ 	bool				permanently_disabled;
+ 	/* PTL disable reference counting */
+ 	atomic_t			disable_ref;
+-- 
+2.55.0
+

@@ -1,0 +1,50 @@
+From 8efd87051c3a2a054519955ca401229f4e84b310 Mon Sep 17 00:00:00 2001
+From: Puranjay Mohan <puranjay@kernel.org>
+Date: Tue, 4 Aug 2026 06:45:53 -0700
+Subject: [PATCH 11035/15333] bpf: Correct the overflow check comment in
+ bpf_iter_num_next()
+
+The comment on the s->cur + 1 >= s->end check claims the (s64) cast is
+needed to avoid overflow when s->cur == s->end == INT_MAX. It isn't:
+s->cur + 1 is computed in int and wraps before the cast, so the cast
+changes nothing (INT_MAX + 1 compares the same either way).
+
+The wraparound is the point. bpf_iter_num_new() sets s->cur = start - 1,
+which wraps to INT_MAX for start == INT_MIN, and the wrapping s->cur + 1
+brings it back to start. (s64)s->cur + 1 would instead break iterators
+starting at INT_MIN.
+
+Drop the cast and reword the comment. No functional change; the wrap is
+well-defined under -fno-strict-overflow.
+
+Signed-off-by: Puranjay Mohan <puranjay@kernel.org>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Link: https://lore.kernel.org/bpf/20260804134601.2305303-2-puranjay@kernel.org
+---
+ kernel/bpf/bpf_iter.c | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/kernel/bpf/bpf_iter.c b/kernel/bpf/bpf_iter.c
+index f5eaeb2493d4..b235e117e206 100644
+--- a/kernel/bpf/bpf_iter.c
++++ b/kernel/bpf/bpf_iter.c
+@@ -802,12 +802,11 @@ __bpf_kfunc int *bpf_iter_num_next(struct bpf_iter_num* it)
+ {
+ 	struct bpf_iter_num_kern *s = (void *)it;
+ 
+-	/* check failed initialization or if we are done (same behavior);
+-	 * need to be careful about overflow, so convert to s64 for checks,
+-	 * e.g., if s->cur == s->end == INT_MAX, we can't just do
+-	 * s->cur + 1 >= s->end
++	/*
++	 * s->cur < s->end while iterating, else s->cur == s->end == 0; the signed
++	 * s->cur + 1 >= s->end holds even when s->cur + 1 wraps (start == INT_MIN).
+ 	 */
+-	if ((s64)(s->cur + 1) >= s->end) {
++	if (s->cur + 1 >= s->end) {
+ 		s->cur = s->end = 0;
+ 		return NULL;
+ 	}
+-- 
+2.55.0
+

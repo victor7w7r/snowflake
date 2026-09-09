@@ -1,0 +1,77 @@
+From da85966dfd23a3b03e00ee3bce6ad301f0a2b229 Mon Sep 17 00:00:00 2001
+From: Aaron Tomlin <atomlin@atomlin.com>
+Date: Sun, 19 Jul 2026 15:10:00 -0400
+Subject: [PATCH 06892/15333] perf trace: Format instruction pointer fields as
+ hexadecimal
+
+Provide a helper function trace__field_is_ip() in
+trace__fprintf_tp_fields() to ensure that tracepoint fields representing
+instruction pointers such as "__probe_ip", "caller_ip", and
+"call_site" are always formatted as hexadecimal memory addresses rather
+than signed integers.
+
+For example, when running a kmem:kfree tracepoint:
+
+    # perf trace --show-cpu --event kmem:kfree --max-event 1
+
+    Before this change, "call_site" was represented as a signed integer:
+      0.000 [003] xfce4-terminal/2201 kmem:kfree(call_site: -1714572588, ptr: 0xffff8afee0303000)
+
+    After this change, "call_site" is correctly represented in hexadecimal:
+      0.000 [003] xfce4-terminal/2201 kmem:kfree(call_site: 0xffffffff99cf1194, ptr: 0xffff8afee0303000)
+
+This improves the readability of perf trace output by making code
+addresses straightforward to parse and map to kernel symbols.
+
+Signed-off-by: Aaron Tomlin <atomlin@atomlin.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/builtin-trace.c | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/tools/perf/builtin-trace.c b/tools/perf/builtin-trace.c
+index e47b5ae4e82a..310ee8df33eb 100644
+--- a/tools/perf/builtin-trace.c
++++ b/tools/perf/builtin-trace.c
+@@ -3224,6 +3224,13 @@ static unsigned char bitmap_byte(const unsigned long *mask, int byte_idx)
+ 	return b_val;
+ }
+ 
++static bool trace__field_is_ip(const char *name)
++{
++	return !strcmp(name, "__probe_ip") ||
++	       !strcmp(name, "caller_ip") ||
++	       !strcmp(name, "call_site");
++}
++
+ static size_t trace__fprintf_tp_fields(struct trace *trace, struct perf_sample *sample,
+ 				       struct thread *thread, void *augmented_args, int augmented_args_size)
+ {
+@@ -3236,6 +3243,7 @@ static size_t trace__fprintf_tp_fields(struct trace *trace, struct perf_sample *
+ 	size_t printed = 0, btf_printed;
+ 	unsigned long val;
+ 	u8 bit = 1;
++	bool is_probe_ip;
+ 	struct syscall_arg syscall_arg = {
+ 		.augmented = {
+ 			.size = augmented_args_size,
+@@ -3323,9 +3331,14 @@ static size_t trace__fprintf_tp_fields(struct trace *trace, struct perf_sample *
+ 		 * Suppress it by default to avoid cluttering the output.
+ 		 * If verbose mode is enabled, ensure it is formatted as a
+ 		 * hexadecimal memory address rather than a signed integer.
++		 *
++		 * caller_ip and call_site are also expected to be instruction
++		 * pointers and should always be represented in hexadecimal.
+ 		 */
+-		if (evsel__is_probe(evsel) && !strcmp(field->name, "__probe_ip")) {
+-			if (!verbose)
++		is_probe_ip = evsel__is_probe(evsel) && !strcmp(field->name, "__probe_ip");
++
++		if (is_probe_ip || trace__field_is_ip(field->name)) {
++			if (is_probe_ip && !verbose)
+ 				continue;
+ 
+ 			printed += scnprintf(bf + printed, size - printed,
+-- 
+2.55.0
+

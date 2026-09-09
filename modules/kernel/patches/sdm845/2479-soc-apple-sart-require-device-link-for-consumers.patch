@@ -1,0 +1,52 @@
+From 36887b488b253c99660a7cef52bb1202820bfdae Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Tue, 16 Jun 2026 08:53:46 +0800
+Subject: [PATCH 02479/15333] soc: apple: sart: require device link for
+ consumers
+
+devm_apple_sart_get() obtains the supplier platform device and attempts
+to create a runtime-PM device link to it, but it ignores device_link_add()
+failure.  A consumer can then continue without the dependency that keeps
+the SART supplier ordered and runtime-PM reachable.
+
+Treat a failed device link as an error and drop the supplier device
+reference before returning.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Reviewed-by: Joshua Peisach <jpeisach@ubuntu.com>
+Link: https://patch.msgid.link/20260616005346.7862-1-pengpeng@iscas.ac.cn
+Signed-off-by: Sven Peter <sven@kernel.org>
+---
+ drivers/soc/apple/sart.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/soc/apple/sart.c b/drivers/soc/apple/sart.c
+index 9eaf3febb382..66b99955b395 100644
+--- a/drivers/soc/apple/sart.c
++++ b/drivers/soc/apple/sart.c
+@@ -218,6 +218,7 @@ struct apple_sart *devm_apple_sart_get(struct device *dev)
+ {
+ 	struct device_node *sart_node;
+ 	struct platform_device *sart_pdev;
++	struct device_link *link;
+ 	struct apple_sart *sart;
+ 
+ 	sart_node = of_parse_phandle(dev->of_node, "apple,sart", 0);
+@@ -236,8 +237,12 @@ struct apple_sart *devm_apple_sart_get(struct device *dev)
+ 		return ERR_PTR(-EPROBE_DEFER);
+ 	}
+ 
+-	device_link_add(dev, &sart_pdev->dev,
+-			DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_SUPPLIER);
++	link = device_link_add(dev, &sart_pdev->dev,
++			       DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_SUPPLIER);
++	if (!link) {
++		put_device(&sart_pdev->dev);
++		return ERR_PTR(-ENODEV);
++	}
+ 
+ 	put_device(&sart_pdev->dev);
+ 
+-- 
+2.55.0
+

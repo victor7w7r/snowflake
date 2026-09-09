@@ -1,0 +1,41 @@
+From dc9edf5878286beb140c401f4e0c3549d529049a Mon Sep 17 00:00:00 2001
+From: Arun Raghavan <arunr@valvesoftware.com>
+Date: Mon, 3 Aug 2026 15:07:52 -0700
+Subject: [PATCH 10518/15333] ALSA: hda/core: Log stream DMA errors on
+ interrupt
+
+The stream descriptor status register reports FIFO and descriptor
+errors, but these are currently cleared silently along with the rest
+of the interrupt status. Log them, rate-limited, so DMA problems are
+visible instead of only manifesting as audible glitches.
+
+Observed on some AMD GPU HDMI audio controllers under specific low power
+circumstances.
+
+Signed-off-by: Arun Raghavan <arunr@valvesoftware.com>
+Cc: Arun Raghavan <arun@arunraghavan.net>
+Link: https://patch.msgid.link/20260803-master-v1-1-9bcedb736978@valvesoftware.com
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/hda/core/controller.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/sound/hda/core/controller.c b/sound/hda/core/controller.c
+index 32048ef32d96..78855ac357c6 100644
+--- a/sound/hda/core/controller.c
++++ b/sound/hda/core/controller.c
+@@ -688,6 +688,11 @@ int snd_hdac_bus_handle_stream_irq(struct hdac_bus *bus, unsigned int status,
+ 			sd_status = snd_hdac_stream_readb(azx_dev, SD_STS);
+ 			snd_hdac_stream_writeb(azx_dev, SD_STS, SD_INT_MASK);
+ 			handled |= 1 << azx_dev->index;
++			if (sd_status & (SD_INT_FIFO_ERR | SD_INT_DESC_ERR)) {
++				dev_warn_ratelimited(bus->dev,
++						"stream %u dma error: 0x%02x\n",
++						azx_dev->index, sd_status);
++			}
+ 			if ((!azx_dev->substream && !azx_dev->cstream) ||
+ 			    !azx_dev->running || !(sd_status & SD_INT_COMPLETE))
+ 				continue;
+-- 
+2.55.0
+

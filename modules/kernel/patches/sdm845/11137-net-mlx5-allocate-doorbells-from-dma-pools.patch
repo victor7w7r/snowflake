@@ -1,0 +1,226 @@
+From c29235677f5e3645e7d7324c5d51aaa78ee9b006 Mon Sep 17 00:00:00 2001
+From: Nimrod Oren <noren@nvidia.com>
+Date: Mon, 3 Aug 2026 16:25:19 +0300
+Subject: [PATCH 11137/15333] net/mlx5: allocate doorbells from dma pools
+
+Allocate doorbells from dma pools instead of the pgdir allocator.
+Doorbell records remain cache-line sized coherent DMA allocations, but
+their sub-allocation is now handled by the common mlx5 DMA pool
+infrastructure.
+
+This also makes doorbell allocation honor the requested NUMA node when
+reusing existing backing pages. The old pgdir allocator used the
+requested node only when allocating a new pgdir page; later
+allocations scanned one global pgdir list and could take any pgdir with
+a free entry, even if that page had been allocated for a different
+NUMA node. Selecting the per-node DMA pool before sub-allocation keeps
+reused doorbell records on pages allocated for the requested node.
+
+Signed-off-by: Nimrod Oren <noren@nvidia.com>
+Reviewed-by: Dragos Tatulea <dtatulea@nvidia.com>
+Signed-off-by: Tariq Toukan <tariqt@nvidia.com>
+Link: https://patch.msgid.link/20260803132520.2891860-3-tariqt@nvidia.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ .../net/ethernet/mellanox/mlx5/core/alloc.c   | 111 +++---------------
+ .../net/ethernet/mellanox/mlx5/core/main.c    |   4 -
+ include/linux/mlx5/driver.h                   |   5 +-
+ 3 files changed, 18 insertions(+), 102 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/alloc.c b/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
+index 3c9938068c56..3975c726d35c 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/alloc.c
+@@ -48,13 +48,6 @@
+ #define MLX5_FRAG_BUF_POOLS_NUM \
+ 	(PAGE_SHIFT - MLX5_FRAG_BUF_POOL_MIN_BLOCK_SHIFT + 1)
+ 
+-struct mlx5_db_pgdir {
+-	struct list_head	list;
+-	unsigned long	       *bitmap;
+-	__be32		       *db_page;
+-	dma_addr_t		db_dma;
+-};
+-
+ struct mlx5_dma_pool {
+ 	/* Protects page_list and per-page allocation bitmaps. */
+ 	struct mutex lock;
+@@ -481,106 +474,36 @@ int mlx5_db_pools_init(struct mlx5_core_dev *dev)
+ 	return 0;
+ }
+ 
+-static struct mlx5_db_pgdir *mlx5_alloc_db_pgdir(struct mlx5_core_dev *dev,
+-						 int node)
+-{
+-	u32 db_per_page = PAGE_SIZE / cache_line_size();
+-	struct mlx5_db_pgdir *pgdir;
+-
+-	pgdir = kzalloc_node(sizeof(*pgdir), GFP_KERNEL, node);
+-	if (!pgdir)
+-		return NULL;
+-
+-	pgdir->bitmap = bitmap_zalloc_node(db_per_page, GFP_KERNEL, node);
+-	if (!pgdir->bitmap) {
+-		kfree(pgdir);
+-		return NULL;
+-	}
+-
+-	bitmap_fill(pgdir->bitmap, db_per_page);
+-
+-	pgdir->db_page = mlx5_dma_zalloc_coherent_node(dev, PAGE_SIZE,
+-						       &pgdir->db_dma, node);
+-	if (!pgdir->db_page) {
+-		bitmap_free(pgdir->bitmap);
+-		kfree(pgdir);
+-		return NULL;
+-	}
+-
+-	return pgdir;
+-}
+-
+-static int mlx5_alloc_db_from_pgdir(struct mlx5_db_pgdir *pgdir,
+-				    struct mlx5_db *db)
++int mlx5_db_alloc_node(struct mlx5_core_dev *dev, struct mlx5_db *db, int node)
+ {
+-	u32 db_per_page = PAGE_SIZE / cache_line_size();
++	struct mlx5_dma_pool_page *page;
++	struct mlx5_dma_pool *pool;
++	unsigned long idx;
+ 	int offset;
+-	int i;
+-
+-	i = find_first_bit(pgdir->bitmap, db_per_page);
+-	if (i >= db_per_page)
+-		return -ENOMEM;
+ 
+-	__clear_bit(i, pgdir->bitmap);
++	node = node == NUMA_NO_NODE ? numa_mem_id() : node;
+ 
+-	db->u.pgdir = pgdir;
+-	db->index   = i;
+-	offset = db->index * cache_line_size();
+-	db->db      = pgdir->db_page + offset / sizeof(*pgdir->db_page);
+-	db->dma     = pgdir->db_dma  + offset;
++	pool = dev->priv.db_node_pools[node];
++	page = mlx5_dma_pool_alloc(pool, &idx);
++	if (!page)
++		return -ENOMEM;
+ 
+-	db->db[0] = 0;
+-	db->db[1] = 0;
++	offset = idx << pool->block_shift;
++	db->u.pool_page = page;
++	db->index = idx;
++	db->db = (__be32 *)((u8 *)page->buf + offset);
++	db->dma = page->dma + offset;
+ 
+ 	return 0;
+ }
+-
+-int mlx5_db_alloc_node(struct mlx5_core_dev *dev, struct mlx5_db *db, int node)
+-{
+-	struct mlx5_db_pgdir *pgdir;
+-	int ret = 0;
+-
+-	mutex_lock(&dev->priv.pgdir_mutex);
+-
+-	list_for_each_entry(pgdir, &dev->priv.pgdir_list, list)
+-		if (!mlx5_alloc_db_from_pgdir(pgdir, db))
+-			goto out;
+-
+-	pgdir = mlx5_alloc_db_pgdir(dev, node);
+-	if (!pgdir) {
+-		ret = -ENOMEM;
+-		goto out;
+-	}
+-
+-	list_add(&pgdir->list, &dev->priv.pgdir_list);
+-
+-	/* This should never fail -- we just allocated an empty page: */
+-	WARN_ON(mlx5_alloc_db_from_pgdir(pgdir, db));
+-
+-out:
+-	mutex_unlock(&dev->priv.pgdir_mutex);
+-
+-	return ret;
+-}
+ EXPORT_SYMBOL_GPL(mlx5_db_alloc_node);
+ 
+ void mlx5_db_free(struct mlx5_core_dev *dev, struct mlx5_db *db)
+ {
+-	u32 db_per_page = PAGE_SIZE / cache_line_size();
+-
+-	mutex_lock(&dev->priv.pgdir_mutex);
+-
+-	__set_bit(db->index, db->u.pgdir->bitmap);
+-
+-	if (bitmap_full(db->u.pgdir->bitmap, db_per_page)) {
+-		dma_free_coherent(mlx5_core_dma_dev(dev), PAGE_SIZE,
+-				  db->u.pgdir->db_page, db->u.pgdir->db_dma);
+-		list_del(&db->u.pgdir->list);
+-		bitmap_free(db->u.pgdir->bitmap);
+-		kfree(db->u.pgdir);
+-	}
++	struct mlx5_dma_pool_page *page = db->u.pool_page;
++	struct mlx5_dma_pool *pool = page->pool;
+ 
+-	mutex_unlock(&dev->priv.pgdir_mutex);
++	mlx5_dma_pool_free(pool, page, db->index);
+ }
+ EXPORT_SYMBOL_GPL(mlx5_db_free);
+ 
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/main.c b/drivers/net/ethernet/mellanox/mlx5/core/main.c
+index b3cb090b5677..5f28d906c35b 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/main.c
++++ b/drivers/net/ethernet/mellanox/mlx5/core/main.c
+@@ -1819,8 +1819,6 @@ int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
+ 	INIT_LIST_HEAD(&priv->bfregs.wc_head.list);
+ 
+ 	mutex_init(&priv->alloc_mutex);
+-	mutex_init(&priv->pgdir_mutex);
+-	INIT_LIST_HEAD(&priv->pgdir_list);
+ 
+ 	priv->numa_node = dev_to_node(mlx5_core_dma_dev(dev));
+ 	priv->dbg.dbg_root = debugfs_create_dir(dev_name(dev->device),
+@@ -1900,7 +1898,6 @@ int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
+ 	mlx5_frag_buf_pools_cleanup(dev);
+ err_frag_buf_pools_init:
+ 	debugfs_remove(dev->priv.dbg.dbg_root);
+-	mutex_destroy(&priv->pgdir_mutex);
+ 	mutex_destroy(&priv->alloc_mutex);
+ 	mutex_destroy(&priv->bfregs.wc_head.lock);
+ 	mutex_destroy(&priv->bfregs.reg_head.lock);
+@@ -1926,7 +1923,6 @@ void mlx5_mdev_uninit(struct mlx5_core_dev *dev)
+ 	mlx5_db_pools_cleanup(dev);
+ 	mlx5_frag_buf_pools_cleanup(dev);
+ 	debugfs_remove_recursive(dev->priv.dbg.dbg_root);
+-	mutex_destroy(&priv->pgdir_mutex);
+ 	mutex_destroy(&priv->alloc_mutex);
+ 	mutex_destroy(&priv->bfregs.wc_head.lock);
+ 	mutex_destroy(&priv->bfregs.reg_head.lock);
+diff --git a/include/linux/mlx5/driver.h b/include/linux/mlx5/driver.h
+index 4246d6d904ba..2c56bb1d676d 100644
+--- a/include/linux/mlx5/driver.h
++++ b/include/linux/mlx5/driver.h
+@@ -599,9 +599,6 @@ struct mlx5_priv {
+ 	struct mutex            alloc_mutex;
+ 	int                     numa_node;
+ 
+-	struct mutex            pgdir_mutex;
+-	struct list_head        pgdir_list;
+-
+ 	struct mlx5_frag_buf_node_pools **frag_buf_node_pools;
+ 	struct mlx5_dma_pool **db_node_pools;
+ 	/* end: alloc stuff */
+@@ -808,7 +805,7 @@ struct mlx5_core_dev {
+ struct mlx5_db {
+ 	__be32			*db;
+ 	union {
+-		struct mlx5_db_pgdir		*pgdir;
++		struct mlx5_dma_pool_page	*pool_page;
+ 		struct mlx5_ib_user_db_page	*user_page;
+ 	}			u;
+ 	dma_addr_t		dma;
+-- 
+2.55.0
+

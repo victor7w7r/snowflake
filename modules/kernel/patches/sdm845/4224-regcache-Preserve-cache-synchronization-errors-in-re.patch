@@ -1,0 +1,91 @@
+From 85da24aac16ab70c77a763e42e52fc3a782fb21c Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Mon, 13 Jul 2026 12:03:11 +0700
+Subject: [PATCH 04224/15333] regcache: Preserve cache synchronization errors
+ in regcache_sync()
+
+regcache_sync() currently stores the return value from both cache
+synchronization and selector register rewriting in the same variable.
+As a result, a successful selector register rewrite can overwrite an
+earlier cache synchronization error, causing regcache_sync() to return
+success even though synchronization failed.
+
+Track the two operations with separate return variables and preserve the
+cache synchronization error. Errors from rewriting selector registers are
+returned only if cache synchronization completed successfully.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260713050312.38729-2-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/base/regmap/regcache.c | 23 ++++++++++++-----------
+ 1 file changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/base/regmap/regcache.c b/drivers/base/regmap/regcache.c
+index aa8f2efed779..040fd60c0d59 100644
+--- a/drivers/base/regmap/regcache.c
++++ b/drivers/base/regmap/regcache.c
+@@ -401,7 +401,8 @@ static int rbtree_all(const void *key, const struct rb_node *node)
+  */
+ int regcache_sync(struct regmap *map)
+ {
+-	int ret = 0;
++	int sync_ret = 0;
++	int selector_ret = 0;
+ 	unsigned int i;
+ 	const char *name;
+ 	bool bypass;
+@@ -426,21 +427,21 @@ int regcache_sync(struct regmap *map)
+ 	/* Apply any patch first */
+ 	map->cache_bypass = true;
+ 	for (i = 0; i < map->patch_regs; i++) {
+-		ret = _regmap_write(map, map->patch[i].reg, map->patch[i].def);
+-		if (ret != 0) {
++		sync_ret = _regmap_write(map, map->patch[i].reg, map->patch[i].def);
++		if (sync_ret != 0) {
+ 			dev_err(map->dev, "Failed to write %x = %x: %d\n",
+-				map->patch[i].reg, map->patch[i].def, ret);
++				map->patch[i].reg, map->patch[i].def, sync_ret);
+ 			goto out;
+ 		}
+ 	}
+ 	map->cache_bypass = false;
+ 
+ 	if (map->cache_ops->sync)
+-		ret = map->cache_ops->sync(map, 0, map->max_register);
++		sync_ret = map->cache_ops->sync(map, 0, map->max_register);
+ 	else
+-		ret = regcache_default_sync(map, 0, map->max_register);
++		sync_ret = regcache_default_sync(map, 0, map->max_register);
+ 
+-	if (ret == 0)
++	if (sync_ret == 0)
+ 		map->cache_dirty = false;
+ 
+ out:
+@@ -462,10 +463,10 @@ int regcache_sync(struct regmap *map)
+ 		if (regcache_read(map, this->selector_reg, &i) != 0)
+ 			continue;
+ 
+-		ret = _regmap_write(map, this->selector_reg, i);
+-		if (ret != 0) {
++		selector_ret = _regmap_write(map, this->selector_reg, i);
++		if (selector_ret != 0) {
+ 			dev_err(map->dev, "Failed to write %x = %x: %d\n",
+-				this->selector_reg, i, ret);
++				this->selector_reg, i, selector_ret);
+ 			break;
+ 		}
+ 	}
+@@ -476,7 +477,7 @@ int regcache_sync(struct regmap *map)
+ 
+ 	trace_regcache_sync(map, name, "stop");
+ 
+-	return ret;
++	return sync_ret ? sync_ret : selector_ret;
+ }
+ EXPORT_SYMBOL_GPL(regcache_sync);
+ 
+-- 
+2.55.0
+

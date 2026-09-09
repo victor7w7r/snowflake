@@ -1,0 +1,44 @@
+From 0c5fb7bc6177b8903196dcb3f4b211d51bbd0ae6 Mon Sep 17 00:00:00 2001
+From: Tim Wiederhake <twiederh@redhat.com>
+Date: Wed, 15 Jul 2026 14:03:40 +0200
+Subject: [PATCH 07467/15333] KVM: x86: Replace delivery mode TODO with
+ WARN_ON_ONCE
+
+The default case in __apic_accept_irq() has carried a printk("TODO:
+unsupported delivery mode") since the original LAPIC emulation was
+introduced in commit 97222cc83163 ("KVM: Emulate local APIC in
+kernel").
+
+The switch now handles all eight delivery modes defined by the x86
+architecture and is always constrained to the three-bit field
+defined by the architecture: Either by masking with APIC_MODE_MASK,
+by three-bit bitfield widths in the IOAPIC and MSI structs, or by
+using APIC_DM_* constants directly.
+
+Replace the unreachable printk with WARN_ON_ONCE(1) to match the
+existing pattern for impossible defaults elsewhere in the same file.
+
+Signed-off-by: Tim Wiederhake <twiederh@redhat.com>
+Link: https://patch.msgid.link/20260715120341.2661873-1-twiederh@redhat.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/lapic.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/arch/x86/kvm/lapic.c b/arch/x86/kvm/lapic.c
+index 0354db0f2c0f..a6c06c69832e 100644
+--- a/arch/x86/kvm/lapic.c
++++ b/arch/x86/kvm/lapic.c
+@@ -1497,8 +1497,7 @@ static int __apic_accept_irq(struct kvm_lapic *apic, int delivery_mode,
+ 		break;
+ 
+ 	default:
+-		printk(KERN_ERR "TODO: unsupported delivery mode %x\n",
+-		       delivery_mode);
++		WARN_ON_ONCE(1);
+ 		break;
+ 	}
+ 	return result;
+-- 
+2.55.0
+

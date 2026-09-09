@@ -1,0 +1,43 @@
+From cb144c2f67128abfa5c7ba33318617d19f192156 Mon Sep 17 00:00:00 2001
+From: Guixin Liu <kanie@linux.alibaba.com>
+Date: Tue, 4 Aug 2026 10:18:59 +0800
+Subject: [PATCH 13021/15333] nvme-pci: release descriptor pools on probe
+ failure
+
+The per-NUMA-node descriptor DMA pools are created lazily from
+nvme_init_hctx_common() once the admin tag set is allocated, but they are
+only destroyed in nvme_remove() via nvme_release_descriptor_pools(). Any
+probe failure after the admin tag set has been allocated unwinds through
+the out_disable label and nvme_pci_free_ctrl(), neither of which releases
+the pools, leaking the dma_pool objects.
+
+Release the descriptor pools in the out_disable error path. It must not
+be added to nvme_pci_free_ctrl(), as that would double-free against
+nvme_remove() on the normal teardown path.
+
+Fixes: d977506f8863 ("nvme-pci: make PRP list DMA pools per-NUMA-node")
+Signed-off-by: Guixin Liu <kanie@linux.alibaba.com>
+Reviewed-by: Hannes Reinecke <hare@suse.de>
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Reviewed-by: Kanchan Joshi <joshi.k@samsung.com>
+Reviewed-by: Nilay Shroff <nilay@linux.ibm.com>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/pci.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/nvme/host/pci.c b/drivers/nvme/host/pci.c
+index 375e7a1fc91d..ef06627b21ee 100644
+--- a/drivers/nvme/host/pci.c
++++ b/drivers/nvme/host/pci.c
+@@ -3854,6 +3854,7 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+ 	nvme_dev_remove_admin(dev);
+ 	nvme_dbbuf_dma_free(dev);
+ 	nvme_free_queues(dev, 0);
++	nvme_release_descriptor_pools(dev);
+ out_release_iod_mempool:
+ 	mempool_destroy(dev->dmavec_mempool);
+ out_dev_unmap:
+-- 
+2.55.0
+

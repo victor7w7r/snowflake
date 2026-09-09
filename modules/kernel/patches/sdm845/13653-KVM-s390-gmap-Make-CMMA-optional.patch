@@ -1,0 +1,108 @@
+From ce4bee6a91da37948dd3c4de9dea0aa9fbdece16 Mon Sep 17 00:00:00 2001
+From: Steffen Eiden <seiden@linux.ibm.com>
+Date: Mon, 3 Aug 2026 13:39:42 +0200
+Subject: [PATCH 13653/15333] KVM: s390: gmap: Make CMMA optional
+
+Guard guest CMMA behind `KVM_S390_MANAGES_S390_GUEST`. This enables
+other KVM implementations to use gmap without implementing CMMA.
+
+No functional changes.
+
+Signed-off-by: Steffen Eiden <seiden@linux.ibm.com>
+Reviewed-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+Signed-off-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+---
+ arch/s390/kvm/gmap/dat.c  | 2 ++
+ arch/s390/kvm/gmap/dat.h  | 2 ++
+ arch/s390/kvm/gmap/gmap.c | 2 ++
+ arch/s390/kvm/gmap/gmap.h | 4 +++-
+ 4 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/arch/s390/kvm/gmap/dat.c b/arch/s390/kvm/gmap/dat.c
+index d0790b3c96f4..f4bad4333d8e 100644
+--- a/arch/s390/kvm/gmap/dat.c
++++ b/arch/s390/kvm/gmap/dat.c
+@@ -1060,6 +1060,7 @@ int dat_set_prefix_notif_bit(union asce asce, gfn_t gfn)
+ 	return 0;
+ }
+ 
++#if KVM_S390_MANAGES_S390_GUEST
+ /**
+  * dat_perform_essa() - Perform ESSA actions on the PGSTE.
+  * @asce: The asce to operate on.
+@@ -1337,3 +1338,4 @@ int dat_set_cmma_bits(struct kvm_s390_mmu_cache *mc, union asce asce, gfn_t gfn,
+ 	}
+ 	return _dat_walk_gfn_range(gfn, gfn + count, asce, &ops, DAT_WALK_IGN_HOLES, &state);
+ }
++#endif /* KVM_S390_MANAGES_S390_GUEST */
+diff --git a/arch/s390/kvm/gmap/dat.h b/arch/s390/kvm/gmap/dat.h
+index 2cc072168810..4f11f9bbd83a 100644
+--- a/arch/s390/kvm/gmap/dat.h
++++ b/arch/s390/kvm/gmap/dat.h
+@@ -552,12 +552,14 @@ int dat_set_slot(struct kvm_s390_mmu_cache *mc, union asce asce, gfn_t start, gf
+ int dat_set_prefix_notif_bit(union asce asce, gfn_t gfn);
+ bool dat_test_age_gfn(union asce asce, gfn_t start, gfn_t end);
+ 
++#if KVM_S390_MANAGES_S390_GUEST
+ int dat_perform_essa(union asce asce, gfn_t gfn, int orc, union essa_state *state, bool *dirty);
+ long dat_reset_cmma(union asce asce, gfn_t start_gfn);
+ int dat_peek_cmma(gfn_t start, union asce asce, unsigned int *count, u8 *values);
+ int dat_get_cmma(union asce asce, gfn_t *start, unsigned int *count, u8 *values, atomic64_t *rem);
+ int dat_set_cmma_bits(struct kvm_s390_mmu_cache *mc, union asce asce, gfn_t gfn,
+ 		      unsigned long count, unsigned long mask, const uint8_t *bits);
++#endif /* KVM_S390_MANAGES_S390_GUEST */
+ 
+ int kvm_s390_mmu_cache_topup(struct kvm_s390_mmu_cache *mc);
+ 
+diff --git a/arch/s390/kvm/gmap/gmap.c b/arch/s390/kvm/gmap/gmap.c
+index 0c5e20f033b6..96feaebf09c8 100644
+--- a/arch/s390/kvm/gmap/gmap.c
++++ b/arch/s390/kvm/gmap/gmap.c
+@@ -1101,6 +1101,7 @@ int gmap_protect_rmap(struct kvm_s390_mmu_cache *mc, struct gmap *sg, gfn_t p_gf
+ 	return 0;
+ }
+ 
++#if KVM_S390_MANAGES_S390_GUEST
+ static long __set_cmma_clean_pte(union pte *ptep, gfn_t gfn, gfn_t next, struct dat_walk *walk)
+ {
+ 	union pgste pgste;
+@@ -1144,6 +1145,7 @@ void _gmap_set_cmma_all(struct gmap *gmap, bool dirty)
+ 		cond_resched();
+ 	} while (gfn);
+ }
++#endif /* KVM_S390_MANAGES_S390_GUEST */
+ 
+ static void gmap_unshadow_level(struct gmap *sg, gfn_t r_gfn, int level)
+ {
+diff --git a/arch/s390/kvm/gmap/gmap.h b/arch/s390/kvm/gmap/gmap.h
+index 328a81c72c7a..6f3bf11d2166 100644
+--- a/arch/s390/kvm/gmap/gmap.h
++++ b/arch/s390/kvm/gmap/gmap.h
+@@ -110,7 +110,6 @@ int gmap_insert_rmap(struct kvm_s390_mmu_cache *mc, struct gmap *sg, gfn_t p_gfn
+ 		     gfn_t r_gfn, int level);
+ int gmap_protect_rmap(struct kvm_s390_mmu_cache *mc, struct gmap *sg, gfn_t p_gfn, gfn_t r_gfn,
+ 		      kvm_pfn_t pfn, int level, bool wr);
+-void _gmap_set_cmma_all(struct gmap *gmap, bool dirty);
+ void _gmap_handle_vsie_unshadow_event(struct gmap *parent, gfn_t gfn);
+ struct gmap *gmap_create_shadow(struct kvm_s390_mmu_cache *mc, struct gmap *gmap,
+ 				union asce asce, int edat_level);
+@@ -204,6 +203,8 @@ static inline bool pte_needs_unshadow(union pte oldpte, union pte newpte, union
+ 	return !newpte.h.p || !newpte.s.pr;
+ }
+ 
++#if KVM_S390_MANAGES_S390_GUEST
++void _gmap_set_cmma_all(struct gmap *gmap, bool dirty);
+ static inline void gmap_set_cmma_all_dirty(struct gmap *gmap)
+ {
+ 	_gmap_set_cmma_all(gmap, true);
+@@ -213,6 +214,7 @@ static inline void gmap_set_cmma_all_clean(struct gmap *gmap)
+ {
+ 	_gmap_set_cmma_all(gmap, false);
+ }
++#endif /* KVM_S390_MANAGES_S390_GUEST */
+ 
+ static inline union pgste _gmap_ptep_xchg(struct gmap *gmap, union pte *ptep, union pte newpte,
+ 					  union pgste pgste, gfn_t gfn, bool needs_lock)
+-- 
+2.55.0
+

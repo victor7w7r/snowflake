@@ -1,0 +1,56 @@
+From b0b85837193b106ab4d7beef5991d442694c66da Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Fri, 17 Jul 2026 16:00:26 +0800
+Subject: [PATCH 07245/15333] crypto: stm32 - Remove redundant dev_err()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_threaded_irq() automatically logs
+detailed error messages on failure. Remove the now-redundant
+driver-specific dev_err() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Acked-by: Maxime Méré <maxime.mere@foss.st.com>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ drivers/crypto/stm32/stm32-cryp.c | 4 +---
+ drivers/crypto/stm32/stm32-hash.c | 4 +---
+ 2 files changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/crypto/stm32/stm32-cryp.c b/drivers/crypto/stm32/stm32-cryp.c
+index b79877099942..3fc2db290b0f 100644
+--- a/drivers/crypto/stm32/stm32-cryp.c
++++ b/drivers/crypto/stm32/stm32-cryp.c
+@@ -2590,10 +2590,8 @@ static int stm32_cryp_probe(struct platform_device *pdev)
+ 	ret = devm_request_threaded_irq(dev, irq, stm32_cryp_irq,
+ 					stm32_cryp_irq_thread, IRQF_ONESHOT,
+ 					dev_name(dev), cryp);
+-	if (ret) {
+-		dev_err(dev, "Cannot grab IRQ\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	cryp->clk = devm_clk_get(dev, NULL);
+ 	if (IS_ERR(cryp->clk)) {
+diff --git a/drivers/crypto/stm32/stm32-hash.c b/drivers/crypto/stm32/stm32-hash.c
+index dada5951082c..e6a1e9b9f88d 100644
+--- a/drivers/crypto/stm32/stm32-hash.c
++++ b/drivers/crypto/stm32/stm32-hash.c
+@@ -2356,10 +2356,8 @@ static int stm32_hash_probe(struct platform_device *pdev)
+ 						stm32_hash_irq_thread,
+ 						IRQF_ONESHOT,
+ 						dev_name(dev), hdev);
+-		if (ret) {
+-			dev_err(dev, "Cannot grab IRQ\n");
++		if (ret)
+ 			return ret;
+-		}
+ 	} else {
+ 		dev_info(dev, "No IRQ, use polling mode\n");
+ 		hdev->polled = true;
+-- 
+2.55.0
+

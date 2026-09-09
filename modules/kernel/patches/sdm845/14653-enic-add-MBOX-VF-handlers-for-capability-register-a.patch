@@ -1,0 +1,405 @@
+From 72b65c94058e4ad9a03885d91c7a5f8a5c1d39be Mon Sep 17 00:00:00 2001
+From: Satish Kharat <satishkh@cisco.com>
+Date: Wed, 12 Aug 2026 05:48:08 -0700
+Subject: [PATCH 14653/15333] enic: add MBOX VF handlers for capability,
+ register and link state
+
+Implement VF-side mailbox message processing for SR-IOV V2
+admin channel communication.
+
+VF receive handlers:
+  - VF_CAPABILITY_REPLY: store PF protocol version, signal
+    completion
+  - VF_REGISTER_REPLY: mark VF as registered, signal completion
+  - VF_UNREGISTER_REPLY: mark VF as unregistered, signal
+    completion
+  - PF_LINK_STATE_NOTIF: update carrier state via
+    netif_carrier_on/off, send ACK back to PF
+
+VF initiation functions for the probe-time handshake:
+  - enic_mbox_vf_capability_check: send capability request,
+    wait for PF reply via completion
+  - enic_mbox_vf_register: send register request, wait for
+    PF confirmation via completion
+  - enic_mbox_vf_unregister: send unregister request, wait
+    for PF confirmation
+
+The wait helper (enic_mbox_wait_reply) uses
+wait_for_completion_timeout, signaled when the admin ISR and
+CQ-poll/dispatch workqueue pipeline delivers the reply message.
+
+mbox_expected_reply is written by the request thread and read by the
+admin CQ poll/dispatch context that runs the receive handlers; annotate
+those accesses with READ_ONCE()/WRITE_ONCE() under the
+single-outstanding-reply invariant.
+
+Signed-off-by: Satish Kharat <satishkh@cisco.com>
+Link: https://patch.msgid.link/20260812-enic-sriov-v2-admin-channel-v2-v13-8-b3809e448aba@cisco.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/cisco/enic/enic.h      |  12 +
+ drivers/net/ethernet/cisco/enic/enic_mbox.c | 277 +++++++++++++++++++-
+ drivers/net/ethernet/cisco/enic/enic_mbox.h |   3 +
+ 3 files changed, 291 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/cisco/enic/enic.h b/drivers/net/ethernet/cisco/enic/enic.h
+index 6261f3e8e4f8..db4d52a4158f 100644
+--- a/drivers/net/ethernet/cisco/enic/enic.h
++++ b/drivers/net/ethernet/cisco/enic/enic.h
+@@ -258,6 +258,8 @@ struct enic {
+ 	u32 tx_coalesce_usecs;
+ 	u16 num_vfs;
+ 	enum enic_vf_type vf_type;
++	bool vf_registered;
++	u32 pf_cap_version;
+ 	unsigned int enable_count;
+ 	spinlock_t enic_api_lock;
+ 	bool enic_api_busy;
+@@ -313,6 +315,16 @@ struct enic {
+ 	/* MBOX protocol state — mbox_lock serializes admin WQ sends */
+ 	struct mutex mbox_lock;
+ 	u64 mbox_msg_num;
++	/* MBOX request-reply state.  mbox_expected_reply is written and
++	 * cleared by the process-context request helpers (capability/register/
++	 * unregister) and only read by the admin_msg_work receive handlers, so
++	 * it is annotated with READ_ONCE()/WRITE_ONCE() rather than locked:
++	 * only one request is in flight at a time (requesters run under RTNL or
++	 * single-threaded probe/remove), so each request is serialized and its
++	 * reply completes mbox_comp before the next request is issued.
++	 */
++	struct completion mbox_comp;
++	u8 mbox_expected_reply;
+ 
+ 	/* PF: per-VF MBOX state, allocated when SRIOV V2 is enabled */
+ 	struct enic_vf_state {
+diff --git a/drivers/net/ethernet/cisco/enic/enic_mbox.c b/drivers/net/ethernet/cisco/enic/enic_mbox.c
+index d1b13737e77d..6b8b44c4d96e 100644
+--- a/drivers/net/ethernet/cisco/enic/enic_mbox.c
++++ b/drivers/net/ethernet/cisco/enic/enic_mbox.c
+@@ -5,6 +5,7 @@
+ #include <linux/netdevice.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/delay.h>
++#include <linux/completion.h>
+ 
+ #include "vnic_dev.h"
+ #include "vnic_wq.h"
+@@ -142,6 +143,16 @@ int enic_mbox_send_msg(struct enic *enic, u8 msg_type, u16 dst_vnic_id,
+ 	return err;
+ }
+ 
++static int enic_mbox_wait_reply(struct enic *enic, unsigned long timeout_ms)
++{
++	unsigned long left;
++
++	left = wait_for_completion_timeout(&enic->mbox_comp,
++					   msecs_to_jiffies(timeout_ms));
++
++	return left ? 0 : -ETIMEDOUT;
++}
++
+ int enic_mbox_send_link_state(struct enic *enic, u16 vf_id, u32 link_state)
+ {
+ 	struct enic_mbox_pf_link_state_notif_msg notif = {};
+@@ -313,6 +324,166 @@ static void enic_mbox_pf_process_msg(struct enic *enic,
+ 			    hdr->msg_type, vf_id, err);
+ }
+ 
++static void enic_mbox_vf_handle_capability_reply(struct enic *enic,
++						 void *payload)
++{
++	struct enic_mbox_vf_capability_reply_msg *reply = payload;
++
++	if (READ_ONCE(enic->mbox_expected_reply) != ENIC_MBOX_VF_CAPABILITY_REPLY) {
++		netdev_warn(enic->netdev,
++			    "MBOX: stale capability reply (expected %u), drop\n",
++			    READ_ONCE(enic->mbox_expected_reply));
++		return;
++	}
++
++	if (le16_to_cpu(reply->reply.ret_major) == 0)
++		enic->pf_cap_version = le32_to_cpu(reply->version);
++	else
++		netdev_warn(enic->netdev,
++			    "MBOX: PF rejected capability request: %u/%u\n",
++			    le16_to_cpu(reply->reply.ret_major),
++			    le16_to_cpu(reply->reply.ret_minor));
++	complete(&enic->mbox_comp);
++}
++
++static void enic_mbox_vf_handle_register_reply(struct enic *enic,
++					       void *payload)
++{
++	struct enic_mbox_vf_register_reply_msg *reply = payload;
++
++	if (READ_ONCE(enic->mbox_expected_reply) != ENIC_MBOX_VF_REGISTER_REPLY) {
++		netdev_warn(enic->netdev,
++			    "MBOX: stale register reply (expected %u), drop\n",
++			    READ_ONCE(enic->mbox_expected_reply));
++		return;
++	}
++
++	if (le16_to_cpu(reply->reply.ret_major)) {
++		netdev_warn(enic->netdev,
++			    "MBOX: VF register rejected by PF: %u/%u\n",
++			    le16_to_cpu(reply->reply.ret_major),
++			    le16_to_cpu(reply->reply.ret_minor));
++	} else {
++		enic->vf_registered = true;
++	}
++	complete(&enic->mbox_comp);
++}
++
++static void enic_mbox_vf_handle_unregister_reply(struct enic *enic,
++						 void *payload)
++{
++	struct enic_mbox_vf_register_reply_msg *reply = payload;
++
++	if (READ_ONCE(enic->mbox_expected_reply) != ENIC_MBOX_VF_UNREGISTER_REPLY) {
++		netdev_warn(enic->netdev,
++			    "MBOX: stale unregister reply (expected %u), drop\n",
++			    READ_ONCE(enic->mbox_expected_reply));
++		return;
++	}
++
++	if (le16_to_cpu(reply->reply.ret_major)) {
++		netdev_warn(enic->netdev,
++			    "MBOX: VF unregister rejected by PF: %u/%u\n",
++			    le16_to_cpu(reply->reply.ret_major),
++			    le16_to_cpu(reply->reply.ret_minor));
++	} else {
++		enic->vf_registered = false;
++	}
++	complete(&enic->mbox_comp);
++}
++
++static void enic_mbox_vf_handle_link_state(struct enic *enic, void *payload)
++{
++	struct enic_mbox_pf_link_state_notif_msg *notif = payload;
++	struct enic_mbox_pf_link_state_ack_msg ack = {};
++	int err;
++
++	switch (le32_to_cpu(notif->link_state)) {
++	case ENIC_MBOX_LINK_STATE_ENABLE:
++		if (!netif_carrier_ok(enic->netdev))
++			netif_carrier_on(enic->netdev);
++		netdev_dbg(enic->netdev, "MBOX: link state -> UP\n");
++		break;
++	case ENIC_MBOX_LINK_STATE_DISABLE:
++		if (netif_carrier_ok(enic->netdev))
++			netif_carrier_off(enic->netdev);
++		netdev_dbg(enic->netdev, "MBOX: link state -> DOWN\n");
++		break;
++	default:
++		netdev_warn(enic->netdev, "MBOX: unknown link state %u\n",
++			    le32_to_cpu(notif->link_state));
++		ack.ack.ret_major = cpu_to_le16(ENIC_MBOX_ERR_GENERIC);
++		break;
++	}
++
++	err = enic_mbox_send_msg(enic, ENIC_MBOX_PF_LINK_STATE_ACK,
++				 ENIC_MBOX_DST_PF, &ack, sizeof(ack));
++	if (err && net_ratelimit())
++		netdev_warn(enic->netdev,
++			    "MBOX: failed to send link state ACK: %d\n", err);
++}
++
++static bool enic_mbox_vf_payload_ok(struct enic *enic, u8 msg_type,
++				    u16 payload_len, size_t min_len)
++{
++	if (payload_len < min_len) {
++		netdev_warn(enic->netdev,
++			    "MBOX: short payload for type %u (%u < %zu)\n",
++			    msg_type, payload_len, min_len);
++		return false;
++	}
++	return true;
++}
++
++static void enic_mbox_vf_process_msg(struct enic *enic,
++				     struct enic_mbox_hdr *hdr, void *payload,
++				     u16 payload_len)
++{
++	switch (hdr->msg_type) {
++	case ENIC_MBOX_VF_CAPABILITY_REPLY: {
++		size_t exp = sizeof(struct enic_mbox_vf_capability_reply_msg);
++
++		if (!enic_mbox_vf_payload_ok(enic, hdr->msg_type,
++					     payload_len, exp))
++			return;
++		enic_mbox_vf_handle_capability_reply(enic, payload);
++		break;
++	}
++	case ENIC_MBOX_VF_REGISTER_REPLY: {
++		size_t exp = sizeof(struct enic_mbox_vf_register_reply_msg);
++
++		if (!enic_mbox_vf_payload_ok(enic, hdr->msg_type,
++					     payload_len, exp))
++			return;
++		enic_mbox_vf_handle_register_reply(enic, payload);
++		break;
++	}
++	case ENIC_MBOX_VF_UNREGISTER_REPLY: {
++		size_t exp = sizeof(struct enic_mbox_vf_register_reply_msg);
++
++		if (!enic_mbox_vf_payload_ok(enic, hdr->msg_type,
++					     payload_len, exp))
++			return;
++		enic_mbox_vf_handle_unregister_reply(enic, payload);
++		break;
++	}
++	case ENIC_MBOX_PF_LINK_STATE_NOTIF: {
++		size_t exp = sizeof(struct enic_mbox_pf_link_state_notif_msg);
++
++		if (!enic_mbox_vf_payload_ok(enic, hdr->msg_type,
++					     payload_len, exp))
++			return;
++		enic_mbox_vf_handle_link_state(enic, payload);
++		break;
++	}
++	default:
++		netdev_dbg(enic->netdev,
++			   "MBOX: VF unhandled msg type %u\n",
++			   hdr->msg_type);
++		break;
++	}
++}
++
+ static void enic_mbox_recv_handler(struct enic *enic, void *buf,
+ 				   unsigned int len)
+ {
+@@ -351,13 +522,117 @@ static void enic_mbox_recv_handler(struct enic *enic, void *buf,
+ 
+ 	payload = buf + sizeof(*hdr);
+ 
+-	if (enic->vf_state)
++	if (enic->vf_state) {
+ 		enic_mbox_pf_process_msg(enic, hdr, payload);
++	} else if (le16_to_cpu(hdr->src_vnic_id) == ENIC_MBOX_DST_PF) {
++		/* src_vnic_id was overwritten from the hardware-verified CQ
++		 * VLAN sender field, so a VF only accepts messages that the
++		 * adapter attributes to the PF.  Its sole admin-channel peer is
++		 * the PF; drop anything else as a spoofed notification.
++		 */
++		enic_mbox_vf_process_msg(enic, hdr, payload,
++					 msg_len - (u16)sizeof(*hdr));
++	} else if (net_ratelimit()) {
++		netdev_warn(enic->netdev,
++			    "MBOX: VF dropping non-PF message from vnic %u\n",
++			    le16_to_cpu(hdr->src_vnic_id));
++	}
++}
++
++int enic_mbox_vf_capability_check(struct enic *enic)
++{
++	struct enic_mbox_vf_capability_msg req = {};
++	int err;
++
++	enic->pf_cap_version = 0;
++	reinit_completion(&enic->mbox_comp);
++	WRITE_ONCE(enic->mbox_expected_reply, ENIC_MBOX_VF_CAPABILITY_REPLY);
++	req.version = cpu_to_le32(ENIC_MBOX_CAP_VERSION_1);
++
++	err = enic_mbox_send_msg(enic, ENIC_MBOX_VF_CAPABILITY_REQUEST,
++				 ENIC_MBOX_DST_PF, &req, sizeof(req));
++	if (err) {
++		WRITE_ONCE(enic->mbox_expected_reply, 0);
++		return err;
++	}
++
++	err = enic_mbox_wait_reply(enic, 3000);
++	WRITE_ONCE(enic->mbox_expected_reply, 0);
++	if (err) {
++		netdev_warn(enic->netdev,
++			    "MBOX: no capability reply from PF\n");
++		return err;
++	}
++
++	if (enic->pf_cap_version < ENIC_MBOX_CAP_VERSION_1) {
++		netdev_warn(enic->netdev,
++			    "MBOX: PF rejected capability request or reported unsupported version %u\n",
++			    enic->pf_cap_version);
++		return -EOPNOTSUPP;
++	}
++
++	return 0;
++}
++
++int enic_mbox_vf_register(struct enic *enic)
++{
++	int err;
++
++	enic->vf_registered = false;
++	reinit_completion(&enic->mbox_comp);
++	WRITE_ONCE(enic->mbox_expected_reply, ENIC_MBOX_VF_REGISTER_REPLY);
++
++	err = enic_mbox_send_msg(enic, ENIC_MBOX_VF_REGISTER_REQUEST,
++				 ENIC_MBOX_DST_PF, NULL, 0);
++	if (err) {
++		WRITE_ONCE(enic->mbox_expected_reply, 0);
++		return err;
++	}
++
++	err = enic_mbox_wait_reply(enic, 3000);
++	WRITE_ONCE(enic->mbox_expected_reply, 0);
++	if (err) {
++		netdev_warn(enic->netdev,
++			    "MBOX: VF registration with PF timed out\n");
++		return err;
++	}
++
++	if (!enic->vf_registered)
++		return -ENODEV;
++
++	return 0;
++}
++
++int enic_mbox_vf_unregister(struct enic *enic)
++{
++	int err;
++
++	if (!enic->vf_registered)
++		return 0;
++
++	reinit_completion(&enic->mbox_comp);
++	WRITE_ONCE(enic->mbox_expected_reply, ENIC_MBOX_VF_UNREGISTER_REPLY);
++
++	err = enic_mbox_send_msg(enic, ENIC_MBOX_VF_UNREGISTER_REQUEST,
++				 ENIC_MBOX_DST_PF, NULL, 0);
++	if (err) {
++		WRITE_ONCE(enic->mbox_expected_reply, 0);
++		return err;
++	}
++
++	err = enic_mbox_wait_reply(enic, 3000);
++	WRITE_ONCE(enic->mbox_expected_reply, 0);
++	if (err)
++		return err;
++	if (enic->vf_registered)
++		return -EACCES;
++	return 0;
+ }
+ 
+ void enic_mbox_init(struct enic *enic)
+ {
+ 	enic->mbox_msg_num = 0;
+ 	mutex_init(&enic->mbox_lock);
++	init_completion(&enic->mbox_comp);
+ 	enic->admin_rq_handler = enic_mbox_recv_handler;
+ }
+diff --git a/drivers/net/ethernet/cisco/enic/enic_mbox.h b/drivers/net/ethernet/cisco/enic/enic_mbox.h
+index f1de67db1273..15e30ee2b0ed 100644
+--- a/drivers/net/ethernet/cisco/enic/enic_mbox.h
++++ b/drivers/net/ethernet/cisco/enic/enic_mbox.h
+@@ -88,5 +88,8 @@ void enic_mbox_init(struct enic *enic);
+ int enic_mbox_send_msg(struct enic *enic, u8 msg_type, u16 dst_vnic_id,
+ 		       void *payload, u16 payload_len);
+ int enic_mbox_send_link_state(struct enic *enic, u16 vf_id, u32 link_state);
++int enic_mbox_vf_capability_check(struct enic *enic);
++int enic_mbox_vf_register(struct enic *enic);
++int enic_mbox_vf_unregister(struct enic *enic);
+ 
+ #endif /* _ENIC_MBOX_H_ */
+-- 
+2.55.0
+

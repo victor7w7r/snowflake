@@ -1,0 +1,57 @@
+From 15792e49564853c7bc7b977c9712a982d4eb57c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Vojt=C4=9Bch=20Kr=C3=A1tk=C3=BD?= <vo.kratky@seznam.cz>
+Date: Sun, 26 Jul 2026 17:21:07 +0200
+Subject: [PATCH 07501/15333] iio: chemical: bme680: Use dev_err_probe()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Used dev_err_probe() instead of dev_err() to simplify error handling.
+
+Signed-off-by: Vojtěch Krátký <vo.kratky@seznam.cz>
+Reviewed-by: Siratul Islam <siratul.islam@linux.dev>
+Signed-off-by: Jonathan Cameron <jonathan.cameron@oss.qualcomm.com>
+---
+ drivers/iio/chemical/bme680_i2c.c | 7 +++----
+ drivers/iio/chemical/bme680_spi.c | 7 +++----
+ 2 files changed, 6 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/iio/chemical/bme680_i2c.c b/drivers/iio/chemical/bme680_i2c.c
+index 4cc0e491621a..c34d67bcb2a3 100644
+--- a/drivers/iio/chemical/bme680_i2c.c
++++ b/drivers/iio/chemical/bme680_i2c.c
+@@ -24,10 +24,9 @@ static int bme680_i2c_probe(struct i2c_client *client)
+ 	const char *name = NULL;
+ 
+ 	regmap = devm_regmap_init_i2c(client, &bme680_regmap_config);
+-	if (IS_ERR(regmap)) {
+-		dev_err(&client->dev, "Failed to register i2c regmap %ld\n", PTR_ERR(regmap));
+-		return PTR_ERR(regmap);
+-	}
++	if (IS_ERR(regmap))
++		return dev_err_probe(&client->dev, PTR_ERR(regmap),
++				     "Failed to register i2c regmap\n");
+ 
+ 	if (id)
+ 		name = id->name;
+diff --git a/drivers/iio/chemical/bme680_spi.c b/drivers/iio/chemical/bme680_spi.c
+index c55c6c514594..2175b9564fa1 100644
+--- a/drivers/iio/chemical/bme680_spi.c
++++ b/drivers/iio/chemical/bme680_spi.c
+@@ -121,10 +121,9 @@ static int bme680_spi_probe(struct spi_device *spi)
+ 
+ 	regmap = devm_regmap_init(&spi->dev, &bme680_regmap_bus,
+ 				  bus_context, &bme680_regmap_config);
+-	if (IS_ERR(regmap)) {
+-		dev_err(&spi->dev, "Failed to register spi regmap %ld\n", PTR_ERR(regmap));
+-		return PTR_ERR(regmap);
+-	}
++	if (IS_ERR(regmap))
++		return dev_err_probe(&spi->dev, PTR_ERR(regmap),
++				     "Failed to register spi regmap\n");
+ 
+ 	return bme680_core_probe(&spi->dev, regmap, id->name);
+ }
+-- 
+2.55.0
+

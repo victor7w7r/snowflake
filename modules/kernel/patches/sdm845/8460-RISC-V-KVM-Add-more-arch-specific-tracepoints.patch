@@ -1,0 +1,274 @@
+From 50448161692b39a21eb99fa9da83b8085b0c36a2 Mon Sep 17 00:00:00 2001
+From: "Yuhang.Chen" <yhchen312@gmail.com>
+Date: Thu, 30 Jul 2026 14:57:11 +0800
+Subject: [PATCH 08460/15333] RISC-V: KVM: Add more arch-specific tracepoints
+
+Add RISC-V KVM tracepoints for events that are useful when debugging
+guest exits and in-kernel emulation paths. The existing kvm_entry and
+kvm_exit tracepoints are kept, with the kvm_entry PC format fixed to use
+zero-padded hexadecimal output.
+
+The newly added tracepoints cover:
+
+- kvm_vcpu_exit for synchronous guest traps
+- kvm_vcpu_irq for VS-mode interrupt set/clear
+- kvm_mmio_emulate for MMIO load/store emulation
+
+kvm_vcpu_exit reports the full trap context (sepc/scause/stval/htval/
+htinst) so userspace can filter by scause, and is placed after the
+interrupt early-return so it fires only for synchronous traps.
+kvm_vcpu_irq covers every set/unset_interrupt() caller from a single
+place.
+
+Example trace output:
+
+kvm_vcpu_exit:
+VCPU: 0, SEPC: 0x80200000, SCAUSE: 0x17,
+STVAL: 0x10000000, HTVAL: 0x4000000, HTINST: 0x2023
+
+kvm_mmio_emulate:
+VCPU: 0, Store MMIO at 0x10000000, len 4, insn 0x2023, sepc 0x80200000
+
+kvm_vcpu_irq:
+VCPU: 0, IRQ: 10, level: 1
+
+Testing:
+
+A QEMU-based test program was used to exercise:
+
+- Guest page faults
+- MMIO emulation
+- IRQ injection
+
+Verified trace output generation for:
+
+- kvm_vcpu_exit
+- kvm_vcpu_irq
+- kvm_mmio_emulate
+
+Assisted-by: YuanSheng:deepseek-v4-pro
+Co-developed-by: Quan Zhou <zhouquan@iscas.ac.cn>
+Signed-off-by: Quan Zhou <zhouquan@iscas.ac.cn>
+Signed-off-by: Yuhang.Chen <yhchen312@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+Link: https://lore.kernel.org/r/20260730065711.3721489-1-yhchen312@gmail.com
+Signed-off-by: Anup Patel <anup@brainfault.org>
+---
+ arch/riscv/kvm/trace.h     | 81 +++++++++++++++++++++++++++++++++++++-
+ arch/riscv/kvm/vcpu.c      |  4 ++
+ arch/riscv/kvm/vcpu_exit.c |  4 ++
+ arch/riscv/kvm/vcpu_insn.c | 13 +++++-
+ 4 files changed, 98 insertions(+), 4 deletions(-)
+
+diff --git a/arch/riscv/kvm/trace.h b/arch/riscv/kvm/trace.h
+index 3d54175d805c..23a5fd1b686e 100644
+--- a/arch/riscv/kvm/trace.h
++++ b/arch/riscv/kvm/trace.h
+@@ -25,7 +25,7 @@ TRACE_EVENT(kvm_entry,
+ 		__entry->pc	= vcpu->arch.guest_context.sepc;
+ 	),
+ 
+-	TP_printk("PC: 0x016%lx", __entry->pc)
++	TP_printk("PC: 0x%016lx", __entry->pc)
+ );
+ 
+ TRACE_EVENT(kvm_exit,
+@@ -56,7 +56,84 @@ TRACE_EVENT(kvm_exit,
+ 		__entry->htinst)
+ );
+ 
+-#endif /* _TRACE_RSICV_KVM_H */
++TRACE_EVENT(kvm_mmio_emulate,
++	TP_PROTO(unsigned long vcpu_id, unsigned long sepc, unsigned long insn,
++		 unsigned long fault_addr, bool write, int len),
++	TP_ARGS(vcpu_id, sepc, insn, fault_addr, write, len),
++
++	TP_STRUCT__entry(
++		__field(unsigned long, vcpu_id)
++		__field(unsigned long, sepc)
++		__field(unsigned long, insn)
++		__field(unsigned long, fault_addr)
++		__field(bool, write)
++		__field(int, len)
++	),
++
++	TP_fast_assign(
++		__entry->vcpu_id	= vcpu_id;
++		__entry->sepc		= sepc;
++		__entry->insn		= insn;
++		__entry->fault_addr	= fault_addr;
++		__entry->write		= write;
++		__entry->len		= len;
++	),
++
++	TP_printk("VCPU: %lu, %s MMIO at 0x%lx, len %d, insn 0x%lx, sepc 0x%lx",
++		  __entry->vcpu_id, __entry->write ? "Store" : "Load",
++		  __entry->fault_addr, __entry->len, __entry->insn,
++		  __entry->sepc)
++);
++
++TRACE_EVENT(kvm_vcpu_exit,
++	TP_PROTO(unsigned long vcpu_id, unsigned long sepc, unsigned long scause,
++		 unsigned long stval, unsigned long htval, unsigned long htinst),
++	TP_ARGS(vcpu_id, sepc, scause, stval, htval, htinst),
++
++	TP_STRUCT__entry(
++		__field(unsigned long, vcpu_id)
++		__field(unsigned long, sepc)
++		__field(unsigned long, scause)
++		__field(unsigned long, stval)
++		__field(unsigned long, htval)
++		__field(unsigned long, htinst)
++	),
++
++	TP_fast_assign(
++		__entry->vcpu_id	= vcpu_id;
++		__entry->sepc		= sepc;
++		__entry->scause		= scause;
++		__entry->stval		= stval;
++		__entry->htval		= htval;
++		__entry->htinst		= htinst;
++	),
++
++	TP_printk("VCPU: %lu, SEPC: 0x%lx, SCAUSE: 0x%lx, STVAL: 0x%lx, HTVAL: 0x%lx, HTINST: 0x%lx",
++		  __entry->vcpu_id, __entry->sepc, __entry->scause,
++		  __entry->stval, __entry->htval, __entry->htinst)
++);
++
++TRACE_EVENT(kvm_vcpu_irq,
++	TP_PROTO(unsigned long vcpu_id, unsigned int irq, int level),
++	TP_ARGS(vcpu_id, irq, level),
++
++	TP_STRUCT__entry(
++		__field(unsigned long, vcpu_id)
++		__field(unsigned int, irq)
++		__field(int, level)
++	),
++
++	TP_fast_assign(
++		__entry->vcpu_id	= vcpu_id;
++		__entry->irq		= irq;
++		__entry->level		= level;
++	),
++
++	TP_printk("VCPU: %lu, IRQ: %u, level: %d",
++		  __entry->vcpu_id, __entry->irq, __entry->level)
++);
++
++#endif /* _TRACE_KVM_H */
+ 
+ #undef TRACE_INCLUDE_PATH
+ #define TRACE_INCLUDE_PATH .
+diff --git a/arch/riscv/kvm/vcpu.c b/arch/riscv/kvm/vcpu.c
+index f8514e072607..56dc0af2f9db 100644
+--- a/arch/riscv/kvm/vcpu.c
++++ b/arch/riscv/kvm/vcpu.c
+@@ -440,6 +440,8 @@ int kvm_riscv_vcpu_set_interrupt(struct kvm_vcpu *vcpu, unsigned int irq)
+ 	__set_bit(irq, vcpu->arch.irqs_pending_mask);
+ 	raw_spin_unlock_irqrestore(&vcpu->arch.irqs_pending_lock, flags);
+ 
++	trace_kvm_vcpu_irq(vcpu->vcpu_id, irq, 1);
++
+ 	kvm_vcpu_kick(vcpu);
+ 
+ 	return 0;
+@@ -466,6 +468,8 @@ int kvm_riscv_vcpu_unset_interrupt(struct kvm_vcpu *vcpu, unsigned int irq)
+ 	__set_bit(irq, vcpu->arch.irqs_pending_mask);
+ 	raw_spin_unlock_irqrestore(&vcpu->arch.irqs_pending_lock, flags);
+ 
++	trace_kvm_vcpu_irq(vcpu->vcpu_id, irq, 0);
++
+ 	return 0;
+ }
+ 
+diff --git a/arch/riscv/kvm/vcpu_exit.c b/arch/riscv/kvm/vcpu_exit.c
+index 9985c3bd2557..88e0c369b354 100644
+--- a/arch/riscv/kvm/vcpu_exit.c
++++ b/arch/riscv/kvm/vcpu_exit.c
+@@ -11,6 +11,7 @@
+ #include <asm/insn-def.h>
+ #include <asm/kvm_mmu.h>
+ #include <asm/kvm_nacl.h>
++#include "trace.h"
+ 
+ static int gstage_page_fault(struct kvm_vcpu *vcpu, struct kvm_run *run,
+ 			     struct kvm_cpu_trap *trap)
+@@ -220,6 +221,9 @@ int kvm_riscv_vcpu_exit(struct kvm_vcpu *vcpu, struct kvm_run *run,
+ 	if (trap->scause & CAUSE_IRQ_FLAG)
+ 		return 1;
+ 
++	trace_kvm_vcpu_exit(vcpu->vcpu_id, trap->sepc, trap->scause,
++			    trap->stval, trap->htval, trap->htinst);
++
+ 	/* Handle guest traps */
+ 	ret = -EFAULT;
+ 	run->exit_reason = KVM_EXIT_UNKNOWN;
+diff --git a/arch/riscv/kvm/vcpu_insn.c b/arch/riscv/kvm/vcpu_insn.c
+index 6506411a3f78..adbbb59a0f36 100644
+--- a/arch/riscv/kvm/vcpu_insn.c
++++ b/arch/riscv/kvm/vcpu_insn.c
+@@ -9,6 +9,7 @@
+ 
+ #include <asm/cpufeature.h>
+ #include <asm/insn.h>
++#include "trace.h"
+ 
+ struct insn_func {
+ 	unsigned long mask;
+@@ -375,7 +376,7 @@ int kvm_riscv_vcpu_mmio_load(struct kvm_vcpu *vcpu, struct kvm_run *run,
+ 			     unsigned long htinst)
+ {
+ 	u8 data_buf[8];
+-	unsigned long insn;
++	unsigned long insn, raw_insn;
+ 	int shift = 0, len = 0, insn_len = 0;
+ 	struct kvm_cpu_trap utrap = { 0 };
+ 	struct kvm_cpu_context *ct = &vcpu->arch.guest_context;
+@@ -405,6 +406,7 @@ int kvm_riscv_vcpu_mmio_load(struct kvm_vcpu *vcpu, struct kvm_run *run,
+ 		}
+ 		insn_len = INSN_LEN(insn);
+ 	}
++	raw_insn = insn;
+ 
+ 	/* Decode length of MMIO and shift */
+ 	if ((insn & INSN_MASK_LW) == INSN_MATCH_LW) {
+@@ -453,6 +455,9 @@ int kvm_riscv_vcpu_mmio_load(struct kvm_vcpu *vcpu, struct kvm_run *run,
+ 	if (fault_addr & (len - 1))
+ 		return -EIO;
+ 
++	trace_kvm_mmio_emulate(vcpu->vcpu_id, ct->sepc, raw_insn, fault_addr,
++			       false, len);
++
+ 	/* Save instruction decode info */
+ 	vcpu->arch.mmio_decode.insn = insn;
+ 	vcpu->arch.mmio_decode.insn_len = insn_len;
+@@ -502,7 +507,7 @@ int kvm_riscv_vcpu_mmio_store(struct kvm_vcpu *vcpu, struct kvm_run *run,
+ 	u32 data32;
+ 	u64 data64;
+ 	ulong data;
+-	unsigned long insn;
++	unsigned long insn, raw_insn;
+ 	int len = 0, insn_len = 0;
+ 	struct kvm_cpu_trap utrap = { 0 };
+ 	struct kvm_cpu_context *ct = &vcpu->arch.guest_context;
+@@ -532,6 +537,7 @@ int kvm_riscv_vcpu_mmio_store(struct kvm_vcpu *vcpu, struct kvm_run *run,
+ 		}
+ 		insn_len = INSN_LEN(insn);
+ 	}
++	raw_insn = insn;
+ 
+ 	data = GET_RS2(insn, &vcpu->arch.guest_context);
+ 	data8 = data16 = data32 = data64 = data;
+@@ -570,6 +576,9 @@ int kvm_riscv_vcpu_mmio_store(struct kvm_vcpu *vcpu, struct kvm_run *run,
+ 	if (fault_addr & (len - 1))
+ 		return -EIO;
+ 
++	trace_kvm_mmio_emulate(vcpu->vcpu_id, ct->sepc, raw_insn, fault_addr,
++			       true, len);
++
+ 	/* Save instruction decode info */
+ 	vcpu->arch.mmio_decode.insn = insn;
+ 	vcpu->arch.mmio_decode.insn_len = insn_len;
+-- 
+2.55.0
+

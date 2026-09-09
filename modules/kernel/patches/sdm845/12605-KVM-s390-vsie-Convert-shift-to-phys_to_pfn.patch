@@ -1,0 +1,32 @@
+From 38926a93f7792da96681bf40051c3fe8095435f0 Mon Sep 17 00:00:00 2001
+From: Christoph Schlameuss <schlameuss@linux.ibm.com>
+Date: Fri, 7 Aug 2026 11:57:44 +0200
+Subject: [PATCH 12605/15333] KVM: s390: vsie: Convert shift to phys_to_pfn()
+
+Make the code slightly more readable by using phys_to_pfn instead of an
+open coded shift.
+
+Signed-off-by: Christoph Schlameuss <schlameuss@linux.ibm.com>
+Reviewed-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+[borntraeger@linux.ibm.com: improve commit message]
+Signed-off-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+---
+ arch/s390/kvm/vsie.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/s390/kvm/vsie.c b/arch/s390/kvm/vsie.c
+index 3e956c7faa4b..937f9c99bc00 100644
+--- a/arch/s390/kvm/vsie.c
++++ b/arch/s390/kvm/vsie.c
+@@ -701,7 +701,7 @@ static int pin_guest_page(struct kvm *kvm, gpa_t gpa, hpa_t *hpa)
+ /* Unpins a page previously pinned via pin_guest_page, marking it as dirty. */
+ static void unpin_guest_page(struct kvm *kvm, gpa_t gpa, hpa_t hpa)
+ {
+-	kvm_release_page_dirty(pfn_to_page(hpa >> PAGE_SHIFT));
++	kvm_release_page_dirty(pfn_to_page(phys_to_pfn(hpa)));
+ 	/* mark the page always as dirty for migration */
+ 	mark_page_dirty(kvm, gpa_to_gfn(gpa));
+ }
+-- 
+2.55.0
+

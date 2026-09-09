@@ -1,0 +1,288 @@
+From bed01ca9e9cf8f8fea5352c07fa206cc3c106045 Mon Sep 17 00:00:00 2001
+From: Gary Guo <gary@garyguo.net>
+Date: Mon, 6 Jul 2026 13:44:24 +0100
+Subject: [PATCH 03943/15333] rust: io: remove `MmioOwned`
+
+`Io` trait is now very easy to implement. Thus, implement it on `Bar` and
+`IoMem` directly and remove the `MmioOwned` struct.
+
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Signed-off-by: Gary Guo <gary@garyguo.net>
+Reviewed-by: Daniel Almeida <daniel.almeida@collabora.com>
+Suggested-by: Danilo Krummrich <dakr@kernel.org>
+Link: https://rust-for-linux.zulipchat.com/#narrow/channel/288089-General/topic/Generic.20I.2FO.20backends/near/571198078
+Link: https://patch.msgid.link/20260706-io_projection-v6-11-72cd5d055d54@garyguo.net
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/kernel/devres.rs |  12 +++--
+ rust/kernel/io.rs     | 103 +-----------------------------------------
+ rust/kernel/io/mem.rs |  26 ++++++-----
+ rust/kernel/pci/io.rs |  16 +++----
+ 4 files changed, 32 insertions(+), 125 deletions(-)
+
+diff --git a/rust/kernel/devres.rs b/rust/kernel/devres.rs
+index aed0c994fd30..3545ffc5345d 100644
+--- a/rust/kernel/devres.rs
++++ b/rust/kernel/devres.rs
+@@ -68,8 +68,9 @@ struct Inner<T> {
+ ///     devres::Devres,
+ ///     io::{
+ ///         Io,
+-///         MmioOwned,
++///         Mmio,
+ ///         MmioRaw,
++///         MmioBackend,
+ ///         PhysAddr,
+ ///         Region, //
+ ///     },
+@@ -104,12 +105,13 @@ struct Inner<T> {
+ ///     }
+ /// }
+ ///
+-/// impl<const SIZE: usize> Deref for IoMem<SIZE> {
+-///    type Target = MmioOwned<SIZE>;
++/// impl<'a, const SIZE: usize> Io<'a> for &'a IoMem<SIZE> {
++///    type Backend = MmioBackend;
++///    type Target = Region<SIZE>;
+ ///
+-///    fn deref(&self) -> &Self::Target {
++///    fn as_view(self) -> Mmio<'a, Region<SIZE>> {
+ ///         // SAFETY: The memory range stored in `self` has been properly mapped in `Self::new`.
+-///         unsafe { MmioOwned::from_raw(&self.0) }
++///         unsafe { Mmio::from_raw(self.0) }
+ ///    }
+ /// }
+ /// # fn no_run(dev: &Device<Bound>) -> Result<(), Error> {
+diff --git a/rust/kernel/io.rs b/rust/kernel/io.rs
+index 82a3369ae110..729b64a385c3 100644
+--- a/rust/kernel/io.rs
++++ b/rust/kernel/io.rs
+@@ -99,8 +99,8 @@ fn size(p: *const Self) -> usize {
+ /// the represented MMIO region does exist or is properly mapped.
+ ///
+ /// Instead, the bus specific MMIO implementation must convert this raw representation into an
+-/// `MmioOwned` instance providing the actual memory accessors. Only by the conversion into an
+-/// `MmioOwned` structure any guarantees are given.
++/// `Mmio` instance providing the actual memory accessors. Only by the conversion into an `Mmio`
++/// structure any guarantees are given.
+ pub struct MmioRaw<T: ?Sized> {
+     /// Pointer is in I/O address space.
+     ///
+@@ -157,80 +157,6 @@ pub fn size(&self) -> usize {
+     }
+ }
+ 
+-/// IO-mapped memory region.
+-///
+-/// The creator (usually a subsystem / bus such as PCI) is responsible for creating the
+-/// mapping, performing an additional region request etc.
+-///
+-/// # Invariant
+-///
+-/// `addr` is the start and `maxsize` the length of valid I/O mapped memory region of size
+-/// `maxsize`.
+-///
+-/// # Examples
+-///
+-/// ```no_run
+-/// use kernel::{
+-///     bindings,
+-///     ffi::c_void,
+-///     io::{
+-///         Io,
+-///         MmioOwned,
+-///         MmioRaw,
+-///         PhysAddr,
+-///         Region,
+-///     },
+-/// };
+-/// use core::ops::Deref;
+-///
+-/// // See also `pci::Bar` for a real example.
+-/// struct IoMem<const SIZE: usize>(MmioRaw<Region<SIZE>>);
+-///
+-/// impl<const SIZE: usize> IoMem<SIZE> {
+-///     /// # Safety
+-///     ///
+-///     /// [`paddr`, `paddr` + `SIZE`) must be a valid MMIO region that is mappable into the CPUs
+-///     /// virtual address space.
+-///     unsafe fn new(paddr: usize) -> Result<Self>{
+-///         // SAFETY: By the safety requirements of this function [`paddr`, `paddr` + `SIZE`) is
+-///         // valid for `ioremap`.
+-///         let addr = unsafe { bindings::ioremap(paddr as PhysAddr, SIZE) };
+-///         if addr.is_null() {
+-///             return Err(ENOMEM);
+-///         }
+-///
+-///         Ok(IoMem(MmioRaw::new_region(addr as usize, SIZE)?))
+-///     }
+-/// }
+-///
+-/// impl<const SIZE: usize> Drop for IoMem<SIZE> {
+-///     fn drop(&mut self) {
+-///         // SAFETY: `self.0.addr()` is guaranteed to be properly mapped by `Self::new`.
+-///         unsafe { bindings::iounmap(self.0.addr() as *mut c_void); };
+-///     }
+-/// }
+-///
+-/// impl<const SIZE: usize> Deref for IoMem<SIZE> {
+-///    type Target = MmioOwned<SIZE>;
+-///
+-///    fn deref(&self) -> &Self::Target {
+-///         // SAFETY: The memory range stored in `self` has been properly mapped in `Self::new`.
+-///         unsafe { MmioOwned::from_raw(&self.0) }
+-///    }
+-/// }
+-///
+-///# fn no_run() -> Result<(), Error> {
+-/// // SAFETY: Invalid usage for example purposes.
+-/// let iomem = unsafe { IoMem::<{ core::mem::size_of::<u32>() }>::new(0xBAAAAAAD)? };
+-/// iomem.write32(0x42, 0x0);
+-/// assert!(iomem.try_write32(0x42, 0x0).is_ok());
+-/// assert!(iomem.try_write32(0x42, 0x4).is_err());
+-/// # Ok(())
+-/// # }
+-/// ```
+-#[repr(transparent)]
+-pub struct MmioOwned<const SIZE: usize = 0>(MmioRaw<Region<SIZE>>);
+-
+ /// Checks whether an access of type `U` at the given `base` and the given `offset`
+ /// is valid within this region.
+ ///
+@@ -958,31 +884,6 @@ fn io_write(view: <$backend as IoBackend>::View<'_, $ty>, value: $ty) {
+ #[cfg(CONFIG_64BIT)]
+ impl_mmio_io_capable!(MmioBackend, u64, readq, writeq);
+ 
+-impl<'a, const SIZE: usize> Io<'a> for &'a MmioOwned<SIZE> {
+-    type Backend = MmioBackend;
+-    type Target = Region<SIZE>;
+-
+-    #[inline]
+-    fn as_view(self) -> Mmio<'a, Self::Target> {
+-        // SAFETY: `Mmio` has same invariant as `MmioOwned`
+-        unsafe { Mmio::from_raw(self.0) }
+-    }
+-}
+-
+-impl<const SIZE: usize> MmioOwned<SIZE> {
+-    /// Converts an `MmioRaw` into an `MmioOwned` instance, providing the accessors to the MMIO
+-    /// mapping.
+-    ///
+-    /// # Safety
+-    ///
+-    /// Callers must ensure that `addr` is the start of a valid I/O mapped memory region of size
+-    /// `maxsize`.
+-    pub unsafe fn from_raw(raw: &MmioRaw<Region<SIZE>>) -> &Self {
+-        // SAFETY: `MmioOwned` is a transparent wrapper around `MmioRaw`.
+-        unsafe { &*core::ptr::from_ref(raw).cast() }
+-    }
+-}
+-
+ /// [`Mmio`] but using relaxed accessors.
+ ///
+ /// This type provides an implementation of [`Io`] that uses relaxed I/O MMIO operands instead of
+diff --git a/rust/kernel/io/mem.rs b/rust/kernel/io/mem.rs
+index 8f6c257c5b8e..d9b3189d09b4 100644
+--- a/rust/kernel/io/mem.rs
++++ b/rust/kernel/io/mem.rs
+@@ -2,8 +2,6 @@
+ 
+ //! Generic memory-mapped IO.
+ 
+-use core::ops::Deref;
+-
+ use crate::{
+     device::{
+         Bound,
+@@ -16,7 +14,9 @@
+             Region,
+             Resource, //
+         },
+-        MmioOwned,
++        Io,
++        Mmio,
++        MmioBackend,
+         MmioRaw, //
+     },
+     prelude::*,
+@@ -210,11 +210,13 @@ pub fn into_devres(self) -> Result<Devres<ExclusiveIoMem<'static, SIZE>>> {
+     }
+ }
+ 
+-impl<const SIZE: usize> Deref for ExclusiveIoMem<'_, SIZE> {
+-    type Target = MmioOwned<SIZE>;
++impl<'a, const SIZE: usize> Io<'a> for &'a ExclusiveIoMem<'_, SIZE> {
++    type Backend = MmioBackend;
++    type Target = super::Region<SIZE>;
+ 
+-    fn deref(&self) -> &Self::Target {
+-        &self.iomem
++    #[inline]
++    fn as_view(self) -> Mmio<'a, Self::Target> {
++        self.iomem.as_view()
+     }
+ }
+ 
+@@ -290,11 +292,13 @@ fn drop(&mut self) {
+     }
+ }
+ 
+-impl<const SIZE: usize> Deref for IoMem<'_, SIZE> {
+-    type Target = MmioOwned<SIZE>;
++impl<'a, const SIZE: usize> Io<'a> for &'a IoMem<'_, SIZE> {
++    type Backend = MmioBackend;
++    type Target = super::Region<SIZE>;
+ 
+-    fn deref(&self) -> &Self::Target {
++    #[inline]
++    fn as_view(self) -> Mmio<'a, Self::Target> {
+         // SAFETY: Safe as by the invariant of `IoMem`.
+-        unsafe { MmioOwned::from_raw(&self.io) }
++        unsafe { Mmio::from_raw(self.io) }
+     }
+ }
+diff --git a/rust/kernel/pci/io.rs b/rust/kernel/pci/io.rs
+index e67c1e3694fb..4be33ecb4192 100644
+--- a/rust/kernel/pci/io.rs
++++ b/rust/kernel/pci/io.rs
+@@ -11,16 +11,14 @@
+         Io,
+         IoBackend,
+         IoCapable,
+-        MmioOwned,
++        Mmio,
++        MmioBackend,
+         MmioRaw,
+         Region, //
+     },
+     prelude::*,
+     ptr::KnownSize, //
+ };
+-use core::{
+-    ops::Deref, //
+-};
+ 
+ /// Represents the size of a PCI configuration space.
+ ///
+@@ -269,12 +267,14 @@ fn drop(&mut self) {
+     }
+ }
+ 
+-impl<const SIZE: usize> Deref for Bar<'_, SIZE> {
+-    type Target = MmioOwned<SIZE>;
++impl<'a, const SIZE: usize> Io<'a> for &'a Bar<'_, SIZE> {
++    type Backend = MmioBackend;
++    type Target = crate::io::Region<SIZE>;
+ 
+-    fn deref(&self) -> &Self::Target {
++    #[inline]
++    fn as_view(self) -> Mmio<'a, Self::Target> {
+         // SAFETY: By the type invariant of `Self`, the MMIO range in `self.io` is properly mapped.
+-        unsafe { MmioOwned::from_raw(&self.io) }
++        unsafe { Mmio::from_raw(self.io) }
+     }
+ }
+ 
+-- 
+2.55.0
+

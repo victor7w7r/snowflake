@@ -1,0 +1,99 @@
+From 824b2c8473f1cb28fb4a0e107ac423ccc8d2da4a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Duje=20Mihanovi=C4=87?= <duje@dujemihanovic.xyz>
+Date: Sat, 13 Jun 2026 16:20:54 +0200
+Subject: [PATCH 08544/15333] mfd: 88pm886: Initialize the battery page
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Initialize the PMIC's battery page. The battery page registers are
+shared between Vbus regulator, charger, fuelgauge and camera flash
+blocks, hence the commonization of the page.
+
+Signed-off-by: Duje Mihanović <duje@dujemihanovic.xyz>
+Reviewed-by: Karel Balej <balejk@matfyz.cz>
+Link: https://patch.msgid.link/20260613-88pm886-vbus-v2-2-021dfb02c6bb@dujemihanovic.xyz
+Signed-off-by: Lee Jones <lee@kernel.org>
+---
+ drivers/mfd/88pm886.c       | 21 ++++++++++++++++++++-
+ include/linux/mfd/88pm886.h |  5 +++++
+ 2 files changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/mfd/88pm886.c b/drivers/mfd/88pm886.c
+index e411d8dee554..f8401d5e6dbe 100644
+--- a/drivers/mfd/88pm886.c
++++ b/drivers/mfd/88pm886.c
+@@ -16,6 +16,12 @@ static const struct regmap_config pm886_regmap_config = {
+ 	.max_register = PM886_REG_RTC_SPARE6,
+ };
+ 
++static const struct regmap_config pm886_regmap_battery_config = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = PM886_REG_CLS_CONFIG1,
++};
++
+ static const struct regmap_irq pm886_regmap_irqs[] = {
+ 	REGMAP_IRQ_REG(PM886_IRQ_ONKEY, 0, PM886_INT_ENA1_ONKEY),
+ };
+@@ -85,10 +91,11 @@ static int pm886_setup_irq(struct pm886_chip *chip,
+ 
+ static int pm886_probe(struct i2c_client *client)
+ {
++	struct regmap *regmap, *regmap_battery;
+ 	struct regmap_irq_chip_data *irq_data;
+ 	struct device *dev = &client->dev;
++	struct i2c_client *battery_page;
+ 	struct pm886_chip *chip;
+-	struct regmap *regmap;
+ 	unsigned int chip_id;
+ 	int err;
+ 
+@@ -112,6 +119,18 @@ static int pm886_probe(struct i2c_client *client)
+ 	if (chip->chip_id != chip_id)
+ 		return dev_err_probe(dev, -EINVAL, "Unsupported chip: 0x%x\n", chip_id);
+ 
++	battery_page = devm_i2c_new_dummy_device(dev, client->adapter,
++						 client->addr + PM886_PAGE_OFFSET_BATTERY);
++	if (IS_ERR(battery_page))
++		return dev_err_probe(dev, PTR_ERR(battery_page),
++				     "Failed to initialize battery page\n");
++
++	regmap_battery = devm_regmap_init_i2c(battery_page, &pm886_regmap_battery_config);
++	if (IS_ERR(regmap_battery))
++		return dev_err_probe(dev, PTR_ERR(regmap_battery),
++				     "Failed to initialize battery regmap\n");
++	chip->regmap_battery = regmap_battery;
++
+ 	err = pm886_setup_irq(chip, &irq_data);
+ 	if (err)
+ 		return err;
+diff --git a/include/linux/mfd/88pm886.h b/include/linux/mfd/88pm886.h
+index 38892ba7b8a4..2c24dd3032ab 100644
+--- a/include/linux/mfd/88pm886.h
++++ b/include/linux/mfd/88pm886.h
+@@ -11,6 +11,7 @@
+ 
+ #define PM886_PAGE_OFFSET_REGULATORS	1
+ #define PM886_PAGE_OFFSET_GPADC		2
++#define PM886_PAGE_OFFSET_BATTERY	3
+ 
+ #define PM886_REG_ID			0x00
+ 
+@@ -128,9 +129,13 @@
+ #define PM886_GPADC_BIAS_LEVELS		16
+ #define PM886_GPADC_INDEX_TO_BIAS_uA(i)	(1 + (i) * 5)
+ 
++/* Battery block register definitions */
++#define PM886_REG_CLS_CONFIG1		0x71
++
+ struct pm886_chip {
+ 	struct i2c_client *client;
+ 	unsigned int chip_id;
+ 	struct regmap *regmap;
++	struct regmap *regmap_battery;
+ };
+ #endif /* __MFD_88PM886_H */
+-- 
+2.55.0
+

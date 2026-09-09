@@ -1,0 +1,70 @@
+From 315a717c716eab4e8db1ec4ddd13d4b963bf73c6 Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Tue, 21 Jul 2026 01:33:38 +0000
+Subject: [PATCH 06296/15333] ASoC: mediatek: mt8192-mt6359-rt1015-rt5682: use
+ *dev in mt8192_mt6359_card_set_be_link()
+
+use *dev, instead of card->dev.
+No functional change, but is preparation for cleanup driver.
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Reviewed-by: AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>
+Link: https://patch.msgid.link/871pcxjfd9.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ .../mediatek/mt8192/mt8192-mt6359-rt1015-rt5682.c    | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/sound/soc/mediatek/mt8192/mt8192-mt6359-rt1015-rt5682.c b/sound/soc/mediatek/mt8192/mt8192-mt6359-rt1015-rt5682.c
+index 91c57765ab57..864b4d7228f5 100644
+--- a/sound/soc/mediatek/mt8192/mt8192-mt6359-rt1015-rt5682.c
++++ b/sound/soc/mediatek/mt8192/mt8192-mt6359-rt1015-rt5682.c
+@@ -1019,7 +1019,7 @@ static struct snd_soc_card mt8192_mt6359_rt1015p_rt5682x_card = {
+ 	.num_dapm_routes = ARRAY_SIZE(mt8192_mt6359_rt1015p_rt5682x_routes),
+ };
+ 
+-static int mt8192_mt6359_card_set_be_link(struct snd_soc_card *card,
++static int mt8192_mt6359_card_set_be_link(struct device *dev,
+ 					  struct snd_soc_dai_link *link,
+ 					  struct device_node *node,
+ 					  char *link_name)
+@@ -1027,9 +1027,9 @@ static int mt8192_mt6359_card_set_be_link(struct snd_soc_card *card,
+ 	int ret;
+ 
+ 	if (node && strcmp(link->name, link_name) == 0) {
+-		ret = snd_soc_of_get_dai_link_codecs(card->dev, node, link);
++		ret = snd_soc_of_get_dai_link_codecs(dev, node, link);
+ 		if (ret < 0) {
+-			dev_err_probe(card->dev, ret, "get dai link codecs fail\n");
++			dev_err_probe(dev, ret, "get dai link codecs fail\n");
+ 			return ret;
+ 		}
+ 	}
+@@ -1065,21 +1065,21 @@ static int mt8192_mt6359_legacy_probe(struct mtk_soc_card_data *soc_card_data)
+ 	}
+ 
+ 	for_each_card_prelinks(card, i, dai_link) {
+-		ret = mt8192_mt6359_card_set_be_link(card, dai_link, speaker_codec, "I2S3");
++		ret = mt8192_mt6359_card_set_be_link(dev, dai_link, speaker_codec, "I2S3");
+ 		if (ret) {
+ 			dev_err_probe(dev, ret, "%s set speaker_codec fail\n",
+ 				      dai_link->name);
+ 			break;
+ 		}
+ 
+-		ret = mt8192_mt6359_card_set_be_link(card, dai_link, headset_codec, "I2S8");
++		ret = mt8192_mt6359_card_set_be_link(dev, dai_link, headset_codec, "I2S8");
+ 		if (ret) {
+ 			dev_err_probe(dev, ret, "%s set headset_codec fail\n",
+ 				      dai_link->name);
+ 			break;
+ 		}
+ 
+-		ret = mt8192_mt6359_card_set_be_link(card, dai_link, headset_codec, "I2S9");
++		ret = mt8192_mt6359_card_set_be_link(dev, dai_link, headset_codec, "I2S9");
+ 		if (ret) {
+ 			dev_err_probe(dev, ret, "%s set headset_codec fail\n",
+ 				      dai_link->name);
+-- 
+2.55.0
+

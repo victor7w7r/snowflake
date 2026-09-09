@@ -1,0 +1,46 @@
+From ad5a796b9e0099754b8ed0f492fbbc000f4668a0 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Mon, 6 Jul 2026 14:33:23 +0200
+Subject: [PATCH 04908/15333] platform/loongarch: laptop: Stop setting
+ acpi_device_class()
+
+The driver populates acpi_device_class() which is never read afterward,
+so make it stop doing that and drop the symbol defined specifically for
+this purpose.
+
+No intentional functional impact.
+
+This will facilitate the removal of device_class from struct
+acpi_device_pnp in the future.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/2444678.ElGaqSPkdT@rafael.j.wysocki
+---
+ drivers/platform/loongarch/loongson-laptop.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/drivers/platform/loongarch/loongson-laptop.c b/drivers/platform/loongarch/loongson-laptop.c
+index 61b18ac206c9..f2dcc6d78051 100644
+--- a/drivers/platform/loongarch/loongson-laptop.c
++++ b/drivers/platform/loongarch/loongson-laptop.c
+@@ -30,7 +30,6 @@
+ #define LOONGSON_ACPI_HKEY_HID	"LOON0000"
+ 
+ #define ACPI_LAPTOP_NAME "loongson-laptop"
+-#define ACPI_LAPTOP_ACPI_EVENT_PREFIX "loongson"
+ 
+ #define MAX_ACPI_ARGS			3
+ #define GENERIC_HOTKEY_MAP_MAX		64
+@@ -167,8 +166,6 @@ static int __init setup_acpi_notify(struct generic_sub_driver *sub_driver)
+ 	}
+ 
+ 	sub_driver->device->driver_data = sub_driver;
+-	sprintf(acpi_device_class(sub_driver->device), "%s/%s",
+-		ACPI_LAPTOP_ACPI_EVENT_PREFIX, sub_driver->name);
+ 
+ 	status = acpi_install_notify_handler(*sub_driver->handle,
+ 			sub_driver->type, dispatch_acpi_notify, sub_driver);
+-- 
+2.55.0
+

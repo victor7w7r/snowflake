@@ -1,0 +1,196 @@
+From eeb9697db6c16d9bb2ce7b7ddf95aa20305aa9f2 Mon Sep 17 00:00:00 2001
+From: Leon Romanovsky <leonro@nvidia.com>
+Date: Mon, 13 Jul 2026 11:10:35 +0300
+Subject: [PATCH 04288/15333] RDMA: Remove redundant memset() from query_device
+ callbacks
+
+The core always hands the driver's query_device() callback a zeroed
+ib_device_attr. There are only two callers of the op and both clear the
+structure before invoking it: setup_device() memsets &device->attrs, and
+ib_uverbs_ex_query_device() passes an on-stack structure initialized to {}.
+
+The open-coded memset(props, 0, sizeof(*props)) at the top of the driver
+callbacks is therefore redundant. Remove it from all drivers.
+
+Signed-off-by: Leon Romanovsky <leonro@nvidia.com>
+---
+ drivers/infiniband/hw/bnxt_re/ib_verbs.c     | 1 -
+ drivers/infiniband/hw/efa/efa_verbs.c        | 1 -
+ drivers/infiniband/hw/erdma/erdma_verbs.c    | 2 --
+ drivers/infiniband/hw/hns/hns_roce_main.c    | 2 --
+ drivers/infiniband/hw/irdma/verbs.c          | 1 -
+ drivers/infiniband/hw/mana/main.c            | 1 -
+ drivers/infiniband/hw/mlx4/main.c            | 2 --
+ drivers/infiniband/hw/mlx5/main.c            | 1 -
+ drivers/infiniband/hw/mthca/mthca_provider.c | 2 --
+ drivers/infiniband/hw/ocrdma/ocrdma_verbs.c  | 1 -
+ drivers/infiniband/hw/qedr/verbs.c           | 2 --
+ drivers/infiniband/hw/usnic/usnic_ib_verbs.c | 1 -
+ drivers/infiniband/sw/siw/siw_verbs.c        | 2 --
+ 13 files changed, 19 deletions(-)
+
+diff --git a/drivers/infiniband/hw/bnxt_re/ib_verbs.c b/drivers/infiniband/hw/bnxt_re/ib_verbs.c
+index 565762529007..90138d64adee 100644
+--- a/drivers/infiniband/hw/bnxt_re/ib_verbs.c
++++ b/drivers/infiniband/hw/bnxt_re/ib_verbs.c
+@@ -193,7 +193,6 @@ int bnxt_re_query_device(struct ib_device *ibdev,
+ 	if (rc)
+ 		return rc;
+ 
+-	memset(ib_attr, 0, sizeof(*ib_attr));
+ 	memcpy(&ib_attr->fw_ver, dev_attr->fw_ver,
+ 	       min(sizeof(dev_attr->fw_ver),
+ 		   sizeof(ib_attr->fw_ver)));
+diff --git a/drivers/infiniband/hw/efa/efa_verbs.c b/drivers/infiniband/hw/efa/efa_verbs.c
+index ec124fbda637..6be8ec53dcb3 100644
+--- a/drivers/infiniband/hw/efa/efa_verbs.c
++++ b/drivers/infiniband/hw/efa/efa_verbs.c
+@@ -222,7 +222,6 @@ int efa_query_device(struct ib_device *ibdev,
+ 
+ 	dev_attr = &dev->dev_attr;
+ 
+-	memset(props, 0, sizeof(*props));
+ 	props->max_mr_size = dev_attr->max_mr_pages * PAGE_SIZE;
+ 	props->page_size_cap = dev_attr->page_size_cap;
+ 	props->vendor_id = dev->pdev->vendor;
+diff --git a/drivers/infiniband/hw/erdma/erdma_verbs.c b/drivers/infiniband/hw/erdma/erdma_verbs.c
+index 74afe6eb18b0..9491cbab69b3 100644
+--- a/drivers/infiniband/hw/erdma/erdma_verbs.c
++++ b/drivers/infiniband/hw/erdma/erdma_verbs.c
+@@ -324,8 +324,6 @@ int erdma_query_device(struct ib_device *ibdev, struct ib_device_attr *attr,
+ 	if (err)
+ 		return err;
+ 
+-	memset(attr, 0, sizeof(*attr));
+-
+ 	attr->max_mr_size = dev->attrs.max_mr_size;
+ 	attr->vendor_id = PCI_VENDOR_ID_ALIBABA;
+ 	attr->vendor_part_id = dev->pdev->device;
+diff --git a/drivers/infiniband/hw/hns/hns_roce_main.c b/drivers/infiniband/hw/hns/hns_roce_main.c
+index c6f633bd5a34..09c07de5f022 100644
+--- a/drivers/infiniband/hw/hns/hns_roce_main.c
++++ b/drivers/infiniband/hw/hns/hns_roce_main.c
+@@ -227,8 +227,6 @@ static int hns_roce_query_device(struct ib_device *ib_dev,
+ 	if (ret)
+ 		return ret;
+ 
+-	memset(props, 0, sizeof(*props));
+-
+ 	props->fw_ver = hr_dev->caps.fw_ver;
+ 	props->sys_image_guid = cpu_to_be64(hr_dev->sys_image_guid);
+ 	props->max_mr_size = (u64)(~(0ULL));
+diff --git a/drivers/infiniband/hw/irdma/verbs.c b/drivers/infiniband/hw/irdma/verbs.c
+index 5c907ffce99b..c9b606cc67d4 100644
+--- a/drivers/infiniband/hw/irdma/verbs.c
++++ b/drivers/infiniband/hw/irdma/verbs.c
+@@ -22,7 +22,6 @@ static int irdma_query_device(struct ib_device *ibdev,
+ 	if (err)
+ 		return err;
+ 
+-	memset(props, 0, sizeof(*props));
+ 	addrconf_addr_eui48((u8 *)&props->sys_image_guid,
+ 			    iwdev->netdev->dev_addr);
+ 	props->fw_ver = (u64)irdma_fw_major_ver(&rf->sc_dev) << 32 |
+diff --git a/drivers/infiniband/hw/mana/main.c b/drivers/infiniband/hw/mana/main.c
+index efe2935bda29..a5b3606a1dd5 100644
+--- a/drivers/infiniband/hw/mana/main.c
++++ b/drivers/infiniband/hw/mana/main.c
+@@ -579,7 +579,6 @@ int mana_ib_query_device(struct ib_device *ibdev, struct ib_device_attr *props,
+ 	if (err)
+ 		return err;
+ 
+-	memset(props, 0, sizeof(*props));
+ 	props->vendor_id = pdev->vendor;
+ 	props->vendor_part_id = dev->gdma_dev->dev_id.type;
+ 	props->max_mr_size = MANA_IB_MAX_MR_SIZE;
+diff --git a/drivers/infiniband/hw/mlx4/main.c b/drivers/infiniband/hw/mlx4/main.c
+index 17073e8f105a..7266a6141944 100644
+--- a/drivers/infiniband/hw/mlx4/main.c
++++ b/drivers/infiniband/hw/mlx4/main.c
+@@ -471,8 +471,6 @@ static int mlx4_ib_query_device(struct ib_device *ibdev,
+ 	if (err)
+ 		goto out;
+ 
+-	memset(props, 0, sizeof *props);
+-
+ 	have_ib_ports = num_ib_ports(dev->dev);
+ 
+ 	props->fw_ver = dev->dev->caps.fw_ver;
+diff --git a/drivers/infiniband/hw/mlx5/main.c b/drivers/infiniband/hw/mlx5/main.c
+index 02809114fc79..e8bba5a76d4e 100644
+--- a/drivers/infiniband/hw/mlx5/main.c
++++ b/drivers/infiniband/hw/mlx5/main.c
+@@ -969,7 +969,6 @@ static int mlx5_ib_query_device(struct ib_device *ibdev,
+ 	if (err)
+ 		return err;
+ 
+-	memset(props, 0, sizeof(*props));
+ 	err = mlx5_query_system_image_guid(ibdev,
+ 					   &props->sys_image_guid);
+ 	if (err)
+diff --git a/drivers/infiniband/hw/mthca/mthca_provider.c b/drivers/infiniband/hw/mthca/mthca_provider.c
+index f90f67afc8fa..e933a53779a4 100644
+--- a/drivers/infiniband/hw/mthca/mthca_provider.c
++++ b/drivers/infiniband/hw/mthca/mthca_provider.c
+@@ -69,8 +69,6 @@ static int mthca_query_device(struct ib_device *ibdev, struct ib_device_attr *pr
+ 		goto out;
+ 	}
+ 
+-	memset(props, 0, sizeof *props);
+-
+ 	props->fw_ver              = mdev->fw_ver;
+ 
+ 	ib_init_query_mad(in_mad);
+diff --git a/drivers/infiniband/hw/ocrdma/ocrdma_verbs.c b/drivers/infiniband/hw/ocrdma/ocrdma_verbs.c
+index 53ba32d168a1..de83dc0ea79c 100644
+--- a/drivers/infiniband/hw/ocrdma/ocrdma_verbs.c
++++ b/drivers/infiniband/hw/ocrdma/ocrdma_verbs.c
+@@ -74,7 +74,6 @@ int ocrdma_query_device(struct ib_device *ibdev, struct ib_device_attr *attr,
+ 	if (err)
+ 		return err;
+ 
+-	memset(attr, 0, sizeof *attr);
+ 	memcpy(&attr->fw_ver, &dev->attr.fw_ver[0],
+ 	       min(sizeof(dev->attr.fw_ver), sizeof(attr->fw_ver)));
+ 	addrconf_addr_eui48((u8 *)&attr->sys_image_guid,
+diff --git a/drivers/infiniband/hw/qedr/verbs.c b/drivers/infiniband/hw/qedr/verbs.c
+index d5416b161340..1cf502579ad1 100644
+--- a/drivers/infiniband/hw/qedr/verbs.c
++++ b/drivers/infiniband/hw/qedr/verbs.c
+@@ -118,8 +118,6 @@ int qedr_query_device(struct ib_device *ibdev,
+ 	if (rc)
+ 		return rc;
+ 
+-	memset(attr, 0, sizeof(*attr));
+-
+ 	attr->fw_ver = qattr->fw_ver;
+ 	attr->sys_image_guid = qattr->sys_image_guid;
+ 	attr->max_mr_size = qattr->max_mr_size;
+diff --git a/drivers/infiniband/hw/usnic/usnic_ib_verbs.c b/drivers/infiniband/hw/usnic/usnic_ib_verbs.c
+index dc355b00f61c..3402c84eb904 100644
+--- a/drivers/infiniband/hw/usnic/usnic_ib_verbs.c
++++ b/drivers/infiniband/hw/usnic/usnic_ib_verbs.c
+@@ -284,7 +284,6 @@ int usnic_ib_query_device(struct ib_device *ibdev,
+ 
+ 	mutex_lock(&us_ibdev->usdev_lock);
+ 	us_ibdev->netdev->ethtool_ops->get_drvinfo(us_ibdev->netdev, &info);
+-	memset(props, 0, sizeof(*props));
+ 	usnic_mac_ip_to_gid(us_ibdev->ufdev->mac, us_ibdev->ufdev->inaddr,
+ 			&gid.raw[0]);
+ 	memcpy(&props->sys_image_guid, &gid.global.interface_id,
+diff --git a/drivers/infiniband/sw/siw/siw_verbs.c b/drivers/infiniband/sw/siw/siw_verbs.c
+index b74ac85c1b8b..e281517fc6f9 100644
+--- a/drivers/infiniband/sw/siw/siw_verbs.c
++++ b/drivers/infiniband/sw/siw/siw_verbs.c
+@@ -136,8 +136,6 @@ int siw_query_device(struct ib_device *base_dev, struct ib_device_attr *attr,
+ 	if (rv)
+ 		return rv;
+ 
+-	memset(attr, 0, sizeof(*attr));
+-
+ 	/* Revisit atomic caps if RFC 7306 gets supported */
+ 	attr->atomic_cap = 0;
+ 	attr->device_cap_flags = IB_DEVICE_MEM_MGT_EXTENSIONS;
+-- 
+2.55.0
+

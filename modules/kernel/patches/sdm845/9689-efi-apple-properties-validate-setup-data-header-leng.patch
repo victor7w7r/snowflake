@@ -1,0 +1,38 @@
+From 44e4ec1a802d2078743f7a77f46af3e2213a3b4e Mon Sep 17 00:00:00 2001
+From: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Date: Mon, 6 Jul 2026 17:18:13 +0800
+Subject: [PATCH 09689/15333] efi: apple-properties: validate setup data header
+ length
+
+map_properties() remaps the Apple properties setup_data payload
+and then reads the properties header fields.
+
+Reject a truncated payload before checking the header version and length
+fields.
+
+Signed-off-by: Pengpeng Hou <pengpeng@iscas.ac.cn>
+Reviewed-by: Lukas Wunner <lukas@wunner.de>
+Signed-off-by: Ard Biesheuvel <ardb@kernel.org>
+---
+ drivers/firmware/efi/apple-properties.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/firmware/efi/apple-properties.c b/drivers/firmware/efi/apple-properties.c
+index 2e525e17fba7..f401a04edf4c 100644
+--- a/drivers/firmware/efi/apple-properties.c
++++ b/drivers/firmware/efi/apple-properties.c
+@@ -207,7 +207,10 @@ static int __init map_properties(void)
+ 		}
+ 
+ 		properties = (struct properties_header *)data->data;
+-		if (properties->version != 1) {
++		if (data_len < sizeof(*properties)) {
++			pr_err("truncated properties header\n");
++			ret = -EINVAL;
++		} else if (properties->version != 1) {
+ 			pr_err("unsupported version:\n");
+ 			print_hex_dump(KERN_ERR, pr_fmt(), DUMP_PREFIX_OFFSET,
+ 			       16, 1, properties, data_len, true);
+-- 
+2.55.0
+

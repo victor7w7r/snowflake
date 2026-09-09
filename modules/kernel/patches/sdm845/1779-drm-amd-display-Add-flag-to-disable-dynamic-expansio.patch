@@ -1,0 +1,67 @@
+From 073875c5d27c89e7fe831e9496f8f9c2fd9e95ea Mon Sep 17 00:00:00 2001
+From: George Shen <george.shen@amd.com>
+Date: Tue, 21 Apr 2026 20:27:42 -0400
+Subject: [PATCH 01779/15333] drm/amd/display: Add flag to disable dynamic
+ expansion for 12bpc
+
+[Why]
+Dynamic expansion is not needed when outputting 12bpc test patterns.
+
+[How]
+Add a debug flag to control disabling dynamic expansion in the case
+of 12bpc test patterns.
+
+Reviewed-by: Michael Strauss <michael.strauss@amd.com>
+Signed-off-by: George Shen <george.shen@amd.com>
+Signed-off-by: George Zhang <george.zhang@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/display/dc/dc.h            |  1 +
+ .../drm/amd/display/dc/opp/dcn20/dcn20_opp.c   | 18 ++++++++++++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/dc.h b/drivers/gpu/drm/amd/display/dc/dc.h
+index b21fdea5fca3..c2a1f75ae9ae 100644
+--- a/drivers/gpu/drm/amd/display/dc/dc.h
++++ b/drivers/gpu/drm/amd/display/dc/dc.h
+@@ -1288,6 +1288,7 @@ struct dc_debug_options {
+ 	unsigned int force_odm2to1_for_edp_pixclk_mhz;
+ 	bool enable_replay_esd_recovery;
+ 	uint8_t iommu_mismatch_temp_wka;
++	bool disable_dynamic_expansion_for_test_pattern;
+ };
+ 
+ 
+diff --git a/drivers/gpu/drm/amd/display/dc/opp/dcn20/dcn20_opp.c b/drivers/gpu/drm/amd/display/dc/opp/dcn20/dcn20_opp.c
+index 50b6973ef123..881b8da656b2 100644
+--- a/drivers/gpu/drm/amd/display/dc/opp/dcn20/dcn20_opp.c
++++ b/drivers/gpu/drm/amd/display/dc/opp/dcn20/dcn20_opp.c
+@@ -89,6 +89,24 @@ void opp2_set_disp_pattern_generator(
+ 	break;
+ 	}
+ 
++	if (opp->ctx->dc->debug.disable_dynamic_expansion_for_test_pattern) {
++		switch (test_pattern) {
++		case CONTROLLER_DP_TEST_PATTERN_COLORSQUARES:
++		case CONTROLLER_DP_TEST_PATTERN_COLORSQUARES_CEA:
++		case CONTROLLER_DP_TEST_PATTERN_VERTICALBARS:
++		case CONTROLLER_DP_TEST_PATTERN_HORIZONTALBARS:
++		case CONTROLLER_DP_TEST_PATTERN_COLORRAMP:
++			if (color_depth == COLOR_DEPTH_121212)
++				REG_UPDATE(FMT_DYNAMIC_EXP_CNTL, FMT_DYNAMIC_EXP_EN, 0);
++		break;
++		case CONTROLLER_DP_TEST_PATTERN_VIDEOMODE:
++			REG_UPDATE(FMT_DYNAMIC_EXP_CNTL, FMT_DYNAMIC_EXP_EN, 1);
++		break;
++		default:
++		break;
++		}
++	}
++
+ 	/* set DPG dimentions */
+ 	REG_SET_2(DPG_DIMENSIONS, 0,
+ 		DPG_ACTIVE_WIDTH, width,
+-- 
+2.55.0
+

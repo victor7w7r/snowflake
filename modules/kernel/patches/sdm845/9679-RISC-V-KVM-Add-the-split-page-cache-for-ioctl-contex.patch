@@ -1,0 +1,54 @@
+From 6c7f75ef096ad6631d62eb66833f3737a85e5dbe Mon Sep 17 00:00:00 2001
+From: Wang Yechao <wang.yechao255@zte.com.cn>
+Date: Fri, 31 Jul 2026 17:12:06 +0800
+Subject: [PATCH 09679/15333] RISC-V: KVM: Add the split page cache for ioctl
+ context
+
+Add the split page cache for dirty logging enablement and the
+KVM_CLEAR_DIRTY_LOG ioctl.
+
+Signed-off-by: Wang Yechao <wang.yechao255@zte.com.cn>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+Link: https://lore.kernel.org/r/20260731091215.1549430-2-wang.yechao255@zte.com.cn
+Signed-off-by: Anup Patel <anup@brainfault.org>
+---
+ arch/riscv/include/asm/kvm_host.h | 1 +
+ arch/riscv/kvm/mmu.c              | 3 +++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/arch/riscv/include/asm/kvm_host.h b/arch/riscv/include/asm/kvm_host.h
+index 489c02135d43..ba5e53e7962b 100644
+--- a/arch/riscv/include/asm/kvm_host.h
++++ b/arch/riscv/include/asm/kvm_host.h
+@@ -86,6 +86,7 @@ struct kvm_arch {
+ 	pgd_t *pgd;
+ 	phys_addr_t pgd_phys;
+ 	unsigned long pgd_levels;
++	struct kvm_mmu_memory_cache pgd_split_page_cache;
+ 
+ 	/* Guest Timer */
+ 	struct kvm_guest_timer timer;
+diff --git a/arch/riscv/kvm/mmu.c b/arch/riscv/kvm/mmu.c
+index cbe65e92b128..49e8cb7e3229 100644
+--- a/arch/riscv/kvm/mmu.c
++++ b/arch/riscv/kvm/mmu.c
+@@ -677,6 +677,7 @@ int kvm_riscv_mmu_alloc_pgd(struct kvm *kvm)
+ 	kvm->arch.pgd = page_to_virt(pgd_page);
+ 	kvm->arch.pgd_phys = page_to_phys(pgd_page);
+ 	kvm->arch.pgd_levels = kvm_riscv_gstage_max_pgd_levels;
++	kvm->arch.pgd_split_page_cache.gfp_zero = __GFP_ZERO;
+ 
+ 	return 0;
+ }
+@@ -704,6 +705,8 @@ void kvm_riscv_mmu_free_pgd(struct kvm *kvm)
+ 
+ 	if (pgd)
+ 		free_pages((unsigned long)pgd, get_order(kvm_riscv_gstage_pgd_size));
++
++	kvm_mmu_free_memory_cache(&kvm->arch.pgd_split_page_cache);
+ }
+ 
+ void kvm_riscv_mmu_update_hgatp(struct kvm_vcpu *vcpu)
+-- 
+2.55.0
+

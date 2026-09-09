@@ -1,0 +1,124 @@
+From 5b8af852cd0303fc2faafd80d76ca7b19d15ca54 Mon Sep 17 00:00:00 2001
+From: Ricardo Ribalda <ribalda@chromium.org>
+Date: Mon, 29 Jun 2026 11:30:47 +0000
+Subject: [PATCH 03695/15333] media: dvb-frontends/helene: Rename priv variable
+
+Coccinelle triggers a false positive where it thinks that the priv
+variable in helene_attach_s and helene_attach is the same variable as
+helene_probe. This is due to a bad heuristic in cocci.
+
+We have reported it to cocci, but until/if this is fixed, renaming a
+local variable is a good compromise to fix this warning:
+
+./dvb-frontends/helene.c:1049:2-7: WARNING: invalid free of devm_ allocated data
+./dvb-frontends/helene.c:1013:2-7: WARNING: invalid free of devm_ allocated data
+
+Signed-off-by: Ricardo Ribalda <ribalda@chromium.org>
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+---
+ drivers/media/dvb-frontends/helene.c | 56 ++++++++++++++--------------
+ 1 file changed, 28 insertions(+), 28 deletions(-)
+
+diff --git a/drivers/media/dvb-frontends/helene.c b/drivers/media/dvb-frontends/helene.c
+index 993280fefc2c..5fbb466cc8af 100644
+--- a/drivers/media/dvb-frontends/helene.c
++++ b/drivers/media/dvb-frontends/helene.c
+@@ -995,22 +995,22 @@ struct dvb_frontend *helene_attach_s(struct dvb_frontend *fe,
+ 		const struct helene_config *config,
+ 		struct i2c_adapter *i2c)
+ {
+-	struct helene_priv *priv = NULL;
++	struct helene_priv *pr = NULL;
+ 
+-	priv = kzalloc_obj(struct helene_priv);
+-	if (priv == NULL)
++	pr = kzalloc_obj(struct helene_priv);
++	if (!pr)
+ 		return NULL;
+-	priv->i2c_address = (config->i2c_address >> 1);
+-	priv->i2c = i2c;
+-	priv->set_tuner_data = config->set_tuner_priv;
+-	priv->set_tuner = config->set_tuner_callback;
+-	priv->xtal = config->xtal;
++	pr->i2c_address = (config->i2c_address >> 1);
++	pr->i2c = i2c;
++	pr->set_tuner_data = config->set_tuner_priv;
++	pr->set_tuner = config->set_tuner_callback;
++	pr->xtal = config->xtal;
+ 
+ 	if (fe->ops.i2c_gate_ctrl)
+ 		fe->ops.i2c_gate_ctrl(fe, 1);
+ 
+-	if (helene_x_pon(priv) != 0) {
+-		kfree(priv);
++	if (helene_x_pon(pr) != 0) {
++		kfree(pr);
+ 		return NULL;
+ 	}
+ 
+@@ -1019,10 +1019,10 @@ struct dvb_frontend *helene_attach_s(struct dvb_frontend *fe,
+ 
+ 	memcpy(&fe->ops.tuner_ops, &helene_tuner_ops_s,
+ 			sizeof(struct dvb_tuner_ops));
+-	fe->tuner_priv = priv;
+-	dev_info(&priv->i2c->dev,
+-			"Sony HELENE Sat attached on addr=%x at I2C adapter %p\n",
+-			priv->i2c_address, priv->i2c);
++	fe->tuner_priv = pr;
++	dev_info(&pr->i2c->dev,
++		 "Sony HELENE Sat attached on addr=%x at I2C adapter %p\n",
++		 pr->i2c_address, pr->i2c);
+ 	return fe;
+ }
+ EXPORT_SYMBOL_GPL(helene_attach_s);
+@@ -1031,22 +1031,22 @@ struct dvb_frontend *helene_attach(struct dvb_frontend *fe,
+ 		const struct helene_config *config,
+ 		struct i2c_adapter *i2c)
+ {
+-	struct helene_priv *priv = NULL;
++	struct helene_priv *pr = NULL;
+ 
+-	priv = kzalloc_obj(struct helene_priv);
+-	if (priv == NULL)
++	pr = kzalloc_obj(struct helene_priv);
++	if (!pr)
+ 		return NULL;
+-	priv->i2c_address = (config->i2c_address >> 1);
+-	priv->i2c = i2c;
+-	priv->set_tuner_data = config->set_tuner_priv;
+-	priv->set_tuner = config->set_tuner_callback;
+-	priv->xtal = config->xtal;
++	pr->i2c_address = (config->i2c_address >> 1);
++	pr->i2c = i2c;
++	pr->set_tuner_data = config->set_tuner_priv;
++	pr->set_tuner = config->set_tuner_callback;
++	pr->xtal = config->xtal;
+ 
+ 	if (fe->ops.i2c_gate_ctrl)
+ 		fe->ops.i2c_gate_ctrl(fe, 1);
+ 
+-	if (helene_x_pon(priv) != 0) {
+-		kfree(priv);
++	if (helene_x_pon(pr) != 0) {
++		kfree(pr);
+ 		return NULL;
+ 	}
+ 
+@@ -1055,10 +1055,10 @@ struct dvb_frontend *helene_attach(struct dvb_frontend *fe,
+ 
+ 	memcpy(&fe->ops.tuner_ops, &helene_tuner_ops_t,
+ 			sizeof(struct dvb_tuner_ops));
+-	fe->tuner_priv = priv;
+-	dev_info(&priv->i2c->dev,
+-			"Sony HELENE Ter attached on addr=%x at I2C adapter %p\n",
+-			priv->i2c_address, priv->i2c);
++	fe->tuner_priv = pr;
++	dev_info(&pr->i2c->dev,
++		 "Sony HELENE Ter attached on addr=%x at I2C adapter %p\n",
++		 pr->i2c_address, pr->i2c);
+ 	return fe;
+ }
+ EXPORT_SYMBOL_GPL(helene_attach);
+-- 
+2.55.0
+

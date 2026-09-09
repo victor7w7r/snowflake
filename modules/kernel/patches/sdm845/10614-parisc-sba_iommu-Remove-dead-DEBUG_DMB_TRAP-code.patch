@@ -1,0 +1,75 @@
+From cf3cd4e3b32d3cf7b37e49ad8e0ea07d44ec25a4 Mon Sep 17 00:00:00 2001
+From: Muhammad Usama Anjum <usama.anjum@arm.com>
+Date: Thu, 30 Jul 2026 10:45:00 +0100
+Subject: [PATCH 10614/15333] parisc: sba_iommu: Remove dead DEBUG_DMB_TRAP
+ code
+
+DEBUG_DMB_TRAP is unconditionally undefined, so the guarded
+declarations and calls can never be built. The declared iterate_pages()
+and set_data_memory_break() functions also have no definitions in the
+tree; removing the #undef would therefore leave unresolved references.
+
+Remove the unused option and its guarded code.
+
+Signed-off-by: Muhammad Usama Anjum <usama.anjum@arm.com>
+Signed-off-by: Helge Deller <deller@gmx.de>
+---
+ drivers/parisc/sba_iommu.c | 21 ---------------------
+ 1 file changed, 21 deletions(-)
+
+diff --git a/drivers/parisc/sba_iommu.c b/drivers/parisc/sba_iommu.c
+index d9339dd50826..e0a148ab5876 100644
+--- a/drivers/parisc/sba_iommu.c
++++ b/drivers/parisc/sba_iommu.c
+@@ -66,7 +66,6 @@
+ #undef DEBUG_SBA_RESOURCE
+ #undef ASSERT_PDIR_SANITY
+ #undef DEBUG_LARGE_SG_ENTRIES
+-#undef DEBUG_DMB_TRAP
+ 
+ #ifdef DEBUG_SBA_INIT
+ #define DBG_INIT(x...)	printk(x)
+@@ -1695,12 +1694,6 @@ sba_common_init(struct sba_device *sba_dev)
+ 
+ 	for(i=0; i< sba_dev->num_ioc; i++) {
+ 		int res_size;
+-#ifdef DEBUG_DMB_TRAP
+-		extern void iterate_pages(unsigned long , unsigned long ,
+-					  void (*)(pte_t * , unsigned long),
+-					  unsigned long );
+-		void set_data_memory_break(pte_t * , unsigned long);
+-#endif
+ 		/* resource map size dictated by pdir_size */
+ 		res_size = sba_dev->ioc[i].pdir_size/sizeof(u64); /* entries */
+ 
+@@ -1715,12 +1708,6 @@ sba_common_init(struct sba_device *sba_dev)
+ 
+ 		sba_dev->ioc[i].res_size = res_size;
+ 		sba_dev->ioc[i].res_map = (char *) __get_free_pages(GFP_KERNEL, get_order(res_size));
+-
+-#ifdef DEBUG_DMB_TRAP
+-		iterate_pages( sba_dev->ioc[i].res_map, res_size,
+-				set_data_memory_break, 0);
+-#endif
+-
+ 		if (NULL == sba_dev->ioc[i].res_map)
+ 		{
+ 			panic("%s:%s() could not allocate resource map\n",
+@@ -1752,14 +1739,6 @@ sba_common_init(struct sba_device *sba_dev)
+ 				*p_start++ = -1;
+ 				
+ 		}
+-
+-#ifdef DEBUG_DMB_TRAP
+-		iterate_pages( sba_dev->ioc[i].res_map, res_size,
+-				set_data_memory_break, 0);
+-		iterate_pages( sba_dev->ioc[i].pdir_base, sba_dev->ioc[i].pdir_size,
+-				set_data_memory_break, 0);
+-#endif
+-
+ 		DBG_INIT("%s() %d res_map %x %p\n",
+ 			__func__, i, res_size, sba_dev->ioc[i].res_map);
+ 	}
+-- 
+2.55.0
+

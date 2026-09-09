@@ -1,0 +1,139 @@
+From 545e560a5b0fb97ff4154e6fb0674d1f5055a81e Mon Sep 17 00:00:00 2001
+From: Qu Wenruo <wqu@suse.com>
+Date: Tue, 9 Jun 2026 19:31:44 +0930
+Subject: [PATCH 11973/15333] btrfs: disable v1 space cache
+
+V2 space cache has been the default mkfs option since btrfs-progs v5.15,
+and commit 1e7bec1f7d65 ("btrfs: emit a warning about space cache v1
+being deprecated") has already added a warning to show v1 space cache
+has been deprecated.
+
+It has been long enough that we should remove v1 space cache completely.
+
+As the first step, disable v1 space cache by:
+
+- Make "space_cache" mount option fallback to "nospace_cache"
+
+- Make "space_cache=v1" fall back to "nospace_cache"
+
+  This is safer than forcing "space_cache=v2", as forcing v2 cache
+  requires removal of v1 cache and regenerating v2 cache.
+  Such operation can be slow, and takes extra metadata space, thus
+  it is not always safe for existing filesystems.
+
+With this done, v1 cache mount will always fallback to nospace cache,
+and mount option will not be able to force v1 space cache usage.
+
+For example, even for a fs with v1 cache:
+
+  # btrfs ins dump-super test.img
+  superblock: bytenr=65536, device=test.img
+  ---------------------------------------------------------
+  csum_type		0 (crc32c)
+  csum_size		4
+  csum			0xdce44b2c [match]
+  bytenr		65536
+  flags			0x1
+  			( WRITTEN )
+  magic			_BHRfS_M [match]
+  fsid			7d7c3bba-8211-4206-868d-10eedd5703f8
+  metadata_uuid		00000000-0000-0000-0000-000000000000
+  label
+  generation		9
+  root			30605312
+  [...]
+  compat_ro_flags	0x0                     <<< No FST feature
+  incompat_flags	0x361
+  			( MIXED_BACKREF |
+  			  BIG_METADATA |
+  			  EXTENDED_IREF |
+  			  SKINNY_METADATA |
+  			  NO_HOLES )
+  cache_generation	9                       <<< Matches generation
+  uuid_tree_generation	9
+
+Attempting to mount it will lead to no space cache other than v1 space cache:
+
+  # mount test.img /mnt/btrfs
+  # dmesg -t | tail -n 5
+  BTRFS: device fsid 7d7c3bba-8211-4206-868d-10eedd5703f8 devid 1 transid 9 /dev/loop0 (7:0) scanned by mount (1264)
+  BTRFS info (device loop0): first mount of filesystem 7d7c3bba-8211-4206-868d-10eedd5703f8
+  BTRFS info (device loop0): using crc32c checksum algorithm
+  BTRFS info (device loop0): turning on async discard
+  BTRFS info (device loop0): last unmount of filesystem 7d7c3bba-8211-4206-868d-10eedd5703f8
+
+Even forcing v1 cache will not work, but fallback to the usual
+nospace_cache:
+
+  # mount test.img -o space_cache=v1 /mnt/btrfs
+  # dmesg -t | tail -n 6
+  BTRFS warning: v1 space cache is deprecated, fallback to no space cache
+  BTRFS: device fsid 7d7c3bba-8211-4206-868d-10eedd5703f8 devid 1 transid 9 /dev/loop0 (7:0) scanned by mount (1264)
+  BTRFS info (device loop0): first mount of filesystem 7d7c3bba-8211-4206-868d-10eedd5703f8
+  BTRFS info (device loop0): using crc32c checksum algorithm
+  BTRFS info (device loop0): turning on async discard
+  BTRFS info (device loop0): last unmount of filesystem 7d7c3bba-8211-4206-868d-10eedd5703f8
+
+And there will be no way to force converting a v2 cache back to v1, such
+attempt will only clear free space tree and fallback to no space cache.
+
+  # mkfs.btrfs -f -O fst,^bgt test.img
+  # mount -o clear_cache,space_cache=v1 test.img /mnt/btrfs
+  # dmesg -t | tail -n 11
+  BTRFS warning: v1 space cache is deprecated, fallback to no space cache
+  BTRFS: device fsid f59daad2-3ab5-4f33-b752-a36cfb09b674 devid 1 transid 8 /dev/loop0 (7:0) scanned by mount (1419)
+  BTRFS info (device loop0): first mount of filesystem f59daad2-3ab5-4f33-b752-a36cfb09b674
+  BTRFS info (device loop0): using crc32c checksum algorithm
+  BTRFS info (device loop0): rebuilding free space tree
+  BTRFS info (device loop0): disabling free space tree
+  BTRFS info (device loop0): clearing compat-ro feature flag for FREE_SPACE_TREE (0x1)
+  BTRFS info (device loop0): clearing compat-ro feature flag for FREE_SPACE_TREE_VALID (0x2)
+  BTRFS info (device loop0): checking UUID tree
+  BTRFS info (device loop0): turning on async discard
+  BTRFS info (device loop0): force clearing of disk cache
+  # mount | grep /mnt/btrfs
+  /mnt/test.img on /mnt/btrfs type btrfs (rw,relatime,discard=async,nospace_cache,subvolid=5,subvol=/)
+
+Signed-off-by: Qu Wenruo <wqu@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/super.c | 19 ++++++++++---------
+ 1 file changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/fs/btrfs/super.c b/fs/btrfs/super.c
+index f4e34898d581..41658705b4e9 100644
+--- a/fs/btrfs/super.c
++++ b/fs/btrfs/super.c
+@@ -514,19 +514,20 @@ static int btrfs_parse_param(struct fs_context *fc, struct fs_parameter *param)
+ 		btrfs_clear_opt(ctx->mount_opt, NODISCARD);
+ 		break;
+ 	case Opt_space_cache:
+-		if (result.negated) {
+-			btrfs_set_opt(ctx->mount_opt, NOSPACECACHE);
+-			btrfs_clear_opt(ctx->mount_opt, SPACE_CACHE);
+-			btrfs_clear_opt(ctx->mount_opt, FREE_SPACE_TREE);
+-		} else {
+-			btrfs_clear_opt(ctx->mount_opt, FREE_SPACE_TREE);
+-			btrfs_set_opt(ctx->mount_opt, SPACE_CACHE);
+-		}
++		if (!result.negated)
++			btrfs_warn(NULL,
++			"v1 space cache is deprecated, falling back to no space cache");
++		btrfs_set_opt(ctx->mount_opt, NOSPACECACHE);
++		btrfs_clear_opt(ctx->mount_opt, SPACE_CACHE);
++		btrfs_clear_opt(ctx->mount_opt, FREE_SPACE_TREE);
+ 		break;
+ 	case Opt_space_cache_version:
+ 		switch (result.uint_32) {
+ 		case Opt_space_cache_v1:
+-			btrfs_set_opt(ctx->mount_opt, SPACE_CACHE);
++			btrfs_warn(NULL,
++			"v1 space cache is deprecated, falling back to no space cache");
++			btrfs_set_opt(ctx->mount_opt, NOSPACECACHE);
++			btrfs_clear_opt(ctx->mount_opt, SPACE_CACHE);
+ 			btrfs_clear_opt(ctx->mount_opt, FREE_SPACE_TREE);
+ 			break;
+ 		case Opt_space_cache_v2:
+-- 
+2.55.0
+

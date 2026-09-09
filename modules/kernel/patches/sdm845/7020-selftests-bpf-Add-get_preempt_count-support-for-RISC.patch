@@ -1,0 +1,97 @@
+From 9b19237a46e7e173f9bc91721d4ada11967f277c Mon Sep 17 00:00:00 2001
+From: Tiezhu Yang <yangtiezhu@loongson.cn>
+Date: Wed, 22 Jul 2026 10:29:06 +0800
+Subject: [PATCH 07020/15333] selftests/bpf: Add get_preempt_count() support
+ for RISC-V
+
+Currently, there is no RISC-V support for get_preempt_count() and
+its fallback path always returns 0.
+
+Add it so that bpf_in_interrupt(), bpf_in_nmi(), bpf_in_hardirq(),
+bpf_in_serving_softirq(), and bpf_in_task() work for RISC-V as well.
+
+Given that RISC-V has supported CONFIG_THREAD_INFO_IN_TASK since its
+initial commit fbe934d69eb7 ("RISC-V: Build Infrastructure") in 2017,
+directly retrieve preempt_count from the thread_info embedded within
+task_struct via bpf_get_current_task_btf().
+
+This aligns the implementation with arm64, powerpc, and loongarch.
+
+Tested on a RISC-V virtual machine.
+
+Before:
+  $ sudo ./test_progs -t exe_ctx
+  ...
+  #114     exe_ctx:FAIL
+  Summary: 0/0 PASSED, 0 SKIPPED, 1 FAILED
+
+After:
+  $ sudo ./test_progs -t exe_ctx
+  #114     exe_ctx:OK
+  Summary: 1/0 PASSED, 0 SKIPPED, 0 FAILED
+
+Signed-off-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Tested-by: Pu Lehui <pulehui@huawei.com>
+Reviewed-by: Pu Lehui <pulehui@huawei.com>
+Link: https://lore.kernel.org/bpf/20260722022906.8778-1-yangtiezhu@loongson.cn
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ tools/testing/selftests/bpf/bpf_experimental.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/bpf_experimental.h b/tools/testing/selftests/bpf/bpf_experimental.h
+index 67ff7882299e..ff37ae5a113d 100644
+--- a/tools/testing/selftests/bpf/bpf_experimental.h
++++ b/tools/testing/selftests/bpf/bpf_experimental.h
+@@ -425,6 +425,8 @@ static inline int get_preempt_count(void)
+ 	return bpf_get_lowcore()->preempt_count;
+ #elif defined(bpf_target_loongarch)
+ 	return bpf_get_current_task_btf()->thread_info.preempt_count;
++#elif defined(bpf_target_riscv)
++	return bpf_get_current_task_btf()->thread_info.preempt_count;
+ #endif
+ 	return 0;
+ }
+@@ -436,6 +438,7 @@ static inline int get_preempt_count(void)
+  *	* powerpc64
+  *	* s390x
+  *	* loongarch
++ *	* riscv
+  */
+ static inline int bpf_in_interrupt(void)
+ {
+@@ -458,6 +461,7 @@ static inline int bpf_in_interrupt(void)
+  *	* powerpc64
+  *	* s390x
+  *	* loongarch
++ *	* riscv
+  */
+ static inline int bpf_in_nmi(void)
+ {
+@@ -471,6 +475,7 @@ static inline int bpf_in_nmi(void)
+  *	* powerpc64
+  *	* s390x
+  *	* loongarch
++ *	* riscv
+  */
+ static inline int bpf_in_hardirq(void)
+ {
+@@ -484,6 +489,7 @@ static inline int bpf_in_hardirq(void)
+  *	* powerpc64
+  *	* s390x
+  *	* loongarch
++ *	* riscv
+  */
+ static inline int bpf_in_serving_softirq(void)
+ {
+@@ -505,6 +511,7 @@ static inline int bpf_in_serving_softirq(void)
+  *	* powerpc64
+  *	* s390x
+  *	* loongarch
++ *	* riscv
+  */
+ static inline int bpf_in_task(void)
+ {
+-- 
+2.55.0
+

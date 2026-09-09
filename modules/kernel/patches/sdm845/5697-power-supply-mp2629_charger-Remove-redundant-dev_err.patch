@@ -1,0 +1,37 @@
+From f73b8c7c3ee61e08819a688bef98c8c454b6d4d5 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Thu, 9 Jul 2026 11:34:04 +0800
+Subject: [PATCH 05697/15333] power: supply: mp2629_charger: Remove redundant
+ dev_err()/dev_err_probe()
+
+The devm_request_threaded_irq() and devm_request_irq() now automatically
+log detailed error messages on failure. This eliminates the need for
+driver-specific dev_err() and dev_err_probe() calls that previously
+printed generic messages.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://patch.msgid.link/20260709033428.362970-26-panchuang@vivo.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/mp2629_charger.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/drivers/power/supply/mp2629_charger.c b/drivers/power/supply/mp2629_charger.c
+index d281c1059629..d7224a63abe2 100644
+--- a/drivers/power/supply/mp2629_charger.c
++++ b/drivers/power/supply/mp2629_charger.c
+@@ -631,10 +631,8 @@ static int mp2629_charger_probe(struct platform_device *pdev)
+ 	ret = devm_request_threaded_irq(dev, irq, NULL,	mp2629_irq_handler,
+ 					IRQF_ONESHOT | IRQF_TRIGGER_RISING,
+ 					"mp2629-charger", charger);
+-	if (ret) {
+-		dev_err(dev, "failed to request gpio IRQ\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	regmap_update_bits(charger->regmap, MP2629_REG_INTERRUPT,
+ 				GENMASK(6, 5), BIT(6) | BIT(5));
+-- 
+2.55.0
+

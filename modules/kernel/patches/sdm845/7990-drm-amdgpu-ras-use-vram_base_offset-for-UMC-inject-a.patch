@@ -1,0 +1,53 @@
+From 149f894a2a8bac181af7b979180e7578e2190bb0 Mon Sep 17 00:00:00 2001
+From: "Stanley.Yang" <Stanley.Yang@amd.com>
+Date: Tue, 14 Jul 2026 17:45:50 +0800
+Subject: [PATCH 07990/15333] drm/amdgpu/ras: use vram_base_offset for UMC
+ inject address
+
+Cover both XGMI hive offset and A+A platform MC FB offset in one calculation.
+
+Signed-off-by: Stanley.Yang <Stanley.Yang@amd.com>
+Reviewed-by: Tao Zhou <tao.zhou1@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/ras/ras_mgr/amdgpu_ras_cmd.c    | 17 +++++------------
+ 1 file changed, 5 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_cmd.c b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_cmd.c
+index c2285fde8b3c..f9ee297a6745 100644
+--- a/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_cmd.c
++++ b/drivers/gpu/drm/amd/ras/ras_mgr/amdgpu_ras_cmd.c
+@@ -73,15 +73,6 @@ static int amdgpu_ras_trigger_error_end(struct ras_core_context *ras_core,
+ 	return 0;
+ }
+ 
+-static uint64_t local_addr_to_xgmi_global_addr(struct ras_core_context *ras_core,
+-					   uint64_t addr)
+-{
+-	struct amdgpu_device *adev = (struct amdgpu_device *)ras_core->dev;
+-	struct amdgpu_xgmi *xgmi = &adev->gmc.xgmi;
+-
+-	return (addr + xgmi->physical_node_id * xgmi->node_segment_size);
+-}
+-
+ /*
+  * UMC error injection is dispatched by the RAS TA using the injection method
+  * carried in struct ras_cmd_inject_error_req. Only the "coherent" methods
+@@ -154,9 +145,11 @@ static int amdgpu_ras_inject_error(struct ras_core_context *ras_core,
+ 				return RAS_CMD__ERROR_INVALID_INPUT_DATA;
+ 			}
+ 
+-			/* Calculate XGMI relative offset */
+-			if (adev->gmc.xgmi.num_physical_nodes > 1)
+-				req->address = local_addr_to_xgmi_global_addr(ras_core, req->address);
++			/*
++			 * Calculate XGMI relative offset if in XGMI hive,
++			 * adapt to A+A platform with mc fb offset calculated.
++			 */
++			req->address += adev->vm_manager.vram_base_offset;
+ 		}
+ 	}
+ 
+-- 
+2.55.0
+

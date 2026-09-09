@@ -1,0 +1,76 @@
+From 43ea91dadb35579169884f6707d43f7b2607153d Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Mon, 20 Jul 2026 18:58:56 -0700
+Subject: [PATCH 06690/15333] ata: pata_pxa: use devres for DMA channel
+ management
+
+Convert the DMA channel request to devm_dma_request_chan() so the
+channel is released automatically on device teardown. This removes
+the explicit dma_release_channel() calls in the probe error paths
+and in pxa_ata_remove(), simplifying the driver.
+
+Use ata_platform_remove_one() which is now equivalent to what remains of
+the remove function after dma_release_channel() removal.
+
+Built as a module for arm/pxa_defconfig (CONFIG_PATA_PXA=m) with
+LLVM=1 W=1; no new warnings.
+
+Assisted-by: opencode:hy3-free
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Signed-off-by: Damien Le Moal <dlemoal@kernel.org>
+---
+ drivers/ata/pata_pxa.c | 22 ++++------------------
+ 1 file changed, 4 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/ata/pata_pxa.c b/drivers/ata/pata_pxa.c
+index c816997dc0a9..a694f6a178e3 100644
+--- a/drivers/ata/pata_pxa.c
++++ b/drivers/ata/pata_pxa.c
+@@ -262,40 +262,26 @@ static int pxa_ata_probe(struct platform_device *pdev)
+ 	/*
+ 	 * Request the DMA channel
+ 	 */
+-	data->dma_chan = dma_request_chan(&pdev->dev, "data");
++	data->dma_chan = devm_dma_request_chan(&pdev->dev, "data");
+ 	if (IS_ERR(data->dma_chan))
+ 		return PTR_ERR(data->dma_chan);
++
+ 	ret = dmaengine_slave_config(data->dma_chan, &config);
+ 	if (ret < 0) {
+ 		dev_err(&pdev->dev, "dma configuration failed: %d\n", ret);
+-		dma_release_channel(data->dma_chan);
+ 		return ret;
+ 	}
+ 
+ 	/*
+ 	 * Activate the ATA host
+ 	 */
+-	ret = ata_host_activate(host, irq, ata_sff_interrupt,
++	return ata_host_activate(host, irq, ata_sff_interrupt,
+ 				pdata->irq_flags, &pxa_ata_sht);
+-	if (ret)
+-		dma_release_channel(data->dma_chan);
+-
+-	return ret;
+-}
+-
+-static void pxa_ata_remove(struct platform_device *pdev)
+-{
+-	struct ata_host *host = platform_get_drvdata(pdev);
+-	struct pata_pxa_data *data = host->ports[0]->private_data;
+-
+-	dma_release_channel(data->dma_chan);
+-
+-	ata_host_detach(host);
+ }
+ 
+ static struct platform_driver pxa_ata_driver = {
+ 	.probe		= pxa_ata_probe,
+-	.remove		= pxa_ata_remove,
++	.remove		= ata_platform_remove_one,
+ 	.driver		= {
+ 		.name		= DRV_NAME,
+ 	},
+-- 
+2.55.0
+

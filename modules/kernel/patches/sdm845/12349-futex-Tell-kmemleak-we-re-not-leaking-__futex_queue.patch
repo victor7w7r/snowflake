@@ -1,0 +1,41 @@
+From fcb8ada1287227a1392930ee52d7b6c6cab0f0b2 Mon Sep 17 00:00:00 2001
+From: Peter Zijlstra <peterz@infradead.org>
+Date: Fri, 7 Aug 2026 17:23:53 +0200
+Subject: [PATCH 12349/15333] futex: Tell kmemleak we're not leaking
+ __futex_queues
+
+Kmemleak doesn't know about runtime_const stuff and figures we're leaking
+__futex_queues. So add this little annotation to tell it all is well.
+
+Fixes: b78b0b658252 ("futex: Use runtime constants for __futex_hash() hot path")
+Reported-by: kernel test robot <oliver.sang@intel.com>
+Closes: https://lore.kernel.org/oe-lkp/202608071053.6db6276e-lkp@intel.com
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Link: https://patch.msgid.link/20260807152353.GP687043@noisy.programming.kicks-ass.net
+---
+ kernel/futex/core.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/kernel/futex/core.c b/kernel/futex/core.c
+index d3fcad4ee716..45538acecbf1 100644
+--- a/kernel/futex/core.c
++++ b/kernel/futex/core.c
+@@ -45,6 +45,7 @@
+ #include <linux/rseq.h>
+ #include <linux/slab.h>
+ #include <linux/vmalloc.h>
++#include <linux/kmemleak.h>
+ 
+ #include <vdso/futex.h>
+ 
+@@ -2028,6 +2029,7 @@ static int __init futex_init(void)
+ 	order = get_order(size);
+ 
+ 	__futex_queues = kcalloc(nr_node_ids, sizeof(*__futex_queues), GFP_KERNEL);
++	kmemleak_not_leak(__futex_queues);
+ 
+ 	runtime_const_init(shift, __futex_shift);
+ 	runtime_const_init(mask,  __futex_mask);
+-- 
+2.55.0
+

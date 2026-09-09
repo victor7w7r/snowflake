@@ -1,0 +1,55 @@
+From 7892c5a22a4e11d1ed3590c04ff73f047c0ce453 Mon Sep 17 00:00:00 2001
+From: Thomas Gleixner <tglx@kernel.org>
+Date: Tue, 7 Jul 2026 21:06:11 +0200
+Subject: [PATCH 04035/15333] loongarch/syscall: Use
+ syscall_enter_from_user_mode_randomize_stack()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+syscall_enter_from_user_mode_randomize_stack() replaces
+syscall_enter_from_user_mode() and the subsequent invocation of
+add_random_kstack_offset().
+
+The advantage is that it applies the stack randomization right after
+enter_from_user_mode() and thereby avoids the overhead of get/put_cpu_var()
+as that code is invoked with interrupts disabled.
+
+No functional change.
+
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Reviewed-by: Radu Rendec <radu@rendec.net>
+Reviewed-by: Jinjie Ruan <ruanjinjie@huawei.com>
+Reviewed-by: Philippe Mathieu-Daudé <philmd@oss.qualcomm.com>
+Reviewed-by: Mukesh Kumar Chaurasiya (IBM) <mkchauras@gmail.com>
+Link: https://patch.msgid.link/20260707190253.865955911@kernel.org
+---
+ arch/loongarch/kernel/syscall.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/arch/loongarch/kernel/syscall.c b/arch/loongarch/kernel/syscall.c
+index 94c1c3b5b0b5..142a9c20292c 100644
+--- a/arch/loongarch/kernel/syscall.c
++++ b/arch/loongarch/kernel/syscall.c
+@@ -11,7 +11,6 @@
+ #include <linux/linkage.h>
+ #include <linux/nospec.h>
+ #include <linux/objtool.h>
+-#include <linux/randomize_kstack.h>
+ #include <linux/syscalls.h>
+ #include <linux/unistd.h>
+ 
+@@ -70,9 +69,7 @@ void noinstr __no_stack_protector do_syscall(struct pt_regs *regs)
+ 	regs->orig_a0 = regs->regs[4];
+ 	regs->regs[4] = -ENOSYS;
+ 
+-	nr = syscall_enter_from_user_mode(regs, nr);
+-
+-	add_random_kstack_offset();
++	nr = syscall_enter_from_user_mode_randomize_stack(regs, nr);
+ 
+ 	if (nr < NR_syscalls) {
+ 		syscall_fn = sys_call_table[array_index_nospec(nr, NR_syscalls)];
+-- 
+2.55.0
+

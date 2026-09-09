@@ -1,0 +1,99 @@
+From cf31c7f186edc0593081c49c7a4374a59c6e3496 Mon Sep 17 00:00:00 2001
+From: Kuniyuki Iwashima <kuniyu@google.com>
+Date: Fri, 31 Jul 2026 16:45:53 +0000
+Subject: [PATCH 10559/15333] geneve: Unlink geneve->sock[46].hlist[46].hlist
+ in __geneve_sock_release().
+
+Currently, geneve->sock[46].hlist[46] is unliked from
+geneve_sock.vni_list in geneve_stop() and geneve_sock.refcnt is
+decremented for each socket later in __geneve_sock_release().
+
+The following patch will introduce a mutex in geneve_net to
+protect geneve_sock.{refcnt,vni_list}.
+
+However, udp_tunnel_notify_del_rx_port() must be outside of the
+lock to avoid AB-BA deadlock.
+
+To make the change cleaner, let's move hlist_del_init_rcu()
+from geneve_stop() to __geneve_sock_release().
+
+Signed-off-by: Kuniyuki Iwashima <kuniyu@google.com>
+Link: https://patch.msgid.link/20260731164612.2148830-2-kuniyu@google.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/geneve.c | 42 +++++++++++++++++++++++++-----------------
+ 1 file changed, 25 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/net/geneve.c b/drivers/net/geneve.c
+index 542e53f9dc3e..bd4fc6dba2fa 100644
+--- a/drivers/net/geneve.c
++++ b/drivers/net/geneve.c
+@@ -1052,9 +1052,30 @@ static struct geneve_sock *geneve_socket_create(struct net *net,
+ 	return gs;
+ }
+ 
+-static void __geneve_sock_release(struct geneve_sock *gs)
++static void __geneve_sock_release(struct geneve_dev *geneve, bool ipv6)
+ {
+-	if (!gs || --gs->refcnt)
++	struct geneve_dev_node *node;
++	struct geneve_sock *gs;
++
++#if IS_ENABLED(CONFIG_IPV6)
++	if (ipv6) {
++		gs = rtnl_dereference(geneve->sock6);
++		rcu_assign_pointer(geneve->sock6, NULL);
++		node = &geneve->hlist6;
++	} else
++#endif
++	{
++		gs = rtnl_dereference(geneve->sock4);
++		rcu_assign_pointer(geneve->sock4, NULL);
++		node = &geneve->hlist4;
++	}
++
++	if (!gs)
++		return;
++
++	hlist_del_init_rcu(&node->hlist);
++
++	if (--gs->refcnt)
+ 		return;
+ 
+ 	list_del(&gs->list);
+@@ -1065,19 +1086,10 @@ static void __geneve_sock_release(struct geneve_sock *gs)
+ 
+ static void geneve_sock_release(struct geneve_dev *geneve)
+ {
+-	struct geneve_sock *gs4 = rtnl_dereference(geneve->sock4);
+ #if IS_ENABLED(CONFIG_IPV6)
+-	struct geneve_sock *gs6 = rtnl_dereference(geneve->sock6);
+-
+-	rcu_assign_pointer(geneve->sock6, NULL);
+-#endif
+-
+-	rcu_assign_pointer(geneve->sock4, NULL);
+-
+-	__geneve_sock_release(gs4);
+-#if IS_ENABLED(CONFIG_IPV6)
+-	__geneve_sock_release(gs6);
++	__geneve_sock_release(geneve, true);
+ #endif
++	__geneve_sock_release(geneve, false);
+ }
+ 
+ static struct geneve_sock *geneve_find_sock(struct net *net,
+@@ -1187,10 +1199,6 @@ static int geneve_stop(struct net_device *dev)
+ {
+ 	struct geneve_dev *geneve = netdev_priv(dev);
+ 
+-	hlist_del_init_rcu(&geneve->hlist4.hlist);
+-#if IS_ENABLED(CONFIG_IPV6)
+-	hlist_del_init_rcu(&geneve->hlist6.hlist);
+-#endif
+ 	geneve_sock_release(geneve);
+ 	return 0;
+ }
+-- 
+2.55.0
+

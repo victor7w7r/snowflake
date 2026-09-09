@@ -1,0 +1,74 @@
+From 9bb4c0b37d54fc7d61f2a21cfa635fa2e3a29ac5 Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Thu, 2 Jul 2026 14:42:54 +0200
+Subject: [PATCH 02327/15333] regmap-irq: Provide IRQ resource request and
+ release callbacks
+
+The users which rely on regmap IRQ to create the IRQ chip may also
+want to have an additional tracking of the IRQ requests and releases.
+Provide a callback for them.
+
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/20260702130903.1790633-2-andriy.shevchenko@linux.intel.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/base/regmap/regmap-irq.c | 22 ++++++++++++++++++++++
+ include/linux/regmap.h           |  2 ++
+ 2 files changed, 24 insertions(+)
+
+diff --git a/drivers/base/regmap/regmap-irq.c b/drivers/base/regmap/regmap-irq.c
+index 07234d415b51..99b55b1053ee 100644
+--- a/drivers/base/regmap/regmap-irq.c
++++ b/drivers/base/regmap/regmap-irq.c
+@@ -296,6 +296,26 @@ static int regmap_irq_set_wake(struct irq_data *data, unsigned int on)
+ 	return 0;
+ }
+ 
++static int regmap_irq_reqres(struct irq_data *data)
++{
++	struct regmap_irq_chip_data *d = irq_data_get_irq_chip_data(data);
++	irq_hw_number_t hwirq = irqd_to_hwirq(data);
++
++	if (d->chip->irq_reqres)
++		return d->chip->irq_reqres(d->chip->irq_drv_data, hwirq);
++
++	return 0;
++}
++
++static void regmap_irq_relres(struct irq_data *data)
++{
++	struct regmap_irq_chip_data *d = irq_data_get_irq_chip_data(data);
++	irq_hw_number_t hwirq = irqd_to_hwirq(data);
++
++	if (d->chip->irq_relres)
++		d->chip->irq_relres(d->chip->irq_drv_data, hwirq);
++}
++
+ static const struct irq_chip regmap_irq_chip = {
+ 	.irq_bus_lock		= regmap_irq_lock,
+ 	.irq_bus_sync_unlock	= regmap_irq_sync_unlock,
+@@ -303,6 +323,8 @@ static const struct irq_chip regmap_irq_chip = {
+ 	.irq_enable		= regmap_irq_enable,
+ 	.irq_set_type		= regmap_irq_set_type,
+ 	.irq_set_wake		= regmap_irq_set_wake,
++	.irq_request_resources  = regmap_irq_reqres,
++	.irq_release_resources  = regmap_irq_relres,
+ };
+ 
+ static inline int read_sub_irq_data(struct regmap_irq_chip_data *data,
+diff --git a/include/linux/regmap.h b/include/linux/regmap.h
+index df44cb30f53b..370baa19db87 100644
+--- a/include/linux/regmap.h
++++ b/include/linux/regmap.h
+@@ -1770,6 +1770,8 @@ struct regmap_irq_chip {
+ 			       void *irq_drv_data);
+ 	unsigned int (*get_irq_reg)(struct regmap_irq_chip_data *data,
+ 				    unsigned int base, int index);
++	int (*irq_reqres)(void *irq_drv_data, irq_hw_number_t hwirq);
++	void (*irq_relres)(void *irq_drv_data, irq_hw_number_t hwirq);
+ 	void *irq_drv_data;
+ };
+ 
+-- 
+2.55.0
+

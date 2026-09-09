@@ -1,0 +1,83 @@
+From abb1537388baf8d872370deb3a07e1afccfa4e61 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh?= <thomas.weissschuh@linutronix.de>
+Date: Thu, 2 Jul 2026 10:21:28 +0200
+Subject: [PATCH 03026/15333] arm64: vdso32: Respect COMPAT_32BIT_TIME
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+If CONFIG_COMPAT_32BIT_TIME is disabled then the vDSO should not
+provide any 32-bit time related functionality. This is the intended
+effect of the kconfig option and also the fallback system calls would
+also not be implemented.
+
+Signed-off-by: Thomas Weißschuh <thomas.weissschuh@linutronix.de>
+Signed-off-by: Thomas Gleixner <tglx@kernel.org>
+Reviewed-by: Philippe Mathieu-Daudé <philmd@oss.qualcomm.com>
+Reviewed-by: Arnd Bergmann <arnd@arndb.de>
+Link: https://patch.msgid.link/20260702-vdso-compat_32bit_time-v3-4-db9f36d8d432@linutronix.de
+---
+ arch/arm64/kernel/vdso32/vdso.lds.S      |  2 ++
+ arch/arm64/kernel/vdso32/vgettimeofday.c | 14 ++++++++------
+ 2 files changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/arch/arm64/kernel/vdso32/vdso.lds.S b/arch/arm64/kernel/vdso32/vdso.lds.S
+index c374fb0146f3..12bfc39e8aab 100644
+--- a/arch/arm64/kernel/vdso32/vdso.lds.S
++++ b/arch/arm64/kernel/vdso32/vdso.lds.S
+@@ -82,9 +82,11 @@ VERSION
+ {
+ 	LINUX_2.6 {
+ 	global:
++#ifdef CONFIG_COMPAT_32BIT_TIME
+ 		__vdso_clock_gettime;
+ 		__vdso_gettimeofday;
+ 		__vdso_clock_getres;
++#endif /* CONFIG_COMPAT_32BIT_TIME */
+ 		__vdso_clock_gettime64;
+ 		__vdso_clock_getres_time64;
+ 	local: *;
+diff --git a/arch/arm64/kernel/vdso32/vgettimeofday.c b/arch/arm64/kernel/vdso32/vgettimeofday.c
+index 0c6998ebe491..12d0255cc2cf 100644
+--- a/arch/arm64/kernel/vdso32/vgettimeofday.c
++++ b/arch/arm64/kernel/vdso32/vgettimeofday.c
+@@ -8,16 +8,17 @@
+ #define BUILD_VDSO32_64
+ #include <vdso/gettime.h>
+ 
++#ifdef CONFIG_COMPAT_32BIT_TIME
+ int __vdso_clock_gettime(clockid_t clock,
+ 			 struct old_timespec32 *ts)
+ {
+ 	return __cvdso_clock_gettime32(clock, ts);
+ }
+ 
+-int __vdso_clock_gettime64(clockid_t clock,
+-			   struct __kernel_timespec *ts)
++int __vdso_clock_getres(clockid_t clock_id,
++			struct old_timespec32 *res)
+ {
+-	return __cvdso_clock_gettime(clock, ts);
++	return __cvdso_clock_getres_time32(clock_id, res);
+ }
+ 
+ int __vdso_gettimeofday(struct __kernel_old_timeval *tv,
+@@ -25,11 +26,12 @@ int __vdso_gettimeofday(struct __kernel_old_timeval *tv,
+ {
+ 	return __cvdso_gettimeofday(tv, tz);
+ }
++#endif /* CONFIG_COMPAT_32BIT_TIME */
+ 
+-int __vdso_clock_getres(clockid_t clock_id,
+-			struct old_timespec32 *res)
++int __vdso_clock_gettime64(clockid_t clock,
++			   struct __kernel_timespec *ts)
+ {
+-	return __cvdso_clock_getres_time32(clock_id, res);
++	return __cvdso_clock_gettime(clock, ts);
+ }
+ 
+ int __vdso_clock_getres_time64(clockid_t clock_id, struct __kernel_timespec *res)
+-- 
+2.55.0
+

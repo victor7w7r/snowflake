@@ -1,0 +1,76 @@
+From 13b1b0b98b82ddaefd899a29318bc745acaf433c Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Tue, 16 Jun 2026 23:08:43 +0300
+Subject: [PATCH 00808/15333] drm/i915/dp_link_caps: Add helper to reset max
+ link limits
+
+Add a helper to reset the link_caps::max_limits max link limits to the
+maximum common supported rate and lane count.
+
+This is needed by a follow-up change in the link training fallback code,
+which temporarily resets max_limits before searching for a fallback
+configuration.
+
+Reviewed-by: Mika Kahola <mika.kahola@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260616200849.3534628-24-imre.deak@intel.com
+---
+ .../gpu/drm/i915/display/intel_dp_link_caps.c | 22 +++++++++++++++++++
+ .../gpu/drm/i915/display/intel_dp_link_caps.h |  1 +
+ 2 files changed, 23 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+index e568f00720d3..ae10200bdd93 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.c
+@@ -160,6 +160,16 @@ static void set_max_link_limits_no_update(struct intel_dp_link_caps *link_caps,
+ 	intel_dp->link.max_lane_count = max_link_limits->lane_count;
+ }
+ 
++static void reset_max_link_limits_no_update(struct intel_dp_link_caps *link_caps)
++{
++	struct intel_dp_link_config max_link_limits = {
++		.rate = intel_dp_max_common_rate(link_caps->dp),
++		.lane_count = intel_dp_link_caps_max_common_lane_count(link_caps),
++	};
++
++	set_max_link_limits_no_update(link_caps, &max_link_limits);
++}
++
+ /**
+  * intel_dp_link_caps_get_max_limits - get the current maximum link limits
+  * @link_caps: link capabilities state
+@@ -216,6 +226,18 @@ bool intel_dp_link_caps_set_max_limits(struct intel_dp_link_caps *link_caps,
+ 	return true;
+ }
+ 
++/**
++ * intel_dp_link_caps_reset_max_limits - reset the current maximum link limits
++ * @link_caps: link capabilities state
++ *
++ * Reset the current maximum link limits to the maximum supported common link
++ * rate and lane count.
++ */
++void intel_dp_link_caps_reset_max_limits(struct intel_dp_link_caps *link_caps)
++{
++	reset_max_link_limits_no_update(link_caps);
++}
++
+ static int intel_dp_link_config_bw(struct intel_dp *intel_dp,
+ 				   const struct intel_dp_link_config_entry *lc)
+ {
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+index c6c60b788887..7baeb4359d2d 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_caps.h
+@@ -31,6 +31,7 @@ void intel_dp_link_caps_get_max_limits(struct intel_dp_link_caps *link_caps,
+ 				       struct intel_dp_link_config *max_link_limits);
+ bool intel_dp_link_caps_set_max_limits(struct intel_dp_link_caps *link_caps,
+ 				       const struct intel_dp_link_config *max_link_limits);
++void intel_dp_link_caps_reset_max_limits(struct intel_dp_link_caps *link_caps);
+ 
+ bool intel_dp_link_caps_update(struct intel_dp *intel_dp,
+ 			       const int *rates, int num_rates, int max_lane_count);
+-- 
+2.55.0
+

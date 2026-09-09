@@ -1,0 +1,78 @@
+From 5ab2c51c888f6b3a351b40fdfe6c381e2b972ab6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig=20=28The=20Capable=20Hub=29?=
+ <u.kleine-koenig@baylibre.com>
+Date: Sun, 5 Jul 2026 17:14:14 +0200
+Subject: [PATCH 03643/15333] pwm: Use named initializers for arrays of
+ acpi_device_id
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+While being less compact, using named initializers allows to more easily
+see which members of the structs are assigned which value without having
+to lookup the declaration of the struct. And it's also more robust
+against changes to the struct definition.
+
+The mentioned robustness is relevant for a planned change to struct
+acpi_device_id that replaces .driver_data by an anonymous union.
+
+This patch doesn't modify the compiled arrays, only their representation
+in source form benefits.
+
+Signed-off-by: Uwe Kleine-König (The Capable Hub) <u.kleine-koenig@baylibre.com>
+Link: https://patch.msgid.link/1a03da9625e1e6bf2befa13c64525e2dfa2243e7.1783263835.git.ukleinek@kernel.org
+Signed-off-by: Uwe Kleine-König <ukleinek@kernel.org>
+---
+ drivers/pwm/pwm-loongson.c      | 2 +-
+ drivers/pwm/pwm-lpss-platform.c | 8 ++++----
+ drivers/pwm/pwm-pca9685.c       | 2 +-
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/pwm/pwm-loongson.c b/drivers/pwm/pwm-loongson.c
+index 31a57edecfd0..f2fb35b7af2b 100644
+--- a/drivers/pwm/pwm-loongson.c
++++ b/drivers/pwm/pwm-loongson.c
+@@ -269,7 +269,7 @@ static const struct of_device_id pwm_loongson_of_ids[] = {
+ MODULE_DEVICE_TABLE(of, pwm_loongson_of_ids);
+ 
+ static const struct acpi_device_id pwm_loongson_acpi_ids[] = {
+-	{ "LOON0006" },
++	{ .id = "LOON0006" },
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(acpi, pwm_loongson_acpi_ids);
+diff --git a/drivers/pwm/pwm-lpss-platform.c b/drivers/pwm/pwm-lpss-platform.c
+index 653ec9d0c8bf..0d4f8bf04e9f 100644
+--- a/drivers/pwm/pwm-lpss-platform.c
++++ b/drivers/pwm/pwm-lpss-platform.c
+@@ -59,10 +59,10 @@ static int pwm_lpss_probe_platform(struct platform_device *pdev)
+ }
+ 
+ static const struct acpi_device_id pwm_lpss_acpi_match[] = {
+-	{ "80860F09", (unsigned long)&pwm_lpss_byt_info },
+-	{ "80862288", (unsigned long)&pwm_lpss_bsw_info },
+-	{ "80862289", (unsigned long)&pwm_lpss_bsw_info },
+-	{ "80865AC8", (unsigned long)&pwm_lpss_bxt_info },
++	{ .id = "80860F09", .driver_data = (unsigned long)&pwm_lpss_byt_info },
++	{ .id = "80862288", .driver_data = (unsigned long)&pwm_lpss_bsw_info },
++	{ .id = "80862289", .driver_data = (unsigned long)&pwm_lpss_bsw_info },
++	{ .id = "80865AC8", .driver_data = (unsigned long)&pwm_lpss_bxt_info },
+ 	{ },
+ };
+ MODULE_DEVICE_TABLE(acpi, pwm_lpss_acpi_match);
+diff --git a/drivers/pwm/pwm-pca9685.c b/drivers/pwm/pwm-pca9685.c
+index 617a74de68c7..0982ba4f566c 100644
+--- a/drivers/pwm/pwm-pca9685.c
++++ b/drivers/pwm/pwm-pca9685.c
+@@ -544,7 +544,7 @@ static const struct i2c_device_id pca9685_id[] = {
+ MODULE_DEVICE_TABLE(i2c, pca9685_id);
+ 
+ static const struct acpi_device_id pca9685_acpi_ids[] = {
+-	{ "INT3492" },
++	{ .id = "INT3492" },
+ 	{ /* sentinel */ },
+ };
+ MODULE_DEVICE_TABLE(acpi, pca9685_acpi_ids);
+-- 
+2.55.0
+

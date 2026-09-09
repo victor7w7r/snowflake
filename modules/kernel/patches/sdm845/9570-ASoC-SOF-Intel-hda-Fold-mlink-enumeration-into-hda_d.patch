@@ -1,0 +1,84 @@
+From c1c90903a25d2f0d5d8fe689fc6371e13c8f796e Mon Sep 17 00:00:00 2001
+From: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Date: Thu, 30 Jul 2026 15:51:27 +0300
+Subject: [PATCH 09570/15333] ASoC: SOF: Intel: hda: Fold mlink enumeration
+ into hda_dsp_ctrl_init_chip()
+
+Move the hda_bus_ml_init() call from hda_init_caps() into
+hda_dsp_ctrl_init_chip(), right after the HDA controller reset has
+been de-asserted and unsolicited responses have been accepted.
+
+hda_dsp_ctrl_init_chip() already calls hda_bus_ml_reset_losidv() at
+the end of its sequence to clear the stream-to-link mapping. On first
+boot this call was a no-op because the multi-link list had not yet
+been populated: hda_bus_ml_init() only runs later in hda_init_caps().
+Enumerating the links inside init_chip() makes the LOSIDV reset
+effective on first boot as well, without adding a second reset call
+from the probe path.
+
+hda_bus_ml_init() now returns early when the hlink_list is already
+populated, so the subsequent invocations from the D3 resume path
+(hda_resume() -> hda_dsp_ctrl_init_chip(false)) are no-ops.
+
+Signed-off-by: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Reviewed-by: Kai Vehmanen <kai.vehmanen@linux.intel.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Reviewed-by: Liam Girdwood <liam.r.girdwood@intel.com>
+Link: https://patch.msgid.link/20260730125130.29887-2-peter.ujfalusi@linux.intel.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/intel/hda-ctrl.c  | 8 ++++++++
+ sound/soc/sof/intel/hda-mlink.c | 4 ++++
+ sound/soc/sof/intel/hda.c       | 2 --
+ 3 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/sof/intel/hda-ctrl.c b/sound/soc/sof/intel/hda-ctrl.c
+index 8332d4bda558..a9ead78d3fcb 100644
+--- a/sound/soc/sof/intel/hda-ctrl.c
++++ b/sound/soc/sof/intel/hda-ctrl.c
+@@ -223,6 +223,14 @@ int hda_dsp_ctrl_init_chip(struct snd_sof_dev *sdev, bool detect_codec)
+ 	/* Accept unsolicited responses */
+ 	snd_hdac_chip_updatel(bus, GCTL, AZX_GCTL_UNSOL, AZX_GCTL_UNSOL);
+ 
++	/* Perform a one-time enumeration of the Multi-Link capability */
++	ret = hda_bus_ml_init(bus);
++	if (ret < 0) {
++		dev_err(sdev->dev, "%s: failed to enumerate multi-links\n",
++			__func__);
++		goto err;
++	}
++
+ 	if (detect_codec)
+ 		hda_codec_detect_mask(sdev);
+ 
+diff --git a/sound/soc/sof/intel/hda-mlink.c b/sound/soc/sof/intel/hda-mlink.c
+index 92314e3b568a..ca8551befdb5 100644
+--- a/sound/soc/sof/intel/hda-mlink.c
++++ b/sound/soc/sof/intel/hda-mlink.c
+@@ -432,6 +432,10 @@ int hda_bus_ml_init(struct hdac_bus *bus)
+ 	if (!bus->mlcap)
+ 		return 0;
+ 
++	/* Enumeration is a one time operation, skip if already done */
++	if (!list_empty(&bus->hlink_list))
++		return 0;
++
+ 	link_count = readl(bus->mlcap + AZX_REG_ML_MLCD) + 1;
+ 
+ 	dev_dbg(bus->dev, "HDAudio Multi-Link count: %d\n", link_count);
+diff --git a/sound/soc/sof/intel/hda.c b/sound/soc/sof/intel/hda.c
+index 007a8e4a2f3d..8602ae3892a2 100644
+--- a/sound/soc/sof/intel/hda.c
++++ b/sound/soc/sof/intel/hda.c
+@@ -639,8 +639,6 @@ static int hda_init_caps(struct snd_sof_dev *sdev)
+ 		return ret;
+ 	}
+ 
+-	hda_bus_ml_init(bus);
+-
+ 	/* Skip SoundWire if it is not supported */
+ 	if (!(interface_mask & BIT(SOF_DAI_INTEL_ALH)))
+ 		goto skip_soundwire;
+-- 
+2.55.0
+

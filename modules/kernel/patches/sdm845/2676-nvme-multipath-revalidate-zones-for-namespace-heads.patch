@@ -1,0 +1,128 @@
+From 224041412693b0d60acee0573eee18cbcd281d64 Mon Sep 17 00:00:00 2001
+From: Yao Sang <sangyao@kylinos.cn>
+Date: Wed, 10 Jun 2026 11:28:46 +0800
+Subject: [PATCH 02676/15333] nvme-multipath: revalidate zones for namespace
+ heads
+
+Zoned multipath namespace heads get BLK_FEAT_ZONED and their limits are
+refreshed from the paths, but the zone state for the head disk is never
+initialized. The previous nr_zones assignment only updated a single
+field and did not allocate or populate the block layer's per-zone state.
+
+The failure was found with xfstests xfs/643 and xfs/646 on an NVMe
+ZNS multipath namespace. Tracing showed regular REQ_OP_WRITE I/O being
+submitted to sequential zones through the multipath head.
+
+That leaves the head disk without valid zone condition information. Code
+using the head device, such as bdev_zone_is_seq(), can then treat a
+sequential zone as non-sequential and submit regular writes to it.
+
+Add a small helper to run blk_revalidate_disk_zones() for a live zoned
+namespace head after the path limits have been committed and when a path
+becomes live. Return the error to the namespace update path, and keep the
+live path transition as a warning-only update. Drop the nr_zones copy, as
+blk_revalidate_disk_zones() updates it together with the rest of the zoned
+disk state.
+
+Signed-off-by: Yao Sang <sangyao@kylinos.cn>
+Reviewed-by: Damien Le Moal <dlemoal@kernel.org>
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Keith Busch <kbusch@kernel.org>
+---
+ drivers/nvme/host/core.c      |  4 ++++
+ drivers/nvme/host/multipath.c | 24 ++++++++++++++++++++----
+ drivers/nvme/host/nvme.h      |  9 +++++++++
+ 3 files changed, 33 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/nvme/host/core.c b/drivers/nvme/host/core.c
+index 453c1f0b2dd0..db0c8ad4628a 100644
+--- a/drivers/nvme/host/core.c
++++ b/drivers/nvme/host/core.c
+@@ -2592,11 +2592,15 @@ static int nvme_update_ns_info(struct nvme_ns *ns, struct nvme_ns_info *info)
+ 		lim.max_write_streams = ns_lim->max_write_streams;
+ 		lim.write_stream_granularity = ns_lim->write_stream_granularity;
+ 		ret = queue_limits_commit_update(ns->head->disk->queue, &lim);
++		if (ret)
++			goto unfreeze_head_queue;
+ 
+ 		set_capacity_and_notify(ns->head->disk, get_capacity(ns->disk));
+ 		set_disk_ro(ns->head->disk, nvme_ns_is_readonly(ns, info));
+ 		nvme_mpath_revalidate_paths(ns->head);
++		ret = nvme_mpath_revalidate_zones(ns->head);
+ 
++unfreeze_head_queue:
+ 		blk_mq_unfreeze_queue(ns->head->disk->queue, memflags);
+ 	}
+ 
+diff --git a/drivers/nvme/host/multipath.c b/drivers/nvme/host/multipath.c
+index 9b9a657fa330..7e9fb7227300 100644
+--- a/drivers/nvme/host/multipath.c
++++ b/drivers/nvme/host/multipath.c
+@@ -288,6 +288,25 @@ void nvme_mpath_revalidate_paths(struct nvme_ns_head *head)
+ 	kblockd_schedule_work(&head->requeue_work);
+ }
+ 
++#ifdef CONFIG_BLK_DEV_ZONED
++int nvme_mpath_revalidate_zones(struct nvme_ns_head *head)
++{
++	struct gendisk *disk = head->disk;
++	int ret;
++
++	if (!disk || !blk_queue_is_zoned(disk->queue) ||
++	    !test_bit(NVME_NSHEAD_DISK_LIVE, &head->flags))
++		return 0;
++
++	ret = blk_revalidate_disk_zones(disk);
++	if (ret)
++		dev_warn_ratelimited(disk_to_dev(disk),
++				     "failed to revalidate zoned namespace head: %d\n",
++				     ret);
++	return ret;
++}
++#endif /* CONFIG_BLK_DEV_ZONED */
++
+ static bool nvme_path_is_disabled(struct nvme_ns *ns)
+ {
+ 	enum nvme_ctrl_state state = nvme_ctrl_state(ns->ctrl);
+@@ -819,6 +838,7 @@ static void nvme_mpath_set_live(struct nvme_ns *ns)
+ 	mutex_unlock(&head->lock);
+ 
+ 	synchronize_srcu(&head->srcu);
++	nvme_mpath_revalidate_zones(head);
+ 	kblockd_schedule_work(&head->requeue_work);
+ }
+ 
+@@ -1375,10 +1395,6 @@ void nvme_mpath_add_disk(struct nvme_ns *ns, __le32 anagrpid)
+ 		nvme_mpath_set_live(ns);
+ 	}
+ 
+-#ifdef CONFIG_BLK_DEV_ZONED
+-	if (blk_queue_is_zoned(ns->queue) && ns->head->disk)
+-		ns->head->disk->nr_zones = ns->disk->nr_zones;
+-#endif
+ }
+ 
+ void nvme_mpath_remove_disk(struct nvme_ns_head *head)
+diff --git a/drivers/nvme/host/nvme.h b/drivers/nvme/host/nvme.h
+index 824651cc898d..a679a4c61462 100644
+--- a/drivers/nvme/host/nvme.h
++++ b/drivers/nvme/host/nvme.h
+@@ -1184,6 +1184,15 @@ static inline bool nvme_mpath_queue_if_no_path(struct nvme_ns_head *head)
+ }
+ #endif /* CONFIG_NVME_MULTIPATH */
+ 
++#if defined(CONFIG_NVME_MULTIPATH) && defined(CONFIG_BLK_DEV_ZONED)
++int nvme_mpath_revalidate_zones(struct nvme_ns_head *head);
++#else
++static inline int nvme_mpath_revalidate_zones(struct nvme_ns_head *head)
++{
++	return 0;
++}
++#endif
++
+ int nvme_ns_get_unique_id(struct nvme_ns *ns, u8 id[16],
+ 		enum blk_unique_id type);
+ 
+-- 
+2.55.0
+

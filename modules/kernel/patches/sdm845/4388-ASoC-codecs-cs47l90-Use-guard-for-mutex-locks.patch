@@ -1,0 +1,57 @@
+From 1b681fda5e51d4ff8b7c39a30e7069e780ec304f Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Wed, 8 Jul 2026 19:49:58 +0700
+Subject: [PATCH 04388/15333] ASoC: codecs: cs47l90: Use guard() for mutex
+ locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Reviewed-by: Charles Keepax <ckeepax@opensource.cirrus.com>
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260708125002.202515-22-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/cs47l90.c | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/sound/soc/codecs/cs47l90.c b/sound/soc/codecs/cs47l90.c
+index 77e8aabb241a..6ce603bfd500 100644
+--- a/sound/soc/codecs/cs47l90.c
++++ b/sound/soc/codecs/cs47l90.c
+@@ -6,6 +6,7 @@
+ //                         Cirrus Logic International Semiconductor Ltd.
+ //
+ 
++#include <linux/cleanup.h>
+ #include <linux/module.h>
+ #include <linux/moduleparam.h>
+ #include <linux/device.h>
+@@ -2423,9 +2424,8 @@ static int cs47l90_component_probe(struct snd_soc_component *component)
+ 
+ 	snd_soc_component_init_regmap(component, madera->regmap);
+ 
+-	mutex_lock(&madera->dapm_ptr_lock);
+-	madera->dapm = snd_soc_component_to_dapm(component);
+-	mutex_unlock(&madera->dapm_ptr_lock);
++	scoped_guard(mutex, &madera->dapm_ptr_lock)
++		madera->dapm = snd_soc_component_to_dapm(component);
+ 
+ 	ret = madera_init_inputs(component);
+ 	if (ret)
+@@ -2456,9 +2456,8 @@ static void cs47l90_component_remove(struct snd_soc_component *component)
+ 	struct madera *madera = cs47l90->core.madera;
+ 	int i;
+ 
+-	mutex_lock(&madera->dapm_ptr_lock);
+-	madera->dapm = NULL;
+-	mutex_unlock(&madera->dapm_ptr_lock);
++	scoped_guard(mutex, &madera->dapm_ptr_lock)
++		madera->dapm = NULL;
+ 
+ 	for (i = 0; i < CS47L90_NUM_ADSP; i++)
+ 		wm_adsp2_component_remove(&cs47l90->core.adsp[i], component);
+-- 
+2.55.0
+

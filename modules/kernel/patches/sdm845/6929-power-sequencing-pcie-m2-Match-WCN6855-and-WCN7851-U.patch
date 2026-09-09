@@ -1,0 +1,52 @@
+From a39ac4651e3b9d2ca78b6d3dc2a81a6bd25fa616 Mon Sep 17 00:00:00 2001
+From: Wei Deng <wei.deng@oss.qualcomm.com>
+Date: Fri, 24 Jul 2026 13:51:56 +0530
+Subject: [PATCH 06929/15333] power: sequencing: pcie-m2: Match WCN6855 and
+ WCN7851 UART BT variants by subdevice ID
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The WCN6855 and WCN7851 combo chips are available in M.2 card variants
+that differ by their BT interface: some expose BT over UART while others
+expose BT over USB. Both variants use the same PCIe device ID for the
+WiFi interface, distinguished only by their sub-system device ID.
+
+The bare PCI_DEVICE() entries match all sub-system IDs, so both UART and
+USB variants hit the same table entry and trigger UART serdev creation.
+For USB variants this is wrong — there is no UART BT interface on such
+a card, and the serdev probe will fail.
+
+Narrow the matches to UART variants only by using PCI_DEVICE_SUB with
+their respective sub-system IDs, so USB variants no longer trigger
+UART serdev creation.
+
+Reviewed-by: Manivannan Sadhasivam <mani@kernel.org>
+Signed-off-by: Wei Deng <wei.deng@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260724-hamoa-m2-sub-id-v2-v3-1-af97de70bbbe@oss.qualcomm.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/power/sequencing/pwrseq-pcie-m2.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/power/sequencing/pwrseq-pcie-m2.c b/drivers/power/sequencing/pwrseq-pcie-m2.c
+index 7cb455569d8e..9c096388d8a2 100644
+--- a/drivers/power/sequencing/pwrseq-pcie-m2.c
++++ b/drivers/power/sequencing/pwrseq-pcie-m2.c
+@@ -192,9 +192,11 @@ static const struct pci_device_id pwrseq_m2_pci_ids[] = {
+ 	  .driver_data = (kernel_ulong_t)"nxp,88w8987-bt" },
+ 	{ PCI_DEVICE_SUB(PCI_VENDOR_ID_QCOM, 0x1103, PCI_VENDOR_ID_QCOM, 0x0108),
+ 	  .driver_data = (kernel_ulong_t)"qcom,qca2066-bt" },
+-	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x1103),
++	{ PCI_DEVICE_SUB(PCI_VENDOR_ID_QCOM, 0x1103, PCI_VENDOR_ID_FOXCONN, 0xe105),
+ 	  .driver_data = (kernel_ulong_t)"qcom,wcn6855-bt" },
+-	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x1107),
++	{ PCI_DEVICE_SUB(PCI_VENDOR_ID_QCOM, 0x1103, PCI_VENDOR_ID_QCOM, 0x337e),
++	  .driver_data = (kernel_ulong_t)"qcom,wcn6855-bt" },
++	{ PCI_DEVICE_SUB(PCI_VENDOR_ID_QCOM, 0x1107, PCI_VENDOR_ID_QCOM, 0x337c),
+ 	  .driver_data = (kernel_ulong_t)"qcom,wcn7850-bt" },
+ 	{ } /* Sentinel */
+ };
+-- 
+2.55.0
+

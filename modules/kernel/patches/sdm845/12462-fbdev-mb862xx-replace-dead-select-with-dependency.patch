@@ -1,0 +1,44 @@
+From d1917ccb7b6f830c0f0c3734bdc8af66a002a9af Mon Sep 17 00:00:00 2001
+From: Julian Braha <julianbraha@gmail.com>
+Date: Thu, 23 Jul 2026 13:28:18 +0100
+Subject: [PATCH 12462/15333] fbdev: mb862xx: replace dead select with
+ dependency
+
+'select' does not work on config options in a 'choice', so currently it is
+possible to enable FB_MB862XX_LIME without FB_LITTLE_ENDIAN.
+
+We cannot replace the 'select FB_LITTLE_ENDIAN' without also changing
+FB_FOREIGN_ENDIAN from 'select' to 'depends on', otherwise we will get
+a recursive dependency.
+
+Since the default choice is FB_BOTH_ENDIAN, let's use:
+'depends on FB_LITTLE_ENDIAN || FB_BOTH_ENDIAN'
+to avoid breaking defconfig.
+
+This dead select was found by kconfirm, a static analysis tool for Kconfig.
+
+Suggested-by: Arnd Bergmann <arnd@arndb.de>
+Signed-off-by: Julian Braha <julianbraha@gmail.com>
+Link: https://lore.kernel.org/all/20260722220023.196029-1-julianbraha@gmail.com/
+Signed-off-by: Helge Deller <deller@gmx.de>
+---
+ drivers/video/fbdev/Kconfig | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/video/fbdev/Kconfig b/drivers/video/fbdev/Kconfig
+index 085d3a202148..e8cd8cb76874 100644
+--- a/drivers/video/fbdev/Kconfig
++++ b/drivers/video/fbdev/Kconfig
+@@ -1717,8 +1717,7 @@ config FB_MB862XX_PCI_GDC
+ config FB_MB862XX_LIME
+ 	bool "Lime GDC"
+ 	depends on OF && PPC
+-	select FB_FOREIGN_ENDIAN
+-	select FB_LITTLE_ENDIAN
++	depends on FB_LITTLE_ENDIAN || FB_BOTH_ENDIAN
+ 	help
+ 	  Framebuffer support for Fujitsu Lime GDC on host CPU bus.
+ 
+-- 
+2.55.0
+

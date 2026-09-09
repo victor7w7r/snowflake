@@ -1,0 +1,142 @@
+From 753f41b30f6fd5bd77f890f7d066d825531435c9 Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Mon, 6 Jul 2026 19:23:04 -0600
+Subject: [PATCH 07887/15333] drm/amd/display: add KUnit tests for stutter
+ quirk
+
+[WHAT]
+Add KUnit tests for dm_should_disable_stutter covering a full quirk
+match, a non-matching device, and a partial match that differs only in
+the PCI revision.
+
+Assisted-by: Copilot:Claude-Opus-4.8
+Reviewed-by: Bhawanpreet Lakha <bhawanpreet.lakha@amd.com>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Wayne Lin <wayne.lin@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c |  3 +-
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h |  2 +
+ .../display/amdgpu_dm/tests/amdgpu_dm_test.c  | 64 +++++++++++++++++++
+ 3 files changed, 68 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+index d6e0175d9668..47f131668bea 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -424,7 +424,7 @@ static const struct amdgpu_stutter_quirk amdgpu_stutter_quirk_list[] = {
+ 	{ 0, 0, 0, 0, 0 },
+ };
+ 
+-static bool dm_should_disable_stutter(struct pci_dev *pdev)
++STATIC_IFN_KUNIT bool dm_should_disable_stutter(struct pci_dev *pdev)
+ {
+ 	const struct amdgpu_stutter_quirk *p = amdgpu_stutter_quirk_list;
+ 
+@@ -440,6 +440,7 @@ static bool dm_should_disable_stutter(struct pci_dev *pdev)
+ 	}
+ 	return false;
+ }
++EXPORT_IF_KUNIT(dm_should_disable_stutter);
+ 
+ 
+ void*
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+index 61d75f2a285d..03189f44efd4 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+@@ -1178,6 +1178,8 @@ bool is_dc_timing_adjust_needed(struct dm_crtc_state *old_state,
+ 				struct dm_crtc_state *new_state);
+ void set_multisync_trigger_params(struct dc_stream_state *stream);
+ void set_master_stream(struct dc_stream_state *stream_set[], int stream_count);
++struct pci_dev;
++bool dm_should_disable_stutter(struct pci_dev *pdev);
+ void reset_freesync_config_for_crtc(struct dm_crtc_state *new_crtc_state);
+ void get_freesync_config_for_crtc(struct dm_crtc_state *new_crtc_state,
+ 				  struct dm_connector_state *new_con_state);
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c
+index c0516ce2311b..a0b4d581a546 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_test.c
+@@ -1937,6 +1937,66 @@ static void dm_test_per_frame_master_sync_skips_null_stream(struct kunit *test)
+ 			    stream);
+ }
+ 
++/* Tests for dm_should_disable_stutter() */
++
++/**
++ * dm_test_should_disable_stutter_match - Test the quirk device matches
++ * @test: The KUnit test context
++ */
++static void dm_test_should_disable_stutter_match(struct kunit *test)
++{
++	struct pci_dev *pdev;
++
++	pdev = kunit_kzalloc(test, sizeof(*pdev), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, pdev);
++
++	pdev->vendor = 0x1002;
++	pdev->device = 0x15dd;
++	pdev->subsystem_vendor = 0x1002;
++	pdev->subsystem_device = 0x15dd;
++	pdev->revision = 0xc8;
++
++	KUNIT_EXPECT_TRUE(test, dm_should_disable_stutter(pdev));
++}
++
++/**
++ * dm_test_should_disable_stutter_no_match - Test a non-quirk device does not match
++ * @test: The KUnit test context
++ */
++static void dm_test_should_disable_stutter_no_match(struct kunit *test)
++{
++	struct pci_dev *pdev;
++
++	pdev = kunit_kzalloc(test, sizeof(*pdev), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, pdev);
++
++	pdev->vendor = 0x1002;
++	pdev->device = 0x1234;
++
++	KUNIT_EXPECT_FALSE(test, dm_should_disable_stutter(pdev));
++}
++
++/**
++ * dm_test_should_disable_stutter_revision_differs - Test a partial match (revision) fails
++ * @test: The KUnit test context
++ */
++static void dm_test_should_disable_stutter_revision_differs(struct kunit *test)
++{
++	struct pci_dev *pdev;
++
++	pdev = kunit_kzalloc(test, sizeof(*pdev), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, pdev);
++
++	/* Everything matches the quirk except the revision */
++	pdev->vendor = 0x1002;
++	pdev->device = 0x15dd;
++	pdev->subsystem_vendor = 0x1002;
++	pdev->subsystem_device = 0x15dd;
++	pdev->revision = 0x00;
++
++	KUNIT_EXPECT_FALSE(test, dm_should_disable_stutter(pdev));
++}
++
+ static struct kunit_case amdgpu_dm_tests[] = {
+ 	/* Simple DM callbacks */
+ 	KUNIT_CASE(dm_test_is_idle),
+@@ -2042,6 +2102,10 @@ static struct kunit_case amdgpu_dm_tests[] = {
+ 	KUNIT_CASE(dm_test_per_frame_master_sync_single_stream),
+ 	KUNIT_CASE(dm_test_per_frame_master_sync_two_streams),
+ 	KUNIT_CASE(dm_test_per_frame_master_sync_skips_null_stream),
++	/* dm_should_disable_stutter */
++	KUNIT_CASE(dm_test_should_disable_stutter_match),
++	KUNIT_CASE(dm_test_should_disable_stutter_no_match),
++	KUNIT_CASE(dm_test_should_disable_stutter_revision_differs),
+ 	{}
+ };
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,148 @@
+From bb4e90e91ba19b598cbdd9a2161b893b86a3f637 Mon Sep 17 00:00:00 2001
+From: luoliang <luoliang@kylinos.cn>
+Date: Thu, 2 Jul 2026 09:23:11 +0800
+Subject: [PATCH 02125/15333] bpftool: Use btf_vlen()/btf_kind()/btf_kflag()
+ helpers consistently
+
+The btf_vlen(), btf_kind() and btf_kflag() inline helpers defined in
+tools/lib/bpf/btf.h are thin wrappers around the BTF_INFO_VLEN(),
+BTF_INFO_KIND() and BTF_INFO_KFLAG() UAPI macros - each one simply
+returns the corresponding macro applied to t->info.
+
+bpftool already uses these helpers in most places, but 13 call sites
+in btf.c and btf_dumper.c still open-code the raw macros. Use the
+helpers consistently, matching the rest of bpftool as well as libbpf.
+
+No functional change.
+
+Signed-off-by: Liang Luo <luoliang@kylinos.cn>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Reviewed-by: Quentin Monnet <qmo@kernel.org>
+Link: https://lore.kernel.org/bpf/20260702012311.2265001-1-luoliang@kylinos.cn
+---
+ tools/bpf/bpftool/btf.c        | 13 ++++++-------
+ tools/bpf/bpftool/btf_dumper.c | 14 +++++++-------
+ 2 files changed, 13 insertions(+), 14 deletions(-)
+
+diff --git a/tools/bpf/bpftool/btf.c b/tools/bpf/bpftool/btf.c
+index 6ef908adf3a4..c9589026da8d 100644
+--- a/tools/bpf/bpftool/btf.c
++++ b/tools/bpf/bpftool/btf.c
+@@ -179,7 +179,7 @@ static int dump_btf_type(const struct btf *btf, __u32 id,
+ 	case BTF_KIND_STRUCT:
+ 	case BTF_KIND_UNION: {
+ 		const struct btf_member *m = (const void *)(t + 1);
+-		__u32 i, vlen = BTF_INFO_VLEN(t->info);
++		__u32 i, vlen = btf_vlen(t);
+ 
+ 		if (json_output) {
+ 			jsonw_uint_field(w, "size", t->size);
+@@ -193,7 +193,7 @@ static int dump_btf_type(const struct btf *btf, __u32 id,
+ 			const char *name = btf_str(btf, m->name_off);
+ 			__u32 bit_off, bit_sz;
+ 
+-			if (BTF_INFO_KFLAG(t->info)) {
++			if (btf_kflag(t)) {
+ 				bit_off = BTF_MEMBER_BIT_OFFSET(m->offset);
+ 				bit_sz = BTF_MEMBER_BITFIELD_SIZE(m->offset);
+ 			} else {
+@@ -224,7 +224,7 @@ static int dump_btf_type(const struct btf *btf, __u32 id,
+ 	}
+ 	case BTF_KIND_ENUM: {
+ 		const struct btf_enum *v = (const void *)(t + 1);
+-		__u32 i, vlen = BTF_INFO_VLEN(t->info);
++		__u32 i, vlen = btf_vlen(t);
+ 		const char *encoding;
+ 
+ 		encoding = btf_kflag(t) ? "SIGNED" : "UNSIGNED";
+@@ -300,8 +300,7 @@ static int dump_btf_type(const struct btf *btf, __u32 id,
+ 		break;
+ 	}
+ 	case BTF_KIND_FWD: {
+-		const char *fwd_kind = BTF_INFO_KFLAG(t->info) ? "union"
+-							       : "struct";
++		const char *fwd_kind = btf_kflag(t) ? "union" : "struct";
+ 
+ 		if (json_output)
+ 			jsonw_string_field(w, "fwd_kind", fwd_kind);
+@@ -322,7 +321,7 @@ static int dump_btf_type(const struct btf *btf, __u32 id,
+ 	}
+ 	case BTF_KIND_FUNC_PROTO: {
+ 		const struct btf_param *p = (const void *)(t + 1);
+-		__u32 i, vlen = BTF_INFO_VLEN(t->info);
++		__u32 i, vlen = btf_vlen(t);
+ 
+ 		if (json_output) {
+ 			jsonw_uint_field(w, "ret_type_id", t->type);
+@@ -365,7 +364,7 @@ static int dump_btf_type(const struct btf *btf, __u32 id,
+ 	case BTF_KIND_DATASEC: {
+ 		const struct btf_var_secinfo *v = (const void *)(t + 1);
+ 		const struct btf_type *vt;
+-		__u32 i, vlen = BTF_INFO_VLEN(t->info);
++		__u32 i, vlen = btf_vlen(t);
+ 
+ 		if (json_output) {
+ 			jsonw_uint_field(w, "size", t->size);
+diff --git a/tools/bpf/bpftool/btf_dumper.c b/tools/bpf/bpftool/btf_dumper.c
+index 9dc8425b1789..e4075824343f 100644
+--- a/tools/bpf/bpftool/btf_dumper.c
++++ b/tools/bpf/bpftool/btf_dumper.c
+@@ -476,8 +476,8 @@ static int btf_dumper_struct(const struct btf_dumper *d, __u32 type_id,
+ 	if (!t)
+ 		return -EINVAL;
+ 
+-	kind_flag = BTF_INFO_KFLAG(t->info);
+-	vlen = BTF_INFO_VLEN(t->info);
++	kind_flag = btf_kflag(t);
++	vlen = btf_vlen(t);
+ 	jsonw_start_object(d->jw);
+ 	m = (struct btf_member *)(t + 1);
+ 
+@@ -535,7 +535,7 @@ static int btf_dumper_datasec(const struct btf_dumper *d, __u32 type_id,
+ 	if (!t)
+ 		return -EINVAL;
+ 
+-	vlen = BTF_INFO_VLEN(t->info);
++	vlen = btf_vlen(t);
+ 	vsi = (struct btf_var_secinfo *)(t + 1);
+ 
+ 	jsonw_start_object(d->jw);
+@@ -557,7 +557,7 @@ static int btf_dumper_do_type(const struct btf_dumper *d, __u32 type_id,
+ {
+ 	const struct btf_type *t = btf__type_by_id(d->btf, type_id);
+ 
+-	switch (BTF_INFO_KIND(t->info)) {
++	switch (btf_kind(t)) {
+ 	case BTF_KIND_INT:
+ 		return btf_dumper_int(t, bit_offset, data, d->jw,
+ 				     d->is_plain_text);
+@@ -631,7 +631,7 @@ static int __btf_dumper_type_only(const struct btf *btf, __u32 type_id,
+ 
+ 	t = btf__type_by_id(btf, type_id);
+ 
+-	switch (BTF_INFO_KIND(t->info)) {
++	switch (btf_kind(t)) {
+ 	case BTF_KIND_INT:
+ 	case BTF_KIND_TYPEDEF:
+ 	case BTF_KIND_FLOAT:
+@@ -661,7 +661,7 @@ static int __btf_dumper_type_only(const struct btf *btf, __u32 type_id,
+ 		break;
+ 	case BTF_KIND_FWD:
+ 		BTF_PRINT_ARG("%s %s ",
+-			      BTF_INFO_KFLAG(t->info) ? "union" : "struct",
++			      btf_kflag(t) ? "union" : "struct",
+ 			      btf__name_by_offset(btf, t->name_off));
+ 		break;
+ 	case BTF_KIND_VOLATILE:
+@@ -718,7 +718,7 @@ static int btf_dump_func(const struct btf *btf, char *func_sig,
+ 		BTF_PRINT_ARG("%s(", btf__name_by_offset(btf, func->name_off));
+ 	else
+ 		BTF_PRINT_ARG("(");
+-	vlen = BTF_INFO_VLEN(func_proto->info);
++	vlen = btf_vlen(func_proto);
+ 	for (i = 0; i < vlen; i++) {
+ 		struct btf_param *arg = &((struct btf_param *)(func_proto + 1))[i];
+ 
+-- 
+2.55.0
+

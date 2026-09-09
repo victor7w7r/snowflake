@@ -1,0 +1,125 @@
+From c6cfaf97837e18d50e65185d36b4a9d860f62a4a Mon Sep 17 00:00:00 2001
+From: Kuniyuki Iwashima <kuniyu@google.com>
+Date: Fri, 3 Jul 2026 00:09:14 +0000
+Subject: [PATCH 03901/15333] rtnetlink: Add per-netns rtnl_work.
+
+The biggest blocker to per-netns RTNL is netdev unregistration.
+
+It starts within a single netns (e.g., during a device lookup or
+netns dismantle), but it can eventually involve multiple namespaces,
+such as when upper ipvlan devices reside in different netns.
+
+This prevents us from acquiring multiple rtnl_net_lock()s beforehand.
+
+When we encounter such a cross-netns device, we must delegate the
+unregistration to the work of the netns where the device actually
+resides.
+
+Let's add per-netns rtnl_work to support the deferred netdev
+unregistration.
+
+Signed-off-by: Kuniyuki Iwashima <kuniyu@google.com>
+Link: https://patch.msgid.link/20260703001009.1572444-4-kuniyu@google.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ include/linux/rtnetlink.h   |  8 ++++++++
+ include/net/net_namespace.h |  1 +
+ net/core/net_namespace.c    |  1 +
+ net/core/rtnetlink.c        | 26 ++++++++++++++++++++++++++
+ 4 files changed, 36 insertions(+)
+
+diff --git a/include/linux/rtnetlink.h b/include/linux/rtnetlink.h
+index ea39dd23a197..95729339e7a5 100644
+--- a/include/linux/rtnetlink.h
++++ b/include/linux/rtnetlink.h
+@@ -115,6 +115,10 @@ bool rtnl_net_is_locked(struct net *net);
+ 
+ bool lockdep_rtnl_net_is_held(struct net *net);
+ 
++void rtnl_net_queue_work(struct net *net);
++void rtnl_net_flush_workqueue(void);
++void rtnl_net_work_func(struct work_struct *work);
++
+ #define rcu_dereference_rtnl_net(net, p)				\
+ 	rcu_dereference_check(p, lockdep_rtnl_net_is_held(net))
+ #define rtnl_net_dereference(net, p)					\
+@@ -150,6 +154,10 @@ static inline void ASSERT_RTNL_NET(struct net *net)
+ 	ASSERT_RTNL();
+ }
+ 
++static inline void rtnl_net_flush_workqueue(void)
++{
++}
++
+ #define rcu_dereference_rtnl_net(net, p)		\
+ 	rcu_dereference_rtnl(p)
+ #define rtnl_net_dereference(net, p)			\
+diff --git a/include/net/net_namespace.h b/include/net/net_namespace.h
+index 80de5e98a66d..a989019af5f7 100644
+--- a/include/net/net_namespace.h
++++ b/include/net/net_namespace.h
+@@ -197,6 +197,7 @@ struct net {
+ #ifdef CONFIG_DEBUG_NET_SMALL_RTNL
+ 	/* Move to a better place when the config guard is removed. */
+ 	struct mutex		rtnl_mutex;
++	struct work_struct	rtnl_work;
+ #endif
+ #if IS_ENABLED(CONFIG_VSOCKETS)
+ 	struct netns_vsock	vsock;
+diff --git a/net/core/net_namespace.c b/net/core/net_namespace.c
+index d9dafe24f57e..d1aeff9de580 100644
+--- a/net/core/net_namespace.c
++++ b/net/core/net_namespace.c
+@@ -422,6 +422,7 @@ static __net_init int preinit_net(struct net *net, struct user_namespace *user_n
+ #ifdef CONFIG_DEBUG_NET_SMALL_RTNL
+ 	mutex_init(&net->rtnl_mutex);
+ 	lock_set_cmp_fn(&net->rtnl_mutex, rtnl_net_lock_cmp_fn, NULL);
++	INIT_WORK(&net->rtnl_work, rtnl_net_work_func);
+ #endif
+ 
+ 	INIT_LIST_HEAD(&net->ptype_all);
+diff --git a/net/core/rtnetlink.c b/net/core/rtnetlink.c
+index c4528f5349a3..608908b3feec 100644
+--- a/net/core/rtnetlink.c
++++ b/net/core/rtnetlink.c
+@@ -273,6 +273,26 @@ bool lockdep_rtnl_net_is_held(struct net *net)
+ 	return lockdep_rtnl_is_held() && lockdep_is_held(&net->rtnl_mutex);
+ }
+ EXPORT_SYMBOL(lockdep_rtnl_net_is_held);
++
++static struct workqueue_struct *rtnl_net_wq;
++
++void rtnl_net_queue_work(struct net *net)
++{
++	queue_work(rtnl_net_wq, &net->rtnl_work);
++}
++
++void rtnl_net_flush_workqueue(void)
++{
++	flush_workqueue(rtnl_net_wq);
++}
++
++void rtnl_net_work_func(struct work_struct *work)
++{
++	struct net *net = container_of(work, struct net, rtnl_work);
++
++	rtnl_net_lock(net);
++	rtnl_net_unlock(net);
++}
+ #else
+ static int rtnl_net_cmp_locks(const struct net *net_a, const struct net *net_b)
+ {
+@@ -7229,4 +7249,10 @@ void __init rtnetlink_init(void)
+ 	register_netdevice_notifier(&rtnetlink_dev_notifier);
+ 
+ 	rtnl_register_many(rtnetlink_rtnl_msg_handlers);
++
++#ifdef CONFIG_DEBUG_NET_SMALL_RTNL
++	rtnl_net_wq = create_workqueue("rtnl_net");
++	if (!rtnl_net_wq)
++		panic("Could not create rtnl_net workq");
++#endif
+ }
+-- 
+2.55.0
+

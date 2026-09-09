@@ -1,0 +1,66 @@
+From b2a2c620404ecb3b9a9706bf438d788ca87a41ac Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Tue, 12 May 2026 00:41:10 +0300
+Subject: [PATCH 04414/15333] drm/i915/fbdev: Extract bios_fb_ok()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Pull the "is the BIOS FB OK?" checks to a helper function. We'll
+add other relevant checks there later.
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Reviewed-by: Jani Nikula <jani.nikula@intel.com>
+Link: https://patch.msgid.link/20260511214122.8468-3-ville.syrjala@linux.intel.com
+Signed-off-by: Maarten Lankhorst <dev@lankhorst.se>
+---
+ drivers/gpu/drm/i915/display/intel_fbdev.c | 26 +++++++++++++++-------
+ 1 file changed, 18 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_fbdev.c b/drivers/gpu/drm/i915/display/intel_fbdev.c
+index c8d4e3a5ce6b..bc267776106e 100644
+--- a/drivers/gpu/drm/i915/display/intel_fbdev.c
++++ b/drivers/gpu/drm/i915/display/intel_fbdev.c
+@@ -262,6 +262,23 @@ __intel_fbdev_fb_alloc(struct intel_display *display,
+ 
+ }
+ 
++static bool bios_fb_ok(const struct intel_framebuffer *fb,
++		       const struct drm_fb_helper_surface_size *sizes)
++{
++	struct intel_display *display = to_intel_display(fb->base.dev);
++	int width = fb->base.width;
++	int height = fb->base.height;
++
++	if (sizes->fb_width > width || sizes->fb_height > height) {
++		drm_dbg_kms(display->drm,
++			    "BIOS fb too small (%dx%d), we require (%dx%d), releasing it\n",
++			    width, height, sizes->fb_width, sizes->fb_height);
++		return false;
++	}
++
++	return true;
++}
++
+ int intel_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 				   struct drm_fb_helper_surface_size *sizes)
+ {
+@@ -279,14 +296,7 @@ int intel_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+ 
+ 	ifbdev->fb = NULL;
+ 
+-	if (fb &&
+-	    (sizes->fb_width > fb->base.width ||
+-	     sizes->fb_height > fb->base.height)) {
+-		drm_dbg_kms(display->drm,
+-			    "BIOS fb too small (%dx%d), we require (%dx%d),"
+-			    " releasing it\n",
+-			    fb->base.width, fb->base.height,
+-			    sizes->fb_width, sizes->fb_height);
++	if (fb && !bios_fb_ok(fb, sizes)) {
+ 		drm_framebuffer_put(&fb->base);
+ 		fb = NULL;
+ 	}
+-- 
+2.55.0
+

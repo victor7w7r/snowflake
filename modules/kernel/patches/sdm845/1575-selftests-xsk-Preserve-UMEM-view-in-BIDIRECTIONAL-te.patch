@@ -1,0 +1,60 @@
+From 333289d1690d6089a656edb46c7cde68afe77223 Mon Sep 17 00:00:00 2001
+From: Maciej Fijalkowski <maciej.fijalkowski@intel.com>
+Date: Mon, 29 Jun 2026 21:12:21 +0200
+Subject: [PATCH 01575/15333] selftests/xsk: Preserve UMEM view in
+ BIDIRECTIONAL test
+
+The UMEM state refactor made __send_pkts() use xsk->umem for Tx
+address generation. At the same time, the shared-UMEM Tx setup copies the
+Rx UMEM state into a Tx-local state object and resets base_addr and
+next_buffer before configuring the Tx socket.
+
+Passing that Tx-local object to xsk_configure() makes xsk->umem point to
+the zero-based Tx allocator state. This breaks the BIDIRECTIONAL test once
+the roles are switched: the same socket is then used for Rx validation, but
+received descriptors from the other logical UMEM half are checked against
+base_addr == 0. With the new UMEM bounds check, a valid address such as
+base_addr + XDP_PACKET_HEADROOM is rejected as being outside the UMEM
+window.
+
+Keep xsk->umem as the shared/Rx UMEM view used for socket configuration
+and Rx validation. Use the ifobject-local UMEM copy only for Tx descriptor
+address generation, preserving the BIDIRECTIONAL test's intent of using
+the proper logical UMEM half after the direction switch.
+
+Reviewed-by: Jason Xing <kerneljasonxing@gmail.com>
+Reviewed-by: Tushar Vyavahare <tushar.vyavahare@intel.com>
+Tested-by: Tushar Vyavahare <tushar.vyavahare@intel.com>
+Signed-off-by: Maciej Fijalkowski <maciej.fijalkowski@intel.com>
+Link: https://patch.msgid.link/20260629191221.2700-1-maciej.fijalkowski@intel.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ tools/testing/selftests/bpf/prog_tests/test_xsk.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/test_xsk.c b/tools/testing/selftests/bpf/prog_tests/test_xsk.c
+index 6eb9096d084c..477aedbb01ba 100644
+--- a/tools/testing/selftests/bpf/prog_tests/test_xsk.c
++++ b/tools/testing/selftests/bpf/prog_tests/test_xsk.c
+@@ -1164,8 +1164,8 @@ static int __send_pkts(struct ifobject *ifobject, struct xsk_socket_info *xsk,
+ 		       bool test_timeout)
+ {
+ 	u32 i, idx = 0, valid_pkts = 0, valid_frags = 0, buffer_len;
++	struct xsk_umem_info *umem = ifobject->xsk_arr[0].umem_real;
+ 	struct pkt_stream *pkt_stream = xsk->pkt_stream;
+-	struct xsk_umem_info *umem = xsk->umem;
+ 	bool use_poll = ifobject->use_poll;
+ 	struct pollfd fds = { };
+ 	int ret;
+@@ -1514,7 +1514,7 @@ static int thread_common_ops_tx(struct test_spec *test, struct ifobject *ifobjec
+ 	umem_tx->base_addr = 0;
+ 	umem_tx->next_buffer = 0;
+ 
+-	ret = xsk_configure(test, ifobject, umem_tx, true);
++	ret = xsk_configure(test, ifobject, umem_rx, true);
+ 	if (ret)
+ 		return ret;
+ 	ifobject->xsk = &ifobject->xsk_arr[0];
+-- 
+2.55.0
+

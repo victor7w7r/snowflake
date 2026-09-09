@@ -1,0 +1,116 @@
+From 84d58754370fc7bb8ff7af5213bb9aa967a38be2 Mon Sep 17 00:00:00 2001
+From: John Hubbard <jhubbard@nvidia.com>
+Date: Wed, 10 Jun 2026 18:19:00 -0700
+Subject: [PATCH 00338/15333] gpu: nova-core: Hopper: use correct sysmem flush
+ registers
+
+Hopper has its own FBHUB sysmem flush page registers, but the Hopper
+framebuffer HAL delegates to the Ampere NISO path, which encodes the
+address with an 8-bit right-shift. That programs the wrong value into
+the wrong registers, so the GPU's sysmembar flush targets the wrong
+system memory address.
+
+Add Hopper's FBHUB flush registers and program them directly from the
+Hopper HAL.
+
+This has not yet been tested on real Hopper hardware (that's true for
+nova-core in general).
+
+Signed-off-by: John Hubbard <jhubbard@nvidia.com>
+Link: https://patch.msgid.link/20260611011901.84517-3-jhubbard@nvidia.com
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/fb/hal/gh100.rs | 31 ++++++++++++++++++++++++---
+ drivers/gpu/nova-core/regs.rs         | 19 ++++++++++++++++
+ 2 files changed, 47 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/fb/hal/gh100.rs b/drivers/gpu/nova-core/fb/hal/gh100.rs
+index 5450c7254dad..d39fe99537ed 100644
+--- a/drivers/gpu/nova-core/fb/hal/gh100.rs
++++ b/drivers/gpu/nova-core/fb/hal/gh100.rs
+@@ -2,24 +2,49 @@
+ // SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ 
+ use kernel::{
++    io::Io,
++    num::Bounded,
+     prelude::*,
+     sizes::SizeConstants, //
+ };
+ 
+ use crate::{
+     driver::Bar0,
+-    fb::hal::FbHal, //
++    fb::hal::FbHal,
++    regs, //
+ };
+ 
+ struct Gh100;
+ 
++fn read_sysmem_flush_page_gh100(bar: Bar0<'_>) -> u64 {
++    let lo = u64::from(bar.read(regs::NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_LO).adr());
++    let hi = u64::from(bar.read(regs::NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_HI).adr());
++
++    (hi << 32) | lo
++}
++
++/// Write the sysmem flush page address through the Hopper FBHUB registers.
++fn write_sysmem_flush_page_gh100(bar: Bar0<'_>, addr: Bounded<u64, 52>) {
++    // Write HI first. The hardware will trigger the flush on the LO write.
++    bar.write_reg(
++        regs::NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_HI::zeroed()
++            .with_adr(addr.shr::<32, 20>().cast::<u32>()),
++    );
++    bar.write_reg(
++        // CAST: lower 32 bits. Hardware ignores bits 7:0.
++        regs::NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_LO::zeroed().with_adr(*addr as u32),
++    );
++}
++
+ impl FbHal for Gh100 {
+     fn read_sysmem_flush_page(&self, bar: Bar0<'_>) -> u64 {
+-        super::ga100::read_sysmem_flush_page_ga100(bar)
++        read_sysmem_flush_page_gh100(bar)
+     }
+ 
+     fn write_sysmem_flush_page(&self, bar: Bar0<'_>, addr: u64) -> Result {
+-        super::ga100::write_sysmem_flush_page_ga100(bar, addr);
++        let addr = Bounded::<u64, 52>::try_new(addr).ok_or(EINVAL)?;
++
++        write_sysmem_flush_page_gh100(bar, addr);
+ 
+         Ok(())
+     }
+diff --git a/drivers/gpu/nova-core/regs.rs b/drivers/gpu/nova-core/regs.rs
+index 5ab7ccfb9855..7982778fd6cb 100644
+--- a/drivers/gpu/nova-core/regs.rs
++++ b/drivers/gpu/nova-core/regs.rs
+@@ -189,6 +189,25 @@ fn fmt(&self, f: &mut kernel::fmt::Formatter<'_>) -> kernel::fmt::Result {
+     }
+ }
+ 
++register! {
++    /// Low bits of the physical system memory address used by the GPU to perform
++    /// sysmembar operations on Hopper.
++    ///
++    /// Like the GB20x FBHUB0 registers, and unlike the Ampere
++    /// `NV_PFB_NISO_FLUSH_SYSMEM_ADDR` registers (which encode the address with an
++    /// 8-bit right-shift), these take the raw address split into lower and upper
++    /// halves. Hardware ignores bits 7:0 of the LO register.
++    pub(crate) NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_LO(u32) @ 0x00100a34 {
++        31:0    adr => u32;
++    }
++
++    /// High bits of the physical system memory address used by the GPU to perform
++    /// sysmembar operations on Hopper.
++    pub(crate) NV_PFB_FBHUB_PCIE_FLUSH_SYSMEM_ADDR_HI(u32) @ 0x00100a38 {
++        19:0    adr;
++    }
++}
++
+ impl NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE {
+     /// Returns the usable framebuffer size, in bytes.
+     pub(crate) fn usable_fb_size(self) -> u64 {
+-- 
+2.55.0
+

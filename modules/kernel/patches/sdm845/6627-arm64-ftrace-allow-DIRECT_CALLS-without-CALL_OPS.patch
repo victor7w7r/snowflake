@@ -1,0 +1,42 @@
+From 9315e22b0c0a5be708798c03dc8f27549667e475 Mon Sep 17 00:00:00 2001
+From: "Jose Fernandez (Anthropic)" <jose.fernandez@linux.dev>
+Date: Tue, 9 Jun 2026 05:19:27 +0000
+Subject: [PATCH 06627/15333] arm64: ftrace: allow DIRECT_CALLS without
+ CALL_OPS
+
+Drop the CALL_OPS requirement from the HAVE_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
+select. Configurations that keep CALL_OPS (!CFI clang builds, and GCC builds
+without CC_OPTIMIZE_FOR_SIZE) are unchanged. CALL_OPS-less configurations
+take the ftrace_caller ops-dispatch path for out-of-range direct calls,
+trading the per-callsite fast path for working BPF trampolines; in-range
+attachments still branch directly with no overhead. GCC -Os builds also gain
+DIRECT_CALLS as a side effect.  That is intended: s390 and loongarch already
+ship DIRECT_CALLS without any per-callsite fast path.
+
+Assisted-by: Claude:unspecified
+Signed-off-by: Jose Fernandez (Anthropic) <jose.fernandez@linux.dev>
+Acked-by: Xu Kuohai <xukuohai@huawei.com>
+Tested-by: Nathan Chancellor <nathan@kernel.org>
+Tested-by: Clayton Craft <craftyguy@postmarketos.org>
+Reviewed-by: Puranjay Mohan <puranjay@kernel.org>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index b3afe0688919..0de419ed780f 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -187,7 +187,7 @@ config ARM64
+ 		if (GCC_SUPPORTS_DYNAMIC_FTRACE_WITH_ARGS || \
+ 		    CLANG_SUPPORTS_DYNAMIC_FTRACE_WITH_ARGS)
+ 	select HAVE_DYNAMIC_FTRACE_WITH_DIRECT_CALLS \
+-		if DYNAMIC_FTRACE_WITH_ARGS && DYNAMIC_FTRACE_WITH_CALL_OPS
++		if DYNAMIC_FTRACE_WITH_ARGS
+ 	select HAVE_DYNAMIC_FTRACE_WITH_CALL_OPS \
+ 		if (DYNAMIC_FTRACE_WITH_ARGS && !CFI && \
+ 		    (CC_IS_CLANG || !CC_OPTIMIZE_FOR_SIZE))
+-- 
+2.55.0
+

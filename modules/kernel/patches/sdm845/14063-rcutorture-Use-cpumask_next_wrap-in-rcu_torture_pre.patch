@@ -1,0 +1,37 @@
+From f424566105c946ef42f2643230362598c06a29f1 Mon Sep 17 00:00:00 2001
+From: "Paul E. McKenney" <paulmck@kernel.org>
+Date: Thu, 4 Jun 2026 20:42:58 -0700
+Subject: [PATCH 14063/15333] rcutorture: Use cpumask_next_wrap() in
+ rcu_torture_preempt()
+
+The rcu_torture_preempt() function uses cpumask_next(), and if that
+returns an out-of-bounds result, re-invokes cpumask_next() on -1.
+Which is exactly what cpumask_next_wrap() does.  This commit therefore
+saves a couple of lines by instead using cpumask_next_wrap().
+
+This was reported by metacode when asked to look for opportunities
+to use cpumask_next_wrap() in kernel/rcu.
+
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ kernel/rcu/rcutorture.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/kernel/rcu/rcutorture.c b/kernel/rcu/rcutorture.c
+index 57cae3fe23fd..afd5045263be 100644
+--- a/kernel/rcu/rcutorture.c
++++ b/kernel/rcu/rcutorture.c
+@@ -4183,9 +4183,7 @@ static int rcu_torture_preempt(void *unused)
+ 		// Wait for preempt_interval ms with up to 100us fuzz.
+ 		torture_hrtimeout_ms(preempt_interval, 100, &rand);
+ 		// Select online CPU.
+-		cpu = cpumask_next(cpu, cpu_online_mask);
+-		if (cpu >= nr_cpu_ids)
+-			cpu = cpumask_next(-1, cpu_online_mask);
++		cpu = cpumask_next_wrap(cpu, cpu_online_mask);
+ 		WARN_ON_ONCE(cpu >= nr_cpu_ids);
+ 		// Move to that CPU, if can't do so, retry later.
+ 		if (torture_sched_setaffinity(current->pid, cpumask_of(cpu), false))
+-- 
+2.55.0
+

@@ -1,0 +1,62 @@
+From 8dd5ca858d26f947c59297ba96a8446a11d7aebf Mon Sep 17 00:00:00 2001
+From: Namjae Jeon <linkinjeon@kernel.org>
+Date: Sun, 12 Jul 2026 14:03:23 +0900
+Subject: [PATCH 14318/15333] ksmbd: check base file delete pending for stream
+ opens
+
+A base file that has been marked for deletion remains present while stream
+handles are open. Name-based opens of either the base file or one of its
+streams must return STATUS_DELETE_PENDING during that interval.
+
+ksmbd_inode_pending_delete() returned only the per-handle stream state for
+stream handles. It therefore skipped the inode-wide S_DEL_PENDING state set
+by the base file delete-on-close path. As a result, a new stream open
+incorrectly succeeded.
+
+Check the inode-wide pending-delete state first for every handle. Only when
+the base file is not pending, check the per-handle stream state.
+
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/vfs_cache.c | 22 ++++++----------------
+ 1 file changed, 6 insertions(+), 16 deletions(-)
+
+diff --git a/fs/smb/server/vfs_cache.c b/fs/smb/server/vfs_cache.c
+index 05114d595b2a..cb6b81d110e0 100644
+--- a/fs/smb/server/vfs_cache.c
++++ b/fs/smb/server/vfs_cache.c
+@@ -229,25 +229,15 @@ bool ksmbd_inode_pending_delete(struct ksmbd_file *fp)
+ 	struct ksmbd_inode *ci = fp->f_ci;
+ 	int ret;
+ 
+-	/*
+-	 * Stream delete-pending is tracked per-handle (see
+-	 * ksmbd_fd_set_delete_pending()), not on the shared inode -- the
+-	 * whole-file flags checked below would never see it set, and would
+-	 * also incorrectly report a whole-file pending-delete as applying
+-	 * to an unrelated stream handle on the same inode.
+-	 */
+-	if (ksmbd_stream_fd(fp)) {
+-		bool pending;
+-
+-		spin_lock(&fp->f_lock);
+-		pending = fp->stream_del_pending;
+-		spin_unlock(&fp->f_lock);
+-		return pending;
+-	}
+-
+ 	down_read(&ci->m_lock);
+ 	ret = (ci->m_flags & S_DEL_PENDING);
+ 	up_read(&ci->m_lock);
++	if (ret || !ksmbd_stream_fd(fp))
++		return ret;
++
++	spin_lock(&fp->f_lock);
++	ret = fp->stream_del_pending;
++	spin_unlock(&fp->f_lock);
+ 
+ 	return ret;
+ }
+-- 
+2.55.0
+

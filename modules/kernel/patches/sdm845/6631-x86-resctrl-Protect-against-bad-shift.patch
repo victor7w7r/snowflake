@@ -1,0 +1,60 @@
+From 097d3f227bbd0b07a6e02e3b9e6c6ae1e5e7e910 Mon Sep 17 00:00:00 2001
+From: Reinette Chatre <reinette.chatre@intel.com>
+Date: Wed, 22 Jul 2026 14:11:38 -0700
+Subject: [PATCH 06631/15333] x86/resctrl: Protect against bad shift
+
+The size of the bandwidth field is enumerated from AMD hardware. resctrl uses
+this field width to determine the maximum bandwidth supported that is stored
+in resctrl_membw::max_bw. User space allocation requests ("control values")
+are compared against this maximum for validity before being programmed to
+hardware.
+
+resctrl filesystem and resctrl x86 architecture code only support u32 control
+values: resctrl_membw::max_bw is a u32, the control value provided by user
+space is parsed into u32 local variables, and after validity checks, the
+control value is staged into the u32 resctrl_staged_config::new_ctrl for
+architecture consumption. The resctrl x86 architecture code in turn caches the
+new control value into the u32 array rdt_hw_ctrl_domain::ctrl_val[].
+
+The AMD bandwidth field to which control values are written can be up to
+64 bits wide. While not an issue with current hardware (bandwidths that
+require more than a u32, more than 536870911.875 GB/s, seem unreasonable
+today), it is theoretically possible that enumeration of maximum bandwidth
+field width will return values that are according to specification but
+cannot be supported by resctrl.
+
+Static checkers complain about this size mismatch.
+
+Fix the static checker complaint by explicitly encoding the fact that resctrl
+is unable to support all values that the hardware specification allows. Switch
+to BIT() instead of open-coding the bitshift to avoid signed integer overflow
+if the number of bits is a valid 31.
+
+Signed-off-by: Reinette Chatre <reinette.chatre@intel.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Reviewed-by: Tony Luck <tony.luck@intel.com>
+Link: https://patch.msgid.link/dd9fc3505c0ed250c5f14898b0ed6d7460a3cb82.1784753375.git.reinette.chatre@intel.com
+---
+ arch/x86/kernel/cpu/resctrl/core.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/cpu/resctrl/core.c b/arch/x86/kernel/cpu/resctrl/core.c
+index bca782050198..9b9495174041 100644
+--- a/arch/x86/kernel/cpu/resctrl/core.c
++++ b/arch/x86/kernel/cpu/resctrl/core.c
+@@ -247,7 +247,11 @@ static __init bool __rdt_get_mem_config_amd(struct rdt_resource *r)
+ 
+ 	cpuid_count(0x80000020, subleaf, &eax, &ebx, &ecx, &edx);
+ 	hw_res->num_closid = edx + 1;
+-	r->membw.max_bw = 1 << eax;
++	if (BITS_PER_TYPE(r->membw.max_bw) <= eax) {
++		pr_warn("Unable to support hardware's maximum bandwidth\n");
++		return false;
++	}
++	r->membw.max_bw = BIT(eax);
+ 
+ 	/* AMD does not use delay */
+ 	r->membw.delay_linear = false;
+-- 
+2.55.0
+

@@ -1,0 +1,65 @@
+From 895bad9cc4cecdef54e4ef66208544d108799761 Mon Sep 17 00:00:00 2001
+From: Nirmoy Das <nirmoyd@nvidia.com>
+Date: Fri, 26 Jun 2026 07:49:02 -0700
+Subject: [PATCH 01345/15333] selftests: net: make busywait timeout clock
+ portable
+
+loopy_wait() expects millisecond timestamps. However, Ubuntu Resolute
+can use uutils date, where `date -u +%s%3N` returns seconds plus full
+nanoseconds instead of a 3-digit millisecond field. This makes
+busywait expire too early and can make vlan_bridge_binding.sh read a
+stale operstate.
+
+Link: https://github.com/uutils/coreutils/issues/11658
+Signed-off-by: Nirmoy Das <nirmoyd@nvidia.com>
+Link: https://patch.msgid.link/20260626144902.3214350-1-nirmoyd@nvidia.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ tools/testing/selftests/net/lib.sh | 19 +++++++++++++++++--
+ 1 file changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/tools/testing/selftests/net/lib.sh b/tools/testing/selftests/net/lib.sh
+index b3827b43782b..d389a965d8f1 100644
+--- a/tools/testing/selftests/net/lib.sh
++++ b/tools/testing/selftests/net/lib.sh
+@@ -70,12 +70,27 @@ ksft_exit_status_merge()
+ 		$ksft_xfail $ksft_pass $ksft_skip $ksft_fail
+ }
+ 
++timestamp_ms()
++{
++	local now=$(date -u +%s:%N)
++	local seconds=${now%:*}
++	local nanoseconds=${now#*:}
++
++	if [[ $nanoseconds =~ ^[0-9]+$ ]]; then
++		nanoseconds=${nanoseconds:0:9}
++	else
++		nanoseconds=0
++	fi
++
++	echo $((seconds * 1000 + 10#$nanoseconds / 1000000))
++}
++
+ loopy_wait()
+ {
+ 	local sleep_cmd=$1; shift
+ 	local timeout_ms=$1; shift
+ 
+-	local start_time="$(date -u +%s%3N)"
++	local start_time=$(timestamp_ms)
+ 	while true
+ 	do
+ 		local out
+@@ -84,7 +99,7 @@ loopy_wait()
+ 			return 0
+ 		fi
+ 
+-		local current_time="$(date -u +%s%3N)"
++		local current_time=$(timestamp_ms)
+ 		if ((current_time - start_time > timeout_ms)); then
+ 			echo -n "$out"
+ 			return 1
+-- 
+2.55.0
+

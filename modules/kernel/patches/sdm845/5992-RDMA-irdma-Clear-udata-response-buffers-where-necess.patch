@@ -1,0 +1,96 @@
+From 91a74a238631ef7b7c6bda17328014ab7160c888 Mon Sep 17 00:00:00 2001
+From: Jacob Moroni <jmoroni@google.com>
+Date: Mon, 13 Jul 2026 17:12:53 +0000
+Subject: [PATCH 05992/15333] RDMA/irdma: Clear udata response buffers where
+ necessary
+
+Methods that may accept udata input but do not provide a
+udata response should use the ib_respond_empty_udata()
+helper to ensure that user response buffers are cleared.
+
+Since the ib_respond_empty_udata() call itself can fail if
+the user intentionally provides a bogus output buffer, it is
+called at the beginning of the method to fail early before
+mutating any state that would be difficult to unwind.
+
+Additionally, add missing bounds validation for udata->outlen
+in irdma_create_srq() to ensure it is large enough to hold the
+response struct as per its original (and so far, only) definition.
+
+Signed-off-by: Jacob Moroni <jmoroni@google.com>
+Link: https://patch.msgid.link/20260713171257.3131493-3-jmoroni@google.com
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/hw/irdma/verbs.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/drivers/infiniband/hw/irdma/verbs.c b/drivers/infiniband/hw/irdma/verbs.c
+index fadd4bff572c..e3ae8ea36fba 100644
+--- a/drivers/infiniband/hw/irdma/verbs.c
++++ b/drivers/infiniband/hw/irdma/verbs.c
+@@ -1315,6 +1315,11 @@ int irdma_modify_qp_roce(struct ib_qp *ibqp, struct ib_qp_attr *attr,
+ 	u8 issue_modify_qp = 0;
+ 	int ret = 0;
+ 
++	/* Clear the response buffer (if any). It may be updated again later. */
++	ret = ib_respond_empty_udata(udata);
++	if (ret)
++		return ret;
++
+ 	ctx_info = &iwqp->ctx_info;
+ 	roce_info = &iwqp->roce_info;
+ 	udp_info = &iwqp->udp_info;
+@@ -1675,6 +1680,10 @@ int irdma_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr, int attr_mask,
+ 	int err;
+ 	unsigned long flags;
+ 
++	err = ib_respond_empty_udata(udata);
++	if (err)
++		return err;
++
+ 	if (udata) {
+ 		/* udata inlen/outlen can be 0 when supporting legacy libi40iw */
+ 		if ((udata->inlen && udata->inlen < IRDMA_MODIFY_QP_MIN_REQ_LEN) ||
+@@ -2094,6 +2103,10 @@ static int irdma_resize_cq(struct ib_cq *ibcq, unsigned int entries,
+ 	if (entries > rf->max_cqe)
+ 		return -EINVAL;
+ 
++	ret = ib_respond_empty_udata(udata);
++	if (ret)
++		return ret;
++
+ 	if (!iwcq->user_mode) {
+ 		entries += 2;
+ 
+@@ -2394,6 +2407,7 @@ static int irdma_create_srq(struct ib_srq *ibsrq,
+ 			    struct ib_srq_init_attr *initattrs,
+ 			    struct ib_udata *udata)
+ {
++#define IRDMA_CREATE_SRQ_MIN_RESP_LEN offsetofend(struct irdma_create_srq_resp, srq_size)
+ 	struct irdma_device *iwdev = to_iwdev(ibsrq->device);
+ 	struct ib_srq_attr *attr = &initattrs->attr;
+ 	struct irdma_pd *iwpd = to_iwpd(ibsrq->pd);
+@@ -2414,6 +2428,9 @@ static int irdma_create_srq(struct ib_srq *ibsrq,
+ 	if (initattrs->srq_type != IB_SRQT_BASIC)
+ 		return -EOPNOTSUPP;
+ 
++	if (udata && udata->outlen < IRDMA_CREATE_SRQ_MIN_RESP_LEN)
++		return -EINVAL;
++
+ 	if (!(uk_attrs->feature_flags & IRDMA_FEATURE_SRQ) ||
+ 	    attr->max_sge > uk_attrs->max_hw_wq_frags)
+ 		return -EINVAL;
+@@ -3606,6 +3623,10 @@ static struct ib_mr *irdma_reg_user_mr(struct ib_pd *pd, u64 start, u64 len,
+ 	if (dmah)
+ 		return ERR_PTR(-EOPNOTSUPP);
+ 
++	err = ib_respond_empty_udata(udata);
++	if (err)
++		return ERR_PTR(err);
++
+ 	if (len > iwdev->rf->sc_dev.hw_attrs.max_mr_size)
+ 		return ERR_PTR(-EINVAL);
+ 
+-- 
+2.55.0
+

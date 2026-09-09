@@ -1,0 +1,37 @@
+From a6d87a272b2c8fe1366ea9a8e2e4cccddbb4157f Mon Sep 17 00:00:00 2001
+From: Rob Clark <robin.clark@oss.qualcomm.com>
+Date: Wed, 29 Jul 2026 08:55:50 -0700
+Subject: [PATCH 08298/15333] drm/msm/gem: Validate lazy VM in GEM_NEW
+
+Otherwise creating a _NO_SHARE BO before any BOs are mapped could cause
+a NPE.
+
+Reported-by: Sashiko <sashiko-bot@kernel.org>
+Signed-off-by: Rob Clark <robin.clark@oss.qualcomm.com>
+Patchwork: https://patchwork.freedesktop.org/patch/743104/
+Message-ID: <20260729155609.20190-14-robin.clark@oss.qualcomm.com>
+---
+ drivers/gpu/drm/msm/msm_gem.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/gpu/drm/msm/msm_gem.c b/drivers/gpu/drm/msm/msm_gem.c
+index 535c6e1acb3c..de4e60e28a71 100644
+--- a/drivers/gpu/drm/msm/msm_gem.c
++++ b/drivers/gpu/drm/msm/msm_gem.c
+@@ -1140,9 +1140,13 @@ int msm_gem_new_handle(struct drm_device *dev, struct drm_file *file,
+ 	int ret;
+ 
+ 	if (flags & MSM_BO_NO_SHARE) {
++		struct msm_drm_private *priv = dev->dev_private;
+ 		struct msm_context *ctx = file->driver_priv;
+ 		struct drm_gpuvm *vm = msm_context_vm(dev, ctx);
+ 
++		if (!priv->gpu || !vm)
++			return UERR(EINVAL, dev, "not supported with shared VM");
++
+ 		r_obj = drm_gpuvm_resv_obj(vm);
+ 	}
+ 
+-- 
+2.55.0
+

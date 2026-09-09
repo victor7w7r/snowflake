@@ -1,0 +1,183 @@
+From b3217bdb0091e52887e23896cd82483f7808914a Mon Sep 17 00:00:00 2001
+From: Slawomir Stepien <sst@poczta.fm>
+Date: Mon, 10 Aug 2026 10:57:17 +0200
+Subject: [PATCH 13818/15333] netdevsim: drop the ability to change max_vfs via
+ debugfs
+
+This debugfs file isn't used by kernel's selftests, so drop it.
+
+Reported-by: syzbot+3147c5de186107ffc7a1@syzkaller.appspotmail.com
+Closes: https://syzkaller.appspot.com/bug?extid=3147c5de186107ffc7a1
+Suggested-by: Jakub Kicinski <kuba@kernel.org>
+Signed-off-by: Slawomir Stepien <sst@poczta.fm>
+Link: https://patch.msgid.link/20260810085717.570382-1-sst@poczta.fm
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/netdevsim/bus.c       |  3 --
+ drivers/net/netdevsim/dev.c       | 79 +------------------------------
+ drivers/net/netdevsim/netdevsim.h |  3 +-
+ 3 files changed, 3 insertions(+), 82 deletions(-)
+
+diff --git a/drivers/net/netdevsim/bus.c b/drivers/net/netdevsim/bus.c
+index 41483e371f05..5c55c308487b 100644
+--- a/drivers/net/netdevsim/bus.c
++++ b/drivers/net/netdevsim/bus.c
+@@ -443,8 +443,6 @@ static const struct bus_type nsim_bus = {
+ 	.num_vf		= nsim_num_vf,
+ };
+ 
+-#define NSIM_BUS_DEV_MAX_VFS 4
+-
+ static struct nsim_bus_dev *
+ nsim_bus_dev_new(unsigned int id, unsigned int port_count, unsigned int num_queues)
+ {
+@@ -464,7 +462,6 @@ nsim_bus_dev_new(unsigned int id, unsigned int port_count, unsigned int num_queu
+ 	nsim_bus_dev->port_count = port_count;
+ 	nsim_bus_dev->num_queues = num_queues;
+ 	nsim_bus_dev->initial_net = current->nsproxy->net_ns;
+-	nsim_bus_dev->max_vfs = NSIM_BUS_DEV_MAX_VFS;
+ 	/* Disallow using nsim_bus_dev */
+ 	smp_store_release(&nsim_bus_dev->init, false);
+ 
+diff --git a/drivers/net/netdevsim/dev.c b/drivers/net/netdevsim/dev.c
+index f65b4cf4ea39..feb88ccbbced 100644
+--- a/drivers/net/netdevsim/dev.c
++++ b/drivers/net/netdevsim/dev.c
+@@ -225,78 +225,6 @@ static const struct file_operations nsim_dev_trap_fa_cookie_fops = {
+ 	.owner = THIS_MODULE,
+ };
+ 
+-static ssize_t nsim_bus_dev_max_vfs_read(struct file *file, char __user *data,
+-					 size_t count, loff_t *ppos)
+-{
+-	struct nsim_dev *nsim_dev = file->private_data;
+-	char buf[11];
+-	ssize_t len;
+-
+-	len = scnprintf(buf, sizeof(buf), "%u\n",
+-			READ_ONCE(nsim_dev->nsim_bus_dev->max_vfs));
+-
+-	return simple_read_from_buffer(data, count, ppos, buf, len);
+-}
+-
+-static ssize_t nsim_bus_dev_max_vfs_write(struct file *file,
+-					  const char __user *data,
+-					  size_t count, loff_t *ppos)
+-{
+-	struct nsim_vf_config *vfconfigs;
+-	struct nsim_dev *nsim_dev;
+-	char buf[10];
+-	ssize_t ret;
+-	u32 val;
+-
+-	if (*ppos != 0)
+-		return 0;
+-
+-	if (count >= sizeof(buf))
+-		return -ENOSPC;
+-
+-	ret = copy_from_user(buf, data, count);
+-	if (ret)
+-		return -EFAULT;
+-	buf[count] = '\0';
+-
+-	ret = kstrtouint(buf, 10, &val);
+-	if (ret)
+-		return -EINVAL;
+-
+-	/* max_vfs limited by the maximum number of provided port indexes */
+-	if (val > NSIM_DEV_VF_PORT_INDEX_MAX - NSIM_DEV_VF_PORT_INDEX_BASE)
+-		return -ERANGE;
+-
+-	vfconfigs = kzalloc_objs(struct nsim_vf_config, val,
+-				 GFP_KERNEL | __GFP_NOWARN);
+-	if (!vfconfigs)
+-		return -ENOMEM;
+-
+-	nsim_dev = file->private_data;
+-	devl_lock(priv_to_devlink(nsim_dev));
+-	/* Reject if VFs are configured */
+-	if (nsim_dev_get_vfs(nsim_dev)) {
+-		ret = -EBUSY;
+-	} else {
+-		swap(nsim_dev->vfconfigs, vfconfigs);
+-		WRITE_ONCE(nsim_dev->nsim_bus_dev->max_vfs, val);
+-		*ppos += count;
+-		ret = count;
+-	}
+-	devl_unlock(priv_to_devlink(nsim_dev));
+-
+-	kfree(vfconfigs);
+-	return ret;
+-}
+-
+-static const struct file_operations nsim_dev_max_vfs_fops = {
+-	.open = simple_open,
+-	.read = nsim_bus_dev_max_vfs_read,
+-	.write = nsim_bus_dev_max_vfs_write,
+-	.llseek = generic_file_llseek,
+-	.owner = THIS_MODULE,
+-};
+-
+ static int nsim_dev_debugfs_init(struct nsim_dev *nsim_dev)
+ {
+ 	char dev_ddir_name[sizeof(DRV_NAME) + 10];
+@@ -343,9 +271,6 @@ static int nsim_dev_debugfs_init(struct nsim_dev *nsim_dev)
+ 	debugfs_create_bool("fail_trap_policer_counter_get", 0600,
+ 			    nsim_dev->ddir,
+ 			    &nsim_dev->fail_trap_policer_counter_get);
+-	/* caution, dev_max_vfs write takes devlink lock */
+-	debugfs_create_file("max_vfs", 0600, nsim_dev->ddir,
+-			    nsim_dev, &nsim_dev_max_vfs_fops);
+ 
+ 	nsim_dev->nodes_ddir = debugfs_create_dir("rate_nodes", nsim_dev->ddir);
+ 	if (IS_ERR(nsim_dev->nodes_ddir)) {
+@@ -1673,7 +1598,7 @@ int nsim_drv_probe(struct nsim_bus_dev *nsim_bus_dev)
+ 	dev_set_drvdata(&nsim_bus_dev->dev, nsim_dev);
+ 
+ 	nsim_dev->vfconfigs = kzalloc_objs(struct nsim_vf_config,
+-					   nsim_bus_dev->max_vfs,
++					   NSIM_BUS_DEV_MAX_VFS,
+ 					   GFP_KERNEL | __GFP_NOWARN);
+ 	if (!nsim_dev->vfconfigs) {
+ 		err = -ENOMEM;
+@@ -1872,7 +1797,7 @@ int nsim_drv_configure_vfs(struct nsim_bus_dev *nsim_bus_dev,
+ 		ret = -EBUSY;
+ 		goto exit_unlock;
+ 	}
+-	if (nsim_bus_dev->max_vfs < num_vfs) {
++	if (num_vfs > NSIM_BUS_DEV_MAX_VFS) {
+ 		ret = -ENOMEM;
+ 		goto exit_unlock;
+ 	}
+diff --git a/drivers/net/netdevsim/netdevsim.h b/drivers/net/netdevsim/netdevsim.h
+index 64f77f93d937..55aec41237b9 100644
+--- a/drivers/net/netdevsim/netdevsim.h
++++ b/drivers/net/netdevsim/netdevsim.h
+@@ -292,7 +292,6 @@ enum nsim_dev_port_type {
+ };
+ 
+ #define NSIM_DEV_VF_PORT_INDEX_BASE 128
+-#define NSIM_DEV_VF_PORT_INDEX_MAX UINT_MAX
+ 
+ struct nsim_dev_port {
+ 	struct list_head list;
+@@ -472,6 +471,7 @@ nsim_psp_handle_ext(struct sk_buff *skb, struct skb_ext *psp_ext) {}
+ int nsim_setup_tc(struct net_device *dev, enum tc_setup_type type,
+ 		  void *type_data);
+ 
++#define NSIM_BUS_DEV_MAX_VFS 4
+ struct nsim_bus_dev {
+ 	struct device dev;
+ 	struct list_head list;
+@@ -480,7 +480,6 @@ struct nsim_bus_dev {
+ 	struct net *initial_net; /* Purpose of this is to carry net pointer
+ 				  * during the probe time only.
+ 				  */
+-	unsigned int max_vfs;
+ 	unsigned int num_vfs;
+ 	bool init;
+ };
+-- 
+2.55.0
+

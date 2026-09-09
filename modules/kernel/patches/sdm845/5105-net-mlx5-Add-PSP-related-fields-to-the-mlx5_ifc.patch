@@ -1,0 +1,128 @@
+From bee40a7d0bd1263934f99054db037cdd4a33fd86 Mon Sep 17 00:00:00 2001
+From: Cosmin Ratiu <cratiu@nvidia.com>
+Date: Mon, 13 Jul 2026 11:43:20 +0300
+Subject: [PATCH 05105/15333] net/mlx5: Add PSP related fields to the mlx5_ifc
+
+This adds:
+- misc_parameters_6, containing a few fields for matching PSP headers.
+As this is the last misc_parameters field defined, retire the old
+optimization added in commit [1] to not touch the reserved part.
+- PSP decap action.
+- PSP SPI header field pointer.
+
+[1] commit 667cb65ae5ad ("net/mlx5: Don't store reserved part in FTEs
+and FGs")
+
+Signed-off-by: Cosmin Ratiu <cratiu@nvidia.com>
+Reviewed-by: Dragos Tatulea <dtatulea@nvidia.com>
+Signed-off-by: Tariq Toukan <tariqt@nvidia.com>
+Link: https://patch.msgid.link/20260713084320.1015240-3-tariqt@nvidia.com
+Reviewed-by: Jacob Keller <jacob.e.keller@intel.com>
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ .../net/ethernet/mellanox/mlx5/core/fs_core.h   | 12 +-----------
+ include/linux/mlx5/device.h                     |  1 +
+ include/linux/mlx5/mlx5_ifc.h                   | 17 +++++++++++++++--
+ 3 files changed, 17 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
+index dbaf33b537f7..906584345a02 100644
+--- a/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
++++ b/drivers/net/ethernet/mellanox/mlx5/core/fs_core.h
+@@ -214,17 +214,7 @@ struct mlx5_ft_underlay_qp {
+ 	u32 qpn;
+ };
+ 
+-#define MLX5_FTE_MATCH_PARAM_RESERVED	reserved_at_e00
+-/* Calculate the fte_match_param length and without the reserved length.
+- * Make sure the reserved field is the last.
+- */
+-#define MLX5_ST_SZ_DW_MATCH_PARAM					    \
+-	((MLX5_BYTE_OFF(fte_match_param, MLX5_FTE_MATCH_PARAM_RESERVED) / sizeof(u32)) + \
+-	 BUILD_BUG_ON_ZERO(MLX5_ST_SZ_BYTES(fte_match_param) !=		     \
+-			   MLX5_FLD_SZ_BYTES(fte_match_param,		     \
+-					     MLX5_FTE_MATCH_PARAM_RESERVED) +\
+-			   MLX5_BYTE_OFF(fte_match_param,		     \
+-					 MLX5_FTE_MATCH_PARAM_RESERVED)))
++#define MLX5_ST_SZ_DW_MATCH_PARAM MLX5_ST_SZ_DW(fte_match_param)
+ 
+ struct fs_fte_action {
+ 	int				modify_mask;
+diff --git a/include/linux/mlx5/device.h b/include/linux/mlx5/device.h
+index 07a25f264292..8cb321a9fb3d 100644
+--- a/include/linux/mlx5/device.h
++++ b/include/linux/mlx5/device.h
+@@ -1171,6 +1171,7 @@ enum {
+ 	MLX5_MATCH_MISC_PARAMETERS_3	= 1 << 4,
+ 	MLX5_MATCH_MISC_PARAMETERS_4	= 1 << 5,
+ 	MLX5_MATCH_MISC_PARAMETERS_5	= 1 << 6,
++	MLX5_MATCH_MISC_PARAMETERS_6	= 1 << 7,
+ };
+ 
+ enum {
+diff --git a/include/linux/mlx5/mlx5_ifc.h b/include/linux/mlx5/mlx5_ifc.h
+index 9c8dbf29f1ef..c7206a9d6731 100644
+--- a/include/linux/mlx5/mlx5_ifc.h
++++ b/include/linux/mlx5/mlx5_ifc.h
+@@ -508,7 +508,8 @@ struct mlx5_ifc_flow_table_prop_layout_bits {
+ 	u8         reformat_l2_to_l3_audp_tunnel[0x1];
+ 	u8         reformat_l3_audp_tunnel_to_l2[0x1];
+ 	u8         ignore_flow_level_rtc_valid[0x1];
+-	u8         reserved_at_70[0x8];
++	u8         reserved_at_70[0x7];
++	u8         reformat_del_psp_transport[0x1];
+ 	u8         log_max_ft_num[0x8];
+ 
+ 	u8         reserved_at_80[0x10];
+@@ -798,6 +799,15 @@ struct mlx5_ifc_fte_match_set_misc5_bits {
+ 	u8         reserved_at_100[0x100];
+ };
+ 
++struct mlx5_ifc_fte_match_set_misc6_bits {
++	u8         reserved_at_0[0x1a];
++	u8         psp_version[0x4];
++	u8         reserved_at_1e[0x2];
++
++	u8         reserved_at_20[0x1e0];
++};
++
++
+ struct mlx5_ifc_cmd_pas_bits {
+ 	u8         pa_h[0x20];
+ 
+@@ -2342,7 +2352,7 @@ struct mlx5_ifc_fte_match_param_bits {
+ 
+ 	struct mlx5_ifc_fte_match_set_misc5_bits misc_parameters_5;
+ 
+-	u8         reserved_at_e00[0x200];
++	struct mlx5_ifc_fte_match_set_misc6_bits misc_parameters_6;
+ };
+ 
+ enum {
+@@ -6988,6 +6998,7 @@ enum {
+ 	MLX5_QUERY_FLOW_GROUP_IN_MATCH_CRITERIA_ENABLE_MISC_PARAMETERS_3 = 0x4,
+ 	MLX5_QUERY_FLOW_GROUP_IN_MATCH_CRITERIA_ENABLE_MISC_PARAMETERS_4 = 0x5,
+ 	MLX5_QUERY_FLOW_GROUP_IN_MATCH_CRITERIA_ENABLE_MISC_PARAMETERS_5 = 0x6,
++	MLX5_QUERY_FLOW_GROUP_IN_MATCH_CRITERIA_ENABLE_MISC_PARAMETERS_6 = 0x7,
+ };
+ 
+ struct mlx5_ifc_query_flow_group_out_bits {
+@@ -7249,6 +7260,7 @@ enum mlx5_reformat_ctx_type {
+ 	MLX5_REFORMAT_TYPE_REMOVE_HDR = 0x10,
+ 	MLX5_REFORMAT_TYPE_ADD_MACSEC = 0x11,
+ 	MLX5_REFORMAT_TYPE_DEL_MACSEC = 0x12,
++	MLX5_REFORMAT_TYPE_REMOVE_PSP_TRANSPORT = 0x16,
+ };
+ 
+ struct mlx5_ifc_alloc_packet_reformat_context_in_bits {
+@@ -7372,6 +7384,7 @@ enum {
+ 	MLX5_ACTION_IN_FIELD_OUT_EMD_47_32     = 0x6F,
+ 	MLX5_ACTION_IN_FIELD_OUT_EMD_31_0      = 0x70,
+ 	MLX5_ACTION_IN_FIELD_PSP_SYNDROME      = 0x71,
++	MLX5_ACTION_IN_FIELD_PSP_HEADER_1      = 0x78,
+ };
+ 
+ struct mlx5_ifc_alloc_modify_header_context_out_bits {
+-- 
+2.55.0
+

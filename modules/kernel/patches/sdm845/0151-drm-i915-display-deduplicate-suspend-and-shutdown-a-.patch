@@ -1,0 +1,110 @@
+From f7cadbee8aa4768713e57650e7afd8b67e26664d Mon Sep 17 00:00:00 2001
+From: Jani Nikula <jani.nikula@intel.com>
+Date: Tue, 2 Jun 2026 11:32:50 +0300
+Subject: [PATCH 00151/15333] drm/i915/display: deduplicate suspend and
+ shutdown a bit
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+intel_display_driver_shutdown() and intel_display_driver_pm_suspend()
+are quite similar. Abstract a shared function to call from both.
+
+This is intentionally just the first non-functional step. More gradual
+changes will follow.
+
+Reviewed-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/4d32548f99655650a9e53f3d33b8359998a00e6d.1780389001.git.jani.nikula@intel.com
+Signed-off-by: Jani Nikula <jani.nikula@intel.com>
+---
+ .../drm/i915/display/intel_display_driver.c   | 45 ++++++++++---------
+ 1 file changed, 23 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_driver.c b/drivers/gpu/drm/i915/display/intel_display_driver.c
+index ab0639e8101a..5f6c3d741196 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_driver.c
++++ b/drivers/gpu/drm/i915/display/intel_display_driver.c
+@@ -66,6 +66,8 @@
+ #include "intel_wm.h"
+ #include "skl_watermark.h"
+ 
++static int __intel_display_driver_pm_suspend(struct intel_display *display, bool shutdown);
++
+ bool intel_display_driver_probe_defer(struct pci_dev *pdev)
+ {
+ 	struct drm_privacy_screen *privacy_screen;
+@@ -680,18 +682,7 @@ void intel_display_driver_shutdown(struct intel_display *display)
+ 	if (!HAS_DISPLAY(display))
+ 		return;
+ 
+-	intel_display_power_disable(display);
+-
+-	drm_client_dev_suspend(display->drm);
+-	drm_kms_helper_poll_disable(display->drm);
+-
+-	intel_display_driver_disable_user_access(display);
+-
+-	drm_atomic_helper_shutdown(display->drm);
+-
+-	flush_workqueue(display->wq.cleanup);
+-
+-	intel_dp_mst_suspend(display);
++	__intel_display_driver_pm_suspend(display, true);
+ 
+ 	intel_encoder_block_all_hpds(display);
+ 
+@@ -720,10 +711,9 @@ void intel_display_driver_shutdown_late(struct intel_display *display)
+  * turn all crtc's off, but do not adjust state
+  * This has to be paired with a call to intel_modeset_setup_hw_state.
+  */
+-int intel_display_driver_pm_suspend(struct intel_display *display)
++static int __intel_display_driver_pm_suspend(struct intel_display *display, bool shutdown)
+ {
+-	struct drm_atomic_commit *state;
+-	int ret;
++	int ret = 0;
+ 
+ 	if (!HAS_DISPLAY(display))
+ 		return 0;
+@@ -739,13 +729,19 @@ int intel_display_driver_pm_suspend(struct intel_display *display)
+ 	drm_kms_helper_poll_disable(display->drm);
+ 	intel_display_driver_disable_user_access(display);
+ 
+-	state = drm_atomic_helper_suspend(display->drm);
+-	ret = PTR_ERR_OR_ZERO(state);
+-	if (ret)
+-		drm_err(display->drm, "Suspending crtc's failed with %i\n",
+-			ret);
+-	else
+-		display->restore.modeset_state = state;
++	if (shutdown) {
++		drm_atomic_helper_shutdown(display->drm);
++	} else {
++		struct drm_atomic_commit *state;
++
++		state = drm_atomic_helper_suspend(display->drm);
++		ret = PTR_ERR_OR_ZERO(state);
++		if (ret)
++			drm_err(display->drm, "Suspending crtc's failed with %i\n",
++				ret);
++		else
++			display->restore.modeset_state = state;
++	}
+ 
+ 	/* ensure all DPT VMAs have been unpinned for intel_dpt_suspend() */
+ 	flush_workqueue(display->wq.cleanup);
+@@ -755,6 +751,11 @@ int intel_display_driver_pm_suspend(struct intel_display *display)
+ 	return ret;
+ }
+ 
++int intel_display_driver_pm_suspend(struct intel_display *display)
++{
++	return __intel_display_driver_pm_suspend(display, false);
++}
++
+ void intel_display_driver_pm_suspend_late(struct intel_display *display, bool s2idle)
+ {
+ 	if (!HAS_DISPLAY(display))
+-- 
+2.55.0
+

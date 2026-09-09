@@ -1,0 +1,72 @@
+From 17b1563aad1fb77ed9e91309a2e06307cf8f95e0 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Tue, 21 Jul 2026 17:25:36 +0700
+Subject: [PATCH 06753/15333] ASoC: codecs: es9356: Use guard() for mutex locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260721102600.523199-6-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/es9356.c | 29 ++++++++++++++++-------------
+ 1 file changed, 16 insertions(+), 13 deletions(-)
+
+diff --git a/sound/soc/codecs/es9356.c b/sound/soc/codecs/es9356.c
+index f574b3d6cb3c..a9863900bf70 100644
+--- a/sound/soc/codecs/es9356.c
++++ b/sound/soc/codecs/es9356.c
+@@ -6,6 +6,7 @@
+ //
+ //
+ 
++#include <linux/cleanup.h>
+ #include <linux/device.h>
+ #include <linux/module.h>
+ #include <linux/soundwire/sdw.h>
+@@ -500,16 +501,19 @@ static int es9356_power_state(struct snd_soc_dai *dai, unsigned char ps, unsigne
+ 	}
+ 
+ 	/* power state changes are not independent across functions */
+-	mutex_lock(&es9356->pde_lock);
+-	ret = es9356_pde_transition_delay(es9356, func, pde_entity, ps?ps0:ps3);
+-	if (ret) {
+-		regmap_write(es9356->regmap,
+-			SDW_SDCA_CTL(func, pde_entity, ES9356_SDCA_CTL_REQ_POWER_STATE, 0), ps?ps3:ps0);
+-		es9356_pde_transition_delay(es9356, func, pde_entity, ps?ps3:ps0);
+-	} else
+-		dev_dbg(component->dev, "%s PDE is already %d\n", __func__, ps?ps0:ps3);
+-
+-	mutex_unlock(&es9356->pde_lock);
++	scoped_guard(mutex, &es9356->pde_lock) {
++		ret = es9356_pde_transition_delay(es9356, func, pde_entity, ps ? ps0 : ps3);
++		if (ret) {
++			regmap_write(es9356->regmap,
++				     SDW_SDCA_CTL(func, pde_entity,
++						  ES9356_SDCA_CTL_REQ_POWER_STATE, 0),
++				     ps ? ps3 : ps0);
++			es9356_pde_transition_delay(es9356, func, pde_entity, ps ? ps3 : ps0);
++		} else {
++			dev_dbg(component->dev, "%s PDE is already %d\n", __func__,
++				ps ? ps0 : ps3);
++		}
++	}
+ 
+ 	if (rate)
+ 		regmap_write(es9356->regmap,
+@@ -1091,9 +1095,8 @@ static int es9356_sdca_dev_system_suspend(struct device *dev)
+ {
+ 	struct es9356_sdw_priv *es9356 = dev_get_drvdata(dev);
+ 
+-	mutex_lock(&es9356->disable_irq_lock);
+-	es9356->disable_irq = true;
+-	mutex_unlock(&es9356->disable_irq_lock);
++	scoped_guard(mutex, &es9356->disable_irq_lock)
++		es9356->disable_irq = true;
+ 
+ 	return es9356_sdca_dev_suspend(dev);
+ }
+-- 
+2.55.0
+

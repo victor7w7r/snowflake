@@ -1,0 +1,57 @@
+From 8e4d7d120734936cb961d9dc46b788e0487d3256 Mon Sep 17 00:00:00 2001
+From: Bence Csokas <bence.csokas@arm.com>
+Date: Mon, 27 Jul 2026 16:02:07 +0200
+Subject: [PATCH 08808/15333] wanxl: Remove pci_map_single_debug()
+
+Since commit 24dd377a76b0 ("wan: wanxl: switch from 'pci_' to 'dma_' API")
+this has been dead code anyways. The pci_map_single() function it attempts
+to redefine has been removed in commit 7968778914e5 ("PCI: Remove the
+deprecated "pci-dma-compat.h" API").
+
+Reviewed-by: Simon Horman <horms@kernel.org>
+Link: https://lore.kernel.org/all/20260709151401.GO1364329@horms.kernel.org
+Signed-off-by: Bence Csokas <bence.csokas@arm.com>
+Link: https://patch.msgid.link/20260727-wanxl-cleanup-v2-1-3826430829c9@arm.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/wan/wanxl.c | 17 -----------------
+ 1 file changed, 17 deletions(-)
+
+diff --git a/drivers/net/wan/wanxl.c b/drivers/net/wan/wanxl.c
+index 065c00c12cc1..c9873f07e06c 100644
+--- a/drivers/net/wan/wanxl.c
++++ b/drivers/net/wan/wanxl.c
+@@ -37,7 +37,6 @@ static const char *version = "wanXL serial card driver version: 0.48";
+ #define PLX_CTL_RESET   0x40000000 /* adapter reset */
+ 
+ #undef DEBUG_PKT
+-#undef DEBUG_PCI
+ 
+ /* MAILBOX #1 - PUTS COMMANDS */
+ #define MBX1_CMD_ABORTJ 0x85000000 /* Abort and Jump */
+@@ -88,22 +87,6 @@ static inline port_status_t *get_status(struct port *port)
+ 	return &port->card->status->port_status[port->node];
+ }
+ 
+-#ifdef DEBUG_PCI
+-static inline dma_addr_t pci_map_single_debug(struct pci_dev *pdev, void *ptr,
+-					      size_t size, int direction)
+-{
+-	dma_addr_t addr = dma_map_single(&pdev->dev, ptr, size, direction);
+-
+-	if (addr + size > 0x100000000LL)
+-		pr_crit("%s: pci_map_single() returned memory at 0x%llx!\n",
+-			pci_name(pdev), (unsigned long long)addr);
+-	return addr;
+-}
+-
+-#undef pci_map_single
+-#define pci_map_single pci_map_single_debug
+-#endif
+-
+ /* Cable and/or personality module change interrupt service */
+ static inline void wanxl_cable_intr(struct port *port)
+ {
+-- 
+2.55.0
+

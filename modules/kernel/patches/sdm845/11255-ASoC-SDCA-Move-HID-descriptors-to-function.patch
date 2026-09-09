@@ -1,0 +1,240 @@
+From f3243b79026e31da037d1cbbbbda44317e3cbcb2 Mon Sep 17 00:00:00 2001
+From: Charles Keepax <ckeepax@opensource.cirrus.com>
+Date: Wed, 5 Aug 2026 13:42:01 +0100
+Subject: [PATCH 11255/15333] ASoC: SDCA: Move HID descriptors to function
+
+The HID descriptors are defined at the function level in DisCo
+and as such it makes more sense to parse and store them at
+that level in the SDCA code. This shouldn't really make much
+practical difference but is conceptually better and avoids
+passing the function node down to the entity parsing code.
+
+Signed-off-by: Charles Keepax <ckeepax@opensource.cirrus.com>
+Reviewed-by: Pierre-Louis Bossart <pierre-louis.bossart@linux.dev>
+Link: https://patch.msgid.link/20260805124205.4152543-5-ckeepax@opensource.cirrus.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/sdca_function.h   | 19 ++++++++--
+ sound/soc/sdca/sdca_functions.c | 65 ++++++++++++++++++++++-----------
+ sound/soc/sdca/sdca_hid.c       | 11 +++---
+ 3 files changed, 63 insertions(+), 32 deletions(-)
+
+diff --git a/include/sound/sdca_function.h b/include/sound/sdca_function.h
+index 35799a977145..72441ed5eba4 100644
+--- a/include/sound/sdca_function.h
++++ b/include/sound/sdca_function.h
+@@ -1126,8 +1126,6 @@ struct sdca_entity_ge {
+  * within this Device
+  * @max_delay: the maximum time in microseconds allowed for the Device
+  * to change the ownership from Device to Host
+- * @hid_report_desc: HID Report Descriptor for the HIDE Entity
+- * @hid_desc: HID descriptor for the HIDE Entity
+  */
+ struct sdca_entity_hide {
+ 	unsigned int *hidtx_ids;
+@@ -1137,8 +1135,6 @@ struct sdca_entity_hide {
+ 	unsigned int af_number_list[SDCA_MAX_FUNCTION_COUNT];
+ 	unsigned int hide_reside_function_num;
+ 	unsigned int max_delay;
+-	unsigned char *hid_report_desc;
+-	struct hid_descriptor hid_desc;
+ };
+ 
+ /**
+@@ -1399,6 +1395,16 @@ struct sdca_fdl_data {
+ 	int num_sets;
+ };
+ 
++/**
++ * struct sdca_function_hid - information about a function's HID descriptors
++ * @report_desc: HID Report Descriptor for the HID Function
++ * @desc: HID descriptor for the HID Function
++ */
++struct sdca_function_hid {
++	unsigned char *report_desc;
++	struct hid_descriptor desc;
++};
++
+ /**
+  * struct sdca_function_data - top-level information for one SDCA function
+  * @desc: Pointer to short descriptor from initial parsing.
+@@ -1413,6 +1419,7 @@ struct sdca_fdl_data {
+  * @reset_max_delay: Maximum Function reset delay in microseconds, before an
+  * error should be reported.
+  * @fdl_data: FDL data for this Function, if available.
++ * @hid: HID data for this Function, if available.
+  */
+ struct sdca_function_data {
+ 	struct sdca_function_desc *desc;
+@@ -1428,6 +1435,10 @@ struct sdca_function_data {
+ 	unsigned int reset_max_delay;
+ 
+ 	struct sdca_fdl_data fdl_data;
++
++	union {
++		struct sdca_function_hid hid;
++	};
+ };
+ 
+ static inline u32 sdca_range(struct sdca_control_range *range,
+diff --git a/sound/soc/sdca/sdca_functions.c b/sound/soc/sdca/sdca_functions.c
+index e9b449b67033..e49acfe49e28 100644
+--- a/sound/soc/sdca/sdca_functions.c
++++ b/sound/soc/sdca/sdca_functions.c
+@@ -1364,14 +1364,13 @@ static int find_sdca_entity_ge(struct device *dev,
+ 	return -EINVAL;
+ }
+ 
+-static int
+-find_sdca_entity_hide(struct device *dev, struct fwnode_handle *function_node,
+-		      struct fwnode_handle *entity_node, struct sdca_entity *entity)
++static int find_sdca_entity_hide(struct device *dev,
++				 struct fwnode_handle *entity_node,
++				 struct sdca_entity *entity)
+ {
+ 	struct sdca_entity_hide *hide = &entity->hide;
+ 	unsigned int delay, *af_list = hide->af_number_list;
+ 	int nval, ret;
+-	unsigned char *report_desc = NULL;
+ 
+ 	ret = fwnode_property_read_u32(entity_node,
+ 				       "mipi-sdca-RxUMP-ownership-transition-max-delay", &delay);
+@@ -1424,23 +1423,6 @@ find_sdca_entity_hide(struct device *dev, struct fwnode_handle *function_node,
+ 	fwnode_property_read_u32_array(entity_node,
+ 				       "mipi-sdca-hide-related-audio-function-list", af_list, nval);
+ 
+-	nval = fwnode_property_count_u8(function_node, "mipi-sdca-hid-descriptor");
+-	if (nval)
+-		fwnode_property_read_u8_array(function_node, "mipi-sdca-hid-descriptor",
+-					      (u8 *)&hide->hid_desc, nval);
+-
+-	if (hide->hid_desc.bNumDescriptors) {
+-		nval = fwnode_property_count_u8(function_node, "mipi-sdca-report-descriptor");
+-		if (nval) {
+-			report_desc = devm_kzalloc(dev, nval, GFP_KERNEL);
+-			if (!report_desc)
+-				return -ENOMEM;
+-			hide->hid_report_desc = report_desc;
+-			fwnode_property_read_u8_array(function_node, "mipi-sdca-report-descriptor",
+-						      report_desc, nval);
+-		}
+-	}
+-
+ 	return 0;
+ }
+ 
+@@ -1518,7 +1500,7 @@ static int find_sdca_entity(struct device *dev, struct sdca_function_data *funct
+ 		ret = find_sdca_entity_ge(dev, entity_node, entity);
+ 		break;
+ 	case SDCA_ENTITY_TYPE_HIDE:
+-		ret = find_sdca_entity_hide(dev, function_node, entity_node, entity);
++		ret = find_sdca_entity_hide(dev, entity_node, entity);
+ 		break;
+ 	default:
+ 		break;
+@@ -2167,6 +2149,35 @@ static int find_sdca_filesets(struct device *dev, struct sdw_slave *sdw,
+ 	return 0;
+ }
+ 
++static int find_sdca_hid(struct device *dev, struct fwnode_handle *function_node,
++			 struct sdca_function_data *function)
++{
++	int nval;
++
++	nval = fwnode_property_count_u8(function_node, "mipi-sdca-hid-descriptor");
++	if (nval)
++		fwnode_property_read_u8_array(function_node, "mipi-sdca-hid-descriptor",
++					      (u8 *)&function->hid.desc, nval);
++
++	if (function->hid.desc.bNumDescriptors) {
++		nval = fwnode_property_count_u8(function_node, "mipi-sdca-report-descriptor");
++		if (nval) {
++			unsigned char *report_desc;
++
++			report_desc = devm_kzalloc(dev, nval, GFP_KERNEL);
++			if (!report_desc)
++				return -ENOMEM;
++
++			function->hid.report_desc = report_desc;
++			fwnode_property_read_u8_array(function_node,
++						      "mipi-sdca-report-descriptor",
++						      report_desc, nval);
++		}
++	}
++
++	return 0;
++}
++
+ /**
+  * sdca_parse_function - parse ACPI DisCo for a Function
+  * @dev: Pointer to device against which function data will be allocated.
+@@ -2218,6 +2229,16 @@ int sdca_parse_function(struct device *dev, struct sdw_slave *sdw,
+ 	if (ret)
+ 		return ret;
+ 
++	switch (function->desc->type) {
++	case SDCA_FUNCTION_TYPE_HID:
++		ret = find_sdca_hid(dev, node, function);
++		if (ret)
++			return ret;
++		break;
++	default:
++		break;
++	}
++
+ 	return 0;
+ }
+ EXPORT_SYMBOL_NS(sdca_parse_function, "SND_SOC_SDCA");
+diff --git a/sound/soc/sdca/sdca_hid.c b/sound/soc/sdca/sdca_hid.c
+index ea511c6f9798..5000d73657b4 100644
+--- a/sound/soc/sdca/sdca_hid.c
++++ b/sound/soc/sdca/sdca_hid.c
+@@ -24,18 +24,18 @@
+ 
+ static int sdwhid_parse(struct hid_device *hid)
+ {
+-	struct sdca_entity *entity = hid->driver_data;
++	struct sdca_function_data *function = hid->driver_data;
+ 	unsigned int rsize;
+ 	int ret;
+ 
+-	rsize = le16_to_cpu(entity->hide.hid_desc.rpt_desc.wDescriptorLength);
++	rsize = le16_to_cpu(function->hid.desc.rpt_desc.wDescriptorLength);
+ 
+ 	if (!rsize || rsize > HID_MAX_DESCRIPTOR_SIZE) {
+ 		dev_err(&hid->dev, "invalid size of report descriptor (%u)\n", rsize);
+ 		return -EINVAL;
+ 	}
+ 
+-	ret = hid_parse_report(hid, entity->hide.hid_report_desc, rsize);
++	ret = hid_parse_report(hid, function->hid.report_desc, rsize);
+ 
+ 	if (!ret)
+ 		return 0;
+@@ -90,7 +90,6 @@ int sdca_add_hid_device(struct sdca_interrupt *interrupt)
+ {
+ 	struct device *dev = interrupt->dev;
+ 	struct sdca_function_data *function = interrupt->function;
+-	struct sdca_entity *entity = interrupt->entity;
+ 	struct hid_device *hid;
+ 	int ret;
+ 
+@@ -102,13 +101,13 @@ int sdca_add_hid_device(struct sdca_interrupt *interrupt)
+ 
+ 	hid->dev.parent = dev;
+ 	hid->bus = BUS_SDW;
+-	hid->version = le16_to_cpu(entity->hide.hid_desc.bcdHID);
++	hid->version = le16_to_cpu(function->hid.desc.bcdHID);
+ 
+ 	strscpy(hid->phys, dev_name(dev));
+ 	snprintf(hid->name, sizeof(hid->name), "SDCA %s:%02x",
+ 		 function->desc->name, function->desc->adr);
+ 
+-	hid->driver_data = entity;
++	hid->driver_data = function;
+ 
+ 	ret = hid_add_device(hid);
+ 	if (ret && ret != -ENODEV) {
+-- 
+2.55.0
+

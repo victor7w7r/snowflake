@@ -1,0 +1,204 @@
+From 222e951b8692f2422b8cb7fc096cf45acb8db461 Mon Sep 17 00:00:00 2001
+From: "Rafael J. Wysocki" <rafael.j.wysocki@intel.com>
+Date: Fri, 19 Jun 2026 16:52:08 +0200
+Subject: [PATCH 04895/15333] cpufreq: intel_pstate: Adjust the .adjust_perf()
+ driver callback
+
+In some cases, the processor may not actually stick to the "desired"
+performance level programmed through the driver's .adjust_perf()
+callback and may go above it, which may not be desirable (for instance,
+there may be a UCLAMP_MAX limit set for the task currently running on
+the given CPU which should be respected).
+
+Address that by adjusting the .adjust_perf() callback to take an
+additional argument, max_perf, representing the maximum allowed
+performance level of the CPU and update the intel_pstate driver to
+take that argument into account as appropriate.
+
+Accordingly, adjust cpufreq_driver_adjust_perf() and the other existing
+user of .adjust_perf(), which is the amd-pstate driver (but the behavior
+of that driver is not changed).
+
+While at it, also update the cpufreq_driver_adjust_perf()
+documentation to reflect this change and some previous code
+changes that have not been taken into account in it.
+
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+Acked-by: Viresh Kumar <viresh.kumar@linaro.org>
+Reviewed-by: Zhongqiu Han <zhongqiu.han@oss.qualcomm.com>
+Reviewed-by: Mario Limonciello (AMD) <superm1@kernel.org>
+Link: https://patch.msgid.link/6277654.lOV4Wx5bFT@rafael.j.wysocki
+[ rjw: Adjusted Rust function formatting ]
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ drivers/cpufreq/amd-pstate.c     |  1 +
+ drivers/cpufreq/cpufreq.c        | 14 +++++++++-----
+ drivers/cpufreq/intel_pstate.c   |  9 ++++++++-
+ include/linux/cpufreq.h          |  2 ++
+ kernel/sched/cpufreq_schedutil.c |  4 +++-
+ rust/kernel/cpufreq.rs           | 11 +++++++++--
+ 6 files changed, 32 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/cpufreq/amd-pstate.c b/drivers/cpufreq/amd-pstate.c
+index a74a4cf99d22..f8d8288d644f 100644
+--- a/drivers/cpufreq/amd-pstate.c
++++ b/drivers/cpufreq/amd-pstate.c
+@@ -782,6 +782,7 @@ static unsigned int amd_pstate_fast_switch(struct cpufreq_policy *policy,
+ static void amd_pstate_adjust_perf(struct cpufreq_policy *policy,
+ 				   unsigned long _min_perf,
+ 				   unsigned long target_perf,
++				   unsigned long _max_perf,
+ 				   unsigned long capacity)
+ {
+ 	u8 max_perf, min_perf, des_perf, cap_perf;
+diff --git a/drivers/cpufreq/cpufreq.c b/drivers/cpufreq/cpufreq.c
+index 507224c9ecd3..f07b73694cec 100644
+--- a/drivers/cpufreq/cpufreq.c
++++ b/drivers/cpufreq/cpufreq.c
+@@ -2225,14 +2225,17 @@ EXPORT_SYMBOL_GPL(cpufreq_driver_fast_switch);
+  * @policy: cpufreq policy object of the target CPU.
+  * @min_perf: Minimum (required) performance level (units of @capacity).
+  * @target_perf: Target (desired) performance level (units of @capacity).
++ * @max_perf: Maximum (allowed) performance level (units of @capacity).
+  * @capacity: Capacity of the target CPU.
+  *
+- * Carry out a fast performance level switch of @cpu without sleeping.
++ * Carry out a fast performance level adjustment for the CPU represented by
++ * @policy without sleeping.
+  *
+  * The driver's ->adjust_perf() callback invoked by this function must be
+- * suitable for being called from within RCU-sched read-side critical sections
+- * and it is expected to select a suitable performance level equal to or above
+- * @min_perf and preferably equal to or below @target_perf.
++ * suitable for calling from within RCU-sched read-side critical sections and
++ * it is expected to program the processor to select suitable performance
++ * levels between @min_perf and @max_perf inclusive and preferably close to
++ * @target_perf going forward for the CPU represented by @policy.
+  *
+  * This function must not be called if policy->fast_switch_enabled is unset.
+  *
+@@ -2244,9 +2247,10 @@ EXPORT_SYMBOL_GPL(cpufreq_driver_fast_switch);
+ void cpufreq_driver_adjust_perf(struct cpufreq_policy *policy,
+ 				 unsigned long min_perf,
+ 				 unsigned long target_perf,
++				 unsigned long max_perf,
+ 				 unsigned long capacity)
+ {
+-	cpufreq_driver->adjust_perf(policy, min_perf, target_perf, capacity);
++	cpufreq_driver->adjust_perf(policy, min_perf, target_perf, max_perf, capacity);
+ }
+ 
+ /**
+diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
+index fd524d0267a3..fe3e6accd9a5 100644
+--- a/drivers/cpufreq/intel_pstate.c
++++ b/drivers/cpufreq/intel_pstate.c
+@@ -3239,6 +3239,7 @@ static unsigned int intel_cpufreq_fast_switch(struct cpufreq_policy *policy,
+ static void intel_cpufreq_adjust_perf(struct cpufreq_policy *policy,
+ 				      unsigned long min_perf,
+ 				      unsigned long target_perf,
++				      unsigned long max_perf,
+ 				      unsigned long capacity)
+ {
+ 	struct cpudata *cpu = all_cpu_data[policy->cpu];
+@@ -3269,7 +3270,13 @@ static void intel_cpufreq_adjust_perf(struct cpufreq_policy *policy,
+ 	if (min_pstate > cpu->max_perf_ratio)
+ 		min_pstate = cpu->max_perf_ratio;
+ 
+-	max_pstate = min(cap_pstate, cpu->max_perf_ratio);
++	max_pstate = cap_pstate;
++	if (max_perf < capacity)
++		max_pstate = DIV_ROUND_UP(cap_pstate * max_perf, capacity);
++
++	if (max_pstate > cpu->max_perf_ratio)
++		max_pstate = cpu->max_perf_ratio;
++
+ 	if (max_pstate < min_pstate)
+ 		max_pstate = min_pstate;
+ 
+diff --git a/include/linux/cpufreq.h b/include/linux/cpufreq.h
+index ae9d1ce4f49c..35ce665edfd8 100644
+--- a/include/linux/cpufreq.h
++++ b/include/linux/cpufreq.h
+@@ -379,6 +379,7 @@ struct cpufreq_driver {
+ 	void		(*adjust_perf)(struct cpufreq_policy *policy,
+ 				       unsigned long min_perf,
+ 				       unsigned long target_perf,
++				       unsigned long max_perf,
+ 				       unsigned long capacity);
+ 
+ 	/*
+@@ -624,6 +625,7 @@ unsigned int cpufreq_driver_fast_switch(struct cpufreq_policy *policy,
+ void cpufreq_driver_adjust_perf(struct cpufreq_policy *policy,
+ 				unsigned long min_perf,
+ 				unsigned long target_perf,
++				unsigned long max_perf,
+ 				unsigned long capacity);
+ bool cpufreq_driver_has_adjust_perf(void);
+ int cpufreq_driver_target(struct cpufreq_policy *policy,
+diff --git a/kernel/sched/cpufreq_schedutil.c b/kernel/sched/cpufreq_schedutil.c
+index a4e689eefdfb..7271cf24879d 100644
+--- a/kernel/sched/cpufreq_schedutil.c
++++ b/kernel/sched/cpufreq_schedutil.c
+@@ -50,6 +50,7 @@ struct sugov_cpu {
+ 
+ 	unsigned long		util;
+ 	unsigned long		bw_min;
++	unsigned long		bw_max;
+ 
+ 	/* The field below is for single-CPU policies only: */
+ #ifdef CONFIG_NO_HZ_COMMON
+@@ -232,6 +233,7 @@ static void sugov_get_util(struct sugov_cpu *sg_cpu, unsigned long boost)
+ 	util = effective_cpu_util(sg_cpu->cpu, util, &min, &max);
+ 	util = max(util, boost);
+ 	sg_cpu->bw_min = min;
++	sg_cpu->bw_max = max;
+ 	sg_cpu->util = sugov_effective_cpu_perf(sg_cpu->cpu, util, min, max);
+ }
+ 
+@@ -484,7 +486,7 @@ static void sugov_update_single_perf(struct update_util_data *hook, u64 time,
+ 		sg_cpu->util = prev_util;
+ 
+ 	cpufreq_driver_adjust_perf(sg_policy->policy, sg_cpu->bw_min,
+-				   sg_cpu->util, max_cap);
++				   sg_cpu->util, sg_cpu->bw_max, max_cap);
+ 
+ 	sg_policy->need_freq_update = false;
+ 	sg_policy->last_freq_update_time = time;
+diff --git a/rust/kernel/cpufreq.rs b/rust/kernel/cpufreq.rs
+index 58ac04c650a1..d624cccb6540 100644
+--- a/rust/kernel/cpufreq.rs
++++ b/rust/kernel/cpufreq.rs
+@@ -792,7 +792,13 @@ fn fast_switch(_policy: &mut Policy, _target_freq: u32) -> u32 {
+     }
+ 
+     /// Driver's `adjust_perf` callback.
+-    fn adjust_perf(_policy: &mut Policy, _min_perf: usize, _target_perf: usize, _capacity: usize) {
++    fn adjust_perf(
++        _policy: &mut Policy,
++        _min_perf: usize,
++        _target_perf: usize,
++        _max_perf: usize,
++        _capacity: usize,
++    ) {
+         build_error!(VTABLE_DEFAULT_ERROR)
+     }
+ 
+@@ -1263,12 +1269,13 @@ impl<T: Driver> Registration<T> {
+         ptr: *mut bindings::cpufreq_policy,
+         min_perf: c_ulong,
+         target_perf: c_ulong,
++        max_perf: c_ulong,
+         capacity: c_ulong,
+     ) {
+         // SAFETY: The `ptr` is guaranteed to be valid by the contract with the C code for the
+         // lifetime of `policy`.
+         let policy = unsafe { Policy::from_raw_mut(ptr) };
+-        T::adjust_perf(policy, min_perf, target_perf, capacity);
++        T::adjust_perf(policy, min_perf, target_perf, max_perf, capacity);
+     }
+ 
+     /// Driver's `get_intermediate` callback.
+-- 
+2.55.0
+

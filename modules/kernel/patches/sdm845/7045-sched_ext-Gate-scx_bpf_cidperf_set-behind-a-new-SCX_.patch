@@ -1,0 +1,233 @@
+From 3a21e34eb2588e135190cf5c48e64397bc18d0b5 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Fri, 24 Jul 2026 09:09:28 -1000
+Subject: [PATCH 07045/15333] sched_ext: Gate scx_bpf_cidperf_set() behind a
+ new SCX_CAP_PERF
+
+scx_bpf_cidperf_set() reaches cpufreq with no cap check, so any cid-form
+sub-sched can steer the frequency of any cid in its view, including ones it
+holds nothing on.
+
+Gate it behind a new SCX_CAP_PERF rather than SCX_CAP_BASE: hardware control
+is a separate axis from queue access - a parent may well delegate scheduling
+on a cid without handing over its frequency. PERF neither implies nor is
+implied by the other caps. The check runs under the target rq's lock, which
+ecaps updates are also folded under, so it is authoritative - a write can
+never land after a revoke has taken effect. Denials are counted in
+SCX_EV_SUB_CIDPERF_DENIED.
+
+The operation is synchronous and the outcome is reported to the caller:
+scx_bpf_cidperf_set() now returns 0 or -errno, -EACCES on denial. The
+cid-form interface is still under initial development, so the signature is
+changed in place without versioning.
+
+scx_qmap grants PERF alongside its existing cid grants so the cpuperf demo
+keeps working in sub-scheds.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/ext.c                   | 35 ++++++++++++++++++------
+ kernel/sched/ext/internal.h              | 16 ++++++++++-
+ tools/sched_ext/include/scx/common.bpf.h |  2 +-
+ tools/sched_ext/scx_qmap.bpf.c           | 17 ++++++++----
+ 4 files changed, 53 insertions(+), 17 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index e11c66bd23e7..aca8d2380509 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -5144,6 +5144,7 @@ static const char *scx_cap_names[__SCX_NR_CAPS] = {
+ 	[__SCX_CAP_ENQ_IMMED]	= "enq_immed",
+ 	[__SCX_CAP_ENQ]		= "enq",
+ 	[__SCX_CAP_PREEMPT]	= "preempt",
++	[__SCX_CAP_PERF]	= "perf",
+ };
+ 
+ static ssize_t scx_attr_caps_show(struct kobject *kobj,
+@@ -9786,6 +9787,7 @@ static s32 scx_cpuperf_set(struct scx_sched *sch, s32 cpu, u32 perf)
+ {
+ 	struct rq *rq, *locked_rq;
+ 	struct rq_flags rf;
++	s32 ret;
+ 
+ 	if (unlikely(perf > SCX_CPUPERF_ONE)) {
+ 		scx_error(sch, "Invalid cpuperf target %u for CPU %d", perf, cpu);
+@@ -9816,13 +9818,24 @@ static s32 scx_cpuperf_set(struct scx_sched *sch, s32 cpu, u32 perf)
+ 		update_rq_clock(rq);
+ 	}
+ 
+-	rq->scx.cpuperf_target = perf;
+-	cpufreq_update_util(rq, 0);
++	/*
++	 * ecaps updates are folded under the rq lock, making this test
++	 * authoritative: a write can never land after a revoke has taken
++	 * effect on @cpu.
++	 */
++	if (likely(!scx_missing_caps(sch, cpu, SCX_CAP_PERF))) {
++		rq->scx.cpuperf_target = perf;
++		cpufreq_update_util(rq, 0);
++		ret = 0;
++	} else {
++		__scx_add_event(sch, SCX_EV_SUB_CIDPERF_DENIED, 1);
++		ret = -EACCES;
++	}
+ 
+ 	if (!locked_rq)
+ 		rq_unlock_irqrestore(rq, &rf);
+ 
+-	return 0;
++	return ret;
+ }
+ 
+ /**
+@@ -9859,10 +9872,13 @@ __bpf_kfunc void scx_bpf_cpuperf_set(s32 cpu, u32 perf, const struct bpf_prog_au
+  * @perf: target performance level [0, %SCX_CPUPERF_ONE]
+  * @aux: implicit BPF argument to access bpf_prog_aux hidden from BPF progs
+  *
+- * cid-addressed equivalent of scx_bpf_cpuperf_set().
++ * cid-addressed equivalent of scx_bpf_cpuperf_set(). A sub-sched needs
++ * SCX_CAP_PERF on @cid. Returns 0 if the target was applied, -%EACCES if
++ * the write was denied for missing caps, other -errnos if @cid didn't
++ * resolve.
+  */
+-__bpf_kfunc void scx_bpf_cidperf_set(s32 cid, u32 perf,
+-				     const struct bpf_prog_aux *aux)
++__bpf_kfunc s32 scx_bpf_cidperf_set(s32 cid, u32 perf,
++				    const struct bpf_prog_aux *aux)
+ {
+ 	struct scx_sched *sch;
+ 	s32 cpu;
+@@ -9871,11 +9887,12 @@ __bpf_kfunc void scx_bpf_cidperf_set(s32 cid, u32 perf,
+ 
+ 	sch = scx_prog_sched(aux);
+ 	if (unlikely(!sch))
+-		return;
++		return -ENODEV;
+ 	cpu = scx_cid_to_cpu(sch, cid);
+ 	if (cpu < 0)
+-		return;
+-	scx_bpf_cpuperf_set(cpu, perf, aux);
++		return cpu;
++
++	return scx_cpuperf_set(sch, cpu, perf);
+ }
+ 
+ /**
+diff --git a/kernel/sched/ext/internal.h b/kernel/sched/ext/internal.h
+index 308d16320818..886f1d132e6b 100644
+--- a/kernel/sched/ext/internal.h
++++ b/kernel/sched/ext/internal.h
+@@ -1206,6 +1206,12 @@ struct scx_event_stats {
+ 	 * sub-sched lacked baseline access on the target cid.
+ 	 */
+ 	s64		SCX_EV_SUB_REENQ_DENIED;
++
++	/*
++	 * The number of times scx_bpf_cidperf_set() was denied because the
++	 * sub-sched lacked SCX_CAP_PERF on the target cid.
++	 */
++	s64		SCX_EV_SUB_CIDPERF_DENIED;
+ };
+ 
+ #define SCX_EVENTS_LIST(SCX_EVENT)					\
+@@ -1227,7 +1233,8 @@ struct scx_event_stats {
+ 	SCX_EVENT(SCX_EV_SUB_FORCED_ADMIT);				\
+ 	SCX_EVENT(SCX_EV_SUB_PREEMPT_DENIED);				\
+ 	SCX_EVENT(SCX_EV_SUB_KICK_DENIED);				\
+-	SCX_EVENT(SCX_EV_SUB_REENQ_DENIED)
++	SCX_EVENT(SCX_EV_SUB_REENQ_DENIED);				\
++	SCX_EVENT(SCX_EV_SUB_CIDPERF_DENIED)
+ 
+ struct scx_sched;
+ 
+@@ -1353,6 +1360,11 @@ struct scx_sched_pnode {
+  *            - SCX_ENQ_PREEMPT inserts
+  *            - SCX_KICK_PREEMPT kicks
+  *
++ * PERF       control the cid's cpu power/perf management state, currently the
++ *            cpufreq target set through scx_bpf_cidperf_set(). Hardware
++ *            control is a separate axis from queue access: PERF neither
++ *            implies nor is implied by the caps above.
++ *
+  * Implied caps apply to the holder's own use of a cid, not to delegation.
+  * scx_bpf_sub_grant() delegates literally-held caps, so a cap held only through
+  * implication is usable but cannot be re-delegated to a child. When granting a
+@@ -1363,6 +1375,7 @@ enum scx_cap_flags {
+ 	__SCX_CAP_ENQ_IMMED		= 0,
+ 	__SCX_CAP_ENQ			= 1,
+ 	__SCX_CAP_PREEMPT		= 2,
++	__SCX_CAP_PERF			= 3,
+ 
+ 	__SCX_NR_CAPS,
+ 	__SCX_CAP_ALL			= BIT_U64(__SCX_NR_CAPS) - 1,
+@@ -1370,6 +1383,7 @@ enum scx_cap_flags {
+ 	SCX_CAP_ENQ_IMMED		= BIT_U64(__SCX_CAP_ENQ_IMMED),
+ 	SCX_CAP_ENQ			= BIT_U64(__SCX_CAP_ENQ),
+ 	SCX_CAP_PREEMPT			= BIT_U64(__SCX_CAP_PREEMPT),
++	SCX_CAP_PERF			= BIT_U64(__SCX_CAP_PERF),
+ 
+ 	/* alias for minimal cap to make any use of a cpu */
+ 	SCX_CAP_BASE			= SCX_CAP_ENQ_IMMED,
+diff --git a/tools/sched_ext/include/scx/common.bpf.h b/tools/sched_ext/include/scx/common.bpf.h
+index acc2b131ea8f..6035d007c43f 100644
+--- a/tools/sched_ext/include/scx/common.bpf.h
++++ b/tools/sched_ext/include/scx/common.bpf.h
+@@ -112,7 +112,7 @@ u32 scx_bpf_nr_cids(void) __ksym __weak;
+ u32 scx_bpf_nr_online_cids(void) __ksym __weak;
+ u32 scx_bpf_cidperf_cap(s32 cid) __ksym __weak;
+ u32 scx_bpf_cidperf_cur(s32 cid) __ksym __weak;
+-void scx_bpf_cidperf_set(s32 cid, u32 perf) __ksym __weak;
++s32 scx_bpf_cidperf_set(s32 cid, u32 perf) __ksym __weak;
+ 
+ /* sub-scheduler cap control, scx_bpf_sub_caps() cgroup_id 0 == self */
+ s32 scx_bpf_sub_grant(u64 cgroup_id, u64 caps, const struct scx_cmask *cmask,
+diff --git a/tools/sched_ext/scx_qmap.bpf.c b/tools/sched_ext/scx_qmap.bpf.c
+index aead17658573..8822ed11c0d8 100644
+--- a/tools/sched_ext/scx_qmap.bpf.c
++++ b/tools/sched_ext/scx_qmap.bpf.c
+@@ -1585,11 +1585,13 @@ __noinline void apply_partition(void)
+ 		cmask_copy(&qa.to_grant_cids.mask, &ssc->granted_cids.mask);
+ 		cmask_andnot(&qa.to_grant_cids.mask, &ssc->prev_granted.mask);
+ 
+-		scx_bpf_sub_revoke(cgid, SCX_CAP_ENQ_IMMED,
++		scx_bpf_sub_revoke(cgid, SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+ 				   (void *)(long)&qa.prev_rr_cids.mask);
+-		scx_bpf_sub_revoke(cgid, SCX_CAP_ENQ | SCX_CAP_PREEMPT | SCX_CAP_ENQ_IMMED,
++		scx_bpf_sub_revoke(cgid, SCX_CAP_ENQ | SCX_CAP_PREEMPT |
++				   SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+ 				   (void *)(long)&qa.to_revoke_cids.mask);
+-		scx_bpf_sub_grant(cgid, SCX_CAP_ENQ | SCX_CAP_PREEMPT | SCX_CAP_ENQ_IMMED,
++		scx_bpf_sub_grant(cgid, SCX_CAP_ENQ | SCX_CAP_PREEMPT |
++				  SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+ 				  (void *)(long)&qa.to_grant_cids.mask, NULL);
+ 	}
+ 
+@@ -1605,7 +1607,8 @@ __noinline void apply_partition(void)
+ 
+ 		holder_cgid = qa.part.rr_slots[pos];	/* 0 = self, nothing to grant */
+ 		if (holder_cgid)
+-			scx_bpf_sub_grant(holder_cgid, SCX_CAP_ENQ_IMMED,
++			scx_bpf_sub_grant(holder_cgid,
++					  SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+ 					  (void *)(long)&qa.rr_cids.mask, NULL);
+ 	}
+ }
+@@ -1696,10 +1699,12 @@ static void rr_advance(void)
+ 		 * time-share.
+ 		 */
+ 		if (old_cgid)
+-			scx_bpf_sub_revoke(old_cgid, SCX_CAP_ENQ_IMMED,
++			scx_bpf_sub_revoke(old_cgid,
++					   SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+ 					   (void *)(long)&qa.rr_cids.mask);
+ 		if (new_cgid)
+-			scx_bpf_sub_grant(new_cgid, SCX_CAP_ENQ_IMMED,
++			scx_bpf_sub_grant(new_cgid,
++					  SCX_CAP_ENQ_IMMED | SCX_CAP_PERF,
+ 					  (void *)(long)&qa.rr_cids.mask, NULL);
+ 	}
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,87 @@
+From 73b6bf3c314ad34a9fd389f84de6e8dbfc204880 Mon Sep 17 00:00:00 2001
+From: "Pawel Zalewski (The Capable Hub)" <pzalewski@thegoodpenguin.co.uk>
+Date: Tue, 4 Aug 2026 10:44:26 +0100
+Subject: [PATCH 10500/15333] ata: use named initializers for acpi_device_id
+
+Use a named initializer for the acpi_device_id fields which makes the code
+more readable and consistent with how lists are initialized in the rest of
+the kernel code base. Also drop explicitly setting fields to 0 where it is
+redundant.
+
+While we are at it - unify the list terminator to have a single space
+between the brackets and no trailing comma.
+
+Signed-off-by: Pawel Zalewski (The Capable Hub) <pzalewski@thegoodpenguin.co.uk>
+Reviewed-by: Niklas Cassel <cassel@kernel.org>
+Signed-off-by: Damien Le Moal <dlemoal@kernel.org>
+---
+ drivers/ata/ahci_platform.c | 4 ++--
+ drivers/ata/ahci_qoriq.c    | 2 +-
+ drivers/ata/ahci_seattle.c  | 4 ++--
+ drivers/ata/ahci_xgene.c    | 6 +++---
+ 4 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/ata/ahci_platform.c b/drivers/ata/ahci_platform.c
+index 4fbcaff3283c..8724b242640e 100644
+--- a/drivers/ata/ahci_platform.c
++++ b/drivers/ata/ahci_platform.c
+@@ -87,9 +87,9 @@ static const struct of_device_id ahci_of_match[] = {
+ MODULE_DEVICE_TABLE(of, ahci_of_match);
+ 
+ static const struct acpi_device_id ahci_acpi_match[] = {
+-	{ "APMC0D33", (unsigned long)&ahci_port_info_nolpm },
++	{ .id = "APMC0D33", .driver_data = (unsigned long)&ahci_port_info_nolpm },
+ 	{ ACPI_DEVICE_CLASS(PCI_CLASS_STORAGE_SATA_AHCI, 0xffffff) },
+-	{},
++	{ }
+ };
+ MODULE_DEVICE_TABLE(acpi, ahci_acpi_match);
+ 
+diff --git a/drivers/ata/ahci_qoriq.c b/drivers/ata/ahci_qoriq.c
+index 0dec1a17e5b1..96492159fa7c 100644
+--- a/drivers/ata/ahci_qoriq.c
++++ b/drivers/ata/ahci_qoriq.c
+@@ -80,7 +80,7 @@ static const struct of_device_id ahci_qoriq_of_match[] = {
+ MODULE_DEVICE_TABLE(of, ahci_qoriq_of_match);
+ 
+ static const struct acpi_device_id ahci_qoriq_acpi_match[] = {
+-	{"NXP0004", .driver_data = (kernel_ulong_t)AHCI_LX2160A},
++	{ .id = "NXP0004", .driver_data = (kernel_ulong_t)AHCI_LX2160A },
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(acpi, ahci_qoriq_acpi_match);
+diff --git a/drivers/ata/ahci_seattle.c b/drivers/ata/ahci_seattle.c
+index 3f16c1678402..9758fa0260ac 100644
+--- a/drivers/ata/ahci_seattle.c
++++ b/drivers/ata/ahci_seattle.c
+@@ -178,8 +178,8 @@ static SIMPLE_DEV_PM_OPS(ahci_pm_ops, ahci_platform_suspend,
+ 			 ahci_platform_resume);
+ 
+ static const struct acpi_device_id ahci_acpi_match[] = {
+-	{ "AMDI0600", 0 },
+-	{}
++	{ .id = "AMDI0600" },
++	{ }
+ };
+ MODULE_DEVICE_TABLE(acpi, ahci_acpi_match);
+ 
+diff --git a/drivers/ata/ahci_xgene.c b/drivers/ata/ahci_xgene.c
+index 98c99b5a8242..2ebfe86e429b 100644
+--- a/drivers/ata/ahci_xgene.c
++++ b/drivers/ata/ahci_xgene.c
+@@ -710,9 +710,9 @@ static const struct scsi_host_template ahci_platform_sht = {
+ 
+ #ifdef CONFIG_ACPI
+ static const struct acpi_device_id xgene_ahci_acpi_match[] = {
+-	{ "APMC0D0D", XGENE_AHCI_V1},
+-	{ "APMC0D32", XGENE_AHCI_V2},
+-	{},
++	{ .id = "APMC0D0D", .driver_data = XGENE_AHCI_V1 },
++	{ .id = "APMC0D32", .driver_data = XGENE_AHCI_V2 },
++	{ }
+ };
+ MODULE_DEVICE_TABLE(acpi, xgene_ahci_acpi_match);
+ #endif
+-- 
+2.55.0
+

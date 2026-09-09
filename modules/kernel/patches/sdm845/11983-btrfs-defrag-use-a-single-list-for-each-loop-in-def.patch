@@ -1,0 +1,45 @@
+From 28bc34d6476a055ce47d9acbfd2632e3fe18e463 Mon Sep 17 00:00:00 2001
+From: Filipe Manana <fdmanana@suse.com>
+Date: Wed, 24 Jun 2026 12:31:44 +0100
+Subject: [PATCH 11983/15333] btrfs: defrag: use a single list for each loop in
+ defrag_one_range()
+
+There's no need to have one list for each loop to defrag each subrange and
+then another one to free each subrange (struct defrag_target_range).
+We can do it in a single loop, freeing each subrange after defragging,
+plus no need to delete each subrange from the list since we immediately
+free it.
+
+Reviewed-by: Qu Wenruo <wqu@suse.com>
+Signed-off-by: Filipe Manana <fdmanana@suse.com>
+Reviewed-by: David Sterba <dsterba@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/defrag.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/fs/btrfs/defrag.c b/fs/btrfs/defrag.c
+index 0697b285e05f..ad1d04d8f165 100644
+--- a/fs/btrfs/defrag.c
++++ b/fs/btrfs/defrag.c
+@@ -1234,16 +1234,12 @@ static int defrag_one_range(struct btrfs_inode *inode, u64 start, u32 len,
+ 	if (ret < 0)
+ 		goto unlock_extent;
+ 
+-	list_for_each_entry(entry, &target_list, list) {
++	list_for_each_entry_safe(entry, tmp, &target_list, list) {
+ 		defrag_one_locked_target(inode, entry, folios, nr_pages, &cached_state);
+ 		if (entry->start > last_defrag_end)
+ 			btrfs_delalloc_release_space(inode, data_reserved, last_defrag_end,
+ 						     entry->start - last_defrag_end, true);
+ 		last_defrag_end = entry->start + entry->len;
+-	}
+-
+-	list_for_each_entry_safe(entry, tmp, &target_list, list) {
+-		list_del_init(&entry->list);
+ 		kfree(entry);
+ 	}
+ unlock_extent:
+-- 
+2.55.0
+

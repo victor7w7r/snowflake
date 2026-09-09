@@ -1,0 +1,93 @@
+From 07d76600a3c59e01430c9a793dc646941be423b9 Mon Sep 17 00:00:00 2001
+From: Loic Poulain <loic.poulain@oss.qualcomm.com>
+Date: Tue, 9 Jun 2026 11:12:06 +0200
+Subject: [PATCH 03065/15333] arm64: dts: qcom: monaco-arduino-monza: Add fan
+ controller and thermal cooling
+
+Enable the CCI1 bus and add support for the Microchip EMC2305 fan
+controller on the Monaco Arduino Monza board. The controller is
+virtually implemented by the onboard MCU.
+
+Add a new active trip point to the cpuss0 thermal zone and
+associate it with onboard fan cooling. The CPU subsystem sensor is
+used as the thermal reference until support for a more appropriate
+onboard/skin sensor becomes available (via spmi-adc5-gen3).
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Loic Poulain <loic.poulain@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260609091206.522331-1-loic.poulain@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ .../boot/dts/qcom/monaco-arduino-monza.dts    | 42 +++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/monaco-arduino-monza.dts b/arch/arm64/boot/dts/qcom/monaco-arduino-monza.dts
+index 8b3ed73feb6e..46ce0722f98f 100644
+--- a/arch/arm64/boot/dts/qcom/monaco-arduino-monza.dts
++++ b/arch/arm64/boot/dts/qcom/monaco-arduino-monza.dts
+@@ -7,6 +7,7 @@
+ 
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
++#include <dt-bindings/pwm/pwm.h>
+ #include <dt-bindings/sound/qcom,q6dsp-lpass-ports.h>
+ 
+ #include "monaco.dtsi"
+@@ -172,6 +173,26 @@ vreg_nvme: regulator-3p3-m2 {
+ 	};
+ };
+ 
++&cci1 {
++	status = "okay";
++};
++
++&cci1_i2c1 {
++	fan_controller: fan-controller@2f {
++		compatible = "microchip,emc2305";
++		reg = <0x2f>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		#pwm-cells = <3>;
++
++		fan: fan@0 {
++			reg = <0x0>;
++			pwms = <&fan_controller 26000 PWM_POLARITY_INVERTED 1>;
++			#cooling-cells = <2>;
++		};
++	};
++};
++
+ &ethernet0 {
+ 	phy-mode = "2500base-x";
+ 	phy-handle = <&hsgmii_phy0>;
+@@ -425,6 +446,27 @@ &pcieport1 {
+ 	reset-gpios = <&tlmm 23 GPIO_ACTIVE_LOW>;
+ };
+ 
++&thermal_zones {
++	cpuss-0-0-thermal {
++		polling-delay = <2000>;
++
++		trips {
++			cpuss0_active: cpuss-active {
++				temperature = <32000>;
++				hysteresis = <2000>;
++				type = "active";
++			};
++		};
++
++		cooling-maps {
++			map-active {
++				trip = <&cpuss0_active>;
++				cooling-device = <&fan 0 THERMAL_NO_LIMIT>;
++			};
++		};
++	};
++};
++
+ &tlmm {
+ 	pcie0_default_state: pcie0-default-state {
+ 		wake-pins {
+-- 
+2.55.0
+

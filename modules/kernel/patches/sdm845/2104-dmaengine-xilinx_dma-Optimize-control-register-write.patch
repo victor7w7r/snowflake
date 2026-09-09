@@ -1,0 +1,62 @@
+From 887b3119380cde56f648130029062c223341a1b3 Mon Sep 17 00:00:00 2001
+From: Suraj Gupta <suraj.gupta2@amd.com>
+Date: Fri, 26 Jun 2026 14:56:56 +0530
+Subject: [PATCH 02104/15333] dmaengine: xilinx_dma: Optimize control register
+ write and channel start logic for AXIDMA and MCDMA in corresponding
+ start_transfer()
+
+Optimize AXI DMA control register programming by consolidating
+coalesce count and delay configuration into a single register write.
+Previously, the coalesce count was written separately from the delay
+configuration, resulting in two register writes. Combine these into
+one write operation to reduce bus overhead.
+Additionally, avoid redundant channel starts in xilinx_dma_start_transfer()
+and xilinx_mcdma_start_transfer() by only calling xilinx_dma_start() when
+the channel is actually idle.
+
+Tested-by: Folker Schwesinger <dev@folker-schwesinger.de>
+Signed-off-by: Suraj Gupta <suraj.gupta2@amd.com>
+Co-developed-by: Srinivas Neeli <srinivas.neeli@amd.com>
+Signed-off-by: Srinivas Neeli <srinivas.neeli@amd.com>
+Reviewed-by: Radhey Shyam Pandey <radhey.shyam.pandey@amd.com>
+Link: https://patch.msgid.link/20260626092656.1563871-4-suraj.gupta2@amd.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/xilinx/xilinx_dma.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/dma/xilinx/xilinx_dma.c b/drivers/dma/xilinx/xilinx_dma.c
+index 6e7b183cb499..829601d8a16f 100644
+--- a/drivers/dma/xilinx/xilinx_dma.c
++++ b/drivers/dma/xilinx/xilinx_dma.c
+@@ -1603,7 +1603,6 @@ static void xilinx_dma_start_transfer(struct xilinx_dma_chan *chan)
+ 		reg &= ~XILINX_DMA_CR_COALESCE_MAX;
+ 		reg |= chan->desc_pendingcount <<
+ 				  XILINX_DMA_CR_COALESCE_SHIFT;
+-		dma_ctrl_write(chan, XILINX_DMA_REG_DMACR, reg);
+ 	}
+ 
+ 	if (chan->has_sg && list_empty(&chan->active_list))
+@@ -1614,7 +1613,8 @@ static void xilinx_dma_start_transfer(struct xilinx_dma_chan *chan)
+ 	reg |= XILINX_DMA_DMAXR_ALL_IRQ_MASK;
+ 	dma_ctrl_write(chan, XILINX_DMA_REG_DMACR, reg);
+ 
+-	xilinx_dma_start(chan);
++	if (chan->idle)
++		xilinx_dma_start(chan);
+ 
+ 	if (chan->err)
+ 		return;
+@@ -1703,7 +1703,8 @@ static void xilinx_mcdma_start_transfer(struct xilinx_dma_chan *chan)
+ 	reg |= XILINX_MCDMA_CR_RUNSTOP_MASK;
+ 	dma_ctrl_write(chan, XILINX_MCDMA_CHAN_CR_OFFSET(chan->tdest), reg);
+ 
+-	xilinx_dma_start(chan);
++	if (chan->idle)
++		xilinx_dma_start(chan);
+ 
+ 	if (chan->err)
+ 		return;
+-- 
+2.55.0
+

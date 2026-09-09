@@ -1,0 +1,46 @@
+From 6034bc4febc98801097e5c416a7fef8ccf883507 Mon Sep 17 00:00:00 2001
+From: Stanislav Fomichev <sdf.kernel@gmail.com>
+Date: Thu, 2 Jul 2026 15:41:47 -0700
+Subject: [PATCH 02923/15333] net: mtk_eth_soc: hold instance lock around
+ DMA-device-swap close
+
+netif_close_many will soon assert ops lock (for locked DOWN/GOING_DOWN).
+Update mtk_eth_set_dma_device to manually grab and release the ops lock.
+
+Signed-off-by: Stanislav Fomichev <sdf@fomichev.me>
+Link: https://patch.msgid.link/20260702224150.3730033-4-sdf@fomichev.me
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/ethernet/mediatek/mtk_eth_soc.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+index 5d291e50a47b..fe7610c42e5d 100644
+--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+@@ -26,6 +26,7 @@
+ #include <linux/bitfield.h>
+ #include <net/dsa.h>
+ #include <net/dst_metadata.h>
++#include <net/netdev_lock.h>
+ #include <net/page_pool/helpers.h>
+ #include <linux/genalloc.h>
+ 
+@@ -5030,10 +5031,14 @@ void mtk_eth_set_dma_device(struct mtk_eth *eth, struct device *dma_dev)
+ 			continue;
+ 
+ 		list_add_tail(&dev->close_list, &dev_list);
++		netdev_lock_ops(dev);
+ 	}
+ 
+ 	netif_close_many(&dev_list, false);
+ 
++	list_for_each_entry(dev, &dev_list, close_list)
++		netdev_unlock_ops(dev);
++
+ 	eth->dma_dev = dma_dev;
+ 
+ 	list_for_each_entry_safe(dev, tmp, &dev_list, close_list) {
+-- 
+2.55.0
+

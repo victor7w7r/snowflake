@@ -1,0 +1,41 @@
+From d112661f951c4b6d9eaca051c52c4828780da082 Mon Sep 17 00:00:00 2001
+From: Namjae Jeon <linkinjeon@kernel.org>
+Date: Tue, 7 Jul 2026 00:25:35 +0900
+Subject: [PATCH 14271/15333] ksmbd: require read control for security
+ information
+
+SMB2 QUERY_INFO security requests currently return owner, group, and DACL
+information without checking the access granted to the opened handle. A
+handle opened with only SYNCHRONIZE or READ_ATTRIBUTES can consequently
+read the security descriptor.
+
+Require READ_CONTROL when OWNER_SECINFO, GROUP_SECINFO, or DACL_SECINFO
+is requested and return STATUS_ACCESS_DENIED otherwise.
+
+This fixes smb2.getinfo.getinfo_access.
+
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/smb2pdu.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index 1959fcd5ebdc..7d1c1d2adc19 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -6425,6 +6425,12 @@ static int smb2_get_info_sec(struct ksmbd_work *work,
+ 	if (!fp)
+ 		return -ENOENT;
+ 
++	if (addition_info & (OWNER_SECINFO | GROUP_SECINFO | DACL_SECINFO) &&
++	    !(fp->daccess & FILE_READ_CONTROL_LE)) {
++		ksmbd_fd_put(work, fp);
++		return -EACCES;
++	}
++
+ 	if (le32_to_cpu(req->OutputBufferLength) < sizeof(struct smb_ntsd)) {
+ 		rsp->hdr.Status = STATUS_BUFFER_TOO_SMALL;
+ 		ksmbd_fd_put(work, fp);
+-- 
+2.55.0
+

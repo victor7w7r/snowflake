@@ -1,0 +1,40 @@
+From 715a22ca5e159be81704a271742f8276a67e80a3 Mon Sep 17 00:00:00 2001
+From: Chuck Lever <cel@kernel.org>
+Date: Sun, 12 Jul 2026 16:45:46 -0400
+Subject: [PATCH 12754/15333] NFSD: Make "stats.h" self-contained
+
+The inline helpers in fs/nfsd/stats.h dereference struct nfsd_net and
+struct svc_export, yet the header includes neither "netns.h" nor
+"export.h", where those types are defined. Each helper therefore
+compiles only when its translation unit has already pulled in both
+headers ahead of "stats.h" -- a hidden ordering requirement that has
+to be honored at every include site.
+
+Include "netns.h" and "export.h" from "stats.h" directly so the
+header stands on its own, and no consumer has to order its includes
+to satisfy it.
+
+Link: https://patch.msgid.link/20260712204554.125308-2-cel@kernel.org
+Reviewed-by: Jeff Layton <jlayton@kernel.org>
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ fs/nfsd/stats.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/fs/nfsd/stats.h b/fs/nfsd/stats.h
+index e4efb0e4e56d..87736b7fbf28 100644
+--- a/fs/nfsd/stats.h
++++ b/fs/nfsd/stats.h
+@@ -10,6 +10,9 @@
+ #include <uapi/linux/nfsd/stats.h>
+ #include <linux/percpu_counter.h>
+ 
++#include "export.h"
++#include "netns.h"
++
+ struct proc_dir_entry *nfsd_proc_stat_init(struct net *net);
+ void nfsd_proc_stat_shutdown(struct net *net);
+ 
+-- 
+2.55.0
+

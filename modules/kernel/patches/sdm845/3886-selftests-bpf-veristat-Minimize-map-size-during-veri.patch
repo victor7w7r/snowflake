@@ -1,0 +1,69 @@
+From e821c223875803760d492f88e357380415f5f438 Mon Sep 17 00:00:00 2001
+From: Emil Tsalapatis <emil@etsalapatis.com>
+Date: Wed, 8 Jul 2026 15:32:39 -0400
+Subject: [PATCH 03886/15333] selftests/bpf: veristat: Minimize map size during
+ verification
+
+The veristat tool verifies that BPF objects along with their
+maps pass verification for a given kernel version. To do so,
+veristat loads the objects and maps into the kernel in order
+to pass them through the verifier.
+
+Currently, veristat sizes the maps according to the max_entries
+field provided by the program author. Depending on the map type
+this field may be irrelevant to the verification process. However,
+loading a large map can fail because of -ENOMEM errors.
+
+This is a problem when the map is supposed to run on large machines,
+but veristat tests it machines with significantly less RAM (e.g.,
+CI). In that case veristat fails even if the program verifies.
+
+Expand veristat to resize maps whose max_entries are not relevant
+to verification. Set the max_entries value as low as possible to
+avoid -ENOMEM errors.
+
+Suggested-by: Andrii Nakryiko <andrii@kernel.org>
+Signed-off-by: Emil Tsalapatis <emil@etsalapatis.com>
+Signed-off-by: Andrii Nakryiko <andrii@kernel.org>
+Link: https://lore.kernel.org/bpf/20260708193239.5063-1-emil@etsalapatis.com
+---
+ tools/testing/selftests/bpf/veristat.c | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/veristat.c b/tools/testing/selftests/bpf/veristat.c
+index a7db6f04f7e1..c9c257784ee3 100644
+--- a/tools/testing/selftests/bpf/veristat.c
++++ b/tools/testing/selftests/bpf/veristat.c
+@@ -1248,6 +1248,29 @@ static void fixup_obj_maps(struct bpf_object *obj)
+ 
+ 		/* fix up map size, if necessary */
+ 		switch (bpf_map__type(map)) {
++		/*
++		 * if the verifier doesn't use max_entries
++		 * then set to 1 to avoid -ENOMEM
++		 */
++		case BPF_MAP_TYPE_HASH:
++		case BPF_MAP_TYPE_PERCPU_HASH:
++		case BPF_MAP_TYPE_LRU_HASH:
++		case BPF_MAP_TYPE_LRU_PERCPU_HASH:
++		case BPF_MAP_TYPE_SOCKHASH:
++		case BPF_MAP_TYPE_DEVMAP_HASH:
++		case BPF_MAP_TYPE_QUEUE:
++		case BPF_MAP_TYPE_STACK:
++		case BPF_MAP_TYPE_BLOOM_FILTER:
++		case BPF_MAP_TYPE_STACK_TRACE:
++			bpf_map__set_max_entries(map, 1);
++			break;
++
++		/* ringbufs must be page-aligned */
++		case BPF_MAP_TYPE_RINGBUF:
++		case BPF_MAP_TYPE_USER_RINGBUF:
++			bpf_map__set_max_entries(map, sysconf(_SC_PAGESIZE));
++			break;
++
+ 		case BPF_MAP_TYPE_SK_STORAGE:
+ 		case BPF_MAP_TYPE_TASK_STORAGE:
+ 		case BPF_MAP_TYPE_INODE_STORAGE:
+-- 
+2.55.0
+

@@ -1,0 +1,60 @@
+From 08f41323f549b1ad9ad2e67e7b5c5ac312c1cb1a Mon Sep 17 00:00:00 2001
+From: Gael Blivet <gael.blivet@gmail.com>
+Date: Fri, 17 Jul 2026 09:15:04 +0200
+Subject: [PATCH 14331/15333] ksmbd: fix maximal access leak when object has no
+ NT ACL
+
+smb2_open()'s maximal-access handling sets maximal_access to the
+FILE_MAXIMAL_ACCESS_LE request sentinel, then calls
+smb_check_perm_dacl() to compute the real access mask from the
+object's DACL.
+
+smb_check_perm_dacl() returns success without touching *pdaccess when
+the object has no stored NT ACL xattr (ksmbd_vfs_get_sd_xattr() fails,
+taking an early goto err_out with rc still 0). This leaves
+maximal_access holding the raw FILE_MAXIMAL_ACCESS_LE sentinel instead
+of a real access mask.
+
+Observed live: a freshly-created share root shows macOS's "no entry"
+(prohibited-access) badge on connect, even though POSIX permissions
+clearly allow access -- macOS requests maximal access via the MxAc
+create context on every share-root open, not via DesiredAccess, so it
+trusts the leaked sentinel verbatim instead of falling through to the
+correct POSIX-based path.
+
+Fall back to ksmbd_vfs_query_maximal_access() -- the same POSIX-based
+computation already used for the DesiredAccess-requested-maximal-access
+case below -- whenever the sentinel comes back unmodified.
+
+Signed-off-by: Gael Blivet <gael.blivet@gmail.com>
+Assisted-by: Claude:claude-sonnet-5
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/smb/server/smb2pdu.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/fs/smb/server/smb2pdu.c b/fs/smb/server/smb2pdu.c
+index c84533d86e47..8d8567b73c43 100644
+--- a/fs/smb/server/smb2pdu.c
++++ b/fs/smb/server/smb2pdu.c
+@@ -4150,6 +4150,17 @@ int smb2_open(struct ksmbd_work *work)
+ 						 0, sess->user->uid, false);
+ 			if (rc)
+ 				goto err_out;
++
++			/*
++			 * smb_check_perm_dacl() returns success without
++			 * touching *pdaccess when the object has no stored
++			 * NT ACL, leaving maximal_access as the
++			 * FILE_MAXIMAL_ACCESS_LE request sentinel instead of
++			 * a real access mask.
++			 */
++			if (maximal_access == FILE_MAXIMAL_ACCESS_LE)
++				ksmbd_vfs_query_maximal_access(idmap, path.dentry,
++							       &maximal_access);
+ 		}
+ 	}
+ 
+-- 
+2.55.0
+

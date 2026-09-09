@@ -1,0 +1,83 @@
+From 4efcd9d0f88bf0cee1fcb15d5b8a6687eabcb53f Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 31 Jul 2026 10:06:23 +0700
+Subject: [PATCH 09503/15333] ASoC: codecs: sigmadsp: Use guard() for mutex
+ locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Cezary Rojewski <cezary.rojewski@intel.com>
+Link: https://patch.msgid.link/20260731030648.8706-2-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/sigmadsp.c | 17 +++++++----------
+ 1 file changed, 7 insertions(+), 10 deletions(-)
+
+diff --git a/sound/soc/codecs/sigmadsp.c b/sound/soc/codecs/sigmadsp.c
+index 2e08fde3989c..b7dbeb237447 100644
+--- a/sound/soc/codecs/sigmadsp.c
++++ b/sound/soc/codecs/sigmadsp.c
+@@ -5,6 +5,7 @@
+  * Copyright 2009-2014 Analog Devices Inc.
+  */
+ 
++#include <linux/cleanup.h>
+ #include <linux/crc32.h>
+ #include <linux/firmware.h>
+ #include <linux/kernel.h>
+@@ -135,7 +136,7 @@ static int sigmadsp_ctrl_put(struct snd_kcontrol *kcontrol,
+ 	uint8_t *data;
+ 	int ret = 0;
+ 
+-	mutex_lock(&sigmadsp->lock);
++	guard(mutex)(&sigmadsp->lock);
+ 
+ 	data = ucontrol->value.bytes.data;
+ 
+@@ -148,8 +149,6 @@ static int sigmadsp_ctrl_put(struct snd_kcontrol *kcontrol,
+ 			ctrl->cached = true;
+ 	}
+ 
+-	mutex_unlock(&sigmadsp->lock);
+-
+ 	return ret;
+ }
+ 
+@@ -160,7 +159,7 @@ static int sigmadsp_ctrl_get(struct snd_kcontrol *kcontrol,
+ 	struct sigmadsp *sigmadsp = snd_kcontrol_chip(kcontrol);
+ 	int ret = 0;
+ 
+-	mutex_lock(&sigmadsp->lock);
++	guard(mutex)(&sigmadsp->lock);
+ 
+ 	if (!ctrl->cached) {
+ 		ret = sigmadsp_read(sigmadsp, ctrl->addr, ctrl->cache,
+@@ -174,8 +173,6 @@ static int sigmadsp_ctrl_get(struct snd_kcontrol *kcontrol,
+ 			ctrl->num_bytes);
+ 	}
+ 
+-	mutex_unlock(&sigmadsp->lock);
+-
+ 	return ret;
+ }
+ 
+@@ -677,10 +674,10 @@ static void sigmadsp_activate_ctrl(struct sigmadsp *sigmadsp,
+ 		return;
+ 	changed = snd_ctl_activate_id(card, &ctrl->kcontrol->id, active);
+ 	if (active && changed > 0) {
+-		mutex_lock(&sigmadsp->lock);
+-		if (ctrl->cached)
+-			sigmadsp_ctrl_write(sigmadsp, ctrl, ctrl->cache);
+-		mutex_unlock(&sigmadsp->lock);
++		scoped_guard(mutex, &sigmadsp->lock) {
++			if (ctrl->cached)
++				sigmadsp_ctrl_write(sigmadsp, ctrl, ctrl->cache);
++		}
+ 	}
+ }
+ 
+-- 
+2.55.0
+

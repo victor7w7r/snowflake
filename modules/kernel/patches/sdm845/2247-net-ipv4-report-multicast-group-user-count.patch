@@ -1,0 +1,85 @@
+From 7cb8198761e627ff3a3b4770c8f147e75c4e649d Mon Sep 17 00:00:00 2001
+From: Yuyang Huang <sigefriedhyy@gmail.com>
+Date: Tue, 30 Jun 2026 20:02:05 +0900
+Subject: [PATCH 02247/15333] net: ipv4: report multicast group user count
+
+RTM_GETMULTICAST has been part of the rtnetlink ABI for a long time
+and already reports IPv4 multicast group membership through
+IFA_MULTICAST and IFA_CACHEINFO. It does not report how many consumers
+hold each membership, so userspace still has to parse /proc/net/igmp to
+get the Users column.
+
+Add IFA_MC_USERS as a u32 attribute carrying ip_mc_list::users in
+RTM_GETMULTICAST replies and entry-lifecycle notifications.
+
+This gives iproute2 enough information to migrate the IPv4 part of
+"ip maddr show" from procfs parsing to rtnetlink.
+
+Signed-off-by: Yuyang Huang <sigefriedhyy@gmail.com>
+Reviewed-by: Vadim Fedorenko <vadim.fedorenko@linux.dev>
+Reviewed-by: Ido Schimmel <idosch@nvidia.com>
+Link: https://patch.msgid.link/20260630110207.37841-2-sigefriedhyy@gmail.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ Documentation/netlink/specs/rt-addr.yaml | 4 ++++
+ include/uapi/linux/if_addr.h             | 1 +
+ net/ipv4/igmp.c                          | 2 ++
+ 3 files changed, 7 insertions(+)
+
+diff --git a/Documentation/netlink/specs/rt-addr.yaml b/Documentation/netlink/specs/rt-addr.yaml
+index 163a106c41bb..0ecbd24c890c 100644
+--- a/Documentation/netlink/specs/rt-addr.yaml
++++ b/Documentation/netlink/specs/rt-addr.yaml
+@@ -123,6 +123,9 @@ attribute-sets:
+       -
+         name: proto
+         type: u8
++      -
++        name: mc-users
++        type: u32
+ 
+ 
+ operations:
+@@ -176,6 +179,7 @@ operations:
+           value: 58
+           attributes: &mcaddr-attrs
+             - multicast
++            - mc-users
+             - cacheinfo
+       dump:
+         request:
+diff --git a/include/uapi/linux/if_addr.h b/include/uapi/linux/if_addr.h
+index aa7958b4e41d..7fb630b7fe31 100644
+--- a/include/uapi/linux/if_addr.h
++++ b/include/uapi/linux/if_addr.h
+@@ -36,6 +36,7 @@ enum {
+ 	IFA_RT_PRIORITY,	/* u32, priority/metric for prefix route */
+ 	IFA_TARGET_NETNSID,
+ 	IFA_PROTO,		/* u8, address protocol */
++	IFA_MC_USERS,		/* u32, multicast group users */
+ 	__IFA_MAX,
+ };
+ 
+diff --git a/net/ipv4/igmp.c b/net/ipv4/igmp.c
+index b6337a47c141..116ce7cec80e 100644
+--- a/net/ipv4/igmp.c
++++ b/net/ipv4/igmp.c
+@@ -1473,6 +1473,7 @@ int inet_fill_ifmcaddr(struct sk_buff *skb, struct net_device *dev,
+ 	ci.ifa_valid = INFINITY_LIFE_TIME;
+ 
+ 	if (nla_put_in_addr(skb, IFA_MULTICAST, im->multiaddr) < 0 ||
++	    nla_put_u32(skb, IFA_MC_USERS, READ_ONCE(im->users)) < 0 ||
+ 	    nla_put(skb, IFA_CACHEINFO, sizeof(ci), &ci) < 0) {
+ 		nlmsg_cancel(skb, nlh);
+ 		return -EMSGSIZE;
+@@ -1494,6 +1495,7 @@ static void inet_ifmcaddr_notify(struct net_device *dev,
+ 
+ 	skb = nlmsg_new(NLMSG_ALIGN(sizeof(struct ifaddrmsg)) +
+ 			nla_total_size(sizeof(__be32)) +
++			nla_total_size(sizeof(u32)) +
+ 			nla_total_size(sizeof(struct ifa_cacheinfo)),
+ 			GFP_KERNEL);
+ 	if (!skb)
+-- 
+2.55.0
+

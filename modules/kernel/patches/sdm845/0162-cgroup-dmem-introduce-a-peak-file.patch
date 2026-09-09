@@ -1,0 +1,89 @@
+From 640c57d6ca1346a1c2363a3f473b405af979e046 Mon Sep 17 00:00:00 2001
+From: Thadeu Lima de Souza Cascardo <cascardo@igalia.com>
+Date: Thu, 14 May 2026 14:36:08 -0300
+Subject: [PATCH 00162/15333] cgroup/dmem: introduce a peak file
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Just like we have memory.peak, introduce a dmem.peak, which uses the
+page_counter support for that.
+
+For now, make it read-only.
+
+This allows for memory usage monitoring without polling dmem.current when
+the information needed is the maximum device memory used. That can be used
+for capacity planning, such that dmem.max can be properly setup for a given
+workload. It can also be used for debugging to determine whether a given
+workload would have caused eviction or system memory use.
+
+Signed-off-by: Thadeu Lima de Souza Cascardo <cascardo@igalia.com>
+Reviewed-by: Michal Koutný <mkoutny@suse.com>
+Reviewed-by: Maarten Lankhorst <dev@lankhorst.se>
+Link: https://patch.msgid.link/20260514-dmem_peak-v3-1-b64ce5d3ac38@igalia.com
+Signed-off-by: Maarten Lankhorst <dev@lankhorst.se>
+---
+ Documentation/admin-guide/cgroup-v2.rst |  6 ++++++
+ kernel/cgroup/dmem.c                    | 15 +++++++++++++++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/Documentation/admin-guide/cgroup-v2.rst b/Documentation/admin-guide/cgroup-v2.rst
+index 6efd0095ed99..d103623b2be4 100644
+--- a/Documentation/admin-guide/cgroup-v2.rst
++++ b/Documentation/admin-guide/cgroup-v2.rst
+@@ -2808,6 +2808,12 @@ DMEM Interface Files
+ 	The semantics are the same as for the memory cgroup controller, and are
+ 	calculated in the same way.
+ 
++  dmem.peak
++	A read-only nested-keyed file that exists on non-root cgroups.
++
++	The max device memory usage recorded for the cgroup and its
++	descendants since the creation of the cgroup for each region.
++
+   dmem.capacity
+ 	A read-only file that describes maximum region capacity.
+ 	It only exists on the root cgroup. Not all memory can be
+diff --git a/kernel/cgroup/dmem.c b/kernel/cgroup/dmem.c
+index 4753a67d0f0f..6430c7ce1e03 100644
+--- a/kernel/cgroup/dmem.c
++++ b/kernel/cgroup/dmem.c
+@@ -182,6 +182,11 @@ static u64 get_resource_current(struct dmem_cgroup_pool_state *pool)
+ 	return pool ? page_counter_read(&pool->cnt) : 0;
+ }
+ 
++static u64 get_resource_peak(struct dmem_cgroup_pool_state *pool)
++{
++	return pool ? READ_ONCE(pool->cnt.watermark) : 0;
++}
++
+ static void reset_all_resource_limits(struct dmem_cgroup_pool_state *rpool)
+ {
+ 	set_resource_min(rpool, 0);
+@@ -808,6 +813,11 @@ static int dmemcg_limit_show(struct seq_file *sf, void *v,
+ 	return 0;
+ }
+ 
++static int dmem_cgroup_region_peak_show(struct seq_file *sf, void *v)
++{
++	return dmemcg_limit_show(sf, v, get_resource_peak);
++}
++
+ static int dmem_cgroup_region_current_show(struct seq_file *sf, void *v)
+ {
+ 	return dmemcg_limit_show(sf, v, get_resource_current);
+@@ -856,6 +866,11 @@ static struct cftype files[] = {
+ 		.name = "current",
+ 		.seq_show = dmem_cgroup_region_current_show,
+ 	},
++	{
++		.name = "peak",
++		.seq_show = dmem_cgroup_region_peak_show,
++		.flags = CFTYPE_NOT_ON_ROOT,
++	},
+ 	{
+ 		.name = "min",
+ 		.write = dmem_cgroup_region_min_write,
+-- 
+2.55.0
+

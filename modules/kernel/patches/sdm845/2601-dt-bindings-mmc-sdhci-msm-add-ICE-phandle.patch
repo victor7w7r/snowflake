@@ -1,0 +1,142 @@
+From 89dfb7cc1a9dc9e7f90e822cb402d3f848f1650a Mon Sep 17 00:00:00 2001
+From: Neeraj Soni <neeraj.soni@oss.qualcomm.com>
+Date: Mon, 29 Jun 2026 13:05:31 +0530
+Subject: [PATCH 02601/15333] dt-bindings: mmc: sdhci-msm: add ICE phandle
+
+On newer Qualcomm SoCs (starting with sc7280/kodiak), ICE is modelled
+as a dedicated DT node. Add the optional qcom,ice phandle to reference
+that node from the SDHCI controller.
+
+When qcom,ice is present, disallow an embedded ICE register region in
+the SDHCI node to avoid double modelling. Older SoCs without qcom,ice
+remain valid.
+
+Co-developed-by: Abel Vesa <abel.vesa@linaro.org>
+Signed-off-by: Abel Vesa <abel.vesa@linaro.org>
+Co-developed-by: Abhinaba Rakshit <abhinaba.rakshit@oss.qualcomm.com>
+Signed-off-by: Abhinaba Rakshit <abhinaba.rakshit@oss.qualcomm.com>
+Reviewed-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Signed-off-by: Neeraj Soni <neeraj.soni@oss.qualcomm.com>
+Signed-off-by: Kuldeep Singh <kuldeep.singh@oss.qualcomm.com>
+Signed-off-by: Ulf Hansson <ulfh@kernel.org>
+---
+ .../bindings/mmc/qcom,sdhci-msm.yaml          | 95 +++++++++++++------
+ 1 file changed, 67 insertions(+), 28 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/mmc/qcom,sdhci-msm.yaml b/Documentation/devicetree/bindings/mmc/qcom,sdhci-msm.yaml
+index bd558a11b792..b3fcc1673c10 100644
+--- a/Documentation/devicetree/bindings/mmc/qcom,sdhci-msm.yaml
++++ b/Documentation/devicetree/bindings/mmc/qcom,sdhci-msm.yaml
+@@ -145,6 +145,11 @@ properties:
+     $ref: /schemas/types.yaml#/definitions/uint32
+     description: platform specific settings for DLL_CONFIG reg.
+ 
++  qcom,ice:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description:
++      phandle to the Inline Crypto Engine (ICE) hardware block for this controller.
++
+   iommus:
+     minItems: 1
+     maxItems: 8
+@@ -198,35 +203,69 @@ allOf:
+             enum:
+               - qcom,sdhci-msm-v4
+     then:
+-      properties:
+-        reg:
+-          minItems: 2
+-          items:
+-            - description: Host controller register map
+-            - description: SD Core register map
+-            - description: CQE register map
+-            - description: Inline Crypto Engine register map
+-        reg-names:
+-          minItems: 2
+-          items:
+-            - const: hc
+-            - const: core
+-            - const: cqhci
+-            - const: ice
++      if:
++        required:
++          - qcom,ice
++      then:
++        properties:
++          reg:
++            minItems: 2
++            items:
++              - description: Host controller register map
++              - description: SD Core register map
++              - description: CQE register map
++          reg-names:
++            minItems: 2
++            items:
++              - const: hc
++              - const: core
++              - const: cqhci
++      else:
++        properties:
++          reg:
++            minItems: 2
++            items:
++              - description: Host controller register map
++              - description: SD Core register map
++              - description: CQE register map
++              - description: Inline Crypto Engine register map
++          reg-names:
++            minItems: 2
++            items:
++              - const: hc
++              - const: core
++              - const: cqhci
++              - const: ice
+     else:
+-      properties:
+-        reg:
+-          minItems: 1
+-          items:
+-            - description: Host controller register map
+-            - description: CQE register map
+-            - description: Inline Crypto Engine register map
+-        reg-names:
+-          minItems: 1
+-          items:
+-            - const: hc
+-            - const: cqhci
+-            - const: ice
++      if:
++        required:
++          - qcom,ice
++      then:
++        properties:
++          reg:
++            minItems: 1
++            items:
++              - description: Host controller register map
++              - description: CQE register map
++          reg-names:
++            minItems: 1
++            items:
++              - const: hc
++              - const: cqhci
++      else:
++        properties:
++          reg:
++            minItems: 1
++            items:
++              - description: Host controller register map
++              - description: CQE register map
++              - description: Inline Crypto Engine register map
++          reg-names:
++            minItems: 1
++            items:
++              - const: hc
++              - const: cqhci
++              - const: ice
+ 
+ unevaluatedProperties: false
+ 
+-- 
+2.55.0
+

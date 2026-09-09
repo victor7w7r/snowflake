@@ -1,0 +1,134 @@
+From 1c9646f3180ea0256b4f93d9585cdde1f1bac65d Mon Sep 17 00:00:00 2001
+From: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Date: Wed, 1 Jul 2026 15:25:17 +0530
+Subject: [PATCH 02345/15333] ASoC: SOF: amd: add system and runtime PM ops for
+ ACP7x
+
+Add amd_sof_acp7x_suspend() and amd_sof_acp7x_resume() for ACP7.B/7.F
+platforms power management.
+
+Signed-off-by: Vijendar Mukunda <Vijendar.Mukunda@amd.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Link: https://patch.msgid.link/20260701095759.1012929-17-Vijendar.Mukunda@amd.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/amd/acp.c   | 71 +++++++++++++++++++++++++++++++++++++++
+ sound/soc/sof/amd/acp.h   |  4 +++
+ sound/soc/sof/amd/acp7x.c |  5 +++
+ 3 files changed, 80 insertions(+)
+
+diff --git a/sound/soc/sof/amd/acp.c b/sound/soc/sof/amd/acp.c
+index c2143821fb83..f89ad86260b4 100644
+--- a/sound/soc/sof/amd/acp.c
++++ b/sound/soc/sof/amd/acp.c
+@@ -1178,6 +1178,77 @@ void amd_sof_acp7x_remove(struct snd_sof_dev *sdev)
+ }
+ EXPORT_SYMBOL_NS(amd_sof_acp7x_remove, "SND_SOC_SOF_AMD_COMMON");
+ 
++int amd_sof_acp7x_suspend(struct snd_sof_dev *sdev, u32 target_state)
++{
++	struct acp_dev_data *acp_data;
++	int ret;
++	bool enable = false;
++
++	acp_data = sdev->pdata->hw_pdata;
++
++	ret = acp_reset(sdev);
++	if (ret) {
++		dev_err(sdev->dev, "ACP Reset failed\n");
++		return ret;
++	}
++	switch (acp_data->pci_rev) {
++	case ACP7B_PCI_ID:
++	case ACP7F_PCI_ID:
++		enable = true;
++		break;
++	default:
++		break;
++	}
++	snd_sof_dsp_write(sdev, ACP_DSP_BAR, ACP_CONTROL, enable);
++	snd_sof_dsp_write(sdev, ACP_DSP_BAR, ACP7X_ZSC_DSP_CTRL, 1);
++
++	return 0;
++}
++EXPORT_SYMBOL_NS(amd_sof_acp7x_suspend, "SND_SOC_SOF_AMD_COMMON");
++
++int amd_sof_acp7x_resume(struct snd_sof_dev *sdev)
++{
++	struct acp_dev_data *acp_data;
++	int ret;
++
++	acp_data = sdev->pdata->hw_pdata;
++
++	ret = acp_init(sdev);
++	if (ret) {
++		dev_err(sdev->dev, "ACP Init failed\n");
++		return ret;
++	}
++	ret = acp_memory_init(sdev);
++	if (ret) {
++		dev_err(sdev->dev, "ACP Memory init failed\n");
++		return ret;
++	}
++
++	switch (acp_data->pci_rev) {
++	case ACP7B_PCI_ID:
++	case ACP7F_PCI_ID:
++		snd_sof_dsp_write(sdev, ACP_DSP_BAR, ACP7X_PME_EN, 1);
++		break;
++	default:
++		break;
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL_NS(amd_sof_acp7x_resume, "SND_SOC_SOF_AMD_COMMON");
++
++int amd_sof_acp7x_suspend_runtime(struct snd_sof_dev *sdev)
++{
++	return amd_sof_acp7x_suspend(sdev, 0);
++}
++EXPORT_SYMBOL_NS(amd_sof_acp7x_suspend_runtime, "SND_SOC_SOF_AMD_COMMON");
++
++int amd_sof_acp7x_resume_runtime(struct snd_sof_dev *sdev)
++{
++	return amd_sof_acp7x_resume(sdev);
++}
++EXPORT_SYMBOL_NS(amd_sof_acp7x_resume_runtime, "SND_SOC_SOF_AMD_COMMON");
++
+ MODULE_LICENSE("Dual BSD/GPL");
+ MODULE_DESCRIPTION("AMD ACP sof driver");
+ MODULE_IMPORT_NS("SOUNDWIRE_AMD_INIT");
+diff --git a/sound/soc/sof/amd/acp.h b/sound/soc/sof/amd/acp.h
+index c2f3add05d0c..16d66b2eaa70 100644
+--- a/sound/soc/sof/amd/acp.h
++++ b/sound/soc/sof/amd/acp.h
+@@ -359,6 +359,10 @@ int sof_acp7x_ops_init(struct snd_sof_dev *sdev);
+ 
+ int amd_sof_acp7x_probe(struct snd_sof_dev *sdev);
+ void amd_sof_acp7x_remove(struct snd_sof_dev *sdev);
++int amd_sof_acp7x_suspend(struct snd_sof_dev *sdev, u32 target_state);
++int amd_sof_acp7x_resume(struct snd_sof_dev *sdev);
++int amd_sof_acp7x_suspend_runtime(struct snd_sof_dev *sdev);
++int amd_sof_acp7x_resume_runtime(struct snd_sof_dev *sdev);
+ 
+ struct snd_soc_acpi_mach *amd_sof_machine_select(struct snd_sof_dev *sdev);
+ /* Machine configuration */
+diff --git a/sound/soc/sof/amd/acp7x.c b/sound/soc/sof/amd/acp7x.c
+index 94b7ea08b309..b6722d11168c 100644
+--- a/sound/soc/sof/amd/acp7x.c
++++ b/sound/soc/sof/amd/acp7x.c
+@@ -176,5 +176,10 @@ int sof_acp7x_ops_init(struct snd_sof_dev *sdev)
+ 	if (acp_sof_post_fw_run_delay)
+ 		sof_acp7x_ops.post_fw_run = sof_acp7x_post_fw_run_delay;
+ 
++	sof_acp7x_ops.suspend = amd_sof_acp7x_suspend;
++	sof_acp7x_ops.resume = amd_sof_acp7x_resume;
++	sof_acp7x_ops.runtime_suspend = amd_sof_acp7x_suspend_runtime;
++	sof_acp7x_ops.runtime_resume = amd_sof_acp7x_resume_runtime;
++
+ 	return 0;
+ }
+-- 
+2.55.0
+

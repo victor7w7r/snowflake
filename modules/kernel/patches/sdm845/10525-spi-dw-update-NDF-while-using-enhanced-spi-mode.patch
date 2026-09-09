@@ -1,0 +1,41 @@
+From 8678095362ccddf538d33acdd697ce6a904c87e9 Mon Sep 17 00:00:00 2001
+From: Sudip Mukherjee <sudip.mukherjee@sifive.com>
+Date: Mon, 3 Aug 2026 05:40:38 -0700
+Subject: [PATCH 10525/15333] spi: dw: update NDF while using enhanced spi mode
+
+If the transfer of Transmit only mode is using enhanced SPI then
+NDF needs to be updated with the number of data frames.
+If the Transmit FIFO goes empty in-between, DWC_ssi masks the serial
+clock and wait for rest of the data until the programmed amount of
+frames are transferred successfully.
+In receive mode, the number of data frames received is equal to this
+register value plus 1.
+In transmit mode, the number of data frames is equal this register
+value.
+
+Signed-off-by: Sudip Mukherjee <sudip.mukherjee@sifive.com>
+Co-developed-by: Changhuang Liang <changhuang.liang@starfivetech.com>
+Signed-off-by: Changhuang Liang <changhuang.liang@starfivetech.com>
+Link: https://patch.msgid.link/20260803124044.156998-6-changhuang.liang@starfivetech.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-dw-core.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/spi/spi-dw-core.c b/drivers/spi/spi-dw-core.c
+index f1b7328fed77..d654cb748646 100644
+--- a/drivers/spi/spi-dw-core.c
++++ b/drivers/spi/spi-dw-core.c
+@@ -348,6 +348,9 @@ void dw_spi_update_config(struct dw_spi *dws, struct spi_device *spi,
+ 	if (cfg->tmode == DW_SPI_CTRLR0_TMOD_EPROMREAD ||
+ 	    cfg->tmode == DW_SPI_CTRLR0_TMOD_RO)
+ 		dw_writel(dws, DW_SPI_CTRLR1, cfg->ndf ? cfg->ndf - 1 : 0);
++	else if (cfg->tmode == DW_SPI_CTRLR0_TMOD_TO &&
++		 dws->caps & DW_SPI_CAP_EMODE)
++		dw_writel(dws, DW_SPI_CTRLR1, cfg->ndf);
+ 
+ 	/* Note DW APB SSI clock divider doesn't support odd numbers */
+ 	clk_div = (DIV_ROUND_UP(dws->max_freq, cfg->freq) + 1) & 0xfffe;
+-- 
+2.55.0
+

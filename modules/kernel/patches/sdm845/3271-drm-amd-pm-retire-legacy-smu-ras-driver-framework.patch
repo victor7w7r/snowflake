@@ -1,0 +1,161 @@
+From 958430a1f068f6be6c9376e07014a9e8c63ae24e Mon Sep 17 00:00:00 2001
+From: Ce Sun <cesun102@amd.com>
+Date: Fri, 3 Apr 2026 11:06:05 +0800
+Subject: [PATCH 03271/15333] drm/amd/pm: retire legacy smu ras driver
+ framework
+
+Remove the legacy smu ras driver framework
+
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Ce Sun <cesun102@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h       |  1 -
+ drivers/gpu/drm/amd/pm/amdgpu_dpm.c           |  7 -------
+ drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h       |  1 -
+ drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c     | 11 ----------
+ drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h |  8 -------
+ .../drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c  | 21 -------------------
+ drivers/gpu/drm/amd/pm/swsmu/smu_internal.h   |  1 -
+ 7 files changed, 50 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
+index a44aed7f169e..822abb638d58 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras.h
+@@ -598,7 +598,6 @@ struct amdgpu_ras {
+ 
+ 	/* Disable/Enable uniras switch */
+ 	bool uniras_enabled;
+-	const struct ras_smu_drv *ras_smu_drv;
+ };
+ 
+ struct ras_fs_data {
+diff --git a/drivers/gpu/drm/amd/pm/amdgpu_dpm.c b/drivers/gpu/drm/amd/pm/amdgpu_dpm.c
+index f76ba6753551..c09c60ad3f38 100644
+--- a/drivers/gpu/drm/amd/pm/amdgpu_dpm.c
++++ b/drivers/gpu/drm/amd/pm/amdgpu_dpm.c
+@@ -2110,10 +2110,3 @@ ssize_t amdgpu_dpm_get_xcp_metrics(struct amdgpu_device *adev, int xcp_id,
+ 
+ 	return ret;
+ }
+-
+-const struct ras_smu_drv *amdgpu_dpm_get_ras_smu_driver(struct amdgpu_device *adev)
+-{
+-	void *pp_handle = adev->powerplay.pp_handle;
+-
+-	return smu_get_ras_smu_driver(pp_handle);
+-}
+diff --git a/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h b/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
+index aa3f427819a0..c7ea29385682 100644
+--- a/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
++++ b/drivers/gpu/drm/amd/pm/inc/amdgpu_dpm.h
+@@ -612,6 +612,5 @@ int amdgpu_dpm_reset_vcn(struct amdgpu_device *adev, uint32_t inst_mask);
+ bool amdgpu_dpm_reset_vcn_is_supported(struct amdgpu_device *adev);
+ bool amdgpu_dpm_is_temp_metrics_supported(struct amdgpu_device *adev,
+ 					  enum smu_temp_metric_type type);
+-const struct ras_smu_drv *amdgpu_dpm_get_ras_smu_driver(struct amdgpu_device *adev);
+ 
+ #endif
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+index 0caea992d3fb..504fd9762a8e 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+@@ -2818,17 +2818,6 @@ const struct amdgpu_ip_block_version smu_v15_0_ip_block = {
+ 	.funcs = &smu_ip_funcs,
+ };
+ 
+-const struct ras_smu_drv *smu_get_ras_smu_driver(void *handle)
+-{
+-	struct smu_context *smu = (struct smu_context *)handle;
+-	const struct ras_smu_drv *tmp = NULL;
+-	int ret;
+-
+-	ret = smu_get_ras_smu_drv(smu, &tmp);
+-
+-	return ret ? NULL : tmp;
+-}
+-
+ static int smu_load_microcode(void *handle)
+ {
+ 	struct smu_context *smu = handle;
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h b/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
+index 378781c05bea..f8fd93999617 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
+@@ -1618,13 +1618,6 @@ struct pptable_funcs {
+ 	 */
+ 	int (*ras_send_msg)(struct smu_context *smu,
+ 			    enum smu_message_type msg, uint32_t param, uint32_t *read_arg);
+-
+-
+-	/**
+-	 * @get_ras_smu_drv: Get RAS smu driver interface
+-	 * Return: ras_smu_drv *
+-	 */
+-	int (*get_ras_smu_drv)(struct smu_context *smu, const struct ras_smu_drv **ras_smu_drv);
+ };
+ 
+ typedef enum {
+@@ -1972,7 +1965,6 @@ int smu_set_pm_policy(struct smu_context *smu, enum pp_pm_policy p_type,
+ 		      int level);
+ ssize_t smu_get_pm_policy_info(struct smu_context *smu,
+ 			       enum pp_pm_policy p_type, char *sysbuf);
+-const struct ras_smu_drv *smu_get_ras_smu_driver(void *handle);
+ 
+ int amdgpu_smu_ras_send_msg(struct amdgpu_device *adev, enum smu_message_type msg,
+ 			    uint32_t param, uint32_t *readarg);
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c
+index 334c92a28994..64db62a8d642 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0_6_ppt.c
+@@ -3273,26 +3273,6 @@ static void smu_v13_0_6_set_temp_funcs(struct smu_context *smu)
+ 			== IP_VERSION(13, 0, 12)) ? &smu_v13_0_12_temp_funcs : NULL;
+ }
+ 
+-static int smu_v13_0_6_get_ras_smu_drv(struct smu_context *smu, const struct ras_smu_drv **ras_smu_drv)
+-{
+-	if (!ras_smu_drv)
+-		return -EINVAL;
+-
+-	if (amdgpu_sriov_vf(smu->adev))
+-		return -EOPNOTSUPP;
+-
+-	switch (amdgpu_ip_version(smu->adev, MP1_HWIP, 0)) {
+-	case IP_VERSION(13, 0, 12):
+-		*ras_smu_drv = &smu_v13_0_12_ras_smu_drv;
+-		break;
+-	default:
+-		*ras_smu_drv = NULL;
+-		break;
+-	}
+-
+-	return 0;
+-}
+-
+ static const struct pptable_funcs smu_v13_0_6_ppt_funcs = {
+ 	/* init dpm */
+ 	.init_allowed_features = smu_v13_0_6_init_allowed_features,
+@@ -3351,7 +3331,6 @@ static const struct pptable_funcs smu_v13_0_6_ppt_funcs = {
+ 	.dpm_reset_vcn = smu_v13_0_6_reset_vcn,
+ 	.post_init = smu_v13_0_6_post_init,
+ 	.ras_send_msg = smu_v13_0_6_ras_send_msg,
+-	.get_ras_smu_drv = smu_v13_0_6_get_ras_smu_drv,
+ };
+ 
+ void smu_v13_0_6_set_ppt_funcs(struct smu_context *smu)
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu_internal.h b/drivers/gpu/drm/amd/pm/swsmu/smu_internal.h
+index 24848da90234..45e3758e9ed8 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu_internal.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu_internal.h
+@@ -98,7 +98,6 @@
+ #define smu_is_asic_wbrf_supported(smu)			smu_ppt_funcs(is_asic_wbrf_supported, false, smu)
+ #define smu_enable_uclk_shadow(smu, enable)		smu_ppt_funcs(enable_uclk_shadow, 0, smu, enable)
+ #define smu_set_wbrf_exclusion_ranges(smu, freq_band_range)		smu_ppt_funcs(set_wbrf_exclusion_ranges, -EOPNOTSUPP, smu, freq_band_range)
+-#define smu_get_ras_smu_drv(smu, ras_smu_drv)			smu_ppt_funcs(get_ras_smu_drv, -EOPNOTSUPP, smu, ras_smu_drv)
+ 
+ #endif
+ #endif
+-- 
+2.55.0
+

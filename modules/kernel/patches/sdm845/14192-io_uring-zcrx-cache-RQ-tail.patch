@@ -1,0 +1,92 @@
+From 888f7ab164508b4c7246dcb4475294d61b2db055 Mon Sep 17 00:00:00 2001
+From: Pavel Begunkov <asml.silence@gmail.com>
+Date: Fri, 7 Aug 2026 14:19:22 +0100
+Subject: [PATCH 14192/15333] io_uring/zcrx: cache RQ tail
+
+The RQ tail is updated by the user space. Cache it to reduce cache line
+bouncing. Refilling now tries to exhaust the previous batch of rqes, but
+since it could be too low, the iterator is allowed to recalculate the
+rqes to process once after synching the tail value.
+
+Signed-off-by: Pavel Begunkov <asml.silence@gmail.com>
+Link: https://patch.msgid.link/b42d2ed8b0e697110b646573b5da2a5f8e85f92e.1786108672.git.asml.silence@gmail.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ io_uring/zcrx.c | 27 +++++++++++++++++++++------
+ io_uring/zcrx.h |  1 +
+ 2 files changed, 22 insertions(+), 6 deletions(-)
+
+diff --git a/io_uring/zcrx.c b/io_uring/zcrx.c
+index d1b82daf18f0..ef17c0e16bd4 100644
+--- a/io_uring/zcrx.c
++++ b/io_uring/zcrx.c
+@@ -1089,16 +1089,22 @@ void io_unregister_zcrx(struct io_ring_ctx *ctx)
+ 
+ struct zcrx_rq_iter {
+ 	int rqes_left;
++	bool flushed;
+ };
+ 
+-static inline u32 zcrx_rq_entries(struct zcrx_rq *rq)
++static inline u32 __zcrx_rq_entries(struct zcrx_rq *rq)
+ {
+-	u32 entries;
++	u32 entries = rq->cached_tail - rq->cached_head;
+ 
+-	entries = smp_load_acquire(&rq->ring->tail) - rq->cached_head;
+ 	return min(entries, rq->nr_entries);
+ }
+ 
++static inline u32 zcrx_rq_entries(struct zcrx_rq *rq)
++{
++	rq->cached_tail = smp_load_acquire(&rq->ring->tail);
++	return __zcrx_rq_entries(rq);
++}
++
+ static struct io_uring_zcrx_rqe *zcrx_next_rqe(struct zcrx_rq *rq, unsigned mask)
+ {
+ 	unsigned int idx = rq->cached_head++ & mask;
+@@ -1109,7 +1115,8 @@ static struct io_uring_zcrx_rqe *zcrx_next_rqe(struct zcrx_rq *rq, unsigned mask
+ static inline void zcrx_rq_iter_init(struct zcrx_rq_iter *it,
+ 				     struct zcrx_rq *rq)
+ {
+-	it->rqes_left = min_t(unsigned, zcrx_rq_entries(rq), ZCRX_REFILL_CAP);
++	it->rqes_left = min_t(unsigned, __zcrx_rq_entries(rq), ZCRX_REFILL_CAP);
++	it->flushed = false;
+ }
+ 
+ static inline bool zcrx_rq_iter_next(struct zcrx_rq_iter *it,
+@@ -1117,8 +1124,16 @@ static inline bool zcrx_rq_iter_next(struct zcrx_rq_iter *it,
+ 				     struct io_uring_zcrx_rqe **rqe)
+ {
+ 	it->rqes_left--;
+-	if (unlikely(it->rqes_left < 0))
+-		return false;
++	if (unlikely(it->rqes_left < 0)) {
++		if (it->flushed)
++			return false;
++		rq->cached_tail = smp_load_acquire(&rq->ring->tail);
++		it->rqes_left = min_t(unsigned, __zcrx_rq_entries(rq),
++				      ZCRX_REFILL_CAP);
++		it->flushed = true;
++		if (--it->rqes_left < 0)
++			return false;
++	}
+ 
+ 	*rqe = zcrx_next_rqe(rq, rq->nr_entries - 1);
+ 	return true;
+diff --git a/io_uring/zcrx.h b/io_uring/zcrx.h
+index 3cdfa4415d62..0eb7ea35a9ff 100644
+--- a/io_uring/zcrx.h
++++ b/io_uring/zcrx.h
+@@ -53,6 +53,7 @@ struct zcrx_rq {
+ 	struct zcrx_rq_hdr		*ring;
+ 	struct io_uring_zcrx_rqe	*rqes;
+ 	u32				cached_head;
++	u32				cached_tail;
+ 	u32				nr_entries;
+ };
+ 
+-- 
+2.55.0
+

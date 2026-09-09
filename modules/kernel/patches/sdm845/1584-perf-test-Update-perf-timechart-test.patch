@@ -1,0 +1,108 @@
+From 5437e98903897246e3f223ab68f1f8bda8b5ed7e Mon Sep 17 00:00:00 2001
+From: Namhyung Kim <namhyung@kernel.org>
+Date: Wed, 24 Jun 2026 13:58:34 -0700
+Subject: [PATCH 01584/15333] perf test: Update perf timechart test
+
+To include IO-only and backtrace modes to test different code paths.
+
+  $ sudo perf test -vv timechart
+  135: perf timechart tests                        : Running
+  135: perf timechart tests:
+  ---- start ----
+  test child forked, pid 2413665
+  perf timechart Basic test
+  perf timechart Basic test [Success]
+  perf timechart IO-only test
+  perf timechart IO-only test [Success]
+  perf timechart Backtrace test
+  perf timechart Backtrace test [Success]
+  ---- end(0) ----
+  135: perf timechart tests                        : Ok
+
+  === Test Summary ===
+  Passed main tests : 1
+  Passed subtests   : 0
+  Skipped tests     : 0
+  Failed tests      : 0
+
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/tests/shell/timechart.sh | 24 +++++++++++++++---------
+ 1 file changed, 15 insertions(+), 9 deletions(-)
+
+diff --git a/tools/perf/tests/shell/timechart.sh b/tools/perf/tests/shell/timechart.sh
+index b14b3472c284..40072b32171a 100755
+--- a/tools/perf/tests/shell/timechart.sh
++++ b/tools/perf/tests/shell/timechart.sh
+@@ -9,7 +9,7 @@ perfdata=$(mktemp /tmp/__perf_timechart_test.perf.data.XXXXX)
+ output=$(mktemp /tmp/__perf_timechart_test.output.XXXXX.svg)
+ 
+ cleanup() {
+-	rm -f "${perfdata}"
++	rm -f "${perfdata}"*
+ 	rm -f "${output}"
+ 	trap - EXIT TERM INT
+ }
+@@ -22,38 +22,41 @@ trap_cleanup() {
+ trap trap_cleanup EXIT TERM INT
+ 
+ test_timechart() {
+-	echo "Basic perf timechart test"
++	NAME=$1
++	OPTION=$2
++
++	echo "perf timechart ${NAME} test"
+ 
+ 	# Try to record timechart data.
+ 	# perf timechart record uses system-wide recording and specific tracepoints.
+ 	# If it fails (e.g. permissions, missing tracepoints), skip the test.
+-	if ! perf timechart record -o "${perfdata}" true > /dev/null 2>&1; then
+-		echo "Basic perf timechart test [Skipped: perf timechart record failed (permissions/events?)]"
++	if ! perf timechart record -o "${perfdata}" ${OPTION} true > /dev/null 2>&1; then
++		echo "perf timechart ${NAME} test [Skipped: perf timechart record failed (permissions/events?)]"
+ 		return
+ 	fi
+ 
+ 	# Generate the timechart
+ 	if ! perf timechart -i "${perfdata}" -o "${output}" > /dev/null 2>&1; then
+-		echo "Basic perf timechart test [Failed: perf timechart command failed]"
++		echo "perf timechart ${NAME} test [Failed: perf timechart command failed]"
+ 		err=1
+ 		return
+ 	fi
+ 
+ 	# Check if output file exists and is not empty
+ 	if [ ! -s "${output}" ]; then
+-		echo "Basic perf timechart test [Failed: output file is empty or missing]"
++		echo "perf timechart ${NAME} test [Failed: output file is empty or missing]"
+ 		err=1
+ 		return
+ 	fi
+ 
+ 	# Check if it looks like an SVG
+ 	if ! grep -q "svg" "${output}"; then
+-		echo "Basic perf timechart test [Failed: output doesn't look like SVG]"
++		echo "perf timechart ${NAME} test [Failed: output doesn't look like SVG]"
+ 		err=1
+ 		return
+ 	fi
+ 
+-	echo "Basic perf timechart test [Success]"
++	echo "perf timechart ${NAME} test [Success]"
+ }
+ 
+ if ! perf check feature -q libtraceevent ; then
+@@ -62,6 +65,9 @@ if ! perf check feature -q libtraceevent ; then
+ 	exit 2
+ fi
+ 
+-test_timechart
++test_timechart "Basic" ""
++test_timechart "IO-only" "-I"
++test_timechart "Backtrace" "-g"
++
+ cleanup
+ exit $err
+-- 
+2.55.0
+

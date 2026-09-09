@@ -1,0 +1,61 @@
+From 5d649ea1d05389e9aee3e38cb0349127bae7ecec Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Tue, 21 Jul 2026 17:25:54 +0700
+Subject: [PATCH 06771/15333] ASoC: codecs: rt700: Use guard() for mutex locks
+
+Clean up the code using guard() for mutex locks.
+Merely code refactoring, and no behavior change.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260721102600.523199-24-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/rt700-sdw.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/sound/soc/codecs/rt700-sdw.c b/sound/soc/codecs/rt700-sdw.c
+index bb449f08e30c..3ba0cc37acd9 100644
+--- a/sound/soc/codecs/rt700-sdw.c
++++ b/sound/soc/codecs/rt700-sdw.c
+@@ -6,6 +6,7 @@
+ //
+ //
+ 
++#include <linux/cleanup.h>
+ #include <linux/delay.h>
+ #include <linux/device.h>
+ #include <linux/soundwire/sdw.h>
+@@ -415,12 +416,11 @@ static int rt700_interrupt_callback(struct sdw_slave *slave,
+ 	dev_dbg(&slave->dev,
+ 		"%s control_port_stat=%x", __func__, status->control_port);
+ 
+-	mutex_lock(&rt700->disable_irq_lock);
++	guard(mutex)(&rt700->disable_irq_lock);
+ 	if (status->control_port & 0x4 && !rt700->disable_irq) {
+ 		mod_delayed_work(system_power_efficient_wq,
+ 			&rt700->jack_detect_work, msecs_to_jiffies(250));
+ 	}
+-	mutex_unlock(&rt700->disable_irq_lock);
+ 
+ 	return 0;
+ }
+@@ -499,11 +499,11 @@ static int rt700_dev_system_suspend(struct device *dev)
+ 	 * deferred work completes and before the parent disables
+ 	 * interrupts on the link
+ 	 */
+-	mutex_lock(&rt700->disable_irq_lock);
+-	rt700->disable_irq = true;
+-	ret = sdw_update_no_pm(slave, SDW_SCP_INTMASK1,
+-			       SDW_SCP_INT1_IMPL_DEF, 0);
+-	mutex_unlock(&rt700->disable_irq_lock);
++	scoped_guard(mutex, &rt700->disable_irq_lock) {
++		rt700->disable_irq = true;
++		ret = sdw_update_no_pm(slave, SDW_SCP_INTMASK1,
++				       SDW_SCP_INT1_IMPL_DEF, 0);
++	}
+ 
+ 	if (ret < 0) {
+ 		/* log but don't prevent suspend from happening */
+-- 
+2.55.0
+

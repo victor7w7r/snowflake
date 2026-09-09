@@ -1,0 +1,37 @@
+From 27af3392196ddfa4c212f4c883b9964a6dcd5f95 Mon Sep 17 00:00:00 2001
+From: Yang Wen <anmuxixixi@gmail.com>
+Date: Mon, 10 Aug 2026 22:58:14 +0800
+Subject: [PATCH 13152/15333] exfat: fix truncated volume labels returned by
+ FS_IOC_GETFSLABEL
+
+exfat_ioctl_get_volume_label() passes uniname.name_len to
+exfat_utf16_to_nls() as the output buffer length. However, name_len is
+the number of UTF-16 code units, while exfat_utf16_to_nls() expects the
+buffer size in bytes.
+
+As a result, volume labels that expand during charset conversion are
+truncated.The destination buffer is FSLABEL_MAX bytes long, so pass
+its actual size to the conversion helper.
+
+Signed-off-by: Yang Wen <anmuxixixi@gmail.com>
+Signed-off-by: Namjae Jeon <linkinjeon@kernel.org>
+---
+ fs/exfat/file.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/exfat/file.c b/fs/exfat/file.c
+index 5e9b47ecc614..1c1524caaaf7 100644
+--- a/fs/exfat/file.c
++++ b/fs/exfat/file.c
+@@ -566,7 +566,7 @@ static int exfat_ioctl_get_volume_label(struct super_block *sb, unsigned long ar
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	ret = exfat_utf16_to_nls(sb, &uniname, label, uniname.name_len);
++	ret = exfat_utf16_to_nls(sb, &uniname, label, sizeof(label));
+ 	if (ret < 0)
+ 		return ret;
+ 
+-- 
+2.55.0
+

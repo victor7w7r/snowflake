@@ -1,0 +1,81 @@
+From 50d8d72e4f28202e18a687ed868ddd3225b2ac1b Mon Sep 17 00:00:00 2001
+From: Sanjay Chitroda <sanjayembeddedse@gmail.com>
+Date: Mon, 22 Jun 2026 10:59:59 +0530
+Subject: [PATCH 02182/15333] iio: gyro: hid-sensor-gyro-3d: Avoid race between
+ callback setup and device exposure
+
+The driver currently exposes the IIO device to userspace before
+completing sensor hub callback registration, and similarly removes
+callbacks while the device can still be accessed during teardown.
+
+This creates a timing window where userspace may enable the buffer
+before callbacks are available. In such cases:
+- samples can be dropped,
+- buffered reads may observe stale or no data.
+
+Reorder probe and remove paths to ensure callbacks are active before
+device exposure and are removed after device is no longer accessible.
+
+This avoids a race window leading to data loss.
+
+Signed-off-by: Sanjay Chitroda <sanjayembeddedse@gmail.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@intel.com>
+Acked-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/gyro/hid-sensor-gyro-3d.c | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/iio/gyro/hid-sensor-gyro-3d.c b/drivers/iio/gyro/hid-sensor-gyro-3d.c
+index bbca2111e79b..c8130b488f10 100644
+--- a/drivers/iio/gyro/hid-sensor-gyro-3d.c
++++ b/drivers/iio/gyro/hid-sensor-gyro-3d.c
+@@ -324,12 +324,6 @@ static int hid_gyro_3d_probe(struct platform_device *pdev)
+ 		return ret;
+ 	}
+ 
+-	ret = iio_device_register(indio_dev);
+-	if (ret) {
+-		dev_err(&pdev->dev, "device register failed\n");
+-		goto error_remove_trigger;
+-	}
+-
+ 	gyro_state->callbacks.send_event = gyro_3d_proc_event;
+ 	gyro_state->callbacks.capture_sample = gyro_3d_capture_sample;
+ 	gyro_state->callbacks.pdev = pdev;
+@@ -337,13 +331,19 @@ static int hid_gyro_3d_probe(struct platform_device *pdev)
+ 					&gyro_state->callbacks);
+ 	if (ret < 0) {
+ 		dev_err(&pdev->dev, "callback reg failed\n");
+-		goto error_iio_unreg;
++		goto error_remove_trigger;
++	}
++
++	ret = iio_device_register(indio_dev);
++	if (ret) {
++		dev_err(&pdev->dev, "device register failed\n");
++		goto error_remove_callback;
+ 	}
+ 
+ 	return ret;
+ 
+-error_iio_unreg:
+-	iio_device_unregister(indio_dev);
++error_remove_callback:
++	sensor_hub_remove_callback(hsdev, HID_USAGE_SENSOR_GYRO_3D);
+ error_remove_trigger:
+ 	hid_sensor_remove_trigger(indio_dev, &gyro_state->common_attributes);
+ 	return ret;
+@@ -356,8 +356,8 @@ static void hid_gyro_3d_remove(struct platform_device *pdev)
+ 	struct iio_dev *indio_dev = platform_get_drvdata(pdev);
+ 	struct gyro_3d_state *gyro_state = iio_priv(indio_dev);
+ 
+-	sensor_hub_remove_callback(hsdev, HID_USAGE_SENSOR_GYRO_3D);
+ 	iio_device_unregister(indio_dev);
++	sensor_hub_remove_callback(hsdev, HID_USAGE_SENSOR_GYRO_3D);
+ 	hid_sensor_remove_trigger(indio_dev, &gyro_state->common_attributes);
+ }
+ 
+-- 
+2.55.0
+

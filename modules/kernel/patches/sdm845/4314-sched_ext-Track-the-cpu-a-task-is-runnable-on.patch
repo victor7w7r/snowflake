@@ -1,0 +1,82 @@
+From d5b8f4cdd17dc42fd51048785fef1e2a7dd1117f Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Mon, 13 Jul 2026 22:18:43 -1000
+Subject: [PATCH 04314/15333] sched_ext: Track the cpu a task is runnable on
+
+Add p->scx.runnable_cpu, the cpu @p is runnable on, or -1 when it is not.
+It is stamped as @p joins the runnable_list (set_task_runnable()) and
+cleared as it leaves (clr_task_runnable()), both under the rq lock.
+
+task_cpu() can't answer "is @p on this rq" reliably: a remote wakeup changes
+it under @p's pi_lock alone, without the source rq lock, so it can read as
+the locked rq while @p is really elsewhere. runnable_cpu changes only under
+the rq lock, so a caller holding an rq lock can compare against it to know
+whether that is @p's current rq.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ include/linux/sched/ext.h | 1 +
+ init/init_task.c          | 1 +
+ kernel/sched/ext/ext.c    | 9 +++++++++
+ 3 files changed, 11 insertions(+)
+
+diff --git a/include/linux/sched/ext.h b/include/linux/sched/ext.h
+index 7e3f6b33f4a8..853f03b63133 100644
+--- a/include/linux/sched/ext.h
++++ b/include/linux/sched/ext.h
+@@ -201,6 +201,7 @@ struct sched_ext_entity {
+ 	s32			sticky_cpu;
+ 	s32			holding_cpu;
+ 	s32			selected_cpu;
++	s32			runnable_cpu;	/* cpu @p is runnable on, -1 if not */
+ 	struct task_struct	*kf_tasks[2];	/* see SCX_CALL_OP_TASK() */
+ 
+ 	struct list_head	runnable_node;	/* rq->scx.runnable_list */
+diff --git a/init/init_task.c b/init/init_task.c
+index b67ef6040a65..5c7ad50ac685 100644
+--- a/init/init_task.c
++++ b/init/init_task.c
+@@ -145,6 +145,7 @@ struct task_struct init_task __aligned(L1_CACHE_BYTES) = {
+ 		.dsq_list.node	= LIST_HEAD_INIT(init_task.scx.dsq_list.node),
+ 		.sticky_cpu	= -1,
+ 		.holding_cpu	= -1,
++		.runnable_cpu	= -1,
+ 		.runnable_node	= LIST_HEAD_INIT(init_task.scx.runnable_node),
+ 		.runnable_at	= INITIAL_JIFFIES,
+ 		.ddsp_dsq_id	= SCX_DSQ_INVALID,
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 35aca50796fd..9ae8d78738b4 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -1865,11 +1865,19 @@ static void set_task_runnable(struct rq *rq, struct task_struct *p)
+ 	 * appended to the runnable_list.
+ 	 */
+ 	list_add_tail(&p->scx.runnable_node, &rq->scx.runnable_list);
++
++	/*
++	 * Record the rq @p is runnable on, maintained under the rq lock so it
++	 * stays valid unlike task_cpu(), which a remote wakeup can move under
++	 * pi_lock alone.
++	 */
++	WRITE_ONCE(p->scx.runnable_cpu, cpu_of(rq));
+ }
+ 
+ static void clr_task_runnable(struct task_struct *p, bool reset_runnable_at)
+ {
+ 	list_del_init(&p->scx.runnable_node);
++	WRITE_ONCE(p->scx.runnable_cpu, -1);
+ 	if (reset_runnable_at)
+ 		p->scx.flags |= SCX_TASK_RESET_RUNNABLE_AT;
+ }
+@@ -3531,6 +3539,7 @@ void init_scx_entity(struct sched_ext_entity *scx)
+ 	RB_CLEAR_NODE(&scx->dsq_priq);
+ 	scx->sticky_cpu = -1;
+ 	scx->holding_cpu = -1;
++	scx->runnable_cpu = -1;
+ 	INIT_LIST_HEAD(&scx->runnable_node);
+ 	scx->runnable_at = jiffies;
+ 	scx->ddsp_dsq_id = SCX_DSQ_INVALID;
+-- 
+2.55.0
+

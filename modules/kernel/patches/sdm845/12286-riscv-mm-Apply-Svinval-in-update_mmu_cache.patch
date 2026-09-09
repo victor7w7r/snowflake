@@ -1,0 +1,97 @@
+From 905be00304bd3658fb0ce2914ed7a95ee799e0f3 Mon Sep 17 00:00:00 2001
+From: Xu Lu <luxu.kernel@bytedance.com>
+Date: Fri, 7 Aug 2026 19:24:29 -0600
+Subject: [PATCH 12286/15333] riscv: mm: Apply Svinval in update_mmu_cache()
+
+Use Svinval in update_mmu_cache_range() when the extension is available.
+
+Signed-off-by: Xu Lu <luxu.kernel@bytedance.com>
+Link: https://patch.msgid.link/20260715132009.10634-3-luxu.kernel@bytedance.com
+Tested-by: Klara Modin <klarasmodin@gmail.com>
+Signed-off-by: Paul Walmsley <pjw@kernel.org>
+---
+ arch/riscv/include/asm/pgtable.h  |  8 ++++++++
+ arch/riscv/include/asm/tlbflush.h | 18 ++++++++++++++++++
+ arch/riscv/mm/tlbflush.c          | 18 ------------------
+ 3 files changed, 26 insertions(+), 18 deletions(-)
+
+diff --git a/arch/riscv/include/asm/pgtable.h b/arch/riscv/include/asm/pgtable.h
+index 9926556099ae..823805cc465a 100644
+--- a/arch/riscv/include/asm/pgtable.h
++++ b/arch/riscv/include/asm/pgtable.h
+@@ -578,6 +578,14 @@ static inline void update_mmu_cache_range(struct vm_fault *vmf,
+ 	if (riscv_has_extension_unlikely(RISCV_ISA_EXT_SVVPTC))
+ 		return;
+ 
++	if (riscv_has_extension_unlikely(RISCV_ISA_EXT_SVINVAL)) {
++		local_sfence_w_inval();
++		while (nr--)
++			local_sinval_vma(address + nr * PAGE_SIZE, asid);
++		local_sfence_inval_ir();
++		return;
++	}
++
+ 	/*
+ 	 * The kernel assumes that TLBs don't cache invalid entries, but
+ 	 * in RISC-V, SFENCE.VMA specifies an ordering constraint, not a
+diff --git a/arch/riscv/include/asm/tlbflush.h b/arch/riscv/include/asm/tlbflush.h
+index 7c2cd5cc92d3..9636d07fe9ee 100644
+--- a/arch/riscv/include/asm/tlbflush.h
++++ b/arch/riscv/include/asm/tlbflush.h
+@@ -20,6 +20,24 @@ static inline unsigned long get_mm_asid(struct mm_struct *mm)
+ 	return mm ? cntx2asid(atomic_long_read(&mm->context.id)) : FLUSH_TLB_NO_ASID;
+ }
+ 
++static inline void local_sfence_inval_ir(void)
++{
++	asm volatile(SFENCE_INVAL_IR() ::: "memory");
++}
++
++static inline void local_sfence_w_inval(void)
++{
++	asm volatile(SFENCE_W_INVAL() ::: "memory");
++}
++
++static inline void local_sinval_vma(unsigned long vma, unsigned long asid)
++{
++	if (asid != FLUSH_TLB_NO_ASID)
++		asm volatile(SINVAL_VMA(%0, %1) : : "r" (vma), "r" (asid) : "memory");
++	else
++		asm volatile(SINVAL_VMA(%0, zero) : : "r" (vma) : "memory");
++}
++
+ static inline void local_flush_tlb_all(void)
+ {
+ 	__asm__ __volatile__ ("sfence.vma" : : : "memory");
+diff --git a/arch/riscv/mm/tlbflush.c b/arch/riscv/mm/tlbflush.c
+index 73c226f719c7..962db300a166 100644
+--- a/arch/riscv/mm/tlbflush.c
++++ b/arch/riscv/mm/tlbflush.c
+@@ -11,24 +11,6 @@
+ 
+ #define has_svinval()	riscv_has_extension_unlikely(RISCV_ISA_EXT_SVINVAL)
+ 
+-static inline void local_sfence_inval_ir(void)
+-{
+-	asm volatile(SFENCE_INVAL_IR() ::: "memory");
+-}
+-
+-static inline void local_sfence_w_inval(void)
+-{
+-	asm volatile(SFENCE_W_INVAL() ::: "memory");
+-}
+-
+-static inline void local_sinval_vma(unsigned long vma, unsigned long asid)
+-{
+-	if (asid != FLUSH_TLB_NO_ASID)
+-		asm volatile(SINVAL_VMA(%0, %1) : : "r" (vma), "r" (asid) : "memory");
+-	else
+-		asm volatile(SINVAL_VMA(%0, zero) : : "r" (vma) : "memory");
+-}
+-
+ /*
+  * Flush entire TLB if number of entries to be flushed is greater
+  * than the threshold below.
+-- 
+2.55.0
+

@@ -1,0 +1,32 @@
+From 6e8a3c24bd75f057b7e6d5d90829550b7af44496 Mon Sep 17 00:00:00 2001
+From: Lijo Lazar <lijo.lazar@amd.com>
+Date: Tue, 16 Jun 2026 10:57:44 +0530
+Subject: [PATCH 01716/15333] drm/amdgpu: bounds check xcp_id in release_sched
+
+Avoid out-of-bounds xcp[] access, e.g. when xcp_id is
+AMDGPU_XCP_NO_PARTITION.
+
+Signed-off-by: Lijo Lazar <lijo.lazar@amd.com>
+Acked-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_xcp.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_xcp.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_xcp.c
+index c6b43353e08e..cf71b4f55252 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_xcp.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_xcp.c
+@@ -476,7 +476,8 @@ void amdgpu_xcp_release_sched(struct amdgpu_device *adev,
+ 	if (drm_sched_wqueue_ready(sched)) {
+ 		struct amdgpu_ring *ring = to_amdgpu_ring(sched);
+ 
+-		atomic_dec(&adev->xcp_mgr->xcp[ring->xcp_id].ref_cnt);
++		if (ring->xcp_id < MAX_XCP)
++			atomic_dec(&adev->xcp_mgr->xcp[ring->xcp_id].ref_cnt);
+ 	}
+ }
+ 
+-- 
+2.55.0
+

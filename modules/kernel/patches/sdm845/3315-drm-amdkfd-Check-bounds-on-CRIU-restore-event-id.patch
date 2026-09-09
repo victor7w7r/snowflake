@@ -1,0 +1,38 @@
+From 5c6c247992d4d9200e073b83f4ec6c703c096845 Mon Sep 17 00:00:00 2001
+From: David Francis <David.Francis@amd.com>
+Date: Tue, 12 May 2026 14:49:41 -0400
+Subject: [PATCH 03315/15333] drm/amdkfd: Check bounds on CRIU restore event id
+
+The valid amdkfd event ids go from 0 to KFD_SIGNAL_EVENT_LIMIT - 1.
+
+During CRIU restore, ensure that the provided event ids are
+in that range.
+
+v2: No need for lower bound check since idr_alloc rejects negative
+inputs
+
+v3: Also change error message to reflect new error condition
+
+Reviewed-by: David Yat Sin <david.yatsin@amd.com>
+Signed-off-by: David Francis <David.Francis@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdkfd/kfd_events.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_events.c b/drivers/gpu/drm/amd/amdkfd/kfd_events.c
+index 08532e9ff4a6..f5fd78f0df7d 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_events.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_events.c
+@@ -161,7 +161,7 @@ static int create_signal_event(struct file *devkfd, struct kfd_process *p,
+ 
+ 	ret = allocate_event_notification_slot(p, ev, restore_id);
+ 	if (ret) {
+-		pr_warn("Signal event wasn't created because out of kernel memory\n");
++		pr_warn("Failed to create signal event notification slot\n");
+ 		return ret;
+ 	}
+ 
+-- 
+2.55.0
+

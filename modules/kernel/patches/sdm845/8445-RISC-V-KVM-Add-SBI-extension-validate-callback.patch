@@ -1,0 +1,91 @@
+From e4f24f9a909da8dac48aa0ac27121827f44ab3fa Mon Sep 17 00:00:00 2001
+From: Inochi Amaoto <inochiama@gmail.com>
+Date: Thu, 30 Jul 2026 07:25:22 +0800
+Subject: [PATCH 08445/15333] RISC-V: KVM: Add SBI extension validate callback
+
+When user disable FWFT extension after setting any value of the
+FWFT feature, the state of vCPU will be broken since the value
+of disable FWFT feature is still functional.
+
+Add the generic SBI extension validate callback so the FWFT
+extension can fix its parameters before the first run.
+
+Signed-off-by: Inochi Amaoto <inochiama@gmail.com>
+Reviewed-by: Anup Patel <anup@brainfault.org>
+Link: https://lore.kernel.org/r/20260729232527.139183-2-inochiama@gmail.com
+Signed-off-by: Anup Patel <anup@brainfault.org>
+---
+ arch/riscv/include/asm/kvm_vcpu_sbi.h |  4 ++++
+ arch/riscv/kvm/vcpu_config.c          |  2 ++
+ arch/riscv/kvm/vcpu_sbi.c             | 23 +++++++++++++++++++++++
+ 3 files changed, 29 insertions(+)
+
+diff --git a/arch/riscv/include/asm/kvm_vcpu_sbi.h b/arch/riscv/include/asm/kvm_vcpu_sbi.h
+index c1a7e3b40d9c..f01a2860c751 100644
+--- a/arch/riscv/include/asm/kvm_vcpu_sbi.h
++++ b/arch/riscv/include/asm/kvm_vcpu_sbi.h
+@@ -60,6 +60,9 @@ struct kvm_vcpu_sbi_extension {
+ 
+ 	void (*reset)(struct kvm_vcpu *vcpu);
+ 
++	/* Allow the extension to correct its parameters before the first run */
++	void (*validate)(struct kvm_vcpu *vcpu);
++
+ 	unsigned long state_reg_subtype;
+ 	unsigned long (*get_state_reg_count)(struct kvm_vcpu *vcpu);
+ 	int (*get_state_reg_id)(struct kvm_vcpu *vcpu, int index, u64 *reg_id);
+@@ -93,6 +96,7 @@ int kvm_riscv_vcpu_sbi_ecall(struct kvm_vcpu *vcpu, struct kvm_run *run);
+ void kvm_riscv_vcpu_sbi_init(struct kvm_vcpu *vcpu);
+ void kvm_riscv_vcpu_sbi_deinit(struct kvm_vcpu *vcpu);
+ void kvm_riscv_vcpu_sbi_reset(struct kvm_vcpu *vcpu);
++void kvm_riscv_vcpu_sbi_validate(struct kvm_vcpu *vcpu);
+ 
+ #ifdef CONFIG_RISCV_SBI_V01
+ extern const struct kvm_vcpu_sbi_extension vcpu_sbi_ext_v01;
+diff --git a/arch/riscv/kvm/vcpu_config.c b/arch/riscv/kvm/vcpu_config.c
+index 238418fed2b9..b68aa830aaf5 100644
+--- a/arch/riscv/kvm/vcpu_config.c
++++ b/arch/riscv/kvm/vcpu_config.c
+@@ -69,6 +69,8 @@ void kvm_riscv_vcpu_config_ran_once(struct kvm_vcpu *vcpu)
+ 
+ 	if (vcpu->guest_debug)
+ 		cfg->hedeleg &= ~BIT(EXC_BREAKPOINT);
++
++	kvm_riscv_vcpu_sbi_validate(vcpu);
+ }
+ 
+ void kvm_riscv_vcpu_config_load(struct kvm_vcpu *vcpu)
+diff --git a/arch/riscv/kvm/vcpu_sbi.c b/arch/riscv/kvm/vcpu_sbi.c
+index 46ab7b989432..b737e9a7a12a 100644
+--- a/arch/riscv/kvm/vcpu_sbi.c
++++ b/arch/riscv/kvm/vcpu_sbi.c
+@@ -723,3 +723,26 @@ void kvm_riscv_vcpu_sbi_reset(struct kvm_vcpu *vcpu)
+ 		ext->reset(vcpu);
+ 	}
+ }
++
++void kvm_riscv_vcpu_sbi_validate(struct kvm_vcpu *vcpu)
++{
++	struct kvm_vcpu_sbi_context *scontext = &vcpu->arch.sbi_context;
++	const struct kvm_riscv_sbi_extension_entry *entry;
++	const struct kvm_vcpu_sbi_extension *ext;
++	int idx, i;
++
++	for (i = 0; i < ARRAY_SIZE(sbi_ext); i++) {
++		entry = &sbi_ext[i];
++		ext = entry->ext_ptr;
++		idx = entry->ext_idx;
++
++		if (idx < 0 || idx >= ARRAY_SIZE(scontext->ext_status))
++			continue;
++
++		if (scontext->ext_status[idx] != KVM_RISCV_SBI_EXT_STATUS_ENABLED ||
++		    !ext->validate)
++			continue;
++
++		ext->validate(vcpu);
++	}
++}
+-- 
+2.55.0
+

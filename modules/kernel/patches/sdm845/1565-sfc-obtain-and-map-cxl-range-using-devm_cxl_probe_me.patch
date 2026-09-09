@@ -1,0 +1,111 @@
+From 0418860ef2ca8ab4e696ce3913fd76660c881c0e Mon Sep 17 00:00:00 2001
+From: Alejandro Lucero <alucerop@amd.com>
+Date: Tue, 30 Jun 2026 16:13:45 +0100
+Subject: [PATCH 01565/15333] sfc: obtain and map cxl range using
+ devm_cxl_probe_mem
+
+Use core API for safely obtain the CXL range linked to an HDM committed
+by the BIOS. Map such a range for being used as the ctpio buffer.
+
+A potential user space action through sysfs unbinding or core cxl
+modules remove will trigger sfc driver device detachment, with that case
+not racing with this mapping as this is done during driver probe and
+therefore protected with device lock against those user space actions.
+
+Signed-off-by: Alejandro Lucero <alucerop@amd.com>
+Reviewed-by: Dave Jiang <dave.jiang@intel.com>
+Acked-by: Edward Cree <ecree.xilinx@gmail.com>
+Signed-off-by: Dan Williams <djbw@kernel.org>
+Link: https://patch.msgid.link/20260630151346.31201-5-alejandro.lucero-palau@amd.com
+Signed-off-by: Dave Jiang <dave.jiang@intel.com>
+---
+ drivers/net/ethernet/sfc/efx.c     |  2 ++
+ drivers/net/ethernet/sfc/efx_cxl.c | 23 +++++++++++++++++++++++
+ drivers/net/ethernet/sfc/efx_cxl.h |  3 +++
+ 3 files changed, 28 insertions(+)
+
+diff --git a/drivers/net/ethernet/sfc/efx.c b/drivers/net/ethernet/sfc/efx.c
+index 61cbb6cfc360..3806cd3dd7f4 100644
+--- a/drivers/net/ethernet/sfc/efx.c
++++ b/drivers/net/ethernet/sfc/efx.c
+@@ -984,6 +984,7 @@ static void efx_pci_remove(struct pci_dev *pci_dev)
+ 	efx_fini_io(efx);
+ 
+ 	probe_data = container_of(efx, struct efx_probe_data, efx);
++	efx_cxl_exit(probe_data);
+ 
+ 	pci_dbg(efx->pci_dev, "shutdown successful\n");
+ 
+@@ -1242,6 +1243,7 @@ static int efx_pci_probe(struct pci_dev *pci_dev,
+ 	return 0;
+ 
+  fail3:
++	efx_cxl_exit(probe_data);
+ 	efx_fini_io(efx);
+  fail2:
+ 	efx_fini_struct(efx);
+diff --git a/drivers/net/ethernet/sfc/efx_cxl.c b/drivers/net/ethernet/sfc/efx_cxl.c
+index 18b535b3ea40..3e7c950f83e9 100644
+--- a/drivers/net/ethernet/sfc/efx_cxl.c
++++ b/drivers/net/ethernet/sfc/efx_cxl.c
+@@ -18,6 +18,7 @@ int efx_cxl_init(struct efx_probe_data *probe_data)
+ {
+ 	struct efx_nic *efx = &probe_data->efx;
+ 	struct pci_dev *pci_dev = efx->pci_dev;
++	struct range cxl_pio_range;
+ 	struct efx_cxl *cxl;
+ 	u16 dvsec;
+ 	int rc;
+@@ -73,9 +74,31 @@ int efx_cxl_init(struct efx_probe_data *probe_data)
+ 		return -ENODEV;
+ 	}
+ 
++	cxl->cxlmd = devm_cxl_probe_mem(&cxl->cxlds, &cxl_pio_range);
++	if (IS_ERR(cxl->cxlmd)) {
++		pci_err(pci_dev, "CXL accel memdev creation failed\n");
++		return PTR_ERR(cxl->cxlmd);
++	}
++
++	cxl->ctpio_cxl = ioremap_wc(cxl_pio_range.start,
++				    range_len(&cxl_pio_range));
++	if (!cxl->ctpio_cxl) {
++		pci_err(pci_dev, "CXL ioremap region (%pra) failed\n",
++			&cxl_pio_range);
++		return -ENOMEM;
++	}
++
+ 	probe_data->cxl = cxl;
+ 
+ 	return 0;
+ }
+ 
++void efx_cxl_exit(struct efx_probe_data *probe_data)
++{
++	if (!probe_data->cxl)
++		return;
++
++	iounmap(probe_data->cxl->ctpio_cxl);
++}
++
+ MODULE_IMPORT_NS("CXL");
+diff --git a/drivers/net/ethernet/sfc/efx_cxl.h b/drivers/net/ethernet/sfc/efx_cxl.h
+index 04e46278464d..3e2705cb063f 100644
+--- a/drivers/net/ethernet/sfc/efx_cxl.h
++++ b/drivers/net/ethernet/sfc/efx_cxl.h
+@@ -20,10 +20,13 @@ struct efx_probe_data;
+ struct efx_cxl {
+ 	struct cxl_dev_state cxlds;
+ 	struct cxl_memdev *cxlmd;
++	void __iomem *ctpio_cxl;
+ };
+ 
+ int efx_cxl_init(struct efx_probe_data *probe_data);
++void efx_cxl_exit(struct efx_probe_data *probe_data);
+ #else
+ static inline int efx_cxl_init(struct efx_probe_data *probe_data) { return 0; }
++static inline void efx_cxl_exit(struct efx_probe_data *probe_data) {}
+ #endif
+ #endif
+-- 
+2.55.0
+

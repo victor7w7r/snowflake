@@ -1,0 +1,56 @@
+From b816d48cc0dc04e7e775880bb07b5f86d5eb6978 Mon Sep 17 00:00:00 2001
+From: Aditya Tipre <tipreaditya@gmail.com>
+Date: Thu, 25 Jun 2026 11:16:06 -0400
+Subject: [PATCH 02904/15333] staging: rtl8723bs: rename shadowed variable
+
+The inner variable ie in update_bcn_erpinfo_ie() shadows an outer local
+variable of the same name. This triggers a -Wshadow warning.
+
+Rename the inner variable to erp_ie to remove the warning
+and make the code less ambiguous.
+
+No functional change.
+
+Signed-off-by: Aditya Tipre <tipreaditya@gmail.com>
+Link: https://patch.msgid.link/20260625151606.96229-1-tipreaditya@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/core/rtw_ap.c | 15 ++++++++-------
+ 1 file changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/core/rtw_ap.c b/drivers/staging/rtl8723bs/core/rtw_ap.c
+index 84852aa4dd26..e1122d3f325d 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_ap.c
++++ b/drivers/staging/rtl8723bs/core/rtw_ap.c
+@@ -1292,20 +1292,21 @@ static void update_bcn_erpinfo_ie(struct adapter *padapter)
+ 		       &len,
+ 		       (pnetwork->ie_length - _BEACON_IE_OFFSET_));
+ 	if (p && len > 0) {
+-		struct ndis_80211_var_ie *ie = (struct ndis_80211_var_ie *)p;
++		struct ndis_80211_var_ie *erp_ie = (struct ndis_80211_var_ie *)p;
+ 
+ 		if (pmlmepriv->num_sta_non_erp == 1)
+-			ie->data[0] |= RTW_ERP_INFO_NON_ERP_PRESENT | RTW_ERP_INFO_USE_PROTECTION;
++			erp_ie->data[0] |= RTW_ERP_INFO_NON_ERP_PRESENT |
++					    RTW_ERP_INFO_USE_PROTECTION;
+ 		else
+-			ie->data[0] &= ~(RTW_ERP_INFO_NON_ERP_PRESENT |
+-					  RTW_ERP_INFO_USE_PROTECTION);
++			erp_ie->data[0] &= ~(RTW_ERP_INFO_NON_ERP_PRESENT |
++					      RTW_ERP_INFO_USE_PROTECTION);
+ 
+ 		if (pmlmepriv->num_sta_no_short_preamble > 0)
+-			ie->data[0] |= RTW_ERP_INFO_BARKER_PREAMBLE_MODE;
++			erp_ie->data[0] |= RTW_ERP_INFO_BARKER_PREAMBLE_MODE;
+ 		else
+-			ie->data[0] &= ~(RTW_ERP_INFO_BARKER_PREAMBLE_MODE);
++			erp_ie->data[0] &= ~(RTW_ERP_INFO_BARKER_PREAMBLE_MODE);
+ 
+-		ERP_IE_handler(padapter, ie);
++		ERP_IE_handler(padapter, erp_ie);
+ 	}
+ }
+ 
+-- 
+2.55.0
+

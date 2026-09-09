@@ -1,0 +1,54 @@
+From fe41c0759b11b982f945633b7abb4b49dfaf8ce4 Mon Sep 17 00:00:00 2001
+From: Tao Cui <cuitao@kylinos.cn>
+Date: Mon, 10 Aug 2026 12:21:50 +0800
+Subject: [PATCH 12411/15333] LoongArch: KVM: Reload one-shot TVAL on migration
+ destination
+
+kvm_restore_timer() rebuilds the remaining timer countdown value from
+vcpu->arch.expire, which is host-internal and is not part of the
+migrated vCPU state. On the migration destination it is still 0, so for
+a one-shot timer that has not expired yet the computed delta is 0 and
+write_gcsr_timertick(0) injects the timer interrupt immediately instead
+of after the remaining time.
+
+The expired one-shot case (TVAL = -1) is already handled earlier. When
+expire has not been set (i.e. on the migration destination), reload the
+remaining countdown value from the migrated TVAL. This covers both one-
+shot and periodic timers. The regular preempt/resume path on the source,
+where expire is valid, is unchanged.
+
+Fixes: a5857b9ff6e0 ("LoongArch: KVM: Implement vcpu timer operations")
+Suggested-by: Bibo Mao <maobibo@loongson.cn>
+Reviewed-by: Bibo Mao <maobibo@loongson.cn>
+Signed-off-by: Tao Cui <cuitao@kylinos.cn>
+Signed-off-by: Huacai Chen <chenhuacai@loongson.cn>
+---
+ arch/loongarch/kvm/timer.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/arch/loongarch/kvm/timer.c b/arch/loongarch/kvm/timer.c
+index 3829f35a4070..96f33e34855a 100644
+--- a/arch/loongarch/kvm/timer.c
++++ b/arch/loongarch/kvm/timer.c
+@@ -119,6 +119,18 @@ void kvm_restore_timer(struct kvm_vcpu *vcpu)
+ 	delta = 0;
+ 	now = ktime_get();
+ 	expire = vcpu->arch.expire;
++	if (!expire) {
++		/*
++		 * vcpu->arch.expire is host-internal and is not migrated,
++		 * so it is 0 after migration. Reload the remaining countdown
++		 * from the migrated TVAL. This covers both one-shot and
++		 * periodic timers.
++		 */
++		if (ticks < cfg)
++			delta = tick_to_ns(vcpu, ticks);
++		expire = ktime_add_ns(now, delta);
++	}
++
+ 	if (ktime_before(now, expire))
+ 		delta = ktime_to_tick(vcpu, ktime_sub(expire, now));
+ 	else if (cfg & CSR_TCFG_PERIOD) {
+-- 
+2.55.0
+

@@ -1,0 +1,39 @@
+From ac00ffdbbc832f4c8ad5312217360d542f7e6690 Mon Sep 17 00:00:00 2001
+From: Samuel Moelius <sam.moelius@trailofbits.com>
+Date: Mon, 29 Jun 2026 15:26:17 +0000
+Subject: [PATCH 07660/15333] samples/ftrace: Prevent division by zero when
+ nr_function_calls is zero
+
+The ftrace-ops sample exposes nr_function_calls as a module parameter
+and uses it as the divisor when printing the measured time per call.
+Loading the module with nr_function_calls=0 skips the benchmark loop and
+then divides the elapsed time by zero, crashing the kernel during sample
+module initialization.
+
+Keep accepting the parameter value, but report -1LL as the per-call
+duration when the call count is zero instead of dividing by it.
+
+Link: https://patch.msgid.link/20260629152616.107080.e19bfbed249c.ftrace-ops-zero-function-calls-div0@trailofbits.com
+Assisted-by: Codex:gpt-5.5-cyber-preview
+Signed-off-by: Samuel Moelius <sam.moelius@trailofbits.com>
+Signed-off-by: Steven Rostedt <rostedt@goodmis.org>
+---
+ samples/ftrace/ftrace-ops.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/samples/ftrace/ftrace-ops.c b/samples/ftrace/ftrace-ops.c
+index 152ffc1a30b6..8cae38d8b879 100644
+--- a/samples/ftrace/ftrace-ops.c
++++ b/samples/ftrace/ftrace-ops.c
+@@ -223,7 +223,7 @@ static int __init ftrace_ops_sample_init(void)
+ 
+ 	pr_info("Attempted %u calls to %ps in %lluns (%lluns / call)\n",
+ 		nr_function_calls, tracee_relevant,
+-		period, div_u64(period, nr_function_calls));
++		period, nr_function_calls ? div_u64(period, nr_function_calls) : -1LL);
+ 
+ 	if (persist)
+ 		return 0;
+-- 
+2.55.0
+

@@ -1,0 +1,68 @@
+From 227db98088756740645491fe29f8701c164badf6 Mon Sep 17 00:00:00 2001
+From: Badhri Jagan Sridharan <badhri@google.com>
+Date: Mon, 29 Jun 2026 22:57:29 +0000
+Subject: [PATCH 03204/15333] usb: typec: tcpm: Defensively bound altmode array
+ accesses
+
+While svdm_consume_modes() already prevents mode_data.altmodes from
+exceeding ALTMODE_DISCOVERY_MAX during SVDM discovery, defensively
+bounding array iteration indices against ALTMODE_DISCOVERY_MAX in altmode
+registration and unregistration helpers guarantees protection against
+out-of-bounds accesses in the event of memory corruption.
+
+Ensure that tcpm_register_plug_altmodes() is also bounded alongside
+tcpm_register_partner_altmodes() and tcpm_unregister_altmodes.
+
+Assisted-by: Antigravity:gemini-3.5-flash
+Signed-off-by: Badhri Jagan Sridharan <badhri@google.com>
+Reviewed-by: RD Babiera <rdbabiera@google.com>
+Acked-by: Heikki Krogerus <heikki.krogerus@linux.intel.com>
+Link: https://patch.msgid.link/20260629225729.2749896-1-badhri@google.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/usb/typec/tcpm/tcpm.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/usb/typec/tcpm/tcpm.c b/drivers/usb/typec/tcpm/tcpm.c
+index 7ef746a90a17..c9ac9381b17c 100644
+--- a/drivers/usb/typec/tcpm/tcpm.c
++++ b/drivers/usb/typec/tcpm/tcpm.c
+@@ -2029,7 +2029,7 @@ static void tcpm_register_partner_altmodes(struct tcpm_port *port)
+ 	if (!port->partner)
+ 		return;
+ 
+-	for (i = 0; i < modep->altmodes; i++) {
++	for (i = 0; i < modep->altmodes && i < ALTMODE_DISCOVERY_MAX; i++) {
+ 		altmode = typec_partner_register_altmode(port->partner,
+ 						&modep->altmode_desc[i]);
+ 		if (IS_ERR(altmode)) {
+@@ -2047,9 +2047,10 @@ static void tcpm_register_plug_altmodes(struct tcpm_port *port)
+ 	struct typec_altmode *altmode;
+ 	int i;
+ 
+-	typec_plug_set_num_altmodes(port->plug_prime, modep->altmodes);
++	typec_plug_set_num_altmodes(port->plug_prime,
++				    min(modep->altmodes, ALTMODE_DISCOVERY_MAX));
+ 
+-	for (i = 0; i < modep->altmodes; i++) {
++	for (i = 0; i < modep->altmodes && i < ALTMODE_DISCOVERY_MAX; i++) {
+ 		altmode = typec_plug_register_altmode(port->plug_prime,
+ 						&modep->altmode_desc[i]);
+ 		if (IS_ERR(altmode)) {
+@@ -4891,11 +4892,11 @@ static void tcpm_unregister_altmodes(struct tcpm_port *port)
+ 	struct pd_mode_data *modep_prime = &port->mode_data_prime;
+ 	int i;
+ 
+-	for (i = 0; i < modep->altmodes; i++) {
++	for (i = 0; i < modep->altmodes && i < ALTMODE_DISCOVERY_MAX; i++) {
+ 		typec_unregister_altmode(port->partner_altmode[i]);
+ 		port->partner_altmode[i] = NULL;
+ 	}
+-	for (i = 0; i < modep_prime->altmodes; i++) {
++	for (i = 0; i < modep_prime->altmodes && i < ALTMODE_DISCOVERY_MAX; i++) {
+ 		typec_unregister_altmode(port->plug_prime_altmode[i]);
+ 		port->plug_prime_altmode[i] = NULL;
+ 	}
+-- 
+2.55.0
+

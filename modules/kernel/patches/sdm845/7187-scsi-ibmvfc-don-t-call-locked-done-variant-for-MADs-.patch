@@ -1,0 +1,41 @@
+From 9c2aa65000f6f99e543500cabe4c67ff758d3ff6 Mon Sep 17 00:00:00 2001
+From: Tyrel Datwyler <tyreld@linux.ibm.com>
+Date: Wed, 22 Jul 2026 17:01:17 -0700
+Subject: [PATCH 07187/15333] scsi: ibmvfc: don't call locked done variant for
+ MADs on send failure
+
+MADs are processed with the requirement that the host_lock is held for
+MAD sends and completions. When a MAD job step is called the host lock
+is already held and there is an unlikely scenario where h_send_crq fails
+with something other than H_CLOSED. If this happens there is a special
+done handler for MADs that tries to take the host lock.
+
+In this failure scenario fall back to the saved evt->_done unlocked
+completion handler.
+
+Signed-off-by: Tyrel Datwyler <tyreld@linux.ibm.com>
+Link: https://patch.msgid.link/20260723000149.969416-2-tyreld@linux.ibm.com
+Signed-off-by: Martin K. Petersen <martin.petersen@oracle.com>
+---
+ drivers/scsi/ibmvscsi/ibmvfc.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/scsi/ibmvscsi/ibmvfc.c b/drivers/scsi/ibmvscsi/ibmvfc.c
+index 3dd2adda195e..0a5f73df8d7d 100644
+--- a/drivers/scsi/ibmvscsi/ibmvfc.c
++++ b/drivers/scsi/ibmvscsi/ibmvfc.c
+@@ -1774,8 +1774,10 @@ static int ibmvfc_send_event(struct ibmvfc_event *evt,
+ 		if (evt->cmnd) {
+ 			evt->cmnd->result = DID_ERROR << 16;
+ 			evt->done = ibmvfc_scsi_eh_done;
+-		} else
++		} else {
+ 			evt->xfer_iu->mad_common.status = cpu_to_be16(IBMVFC_MAD_CRQ_ERROR);
++			evt->done = evt->_done;
++		}
+ 
+ 		evt->done(evt);
+ 	} else {
+-- 
+2.55.0
+

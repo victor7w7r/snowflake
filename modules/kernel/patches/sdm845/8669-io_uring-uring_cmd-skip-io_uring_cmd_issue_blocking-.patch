@@ -1,0 +1,80 @@
+From 13b0742fd05864384724710c1bb12643b5448015 Mon Sep 17 00:00:00 2001
+From: Caleb Sander Mateos <csander@purestorage.com>
+Date: Thu, 2 Jul 2026 12:48:45 -0600
+Subject: [PATCH 08669/15333] io_uring/uring_cmd: skip
+ io_uring_cmd_issue_blocking() task work
+
+io_uring_cmd_issue_blocking() is only called from blk_cmd_complete(),
+which is already a task work callback. However, it queues another task
+work item, to call io_queue_iowq(). Just call io_queue_iowq() directly
+to skip the CPU cost and latency of the redundant task work proxying.
+
+Signed-off-by: Caleb Sander Mateos <csander@purestorage.com>
+Link: https://patch.msgid.link/20260702184847.1709378-1-csander@purestorage.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ io_uring/io_uring.c  | 13 +------------
+ io_uring/io_uring.h  |  2 +-
+ io_uring/uring_cmd.c |  2 +-
+ 3 files changed, 3 insertions(+), 14 deletions(-)
+
+diff --git a/io_uring/io_uring.c b/io_uring/io_uring.c
+index 1279e27c2c6d..4c83a94b4bdc 100644
+--- a/io_uring/io_uring.c
++++ b/io_uring/io_uring.c
+@@ -407,7 +407,7 @@ static void io_prep_async_link(struct io_kiocb *req)
+ 	}
+ }
+ 
+-static void io_queue_iowq(struct io_kiocb *req)
++void io_queue_iowq(struct io_kiocb *req)
+ {
+ 	struct io_uring_task *tctx = req->tctx;
+ 
+@@ -435,17 +435,6 @@ static void io_queue_iowq(struct io_kiocb *req)
+ 	io_wq_enqueue(tctx->io_wq, &req->work);
+ }
+ 
+-static void io_req_queue_iowq_tw(struct io_tw_req tw_req, io_tw_token_t tw)
+-{
+-	io_queue_iowq(tw_req.req);
+-}
+-
+-void io_req_queue_iowq(struct io_kiocb *req)
+-{
+-	req->io_task_work.func = io_req_queue_iowq_tw;
+-	io_req_task_work_add(req);
+-}
+-
+ unsigned io_linked_nr(struct io_kiocb *req)
+ {
+ 	struct io_kiocb *tmp;
+diff --git a/io_uring/io_uring.h b/io_uring/io_uring.h
+index cb736b815422..dfe26a9c21bf 100644
+--- a/io_uring/io_uring.h
++++ b/io_uring/io_uring.h
+@@ -195,7 +195,7 @@ __cold void io_uring_drop_tctx_refs(struct task_struct *task);
+ 
+ int io_ring_add_registered_file(struct io_uring_task *tctx, struct file *file,
+ 				     int start, int end);
+-void io_req_queue_iowq(struct io_kiocb *req);
++void io_queue_iowq(struct io_kiocb *req);
+ 
+ int io_poll_issue(struct io_kiocb *req, io_tw_token_t tw);
+ int io_submit_sqes(struct io_ring_ctx *ctx, unsigned int nr);
+diff --git a/io_uring/uring_cmd.c b/io_uring/uring_cmd.c
+index 7b25dcd9d05f..5525267d2e03 100644
+--- a/io_uring/uring_cmd.c
++++ b/io_uring/uring_cmd.c
+@@ -326,7 +326,7 @@ void io_uring_cmd_issue_blocking(struct io_uring_cmd *ioucmd)
+ {
+ 	struct io_kiocb *req = cmd_to_io_kiocb(ioucmd);
+ 
+-	io_req_queue_iowq(req);
++	io_queue_iowq(req);
+ }
+ 
+ int io_cmd_poll_multishot(struct io_uring_cmd *cmd,
+-- 
+2.55.0
+

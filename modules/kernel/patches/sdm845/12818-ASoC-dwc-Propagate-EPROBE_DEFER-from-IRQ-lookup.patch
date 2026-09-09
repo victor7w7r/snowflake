@@ -1,0 +1,38 @@
+From 564db8b8da8d5293424406114244c24ef947dd1c Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 6 Aug 2026 13:10:45 +0700
+Subject: [PATCH 12818/15333] ASoC: dwc: Propagate -EPROBE_DEFER from IRQ
+ lookup
+
+platform_get_irq_optional() never returns 0. It returns a positive IRQ
+number on success or a negative error code on failure.
+
+Return -EPROBE_DEFER from platform_get_irq_optional() so the driver is
+re-probed when the interrupt resource becomes available instead of
+continuing probe without an IRQ.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260806061046.25323-1-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/dwc/dwc-i2s.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/sound/soc/dwc/dwc-i2s.c b/sound/soc/dwc/dwc-i2s.c
+index 74dfd39fd604..2e9fb79b1cd8 100644
+--- a/sound/soc/dwc/dwc-i2s.c
++++ b/sound/soc/dwc/dwc-i2s.c
+@@ -955,7 +955,9 @@ static int dw_i2s_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	irq = platform_get_irq_optional(pdev, 0);
+-	if (irq >= 0) {
++	if (irq == -EPROBE_DEFER)
++		return irq;
++	if (irq > 0) {
+ 		ret = devm_request_irq(&pdev->dev, irq, i2s_irq_handler, 0,
+ 				pdev->name, dev);
+ 		if (ret < 0) {
+-- 
+2.55.0
+

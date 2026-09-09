@@ -1,0 +1,96 @@
+From 032270c30836ef1bf7739b7b9568bd77de1d9a9b Mon Sep 17 00:00:00 2001
+From: Haesung Kim <mattkim513@gmail.com>
+Date: Tue, 14 Jul 2026 16:26:27 +0900
+Subject: [PATCH 06730/15333] PM: hibernate: swap: defer linking the next map
+ page
+
+Delay allocating and linking the next swap_map_page until another image
+page actually needs to be recorded.
+
+The previous code linked and wrote a new swap map page as soon as the
+current one became full. When the image size was an exact multiple of
+MAP_PAGE_ENTRIES, that left an empty final map page that existed only to
+terminate the on-disk chain.
+
+Instead, keep a full map page in memory and only allocate the next map page
+when the next image page arrives. This preserves the resume chain while
+avoiding an unnecessary swap slot allocation and write for the empty
+swap map page.
+
+Signed-off-by: Haesung Kim <mattkim513@gmail.com>
+Link: https://patch.msgid.link/20260714072627.3165744-1-mattkim513@gmail.com
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ kernel/power/swap.c | 30 ++++++++++++++++++++----------
+ 1 file changed, 20 insertions(+), 10 deletions(-)
+
+diff --git a/kernel/power/swap.c b/kernel/power/swap.c
+index 67570f74566c..c78f1593600b 100644
+--- a/kernel/power/swap.c
++++ b/kernel/power/swap.c
+@@ -430,19 +430,22 @@ static int swap_write_page(struct swap_map_handle *handle, void *buf,
+ 
+ 	if (!handle->cur)
+ 		return -EINVAL;
+-	offset = alloc_swapdev_block(root_swap);
+-	error = write_page(buf, offset, hb);
+-	if (error)
+-		return error;
+-	handle->cur->entries[handle->k++] = offset;
++
++	/*
++	 * If the current map page is full, allocate and link next one first.
++	 * Delaying this until here avoids writing an empty swap map page when
++	 * the image size is an exact MAP_PAGE_ENTRIES multiple.
++	 */
+ 	if (handle->k >= MAP_PAGE_ENTRIES) {
+ 		offset = alloc_swapdev_block(root_swap);
+ 		if (!offset)
+ 			return -ENOSPC;
++
+ 		handle->cur->next_swap = offset;
+ 		error = write_page(handle->cur, handle->cur_swap, hb);
+ 		if (error)
+-			goto out;
++			return error;
++
+ 		clear_page(handle->cur);
+ 		handle->cur_swap = offset;
+ 		handle->k = 0;
+@@ -450,7 +453,7 @@ static int swap_write_page(struct swap_map_handle *handle, void *buf,
+ 		if (hb && low_free_pages() <= handle->reqd_free_pages) {
+ 			error = hib_wait_io(hb);
+ 			if (error)
+-				goto out;
++				return error;
+ 			/*
+ 			 * Recalculate the number of required free pages, to
+ 			 * make sure we never take more than half.
+@@ -458,14 +461,21 @@ static int swap_write_page(struct swap_map_handle *handle, void *buf,
+ 			handle->reqd_free_pages = reqd_free_pages();
+ 		}
+ 	}
+- out:
+-	return error;
++
++	offset = alloc_swapdev_block(root_swap);
++	error = write_page(buf, offset, hb);
++	if (error)
++		return error;
++	handle->cur->entries[handle->k++] = offset;
++	return 0;
+ }
+ 
+ static int flush_swap_writer(struct swap_map_handle *handle)
+ {
+-	if (handle->cur && handle->cur_swap)
++	if (handle->cur && handle->cur_swap && handle->k)
+ 		return write_page(handle->cur, handle->cur_swap, NULL);
++	else if (handle->cur && handle->cur_swap)
++		return 0;
+ 	else
+ 		return -EINVAL;
+ }
+-- 
+2.55.0
+

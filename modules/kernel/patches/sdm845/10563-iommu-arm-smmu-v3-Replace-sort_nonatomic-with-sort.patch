@@ -1,0 +1,42 @@
+From 340e3c5165d4dd673c0219756aaf54c5b749b581 Mon Sep 17 00:00:00 2001
+From: Kuan-Wei Chiu <visitorckw@gmail.com>
+Date: Thu, 30 Jul 2026 18:12:15 +0000
+Subject: [PATCH 10563/15333] iommu/arm-smmu-v3: Replace sort_nonatomic() with
+ sort()
+
+The number of master->num_streams per master device is typically very
+small in practice. Sorting this array takes a very small amount of
+time, so there is no practical risk of triggering a soft lockup that
+would necessitate calling cond_resched() during the sort.
+
+Replace sort_nonatomic() with the standard sort(). Since this is the
+only remaining in-tree caller of sort_nonatomic(), this change paves
+the way to eventually remove the unused sort_nonatomic() API from the
+core library.
+
+Signed-off-by: Kuan-Wei Chiu <visitorckw@gmail.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
+index 2587c33c778f..ef8866e124f3 100644
+--- a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
++++ b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
+@@ -4113,9 +4113,9 @@ static int arm_smmu_insert_master(struct arm_smmu_device *smmu,
+ 	}
+ 
+ 	/* Put the ids into order for sorted to_merge/to_unref arrays */
+-	sort_nonatomic(master->streams, master->num_streams,
+-		       sizeof(master->streams[0]), arm_smmu_stream_id_cmp,
+-		       NULL);
++	sort(master->streams, master->num_streams,
++	     sizeof(master->streams[0]), arm_smmu_stream_id_cmp,
++	     NULL);
+ 
+ 	mutex_lock(&smmu->streams_mutex);
+ 	for (i = 0; i < fwspec->num_ids; i++) {
+-- 
+2.55.0
+

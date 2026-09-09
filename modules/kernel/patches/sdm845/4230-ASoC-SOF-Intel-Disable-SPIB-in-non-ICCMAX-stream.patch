@@ -1,0 +1,138 @@
+From 0507d956c4ce91f2bca63ef99d2f0a30817ea7db Mon Sep 17 00:00:00 2001
+From: Bard Liao <yung-chuan.liao@linux.intel.com>
+Date: Mon, 13 Jul 2026 16:46:50 +0800
+Subject: [PATCH 04230/15333] ASoC: SOF: Intel: Disable SPIB in non ICCMAX
+ stream
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The existing code disable SPIB in the playback direction only because
+previously the hda data stream is only used for SOF firmware download
+and we prepare capture stream for ICCMAX and prepare playback stream
+for non ICCMAX case. But now the hda data stream is also used for
+SoundWire BPT which will use both directions. The SPIB is enabled in
+non ICCMAX cases and we should disable in clean up.
+Add a is_iccmax flag in the hda_data_stream_cleanup() function to align
+with the hda_data_stream_prepare() function to enable/disable the SPIB.
+
+Signed-off-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Reviewed-by: Péter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Link: https://patch.msgid.link/20260713084650.4138172-3-yung-chuan.liao@linux.intel.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/intel/hda-loader.c  | 11 ++++++-----
+ sound/soc/sof/intel/hda-sdw-bpt.c |  2 +-
+ sound/soc/sof/intel/hda-stream.c  |  8 +++++---
+ sound/soc/sof/intel/hda.h         |  5 +++--
+ 4 files changed, 15 insertions(+), 11 deletions(-)
+
+diff --git a/sound/soc/sof/intel/hda-loader.c b/sound/soc/sof/intel/hda-loader.c
+index 2b3abcf75d55..4347e71337f9 100644
+--- a/sound/soc/sof/intel/hda-loader.c
++++ b/sound/soc/sof/intel/hda-loader.c
+@@ -216,9 +216,10 @@ int hda_cl_trigger(struct device *dev, struct hdac_ext_stream *hext_stream, int
+ EXPORT_SYMBOL_NS(hda_cl_trigger, "SND_SOC_SOF_INTEL_HDA_COMMON");
+ 
+ int hda_cl_cleanup(struct device *dev, struct snd_dma_buffer *dmab,
+-			  bool persistent_buffer, struct hdac_ext_stream *hext_stream)
++		   bool persistent_buffer, struct hdac_ext_stream *hext_stream, bool is_iccmax)
+ {
+-	return hda_data_stream_cleanup(dev, dmab, persistent_buffer, hext_stream, false);
++	return hda_data_stream_cleanup(dev, dmab, persistent_buffer, hext_stream,
++				       is_iccmax, false);
+ }
+ EXPORT_SYMBOL_NS(hda_cl_cleanup, "SND_SOC_SOF_INTEL_HDA_COMMON");
+ 
+@@ -302,7 +303,7 @@ int hda_dsp_cl_boot_firmware_iccmax(struct snd_sof_dev *sdev)
+ 	 * If the cleanup also fails, we return the initial error
+ 	 */
+ 	ret1 = hda_cl_cleanup(sdev->dev, &hda->iccmax_dmab,
+-			      persistent_cl_buffer, iccmax_stream);
++			      persistent_cl_buffer, iccmax_stream, true);
+ 	if (ret1 < 0) {
+ 		dev_err(sdev->dev, "error: ICCMAX stream cleanup failed\n");
+ 
+@@ -458,7 +459,7 @@ int hda_dsp_cl_boot_firmware(struct snd_sof_dev *sdev)
+ 	 * If the cleanup also fails, we return the initial error
+ 	 */
+ 	ret1 = hda_cl_cleanup(sdev->dev, &hda->cl_dmab,
+-			      persistent_cl_buffer, hext_stream);
++			      persistent_cl_buffer, hext_stream, false);
+ 	if (ret1 < 0) {
+ 		dev_err(sdev->dev, "error: Code loader DSP cleanup failed\n");
+ 
+@@ -587,7 +588,7 @@ int hda_dsp_ipc4_load_library(struct snd_sof_dev *sdev,
+ cleanup:
+ 	/* clean up even in case of error and return the first error */
+ 	ret1 = hda_cl_cleanup(sdev->dev, &hda->cl_dmab, persistent_cl_buffer,
+-			      hext_stream);
++			      hext_stream, false);
+ 	if (ret1 < 0) {
+ 		dev_err(sdev->dev, "%s: Code loader DSP cleanup failed\n", __func__);
+ 
+diff --git a/sound/soc/sof/intel/hda-sdw-bpt.c b/sound/soc/sof/intel/hda-sdw-bpt.c
+index 728ffe7ae54d..c10648f56f23 100644
+--- a/sound/soc/sof/intel/hda-sdw-bpt.c
++++ b/sound/soc/sof/intel/hda-sdw-bpt.c
+@@ -163,7 +163,7 @@ static int hda_sdw_bpt_dma_deprepare(struct device *dev, struct hdac_ext_stream
+ 	u32 mask;
+ 	int ret;
+ 
+-	ret = hda_data_stream_cleanup(sdev->dev, dmab_bdl, false, sdw_bpt_stream, true);
++	ret = hda_data_stream_cleanup(sdev->dev, dmab_bdl, false, sdw_bpt_stream, false, true);
+ 	if (ret < 0) {
+ 		dev_err(sdev->dev, "%s: SDW BPT DMA cleanup failed\n",
+ 			__func__);
+diff --git a/sound/soc/sof/intel/hda-stream.c b/sound/soc/sof/intel/hda-stream.c
+index 4a46e35c3eac..0778002e2bd6 100644
+--- a/sound/soc/sof/intel/hda-stream.c
++++ b/sound/soc/sof/intel/hda-stream.c
+@@ -1328,16 +1328,18 @@ hda_data_stream_prepare(struct device *dev, unsigned int format, unsigned int si
+ EXPORT_SYMBOL_NS(hda_data_stream_prepare, "SND_SOC_SOF_INTEL_HDA_COMMON");
+ 
+ int hda_data_stream_cleanup(struct device *dev, struct snd_dma_buffer *dmab,
+-			    bool persistent_buffer, struct hdac_ext_stream *hext_stream, bool pair)
++			    bool persistent_buffer, struct hdac_ext_stream *hext_stream,
++			    bool is_iccmax, bool pair)
+ {
+ 	struct snd_sof_dev *sdev =  dev_get_drvdata(dev);
+ 	struct hdac_stream *hstream = hdac_stream(hext_stream);
+ 	int sd_offset = SOF_STREAM_SD_OFFSET(hstream);
+ 	int ret = 0;
+ 
+-	if (hstream->direction == SNDRV_PCM_STREAM_PLAYBACK)
++	if (!is_iccmax)
+ 		ret = hda_dsp_stream_spib_config(sdev, hext_stream, HDA_DSP_SPIB_DISABLE, 0);
+-	else
++
++	if (hstream->direction == SNDRV_PCM_STREAM_CAPTURE)
+ 		snd_sof_dsp_update_bits(sdev, HDA_DSP_HDA_BAR, sd_offset,
+ 					SOF_HDA_SD_CTL_DMA_START, 0);
+ 
+diff --git a/sound/soc/sof/intel/hda.h b/sound/soc/sof/intel/hda.h
+index 3f0966477ace..799e49539b4a 100644
+--- a/sound/soc/sof/intel/hda.h
++++ b/sound/soc/sof/intel/hda.h
+@@ -739,7 +739,7 @@ struct hdac_ext_stream *hda_cl_prepare(struct device *dev, unsigned int format,
+ int hda_cl_trigger(struct device *dev, struct hdac_ext_stream *hext_stream, int cmd);
+ 
+ int hda_cl_cleanup(struct device *dev, struct snd_dma_buffer *dmab,
+-		   bool persistent_buffer, struct hdac_ext_stream *hext_stream);
++		   bool persistent_buffer, struct hdac_ext_stream *hext_stream, bool is_iccmax);
+ int cl_dsp_init(struct snd_sof_dev *sdev, int stream_tag, bool imr_boot);
+ #define HDA_CL_STREAM_FORMAT 0x40
+ 
+@@ -911,7 +911,8 @@ hda_data_stream_prepare(struct device *dev, unsigned int format, unsigned int si
+ 			bool is_iccmax, bool pair);
+ 
+ int hda_data_stream_cleanup(struct device *dev, struct snd_dma_buffer *dmab,
+-			    bool persistent_buffer, struct hdac_ext_stream *hext_stream, bool pair);
++			    bool persistent_buffer, struct hdac_ext_stream *hext_stream,
++			    bool is_iccmax, bool pair);
+ 
+ /* common dai driver */
+ extern struct snd_soc_dai_driver skl_dai[];
+-- 
+2.55.0
+

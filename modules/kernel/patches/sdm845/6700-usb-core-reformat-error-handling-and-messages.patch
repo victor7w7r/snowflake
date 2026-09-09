@@ -1,0 +1,57 @@
+From cae6572efdd0948a7b676b3c5a7cebf9483bc781 Mon Sep 17 00:00:00 2001
+From: Griffin Kroah-Hartman <griffin@kroah.com>
+Date: Wed, 22 Jul 2026 10:17:40 +0200
+Subject: [PATCH 06700/15333] usb: core: reformat error handling and messages
+
+Rearrange the error handling changes in the previous patch, in both
+hub_ext_port_status() and hub_hub_status(), in respect to maintainer
+feedback.
+
+Additionally, change the two usages of dev_err() in these functions to
+dev_dbg(), and reformat the error messages to be more accurate.
+
+Suggested-by: Alan Stern <stern@rowland.harvard.edu>
+Signed-off-by: Griffin Kroah-Hartman <griffin@kroah.com>
+Link: https://patch.msgid.link/20260722-usb_core_patches_2-v3-2-87622252bfdd@kroah.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/usb/core/hub.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c
+index 74a365ca08bd..437ff2a0f301 100644
+--- a/drivers/usb/core/hub.c
++++ b/drivers/usb/core/hub.c
+@@ -623,11 +623,11 @@ static int hub_ext_port_status(struct usb_hub *hub, int port1, int type,
+ 	mutex_lock(&hub->status_mutex);
+ 	ret = get_port_status(hub->hdev, port1, &hub->status->port, type, len);
+ 	if (ret < len) {
+-		if (ret != -ENODEV)
+-			dev_err(hub->intfdev,
+-				"%s failed (err = %d)\n", __func__, ret);
+ 		if (ret >= 0)
+ 			ret = -EIO;
++		if (ret != -ENODEV)
++			dev_dbg(hub->intfdev,
++				"get_port_status failed: err = %d\n", ret);
+ 	} else {
+ 		*status = le16_to_cpu(hub->status->port.wPortStatus);
+ 		*change = le16_to_cpu(hub->status->port.wPortChange);
+@@ -995,11 +995,11 @@ static int hub_hub_status(struct usb_hub *hub,
+ 	mutex_lock(&hub->status_mutex);
+ 	ret = get_hub_status(hub->hdev, &hub->status->hub);
+ 	if (ret < (int)sizeof(hub->status->hub)) {
+-		if (ret != -ENODEV)
+-			dev_err(hub->intfdev,
+-				"%s failed (err = %d)\n", __func__, ret);
+ 		if (ret >= 0)
+ 			ret = -EIO;
++		if (ret != -ENODEV)
++			dev_dbg(hub->intfdev,
++				"get_hub_status failed: err = %d\n", ret);
+ 	} else {
+ 		*status = le16_to_cpu(hub->status->hub.wHubStatus);
+ 		*change = le16_to_cpu(hub->status->hub.wHubChange);
+-- 
+2.55.0
+

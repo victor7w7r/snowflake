@@ -1,0 +1,130 @@
+From f6065852d2137734bcb26c9f94e5daf526179aa9 Mon Sep 17 00:00:00 2001
+From: Aditya Prakash Srivastava <aditya.ansh182@gmail.com>
+Date: Fri, 3 Jul 2026 04:54:13 +0000
+Subject: [PATCH 06505/15333] ext4: cleanup unused CONVERT_INLINE_DATA flag
+
+After implementing bitwise flags for tracking the inline data write
+state in the address space fsdata parameter, the CONVERT_INLINE_DATA
+state flag is left unused and can be removed.
+
+Perform this clean-up by:
+1) Deleting the CONVERT_INLINE_DATA definition from ext4.h.
+2) Removing the void **fsdata argument from both the forward
+   declaration and the definition of the internal helper
+   ext4_da_convert_inline_data_to_extent().
+3) Removing the void **fsdata argument from the declaration and
+   definition of ext4_generic_write_inline_data() and updating
+   the caller ext4_try_to_write_inline_data() and the internal
+   re-alloc retry logic accordingly.
+4) Updating ext4_da_write_begin() to call
+   ext4_generic_write_inline_data() without the fsdata parameter.
+
+Suggested-by: Jan Kara <jack@suse.cz>
+Signed-off-by: Aditya Prakash Srivastava <aditya.ansh182@gmail.com>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Link: https://patch.msgid.link/20260703045414.1768-2-aditya.ansh182@gmail.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/ext4.h   |  5 ++---
+ fs/ext4/inline.c | 13 +++++--------
+ fs/ext4/inode.c  |  2 +-
+ 3 files changed, 8 insertions(+), 12 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 87c842b2f79b..5bad1b5bbccf 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -3137,8 +3137,7 @@ int do_journal_get_write_access(handle_t *handle, struct inode *inode,
+ 				struct buffer_head *bh);
+ void ext4_set_inode_mapping_order(struct inode *inode);
+ #define FALL_BACK_TO_NONDELALLOC 1
+-#define CONVERT_INLINE_DATA	 2
+-#define EXT4_WRITE_DATA_INLINE	 4
++#define EXT4_WRITE_DATA_INLINE	 2
+ 
+ typedef enum {
+ 	EXT4_IGET_NORMAL =	0,
+@@ -3756,7 +3755,7 @@ extern int ext4_generic_write_inline_data(struct address_space *mapping,
+ 					  struct inode *inode,
+ 					  loff_t pos, unsigned len,
+ 					  struct folio **foliop,
+-					  void **fsdata, bool da);
++					  bool da);
+ extern int ext4_try_add_inline_entry(handle_t *handle,
+ 				     struct ext4_filename *fname,
+ 				     struct inode *dir, struct inode *inode);
+diff --git a/fs/ext4/inline.c b/fs/ext4/inline.c
+index 7bb28735de91..ceee69a66482 100644
+--- a/fs/ext4/inline.c
++++ b/fs/ext4/inline.c
+@@ -22,8 +22,7 @@
+ 
+ 
+ static int ext4_da_convert_inline_data_to_extent(struct address_space *mapping,
+-						 struct inode *inode,
+-						 void **fsdata);
++						 struct inode *inode);
+ 
+ static int ext4_get_inline_size(struct inode *inode)
+ {
+@@ -697,7 +696,7 @@ int ext4_generic_write_inline_data(struct address_space *mapping,
+ 					  struct inode *inode,
+ 					  loff_t pos, unsigned len,
+ 					  struct folio **foliop,
+-					  void **fsdata, bool da)
++					  bool da)
+ {
+ 	int ret;
+ 	handle_t *handle;
+@@ -728,7 +727,7 @@ int ext4_generic_write_inline_data(struct address_space *mapping,
+ 			return ext4_convert_inline_data_to_extent(mapping, inode);
+ 		}
+ 
+-		ret = ext4_da_convert_inline_data_to_extent(mapping, inode, fsdata);
++		ret = ext4_da_convert_inline_data_to_extent(mapping, inode);
+ 		if (ret == -ENOSPC &&
+ 		    ext4_should_retry_alloc(inode->i_sb, &retries))
+ 			goto retry_journal;
+@@ -788,7 +787,7 @@ int ext4_try_to_write_inline_data(struct address_space *mapping,
+ 	if (pos + len > ext4_get_max_inline_size(inode))
+ 		return ext4_convert_inline_data_to_extent(mapping, inode);
+ 	return ext4_generic_write_inline_data(mapping, inode, pos, len,
+-					      foliop, NULL, false);
++					      foliop, false);
+ }
+ 
+ int ext4_write_inline_data_end(struct inode *inode, loff_t pos, unsigned len,
+@@ -895,8 +894,7 @@ int ext4_write_inline_data_end(struct inode *inode, loff_t pos, unsigned len,
+  *    need to start the journal since the file's metadata isn't changed now.
+  */
+ static int ext4_da_convert_inline_data_to_extent(struct address_space *mapping,
+-						 struct inode *inode,
+-						 void **fsdata)
++						 struct inode *inode)
+ {
+ 	int ret = 0, inline_size;
+ 	struct folio *folio;
+@@ -934,7 +932,6 @@ static int ext4_da_convert_inline_data_to_extent(struct address_space *mapping,
+ 	folio_mark_dirty(folio);
+ 	folio_mark_uptodate(folio);
+ 	ext4_clear_inode_state(inode, EXT4_STATE_MAY_INLINE_DATA);
+-	*fsdata = (void *)CONVERT_INLINE_DATA;
+ 
+ out:
+ 	up_read(&EXT4_I(inode)->xattr_sem);
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index c5c98696882e..68705baab72c 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -3174,7 +3174,7 @@ static int ext4_da_write_begin(const struct kiocb *iocb,
+ 
+ 	if (ext4_test_inode_state(inode, EXT4_STATE_MAY_INLINE_DATA)) {
+ 		ret = ext4_generic_write_inline_data(mapping, inode, pos, len,
+-						     foliop, fsdata, true);
++						     foliop, true);
+ 		if (ret < 0)
+ 			return ret;
+ 		if (ret == 1) {
+-- 
+2.55.0
+

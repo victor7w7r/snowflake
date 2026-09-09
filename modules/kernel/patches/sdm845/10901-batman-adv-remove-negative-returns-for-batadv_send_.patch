@@ -1,0 +1,53 @@
+From 02aee8ebea3a714d92b27da9a9d8791d8c8c9a4f Mon Sep 17 00:00:00 2001
+From: Sven Eckelmann <sven@narfation.org>
+Date: Thu, 30 Jul 2026 08:23:28 +0200
+Subject: [PATCH 10901/15333] batman-adv: remove negative returns for
+ batadv_send_skb_unicast
+
+The kernel documentation for batadv_send_skb_unicast() states that only the
+return values NET_XMIT_DROP and NET_XMIT_SUCCESS are valid. Functions like
+batadv_dat_snoop_incoming_arp_request() are only checking if the return is
+not NET_XMIT_DROP to check if send was successful or not. Negative values
+were therefore also handled as success.
+
+Similar functions are not returning the batadv_send_skb_to_orig() return
+value directly but are checking if it is a direct success and only then
+marking the return as such. This must also be adopted for
+batadv_send_skb_unicast().
+
+The callers of this function are mostly not affected. Only packet counting
+in batadv_dat_snoop_incoming_arp_request() will now work as expected in
+case of a negative return value from batadv_send_skb_to_orig().
+
+Signed-off-by: Sven Eckelmann <sven@narfation.org>
+---
+ net/batman-adv/send.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/net/batman-adv/send.c b/net/batman-adv/send.c
+index 2122560c90e5..929b6dd34c10 100644
+--- a/net/batman-adv/send.c
++++ b/net/batman-adv/send.c
+@@ -324,6 +324,7 @@ int batadv_send_skb_unicast(struct batadv_priv *bat_priv,
+ 	struct batadv_unicast_packet *unicast_packet;
+ 	int ret = NET_XMIT_DROP;
+ 	struct ethhdr *ethhdr;
++	int res;
+ 
+ 	if (!orig_node)
+ 		goto out;
+@@ -360,7 +361,10 @@ int batadv_send_skb_unicast(struct batadv_priv *bat_priv,
+ 	if (batadv_tt_global_client_is_roaming(bat_priv, ethhdr->h_dest, vid))
+ 		unicast_packet->ttvn = unicast_packet->ttvn - 1;
+ 
+-	ret = batadv_send_skb_to_orig(skb, orig_node, NULL);
++	res = batadv_send_skb_to_orig(skb, orig_node, NULL);
++	if (res == NET_XMIT_SUCCESS)
++		ret = NET_XMIT_SUCCESS;
++
+ 	 /* skb was consumed */
+ 	skb = NULL;
+ 
+-- 
+2.55.0
+

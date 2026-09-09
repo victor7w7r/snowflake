@@ -1,0 +1,54 @@
+From f3b1357673ddb37ae8b9a8fe44df73cbd2a519c5 Mon Sep 17 00:00:00 2001
+From: Sumit Garg <sumit.garg@oss.qualcomm.com>
+Date: Thu, 2 Jul 2026 17:28:21 +0530
+Subject: [PATCH 03584/15333] remoteproc: qcom_q6v5_mss: Switch to generic PAS
+ TZ APIs
+
+Switch qcom_q6v5_mss client driver over to generic PAS TZ APIs. Generic PAS
+TZ service allows to support multiple TZ implementation backends like QTEE
+based SCM PAS service, OP-TEE based PAS service and any further future TZ
+backend service.
+
+Reviewed-by: Mukesh Ojha <mukesh.ojha@oss.qualcomm.com>
+Tested-by: Mukesh Ojha <mukesh.ojha@oss.qualcomm.com> # Lemans
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Sumit Garg <sumit.garg@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260702115835.167602-6-sumit.garg@kernel.org
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ drivers/remoteproc/qcom_q6v5_mss.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/remoteproc/qcom_q6v5_mss.c b/drivers/remoteproc/qcom_q6v5_mss.c
+index ae78f5c7c1b6..96888007faa8 100644
+--- a/drivers/remoteproc/qcom_q6v5_mss.c
++++ b/drivers/remoteproc/qcom_q6v5_mss.c
+@@ -34,6 +34,7 @@
+ #include "qcom_pil_info.h"
+ #include "qcom_q6v5.h"
+ 
++#include <linux/firmware/qcom/qcom_pas.h>
+ #include <linux/firmware/qcom/qcom_scm.h>
+ 
+ #define MPSS_CRASH_REASON_SMEM		421
+@@ -1480,7 +1481,7 @@ static int q6v5_mpss_load(struct q6v5 *qproc)
+ 	}
+ 
+ 	if (qproc->need_pas_mem_setup) {
+-		ret = qcom_scm_pas_mem_setup(MPSS_PAS_ID, qproc->mpss_phys, qproc->mpss_size);
++		ret = qcom_pas_mem_setup(MPSS_PAS_ID, qproc->mpss_phys, qproc->mpss_size);
+ 		if (ret) {
+ 			dev_err(qproc->dev,
+ 				"setting up mpss memory failed: %d\n", ret);
+@@ -2077,7 +2078,7 @@ static int q6v5_probe(struct platform_device *pdev)
+ 	if (!desc)
+ 		return -EINVAL;
+ 
+-	if (desc->need_mem_protection && !qcom_scm_is_available())
++	if (desc->need_mem_protection && !qcom_pas_is_available())
+ 		return -EPROBE_DEFER;
+ 
+ 	mba_image = desc->hexagon_mba_image;
+-- 
+2.55.0
+

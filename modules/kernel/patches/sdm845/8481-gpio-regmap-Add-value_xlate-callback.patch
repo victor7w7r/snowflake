@@ -1,0 +1,146 @@
+From 5f28e3dbd23199c778f5339c0d4488820435f6d5 Mon Sep 17 00:00:00 2001
+From: Yu-Chun Lin <eleanor.lin@realtek.com>
+Date: Sun, 26 Jul 2026 20:51:57 +0800
+Subject: [PATCH 08481/15333] gpio: regmap: Add value_xlate callback
+
+Introduce a new optional 'value_xlate' callback. This routine allows drivers
+to translate or modify the register value and mask immediately before a write
+operation. It is particularly useful for hardware that requires additional
+control bits, such as a write-enable bit, to be appended to the data
+dynamically.
+
+Reviewed-by: Michael Walle <mwalle@kernel.org>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Suggested-by: Michael Walle <mwalle@kernel.org>
+Signed-off-by: Yu-Chun Lin <eleanor.lin@realtek.com>
+Link: https://patch.msgid.link/20260726125209.140307-7-eleanor.lin@realtek.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/gpio/gpio-regmap.c  | 31 ++++++++++++++++++++++++++++++-
+ include/linux/gpio/regmap.h | 15 ++++++++++++---
+ 2 files changed, 42 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpio/gpio-regmap.c b/drivers/gpio/gpio-regmap.c
+index ceab805d053c..cff7db8036f7 100644
+--- a/drivers/gpio/gpio-regmap.c
++++ b/drivers/gpio/gpio-regmap.c
+@@ -45,6 +45,12 @@ struct gpio_regmap {
+ 			      unsigned int base, unsigned int offset,
+ 			      unsigned int *reg, unsigned int *mask);
+ 
++	int (*value_xlate)(struct gpio_regmap *gpio,
++			   enum gpio_regmap_operation op,
++			   unsigned int base, unsigned int offset,
++			   unsigned int reg, unsigned int *mask,
++			   unsigned int *val);
++
+ 	void *driver_data;
+ };
+ 
+@@ -114,6 +120,13 @@ static int gpio_regmap_set(struct gpio_chip *chip, unsigned int offset,
+ 	else
+ 		mask_val = 0;
+ 
++	if (gpio->value_xlate) {
++		ret = gpio->value_xlate(gpio, GPIO_REGMAP_SET_OP, base, offset,
++					reg, &mask, &mask_val);
++		if (ret)
++			return ret;
++	}
++
+ 	/* ignore input values which shadow the old output value */
+ 	if (gpio->reg_dat_base == gpio->reg_set_base)
+ 		ret = regmap_write_bits(gpio->regmap, reg, mask, mask_val);
+@@ -127,7 +140,7 @@ static int gpio_regmap_set_with_clear(struct gpio_chip *chip,
+ 				      unsigned int offset, int val)
+ {
+ 	struct gpio_regmap *gpio = gpiochip_get_data(chip);
+-	unsigned int base, reg, mask;
++	unsigned int base, reg, mask, value = 0;
+ 	int ret;
+ 
+ 	if (val)
+@@ -139,6 +152,13 @@ static int gpio_regmap_set_with_clear(struct gpio_chip *chip,
+ 	if (ret)
+ 		return ret;
+ 
++	if (gpio->value_xlate) {
++		ret = gpio->value_xlate(gpio, GPIO_REGMAP_SET_OP, base, offset,
++					reg, &mask, &value);
++		if (ret)
++			return ret;
++	}
++
+ 	return regmap_write(gpio->regmap, reg, mask);
+ }
+ 
+@@ -248,6 +268,13 @@ static int gpio_regmap_set_direction(struct gpio_chip *chip,
+ 	else
+ 		val = output ? mask : 0;
+ 
++	if (gpio->value_xlate) {
++		ret = gpio->value_xlate(gpio, GPIO_REGMAP_SET_DIR_OP, base, offset,
++					reg, &mask, &val);
++		if (ret)
++			return ret;
++	}
++
+ 	return regmap_update_bits(gpio->regmap, reg, mask, val);
+ }
+ 
+@@ -415,6 +442,8 @@ struct gpio_regmap *gpio_regmap_register(const struct gpio_regmap_config *config
+ 	if (!gpio->reg_mask_xlate)
+ 		gpio->reg_mask_xlate = gpio_regmap_simple_xlate;
+ 
++	gpio->value_xlate = config->value_xlate;
++
+ 	ret = gpiochip_add_data(chip, gpio);
+ 	if (ret < 0)
+ 		goto err_free_bitmap_output;
+diff --git a/include/linux/gpio/regmap.h b/include/linux/gpio/regmap.h
+index 7eebb6381296..77dbb353bc1f 100644
+--- a/include/linux/gpio/regmap.h
++++ b/include/linux/gpio/regmap.h
+@@ -14,13 +14,13 @@ struct regmap;
+ #define GPIO_REGMAP_ADDR(addr) ((addr) ? : GPIO_REGMAP_ADDR_ZERO)
+ 
+ /**
+- * enum gpio_regmap_operation - Operation type for reg_mask_xlate callback
++ * enum gpio_regmap_operation - Operation type for gpio_regmap callbacks
+  *
+  * Traditionally, the operation type was inferred from the base register.
+  * However, that approach does not always work — for example, when all control
+  * bits of a single GPIO reside in the same register. This enum allows the
+- * reg_mask_xlate callback to explicitly distinguish between operation types.
+- * The user is free to choose which method to use.
++ * callbacks (reg_mask_xlate and value_xlate) to explicitly distinguish between
++ * operation types. The user is free to choose which method to use.
+  *
+  * Read operation:
+  * @GPIO_REGMAP_GET_OP: Indicates a read operation to get the current GPIO value.
+@@ -81,6 +81,11 @@ enum gpio_regmap_operation {
+  *			is used.
+  * @init_valid_mask:	(Optional) Routine to initialize @valid_mask, to be used
+  *			if not all GPIOs are valid.
++ * @value_xlate:	(Optional) Routine to translate the register value and
++ *			mask before writing. This allows driver-specific logic
++ *			to append additional bits (like write-enable masks)
++ *			dynamically based on the current operation
++ *			(GPIO_REGMAP_SET_OP and GPIO_REGMAP_SET_DIR_OP).
+  * @drvdata:		(Optional) Pointer to driver specific data which is
+  *			not used by gpio-remap but is provided "as is" to the
+  *			driver callback(s).
+@@ -138,6 +143,10 @@ struct gpio_regmap_config {
+ 			       unsigned long *valid_mask,
+ 			       unsigned int ngpios);
+ 
++	int (*value_xlate)(struct gpio_regmap *gpio, enum gpio_regmap_operation,
++			   unsigned int base, unsigned int offset, unsigned int reg,
++			   unsigned int *mask, unsigned int *val);
++
+ 	void *drvdata;
+ };
+ 
+-- 
+2.55.0
+

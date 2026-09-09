@@ -1,0 +1,47 @@
+From b82384bffb27467e2e3966831d83eff3a6e1fbbb Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Wed, 15 Jul 2026 12:11:13 +0700
+Subject: [PATCH 04715/15333] ASoC: tegra: tegra210_adx: Return the original
+ error directly
+
+snd_soc_add_component_controls() already reports failures internally.
+Return its error code directly instead of logging the error again in the
+component probe callback. Also remove the now unnecessary local error
+variable.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Thierry Reding <treding@nvidia.com>
+Link: https://patch.msgid.link/20260715051115.17385-3-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/tegra/tegra210_adx.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/sound/soc/tegra/tegra210_adx.c b/sound/soc/tegra/tegra210_adx.c
+index 15a94196ee1a..e75bf50f8fb0 100644
+--- a/sound/soc/tegra/tegra210_adx.c
++++ b/sound/soc/tegra/tegra210_adx.c
+@@ -496,16 +496,12 @@ static struct snd_kcontrol_new tegra264_adx_controls[] = {
+ static int tegra210_adx_component_probe(struct snd_soc_component *component)
+ {
+ 	struct tegra210_adx *adx = snd_soc_component_get_drvdata(component);
+-	int err = 0;
+ 
+-	if (adx->soc_data->num_controls) {
+-		err = snd_soc_add_component_controls(component, adx->soc_data->controls,
+-						     adx->soc_data->num_controls);
+-		if (err)
+-			dev_err(component->dev, "can't add ADX controls, err: %d\n", err);
+-	}
++	if (adx->soc_data->num_controls)
++		return snd_soc_add_component_controls(component, adx->soc_data->controls,
++						      adx->soc_data->num_controls);
+ 
+-	return err;
++	return 0;
+ }
+ 
+ static const struct snd_soc_component_driver tegra210_adx_cmpnt = {
+-- 
+2.55.0
+

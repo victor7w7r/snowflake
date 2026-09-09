@@ -1,0 +1,38 @@
+From a2a2c3afab3343b7d3bb06fe52a924cdf952f446 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Fri, 24 Jul 2026 11:03:40 +0800
+Subject: [PATCH 07484/15333] iio: gyro: adxrs290: Remove redundant
+ dev_err_probe()
+
+Since commit
+55b48e23f5c4 ("genirq/devres: Add error handling in devm_request_*_irq()"),
+devm_request_irq() automatically logs detailed error messages on failure.
+Remove the now-redundant driver-specific dev_err_probe() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Reviewed-by: Joshua Crofts <joshua.crofts1@gmail.com>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@intel.com>
+Signed-off-by: Jonathan Cameron <jonathan.cameron@oss.qualcomm.com>
+---
+ drivers/iio/gyro/adxrs290.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/iio/gyro/adxrs290.c b/drivers/iio/gyro/adxrs290.c
+index 35928383d4f2..563de2724396 100644
+--- a/drivers/iio/gyro/adxrs290.c
++++ b/drivers/iio/gyro/adxrs290.c
+@@ -585,9 +585,8 @@ static int adxrs290_probe_trigger(struct iio_dev *indio_dev)
+ 	ret = devm_request_irq(&st->spi->dev, st->spi->irq,
+ 			       &iio_trigger_generic_data_rdy_poll,
+ 			       IRQF_NO_THREAD, "adxrs290_irq", st->dready_trig);
+-	if (ret < 0)
+-		return dev_err_probe(&st->spi->dev, ret,
+-				     "request irq %d failed\n", st->spi->irq);
++	if (ret)
++		return ret;
+ 
+ 	ret = devm_iio_trigger_register(&st->spi->dev, st->dready_trig);
+ 	if (ret) {
+-- 
+2.55.0
+

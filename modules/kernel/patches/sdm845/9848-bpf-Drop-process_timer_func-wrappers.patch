@@ -1,0 +1,60 @@
+From 70a841617aa8f228fc9de3b82cd1bdc4cb249497 Mon Sep 17 00:00:00 2001
+From: Amery Hung <ameryhung@gmail.com>
+Date: Sat, 1 Aug 2026 00:46:16 -0700
+Subject: [PATCH 09848/15333] bpf: Drop process_timer_func wrappers
+
+Drop process_timer_{helper,kfunc}() since bpf_call_arg_meta is now
+shared by helper and kfunc. Call process_timer_func() directly.
+
+Signed-off-by: Amery Hung <ameryhung@gmail.com>
+Reviewed-by: Eduard Zingerman <eddyz87@gmail.com>
+Link: https://lore.kernel.org/bpf/20260801074633.1595644-2-ameryhung@gmail.com
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+---
+ kernel/bpf/verifier.c | 16 ++--------------
+ 1 file changed, 2 insertions(+), 14 deletions(-)
+
+diff --git a/kernel/bpf/verifier.c b/kernel/bpf/verifier.c
+index 8d0635ee48c7..616194f25dfb 100644
+--- a/kernel/bpf/verifier.c
++++ b/kernel/bpf/verifier.c
+@@ -7224,18 +7224,6 @@ static int process_timer_func(struct bpf_verifier_env *env, struct bpf_reg_state
+ 	return check_map_field_pointer(env, reg, argno, BPF_TIMER, map);
+ }
+ 
+-static int process_timer_helper(struct bpf_verifier_env *env, struct bpf_reg_state *reg, argno_t argno,
+-				struct bpf_call_arg_meta *meta)
+-{
+-	return process_timer_func(env, reg, argno, &meta->map);
+-}
+-
+-static int process_timer_kfunc(struct bpf_verifier_env *env, struct bpf_reg_state *reg, argno_t argno,
+-			       struct bpf_call_arg_meta *meta)
+-{
+-	return process_timer_func(env, reg, argno, &meta->map);
+-}
+-
+ static int process_kptr_func(struct bpf_verifier_env *env, int regno,
+ 			     struct bpf_call_arg_meta *meta)
+ {
+@@ -8466,7 +8454,7 @@ static int check_func_arg(struct bpf_verifier_env *env, u32 arg,
+ 		}
+ 		break;
+ 	case ARG_PTR_TO_TIMER:
+-		err = process_timer_helper(env, reg, argno, meta);
++		err = process_timer_func(env, reg, argno, &meta->map);
+ 		if (err)
+ 			return err;
+ 		break;
+@@ -12515,7 +12503,7 @@ static int check_kfunc_args(struct bpf_verifier_env *env, struct bpf_call_arg_me
+ 					reg_arg_name(env, argno));
+ 				return -EINVAL;
+ 			}
+-			ret = process_timer_kfunc(env, reg, argno, meta);
++			ret = process_timer_func(env, reg, argno, &meta->map);
+ 			if (ret < 0)
+ 				return ret;
+ 			break;
+-- 
+2.55.0
+

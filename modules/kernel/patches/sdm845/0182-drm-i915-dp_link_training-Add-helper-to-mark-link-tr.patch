@@ -1,0 +1,90 @@
+From 9bd47678708cc22ffd59a08a9b2553a72c1d8319 Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Mon, 1 Jun 2026 12:38:26 +0300
+Subject: [PATCH 00182/15333] drm/i915/dp_link_training: Add helper to mark
+ link training failure
+
+Add link_recovery_mark_train_failure() to record the failure and make
+the link recovery state transition explicit after a link training
+failure: recovery can continue with an autoretrain, or must be handed
+over to userspace after fallback selection.
+
+This also prepares for replacing the sequential link training failure
+counter with an enum in a follow-up change.
+
+v2: (Jani)
+- Convert link_recovery_mark_train_failure()'s documentation to be a
+  non kernel-doc comment.
+- Rename can_autoretrain flag to autoretrain_allowed.
+
+Cc: Jani Nikula <jani.nikula@intel.com>
+Reviewed-by: Mika Kahola <mika.kahola@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260601093836.3057345-14-imre.deak@intel.com
+---
+ .../drm/i915/display/intel_dp_link_training.c | 28 +++++++++++++++++--
+ 1 file changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_training.c b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+index 6c48219d770b..e0bb9f45b0c8 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_training.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+@@ -1292,6 +1292,28 @@ link_recovery_autoretrain_allowed(struct intel_dp_link_training *link_training)
+ 	return link_training->seq_train_failures < MAX_SEQ_TRAIN_FAILURES;
+ }
+ 
++/*
++ * Record a link training failure and advance the recovery state to
++ * indicate the next required recovery step.
++ *
++ * The caller must proceed with recovery as instructed by the return
++ * value, either via automatic retraining or, once automatic retraining
++ * is no longer possible, via userspace modesets after fallback
++ * selection.
++ *
++ * See also:
++ *   - DOC: DisplayPort link training
++ */
++static bool
++link_recovery_mark_train_failure(struct intel_dp_link_training *link_training)
++{
++	if (link_recovery_autoretrain_allowed(link_training))
++		/* Move to autoretrain pending or autoretrain disabled state. */
++		link_training->seq_train_failures++;
++
++	return link_recovery_autoretrain_allowed(link_training);
++}
++
+ /**
+  * intel_dp_stop_link_train - stop link training
+  * @intel_dp: DP struct
+@@ -1828,6 +1850,7 @@ void intel_dp_start_link_train(struct intel_atomic_state *state,
+ 	struct intel_encoder *encoder = &dig_port->base;
+ 	struct intel_dp_link_training *link_training =
+ 		intel_dp->link.training;
++	bool autoretrain_allowed;
+ 	bool passed;
+ 	/*
+ 	 * Reinit the LTTPRs here to ensure that they are switched to
+@@ -1859,8 +1882,7 @@ void intel_dp_start_link_train(struct intel_atomic_state *state,
+ 		return;
+ 	}
+ 
+-	if (link_recovery_autoretrain_allowed(link_training))
+-		link_training->seq_train_failures++;
++	autoretrain_allowed = link_recovery_mark_train_failure(link_training);
+ 
+ 	/*
+ 	 * Ignore the link failure in CI
+@@ -1879,7 +1901,7 @@ void intel_dp_start_link_train(struct intel_atomic_state *state,
+ 		return;
+ 	}
+ 
+-	if (link_recovery_autoretrain_allowed(link_training))
++	if (autoretrain_allowed)
+ 		return;
+ 
+ 	if (intel_dp_schedule_fallback_link_training(state, intel_dp, crtc_state))
+-- 
+2.55.0
+

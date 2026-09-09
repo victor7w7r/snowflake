@@ -1,0 +1,102 @@
+From 331ca76fe5cee0df5a025d97d68fee53140053c7 Mon Sep 17 00:00:00 2001
+From: David Lechner <dlechner@baylibre.com>
+Date: Sat, 16 May 2026 10:09:37 -0500
+Subject: [PATCH 02375/15333] iio: resolver: ad2s1210: refactor trigger handler
+
+Refactor the trigger handler to avoid use of goto in a guard() scope.
+Ideally, we should not be mixing goto and automatic cleanup.
+
+iio_trigger_notify_done() was not part of the critical section anyway,
+so is not moved to the new function.
+
+Signed-off-by: David Lechner <dlechner@baylibre.com>
+Reviewed-by: Stepan Ionichev <sozdayvek@gmail.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/resolver/ad2s1210.c | 30 +++++++++++++++++-------------
+ 1 file changed, 17 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/iio/resolver/ad2s1210.c b/drivers/iio/resolver/ad2s1210.c
+index db8e34e2ba73..3b5ec21e3446 100644
+--- a/drivers/iio/resolver/ad2s1210.c
++++ b/drivers/iio/resolver/ad2s1210.c
+@@ -1276,10 +1276,8 @@ static int ad2s1210_debugfs_reg_access(struct iio_dev *indio_dev,
+ 	return regmap_write(st->regmap, reg, writeval);
+ }
+ 
+-static irqreturn_t ad2s1210_trigger_handler(int irq, void *p)
++static void ad2s1210_scan_to_buffers(struct iio_dev *indio_dev, s64 timestamp)
+ {
+-	struct iio_poll_func *pf = p;
+-	struct iio_dev *indio_dev = pf->indio_dev;
+ 	struct ad2s1210_state *st = iio_priv(indio_dev);
+ 	size_t chan = 0;
+ 	int ret;
+@@ -1295,15 +1293,15 @@ static irqreturn_t ad2s1210_trigger_handler(int irq, void *p)
+ 					       AD2S1210_REG_POSITION_MSB,
+ 					       &st->sample.raw, 2);
+ 			if (ret < 0)
+-				goto error_ret;
++				return;
+ 		} else {
+ 			ret = ad2s1210_set_mode(st, MOD_POS);
+ 			if (ret < 0)
+-				goto error_ret;
++				return;
+ 
+ 			ret = spi_read(st->sdev, &st->sample, 3);
+ 			if (ret < 0)
+-				goto error_ret;
++				return;
+ 		}
+ 
+ 		memcpy(&st->scan.chan[chan++], &st->sample.raw, 2);
+@@ -1315,15 +1313,15 @@ static irqreturn_t ad2s1210_trigger_handler(int irq, void *p)
+ 					       AD2S1210_REG_VELOCITY_MSB,
+ 					       &st->sample.raw, 2);
+ 			if (ret < 0)
+-				goto error_ret;
++				return;
+ 		} else {
+ 			ret = ad2s1210_set_mode(st, MOD_VEL);
+ 			if (ret < 0)
+-				goto error_ret;
++				return;
+ 
+ 			ret = spi_read(st->sdev, &st->sample, 3);
+ 			if (ret < 0)
+-				goto error_ret;
++				return;
+ 		}
+ 
+ 		memcpy(&st->scan.chan[chan++], &st->sample.raw, 2);
+@@ -1334,16 +1332,22 @@ static irqreturn_t ad2s1210_trigger_handler(int irq, void *p)
+ 
+ 		ret = regmap_read(st->regmap, AD2S1210_REG_FAULT, &reg_val);
+ 		if (ret < 0)
+-			goto error_ret;
++			return;
+ 
+ 		st->sample.fault = reg_val;
+ 	}
+ 
+-	ad2s1210_push_events(indio_dev, st->sample.fault, pf->timestamp);
++	ad2s1210_push_events(indio_dev, st->sample.fault, timestamp);
+ 	iio_push_to_buffers_with_ts(indio_dev, &st->scan, sizeof(st->scan),
+-				    pf->timestamp);
++				    timestamp);
++}
++
++static irqreturn_t ad2s1210_trigger_handler(int irq, void *p)
++{
++	struct iio_poll_func *pf = p;
++	struct iio_dev *indio_dev = pf->indio_dev;
+ 
+-error_ret:
++	ad2s1210_scan_to_buffers(indio_dev, pf->timestamp);
+ 	iio_trigger_notify_done(indio_dev->trig);
+ 
+ 	return IRQ_HANDLED;
+-- 
+2.55.0
+

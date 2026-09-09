@@ -1,0 +1,49 @@
+From 6d5c18483f0cf12eb636dcf46be452054f3aef4f Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Thu, 9 Jul 2026 11:34:10 +0800
+Subject: [PATCH 05703/15333] power: supply: rk817_charger: Remove redundant
+ dev_err()/dev_err_probe()
+
+The devm_request_threaded_irq() and devm_request_irq() now automatically
+log detailed error messages on failure. This eliminates the need for
+driver-specific dev_err() and dev_err_probe() calls that previously
+printed generic messages.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://patch.msgid.link/20260709033428.362970-32-panchuang@vivo.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/rk817_charger.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/power/supply/rk817_charger.c b/drivers/power/supply/rk817_charger.c
+index 9436c6bbf51f..5558b182a1a6 100644
+--- a/drivers/power/supply/rk817_charger.c
++++ b/drivers/power/supply/rk817_charger.c
+@@ -1186,19 +1186,15 @@ static int rk817_charger_probe(struct platform_device *pdev)
+ 					rk817_plug_in_isr,
+ 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+ 					"rk817_plug_in", charger);
+-	if (ret) {
+-		return dev_err_probe(&pdev->dev, ret,
+-				      "plug_in_irq request failed!\n");
+-	}
++	if (ret)
++		return ret;
+ 
+ 	ret = devm_request_threaded_irq(charger->dev, plugout_irq, NULL,
+ 					rk817_plug_out_isr,
+ 					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+ 					"rk817_plug_out", charger);
+-	if (ret) {
+-		return dev_err_probe(&pdev->dev, ret,
+-				     "plug_out_irq request failed!\n");
+-	}
++	if (ret)
++		return ret;
+ 
+ 	ret = devm_delayed_work_autocancel(&pdev->dev, &charger->work,
+ 					   rk817_charging_monitor);
+-- 
+2.55.0
+

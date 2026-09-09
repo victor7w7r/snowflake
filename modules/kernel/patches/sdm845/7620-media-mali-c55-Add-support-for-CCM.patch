@@ -1,0 +1,186 @@
+From bb401df68c06b13db7f1f4de97d7c588b9e22a03 Mon Sep 17 00:00:00 2001
+From: Jacopo Mondi <jacopo.mondi+renesas@ideasonboard.com>
+Date: Tue, 30 Jun 2026 09:41:27 +0200
+Subject: [PATCH 07620/15333] media: mali-c55: Add support for CCM
+
+Add support for the CCM (Color Correction Matrix) for the Mali C55 ISP.
+
+Define a new block in the uAPI using the extensible v4l2-isp format and
+implement support for configuring the CCM parameters in the mali-c55
+ISP driver.
+
+Signed-off-by: Jacopo Mondi <jacopo.mondi+renesas@ideasonboard.com>
+Reviewed-by: Vincenzo Frascino <vincenzo.frascino@arm.com>
+Reviewed-by: Linus Walleij <linusw@kernel.org>
+Signed-off-by: Hans Verkuil <hverkuil+cisco@kernel.org>
+---
+ .../platform/arm/mali-c55/mali-c55-params.c   | 52 +++++++++++++++++++
+ .../uapi/linux/media/arm/mali-c55-config.h    | 41 ++++++++++++++-
+ 2 files changed, 92 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/arm/mali-c55/mali-c55-params.c b/drivers/media/platform/arm/mali-c55/mali-c55-params.c
+index 33e2232ec8f5..98f780cd46fe 100644
+--- a/drivers/media/platform/arm/mali-c55/mali-c55-params.c
++++ b/drivers/media/platform/arm/mali-c55/mali-c55-params.c
+@@ -46,6 +46,7 @@
+  * @awb_config:		For header->type == MALI_C55_PARAM_BLOCK_AWB_CONFIG
+  * @shading_config:	For header->type == MALI_C55_PARAM_MESH_SHADING_CONFIG
+  * @shading_selection:	For header->type == MALI_C55_PARAM_MESH_SHADING_SELECTION
++ * @ccm:		For header->type == MALI_C55_PARAM_BLOCK_CCM
+  * @data:		Allows easy initialisation of a union variable with a
+  *			pointer into a __u8 array.
+  */
+@@ -59,6 +60,7 @@ union mali_c55_params_block {
+ 	const struct mali_c55_params_awb_config *awb_config;
+ 	const struct mali_c55_params_mesh_shading_config *shading_config;
+ 	const struct mali_c55_params_mesh_shading_selection *shading_selection;
++	const struct mali_c55_params_ccm *ccm;
+ 	const __u8 *data;
+ };
+ 
+@@ -415,6 +417,52 @@ static void mali_c55_params_lsc_selection(struct mali_c55 *mali_c55,
+ 				 params->mesh_strength);
+ }
+ 
++static void mali_c55_params_ccm(struct mali_c55 *mali_c55,
++				union mali_c55_params_block block)
++{
++	const struct mali_c55_params_ccm *params = block.ccm;
++
++	if (block.header->flags & V4L2_ISP_PARAMS_FL_BLOCK_DISABLE) {
++		mali_c55_ctx_write(mali_c55, MALI_C55_REG_CCM_ENABLE, 0);
++		return;
++	}
++
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_COEF_R_R,
++				 MALI_C55_CCM_COEF_MASK, params->coeffs[0][0]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_COEF_R_G,
++				 MALI_C55_CCM_COEF_MASK, params->coeffs[0][1]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_COEF_R_B,
++				 MALI_C55_CCM_COEF_MASK, params->coeffs[0][2]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_COEF_G_R,
++				 MALI_C55_CCM_COEF_MASK, params->coeffs[1][0]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_COEF_G_G,
++				 MALI_C55_CCM_COEF_MASK, params->coeffs[1][1]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_COEF_G_B,
++				 MALI_C55_CCM_COEF_MASK, params->coeffs[1][2]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_COEF_B_R,
++				 MALI_C55_CCM_COEF_MASK, params->coeffs[2][0]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_COEF_B_G,
++				 MALI_C55_CCM_COEF_MASK, params->coeffs[2][1]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_COEF_B_B,
++				 MALI_C55_CCM_COEF_MASK, params->coeffs[2][2]);
++
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_ANTIFOG_GAIN_R,
++				 MALI_C55_CCM_ANTIFOG_GAIN_MASK, params->gains[0]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_ANTIFOG_GAIN_G,
++				 MALI_C55_CCM_ANTIFOG_GAIN_MASK, params->gains[1]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_ANTIFOG_GAIN_B,
++				 MALI_C55_CCM_ANTIFOG_GAIN_MASK, params->gains[2]);
++
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_ANTIFOG_OFFSET_R,
++				 MALI_C55_CCM_ANTIFOG_OFFSET_MASK, params->offs[0]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_ANTIFOG_OFFSET_G,
++				 MALI_C55_CCM_ANTIFOG_OFFSET_MASK, params->offs[1]);
++	mali_c55_ctx_update_bits(mali_c55, MALI_C55_REG_CCM_ANTIFOG_OFFSET_B,
++				 MALI_C55_CCM_ANTIFOG_OFFSET_MASK, params->offs[2]);
++
++	mali_c55_ctx_write(mali_c55, MALI_C55_REG_CCM_ENABLE, 1);
++}
++
+ static const mali_c55_params_handler mali_c55_params_handlers[] = {
+ 	[MALI_C55_PARAM_BLOCK_SENSOR_OFFS] = &mali_c55_params_sensor_offs,
+ 	[MALI_C55_PARAM_BLOCK_AEXP_HIST] = &mali_c55_params_aexp_hist,
+@@ -427,6 +475,7 @@ static const mali_c55_params_handler mali_c55_params_handlers[] = {
+ 	[MALI_C55_PARAM_BLOCK_AWB_GAINS_AEXP] = &mali_c55_params_awb_gains,
+ 	[MALI_C55_PARAM_MESH_SHADING_CONFIG] = &mali_c55_params_lsc_config,
+ 	[MALI_C55_PARAM_MESH_SHADING_SELECTION] = &mali_c55_params_lsc_selection,
++	[MALI_C55_PARAM_BLOCK_CCM] = &mali_c55_params_ccm,
+ };
+ 
+ static const struct v4l2_isp_params_block_type_info
+@@ -464,6 +513,9 @@ mali_c55_params_block_types_info[] = {
+ 	[MALI_C55_PARAM_MESH_SHADING_SELECTION] = {
+ 		.size = sizeof(struct mali_c55_params_mesh_shading_selection),
+ 	},
++	[MALI_C55_PARAM_BLOCK_CCM] = {
++		.size = sizeof(struct mali_c55_params_ccm),
++	},
+ };
+ 
+ static_assert(ARRAY_SIZE(mali_c55_params_handlers) ==
+diff --git a/include/uapi/linux/media/arm/mali-c55-config.h b/include/uapi/linux/media/arm/mali-c55-config.h
+index 3d335f950eeb..0b18863f973d 100644
+--- a/include/uapi/linux/media/arm/mali-c55-config.h
++++ b/include/uapi/linux/media/arm/mali-c55-config.h
+@@ -219,6 +219,7 @@ struct mali_c55_stats_buffer {
+  * @MALI_C55_PARAM_BLOCK_AWB_GAINS_AEXP: Auto-white balance gains for AEXP-0 tap
+  * @MALI_C55_PARAM_MESH_SHADING_CONFIG : Mesh shading tables configuration
+  * @MALI_C55_PARAM_MESH_SHADING_SELECTION: Mesh shading table selection
++ * @MALI_C55_PARAM_BLOCK_CCM: Colour correction matrix
+  */
+ enum mali_c55_param_block_type {
+ 	MALI_C55_PARAM_BLOCK_SENSOR_OFFS,
+@@ -232,6 +233,7 @@ enum mali_c55_param_block_type {
+ 	MALI_C55_PARAM_BLOCK_AWB_GAINS_AEXP,
+ 	MALI_C55_PARAM_MESH_SHADING_CONFIG,
+ 	MALI_C55_PARAM_MESH_SHADING_SELECTION,
++	MALI_C55_PARAM_BLOCK_CCM,
+ };
+ 
+ /**
+@@ -757,6 +759,42 @@ struct mali_c55_params_mesh_shading_selection {
+ 	__u16 mesh_strength;
+ };
+ 
++/**
++ * struct mali_c55_params_ccm - Coefficients, offsets and gains for the colour
++ *				correction matrix
++ *
++ * The colour correction module converts images data from a sensor-specific
++ * colour space to known one.
++ *
++ * Colour correction is applied after demosaicing and each pixel is represented
++ * as a column vector of the three RGB colour channels on which the following
++ * operations take place:
++ * 1) An offset is subtracted from each colour channel
++ * 2) Each colour channel is multiplied by a gain
++ * 3) The pixel column vector is multiplied by the colour correction matrix
++ *
++ * This struct allows users to configure the coefficients for CCM and the
++ * per-channel offsets and gains. The nine matrix coefficients are expressed as
++ * 13 bits signed Q4.8 Sign/Magnitude fixed-point numbers, the three gain
++ * multipliers are expressed as 12 bits unsigned Q4.8 fixed-point numbers and
++ * the three offsets are expressed as a 12 bits unsigned integers.
++ *
++ * header.type should be set to MALI_C55_PARAM_BLOCK_CCM from
++ * :c:type:`mali_c55_param_block_type`.
++ *
++ * @header:	The Mali-C55 parameters block header
++ * @coeffs:	3x3 color conversion matrix coefficients in sign/magnitude
++ *		Q4.8 format
++ * @gains:	Gains for red, green and blue channels in unsigned Q4.8 format
++ * @offs:	Offsets for red, green and blue channels
++ */
++struct mali_c55_params_ccm {
++	struct v4l2_isp_params_block_header header;
++	__u16 coeffs[3][3];
++	__u16 gains[3];
++	__u16 offs[3];
++};
++
+ /**
+  * define MALI_C55_PARAMS_MAX_SIZE - Maximum size of all Mali C55 Parameters
+  *
+@@ -780,6 +818,7 @@ struct mali_c55_params_mesh_shading_selection {
+ 	sizeof(struct mali_c55_params_awb_config) +		\
+ 	sizeof(struct mali_c55_params_awb_gains) +		\
+ 	sizeof(struct mali_c55_params_mesh_shading_config) +	\
+-	sizeof(struct mali_c55_params_mesh_shading_selection))
++	sizeof(struct mali_c55_params_mesh_shading_selection) +	\
++	sizeof(struct mali_c55_params_ccm))
+ 
+ #endif /* __UAPI_MALI_C55_CONFIG_H */
+-- 
+2.55.0
+

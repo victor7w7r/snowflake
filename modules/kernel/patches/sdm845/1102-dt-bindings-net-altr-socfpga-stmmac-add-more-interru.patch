@@ -1,0 +1,100 @@
+From da07acfd60891b499573b2720b1802a23032472d Mon Sep 17 00:00:00 2001
+From: Dinh Nguyen <dinguyen@kernel.org>
+Date: Thu, 25 Jun 2026 17:17:47 -0500
+Subject: [PATCH 01102/15333] dt-bindings: net: altr,socfpga-stmmac: add more
+ interrupts for Agilex5
+
+The stmmac hardware on Agilex5 supports 8 TX/RX queue pairs and is
+dma-coherent. Update the schema to handle the hardware differences
+between SoC variants.
+
+Also make 'interrupts' and 'interrupt-names' as required properties.
+
+Acked-by: Conor Dooley <conor.dooley@microchip.com>
+Signed-off-by: Dinh Nguyen <dinguyen@kernel.org>
+---
+v2: Set the top level interrupts to include the widest contraints(1-17)
+    Just have 1 list of all interrupt-names
+    Update commit message to include 'interrupts' and 'interrupt-names'
+    as required properties
+    Change minItems 1 to maxItems 1 for non agilex5 variants
+    Add same constraint for interrupt-names
+---
+ .../bindings/net/altr,socfpga-stmmac.yaml     | 46 ++++++++++++++++++-
+ 1 file changed, 45 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/devicetree/bindings/net/altr,socfpga-stmmac.yaml b/Documentation/devicetree/bindings/net/altr,socfpga-stmmac.yaml
+index fc445ad5a1f1..63084f762373 100644
+--- a/Documentation/devicetree/bindings/net/altr,socfpga-stmmac.yaml
++++ b/Documentation/devicetree/bindings/net/altr,socfpga-stmmac.yaml
+@@ -63,11 +63,29 @@ properties:
+       - const: ptp_ref
+ 
+   interrupts:
+-    maxItems: 1
++    minItems: 1
++    maxItems: 17
+ 
+   interrupt-names:
++    minItems: 1
+     items:
+       - const: macirq
++      - const: tx-queue-0
++      - const: tx-queue-1
++      - const: tx-queue-2
++      - const: tx-queue-3
++      - const: tx-queue-4
++      - const: tx-queue-5
++      - const: tx-queue-6
++      - const: tx-queue-7
++      - const: rx-queue-0
++      - const: rx-queue-1
++      - const: rx-queue-2
++      - const: rx-queue-3
++      - const: rx-queue-4
++      - const: rx-queue-5
++      - const: rx-queue-6
++      - const: rx-queue-7
+ 
+   iommus:
+     minItems: 1
+@@ -149,10 +167,36 @@ required:
+   - clocks
+   - clock-names
+   - altr,sysmgr-syscon
++  - interrupts
++  - interrupt-names
+ 
+ allOf:
+   - $ref: snps,dwmac.yaml#
+ 
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: altr,socfpga-stmmac-agilex5
++    then:
++      properties:
++        interrupts:
++          minItems: 17
++
++        interrupt-names:
++          minItems: 17
++
++        dma-coherent: true
++    else:
++      properties:
++        interrupts:
++          maxItems: 1
++
++        interrupt-names:
++          maxItems: 1
++
++        dma-coherent: false
++
+ unevaluatedProperties: false
+ 
+ examples:
+-- 
+2.55.0
+

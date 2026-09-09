@@ -1,0 +1,35 @@
+From 2ae189fc1c2cdc53f6fa525c01b1026db01cc532 Mon Sep 17 00:00:00 2001
+From: Dave Stevenson <dave.stevenson@raspberrypi.com>
+Date: Wed, 15 Jul 2026 12:43:30 +0100
+Subject: [PATCH 04865/15333] media: imx355: Use NULL ctrl_ops for HBLANK as it
+ is a read-only control
+
+This avoids the set_ctrl handler being called under any
+circumstances, as it will return an error for the unhandled
+ctrl.
+
+Signed-off-by: Dave Stevenson <dave.stevenson@raspberrypi.com>
+Signed-off-by: Sakari Ailus <sakari.ailus@linux.intel.com>
+---
+ drivers/media/i2c/imx355.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/media/i2c/imx355.c b/drivers/media/i2c/imx355.c
+index cc27a193cd81..3b3bf41485c2 100644
+--- a/drivers/media/i2c/imx355.c
++++ b/drivers/media/i2c/imx355.c
+@@ -1124,9 +1124,8 @@ static int imx355_init_controls(struct imx355 *imx355)
+ 					   1, vblank_def);
+ 
+ 	hblank = mode->llp - mode->width;
+-	imx355->hblank = v4l2_ctrl_new_std(ctrl_hdlr, &imx355_ctrl_ops,
+-					   V4L2_CID_HBLANK, hblank, hblank,
+-					   1, hblank);
++	imx355->hblank = v4l2_ctrl_new_std(ctrl_hdlr, NULL, V4L2_CID_HBLANK,
++					   hblank, hblank, 1, hblank);
+ 	if (imx355->hblank)
+ 		imx355->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+ 
+-- 
+2.55.0
+

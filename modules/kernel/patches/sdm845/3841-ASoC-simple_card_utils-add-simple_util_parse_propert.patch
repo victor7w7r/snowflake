@@ -1,0 +1,214 @@
+From 7ad9d917e251be70cfa9733f990cfa5f7c49f9b5 Mon Sep 17 00:00:00 2001
+From: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Date: Thu, 2 Jul 2026 01:45:14 +0000
+Subject: [PATCH 03841/15333] ASoC: simple_card_utils: add
+ simple_util_parse_property()
+
+We have simple_util_parse_{routing/widgets/pin_switches}().
+These are doing almost same things, but has each own implementation.
+Les't adds new simple_util_parse_property() and share the code.
+
+To be more easy cleanup later, change the required parameter from
+"card" to "priv".
+
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@renesas.com>
+Link: https://patch.msgid.link/87bjcqxiza.wl-kuninori.morimoto.gx@renesas.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/simple_card_utils.h     | 27 +++++++---
+ sound/soc/generic/audio-graph-card.c  |  4 +-
+ sound/soc/generic/audio-graph-card2.c |  4 +-
+ sound/soc/generic/simple-card-utils.c | 72 ++++++++-------------------
+ sound/soc/generic/simple-card.c       |  6 +--
+ 5 files changed, 49 insertions(+), 64 deletions(-)
+
+diff --git a/include/sound/simple_card_utils.h b/include/sound/simple_card_utils.h
+index 915e6ae5f68d..dfa1b5fb7aa8 100644
+--- a/include/sound/simple_card_utils.h
++++ b/include/sound/simple_card_utils.h
+@@ -189,12 +189,27 @@ bool simple_util_is_convert_required(const struct simple_util_data *data);
+ 
+ int simple_util_get_sample_fmt(struct simple_util_data *data);
+ 
+-int simple_util_parse_routing(struct snd_soc_card *card,
+-				      char *prefix);
+-int simple_util_parse_widgets(struct snd_soc_card *card,
+-				      char *prefix);
+-int simple_util_parse_pin_switches(struct snd_soc_card *card,
+-				   char *prefix);
++int simple_util_parse_property(struct simple_util_priv *priv,
++			       int (*func)(struct snd_soc_card *card, const char *propname),
++			       char *prefix, char *property);
++static inline int simple_util_parse_routing(struct simple_util_priv *priv, char *prefix)
++{
++	return simple_util_parse_property(priv, snd_soc_of_parse_audio_routing,
++					  prefix, "routing");
++}
++
++static inline int simple_util_parse_widgets(struct simple_util_priv *priv, char *prefix)
++{
++	return simple_util_parse_property(priv, snd_soc_of_parse_audio_simple_widgets,
++					  prefix, "widgets");
++}
++
++static inline int simple_util_parse_pin_switches(struct simple_util_priv *priv, char *prefix)
++{
++	return simple_util_parse_property(priv, snd_soc_of_parse_pin_switches,
++					  prefix, "pin-switches");
++}
++
+ 
+ int simple_util_init_jack(struct snd_soc_card *card,
+ 			       struct simple_util_jack *sjack,
+diff --git a/sound/soc/generic/audio-graph-card.c b/sound/soc/generic/audio-graph-card.c
+index 42e1b77fa65e..273b0c82ebea 100644
+--- a/sound/soc/generic/audio-graph-card.c
++++ b/sound/soc/generic/audio-graph-card.c
+@@ -579,11 +579,11 @@ int audio_graph_parse_of(struct simple_util_priv *priv, struct device *dev)
+ 		goto end;
+ 	}
+ 
+-	ret = simple_util_parse_widgets(card, NULL);
++	ret = simple_util_parse_widgets(priv, NULL);
+ 	if (ret < 0)
+ 		goto end;
+ 
+-	ret = simple_util_parse_routing(card, NULL);
++	ret = simple_util_parse_routing(priv, NULL);
+ 	if (ret < 0)
+ 		goto end;
+ 
+diff --git a/sound/soc/generic/audio-graph-card2.c b/sound/soc/generic/audio-graph-card2.c
+index c5ada1f83881..b4ae9bb860a1 100644
+--- a/sound/soc/generic/audio-graph-card2.c
++++ b/sound/soc/generic/audio-graph-card2.c
+@@ -1336,11 +1336,11 @@ int audio_graph2_parse_of(struct simple_util_priv *priv, struct device *dev,
+ 		goto end;
+ 	}
+ 
+-	ret = simple_util_parse_widgets(card, NULL);
++	ret = simple_util_parse_widgets(priv, NULL);
+ 	if (ret < 0)
+ 		goto end;
+ 
+-	ret = simple_util_parse_routing(card, NULL);
++	ret = simple_util_parse_routing(priv, NULL);
+ 	if (ret < 0)
+ 		goto end;
+ 
+diff --git a/sound/soc/generic/simple-card-utils.c b/sound/soc/generic/simple-card-utils.c
+index e5cb602fd248..522dd1e3c96a 100644
+--- a/sound/soc/generic/simple-card-utils.c
++++ b/sound/soc/generic/simple-card-utils.c
+@@ -216,6 +216,27 @@ int simple_util_set_dailink_name(struct simple_util_priv *priv,
+ }
+ EXPORT_SYMBOL_GPL(simple_util_set_dailink_name);
+ 
++int simple_util_parse_property(struct simple_util_priv *priv,
++			       int (*func)(struct snd_soc_card *card, const char *propname),
++			       char *prefix, char *property)
++{
++	struct snd_soc_card *card = simple_priv_to_card(priv);
++	struct device_node *node = card->dev->of_node;
++	char prop[128];
++
++	if (!prefix)
++		prefix = "";
++
++	snprintf(prop, sizeof(prop), "%s%s", prefix, property);
++
++	/* no property is not error */
++	if (!of_property_present(node, prop))
++		return 0;
++
++	return func(card, prop);
++}
++EXPORT_SYMBOL_GPL(simple_util_parse_property);
++
+ int simple_util_parse_card_name(struct simple_util_priv *priv,
+ 				char *prefix)
+ {
+@@ -747,57 +768,6 @@ void simple_util_clean_reference(struct snd_soc_card *card)
+ }
+ EXPORT_SYMBOL_GPL(simple_util_clean_reference);
+ 
+-int simple_util_parse_routing(struct snd_soc_card *card,
+-			      char *prefix)
+-{
+-	struct device_node *node = card->dev->of_node;
+-	char prop[128];
+-
+-	if (!prefix)
+-		prefix = "";
+-
+-	snprintf(prop, sizeof(prop), "%s%s", prefix, "routing");
+-
+-	if (!of_property_present(node, prop))
+-		return 0;
+-
+-	return snd_soc_of_parse_audio_routing(card, prop);
+-}
+-EXPORT_SYMBOL_GPL(simple_util_parse_routing);
+-
+-int simple_util_parse_widgets(struct snd_soc_card *card,
+-			      char *prefix)
+-{
+-	struct device_node *node = card->dev->of_node;
+-	char prop[128];
+-
+-	if (!prefix)
+-		prefix = "";
+-
+-	snprintf(prop, sizeof(prop), "%s%s", prefix, "widgets");
+-
+-	if (of_property_present(node, prop))
+-		return snd_soc_of_parse_audio_simple_widgets(card, prop);
+-
+-	/* no widgets is not error */
+-	return 0;
+-}
+-EXPORT_SYMBOL_GPL(simple_util_parse_widgets);
+-
+-int simple_util_parse_pin_switches(struct snd_soc_card *card,
+-				   char *prefix)
+-{
+-	char prop[128];
+-
+-	if (!prefix)
+-		prefix = "";
+-
+-	snprintf(prop, sizeof(prop), "%s%s", prefix, "pin-switches");
+-
+-	return snd_soc_of_parse_pin_switches(card, prop);
+-}
+-EXPORT_SYMBOL_GPL(simple_util_parse_pin_switches);
+-
+ int simple_util_init_jack(struct snd_soc_card *card,
+ 			  struct simple_util_jack *sjack,
+ 			  int is_hp, char *prefix,
+diff --git a/sound/soc/generic/simple-card.c b/sound/soc/generic/simple-card.c
+index 20e6edd1d7d3..6e432733649f 100644
+--- a/sound/soc/generic/simple-card.c
++++ b/sound/soc/generic/simple-card.c
+@@ -692,15 +692,15 @@ static int simple_parse_of(struct simple_util_priv *priv)
+ 	if (ret < 0)
+ 		goto end;
+ 
+-	ret = simple_util_parse_widgets(card, PREFIX);
++	ret = simple_util_parse_widgets(priv, PREFIX);
+ 	if (ret < 0)
+ 		goto end;
+ 
+-	ret = simple_util_parse_routing(card, PREFIX);
++	ret = simple_util_parse_routing(priv, PREFIX);
+ 	if (ret < 0)
+ 		goto end;
+ 
+-	ret = simple_util_parse_pin_switches(card, PREFIX);
++	ret = simple_util_parse_pin_switches(priv, PREFIX);
+ 	if (ret < 0)
+ 		goto end;
+ 
+-- 
+2.55.0
+

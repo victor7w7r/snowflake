@@ -1,0 +1,46 @@
+From 4a3ada659c236d9a903c48834f3e8655a8979e16 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Mon, 20 Jul 2026 16:42:59 +0800
+Subject: [PATCH 10213/15333] HID: amd_sfh: Remove redundant dev_err()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() automatically logs
+detailed error messages on failure. Remove the now-redundant
+driver-specific dev_err() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Acked-by: Basavaraj Natikar <Basavaraj.Natikar@amd.com>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ drivers/hid/amd-sfh-hid/amd_sfh_pcie.c | 13 ++-----------
+ 1 file changed, 2 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/hid/amd-sfh-hid/amd_sfh_pcie.c b/drivers/hid/amd-sfh-hid/amd_sfh_pcie.c
+index 4b81cebdc335..4d0a95fbc4e4 100644
+--- a/drivers/hid/amd-sfh-hid/amd_sfh_pcie.c
++++ b/drivers/hid/amd-sfh-hid/amd_sfh_pcie.c
+@@ -122,19 +122,10 @@ static irqreturn_t amd_sfh_irq_handler(int irq, void *data)
+ 
+ int amd_sfh_irq_init_v2(struct amd_mp2_dev *privdata)
+ {
+-	int rc;
+-
+ 	pcim_intx(privdata->pdev, true);
+ 
+-	rc = devm_request_irq(&privdata->pdev->dev, privdata->pdev->irq,
+-			      amd_sfh_irq_handler, 0, DRIVER_NAME, privdata);
+-	if (rc) {
+-		dev_err(&privdata->pdev->dev, "failed to request irq %d err=%d\n",
+-			privdata->pdev->irq, rc);
+-		return rc;
+-	}
+-
+-	return 0;
++	return devm_request_irq(&privdata->pdev->dev, privdata->pdev->irq,
++				amd_sfh_irq_handler, 0, DRIVER_NAME, privdata);
+ }
+ 
+ static int amd_sfh_dis_sts_v2(struct amd_mp2_dev *privdata)
+-- 
+2.55.0
+

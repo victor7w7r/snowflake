@@ -1,0 +1,60 @@
+From 9bd7d3ea0531715ff1fc9e51e0aed51d2300f4a6 Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Tue, 28 Jul 2026 03:47:43 +0900
+Subject: [PATCH 10267/15333] iio: light: vcnl4000: remove
+ vcnl4000_set_pm_runtime_state() helper
+
+vcnl4000_set_pm_runtime_state() just calls pm_runtime_resume_and_get()
+or pm_runtime_put_autosuspend() depending on its bool argument. Call
+them directly and remove the helper.
+
+No functional change.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Signed-off-by: Jonathan Cameron <jonathan.cameron@oss.qualcomm.com>
+---
+ drivers/iio/light/vcnl4000.c | 14 ++------------
+ 1 file changed, 2 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/iio/light/vcnl4000.c b/drivers/iio/light/vcnl4000.c
+index b8ac156ad5c9..336468d59ea7 100644
+--- a/drivers/iio/light/vcnl4000.c
++++ b/drivers/iio/light/vcnl4000.c
+@@ -537,16 +537,6 @@ static bool vcnl4010_is_in_periodic_mode(struct vcnl4000_data *data)
+ 	return !!(ret & VCNL4000_SELF_TIMED_EN);
+ }
+ 
+-static int vcnl4000_set_pm_runtime_state(struct vcnl4000_data *data, bool on)
+-{
+-	struct device *dev = &data->client->dev;
+-
+-	if (on)
+-		return pm_runtime_resume_and_get(dev);
+-
+-	return pm_runtime_put_autosuspend(dev);
+-}
+-
+ static int vcnl4040_read_als_it(struct vcnl4000_data *data, int *val, int *val2)
+ {
+ 	int ret;
+@@ -850,7 +840,7 @@ static int vcnl4000_read_raw(struct iio_dev *indio_dev,
+ 
+ 	switch (mask) {
+ 	case IIO_CHAN_INFO_RAW:
+-		ret = vcnl4000_set_pm_runtime_state(data, true);
++		ret = pm_runtime_resume_and_get(&data->client->dev);
+ 		if  (ret < 0)
+ 			return ret;
+ 
+@@ -869,7 +859,7 @@ static int vcnl4000_read_raw(struct iio_dev *indio_dev,
+ 		default:
+ 			ret = -EINVAL;
+ 		}
+-		vcnl4000_set_pm_runtime_state(data, false);
++		pm_runtime_put_autosuspend(&data->client->dev);
+ 		return ret;
+ 	case IIO_CHAN_INFO_SCALE:
+ 		if (chan->type != IIO_LIGHT)
+-- 
+2.55.0
+

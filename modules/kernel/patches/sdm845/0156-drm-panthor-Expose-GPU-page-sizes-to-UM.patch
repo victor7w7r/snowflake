@@ -1,0 +1,140 @@
+From 6c1427fd03d8c30be810592523c5ba8fe864c2b0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Adri=C3=A1n=20Larumbe?= <adrian.larumbe@collabora.com>
+Date: Fri, 22 May 2026 19:51:55 +0100
+Subject: [PATCH 00156/15333] drm/panthor: Expose GPU page sizes to UM
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In future commits that will implement repeated mappings, only repeat
+values multiple of GPU page sizes will be tolerated. That means these
+values must be made known to UM. Do it through a queriable GPU info
+value.
+
+Reviewed-by: Steven Price <steven.price@arm.com>
+Reviewed-by: Boris Brezillon <boris.brezillon@collabora.com>
+Signed-off-by: Adrián Larumbe <adrian.larumbe@collabora.com>
+Link: https://patch.msgid.link/20260522185206.2798288-2-adrian.larumbe@collabora.com
+Signed-off-by: Steven Price <steven.price@arm.com>
+---
+ drivers/gpu/drm/panthor/panthor_device.h |  3 +++
+ drivers/gpu/drm/panthor/panthor_drv.c    |  8 ++++++++
+ drivers/gpu/drm/panthor/panthor_mmu.c    |  9 ++++++++-
+ include/uapi/drm/panthor_drm.h           | 13 +++++++++++++
+ 4 files changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/panthor/panthor_device.h b/drivers/gpu/drm/panthor/panthor_device.h
+index a412a50eec76..35679bfa1f3a 100644
+--- a/drivers/gpu/drm/panthor/panthor_device.h
++++ b/drivers/gpu/drm/panthor/panthor_device.h
+@@ -161,6 +161,9 @@ struct panthor_device {
+ 	/** @csif_info: Command stream interface information. */
+ 	struct drm_panthor_csif_info csif_info;
+ 
++	/** @mmu_info: MMU info */
++	struct drm_panthor_mmu_info mmu_info;
++
+ 	/** @hw: GPU-specific data. */
+ 	struct panthor_hw *hw;
+ 
+diff --git a/drivers/gpu/drm/panthor/panthor_drv.c b/drivers/gpu/drm/panthor/panthor_drv.c
+index 1b8f5d5c2ee9..557e1bfddfd7 100644
+--- a/drivers/gpu/drm/panthor/panthor_drv.c
++++ b/drivers/gpu/drm/panthor/panthor_drv.c
+@@ -175,6 +175,7 @@ panthor_get_uobj_array(const struct drm_panthor_obj_array *in, u32 min_stride,
+ 	_Generic(_obj_name, \
+ 		 PANTHOR_UOBJ_DECL(struct drm_panthor_gpu_info, tiler_present), \
+ 		 PANTHOR_UOBJ_DECL(struct drm_panthor_csif_info, pad), \
++		 PANTHOR_UOBJ_DECL(struct drm_panthor_mmu_info, page_size_bitmap), \
+ 		 PANTHOR_UOBJ_DECL(struct drm_panthor_timestamp_info, current_timestamp), \
+ 		 PANTHOR_UOBJ_DECL(struct drm_panthor_group_priorities_info, pad), \
+ 		 PANTHOR_UOBJ_DECL(struct drm_panthor_sync_op, timeline_value), \
+@@ -954,6 +955,10 @@ static int panthor_ioctl_dev_query(struct drm_device *ddev, void *data, struct d
+ 			args->size = sizeof(priorities_info);
+ 			return 0;
+ 
++		case DRM_PANTHOR_DEV_QUERY_MMU_INFO:
++			args->size = sizeof(ptdev->mmu_info);
++			return 0;
++
+ 		default:
+ 			return -EINVAL;
+ 		}
+@@ -984,6 +989,9 @@ static int panthor_ioctl_dev_query(struct drm_device *ddev, void *data, struct d
+ 		panthor_query_group_priorities_info(file, &priorities_info);
+ 		return PANTHOR_UOBJ_SET(args->pointer, args->size, priorities_info);
+ 
++	case DRM_PANTHOR_DEV_QUERY_MMU_INFO:
++		return PANTHOR_UOBJ_SET(args->pointer, args->size, ptdev->mmu_info);
++
+ 	default:
+ 		return -EINVAL;
+ 	}
+diff --git a/drivers/gpu/drm/panthor/panthor_mmu.c b/drivers/gpu/drm/panthor/panthor_mmu.c
+index 9d4500850561..271a3ea55b61 100644
+--- a/drivers/gpu/drm/panthor/panthor_mmu.c
++++ b/drivers/gpu/drm/panthor/panthor_mmu.c
+@@ -2782,7 +2782,7 @@ panthor_vm_create(struct panthor_device *ptdev, bool for_mcu,
+ 	refcount_set(&vm->as.active_cnt, 0);
+ 
+ 	pgtbl_cfg = (struct io_pgtable_cfg) {
+-		.pgsize_bitmap	= SZ_4K | SZ_2M,
++		.pgsize_bitmap	= ptdev->mmu_info.page_size_bitmap,
+ 		.ias		= va_bits,
+ 		.oas		= pa_bits,
+ 		.coherent_walk	= ptdev->coherent,
+@@ -3228,6 +3228,11 @@ static void panthor_mmu_release_wq(struct drm_device *ddev, void *res)
+ 	destroy_workqueue(res);
+ }
+ 
++static void panthor_mmu_info_init(struct panthor_device *ptdev)
++{
++	ptdev->mmu_info.page_size_bitmap = SZ_4K | SZ_2M;
++}
++
+ /**
+  * panthor_mmu_init() - Initialize the MMU logic.
+  * @ptdev: Device.
+@@ -3240,6 +3245,8 @@ int panthor_mmu_init(struct panthor_device *ptdev)
+ 	struct panthor_mmu *mmu;
+ 	int ret, irq;
+ 
++	panthor_mmu_info_init(ptdev);
++
+ 	mmu = drmm_kzalloc(&ptdev->base, sizeof(*mmu), GFP_KERNEL);
+ 	if (!mmu)
+ 		return -ENOMEM;
+diff --git a/include/uapi/drm/panthor_drm.h b/include/uapi/drm/panthor_drm.h
+index 0e455d91e77d..b462752c793d 100644
+--- a/include/uapi/drm/panthor_drm.h
++++ b/include/uapi/drm/panthor_drm.h
+@@ -253,6 +253,9 @@ enum drm_panthor_dev_query_type {
+ 	 * @DRM_PANTHOR_DEV_QUERY_GROUP_PRIORITIES_INFO: Query allowed group priorities information.
+ 	 */
+ 	DRM_PANTHOR_DEV_QUERY_GROUP_PRIORITIES_INFO,
++
++	/** @DRM_PANTHOR_DEV_QUERY_MMU_INFO: Query MMU information. */
++	DRM_PANTHOR_DEV_QUERY_MMU_INFO,
+ };
+ 
+ /**
+@@ -487,6 +490,16 @@ struct drm_panthor_timestamp_info {
+ 	__u64 cpu_timestamp_nsec;
+ };
+ 
++/**
++ * struct drm_panthor_mmu_info - MMU information
++ *
++ * Structure grouping all queryable information relating to the MMU.
++ */
++struct drm_panthor_mmu_info {
++	/** @page_size_bitmap: Allowed page sizes */
++	__u64 page_size_bitmap;
++};
++
+ /**
+  * struct drm_panthor_group_priorities_info - Group priorities information
+  *
+-- 
+2.55.0
+

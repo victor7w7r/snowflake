@@ -1,0 +1,169 @@
+From 66084e9510a96436f905526454c67bf7aa0e96f1 Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Sun, 26 Jul 2026 00:08:50 +0900
+Subject: [PATCH 08522/15333] net: ethernet: remove conditional return with no
+ effect
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Both branches of the check return the same value, so the check has
+no effect. Remove it and return the value directly.
+
+This is the result of running the Coccinelle script from
+scripts/coccinelle/misc/cond_return_no_effect.cocci.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Reviewed-by: Niklas Söderlund <niklas.soderlund+renesas@ragnatech.se>
+Reviewed-by: Arthur Kiyanovski <akiyano@amazon.com>
+Reviewed-by: Ioana Ciornei <ioana.ciornei@nxp.com> # for dpaa2-switch
+Link: https://patch.msgid.link/20260725150852.859188-3-ekffu200098@gmail.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ drivers/net/ethernet/amazon/ena/ena_netdev.c          | 6 +-----
+ drivers/net/ethernet/aquantia/atlantic/aq_macsec.c    | 6 +-----
+ drivers/net/ethernet/freescale/dpaa2/dpaa2-switch.c   | 6 +-----
+ drivers/net/ethernet/freescale/gianfar.c              | 6 +-----
+ drivers/net/ethernet/qlogic/netxen/netxen_nic_hw.c    | 7 +------
+ drivers/net/ethernet/qlogic/qlcnic/qlcnic_83xx_init.c | 6 +-----
+ drivers/net/ethernet/renesas/rtsn.c                   | 7 +------
+ 7 files changed, 7 insertions(+), 37 deletions(-)
+
+diff --git a/drivers/net/ethernet/amazon/ena/ena_netdev.c b/drivers/net/ethernet/amazon/ena/ena_netdev.c
+index 5d05020a6d05..ea89619039d8 100644
+--- a/drivers/net/ethernet/amazon/ena/ena_netdev.c
++++ b/drivers/net/ethernet/amazon/ena/ena_netdev.c
+@@ -2303,11 +2303,7 @@ static int ena_open(struct net_device *netdev)
+ 		return rc;
+ 	}
+ 
+-	rc = ena_up(adapter);
+-	if (rc)
+-		return rc;
+-
+-	return rc;
++	return ena_up(adapter);
+ }
+ 
+ /* ena_close - Disables a network interface
+diff --git a/drivers/net/ethernet/aquantia/atlantic/aq_macsec.c b/drivers/net/ethernet/aquantia/atlantic/aq_macsec.c
+index 3ca072360ec7..fd4ee6212234 100644
+--- a/drivers/net/ethernet/aquantia/atlantic/aq_macsec.c
++++ b/drivers/net/ethernet/aquantia/atlantic/aq_macsec.c
+@@ -735,11 +735,7 @@ static int aq_set_rxsc(struct aq_nic_s *nic, const u32 rxsc_idx)
+ 	sc_record.valid = 1;
+ 	sc_record.fresh = 1;
+ 
+-	ret = aq_mss_set_ingress_sc_record(hw, &sc_record, hw_sc_idx);
+-	if (ret)
+-		return ret;
+-
+-	return ret;
++	return aq_mss_set_ingress_sc_record(hw, &sc_record, hw_sc_idx);
+ }
+ 
+ static int aq_mdo_add_rxsc(struct macsec_context *ctx)
+diff --git a/drivers/net/ethernet/freescale/dpaa2/dpaa2-switch.c b/drivers/net/ethernet/freescale/dpaa2/dpaa2-switch.c
+index 33e7a99d3e49..79d4a77f72bd 100644
+--- a/drivers/net/ethernet/freescale/dpaa2/dpaa2-switch.c
++++ b/drivers/net/ethernet/freescale/dpaa2/dpaa2-switch.c
+@@ -3935,11 +3935,7 @@ static int dpaa2_switch_port_init(struct ethsw_port_priv *port_priv, u16 port)
+ 	if (err)
+ 		return err;
+ 
+-	err = dpaa2_switch_port_trap_mac_addr(port_priv, ll_mac, ll_mask);
+-	if (err)
+-		return err;
+-
+-	return err;
++	return dpaa2_switch_port_trap_mac_addr(port_priv, ll_mac, ll_mask);
+ }
+ 
+ static void dpaa2_switch_ctrl_if_teardown(struct ethsw_core *ethsw)
+diff --git a/drivers/net/ethernet/freescale/gianfar.c b/drivers/net/ethernet/freescale/gianfar.c
+index 89215e1ddc2d..cf636fc5aafa 100644
+--- a/drivers/net/ethernet/freescale/gianfar.c
++++ b/drivers/net/ethernet/freescale/gianfar.c
+@@ -2877,11 +2877,7 @@ static int gfar_enet_open(struct net_device *dev)
+ 	if (err)
+ 		return err;
+ 
+-	err = startup_gfar(dev);
+-	if (err)
+-		return err;
+-
+-	return err;
++	return startup_gfar(dev);
+ }
+ 
+ /* Stops the kernel queue, and halts the controller */
+diff --git a/drivers/net/ethernet/qlogic/netxen/netxen_nic_hw.c b/drivers/net/ethernet/qlogic/netxen/netxen_nic_hw.c
+index fff8dc84212d..e96a268067f2 100644
+--- a/drivers/net/ethernet/qlogic/netxen/netxen_nic_hw.c
++++ b/drivers/net/ethernet/qlogic/netxen/netxen_nic_hw.c
+@@ -2478,7 +2478,6 @@ static int netxen_parse_md_template(struct netxen_adapter *adapter)
+ static int
+ netxen_collect_minidump(struct netxen_adapter *adapter)
+ {
+-	int ret = 0;
+ 	struct netxen_minidump_template_hdr *hdr;
+ 	hdr = (struct netxen_minidump_template_hdr *)
+ 				adapter->mdump.md_template;
+@@ -2486,11 +2485,7 @@ netxen_collect_minidump(struct netxen_adapter *adapter)
+ 	hdr->driver_timestamp = ktime_get_seconds();
+ 	hdr->driver_info_word2 = adapter->fw_version;
+ 	hdr->driver_info_word3 = NXRD32(adapter, CRB_DRIVER_VERSION);
+-	ret = netxen_parse_md_template(adapter);
+-	if (ret)
+-		return ret;
+-
+-	return ret;
++	return netxen_parse_md_template(adapter);
+ }
+ 
+ 
+diff --git a/drivers/net/ethernet/qlogic/qlcnic/qlcnic_83xx_init.c b/drivers/net/ethernet/qlogic/qlcnic/qlcnic_83xx_init.c
+index 45ed8705c7ca..47cd9ec665ee 100644
+--- a/drivers/net/ethernet/qlogic/qlcnic/qlcnic_83xx_init.c
++++ b/drivers/net/ethernet/qlogic/qlcnic/qlcnic_83xx_init.c
+@@ -1618,11 +1618,7 @@ static int qlcnic_83xx_check_hw_status(struct qlcnic_adapter *p_dev)
+ 	if (err)
+ 		return err;
+ 
+-	err = qlcnic_83xx_check_heartbeat(p_dev);
+-	if (err)
+-		return err;
+-
+-	return err;
++	return qlcnic_83xx_check_heartbeat(p_dev);
+ }
+ 
+ static int qlcnic_83xx_poll_reg(struct qlcnic_adapter *p_dev, u32 addr,
+diff --git a/drivers/net/ethernet/renesas/rtsn.c b/drivers/net/ethernet/renesas/rtsn.c
+index ee8381b60b8d..f7beeb73eb16 100644
+--- a/drivers/net/ethernet/renesas/rtsn.c
++++ b/drivers/net/ethernet/renesas/rtsn.c
+@@ -685,7 +685,6 @@ static void rtsn_set_rate(struct rtsn_private *priv)
+ static int rtsn_rmac_init(struct rtsn_private *priv)
+ {
+ 	const u8 *mac_addr = priv->ndev->dev_addr;
+-	int ret;
+ 
+ 	/* Set MAC address */
+ 	rtsn_write(priv, MRMAC0, (mac_addr[0] << 8) | mac_addr[1]);
+@@ -702,11 +701,7 @@ static int rtsn_rmac_init(struct rtsn_private *priv)
+ 
+ 	/* Link verification */
+ 	rtsn_modify(priv, MLVC, MLVC_PLV, MLVC_PLV);
+-	ret = rtsn_reg_wait(priv, MLVC, MLVC_PLV, 0);
+-	if (ret)
+-		return ret;
+-
+-	return ret;
++	return rtsn_reg_wait(priv, MLVC, MLVC_PLV, 0);
+ }
+ 
+ static int rtsn_hw_init(struct rtsn_private *priv)
+-- 
+2.55.0
+

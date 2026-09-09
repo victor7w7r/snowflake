@@ -1,0 +1,39 @@
+From cff96362794a5c1f3adb013b4a46c7233149a629 Mon Sep 17 00:00:00 2001
+From: Luca Ceresoli <luca.ceresoli@bootlin.com>
+Date: Fri, 19 Jun 2026 09:02:13 +0200
+Subject: [PATCH 01966/15333] drm/mxsfb/lcdif: don't hide lcdif_attach_bridge()
+ deferral messages
+
+lcdif_attach_bridge() uses dev_err_probe() on all its error returns to
+store a specific deferral message.
+
+However its caller lcdif_load() calls dev_err_probe() again on error,
+overwriting the specific deferral messages with a unique, unavoidably
+generic, message.
+
+Make the specific deferral message visible by using a plain 'return ret' on
+the caller.
+
+Acked-by: Liu Ying <victor.liu@nxp.com>
+Link: https://patch.msgid.link/20260619-drm-lcdif-deferral-msg-v1-1-ce2392dca985@bootlin.com
+Signed-off-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+---
+ drivers/gpu/drm/mxsfb/lcdif_drv.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/mxsfb/lcdif_drv.c b/drivers/gpu/drm/mxsfb/lcdif_drv.c
+index f5bb59cd5028..e2173c4d6fc2 100644
+--- a/drivers/gpu/drm/mxsfb/lcdif_drv.c
++++ b/drivers/gpu/drm/mxsfb/lcdif_drv.c
+@@ -186,7 +186,7 @@ static int lcdif_load(struct drm_device *drm)
+ 
+ 	ret = lcdif_attach_bridge(lcdif);
+ 	if (ret)
+-		return dev_err_probe(drm->dev, ret, "Cannot connect bridge\n");
++		return ret;
+ 
+ 	drm->mode_config.min_width	= LCDIF_MIN_XRES;
+ 	drm->mode_config.min_height	= LCDIF_MIN_YRES;
+-- 
+2.55.0
+

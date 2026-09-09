@@ -1,0 +1,372 @@
+From ba4af3ca26b1ceed6cc4c52be3591d270e074979 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Christian=20K=C3=B6nig?= <christian.koenig@amd.com>
+Date: Fri, 8 May 2026 21:00:08 +0200
+Subject: [PATCH 05212/15333] drm/amdgpu: move job parameter to the end in
+ amdgpu_job_alloc() and *_with_ib()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Move the job output parameter to be the last parameter in the
+amdgpu_job_alloc() and amdgpu_job_alloc_with_ib() function signature. This
+aligns with the common kernel coding convention where output parameters
+typically come last.
+
+Assisted-by: Claude:Sonnet 4
+Signed-off-by: Christian König <christian.koenig@amd.com>
+Reviewed-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c  |  2 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c      |  4 ++--
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c     |  5 +++--
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gmc.c     |  3 ++-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_job.c     | 10 +++++-----
+ drivers/gpu/drm/amd/amdgpu/amdgpu_job.h     |  8 ++++----
+ drivers/gpu/drm/amd/amdgpu/amdgpu_jpeg.c    |  5 +++--
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c     | 11 ++++++-----
+ drivers/gpu/drm/amd/amdgpu/amdgpu_uvd.c     |  5 +++--
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vce.c     |  8 +++++---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c     | 12 ++++++++----
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm_sdma.c |  2 +-
+ drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c       | 10 ++++++----
+ drivers/gpu/drm/amd/amdgpu/uvd_v7_0.c       | 10 ++++++----
+ drivers/gpu/drm/amd/amdkfd/kfd_migrate.c    |  4 ++--
+ 15 files changed, 57 insertions(+), 42 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c
+index c693c508df1a..a496c383cf6e 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c
+@@ -711,7 +711,7 @@ int amdgpu_amdkfd_submit_ib(struct amdgpu_device *adev,
+ 		goto err;
+ 	}
+ 
+-	ret = amdgpu_job_alloc(adev, NULL, NULL, NULL, 1, &job, 0);
++	ret = amdgpu_job_alloc(adev, NULL, NULL, NULL, 1, 0, &job);
+ 	if (ret)
+ 		goto err;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
+index d58701908158..2a6859b6ef05 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
+@@ -267,8 +267,8 @@ static int amdgpu_cs_pass1(struct amdgpu_cs_parser *p,
+ 
+ 	for (i = 0; i < p->gang_size; ++i) {
+ 		ret = amdgpu_job_alloc(p->adev, vm, p->entities[i], vm,
+-				       num_ibs[i], &p->jobs[i],
+-				       p->filp->client_id);
++				       num_ibs[i], p->filp->client_id,
++				       &p->jobs[i]);
+ 		if (ret)
+ 			goto free_all_kdata;
+ 		switch (p->adev->enforce_isolation[fpriv->xcp_id]) {
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+index 1e275c2e7dd3..9d3b40c385c9 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gfx.c
+@@ -1713,8 +1713,9 @@ static int amdgpu_gfx_run_cleaner_shader_job(struct amdgpu_ring *ring)
+ 	owner = (void *)(unsigned long)atomic_inc_return(&counter);
+ 
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, &entity, owner,
+-				     ib_size_dw * sizeof(uint32_t), 0, &job,
+-				     AMDGPU_KERNEL_JOB_ID_CLEANER_SHADER);
++				     ib_size_dw * sizeof(uint32_t), 0,
++				     AMDGPU_KERNEL_JOB_ID_CLEANER_SHADER,
++				     &job);
+ 	if (r)
+ 		goto err;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gmc.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_gmc.c
+index 4000b2c6fc98..3da50132c5d0 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gmc.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gmc.c
+@@ -761,7 +761,8 @@ void amdgpu_gmc_flush_gpu_tlb(struct amdgpu_device *adev, uint32_t vmid,
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, &adev->mman.default_entity.base,
+ 				     AMDGPU_FENCE_OWNER_UNDEFINED,
+ 				     16 * 4, AMDGPU_IB_POOL_IMMEDIATE,
+-				     &job, AMDGPU_KERNEL_JOB_ID_FLUSH_GPU_TLB);
++				     AMDGPU_KERNEL_JOB_ID_FLUSH_GPU_TLB,
++				     &job);
+ 	if (r)
+ 		goto error_alloc;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_job.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_job.c
+index cff73f1b5a72..fa695bdcf6eb 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_job.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_job.c
+@@ -198,8 +198,8 @@ static enum drm_gpu_sched_stat amdgpu_job_timedout(struct drm_sched_job *s_job)
+ 
+ int amdgpu_job_alloc(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 		     struct drm_sched_entity *entity, void *owner,
+-		     unsigned int num_ibs, struct amdgpu_job **job,
+-		     u64 drm_client_id)
++		     unsigned int num_ibs, u64 drm_client_id,
++		     struct amdgpu_job **job)
+ {
+ 	struct amdgpu_fence *af;
+ 	int r;
+@@ -252,12 +252,12 @@ int amdgpu_job_alloc(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ int amdgpu_job_alloc_with_ib(struct amdgpu_device *adev,
+ 			     struct drm_sched_entity *entity, void *owner,
+ 			     size_t size, enum amdgpu_ib_pool_type pool_type,
+-			     struct amdgpu_job **job, u64 k_job_id)
++			     u64 k_job_id, struct amdgpu_job **job)
+ {
+ 	int r;
+ 
+-	r = amdgpu_job_alloc(adev, NULL, entity, owner, 1, job,
+-			     k_job_id);
++	r = amdgpu_job_alloc(adev, NULL, entity, owner, 1, k_job_id,
++			     job);
+ 	if (r)
+ 		return r;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_job.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_job.h
+index e70a1117b812..822849693b3a 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_job.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_job.h
+@@ -115,13 +115,13 @@ static inline struct amdgpu_ring *amdgpu_job_ring(struct amdgpu_job *job)
+ 
+ int amdgpu_job_alloc(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 		     struct drm_sched_entity *entity, void *owner,
+-		     unsigned int num_ibs, struct amdgpu_job **job,
+-		     u64 drm_client_id);
++		     unsigned int num_ibs, u64 drm_client_id,
++		     struct amdgpu_job **job);
+ int amdgpu_job_alloc_with_ib(struct amdgpu_device *adev,
+ 			     struct drm_sched_entity *entity, void *owner,
+ 			     size_t size, enum amdgpu_ib_pool_type pool_type,
+-			     struct amdgpu_job **job,
+-			     u64 k_job_id);
++			     u64 k_job_id,
++			     struct amdgpu_job **job);
+ void amdgpu_job_set_resources(struct amdgpu_job *job, struct amdgpu_bo *gds,
+ 			      struct amdgpu_bo *gws, struct amdgpu_bo *oa);
+ void amdgpu_job_free_resources(struct amdgpu_job *job);
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_jpeg.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_jpeg.c
+index 57935c321515..363b99168478 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_jpeg.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_jpeg.c
+@@ -197,8 +197,9 @@ static int amdgpu_jpeg_dec_set_reg(struct amdgpu_ring *ring, uint32_t handle,
+ 	int i, r;
+ 
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, NULL, NULL, ib_size_dw * 4,
+-				     AMDGPU_IB_POOL_DIRECT, &job,
+-				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_IB_POOL_DIRECT,
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
+index 7920675af1d1..03c1e5e3580c 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
+@@ -244,8 +244,9 @@ static int amdgpu_ttm_map_buffer(struct amdgpu_ttm_buffer_entity *entity,
+ 	r = amdgpu_job_alloc_with_ib(adev, &entity->base,
+ 				     AMDGPU_FENCE_OWNER_UNDEFINED,
+ 				     num_dw * 4 + num_bytes,
+-				     AMDGPU_IB_POOL_DELAYED, &job,
+-				     AMDGPU_KERNEL_JOB_ID_TTM_MAP_BUFFER);
++				     AMDGPU_IB_POOL_DELAYED,
++				     AMDGPU_KERNEL_JOB_ID_TTM_MAP_BUFFER,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+@@ -1592,8 +1593,8 @@ static int amdgpu_ttm_access_memory_sdma(struct ttm_buffer_object *bo,
+ 	r = amdgpu_job_alloc_with_ib(adev, &adev->mman.default_entity.base,
+ 				     AMDGPU_FENCE_OWNER_UNDEFINED,
+ 				     num_dw * 4, AMDGPU_IB_POOL_DELAYED,
+-				     &job,
+-				     AMDGPU_KERNEL_JOB_ID_TTM_ACCESS_MEMORY_SDMA);
++				     AMDGPU_KERNEL_JOB_ID_TTM_ACCESS_MEMORY_SDMA,
++				     &job);
+ 	if (r)
+ 		goto out;
+ 
+@@ -2443,7 +2444,7 @@ static int amdgpu_ttm_prepare_job(struct amdgpu_device *adev,
+ 	int r;
+ 	r = amdgpu_job_alloc_with_ib(adev, &entity->base,
+ 				     AMDGPU_FENCE_OWNER_UNDEFINED,
+-				     num_dw * 4, pool, job, k_job_id);
++				     num_dw * 4, pool, k_job_id, job);
+ 	if (r)
+ 		return r;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_uvd.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_uvd.c
+index 23383ac5323f..e8b0c62f72be 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_uvd.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_uvd.c
+@@ -1165,8 +1165,9 @@ static int amdgpu_uvd_send_msg(struct amdgpu_ring *ring, struct amdgpu_bo *bo,
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, &adev->uvd.entity,
+ 				     AMDGPU_FENCE_OWNER_UNDEFINED,
+ 				     64, direct ? AMDGPU_IB_POOL_DIRECT :
+-				     AMDGPU_IB_POOL_DELAYED, &job,
+-				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_IB_POOL_DELAYED,
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vce.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vce.c
+index eef3c9853a5c..1f7a98cdce5a 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vce.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vce.c
+@@ -473,7 +473,8 @@ static int amdgpu_vce_get_create_msg(struct amdgpu_ring *ring, uint32_t handle,
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, &ring->adev->vce.entity,
+ 				     AMDGPU_FENCE_OWNER_UNDEFINED,
+ 				     ib_size_dw * 4, AMDGPU_IB_POOL_DIRECT,
+-				     &job, AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+@@ -564,8 +565,9 @@ static int amdgpu_vce_get_destroy_msg(struct amdgpu_ring *ring, uint32_t handle,
+ 				     AMDGPU_FENCE_OWNER_UNDEFINED,
+ 				     ib_size_dw * 4,
+ 				     direct ? AMDGPU_IB_POOL_DIRECT :
+-				     AMDGPU_IB_POOL_DELAYED, &job,
+-				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_IB_POOL_DELAYED,
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c
+index fe504f1a3fc8..17db7264269e 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c
+@@ -629,7 +629,8 @@ static int amdgpu_vcn_dec_send_msg(struct amdgpu_ring *ring,
+ 
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, NULL, NULL,
+ 				     64, AMDGPU_IB_POOL_DIRECT,
+-				     &job, AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		goto err;
+ 
+@@ -809,7 +810,8 @@ static int amdgpu_vcn_dec_sw_send_msg(struct amdgpu_ring *ring,
+ 
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, NULL, NULL,
+ 				     ib_size_dw * 4, AMDGPU_IB_POOL_DIRECT,
+-				     &job, AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		goto err;
+ 
+@@ -939,7 +941,8 @@ static int amdgpu_vcn_enc_get_create_msg(struct amdgpu_ring *ring, uint32_t hand
+ 
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, NULL, NULL,
+ 				     ib_size_dw * 4, AMDGPU_IB_POOL_DIRECT,
+-				     &job, AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+@@ -1006,7 +1009,8 @@ static int amdgpu_vcn_enc_get_destroy_msg(struct amdgpu_ring *ring, uint32_t han
+ 
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, NULL, NULL,
+ 				     ib_size_dw * 4, AMDGPU_IB_POOL_DIRECT,
+-				     &job, AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm_sdma.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm_sdma.c
+index fd09a2b5a147..430274237689 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm_sdma.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm_sdma.c
+@@ -56,7 +56,7 @@ static int amdgpu_vm_sdma_alloc_job(struct amdgpu_vm_update_params *p,
+ 	ndw = min(ndw, AMDGPU_VM_SDMA_MAX_NUM_DW);
+ 
+ 	r = amdgpu_job_alloc_with_ib(p->adev, entity, AMDGPU_FENCE_OWNER_VM,
+-				     ndw * 4, pool, &p->job, k_job_id);
++				     ndw * 4, pool, k_job_id, &p->job);
+ 	if (r)
+ 		return r;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c b/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c
+index 8bb9592b0981..bbd0e05d39e5 100644
+--- a/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c
+@@ -217,8 +217,9 @@ static int uvd_v6_0_enc_get_create_msg(struct amdgpu_ring *ring, uint32_t handle
+ 	int i, r;
+ 
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, NULL, NULL, ib_size_dw * 4,
+-				     AMDGPU_IB_POOL_DIRECT, &job,
+-				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_IB_POOL_DIRECT,
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+@@ -282,8 +283,9 @@ static int uvd_v6_0_enc_get_destroy_msg(struct amdgpu_ring *ring,
+ 	int i, r;
+ 
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, NULL, NULL, ib_size_dw * 4,
+-				     AMDGPU_IB_POOL_DIRECT, &job,
+-				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_IB_POOL_DIRECT,
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/uvd_v7_0.c b/drivers/gpu/drm/amd/amdgpu/uvd_v7_0.c
+index df2c83348315..46222fc30be6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/uvd_v7_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/uvd_v7_0.c
+@@ -225,8 +225,9 @@ static int uvd_v7_0_enc_get_create_msg(struct amdgpu_ring *ring, u32 handle,
+ 	int i, r;
+ 
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, NULL, NULL, ib_size_dw * 4,
+-				     AMDGPU_IB_POOL_DIRECT, &job,
+-				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_IB_POOL_DIRECT,
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+@@ -289,8 +290,9 @@ static int uvd_v7_0_enc_get_destroy_msg(struct amdgpu_ring *ring, u32 handle,
+ 	int i, r;
+ 
+ 	r = amdgpu_job_alloc_with_ib(ring->adev, NULL, NULL, ib_size_dw * 4,
+-				     AMDGPU_IB_POOL_DIRECT, &job,
+-				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
++				     AMDGPU_IB_POOL_DIRECT,
++				     AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_migrate.c b/drivers/gpu/drm/amd/amdkfd/kfd_migrate.c
+index 7cd236c1ff75..ed3649a81332 100644
+--- a/drivers/gpu/drm/amd/amdkfd/kfd_migrate.c
++++ b/drivers/gpu/drm/amd/amdkfd/kfd_migrate.c
+@@ -68,8 +68,8 @@ svm_migrate_gart_map(struct amdgpu_ring *ring,
+ 				     AMDGPU_FENCE_OWNER_UNDEFINED,
+ 				     num_dw * 4 + num_bytes,
+ 				     AMDGPU_IB_POOL_DELAYED,
+-				     &job,
+-				     AMDGPU_KERNEL_JOB_ID_KFD_GART_MAP);
++				     AMDGPU_KERNEL_JOB_ID_KFD_GART_MAP,
++				     &job);
+ 	if (r)
+ 		return r;
+ 
+-- 
+2.55.0
+

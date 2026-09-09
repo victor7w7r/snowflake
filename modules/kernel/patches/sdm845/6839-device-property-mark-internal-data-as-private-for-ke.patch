@@ -1,0 +1,49 @@
+From 5037353473201f51567cdd420fdc02bf6e973776 Mon Sep 17 00:00:00 2001
+From: Randy Dunlap <rdunlap@infradead.org>
+Date: Mon, 20 Jul 2026 19:32:18 -0700
+Subject: [PATCH 06839/15333] device property: mark internal data as private
+ for kernel-doc
+
+Mark the @value union members as private since they are an internal
+representation of @value. This prevents kernel-doc warnings:
+
+Warning: include/linux/property.h:406 struct member 'u8_data' not
+ described in 'property_entry'
+Warning: include/linux/property.h:406 struct member 'u16_data' not
+ described in 'property_entry'
+Warning: include/linux/property.h:406 struct member 'u32_data' not
+ described in 'property_entry'
+Warning: include/linux/property.h:406 struct member 'u64_data' not
+ described in 'property_entry'
+Warning: include/linux/property.h:406 struct member 'str' not described
+ in 'property_entry'
+
+Signed-off-by: Randy Dunlap <rdunlap@infradead.org>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/20260721023218.3490573-1-rdunlap@infradead.org
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ include/linux/property.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/include/linux/property.h b/include/linux/property.h
+index 14c304db4664..907c790a3f01 100644
+--- a/include/linux/property.h
++++ b/include/linux/property.h
+@@ -397,11 +397,13 @@ struct property_entry {
+ 	union {
+ 		const void *pointer;
+ 		union {
++			/* private: internal representation of @value */
+ 			u8 u8_data[sizeof(u64) / sizeof(u8)];
+ 			u16 u16_data[sizeof(u64) / sizeof(u16)];
+ 			u32 u32_data[sizeof(u64) / sizeof(u32)];
+ 			u64 u64_data[sizeof(u64) / sizeof(u64)];
+ 			const char *str[sizeof(u64) / sizeof(char *)];
++			/* public: */
+ 		} value;
+ 	};
+ };
+-- 
+2.55.0
+

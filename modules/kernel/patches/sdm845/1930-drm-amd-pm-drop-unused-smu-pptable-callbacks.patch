@@ -1,0 +1,230 @@
+From 719f83f3c67541b1392fb45851fb8ca7716dbde9 Mon Sep 17 00:00:00 2001
+From: Yang Wang <kevinyang.wang@amd.com>
+Date: Wed, 24 Jun 2026 13:47:18 +0800
+Subject: [PATCH 01930/15333] drm/amd/pm: drop unused smu pptable callbacks
+
+struct pptable_funcs still carries callback slots that no longer have
+call paths, drop the following unused callback slots:
+
+- baco_get_state()
+- baco_set_state()
+- set_power_state()
+- get_clock_by_type_with_voltage()
+- set_azalia_d3_pme()
+
+Signed-off-by: Yang Wang <kevinyang.wang@amd.com>
+Reviewed-by: Kenneth Feng <kenneth.feng@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h | 29 -------------------
+ drivers/gpu/drm/amd/pm/swsmu/inc/smu_v11_0.h  |  2 --
+ drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h  |  2 --
+ .../gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c |  1 -
+ .../gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c   |  1 -
+ .../amd/pm/swsmu/smu11/sienna_cichlid_ppt.c   |  1 -
+ .../gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c    |  5 ----
+ .../gpu/drm/amd/pm/swsmu/smu12/renoir_ppt.c   |  1 -
+ .../drm/amd/pm/swsmu/smu13/aldebaran_ppt.c    |  1 -
+ .../gpu/drm/amd/pm/swsmu/smu13/smu_v13_0.c    |  9 ------
+ .../drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c  |  2 --
+ 11 files changed, 54 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h b/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
+index d76e0b005308..38a8249570a9 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/amdgpu_smu.h
+@@ -849,8 +849,6 @@ struct pptable_funcs {
+ 	 */
+ 	int (*set_default_dpm_table)(struct smu_context *smu);
+ 
+-	int (*set_power_state)(struct smu_context *smu);
+-
+ 	/**
+ 	 * @populate_umd_state_clk: Populate the UMD power state table with
+ 	 *                          defaults.
+@@ -903,16 +901,6 @@ struct pptable_funcs {
+ 					      struct
+ 					      pp_clock_levels_with_latency
+ 					      *clocks);
+-	/**
+-	 * @get_clock_by_type_with_voltage: Get the speed and voltage of a clock
+-	 *                                  domain.
+-	 */
+-	int (*get_clock_by_type_with_voltage)(struct smu_context *smu,
+-					      enum amd_pp_clock_type type,
+-					      struct
+-					      pp_clock_levels_with_voltage
+-					      *clocks);
+-
+ 	/**
+ 	 * @get_power_profile_mode: Print all power profile modes to
+ 	 *                          buffer. Star current mode.
+@@ -1354,11 +1342,6 @@ struct pptable_funcs {
+ 	 */
+ 	int (*register_irq_handler)(struct smu_context *smu);
+ 
+-	/**
+-	 * @set_azalia_d3_pme: Wake the audio decode engine from d3 sleep.
+-	 */
+-	int (*set_azalia_d3_pme)(struct smu_context *smu);
+-
+ 	/**
+ 	 * @get_max_sustainable_clocks_by_dc: Get a copy of the max sustainable
+ 	 *                                    clock speeds table.
+@@ -1375,18 +1358,6 @@ struct pptable_funcs {
+ 	 */
+ 	int (*get_bamaco_support)(struct smu_context *smu);
+ 
+-	/**
+-	 * @baco_get_state: Get the current BACO state.
+-	 *
+-	 * Return: Current BACO state.
+-	 */
+-	enum smu_baco_state (*baco_get_state)(struct smu_context *smu);
+-
+-	/**
+-	 * @baco_set_state: Enter/exit BACO.
+-	 */
+-	int (*baco_set_state)(struct smu_context *smu, enum smu_baco_state state);
+-
+ 	/**
+ 	 * @baco_enter: Enter BACO.
+ 	 */
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v11_0.h b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v11_0.h
+index dd94e8a9e218..c0accee9a9c8 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v11_0.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v11_0.h
+@@ -199,8 +199,6 @@ int smu_v11_0_gfx_off_control(struct smu_context *smu, bool enable);
+ 
+ int smu_v11_0_register_irq_handler(struct smu_context *smu);
+ 
+-int smu_v11_0_set_azalia_d3_pme(struct smu_context *smu);
+-
+ int smu_v11_0_get_max_sustainable_clocks_by_dc(struct smu_context *smu,
+ 		struct pp_smu_nv_clock_table *max_clocks);
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h
+index 68f4de5f800c..7f21f867d73c 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_v13_0.h
+@@ -180,8 +180,6 @@ int smu_v13_0_gfx_off_control(struct smu_context *smu, bool enable);
+ 
+ int smu_v13_0_register_irq_handler(struct smu_context *smu);
+ 
+-int smu_v13_0_set_azalia_d3_pme(struct smu_context *smu);
+-
+ int smu_v13_0_get_max_sustainable_clocks_by_dc(struct smu_context *smu,
+ 					       struct pp_smu_nv_clock_table *max_clocks);
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c
+index 06898eaa96b8..db5db2c9c8e8 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/arcturus_ppt.c
+@@ -1933,7 +1933,6 @@ static const struct pptable_funcs arcturus_ppt_funcs = {
+ 	.set_xgmi_pstate = smu_v11_0_set_xgmi_pstate,
+ 	.gfx_off_control = smu_v11_0_gfx_off_control,
+ 	.register_irq_handler = smu_v11_0_register_irq_handler,
+-	.set_azalia_d3_pme = smu_v11_0_set_azalia_d3_pme,
+ 	.get_max_sustainable_clocks_by_dc = smu_v11_0_get_max_sustainable_clocks_by_dc,
+ 	.get_bamaco_support = smu_v11_0_get_bamaco_support,
+ 	.baco_enter = smu_v11_0_baco_enter,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
+index 7e7b082fce19..8feea44f3ca0 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/navi10_ppt.c
+@@ -3338,7 +3338,6 @@ static const struct pptable_funcs navi10_ppt_funcs = {
+ 	.set_xgmi_pstate = smu_v11_0_set_xgmi_pstate,
+ 	.gfx_off_control = smu_v11_0_gfx_off_control,
+ 	.register_irq_handler = smu_v11_0_register_irq_handler,
+-	.set_azalia_d3_pme = smu_v11_0_set_azalia_d3_pme,
+ 	.get_max_sustainable_clocks_by_dc = smu_v11_0_get_max_sustainable_clocks_by_dc,
+ 	.get_bamaco_support = smu_v11_0_get_bamaco_support,
+ 	.baco_enter = navi10_baco_enter,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c
+index 0ac789058d12..c0de73b85353 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/sienna_cichlid_ppt.c
+@@ -3145,7 +3145,6 @@ static const struct pptable_funcs sienna_cichlid_ppt_funcs = {
+ 	.set_xgmi_pstate = smu_v11_0_set_xgmi_pstate,
+ 	.gfx_off_control = smu_v11_0_gfx_off_control,
+ 	.register_irq_handler = smu_v11_0_register_irq_handler,
+-	.set_azalia_d3_pme = smu_v11_0_set_azalia_d3_pme,
+ 	.get_max_sustainable_clocks_by_dc = smu_v11_0_get_max_sustainable_clocks_by_dc,
+ 	.get_bamaco_support = smu_v11_0_get_bamaco_support,
+ 	.baco_enter = sienna_cichlid_baco_enter,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c
+index b2cba36046a1..a889d846e9c5 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/smu_v11_0.c
+@@ -1417,11 +1417,6 @@ int smu_v11_0_get_max_sustainable_clocks_by_dc(struct smu_context *smu,
+ 	return 0;
+ }
+ 
+-int smu_v11_0_set_azalia_d3_pme(struct smu_context *smu)
+-{
+-	return smu_cmn_send_smc_msg(smu, SMU_MSG_BacoAudioD3PME, NULL);
+-}
+-
+ int smu_v11_0_baco_set_armd3_sequence(struct smu_context *smu,
+ 				      enum smu_baco_seq baco_seq)
+ {
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu12/renoir_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu12/renoir_ppt.c
+index 75335da224c7..2b011610e3c7 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu12/renoir_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu12/renoir_ppt.c
+@@ -1444,7 +1444,6 @@ static int renoir_get_enabled_mask(struct smu_context *smu,
+ }
+ 
+ static const struct pptable_funcs renoir_ppt_funcs = {
+-	.set_power_state = NULL,
+ 	.emit_clk_levels = renoir_emit_clk_levels,
+ 	.get_current_power_state = renoir_get_current_power_state,
+ 	.dpm_set_vcn_enable = renoir_dpm_set_vcn_enable,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/aldebaran_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/aldebaran_ppt.c
+index 9d8b1227388f..cd7bf36673cb 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/aldebaran_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/aldebaran_ppt.c
+@@ -2004,7 +2004,6 @@ static const struct pptable_funcs aldebaran_ppt_funcs = {
+ 	.disable_thermal_alert = smu_v13_0_disable_thermal_alert,
+ 	.set_xgmi_pstate = smu_v13_0_set_xgmi_pstate,
+ 	.register_irq_handler = smu_v13_0_register_irq_handler,
+-	.set_azalia_d3_pme = smu_v13_0_set_azalia_d3_pme,
+ 	.get_max_sustainable_clocks_by_dc = smu_v13_0_get_max_sustainable_clocks_by_dc,
+ 	.get_bamaco_support = aldebaran_get_bamaco_support,
+ 	.get_dpm_ultimate_freq = aldebaran_get_dpm_ultimate_freq,
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0.c b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0.c
+index 492467154ab9..4f10bce36756 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu13/smu_v13_0.c
+@@ -1320,15 +1320,6 @@ int smu_v13_0_get_max_sustainable_clocks_by_dc(struct smu_context *smu,
+ 	return 0;
+ }
+ 
+-int smu_v13_0_set_azalia_d3_pme(struct smu_context *smu)
+-{
+-	int ret = 0;
+-
+-	ret = smu_cmn_send_smc_msg(smu, SMU_MSG_BacoAudioD3PME, NULL);
+-
+-	return ret;
+-}
+-
+ static int smu_v13_0_wait_for_reset_complete(struct smu_context *smu,
+ 					     uint64_t event_arg)
+ {
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
+index 1bb418f17025..d6cf643205ab 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu14/smu_v14_0_2_ppt.c
+@@ -2890,8 +2890,6 @@ static const struct pptable_funcs smu_v14_0_2_ppt_funcs = {
+ 	.deep_sleep_control = smu_v14_0_deep_sleep_control,
+ 	.gfx_ulv_control = smu_v14_0_gfx_ulv_control,
+ 	.get_bamaco_support = smu_v14_0_get_bamaco_support,
+-	.baco_get_state = smu_v14_0_baco_get_state,
+-	.baco_set_state = smu_v14_0_baco_set_state,
+ 	.baco_enter = smu_v14_0_2_baco_enter,
+ 	.baco_exit = smu_v14_0_2_baco_exit,
+ 	.mode1_reset_is_support = smu_v14_0_2_is_mode1_reset_supported,
+-- 
+2.55.0
+

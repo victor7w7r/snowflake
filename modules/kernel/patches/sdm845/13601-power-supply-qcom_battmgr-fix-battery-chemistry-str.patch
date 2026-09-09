@@ -1,0 +1,41 @@
+From 37689bcbc41b3850781b6c84f90cb4bd632bfbf0 Mon Sep 17 00:00:00 2001
+From: Tingguo Cheng <tingguoc@qti.qualcomm.com>
+Date: Wed, 12 Aug 2026 00:44:47 -0700
+Subject: [PATCH 13601/15333] power: supply: qcom_battmgr: fix battery
+ chemistry strncmp length
+
+The battery_chemistry field is a 4-byte array without guaranteed null
+termination. Using BATTMGR_CHEMISTRY_LEN (4) as the strncmp length for
+3-character string literals implicitly requires chemistry[3] == '\0',
+which may not hold. Use 3 instead to match only the significant bytes.
+
+Signed-off-by: Tingguo Cheng <tingguo.cheng@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260812-fix-qcom-batt-chemistry-strn-v1-1-458545e02641@oss.qualcomm.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/qcom_battmgr.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/power/supply/qcom_battmgr.c b/drivers/power/supply/qcom_battmgr.c
+index 91cf39b0083a..7716eb9e1aff 100644
+--- a/drivers/power/supply/qcom_battmgr.c
++++ b/drivers/power/supply/qcom_battmgr.c
+@@ -1238,11 +1238,11 @@ static void qcom_battmgr_sc8280xp_strcpy(char *dest, const char *src)
+ 
+ static unsigned int qcom_battmgr_sc8280xp_parse_technology(const char *chemistry)
+ {
+-	if ((!strncmp(chemistry, "LIO", BATTMGR_CHEMISTRY_LEN)) ||
+-	    (!strncmp(chemistry, "OOI", BATTMGR_CHEMISTRY_LEN)))
++	if ((!strncmp(chemistry, "LIO", 3)) ||
++	    (!strncmp(chemistry, "OOI", 3)))
+ 		return POWER_SUPPLY_TECHNOLOGY_LION;
+-	if (!strncmp(chemistry, "LIP", BATTMGR_CHEMISTRY_LEN) ||
+-	    !strncmp(chemistry, "LiP", BATTMGR_CHEMISTRY_LEN))
++	if (!strncmp(chemistry, "LIP", 3) ||
++	    !strncmp(chemistry, "LiP", 3))
+ 		return POWER_SUPPLY_TECHNOLOGY_LIPO;
+ 
+ 	pr_err("Unknown battery technology '%s'\n", chemistry);
+-- 
+2.55.0
+

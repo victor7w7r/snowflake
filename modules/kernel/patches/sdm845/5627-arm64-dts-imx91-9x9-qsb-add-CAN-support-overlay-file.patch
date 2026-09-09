@@ -1,0 +1,94 @@
+From 356894c37aa1f8ab430cef5d69176123b0ec98b3 Mon Sep 17 00:00:00 2001
+From: Haibo Chen <haibo.chen@nxp.com>
+Date: Fri, 10 Jul 2026 18:12:20 +0800
+Subject: [PATCH 05627/15333] arm64: dts: imx91-9x9-qsb: add CAN support
+ overlay file
+
+On the i.MX91 9x9 QSB, CAN1 and MICFIL share pins. A TMUX1574RSVR
+analog mux controls the routing: when SEL is driven high, CAN1 is
+selected; when SEL is driven low, MICFIL is selected. By default,
+SEL is kept low.
+
+To enable CAN1, SEL must be driven high. This is done via the can_fun
+function defined in the pinctrl-gpiomux node. CAN1 uses the
+TJA1057GT/3 PHY.
+
+Signed-off-by: Haibo Chen <haibo.chen@nxp.com>
+Signed-off-by: Frank Li <Frank.Li@nxp.com>
+---
+ arch/arm64/boot/dts/freescale/Makefile        |  2 +
+ .../dts/freescale/imx91-9x9-qsb-can1.dtso     | 48 +++++++++++++++++++
+ 2 files changed, 50 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/freescale/imx91-9x9-qsb-can1.dtso
+
+diff --git a/arch/arm64/boot/dts/freescale/Makefile b/arch/arm64/boot/dts/freescale/Makefile
+index 7d77856d3e7d..b60b43071936 100644
+--- a/arch/arm64/boot/dts/freescale/Makefile
++++ b/arch/arm64/boot/dts/freescale/Makefile
+@@ -580,7 +580,9 @@ dtb-$(CONFIG_ARCH_MXC) += imx91-11x11-frdm.dtb
+ dtb-$(CONFIG_ARCH_MXC) += imx91-11x11-frdm-s.dtb
+ dtb-$(CONFIG_ARCH_MXC) += imx91-phyboard-segin.dtb
+ 
++imx91-9x9-qsb-can1-dtbs += imx91-9x9-qsb.dtb imx91-9x9-qsb-can1.dtbo
+ imx91-phyboard-segin-peb-av-18-dtbs += imx91-phyboard-segin.dtb imx91-phyboard-segin-peb-av-18.dtbo
++dtb-$(CONFIG_ARCH_MXC) += imx91-9x9-qsb-can1.dtb
+ dtb-$(CONFIG_ARCH_MXC) += imx91-phyboard-segin-peb-av-18.dtb
+ 
+ dtb-$(CONFIG_ARCH_MXC) += imx91-tqma9131-mba91xxca.dtb
+diff --git a/arch/arm64/boot/dts/freescale/imx91-9x9-qsb-can1.dtso b/arch/arm64/boot/dts/freescale/imx91-9x9-qsb-can1.dtso
+new file mode 100644
+index 000000000000..b8343d653e51
+--- /dev/null
++++ b/arch/arm64/boot/dts/freescale/imx91-9x9-qsb-can1.dtso
+@@ -0,0 +1,48 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++/*
++ * Copyright 2026 NXP
++ */
++
++#include <dt-bindings/gpio/gpio.h>
++#include "imx91-pinfunc.h"
++
++/dts-v1/;
++/plugin/;
++
++&{/} {
++	flexcan_phy: can-phy {
++		compatible = "nxp,tja1057";
++		#phy-cells = <0>;
++		max-bitrate = <5000000>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pinctrl_flexcan_phy>;
++		silent-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
++	};
++};
++
++&flexcan1 {
++	phys = <&flexcan_phy>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_flexcan1>, <&can_fun>;
++	status = "okay";
++};
++
++&iomuxc {
++	pinctrl_flexcan_phy: flexcanphygrp {
++		fsl,pins = <
++			MX91_PAD_PDM_BIT_STREAM1__GPIO1_IO10	0x31e
++		>;
++	};
++
++	pinctrl_flexcan1: flexcan1grp {
++		fsl,pins = <
++			MX91_PAD_PDM_CLK__CAN1_TX		0x139e
++			MX91_PAD_PDM_BIT_STREAM0__CAN1_RX	0x139e
++		>;
++	};
++};
++
++/* micfil uses PDM port A pins, conflicts with can1 */
++&micfil {
++	status = "disabled";
++};
+-- 
+2.55.0
+

@@ -1,0 +1,169 @@
+From 95b39df0413077b631cde9c6e35224c15258ccf5 Mon Sep 17 00:00:00 2001
+From: Eric Biggers <ebiggers@kernel.org>
+Date: Sun, 12 Jul 2026 22:36:54 -0400
+Subject: [PATCH 06040/15333] blk-crypto: Allow control over whether hardware
+ is used
+
+fscrypt uses inline encryption hardware only when the "inlinecrypt"
+mount option is given.  I'd like to keep that behavior even after
+standardizing on the blk-crypto API for file contents encryption.  That
+is, the default should continue to be the well-tested CPU-based
+encryption code, and the use of inline encryption hardware should
+continue to be an opt-in feature for systems where it's beneficial and
+has been fully validated (including verifying ciphertext correctness).
+
+To support this use case, extend blk_crypto_config with a new flag
+BLK_CRYPTO_CFG_ALLOW_HW.
+
+For now it's always set.  Later commits will change that.
+
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Link: https://patch.msgid.link/20260713023708.9245-4-ebiggers@kernel.org
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+---
+ block/blk-crypto.c          | 11 ++++++++++-
+ drivers/md/dm-inlinecrypt.c |  3 ++-
+ fs/crypto/inline_crypt.c    |  4 +++-
+ include/linux/blk-crypto.h  | 13 ++++++++++++-
+ 4 files changed, 27 insertions(+), 4 deletions(-)
+
+diff --git a/block/blk-crypto.c b/block/blk-crypto.c
+index de60f03b4d4b..0fe6ef0eea1d 100644
+--- a/block/blk-crypto.c
++++ b/block/blk-crypto.c
+@@ -300,6 +300,7 @@ int __blk_crypto_rq_bio_prep(struct request *rq, struct bio *bio,
+  * @dun_bytes: number of bytes that will be used to specify the DUN when this
+  *	       key is used
+  * @data_unit_size: the data unit size to use for en/decryption
++ * @flags: BLK_CRYPTO_CFG_* flags
+  *
+  * Return: 0 on success, -errno on failure.  The caller is responsible for
+  *	   zeroizing both blk_key and key_bytes when done with them.
+@@ -309,7 +310,7 @@ int blk_crypto_init_key(struct blk_crypto_key *blk_key,
+ 			enum blk_crypto_key_type key_type,
+ 			enum blk_crypto_mode_num crypto_mode,
+ 			unsigned int dun_bytes,
+-			unsigned int data_unit_size)
++			unsigned int data_unit_size, int flags)
+ {
+ 	const struct blk_crypto_mode *mode;
+ 
+@@ -318,6 +319,9 @@ int blk_crypto_init_key(struct blk_crypto_key *blk_key,
+ 	if (crypto_mode >= ARRAY_SIZE(blk_crypto_modes))
+ 		return -EINVAL;
+ 
++	if (flags & ~BLK_CRYPTO_CFG_ALLOW_HW)
++		return -EINVAL;
++
+ 	mode = &blk_crypto_modes[crypto_mode];
+ 	switch (key_type) {
+ 	case BLK_CRYPTO_KEY_TYPE_RAW:
+@@ -328,6 +332,8 @@ int blk_crypto_init_key(struct blk_crypto_key *blk_key,
+ 		if (key_size < mode->security_strength ||
+ 		    key_size > BLK_CRYPTO_MAX_HW_WRAPPED_KEY_SIZE)
+ 			return -EINVAL;
++		if (!(flags & BLK_CRYPTO_CFG_ALLOW_HW))
++			return -EINVAL;
+ 		break;
+ 	default:
+ 		return -EINVAL;
+@@ -343,6 +349,7 @@ int blk_crypto_init_key(struct blk_crypto_key *blk_key,
+ 	blk_key->crypto_cfg.dun_bytes = dun_bytes;
+ 	blk_key->crypto_cfg.data_unit_size = data_unit_size;
+ 	blk_key->crypto_cfg.key_type = key_type;
++	blk_key->crypto_cfg.flags = flags;
+ 	blk_key->data_unit_size_bits = ilog2(data_unit_size);
+ 	blk_key->size = key_size;
+ 	memcpy(blk_key->bytes, key_bytes, key_size);
+@@ -368,6 +375,8 @@ bool blk_crypto_config_supported_natively(struct block_device *bdev,
+ 
+ 	if (!profile)
+ 		return false;
++	if (!(cfg->flags & BLK_CRYPTO_CFG_ALLOW_HW))
++		return false;
+ 	if (!(profile->modes_supported[cfg->crypto_mode] & cfg->data_unit_size))
+ 		return false;
+ 	if (profile->max_dun_bytes_supported < cfg->dun_bytes)
+diff --git a/drivers/md/dm-inlinecrypt.c b/drivers/md/dm-inlinecrypt.c
+index 41293c18d10f..f50970db0f94 100644
+--- a/drivers/md/dm-inlinecrypt.c
++++ b/drivers/md/dm-inlinecrypt.c
+@@ -408,7 +408,8 @@ static int inlinecrypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
+ 
+ 	err = blk_crypto_init_key(&ctx->key, key_bytes, ctx->key_size,
+ 				  ctx->key_type, cipher->mode_num,
+-				  dun_bytes, ctx->sector_size);
++				  dun_bytes, ctx->sector_size,
++				  BLK_CRYPTO_CFG_ALLOW_HW);
+ 	if (err) {
+ 		ti->error = "Error initializing blk-crypto key";
+ 		goto bad;
+diff --git a/fs/crypto/inline_crypt.c b/fs/crypto/inline_crypt.c
+index 66b9c9150fed..013f2bdc6f23 100644
+--- a/fs/crypto/inline_crypt.c
++++ b/fs/crypto/inline_crypt.c
+@@ -126,6 +126,7 @@ int fscrypt_select_encryption_impl(struct fscrypt_inode_info *ci,
+ 	crypto_cfg.dun_bytes = fscrypt_get_dun_bytes(ci);
+ 	crypto_cfg.key_type = is_hw_wrapped_key ?
+ 		BLK_CRYPTO_KEY_TYPE_HW_WRAPPED : BLK_CRYPTO_KEY_TYPE_RAW;
++	crypto_cfg.flags = BLK_CRYPTO_CFG_ALLOW_HW;
+ 
+ 	num_devs = fscrypt_get_devices(sb, devs);
+ 	for (i = 0; i < num_devs; i++) {
+@@ -162,7 +163,8 @@ int fscrypt_prepare_inline_crypt_key(struct fscrypt_prepared_key *prep_key,
+ 
+ 	err = blk_crypto_init_key(blk_key, key_bytes, key_size, key_type,
+ 				  crypto_mode, fscrypt_get_dun_bytes(ci),
+-				  1U << ci->ci_data_unit_bits);
++				  1U << ci->ci_data_unit_bits,
++				  BLK_CRYPTO_CFG_ALLOW_HW);
+ 	if (err) {
+ 		fscrypt_err(inode, "error %d initializing blk-crypto key", err);
+ 		goto fail;
+diff --git a/include/linux/blk-crypto.h b/include/linux/blk-crypto.h
+index f7c3cb4a342f..5f40821f99cd 100644
+--- a/include/linux/blk-crypto.h
++++ b/include/linux/blk-crypto.h
+@@ -68,6 +68,15 @@ enum blk_crypto_key_type {
+  */
+ #define BLK_CRYPTO_SW_SECRET_SIZE	32
+ 
++/* Flags for blk_crypto_config::flags: */
++
++/*
++ * If set, inline encryption hardware will be used if available.
++ * If unset, CPU-based encryption will always be used (requires
++ * CONFIG_BLK_INLINE_ENCRYPTION_FALLBACK)
++ */
++#define BLK_CRYPTO_CFG_ALLOW_HW		(1 << 0)
++
+ /**
+  * struct blk_crypto_config - an inline encryption key's crypto configuration
+  * @crypto_mode: encryption algorithm this key is for
+@@ -77,12 +86,14 @@ enum blk_crypto_key_type {
+  *	filesystem block size or the disk sector size.
+  * @dun_bytes: the maximum number of bytes of DUN used when using this key
+  * @key_type: the type of this key -- either raw or hardware-wrapped
++ * @flags: BLK_CRYPTO_CFG_* flags
+  */
+ struct blk_crypto_config {
+ 	enum blk_crypto_mode_num crypto_mode;
+ 	unsigned int data_unit_size;
+ 	unsigned int dun_bytes;
+ 	enum blk_crypto_key_type key_type;
++	int flags;
+ };
+ 
+ /**
+@@ -150,7 +161,7 @@ int blk_crypto_init_key(struct blk_crypto_key *blk_key,
+ 			enum blk_crypto_key_type key_type,
+ 			enum blk_crypto_mode_num crypto_mode,
+ 			unsigned int dun_bytes,
+-			unsigned int data_unit_size);
++			unsigned int data_unit_size, int flags);
+ 
+ int blk_crypto_start_using_key(struct block_device *bdev,
+ 			       const struct blk_crypto_key *key);
+-- 
+2.55.0
+

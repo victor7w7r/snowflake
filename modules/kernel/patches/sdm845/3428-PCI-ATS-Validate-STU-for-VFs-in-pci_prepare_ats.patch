@@ -1,0 +1,55 @@
+From 6fd7c5c81af233e1745d23c1f5d44a8a04c92209 Mon Sep 17 00:00:00 2001
+From: Pranjal Shrivastava <praan@google.com>
+Date: Mon, 15 Jun 2026 23:50:35 +0000
+Subject: [PATCH 03428/15333] PCI/ATS: Validate STU for VFs in
+ pci_prepare_ats()
+
+While every PCI Function that implements ATS has an independent ATS
+Extended Capability structure with a Read/Write Smallest Translation
+Unit (STU) field, the kernel manages SR-IOV ATS by requiring the IOMMU
+driver to configure the STU on the Physical Function (PF) before any
+any Virtual Functions (VFs) are created.
+
+Currently, pci_prepare_ats() bails out early for VFs, assuming that the
+PF has already been correctly prepared. However, this creates a potential
+mismatch if a VF is subsequently prepared with a different page shift.
+
+Update pci_prepare_ats() to validate that the requested page shift (ps)
+matches the STU already configured in the associated PF. This ensures
+early detection of incompatible configurations and maintains the kernel's
+policy of consistent STU sizing across all functions associated with a
+given SMMU.
+
+Reviewed-by: Jason Gunthorpe <jgg@nvidia.com>
+Reviewed-by: Samiullah Khawaja <skhawaja@google.com>
+Reviewed-by: Nicolin Chen <nicolinc@nvidia.com>
+Reviewed-by: Lu Baolu <baolu.lu@linux.intel.com>
+Reviewed-by: Kevin Tian <kevin.tian@intel.com>
+Acked-by: Bjorn Helgaas <bhelgaas@google.com>
+Signed-off-by: Pranjal Shrivastava <praan@google.com>
+Signed-off-by: Joerg Roedel <joerg.roedel@amd.com>
+---
+ drivers/pci/ats.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/pci/ats.c b/drivers/pci/ats.c
+index 679a3c3c1d54..9cb23780093d 100644
+--- a/drivers/pci/ats.c
++++ b/drivers/pci/ats.c
+@@ -73,8 +73,12 @@ int pci_prepare_ats(struct pci_dev *dev, int ps)
+ 	if (ps < PCI_ATS_MIN_STU)
+ 		return -EINVAL;
+ 
+-	if (dev->is_virtfn)
++	if (dev->is_virtfn) {
++		if (pci_physfn(dev)->ats_stu != ps)
++			return -EINVAL;
++
+ 		return 0;
++	}
+ 
+ 	dev->ats_stu = ps;
+ 	ctrl = PCI_ATS_CTRL_STU(dev->ats_stu - PCI_ATS_MIN_STU);
+-- 
+2.55.0
+

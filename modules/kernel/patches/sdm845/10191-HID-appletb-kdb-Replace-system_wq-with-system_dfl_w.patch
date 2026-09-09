@@ -1,0 +1,59 @@
+From 26829c0aeae9aa16d4bcf106488494abd312230b Mon Sep 17 00:00:00 2001
+From: Marco Crivellari <marco.crivellari@suse.com>
+Date: Tue, 7 Jul 2026 16:53:03 +0200
+Subject: [PATCH 10191/15333] HID: appletb-kdb: Replace system_wq with
+ system_dfl_wq
+
+Currently the code enqueue work items using mod_delayed_work(), using
+system_wq, the old per-CPU Workqueue.
+
+The function end up calling __queue_delayed_work(), which set a global
+timer that could fire anywhere, enqueuing the work where the timer fired.
+
+Unbound works could benefit from scheduler task placement, to optimize
+performance and power consumption.
+
+Since the workqueue work doesn't rely on per-cpu variables, there is no
+obvious reason that justify the use of a per-cpu workqueue. So change the
+workqueue with the new unbound version, system_dfl_wq.
+
+Signed-off-by: Marco Crivellari <marco.crivellari@suse.com>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ drivers/hid/hid-appletb-kbd.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/hid/hid-appletb-kbd.c b/drivers/hid/hid-appletb-kbd.c
+index 462010a75899..5cc27066f602 100644
+--- a/drivers/hid/hid-appletb-kbd.c
++++ b/drivers/hid/hid-appletb-kbd.c
+@@ -175,7 +175,7 @@ static void appletb_inactivity_work(struct work_struct *work)
+ 		if (!kbd->has_dimmed) {
+ 			backlight_device_set_brightness(kbd->backlight_dev, 1);
+ 			kbd->has_dimmed = true;
+-			mod_delayed_work(system_wq, &kbd->inactivity_work,
++			mod_delayed_work(system_dfl_wq, &kbd->inactivity_work,
+ 					 secs_to_jiffies(appletb_tb_idle_timeout));
+ 		} else if (!kbd->has_turned_off) {
+ 			backlight_device_set_brightness(kbd->backlight_dev, 0);
+@@ -201,7 +201,7 @@ static void reset_inactivity_timer(struct appletb_kbd *kbd)
+ 			kbd->has_turned_off = false;
+ 			schedule_work(&kbd->restore_brightness_work);
+ 		}
+-		mod_delayed_work(system_wq, &kbd->inactivity_work,
++		mod_delayed_work(system_dfl_wq, &kbd->inactivity_work,
+ 				 secs_to_jiffies(appletb_tb_dim_timeout));
+ 	}
+ }
+@@ -423,7 +423,7 @@ static int appletb_kbd_probe(struct hid_device *hdev, const struct hid_device_id
+ 		INIT_DELAYED_WORK(&kbd->inactivity_work, appletb_inactivity_work);
+ 		INIT_WORK(&kbd->restore_brightness_work,
+ 			  appletb_restore_brightness_work);
+-		mod_delayed_work(system_wq, &kbd->inactivity_work,
++		mod_delayed_work(system_dfl_wq, &kbd->inactivity_work,
+ 				 secs_to_jiffies(appletb_tb_dim_timeout));
+ 	}
+ 
+-- 
+2.55.0
+

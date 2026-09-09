@@ -1,0 +1,43 @@
+From 596289fe4836067b0320c80a9ab0101b9f7f9328 Mon Sep 17 00:00:00 2001
+From: Fuad Tabba <fuad.tabba@linux.dev>
+Date: Tue, 21 Jul 2026 17:16:24 +0100
+Subject: [PATCH 06293/15333] KVM: arm64: Sync SCTLR_EL1 when injecting an
+ exception into a pVM
+
+When pKVM injects a synchronous exception into a protected guest,
+enter_exception64() reads SCTLR_EL1 to set the new PSTATE's PAN and
+SSBS bits. pKVM refreshes VBAR_EL1 from the live value before injecting
+but not SCTLR_EL1, which is untrapped for protected guests, so a guest
+that updates it and then traps takes the exception with stale PAN/SSBS.
+
+Sync SCTLR_EL1 alongside VBAR_EL1.
+
+Fixes: 798eb5978700 ("KVM: arm64: Sync protected guest VBAR_EL1 on injecting an undef exception")
+Signed-off-by: Fuad Tabba <fuad.tabba@linux.dev>
+Link: https://patch.msgid.link/20260721161624.3983041-1-fuad.tabba@linux.dev
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/hyp/nvhe/sys_regs.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/kvm/hyp/nvhe/sys_regs.c b/arch/arm64/kvm/hyp/nvhe/sys_regs.c
+index 8c3fbb413a06..7608cc4030b8 100644
+--- a/arch/arm64/kvm/hyp/nvhe/sys_regs.c
++++ b/arch/arm64/kvm/hyp/nvhe/sys_regs.c
+@@ -257,10 +257,11 @@ static void inject_sync64(struct kvm_vcpu *vcpu, u64 esr)
+ 	*vcpu_cpsr(vcpu) = read_sysreg_el2(SYS_SPSR);
+ 
+ 	/*
+-	 * Make sure we have the latest update to VBAR_EL1, as pKVM
+-	 * handles traps very early, before sysregs are resync'ed
++	 * Sync VBAR_EL1 and SCTLR_EL1, both read by enter_exception64(),
++	 * as pKVM handles traps before sysregs are resync'ed.
+ 	 */
+ 	__vcpu_assign_sys_reg(vcpu, VBAR_EL1, read_sysreg_el1(SYS_VBAR));
++	__vcpu_assign_sys_reg(vcpu, SCTLR_EL1, read_sysreg_el1(SYS_SCTLR));
+ 
+ 	kvm_pend_exception(vcpu, EXCEPT_AA64_EL1_SYNC);
+ 
+-- 
+2.55.0
+

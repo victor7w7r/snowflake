@@ -1,0 +1,294 @@
+From d12ff7e0116f085b57550c2b431f37fd1b2c065f Mon Sep 17 00:00:00 2001
+From: Liu Ying <victor.liu@nxp.com>
+Date: Thu, 23 Jul 2026 14:37:32 +0800
+Subject: [PATCH 08178/15333] drm/bridge: imx: Add i.MX93 parallel display
+ format configuration support
+
+NXP i.MX93 mediamix blk-ctrl contains one DISPLAY_MUX register which
+configures parallel display format by using the "PARALLEL_DISP_FORMAT"
+field. Add a DRM bridge driver to support the display format configuration.
+
+[m.felsch@pengutronix.de: port to v7.0-rc1]
+[m.felsch@pengutronix.de: add review feedback (Alexander)]
+[m.felsch@pengutronix.de: fix to short Kconfig description (checkpath)]
+[m.felsch@pengutronix.de: use "GPL" instead of "GPL v2" (checkpatch)]
+[m.felsch@pengutronix.de: add bus-width support]
+[ Liu Ying: Port to drm-misc/drm-misc-next(v7.2-rc2 based) ]
+[ Liu Ying: Add nxp,imx91-pdfc compatible string ]
+[ Liu Ying: Call drm_bridge_get() for next_bridge ]
+[ Liu Ying: Reject unsupported output bus fmt in .atomic_get_input_bus_fmts() ]
+
+Reviewed-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+Signed-off-by: Marco Felsch <m.felsch@pengutronix.de>
+Reviewed-by: Alexander Stein <alexander.stein@ew.tq-group.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Reviewed-by: Laurentiu Palcu <laurentiu.palcu@oss.nxp.com>
+Link: https://patch.msgid.link/20260723-v6-18-topic-imx93-parallel-display-v13-1-ccf3f9bbc0fc@nxp.com
+Signed-off-by: Liu Ying <victor.liu@nxp.com>
+---
+ drivers/gpu/drm/bridge/imx/Kconfig      |  11 ++
+ drivers/gpu/drm/bridge/imx/Makefile     |   1 +
+ drivers/gpu/drm/bridge/imx/imx93-pdfc.c | 222 ++++++++++++++++++++++++
+ 3 files changed, 234 insertions(+)
+ create mode 100644 drivers/gpu/drm/bridge/imx/imx93-pdfc.c
+
+diff --git a/drivers/gpu/drm/bridge/imx/Kconfig b/drivers/gpu/drm/bridge/imx/Kconfig
+index 005a745e5c47..49fcecfee38e 100644
+--- a/drivers/gpu/drm/bridge/imx/Kconfig
++++ b/drivers/gpu/drm/bridge/imx/Kconfig
+@@ -107,4 +107,15 @@ config DRM_IMX93_MIPI_DSI
+ 	  Choose this to enable MIPI DSI controller found in Freescale i.MX93
+ 	  processor.
+ 
++config DRM_IMX93_PARALLEL_DISP_FMT_CONVERTER
++	tristate "NXP i.MX91/i.MX93 parallel display format converter"
++	depends on OF
++	select DRM_KMS_HELPER
++	help
++	  On i.MX93 and i.MX91 SoCs the parallel display format output is
++	  controlled via the MEDIAMIX BLK-CTRL DISPLAY_MUX.
++
++	  Say 'Y' or 'M' if you use the parallel display output path on a
++	  i.MX93 or i.MX91 SoC.
++
+ endif # ARCH_MXC || COMPILE_TEST
+diff --git a/drivers/gpu/drm/bridge/imx/Makefile b/drivers/gpu/drm/bridge/imx/Makefile
+index 94ac8c40ebe9..99f28cd013ae 100644
+--- a/drivers/gpu/drm/bridge/imx/Makefile
++++ b/drivers/gpu/drm/bridge/imx/Makefile
+@@ -10,3 +10,4 @@ obj-$(CONFIG_DRM_IMX8QXP_PIXEL_COMBINER) += imx8qxp-pixel-combiner.o
+ obj-$(CONFIG_DRM_IMX8QXP_PIXEL_LINK) += imx8qxp-pixel-link.o
+ obj-$(CONFIG_DRM_IMX8QXP_PIXEL_LINK_TO_DPI) += imx8qxp-pxl2dpi.o
+ obj-$(CONFIG_DRM_IMX93_MIPI_DSI) += imx93-mipi-dsi.o
++obj-$(CONFIG_DRM_IMX93_PARALLEL_DISP_FMT_CONVERTER) += imx93-pdfc.o
+diff --git a/drivers/gpu/drm/bridge/imx/imx93-pdfc.c b/drivers/gpu/drm/bridge/imx/imx93-pdfc.c
+new file mode 100644
+index 000000000000..2d6ca95ed554
+--- /dev/null
++++ b/drivers/gpu/drm/bridge/imx/imx93-pdfc.c
+@@ -0,0 +1,222 @@
++// SPDX-License-Identifier: GPL-2.0+
++
++/*
++ * Copyright 2022-2025 NXP
++ */
++
++#include <linux/bitfield.h>
++#include <linux/bits.h>
++#include <linux/media-bus-format.h>
++#include <linux/mfd/syscon.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_graph.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++
++#include <drm/drm_atomic_state_helper.h>
++#include <drm/drm_bridge.h>
++
++#define IMX93_DISPLAY_MUX_REG		0x60
++#define PARALLEL_DISP_FORMAT		GENMASK(10, 8)
++#define FORMAT_RGB888_TO_RGB888		FIELD_PREP(PARALLEL_DISP_FORMAT, 0)
++#define FORMAT_RGB888_TO_RGB666		FIELD_PREP(PARALLEL_DISP_FORMAT, 1)
++#define FORMAT_RGB565_TO_RGB565		FIELD_PREP(PARALLEL_DISP_FORMAT, 2)
++
++struct imx93_pdfc {
++	struct drm_bridge bridge;
++	struct device *dev;
++	struct regmap *regmap;
++	u32 phy_bus_width;
++};
++
++static struct imx93_pdfc *bridge_to_imx93_pdfc(struct drm_bridge *bridge)
++{
++	return container_of(bridge, struct imx93_pdfc, bridge);
++}
++
++static int
++imx93_pdfc_bridge_attach(struct drm_bridge *bridge, struct drm_encoder *encoder,
++			 enum drm_bridge_attach_flags flags)
++{
++	return drm_bridge_attach(bridge->encoder, bridge->next_bridge, bridge, flags);
++}
++
++static void imx93_pdfc_bridge_atomic_enable(struct drm_bridge *bridge,
++					    struct drm_atomic_commit *state)
++{
++	struct imx93_pdfc *pdfc = bridge_to_imx93_pdfc(bridge);
++	const struct drm_bridge_state *bridge_state;
++	unsigned int mask = PARALLEL_DISP_FORMAT;
++	unsigned int val;
++
++	bridge_state = drm_atomic_get_new_bridge_state(state, bridge);
++
++	switch (bridge_state->output_bus_cfg.format) {
++	case MEDIA_BUS_FMT_RGB888_1X24:
++	case MEDIA_BUS_FMT_FIXED:
++		val = FORMAT_RGB888_TO_RGB888;
++		if (pdfc->phy_bus_width == 18) {
++			/*
++			 * Can be valid if physical bus limitation exists,
++			 * therefore use dev_dbg().
++			 */
++			dev_dbg(pdfc->dev, "Truncate two LSBs from each color\n");
++			val = FORMAT_RGB888_TO_RGB666;
++		}
++		break;
++	case MEDIA_BUS_FMT_RGB666_1X18:
++		val = FORMAT_RGB888_TO_RGB666;
++		break;
++	case MEDIA_BUS_FMT_RGB565_1X16:
++		val = FORMAT_RGB565_TO_RGB565;
++		break;
++	}
++
++	regmap_update_bits(pdfc->regmap, IMX93_DISPLAY_MUX_REG, mask, val);
++}
++
++/* TODO: Add YUV formats */
++static const u32 imx93_pdfc_bus_output_fmts[] = {
++	MEDIA_BUS_FMT_FIXED,
++	MEDIA_BUS_FMT_RGB888_1X24,
++	MEDIA_BUS_FMT_RGB666_1X18,
++	MEDIA_BUS_FMT_RGB565_1X16,
++};
++
++static bool imx93_pdfc_bus_output_fmt_supported(u32 fmt)
++{
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(imx93_pdfc_bus_output_fmts); i++) {
++		if (imx93_pdfc_bus_output_fmts[i] == fmt)
++			return true;
++	}
++
++	return false;
++}
++
++static u32 *
++imx93_pdfc_bridge_atomic_get_input_bus_fmts(struct drm_bridge *bridge,
++					    struct drm_bridge_state *bridge_state,
++					    struct drm_crtc_state *crtc_state,
++					    struct drm_connector_state *conn_state,
++					    u32 output_fmt,
++					    unsigned int *num_input_fmts)
++{
++	u32 *input_fmts;
++
++	*num_input_fmts = 0;
++
++	if (!imx93_pdfc_bus_output_fmt_supported(output_fmt))
++		return NULL;
++
++	input_fmts = kmalloc_obj(*input_fmts);
++	if (!input_fmts)
++		return NULL;
++
++	*num_input_fmts = 1;
++
++	switch (output_fmt) {
++	case MEDIA_BUS_FMT_RGB888_1X24:
++	case MEDIA_BUS_FMT_RGB565_1X16:
++		input_fmts[0] = output_fmt;
++		break;
++	case MEDIA_BUS_FMT_RGB666_1X18:
++	case MEDIA_BUS_FMT_FIXED:
++		input_fmts[0] = MEDIA_BUS_FMT_RGB888_1X24;
++		break;
++	}
++
++	return input_fmts;
++}
++
++static int imx93_pdfc_bridge_atomic_check(struct drm_bridge *bridge,
++					  struct drm_bridge_state *bridge_state,
++					  struct drm_crtc_state *crtc_state,
++					  struct drm_connector_state *conn_state)
++{
++	struct imx93_pdfc *pdfc = bridge_to_imx93_pdfc(bridge);
++	u32 format = bridge_state->output_bus_cfg.format;
++
++	if (imx93_pdfc_bus_output_fmt_supported(format))
++		return 0;
++
++	dev_warn(pdfc->dev, "Unsupported output bus format: 0x%x\n", format);
++
++	return -EINVAL;
++}
++
++static const struct drm_bridge_funcs funcs = {
++	.attach			= imx93_pdfc_bridge_attach,
++	.atomic_enable		= imx93_pdfc_bridge_atomic_enable,
++	.atomic_duplicate_state	= drm_atomic_helper_bridge_duplicate_state,
++	.atomic_destroy_state	= drm_atomic_helper_bridge_destroy_state,
++	.atomic_get_input_bus_fmts	= imx93_pdfc_bridge_atomic_get_input_bus_fmts,
++	.atomic_check		= imx93_pdfc_bridge_atomic_check,
++	.atomic_create_state	= drm_atomic_helper_bridge_create_state,
++};
++
++static int imx93_pdfc_bridge_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct drm_bridge *next_bridge;
++	struct imx93_pdfc *pdfc;
++	struct device_node *ep;
++	int err;
++
++	pdfc = devm_drm_bridge_alloc(dev, struct imx93_pdfc, bridge, &funcs);
++	if (IS_ERR(pdfc))
++		return PTR_ERR(pdfc);
++
++	pdfc->regmap = syscon_node_to_regmap(dev->of_node->parent);
++	if (IS_ERR(pdfc->regmap))
++		return dev_err_probe(dev, PTR_ERR(pdfc->regmap),
++				     "failed to get regmap\n");
++
++	/* No limits per default */
++	pdfc->phy_bus_width = 24;
++
++	/* Get output ep (port1/endpoint) */
++	ep = of_graph_get_endpoint_by_regs(dev->of_node, 1, -1);
++	if (ep) {
++		err = of_property_read_u32(ep, "bus-width", &pdfc->phy_bus_width);
++		of_node_put(ep);
++
++		/* bus-width is optional but it must have valid data if present */
++		if (err && err != -EINVAL)
++			return dev_err_probe(dev, err,
++					     "failed to query bus-width\n");
++	}
++
++	next_bridge = devm_drm_of_get_bridge(dev, dev->of_node, 1, 0);
++	if (IS_ERR(next_bridge))
++		return dev_err_probe(dev, PTR_ERR(next_bridge),
++				     "failed to get next bridge\n");
++	pdfc->dev = dev;
++	pdfc->bridge.of_node = dev->of_node;
++	pdfc->bridge.type = DRM_MODE_CONNECTOR_DPI;
++	pdfc->bridge.next_bridge = drm_bridge_get(next_bridge);
++
++	return devm_drm_bridge_add(dev, &pdfc->bridge);
++}
++
++static const struct of_device_id imx93_pdfc_dt_ids[] = {
++	{ .compatible = "nxp,imx91-pdfc", },
++	{ .compatible = "nxp,imx93-pdfc", },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, imx93_pdfc_dt_ids);
++
++static struct platform_driver imx93_pdfc_bridge_driver = {
++	.probe	= imx93_pdfc_bridge_probe,
++	.driver	= {
++		.of_match_table = imx93_pdfc_dt_ids,
++		.name = "imx93_pdfc",
++	},
++};
++module_platform_driver(imx93_pdfc_bridge_driver);
++
++MODULE_DESCRIPTION("NXP i.MX93 parallel display format configuration driver");
++MODULE_AUTHOR("Liu Ying <victor.liu@nxp.com>");
++MODULE_LICENSE("GPL");
+-- 
+2.55.0
+

@@ -1,0 +1,114 @@
+From a4bdab2be4fdaf5f90a7fc445452167cb624cdf2 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Tue, 21 Jul 2026 16:13:52 +0200
+Subject: [PATCH 09954/15333] binfmt_misc: add transparent interpreter dispatch
+
+A binfmt_misc interpreter is visible to the binary it runs. argv[0]
+becomes the interpreter path and the binary's path is appended as an
+argument and /proc/pid/cmdline shows both. For wine or qemu-user that is
+the point. For a per-binary loader the interpreter is an implementation
+detail of running the binary that has no business in the argument
+vector. And a binary handed to execveat() as an O_CLOEXEC fd without a
+usable path cannot be run through binfmt_misc at all. The interpreter
+would have no path to open the binary by.
+
+Add the dispatch machinery for a transparent mode. The binary is handed
+to the interpreter through AT_EXECFD. The argument vector is left
+exactly as the caller set it. argv[0] and /proc/pid/cmdline look like a
+direct execution of the binary. bprm->interp still names the
+interpreter: it drives the next format lookup and the
+sched_prepare_exec tracepoint, not what the process sees.
+
+The interpreter loads the binary from AT_EXECFD for this. A relocatable
+loader can and glibc's ld.so is gaining AT_EXECFD support [1]. A staged
+interpreter argument is rejected: no argv slot is built for it to land
+in.
+
+The transparent branch raises BINPRM_FLAGS_TRANSPARENT_INTERP. A
+dispatch through it labels mm->exe_file with the binary and raises
+AT_FLAGS_TRANSPARENT_INTERP next to AT_EXECFD. The aux vector bit is the
+loader's hint to retarget saved_auxv and the statistics markers to the
+binary, which is only correct while the exe link names the binary too.
+
+The inaccessible-path bail moves after handler selection and into the
+path-building branch. A transparent interpreter takes the binary from
+AT_EXECFD instead of a path, so the restriction does not apply to it
+and the O_CLOEXEC execveat() case above can work. Nothing can take the
+transparent branch yet.
+
+Link: https://inbox.sourceware.org/libc-alpha/20260717-work-glibc-binfmt_misc-v3-0-45129bfb13fe@kernel.org [1]
+Link: https://patch.msgid.link/20260721-work-bpf-binfmt_misc-ptinterp-v2-10-e57866e4ae0f@kernel.org
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/binfmt_misc.c | 27 +++++++++++++++++++--------
+ 1 file changed, 19 insertions(+), 8 deletions(-)
+
+diff --git a/fs/binfmt_misc.c b/fs/binfmt_misc.c
+index a47a0a677e93..c49e88283f12 100644
+--- a/fs/binfmt_misc.c
++++ b/fs/binfmt_misc.c
+@@ -50,6 +50,7 @@ enum binfmt_misc_entry_flags {
+ 	MISC_FMT_OPEN_BINARY	= (1U << 30),
+ 	MISC_FMT_CREDENTIALS	= (1U << 29),
+ 	MISC_FMT_OPEN_FILE	= (1U << 28),
++	MISC_FMT_TRANSPARENT	= (1U << 27),
+ };
+ 
+ /**
+@@ -400,6 +401,10 @@ static int build_interp_argv(struct linux_binprm *bprm, const char *interpreter,
+ {
+ 	int retval;
+ 
++	/* The interpreter has to be able to load the binary by path. */
++	if (bprm->interp_flags & BINPRM_FLAGS_PATH_INACCESSIBLE)
++		return -ENOENT;
++
+ 	/* The entry's own choice - not one accumulated from an earlier level. */
+ 	if (flags & MISC_FMT_PRESERVE_ARGV0) {
+ 		bprm->interp_flags |= BINPRM_FLAGS_PRESERVE_ARGV0;
+@@ -458,21 +463,23 @@ static int load_misc_binary(struct linux_binprm *bprm)
+ 	if (!fmt)
+ 		return -ENOEXEC;
+ 
+-	/* Need to be able to load the file after exec */
+-	if (bprm->interp_flags & BINPRM_FLAGS_PATH_INACCESSIBLE)
+-		return -ENOENT;
+-
+ 	interpreter = entry_select_interpreter(fmt, bprm);
+ 	if (IS_ERR(interpreter))
+ 		return PTR_ERR(interpreter);
+ 
+ 	flags = entry_invocation_flags(fmt, bprm);
+ 
+-	retval = build_interp_argv(bprm, interpreter, flags);
+-	if (retval)
+-		return retval;
++	/* No argv is built for a staged argument to land in. */
++	if ((flags & MISC_FMT_TRANSPARENT) && bprm->bpf_interp_arg)
++		return -EINVAL;
+ 
+-	/* Update interp in case binfmt_script needs it. */
++	if (!(flags & MISC_FMT_TRANSPARENT)) {
++		retval = build_interp_argv(bprm, interpreter, flags);
++		if (retval)
++			return retval;
++	}
++
++	/* Update interp for the next round; sched_prepare_exec reports it. */
+ 	retval = bprm_change_interp(interpreter, bprm);
+ 	if (retval < 0)
+ 		return retval;
+@@ -481,6 +488,10 @@ static int load_misc_binary(struct linux_binprm *bprm)
+ 	if (IS_ERR(interp_file))
+ 		return PTR_ERR(interp_file);
+ 
++	/* Raise only past the last failure, or an -ENOEXEC decline leaks it. */
++	if (flags & MISC_FMT_TRANSPARENT)
++		bprm->interp_flags |= BINPRM_FLAGS_TRANSPARENT_INTERP;
++
+ 	bprm->interpreter = interp_file;
+ 	if (flags & MISC_FMT_OPEN_BINARY)
+ 		bprm->have_execfd = 1;
+-- 
+2.55.0
+

@@ -1,0 +1,82 @@
+From c0646b96473340c71cd133ac4056efc9f78141f7 Mon Sep 17 00:00:00 2001
+From: Fuad Tabba <fuad.tabba@linux.dev>
+Date: Wed, 29 Jul 2026 14:18:16 +0100
+Subject: [PATCH 09013/15333] KVM: arm64: Extract MPIDR computation into a
+ shared header
+
+Extract the vCPU MPIDR computation embedded in reset_mpidr() into a
+kvm_calculate_mpidr() inline in sys_regs.h, so it can be computed
+without duplicating the logic. A follow-up series reuses it to reset
+protected vCPUs at EL2.
+
+No functional change intended.
+
+Reviewed-by: Vincent Donnefort <vdonnefort@google.com>
+Signed-off-by: Fuad Tabba <fuad.tabba@linux.dev>
+Link: https://patch.msgid.link/20260729131823.2021516-2-fuad.tabba@linux.dev
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/sys_regs.c | 14 +-------------
+ arch/arm64/kvm/sys_regs.h | 19 +++++++++++++++++++
+ 2 files changed, 20 insertions(+), 13 deletions(-)
+
+diff --git a/arch/arm64/kvm/sys_regs.c b/arch/arm64/kvm/sys_regs.c
+index 5d5c579d4579..08ba882799d4 100644
+--- a/arch/arm64/kvm/sys_regs.c
++++ b/arch/arm64/kvm/sys_regs.c
+@@ -976,21 +976,9 @@ static u64 reset_actlr(struct kvm_vcpu *vcpu, const struct sys_reg_desc *r)
+ 
+ static u64 reset_mpidr(struct kvm_vcpu *vcpu, const struct sys_reg_desc *r)
+ {
+-	u64 mpidr;
++	u64 mpidr = kvm_calculate_mpidr(vcpu);
+ 
+-	/*
+-	 * Map the vcpu_id into the first three affinity level fields of
+-	 * the MPIDR. We limit the number of VCPUs in level 0 due to a
+-	 * limitation to 16 CPUs in that level in the ICC_SGIxR registers
+-	 * of the GICv3 to be able to address each CPU directly when
+-	 * sending IPIs.
+-	 */
+-	mpidr = (vcpu->vcpu_id & 0x0f) << MPIDR_LEVEL_SHIFT(0);
+-	mpidr |= ((vcpu->vcpu_id >> 4) & 0xff) << MPIDR_LEVEL_SHIFT(1);
+-	mpidr |= ((vcpu->vcpu_id >> 12) & 0xff) << MPIDR_LEVEL_SHIFT(2);
+-	mpidr |= (1ULL << 31);
+ 	vcpu_write_sys_reg(vcpu, mpidr, MPIDR_EL1);
+-
+ 	return mpidr;
+ }
+ 
+diff --git a/arch/arm64/kvm/sys_regs.h b/arch/arm64/kvm/sys_regs.h
+index 2a983664220c..bd56a45abbf9 100644
+--- a/arch/arm64/kvm/sys_regs.h
++++ b/arch/arm64/kvm/sys_regs.h
+@@ -222,6 +222,25 @@ find_reg(const struct sys_reg_params *params, const struct sys_reg_desc table[],
+ 	return __inline_bsearch((void *)pval, table, num, sizeof(table[0]), match_sys_reg);
+ }
+ 
++static inline u64 kvm_calculate_mpidr(const struct kvm_vcpu *vcpu)
++{
++	u64 mpidr;
++
++	/*
++	 * Map the vcpu_id into the first three affinity level fields of
++	 * the MPIDR. We limit the number of VCPUs in level 0 due to a
++	 * limitation to 16 CPUs in that level in the ICC_SGIxR registers
++	 * of the GICv3 to be able to address each CPU directly when
++	 * sending IPIs.
++	 */
++	mpidr = (vcpu->vcpu_id & 0x0f) << MPIDR_LEVEL_SHIFT(0);
++	mpidr |= ((vcpu->vcpu_id >> 4) & 0xff) << MPIDR_LEVEL_SHIFT(1);
++	mpidr |= ((vcpu->vcpu_id >> 12) & 0xff) << MPIDR_LEVEL_SHIFT(2);
++	mpidr |= (1ULL << 31);
++
++	return mpidr;
++}
++
+ const struct sys_reg_desc *get_reg_by_id(u64 id,
+ 					 const struct sys_reg_desc table[],
+ 					 unsigned int num);
+-- 
+2.55.0
+

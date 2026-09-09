@@ -1,0 +1,58 @@
+From 3194c0f961a4d198e28d055b0be3f597b85012c9 Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Sun, 19 Jul 2026 14:54:56 -0700
+Subject: [PATCH 07736/15333] clk: hisilicon: hi3660-stub: use
+ devm_platform_ioremap_resource
+
+Replace the open-coded platform_get_resource() plus devm_ioremap()
+sequence with devm_platform_ioremap_resource(), which fetches the
+resource, requests the region and maps it in one call. Switch the error
+check to IS_ERR()/PTR_ERR() and drop the now-unused struct resource
+pointer.
+
+The only in-tree user (stub_clock@e896b500 in hi3660.dtsi) has a single
+0x100-byte reg region, so the region reservation added by
+devm_ioremap_resource() is exclusive and does not introduce overlap
+failures.
+
+Built for ARM (drivers/clk/hisilicon/clk-hi3660-stub.o) with LLVM=1.
+
+Assisted-by: opencode:hy3-free
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+Reviewed-by: Brian Masney <bmasney@redhat.com>
+Signed-off-by: Brian Masney <bmasney@redhat.com>
+---
+ drivers/clk/hisilicon/clk-hi3660-stub.c | 10 +++-------
+ 1 file changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/clk/hisilicon/clk-hi3660-stub.c b/drivers/clk/hisilicon/clk-hi3660-stub.c
+index 7c8b00ee6019..1b81f26670ed 100644
+--- a/drivers/clk/hisilicon/clk-hi3660-stub.c
++++ b/drivers/clk/hisilicon/clk-hi3660-stub.c
+@@ -124,7 +124,6 @@ static struct clk_hw *hi3660_stub_clk_hw_get(struct of_phandle_args *clkspec,
+ static int hi3660_stub_clk_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+-	struct resource *res;
+ 	unsigned int i;
+ 	int ret;
+ 
+@@ -139,12 +138,9 @@ static int hi3660_stub_clk_probe(struct platform_device *pdev)
+ 	if (IS_ERR(stub_clk_chan.mbox))
+ 		return PTR_ERR(stub_clk_chan.mbox);
+ 
+-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+-	if (!res)
+-		return -EINVAL;
+-	freq_reg = devm_ioremap(dev, res->start, resource_size(res));
+-	if (!freq_reg)
+-		return -ENOMEM;
++	freq_reg = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(freq_reg))
++		return PTR_ERR(freq_reg);
+ 
+ 	freq_reg += HI3660_STUB_CLOCK_DATA;
+ 
+-- 
+2.55.0
+

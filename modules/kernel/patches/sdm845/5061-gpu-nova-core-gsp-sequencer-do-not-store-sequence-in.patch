@@ -1,0 +1,114 @@
+From 686a7fd1f7183c9fbd425ba50cf8dc37e020ec73 Mon Sep 17 00:00:00 2001
+From: Alexandre Courbot <acourbot@nvidia.com>
+Date: Thu, 9 Jul 2026 15:52:55 +0900
+Subject: [PATCH 05061/15333] gpu: nova-core: gsp: sequencer: do not store
+ sequence into GspSequencer
+
+The sequence is currently stored in the `GspSequencer` even though its
+lifetime is limited to `GspSequencer::run`. This object-oriented design
+does not play well with the borrow-checker, as `GspSequencer::iter`
+borrows the `GspSequencer`, which makes it difficult to introduce
+mutable references in `GspBootContext`, as we want to do in order to
+make the `Falcon` references mutable.
+
+Thus, store the sequence locally in `GspSequencer::run`, and move
+iterator creation to `GspSeqIter::new` so it no longer needs to borrow
+the whole `GspSequencer`.
+
+Reviewed-by: Eliot Courtney <ecourtney@nvidia.com>
+Link: https://patch.msgid.link/20260709-nova-bootcontext-v6-2-520cbf8b9b50@nvidia.com
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/gsp/sequencer.rs | 35 +++++++++++---------------
+ 1 file changed, 15 insertions(+), 20 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/gsp/sequencer.rs b/drivers/gpu/nova-core/gsp/sequencer.rs
+index f55205bd61f3..ddce32cc4e30 100644
+--- a/drivers/gpu/nova-core/gsp/sequencer.rs
++++ b/drivers/gpu/nova-core/gsp/sequencer.rs
+@@ -129,8 +129,6 @@ pub(crate) fn new(data: &[u8], dev: &device::Device) -> Result<(Self, usize)> {
+ 
+ /// GSP Sequencer for executing firmware commands during boot.
+ pub(crate) struct GspSequencer<'a> {
+-    /// Sequencer information with command data.
+-    seq_info: GspSequence,
+     /// `Bar0` for register access.
+     bar: Bar0<'a>,
+     /// SEC2 falcon for core operations.
+@@ -268,7 +266,7 @@ fn run(&self, seq: &GspSequencer<'_>) -> Result {
+ }
+ 
+ /// Iterator over GSP sequencer commands.
+-pub(crate) struct GspSeqIter<'a> {
++struct GspSeqIter<'a> {
+     /// Command data buffer.
+     cmd_data: &'a [u8],
+     /// Current position in the buffer.
+@@ -281,6 +279,18 @@ pub(crate) struct GspSeqIter<'a> {
+     dev: &'a device::Device,
+ }
+ 
++impl<'a> GspSeqIter<'a> {
++    fn new(seq: &'a GspSequence, dev: &'a device::Device) -> Self {
++        Self {
++            cmd_data: &seq.cmd_data,
++            current_offset: 0,
++            total_cmds: seq.cmd_index,
++            cmds_processed: 0,
++            dev,
++        }
++    }
++}
++
+ impl<'a> Iterator for GspSeqIter<'a> {
+     type Item = Result<GspSeqCmd>;
+ 
+@@ -322,20 +332,6 @@ fn next(&mut self) -> Option<Self::Item> {
+     }
+ }
+ 
+-impl<'a> GspSequencer<'a> {
+-    fn iter(&self) -> GspSeqIter<'_> {
+-        let cmd_data = &self.seq_info.cmd_data[..];
+-
+-        GspSeqIter {
+-            cmd_data,
+-            current_offset: 0,
+-            total_cmds: self.seq_info.cmd_index,
+-            cmds_processed: 0,
+-            dev: self.dev,
+-        }
+-    }
+-}
+-
+ impl<'a> GspSequencer<'a> {
+     pub(crate) fn run(
+         cmdq: &Cmdq,
+@@ -352,7 +348,6 @@ pub(crate) fn run(
+         };
+ 
+         let sequencer = GspSequencer {
+-            seq_info,
+             bar: ctx.bar,
+             sec2_falcon: ctx.sec2_falcon,
+             gsp_falcon: ctx.gsp_falcon,
+@@ -363,14 +358,14 @@ pub(crate) fn run(
+ 
+         dev_dbg!(sequencer.dev, "Running CPU Sequencer commands\n");
+ 
+-        for cmd_result in sequencer.iter() {
++        for cmd_result in GspSeqIter::new(&seq_info, sequencer.dev) {
+             match cmd_result {
+                 Ok(cmd) => cmd.run(&sequencer)?,
+                 Err(e) => {
+                     dev_err!(
+                         sequencer.dev,
+                         "Error running command at index {}\n",
+-                        sequencer.seq_info.cmd_index
++                        seq_info.cmd_index
+                     );
+                     return Err(e);
+                 }
+-- 
+2.55.0
+

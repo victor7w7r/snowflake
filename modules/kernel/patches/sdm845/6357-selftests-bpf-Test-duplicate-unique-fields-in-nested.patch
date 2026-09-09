@@ -1,0 +1,57 @@
+From 9f2afb635cffd670e71580a3070b6e5c68fb99c5 Mon Sep 17 00:00:00 2001
+From: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Date: Sun, 19 Jul 2026 17:36:31 +0200
+Subject: [PATCH 06357/15333] selftests/bpf: Test duplicate unique fields in
+ nested structs
+
+Add a raw BTF test with a spin lock directly in a struct and another in a
+nested struct. The duplicate must now be rejected during BTF loading.
+
+Signed-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+Link: https://patch.msgid.link/20260719153634.2908692-5-memxor@gmail.com
+Signed-off-by: Eduard Zingerman <eddyz87@gmail.com>
+---
+ tools/testing/selftests/bpf/prog_tests/btf.c | 27 ++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/btf.c b/tools/testing/selftests/bpf/prog_tests/btf.c
+index 66855cbd6b73..2100400d896b 100644
+--- a/tools/testing/selftests/bpf/prog_tests/btf.c
++++ b/tools/testing/selftests/bpf/prog_tests/btf.c
+@@ -4250,6 +4250,33 @@ static struct btf_raw_test raw_tests[] = {
+ 	.max_entries = 1,
+ },
+ 
++/*
++ * struct inner {
++ *     struct bpf_spin_lock lock;
++ * };
++ *
++ * struct value {
++ *     struct bpf_spin_lock lock;
++ *     struct inner nested;
++ * };
++ */
++{
++	.descr = "struct test duplicate nested unique fields",
++	.raw_types = {
++		BTF_TYPE_INT_ENC(NAME_TBD, BTF_INT_SIGNED, 0, 32, 4),	/* [1] */
++		BTF_STRUCT_ENC(NAME_TBD, 1, 4),				/* [2] */
++		BTF_MEMBER_ENC(NAME_TBD, 1, 0),
++		BTF_STRUCT_ENC(NAME_TBD, 1, 4),				/* [3] */
++		BTF_MEMBER_ENC(NAME_TBD, 2, 0),
++		BTF_STRUCT_ENC(NAME_TBD, 2, 8),				/* [4] */
++		BTF_MEMBER_ENC(NAME_TBD, 2, 0),
++		BTF_MEMBER_ENC(NAME_TBD, 3, 32),
++		BTF_END_RAW,
++	},
++	BTF_STR_SEC("\0int\0bpf_spin_lock\0val\0inner\0lock\0value\0lock\0nested"),
++	.btf_load_err = true,
++},
++
+ {
+ 	.descr = "struct test repeated fields count overflow",
+ 	.raw_types = {
+-- 
+2.55.0
+

@@ -1,0 +1,43 @@
+From 406e181cb32546db0867f4c44bdbe5e23a56dbde Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Wed, 1 Jul 2026 15:43:36 +0700
+Subject: [PATCH 02312/15333] ASoC: samsung: i2s: Use dev_err_probe() for iis
+ clock error
+
+Switch the iis clock error path to dev_err_probe(). This folds the
+dev_err() and return into a single statement and, when devm_clk_get()
+returns -EPROBE_DEFER, avoids logging a spurious error on every probe
+retry while still recording the reason in the deferred-probe debugfs.
+
+No functional change other than the demoted log level on deferred
+probe; the returned error code is unchanged.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260701084336.308886-1-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/samsung/i2s.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/sound/soc/samsung/i2s.c b/sound/soc/samsung/i2s.c
+index f80e8d498156..56d11741dabd 100644
+--- a/sound/soc/samsung/i2s.c
++++ b/sound/soc/samsung/i2s.c
+@@ -1441,10 +1441,10 @@ static int samsung_i2s_probe(struct platform_device *pdev)
+ 	regs_base = res->start;
+ 
+ 	priv->clk = devm_clk_get(&pdev->dev, "iis");
+-	if (IS_ERR(priv->clk)) {
+-		dev_err(&pdev->dev, "Failed to get iis clock\n");
+-		return PTR_ERR(priv->clk);
+-	}
++	if (IS_ERR(priv->clk))
++		return dev_err_probe(&pdev->dev, PTR_ERR(priv->clk),
++				     "Failed to get iis clock\n");
++
+ 
+ 	ret = clk_prepare_enable(priv->clk);
+ 	if (ret != 0) {
+-- 
+2.55.0
+

@@ -1,0 +1,255 @@
+From b0a2ca6ae0ed03c625cd343d662d83bc94d84217 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Mon, 13 Jul 2026 22:18:44 -1000
+Subject: [PATCH 04321/15333] sched_ext: Add scx_bpf_sub_kill() to evict a
+ child sub-scheduler
+
+A cid-form scheduler can grant caps to and revoke them from its child
+sub-schedulers but has no way to tear one down. Add scx_bpf_sub_kill() to
+evict a direct child with a printf-style reason that reaches the child's
+scx_exit_info. No exit code is taken because the child is a separate
+scheduler whose exit-code semantics the parent cannot know. The child and
+its subtree are disabled through the usual async path under a new exit kind,
+SCX_EXIT_PARENT_KILL.
+
+The bstr formatting infrastructure in ext.c is exposed through internal.h
+with scx_ prefixes so the kfunc, which lives in sub.c, can format the
+reason.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/ext.c                   | 28 +++++++-----
+ kernel/sched/ext/internal.h              | 11 +++++
+ kernel/sched/ext/sub.c                   | 57 ++++++++++++++++++++++++
+ tools/sched_ext/include/scx/common.bpf.h | 18 ++++++++
+ 4 files changed, 102 insertions(+), 12 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 945f6192ca41..f8f8597b6f78 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -187,14 +187,8 @@ static const struct rhashtable_params dsq_hash_params = {
+ 
+ static LLIST_HEAD(dsqs_to_free);
+ 
+-/* string formatting from BPF */
+-struct scx_bstr_buf {
+-	u64			data[MAX_BPRINTF_VARARGS];
+-	char			line[SCX_EXIT_MSG_LEN];
+-};
+-
+-static DEFINE_RAW_SPINLOCK(scx_exit_bstr_buf_lock);
+-static struct scx_bstr_buf scx_exit_bstr_buf;
++DEFINE_RAW_SPINLOCK(scx_exit_bstr_buf_lock);
++struct scx_bstr_buf scx_exit_bstr_buf;
+ 
+ /* ops debug dump */
+ static DEFINE_RAW_SPINLOCK(scx_dump_lock);
+@@ -5755,6 +5749,8 @@ static const char *scx_exit_reason(enum scx_exit_kind kind)
+ 		return "disabled by sysrq-S";
+ 	case SCX_EXIT_PARENT:
+ 		return "parent exiting";
++	case SCX_EXIT_PARENT_KILL:
++		return "killed by parent scheduler";
+ 	case SCX_EXIT_ERROR:
+ 		return "runtime error";
+ 	case SCX_EXIT_ERROR_BPF:
+@@ -9370,8 +9366,8 @@ static s32 __bstr_format(struct scx_sched *sch, u64 *data_buf, char *line_buf,
+ }
+ 
+ __printf(3, 0)
+-static s32 bstr_format(struct scx_sched *sch, struct scx_bstr_buf *buf,
+-		       char *fmt, unsigned long long *data, u32 data__sz)
++s32 scx_bstr_format(struct scx_sched *sch, struct scx_bstr_buf *buf,
++		    char *fmt, unsigned long long *data, u32 data__sz)
+ {
+ 	return __bstr_format(sch, buf->data, buf->line, sizeof(buf->line),
+ 			     fmt, data, data__sz);
+@@ -9401,7 +9397,7 @@ __bpf_kfunc void scx_bpf_exit_bstr(s64 exit_code, char *fmt,
+ 	raw_spin_lock_irqsave(&scx_exit_bstr_buf_lock, flags);
+ 	sch = scx_prog_sched(aux);
+ 	if (likely(sch) &&
+-	    bstr_format(sch, &scx_exit_bstr_buf, fmt, data, data__sz) >= 0)
++	    scx_bstr_format(sch, &scx_exit_bstr_buf, fmt, data, data__sz) >= 0)
+ 		scx_exit(sch, SCX_EXIT_UNREG_BPF, exit_code, "%s", scx_exit_bstr_buf.line);
+ 	raw_spin_unlock_irqrestore(&scx_exit_bstr_buf_lock, flags);
+ }
+@@ -9426,7 +9422,7 @@ __bpf_kfunc void scx_bpf_error_bstr(char *fmt, unsigned long long *data,
+ 	raw_spin_lock_irqsave(&scx_exit_bstr_buf_lock, flags);
+ 	sch = scx_prog_sched(aux);
+ 	if (likely(sch) &&
+-	    bstr_format(sch, &scx_exit_bstr_buf, fmt, data, data__sz) >= 0)
++	    scx_bstr_format(sch, &scx_exit_bstr_buf, fmt, data, data__sz) >= 0)
+ 		scx_exit(sch, SCX_EXIT_ERROR_BPF, 0, "%s", scx_exit_bstr_buf.line);
+ 	raw_spin_unlock_irqrestore(&scx_exit_bstr_buf_lock, flags);
+ }
+@@ -10062,6 +10058,13 @@ __bpf_kfunc s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out_
+ {
+ 	return -EOPNOTSUPP;
+ }
++
++__bpf_kfunc s32 scx_bpf_sub_kill_bstr(u64 cgroup_id, char *fmt,
++				      unsigned long long *data, u32 data__sz,
++				      const struct bpf_prog_aux *aux)
++{
++	return -EOPNOTSUPP;
++}
+ #endif	/* !CONFIG_EXT_SUB_SCHED */
+ 
+ __bpf_kfunc_end_defs();
+@@ -10111,6 +10114,7 @@ BTF_ID_FLAGS(func, scx_bpf_task_cgroup, KF_IMPLICIT_ARGS | KF_RCU | KF_ACQUIRE)
+ BTF_ID_FLAGS(func, scx_bpf_sub_grant, KF_IMPLICIT_ARGS)
+ BTF_ID_FLAGS(func, scx_bpf_sub_revoke, KF_IMPLICIT_ARGS)
+ BTF_ID_FLAGS(func, scx_bpf_sub_caps, KF_IMPLICIT_ARGS)
++BTF_ID_FLAGS(func, scx_bpf_sub_kill_bstr, KF_IMPLICIT_ARGS)
+ BTF_KFUNCS_END(scx_kfunc_ids_any)
+ 
+ static const struct btf_kfunc_id_set scx_kfunc_set_any = {
+diff --git a/kernel/sched/ext/internal.h b/kernel/sched/ext/internal.h
+index 97d7ce89dd5f..d7a1d6a14ebf 100644
+--- a/kernel/sched/ext/internal.h
++++ b/kernel/sched/ext/internal.h
+@@ -51,6 +51,7 @@ enum scx_exit_kind {
+ 	SCX_EXIT_UNREG_KERN,	/* kernel-initiated unregistration */
+ 	SCX_EXIT_SYSRQ,		/* requested by 'S' sysrq */
+ 	SCX_EXIT_PARENT,	/* parent exiting */
++	SCX_EXIT_PARENT_KILL,	/* killed by parent scheduler */
+ 
+ 	SCX_EXIT_ERROR = 1024,	/* runtime error, error msg contains details */
+ 	SCX_EXIT_ERROR_BPF,	/* ERROR but triggered through scx_bpf_error() */
+@@ -1876,6 +1877,12 @@ struct scx_enable_cmd {
+ 	int			ret;
+ };
+ 
++/* string formatting from BPF */
++struct scx_bstr_buf {
++	u64			data[MAX_BPRINTF_VARARGS];
++	char			line[SCX_EXIT_MSG_LEN];
++};
++
+ extern struct scx_sched __rcu *scx_root;
+ DECLARE_PER_CPU(struct rq *, scx_locked_rq_state);
+ 
+@@ -1936,10 +1943,14 @@ struct scx_sched *scx_alloc_and_add_sched(struct scx_enable_cmd *cmd,
+ int scx_validate_ops(struct scx_sched *sch, const struct sched_ext_ops *ops);
+ int scx_sched_sysfs_add(struct scx_sched *sch);
+ bool scx_is_descendant(struct scx_sched *sch, struct scx_sched *ancestor);
++__printf(3, 0) s32 scx_bstr_format(struct scx_sched *sch, struct scx_bstr_buf *buf,
++				   char *fmt, unsigned long long *data, u32 data__sz);
+ 
+ extern raw_spinlock_t scx_sched_lock;
+ extern struct mutex scx_enable_mutex;
+ extern struct percpu_rw_semaphore scx_fork_rwsem;
++extern raw_spinlock_t scx_exit_bstr_buf_lock;
++extern struct scx_bstr_buf scx_exit_bstr_buf;
+ #ifdef CONFIG_EXT_SUB_SCHED
+ extern const struct rhashtable_params scx_sched_hash_params;
+ extern struct rhashtable scx_sched_hash;
+diff --git a/kernel/sched/ext/sub.c b/kernel/sched/ext/sub.c
+index bdcbde37d0d2..68ab3675337f 100644
+--- a/kernel/sched/ext/sub.c
++++ b/kernel/sched/ext/sub.c
+@@ -1694,6 +1694,63 @@ __bpf_kfunc s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out_
+ 	return 0;
+ }
+ 
++/**
++ * scx_bpf_sub_kill_bstr - Kill a direct child sub-scheduler
++ * @cgroup_id: cgroup id of the direct child to kill
++ * @fmt: reason message format string
++ * @data: format string parameters packaged using ___bpf_fill() macro
++ * @data__sz: @data len, must end in '__sz' for the verifier
++ * @aux: implicit BPF argument to access bpf_prog_aux hidden from BPF progs
++ *
++ * Evict a direct child sub-scheduler, disabling it with the supplied reason.
++ * The child and its subtree are torn down asynchronously through the usual
++ * disable path.
++ *
++ * Unlike scx_bpf_exit(), no exit code is taken: the child is a separate
++ * scheduler with its own exit-code semantics, so a code chosen by the parent
++ * would have no defined meaning. The reason string carries the intent.
++ *
++ * Return 0 on success or -ENODEV if @cgroup_id names no sub-scheduler, which
++ * can race with the child detaching on its own and so is not a scheduler error.
++ * Naming a sched that exists but is not a direct child aborts the parent.
++ */
++__printf(2, 0)
++__bpf_kfunc s32 scx_bpf_sub_kill_bstr(u64 cgroup_id, char *fmt,
++				      unsigned long long *data, u32 data__sz,
++				      const struct bpf_prog_aux *aux)
++{
++	struct scx_sched *parent, *child;
++	s32 ret;
++
++	guard(rcu)();
++
++	parent = scx_prog_sched(aux);
++	if (unlikely(!parent))
++		return -ENODEV;
++
++	if (!scx_is_cid_type()) {
++		scx_error(parent, "sub-cap kfuncs require a cid-form scheduler");
++		return -EOPNOTSUPP;
++	}
++
++	child = scx_find_sub_sched(cgroup_id);
++	if (unlikely(!child))
++		return -ENODEV;
++
++	if (unlikely(scx_parent(child) != parent)) {
++		scx_error(parent, "%s: sub-%llu is not a direct child",
++			  parent->cgrp_path, cgroup_id);
++		return -EINVAL;
++	}
++
++	guard(raw_spinlock_irqsave)(&scx_exit_bstr_buf_lock);
++	ret = scx_bstr_format(parent, &scx_exit_bstr_buf, fmt, data, data__sz);
++	if (ret < 0)
++		return ret;
++	scx_exit(child, SCX_EXIT_PARENT_KILL, 0, "%s", scx_exit_bstr_buf.line);
++	return 0;
++}
++
+ __bpf_kfunc_end_defs();
+ 
+ #endif	/* CONFIG_EXT_SUB_SCHED */
+diff --git a/tools/sched_ext/include/scx/common.bpf.h b/tools/sched_ext/include/scx/common.bpf.h
+index 09c21602b2ed..acc2b131ea8f 100644
+--- a/tools/sched_ext/include/scx/common.bpf.h
++++ b/tools/sched_ext/include/scx/common.bpf.h
+@@ -119,6 +119,8 @@ s32 scx_bpf_sub_grant(u64 cgroup_id, u64 caps, const struct scx_cmask *cmask,
+ 		      struct scx_cmask *denied) __ksym __weak;
+ void scx_bpf_sub_revoke(u64 cgroup_id, u64 caps, const struct scx_cmask *cmask) __ksym __weak;
+ s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out) __ksym __weak;
++s32 scx_bpf_sub_kill_bstr(u64 cgroup_id, char *fmt,
++			  unsigned long long *data, u32 data__sz) __ksym __weak;
+ 
+ /*
+  * Use the following as @it__iter when calling scx_bpf_dsq_move[_vtime]() from
+@@ -165,6 +167,22 @@ void ___scx_bpf_bstr_format_checker(const char *fmt, ...) {}
+ 	___scx_bpf_bstr_format_checker(fmt, ##args);				\
+ })
+ 
++/*
++ * scx_bpf_sub_kill() wraps the scx_bpf_sub_kill_bstr() kfunc with variadic
++ * arguments instead of an array of u64. It kills the direct child sub-scheduler
++ * @cgid, passing the formatted reason to its user space, and evaluates to the
++ * kfunc's return value. On a kernel without sub-scheduler support the kfunc is
++ * absent and it returns -EOPNOTSUPP.
++ */
++#define scx_bpf_sub_kill(cgid, fmt, args...)					\
++({										\
++	scx_bpf_bstr_preamble(fmt, args)					\
++	___scx_bpf_bstr_format_checker(fmt, ##args);				\
++	bpf_ksym_exists(scx_bpf_sub_kill_bstr) ?				\
++		scx_bpf_sub_kill_bstr((cgid), ___fmt, ___param,			\
++				      sizeof(___param)) : -EOPNOTSUPP;		\
++})
++
+ /*
+  * scx_bpf_error() wraps the scx_bpf_error_bstr() kfunc with variadic arguments
+  * instead of an array of u64. Invoking this macro will cause the scheduler to
+-- 
+2.55.0
+

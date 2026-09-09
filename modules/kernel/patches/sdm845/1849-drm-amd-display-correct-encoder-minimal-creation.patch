@@ -1,0 +1,265 @@
+From e14fcf9e5d2b521bec0ea3051058e64add87cb21 Mon Sep 17 00:00:00 2001
+From: Peichen Huang <PeiChen.Huang@amd.com>
+Date: Tue, 16 Jun 2026 10:37:02 +0800
+Subject: [PATCH 01849/15333] drm/amd/display: correct encoder minimal creation
+
+[WHY]
+shift and mask are not correctly initialized in create_minimal functions.
+
+[HOW]
+Correct initialize necessary variables.
+
+Reviewed-by: Cruise Hung <cruise.hung@amd.com>
+Signed-off-by: Peichen Huang <PeiChen.Huang@amd.com>
+Signed-off-by: George Zhang <george.zhang@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/dc/dio/dcn31/dcn31_dio_link_encoder.c | 4 ++++
+ .../gpu/drm/amd/display/dc/dio/dcn31/dcn31_dio_link_encoder.h | 2 ++
+ .../gpu/drm/amd/display/dc/resource/dcn31/dcn31_resource.c    | 4 +++-
+ .../gpu/drm/amd/display/dc/resource/dcn314/dcn314_resource.c  | 4 +++-
+ .../gpu/drm/amd/display/dc/resource/dcn315/dcn315_resource.c  | 4 +++-
+ .../gpu/drm/amd/display/dc/resource/dcn316/dcn316_resource.c  | 4 +++-
+ .../gpu/drm/amd/display/dc/resource/dcn35/dcn35_resource.c    | 4 +++-
+ .../gpu/drm/amd/display/dc/resource/dcn351/dcn351_resource.c  | 4 +++-
+ .../gpu/drm/amd/display/dc/resource/dcn36/dcn36_resource.c    | 4 +++-
+ .../gpu/drm/amd/display/dc/resource/dcn42/dcn42_resource.c    | 4 +++-
+ .../gpu/drm/amd/display/dc/resource/dcn42b/dcn42b_resource.c  | 4 +++-
+ 11 files changed, 33 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/dio/dcn31/dcn31_dio_link_encoder.c b/drivers/gpu/drm/amd/display/dc/dio/dcn31/dcn31_dio_link_encoder.c
+index bcb791d74189..f57f3ba68a02 100644
+--- a/drivers/gpu/drm/amd/display/dc/dio/dcn31/dcn31_dio_link_encoder.c
++++ b/drivers/gpu/drm/amd/display/dc/dio/dcn31/dcn31_dio_link_encoder.c
+@@ -516,6 +516,8 @@ void dcn31_link_encoder_construct_minimal(
+ 	struct dc_context *ctx,
+ 	const struct encoder_feature_support *enc_features,
+ 	const struct dcn10_link_enc_registers *link_regs,
++	const struct dcn10_link_enc_shift *link_shift,
++	const struct dcn10_link_enc_mask *link_mask,
+ 	enum engine_id eng_id)
+ {
+ 	struct dcn10_link_encoder *enc10 = &enc20->enc10;
+@@ -529,6 +531,8 @@ void dcn31_link_encoder_construct_minimal(
+ 	enc10->base.features = *enc_features;
+ 	enc10->base.transmitter = TRANSMITTER_UNKNOWN;
+ 	enc10->link_regs = link_regs;
++	enc10->link_shift = link_shift;
++	enc10->link_mask = link_mask;
+ 
+ 	enc10->base.output_signals =
+ 		SIGNAL_TYPE_DISPLAY_PORT |
+diff --git a/drivers/gpu/drm/amd/display/dc/dio/dcn31/dcn31_dio_link_encoder.h b/drivers/gpu/drm/amd/display/dc/dio/dcn31/dcn31_dio_link_encoder.h
+index 3cf587527991..88ab9684e207 100644
+--- a/drivers/gpu/drm/amd/display/dc/dio/dcn31/dcn31_dio_link_encoder.h
++++ b/drivers/gpu/drm/amd/display/dc/dio/dcn31/dcn31_dio_link_encoder.h
+@@ -246,6 +246,8 @@ void dcn31_link_encoder_construct_minimal(
+ 	struct dc_context *ctx,
+ 	const struct encoder_feature_support *enc_features,
+ 	const struct dcn10_link_enc_registers *link_regs,
++	const struct dcn10_link_enc_shift *link_shift,
++	const struct dcn10_link_enc_mask *link_mask,
+ 	enum engine_id eng_id);
+ 
+ void dcn31_link_encoder_set_dio_phy_mux(
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn31/dcn31_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn31/dcn31_resource.c
+index 02bf6f1f3100..e29efa452c87 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn31/dcn31_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn31/dcn31_resource.c
+@@ -1189,7 +1189,7 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ {
+ 	struct dcn20_link_encoder *enc20;
+ 
+-	if (((unsigned int)eng_id - ENGINE_ID_DIGA) > ctx->dc->res_pool->res_cap->num_dig_link_enc)
++	if (((unsigned int)eng_id - ENGINE_ID_DIGA) >= ctx->dc->res_pool->res_cap->num_dig_link_enc)
+ 		return NULL;
+ 
+ 	enc20 = kzalloc_obj(struct dcn20_link_encoder);
+@@ -1201,6 +1201,8 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ 			ctx,
+ 			&link_enc_feature,
+ 			&link_enc_regs[eng_id - ENGINE_ID_DIGA],
++			&le_shift,
++			&le_mask,
+ 			eng_id);
+ 
+ 	return &enc20->enc10.base;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn314/dcn314_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn314/dcn314_resource.c
+index d8096f11fb77..f50b3250dcba 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn314/dcn314_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn314/dcn314_resource.c
+@@ -1246,7 +1246,7 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ {
+ 	struct dcn20_link_encoder *enc20;
+ 
+-	if (((unsigned int)eng_id - ENGINE_ID_DIGA) > ctx->dc->res_pool->res_cap->num_dig_link_enc)
++	if (((unsigned int)eng_id - ENGINE_ID_DIGA) >= ctx->dc->res_pool->res_cap->num_dig_link_enc)
+ 		return NULL;
+ 
+ 	enc20 = kzalloc_obj(struct dcn20_link_encoder);
+@@ -1258,6 +1258,8 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ 			ctx,
+ 			&link_enc_feature,
+ 			&link_enc_regs[eng_id - ENGINE_ID_DIGA],
++			&le_shift,
++			&le_mask,
+ 			eng_id);
+ 
+ 	return &enc20->enc10.base;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn315/dcn315_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn315/dcn315_resource.c
+index ca458f30e45c..8297f2f04c16 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn315/dcn315_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn315/dcn315_resource.c
+@@ -1188,7 +1188,7 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ {
+ 	struct dcn20_link_encoder *enc20;
+ 
+-	if (((unsigned int)eng_id - ENGINE_ID_DIGA) > ctx->dc->res_pool->res_cap->num_dig_link_enc)
++	if (((unsigned int)eng_id - ENGINE_ID_DIGA) >= ctx->dc->res_pool->res_cap->num_dig_link_enc)
+ 		return NULL;
+ 
+ 	enc20 = kzalloc_obj(struct dcn20_link_encoder);
+@@ -1200,6 +1200,8 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ 			ctx,
+ 			&link_enc_feature,
+ 			&link_enc_regs[eng_id - ENGINE_ID_DIGA],
++			&le_shift,
++			&le_mask,
+ 			eng_id);
+ 
+ 	return &enc20->enc10.base;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn316/dcn316_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn316/dcn316_resource.c
+index 560a53de22fc..046566ad1afe 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn316/dcn316_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn316/dcn316_resource.c
+@@ -1181,7 +1181,7 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ {
+ 	struct dcn20_link_encoder *enc20;
+ 
+-	if (((unsigned int)eng_id - ENGINE_ID_DIGA) > ctx->dc->res_pool->res_cap->num_dig_link_enc)
++	if (((unsigned int)eng_id - ENGINE_ID_DIGA) >= ctx->dc->res_pool->res_cap->num_dig_link_enc)
+ 		return NULL;
+ 
+ 	enc20 = kzalloc_obj(struct dcn20_link_encoder);
+@@ -1193,6 +1193,8 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ 			ctx,
+ 			&link_enc_feature,
+ 			&link_enc_regs[eng_id - ENGINE_ID_DIGA],
++			&le_shift,
++			&le_mask,
+ 			eng_id);
+ 
+ 	return &enc20->enc10.base;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn35/dcn35_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn35/dcn35_resource.c
+index efed9317f3ff..5541b89b1350 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn35/dcn35_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn35/dcn35_resource.c
+@@ -1188,7 +1188,7 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ {
+ 	struct dcn20_link_encoder *enc20;
+ 
+-	if (((unsigned int)eng_id - ENGINE_ID_DIGA) > ctx->dc->res_pool->res_cap->num_dig_link_enc)
++	if (((unsigned int)eng_id - ENGINE_ID_DIGA) >= ctx->dc->res_pool->res_cap->num_dig_link_enc)
+ 		return NULL;
+ 
+ 	enc20 = kzalloc_obj(struct dcn20_link_encoder);
+@@ -1200,6 +1200,8 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ 			ctx,
+ 			&link_enc_feature,
+ 			&link_enc_regs[eng_id - ENGINE_ID_DIGA],
++			&le_shift,
++			&le_mask,
+ 			eng_id);
+ 
+ 	return &enc20->enc10.base;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn351/dcn351_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn351/dcn351_resource.c
+index 079b4f735ab3..053b4380f57e 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn351/dcn351_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn351/dcn351_resource.c
+@@ -1168,7 +1168,7 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ {
+ 	struct dcn20_link_encoder *enc20;
+ 
+-	if (((unsigned int)eng_id - ENGINE_ID_DIGA) > ctx->dc->res_pool->res_cap->num_dig_link_enc)
++	if (((unsigned int)eng_id - ENGINE_ID_DIGA) >= ctx->dc->res_pool->res_cap->num_dig_link_enc)
+ 		return NULL;
+ 
+ 	enc20 = kzalloc_obj(struct dcn20_link_encoder);
+@@ -1180,6 +1180,8 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ 			ctx,
+ 			&link_enc_feature,
+ 			&link_enc_regs[eng_id - ENGINE_ID_DIGA],
++			&le_shift,
++			&le_mask,
+ 			eng_id);
+ 
+ 	return &enc20->enc10.base;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn36/dcn36_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn36/dcn36_resource.c
+index a293e05f8085..592000cf9250 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn36/dcn36_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn36/dcn36_resource.c
+@@ -1175,7 +1175,7 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ {
+ 	struct dcn20_link_encoder *enc20;
+ 
+-	if (((unsigned int)eng_id - ENGINE_ID_DIGA) > ctx->dc->res_pool->res_cap->num_dig_link_enc)
++	if (((unsigned int)eng_id - ENGINE_ID_DIGA) >= ctx->dc->res_pool->res_cap->num_dig_link_enc)
+ 		return NULL;
+ 
+ 	enc20 = kzalloc_obj(struct dcn20_link_encoder);
+@@ -1187,6 +1187,8 @@ static struct link_encoder *dcn31_link_enc_create_minimal(
+ 			ctx,
+ 			&link_enc_feature,
+ 			&link_enc_regs[eng_id - ENGINE_ID_DIGA],
++			&le_shift,
++			&le_mask,
+ 			eng_id);
+ 
+ 	return &enc20->enc10.base;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn42/dcn42_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn42/dcn42_resource.c
+index 44728894dceb..c999db12d0a5 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn42/dcn42_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn42/dcn42_resource.c
+@@ -1882,7 +1882,7 @@ static struct link_encoder *dcn42_link_enc_create_minimal(
+ {
+ 	struct dcn20_link_encoder *enc20;
+ 
+-	if ((unsigned int)(eng_id - ENGINE_ID_DIGA) > ctx->dc->res_pool->res_cap->num_dig_link_enc)
++	if ((unsigned int)(eng_id - ENGINE_ID_DIGA) >= ctx->dc->res_pool->res_cap->num_dig_link_enc)
+ 		return NULL;
+ 
+ 	enc20 = kzalloc(sizeof(struct dcn20_link_encoder), GFP_KERNEL);
+@@ -1894,6 +1894,8 @@ static struct link_encoder *dcn42_link_enc_create_minimal(
+ 			ctx,
+ 			&link_enc_feature,
+ 			&link_enc_regs[eng_id - ENGINE_ID_DIGA],
++			&le_shift,
++			&le_mask,
+ 			eng_id);
+ 
+ 	return &enc20->enc10.base;
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn42b/dcn42b_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn42b/dcn42b_resource.c
+index 669bd5eb4c8f..60cbaf4f6fdf 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn42b/dcn42b_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn42b/dcn42b_resource.c
+@@ -1824,7 +1824,7 @@ static struct link_encoder *dcn42b_link_enc_create_minimal(
+ {
+ 	struct dcn20_link_encoder *enc20;
+ 
+-	if ((unsigned int)(eng_id - ENGINE_ID_DIGA) > ctx->dc->res_pool->res_cap->num_dig_link_enc)
++	if ((unsigned int)(eng_id - ENGINE_ID_DIGA) >= ctx->dc->res_pool->res_cap->num_dig_link_enc)
+ 		return NULL;
+ 
+ 	enc20 = kzalloc(sizeof(struct dcn20_link_encoder), GFP_KERNEL);
+@@ -1836,6 +1836,8 @@ static struct link_encoder *dcn42b_link_enc_create_minimal(
+ 			ctx,
+ 			&link_enc_feature,
+ 			&link_enc_regs[eng_id - ENGINE_ID_DIGA],
++			&le_shift,
++			&le_mask,
+ 			eng_id);
+ 
+ 	return &enc20->enc10.base;
+-- 
+2.55.0
+

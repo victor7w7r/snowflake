@@ -1,0 +1,54 @@
+From e417d51c7f2ee08361b57a97869a2870bb417782 Mon Sep 17 00:00:00 2001
+From: Hans de Goede <johannes.goede@oss.qualcomm.com>
+Date: Tue, 23 Jun 2026 14:27:32 +0200
+Subject: [PATCH 01461/15333] pinctrl: qcom: Drop unused irq_data argument from
+ msm_gpio_update_dual_edge_pos()
+
+The "struct irq_data *d" argument to msm_gpio_update_dual_edge_pos() is
+unused, drop it.
+
+Signed-off-by: Hans de Goede <johannes.goede@oss.qualcomm.com>
+Acked-by: Linus Walleij <linusw@kernel.org>
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Reviewed-by: Mukesh Ojha <mukesh.ojha@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260623122732.6439-2-johannes.goede@oss.qualcomm.com
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+---
+ drivers/pinctrl/qcom/pinctrl-msm.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/pinctrl/qcom/pinctrl-msm.c b/drivers/pinctrl/qcom/pinctrl-msm.c
+index a035cb6a74fe..1055d42381bb 100644
+--- a/drivers/pinctrl/qcom/pinctrl-msm.c
++++ b/drivers/pinctrl/qcom/pinctrl-msm.c
+@@ -810,8 +810,7 @@ static const struct gpio_chip msm_gpio_template = {
+  * Algorithm comes from Google's msmgpio driver.
+  */
+ static void msm_gpio_update_dual_edge_pos(struct msm_pinctrl *pctrl,
+-					  const struct msm_pingroup *g,
+-					  struct irq_data *d)
++					  const struct msm_pingroup *g)
+ {
+ 	int loop_limit = 100;
+ 	unsigned val, val2, intstat;
+@@ -1005,7 +1004,7 @@ static void msm_gpio_irq_ack(struct irq_data *d)
+ 	msm_ack_intr_status(pctrl, g);
+ 
+ 	if (test_bit(d->hwirq, pctrl->dual_edge_irqs))
+-		msm_gpio_update_dual_edge_pos(pctrl, g, d);
++		msm_gpio_update_dual_edge_pos(pctrl, g);
+ 
+ 	raw_spin_unlock_irqrestore(&pctrl->lock, flags);
+ }
+@@ -1175,7 +1174,7 @@ static int msm_gpio_irq_set_type(struct irq_data *d, unsigned int type)
+ 		msm_ack_intr_status(pctrl, g);
+ 
+ 	if (test_bit(d->hwirq, pctrl->dual_edge_irqs))
+-		msm_gpio_update_dual_edge_pos(pctrl, g, d);
++		msm_gpio_update_dual_edge_pos(pctrl, g);
+ 
+ 	raw_spin_unlock_irqrestore(&pctrl->lock, flags);
+ 
+-- 
+2.55.0
+

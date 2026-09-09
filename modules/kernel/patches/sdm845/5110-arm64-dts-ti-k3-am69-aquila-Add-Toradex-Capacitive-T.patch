@@ -1,0 +1,221 @@
+From e1df722d2b56101ec8f54ab99f3edccce631d2ea Mon Sep 17 00:00:00 2001
+From: Vitor Soares <vitor.soares@toradex.com>
+Date: Tue, 2 Jun 2026 12:51:26 +0100
+Subject: [PATCH 05110/15333] arm64: dts: ti: k3-am69-aquila: Add Toradex
+ Capacitive Touch Display 10.1" DSI with adapter
+
+Add a device tree overlay for the Toradex Capacitive Touch Display 10.1"
+DSI used with the Toradex DSI Display Adapter on the Aquila Development
+Board. On this board, DSI_1 is exposed on connector J44 through a Samtec
+LSS-130 connector, and the adapter converts it to an FFC/FPC connector.
+
+The display includes an internal Texas Instruments SN65DSI83 DSI-to-LVDS
+bridge driving a Riverdi RVT101HVLNWC00 10.1" WXGA IPS TFT LCD panel.
+Touch input is provided by an Ilitek ILI2132 capacitive touch controller.
+
+Link: https://developer.toradex.com/hardware/accessories/displays/capacitive-touch-display-101inch-dsi
+Link: https://developer.toradex.com/hardware/accessories/add-ons/dsi-display-adapter
+Signed-off-by: Vitor Soares <vitor.soares@toradex.com>
+Reviewed-by: Francesco Dolcini <francesco.dolcini@toradex.com>
+Link: https://patch.msgid.link/20260602115123.1324474-12-ivitro@gmail.com
+Signed-off-by: Vignesh Raghavendra <vigneshr@ti.com>
+---
+ arch/arm64/boot/dts/ti/Makefile               |   5 +
+ ...la-adapter-panel-cap-touch-10inch-dsi.dtso | 155 ++++++++++++++++++
+ 2 files changed, 160 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/ti/k3-am69-aquila-adapter-panel-cap-touch-10inch-dsi.dtso
+
+diff --git a/arch/arm64/boot/dts/ti/Makefile b/arch/arm64/boot/dts/ti/Makefile
+index 9619d033301e..c38a3831bf4b 100644
+--- a/arch/arm64/boot/dts/ti/Makefile
++++ b/arch/arm64/boot/dts/ti/Makefile
+@@ -193,6 +193,7 @@ dtb-$(CONFIG_ARCH_K3) += k3-j722s-evm-csi2-quad-tevi-ov5640.dtbo
+ # Boards with J784s4 SoC
+ k3-am69-aquila-dev-dsi-to-hdmi-dtbs := k3-am69-aquila-dev.dtb \
+ 	k3-am69-aquila-dsi-to-hdmi.dtbo
++dtb-$(CONFIG_ARCH_K3) += k3-am69-aquila-adapter-panel-cap-touch-10inch-dsi.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am69-aquila-clover.dtb
+ dtb-$(CONFIG_ARCH_K3) += k3-am69-aquila-dev.dtb
+ dtb-$(CONFIG_ARCH_K3) += k3-am69-aquila-dev-dsi-to-hdmi.dtb
+@@ -312,6 +313,9 @@ k3-am68-sk-base-board-csi2-dual-imx219-dtbs := k3-am68-sk-base-board.dtb \
+ 	k3-j721e-sk-csi2-dual-imx219.dtbo
+ k3-am68-sk-base-board-pcie1-ep-dtbs := k3-am68-sk-base-board.dtb \
+ 	k3-am68-sk-base-board-pcie1-ep.dtbo
++k3-am69-aquila-dev-adapter-panel-cap-touch-10inch-dsi-dtbs := \
++	k3-am69-aquila-dev.dtb \
++	k3-am69-aquila-adapter-panel-cap-touch-10inch-dsi.dtbo
+ k3-am69-aquila-dev-dsi-to-lvds-panel-cap-touch-10inch-dtbs := \
+ 	k3-am69-aquila-dev.dtb \
+ 	k3-am69-aquila-dsi-to-lvds-panel-cap-touch-10inch.dtbo
+@@ -398,6 +402,7 @@ dtb- += k3-am625-beagleplay-csi2-ov5640.dtb \
+ 	k3-am68-phyboard-izar-peb-av-15.dtb \
+ 	k3-am68-sk-base-board-csi2-dual-imx219.dtb \
+ 	k3-am68-sk-base-board-pcie1-ep.dtb \
++	k3-am69-aquila-dev-adapter-panel-cap-touch-10inch-dsi.dtb \
+ 	k3-am69-aquila-dev-dsi-to-lvds-panel-cap-touch-10inch.dtb \
+ 	k3-am69-sk-csi2-dual-imx219.dtb \
+ 	k3-am69-sk-pcie0-ep.dtb \
+diff --git a/arch/arm64/boot/dts/ti/k3-am69-aquila-adapter-panel-cap-touch-10inch-dsi.dtso b/arch/arm64/boot/dts/ti/k3-am69-aquila-adapter-panel-cap-touch-10inch-dsi.dtso
+new file mode 100644
+index 000000000000..a5ee6c867fb1
+--- /dev/null
++++ b/arch/arm64/boot/dts/ti/k3-am69-aquila-adapter-panel-cap-touch-10inch-dsi.dtso
+@@ -0,0 +1,155 @@
++// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
++/*
++ * Copyright (c) Toradex
++ *
++ * Toradex Capacitive Touch Display 10.1" on Aquila DSI_1.
++ * Used on Development Board (J44), DSI_1 is exposed via a Samtec LSS-130
++ * connector, and requires the Toradex DSI Display Adapter to convert to
++ * FFC/FPC connector.
++ *
++ * https://developer.toradex.com/hardware/accessories/displays/capacitive-touch-display-101inch-dsi
++ * https://www.toradex.com/accessories/capacitive-touch-display-10.1-inch-dsi
++ * https://developer.toradex.com/hardware/accessories/add-ons/dsi-display-adapter
++ * https://www.toradex.com/accessories/verdin-dsi-display-adapter
++ */
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/interrupt-controller/irq.h>
++
++&{/} {
++	backlight_pwm3: backlight-pwm3 {
++		compatible = "pwm-backlight";
++		brightness-levels = <0 45 63 88 119 158 203 255>;
++		default-brightness-level = <4>;
++		/* Aquila PWM_3_DSI (AQUILA B46) */
++		pwms = <&main_ehrpwm5 0 6666667 0>;
++	};
++
++	panel-lvds-bridge {
++		compatible = "riverdi,rvt101hvlnwc00", "panel-lvds";
++		backlight = <&backlight_pwm3>;
++		data-mapping = "vesa-24";
++		height-mm = <136>;
++		width-mm = <217>;
++
++		panel-timing {
++			clock-frequency = <72400000>;
++			de-active = <1>;
++			hactive = <1280>;
++			hback-porch = <83 83 83>;
++			hfront-porch = <12 72 132>;
++			hsync-active = <0>;
++			hsync-len = <1 5 40>;
++			pixelclk-active = <1>;
++			vactive = <800>;
++			vback-porch = <13 13 13>;
++			vfront-porch = <1 15 49>;
++			vsync-active = <0>;
++			vsync-len = <1 10 20>;
++		};
++
++		port {
++			panel_lvds_bridge_in: endpoint {
++				remote-endpoint = <&dsi_lvds_bridge_out>;
++			};
++		};
++	};
++};
++
++&dphy_tx0 {
++	status = "okay";
++};
++
++&dsi0 {
++	status = "okay";
++};
++
++&dsi0_ports {
++	#address-cells = <1>;
++	#size-cells = <0>;
++
++	port@0 {
++		reg = <0>;
++
++		dsi0_out: endpoint {
++			remote-endpoint = <&dsi_lvds_bridge_in>;
++		};
++	};
++
++	port@1 {
++		reg = <1>;
++
++		dsi0_in: endpoint {
++			remote-endpoint = <&dpi2_out>;
++		};
++	};
++};
++
++&dss_ports {
++	#address-cells = <1>;
++	#size-cells = <0>;
++
++	port@2 {
++		reg = <2>;
++
++		dpi2_out: endpoint {
++			remote-endpoint = <&dsi0_in>;
++		};
++	};
++};
++
++/* I2C on DSI Connector Pin #52 and #54 */
++&i2c_dsi_1 {
++	#address-cells = <1>;
++	#size-cells = <0>;
++
++	bridge@2c {
++		compatible = "ti,sn65dsi83";
++		reg = <0x2c>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pinctrl_gpio_20_dsi_1>;
++		/* Aquila GPIO_20_DSI_1 (AQUILA B45) */
++		enable-gpios = <&main_gpio0 18 GPIO_ACTIVE_HIGH>;
++
++		ports {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			port@0 {
++				reg = <0>;
++
++				dsi_lvds_bridge_in: endpoint {
++					remote-endpoint = <&dsi0_out>;
++					data-lanes = <1 2 3 4>;
++				};
++			};
++
++			port@2 {
++				reg = <2>;
++
++				dsi_lvds_bridge_out: endpoint {
++					remote-endpoint = <&panel_lvds_bridge_in>;
++				};
++			};
++		};
++	};
++
++	touchscreen@41 {
++		compatible = "ilitek,ili2132";
++		reg = <0x41>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pinctrl_gpio_17_dsi_1>, <&pinctrl_gpio_18_dsi_1>;
++		/* Aquila GPIO_17_DSI_1 (AQUILA B42) */
++		interrupt-parent = <&main_gpio0>;
++		/*
++		 * Data-ready pulse is ~200 us; either edge can be used,
++		 * use the rising edge because the falling edge is noisy.
++		 */
++		interrupts = <12 IRQ_TYPE_EDGE_RISING>;
++		/* Aquila GPIO_18_DSI_1 (AQUILA B43) */
++		reset-gpios = <&main_gpio0 31 GPIO_ACTIVE_LOW>;
++	};
++};
+-- 
+2.55.0
+

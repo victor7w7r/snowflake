@@ -1,0 +1,51 @@
+From c2b8f4930ab3fa05f4116d15336d9593a128aab8 Mon Sep 17 00:00:00 2001
+From: Joel Granados <joel.granados@kernel.org>
+Date: Thu, 25 Jun 2026 22:38:13 +0200
+Subject: [PATCH 10988/15333] sysctl: Move default converter assignment out of
+ do_proc_dointvec
+
+Move the converter assignment out of do_proc_dointvec into the caller.
+Both the test for NULL and the assignment are meant to stay within the
+sysctl.c context. This is in preparation of using a typed macro to for
+the integer proc vector function.
+
+Signed-off-by: Joel Granados <joel.granados@kernel.org>
+---
+ kernel/sysctl.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index c9efb17cc255..e53e60213462 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -591,9 +591,6 @@ static int do_proc_dointvec(const struct ctl_table *table, int dir,
+ 	vleft = table->maxlen / sizeof(*i);
+ 	left = *lenp;
+ 
+-	if (!conv)
+-		conv = do_proc_int_conv;
+-
+ 	if (SYSCTL_USER_TO_KERN(dir)) {
+ 		if (proc_first_pos_non_zero_ignore(ppos, table))
+ 			goto out;
+@@ -840,7 +837,7 @@ int proc_dobool(const struct ctl_table *table, int dir, void *buffer,
+ int proc_dointvec(const struct ctl_table *table, int dir, void *buffer,
+ 		  size_t *lenp, loff_t *ppos)
+ {
+-	return do_proc_dointvec(table, dir, buffer, lenp, ppos, NULL);
++	return do_proc_dointvec(table, dir, buffer, lenp, ppos, do_proc_int_conv);
+ }
+ 
+ /**
+@@ -1090,6 +1087,8 @@ int proc_dointvec_conv(const struct ctl_table *table, int dir, void *buffer,
+ 		       int (*conv)(bool *negp, unsigned long *u_ptr, int *k_ptr,
+ 				   int dir, const struct ctl_table *table))
+ {
++	if (!conv)
++		conv = do_proc_int_conv;
+ 	return do_proc_dointvec(table, dir, buffer, lenp, ppos, conv);
+ }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,62 @@
+From 4933d4f45b5ce2a1d0d9c4ab703460997439d6a7 Mon Sep 17 00:00:00 2001
+From: Namhyung Kim <namhyung@kernel.org>
+Date: Wed, 24 Jun 2026 13:58:27 -0700
+Subject: [PATCH 01577/15333] perf timechart: Don't pass @event to
+ cat_backtrace()
+
+The cat_backtrace() is only called from process_sample_event() which
+means the event type is always PERF_RECORD_SAMPLE.  We don't need to
+pass the event just because to print already known info.
+
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/builtin-timechart.c | 12 +++++-------
+ 1 file changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/tools/perf/builtin-timechart.c b/tools/perf/builtin-timechart.c
+index 85a9ad0455ae..dafd361ecf9d 100644
+--- a/tools/perf/builtin-timechart.c
++++ b/tools/perf/builtin-timechart.c
+@@ -493,8 +493,7 @@ static void sched_switch(struct timechart *tchart, int cpu, u64 timestamp,
+  * Returns a malloc'd backtrace string built via open_memstream, or NULL
+  * on error.  Caller must free() the returned pointer.
+  */
+-static char *cat_backtrace(union perf_event *event,
+-			   struct perf_sample *sample,
++static char *cat_backtrace(struct perf_sample *sample,
+ 			   struct machine *machine)
+ {
+ 	struct addr_location al;
+@@ -516,9 +515,8 @@ static char *cat_backtrace(union perf_event *event,
+ 		goto exit;
+ 
+ 	if (machine__resolve(machine, &al, sample) < 0) {
+-		pr_err("problem processing %s (%u) event at offset %#" PRIx64 ", skipping it.\n",
+-		       perf_event__name(event->header.type), event->header.type,
+-		       sample->file_offset);
++		pr_err("problem processing SAMPLE (%u) event at offset %#" PRIx64 ", skipping it.\n",
++		       PERF_RECORD_SAMPLE, sample->file_offset);
+ 		goto exit;
+ 	}
+ 
+@@ -578,7 +576,7 @@ typedef int (*tracepoint_handler)(struct timechart *tchart,
+ 				  const char *backtrace);
+ 
+ static int process_sample_event(const struct perf_tool *tool,
+-				union perf_event *event,
++				union perf_event *event __maybe_unused,
+ 				struct perf_sample *sample,
+ 				struct machine *machine)
+ {
+@@ -595,7 +593,7 @@ static int process_sample_event(const struct perf_tool *tool,
+ 
+ 	if (evsel->handler != NULL) {
+ 		tracepoint_handler f = evsel->handler;
+-		char *backtrace = cat_backtrace(event, sample, machine);
++		char *backtrace = cat_backtrace(sample, machine);
+ 
+ 		ret = f(tchart, sample, backtrace);
+ 		free(backtrace);
+-- 
+2.55.0
+

@@ -1,0 +1,53 @@
+From 71a7c58770a3991bc6aa49ee3b643b2d8d9ae484 Mon Sep 17 00:00:00 2001
+From: Chuck Lever <cel@kernel.org>
+Date: Sun, 12 Jul 2026 16:45:50 -0400
+Subject: [PATCH 12758/15333] NFSD: Move the export.h include from nfsd.h to
+ auth.c
+
+Nothing declared in fs/nfsd/nfsd.h references a type, macro, or
+function that export.h defines. The include is present only so
+that source files including nfsd.h pick up export.h's definitions
+transitively. Of the twenty source files that include nfsd.h, only
+auth.c relies on that side effect: it names struct svc_export and the
+NFSEXP_* flags yet includes no header that supplies them.
+
+Add the export.h include directly to auth.c, then drop it from nfsd.h
+so the header carries only the dependencies its own declarations
+require.
+
+Link: https://patch.msgid.link/20260712204554.125308-6-cel@kernel.org
+Reviewed-by: Jeff Layton <jlayton@kernel.org>
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ fs/nfsd/auth.c | 1 +
+ fs/nfsd/nfsd.h | 2 --
+ 2 files changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/fs/nfsd/auth.c b/fs/nfsd/auth.c
+index 4dc327e02456..e3b4a35caac6 100644
+--- a/fs/nfsd/auth.c
++++ b/fs/nfsd/auth.c
+@@ -3,6 +3,7 @@
+ 
+ #include <linux/sched.h>
+ #include "nfsd.h"
++#include "export.h"
+ #include "auth.h"
+ 
+ int nfsexp_flags(struct svc_cred *cred, struct svc_export *exp)
+diff --git a/fs/nfsd/nfsd.h b/fs/nfsd/nfsd.h
+index 4583d7d51a88..b35e9a9a112d 100644
+--- a/fs/nfsd/nfsd.h
++++ b/fs/nfsd/nfsd.h
+@@ -23,8 +23,6 @@
+ 
+ #include <uapi/linux/nfsd/debug.h>
+ 
+-#include "export.h"
+-
+ #undef ifdebug
+ #ifdef CONFIG_SUNRPC_DEBUG
+ # define ifdebug(flag)		if (nfsd_debug & NFSDDBG_##flag)
+-- 
+2.55.0
+

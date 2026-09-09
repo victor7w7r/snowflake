@@ -1,0 +1,51 @@
+From 9ed48de2d9c4c71c0f560e13bc71fb2c7c8defd5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Thomas=20Wei=C3=9Fschuh?= <linux@weissschuh.net>
+Date: Tue, 30 Jun 2026 23:15:00 +0200
+Subject: [PATCH 04184/15333] scripts: headers_install.sh: Normalize
+ __ASSEMBLER__ to __ASSEMBLY__
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+There is an ongoing effort to replace the usage of __ASSEMBLY__ with
+__ASSEMBLER__ throughout the kernel tree, see for example
+commit 287d163322b7 ("arm64: Replace __ASSEMBLY__ with __ASSEMBLER__ in
+non-uapi headers"). The latter is automatically provided by all compilers
+and preprocessors supported by the kernel, so the explicit definitions
+of __ASSEMBLY__ can be removed.
+
+However the UAPI headers might be used with non-GCC-compatible
+compilers, which do not define __ASSEMBLER__ automatically.
+So this migration may break users. Also during the migration phase, the
+UAPI headers will use a mix of *both* __ASSEMBLY__ and __ASSEMBLER__ at
+the same time, which is ugly and inconsistent.
+
+For now make sure that the exported UAPI headers consistently use
+__ASSEMBLY__ as before.
+
+Link: https://lore.kernel.org/lkml/164baf81-2824-4943-bbc1-4ae8a160c0cc@t-8ch.de/
+Signed-off-by: Thomas Weißschuh <linux@weissschuh.net>
+Acked-by: Nick Huang <sef1548@gmail.com>
+Reviewed-by: Nicolas Schier <n.schier@fritz.com>
+Tested-by: Nicolas Schier <n.schier@fritz.com>
+Link: https://patch.msgid.link/20260630-uapi-assembly-v2-1-8e7bee2fe816@weissschuh.net
+Signed-off-by: Nicolas Schier <nsc@kernel.org>
+---
+ scripts/headers_install.sh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/scripts/headers_install.sh b/scripts/headers_install.sh
+index 9c15e748761c..83e447596878 100755
+--- a/scripts/headers_install.sh
++++ b/scripts/headers_install.sh
+@@ -36,6 +36,7 @@ sed -E -e '
+ 	s/(^|[^a-zA-Z0-9])__packed([^a-zA-Z0-9_]|$)/\1__attribute__((packed))\2/g
+ 	s/(^|[[:space:](])(inline|asm|volatile)([[:space:](]|$)/\1__\2__\3/g
+ 	s@#(ifndef|define|endif[[:space:]]*/[*])[[:space:]]*_UAPI@#\1 @
++	s/__ASSEMBLER__/__ASSEMBLY__/g
+ ' $INFILE > $TMPFILE || exit 1
+ 
+ scripts/unifdef -U__KERNEL__ -D__EXPORTED_HEADERS__ $TMPFILE > $OUTFILE
+-- 
+2.55.0
+

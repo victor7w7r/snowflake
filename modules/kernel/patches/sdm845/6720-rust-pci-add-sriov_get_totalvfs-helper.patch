@@ -1,0 +1,81 @@
+From 6afbbc27f582b873eb42744b09d57aeefc9e5628 Mon Sep 17 00:00:00 2001
+From: Zhi Wang <zhiw@nvidia.com>
+Date: Wed, 22 Jul 2026 10:39:09 +0300
+Subject: [PATCH 06720/15333] rust: pci: add sriov_get_totalvfs() helper
+
+Expose pci_sriov_get_totalvfs() to Rust PCI drivers so they can query
+how many SR-IOV VFs a device supports.
+
+Use a conditional C helper because the !CONFIG_PCI_IOV version of
+pci_sriov_get_totalvfs() is a static inline function and is therefore
+not emitted into the Rust bindings. Return Option<NonZero<u16>> so Rust
+callers must handle the zero value that represents unavailable SR-IOV.
+
+Reviewed-by: Alexandre Courbot <acourbot@nvidia.com>
+Cc: Alexandre Courbot <acourbot@nvidia.com>
+Cc: Bjorn Helgaas <bhelgaas@google.com>
+Cc: David Laight <david.laight.linux@gmail.com>
+Cc: Gary Guo <gary@garyguo.net>
+Cc: linux-pci@vger.kernel.org
+Link: https://lore.kernel.org/all/DJHPRE4TGGT8.BUTMYOF5YE05@nvidia.com/
+Signed-off-by: Zhi Wang <zhiw@nvidia.com>
+Link: https://patch.msgid.link/20260722073913.1807677-3-zhiw@nvidia.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ rust/helpers/pci.c |  8 ++++++++
+ rust/kernel/pci.rs | 13 +++++++++++++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/rust/helpers/pci.c b/rust/helpers/pci.c
+index e44905317d75..4ebf256dff23 100644
+--- a/rust/helpers/pci.c
++++ b/rust/helpers/pci.c
+@@ -24,6 +24,14 @@ __rust_helper bool rust_helper_dev_is_pci(const struct device *dev)
+ 	return dev_is_pci(dev);
+ }
+ 
++#ifndef CONFIG_PCI_IOV
++__rust_helper unsigned int
++rust_helper_pci_sriov_get_totalvfs(struct pci_dev *pdev)
++{
++	return pci_sriov_get_totalvfs(pdev);
++}
++#endif
++
+ #ifndef CONFIG_PCI_MSI
+ __rust_helper int rust_helper_pci_alloc_irq_vectors(struct pci_dev *dev,
+ 						    unsigned int min_vecs,
+diff --git a/rust/kernel/pci.rs b/rust/kernel/pci.rs
+index c6d6bd8f251d..9f19ccd5905c 100644
+--- a/rust/kernel/pci.rs
++++ b/rust/kernel/pci.rs
+@@ -25,6 +25,7 @@
+ use core::{
+     marker::PhantomData,
+     mem::offset_of,
++    num::NonZero,
+     ptr::{
+         addr_of_mut,
+         NonNull, //
+@@ -452,6 +453,18 @@ pub fn pci_class(&self) -> Class {
+ }
+ 
+ impl<'a> Device<device::Core<'a>> {
++    /// Returns the total number of VFs, or [`None`] if SR-IOV is not available.
++    #[inline]
++    pub fn sriov_get_totalvfs(&self) -> Option<NonZero<u16>> {
++        // SAFETY: `self.as_raw()` is a valid pointer to a `struct pci_dev`.
++        let total_vfs = unsafe { bindings::pci_sriov_get_totalvfs(self.as_raw()) };
++
++        // CAST: The C function returns `unsigned int`, but the value originates
++        // from TotalVFs/driver_max_VFs (which are defined as `u16`), so this cast
++        // cannot truncate.
++        NonZero::new(total_vfs as u16)
++    }
++
+     /// Enable memory resources for this device.
+     pub fn enable_device_mem(&self) -> Result {
+         // SAFETY: `self.as_raw` is guaranteed to be a pointer to a valid `struct pci_dev`.
+-- 
+2.55.0
+

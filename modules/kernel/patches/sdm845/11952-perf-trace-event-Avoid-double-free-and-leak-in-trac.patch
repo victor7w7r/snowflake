@@ -1,0 +1,63 @@
+From 6c07d49ef3beb87436475e8489e45d46e8579001 Mon Sep 17 00:00:00 2001
+From: Tanushree Shah <tshah@linux.ibm.com>
+Date: Sun, 26 Jul 2026 00:19:51 +0530
+Subject: [PATCH 11952/15333] perf trace-event: Avoid double free and leak in
+ trace_event__cleanup()/trace_event__init()
+
+trace_event__cleanup() frees t->pevent but never clears the
+pointer. It can be called twice on the same trace_event: once
+from trace_report()'s error path, and again from
+perf_session__delete() during session teardown, resulting in a
+double free / use-after-free.
+
+Separately, trace_event__init() overwrites t->pevent/t->plugin_list
+without releasing any existing handle, leaking memory if it's
+called more than once on the same struct. eg. via a perf.data
+file with multiple PERF_RECORD_HEADER_TRACING_DATA headers.
+
+Guard against re-entry by returning early if t->pevent is already
+NULL, and clear it after cleanup so a repeat call is a safe no-op.
+Call trace_event__cleanup() at the start of trace_event__init(),
+so a repeated init releases any existing handle before allocating
+a new one.
+
+Signed-off-by: Tanushree Shah <tshah@linux.ibm.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/util/trace-event.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/tools/perf/util/trace-event.c b/tools/perf/util/trace-event.c
+index 6a8c66c64b70..000c1e1d68c1 100644
+--- a/tools/perf/util/trace-event.c
++++ b/tools/perf/util/trace-event.c
+@@ -26,7 +26,11 @@ static bool tevent_initialized;
+ 
+ int trace_event__init(struct trace_event *t)
+ {
+-	struct tep_handle *pevent = tep_alloc();
++	struct tep_handle *pevent;
++
++	trace_event__cleanup(t);
++
++	pevent = tep_alloc();
+ 
+ 	if (pevent) {
+ 		t->plugin_list = tep_load_plugins(pevent);
+@@ -63,8 +67,13 @@ int trace_event__register_resolver(struct machine *machine,
+ 
+ void trace_event__cleanup(struct trace_event *t)
+ {
++	if (!t->pevent)
++		return;
++
+ 	tep_unload_plugins(t->plugin_list, t->pevent);
+ 	tep_free(t->pevent);
++	t->pevent = NULL;
++	t->plugin_list = NULL;
+ }
+ 
+ /*
+-- 
+2.55.0
+

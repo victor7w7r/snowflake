@@ -1,0 +1,60 @@
+From 0585a0c7ab8f00f9f978eb33674af08c8d017957 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Wed, 29 Jul 2026 10:37:25 +0200
+Subject: [PATCH 09193/15333] ALSA: sscape: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260729083735.120219-8-tiwai@suse.de
+---
+ sound/isa/sscape.c | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/sound/isa/sscape.c b/sound/isa/sscape.c
+index ce8a59650e38..9b615b588cdf 100644
+--- a/sound/isa/sscape.c
++++ b/sound/isa/sscape.c
+@@ -526,7 +526,7 @@ static int upload_dma_data(struct soundscape *s, const unsigned char *data,
+ static int sscape_upload_bootblock(struct snd_card *card)
+ {
+ 	struct soundscape *sscape = get_card_soundscape(card);
+-	const struct firmware *init_fw = NULL;
++	const struct firmware *init_fw __free(firmware) = NULL;
+ 	int data = 0;
+ 	int ret;
+ 
+@@ -537,8 +537,6 @@ static int sscape_upload_bootblock(struct snd_card *card)
+ 	}
+ 	ret = upload_dma_data(sscape, init_fw->data, init_fw->size);
+ 
+-	release_firmware(init_fw);
+-
+ 	guard(spinlock_irqsave)(&sscape->lock);
+ 	if (ret == 0)
+ 		data = host_read_ctrl_unsafe(sscape->io_base, 100);
+@@ -562,7 +560,7 @@ static int sscape_upload_bootblock(struct snd_card *card)
+ static int sscape_upload_microcode(struct snd_card *card, int version)
+ {
+ 	struct soundscape *sscape = get_card_soundscape(card);
+-	const struct firmware *init_fw = NULL;
++	const struct firmware *init_fw __free(firmware) = NULL;
+ 	char name[14];
+ 	int err;
+ 
+@@ -579,8 +577,6 @@ static int sscape_upload_microcode(struct snd_card *card, int version)
+ 		dev_info(card->dev, "sscape: MIDI firmware loaded %zu KBs\n",
+ 			 init_fw->size >> 10);
+ 
+-	release_firmware(init_fw);
+-
+ 	return err;
+ }
+ 
+-- 
+2.55.0
+

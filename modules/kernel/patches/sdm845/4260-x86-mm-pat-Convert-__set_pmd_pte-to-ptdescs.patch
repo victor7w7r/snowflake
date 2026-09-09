@@ -1,0 +1,43 @@
+From e27d938b0de86304f12c89706b8034f89f015077 Mon Sep 17 00:00:00 2001
+From: Vishal Moola <vishal.moola@gmail.com>
+Date: Mon, 29 Jun 2026 11:57:35 -0700
+Subject: [PATCH 04260/15333] x86/mm/pat: Convert __set_pmd_pte() to ptdescs
+
+Convert __set_pmd_pte() to ptdescs in preparation for the eventual
+splitting of ptdescs from struct page.
+
+Signed-off-by: Vishal Moola <vishal.moola@gmail.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Reviewed-by: William Kucharski <william.kucharski@linux.dev>
+Acked-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Link: https://patch.msgid.link/20260629185742.126987-3-vishal.moola@gmail.com
+---
+ arch/x86/mm/pat/set_memory.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/arch/x86/mm/pat/set_memory.c b/arch/x86/mm/pat/set_memory.c
+index 3b9032a3f315..93cb71451ce2 100644
+--- a/arch/x86/mm/pat/set_memory.c
++++ b/arch/x86/mm/pat/set_memory.c
+@@ -890,15 +890,15 @@ static void __set_pmd_pte(pte_t *kpte, unsigned long address, pte_t pte)
+ 	set_pte_atomic(kpte, pte);
+ 
+ 	if (IS_ENABLED(CONFIG_X86_32)) {
+-		struct page *page;
++		struct ptdesc *ptdesc;
+ 
+-		list_for_each_entry(page, &pgd_list, lru) {
++		list_for_each_entry(ptdesc, &pgd_list, pt_list) {
+ 			pgd_t *pgd;
+ 			p4d_t *p4d;
+ 			pud_t *pud;
+ 			pmd_t *pmd;
+ 
+-			pgd = (pgd_t *)page_address(page) + pgd_index(address);
++			pgd = (pgd_t *)ptdesc_address(ptdesc) + pgd_index(address);
+ 			p4d = p4d_offset(pgd, address);
+ 			pud = pud_offset(p4d, address);
+ 			pmd = pmd_offset(pud, address);
+-- 
+2.55.0
+

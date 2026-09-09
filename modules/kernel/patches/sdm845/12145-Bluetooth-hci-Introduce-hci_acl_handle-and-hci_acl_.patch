@@ -1,0 +1,43 @@
+From 22fd0fbcf720a99acdd2bef66d57f4f3c95ed9cb Mon Sep 17 00:00:00 2001
+From: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Date: Sat, 25 Jul 2026 01:54:44 -0700
+Subject: [PATCH 12145/15333] Bluetooth: hci: Introduce hci_acl_handle() and
+ hci_acl_dlen() helpers
+
+Introduce both helpers for ACL packet since:
+
+both core and transport drivers extract the handle and data length
+from its header in several places.
+
+Both will be used later.
+
+Signed-off-by: Zijun Hu <zijun.hu@oss.qualcomm.com>
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ include/net/bluetooth/hci.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/include/net/bluetooth/hci.h b/include/net/bluetooth/hci.h
+index 50f0eef71fb1..d557bdf9ae57 100644
+--- a/include/net/bluetooth/hci.h
++++ b/include/net/bluetooth/hci.h
+@@ -3407,6 +3407,16 @@ static inline struct hci_iso_hdr *hci_iso_hdr(const struct sk_buff *skb)
+ #define hci_handle(h)		(h & 0x0fff)
+ #define hci_flags(h)		(h >> 12)
+ 
++static inline __u16 hci_acl_handle(const struct sk_buff *skb)
++{
++	return hci_handle(__le16_to_cpu(hci_acl_hdr(skb)->handle));
++}
++
++static inline __u16 hci_acl_dlen(const struct sk_buff *skb)
++{
++	return __le16_to_cpu(hci_acl_hdr(skb)->dlen);
++}
++
+ /* ISO handle and flags pack/unpack */
+ #define hci_iso_flags_pb(f)		(f & 0x0003)
+ #define hci_iso_flags_ts(f)		((f >> 2) & 0x0001)
+-- 
+2.55.0
+

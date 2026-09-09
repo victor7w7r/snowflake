@@ -1,0 +1,90 @@
+From bd66bfb0bf20919b07681a589bb2aa3f22b191b9 Mon Sep 17 00:00:00 2001
+From: Marek Vasut <marex@nabladev.com>
+Date: Sat, 30 May 2026 21:53:22 +0100
+Subject: [PATCH 05504/15333] nvmem: core: Default to read-only if wp-gpios
+ present
+
+In case the nvmem DT node contains "wp-gpios" DT property, the device
+currently defaults to read-write and the force_ro sysfs attribute reads
+0. Switch to the default read-only, which is both safer, and aligned
+with eMMC HW BOOT partition force_ro sysfs attribute behavior, which
+also defaults to read-only.
+
+The adjustment of nvmem->read_only value to read-only in case wp-gpios
+DT property is present must be done only after the device_add() got
+called because device_add() does internally call nvmem_bin_attr_get_umode(),
+which configures the permissions of 'nvmem' bin attr based on the value
+of nvmem->read_only that is only parsed from DT property 'read-only',
+without any adjustment. This way, if DT property 'read-only' is present,
+the 'nvmem' attribute is always read-only. Otherwise, if the device is
+writeable, then 'nvmem' attribute is writeable, and nvmem->read_only
+defaults to read-only, but can be switched to read-write at runtime via
+the 'force_ro' attribute.
+
+The updated behavior can be tested as follows:
+
+Current content:
+"
+$ cat /sys/bus/nvmem/devices/logging7/force_ro
+1
+
+$ hexdump -C /sys/bus/nvmem/devices/logging7/nvmem
+00000000  66 6f 6f 0a ff ff ff ff
+"
+
+Write into default-read-only device:
+"
+$ echo bar > /sys/bus/nvmem/devices/logging7/nvmem
+bash: echo: write error: Operation not permitted
+$ cat /sys/bus/nvmem/devices/logging7/force_ro
+1
+"
+
+Unlock and write into device:
+"
+$ echo 0 > /sys/bus/nvmem/devices/logging7/force_ro
+$ cat /sys/bus/nvmem/devices/logging7/force_ro
+0
+
+$ echo bar > /sys/bus/nvmem/devices/logging7/nvmem
+$ hexdump -C /sys/bus/nvmem/devices/logging7/nvmem
+00000000  62 61 72 0a ff ff ff ff
+"
+
+Relock and write into device, fails because device is read-only again:
+"
+$ echo 1 > /sys/bus/nvmem/devices/logging7/force_ro
+$ echo baz > /sys/bus/nvmem/devices/logging7/nvmem
+bash: echo: write error: Operation not permitted
+
+$ hexdump -C /sys/bus/nvmem/devices/logging7/nvmem
+00000000  62 61 72 0a ff ff ff ff
+"
+
+Reviewed-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Signed-off-by: Marek Vasut <marex@nabladev.com>
+Signed-off-by: Srinivas Kandagatla <srini@kernel.org>
+Link: https://patch.msgid.link/20260530205333.117458-4-srini@kernel.org
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/nvmem/core.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/nvmem/core.c b/drivers/nvmem/core.c
+index e871181751f3..6bcb90760bee 100644
+--- a/drivers/nvmem/core.c
++++ b/drivers/nvmem/core.c
+@@ -1019,6 +1019,10 @@ struct nvmem_device *nvmem_register(const struct nvmem_config *config)
+ 	if (rval)
+ 		goto err_remove_dev;
+ 
++	/* If the device has WP GPIO, default to read-only */
++	if (nvmem->wp_gpio)
++		nvmem->read_only = true;
++
+ #ifdef CONFIG_NVMEM_SYSFS
+ 	rval = nvmem_populate_sysfs_cells(nvmem);
+ 	if (rval)
+-- 
+2.55.0
+

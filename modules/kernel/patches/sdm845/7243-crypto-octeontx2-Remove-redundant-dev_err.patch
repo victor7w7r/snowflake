@@ -1,0 +1,36 @@
+From 1222a24f79cad1c187a7c92bf104f94f8e0fcfa1 Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Fri, 17 Jul 2026 16:00:24 +0800
+Subject: [PATCH 07243/15333] crypto: octeontx2 - Remove redundant dev_err()
+
+Since commit 55b48e23f5c4 ("genirq/devres: Add error handling in
+devm_request_*_irq()"), devm_request_irq() automatically logs
+detailed error messages on failure. Remove the now-redundant
+driver-specific dev_err() calls.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ drivers/crypto/marvell/octeontx2/otx2_cptpf_main.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/drivers/crypto/marvell/octeontx2/otx2_cptpf_main.c b/drivers/crypto/marvell/octeontx2/otx2_cptpf_main.c
+index f6f47f4e5d83..79f6c2bb9d8b 100644
+--- a/drivers/crypto/marvell/octeontx2/otx2_cptpf_main.c
++++ b/drivers/crypto/marvell/octeontx2/otx2_cptpf_main.c
+@@ -430,11 +430,8 @@ static int cptpf_register_afpf_mbox_intr(struct otx2_cptpf_dev *cptpf)
+ 	/* Register AF-PF mailbox interrupt handler */
+ 	ret = devm_request_irq(dev, irq, otx2_cptpf_afpf_mbox_intr, 0,
+ 			       "CPTAFPF Mbox", cptpf);
+-	if (ret) {
+-		dev_err(dev,
+-			"IRQ registration failed for PFAF mbox irq\n");
++	if (ret)
+ 		return ret;
+-	}
+ 	/* Clear interrupt if any, to avoid spurious interrupts */
+ 	otx2_cpt_write64(cptpf->reg_base, BLKADDR_RVUM, 0, RVU_PF_INT, 0x1ULL);
+ 	/* Enable AF-PF interrupt */
+-- 
+2.55.0
+

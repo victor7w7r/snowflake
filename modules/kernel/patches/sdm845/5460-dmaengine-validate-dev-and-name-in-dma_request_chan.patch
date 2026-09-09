@@ -1,0 +1,52 @@
+From dc8a5238e1c7db74a7b4f02bcf0b05559b6627c5 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 16 Jul 2026 12:27:58 +0700
+Subject: [PATCH 05460/15333] dmaengine: validate dev and name in
+ dma_request_chan()
+
+dma_request_chan() assumes both @dev and @name are valid, but neither is
+checked before use.
+
+dev is dereferenced immediately via dev_fwnode(), which accesses
+dev->of_node or dev->fwnode without checking for NULL. Likewise, if name is
+NULL and the OF/ACPI lookup does not succeed, the legacy filter-map path
+eventually passes it to strcmp(), resulting in a NULL pointer dereference.
+
+These are caller bugs rather than normal lookup failures, so add a
+WARN_ON() at function entry to catch invalid arguments early during
+development instead of crashing later.
+
+No functional change for valid callers.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260716052758.23465-1-phucduc.bui@gmail.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/dma/dmaengine.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/dma/dmaengine.c b/drivers/dma/dmaengine.c
+index 23e3bb18c166..6ffd8bd82154 100644
+--- a/drivers/dma/dmaengine.c
++++ b/drivers/dma/dmaengine.c
+@@ -814,10 +814,15 @@ static const struct dma_slave_map *dma_filter_match(struct dma_device *device,
+  */
+ struct dma_chan *dma_request_chan(struct device *dev, const char *name)
+ {
+-	struct fwnode_handle *fwnode = dev_fwnode(dev);
++	struct fwnode_handle *fwnode;
+ 	struct dma_device *d, *_d;
+ 	struct dma_chan *chan = NULL;
+ 
++	if (WARN_ON(!dev || !name))
++		return ERR_PTR(-EINVAL);
++
++	fwnode = dev_fwnode(dev);
++
+ 	if (is_of_node(fwnode))
+ 		chan = of_dma_request_slave_channel(to_of_node(fwnode), name);
+ 	else if (is_acpi_device_node(fwnode))
+-- 
+2.55.0
+

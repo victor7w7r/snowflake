@@ -1,0 +1,79 @@
+From 924be9d673eb75deef2f71ddee0d7d89fe69bb7b Mon Sep 17 00:00:00 2001
+From: Vishal Badole <Vishal.Badole@amd.com>
+Date: Tue, 21 Jul 2026 21:15:14 +0530
+Subject: [PATCH 06846/15333] x86/topology: Add TOPO_CPU_TYPE_LOW_POWER
+
+AMD heterogeneous parts report a third core type via CPUID Fn0x80000026
+EBX[31:28] (Extended CPU Topology, Core Type):
+
+  0 - Performance
+  1 - Efficiency
+  2 - Low Power
+
+get_topology_cpu_type() only translates the first two, so on parts that ship
+low-power cores the third type falls through to TOPO_CPU_TYPE_UNKNOWN.
+
+Add TOPO_CPU_TYPE_LOW_POWER which takes care of this new type.
+
+  [ bp: Massage commit message, zap the "what" explanation. ]
+
+Signed-off-by: Vishal Badole <Vishal.Badole@amd.com>
+Signed-off-by: Borislav Petkov (AMD) <bp@alien8.de>
+Link: https://patch.msgid.link/20260721154514.2506972-4-Vishal.Badole@amd.com
+---
+ arch/x86/include/asm/processor.h      | 1 +
+ arch/x86/kernel/acpi/cppc.c           | 3 ++-
+ arch/x86/kernel/cpu/topology_common.c | 3 +++
+ 3 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/arch/x86/include/asm/processor.h b/arch/x86/include/asm/processor.h
+index fc0350fe8f5e..9e8183441888 100644
+--- a/arch/x86/include/asm/processor.h
++++ b/arch/x86/include/asm/processor.h
+@@ -73,6 +73,7 @@ enum x86_topology_cpu_type {
+ 	TOPO_CPU_TYPE_ANY = 0,
+ 	TOPO_CPU_TYPE_PERFORMANCE,
+ 	TOPO_CPU_TYPE_EFFICIENCY,
++	TOPO_CPU_TYPE_LOW_POWER,
+ 	TOPO_CPU_TYPE_UNKNOWN,
+ };
+ 
+diff --git a/arch/x86/kernel/acpi/cppc.c b/arch/x86/kernel/acpi/cppc.c
+index b8f5dd0a8117..bbade0da5130 100644
+--- a/arch/x86/kernel/acpi/cppc.c
++++ b/arch/x86/kernel/acpi/cppc.c
+@@ -281,8 +281,9 @@ int amd_get_boost_ratio_numerator(unsigned int cpu, u64 *numerator)
+ 			/* use the max scale for performance cores */
+ 			*numerator = CPPC_HIGHEST_PERF_PERFORMANCE;
+ 			return 0;
++		case TOPO_CPU_TYPE_LOW_POWER:
+ 		case TOPO_CPU_TYPE_EFFICIENCY:
+-			/* use the highest perf value for efficiency cores */
++			/* use the highest perf value for efficiency and low-power cores */
+ 			ret = amd_get_highest_perf(cpu, &tmp);
+ 			if (ret)
+ 				return ret;
+diff --git a/arch/x86/kernel/cpu/topology_common.c b/arch/x86/kernel/cpu/topology_common.c
+index 71b6c33afe0b..581f2fcd7e42 100644
+--- a/arch/x86/kernel/cpu/topology_common.c
++++ b/arch/x86/kernel/cpu/topology_common.c
+@@ -44,6 +44,7 @@ enum x86_topology_cpu_type get_topology_cpu_type(struct cpuinfo_x86 *c)
+ 		switch (c->topo.amd_type) {
+ 		case AMD_CPU_TYPE_PERFORMANCE:	return TOPO_CPU_TYPE_PERFORMANCE;
+ 		case AMD_CPU_TYPE_EFFICIENCY:	return TOPO_CPU_TYPE_EFFICIENCY;
++		case AMD_CPU_TYPE_LOW_POWER:	return TOPO_CPU_TYPE_LOW_POWER;
+ 		}
+ 	}
+ 
+@@ -57,6 +58,8 @@ const char *get_topology_cpu_type_name(struct cpuinfo_x86 *c)
+ 		return "performance";
+ 	case TOPO_CPU_TYPE_EFFICIENCY:
+ 		return "efficiency";
++	case TOPO_CPU_TYPE_LOW_POWER:
++		return "low_power";
+ 	default:
+ 		return "unknown";
+ 	}
+-- 
+2.55.0
+

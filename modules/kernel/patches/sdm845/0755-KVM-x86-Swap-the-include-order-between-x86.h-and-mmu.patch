@@ -1,0 +1,74 @@
+From febae924e83017834994054916dd612266aa1e5d Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 12 Jun 2026 17:03:06 -0700
+Subject: [PATCH 00755/15333] KVM: x86: Swap the include order between x86.h
+ and mmu.h
+
+Invert the include ordering between x86.h and mmu.h, and move
+mmu_is_nested() to mmu.h where it belongs (mmu_is_nested()'s placement in
+x86.h was solely responsible for the existing ordering), so that x86.h is
+not included by most KVM internal headers (but includes them).
+
+No functional change intended.
+
+Reviewed-by: Kai Huang <kai.huang@intel.com>
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+Reviewed-by: Binbin Wu <binbin.wu@linux.intel.com>
+Message-ID: <20260613000329.732085-8-seanjc@google.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/kvm/mmu.h | 6 +++++-
+ arch/x86/kvm/x86.h | 6 +-----
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/kvm/mmu.h b/arch/x86/kvm/mmu.h
+index e1bb663ebbd5..f9e137cc831f 100644
+--- a/arch/x86/kvm/mmu.h
++++ b/arch/x86/kvm/mmu.h
+@@ -4,7 +4,6 @@
+ 
+ #include <linux/kvm_host.h>
+ #include "regs.h"
+-#include "x86.h"
+ #include "cpuid.h"
+ 
+ extern bool __read_mostly enable_mmio_caching;
+@@ -300,6 +299,11 @@ static inline void kvm_update_page_stats(struct kvm *kvm, int level, int count)
+ 	atomic64_add(count, &kvm->stat.pages[level - 1]);
+ }
+ 
++static inline bool mmu_is_nested(struct kvm_vcpu *vcpu)
++{
++	return vcpu->arch.mmu == &vcpu->arch.guest_mmu;
++}
++
+ static inline gpa_t kvm_translate_gpa(struct kvm_vcpu *vcpu,
+ 				      struct kvm_mmu *mmu,
+ 				      gpa_t gpa, u64 access,
+diff --git a/arch/x86/kvm/x86.h b/arch/x86/kvm/x86.h
+index 77c73956ee23..a0e68eaf1f80 100644
+--- a/arch/x86/kvm/x86.h
++++ b/arch/x86/kvm/x86.h
+@@ -6,6 +6,7 @@
+ #include <asm/fpu/xstate.h>
+ #include <asm/mce.h>
+ #include <asm/pvclock.h>
++#include "mmu.h"
+ #include "regs.h"
+ #include "kvm_emulate.h"
+ #include "cpuid.h"
+@@ -210,11 +211,6 @@ static inline bool x86_exception_has_error_code(unsigned int vector)
+ 	return (1U << vector) & exception_has_error_code;
+ }
+ 
+-static inline bool mmu_is_nested(struct kvm_vcpu *vcpu)
+-{
+-	return vcpu->arch.mmu == &vcpu->arch.guest_mmu;
+-}
+-
+ static inline u8 vcpu_virt_addr_bits(struct kvm_vcpu *vcpu)
+ {
+ 	return kvm_is_cr4_bit_set(vcpu, X86_CR4_LA57) ? 57 : 48;
+-- 
+2.55.0
+

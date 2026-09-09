@@ -1,0 +1,57 @@
+From 39ec460b56b26319d1f31b459e8be7ea34ae9c67 Mon Sep 17 00:00:00 2001
+From: Richard Zhu <hongxing.zhu@nxp.com>
+Date: Thu, 30 Jul 2026 17:04:47 +0800
+Subject: [PATCH 08573/15333] clk: imx95-blk-ctl: Fix REFCLK rise-fall mismatch
+ on i.MX95
+
+When the internal PLL is used as the PCIe reference clock source on i.MX95,
+a REFCLK rise-fall time mismatch is observed during PCIe Gen1 compliance
+testing with the Lfast IO analyzer.
+
+Fix this issue by configuring the IREF_TX field to 0xF (15), which adjusts
+the transmitter current reference to meet the PCIe specification timing
+requirements.
+
+Signed-off-by: Richard Zhu <hongxing.zhu@nxp.com>
+Reviewed-by: Peng Fan <peng.fan@nxp.com>
+Link: https://patch.msgid.link/20260730090447.271109-1-hongxing.zhu@oss.nxp.com
+Signed-off-by: Abel Vesa <abel.vesa@oss.qualcomm.com>
+---
+ drivers/clk/imx/clk-imx95-blk-ctl.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/clk/imx/clk-imx95-blk-ctl.c b/drivers/clk/imx/clk-imx95-blk-ctl.c
+index 1f9259f45607..bc6957299cec 100644
+--- a/drivers/clk/imx/clk-imx95-blk-ctl.c
++++ b/drivers/clk/imx/clk-imx95-blk-ctl.c
+@@ -44,6 +44,8 @@ struct imx95_blk_ctl_clk_dev_data {
+ 	const char * const *parent_names;
+ 	u32 num_parents;
+ 	u32 reg;
++	u32 reg_init_msk;
++	u32 reg_init_val;
+ 	u32 bit_idx;
+ 	u32 bit_width;
+ 	u32 clk_type;
+@@ -289,6 +291,8 @@ static const struct imx95_blk_ctl_clk_dev_data hsio_blk_ctl_clk_dev_data[] = {
+ 		.parent_names = (const char *[]){ "func_out_en", },
+ 		.num_parents = 1,
+ 		.reg = 0,
++		.reg_init_msk = GENMASK(10, 7),
++		.reg_init_val = GENMASK(10, 7),
+ 		.bit_idx = 6,
+ 		.bit_width = 1,
+ 		.type = CLK_GATE,
+@@ -410,6 +414,9 @@ static int imx95_bc_probe(struct platform_device *pdev)
+ 		const struct imx95_blk_ctl_clk_dev_data *data = &bc->pdata->clk_dev_data[i];
+ 		void __iomem *reg = base + data->reg;
+ 
++		if (data->reg_init_msk)
++			writel((readl(reg) & ~data->reg_init_msk) | data->reg_init_val, reg);
++
+ 		if (data->type == CLK_MUX) {
+ 			hws[i] = clk_hw_register_mux(dev, data->name, data->parent_names,
+ 						     data->num_parents, data->flags, reg,
+-- 
+2.55.0
+

@@ -1,0 +1,162 @@
+From 7d3e99e93382f1a49eab5afe78586a66907e4ff3 Mon Sep 17 00:00:00 2001
+From: Alvin Sun <alvin.sun@linux.dev>
+Date: Tue, 11 Aug 2026 14:39:46 +0800
+Subject: [PATCH 13439/15333] rust: macros: auto-insert OwnerModule in
+ #[vtable]
+
+Auto-add `type OwnerModule: ::kernel::ModuleMetadata;` as a required
+associated type on the trait side if not already defined, and
+auto-insert `type OwnerModule = crate::LocalModule;` on the impl side
+if not explicitly provided, eliminating the need to manually declare
+and implement `OwnerModule` in every vtable trait and impl.
+
+Assisted-by: opencode:glm-5.2
+Reviewed-by: Andreas Hindborg <a.hindborg@kernel.org>
+Suggested-by: Gary Guo <gary@garyguo.net>
+Link: https://lore.kernel.org/all/DIMMWHUOLPSH.13JFRHDKDQJGO@garyguo.net
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Acked-by: Danilo Krummrich <dakr@kernel.org>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Signed-off-by: Alvin Sun <alvin.sun@linux.dev>
+Link: https://patch.msgid.link/20260811-fix-fops-owner-v10-4-7e71776f9dbe@linux.dev
+[ Fixed `rusttest` by adding a dummy `LocalModule`. Removed interim
+  `#[allow(dead_code)]`. - Miguel ]
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ rust/macros/lib.rs          | 18 ++++++++++++++++
+ rust/macros/vtable.rs       | 41 ++++++++++++++++++++++++++++++++-----
+ scripts/rustdoc_test_gen.rs |  1 -
+ 3 files changed, 54 insertions(+), 6 deletions(-)
+
+diff --git a/rust/macros/lib.rs b/rust/macros/lib.rs
+index 4a48fabbc268..408a90567f7e 100644
+--- a/rust/macros/lib.rs
++++ b/rust/macros/lib.rs
+@@ -177,12 +177,29 @@ pub fn module(input: TokenStream) -> TokenStream {
+ ///
+ /// This macro should not be used when all functions are required.
+ ///
++/// Additionally, this macro automatically handles the `OwnerModule`
++/// associated type: on the trait side, `type OwnerModule: ModuleMetadata;`
++/// is added as a required associated type if not already defined; on the
++/// impl side, `type OwnerModule = LocalModule;` is automatically inserted
++/// if not explicitly defined.
++///
+ /// # Examples
+ ///
+ /// ```
+ /// use kernel::error::VTABLE_DEFAULT_ERROR;
+ /// use kernel::prelude::*;
+ ///
++/// # struct LocalModule;
++/// # impl kernel::ModuleMetadata for LocalModule {
++/// #     const NAME: &'static kernel::str::CStr = c"vtable_doctest";
++/// #
++/// #     // SAFETY: This doctest runs on the host: there is no `THIS_MODULE`.
++/// #     const THIS_MODULE: kernel::ThisModule = unsafe {
++/// #         kernel::ThisModule::from_ptr(core::ptr::null_mut())
++/// #     };
++/// # }
++/// #
++/// # fn main() {
+ /// // Declares a `#[vtable]` trait
+ /// #[vtable]
+ /// pub trait Operations: Send + Sync + Sized {
+@@ -208,6 +225,7 @@ pub fn module(input: TokenStream) -> TokenStream {
+ ///
+ /// assert_eq!(<Foo as Operations>::HAS_FOO, true);
+ /// assert_eq!(<Foo as Operations>::HAS_BAR, false);
++/// # }
+ /// ```
+ ///
+ /// [`kernel::error::VTABLE_DEFAULT_ERROR`]: ../kernel/error/constant.VTABLE_DEFAULT_ERROR.html
+diff --git a/rust/macros/vtable.rs b/rust/macros/vtable.rs
+index c6510b0c4ea1..be9a5ed8abe5 100644
+--- a/rust/macros/vtable.rs
++++ b/rust/macros/vtable.rs
+@@ -30,6 +30,22 @@ fn handle_trait(mut item: ItemTrait) -> Result<ItemTrait> {
+          const USE_VTABLE_ATTR: ();
+     });
+ 
++    // Add `type OwnerModule: ModuleMetadata` as a required associated type if
++    // the trait does not already define it.
++    if !item
++        .items
++        .iter()
++        .any(|i| matches!(i, TraitItem::Type(t) if t.ident == "OwnerModule"))
++    {
++        gen_items.push(parse_quote! {
++            /// The module implementing this vtable trait.
++            ///
++            /// Automatically set to `crate::LocalModule` by the `#[vtable]`
++            /// impl macro.
++            type OwnerModule: ::kernel::ModuleMetadata;
++        });
++    }
++
+     for item in &item.items {
+         if let TraitItem::Fn(fn_item) = item {
+             let name = &fn_item.sig.ident;
+@@ -57,12 +73,18 @@ fn handle_trait(mut item: ItemTrait) -> Result<ItemTrait> {
+ 
+ fn handle_impl(mut item: ItemImpl) -> Result<ItemImpl> {
+     let mut gen_items = Vec::new();
+-    let mut defined_consts = HashSet::new();
++    let mut defined_items = HashSet::new();
+ 
+-    // Iterate over all user-defined constants to gather any possible explicit overrides.
++    // Iterate over all user-defined items to gather any possible explicit overrides.
+     for item in &item.items {
+-        if let ImplItem::Const(const_item) = item {
+-            defined_consts.insert(const_item.ident.clone());
++        match item {
++            ImplItem::Const(const_item) => {
++                defined_items.insert(const_item.ident.clone());
++            }
++            ImplItem::Type(type_item) => {
++                defined_items.insert(type_item.ident.clone());
++            }
++            _ => {}
+         }
+     }
+ 
+@@ -70,6 +92,15 @@ fn handle_impl(mut item: ItemImpl) -> Result<ItemImpl> {
+         const USE_VTABLE_ATTR: () = ();
+     });
+ 
++    // Auto-insert `type OwnerModule = crate::LocalModule` if not explicitly defined.
++    // `crate::LocalModule` resolves to the real module type (via `module!`) or a
++    // dummy fallback in non-module contexts (e.g., doctests).
++    if !defined_items.contains(&parse_quote!(OwnerModule)) {
++        gen_items.push(parse_quote! {
++            type OwnerModule = crate::LocalModule;
++        });
++    }
++
+     for item in &item.items {
+         if let ImplItem::Fn(fn_item) = item {
+             let name = &fn_item.sig.ident;
+@@ -78,7 +109,7 @@ fn handle_impl(mut item: ItemImpl) -> Result<ItemImpl> {
+                 name.span(),
+             );
+             // Skip if it's declared already -- this allows user override.
+-            if defined_consts.contains(&gen_const_name) {
++            if defined_items.contains(&gen_const_name) {
+                 continue;
+             }
+             let cfg_attrs = crate::helpers::gather_cfg_attrs(&fn_item.attrs);
+diff --git a/scripts/rustdoc_test_gen.rs b/scripts/rustdoc_test_gen.rs
+index 2018e47c151e..d087c0d9fcb3 100644
+--- a/scripts/rustdoc_test_gen.rs
++++ b/scripts/rustdoc_test_gen.rs
+@@ -240,7 +240,6 @@ macro_rules! assert_eq {{
+ const __LOG_PREFIX: &[u8] = b"rust_doctests_kernel\0";
+ 
+ /// Dummy module type for doctest context.
+-#[allow(dead_code)]
+ struct LocalModule;
+ 
+ use kernel::{{
+-- 
+2.55.0
+

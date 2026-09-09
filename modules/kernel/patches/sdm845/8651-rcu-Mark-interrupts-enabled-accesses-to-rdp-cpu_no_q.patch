@@ -1,0 +1,35 @@
+From 76892716e187e1bb4be30c8c980204b501c28555 Mon Sep 17 00:00:00 2001
+From: "Paul E. McKenney" <paulmck@kernel.org>
+Date: Fri, 24 Jul 2026 14:44:15 -0700
+Subject: [PATCH 08651/15333] rcu: Mark interrupts-enabled accesses to
+ rdp->cpu_no_qs.s
+
+The rdp->cpu_no_qs.s field is accessed only by the current CPU,
+but can be accessed both at task level and from interrupt handlers.
+All accesses from interrupts-enabled code must therefore be marked.
+This commit therefore converts from __this_cpu_read() to this_cpu_read(),
+but only in interrupts-enabled code, that is, the rcu_qs() function.
+
+KCSAN located this issue.
+
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ kernel/rcu/tree_plugin.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/rcu/tree_plugin.h b/kernel/rcu/tree_plugin.h
+index 844a9ced67cc..6904a4f826d1 100644
+--- a/kernel/rcu/tree_plugin.h
++++ b/kernel/rcu/tree_plugin.h
+@@ -976,7 +976,7 @@ static void __init rcu_bootup_announce(void)
+ static void rcu_qs(void)
+ {
+ 	RCU_LOCKDEP_WARN(preemptible(), "rcu_qs() invoked with preemption enabled!!!");
+-	if (!__this_cpu_read(rcu_data.cpu_no_qs.s))
++	if (!this_cpu_read(rcu_data.cpu_no_qs.s))
+ 		return;
+ 	trace_rcu_grace_period(TPS("rcu_sched"),
+ 			       __this_cpu_read(rcu_data.gp_seq), TPS("cpuqs"));
+-- 
+2.55.0
+

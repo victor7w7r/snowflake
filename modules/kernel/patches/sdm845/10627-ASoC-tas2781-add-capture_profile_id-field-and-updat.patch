@@ -1,0 +1,354 @@
+From 431c15610d017a470e488284c3b8f977f35e3309 Mon Sep 17 00:00:00 2001
+From: Shenghao Ding <shenghao-ding@ti.com>
+Date: Tue, 4 Aug 2026 19:14:33 +0800
+Subject: [PATCH 10627/15333] ASoC: tas2781: add capture_profile_id field and
+ update the tuning_switch function
+
+Currently, the TAS2781 SmartAMP driver uses the same profile ID for both
+playback and capture scenarios (e.g., PDM microphone recording or IV data
+capture). This makes it impossible to apply different DSP configurations
+for capture and playback, which is required in real-world tuning and
+production use cases. With these changes, capture and playback paths now
+use their own DSP profiles, improving tuning flexibility and avoiding
+unintended profile conflicts between SmartAMP capture and playback
+scenarios.
+
+Signed-off-by: Shenghao Ding <shenghao-ding@ti.com>
+Link: https://patch.msgid.link/20260804111433.1148-1-shenghao-ding@ti.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ include/sound/tas2781-dsp.h                   |   7 +-
+ .../hda/codecs/side-codecs/tas2781_hda_i2c.c  |  10 +-
+ .../hda/codecs/side-codecs/tas2781_hda_spi.c  |  12 +-
+ sound/soc/codecs/tas2781-fmwlib.c             |   6 +-
+ sound/soc/codecs/tas2781-i2c.c                | 133 +++++++++++++++++-
+ 5 files changed, 151 insertions(+), 17 deletions(-)
+
+diff --git a/include/sound/tas2781-dsp.h b/include/sound/tas2781-dsp.h
+index dd6ee45ad096..e845687decf9 100644
+--- a/include/sound/tas2781-dsp.h
++++ b/include/sound/tas2781-dsp.h
+@@ -201,6 +201,11 @@ struct tasdevice_rca {
+ 	int ncfgs;
+ 	struct tasdevice_config_info **cfg_info;
+ 	int profile_cfg_id;
++	/*
++	 * Used among SmartAMP for PDM microphone recording or IV data
++	 * capture.
++	 */
++	int capture_profile_id;
+ 	/*
+ 	 * Since version 0x105, the keyword 'init' was introduced into the
+ 	 * profile, which is used for chip initialization, particularly to
+@@ -222,7 +227,7 @@ void tasdevice_calbin_remove(void *context);
+ int tasdevice_select_tuningprm_cfg(void *context, int prm,
+ 	int cfg_no, int rca_conf_no);
+ int tasdevice_prmg_load(void *context, int prm_no);
+-void tasdevice_tuning_switch(void *context, int state);
++void tasdevice_tuning_switch(void *context, int state, bool is_cap);
+ int tas2781_load_calibration(void *context, char *file_name,
+ 	unsigned short i);
+ 
+diff --git a/sound/hda/codecs/side-codecs/tas2781_hda_i2c.c b/sound/hda/codecs/side-codecs/tas2781_hda_i2c.c
+index 624db967f17b..8b08b35b1dde 100644
+--- a/sound/hda/codecs/side-codecs/tas2781_hda_i2c.c
++++ b/sound/hda/codecs/side-codecs/tas2781_hda_i2c.c
+@@ -173,13 +173,13 @@ static void tas2781_hda_playback_hook(struct device *dev, int action)
+ 	case HDA_GEN_PCM_ACT_OPEN:
+ 		pm_runtime_get_sync(dev);
+ 		scoped_guard(mutex, &tas_hda->priv->codec_lock) {
+-			tasdevice_tuning_switch(tas_hda->priv, 0);
++			tasdevice_tuning_switch(tas_hda->priv, 0, false);
+ 			tas_hda->priv->playback_started = true;
+ 		}
+ 		break;
+ 	case HDA_GEN_PCM_ACT_CLOSE:
+ 		scoped_guard(mutex, &tas_hda->priv->codec_lock) {
+-			tasdevice_tuning_switch(tas_hda->priv, 1);
++			tasdevice_tuning_switch(tas_hda->priv, 1, false);
+ 			tas_hda->priv->playback_started = false;
+ 		}
+ 
+@@ -722,7 +722,7 @@ static int tas2781_runtime_suspend(struct device *dev)
+ 	 * Stop the playback if it's unused.
+ 	 */
+ 	if (tas_hda->priv->playback_started) {
+-		tasdevice_tuning_switch(tas_hda->priv, 1);
++		tasdevice_tuning_switch(tas_hda->priv, 1, false);
+ 		tas_hda->priv->playback_started = false;
+ 	}
+ 
+@@ -752,7 +752,7 @@ static int tas2781_system_suspend(struct device *dev)
+ 
+ 	/* Shutdown chip before system suspend */
+ 	if (tas_hda->priv->playback_started)
+-		tasdevice_tuning_switch(tas_hda->priv, 1);
++		tasdevice_tuning_switch(tas_hda->priv, 1, false);
+ 
+ 	/*
+ 	 * Reset GPIO may be shared, so cannot reset here.
+@@ -785,7 +785,7 @@ static int tas2781_system_resume(struct device *dev)
+ 			TASDEVICE_BIN_BLK_PRE_POWER_UP);
+ 
+ 	if (tas_hda->priv->playback_started)
+-		tasdevice_tuning_switch(tas_hda->priv, 0);
++		tasdevice_tuning_switch(tas_hda->priv, 0, false);
+ 
+ 	return 0;
+ }
+diff --git a/sound/hda/codecs/side-codecs/tas2781_hda_spi.c b/sound/hda/codecs/side-codecs/tas2781_hda_spi.c
+index 4899ea372798..e05f12a0c8bb 100644
+--- a/sound/hda/codecs/side-codecs/tas2781_hda_spi.c
++++ b/sound/hda/codecs/side-codecs/tas2781_hda_spi.c
+@@ -399,11 +399,11 @@ static void tas2781_hda_playback_hook(struct device *dev, int action)
+ 		pm_runtime_get_sync(dev);
+ 		guard(mutex)(&tas_priv->codec_lock);
+ 		if (tas_priv->fw_state == TASDEVICE_DSP_FW_ALL_OK)
+-			tasdevice_tuning_switch(tas_hda->priv, 0);
++			tasdevice_tuning_switch(tas_hda->priv, 0, false);
+ 	} else if (action == HDA_GEN_PCM_ACT_CLOSE) {
+ 		guard(mutex)(&tas_priv->codec_lock);
+ 		if (tas_priv->fw_state == TASDEVICE_DSP_FW_ALL_OK)
+-			tasdevice_tuning_switch(tas_priv, 1);
++			tasdevice_tuning_switch(tas_priv, 1, false);
+ 		pm_runtime_put_autosuspend(dev);
+ 	}
+ }
+@@ -847,7 +847,7 @@ static int tas2781_runtime_suspend(struct device *dev)
+ 
+ 	if (tas_priv->fw_state == TASDEVICE_DSP_FW_ALL_OK
+ 		&& tas_priv->playback_started)
+-		tasdevice_tuning_switch(tas_priv, 1);
++		tasdevice_tuning_switch(tas_priv, 1, false);
+ 
+ 	tas_priv->tasdevice[tas_priv->index].cur_book = -1;
+ 	tas_priv->tasdevice[tas_priv->index].cur_conf = -1;
+@@ -864,7 +864,7 @@ static int tas2781_runtime_resume(struct device *dev)
+ 
+ 	if (tas_priv->fw_state == TASDEVICE_DSP_FW_ALL_OK
+ 		&& tas_priv->playback_started)
+-		tasdevice_tuning_switch(tas_priv, 0);
++		tasdevice_tuning_switch(tas_priv, 0, false);
+ 
+ 	return 0;
+ }
+@@ -882,7 +882,7 @@ static int tas2781_system_suspend(struct device *dev)
+ 	/* Shutdown chip before system suspend */
+ 	if (tas_priv->fw_state == TASDEVICE_DSP_FW_ALL_OK
+ 		&& tas_priv->playback_started)
+-		tasdevice_tuning_switch(tas_priv, 1);
++		tasdevice_tuning_switch(tas_priv, 1, false);
+ 
+ 	return 0;
+ }
+@@ -917,7 +917,7 @@ static int tas2781_system_resume(struct device *dev)
+ 		tas_priv->fw_state = TASDEVICE_DSP_FW_ALL_OK;
+ 
+ 		if (tas_priv->playback_started)
+-			tasdevice_tuning_switch(tas_priv, 0);
++			tasdevice_tuning_switch(tas_priv, 0, false);
+ 	}
+ 
+ 	return ret;
+diff --git a/sound/soc/codecs/tas2781-fmwlib.c b/sound/soc/codecs/tas2781-fmwlib.c
+index dcbeb9618195..11d1c2ac865b 100644
+--- a/sound/soc/codecs/tas2781-fmwlib.c
++++ b/sound/soc/codecs/tas2781-fmwlib.c
+@@ -2797,11 +2797,12 @@ int tasdevice_prmg_load(void *context, int prm_no)
+ }
+ EXPORT_SYMBOL_NS_GPL(tasdevice_prmg_load, "SND_SOC_TAS2781_FMWLIB");
+ 
+-void tasdevice_tuning_switch(void *context, int state)
++void tasdevice_tuning_switch(void *context, int state, bool is_cap)
+ {
+ 	struct tasdevice_priv *tas_priv = (struct tasdevice_priv *) context;
+ 	struct tasdevice_fw *tas_fmw = tas_priv->fmw;
+-	int profile_cfg_id = tas_priv->rcabin.profile_cfg_id;
++	int profile_cfg_id = is_cap ? tas_priv->rcabin.capture_profile_id :
++				tas_priv->rcabin.profile_cfg_id;
+ 
+ 	/*
+ 	 * Only RCA-based Playback can still work with no dsp program running
+@@ -2818,7 +2819,6 @@ void tasdevice_tuning_switch(void *context, int state)
+ 	if (state == 0) {
+ 		if (tas_fmw && tas_priv->cur_prog < tas_fmw->nr_programs) {
+ 			/* dsp mode or tuning mode */
+-			profile_cfg_id = tas_priv->rcabin.profile_cfg_id;
+ 			tasdevice_select_tuningprm_cfg(tas_priv,
+ 				tas_priv->cur_prog, tas_priv->cur_conf,
+ 				profile_cfg_id);
+diff --git a/sound/soc/codecs/tas2781-i2c.c b/sound/soc/codecs/tas2781-i2c.c
+index 01442fd57d7e..70229e8279a3 100644
+--- a/sound/soc/codecs/tas2781-i2c.c
++++ b/sound/soc/codecs/tas2781-i2c.c
+@@ -1000,6 +1000,50 @@ static int tasdevice_set_profile_id(struct snd_kcontrol *kcontrol,
+ 	return ret;
+ }
+ 
++/**
++ * tasdevice_get_capture_profile_id - Report current active capture profile
++ * ID to user space
++ * @kcontrol: ALSA kcontrol structure passed from ALSA core
++ * @ucontrol: User-space control element value buffer to write the result back
++ *
++ * This function ensures the returned profile ID is always clamped inside the
++ * valid range advertised by the info callback, preventing accidental invalid
++ * values from being exposed to applications even if internal driver state is
++ * temporarily inconsistent.
++ *
++ * Returns 0 on successful fill of the control value, no error conditions
++ * are defined for this getter callback.
++ */
++static int tasdevice_set_capture_profile_id(struct snd_kcontrol *kcontrol,
++		struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_soc_component *codec = snd_kcontrol_chip(kcontrol);
++	struct tasdevice_priv *tas_priv = snd_soc_component_get_drvdata(codec);
++	unsigned int user_prof_id = ucontrol->value.integer.value[0];
++	unsigned int max_valid_id;
++	int ret = 0;
++
++	/*
++	 * Align valid range with the bound defined in
++	 * tasdevice_info_profile()
++	 */
++	max_valid_id = tas_priv->rcabin.ncfgs - 1;
++
++	/*
++	 * Reject invalid input including zero total configuration edge
++	 * case
++	 */
++	if (tas_priv->rcabin.ncfgs == 0 || user_prof_id > max_valid_id)
++		return -EINVAL;
++
++	if (tas_priv->rcabin.capture_profile_id != user_prof_id) {
++		tas_priv->rcabin.capture_profile_id = user_prof_id;
++		ret = 1;
++	}
++
++	return ret;
++}
++
+ static int tasdevice_info_active_num(struct snd_kcontrol *kcontrol,
+ 			struct snd_ctl_elem_info *uinfo)
+ {
+@@ -1080,6 +1124,41 @@ static int tasdevice_get_profile_id(struct snd_kcontrol *kcontrol,
+ 	return 0;
+ }
+ 
++/**
++ * tasdevice_get_capture_profile_id - Report current active capture profile
++ * ID to user space
++ * @kcontrol: ALSA kcontrol structure passed from ALSA core
++ * @ucontrol: User-space control element value buffer to write the result back
++ *
++ * This function ensures the returned profile ID is always clamped inside the
++ * valid range advertised by the info callback, preventing accidental invalid
++ * values from being exposed to applications even if internal driver state is
++ * temporarily inconsistent.
++ *
++ * Returns 0 on successful fill of the control value, no error conditions
++ * are defined for this getter callback.
++ */
++static int tasdevice_get_capture_profile_id(struct snd_kcontrol *kcontrol,
++			struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_soc_component *codec = snd_kcontrol_chip(kcontrol);
++	struct tasdevice_priv *tas_priv = snd_soc_component_get_drvdata(codec);
++	unsigned int max_valid_id, current_prof_id;
++
++	max_valid_id = tas_priv->rcabin.ncfgs > 0 ?
++		(tas_priv->rcabin.ncfgs - 1U) : 0;
++
++	/*
++	 * Cast current profile id to unsigned to match type with max_valid_id,
++	 * avoid signedness mismatch;
++	 */
++	current_prof_id = (unsigned int)tas_priv->rcabin.capture_profile_id;
++	/* Prevent underflow when there are no loaded capture profiles. */
++	ucontrol->value.integer.value[0] = min(current_prof_id, max_valid_id);
++
++	return 0;
++}
++
+ static int tasdevice_get_chip_id(struct snd_kcontrol *kcontrol,
+ 			struct snd_ctl_elem_value *ucontrol)
+ {
+@@ -1122,6 +1201,41 @@ static int tasdevice_create_control(struct tasdevice_priv *tas_priv)
+ 	ret = snd_soc_add_component_controls(tas_priv->codec,
+ 		prof_ctrls, nr_controls < mix_index ? nr_controls : mix_index);
+ 
++	mix_index = 0;
++	switch (tas_priv->chip_id) {
++	case TAS2563:
++	case TAS2568:
++	case TAS2570:
++	case TAS2572:
++	case TAS2573:
++	case TAS2574:
++	case TAS2781:
++	prof_ctrls = devm_kcalloc(tas_priv->dev, nr_controls,
++		sizeof(prof_ctrls[0]), GFP_KERNEL);
++	if (!prof_ctrls) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	/* Create a mixer item for selecting the capture profile */
++	name = devm_kstrdup(tas_priv->dev, "Speaker Capture Profile Id",
++		GFP_KERNEL);
++	if (!name) {
++		ret = -ENOMEM;
++		goto out;
++	}
++	prof_ctrls[mix_index].name = name;
++	prof_ctrls[mix_index].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
++	prof_ctrls[mix_index].info = tasdevice_info_profile;
++	prof_ctrls[mix_index].get = tasdevice_get_capture_profile_id;
++	prof_ctrls[mix_index].put = tasdevice_set_capture_profile_id;
++	mix_index++;
++
++	ret = snd_soc_add_component_controls(tas_priv->codec,
++		prof_ctrls, nr_controls < mix_index ? nr_controls : mix_index);
++		break;
++	}
++
+ out:
+ 	return ret;
+ }
+@@ -1773,7 +1887,22 @@ static int tasdevice_dapm_event(struct snd_soc_dapm_widget *w,
+ 	guard(mutex)(&tas_priv->codec_lock);
+ 	if (event == SND_SOC_DAPM_PRE_PMD)
+ 		state = 1;
+-	tasdevice_tuning_switch(tas_priv, state);
++	tasdevice_tuning_switch(tas_priv, state, false);
++
++	return 0;
++}
++
++static int tasdevice_capture_dapm_event(struct snd_soc_dapm_widget *w,
++			struct snd_kcontrol *kcontrol, int event)
++{
++	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
++	struct tasdevice_priv *tas_priv = snd_soc_component_get_drvdata(codec);
++	int state = 0;
++
++	guard(mutex)(&tas_priv->codec_lock);
++	if (event == SND_SOC_DAPM_PRE_PMD)
++		state = 1;
++	tasdevice_tuning_switch(tas_priv, state, true);
+ 
+ 	return 0;
+ }
+@@ -1781,7 +1910,7 @@ static int tasdevice_dapm_event(struct snd_soc_dapm_widget *w,
+ static const struct snd_soc_dapm_widget tasdevice_dapm_widgets[] = {
+ 	SND_SOC_DAPM_AIF_IN("ASI", "ASI Playback", 0, SND_SOC_NOPM, 0, 0),
+ 	SND_SOC_DAPM_AIF_OUT_E("ASI OUT", "ASI Capture", 0, SND_SOC_NOPM,
+-		0, 0, tasdevice_dapm_event,
++		0, 0, tasdevice_capture_dapm_event,
+ 		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_PRE_PMD),
+ 	SND_SOC_DAPM_SPK("SPK", tasdevice_dapm_event),
+ 	SND_SOC_DAPM_OUTPUT("OUT"),
+-- 
+2.55.0
+

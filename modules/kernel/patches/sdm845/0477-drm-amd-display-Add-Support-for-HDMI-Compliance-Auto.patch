@@ -1,0 +1,163 @@
+From fcf4919cd87333f2e67c149cd3eacb1cd0835137 Mon Sep 17 00:00:00 2001
+From: Fangzhi Zuo <Jerry.Zuo@amd.com>
+Date: Wed, 3 Jun 2026 13:39:13 -0400
+Subject: [PATCH 00477/15333] drm/amd/display: Add Support for HDMI Compliance
+ Automation
+
+Add support to get DUT trained at FRL link rate when working with
+Teledyne M41h compliance automation.
+
+Reviewed-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: Fangzhi Zuo <Jerry.Zuo@amd.com>
+Signed-off-by: Chenyu Chen <chen-yu.chen@amd.com>
+Tested-by: Daniel Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h |  3 +
+ .../display/amdgpu_dm/amdgpu_dm_connector.c   |  5 ++
+ .../amd/display/amdgpu_dm/amdgpu_dm_debugfs.c | 67 ++++++++++++++++++-
+ .../amd/display/amdgpu_dm/amdgpu_dm_helpers.c |  6 ++
+ 4 files changed, 80 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+index c0144d14b793..eedca412eca0 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+@@ -877,6 +877,9 @@ struct amdgpu_dm_connector {
+ 	unsigned int hdmi_hpd_debounce_delay_ms;
+ 	struct delayed_work hdmi_hpd_debounce_work;
+ 	struct dc_sink *hdmi_prev_sink;
++
++	/* HDMI compliance automation */
++	bool hdmi_comp_auto;
+ };
+ 
+ static inline void amdgpu_dm_set_mst_status(uint8_t *status,
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+index f239ce767bff..df09627f4c04 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+@@ -573,6 +573,11 @@ void amdgpu_dm_update_connector_after_detect(
+ 		amdgpu_dm_update_freesync_caps(connector, aconnector->drm_edid, true);
+ 		amdgpu_dm_update_connector_ext_caps(aconnector);
+ 		dm_set_panel_type(aconnector);
++
++		if (aconnector->hdmi_comp_auto) {
++			if (sink->sink_signal != SIGNAL_TYPE_HDMI_FRL)
++				sink->sink_signal = SIGNAL_TYPE_HDMI_FRL;
++		}
+ 	} else {
+ 		hdmi_cec_unset_edid(aconnector);
+ 		drm_dp_cec_unset_edid(&aconnector->dm_dp_aux.aux);
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_debugfs.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_debugfs.c
+index 3bcf3ff30aee..2d455359fdb4 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_debugfs.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_debugfs.c
+@@ -2982,6 +2982,64 @@ static ssize_t hdmi_cec_state_write(struct file *f, const char __user *buf,
+ 	return size;
+ }
+ 
++/**
++ * hdmi_automation_enable - Enable/Disable HDMI automation feature
++ * @f: file structure.
++ * @buf: userspace buffer. set to '1' to enable; '0' to disable automation feature.
++ * @size: size of buffer from userpsace.
++ * @pos: unused.
++ *
++ * Return size on success, error code on failure
++ */
++static ssize_t hdmi_automation_enable(struct file *f, const char __user *buf,
++	size_t size, loff_t *pos)
++{
++	struct amdgpu_dm_connector *aconnector = file_inode(f)->i_private;
++	char *wr_buf = NULL;
++	const uint32_t wr_buf_size = 40;
++	int max_param_num = 1;
++	uint8_t param_nums = 0;
++	long param[2];
++	bool hdmi_comp_auto;
++
++	if (size == 0)
++		return -EINVAL;
++
++	wr_buf = kcalloc(wr_buf_size, sizeof(char), GFP_KERNEL);
++	if (!wr_buf)
++		return -ENOSPC;
++
++	if (parse_write_buffer_into_params(wr_buf, wr_buf_size,
++					   (long *)param, buf,
++					   max_param_num,
++					   &param_nums)) {
++		kfree(wr_buf);
++		return -EINVAL;
++	}
++
++	if (param_nums <= 0) {
++		kfree(wr_buf);
++		DRM_DEBUG_DRIVER("user data not be read\n");
++		return -EINVAL;
++	}
++
++	switch (param[0]) {
++	case 0:
++		hdmi_comp_auto = false;
++		break;
++	case 1:
++	default:
++		hdmi_comp_auto = true;
++		break;
++	}
++
++	/* Persist setting across sink re-detection/hotplug. */
++	aconnector->hdmi_comp_auto = hdmi_comp_auto;
++
++	kfree(wr_buf);
++	return size;
++}
++
+ DEFINE_SHOW_ATTRIBUTE(dp_dsc_fec_support);
+ DEFINE_SHOW_ATTRIBUTE(dmub_fw_state);
+ DEFINE_SHOW_ATTRIBUTE(dmub_tracebuffer);
+@@ -3099,6 +3157,12 @@ static const struct file_operations dp_mst_link_settings_debugfs_fops = {
+ 	.llseek = default_llseek
+ };
+ 
++static const struct file_operations hdmi_automation_debugfs_fops = {
++	.owner = THIS_MODULE,
++	.write = hdmi_automation_enable,
++	.llseek = default_llseek
++};
++
+ static const struct {
+ 	char *name;
+ 	const struct file_operations *fops;
+@@ -3131,7 +3195,8 @@ static const struct {
+ 	const struct file_operations *fops;
+ } hdmi_debugfs_entries[] = {
+ 		{"hdcp_sink_capability", &hdcp_sink_capability_fops},
+-		{"hdmi_cec_state", &hdmi_cec_state_fops}
++		{"hdmi_cec_state", &hdmi_cec_state_fops},
++		{"hdmi_automation", &hdmi_automation_debugfs_fops}
+ };
+ 
+ /*
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
+index c6f94eb71ffa..eef031022be2 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
+@@ -193,6 +193,12 @@ enum dc_edid_status dm_helpers_parse_edid_caps(
+ 					__func__, connector->name, edid_caps->frl_dsc_10bpc, edid_caps->frl_dsc_12bpc, \
+ 					edid_caps->frl_dsc_all_bpp, edid_caps->frl_dsc_native_420, edid_caps->frl_dsc_max_slices, \
+ 					edid_caps->frl_dsc_max_frl_rate, edid_caps->frl_dsc_total_chunk_kbytes);
++		if (aconnector->hdmi_comp_auto) {
++			edid_caps->panel_patch.hdmi_comp_auto = true;
++			link->ctx->dc->debug.force_frl_max = true;
++			link->ctx->dc->debug.force_frl_dsc = true;
++			drm_dbg_driver(connector->dev, "%s: HDMI_FRL [%s] hdmi_comp_auto --> enabled\n", __func__, connector->name);
++		}
+ 	}
+ 
+ 	apply_edid_quirks(link, edid_buf, edid_caps);
+-- 
+2.55.0
+

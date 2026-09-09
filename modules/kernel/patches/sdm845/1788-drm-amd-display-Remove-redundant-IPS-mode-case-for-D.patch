@@ -1,0 +1,77 @@
+From bc1afb9ff985bb806e10eb7d81af974cbe86b57a Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Mon, 15 Jun 2026 12:10:58 -0600
+Subject: [PATCH 01788/15333] drm/amd/display: Remove redundant IPS mode case
+ for DCN 4.2
+
+[WHAT]
+Remove the redundant IP_VERSION(4, 2, 0) case from
+dm_get_default_ips_mode() since it only reassigns the same
+DMUB_IPS_ENABLE value already set at initialization.
+
+Also remove the corresponding KUnit test.
+
+Reviewed-by: Chenyu Chen <chen-yu.chen@amd.com>
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Signed-off-by: George Zhang <george.zhang@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.c |  4 ----
+ .../amdgpu_dm/tests/amdgpu_dm_dmub_test.c      | 18 ------------------
+ 2 files changed, 22 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.c
+index b4c3371f5757..7519219db0f8 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dmub.c
+@@ -453,10 +453,6 @@ enum dmub_ips_disable_type dm_get_default_ips_mode(
+ 	case IP_VERSION(3, 5, 1):
+ 		ret =  DMUB_IPS_RCG_IN_ACTIVE_IPS2_IN_OFF;
+ 		break;
+-	case IP_VERSION(4, 2, 0):
+-	case IP_VERSION(4, 2, 1):
+-		ret =  DMUB_IPS_ENABLE;
+-		break;
+ 	default:
+ 		/* ASICs older than DCN35 do not have IPSs */
+ 		if (amdgpu_ip_version(adev, DCE_HWIP, 0) < IP_VERSION(3, 5, 0))
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_dmub_test.c b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_dmub_test.c
+index b82dd301a896..bf90ccfbf431 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_dmub_test.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/tests/amdgpu_dm_dmub_test.c
+@@ -350,23 +350,6 @@ static void dm_test_get_default_ips_mode_dcn36(struct kunit *test)
+ 			DMUB_IPS_RCG_IN_ACTIVE_IPS2_IN_OFF);
+ }
+ 
+-/**
+- * dm_test_get_default_ips_mode_dcn42 - Test Get default ips mode dcn42
+- * @test: The KUnit test context
+- */
+-static void dm_test_get_default_ips_mode_dcn42(struct kunit *test)
+-{
+-	struct amdgpu_device *adev;
+-
+-	adev = kunit_kzalloc(test, sizeof(*adev), GFP_KERNEL);
+-	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, adev);
+-
+-	adev->ip_versions[DCE_HWIP][0] = IP_VERSION(4, 2, 0);
+-
+-	KUNIT_EXPECT_EQ(test, dm_get_default_ips_mode(adev),
+-			DMUB_IPS_DISABLE_ALL);
+-}
+-
+ /**
+  * dm_test_get_default_ips_mode_older_than_dcn35 - Test Get default ips mode older than dcn35
+  * @test: The KUnit test context
+@@ -572,7 +555,6 @@ static struct kunit_case amdgpu_dm_dmub_tests[] = {
+ 	KUNIT_CASE(dm_test_get_default_ips_mode_dcn35),
+ 	KUNIT_CASE(dm_test_get_default_ips_mode_dcn351),
+ 	KUNIT_CASE(dm_test_get_default_ips_mode_dcn36),
+-	KUNIT_CASE(dm_test_get_default_ips_mode_dcn42),
+ 	KUNIT_CASE(dm_test_get_default_ips_mode_older_than_dcn35),
+ 	KUNIT_CASE(dm_test_get_default_ips_mode_newer_default),
+ 	/* dm_dmub_hw_init() */
+-- 
+2.55.0
+

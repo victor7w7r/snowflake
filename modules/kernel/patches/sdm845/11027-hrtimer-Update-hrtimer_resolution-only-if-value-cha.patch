@@ -1,0 +1,41 @@
+From e00210ff2ca8f45abda86c919816f589aff4fc1f Mon Sep 17 00:00:00 2001
+From: "Paul E. McKenney" <paulmck@kernel.org>
+Date: Fri, 31 Jul 2026 12:20:05 -0700
+Subject: [PATCH 11027/15333] hrtimer: Update hrtimer_resolution only if value
+ changes
+
+Currently, the hrtimer_switch_to_hres() function unconditionally updates
+hrtimer_resolution to HIGH_RES_NSEC.  This causes KCSAN false positives
+in kernels built with CONFIG_KCSAN_STRICT=y.  It also causes unnecessary
+cache-line traffic on the many code paths that load hrtimer_resolution,
+which is especially regrettable because the value of hrtimer_resolution
+normally changes only once during the lifetime of a given kernel.
+
+Therefore, update the value of hrtimer_resolution to HIGH_RES_NSEC only
+if it does not already have that value.
+
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+Cc: Anna-Maria Behnsen <anna-maria@linutronix.de>
+Cc: Frederic Weisbecker <frederic@kernel.org>
+Cc: Thomas Gleixner <tglx@kernel.org>
+---
+ kernel/time/hrtimer.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
+index 84ea341a6efc..8c6a6de7dc35 100644
+--- a/kernel/time/hrtimer.c
++++ b/kernel/time/hrtimer.c
+@@ -777,7 +777,8 @@ static void hrtimer_switch_to_hres(void)
+ 		return;
+ 	}
+ 	base->hres_active = true;
+-	hrtimer_resolution = HIGH_RES_NSEC;
++	if (hrtimer_resolution != HIGH_RES_NSEC)
++		hrtimer_resolution = HIGH_RES_NSEC;
+ 
+ 	tick_setup_sched_timer(true);
+ 	/* "Retrigger" the interrupt to get things going */
+-- 
+2.55.0
+

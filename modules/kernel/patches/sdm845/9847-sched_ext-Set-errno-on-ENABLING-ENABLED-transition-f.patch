@@ -1,0 +1,39 @@
+From c5b9316cf3d5371d53022352c7c9d248e14b801f Mon Sep 17 00:00:00 2001
+From: Liang Luo <luoliang@kylinos.cn>
+Date: Tue, 28 Jul 2026 14:09:55 +0800
+Subject: [PATCH 09847/15333] sched_ext: Set errno on ENABLING -> ENABLED
+ transition failure
+
+If the SCX_ENABLING -> SCX_ENABLED cmpxchg at the tail of
+scx_root_enable_workfn() fails, the function jumps to err_disable
+without setting ret. At that point ret still holds the return value
+of the last successful __scx_init_task() call, which is 0, so the
+err_disable fallback reports the meaningless message:
+
+  scx_root_enable() failed (0)
+
+Set ret = -EBUSY, consistent with the other enable-state guards at
+the top of the same function, so the fallback always reports a real
+errno.
+
+Signed-off-by: Liang Luo <luoliang@kylinos.cn>
+Signed-off-by: Tejun Heo <tj@kernel.org>
+---
+ kernel/sched/ext/ext.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 312938179e52..6a3e94707c8b 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -7520,6 +7520,7 @@ static void scx_root_enable_workfn(struct kthread_work *work)
+ 
+ 	if (!scx_tryset_enable_state(SCX_ENABLED, SCX_ENABLING)) {
+ 		WARN_ON_ONCE(atomic_read(&sch->exit_kind) == SCX_EXIT_NONE);
++		ret = -EBUSY;
+ 		goto err_disable;
+ 	}
+ 
+-- 
+2.55.0
+

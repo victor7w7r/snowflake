@@ -1,0 +1,193 @@
+From bfc7a8fff313e15ddda69d62535eaf3413f57ee4 Mon Sep 17 00:00:00 2001
+From: Imre Deak <imre.deak@intel.com>
+Date: Wed, 1 Jul 2026 18:31:45 +0300
+Subject: [PATCH 03407/15333] drm/i915/dp_test: Use link caps for compliance
+ link configs
+
+Use the link caps configuration mask when applying DP compliance test
+link parameters during state computation.
+
+Preserve the legacy behavior of falling back to all configurations with
+the requested lane count if the requested rate and lane count pair is
+not allowed.
+
+In case no valid configuration is found fail the modeset.
+
+v2:
+- Rebase on changes using a filter object instead of a mask of
+  configuration indices.
+- Rebase on changes using an iteration object.
+
+Reviewed-by: Luca Coelho <luciano.coelho@intel.com>
+Signed-off-by: Imre Deak <imre.deak@intel.com>
+Link: https://patch.msgid.link/20260701153204.4124150-17-imre.deak@intel.com
+---
+ drivers/gpu/drm/i915/display/intel_dp.c      |  3 +-
+ drivers/gpu/drm/i915/display/intel_dp_test.c | 96 +++++++++++++++++++-
+ drivers/gpu/drm/i915/display/intel_dp_test.h |  3 +-
+ 3 files changed, 99 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+index ea4facb68da6..08f2cc038be0 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
++++ b/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -2769,7 +2769,8 @@ intel_dp_compute_config_limits(struct intel_dp *intel_dp,
+ 		limits->link_config_filter = new_filter;
+ 	}
+ 
+-	intel_dp_test_compute_config(intel_dp, crtc_state, limits);
++	if (!intel_dp_test_compute_config(connector, crtc_state, limits))
++		return false;
+ 
+ 	return intel_dp_compute_config_link_bpp_limits(connector,
+ 						       crtc_state,
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_test.c b/drivers/gpu/drm/i915/display/intel_dp_test.c
+index da7632536dac..ec7fa690910b 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_test.c
++++ b/drivers/gpu/drm/i915/display/intel_dp_test.c
+@@ -28,11 +28,92 @@ void intel_dp_test_reset(struct intel_dp *intel_dp)
+ 	memset(&intel_dp->compliance, 0, sizeof(intel_dp->compliance));
+ }
+ 
++static bool set_filter_for_lane_count(struct intel_connector *connector,
++				      struct intel_dp_link_caps *link_caps,
++				      int lane_count,
++				      struct link_config_limits *limits)
++{
++	struct intel_dp_link_config link_config;
++	struct intel_dp_link_caps_order order =
++		intel_dp_link_caps_connector_compute_order(connector);
++	struct intel_dp_link_caps_filter new_filter = INTEL_DP_LINK_CAPS_FILTER_NONE;
++	struct intel_dp_link_caps_iter iter;
++	bool found = false;
++
++	intel_dp_link_caps_iter_start(&iter, link_caps, order, limits->link_config_filter);
++	for_each_dp_link_config(&iter, &link_config) {
++		if (link_config.lane_count != lane_count)
++			continue;
++
++		intel_dp_link_caps_filter_add(link_caps, &new_filter, &link_config);
++		found = true;
++	}
++	intel_dp_link_caps_iter_end(&iter);
++
++	if (!found)
++		return false;
++
++	limits->link_config_filter = new_filter;
++
++	return true;
++}
++
++static bool set_filter_for_link_config(struct intel_connector *connector,
++				       struct intel_dp_link_caps *link_caps,
++				       const struct intel_dp_link_config *link_params,
++				       struct link_config_limits *limits)
++{
++	struct intel_dp_link_caps_filter new_filter = INTEL_DP_LINK_CAPS_FILTER_NONE;
++
++	if (!intel_dp_link_caps_filter_add(link_caps, &new_filter, link_params))
++		return false;
++
++	limits->link_config_filter = new_filter;
++
++	return true;
++}
++
++static bool set_filter_for_link_params(struct intel_connector *connector,
++				       int link_rate, int lane_count,
++				       struct link_config_limits *limits)
++{
++	struct intel_dp *intel_dp = intel_attached_dp(connector);
++	struct intel_encoder *encoder = &dp_to_dig_port(intel_dp)->base;
++	struct intel_dp_link_caps *link_caps = intel_dp->link.caps;
++	struct intel_display *display = to_intel_display(intel_dp);
++	struct intel_dp_link_config requested_config;
++
++	requested_config.rate = link_rate;
++	requested_config.lane_count = lane_count;
++
++	if (set_filter_for_link_config(connector, link_caps, &requested_config, limits))
++		return true;
++
++	/*
++	 * Preserve the legacy behavior: if the requested (rate, lane_count)
++	 * combination is not an allowed config, fall back to all configs
++	 * matching the requested lane count.
++	 *
++	 * TODO: Recheck whether this behavior is actually correct.
++	 */
++	if (set_filter_for_lane_count(connector, link_caps, lane_count, limits))
++		return true;
++
++	drm_dbg_kms(display->drm,
++		    "[ENCODER:%d:%s] Invalid autotest link config parameters: %dx%d\n",
++		    encoder->base.base.id, encoder->base.name,
++		    requested_config.lane_count,
++		    requested_config.rate);
++
++	return false;
++}
++
+ /* Adjust link config limits based on compliance test requests. */
+-void intel_dp_test_compute_config(struct intel_dp *intel_dp,
++bool intel_dp_test_compute_config(struct intel_connector *connector,
+ 				  struct intel_crtc_state *pipe_config,
+ 				  struct link_config_limits *limits)
+ {
++	struct intel_dp *intel_dp = intel_attached_dp(connector);
+ 	struct intel_dp_link_caps *link_caps = intel_dp->link.caps;
+ 	struct intel_display *display = to_intel_display(intel_dp);
+ 
+@@ -51,6 +132,11 @@ void intel_dp_test_compute_config(struct intel_dp *intel_dp,
+ 	if (intel_dp->compliance.test_type == DP_TEST_LINK_TRAINING) {
+ 		int index;
+ 
++		/*
++		 * TODO: Remove the following min/max link limit setup
++		 * after converting to use the link configuration filter
++		 * instead in limits.
++		 */
+ 		/* Validate the compliance test data since max values
+ 		 * might have changed due to link train fallback.
+ 		 */
+@@ -65,7 +151,15 @@ void intel_dp_test_compute_config(struct intel_dp *intel_dp,
+ 			limits->min_lane_count = intel_dp->compliance.test_lane_count;
+ 			limits->max_lane_count = intel_dp->compliance.test_lane_count;
+ 		}
++
++		if (!set_filter_for_link_params(connector,
++						intel_dp->compliance.test_link_rate,
++						intel_dp->compliance.test_lane_count,
++						limits))
++			return false;
+ 	}
++
++	return true;
+ }
+ 
+ /* Compliance test status bits  */
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_test.h b/drivers/gpu/drm/i915/display/intel_dp_test.h
+index dcc167e4c7f6..a08f37a63dc9 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_test.h
++++ b/drivers/gpu/drm/i915/display/intel_dp_test.h
+@@ -6,6 +6,7 @@
+ 
+ #include <linux/types.h>
+ 
++struct intel_connector;
+ struct intel_crtc_state;
+ struct intel_display;
+ struct intel_dp;
+@@ -13,7 +14,7 @@ struct link_config_limits;
+ 
+ void intel_dp_test_reset(struct intel_dp *intel_dp);
+ void intel_dp_test_request(struct intel_dp *intel_dp);
+-void intel_dp_test_compute_config(struct intel_dp *intel_dp,
++bool intel_dp_test_compute_config(struct intel_connector *connector,
+ 				  struct intel_crtc_state *pipe_config,
+ 				  struct link_config_limits *limits);
+ bool intel_dp_test_phy(struct intel_dp *intel_dp);
+-- 
+2.55.0
+

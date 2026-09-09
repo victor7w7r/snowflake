@@ -1,0 +1,79 @@
+From 98a6cabfd805d55a1b2c70b01923ec9b9bbc706a Mon Sep 17 00:00:00 2001
+From: Thomas Zimmermann <tzimmermann@suse.de>
+Date: Fri, 29 May 2026 16:01:23 +0200
+Subject: [PATCH 00137/15333] lib/fonts: Look up glyph data with
+ font_data_glyph_buf()
+
+Add font_data_glyph_buf() to retrieve a character's glyph data or NULL
+otherwise. Console fonts can currently contain 256 or 512 glyphs. The
+kernel-internal characters are of type char, unsigned short or unsigned
+int. Catch all of them by accepting unsigned int. Callers possibly have
+to cast from signed to unsigned types to reach all glyphs in a font.
+
+Signed-off-by: Thomas Zimmermann <tzimmermann@suse.de>
+Reviewed-by: Jocelyn Falempe <jfalempe@redhat.com>
+Link: https://patch.msgid.link/20260529140759.529929-2-tzimmermann@suse.de
+---
+ include/linux/font.h |  3 +++
+ lib/fonts/fonts.c    | 31 +++++++++++++++++++++++++++++++
+ 2 files changed, 34 insertions(+)
+
+diff --git a/include/linux/font.h b/include/linux/font.h
+index 6845f02d739a..ea23b727388b 100644
+--- a/include/linux/font.h
++++ b/include/linux/font.h
+@@ -101,6 +101,9 @@ font_data_t *font_data_import(const struct console_font *font, unsigned int vpit
+ void font_data_get(font_data_t *fd);
+ bool font_data_put(font_data_t *fd);
+ unsigned int font_data_size(font_data_t *fd);
++const unsigned char *font_data_glyph_buf(font_data_t *fd,
++					 unsigned int width, unsigned int vpitch,
++					 unsigned int c);
+ bool font_data_is_equal(font_data_t *lhs, font_data_t *rhs);
+ int font_data_export(font_data_t *fd, struct console_font *font, unsigned int vpitch);
+ 
+diff --git a/lib/fonts/fonts.c b/lib/fonts/fonts.c
+index f5d5333450a0..4fc66722d00d 100644
+--- a/lib/fonts/fonts.c
++++ b/lib/fonts/fonts.c
+@@ -178,6 +178,37 @@ unsigned int font_data_size(font_data_t *fd)
+ }
+ EXPORT_SYMBOL_GPL(font_data_size);
+ 
++static unsigned int font_data_num_glyphs(font_data_t *fd, unsigned int width, unsigned int height)
++{
++	return font_data_size(fd) / font_glyph_size(width, height);
++}
++
++/**
++ * font_data_glyph_buf() - Returns the glyph for a specific character as raw bytes
++ * @fd: The font data
++ * @width: The glyph width in bits per scanline
++ * @vpitch: The number of scanlines per glyph
++ * @c: The character
++ *
++ * Glyphs start at fixed intervals within the font data. font_data_glyph_buf()
++ * returns the glyph shape of the specified character. If no such glyph
++ * exists in the font, it returns NULL.
++ *
++ * Returns:
++ * The character's raw glyph shape, or NULL if no glyph exists for the character. The
++ * provided buffer is read-only.
++ */
++const unsigned char *font_data_glyph_buf(font_data_t *fd,
++					 unsigned int width, unsigned int vpitch,
++					 unsigned int c)
++{
++	if (c >= font_data_num_glyphs(fd, width, vpitch))
++		return NULL;
++
++	return font_data_buf(fd) + font_glyph_size(width, vpitch) * c;
++}
++EXPORT_SYMBOL_GPL(font_data_glyph_buf);
++
+ /**
+  * font_data_is_equal - Compares font data for equality
+  * @lhs: Left-hand side font data
+-- 
+2.55.0
+

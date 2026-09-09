@@ -1,0 +1,80 @@
+From 19598e92c8b76c77b1293eb58829cd27b1dd6d96 Mon Sep 17 00:00:00 2001
+From: Damien Le Moal <dlemoal@kernel.org>
+Date: Fri, 19 Jun 2026 18:29:32 +0900
+Subject: [PATCH 05718/15333] ata: libata-scsi: improve ata_get_xlat_func
+
+ata_get_xlat_func() is given only the opcode of a SCSI command to
+determine the ATA command to translate to. This makes it impossible to
+translate SCSI commands such as SERVICE ACTION IN which need a service
+action field to fully specify the command.
+
+In preparation for supporting the translation of the SERVICE ACTION IN
+command with service actions different from the SAI_READ_CAPACITY_16 (READ
+CAPACITY 16), change ata_get_xlat_func() to take a pointer to a SCSI
+command CDB so that all fields of the SCSI command to translate can be
+easily inspected.
+
+Signed-off-by: Damien Le Moal <dlemoal@kernel.org>
+Reviewed-by: Martin K. Petersen <martin.petersen@oracle.com>
+Reviewed-by: Hannes Reinecke <hare@kernel.org>
+---
+ drivers/ata/libata-scsi.c | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/ata/libata-scsi.c b/drivers/ata/libata-scsi.c
+index 5cddb63a6bc6..f5c838ca0ce9 100644
+--- a/drivers/ata/libata-scsi.c
++++ b/drivers/ata/libata-scsi.c
+@@ -4606,7 +4606,7 @@ static unsigned int ata_scsi_var_len_cdb_xlat(struct ata_queued_cmd *qc)
+ /**
+  *	ata_get_xlat_func - check if SCSI to ATA translation is possible
+  *	@dev: ATA device
+- *	@cmd: SCSI command opcode to consider
++ *	@cdb: CDB of the SCSI command to consider
+  *
+  *	Look up the SCSI command given, and determine whether the
+  *	SCSI command is to be translated or simulated.
+@@ -4615,9 +4615,10 @@ static unsigned int ata_scsi_var_len_cdb_xlat(struct ata_queued_cmd *qc)
+  *	Pointer to translation function if possible, %NULL if not.
+  */
+ 
+-static inline ata_xlat_func_t ata_get_xlat_func(struct ata_device *dev, u8 cmd)
++static inline ata_xlat_func_t ata_get_xlat_func(struct ata_device *dev,
++						u8 *cdb)
+ {
+-	switch (cmd) {
++	switch (cdb[0]) {
+ 	case READ_6:
+ 	case READ_10:
+ 	case READ_16:
+@@ -4748,7 +4749,8 @@ enum scsi_qc_status __ata_scsi_queuecmd(struct scsi_cmnd *scmd,
+ 					struct ata_port *ap)
+ 	__must_hold(ap->lock)
+ {
+-	u8 scsi_op = scmd->cmnd[0];
++	u8 *cdb = scmd->cmnd;
++	u8 scsi_op = cdb[0];
+ 	ata_xlat_func_t xlat_func;
+ 
+ 	/*
+@@ -4768,7 +4770,7 @@ enum scsi_qc_status __ata_scsi_queuecmd(struct scsi_cmnd *scmd,
+ 		if (unlikely(scmd->cmd_len > dev->cdb_len))
+ 			goto bad_cdb_len;
+ 
+-		xlat_func = ata_get_xlat_func(dev, scsi_op);
++		xlat_func = ata_get_xlat_func(dev, cdb);
+ 	} else if (likely((scsi_op != ATA_16) || !atapi_passthru16)) {
+ 		/* relay SCSI command to ATAPI device */
+ 		int len = COMMAND_SIZE(scsi_op);
+@@ -4784,7 +4786,7 @@ enum scsi_qc_status __ata_scsi_queuecmd(struct scsi_cmnd *scmd,
+ 		if (unlikely(scmd->cmd_len > 16))
+ 			goto bad_cdb_len;
+ 
+-		xlat_func = ata_get_xlat_func(dev, scsi_op);
++		xlat_func = ata_get_xlat_func(dev, cdb);
+ 	}
+ 
+ 	if (xlat_func)
+-- 
+2.55.0
+

@@ -1,0 +1,38 @@
+From 70d0d7b24d8606effdcbc0b0dec6955759ed36c7 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Wed, 15 Jul 2026 12:11:12 +0700
+Subject: [PATCH 04714/15333] ASoC: tegra: tegra20_das: Use dev_err_probe() for
+ error handling
+
+Replace the existing dev_err() and PTR_ERR() sequence with
+dev_err_probe(), preserving the original error code while simplifying
+the error handling.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260715051115.17385-2-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/tegra/tegra20_das.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/sound/soc/tegra/tegra20_das.c b/sound/soc/tegra/tegra20_das.c
+index b48cc4a6967b..ea8bc9bcfa67 100644
+--- a/sound/soc/tegra/tegra20_das.c
++++ b/sound/soc/tegra/tegra20_das.c
+@@ -167,10 +167,9 @@ static int tegra20_das_probe(struct platform_device *pdev)
+ 
+ 	das->regmap = devm_regmap_init_mmio(&pdev->dev, regs,
+ 					    &tegra20_das_regmap_config);
+-	if (IS_ERR(das->regmap)) {
+-		dev_err(&pdev->dev, "regmap init failed\n");
+-		return PTR_ERR(das->regmap);
+-	}
++	if (IS_ERR(das->regmap))
++		return dev_err_probe(&pdev->dev, PTR_ERR(das->regmap),
++				     "regmap init failed\n");
+ 
+ 	tegra20_das_connect_dap_to_dac(das, TEGRA20_DAS_DAP_ID_1,
+ 				       TEGRA20_DAS_DAP_SEL_DAC1);
+-- 
+2.55.0
+

@@ -1,0 +1,46 @@
+From 982b2a43682b55e7d9800000f2592832ff2865ba Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Timur=20Krist=C3=B3f?= <timur.kristof@gmail.com>
+Date: Fri, 10 Jul 2026 09:36:48 +0200
+Subject: [PATCH 04819/15333] drm/amdgpu: Fix IP block NULL check during soft
+ reset
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We can't print the IP block name when the IP block is NULL.
+
+Note that it should never be NULL, the only way that
+can happen is when amdgpu_ip_from_ring() is missing the
+given ring type. The check is just there to be sure.
+
+Reported-by: kernel test robot <lkp@intel.com>
+Reported-by: Dan Carpenter <error27@gmail.com>
+Closes: https://lore.kernel.org/r/202607031711.yLwFhGfp-lkp@intel.com/
+Signed-off-by: Timur Kristóf <timur.kristof@gmail.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ip.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ip.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ip.c
+index 33a04113ed74..922f4b15619d 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ip.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ip.c
+@@ -489,7 +489,13 @@ int amdgpu_device_ip_soft_reset(struct amdgpu_ring *guilty_ring,
+ 	ip_type = amdgpu_ip_from_ring(guilty_ring->funcs->type);
+ 	ip_block = amdgpu_device_ip_get_ip_block(adev, ip_type);
+ 
+-	if (!ip_block || !ip_block->version->funcs->soft_reset) {
++	if (unlikely(!ip_block)) {
++		dev_warn(adev->dev, "IP block not found for ring %s\n",
++			 guilty_ring->name);
++		return -EOPNOTSUPP;
++	}
++
++	if (!ip_block->version->funcs->soft_reset) {
+ 		dev_warn(adev->dev, "IP block soft reset not supported on %s\n",
+ 			 ip_block->version->funcs->name);
+ 		return -EOPNOTSUPP;
+-- 
+2.55.0
+

@@ -1,0 +1,45 @@
+From 023349192e79cfb00ef9ad320549e4f6b6cf8309 Mon Sep 17 00:00:00 2001
+From: Jiri Pirko <jiri@nvidia.com>
+Date: Wed, 1 Jul 2026 14:40:14 +0200
+Subject: [PATCH 06724/15333] RDMA/mlx5: Use UMEM attribute for SRQ buffer in
+ create_srq
+
+Use the per-attribute UMEM helper to pin the SRQ buffer umem on demand.
+ib_umem_get_attr_or_va() resolves the new CREATE_SRQ_BUF_UMEM attribute
+when present and otherwise falls back to the existing UHW ucmd->buf_addr
+VA, preserving the legacy behavior.
+
+Signed-off-by: Jiri Pirko <jiri@nvidia.com>
+Link: https://patch.msgid.link/20260701124015.64350-3-jiri@resnulli.us
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ drivers/infiniband/hw/mlx5/srq.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/infiniband/hw/mlx5/srq.c b/drivers/infiniband/hw/mlx5/srq.c
+index 5bc48fef3744..6fa4c5a9a0d5 100644
+--- a/drivers/infiniband/hw/mlx5/srq.c
++++ b/drivers/infiniband/hw/mlx5/srq.c
+@@ -48,6 +48,8 @@ static int create_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq,
+ 	struct mlx5_ib_create_srq ucmd;
+ 	struct mlx5_ib_ucontext *ucontext = rdma_udata_to_drv_context(
+ 		udata, struct mlx5_ib_ucontext, ibucontext);
++	struct uverbs_attr_bundle *attrs =
++		rdma_udata_to_uverbs_attr_bundle(udata);
+ 	int err;
+ 	u32 uidx = MLX5_IB_DEFAULT_UIDX;
+ 
+@@ -66,7 +68,9 @@ static int create_srq_user(struct ib_pd *pd, struct mlx5_ib_srq *srq,
+ 
+ 	srq->wq_sig = !!(ucmd.flags & MLX5_SRQ_FLAG_SIGNATURE);
+ 
+-	srq->umem = ib_umem_get_va(pd->device, ucmd.buf_addr, buf_size, 0);
++	srq->umem = ib_umem_get_attr_or_va(pd->device, attrs,
++					   UVERBS_ATTR_CREATE_SRQ_BUF_UMEM,
++					   ucmd.buf_addr, buf_size, 0);
+ 	if (IS_ERR(srq->umem)) {
+ 		mlx5_ib_dbg(dev, "failed umem get, size %d\n", buf_size);
+ 		err = PTR_ERR(srq->umem);
+-- 
+2.55.0
+

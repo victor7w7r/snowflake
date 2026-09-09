@@ -1,0 +1,56 @@
+From 9b6229006fa66fa96c80b7fa163911b1a80be939 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig=20=28The=20Capable=20Hub=29?=
+ <u.kleine-koenig@baylibre.com>
+Date: Fri, 19 Jun 2026 17:54:36 +0200
+Subject: [PATCH 01330/15333] iio: magnetometer: hmc5843: Simplify device
+ abstraction
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The driver supports a single chip variant only. Simplify the driver by
+hard-coding the device properties instead of using the id_table's
+abstraction for a single chip type and a lookup in a table with only one
+entry.
+
+Signed-off-by: Uwe Kleine-König (The Capable Hub) <u.kleine-koenig@baylibre.com>
+Reviewed-by: Nuno Sá <nuno.sa@analog.com>
+Signed-off-by: Jonathan Cameron <jic23@kernel.org>
+---
+ drivers/iio/magnetometer/hmc5843_spi.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/iio/magnetometer/hmc5843_spi.c b/drivers/iio/magnetometer/hmc5843_spi.c
+index 6a55c1559b0d..29dee5dce2ae 100644
+--- a/drivers/iio/magnetometer/hmc5843_spi.c
++++ b/drivers/iio/magnetometer/hmc5843_spi.c
+@@ -56,7 +56,6 @@ static int hmc5843_spi_probe(struct spi_device *spi)
+ {
+ 	int ret;
+ 	struct regmap *regmap;
+-	const struct spi_device_id *id = spi_get_device_id(spi);
+ 
+ 	spi->mode = SPI_MODE_3;
+ 	spi->max_speed_hz = 8000000;
+@@ -69,8 +68,7 @@ static int hmc5843_spi_probe(struct spi_device *spi)
+ 		return PTR_ERR(regmap);
+ 
+ 	return hmc5843_common_probe(&spi->dev,
+-			regmap,
+-			id->driver_data, id->name);
++			regmap, HMC5983_ID, "hmc5983");
+ }
+ 
+ static void hmc5843_spi_remove(struct spi_device *spi)
+@@ -79,7 +77,7 @@ static void hmc5843_spi_remove(struct spi_device *spi)
+ }
+ 
+ static const struct spi_device_id hmc5843_id[] = {
+-	{ "hmc5983", HMC5983_ID },
++	{ .name = "hmc5983" },
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(spi, hmc5843_id);
+-- 
+2.55.0
+

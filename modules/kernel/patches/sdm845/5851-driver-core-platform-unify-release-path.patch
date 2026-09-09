@@ -1,0 +1,59 @@
+From 7d80509ff0daab86cc83cf939cae6f68f5f09871 Mon Sep 17 00:00:00 2001
+From: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Date: Thu, 16 Jul 2026 14:31:39 +0200
+Subject: [PATCH 05851/15333] driver core: platform: unify release path
+
+With no drivers that manually assign software nodes to platform devices
+created with platform_device_alloc(), we can now unify the release path
+and remove platform_device_release_full().
+
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260716-swnode-remove-on-dev-unreg-v8-4-5c2b8cc38c28@oss.qualcomm.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/base/platform.c | 16 +++++++---------
+ 1 file changed, 7 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/base/platform.c b/drivers/base/platform.c
+index fb57d487a6c2..66f9ec73d47e 100644
+--- a/drivers/base/platform.c
++++ b/drivers/base/platform.c
+@@ -599,19 +599,19 @@ static void platform_device_release(struct device *dev)
+ 	struct platform_object *pa = container_of(dev, struct platform_object,
+ 						  pdev.dev);
+ 
+-	fwnode_handle_put(pa->pdev.dev.fwnode);
++	device_remove_software_node(dev);
++	/*
++	 * If the primary firmware node is a software node, its reference count
++	 * was already decreased by the call to device_remove_software_node().
++	 */
++	if (!is_software_node(dev_fwnode(dev)))
++		fwnode_handle_put(pa->pdev.dev.fwnode);
+ 	kfree(pa->pdev.dev.platform_data);
+ 	kfree(pa->pdev.mfd_cell);
+ 	kfree(pa->pdev.resource);
+ 	kfree(pa);
+ }
+ 
+-static void platform_device_release_full(struct device *dev)
+-{
+-	device_remove_software_node(dev);
+-	platform_device_release(dev);
+-}
+-
+ /**
+  * platform_device_alloc - create a platform device
+  * @name: base name of the device we're adding
+@@ -960,8 +960,6 @@ struct platform_device *platform_device_register_full(const struct platform_devi
+ 		ret = device_add_software_node(&pdev->dev, pdevinfo->swnode);
+ 		if (ret)
+ 			goto err;
+-
+-		pdev->dev.release = platform_device_release_full;
+ 	} else if (pdevinfo->properties) {
+ 		ret = device_create_managed_software_node(&pdev->dev,
+ 							  pdevinfo->properties, NULL);
+-- 
+2.55.0
+

@@ -1,0 +1,58 @@
+From ecb42d97c8e143e8d9482e8d7019d06019cd961b Mon Sep 17 00:00:00 2001
+From: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Date: Wed, 8 Jul 2026 11:48:41 +0200
+Subject: [PATCH 03975/15333] dt-bindings: clock: qcom,sm8450-video: Require
+ required-opps on X1E80100
+
+Reverse the logic within "if:then:" when expecting "required-opps"
+property to have negative list of only variants which do not require
+these.  VIDEOCC on SM8650 does not need "required-opps" as explained in
+the commit 6720e8dbcb1b ("dt-bindings: clock: qcom: Drop required-opps
+in required on sm8650 videocc").  Requirement on VIDEOCC on SM8475 is
+not known.
+
+Reverting the logic in "if:" part has two impacts:
+
+1. Adds requirement of "required-opps" on VIDEOCC on Hamoa (X1E80100),
+   to match hardware expectation, similarly to existing its variant
+   X1P42100 (already expressed in DTS).
+
+2. Reduces the chances of forgetting to update constraints when adding
+   new compatibles (like for X1E80100).
+
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260708-dt-bindings-camcc-required-opps-v1-3-ae0871774210@oss.qualcomm.com
+[bjorn: Rebased, assuming the newly added hawi compatible also requires opps]
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ .../bindings/clock/qcom,sm8450-videocc.yaml        | 14 +++++---------
+ 1 file changed, 5 insertions(+), 9 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/clock/qcom,sm8450-videocc.yaml b/Documentation/devicetree/bindings/clock/qcom,sm8450-videocc.yaml
+index a6fd1992d6d2..1e1fec1cd7ce 100644
+--- a/Documentation/devicetree/bindings/clock/qcom,sm8450-videocc.yaml
++++ b/Documentation/devicetree/bindings/clock/qcom,sm8450-videocc.yaml
+@@ -67,15 +67,11 @@ allOf:
+   - if:
+       properties:
+         compatible:
+-          contains:
+-            enum:
+-              - qcom,glymur-videocc
+-              - qcom,hawi-videocc
+-              - qcom,kaanapali-videocc
+-              - qcom,sm8450-videocc
+-              - qcom,sm8550-videocc
+-              - qcom,sm8750-videocc
+-              - qcom,x1p42100-videocc
++          not:
++            contains:
++              enum:
++                - qcom,sm8475-videocc
++                - qcom,sm8650-videocc
+     then:
+       required:
+         - required-opps
+-- 
+2.55.0
+

@@ -1,0 +1,39 @@
+From c9aab8bba225d786ca05f6f8732946b9944dc728 Mon Sep 17 00:00:00 2001
+From: Paul Louvel <paul.louvel@bootlin.com>
+Date: Tue, 7 Jul 2026 17:45:03 +0200
+Subject: [PATCH 12939/15333] watchdog: w83627hf_wdt: Use WDOG_HW_RUNNING for
+ running chip on boot
+
+If the watchdog is already running when the driver is initialized, the
+driver currently refreshes it once using the default timeout of 60
+seconds.
+
+Since commit ee142889e32f ("watchdog: Introduce WDOG_HW_RUNNING flag"),
+the watchdog core can kick an already running watchdog alive until
+userspace open the device.
+
+Add the WDOG_HW_RUNNING flag to the watchdog status if the watchdog is
+already running.
+
+Signed-off-by: Paul Louvel <paul.louvel@bootlin.com>
+Link: https://lore.kernel.org/r/20260707-w83627hf_wdt-nct6126d-v4-3-829e5f63d548@bootlin.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/watchdog/w83627hf_wdt.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/watchdog/w83627hf_wdt.c b/drivers/watchdog/w83627hf_wdt.c
+index bfe132cfea87..db77599e43a0 100644
+--- a/drivers/watchdog/w83627hf_wdt.c
++++ b/drivers/watchdog/w83627hf_wdt.c
+@@ -244,6 +244,7 @@ static int w83627hf_init(struct watchdog_device *wdog, enum chips chip)
+ 			pr_info("Watchdog already running. Resetting timeout to %d sec\n",
+ 				wdog->timeout);
+ 			superio_outb(cr_wdt_timeout, wdog->timeout);
++			set_bit(WDOG_HW_RUNNING, &wdog->status);
+ 		}
+ 	}
+ 
+-- 
+2.55.0
+

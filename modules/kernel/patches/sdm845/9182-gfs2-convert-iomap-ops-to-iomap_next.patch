@@ -1,0 +1,38 @@
+From f3f2f10d8cc5d0a3630020641b79f47ba44463c8 Mon Sep 17 00:00:00 2001
+From: Joanne Koong <joannelkoong@gmail.com>
+Date: Wed, 29 Jul 2026 12:27:31 -0700
+Subject: [PATCH 09182/15333] gfs2: convert iomap ops to ->iomap_next()
+
+Convert gfs2 iomap_ops to the new ->iomap_next() callback. The callback is
+generated with the DEFINE_IOMAP_ITER_NEXT_END() macro, which wraps the
+iomap_iter_next() helper to finish the previous mapping if needed and
+produce the next one. No functional changes are intended.
+
+Signed-off-by: Joanne Koong <joannelkoong@gmail.com>
+Link: https://patch.msgid.link/20260729192737.3190206-17-joannelkoong@gmail.com
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/gfs2/bmap.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/fs/gfs2/bmap.c b/fs/gfs2/bmap.c
+index 51ac1fd44f78..73c626971163 100644
+--- a/fs/gfs2/bmap.c
++++ b/fs/gfs2/bmap.c
+@@ -1200,9 +1200,11 @@ static int gfs2_iomap_end(struct inode *inode, loff_t pos, loff_t length,
+ 	return 0;
+ }
+ 
++static DEFINE_IOMAP_ITER_NEXT_END(gfs2_iomap_next, gfs2_iomap_begin,
++				  gfs2_iomap_end);
++
+ const struct iomap_ops gfs2_iomap_ops = {
+-	.iomap_begin = gfs2_iomap_begin,
+-	.iomap_end = gfs2_iomap_end,
++	.iomap_next = gfs2_iomap_next,
+ };
+ 
+ /**
+-- 
+2.55.0
+

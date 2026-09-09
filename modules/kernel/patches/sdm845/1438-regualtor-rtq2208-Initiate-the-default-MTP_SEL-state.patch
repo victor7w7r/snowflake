@@ -1,0 +1,54 @@
+From 2f84cec84ffa1987a4dee80283f926774030e879 Mon Sep 17 00:00:00 2001
+From: ChiYuan Huang <cy_huang@richtek.com>
+Date: Fri, 26 Jun 2026 11:38:53 +0800
+Subject: [PATCH 01438/15333] regualtor: rtq2208: Initiate the default MTP_SEL
+ state by hardware register
+
+Read the initial MTP_SEL state by hardware register to prevent the wrong
+specified property value from the conflict of hardware pin assignment.
+
+Signed-off-by: ChiYuan Huang <cy_huang@richtek.com>
+Link: https://patch.msgid.link/557e872a87c603a26cf91f0d4448e527afcbbae8.1782444299.git.cy_huang@richtek.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/regulator/rtq2208-regulator.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/regulator/rtq2208-regulator.c b/drivers/regulator/rtq2208-regulator.c
+index f669a562f036..7fe082def494 100644
+--- a/drivers/regulator/rtq2208-regulator.c
++++ b/drivers/regulator/rtq2208-regulator.c
+@@ -12,6 +12,7 @@
+ #include <linux/mod_devicetable.h>
+ 
+ /* Register */
++#define RTQ2208_REG_FSOUTB_CNTL			0x11
+ #define RTQ2208_REG_GLOBAL_INT1			0x12
+ #define RTQ2208_REG_FLT_RECORDBUCK_CB		0x18
+ #define RTQ2208_REG_GLOBAL_INT1_MASK		0x1D
+@@ -34,6 +35,7 @@
+ #define RTQ2208_REG_HIDDEN1			0xFF
+ 
+ /* Mask */
++#define RTQ2208_MTP_SEL_RO_MASK			BIT(7)
+ #define RTQ2208_BUCK_NR_MTP_SEL_MASK		GENMASK(7, 0)
+ #define RTQ2208_BUCK_EN_NR_MTP_SEL0_MASK	BIT(0)
+ #define RTQ2208_BUCK_EN_NR_MTP_SEL1_MASK	BIT(1)
+@@ -465,10 +467,13 @@ static int rtq2208_parse_regulator_dt_data(int n_regulator, const unsigned int *
+ 		struct rtq2208_regulator_desc *rdesc[RTQ2208_LDO_MAX], struct device *dev,
+ 		unsigned int ldo1_fixed, unsigned int ldo2_fixed)
+ {
++	struct regmap *regmap = dev_get_regmap(dev, NULL);
+ 	int mtp_sel, i, idx;
+ 
+ 	/* get mtp_sel0 or mtp_sel1 */
+-	mtp_sel = device_property_read_bool(dev, "richtek,mtp-sel-high");
++	mtp_sel = regmap_test_bits(regmap, RTQ2208_REG_FSOUTB_CNTL, RTQ2208_MTP_SEL_RO_MASK);
++	if (mtp_sel < 0)
++		return dev_err_probe(dev, mtp_sel, "Failed to init mtp_sel state\n");
+ 
+ 	for (i = 0; i < n_regulator; i++) {
+ 		idx = regulator_idx_table[i];
+-- 
+2.55.0
+

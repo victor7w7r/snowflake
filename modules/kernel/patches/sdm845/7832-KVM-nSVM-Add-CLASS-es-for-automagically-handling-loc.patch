@@ -1,0 +1,156 @@
+From d196e4d91e7845b9e65436574bff63234a6f4d1d Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Thu, 23 Jul 2026 17:47:53 -0700
+Subject: [PATCH 07832/15333] KVM: nSVM: Add CLASS()es for automagically
+ handling local kvm_vcpu_map() usage
+
+Add CLASS() definitions for locally mapping a PFN using kvm_vcpu_map()
+given a vCPU+gfn pair.  In addition to eliminating the need to manually
+do unmap(), e.g. in error paths, this will allow hardening KVM against
+double-mapping without having to manually ensure every on-stack declaration
+is zero-initialized.
+
+Use "map local" as the primary terminology as the basic concept is more or
+less the same as kmap_local(): ensure the current context has a kernel
+mapping to the underlying memory.
+
+Immediately convert the relatively straightforward nested SVM flows, and
+defer converting the more involved SMM flows to a separate change.
+
+No functional change intended.
+
+Cc: Yosry Ahmed <yosry@kernel.org>
+Link: https://patch.msgid.link/20260724004757.131420-3-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/svm/nested.c | 18 +++++++-----------
+ arch/x86/kvm/svm/svm.c    |  8 +++-----
+ include/linux/kvm_host.h  | 19 +++++++++++++++++++
+ 3 files changed, 29 insertions(+), 16 deletions(-)
+
+diff --git a/arch/x86/kvm/svm/nested.c b/arch/x86/kvm/svm/nested.c
+index 5f6d9971a3f2..4deb8c75df3d 100644
+--- a/arch/x86/kvm/svm/nested.c
++++ b/arch/x86/kvm/svm/nested.c
+@@ -1086,14 +1086,14 @@ int enter_svm_guest_mode(struct kvm_vcpu *vcpu, u64 vmcb12_gpa, bool from_vmrun)
+ static int nested_svm_copy_vmcb12_to_cache(struct kvm_vcpu *vcpu, u64 vmcb12_gpa)
+ {
+ 	struct vcpu_svm *svm = to_svm(vcpu);
+-	struct kvm_host_map map;
+ 	struct vmcb *vmcb12;
+ 	int r = 0;
+ 
+-	if (kvm_vcpu_map(vcpu, gpa_to_gfn(vmcb12_gpa), &map))
++	CLASS(kvm_vcpu_map_local, m)(vcpu, gpa_to_gfn(vmcb12_gpa));
++	if (m.ret)
+ 		return -EFAULT;
+ 
+-	vmcb12 = map.hva;
++	vmcb12 = m.map.hva;
+ 	nested_copy_vmcb_control_to_cache(svm, &vmcb12->control);
+ 	nested_copy_vmcb_save_to_cache(svm, &vmcb12->save);
+ 
+@@ -1107,7 +1107,6 @@ static int nested_svm_copy_vmcb12_to_cache(struct kvm_vcpu *vcpu, u64 vmcb12_gpa
+ 		r = -EINVAL;
+ 	}
+ 
+-	kvm_vcpu_unmap(vcpu, &map);
+ 	return r;
+ }
+ 
+@@ -1251,15 +1250,13 @@ static int nested_svm_vmexit_update_vmcb12(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_svm *svm = to_svm(vcpu);
+ 	struct vmcb *vmcb02 = svm->nested.vmcb02.ptr;
+-	struct kvm_host_map map;
+ 	struct vmcb *vmcb12;
+-	int rc;
+ 
+-	rc = kvm_vcpu_map(vcpu, gpa_to_gfn(svm->nested.vmcb12_gpa), &map);
+-	if (rc)
+-		return rc;
++	CLASS(kvm_vcpu_map_local, m)(vcpu, gpa_to_gfn(svm->nested.vmcb12_gpa));
++	if (m.ret)
++		return m.ret;
+ 
+-	vmcb12 = map.hva;
++	vmcb12 = m.map.hva;
+ 
+ 	vmcb12->save.es     = vmcb02->save.es;
+ 	vmcb12->save.cs     = vmcb02->save.cs;
+@@ -1314,7 +1311,6 @@ static int nested_svm_vmexit_update_vmcb12(struct kvm_vcpu *vcpu)
+ 				       vmcb12->control.exit_int_info_err,
+ 				       KVM_ISA_SVM);
+ 
+-	kvm_vcpu_unmap(vcpu, &map);
+ 	return 0;
+ }
+ 
+diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c
+index 1b7e613fde7b..10401330a6b1 100644
+--- a/arch/x86/kvm/svm/svm.c
++++ b/arch/x86/kvm/svm/svm.c
+@@ -2221,7 +2221,6 @@ static int vmload_vmsave_interception(struct kvm_vcpu *vcpu, bool vmload)
+ 	u64 vmcb12_gpa = kvm_rax_read(vcpu);
+ 	struct vcpu_svm *svm = to_svm(vcpu);
+ 	struct vmcb *vmcb12;
+-	struct kvm_host_map map;
+ 	int ret;
+ 
+ 	if (nested_svm_check_permissions(vcpu))
+@@ -2232,10 +2231,11 @@ static int vmload_vmsave_interception(struct kvm_vcpu *vcpu, bool vmload)
+ 		return 1;
+ 	}
+ 
+-	if (kvm_vcpu_map(vcpu, gpa_to_gfn(vmcb12_gpa), &map))
++	CLASS(kvm_vcpu_map_local, m)(vcpu, gpa_to_gfn(vmcb12_gpa));
++	if (m.ret)
+ 		return kvm_handle_memory_failure(vcpu, X86EMUL_IO_NEEDED, NULL);
+ 
+-	vmcb12 = map.hva;
++	vmcb12 = m.map.hva;
+ 
+ 	ret = kvm_skip_emulated_instruction(vcpu);
+ 
+@@ -2248,8 +2248,6 @@ static int vmload_vmsave_interception(struct kvm_vcpu *vcpu, bool vmload)
+ 		svm_copy_vmloadsave_state(vmcb12, svm->vmcb01.ptr);
+ 	}
+ 
+-	kvm_vcpu_unmap(vcpu, &map);
+-
+ 	return ret;
+ }
+ 
+diff --git a/include/linux/kvm_host.h b/include/linux/kvm_host.h
+index 0bdfa3699352..ef851de0392b 100644
+--- a/include/linux/kvm_host.h
++++ b/include/linux/kvm_host.h
+@@ -1420,6 +1420,25 @@ static inline void kvm_vcpu_map_mark_dirty(struct kvm_vcpu *vcpu,
+ 		kvm_vcpu_mark_page_dirty(vcpu, map->gfn);
+ }
+ 
++typedef struct {
++	struct kvm_vcpu *vcpu;
++	struct kvm_host_map map;
++	int ret;
++} kvm_vcpu_local_map_t;
++
++#define DEFINE_VCPU_MAP_CLASS(ro)					\
++DEFINE_CLASS(kvm_vcpu_map_local##ro, kvm_vcpu_local_map_t,		\
++	     if (!_T.ret) kvm_vcpu_unmap(_T.vcpu, &_T.map),		\
++	     ({								\
++		kvm_vcpu_local_map_t m = { .vcpu = vcpu };		\
++									\
++		m.ret = kvm_vcpu_map##ro(vcpu, gfn, &m.map);		\
++									\
++		m;							\
++	     }), struct kvm_vcpu *vcpu, gfn_t gfn);
++DEFINE_VCPU_MAP_CLASS();
++DEFINE_VCPU_MAP_CLASS(_readonly);
++
+ unsigned long kvm_vcpu_gfn_to_hva(struct kvm_vcpu *vcpu, gfn_t gfn);
+ unsigned long kvm_vcpu_gfn_to_hva_prot(struct kvm_vcpu *vcpu, gfn_t gfn, bool *writable);
+ int kvm_vcpu_read_guest_page(struct kvm_vcpu *vcpu, gfn_t gfn, void *data, int offset,
+-- 
+2.55.0
+

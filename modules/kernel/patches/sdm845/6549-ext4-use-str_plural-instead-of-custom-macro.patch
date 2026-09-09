@@ -1,0 +1,49 @@
+From fef5265969773387cbeb79803de4834e4bbd1d4f Mon Sep 17 00:00:00 2001
+From: Joshua Crofts <joshua.crofts1@gmail.com>
+Date: Mon, 13 Jul 2026 07:41:29 +0200
+Subject: [PATCH 06549/15333] ext4: use str_plural() instead of custom macro
+
+Remove the custom PLURAL() macro and use str_plural() from
+string_choices.h instead.
+
+Reviewed-by: Baokun Li <libaokun@huawei.com>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Signed-off-by: Joshua Crofts <joshua.crofts1@gmail.com>
+Link: https://patch.msgid.link/20260713-remove-plural-macro-v2-1-424e1536ac10@gmail.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/orphan.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/fs/ext4/orphan.c b/fs/ext4/orphan.c
+index 7095ba1564f6..646c3077b6d2 100644
+--- a/fs/ext4/orphan.c
++++ b/fs/ext4/orphan.c
+@@ -4,6 +4,7 @@
+ #include <linux/fs.h>
+ #include <linux/quotaops.h>
+ #include <linux/buffer_head.h>
++#include <linux/string_choices.h>
+ 
+ #include "ext4.h"
+ #include "ext4_jbd2.h"
+@@ -486,14 +487,12 @@ void ext4_orphan_cleanup(struct super_block *sb, struct ext4_super_block *es)
+ 		}
+ 	}
+ 
+-#define PLURAL(x) (x), ((x) == 1) ? "" : "s"
+-
+ 	if (nr_orphans)
+ 		ext4_msg(sb, KERN_INFO, "%d orphan inode%s deleted",
+-		       PLURAL(nr_orphans));
++			 nr_orphans, str_plural(nr_orphans));
+ 	if (nr_truncates)
+ 		ext4_msg(sb, KERN_INFO, "%d truncate%s cleaned up",
+-		       PLURAL(nr_truncates));
++			 nr_truncates, str_plural(nr_truncates));
+ #ifdef CONFIG_QUOTA
+ 	/* Turn off quotas if they were enabled for orphan cleanup */
+ 	if (quota_update) {
+-- 
+2.55.0
+

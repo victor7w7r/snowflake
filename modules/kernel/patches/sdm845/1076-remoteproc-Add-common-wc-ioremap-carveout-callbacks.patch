@@ -1,0 +1,71 @@
+From 50227acbf4e5173db0f05ed95414512e7783889f Mon Sep 17 00:00:00 2001
+From: Ben Levinsky <ben.levinsky@amd.com>
+Date: Thu, 28 May 2026 19:16:33 -0700
+Subject: [PATCH 01076/15333] remoteproc: Add common wc-ioremap carveout
+ callbacks
+
+Several remoteproc drivers open-code the same ioremap_wc() and
+iounmap() callbacks for carveout mappings. Add subsystem-private
+helpers in remoteproc_internal.h so those drivers can share the same
+implementation.
+
+Keep this change behavior-neutral. The helper now emits a common error
+message on ioremap_wc() failure, but leaves mem->is_iomem handling to a
+follow-on patch so that the behavioral change can be justified
+separately.
+
+Signed-off-by: Ben Levinsky <ben.levinsky@amd.com>
+Tested-by: Peng Fan <peng.fan@nxp.com> #i.MX8MP-EVK
+Link: https://lore.kernel.org/r/20260529021637.2077602-2-ben.levinsky@amd.com
+Signed-off-by: Mathieu Poirier <mathieu.poirier@linaro.org>
+---
+ drivers/remoteproc/remoteproc_internal.h | 26 ++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/drivers/remoteproc/remoteproc_internal.h b/drivers/remoteproc/remoteproc_internal.h
+index 0a5e15744b1d..46080c1c030e 100644
+--- a/drivers/remoteproc/remoteproc_internal.h
++++ b/drivers/remoteproc/remoteproc_internal.h
+@@ -14,6 +14,7 @@
+ 
+ #include <linux/irqreturn.h>
+ #include <linux/firmware.h>
++#include <linux/io.h>
+ 
+ struct rproc;
+ 
+@@ -122,6 +123,31 @@ rproc_find_carveout_by_name(struct rproc *rproc, const char *name, ...);
+ void rproc_add_rvdev(struct rproc *rproc, struct rproc_vdev *rvdev);
+ void rproc_remove_rvdev(struct rproc_vdev *rvdev);
+ 
++static inline int rproc_mem_entry_ioremap_wc(struct rproc *rproc,
++					     struct rproc_mem_entry *mem)
++{
++	void __iomem *va;
++
++	va = ioremap_wc(mem->dma, mem->len);
++	if (!va) {
++		dev_err(&rproc->dev, "Unable to map memory region: %pa+%zx\n",
++			&mem->dma, mem->len);
++		return -ENOMEM;
++	}
++
++	mem->va = (__force void *)va;
++
++	return 0;
++}
++
++static inline int rproc_mem_entry_iounmap(struct rproc *rproc,
++					  struct rproc_mem_entry *mem)
++{
++	iounmap((__force __iomem void *)mem->va);
++
++	return 0;
++}
++
+ static inline int rproc_prepare_device(struct rproc *rproc)
+ {
+ 	if (rproc->ops->prepare)
+-- 
+2.55.0
+

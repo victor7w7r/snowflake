@@ -1,0 +1,40 @@
+From c6af91e48594191f62ad3c1fcc8269b1eb539ef8 Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Wed, 1 Jul 2026 00:04:12 +0900
+Subject: [PATCH 01612/15333] mm: remove unnecessary empty range check in
+ early_calculate_totalpages()
+
+early_calculate_totalpages() iterates the memory ranges with
+for_each_mem_pfn_range() and calls node_set_state(nid, N_MEMORY) only when
+end_pfn - start_pfn is non-zero. for_each_mem_pfn_range() never returns an
+empty range, so start_pfn < end_pfn always.
+
+Therefore the check is unnecessary, so remove it.
+
+No functional change.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Reviewed-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Link: https://patch.msgid.link/20260630150413.1718632-8-ekffu200098@gmail.com
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+---
+ mm/mm_init.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/mm/mm_init.c b/mm/mm_init.c
+index 0f64909e8d20..17498a13eb99 100644
+--- a/mm/mm_init.c
++++ b/mm/mm_init.c
+@@ -332,8 +332,7 @@ static unsigned long __init early_calculate_totalpages(void)
+ 		unsigned long pages = end_pfn - start_pfn;
+ 
+ 		totalpages += pages;
+-		if (pages)
+-			node_set_state(nid, N_MEMORY);
++		node_set_state(nid, N_MEMORY);
+ 	}
+ 	return totalpages;
+ }
+-- 
+2.55.0
+

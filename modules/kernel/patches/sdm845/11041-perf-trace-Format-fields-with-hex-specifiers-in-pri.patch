@@ -1,0 +1,112 @@
+From 9dd7c82d462ee98b4b293a93b8fb3b6514e73820 Mon Sep 17 00:00:00 2001
+From: Aaron Tomlin <atomlin@atomlin.com>
+Date: Mon, 3 Aug 2026 08:48:45 -0400
+Subject: [PATCH 11041/15333] perf trace: Format fields with hex specifiers in
+ print_fmt as hexadecimal
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Currently, when a probe event is added using perf probe --add with a
+hexadecimal type cast (e.g., var:x64 and var:x32), the kernel traceprobe
+subsystem sets the field type to "u64" in the event's format file, yet
+generates a print format specifier of "var=0x%Lx" or "0x%x".
+
+By default, perf trace uses its internal beautifiers which only inspect
+field->type and field->flags. Because traceprobe events declare
+primitive integer field types ("u64") without a C pointer asterisk
+(i.e., "*"), perf trace defaults to printing the field's value as a
+decimal unsigned long ("%ld"), ignoring the hexadecimal intent.
+
+Introduce field_has_hex_fmt() to inspect the tracepoint's print_fmt
+format string. If a field's print format assignment uses hexadecimal
+specifiers (i.e., "=0x", "=%#", or "=%p"), assign SCA_PTR formatting so
+perf trace displays the value in hexadecimal by default without
+requiring --libtraceevent. For example:
+
+    ❯ sudo ./perf probe --add 'enqueue_task_fair rq=rq:x64 p=p:x64 flags=flags:x32'
+    Added new event:
+      probe:enqueue_task_fair (on enqueue_task_fair with rq=rq:x64 p=p:x64 flags=flags:x32)
+
+    You can now use it in all perf tools, such as:
+
+            perf record -e probe:enqueue_task_fair -aR sleep 1
+
+    ❯ sudo ./perf trace --show-cpu --event probe:enqueue_task_fair --max-event 3
+         0.000 [000] :0/0 probe:enqueue_task_fair(rq: 0xffff8ac632233180, p: 0xffff8ac2c1240000, flags: 0x100009)
+         0.006 [004] :0/0 probe:enqueue_task_fair(rq: 0xffff8ac632433180, p: 0xffff8ac624cf8000, flags: 0x9)
+         0.069 [001] :0/0 probe:enqueue_task_fair(rq: 0xffff8ac6322b3180, p: 0xffff8ac4c4212c40, flags: 0x9)
+
+Signed-off-by: Aaron Tomlin <atomlin@atomlin.com>
+Signed-off-by: Namhyung Kim <namhyung@kernel.org>
+---
+ tools/perf/builtin-trace.c | 46 +++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 45 insertions(+), 1 deletion(-)
+
+diff --git a/tools/perf/builtin-trace.c b/tools/perf/builtin-trace.c
+index 310ee8df33eb..c3c7f1f85c53 100644
+--- a/tools/perf/builtin-trace.c
++++ b/tools/perf/builtin-trace.c
+@@ -2099,6 +2099,49 @@ static bool is_internal_field(struct tep_format_field *field)
+ 	return !strcmp(field->type, "__data_loc char[]");
+ }
+ 
++static bool field_has_hex_fmt(struct tep_format_field *field, int len)
++{
++	const char *fmt, *pos, *end = NULL;
++
++	if (!field || !field->event || !field->event->print_fmt.format)
++		return false;
++
++	fmt = field->event->print_fmt.format;
++
++	/* NB: Limit scanning strictly to the quoted printf format string */
++	if (*fmt == '"') {
++		const char *p = ++fmt;
++
++		while (*p) {
++			if (*p == '\\' && p[1] != '\0') {
++				/* NB: Skip escaped character */
++				p += 2;
++			} else if (*p == '"') {
++				end = p;
++				break;
++			} else {
++				p++;
++			}
++		}
++	} else {
++		end = strchr(fmt, ',');
++	}
++
++	for (pos = strstr(fmt, field->name); pos && (!end || pos < end);
++	     pos = strstr(pos + 1, field->name)) {
++		if (pos == fmt || !(isalnum(pos[-1]) || pos[-1] == '_')) {
++			const char *after = pos + len;
++
++			if (*after == '=' && (strstarts(after + 1, "0x") ||
++					      strstarts(after + 1, "%#") ||
++					      strstarts(after + 1, "%p")))
++				return true;
++		}
++	}
++
++	return false;
++}
++
+ static struct tep_format_field *
+ syscall_arg_fmt__init_array(struct syscall_arg_fmt *arg, struct tep_format_field *field,
+ 			    bool *use_btf)
+@@ -2126,7 +2169,8 @@ syscall_arg_fmt__init_array(struct syscall_arg_fmt *arg, struct tep_format_field
+ 		    ((len >= 4 && strcmp(field->name + len - 4, "name") == 0) ||
+ 		     strstr(field->name, "path") != NULL)) {
+ 			arg->scnprintf = SCA_FILENAME;
+-		} else if ((field->flags & TEP_FIELD_IS_POINTER) || strstr(field->name, "addr"))
++		} else if ((field->flags & TEP_FIELD_IS_POINTER) || strstr(field->name, "addr") ||
++			   field_has_hex_fmt(field, len))
+ 			arg->scnprintf = SCA_PTR;
+ 		else if (strcmp(field->type, "pid_t") == 0)
+ 			arg->scnprintf = SCA_PID;
+-- 
+2.55.0
+

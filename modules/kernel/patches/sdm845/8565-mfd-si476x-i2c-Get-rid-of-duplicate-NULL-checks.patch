@@ -1,0 +1,58 @@
+From b1eb3de64d02cec71b419b9918d1697797fa156d Mon Sep 17 00:00:00 2001
+From: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Date: Wed, 15 Jul 2026 21:16:03 +0200
+Subject: [PATCH 08565/15333] mfd: si476x-i2c: Get rid of duplicate NULL checks
+
+GPIO descriptor APIs are NULL-aware and since the requested line is optional
+we don't need to have an additional check each time we want to toggle GPIO.
+
+Get rid of duplicate NULL checks.
+
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@linux.intel.com>
+Link: https://patch.msgid.link/20260715191603.1325479-1-andriy.shevchenko@linux.intel.com
+Signed-off-by: Lee Jones <lee@kernel.org>
+---
+ drivers/mfd/si476x-i2c.c | 13 +++++--------
+ 1 file changed, 5 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/mfd/si476x-i2c.c b/drivers/mfd/si476x-i2c.c
+index 55700ce711f4..9bce720a0a08 100644
+--- a/drivers/mfd/si476x-i2c.c
++++ b/drivers/mfd/si476x-i2c.c
+@@ -130,8 +130,7 @@ int si476x_core_start(struct si476x_core *core, bool soft)
+ 	int err;
+ 
+ 	if (!soft) {
+-		if (core->reset)
+-			gpiod_set_value_cansleep(core->reset, 0);
++		gpiod_set_value_cansleep(core->reset, 0);
+ 
+ 		if (client->irq)
+ 			enable_irq(client->irq);
+@@ -197,8 +196,7 @@ int si476x_core_start(struct si476x_core *core, bool soft)
+ 	else
+ 		cancel_delayed_work_sync(&core->status_monitor);
+ 
+-	if (core->reset)
+-		gpiod_set_value_cansleep(core->reset, 1);
++	gpiod_set_value_cansleep(core->reset, 1);
+ 
+ 	return err;
+ }
+@@ -242,10 +240,9 @@ int si476x_core_stop(struct si476x_core *core, bool soft)
+ 	else
+ 		cancel_delayed_work_sync(&core->status_monitor);
+ 
+-	if (!soft) {
+-		if (core->reset)
+-			gpiod_set_value_cansleep(core->reset, 1);
+-	}
++	if (!soft)
++		gpiod_set_value_cansleep(core->reset, 1);
++
+ 	return err;
+ }
+ EXPORT_SYMBOL_GPL(si476x_core_stop);
+-- 
+2.55.0
+

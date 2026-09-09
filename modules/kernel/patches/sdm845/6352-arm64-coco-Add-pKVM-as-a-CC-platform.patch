@@ -1,0 +1,182 @@
+From e62decaf98e7c1385c4a22c61ba8bf94d24713a5 Mon Sep 17 00:00:00 2001
+From: Mostafa Saleh <smostafa@google.com>
+Date: Wed, 3 Jun 2026 11:05:22 +0000
+Subject: [PATCH 06352/15333] arm64/coco: Add pKVM as a CC platform
+
+pKVM does support memory encryption, expose that to the rest of
+the kernel through cc_platform_has()
+
+At the moment, all devices inside the guest are emulated which
+requires its memory to be shared back to the host (decrypted), so
+set force_dma_unencrypted() to always return true.
+
+Although, typically pKVM guests rely on restricted-dma-pools to
+bounce traffic, with this change, it is possible to solely rely on
+the default SWIOTLB for that (assuming the appropriate size is set
+from the command line)
+
+Signed-off-by: Mostafa Saleh <smostafa@google.com>
+Reviewed-by: Catalin Marinas <catalin.marinas@arm.com>
+Tested-by: Aneesh Kumar K.V (Arm) <aneesh.kumar@kernel.org>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/include/asm/hypervisor.h           | 13 +++++++++++++
+ arch/arm64/include/asm/mem_encrypt.h          |  3 ++-
+ arch/arm64/kernel/rsi.c                       | 12 ------------
+ arch/arm64/mm/init.c                          | 15 ++++++++++++++-
+ drivers/virt/coco/pkvm-guest/arm-pkvm-guest.c |  3 +++
+ 5 files changed, 32 insertions(+), 14 deletions(-)
+
+diff --git a/arch/arm64/include/asm/hypervisor.h b/arch/arm64/include/asm/hypervisor.h
+index a12fd897c877..8889a0ba1ec5 100644
+--- a/arch/arm64/include/asm/hypervisor.h
++++ b/arch/arm64/include/asm/hypervisor.h
+@@ -3,6 +3,9 @@
+ #define _ASM_ARM64_HYPERVISOR_H
+ 
+ #include <asm/xen/hypervisor.h>
++#include <linux/jump_label.h>
++
++DECLARE_STATIC_KEY_FALSE(pkvm_guest);
+ 
+ void kvm_init_hyp_services(void);
+ bool kvm_arm_hyp_service_available(u32 func_id);
+@@ -10,8 +13,18 @@ void kvm_arm_target_impl_cpu_init(void);
+ 
+ #ifdef CONFIG_ARM_PKVM_GUEST
+ void pkvm_init_hyp_services(void);
++
++static inline bool is_protected_kvm_guest(void)
++{
++	return static_branch_unlikely(&pkvm_guest);
++}
+ #else
+ static inline void pkvm_init_hyp_services(void) { };
++
++static inline bool is_protected_kvm_guest(void)
++{
++	return false;
++}
+ #endif
+ 
+ static inline void kvm_arch_init_hyp_services(void)
+diff --git a/arch/arm64/include/asm/mem_encrypt.h b/arch/arm64/include/asm/mem_encrypt.h
+index 314b2b52025f..636f45b4d8af 100644
+--- a/arch/arm64/include/asm/mem_encrypt.h
++++ b/arch/arm64/include/asm/mem_encrypt.h
+@@ -2,6 +2,7 @@
+ #ifndef __ASM_MEM_ENCRYPT_H
+ #define __ASM_MEM_ENCRYPT_H
+ 
++#include <asm/hypervisor.h>
+ #include <asm/rsi.h>
+ 
+ struct device;
+@@ -20,7 +21,7 @@ int realm_register_memory_enc_ops(void);
+ 
+ static inline bool force_dma_unencrypted(struct device *dev)
+ {
+-	return is_realm_world();
++	return is_realm_world() || is_protected_kvm_guest();
+ }
+ 
+ /*
+diff --git a/arch/arm64/kernel/rsi.c b/arch/arm64/kernel/rsi.c
+index 92160f2e57ff..25ca75ce1a4d 100644
+--- a/arch/arm64/kernel/rsi.c
++++ b/arch/arm64/kernel/rsi.c
+@@ -7,7 +7,6 @@
+ #include <linux/memblock.h>
+ #include <linux/psci.h>
+ #include <linux/swiotlb.h>
+-#include <linux/cc_platform.h>
+ #include <linux/platform_device.h>
+ 
+ #include <asm/io.h>
+@@ -23,17 +22,6 @@ EXPORT_SYMBOL(prot_ns_shared);
+ DEFINE_STATIC_KEY_FALSE_RO(rsi_present);
+ EXPORT_SYMBOL(rsi_present);
+ 
+-bool cc_platform_has(enum cc_attr attr)
+-{
+-	switch (attr) {
+-	case CC_ATTR_MEM_ENCRYPT:
+-		return is_realm_world();
+-	default:
+-		return false;
+-	}
+-}
+-EXPORT_SYMBOL_GPL(cc_platform_has);
+-
+ static bool rsi_version_matches(void)
+ {
+ 	unsigned long ver_lower, ver_higher;
+diff --git a/arch/arm64/mm/init.c b/arch/arm64/mm/init.c
+index 9fb17043dd0d..3b9e1b8de6cb 100644
+--- a/arch/arm64/mm/init.c
++++ b/arch/arm64/mm/init.c
+@@ -11,6 +11,7 @@
+ #include <linux/errno.h>
+ #include <linux/swap.h>
+ #include <linux/init.h>
++#include <linux/cc_platform.h>
+ #include <linux/cache.h>
+ #include <linux/mman.h>
+ #include <linux/nodemask.h>
+@@ -36,6 +37,7 @@
+ 
+ #include <asm/boot.h>
+ #include <asm/fixmap.h>
++#include <asm/hypervisor.h>
+ #include <asm/kasan.h>
+ #include <asm/kernel-pgtable.h>
+ #include <asm/kvm_host.h>
+@@ -337,7 +339,7 @@ void __init arch_mm_preinit(void)
+ {
+ 	unsigned int flags = SWIOTLB_VERBOSE;
+ 
+-	if (is_realm_world()) {
++	if (is_realm_world() || is_protected_kvm_guest()) {
+ 		flags |= SWIOTLB_FORCE;
+ 	} else if (max_pfn <= PFN_DOWN(arm64_dma_phys_limit)) {
+ 		/*
+@@ -412,6 +414,17 @@ void dump_mem_limit(void)
+ 	}
+ }
+ 
++bool cc_platform_has(enum cc_attr attr)
++{
++	switch (attr) {
++	case CC_ATTR_MEM_ENCRYPT:
++		return is_realm_world() || is_protected_kvm_guest();
++	default:
++		return false;
++	}
++}
++EXPORT_SYMBOL_GPL(cc_platform_has);
++
+ #ifdef CONFIG_EXECMEM
+ static u64 module_direct_base __ro_after_init = 0;
+ static u64 module_plt_base __ro_after_init = 0;
+diff --git a/drivers/virt/coco/pkvm-guest/arm-pkvm-guest.c b/drivers/virt/coco/pkvm-guest/arm-pkvm-guest.c
+index 4230b817a80b..6e966bad5ee1 100644
+--- a/drivers/virt/coco/pkvm-guest/arm-pkvm-guest.c
++++ b/drivers/virt/coco/pkvm-guest/arm-pkvm-guest.c
+@@ -17,6 +17,7 @@
+ #include <asm/hypervisor.h>
+ 
+ static size_t pkvm_granule;
++DEFINE_STATIC_KEY_FALSE_RO(pkvm_guest);
+ 
+ static int arm_smccc_do_one_page(u32 func_id, phys_addr_t phys)
+ {
+@@ -120,4 +121,6 @@ void pkvm_init_hyp_services(void)
+ 
+ 	if (kvm_arm_hyp_service_available(ARM_SMCCC_KVM_FUNC_MMIO_GUARD))
+ 		arm64_ioremap_prot_hook_register(&mmio_guard_ioremap_hook);
++
++	static_branch_enable(&pkvm_guest);
+ }
+-- 
+2.55.0
+

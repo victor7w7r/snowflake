@@ -1,0 +1,245 @@
+From 663870a84c1734b2817f51d93c0e61f1dc1c5f1e Mon Sep 17 00:00:00 2001
+From: Benjamin Blume <benjaminblume@posteo.de>
+Date: Mon, 13 Jul 2026 12:42:13 +0000
+Subject: [PATCH 10212/15333] HID: hyperx: add driver for the HyperX QuadCast 2
+ mute button
+
+The tap-to-mute button of the HyperX QuadCast 2 (03f0:07b4) is handled
+entirely in the device firmware.  The firmware gates the audio internally
+but never sends the Telephony "Phone Mute" usage (0x2f) that its own report
+descriptor advertises, and it does not touch the UAC feature unit either.
+Consequently neither an evdev key event nor an ALSA mixer change is ever
+generated, and userspace has no way to learn that the microphone was muted:
+desktops keep showing the microphone as live, and conferencing applications
+keep displaying an unmuted microphone while transmitting silence.
+
+The mute state is reported through a vendor-defined collection instead:
+
+  06 c0 ff        Usage Page (Vendor-Defined 0xFFC0)
+  a1 01           Collection (Application)
+  06 c1 ff          Usage Page (Vendor-Defined 0xFFC1)
+  85 77             Report ID (0x77)
+  09 f0             Usage (0xF0)
+  75 08  95 3f      Report Size (8), Report Count (63)
+  81 02             Input (Data,Var,Abs)
+
+Pressing the button emits a 64-byte report on that collection:
+
+  77 06 00 00 ...   microphone unmuted
+  77 06 01 00 ...   microphone muted
+
+where byte 1 identifies the mute event and byte 2 carries the resulting
+state.  As the payload is an opaque vendor blob carrying no HID usages,
+hid-input cannot map it and a hwdb entry cannot express it either.
+
+Add a driver that decodes the report and emits KEY_MICMUTE, which makes the
+button behave like any other microphone mute key.
+
+Note that the device reports the resulting absolute state, whereas
+KEY_MICMUTE is a momentary key that userspace acts on as a toggle, so the
+driver emits one keypress per state change.
+
+Tested on a HyperX QuadCast 2 (03f0:07b4).
+
+Signed-off-by: Benjamin Blume <benjaminblume@posteo.de>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ MAINTAINERS              |   6 ++
+ drivers/hid/Kconfig      |  13 +++++
+ drivers/hid/Makefile     |   1 +
+ drivers/hid/hid-hyperx.c | 117 +++++++++++++++++++++++++++++++++++++++
+ drivers/hid/hid-ids.h    |   1 +
+ 5 files changed, 138 insertions(+)
+ create mode 100644 drivers/hid/hid-hyperx.c
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index f37a81950e25..0f45c4be7c3b 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -11530,6 +11530,12 @@ F:	include/uapi/linux/hid*
+ F:	samples/hid/
+ F:	tools/testing/selftests/hid/
+ 
++HID HYPERX DRIVER
++M:	Benjamin Blume <benjaminblume@posteo.de>
++L:	linux-input@vger.kernel.org
++S:	Maintained
++F:	drivers/hid/hid-hyperx.c
++
+ HID LOGITECH DRIVERS
+ R:	Filipe Laíns <lains@riseup.net>
+ L:	linux-input@vger.kernel.org
+diff --git a/drivers/hid/Kconfig b/drivers/hid/Kconfig
+index f9bcaeb66385..e00bac8f4271 100644
+--- a/drivers/hid/Kconfig
++++ b/drivers/hid/Kconfig
+@@ -433,6 +433,19 @@ config HOLTEK_FF
+ 	  Say Y here if you have a Holtek On Line Grip based game controller
+ 	  and want to have force feedback support for it.
+ 
++config HID_HYPERX
++	tristate "HyperX microphones"
++	depends on USB_HID
++	help
++	  Support for the mute button of HyperX microphones.
++
++	  The button is handled in the device firmware and only reports the
++	  resulting mute state through a vendor-defined collection, so without
++	  this driver userspace never learns that the microphone was muted.
++
++	  Supported devices:
++	  - HyperX QuadCast 2
++
+ config HID_VIVALDI_COMMON
+ 	tristate
+ 	help
+diff --git a/drivers/hid/Makefile b/drivers/hid/Makefile
+index 23e6e3dd0c56..4138be76bf34 100644
+--- a/drivers/hid/Makefile
++++ b/drivers/hid/Makefile
+@@ -67,6 +67,7 @@ obj-$(CONFIG_HID_HOLTEK)	+= hid-holtek-kbd.o
+ obj-$(CONFIG_HID_HOLTEK)	+= hid-holtek-mouse.o
+ obj-$(CONFIG_HID_HOLTEK)	+= hid-holtekff.o
+ obj-$(CONFIG_HID_HYPERV_MOUSE)	+= hid-hyperv.o
++obj-$(CONFIG_HID_HYPERX)	+= hid-hyperx.o
+ obj-$(CONFIG_HID_ICADE)		+= hid-icade.o
+ obj-$(CONFIG_HID_ITE)		+= hid-ite.o
+ obj-$(CONFIG_HID_JABRA)		+= hid-jabra.o
+diff --git a/drivers/hid/hid-hyperx.c b/drivers/hid/hid-hyperx.c
+new file mode 100644
+index 000000000000..18d2dc24cc76
+--- /dev/null
++++ b/drivers/hid/hid-hyperx.c
+@@ -0,0 +1,117 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ *  HID driver for the HyperX QuadCast 2 microphone
++ *
++ *  The tap-to-mute button is handled entirely in the device firmware: it gates
++ *  the audio internally and does not send the Telephony "Phone Mute" usage its
++ *  own report descriptor advertises.  The resulting mute state is only reported
++ *  through a vendor-defined collection, which hid-input cannot map, so the
++ *  button is invisible to userspace.
++ *
++ *  Copyright (c) 2026 Benjamin Blume <benjaminblume@posteo.de>
++ */
++
++#include <linux/hid.h>
++#include <linux/input.h>
++#include <linux/module.h>
++
++#include "hid-ids.h"
++
++#define HYPERX_QC2_REPORT_ID	0x77
++#define HYPERX_QC2_EVENT_MUTE	0x06
++#define HYPERX_QC2_MUTE_LEN	3
++
++struct hyperx_drvdata {
++	struct input_dev *input;
++	bool muted;
++	bool have_state;
++};
++
++static int hyperx_input_configured(struct hid_device *hdev,
++				   struct hid_input *hi)
++{
++	struct hyperx_drvdata *drvdata = hid_get_drvdata(hdev);
++
++	/*
++	 * The device exposes several application collections.  Prefer the
++	 * telephony one, which already advertises KEY_MICMUTE, and fall back
++	 * to the first collection otherwise.
++	 */
++	if (!drvdata->input || test_bit(KEY_MICMUTE, hi->input->keybit)) {
++		drvdata->input = hi->input;
++		input_set_capability(drvdata->input, EV_KEY, KEY_MICMUTE);
++	}
++
++	return 0;
++}
++
++static int hyperx_raw_event(struct hid_device *hdev, struct hid_report *report,
++			    u8 *data, int size)
++{
++	struct hyperx_drvdata *drvdata = hid_get_drvdata(hdev);
++	bool muted;
++
++	if (!(hdev->claimed & HID_CLAIMED_INPUT) || !drvdata->input)
++		return 0;
++
++	if (size < HYPERX_QC2_MUTE_LEN || data[0] != HYPERX_QC2_REPORT_ID ||
++	    data[1] != HYPERX_QC2_EVENT_MUTE)
++		return 0;
++
++	muted = data[2];
++	if (drvdata->have_state && muted == drvdata->muted)
++		return 0;
++
++	drvdata->muted = muted;
++	drvdata->have_state = true;
++
++	/*
++	 * The device reports the resulting absolute state, while KEY_MICMUTE is
++	 * a momentary key that userspace acts on as a toggle.  Emit one
++	 * keypress per state change.
++	 */
++	input_report_key(drvdata->input, KEY_MICMUTE, 1);
++	input_sync(drvdata->input);
++	input_report_key(drvdata->input, KEY_MICMUTE, 0);
++	input_sync(drvdata->input);
++
++	return 0;
++}
++
++static int hyperx_probe(struct hid_device *hdev, const struct hid_device_id *id)
++{
++	struct hyperx_drvdata *drvdata;
++	int ret;
++
++	drvdata = devm_kzalloc(&hdev->dev, sizeof(*drvdata), GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	hid_set_drvdata(hdev, drvdata);
++
++	ret = hid_parse(hdev);
++	if (ret)
++		return ret;
++
++	return hid_hw_start(hdev, HID_CONNECT_DEFAULT);
++}
++
++static const struct hid_device_id hyperx_devices[] = {
++	{ HID_USB_DEVICE(USB_VENDOR_ID_HP,
++			 USB_PRODUCT_ID_HP_HYPERX_QUADCAST_2) },
++	{ }
++};
++MODULE_DEVICE_TABLE(hid, hyperx_devices);
++
++static struct hid_driver hyperx_driver = {
++	.name			= "hyperx",
++	.id_table		= hyperx_devices,
++	.probe			= hyperx_probe,
++	.input_configured	= hyperx_input_configured,
++	.raw_event		= hyperx_raw_event,
++};
++module_hid_driver(hyperx_driver);
++
++MODULE_DESCRIPTION("HID driver for the HyperX QuadCast 2 microphone");
++MODULE_AUTHOR("Benjamin Blume <benjaminblume@posteo.de>");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/hid/hid-ids.h b/drivers/hid/hid-ids.h
+index 1059922baaac..76674b33e808 100644
+--- a/drivers/hid/hid-ids.h
++++ b/drivers/hid/hid-ids.h
+@@ -688,6 +688,7 @@
+ #define USB_DEVICE_ID_HORI_WIRELESS_SWITCH_PAD	0x00f6
+ 
+ #define USB_VENDOR_ID_HP		0x03f0
++#define USB_PRODUCT_ID_HP_HYPERX_QUADCAST_2			0x07b4
+ #define USB_PRODUCT_ID_HP_ELITE_PRESENTER_MOUSE_464A		0x464a
+ #define USB_PRODUCT_ID_HP_LOGITECH_OEM_USB_OPTICAL_MOUSE_0A4A	0x0a4a
+ #define USB_PRODUCT_ID_HP_LOGITECH_OEM_USB_OPTICAL_MOUSE_0B4A	0x0b4a
+-- 
+2.55.0
+

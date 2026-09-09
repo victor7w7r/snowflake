@@ -1,0 +1,58 @@
+From 380b0e5e0e30e0ae57056cd18e5a9a60892b2ece Mon Sep 17 00:00:00 2001
+From: Josh Hilke <jrhilke@google.com>
+Date: Fri, 26 Jun 2026 14:35:23 -0700
+Subject: [PATCH 02970/15333] KVM: selftests: Add a helper to set proc IRQ
+ affinity for IRQ test
+
+Add a utility, proc_irq_set_smp_affinity(), to set the CPU affinity of a
+Linux host IRQ via the proc filesystem.  Use smp_affinity_list instead of
+smp_affinity to avoid having to convert the single CPU to a bitmask.
+
+The helper will be used by the eventfd IRQ test to verify delivery of IRQs
+when the affinity is randomized/modified.
+
+Signed-off-by: Josh Hilke <jrhilke@google.com>
+[sean: make the utility self-contained, drop "list", massage changelog]
+Link: https://patch.msgid.link/20260626213534.3866178-11-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ tools/testing/selftests/kvm/include/proc_util.h |  2 ++
+ tools/testing/selftests/kvm/lib/proc_util.c     | 14 ++++++++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/tools/testing/selftests/kvm/include/proc_util.h b/tools/testing/selftests/kvm/include/proc_util.h
+index 704839b6d7af..d1ddc967d11d 100644
+--- a/tools/testing/selftests/kvm/include/proc_util.h
++++ b/tools/testing/selftests/kvm/include/proc_util.h
+@@ -6,4 +6,6 @@
+ 
+ unsigned int vfio_msix_to_host_irq(const char *vfio_device_bdf, int msix);
+ 
++void proc_irq_set_smp_affinity(unsigned int irq, int cpu);
++
+ #endif /* SELFTEST_KVM_PROC_UTIL_H */
+diff --git a/tools/testing/selftests/kvm/lib/proc_util.c b/tools/testing/selftests/kvm/lib/proc_util.c
+index 84d30f055a0a..3960b3841d63 100644
+--- a/tools/testing/selftests/kvm/lib/proc_util.c
++++ b/tools/testing/selftests/kvm/lib/proc_util.c
+@@ -38,3 +38,17 @@ unsigned int vfio_msix_to_host_irq(const char *device_bdf, int msix)
+ 	return (unsigned int)irq;
+ }
+ 
++void proc_irq_set_smp_affinity(unsigned int irq, int cpu)
++{
++	char path[PATH_MAX];
++	int r, fd;
++
++	snprintf(path, sizeof(path), "/proc/irq/%u/smp_affinity_list", irq);
++	fd = open(path, O_RDWR);
++	TEST_ASSERT(fd >= 0, "Failed to open %s", path);
++
++	r = dprintf(fd, "%d\n", cpu);
++	TEST_ASSERT(r > 0, "Failed to affinitize IRQ-%u to CPU %d", irq, cpu);
++
++	kvm_close(fd);
++}
+-- 
+2.55.0
+

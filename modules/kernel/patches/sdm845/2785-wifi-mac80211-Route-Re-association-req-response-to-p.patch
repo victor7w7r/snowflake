@@ -1,0 +1,88 @@
+From ac798f757d6475dc6fee2ec899980d6740714596 Mon Sep 17 00:00:00 2001
+From: Ilan Peer <ilan.peer@intel.com>
+Date: Mon, 6 Jul 2026 22:29:31 +0300
+Subject: [PATCH 02785/15333] wifi: mac80211: Route (Re)association
+ req/response to per-STA queue
+
+An association request or response frame is generally delivered to the
+driver without a TX queue object. However, with drivers that do encryption
+offload and couple the key with a transmit queue, this means that the
+frames are not being encrypted.
+
+Fix this by routing the association frames to the management TXQ.
+This will allow the driver to set up the required resources before
+transmitting the association frame, e.g., set up keys etc.
+
+Signed-off-by: Ilan Peer <ilan.peer@intel.com>
+Reviewed-by: Johannes Berg <johannes.berg@intel.com>
+Signed-off-by: Miri Korenblit <miriam.rachel.korenblit@intel.com>
+Link: https://patch.msgid.link/20260706222925.febcc62f485c.Iff932880e4b98232cbf6ba405fbb90d650a85381@changeid
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ include/linux/ieee80211.h  | 11 +++++++++++
+ net/mac80211/ieee80211_i.h |  4 +---
+ net/mac80211/tx.c          |  7 +++++++
+ 3 files changed, 19 insertions(+), 3 deletions(-)
+
+diff --git a/include/linux/ieee80211.h b/include/linux/ieee80211.h
+index 084ad45aa2d8..26e674038865 100644
+--- a/include/linux/ieee80211.h
++++ b/include/linux/ieee80211.h
+@@ -556,6 +556,17 @@ static inline bool ieee80211_is_reassoc_resp(__le16 fc)
+ 	       cpu_to_le16(IEEE80211_FTYPE_MGMT | IEEE80211_STYPE_REASSOC_RESP);
+ }
+ 
++/**
++ * ieee80211_is_assoc - check if (Re)association request/response frame
++ * @fc: frame control bytes in little-endian byteorder
++ * Return: whether or not the frame is an (re)association request or response
++ */
++static inline bool ieee80211_is_assoc(__le16 fc)
++{
++	return ieee80211_is_assoc_req(fc) || ieee80211_is_reassoc_req(fc) ||
++	       ieee80211_is_assoc_resp(fc) || ieee80211_is_reassoc_resp(fc);
++}
++
+ /**
+  * ieee80211_is_probe_req - check if IEEE80211_FTYPE_MGMT && IEEE80211_STYPE_PROBE_REQ
+  * @fc: frame control bytes in little-endian byteorder
+diff --git a/net/mac80211/ieee80211_i.h b/net/mac80211/ieee80211_i.h
+index 34a9ea8b6f85..d585820245dd 100644
+--- a/net/mac80211/ieee80211_i.h
++++ b/net/mac80211/ieee80211_i.h
+@@ -2470,9 +2470,7 @@ void __ieee80211_tx_skb_tid_band(struct ieee80211_sub_if_data *sdata,
+ static inline bool ieee80211_require_encrypted_assoc(__le16 fc,
+ 						     struct sta_info *sta)
+ {
+-	return (sta && sta->sta.epp_peer &&
+-		(ieee80211_is_assoc_req(fc) || ieee80211_is_reassoc_req(fc) ||
+-		 ieee80211_is_assoc_resp(fc) || ieee80211_is_reassoc_resp(fc)));
++	return sta && sta->sta.epp_peer && ieee80211_is_assoc(fc);
+ }
+ 
+ /* sta_out needs to be checked for ERR_PTR() before using */
+diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
+index c13b209fad47..42cfd76850b8 100644
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -1309,10 +1309,17 @@ static struct txq_info *ieee80211_get_txq(struct ieee80211_local *local,
+ 	    (info->control.flags & IEEE80211_TX_CTRL_PS_RESPONSE))
+ 		return NULL;
+ 
++	/*
++	 * While (re)association request/response frames are not considered
++	 * bufferable MMPDUs, use the TXQ abstraction for the transmission of
++	 * these frames. This is specifically useful for drivers that might
++	 * associate other resources with the TXQ, e.g., encryption keys etc.
++	 */
+ 	if (!(info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP) &&
+ 	    unlikely(!ieee80211_is_data_present(hdr->frame_control))) {
+ 		if ((!ieee80211_is_mgmt(hdr->frame_control) ||
+ 		     ieee80211_is_bufferable_mmpdu(skb) ||
++		     ieee80211_is_assoc(hdr->frame_control) ||
+ 		     vif->type == NL80211_IFTYPE_STATION ||
+ 		     vif->type == NL80211_IFTYPE_NAN ||
+ 		     vif->type == NL80211_IFTYPE_NAN_DATA) &&
+-- 
+2.55.0
+

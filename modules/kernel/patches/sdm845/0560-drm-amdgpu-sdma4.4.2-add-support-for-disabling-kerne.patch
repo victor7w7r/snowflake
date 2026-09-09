@@ -1,0 +1,52 @@
+From 991fd2cb908bf5d35a496760519442d6e9f8763d Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Wed, 27 May 2026 16:12:07 -0400
+Subject: [PATCH 00560/15333] drm/amdgpu/sdma4.4.2: add support for disabling
+ kernel queues
+
+Allow the user to disable kernel queues.  This can be used
+to free up vmid resources if kernel queues are not needed.
+
+Set amdgpu.user_queue=2 to disable kernel queues.
+
+Reviewed-by: Kent Russell <kent.russell@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/sdma_v4_4_2.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/sdma_v4_4_2.c b/drivers/gpu/drm/amd/amdgpu/sdma_v4_4_2.c
+index 88428b88e00f..777a70852883 100644
+--- a/drivers/gpu/drm/amd/amdgpu/sdma_v4_4_2.c
++++ b/drivers/gpu/drm/amd/amdgpu/sdma_v4_4_2.c
+@@ -1359,6 +1359,19 @@ static int sdma_v4_4_2_early_init(struct amdgpu_ip_block *ip_block)
+ 	struct amdgpu_device *adev = ip_block->adev;
+ 	int r;
+ 
++	switch (amdgpu_user_queue) {
++	case -1:
++	case 0:
++	default:
++		adev->sdma.no_user_submission = false;
++		adev->sdma.disable_uq = true;
++		break;
++	case 2:
++		adev->sdma.no_user_submission = true;
++		adev->sdma.disable_uq = true;
++		break;
++	}
++
+ 	r = sdma_v4_4_2_init_microcode(adev);
+ 	if (r)
+ 		return r;
+@@ -1478,6 +1491,7 @@ static int sdma_v4_4_2_sw_init(struct amdgpu_ip_block *ip_block)
+ 		/* doorbell size is 2 dwords, get DWORD offset */
+ 		ring->doorbell_index = adev->doorbell_index.sdma_engine[i] << 1;
+ 		ring->vm_hub = AMDGPU_MMHUB0(aid_id);
++		ring->no_user_submission = adev->sdma.no_user_submission;
+ 
+ 		sprintf(ring->name, "sdma%d.%d", aid_id,
+ 				i % adev->sdma.num_inst_per_aid);
+-- 
+2.55.0
+

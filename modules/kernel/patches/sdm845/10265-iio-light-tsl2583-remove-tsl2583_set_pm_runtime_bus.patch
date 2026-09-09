@@ -1,0 +1,94 @@
+From 75056737b69029cb08a294a2ef746ecfdb598abd Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Tue, 28 Jul 2026 03:47:41 +0900
+Subject: [PATCH 10265/15333] iio: light: tsl2583: remove
+ tsl2583_set_pm_runtime_busy() helper
+
+tsl2583_set_pm_runtime_busy() just calls pm_runtime_resume_and_get()
+or pm_runtime_put_autosuspend() depending on its bool argument. Call
+them directly and remove the helper.
+
+No functional change.
+
+Suggested-by: Jonathan Cameron <jic23@kernel.org>
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Reviewed-by: Brian Masney <bmasney@redhat.com>
+Signed-off-by: Jonathan Cameron <jonathan.cameron@oss.qualcomm.com>
+---
+ drivers/iio/light/tsl2583.c | 22 +++++++---------------
+ 1 file changed, 7 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/iio/light/tsl2583.c b/drivers/iio/light/tsl2583.c
+index 54fa426c5755..06da145569f7 100644
+--- a/drivers/iio/light/tsl2583.c
++++ b/drivers/iio/light/tsl2583.c
+@@ -639,14 +639,6 @@ static const struct iio_chan_spec tsl2583_channels[] = {
+ 	},
+ };
+ 
+-static int tsl2583_set_pm_runtime_busy(struct tsl2583_chip *chip, bool on)
+-{
+-	if (on)
+-		return pm_runtime_resume_and_get(&chip->client->dev);
+-
+-	return pm_runtime_put_autosuspend(&chip->client->dev);
+-}
+-
+ static int tsl2583_read_raw(struct iio_dev *indio_dev,
+ 			    struct iio_chan_spec const *chan,
+ 			    int *val, int *val2, long mask)
+@@ -654,7 +646,7 @@ static int tsl2583_read_raw(struct iio_dev *indio_dev,
+ 	struct tsl2583_chip *chip = iio_priv(indio_dev);
+ 	int ret, pm_ret;
+ 
+-	ret = tsl2583_set_pm_runtime_busy(chip, true);
++	ret = pm_runtime_resume_and_get(&chip->client->dev);
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -722,16 +714,16 @@ static int tsl2583_read_raw(struct iio_dev *indio_dev,
+ 	mutex_unlock(&chip->als_mutex);
+ 
+ 	if (ret < 0) {
+-		tsl2583_set_pm_runtime_busy(chip, false);
++		pm_runtime_put_autosuspend(&chip->client->dev);
+ 		return ret;
+ 	}
+ 
+ 	/*
+ 	 * Preserve the ret variable if the call to
+-	 * tsl2583_set_pm_runtime_busy() is successful so the reading
++	 * pm_runtime_put_autosuspend() is successful so the reading
+ 	 * (if applicable) is returned to user space.
+ 	 */
+-	pm_ret = tsl2583_set_pm_runtime_busy(chip, false);
++	pm_ret = pm_runtime_put_autosuspend(&chip->client->dev);
+ 	if (pm_ret < 0)
+ 		return pm_ret;
+ 
+@@ -745,7 +737,7 @@ static int tsl2583_write_raw(struct iio_dev *indio_dev,
+ 	struct tsl2583_chip *chip = iio_priv(indio_dev);
+ 	int ret;
+ 
+-	ret = tsl2583_set_pm_runtime_busy(chip, true);
++	ret = pm_runtime_resume_and_get(&chip->client->dev);
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -786,11 +778,11 @@ static int tsl2583_write_raw(struct iio_dev *indio_dev,
+ 	mutex_unlock(&chip->als_mutex);
+ 
+ 	if (ret < 0) {
+-		tsl2583_set_pm_runtime_busy(chip, false);
++		pm_runtime_put_autosuspend(&chip->client->dev);
+ 		return ret;
+ 	}
+ 
+-	ret = tsl2583_set_pm_runtime_busy(chip, false);
++	ret = pm_runtime_put_autosuspend(&chip->client->dev);
+ 	if (ret < 0)
+ 		return ret;
+ 
+-- 
+2.55.0
+

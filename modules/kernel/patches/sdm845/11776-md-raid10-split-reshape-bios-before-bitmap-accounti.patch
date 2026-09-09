@@ -1,0 +1,47 @@
+From aa648f26a985d08f816740bb964a743406a5f40b Mon Sep 17 00:00:00 2001
+From: Yu Kuai <yukuai@fygo.io>
+Date: Mon, 3 Aug 2026 03:50:34 +0800
+Subject: [PATCH 11776/15333] md/raid10: split reshape bios before bitmap
+ accounting
+
+Use the shared mddev_bio_split_at_reshape_offset() helper so RAID10
+submits only one-side bios to llbitmap during reshape.
+
+Tested-by: Mykola Marzhan <mykola@meshstor.io>
+Link: https://patch.msgid.link/20260802195038.164272-26-yukuai@kernel.org
+Signed-off-by: Yu Kuai <yukuai@fygo.io>
+---
+ drivers/md/raid10.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/md/raid10.c b/drivers/md/raid10.c
+index bac9edd28c97..562a325a7195 100644
+--- a/drivers/md/raid10.c
++++ b/drivers/md/raid10.c
+@@ -1848,6 +1848,7 @@ static bool raid10_make_request(struct mddev *mddev, struct bio *bio)
+ {
+ 	struct r10conf *conf = mddev->private;
+ 	sector_t chunk_mask = (conf->geo.chunk_mask & conf->prev.chunk_mask);
++	const int rw = bio_data_dir(bio);
+ 	int chunk_sects = chunk_mask + 1;
+ 	int sectors = bio_sectors(bio);
+ 
+@@ -1873,6 +1874,15 @@ static bool raid10_make_request(struct mddev *mddev, struct bio *bio)
+ 		sectors = chunk_sects -
+ 			(bio->bi_iter.bi_sector &
+ 			 (chunk_sects - 1));
++
++	bio = mddev_bio_split_at_reshape_offset(mddev, bio, &sectors,
++						&conf->bio_split);
++	if (!bio) {
++		if (rw == WRITE)
++			md_write_end(mddev);
++		return true;
++	}
++
+ 	if (!__make_request(mddev, bio, sectors))
+ 		md_write_end(mddev);
+ 
+-- 
+2.55.0
+

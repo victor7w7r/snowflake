@@ -1,0 +1,151 @@
+From 744e168d62fc50b362a4835f77feafd417b965a1 Mon Sep 17 00:00:00 2001
+From: Eliot Courtney <ecourtney@nvidia.com>
+Date: Tue, 4 Aug 2026 14:41:14 +0900
+Subject: [PATCH 10890/15333] gpu: nova-core: return non-WPR heap size as u64
+ from HALs
+
+This is always immediately widened to u64, so just return it as a u64
+from the beginning.
+
+Signed-off-by: Eliot Courtney <ecourtney@nvidia.com>
+Link: https://patch.msgid.link/20260804-blackwell-fixes-v4-3-ac858b6a1935@nvidia.com
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/fb.rs           | 2 +-
+ drivers/gpu/nova-core/fb/hal.rs       | 2 +-
+ drivers/gpu/nova-core/fb/hal/ga100.rs | 2 +-
+ drivers/gpu/nova-core/fb/hal/ga102.rs | 2 +-
+ drivers/gpu/nova-core/fb/hal/gb100.rs | 4 ++--
+ drivers/gpu/nova-core/fb/hal/gb202.rs | 4 ++--
+ drivers/gpu/nova-core/fb/hal/gh100.rs | 4 ++--
+ drivers/gpu/nova-core/fb/hal/tu102.rs | 6 +++---
+ 8 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/fb.rs b/drivers/gpu/nova-core/fb.rs
+index 4a1be29cf5fb..86d2bdaab7f9 100644
+--- a/drivers/gpu/nova-core/fb.rs
++++ b/drivers/gpu/nova-core/fb.rs
+@@ -271,7 +271,7 @@ pub(crate) fn new(
+         };
+ 
+         let non_wpr_heap = {
+-            let non_wpr_heap_size = u64::from(hal.non_wpr_heap_size());
++            let non_wpr_heap_size = hal.non_wpr_heap_size();
+             FbRange(wpr2.start - non_wpr_heap_size..wpr2.start)
+         };
+ 
+diff --git a/drivers/gpu/nova-core/fb/hal.rs b/drivers/gpu/nova-core/fb/hal.rs
+index 714f0b51cd8f..99363cfb116b 100644
+--- a/drivers/gpu/nova-core/fb/hal.rs
++++ b/drivers/gpu/nova-core/fb/hal.rs
+@@ -37,7 +37,7 @@ pub(crate) trait FbHal {
+     fn pmu_reserved_size(&self) -> u32;
+ 
+     /// Returns the non-WPR heap size for this chipset, in bytes.
+-    fn non_wpr_heap_size(&self) -> u32;
++    fn non_wpr_heap_size(&self) -> u64;
+ 
+     /// Returns the FRTS size, in bytes.
+     fn frts_size(&self) -> u64;
+diff --git a/drivers/gpu/nova-core/fb/hal/ga100.rs b/drivers/gpu/nova-core/fb/hal/ga100.rs
+index d13c9a826eef..a81b3e42ae41 100644
+--- a/drivers/gpu/nova-core/fb/hal/ga100.rs
++++ b/drivers/gpu/nova-core/fb/hal/ga100.rs
+@@ -74,7 +74,7 @@ fn pmu_reserved_size(&self) -> u32 {
+         super::tu102::pmu_reserved_size_tu102()
+     }
+ 
+-    fn non_wpr_heap_size(&self) -> u32 {
++    fn non_wpr_heap_size(&self) -> u64 {
+         super::tu102::non_wpr_heap_size_tu102()
+     }
+ 
+diff --git a/drivers/gpu/nova-core/fb/hal/ga102.rs b/drivers/gpu/nova-core/fb/hal/ga102.rs
+index 44a2cf8a00f1..a5eeddb8a1ae 100644
+--- a/drivers/gpu/nova-core/fb/hal/ga102.rs
++++ b/drivers/gpu/nova-core/fb/hal/ga102.rs
+@@ -41,7 +41,7 @@ fn pmu_reserved_size(&self) -> u32 {
+         super::tu102::pmu_reserved_size_tu102()
+     }
+ 
+-    fn non_wpr_heap_size(&self) -> u32 {
++    fn non_wpr_heap_size(&self) -> u64 {
+         super::tu102::non_wpr_heap_size_tu102()
+     }
+ 
+diff --git a/drivers/gpu/nova-core/fb/hal/gb100.rs b/drivers/gpu/nova-core/fb/hal/gb100.rs
+index 7e5b0e3ffc67..d9e4d62ae632 100644
+--- a/drivers/gpu/nova-core/fb/hal/gb100.rs
++++ b/drivers/gpu/nova-core/fb/hal/gb100.rs
+@@ -111,9 +111,9 @@ fn pmu_reserved_size(&self) -> u32 {
+         pmu_reserved_size_gb100()
+     }
+ 
+-    fn non_wpr_heap_size(&self) -> u32 {
++    fn non_wpr_heap_size(&self) -> u64 {
+         // Non-WPR heap for GB10x (see Open RM: kgspGetNonWprHeapSize, GB100/GB102).
+-        u32::SZ_2M
++        u64::SZ_2M
+     }
+ 
+     fn frts_size(&self) -> u64 {
+diff --git a/drivers/gpu/nova-core/fb/hal/gb202.rs b/drivers/gpu/nova-core/fb/hal/gb202.rs
+index c590e5b1269c..4341ecf36188 100644
+--- a/drivers/gpu/nova-core/fb/hal/gb202.rs
++++ b/drivers/gpu/nova-core/fb/hal/gb202.rs
+@@ -71,10 +71,10 @@ fn pmu_reserved_size(&self) -> u32 {
+         super::gb100::pmu_reserved_size_gb100()
+     }
+ 
+-    fn non_wpr_heap_size(&self) -> u32 {
++    fn non_wpr_heap_size(&self) -> u64 {
+         // Non-WPR heap for GB20x (see Open RM: kgspGetNonWprHeapSize, GB202+).
+         // This size is r570-specific.
+-        u32::SZ_2M + u32::SZ_128K
++        u64::SZ_2M + u64::SZ_128K
+     }
+ 
+     fn frts_size(&self) -> u64 {
+diff --git a/drivers/gpu/nova-core/fb/hal/gh100.rs b/drivers/gpu/nova-core/fb/hal/gh100.rs
+index 2867ae058d0a..cf8e6403ef98 100644
+--- a/drivers/gpu/nova-core/fb/hal/gh100.rs
++++ b/drivers/gpu/nova-core/fb/hal/gh100.rs
+@@ -63,9 +63,9 @@ fn pmu_reserved_size(&self) -> u32 {
+         super::tu102::pmu_reserved_size_tu102()
+     }
+ 
+-    fn non_wpr_heap_size(&self) -> u32 {
++    fn non_wpr_heap_size(&self) -> u64 {
+         // Non-WPR heap for Hopper (see Open RM: kgspCalculateFbLayout_GH100).
+-        u32::SZ_2M
++        u64::SZ_2M
+     }
+ 
+     fn frts_size(&self) -> u64 {
+diff --git a/drivers/gpu/nova-core/fb/hal/tu102.rs b/drivers/gpu/nova-core/fb/hal/tu102.rs
+index 541f163b52d3..bf5967cbffd3 100644
+--- a/drivers/gpu/nova-core/fb/hal/tu102.rs
++++ b/drivers/gpu/nova-core/fb/hal/tu102.rs
+@@ -46,8 +46,8 @@ pub(super) const fn pmu_reserved_size_tu102() -> u32 {
+     0
+ }
+ 
+-pub(super) const fn non_wpr_heap_size_tu102() -> u32 {
+-    u32::SZ_1M
++pub(super) const fn non_wpr_heap_size_tu102() -> u64 {
++    u64::SZ_1M
+ }
+ 
+ pub(super) const fn frts_size_tu102() -> u64 {
+@@ -77,7 +77,7 @@ fn pmu_reserved_size(&self) -> u32 {
+         pmu_reserved_size_tu102()
+     }
+ 
+-    fn non_wpr_heap_size(&self) -> u32 {
++    fn non_wpr_heap_size(&self) -> u64 {
+         non_wpr_heap_size_tu102()
+     }
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,82 @@
+From 2a7ecc5fbde76fd48f37c2878e52c50ae8928e0a Mon Sep 17 00:00:00 2001
+From: Petr Pavlu <petr.pavlu@suse.com>
+Date: Thu, 6 Aug 2026 11:10:20 +0200
+Subject: [PATCH 11226/15333] module/dups: Clean up includes
+
+The kernel/module/dups.c file relies on the following definitions and
+associated functions:
+
+* module_param() -> linux/moduleparam.h,
+* DEFINE_MUTEX() -> linux/mutex.h,
+* LIST_HEAD(), list_for_each_entry(), ... -> linux/list.h,
+* refcount_t, refcount_inc(), ... -> linux/refcount.h,
+* MODULE_NAME_LEN -> linux/module.h,
+* completion, complete_all(), ... -> linux/completion.h,
+* delayed_work, work_struct, ... -> linux/workqueue.h,
+* lockdep_assert_held() -> linux/lockdep.h,
+* strcmp(), memcpy() -> linux/string.h,
+* container_of() -> linux/container_of.h,
+* DEFINE_FREE(), __free(), scoped_guard() -> linux/cleanup.h,
+* kzalloc_obj(), kfree() -> linux/slab.h,
+* pr_debug(), pr_warn() -> linux/printk.h,
+* WARN() -> linux/bug.h,
+* TASK_KILLABLE -> linux/sched.h,
+* HZ -> linux/param.h.
+
+Update the file's include list accordingly.
+
+Signed-off-by: Petr Pavlu <petr.pavlu@suse.com>
+---
+ kernel/module/dups.c | 32 ++++++++++++--------------------
+ 1 file changed, 12 insertions(+), 20 deletions(-)
+
+diff --git a/kernel/module/dups.c b/kernel/module/dups.c
+index fa3a4e623543..c9be9df6a65d 100644
+--- a/kernel/module/dups.c
++++ b/kernel/module/dups.c
+@@ -7,30 +7,22 @@
+ 
+ #define pr_fmt(fmt)     "module: " fmt
+ 
++#include <linux/bug.h>
++#include <linux/cleanup.h>
++#include <linux/completion.h>
++#include <linux/container_of.h>
++#include <linux/list.h>
++#include <linux/lockdep.h>
+ #include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/mutex.h>
++#include <linux/param.h>
++#include <linux/printk.h>
++#include <linux/refcount.h>
+ #include <linux/sched.h>
+-#include <linux/sched/task.h>
+-#include <linux/binfmts.h>
+-#include <linux/syscalls.h>
+-#include <linux/unistd.h>
+-#include <linux/kmod.h>
+ #include <linux/slab.h>
+-#include <linux/completion.h>
+-#include <linux/cred.h>
+-#include <linux/file.h>
++#include <linux/string.h>
+ #include <linux/workqueue.h>
+-#include <linux/security.h>
+-#include <linux/mount.h>
+-#include <linux/kernel.h>
+-#include <linux/init.h>
+-#include <linux/resource.h>
+-#include <linux/notifier.h>
+-#include <linux/suspend.h>
+-#include <linux/rwsem.h>
+-#include <linux/ptrace.h>
+-#include <linux/async.h>
+-#include <linux/uaccess.h>
+-#include <linux/refcount.h>
+ 
+ #include "internal.h"
+ 
+-- 
+2.55.0
+

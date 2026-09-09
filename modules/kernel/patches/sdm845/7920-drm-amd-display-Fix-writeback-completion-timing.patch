@@ -1,0 +1,111 @@
+From 459e61b53910be3c6dff4d97ae95bb6116ee65dd Mon Sep 17 00:00:00 2001
+From: Alex Hung <alex.hung@amd.com>
+Date: Fri, 10 Jul 2026 21:31:58 -0600
+Subject: [PATCH 07920/15333] drm/amd/display: Fix writeback completion timing
+
+[WHY]
+The out fence was signalled on the first vblank after arming, before the
+DMA finished copying, and the old code worked around this with an
+mdelay() in the IRQ handler.
+
+[HOW]
+Hold a vblank reference while writeback is pending and signal the out
+fence on the second vblank instead of using mdelay(). Add
+amdgpu_dm_crtc_complete_writeback() to finish and clean up writeback
+from both the IRQ and teardown paths.
+
+This can be verified by running IGT's kms_writeback 20 times without
+timeout errors.
+
+Assisted-by: Copilot:Claude-Opus-4.8
+Signed-off-by: Alex Hung <alex.hung@amd.com>
+Reviewed-by: Mario Limonciello (AMD) <superm1@kernel.org>
+Reviewed-by: Harry Wentland <harry.wentland@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_mode.h      |  1 +
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c |  2 ++
+ .../drm/amd/display/amdgpu_dm/amdgpu_dm_irq.c | 33 ++++++++++---------
+ 3 files changed, 21 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_mode.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_mode.h
+index 8069fc41cc7f..7c784277396a 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_mode.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_mode.h
+@@ -509,6 +509,7 @@ struct amdgpu_crtc {
+ 	struct drm_pending_vblank_event *event;
+ 
+ 	bool wb_pending;
++	bool wb_frame_done;
+ 	bool wb_enabled;
+ 	struct drm_writeback_connector *wb_conn;
+ };
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+index 4b52ed3fb2bf..372df3146c19 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -4688,6 +4688,7 @@ bool amdgpu_dm_crtc_complete_writeback(struct amdgpu_crtc *acrtc)
+ 	spin_lock_irqsave(&acrtc->wb_conn->job_lock, flags);
+ 	pending = acrtc->wb_pending;
+ 	acrtc->wb_pending = false;
++	acrtc->wb_frame_done = false;
+ 	spin_unlock_irqrestore(&acrtc->wb_conn->job_lock, flags);
+ 
+ 	if (!pending)
+@@ -5156,6 +5157,7 @@ static void dm_set_writeback(struct amdgpu_display_manager *dm,
+ 	 * cannot run its matching vblank_put before this get.
+ 	 */
+ 	WARN_ON(drm_crtc_vblank_get(&acrtc->base));
++	acrtc->wb_frame_done = false;
+ 	acrtc->wb_pending = true;
+ }
+ 
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_irq.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_irq.c
+index 9c574849142b..9be63996b062 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_irq.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_irq.c
+@@ -1960,23 +1960,26 @@ static void dm_crtc_high_irq_handler(struct amdgpu_device *adev,
+ 	bool is_dcn = amdgpu_ip_version(adev, DCE_HWIP, 0) != 0;
+ 
+ 	if (acrtc->wb_conn && acrtc->wb_pending) {
+-		struct dc_stream_state *stream = acrtc->dm_irq_params.stream;
+-		unsigned int v_total, refresh_hz;
+-
+-		v_total = stream->adjust.v_total_max ?
+-			  stream->adjust.v_total_max : stream->timing.v_total;
+-		refresh_hz = div_u64((uint64_t) stream->timing.pix_clk_100hz *
+-			     100LL, (v_total * stream->timing.h_total));
+-		mdelay(1000 / refresh_hz);
+-
+-		/*
+-		 * Completion (signalling the out fence and releasing the vblank
+-		 * reference taken in dm_set_writeback()) is handled by the shared
+-		 * helper, which is also used by the teardown path.
+-		 */
+-		if (amdgpu_dm_crtc_complete_writeback(acrtc))
++		if (acrtc->wb_frame_done) {
++			/*
++			 * Second vblank: the DMA for the captured frame has
++			 * had a full frame period to flush to memory. Signal
++			 * the out fence now.
++			 */
++			amdgpu_dm_crtc_complete_writeback(acrtc);
++		} else {
++			/*
++			 * First vblank after arming: the frame has been
++			 * scanned out and the DMA is finishing. Disable
++			 * writeback immediately to prevent the hardware from
++			 * starting a new capture that would overwrite the
++			 * buffer. Signal completion on the next vblank to
++			 * ensure the DMA is fully flushed to memory.
++			 */
+ 			dc_stream_fc_disable_writeback(adev->dm.dc,
+ 						       acrtc->dm_irq_params.stream, 0);
++			acrtc->wb_frame_done = true;
++		}
+ 	}
+ 
+ 	vrr_active = amdgpu_dm_crtc_vrr_active_irq(acrtc);
+-- 
+2.55.0
+

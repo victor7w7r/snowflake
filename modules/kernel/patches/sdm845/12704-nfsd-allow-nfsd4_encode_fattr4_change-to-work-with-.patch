@@ -1,0 +1,34 @@
+From f37d614b856134dfd891d227135dc9a25b45af67 Mon Sep 17 00:00:00 2001
+From: Jeff Layton <jlayton@kernel.org>
+Date: Tue, 16 Jun 2026 07:58:56 -0400
+Subject: [PATCH 12704/15333] nfsd: allow nfsd4_encode_fattr4_change() to work
+ with no export
+
+In the context of a CB_NOTIFY callback, we may not have easy access to
+a svc_export. nfsd will not currently grant a delegation on a the V4 root
+however, so this should be safe.
+
+Signed-off-by: Jeff Layton <jlayton@kernel.org>
+Acked-by: Chuck Lever <chuck.lever@oracle.com>
+Link: https://patch.msgid.link/20260616-dir-deleg-v7-13-6cbc7eac0ade@kernel.org
+Signed-off-by: Chuck Lever <cel@kernel.org>
+---
+ fs/nfsd/nfs4xdr.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/nfsd/nfs4xdr.c b/fs/nfsd/nfs4xdr.c
+index 23419423f7b0..f50027712d71 100644
+--- a/fs/nfsd/nfs4xdr.c
++++ b/fs/nfsd/nfs4xdr.c
+@@ -3277,7 +3277,7 @@ static __be32 nfsd4_encode_fattr4_change(struct xdr_stream *xdr,
+ {
+ 	const struct svc_export *exp = args->exp;
+ 
+-	if (unlikely(exp->ex_flags & NFSEXP_V4ROOT)) {
++	if (exp && unlikely(exp->ex_flags & NFSEXP_V4ROOT)) {
+ 		u32 flush_time = convert_to_wallclock(exp->cd->flush_time);
+ 
+ 		if (xdr_stream_encode_u32(xdr, flush_time) != XDR_UNIT)
+-- 
+2.55.0
+

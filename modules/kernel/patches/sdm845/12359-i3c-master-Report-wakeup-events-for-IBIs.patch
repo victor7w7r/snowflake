@@ -1,0 +1,47 @@
+From ff2b20f8f1ff9680ca1fce315e1d5eddd687266d Mon Sep 17 00:00:00 2001
+From: Adrian Hunter <adrian.hunter@intel.com>
+Date: Fri, 7 Aug 2026 17:56:33 +0300
+Subject: [PATCH 12359/15333] i3c: master: Report wakeup events for IBIs
+
+An I3C device configured as a wakeup source can wake the system by
+generating an In-Band Interrupt (IBI).
+
+When an IBI is queued for processing, record a wakeup event for the
+device if wakeup is enabled.  Use a 100 ms processing interval to give
+the I3C device driver time to process the IBI.
+
+Signed-off-by: Adrian Hunter <adrian.hunter@intel.com>
+Reviewed-by: Frank Li <Frank.Li@nxp.com>
+Link: https://patch.msgid.link/20260807145638.168865-10-adrian.hunter@intel.com
+Signed-off-by: Alexandre Belloni <alexandre.belloni@bootlin.com>
+---
+ drivers/i3c/master.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/i3c/master.c b/drivers/i3c/master.c
+index 2616354dbe54..6c5341491944 100644
+--- a/drivers/i3c/master.c
++++ b/drivers/i3c/master.c
+@@ -3384,6 +3384,9 @@ static void i3c_master_unregister_i3c_devs(struct i3c_master_controller *master)
+ 	}
+ }
+ 
++/* Approximate time for IBI handler to run */
++#define I3C_WAKEUP_PROCESSING_TIME_MS 100
++
+ /**
+  * i3c_master_queue_ibi() - Queue an IBI
+  * @dev: the device this IBI is coming from
+@@ -3397,6 +3400,9 @@ void i3c_master_queue_ibi(struct i3c_dev_desc *dev, struct i3c_ibi_slot *slot)
+ 	if (!dev->ibi || !slot)
+ 		return;
+ 
++	if (device_may_wakeup(&dev->dev->dev))
++		pm_wakeup_event(&dev->dev->dev, I3C_WAKEUP_PROCESSING_TIME_MS);
++
+ 	atomic_inc(&dev->ibi->pending_ibis);
+ 	queue_work(dev->ibi->wq, &slot->work);
+ }
+-- 
+2.55.0
+

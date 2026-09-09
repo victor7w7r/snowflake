@@ -1,0 +1,84 @@
+From cf0de88094a7b4df18008b6efb1290f4efed731f Mon Sep 17 00:00:00 2001
+From: K Prateek Nayak <kprateek.nayak@amd.com>
+Date: Tue, 28 Jul 2026 05:25:38 +0000
+Subject: [PATCH 08192/15333] s390/runtime-const: Introduce
+ runtime_const_mask_32()
+
+Futex hash computation requires a mask operation with read-only after
+init data that will be converted to a runtime constant in the subsequent
+commit.
+
+Introduce runtime_const_mask_32 to further optimize the mask operation
+in the futex hash computation hot path.
+
+GCC generates a:
+
+  nilf %r1,<imm32>
+
+to tackle arbitrary 32-bit masks and the same is implemented here.
+Immediate patching pattern for __runtime_fixup_mask() has been adopted
+from __runtime_fixup_ptr().
+
+Signed-off-by: K Prateek Nayak <kprateek.nayak@amd.com>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>
+Acked-by: Heiko Carstens <hca@linux.ibm.com>
+Link: https://patch.msgid.link/20260728052540.4728-7-kprateek.nayak@amd.com
+---
+ arch/s390/include/asm/runtime-const.h | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/arch/s390/include/asm/runtime-const.h b/arch/s390/include/asm/runtime-const.h
+index 17878b1d048c..7b71156031ec 100644
+--- a/arch/s390/include/asm/runtime-const.h
++++ b/arch/s390/include/asm/runtime-const.h
+@@ -33,6 +33,20 @@
+ 	__ret;							\
+ })
+ 
++#define runtime_const_mask_32(val, sym)				\
++({								\
++	unsigned int __ret = (val);				\
++								\
++	asm_inline(						\
++		"0:	nilf	%[__ret],12\n"			\
++		".pushsection runtime_mask_" #sym ",\"a\"\n"	\
++		".long 0b - .\n"				\
++		".popsection"					\
++		: [__ret] "+d" (__ret)				\
++		: : "cc");					\
++	__ret;							\
++})
++
+ #define runtime_const_init(type, sym) do {			\
+ 	extern s32 __start_runtime_##type##_##sym[];		\
+ 	extern s32 __stop_runtime_##type##_##sym[];		\
+@@ -43,12 +57,12 @@
+ 			    __stop_runtime_##type##_##sym);	\
+ } while (0)
+ 
+-/* 32-bit immediate for iihf and iilf in bits in I2 field */
+ static inline void __runtime_fixup_32(u32 *p, unsigned int val)
+ {
+ 	s390_kernel_write(p, &val, sizeof(val));
+ }
+ 
++/* 32-bit immediate for iihf and iilf in bits in I2 field */
+ static inline void __runtime_fixup_ptr(void *where, unsigned long val)
+ {
+ 	__runtime_fixup_32(where + 2, val >> 32);
+@@ -65,6 +79,12 @@ static inline void __runtime_fixup_shift(void *where, unsigned long val)
+ 	s390_kernel_write(where, &insn, sizeof(insn));
+ }
+ 
++/* 32-bit immediate for nilf in bits in I2 field */
++static inline void __runtime_fixup_mask(void *where, unsigned long val)
++{
++	__runtime_fixup_32(where + 2, val);
++}
++
+ static inline void runtime_const_fixup(void (*fn)(void *, unsigned long),
+ 				       unsigned long val, s32 *start, s32 *end)
+ {
+-- 
+2.55.0
+

@@ -1,0 +1,105 @@
+From 9102e655ea7285c1bc329669865ba8a38cdb69e6 Mon Sep 17 00:00:00 2001
+From: Antonin Malzieu Ridolfi <dev@nanonej.com>
+Date: Wed, 17 Jun 2026 01:48:12 +0200
+Subject: [PATCH 00708/15333] gpu: nova-core: fb: Move PDISP register
+ definition
+
+Move PDISP register definition into fb module and update register
+visibility.
+
+Signed-off-by: Antonin Malzieu Ridolfi <dev@nanonej.com>
+Link: https://patch.msgid.link/20260617-nova-core-regs-split-v1-1-4c7dc4450ea7@nanonej.com
+[acourbot: fix rustfmt issue.]
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/fb.rs      |  4 ++--
+ drivers/gpu/nova-core/fb/regs.rs | 25 +++++++++++++++++++++++++
+ drivers/gpu/nova-core/regs.rs    | 22 ----------------------
+ 3 files changed, 27 insertions(+), 24 deletions(-)
+ create mode 100644 drivers/gpu/nova-core/fb/regs.rs
+
+diff --git a/drivers/gpu/nova-core/fb.rs b/drivers/gpu/nova-core/fb.rs
+index 725e428154cf..273cff752fae 100644
+--- a/drivers/gpu/nova-core/fb.rs
++++ b/drivers/gpu/nova-core/fb.rs
+@@ -23,11 +23,11 @@
+     firmware::gsp::GspFirmware,
+     gpu::Chipset,
+     gsp,
+-    num::FromSafeCast,
+-    regs, //
++    num::FromSafeCast, //
+ };
+ 
+ mod hal;
++mod regs;
+ 
+ /// Type holding the sysmem flush memory page, a page of memory to be written into the
+ /// `NV_PFB_NISO_FLUSH_SYSMEM_ADDR*` registers and used to maintain memory coherency.
+diff --git a/drivers/gpu/nova-core/fb/regs.rs b/drivers/gpu/nova-core/fb/regs.rs
+new file mode 100644
+index 000000000000..b2ec02f584be
+--- /dev/null
++++ b/drivers/gpu/nova-core/fb/regs.rs
+@@ -0,0 +1,25 @@
++// SPDX-License-Identifier: GPL-2.0
++
++use kernel::io::register;
++
++// PDISP
++
++register! {
++    pub(super) NV_PDISP_VGA_WORKSPACE_BASE(u32) @ 0x00625f04 {
++        /// VGA workspace base address divided by 0x10000.
++        31:8    addr;
++        /// Set if the `addr` field is valid.
++        3:3     status_valid => bool;
++    }
++}
++
++impl NV_PDISP_VGA_WORKSPACE_BASE {
++    /// Returns the base address of the VGA workspace, or `None` if none exists.
++    pub(super) fn vga_workspace_addr(self) -> Option<u64> {
++        if self.status_valid() {
++            Some(u64::from(self.addr()) << 16)
++        } else {
++            None
++        }
++    }
++}
+diff --git a/drivers/gpu/nova-core/regs.rs b/drivers/gpu/nova-core/regs.rs
+index 3f16365d3a0e..397124f245ee 100644
+--- a/drivers/gpu/nova-core/regs.rs
++++ b/drivers/gpu/nova-core/regs.rs
+@@ -302,28 +302,6 @@ pub(crate) fn usable_fb_size(self) -> u64 {
+     }
+ }
+ 
+-// PDISP
+-
+-register! {
+-    pub(crate) NV_PDISP_VGA_WORKSPACE_BASE(u32) @ 0x00625f04 {
+-        /// VGA workspace base address divided by 0x10000.
+-        31:8    addr;
+-        /// Set if the `addr` field is valid.
+-        3:3     status_valid => bool;
+-    }
+-}
+-
+-impl NV_PDISP_VGA_WORKSPACE_BASE {
+-    /// Returns the base address of the VGA workspace, or `None` if none exists.
+-    pub(crate) fn vga_workspace_addr(self) -> Option<u64> {
+-        if self.status_valid() {
+-            Some(u64::from(self.addr()) << 16)
+-        } else {
+-            None
+-        }
+-    }
+-}
+-
+ // FUSE
+ 
+ pub(crate) const NV_FUSE_OPT_FPF_SIZE: usize = 16;
+-- 
+2.55.0
+

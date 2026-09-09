@@ -1,0 +1,61 @@
+From b6ba77dfeb2abb52945ea205a1865c1a60bdfebe Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 15:59:56 +0200
+Subject: [PATCH 12810/15333] ASoC: zl38060: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-25-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/zl38060.c | 11 ++++-------
+ 1 file changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/sound/soc/codecs/zl38060.c b/sound/soc/codecs/zl38060.c
+index 7de4014e626d..894b8eb42e39 100644
+--- a/sound/soc/codecs/zl38060.c
++++ b/sound/soc/codecs/zl38060.c
+@@ -162,7 +162,7 @@ static int zl38_fw_send_xaddr(struct regmap *regmap, const void *data)
+ static int zl38_load_firmware(struct device *dev, struct regmap *regmap)
+ {
+ 	const struct ihex_binrec *rec;
+-	const struct firmware *fw;
++	const struct firmware *fw __free(firmware) = NULL;
+ 	u32 addr;
+ 	u16 len;
+ 	int err;
+@@ -180,7 +180,7 @@ static int zl38_load_firmware(struct device *dev, struct regmap *regmap)
+ 		return err;
+ 	err = zl38_fw_enter_boot_mode(regmap);
+ 	if (err)
+-		goto out;
++		return err;
+ 	rec = (const struct ihex_binrec *)fw->data;
+ 	while (rec) {
+ 		addr = be32_to_cpu(rec->addr);
+@@ -195,15 +195,12 @@ static int zl38_load_firmware(struct device *dev, struct regmap *regmap)
+ 			err = -EINVAL;
+ 		}
+ 		if (err)
+-			goto out;
++			return err;
+ 		/* next ! */
+ 		rec = ihex_next_binrec(rec);
+ 	}
+-	err = zl38_fw_go(regmap);
+ 
+-out:
+-	release_firmware(fw);
+-	return err;
++	return zl38_fw_go(regmap);
+ }
+ 
+ 
+-- 
+2.55.0
+

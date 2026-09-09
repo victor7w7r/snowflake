@@ -1,0 +1,36 @@
+From c2b218866214bce2a0a3518fc03d976aacfba98e Mon Sep 17 00:00:00 2001
+From: Alex Deucher <alexander.deucher@amd.com>
+Date: Tue, 7 Jul 2026 13:55:01 -0400
+Subject: [PATCH 04547/15333] drm/amdgpu/gfx10: fix IP dump alloc ordering
+
+If gfx sysfs init fails, we may leak the ip dump
+allocations.
+
+Reviewed-by: Mukul Joshi <mukul.joshi@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
+index 55342962422b..a998ce77da40 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
+@@ -4988,12 +4988,12 @@ static int gfx_v10_0_sw_init(struct amdgpu_ip_block *ip_block)
+ 
+ 	gfx_v10_0_gpu_early_init(adev);
+ 
+-	gfx_v10_0_alloc_ip_dump(adev);
+-
+ 	r = amdgpu_gfx_sysfs_init(adev);
+ 	if (r)
+ 		return r;
+ 
++	gfx_v10_0_alloc_ip_dump(adev);
++
+ 	return 0;
+ }
+ 
+-- 
+2.55.0
+

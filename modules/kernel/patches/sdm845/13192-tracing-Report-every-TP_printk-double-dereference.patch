@@ -1,0 +1,41 @@
+From 0456323ddd676446ac79aacd69c3443e64197843 Mon Sep 17 00:00:00 2001
+From: David Carlier <devnexen@gmail.com>
+Date: Thu, 6 Aug 2026 22:52:56 +0100
+Subject: [PATCH 13192/15333] tracing: Report every TP_printk double
+ dereference
+
+WARN_ONCE() splats once per call site, so only the first offending event
+registered is ever reported. The tree currently has six:
+ice_{rx,tx}_dim_template, two hfi1 txq events, mtu3_ep and edma_log_io.
+Whichever registers first hides the rest, and each has to be found again
+on the next boot.
+
+Add a pr_warn() next to the WARN_ONCE() so every offender is listed, the
+same way test_event_printk() already pairs WARN_ON_ONCE() with pr_warn()
+for unsafe %p* dereferences. The WARN_ONCE() stays so the condition still
+fails tests and panics under panic_on_warn.
+
+Link: https://patch.msgid.link/20260806215256.1680267-1-devnexen@gmail.com
+Suggested-by: Steven Rostedt <rostedt@goodmis.org>
+Signed-off-by: David Carlier <devnexen@gmail.com>
+Signed-off-by: Steven Rostedt <rostedt@goodmis.org>
+---
+ kernel/trace/trace_events.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/kernel/trace/trace_events.c b/kernel/trace/trace_events.c
+index a8590d2394e3..ce902482ec7c 100644
+--- a/kernel/trace/trace_events.c
++++ b/kernel/trace/trace_events.c
+@@ -415,6 +415,8 @@ static void test_double_dereference(const char *str, int len,
+ 		ptr += 5;
+ 		for (; ptr < end; ptr++) {
+ 			if (ptr[0] == '-' && ptr[1] == '>') {
++				pr_warn("TRACE EVENT ERROR: Event %s has double dereference in TP_printk: %.*s\n",
++					trace_event_name(call), len, str);
+ 				WARN_ONCE(1, "Event %s has double dereference in TP_printk: %.*s\n",
+ 					  trace_event_name(call), len, str);
+ 				return;
+-- 
+2.55.0
+

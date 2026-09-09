@@ -1,0 +1,47 @@
+From 3df611b5a04e916f406882a22f33b570831df404 Mon Sep 17 00:00:00 2001
+From: Ackerley Tng <ackerleytng@google.com>
+Date: Thu, 23 Jul 2026 14:08:08 -0700
+Subject: [PATCH 07413/15333] KVM: guest_memfd: Only "prepare" folios for
+ private pages
+
+When getting a guest_memfd pfn, prepare the folio, i.e. convert its pages
+to private, if and only if the page is actually private.  The misnamed
+prepare() hook exists specifically to allow x86's SNP to assign pages to
+the owning VM in the RMP when mapping private memory into a guest.
+
+Guarding the call will allow renaming the prepare() hook to better reflect
+its role, without creating a semantic mess, and will become a hard
+requirement once in-place conversion is supported, i.e. when CoCo VMs
+support SHARED guest_memfd pages.
+
+For all intents, no functional change intended (the sole arch hook is a nop
+for SHARED memory).
+
+Suggested-by: Michael Roth <michael.roth@amd.com>
+Reviewed-by: Fuad Tabba <tabba@google.com>
+[sean: rewrite changelog to fit the context]
+Signed-off-by: Ackerley Tng <ackerleytng@google.com>
+Reviewed-by: Xiaoyao Li <xiaoyao.li@intel.com>
+Link: https://patch.msgid.link/20260723210811.72720-7-seanjc@google.com
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ virt/kvm/guest_memfd.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/virt/kvm/guest_memfd.c b/virt/kvm/guest_memfd.c
+index 3fa4969b38f9..25da7778af01 100644
+--- a/virt/kvm/guest_memfd.c
++++ b/virt/kvm/guest_memfd.c
+@@ -814,7 +814,8 @@ int kvm_gmem_get_pfn(struct kvm *kvm, struct kvm_memory_slot *slot,
+ 		folio_mark_uptodate(folio);
+ 	}
+ 
+-	r = kvm_gmem_prepare_folio(kvm, slot, gfn, folio);
++	if (kvm_gmem_is_private_mem(file_inode(file), index))
++		r = kvm_gmem_prepare_folio(kvm, slot, gfn, folio);
+ 
+ 	folio_unlock(folio);
+ 
+-- 
+2.55.0
+

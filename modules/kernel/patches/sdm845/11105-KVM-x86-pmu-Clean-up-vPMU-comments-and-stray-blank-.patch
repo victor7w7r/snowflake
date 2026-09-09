@@ -1,0 +1,144 @@
+From 66ee8f1556575c8f9ae76932dd3aca65b4b60e59 Mon Sep 17 00:00:00 2001
+From: Like Xu <likexu@tencent.com>
+Date: Thu, 25 Jun 2026 17:01:55 +0800
+Subject: [PATCH 11105/15333] KVM: x86/pmu: Clean up vPMU comments and stray
+ blank lines
+
+Tidy up the x86 vPMU emulation code and its selftests by fixing comments
+that no longer reflect the code along with assorted spelling and grammar
+mistakes, and by dropping redundant blank lines reported by checkpatch.
+
+No functional change intended.
+
+Signed-off-by: Like Xu <likexu@tencent.com>
+Link: https://patch.msgid.link/20260625090155.6326-1-likexu@tencent.com
+[sean: keep quotes around "hit", shove sequences fix into separate patch]
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+---
+ arch/x86/kvm/pmu.c                                   | 12 +++++-------
+ arch/x86/kvm/pmu.h                                   |  4 ++--
+ arch/x86/kvm/vmx/pmu_intel.c                         |  1 -
+ tools/testing/selftests/kvm/x86/pmu_counters_test.c  |  6 +++---
+ .../selftests/kvm/x86/pmu_event_filter_test.c        |  4 ++--
+ 5 files changed, 12 insertions(+), 15 deletions(-)
+
+diff --git a/arch/x86/kvm/pmu.c b/arch/x86/kvm/pmu.c
+index 62d0ed99ebe9..311f24344939 100644
+--- a/arch/x86/kvm/pmu.c
++++ b/arch/x86/kvm/pmu.c
+@@ -415,7 +415,7 @@ void pmc_write_counter(struct kvm_pmc *pmc, u64 val)
+ 	 * Drop any unconsumed accumulated counts, the WRMSR is a write, not a
+ 	 * read-modify-write.  Adjust the counter value so that its value is
+ 	 * relative to the current count, as reading the current count from
+-	 * perf is faster than pausing and repgrogramming the event in order to
++	 * perf is faster than pausing and reprogramming the event in order to
+ 	 * reset it to '0'.  Note, this very sneakily offsets the accumulated
+ 	 * emulated count too, by using pmc_read_counter()!
+ 	 */
+@@ -434,7 +434,6 @@ static int filter_cmp(const void *pa, const void *pb, u64 mask)
+ 	return (a > b) - (a < b);
+ }
+ 
+-
+ static int filter_sort_cmp(const void *pa, const void *pb)
+ {
+ 	return filter_cmp(pa, pb, (KVM_PMU_MASKED_ENTRY_EVENT_SELECT |
+@@ -670,7 +669,7 @@ void kvm_pmu_handle_event(struct kvm_vcpu *vcpu)
+ 	/*
+ 	 * The reprogramming bitmap can be written asynchronously by something
+ 	 * other than the task that holds vcpu->mutex, take care to clear only
+-	 * the bits that will actually processed.
++	 * the bits that will actually be processed.
+ 	 */
+ 	BUILD_BUG_ON(sizeof(bitmap) != sizeof(atomic64_t));
+ 	atomic64_andnot(*(s64 *)bitmap, &pmu->__reprogram_pmi);
+@@ -678,9 +677,9 @@ void kvm_pmu_handle_event(struct kvm_vcpu *vcpu)
+ 	kvm_for_each_pmc(pmu, pmc, bit, bitmap) {
+ 		/*
+ 		 * If reprogramming fails, e.g. due to contention, re-set the
+-		 * regprogram bit set, i.e. opportunistically try again on the
+-		 * next PMU refresh.  Don't make a new request as doing so can
+-		 * stall the guest if reprogramming repeatedly fails.
++		 * reprogram bit, i.e. opportunistically try again on the next
++		 * PMU refresh.  Don't make a new request as doing so can stall
++		 * the guest if reprogramming repeatedly fails.
+ 		 */
+ 		if (reprogram_counter(pmc))
+ 			set_bit(pmc->idx, pmu->reprogram_pmi);
+@@ -968,7 +967,6 @@ static void kvm_pmu_reset(struct kvm_vcpu *vcpu)
+ 	kvm_pmu_call(reset)(vcpu);
+ }
+ 
+-
+ /*
+  * Refresh the PMU configuration for the vCPU, e.g. if userspace changes CPUID
+  * and/or PERF_CAPABILITIES.
+diff --git a/arch/x86/kvm/pmu.h b/arch/x86/kvm/pmu.h
+index a5821d7c87f9..090c9bbb74f4 100644
+--- a/arch/x86/kvm/pmu.h
++++ b/arch/x86/kvm/pmu.h
+@@ -94,8 +94,8 @@ static inline bool kvm_vcpu_has_mediated_pmu(struct kvm_vcpu *vcpu)
+  * is tracked internally via index 32.  On Intel, (AMD doesn't support fixed
+  * counters), this mirrors how fixed counters are mapped to PERF_GLOBAL_CTRL
+  * and similar MSRs, i.e. tracking fixed counters at base index 32 reduces the
+- * amounter of boilerplate needed to iterate over PMCs *and* simplifies common
+- * enabling/disable/reset operations.
++ * amount of boilerplate needed to iterate over PMCs *and* simplifies common
++ * enable/disable/reset operations.
+  *
+  * WARNING!  This helper is only for lookups that are initiated by KVM, it is
+  * NOT safe for guest lookups, e.g. will do the wrong thing if passed a raw
+diff --git a/arch/x86/kvm/vmx/pmu_intel.c b/arch/x86/kvm/vmx/pmu_intel.c
+index a73a9515d96c..70ef84aa1a22 100644
+--- a/arch/x86/kvm/vmx/pmu_intel.c
++++ b/arch/x86/kvm/vmx/pmu_intel.c
+@@ -795,7 +795,6 @@ static void intel_pmu_write_global_ctrl(u64 global_ctrl)
+ 	vmcs_write64(GUEST_IA32_PERF_GLOBAL_CTRL, global_ctrl);
+ }
+ 
+-
+ static void intel_mediated_pmu_load(struct kvm_vcpu *vcpu)
+ {
+ 	struct kvm_pmu *pmu = vcpu_to_pmu(vcpu);
+diff --git a/tools/testing/selftests/kvm/x86/pmu_counters_test.c b/tools/testing/selftests/kvm/x86/pmu_counters_test.c
+index dc6afac3aa91..03672ca6b3dd 100644
+--- a/tools/testing/selftests/kvm/x86/pmu_counters_test.c
++++ b/tools/testing/selftests/kvm/x86/pmu_counters_test.c
+@@ -146,9 +146,9 @@ static u8 guest_get_pmu_version(void)
+ 
+ /*
+  * If an architectural event is supported and guaranteed to generate at least
+- * one "hit, assert that its count is non-zero.  If an event isn't supported or
+- * the test can't guarantee the associated action will occur, then all bets are
+- * off regarding the count, i.e. no checks can be done.
++ * one "hit", assert that its count is non-zero.  If an event isn't supported
++ * or the test can't guarantee the associated action will occur, then all bets
++ * are off regarding the count, i.e. no checks can be done.
+  *
+  * Sanity check that in all cases, the event doesn't count when it's disabled,
+  * and that KVM correctly emulates the write of an arbitrary value.
+diff --git a/tools/testing/selftests/kvm/x86/pmu_event_filter_test.c b/tools/testing/selftests/kvm/x86/pmu_event_filter_test.c
+index 84e4c6ca67a3..2d401ff09112 100644
+--- a/tools/testing/selftests/kvm/x86/pmu_event_filter_test.c
++++ b/tools/testing/selftests/kvm/x86/pmu_event_filter_test.c
+@@ -62,7 +62,7 @@ struct {
+ 
+ /*
+  * If we encounter a #GP during the guest PMU sanity check, then the guest
+- * PMU is not functional. Inform the hypervisor via GUEST_SYNC(0).
++ * PMU is not functional. Inform the hypervisor via GUEST_SYNC(-EFAULT).
+  */
+ static void guest_gp_handler(struct ex_regs *regs)
+ {
+@@ -73,7 +73,7 @@ static void guest_gp_handler(struct ex_regs *regs)
+  * Check that we can write a new value to the given MSR and read it back.
+  * The caller should provide a non-empty set of bits that are safe to flip.
+  *
+- * Return on success. GUEST_SYNC(0) on error.
++ * Return on success, GUEST_SYNC(-EIO) on error.
+  */
+ static void check_msr(u32 msr, u64 bits_to_flip)
+ {
+-- 
+2.55.0
+

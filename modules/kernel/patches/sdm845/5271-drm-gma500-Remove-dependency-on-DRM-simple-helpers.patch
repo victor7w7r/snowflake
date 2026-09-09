@@ -1,0 +1,280 @@
+From 6143359440d41d4c571435c9cd2fbaf9f8dc2788 Mon Sep 17 00:00:00 2001
+From: Diogo Silva <diogompaissilva@gmail.com>
+Date: Tue, 23 Jun 2026 21:38:33 +0200
+Subject: [PATCH 05271/15333] drm/gma500: Remove dependency on DRM simple
+ helpers
+
+Simple KMS helper are deprecated since they only add an intermediate
+layer between drivers and the atomic modesetting.
+This patch removes the dependency on drm simple helpers from gma500
+DRM drivers.
+
+Signed-off-by: Diogo Silva <diogompaissilva@gmail.com>
+Reviewed-by: Thomas Zimmermann <tzimmermann@suse.de>
+Signed-off-by: Thomas Zimmermann <tzimmermann@suse.de>
+Link: https://patch.msgid.link/20260623-gma-drm-simple-v1-1-c404a5e62aab@gmail.com
+---
+ drivers/gpu/drm/gma500/cdv_intel_crt.c  |  9 +++++++--
+ drivers/gpu/drm/gma500/cdv_intel_dp.c   |  9 +++++++--
+ drivers/gpu/drm/gma500/cdv_intel_hdmi.c | 10 +++++++---
+ drivers/gpu/drm/gma500/cdv_intel_lvds.c |  9 +++++++--
+ drivers/gpu/drm/gma500/oaktrail_hdmi.c  |  9 +++++++--
+ drivers/gpu/drm/gma500/oaktrail_lvds.c  |  9 +++++++--
+ drivers/gpu/drm/gma500/psb_intel_lvds.c |  9 +++++++--
+ 7 files changed, 49 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/gpu/drm/gma500/cdv_intel_crt.c b/drivers/gpu/drm/gma500/cdv_intel_crt.c
+index 342a57c82846..e51a965ddeb8 100644
+--- a/drivers/gpu/drm/gma500/cdv_intel_crt.c
++++ b/drivers/gpu/drm/gma500/cdv_intel_crt.c
+@@ -29,8 +29,8 @@
+ #include <linux/pm_runtime.h>
+ 
+ #include <drm/drm_crtc_helper.h>
++#include <drm/drm_encoder.h>
+ #include <drm/drm_modeset_helper_vtables.h>
+-#include <drm/drm_simple_kms_helper.h>
+ 
+ #include "cdv_device.h"
+ #include "intel_bios.h"
+@@ -217,6 +217,10 @@ static int cdv_intel_crt_set_property(struct drm_connector *connector,
+  * Routines for controlling stuff on the analog port
+  */
+ 
++static const struct drm_encoder_funcs cdv_intel_crt_funcs = {
++	.destroy = drm_encoder_cleanup,
++};
++
+ static const struct drm_encoder_helper_funcs cdv_intel_crt_helper_funcs = {
+ 	.dpms = cdv_intel_crt_dpms,
+ 	.prepare = gma_encoder_prepare,
+@@ -275,7 +279,8 @@ void cdv_intel_crt_init(struct drm_device *dev,
+ 		goto err_ddc_destroy;
+ 
+ 	encoder = &gma_encoder->base;
+-	ret = drm_simple_encoder_init(dev, encoder, DRM_MODE_ENCODER_DAC);
++	ret = drm_encoder_init(dev, encoder, &cdv_intel_crt_funcs,
++			       DRM_MODE_ENCODER_DAC, NULL);
+ 	if (ret)
+ 		goto err_connector_cleanup;
+ 
+diff --git a/drivers/gpu/drm/gma500/cdv_intel_dp.c b/drivers/gpu/drm/gma500/cdv_intel_dp.c
+index 7d08011d9663..8d0626ddf1c3 100644
+--- a/drivers/gpu/drm/gma500/cdv_intel_dp.c
++++ b/drivers/gpu/drm/gma500/cdv_intel_dp.c
+@@ -33,9 +33,9 @@
+ #include <drm/drm_crtc.h>
+ #include <drm/drm_crtc_helper.h>
+ #include <drm/drm_edid.h>
++#include <drm/drm_encoder.h>
+ #include <drm/drm_modeset_helper_vtables.h>
+ #include <drm/drm_print.h>
+-#include <drm/drm_simple_kms_helper.h>
+ 
+ #include "gma_display.h"
+ #include "psb_drv.h"
+@@ -1873,6 +1873,10 @@ cdv_intel_dp_destroy(struct drm_connector *connector)
+ 	kfree(gma_connector);
+ }
+ 
++static const struct drm_encoder_funcs cdv_intel_dp_funcs = {
++	.destroy = drm_encoder_cleanup,
++};
++
+ static const struct drm_encoder_helper_funcs cdv_intel_dp_helper_funcs = {
+ 	.dpms = cdv_intel_dp_dpms,
+ 	.mode_fixup = cdv_intel_dp_mode_fixup,
+@@ -1971,7 +1975,8 @@ cdv_intel_dp_init(struct drm_device *dev, struct psb_intel_mode_device *mode_dev
+ 	encoder = &gma_encoder->base;
+ 
+ 	drm_connector_init(dev, connector, &cdv_intel_dp_connector_funcs, type);
+-	drm_simple_encoder_init(dev, encoder, DRM_MODE_ENCODER_TMDS);
++	drm_encoder_init(dev, encoder, &cdv_intel_dp_funcs,
++			 DRM_MODE_ENCODER_TMDS, NULL);
+ 
+ 	gma_connector_attach_encoder(gma_connector, gma_encoder);
+ 
+diff --git a/drivers/gpu/drm/gma500/cdv_intel_hdmi.c b/drivers/gpu/drm/gma500/cdv_intel_hdmi.c
+index ce7850647778..757ff9408250 100644
+--- a/drivers/gpu/drm/gma500/cdv_intel_hdmi.c
++++ b/drivers/gpu/drm/gma500/cdv_intel_hdmi.c
+@@ -30,9 +30,9 @@
+ #include <drm/drm_crtc.h>
+ #include <drm/drm_crtc_helper.h>
+ #include <drm/drm_edid.h>
++#include <drm/drm_encoder.h>
+ #include <drm/drm_modeset_helper_vtables.h>
+ #include <drm/drm_print.h>
+-#include <drm/drm_simple_kms_helper.h>
+ 
+ #include "cdv_device.h"
+ #include "psb_drv.h"
+@@ -251,6 +251,10 @@ static void cdv_hdmi_destroy(struct drm_connector *connector)
+ 	kfree(gma_connector);
+ }
+ 
++static const struct drm_encoder_funcs cdv_hdmi_funcs = {
++	.destroy = drm_encoder_cleanup,
++};
++
+ static const struct drm_encoder_helper_funcs cdv_hdmi_helper_funcs = {
+ 	.dpms = cdv_hdmi_dpms,
+ 	.prepare = gma_encoder_prepare,
+@@ -329,8 +333,8 @@ void cdv_hdmi_init(struct drm_device *dev,
+ 	if (ret)
+ 		goto err_ddc_destroy;
+ 
+-	ret = drm_simple_encoder_init(dev, &gma_encoder->base,
+-				      DRM_MODE_ENCODER_TMDS);
++	ret = drm_encoder_init(dev, &gma_encoder->base, &cdv_hdmi_funcs,
++			       DRM_MODE_ENCODER_TMDS, NULL);
+ 	if (ret)
+ 		goto err_connector_cleanup;
+ 
+diff --git a/drivers/gpu/drm/gma500/cdv_intel_lvds.c b/drivers/gpu/drm/gma500/cdv_intel_lvds.c
+index d7fd9a783cde..336ab411d699 100644
+--- a/drivers/gpu/drm/gma500/cdv_intel_lvds.c
++++ b/drivers/gpu/drm/gma500/cdv_intel_lvds.c
+@@ -13,9 +13,9 @@
+ #include <linux/pm_runtime.h>
+ 
+ #include <drm/drm_crtc_helper.h>
++#include <drm/drm_encoder.h>
+ #include <drm/drm_modeset_helper_vtables.h>
+ #include <drm/drm_print.h>
+-#include <drm/drm_simple_kms_helper.h>
+ 
+ #include "cdv_device.h"
+ #include "intel_bios.h"
+@@ -394,6 +394,10 @@ static int cdv_intel_lvds_set_property(struct drm_connector *connector,
+ 	return 0;
+ }
+ 
++static const struct drm_encoder_funcs cdv_intel_lvds_funcs = {
++	.destroy = drm_encoder_cleanup,
++};
++
+ static const struct drm_encoder_helper_funcs
+ 					cdv_intel_lvds_helper_funcs = {
+ 	.dpms = cdv_intel_lvds_encoder_dpms,
+@@ -535,7 +539,8 @@ void cdv_intel_lvds_init(struct drm_device *dev,
+ 	if (ret)
+ 		goto err_destroy_ddc;
+ 
+-	ret = drm_simple_encoder_init(dev, encoder, DRM_MODE_ENCODER_LVDS);
++	ret = drm_encoder_init(dev, encoder, &cdv_intel_lvds_funcs,
++			       DRM_MODE_ENCODER_LVDS, NULL);
+ 	if (ret)
+ 		goto err_connector_cleanup;
+ 
+diff --git a/drivers/gpu/drm/gma500/oaktrail_hdmi.c b/drivers/gpu/drm/gma500/oaktrail_hdmi.c
+index 403d21cbb3a2..5a6132176086 100644
+--- a/drivers/gpu/drm/gma500/oaktrail_hdmi.c
++++ b/drivers/gpu/drm/gma500/oaktrail_hdmi.c
+@@ -29,9 +29,9 @@
+ #include <drm/drm.h>
+ #include <drm/drm_crtc_helper.h>
+ #include <drm/drm_edid.h>
++#include <drm/drm_encoder.h>
+ #include <drm/drm_modeset_helper_vtables.h>
+ #include <drm/drm_print.h>
+-#include <drm/drm_simple_kms_helper.h>
+ 
+ #include "psb_drv.h"
+ #include "psb_intel_drv.h"
+@@ -605,6 +605,10 @@ static void oaktrail_hdmi_destroy(struct drm_connector *connector)
+ 	return;
+ }
+ 
++static const struct drm_encoder_funcs oaktrail_hdmi_funcs = {
++	.destroy = drm_encoder_cleanup,
++};
++
+ static const struct drm_encoder_helper_funcs oaktrail_hdmi_helper_funcs = {
+ 	.dpms = oaktrail_hdmi_dpms,
+ 	.prepare = gma_encoder_prepare,
+@@ -648,7 +652,8 @@ void oaktrail_hdmi_init(struct drm_device *dev,
+ 			   &oaktrail_hdmi_connector_funcs,
+ 			   DRM_MODE_CONNECTOR_DVID);
+ 
+-	drm_simple_encoder_init(dev, encoder, DRM_MODE_ENCODER_TMDS);
++	drm_encoder_init(dev, encoder, &oaktrail_hdmi_funcs,
++			 DRM_MODE_ENCODER_TMDS, NULL);
+ 
+ 	gma_connector_attach_encoder(gma_connector, gma_encoder);
+ 
+diff --git a/drivers/gpu/drm/gma500/oaktrail_lvds.c b/drivers/gpu/drm/gma500/oaktrail_lvds.c
+index e194d0cce067..425796d8d6c3 100644
+--- a/drivers/gpu/drm/gma500/oaktrail_lvds.c
++++ b/drivers/gpu/drm/gma500/oaktrail_lvds.c
+@@ -12,9 +12,9 @@
+ #include <linux/pm_runtime.h>
+ 
+ #include <drm/drm_edid.h>
++#include <drm/drm_encoder.h>
+ #include <drm/drm_modeset_helper_vtables.h>
+ #include <drm/drm_print.h>
+-#include <drm/drm_simple_kms_helper.h>
+ 
+ #include "intel_bios.h"
+ #include "power.h"
+@@ -202,6 +202,10 @@ static void oaktrail_lvds_commit(struct drm_encoder *encoder)
+ 	oaktrail_lvds_set_power(dev, gma_encoder, true);
+ }
+ 
++static const struct drm_encoder_funcs oaktrail_lvds_funcs = {
++	.destroy = drm_encoder_cleanup,
++};
++
+ static const struct drm_encoder_helper_funcs oaktrail_lvds_helper_funcs = {
+ 	.dpms = oaktrail_lvds_dpms,
+ 	.mode_fixup = psb_intel_lvds_mode_fixup,
+@@ -319,7 +323,8 @@ void oaktrail_lvds_init(struct drm_device *dev,
+ 	if (ret)
+ 		goto err_free_connector;
+ 
+-	ret = drm_simple_encoder_init(dev, encoder, DRM_MODE_ENCODER_LVDS);
++	ret = drm_encoder_init(dev, encoder, &oaktrail_lvds_funcs,
++			       DRM_MODE_ENCODER_LVDS, NULL);
+ 	if (ret)
+ 		goto err_connector_cleanup;
+ 
+diff --git a/drivers/gpu/drm/gma500/psb_intel_lvds.c b/drivers/gpu/drm/gma500/psb_intel_lvds.c
+index 2ca164b21293..cd882786d946 100644
+--- a/drivers/gpu/drm/gma500/psb_intel_lvds.c
++++ b/drivers/gpu/drm/gma500/psb_intel_lvds.c
+@@ -12,9 +12,9 @@
+ #include <linux/pm_runtime.h>
+ 
+ #include <drm/drm_crtc_helper.h>
++#include <drm/drm_encoder.h>
+ #include <drm/drm_modeset_helper_vtables.h>
+ #include <drm/drm_print.h>
+-#include <drm/drm_simple_kms_helper.h>
+ 
+ #include "intel_bios.h"
+ #include "power.h"
+@@ -593,6 +593,10 @@ int psb_intel_lvds_set_property(struct drm_connector *connector,
+ 	return -1;
+ }
+ 
++static const struct drm_encoder_funcs psb_intel_lvds_funcs = {
++	.destroy = drm_encoder_cleanup,
++};
++
+ static const struct drm_encoder_helper_funcs psb_intel_lvds_helper_funcs = {
+ 	.dpms = psb_intel_lvds_encoder_dpms,
+ 	.mode_fixup = psb_intel_lvds_mode_fixup,
+@@ -679,7 +683,8 @@ void psb_intel_lvds_init(struct drm_device *dev,
+ 	if (ret)
+ 		goto err_ddc_destroy;
+ 
+-	ret = drm_simple_encoder_init(dev, encoder, DRM_MODE_ENCODER_LVDS);
++	ret = drm_encoder_init(dev, encoder, &psb_intel_lvds_funcs,
++			       DRM_MODE_ENCODER_LVDS, NULL);
+ 	if (ret)
+ 		goto err_connector_cleanup;
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,340 @@
+From e655873885063245fd7f49f81cebfdfdef66a59d Mon Sep 17 00:00:00 2001
+From: Zhi Wang <zhiw@nvidia.com>
+Date: Thu, 4 Jun 2026 14:43:36 +0300
+Subject: [PATCH 00365/15333] gpu: nova-core: consolidate GSP boot parameters
+ into GspBootContext
+
+The GspHal trait methods boot() and post_boot() accept a long list of
+individual parameters (dev, bar, chipset, gsp_falcon, sec2_falcon) that
+are threaded through the entire GSP boot call chain. This makes the
+signatures unwieldy and difficult to extend as new boot-time context
+(e.g. vGPU state) is introduced.
+
+Introduce a GspBootContext struct that bundles the common boot
+parameters into a single object, and refactor the GspHal trait to accept
+&GspBootContext instead of individual arguments. The struct also exposes
+a dev() helper with proper lifetime annotation so that HAL
+implementations can extract the device reference without reborrowing
+constraints.
+
+Update both TU102 and GH100 HAL implementations to extract their
+required parameters from the context struct, and simplify the call sites
+in Gsp::boot() accordingly.
+
+Signed-off-by: Zhi Wang <zhiw@nvidia.com>
+Link: https://patch.msgid.link/20260604114339.1565660-7-zhiw@nvidia.com
+[acourbot: pass `GspBootContext` by value to `Gsp::boot`.]
+[acourbot: deconstruct `GspBootContext` in `Gsp::boot` to simplify diff.]
+Signed-off-by: Alexandre Courbot <acourbot@nvidia.com>
+---
+ drivers/gpu/nova-core/gpu.rs           | 11 +++++++--
+ drivers/gpu/nova-core/gsp.rs           | 22 ++++++++++++++++++
+ drivers/gpu/nova-core/gsp/boot.rs      | 25 ++++++---------------
+ drivers/gpu/nova-core/gsp/hal.rs       | 23 +++++--------------
+ drivers/gpu/nova-core/gsp/hal/gh100.rs | 14 +++++++-----
+ drivers/gpu/nova-core/gsp/hal/tu102.rs | 31 +++++++++++---------------
+ 6 files changed, 64 insertions(+), 62 deletions(-)
+
+diff --git a/drivers/gpu/nova-core/gpu.rs b/drivers/gpu/nova-core/gpu.rs
+index b3c91731db45..6a9572107cf3 100644
+--- a/drivers/gpu/nova-core/gpu.rs
++++ b/drivers/gpu/nova-core/gpu.rs
+@@ -23,7 +23,8 @@
+     fb::SysmemFlush,
+     gsp::{
+         self,
+-        Gsp, //
++        Gsp,
++        GspBootContext, //
+     },
+     regs,
+ };
+@@ -323,7 +324,13 @@ pub(crate) fn new(
+             // This member must be initialized last, so the `UnloadBundle` can never be dropped from
+             // outside of the constructed `Gpu`, ensuring that the unload sequence is properly run
+             // in case of failure.
+-            unload_bundle: gsp.boot(pdev, bar, spec.chipset, gsp_falcon, sec2_falcon)?,
++            unload_bundle: gsp.boot(GspBootContext {
++                pdev,
++                bar,
++                chipset: spec.chipset,
++                gsp_falcon,
++                sec2_falcon,
++            })?,
+             bar,
+         })
+     }
+diff --git a/drivers/gpu/nova-core/gsp.rs b/drivers/gpu/nova-core/gsp.rs
+index 385b4c09582b..3876208779ad 100644
+--- a/drivers/gpu/nova-core/gsp.rs
++++ b/drivers/gpu/nova-core/gsp.rs
+@@ -32,6 +32,13 @@
+ };
+ 
+ use crate::{
++    driver::Bar0,
++    falcon::{
++        gsp::Gsp as GspFalcon,
++        sec2::Sec2 as Sec2Falcon,
++        Falcon, //
++    },
++    gpu::Chipset,
+     gsp::cmdq::Cmdq,
+     gsp::fw::{
+         GspArgumentsPadded,
+@@ -43,6 +50,21 @@
+ pub(crate) const GSP_PAGE_SHIFT: usize = 12;
+ pub(crate) const GSP_PAGE_SIZE: usize = 1 << GSP_PAGE_SHIFT;
+ 
++/// Common context for the GSP boot process.
++pub(crate) struct GspBootContext<'a> {
++    pub(crate) pdev: &'a pci::Device<device::Bound>,
++    pub(crate) bar: Bar0<'a>,
++    pub(crate) chipset: Chipset,
++    pub(crate) gsp_falcon: &'a Falcon<GspFalcon>,
++    pub(crate) sec2_falcon: &'a Falcon<Sec2Falcon>,
++}
++
++impl<'a> GspBootContext<'a> {
++    pub(crate) fn dev(&self) -> &'a device::Device<device::Bound> {
++        self.pdev.as_ref()
++    }
++}
++
+ /// Number of GSP pages to use in a RM log buffer.
+ const RM_LOG_BUFFER_NUM_PAGES: usize = 0x10;
+ const LOG_BUFFER_SIZE: usize = RM_LOG_BUFFER_NUM_PAGES * GSP_PAGE_SIZE;
+diff --git a/drivers/gpu/nova-core/gsp/boot.rs b/drivers/gpu/nova-core/gsp/boot.rs
+index 8afb62d689cb..e380334e937b 100644
+--- a/drivers/gpu/nova-core/gsp/boot.rs
++++ b/drivers/gpu/nova-core/gsp/boot.rs
+@@ -6,7 +6,6 @@
+     device,
+     dma::Coherent,
+     io::poll::read_poll_timeout,
+-    pci,
+     prelude::*,
+     time::Delta,
+     types::ScopeGuard, //
+@@ -24,7 +23,6 @@
+         gsp::GspFirmware,
+         FIRMWARE_VERSION, //
+     },
+-    gpu::Chipset,
+     gsp::{
+         cmdq::Cmdq,
+         commands,
+@@ -103,12 +101,12 @@ impl super::Gsp {
+     /// [`Self::unload`]) returned.
+     pub(crate) fn boot(
+         self: Pin<&mut Self>,
+-        pdev: &pci::Device<device::Bound>,
+-        bar: Bar0<'_>,
+-        chipset: Chipset,
+-        gsp_falcon: &Falcon<Gsp>,
+-        sec2_falcon: &Falcon<Sec2>,
++        ctx: super::GspBootContext<'_>,
+     ) -> Result<Option<super::UnloadBundle>> {
++        let pdev = ctx.pdev;
++        let bar = ctx.bar;
++        let chipset = ctx.chipset;
++        let gsp_falcon = ctx.gsp_falcon;
+         let dev = pdev.as_ref();
+         let hal = super::hal::gsp_hal(chipset);
+ 
+@@ -120,16 +118,7 @@ pub(crate) fn boot(
+         let wpr_meta = Coherent::init(dev, GFP_KERNEL, GspFwWprMeta::new(&gsp_fw, &fb_layout))?;
+ 
+         // Perform the chipset-specific boot sequence, and retrieve the unload bundle.
+-        let unload_guard = hal.boot(
+-            &self,
+-            dev,
+-            bar,
+-            chipset,
+-            &fb_layout,
+-            &wpr_meta,
+-            gsp_falcon,
+-            sec2_falcon,
+-        )?;
++        let unload_guard = hal.boot(&self, &ctx, &fb_layout, &wpr_meta)?;
+ 
+         gsp_falcon.write_os_version(bar, gsp_fw.bootloader.app_version);
+ 
+@@ -148,7 +137,7 @@ pub(crate) fn boot(
+         self.cmdq
+             .send_command_no_wait(bar, commands::SetRegistry::new())?;
+ 
+-        hal.post_boot(&self, dev, bar, &gsp_fw, gsp_falcon, sec2_falcon)?;
++        hal.post_boot(&self, &ctx, &gsp_fw)?;
+ 
+         // Wait until GSP is fully initialized.
+         commands::wait_gsp_init_done(&self.cmdq)?;
+diff --git a/drivers/gpu/nova-core/gsp/hal.rs b/drivers/gpu/nova-core/gsp/hal.rs
+index 04f004856c60..51a277fe97bb 100644
+--- a/drivers/gpu/nova-core/gsp/hal.rs
++++ b/drivers/gpu/nova-core/gsp/hal.rs
+@@ -4,11 +4,10 @@
+ mod gh100;
+ mod tu102;
+ 
+-use kernel::prelude::*;
+-
+ use kernel::{
+     device,
+-    dma::Coherent, //
++    dma::Coherent,
++    prelude::*, //
+ };
+ 
+ use crate::{
+@@ -27,6 +26,7 @@
+     gsp::{
+         boot::BootUnloadGuard,
+         Gsp,
++        GspBootContext,
+         GspFwWprMeta, //
+     },
+ };
+@@ -53,32 +53,19 @@ pub(super) trait GspHal: Send {
+     ///
+     /// Upon success, returns a guard that runs the GSP unload sequence if GSP boot does not
+     /// complete.
+-    #[allow(clippy::too_many_arguments)]
+     fn boot<'a>(
+         &self,
+         gsp: &'a Gsp,
+-        dev: &'a device::Device<device::Bound>,
+-        bar: Bar0<'a>,
+-        chipset: Chipset,
++        ctx: &GspBootContext<'a>,
+         fb_layout: &FbLayout,
+         wpr_meta: &Coherent<GspFwWprMeta>,
+-        gsp_falcon: &'a Falcon<GspEngine>,
+-        sec2_falcon: &'a Falcon<Sec2>,
+     ) -> Result<BootUnloadGuard<'a>>;
+ 
+     /// Performs HAL-specific post-GSP boot tasks.
+     ///
+     /// This method is called by the GSP boot code after the GSP is confirmed to be running, and
+     /// after the initialization commands have been pushed onto its queue.
+-    fn post_boot(
+-        &self,
+-        _gsp: &Gsp,
+-        _dev: &device::Device<device::Bound>,
+-        _bar: Bar0<'_>,
+-        _gsp_fw: &GspFirmware,
+-        _gsp_falcon: &Falcon<GspEngine>,
+-        _sec2_falcon: &Falcon<Sec2>,
+-    ) -> Result {
++    fn post_boot(&self, _gsp: &Gsp, _ctx: &GspBootContext<'_>, _gsp_fw: &GspFirmware) -> Result {
+         Ok(())
+     }
+ }
+diff --git a/drivers/gpu/nova-core/gsp/hal/gh100.rs b/drivers/gpu/nova-core/gsp/hal/gh100.rs
+index 98f5ce197d13..c9fdc8cacedc 100644
+--- a/drivers/gpu/nova-core/gsp/hal/gh100.rs
++++ b/drivers/gpu/nova-core/gsp/hal/gh100.rs
+@@ -26,7 +26,6 @@
+         FmcBootArgs,
+         Fsp, //
+     },
+-    gpu::Chipset,
+     gsp::{
+         boot::BootUnloadGuard,
+         hal::{
+@@ -34,6 +33,7 @@
+             UnloadBundle, //
+         },
+         Gsp,
++        GspBootContext,
+         GspFwWprMeta, //
+     },
+ };
+@@ -152,14 +152,16 @@ impl GspHal for Gh100 {
+     fn boot<'a>(
+         &self,
+         gsp: &'a Gsp,
+-        dev: &'a device::Device<device::Bound>,
+-        bar: Bar0<'a>,
+-        chipset: Chipset,
++        ctx: &GspBootContext<'a>,
+         fb_layout: &FbLayout,
+         wpr_meta: &Coherent<GspFwWprMeta>,
+-        gsp_falcon: &'a Falcon<GspEngine>,
+-        sec2_falcon: &'a Falcon<Sec2>,
+     ) -> Result<BootUnloadGuard<'a>> {
++        let dev = ctx.dev();
++        let bar = ctx.bar;
++        let chipset = ctx.chipset;
++        let gsp_falcon = ctx.gsp_falcon;
++        let sec2_falcon = ctx.sec2_falcon;
++
+         let fsp_fw = FspFirmware::new(dev, chipset, FIRMWARE_VERSION)?;
+ 
+         let unload_bundle = crate::gsp::UnloadBundle(
+diff --git a/drivers/gpu/nova-core/gsp/hal/tu102.rs b/drivers/gpu/nova-core/gsp/hal/tu102.rs
+index eb7166148cc9..f8a8541704ee 100644
+--- a/drivers/gpu/nova-core/gsp/hal/tu102.rs
++++ b/drivers/gpu/nova-core/gsp/hal/tu102.rs
+@@ -42,6 +42,7 @@
+             GspSequencerParams, //
+         },
+         Gsp,
++        GspBootContext,
+         GspFwWprMeta, //
+     },
+     regs,
+@@ -269,14 +270,16 @@ impl GspHal for Tu102 {
+     fn boot<'a>(
+         &self,
+         gsp: &'a Gsp,
+-        dev: &'a device::Device<device::Bound>,
+-        bar: Bar0<'a>,
+-        chipset: Chipset,
++        ctx: &GspBootContext<'a>,
+         fb_layout: &FbLayout,
+         wpr_meta: &Coherent<GspFwWprMeta>,
+-        gsp_falcon: &'a Falcon<GspEngine>,
+-        sec2_falcon: &'a Falcon<Sec2>,
+     ) -> Result<BootUnloadGuard<'a>> {
++        let dev = ctx.dev();
++        let bar = ctx.bar;
++        let chipset = ctx.chipset;
++        let gsp_falcon = ctx.gsp_falcon;
++        let sec2_falcon = ctx.sec2_falcon;
++
+         let bios = Vbios::new(dev, bar)?;
+ 
+         // Try and prepare the unload bundle.
+@@ -332,23 +335,15 @@ fn boot<'a>(
+         Ok(unload_guard)
+     }
+ 
+-    fn post_boot(
+-        &self,
+-        gsp: &Gsp,
+-        dev: &device::Device<device::Bound>,
+-        bar: Bar0<'_>,
+-        gsp_fw: &GspFirmware,
+-        gsp_falcon: &Falcon<GspEngine>,
+-        sec2_falcon: &Falcon<Sec2>,
+-    ) -> Result {
++    fn post_boot(&self, gsp: &Gsp, ctx: &GspBootContext<'_>, gsp_fw: &GspFirmware) -> Result {
+         // Create and run the GSP sequencer.
+         let seq_params = GspSequencerParams {
+             bootloader_app_version: gsp_fw.bootloader.app_version,
+             libos_dma_handle: gsp.libos.dma_handle(),
+-            gsp_falcon,
+-            sec2_falcon,
+-            dev,
+-            bar,
++            gsp_falcon: ctx.gsp_falcon,
++            sec2_falcon: ctx.sec2_falcon,
++            dev: ctx.dev(),
++            bar: ctx.bar,
+         };
+         GspSequencer::run(&gsp.cmdq, seq_params)?;
+ 
+-- 
+2.55.0
+

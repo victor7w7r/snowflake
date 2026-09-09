@@ -1,0 +1,48 @@
+From 26c602eea1f8ac9154c44e5e206f35335f16e025 Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Wed, 29 Jul 2026 10:37:31 +0200
+Subject: [PATCH 09199/15333] ALSA: pcxhr: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260729083735.120219-14-tiwai@suse.de
+---
+ sound/pci/pcxhr/pcxhr_hwdep.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/sound/pci/pcxhr/pcxhr_hwdep.c b/sound/pci/pcxhr/pcxhr_hwdep.c
+index 249805065f61..54f3950579aa 100644
+--- a/sound/pci/pcxhr/pcxhr_hwdep.c
++++ b/sound/pci/pcxhr/pcxhr_hwdep.c
+@@ -367,7 +367,6 @@ int pcxhr_setup_firmware(struct pcxhr_mgr *mgr)
+ 	};
+ 	char path[32];
+ 
+-	const struct firmware *fw_entry;
+ 	int i, err;
+ 	int fw_set = mgr->fw_file_set;
+ 
+@@ -375,6 +374,7 @@ int pcxhr_setup_firmware(struct pcxhr_mgr *mgr)
+ 		if (!fw_files[fw_set][i])
+ 			continue;
+ 		sprintf(path, "pcxhr/%s", fw_files[fw_set][i]);
++		const struct firmware *fw_entry __free(firmware) = NULL;
+ 		if (request_firmware(&fw_entry, path, &mgr->pci->dev)) {
+ 			dev_err(&mgr->pci->dev,
+ 				"pcxhr: can't load firmware %s\n",
+@@ -383,7 +383,6 @@ int pcxhr_setup_firmware(struct pcxhr_mgr *mgr)
+ 		}
+ 		/* fake hwdep dsp record */
+ 		err = pcxhr_dsp_load(mgr, i, fw_entry);
+-		release_firmware(fw_entry);
+ 		if (err < 0)
+ 			return err;
+ 		mgr->dsp_loaded |= 1 << i;
+-- 
+2.55.0
+

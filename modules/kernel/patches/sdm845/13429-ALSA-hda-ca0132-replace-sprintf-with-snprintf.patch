@@ -1,0 +1,79 @@
+From 59a2cd69b44007fa59566bc52da107fc2b814cf0 Mon Sep 17 00:00:00 2001
+From: Bob Song <songxiebing@kylinos.cn>
+Date: Wed, 12 Aug 2026 11:30:30 +0800
+Subject: [PATCH 13429/15333] ALSA: hda/ca0132: replace sprintf() with
+ snprintf()
+
+Replace six sprintf() calls that write to
+SNDRV_CTL_ELEM_ID_NAME_MAXLEN-sized buffers with snprintf() to avoid
+potential buffer overflows.
+
+Signed-off-by: Bob Song <songxiebing@kylinos.cn>
+Link: https://patch.msgid.link/20260812033030.635417-1-songxiebing@kylinos.cn
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+---
+ sound/hda/codecs/ca0132.c | 19 ++++++++++---------
+ 1 file changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/sound/hda/codecs/ca0132.c b/sound/hda/codecs/ca0132.c
+index aa2635d8ab92..0f8fb62f021d 100644
+--- a/sound/hda/codecs/ca0132.c
++++ b/sound/hda/codecs/ca0132.c
+@@ -5788,7 +5788,8 @@ static int ca0132_alt_mic_boost_info(struct snd_kcontrol *kcontrol,
+ 	uinfo->value.enumerated.items = MIC_BOOST_NUM_OF_STEPS;
+ 	if (uinfo->value.enumerated.item >= MIC_BOOST_NUM_OF_STEPS)
+ 		uinfo->value.enumerated.item = MIC_BOOST_NUM_OF_STEPS - 1;
+-	sprintf(namestr, "%d %s", (uinfo->value.enumerated.item * 10), sfx);
++	snprintf(namestr, sizeof(namestr), "%d %s",
++		 (uinfo->value.enumerated.item * 10), sfx);
+ 	strscpy(uinfo->value.enumerated.name, namestr);
+ 	return 0;
+ }
+@@ -5840,9 +5841,9 @@ static int ae5_headphone_gain_info(struct snd_kcontrol *kcontrol,
+ 	uinfo->value.enumerated.items = AE5_HEADPHONE_GAIN_MAX;
+ 	if (uinfo->value.enumerated.item >= AE5_HEADPHONE_GAIN_MAX)
+ 		uinfo->value.enumerated.item = AE5_HEADPHONE_GAIN_MAX - 1;
+-	sprintf(namestr, "%s %s",
+-		ae5_headphone_gain_presets[uinfo->value.enumerated.item].name,
+-		sfx);
++	snprintf(namestr, sizeof(namestr), "%s %s",
++		 ae5_headphone_gain_presets[uinfo->value.enumerated.item].name,
++		 sfx);
+ 	strscpy(uinfo->value.enumerated.name, namestr);
+ 	return 0;
+ }
+@@ -5894,8 +5895,8 @@ static int ae5_sound_filter_info(struct snd_kcontrol *kcontrol,
+ 	uinfo->value.enumerated.items = AE5_SOUND_FILTER_MAX;
+ 	if (uinfo->value.enumerated.item >= AE5_SOUND_FILTER_MAX)
+ 		uinfo->value.enumerated.item = AE5_SOUND_FILTER_MAX - 1;
+-	sprintf(namestr, "%s",
+-			ae5_filter_presets[uinfo->value.enumerated.item].name);
++	snprintf(namestr, sizeof(namestr), "%s",
++		 ae5_filter_presets[uinfo->value.enumerated.item].name);
+ 	strscpy(uinfo->value.enumerated.name, namestr);
+ 	return 0;
+ }
+@@ -6632,7 +6633,7 @@ static int ca0132_alt_add_effect_slider(struct hda_codec *codec, hda_nid_t nid,
+ 	struct snd_kcontrol_new knew =
+ 		HDA_CODEC_VOLUME_MONO(namestr, nid, 1, 0, type);
+ 
+-	sprintf(namestr, "FX: %s %s Volume", pfx, dirstr[dir]);
++	snprintf(namestr, sizeof(namestr), "FX: %s %s Volume", pfx, dirstr[dir]);
+ 
+ 	knew.tlv.c = NULL;
+ 
+@@ -6671,9 +6672,9 @@ static int add_fx_switch(struct hda_codec *codec, hda_nid_t nid,
+ 	 * prefix to OutFX or InFX enable controls.
+ 	 */
+ 	if (ca0132_use_alt_controls(spec) && (nid <= IN_EFFECT_END_NID))
+-		sprintf(namestr, "FX: %s %s Switch", pfx, dirstr[dir]);
++		snprintf(namestr, sizeof(namestr), "FX: %s %s Switch", pfx, dirstr[dir]);
+ 	else
+-		sprintf(namestr, "%s %s Switch", pfx, dirstr[dir]);
++		snprintf(namestr, sizeof(namestr), "%s %s Switch", pfx, dirstr[dir]);
+ 
+ 	return snd_hda_ctl_add(codec, nid, snd_ctl_new1(&knew, codec));
+ }
+-- 
+2.55.0
+

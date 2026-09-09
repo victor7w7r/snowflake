@@ -1,0 +1,67 @@
+From 523c01b12ec141926ae39b9b538c2ca12e899225 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Thu, 23 Jul 2026 18:10:14 +0700
+Subject: [PATCH 08577/15333] ASoC: starfive: jh7110_tdm: Drop redundant error
+ messages
+
+The called functions already log failures where appropriate. Return the
+original error directly and avoid duplicate error messages.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260723111014.54071-5-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/starfive/jh7110_tdm.c | 16 ++++------------
+ 1 file changed, 4 insertions(+), 12 deletions(-)
+
+diff --git a/sound/soc/starfive/jh7110_tdm.c b/sound/soc/starfive/jh7110_tdm.c
+index 5365ebe44471..f7522bfbe8e6 100644
+--- a/sound/soc/starfive/jh7110_tdm.c
++++ b/sound/soc/starfive/jh7110_tdm.c
+@@ -559,10 +559,8 @@ static int jh7110_tdm_clk_reset_get(struct platform_device *pdev,
+ 	tdm->clks[5].id = "tdm";
+ 
+ 	ret = devm_clk_bulk_get(&pdev->dev, ARRAY_SIZE(tdm->clks), tdm->clks);
+-	if (ret) {
+-		dev_err(&pdev->dev, "Failed to get tdm clocks\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	tdm->resets = devm_reset_control_array_get_exclusive(&pdev->dev);
+ 	if (IS_ERR(tdm->resets)) {
+@@ -589,28 +587,22 @@ static int jh7110_tdm_probe(struct platform_device *pdev)
+ 	tdm->dev = &pdev->dev;
+ 
+ 	ret = jh7110_tdm_clk_reset_get(pdev, tdm);
+-	if (ret) {
+-		dev_err(&pdev->dev, "Failed to enable audio-tdm clock\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	jh7110_tdm_init_params(tdm);
+ 
+ 	dev_set_drvdata(&pdev->dev, tdm);
+ 	ret = devm_snd_soc_register_component(&pdev->dev, &jh7110_tdm_component,
+ 					      &jh7110_tdm_dai, 1);
+-	if (ret) {
+-		dev_err(&pdev->dev, "Failed to register dai\n");
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	ret = devm_snd_dmaengine_pcm_register(&pdev->dev,
+ 					      &jh7110_dmaengine_pcm_config,
+ 					      SND_DMAENGINE_PCM_FLAG_COMPAT);
+-	if (ret) {
+-		dev_err(&pdev->dev, "Could not register pcm: %d\n", ret);
++	if (ret)
+ 		return ret;
+-	}
+ 
+ 	pm_runtime_enable(&pdev->dev);
+ 	if (!pm_runtime_enabled(&pdev->dev)) {
+-- 
+2.55.0
+

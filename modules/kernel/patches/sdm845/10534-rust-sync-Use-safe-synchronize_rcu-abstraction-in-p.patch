@@ -1,0 +1,54 @@
+From 47c3367ff096e66f614ed3cdadece26ffc04b5e8 Mon Sep 17 00:00:00 2001
+From: Philipp Stanner <phasta@kernel.org>
+Date: Wed, 24 Jun 2026 17:07:04 +0200
+Subject: [PATCH 10534/15333] rust: sync: Use safe synchronize_rcu()
+ abstraction in poll
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We now have a safe wrapper for the foreign function synchronize_rcu().
+
+Use it in poll.rs.
+
+Signed-off-by: Philipp Stanner <phasta@kernel.org>
+Reviewed-by: Alice Ryhl <aliceryhl@google.com>
+Reviewed-by: Onur Özkan <work@onurozkan.dev>
+Reviewed-by: Danilo Krummrich <dakr@kernel.org>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+Signed-off-by: Boqun Feng <boqun@kernel.org>
+Link: https://patch.msgid.link/20260624150704.1504001-5-phasta@kernel.org
+---
+ rust/kernel/sync/poll.rs | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/rust/kernel/sync/poll.rs b/rust/kernel/sync/poll.rs
+index 0ec985d560c8..5aa0ce9ba01b 100644
+--- a/rust/kernel/sync/poll.rs
++++ b/rust/kernel/sync/poll.rs
+@@ -8,7 +8,11 @@
+     bindings,
+     fs::File,
+     prelude::*,
+-    sync::{CondVar, LockClassKey},
++    sync::{
++        rcu::synchronize_rcu,
++        CondVar,
++        LockClassKey, //
++    }, //
+ };
+ use core::{marker::PhantomData, ops::Deref};
+ 
+@@ -99,8 +103,6 @@ fn drop(self: Pin<&mut Self>) {
+         unsafe { bindings::__wake_up_pollfree(self.inner.wait_queue_head.get()) };
+ 
+         // Wait for epoll items to be properly removed.
+-        //
+-        // SAFETY: Just an FFI call.
+-        unsafe { bindings::synchronize_rcu() };
++        synchronize_rcu();
+     }
+ }
+-- 
+2.55.0
+

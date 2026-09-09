@@ -1,0 +1,74 @@
+From 17bee9ee734e56d512ec7803eb7948adb56d1d9c Mon Sep 17 00:00:00 2001
+From: Yanan He <grumpycat921013@gmail.com>
+Date: Mon, 6 Jul 2026 17:14:44 +0800
+Subject: [PATCH 04082/15333] ARM: dts: rockchip: Add RV1126 I2C5
+
+The controller is present in the SoC and can be used by boards for
+external peripherals, such as an RTC on the Alientek DLRV1126 carrier
+board.
+
+Signed-off-by: Yanan He <grumpycat921013@gmail.com>
+Link: https://patch.msgid.link/20260706-rv1126-alientek-dlrv1126-v2-4-ff3176ca362b@gmail.com
+Signed-off-by: Heiko Stuebner <heiko@sntech.de>
+---
+ arch/arm/boot/dts/rockchip/rv1126-pinctrl.dtsi | 10 ++++++++++
+ arch/arm/boot/dts/rockchip/rv1126.dtsi         | 15 +++++++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/arch/arm/boot/dts/rockchip/rv1126-pinctrl.dtsi b/arch/arm/boot/dts/rockchip/rv1126-pinctrl.dtsi
+index 35ef6732281f..1d883b80aed4 100644
+--- a/arch/arm/boot/dts/rockchip/rv1126-pinctrl.dtsi
++++ b/arch/arm/boot/dts/rockchip/rv1126-pinctrl.dtsi
+@@ -123,6 +123,16 @@ i2c3m2_xfer: i2c3m2-xfer {
+ 				<1 RK_PD7 3 &pcfg_pull_none>;
+ 		};
+ 	};
++	i2c5 {
++		/omit-if-no-ref/
++		i2c5m0_xfer: i2c5m0-xfer {
++			rockchip,pins =
++				/* i2c5_scl_m0 */
++				<2 RK_PA5 7 &pcfg_pull_none_drv_level_0_smt>,
++				/* i2c5_sda_m0 */
++				<2 RK_PB3 7 &pcfg_pull_none_drv_level_0_smt>;
++		};
++	};
+ 	i2s0 {
+ 		i2s0m0_lrck_tx: i2s0m0-lrck-tx {
+ 			rockchip,pins =
+diff --git a/arch/arm/boot/dts/rockchip/rv1126.dtsi b/arch/arm/boot/dts/rockchip/rv1126.dtsi
+index d6e8b63daa42..d0cdc5f74212 100644
+--- a/arch/arm/boot/dts/rockchip/rv1126.dtsi
++++ b/arch/arm/boot/dts/rockchip/rv1126.dtsi
+@@ -23,6 +23,7 @@ aliases {
+ 		i2c0 = &i2c0;
+ 		i2c2 = &i2c2;
+ 		i2c3 = &i2c3;
++		i2c5 = &i2c5;
+ 		serial0 = &uart0;
+ 		serial1 = &uart1;
+ 		serial2 = &uart2;
+@@ -400,6 +401,20 @@ i2c3: i2c@ff520000 {
+ 		status = "disabled";
+ 	};
+ 
++	i2c5: i2c@ff540000 {
++		compatible = "rockchip,rv1126-i2c", "rockchip,rk3399-i2c";
++		reg = <0xff540000 0x1000>;
++		interrupts = <GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&cru CLK_I2C5>, <&cru PCLK_I2C5>;
++		clock-names = "i2c", "pclk";
++		pinctrl-names = "default";
++		pinctrl-0 = <&i2c5m0_xfer>;
++		rockchip,grf = <&pmugrf>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		status = "disabled";
++	};
++
+ 	pwm8: pwm@ff550000 {
+ 		compatible = "rockchip,rv1126-pwm", "rockchip,rk3328-pwm";
+ 		reg = <0xff550000 0x10>;
+-- 
+2.55.0
+

@@ -1,0 +1,54 @@
+From f6540105e0aaf6c1d3fec6070217f199bdc351f7 Mon Sep 17 00:00:00 2001
+From: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Date: Sat, 11 Jul 2026 15:25:04 +0200
+Subject: [PATCH 03930/15333] soc: qcom: Avoid SCM and SPM for cpuidle drivers
+
+QCOM_SCM and QCOM_SPM are user-selectable drivers, thus
+ARM_QCOM_SPM_CPUIDLE should rather avoid selecting them but instead
+depend to avoid any possible unmet dependencies.
+
+ARM_QCOM_SPM_CPUIDLE does use symbols from SCM and SPM, and since it
+cannot be built-in, the dependency must be as built-in.
+
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260711-qcom-soc-kconfig-v2-4-4a907e064281@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ drivers/cpuidle/Kconfig.arm | 4 ++--
+ drivers/soc/qcom/Kconfig    | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/cpuidle/Kconfig.arm b/drivers/cpuidle/Kconfig.arm
+index a1ee475d180d..b88b01aa5829 100644
+--- a/drivers/cpuidle/Kconfig.arm
++++ b/drivers/cpuidle/Kconfig.arm
+@@ -120,11 +120,11 @@ config ARM_QCOM_SPM_CPUIDLE
+ 	bool "CPU Idle Driver for Qualcomm Subsystem Power Manager (SPM)"
+ 	depends on (ARCH_QCOM || COMPILE_TEST) && !ARM64 && MMU
+ 	depends on ARCH_SUSPEND_POSSIBLE
++	depends on QCOM_SCM=y
++	depends on QCOM_SPM=y
+ 	select ARM_CPU_SUSPEND
+ 	select CPU_IDLE_MULTIPLE_DRIVERS
+ 	select DT_IDLE_STATES
+-	select QCOM_SCM
+-	select QCOM_SPM
+ 	help
+ 	  Select this to enable cpuidle for Qualcomm processors.
+ 	  The Subsystem Power Manager (SPM) controls low power modes for the
+diff --git a/drivers/soc/qcom/Kconfig b/drivers/soc/qcom/Kconfig
+index 4e6eac2769e5..fd4d4ecd2df0 100644
+--- a/drivers/soc/qcom/Kconfig
++++ b/drivers/soc/qcom/Kconfig
+@@ -227,7 +227,7 @@ config QCOM_SOCINFO
+ 
+ config QCOM_SPM
+ 	tristate "Qualcomm Subsystem Power Manager (SPM)"
+-	select QCOM_SCM
++	depends on QCOM_SCM
+ 	default ARCH_QCOM if ARM
+ 	help
+ 	  Enable the support for the Qualcomm Subsystem Power Manager, used
+-- 
+2.55.0
+

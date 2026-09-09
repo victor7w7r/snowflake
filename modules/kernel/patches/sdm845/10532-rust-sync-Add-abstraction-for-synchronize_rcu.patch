@@ -1,0 +1,51 @@
+From 1fb92e0625596985b3941925afe7906fef41214b Mon Sep 17 00:00:00 2001
+From: Philipp Stanner <phasta@kernel.org>
+Date: Wed, 24 Jun 2026 17:07:02 +0200
+Subject: [PATCH 10532/15333] rust: sync: Add abstraction for synchronize_rcu()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+synchronize_rcu() is a frequently used C function which is always safe
+to be called.
+
+Add a safe abstraction for synchronize_rcu().
+
+Signed-off-by: Philipp Stanner <phasta@kernel.org>
+Reviewed-by: Onur Özkan <work@onurozkan.dev>
+Reviewed-by: Danilo Krummrich <dakr@kernel.org>
+Reviewed-by: Gary Guo <gary@garyguo.net>
+[boqun: Fix rustdoc reported by kernel test robot <lkp@intel.com>]
+Signed-off-by: Boqun Feng <boqun@kernel.org>
+Link: https://patch.msgid.link/20260624150704.1504001-3-phasta@kernel.org
+---
+ rust/kernel/sync/rcu.rs | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/rust/kernel/sync/rcu.rs b/rust/kernel/sync/rcu.rs
+index a32bef6e490b..d867240be736 100644
+--- a/rust/kernel/sync/rcu.rs
++++ b/rust/kernel/sync/rcu.rs
+@@ -50,3 +50,19 @@ fn drop(&mut self) {
+ pub fn read_lock() -> Guard {
+     Guard::new()
+ }
++
++/// Wait for one RCU grace period.
++///
++/// Waits for all RCU read-side critical sections (such as those established by
++/// a [`Guard`]) at the moment of the function call to finish.
++///
++/// Does not prevent new read-side critical sections from starting, which may
++/// begin and run while this call is blocking.
++///
++/// Note that this is one of the RCU primitives which must not be called in
++/// atomic context.
++#[inline]
++pub fn synchronize_rcu() {
++    // SAFETY: `synchronize_rcu()` is always safe to be called from process context.
++    unsafe { bindings::synchronize_rcu() };
++}
+-- 
+2.55.0
+

@@ -1,0 +1,42 @@
+From d5e81a5650b5258c73768366db123b6d5bc48e32 Mon Sep 17 00:00:00 2001
+From: Yichong Chen <chenyichong@uniontech.com>
+Date: Fri, 31 Jul 2026 20:05:54 +0800
+Subject: [PATCH 14152/15333] kernfs: avoid iattr allocation in listxattr
+
+kernfs_iop_listxattr() only needs to report existing xattrs, but it uses
+kernfs_iattrs(), which allocates kernfs_iattrs when the node does not
+have one yet.
+
+This makes a query operation create persistent per-node metadata even
+when the xattr list is empty.
+
+Use kernfs_iattrs_noalloc() instead and return an empty list when no
+iattrs exist.
+
+Signed-off-by: Yichong Chen <chenyichong@uniontech.com>
+Acked-by: Tejun Heo <tj@kernel.org>
+Link: https://patch.msgid.link/20260731120554.630147-1-chenyichong@uniontech.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ fs/kernfs/inode.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/fs/kernfs/inode.c b/fs/kernfs/inode.c
+index 2cb20294aaf5..237dcdd73fc2 100644
+--- a/fs/kernfs/inode.c
++++ b/fs/kernfs/inode.c
+@@ -141,9 +141,9 @@ ssize_t kernfs_iop_listxattr(struct dentry *dentry, char *buf, size_t size)
+ 	struct kernfs_node *kn = kernfs_dentry_node(dentry);
+ 	struct kernfs_iattrs *attrs;
+ 
+-	attrs = kernfs_iattrs(kn);
++	attrs = kernfs_iattrs_noalloc(kn);
+ 	if (!attrs)
+-		return -ENOMEM;
++		return 0;
+ 
+ 	return simple_xattr_list(d_inode(dentry), &attrs->xattrs, buf, size);
+ }
+-- 
+2.55.0
+

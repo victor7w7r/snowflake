@@ -1,0 +1,183 @@
+From cab8a73970538cd29250a97089d8febf26a4b344 Mon Sep 17 00:00:00 2001
+From: Serhat Kumral <serhatkumral1@gmail.com>
+Date: Tue, 16 Jun 2026 03:01:17 +0300
+Subject: [PATCH 02894/15333] staging: rtl8723bs: rename ScanType to scan_type
+
+Rename the CamelCase field ScanType of struct rt_channel_info, as
+well as the relevant local variables, to scan_type to conform to
+the Linux kernel coding style guidelines.
+This also fixes several checkpatch.pl warnings:
+CHECK: Avoid CamelCase: <ScanType>
+
+Signed-off-by: Serhat Kumral <serhatkumral1@gmail.com>
+Link: https://patch.msgid.link/20260616000117.126504-2-serhatkumral1@gmail.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+---
+ drivers/staging/rtl8723bs/core/rtw_mlme_ext.c | 37 ++++++++++---------
+ .../staging/rtl8723bs/include/rtw_mlme_ext.h  |  2 +-
+ drivers/staging/rtl8723bs/os_dep/wifi_regd.c  |  2 +-
+ 3 files changed, 21 insertions(+), 20 deletions(-)
+
+diff --git a/drivers/staging/rtl8723bs/core/rtw_mlme_ext.c b/drivers/staging/rtl8723bs/core/rtw_mlme_ext.c
+index 7c4bdae13aa1..18f851401b4e 100644
+--- a/drivers/staging/rtl8723bs/core/rtw_mlme_ext.c
++++ b/drivers/staging/rtl8723bs/core/rtw_mlme_ext.c
+@@ -346,18 +346,18 @@ static u8 init_channel_set(struct adapter *padapter, u8 ChannelPlan, struct rt_c
+ 				(ChannelPlan == RT_CHANNEL_DOMAIN_GLOBAL_NULL)) {
+ 				if (channel_set[chanset_size].channel_num >= 1 &&
+ 				    channel_set[chanset_size].channel_num <= 11)
+-					channel_set[chanset_size].ScanType = SCAN_ACTIVE;
++					channel_set[chanset_size].scan_type = SCAN_ACTIVE;
+ 				else if (channel_set[chanset_size].channel_num  >= 12 &&
+ 					 channel_set[chanset_size].channel_num  <= 14)
+-					channel_set[chanset_size].ScanType  = SCAN_PASSIVE;
++					channel_set[chanset_size].scan_type  = SCAN_PASSIVE;
+ 			} else if (ChannelPlan == RT_CHANNEL_DOMAIN_WORLD_WIDE_13 ||
+ 				 Index2G == RT_CHANNEL_DOMAIN_2G_WORLD) { /*  channel 12~13, passive scan */
+ 				if (channel_set[chanset_size].channel_num <= 11)
+-					channel_set[chanset_size].ScanType = SCAN_ACTIVE;
++					channel_set[chanset_size].scan_type = SCAN_ACTIVE;
+ 				else
+-					channel_set[chanset_size].ScanType = SCAN_PASSIVE;
++					channel_set[chanset_size].scan_type = SCAN_PASSIVE;
+ 			} else
+-				channel_set[chanset_size].ScanType = SCAN_ACTIVE;
++				channel_set[chanset_size].scan_type = SCAN_ACTIVE;
+ 
+ 			chanset_size++;
+ 		}
+@@ -3689,7 +3689,7 @@ unsigned int send_beacon(struct adapter *padapter)
+ void site_survey(struct adapter *padapter)
+ {
+ 	unsigned char survey_channel = 0, val8;
+-	enum rt_scan_type	ScanType = SCAN_PASSIVE;
++	enum rt_scan_type	scan_type = SCAN_PASSIVE;
+ 	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;
+ 	struct mlme_ext_info *pmlmeinfo = &pmlmeext->mlmext_info;
+ 	u32 initialgain = 0;
+@@ -3701,7 +3701,8 @@ void site_survey(struct adapter *padapter)
+ 		if (pmlmeext->sitesurvey_res.channel_idx < pmlmeext->sitesurvey_res.ch_num) {
+ 			ch = &pmlmeext->sitesurvey_res.ch[pmlmeext->sitesurvey_res.channel_idx];
+ 			survey_channel = ch->hw_value;
+-			ScanType = (ch->flags & RTW_IEEE80211_CHAN_PASSIVE_SCAN) ? SCAN_PASSIVE : SCAN_ACTIVE;
++			scan_type = (ch->flags & RTW_IEEE80211_CHAN_PASSIVE_SCAN) ?
++				SCAN_PASSIVE : SCAN_ACTIVE;
+ 		}
+ 	}
+ 
+@@ -3712,7 +3713,7 @@ void site_survey(struct adapter *padapter)
+ 		else
+ 			r8723bs_select_channel(padapter, survey_channel);
+ 
+-		if (ScanType == SCAN_ACTIVE) { /* obey the channel plan setting... */
++		if (scan_type == SCAN_ACTIVE) { /* obey the channel plan setting... */
+ 			{
+ 				int i;
+ 
+@@ -4183,18 +4184,18 @@ static void process_80211d(struct adapter *padapter, struct wlan_bssid_ex *bssid
+ 
+ 				if (chplan_sta[i].channel_num == chplan_ap.Channel[j]) {
+ 					chplan_new[k].channel_num = chplan_ap.Channel[j];
+-					chplan_new[k].ScanType = SCAN_ACTIVE;
++					chplan_new[k].scan_type = SCAN_ACTIVE;
+ 					i++;
+ 					j++;
+ 					k++;
+ 				} else if (chplan_sta[i].channel_num < chplan_ap.Channel[j]) {
+ 					chplan_new[k].channel_num = chplan_sta[i].channel_num;
+-					chplan_new[k].ScanType = SCAN_PASSIVE;
++					chplan_new[k].scan_type = SCAN_PASSIVE;
+ 					i++;
+ 					k++;
+ 				} else if (chplan_sta[i].channel_num > chplan_ap.Channel[j]) {
+ 					chplan_new[k].channel_num = chplan_ap.Channel[j];
+-					chplan_new[k].ScanType = SCAN_ACTIVE;
++					chplan_new[k].scan_type = SCAN_ACTIVE;
+ 					j++;
+ 					k++;
+ 				}
+@@ -4205,7 +4206,7 @@ static void process_80211d(struct adapter *padapter, struct wlan_bssid_ex *bssid
+ 				(chplan_sta[i].channel_num != 0) &&
+ 				(chplan_sta[i].channel_num <= 14)) {
+ 				chplan_new[k].channel_num = chplan_sta[i].channel_num;
+-				chplan_new[k].ScanType = SCAN_PASSIVE;
++				chplan_new[k].scan_type = SCAN_PASSIVE;
+ 				i++;
+ 				k++;
+ 			}
+@@ -4213,7 +4214,7 @@ static void process_80211d(struct adapter *padapter, struct wlan_bssid_ex *bssid
+ 			/*  add channel AP supported */
+ 			while ((j < chplan_ap.Len) && (chplan_ap.Channel[j] <= 14)) {
+ 				chplan_new[k].channel_num = chplan_ap.Channel[j];
+-				chplan_new[k].ScanType = SCAN_ACTIVE;
++				chplan_new[k].scan_type = SCAN_ACTIVE;
+ 				j++;
+ 				k++;
+ 			}
+@@ -4223,7 +4224,7 @@ static void process_80211d(struct adapter *padapter, struct wlan_bssid_ex *bssid
+ 				(chplan_sta[i].channel_num != 0) &&
+ 				(chplan_sta[i].channel_num <= 14)) {
+ 				chplan_new[k].channel_num = chplan_sta[i].channel_num;
+-				chplan_new[k].ScanType = chplan_sta[i].ScanType;
++				chplan_new[k].scan_type = chplan_sta[i].scan_type;
+ 				i++;
+ 				k++;
+ 			}
+@@ -4242,8 +4243,8 @@ static void process_80211d(struct adapter *padapter, struct wlan_bssid_ex *bssid
+ 	i = 0;
+ 	while ((i < MAX_CHANNEL_NUM) && (chplan_new[i].channel_num != 0)) {
+ 		if (chplan_new[i].channel_num == channel) {
+-			if (chplan_new[i].ScanType == SCAN_PASSIVE)
+-				chplan_new[i].ScanType = SCAN_ACTIVE;
++			if (chplan_new[i].scan_type == SCAN_PASSIVE)
++				chplan_new[i].scan_type = SCAN_ACTIVE;
+ 			break;
+ 		}
+ 		i++;
+@@ -5313,7 +5314,7 @@ static int rtw_scan_ch_decision(struct adapter *padapter, struct rtw_ieee80211_c
+ 
+ 			memcpy(&out[j], &in[i], sizeof(struct rtw_ieee80211_channel));
+ 
+-			if (pmlmeext->channel_set[set_idx].ScanType == SCAN_PASSIVE)
++			if (pmlmeext->channel_set[set_idx].scan_type == SCAN_PASSIVE)
+ 				out[j].flags |= RTW_IEEE80211_CHAN_PASSIVE_SCAN;
+ 
+ 			j++;
+@@ -5335,7 +5336,7 @@ static int rtw_scan_ch_decision(struct adapter *padapter, struct rtw_ieee80211_c
+ 
+ 			out[j].hw_value = pmlmeext->channel_set[i].channel_num;
+ 
+-			if (pmlmeext->channel_set[i].ScanType == SCAN_PASSIVE)
++			if (pmlmeext->channel_set[i].scan_type == SCAN_PASSIVE)
+ 				out[j].flags |= RTW_IEEE80211_CHAN_PASSIVE_SCAN;
+ 
+ 			j++;
+diff --git a/drivers/staging/rtl8723bs/include/rtw_mlme_ext.h b/drivers/staging/rtl8723bs/include/rtw_mlme_ext.h
+index a2e0596ae207..786dc805516e 100644
+--- a/drivers/staging/rtl8723bs/include/rtw_mlme_ext.h
++++ b/drivers/staging/rtl8723bs/include/rtw_mlme_ext.h
+@@ -323,7 +323,7 @@ struct mlme_ext_info {
+ /*  The channel information about this channel including joining, scanning, and power constraints. */
+ struct rt_channel_info {
+ 	u8 channel_num;		/*  The channel number. */
+-	enum rt_scan_type	ScanType;		/*  Scan type such as passive or active scan. */
++	enum rt_scan_type scan_type;		/*  Scan type such as passive or active scan. */
+ };
+ 
+ int rtw_ch_set_search_ch(struct rt_channel_info *ch_set, const u32 ch);
+diff --git a/drivers/staging/rtl8723bs/os_dep/wifi_regd.c b/drivers/staging/rtl8723bs/os_dep/wifi_regd.c
+index ff2072eb3807..d201a18d78b0 100644
+--- a/drivers/staging/rtl8723bs/os_dep/wifi_regd.c
++++ b/drivers/staging/rtl8723bs/os_dep/wifi_regd.c
+@@ -74,7 +74,7 @@ static void _rtw_reg_apply_flags(struct wiphy *wiphy)
+ 		freq = rtw_ieee80211_channel_to_frequency(channel);
+ 		ch = ieee80211_get_channel(wiphy, freq);
+ 		if (ch) {
+-			if (channel_set[i].ScanType == SCAN_PASSIVE)
++			if (channel_set[i].scan_type == SCAN_PASSIVE)
+ 				ch->flags = IEEE80211_CHAN_NO_IR;
+ 			else
+ 				ch->flags = 0;
+-- 
+2.55.0
+

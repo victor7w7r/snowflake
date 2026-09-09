@@ -1,0 +1,35 @@
+From dc5419ffdb80a16b782da8ab208df2da7bd15691 Mon Sep 17 00:00:00 2001
+From: Jori Koolstra <jkoolstra@xs4all.nl>
+Date: Tue, 30 Jun 2026 12:53:38 +0200
+Subject: [PATCH 01658/15333] ext4: drop redundant S_IFDIR from mkdir
+
+vfs_mkdir() now sets the S_IFDIR type bit in the mode it passes to
+->mkdir(), so OR-ing S_IFDIR into the mode again in ext4_mkdir() is
+redundant. Drop it.
+
+Assisted-by: LLM
+Signed-off-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Link: https://patch.msgid.link/20260630105400.68459-10-jkoolstra@xs4all.nl
+Reviewed-by: NeilBrown <neil@brown.name>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/ext4/namei.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+index cc49ae04a6f6..0992fe21b261 100644
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -3009,7 +3009,7 @@ static struct dentry *ext4_mkdir(struct mnt_idmap *idmap, struct inode *dir,
+ 	credits = (EXT4_DATA_TRANS_BLOCKS(dir->i_sb) +
+ 		   EXT4_INDEX_EXTRA_TRANS_BLOCKS + 3);
+ retry:
+-	inode = ext4_new_inode_start_handle(idmap, dir, S_IFDIR | mode,
++	inode = ext4_new_inode_start_handle(idmap, dir, mode,
+ 					    &dentry->d_name,
+ 					    0, NULL, EXT4_HT_DIR, credits);
+ 	handle = ext4_journal_current_handle();
+-- 
+2.55.0
+

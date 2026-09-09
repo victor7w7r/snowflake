@@ -1,0 +1,68 @@
+From 560b35bd7c8aa1b7cd20adf28c401e93da567400 Mon Sep 17 00:00:00 2001
+From: "Paul E. McKenney" <paulmck@kernel.org>
+Date: Wed, 8 Jul 2026 13:50:35 -0700
+Subject: [PATCH 14067/15333] rcutorture: Test RCU Tasks Trace GP implying RCU
+ GP
+
+An RCU Tasks Trace grace period is supposed to imply an RCU grace period,
+and this implication is relied on by BPF.  But this is not currently
+tested.  This commit therefore makes tasks_tracing_torture_read_lock()
+sometimes use rcu_read_lock() instead of rcu_read_lock_trace(), thus
+testing the required implication.
+
+Signed-off-by: Paul E. McKenney <paulmck@kernel.org>
+---
+ kernel/rcu/rcutorture.c | 22 ++++++++++++++++------
+ 1 file changed, 16 insertions(+), 6 deletions(-)
+
+diff --git a/kernel/rcu/rcutorture.c b/kernel/rcu/rcutorture.c
+index 6e9822baa236..c8118c38812a 100644
+--- a/kernel/rcu/rcutorture.c
++++ b/kernel/rcu/rcutorture.c
+@@ -766,11 +766,12 @@ srcu_read_delay(struct torture_random_state *rrsp, struct rt_read_seg *rtrsp)
+ 	const long uspertick = 1000000 / HZ;
+ 	const long longdelay = 10;
+ 
+-	/* We want there to be long-running readers, but not all the time. */
++	// We want there to be long-running readers, but not all the time.
++	// The !rcu_preempt_depth() is for RCU Tasks Trace.
+ 
+ 	delay = torture_random(rrsp) %
+ 		(nrealreaders * 2 * longdelay * uspertick);
+-	if (!delay && in_task()) {
++	if (!delay && !in_atomic() && !rcu_preempt_depth() && !irqs_disabled()) {
+ 		schedule_timeout_interruptible(longdelay);
+ 		rtrsp->rt_delay_jiffies = longdelay;
+ 	} else {
+@@ -1219,15 +1220,24 @@ static struct rcu_torture_ops tasks_rude_ops = {
+  * Definitions for tracing RCU-tasks torture testing.
+  */
+ 
++// Note that an RCU Tasks Trace GP must imply an RCU GP.
+ static int tasks_tracing_torture_read_lock(void)
+ {
+-	rcu_read_lock_trace();
+-	return 0;
++	int use_rcu = !(jiffies & 0xff);
++
++	if (use_rcu)
++		rcu_read_lock();
++	else
++		rcu_read_lock_trace();
++	return use_rcu;
+ }
+ 
+-static void tasks_tracing_torture_read_unlock(int idx)
++static void tasks_tracing_torture_read_unlock(int use_rcu)
+ {
+-	rcu_read_unlock_trace();
++	if (use_rcu)
++		rcu_read_unlock();
++	else
++		rcu_read_unlock_trace();
+ }
+ 
+ static void rcu_tasks_tracing_torture_deferred_free(struct rcu_torture *p)
+-- 
+2.55.0
+

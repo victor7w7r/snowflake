@@ -1,0 +1,52 @@
+From 119a9a23fbae4fefbb5cd4776547b3b6803a7eaa Mon Sep 17 00:00:00 2001
+From: Fuad Tabba <fuad.tabba@linux.dev>
+Date: Sun, 26 Jul 2026 15:36:42 +0100
+Subject: [PATCH 09004/15333] KVM: arm64: Flush external_mdscr_el1 to the pKVM
+ hyp vCPU
+
+flush_debug_state() propagates the guest's debug_owner and the
+owner-selected debug register state to the hyp vCPU, but not
+external_mdscr_el1. While the host owns the debug registers, the world
+switch loads MDSCR_EL1 from external_mdscr_el1 (ctxt_mdscr_el1()),
+where the host's KDE/MDE/SS bits live. A non-protected guest under
+KVM_GUESTDBG_USE_HW or single-step therefore runs with MDSCR_EL1.MDE/SS
+clear in hardware, and its watchpoints, breakpoints and single-step
+never fire.
+
+Propagate external_mdscr_el1 to the hyp vCPU alongside the host-owned
+debug state.
+
+Fixes: 4ad3a0b87f2ec ("KVM: arm64: Don't hijack guest context MDSCR_EL1")
+Signed-off-by: Fuad Tabba <fuad.tabba@linux.dev>
+Link: https://patch.msgid.link/20260726143643.303456-2-fuad.tabba@linux.dev
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/hyp/nvhe/hyp-main.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/kvm/hyp/nvhe/hyp-main.c b/arch/arm64/kvm/hyp/nvhe/hyp-main.c
+index d3c69de698f4..104026ee70e8 100644
+--- a/arch/arm64/kvm/hyp/nvhe/hyp-main.c
++++ b/arch/arm64/kvm/hyp/nvhe/hyp-main.c
+@@ -108,10 +108,16 @@ static void flush_debug_state(struct pkvm_hyp_vcpu *hyp_vcpu)
+ 
+ 	hyp_vcpu->vcpu.arch.debug_owner = host_vcpu->arch.debug_owner;
+ 
+-	if (kvm_guest_owns_debug_regs(&hyp_vcpu->vcpu))
++	if (kvm_guest_owns_debug_regs(&hyp_vcpu->vcpu)) {
+ 		hyp_vcpu->vcpu.arch.vcpu_debug_state = host_vcpu->arch.vcpu_debug_state;
+-	else if (kvm_host_owns_debug_regs(&hyp_vcpu->vcpu))
++	} else if (kvm_host_owns_debug_regs(&hyp_vcpu->vcpu)) {
+ 		hyp_vcpu->vcpu.arch.external_debug_state = host_vcpu->arch.external_debug_state;
++		/*
++		 * The world switch loads MDSCR_EL1 from external_mdscr_el1
++		 * (ctxt_mdscr_el1()).
++		 */
++		hyp_vcpu->vcpu.arch.external_mdscr_el1 = host_vcpu->arch.external_mdscr_el1;
++	}
+ }
+ 
+ static void sync_debug_state(struct pkvm_hyp_vcpu *hyp_vcpu)
+-- 
+2.55.0
+

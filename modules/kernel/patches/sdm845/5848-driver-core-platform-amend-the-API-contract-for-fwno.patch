@@ -1,0 +1,78 @@
+From e6054f410c9757e359d697ebade2213c398247e7 Mon Sep 17 00:00:00 2001
+From: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Date: Thu, 16 Jul 2026 14:31:36 +0200
+Subject: [PATCH 05848/15333] driver core: platform: amend the API contract for
+ fwnode setters
+
+Calling platform_device_set_fwnode() (and by extension:
+platform_device_set_of_node()) of platform_device_set_of_node_from_dev()
+for a dynamically allocated platform device whose primary firmware node
+is already assigned and is a software node leads to a resource leak as we
+never perform the corresponding call to software_node_notify_remove(). As
+there are currently no users for this special case - just disallow it and
+warn loudly if it ever happens.
+
+Signed-off-by: Bartosz Golaszewski <bartosz.golaszewski@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260716-swnode-remove-on-dev-unreg-v8-1-5c2b8cc38c28@oss.qualcomm.com
+Signed-off-by: Danilo Krummrich <dakr@kernel.org>
+---
+ drivers/base/platform.c | 21 ++++++++++++++++++---
+ 1 file changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/base/platform.c b/drivers/base/platform.c
+index a71015f1d915..fb57d487a6c2 100644
+--- a/drivers/base/platform.c
++++ b/drivers/base/platform.c
+@@ -707,7 +707,9 @@ EXPORT_SYMBOL_GPL(platform_device_add_data);
+  *
+  * Assign an OF node to this platform device. Internally keep track of the
+  * reference count. Devices created with platform_device_alloc() must use this
+- * function instead of assigning the node manually.
++ * function instead of assigning the node manually. This function must not be
++ * called for a platform device that already has a software node as its primary
++ * firmware node assigned.
+  */
+ void platform_device_set_of_node(struct platform_device *pdev,
+ 				 struct device_node *np)
+@@ -723,11 +725,20 @@ EXPORT_SYMBOL_GPL(platform_device_set_of_node);
+  *
+  * Assign a firmware node to this platform device. Internally keep track of the
+  * reference count. Devices created with platform_device_alloc() must use this
+- * function instead of assigning the node manually.
++ * function instead of assigning the node manually. This function must not be
++ * called for a platform device that already has a software node as its primary
++ * firmware node assigned.
+  */
+ void platform_device_set_fwnode(struct platform_device *pdev,
+ 				struct fwnode_handle *fwnode)
+ {
++	/*
++	 * If we call this function for a platform device whose primary
++	 * firmware node is a software node, we'll never end up calling the
++	 * symmetric software_node_notify_remove(). There are no users for this
++	 * right now in the tree so just disallow it.
++	 */
++	WARN_ON(is_software_node(dev_fwnode(&pdev->dev)));
+ 	fwnode_handle_put(pdev->dev.fwnode);
+ 	device_set_node(&pdev->dev, fwnode_handle_get(fwnode));
+ }
+@@ -739,11 +750,15 @@ EXPORT_SYMBOL_GPL(platform_device_set_fwnode);
+  * @dev2: device whose OF node to reuse
+  *
+  * Reuses the OF node of another device in this platform device while
+- * internally keeping track of reference counting.
++ * internally keeping track of reference counting. This function must not be
++ * called for a platform device that already has a software node as its primary
++ * firmware node assigned.
+  */
+ void platform_device_set_of_node_from_dev(struct platform_device *pdev,
+ 					  const struct device *dev2)
+ {
++	/* See platform_device_set_fwnode(). */
++	WARN_ON(is_software_node(dev_fwnode(&pdev->dev)));
+ 	device_set_of_node_from_dev(&pdev->dev, dev2);
+ 	pdev->dev.fwnode = of_fwnode_handle(pdev->dev.of_node);
+ }
+-- 
+2.55.0
+

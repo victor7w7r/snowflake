@@ -1,0 +1,89 @@
+From 78f8d726e62e0b72a4b11e5778d2d7e252b076c0 Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Mon, 3 Aug 2026 11:01:07 -1000
+Subject: [PATCH 10243/15333] sched_ext: Make SCX_ENQ_IGNORE_CAPS waive the
+ preemption cap too
+
+SCX_ENQ_IGNORE_CAPS is kernel-internal and marks a placement the kernel
+forces. scx_caps_for_enq() waives the enqueue cap for it, but a PREEMPT
+insert still picks up the preemption cap requirement from
+scx_caps_for_preempt(). Update scx_caps_for_preempt() to take enq_flags and
+require nothing when SCX_ENQ_IGNORE_CAPS is set.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/ext.c | 5 +++--
+ kernel/sched/ext/sub.c | 2 +-
+ kernel/sched/ext/sub.h | 9 ++++++---
+ 3 files changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 1577a063d63f..c603b90f16a1 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -8150,8 +8150,9 @@ static bool kick_one_cpu(s32 cpu, struct scx_sched_pcpu *pcpu, struct rq *this_r
+ 	if (kickable && !scx_missing_caps(pcpu->sch, cpu, SCX_CAP_BASE)) {
+ 		if (cpumask_test_cpu(cpu, pcpu->cpus_to_preempt)) {
+ 			if (cur_class == &ext_sched_class) {
+-				if (likely(!scx_missing_caps(pcpu->sch, cpu,
+-							     scx_caps_for_preempt(pcpu->sch, rq))))
++				u64 caps = scx_caps_for_preempt(pcpu->sch, rq, 0);
++
++				if (likely(!scx_missing_caps(pcpu->sch, cpu, caps)))
+ 					scx_set_task_slice(rq->curr, 0);
+ 				else
+ 					__scx_add_event(pcpu->sch,
+diff --git a/kernel/sched/ext/sub.c b/kernel/sched/ext/sub.c
+index 2ea9a690e986..c30f48ee07f9 100644
+--- a/kernel/sched/ext/sub.c
++++ b/kernel/sched/ext/sub.c
+@@ -262,7 +262,7 @@ struct scx_dispatch_q *scx_resolve_local_dsq(struct scx_sched *sch, struct rq *r
+ 	 * @p's owner (@sch). Check caps against the scheduling sched.
+ 	 */
+ 	if (*enq_flags & SCX_ENQ_PREEMPT)
+-		needed |= scx_caps_for_preempt(asch, rq);
++		needed |= scx_caps_for_preempt(asch, rq, *enq_flags);
+ 	missing = scx_missing_caps(asch, cpu_of(rq), needed);
+ 
+ 	/* requirements met */
+diff --git a/kernel/sched/ext/sub.h b/kernel/sched/ext/sub.h
+index db449559bbe8..fe1d82e6c1d5 100644
+--- a/kernel/sched/ext/sub.h
++++ b/kernel/sched/ext/sub.h
+@@ -140,7 +140,7 @@ static inline u64 scx_missing_caps(struct scx_sched *sch, s32 cpu, u64 needed)
+ static inline u64 scx_caps_for_enq(u64 enq_flags)
+ {
+ 	/* a restored task must be put into the local DSQ regardless of caps */
+-	if (enq_flags & SCX_ENQ_IGNORE_CAPS)
++	if (unlikely(enq_flags & SCX_ENQ_IGNORE_CAPS))
+ 		return 0;
+ 	if (enq_flags & SCX_ENQ_IMMED)
+ 		return SCX_CAP_ENQ_IMMED;
+@@ -156,10 +156,13 @@ static inline u64 scx_caps_for_task(struct task_struct *p)
+ }
+ 
+ /* the cap @sch needs to preempt @rq's current task, 0 if none */
+-static inline u64 scx_caps_for_preempt(struct scx_sched *sch, struct rq *rq)
++static inline u64 scx_caps_for_preempt(struct scx_sched *sch, struct rq *rq, u64 enq_flags)
+ {
+ 	struct task_struct *curr = rq->curr;
+ 
++	/* a kernel-forced placement preempts regardless of caps */
++	if (unlikely(enq_flags & SCX_ENQ_IGNORE_CAPS))
++		return 0;
+ 	/* a non-ext task can't be preempted by ext, own-subtree needs no cap */
+ 	if (curr->sched_class != &ext_sched_class ||
+ 	    scx_is_descendant(scx_task_sched(curr), sch))
+@@ -195,7 +198,7 @@ static inline bool scx_task_can_stay_on_cpu(struct rq *rq, struct task_struct *p
+ #else	/* CONFIG_EXT_SUB_SCHED */
+ 
+ static inline u64 scx_missing_caps(struct scx_sched *sch, s32 cpu, u64 needed) { return 0; }
+-static inline u64 scx_caps_for_preempt(struct scx_sched *sch, struct rq *rq) { return 0; }
++static inline u64 scx_caps_for_preempt(struct scx_sched *sch, struct rq *rq, u64 enq_flags) { return 0; }
+ static inline bool scx_task_can_stay_on_cpu(struct rq *rq, struct task_struct *p) { return true; }
+ 
+ #endif	/* CONFIG_EXT_SUB_SCHED */
+-- 
+2.55.0
+

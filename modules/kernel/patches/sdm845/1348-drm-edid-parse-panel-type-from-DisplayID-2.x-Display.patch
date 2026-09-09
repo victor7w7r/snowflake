@@ -1,0 +1,188 @@
+From 1258f9c9ff1dba0d081e27a5f85597a916249988 Mon Sep 17 00:00:00 2001
+From: Chenyu Chen <chen-yu.chen@amd.com>
+Date: Tue, 26 May 2026 10:59:50 +0800
+Subject: [PATCH 01348/15333] drm/edid: parse panel type from DisplayID 2.x
+ Display Parameters
+
+Parse the Display Parameters Data Block (tag 0x21) defined in
+DisplayID v2.1a Section 4.2.6. Extract the Display Device Technology
+field from the color depth and device technology byte, which indicates
+whether the panel uses LCD or OLED technology.
+
+Add a panel_type field to struct drm_display_info and populate it
+during DisplayID iteration so downstream drivers can use it for
+panel-type-dependent behavior. Add DRM_MODE_PANEL_TYPE_LCD to the UAPI
+panel type property alongside the existing OLED value.
+
+Assisted-by: Copilot:Claude-Opus-4.6
+Signed-off-by: Chenyu Chen <chen-yu.chen@amd.com>
+Reviewed-by: Jani Nikula <jani.nikula@intel.com>
+Reviewed-by: Mario Limonciello (AMD) <superm1@kernel.org>
+Link: https://patch.msgid.link/20260526030254.1460480-3-chen-yu.chen@amd.com
+Signed-off-by: Mario Limonciello <superm1@kernel.org>
+---
+ drivers/gpu/drm/drm_connector.c          |  3 +-
+ drivers/gpu/drm/drm_displayid_internal.h | 24 +++++++++++++
+ drivers/gpu/drm/drm_edid.c               | 45 ++++++++++++++++++++++++
+ include/drm/drm_connector.h              |  6 ++++
+ include/uapi/drm/drm_mode.h              |  1 +
+ 5 files changed, 78 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/drm_connector.c b/drivers/gpu/drm/drm_connector.c
+index cbb067d02cb9..d194312cb6c5 100644
+--- a/drivers/gpu/drm/drm_connector.c
++++ b/drivers/gpu/drm/drm_connector.c
+@@ -1189,6 +1189,7 @@ static const struct drm_prop_enum_list drm_link_status_enum_list[] = {
+ static const struct drm_prop_enum_list drm_panel_type_enum_list[] = {
+ 	{ DRM_MODE_PANEL_TYPE_UNKNOWN, "unknown" },
+ 	{ DRM_MODE_PANEL_TYPE_OLED, "OLED" },
++	{ DRM_MODE_PANEL_TYPE_LCD, "LCD" },
+ };
+ 
+ /**
+@@ -1533,7 +1534,7 @@ EXPORT_SYMBOL(drm_hdmi_connector_get_output_format_name);
+  * 	never read back the value of "DPMS" because it can be incorrect.
+  * panel_type:
+  * 	Immutable enum property to indicate the type of connected panel.
+- * 	Possible values are "unknown" (default) and "OLED".
++ * 	Possible values are "unknown" (default), "OLED", and "LCD".
+  * PATH:
+  * 	Connector path property to identify how this sink is physically
+  * 	connected. Used by DP MST. This should be set by calling
+diff --git a/drivers/gpu/drm/drm_displayid_internal.h b/drivers/gpu/drm/drm_displayid_internal.h
+index 5b1b32f73516..6f431aafafcf 100644
+--- a/drivers/gpu/drm/drm_displayid_internal.h
++++ b/drivers/gpu/drm/drm_displayid_internal.h
+@@ -142,6 +142,30 @@ struct displayid_formula_timing_block {
+ 	struct displayid_formula_timings_9 timings[];
+ } __packed;
+ 
++#define DISPLAYID_DEVICE_TECH_UNSPECIFIED	0
++#define DISPLAYID_DEVICE_TECH_LCD		1
++#define DISPLAYID_DEVICE_TECH_OLED		2
++
++#define DISPLAYID_DISPLAY_PARAMS_DEVICE_TECH	GENMASK(6, 4)
++
++struct displayid_display_params_block {
++	struct displayid_block base;
++	__le16 horiz_image_size;
++	__le16 vert_image_size;
++	__le16 horiz_pixel_count;
++	__le16 vert_pixel_count;
++	u8 features;
++	u8 primary_color1[3];
++	u8 primary_color2[3];
++	u8 primary_color3[3];
++	u8 white_point[3];
++	__le16 max_luminance_full;
++	__le16 max_luminance_10;
++	__le16 min_luminance;
++	u8 color_depth_and_tech;	/* [2:0] depth, [6:4] device tech, [7] theme */
++	u8 gamma_eotf;
++} __packed;
++
+ #define DISPLAYID_VESA_MSO_OVERLAP	GENMASK(3, 0)
+ #define DISPLAYID_VESA_MSO_MODE		GENMASK(6, 5)
+ 
+diff --git a/drivers/gpu/drm/drm_edid.c b/drivers/gpu/drm/drm_edid.c
+index aebbff8ac992..ae26618a9a57 100644
+--- a/drivers/gpu/drm/drm_edid.c
++++ b/drivers/gpu/drm/drm_edid.c
+@@ -6713,6 +6713,8 @@ static void drm_reset_display_info(struct drm_connector *connector)
+ 
+ 	info->source_physical_address = CEC_PHYS_ADDR_INVALID;
+ 	memset(&info->amd_vsdb, 0, sizeof(info->amd_vsdb));
++
++	info->panel_type = DRM_MODE_PANEL_TYPE_UNKNOWN;
+ }
+ 
+ static void drm_displayid_process_base_section_header(struct drm_connector *connector,
+@@ -6731,6 +6733,45 @@ static void drm_displayid_process_base_section_header(struct drm_connector *conn
+ 		info->non_desktop = true;
+ }
+ 
++static void
++drm_displayid_parse_display_params(struct drm_connector *connector,
++				   const struct displayid_block *block)
++{
++	struct drm_display_info *info = &connector->display_info;
++	const struct displayid_display_params_block *params =
++		(const struct displayid_display_params_block *)block;
++	u8 tech;
++
++	if (block->num_bytes < sizeof(*params) - sizeof(params->base)) {
++		drm_dbg_kms(connector->dev,
++			    "[CONNECTOR:%d:%s] DisplayID Display Parameters block too short (%u < %zu)\n",
++			    connector->base.id, connector->name,
++			    block->num_bytes,
++			    sizeof(*params) - sizeof(params->base));
++		return;
++	}
++
++	tech = FIELD_GET(DISPLAYID_DISPLAY_PARAMS_DEVICE_TECH,
++			 params->color_depth_and_tech);
++
++	drm_dbg_kms(connector->dev,
++		    "[CONNECTOR:%d:%s] DisplayID Display Parameters: device technology %s\n",
++		    connector->base.id, connector->name,
++		    tech == DISPLAYID_DEVICE_TECH_LCD ? "LCD" :
++		    tech == DISPLAYID_DEVICE_TECH_OLED ? "OLED" : "unspecified");
++
++	switch (tech) {
++	case DISPLAYID_DEVICE_TECH_LCD:
++		info->panel_type = DRM_MODE_PANEL_TYPE_LCD;
++		break;
++	case DISPLAYID_DEVICE_TECH_OLED:
++		info->panel_type = DRM_MODE_PANEL_TYPE_OLED;
++		break;
++	default:
++		break;
++	}
++}
++
+ static void update_displayid_info(struct drm_connector *connector,
+ 				  const struct drm_edid *drm_edid)
+ {
+@@ -6744,6 +6785,10 @@ static void update_displayid_info(struct drm_connector *connector,
+ 			drm_displayid_process_base_section_header(connector, &iter);
+ 			base_section_header_processed = true;
+ 		}
++
++		if (displayid_version(&iter) == DISPLAY_ID_STRUCTURE_VER_20 &&
++		    block->tag == DATA_BLOCK_2_DISPLAY_PARAMETERS)
++			drm_displayid_parse_display_params(connector, block);
+ 	}
+ 	displayid_iter_end(&iter);
+ }
+diff --git a/include/drm/drm_connector.h b/include/drm/drm_connector.h
+index 4317166562cf..0cb72aa081d9 100644
+--- a/include/drm/drm_connector.h
++++ b/include/drm/drm_connector.h
+@@ -989,6 +989,12 @@ struct drm_display_info {
+ 	 * @amd_vsdb: AMD-specific VSDB information.
+ 	 */
+ 	struct drm_amd_vsdb_info amd_vsdb;
++
++	/**
++	 * @panel_type: Panel type from DisplayID Display Parameters
++	 * Data Block (tag 0x21). Uses DRM_MODE_PANEL_TYPE_* constants.
++	 */
++	u8 panel_type;
+ };
+ 
+ int drm_display_info_set_bus_formats(struct drm_display_info *info,
+diff --git a/include/uapi/drm/drm_mode.h b/include/uapi/drm/drm_mode.h
+index 381a3e857d4e..bd435effdcee 100644
+--- a/include/uapi/drm/drm_mode.h
++++ b/include/uapi/drm/drm_mode.h
+@@ -155,6 +155,7 @@ extern "C" {
+ /* Panel type property */
+ #define DRM_MODE_PANEL_TYPE_UNKNOWN	0
+ #define DRM_MODE_PANEL_TYPE_OLED	1
++#define DRM_MODE_PANEL_TYPE_LCD		2
+ 
+ /*
+  * DRM_MODE_ROTATE_<degrees>
+-- 
+2.55.0
+

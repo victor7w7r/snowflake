@@ -1,0 +1,48 @@
+From bb82e4327a39a17a9338413554b11b328ced0ffd Mon Sep 17 00:00:00 2001
+From: Fabio Estevam <festevam@nabladev.com>
+Date: Wed, 29 Jul 2026 16:28:30 -0300
+Subject: [PATCH 11416/15333] phy: freescale: fsl-samsung-hdmi: Balance runtime
+ PM operations
+
+fsl_samsung_hdmi_phy_probe() enables runtime PM, but the remove
+callback does not disable it. Unbinding and rebinding the device
+therefore results in the following warning on reprobe:
+
+Unbalanced pm_runtime_enable!
+
+Disable runtime PM after removing the clock provider.
+
+Also undo the runtime PM operations when phy_clk_register() fails.
+Otherwise, a failed probe leaves runtime PM enabled and the usage
+counter incremented.
+
+Signed-off-by: Fabio Estevam <festevam@nabladev.com>
+Link: https://patch.msgid.link/20260729192830.487150-1-festevam@gmail.com
+Signed-off-by: Vinod Koul <vkoul@kernel.org>
+---
+ drivers/phy/freescale/phy-fsl-samsung-hdmi.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/phy/freescale/phy-fsl-samsung-hdmi.c b/drivers/phy/freescale/phy-fsl-samsung-hdmi.c
+index d010fec15671..0f25d81de61b 100644
+--- a/drivers/phy/freescale/phy-fsl-samsung-hdmi.c
++++ b/drivers/phy/freescale/phy-fsl-samsung-hdmi.c
+@@ -679,12 +679,15 @@ static int fsl_samsung_hdmi_phy_probe(struct platform_device *pdev)
+ 	return 0;
+ 
+ register_clk_failed:
++	pm_runtime_disable(phy->dev);
++	pm_runtime_put_noidle(phy->dev);
+ 	return ret;
+ }
+ 
+ static void fsl_samsung_hdmi_phy_remove(struct platform_device *pdev)
+ {
+ 	of_clk_del_provider(pdev->dev.of_node);
++	pm_runtime_disable(&pdev->dev);
+ }
+ 
+ static int __maybe_unused fsl_samsung_hdmi_phy_suspend(struct device *dev)
+-- 
+2.55.0
+

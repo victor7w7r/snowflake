@@ -1,0 +1,49 @@
+From defbd61c2ab01654b37750ed1515864523280cc4 Mon Sep 17 00:00:00 2001
+From: Vishal Moola <vishal.moola@gmail.com>
+Date: Mon, 29 Jun 2026 11:57:42 -0700
+Subject: [PATCH 04267/15333] x86/xen: Convert xen_mm_unpin_all() to ptdescs
+
+Convert xen_mm_unpin_all() to ptdescs in preparation for the eventual
+splitting of ptdescs from struct page. Continue checking PagePinned
+through the underlying page as we do not have a per-memdesc api yet.
+
+Signed-off-by: Vishal Moola <vishal.moola@gmail.com>
+Signed-off-by: Dave Hansen <dave.hansen@linux.intel.com>
+Reviewed-by: William Kucharski <william.kucharski@linux.dev>
+Reviewed-by: Juergen Gross <jgross@suse.com>
+Acked-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+Link: https://patch.msgid.link/20260629185742.126987-10-vishal.moola@gmail.com
+---
+ arch/x86/xen/mmu_pv.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/xen/mmu_pv.c b/arch/x86/xen/mmu_pv.c
+index d2b3bbd7100e..377c3c0d9f20 100644
+--- a/arch/x86/xen/mmu_pv.c
++++ b/arch/x86/xen/mmu_pv.c
+@@ -947,16 +947,16 @@ static void xen_pgd_unpin(struct mm_struct *mm)
+  */
+ void xen_mm_unpin_all(void)
+ {
+-	struct page *page;
++	struct ptdesc *ptdesc;
+ 
+ 	spin_lock(&init_mm.page_table_lock);
+ 	spin_lock(&pgd_lock);
+ 
+-	list_for_each_entry(page, &pgd_list, lru) {
+-		if (PageSavePinned(page)) {
+-			BUG_ON(!PagePinned(page));
+-			__xen_pgd_unpin(&init_mm, (pgd_t *)page_address(page));
+-			ClearPageSavePinned(page);
++	list_for_each_entry(ptdesc, &pgd_list, pt_list) {
++		if (PageSavePinned(ptdesc_page(ptdesc))) {
++			BUG_ON(!PagePinned(ptdesc_page(ptdesc)));
++			__xen_pgd_unpin(&init_mm, (pgd_t *)ptdesc_address(ptdesc));
++			ClearPageSavePinned(ptdesc_page(ptdesc));
+ 		}
+ 	}
+ 
+-- 
+2.55.0
+

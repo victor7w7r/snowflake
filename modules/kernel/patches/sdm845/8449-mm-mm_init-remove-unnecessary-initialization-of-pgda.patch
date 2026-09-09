@@ -1,0 +1,35 @@
+From 78fac571b06490654af45c902c7ab5f651fe7067 Mon Sep 17 00:00:00 2001
+From: Sang-Heon Jeon <ekffu200098@gmail.com>
+Date: Thu, 30 Jul 2026 00:51:15 +0900
+Subject: [PATCH 08449/15333] mm/mm_init: remove unnecessary initialization of
+ pgdat->per_cpu_nodestats
+
+free_area_init_node() sets pgdat->per_cpu_nodestats to NULL and later
+calls free_area_init_core(), which unconditionally overwrites it with
+&boot_nodestats. Nothing reads the field in between, so the store has
+no effect.
+
+Remove unnecessary initialization. No functional change.
+
+Signed-off-by: Sang-Heon Jeon <ekffu200098@gmail.com>
+Link: https://patch.msgid.link/20260729155143.177790-1-ekffu200098@gmail.com
+Signed-off-by: Mike Rapoport (Microsoft) <rppt@kernel.org>
+---
+ mm/mm_init.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/mm/mm_init.c b/mm/mm_init.c
+index 10eda88bf476..acba6b30b535 100644
+--- a/mm/mm_init.c
++++ b/mm/mm_init.c
+@@ -1713,7 +1713,6 @@ static void __init free_area_init_node(int nid)
+ 
+ 	pgdat->node_id = nid;
+ 	pgdat->node_start_pfn = start_pfn;
+-	pgdat->per_cpu_nodestats = NULL;
+ 
+ 	if (start_pfn != end_pfn) {
+ 		pr_info("Initmem setup node %d [mem %#018Lx-%#018Lx]\n", nid,
+-- 
+2.55.0
+

@@ -1,0 +1,68 @@
+From b1cb2fc140024e3d3caf5f348495990945c7ac85 Mon Sep 17 00:00:00 2001
+From: Ilya Bakoulin <Ilya.Bakoulin@amd.com>
+Date: Tue, 30 Jun 2026 17:57:18 -0400
+Subject: [PATCH 07863/15333] drm/amd/display: Fix DP LT failure logging
+
+[Why/How]
+The final DP LT failure meant to be logged as DC warning is skipped due
+to a break statement above. Move logging up to make sure we don't miss
+LT fail events.
+
+Reviewed-by: George Shen <george.shen@amd.com>
+Signed-off-by: Ilya Bakoulin <Ilya.Bakoulin@amd.com>
+Signed-off-by: Wayne Lin <wayne.lin@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../dc/link/protocols/link_dp_training.c      | 28 +++++++++----------
+ 1 file changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_training.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_training.c
+index 605bf19dc4f2..04eedec8a230 100644
+--- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_training.c
++++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_training.c
+@@ -1721,6 +1721,20 @@ bool perform_link_training_with_retries(
+ 			}
+ 		}
+ 
++		if (j == (attempts - 1)) {
++			DC_LOG_WARNING(
++				"%s: Link(%d) training attempt %u of %d failed @ rate(%d) x lane(%d) @ spread = %x : fail reason:(%d)\n",
++				__func__, link->link_index, (unsigned int)j + 1, attempts,
++				cur_link_settings.link_rate, cur_link_settings.lane_count,
++				cur_link_settings.link_spread, status);
++		} else {
++			DC_LOG_HW_LINK_TRAINING(
++				"%s: Link(%d) training attempt %u of %d failed @ rate(%d) x lane(%d) @ spread = %x : fail reason:(%d)\n",
++				__func__, link->link_index, (unsigned int)j + 1, attempts,
++				cur_link_settings.link_rate, cur_link_settings.lane_count,
++				cur_link_settings.link_spread, status);
++		}
++
+ 		fail_count++;
+ 		dp_trace_lt_fail_count_update(link, fail_count, false);
+ 		if (link->ep_type == DISPLAY_ENDPOINT_PHY) {
+@@ -1740,20 +1754,6 @@ bool perform_link_training_with_retries(
+ 				do_fallback = false;
+ 		}
+ 
+-		if (j == (attempts - 1)) {
+-			DC_LOG_WARNING(
+-				"%s: Link(%d) training attempt %u of %d failed @ rate(%d) x lane(%d) @ spread = %x : fail reason:(%d)\n",
+-				__func__, link->link_index, (unsigned int)j + 1, attempts,
+-				cur_link_settings.link_rate, cur_link_settings.lane_count,
+-				cur_link_settings.link_spread, status);
+-		} else {
+-			DC_LOG_HW_LINK_TRAINING(
+-				"%s: Link(%d) training attempt %u of %d failed @ rate(%d) x lane(%d) @ spread = %x : fail reason:(%d)\n",
+-				__func__, link->link_index, (unsigned int)j + 1, attempts,
+-				cur_link_settings.link_rate, cur_link_settings.lane_count,
+-				cur_link_settings.link_spread, status);
+-		}
+-
+ 		dp_disable_link_phy(link, &pipe_ctx->link_res, signal);
+ 
+ 		/* Abort link training if failure due to sink being unplugged. */
+-- 
+2.55.0
+

@@ -1,0 +1,113 @@
+From 18698b35b48bd6198c576d889bec70c50acf5758 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <brauner@kernel.org>
+Date: Fri, 10 Jul 2026 11:33:12 +0200
+Subject: [PATCH 09923/15333] binfmt_misc: use print_hex_dump_debug() for the
+ register debug output
+
+The hex dumps in create_entry() are compiled out unless someone edits
+the file to define DEBUG while the pr_debug() calls right next to
+them are dynamic-debug aware. Switch the dumps to
+print_hex_dump_debug() which follows the same rules as pr_debug() so
+the register parsing debug output is uniformly controlled through
+dynamic debug, and remove the USE_DEBUG machinery.
+
+Drop the magic[masked] dump instead of converting it: it printed the
+bitwise AND of two buffers dumped right above it and required a
+temporary allocation on every registration just to recompute what
+the reader can derive from the magic and mask dumps directly.
+
+Link: https://patch.msgid.link/20260710-work-binfmt_misc-locking-v3-11-a162f7cb58d6@kernel.org
+Reviewed-by: Jori Koolstra <jkoolstra@xs4all.nl>
+Signed-off-by: Christian Brauner (Amutable) <brauner@kernel.org>
+---
+ fs/binfmt_misc.c | 52 ++++++++++++++----------------------------------
+ 1 file changed, 15 insertions(+), 37 deletions(-)
+
+diff --git a/fs/binfmt_misc.c b/fs/binfmt_misc.c
+index 0880b058d3b6..ab715618142e 100644
+--- a/fs/binfmt_misc.c
++++ b/fs/binfmt_misc.c
+@@ -32,12 +32,6 @@
+ 
+ #include "internal.h"
+ 
+-#ifdef DEBUG
+-# define USE_DEBUG 1
+-#else
+-# define USE_DEBUG 0
+-#endif
+-
+ /* Entry status and match type bit numbers. */
+ enum binfmt_misc_entry_bits {
+ 	MISC_FMT_ENABLED_BIT	= 0,
+@@ -459,10 +453,9 @@ static struct binfmt_misc_entry *create_entry(const char __user *buffer,
+ 			goto einval;
+ 		if (!e->magic[0])
+ 			goto einval;
+-		if (USE_DEBUG)
+-			print_hex_dump_bytes(
+-				KBUILD_MODNAME ": register: magic[raw]: ",
+-				DUMP_PREFIX_NONE, e->magic, p - e->magic);
++		print_hex_dump_debug(
++			KBUILD_MODNAME ": register: magic[raw]: ",
++			DUMP_PREFIX_NONE, 16, 1, e->magic, p - e->magic, true);
+ 
+ 		/* Parse the 'mask' field. */
+ 		e->mask = p;
+@@ -472,10 +465,12 @@ static struct binfmt_misc_entry *create_entry(const char __user *buffer,
+ 		if (!e->mask[0]) {
+ 			e->mask = NULL;
+ 			pr_debug("register:  mask[raw]: none\n");
+-		} else if (USE_DEBUG)
+-			print_hex_dump_bytes(
++		} else {
++			print_hex_dump_debug(
+ 				KBUILD_MODNAME ": register:  mask[raw]: ",
+-				DUMP_PREFIX_NONE, e->mask, p - e->mask);
++				DUMP_PREFIX_NONE, 16, 1, e->mask, p - e->mask,
++				true);
++		}
+ 
+ 		/*
+ 		 * Decode the magic & mask fields.
+@@ -491,30 +486,13 @@ static struct binfmt_misc_entry *create_entry(const char __user *buffer,
+ 		    BINPRM_BUF_SIZE - e->size < e->offset)
+ 			goto einval;
+ 		pr_debug("register: magic/mask length: %i\n", e->size);
+-		if (USE_DEBUG) {
+-			print_hex_dump_bytes(
+-				KBUILD_MODNAME ": register: magic[decoded]: ",
+-				DUMP_PREFIX_NONE, e->magic, e->size);
+-
+-			if (e->mask) {
+-				int i;
+-				char *masked = kmalloc(e->size, GFP_KERNEL_ACCOUNT);
+-
+-				print_hex_dump_bytes(
+-					KBUILD_MODNAME ": register:  mask[decoded]: ",
+-					DUMP_PREFIX_NONE, e->mask, e->size);
+-
+-				if (masked) {
+-					for (i = 0; i < e->size; ++i)
+-						masked[i] = e->magic[i] & e->mask[i];
+-					print_hex_dump_bytes(
+-						KBUILD_MODNAME ": register:  magic[masked]: ",
+-						DUMP_PREFIX_NONE, masked, e->size);
+-
+-					kfree(masked);
+-				}
+-			}
+-		}
++		print_hex_dump_debug(
++			KBUILD_MODNAME ": register: magic[decoded]: ",
++			DUMP_PREFIX_NONE, 16, 1, e->magic, e->size, true);
++		if (e->mask)
++			print_hex_dump_debug(
++				KBUILD_MODNAME ": register:  mask[decoded]: ",
++				DUMP_PREFIX_NONE, 16, 1, e->mask, e->size, true);
+ 	} else {
+ 		/* Handle the 'E' (extension) format. */
+ 
+-- 
+2.55.0
+

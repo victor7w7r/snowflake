@@ -1,0 +1,61 @@
+From d6850f1984eb1e5dcec3de2703d32ea4c34c8ad8 Mon Sep 17 00:00:00 2001
+From: Christophe JAILLET <christophe.jaillet@wanadoo.fr>
+Date: Tue, 14 Jul 2026 10:39:14 +0200
+Subject: [PATCH 06523/15333] wifi: ath12k: Constify struct ath12k_dp_arch_ops
+
+'struct ath12k_dp_arch_ops' is not modified in this driver.
+
+Constifying this structure moves some data to a read-only section, so
+increases overall security, especially when the structure holds some
+function pointers.
+
+On a x86_64, with allmodconfig, as an example:
+Before:
+======
+   text	   data	    bss	    dec	    hex	filename
+   6318	   3384	      0	   9702	   25e6	drivers/net/wireless/ath/ath12k/wifi7/dp.o
+
+After:
+=====
+   text	   data	    bss	    dec	    hex	filename
+   6478	   3224	      0	   9702	   25e6	drivers/net/wireless/ath/ath12k/wifi7/dp.o
+
+Signed-off-by: Christophe JAILLET <christophe.jaillet@wanadoo.fr>
+Reviewed-by: Rameshkumar Sundaram <rameshkumar.sundaram@oss.qualcomm.com>
+Reviewed-by: Baochen Qiang <baochen.qiang@oss.qualcomm.com>
+Link: https://patch.msgid.link/969d732e2c6f169e1aa5e89c7e01743a1adb55df.1784010931.git.christophe.jaillet@wanadoo.fr
+Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/dp.h       | 2 +-
+ drivers/net/wireless/ath/ath12k/wifi7/dp.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/dp.h b/drivers/net/wireless/ath/ath12k/dp.h
+index 64f79e43341e..a94bbc337df4 100644
+--- a/drivers/net/wireless/ath/ath12k/dp.h
++++ b/drivers/net/wireless/ath/ath12k/dp.h
+@@ -538,7 +538,7 @@ struct ath12k_dp {
+ 	/* Lock for protection of peers and rhead_peer_addr */
+ 	spinlock_t dp_lock;
+ 
+-	struct ath12k_dp_arch_ops *ops;
++	const struct ath12k_dp_arch_ops *ops;
+ 
+ 	/* Linked list of struct ath12k_dp_link_peer */
+ 	struct list_head peers;
+diff --git a/drivers/net/wireless/ath/ath12k/wifi7/dp.c b/drivers/net/wireless/ath/ath12k/wifi7/dp.c
+index c72f604661ce..397da016bc78 100644
+--- a/drivers/net/wireless/ath/ath12k/wifi7/dp.c
++++ b/drivers/net/wireless/ath/ath12k/wifi7/dp.c
+@@ -139,7 +139,7 @@ static int ath12k_wifi7_dp_service_srng(struct ath12k_dp *dp,
+ 	return tot_work_done;
+ }
+ 
+-static struct ath12k_dp_arch_ops ath12k_wifi7_dp_arch_ops = {
++static const struct ath12k_dp_arch_ops ath12k_wifi7_dp_arch_ops = {
+ 	.service_srng = ath12k_wifi7_dp_service_srng,
+ 	.tx_get_vdev_bank_config = ath12k_wifi7_dp_tx_get_vdev_bank_config,
+ 	.reo_cmd_send = ath12k_wifi7_dp_reo_cmd_send,
+-- 
+2.55.0
+

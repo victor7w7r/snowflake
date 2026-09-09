@@ -1,0 +1,66 @@
+From ae88f78bc4ebae984a60ec4b4d6610cce5cfce0f Mon Sep 17 00:00:00 2001
+From: Maxime Chevallier <maxime.chevallier@bootlin.com>
+Date: Sun, 2 Aug 2026 13:40:14 +0200
+Subject: [PATCH 10325/15333] net: stmmac: ethtool: Address off-by-one when
+ reading the coal rx-usecs
+
+When reading the rx-usecs coalescing parameters on a dwmac variant that
+uses the RIWT for RX interrupt coalescing, we convert the riwt value to
+usecs :
+ - One riwt cycle is 256 clock ticks, we compute how many ticks in $riwt
+   cycles
+ - divide that by how many ticks in a microsecond, and we get the
+   rx-usecs.
+
+The opposite computation is done when setting the rx-usecs param.
+
+Because of the 256 ratio, we're subjected to off-by-one errors in the
+value read-back, which can be reliably measured on i.mx8MP :
+
+$ ethtool -C eth1 rx-usecs 102
+
+$ ethtool -c eth1
+  Coalesce parameters for eth1:
+  [...]
+  rx-usecs: 101
+
+Let's be more explicit about the rounding for the riwt to usec
+computations by using DIV_ROUND_CLOSEST, which solves the off-by-one.
+
+This does change the boundaries of accepted rx-usecs parameters, as the
+previously accepted values were in the 16-246 us range, and now fall
+into the 15-245 range on imx8mp.
+
+Signed-off-by: Maxime Chevallier <maxime.chevallier@bootlin.com>
+Reviewed-by: Andrew Lunn <andrew@lunn.ch>
+Link: https://patch.msgid.link/20260802114015.214212-3-maxime.chevallier@bootlin.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c b/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+index eebfd6976aaa..154cc0c7623d 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
++++ b/drivers/net/ethernet/stmicro/stmmac/stmmac_ethtool.c
+@@ -762,7 +762,7 @@ static u32 stmmac_usec2riwt(u32 usec, struct stmmac_priv *priv)
+ 	/* Receive Interrupt Watchdog Timer (riwt) has a resolution of 256
+ 	 * ticks.
+ 	 */
+-	return (usec * (clk / USEC_PER_SEC)) / 256;
++	return DIV_ROUND_CLOSEST(usec * (clk / USEC_PER_SEC), 256);
+ }
+ 
+ static u32 stmmac_riwt2usec(u32 riwt, struct stmmac_priv *priv)
+@@ -775,7 +775,7 @@ static u32 stmmac_riwt2usec(u32 riwt, struct stmmac_priv *priv)
+ 			return 0;
+ 	}
+ 
+-	return (riwt * 256) / (clk / USEC_PER_SEC);
++	return DIV_ROUND_CLOSEST(riwt * 256, clk / USEC_PER_SEC);
+ }
+ 
+ static int __stmmac_get_coalesce(struct net_device *dev,
+-- 
+2.55.0
+

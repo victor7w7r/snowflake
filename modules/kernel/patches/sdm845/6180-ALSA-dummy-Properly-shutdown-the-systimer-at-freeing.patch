@@ -1,0 +1,37 @@
+From 260fc7a0fe660fc5b3c44541757f2399c981986f Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Mon, 20 Jul 2026 15:53:54 +0200
+Subject: [PATCH 06180/15333] ALSA: dummy: Properly shutdown the systimer at
+ freeing
+
+Add timer_shutdown_sync() call at the free callback for systimer
+backend, in order to make sure that we can release the resources.
+
+This is only for hardening, and there shouldn't be any actual issue
+that requires this change for now.
+
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260720135356.1779857-4-tiwai@suse.de
+---
+ sound/drivers/dummy.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/sound/drivers/dummy.c b/sound/drivers/dummy.c
+index 3bc0289e3518..8836799727ea 100644
+--- a/sound/drivers/dummy.c
++++ b/sound/drivers/dummy.c
+@@ -350,7 +350,10 @@ static int dummy_systimer_create(struct snd_pcm_substream *substream)
+ 
+ static void dummy_systimer_free(struct snd_pcm_substream *substream)
+ {
+-	kfree(substream->runtime->private_data);
++	struct dummy_systimer_pcm *dpcm = substream->runtime->private_data;
++
++	timer_shutdown_sync(&dpcm->timer);
++	kfree(dpcm);
+ }
+ 
+ static const struct dummy_timer_ops dummy_systimer_ops = {
+-- 
+2.55.0
+

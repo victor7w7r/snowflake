@@ -1,0 +1,35 @@
+From d73289a64e802b4b60d6501a3964682d8db2ac0f Mon Sep 17 00:00:00 2001
+From: YiPeng Chai <YiPeng.Chai@amd.com>
+Date: Tue, 16 Jun 2026 16:24:13 +0800
+Subject: [PATCH 00551/15333] drm/amd/ras: use IS_ERR() to check thread
+ creation result
+
+Use IS_ERR() to check thread creation result.
+
+Signed-off-by: YiPeng Chai <YiPeng.Chai@amd.com>
+Reviewed-by: Tao Zhou <tao.zhou1@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ drivers/gpu/drm/amd/ras/rascore/ras_process.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/ras/rascore/ras_process.c b/drivers/gpu/drm/amd/ras/rascore/ras_process.c
+index 3267dcdb169c..c001074c8c56 100644
+--- a/drivers/gpu/drm/amd/ras/rascore/ras_process.c
++++ b/drivers/gpu/drm/amd/ras/rascore/ras_process.c
+@@ -248,9 +248,10 @@ int ras_process_init(struct ras_core_context *ras_core)
+ 
+ 	ras_proc->ras_process_thread = kthread_run(ras_process_thread,
+ 							(void *)ras_core, "ras_process_thread");
+-	if (!ras_proc->ras_process_thread) {
++	if (IS_ERR(ras_proc->ras_process_thread)) {
+ 		RAS_DEV_ERR(ras_core->dev, "Failed to create ras_process_thread.\n");
+-		ret =  -ENOMEM;
++		ret = PTR_ERR(ras_proc->ras_process_thread);
++		ras_proc->ras_process_thread = NULL;
+ 		goto err;
+ 	}
+ 
+-- 
+2.55.0
+

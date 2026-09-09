@@ -1,0 +1,73 @@
+From f716a05f496718a7f70a7765291ad8e7858c81a2 Mon Sep 17 00:00:00 2001
+From: Sherry Sun <sherry.sun@nxp.com>
+Date: Mon, 17 Aug 2026 10:27:39 +0800
+Subject: [PATCH 14579/15333] Bluetooth: btnxpuart: Check remote M.2 connector
+ availability before pwrseq
+
+The current code uses of_graph_is_present() to decide whether to enter
+the pwrseq path. However, of_graph_is_present() only checks for the
+structural presence of a port/ports sub-node and does not check the
+status property. This causes problems when a DT overlay disables the
+remote M.2 connector node (e.g., switching from PCIe WiFi to SDIO WiFi):
+the port node still exists, so of_graph_is_present() returns true, but
+the pwrseq provider never registers because the connector is disabled,
+leading to an infinite -EPROBE_DEFER loop.
+
+Replace of_graph_is_present() with a new helper that traverses the OF
+graph to the remote port parent (the M.2 connector node) and checks
+of_device_is_available(). When the remote connector is disabled, the
+pwrseq path is skipped, allowing the BT driver to fall through to the
+direct bluetooth child node path.
+
+Fixes: e48e332d84d8 ("Bluetooth: btnxpuart: Add M.2 Bluetooth device support using pwrseq")
+Signed-off-by: Sherry Sun <sherry.sun@nxp.com>
+Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
+---
+ drivers/bluetooth/btnxpuart.c | 24 +++++++++++++++++++++++-
+ 1 file changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/bluetooth/btnxpuart.c b/drivers/bluetooth/btnxpuart.c
+index 81cdd8da5636..e2b8f7997e4e 100644
+--- a/drivers/bluetooth/btnxpuart.c
++++ b/drivers/bluetooth/btnxpuart.c
+@@ -1809,6 +1809,28 @@ static void nxp_coredump_notify(struct hci_dev *hdev, int state)
+ 	kobject_uevent_env(&serdev->dev.kobj, KOBJ_CHANGE, envp);
+ }
+ 
++/*
++ * Check if the remote M.2 connector device linked via OF graph is present
++ * and available. This is used to determine whether the pwrseq path should
++ * be taken. When the remote connector node is disabled (e.g., by a DT
++ * overlay switching from PCIe WiFi to SDIO WiFi), the pwrseq path is
++ * skipped, allowing the BT driver to use a direct bluetooth child node
++ * instead.
++ */
++static bool nxp_m2_connector_is_available(struct device *dev)
++{
++	struct device_node *ep __free(device_node) =
++		of_graph_get_next_endpoint(dev_of_node(dev), NULL);
++
++	if (!ep)
++		return false;
++
++	struct device_node *remote __free(device_node) =
++		of_graph_get_remote_port_parent(ep);
++
++	return remote && of_device_is_available(remote);
++}
++
+ static int nxp_serdev_probe(struct serdev_device *serdev)
+ {
+ 	struct hci_dev *hdev;
+@@ -1863,7 +1885,7 @@ static int nxp_serdev_probe(struct serdev_device *serdev)
+ 		return err;
+ 	}
+ 
+-	if (of_graph_is_present(dev_of_node(&serdev->ctrl->dev))) {
++	if (nxp_m2_connector_is_available(&serdev->ctrl->dev)) {
+ 		struct pwrseq_desc *pwrseq;
+ 
+ 		pwrseq = pwrseq_get(&serdev->ctrl->dev, "uart");
+-- 
+2.55.0
+

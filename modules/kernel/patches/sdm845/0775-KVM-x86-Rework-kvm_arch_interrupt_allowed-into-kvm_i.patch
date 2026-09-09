@@ -1,0 +1,109 @@
+From 5b9585bc5b883bb64f02bf171fd7c676caecd16f Mon Sep 17 00:00:00 2001
+From: Sean Christopherson <seanjc@google.com>
+Date: Fri, 12 Jun 2026 17:03:26 -0700
+Subject: [PATCH 00775/15333] KVM: x86: Rework kvm_arch_interrupt_allowed()
+ into kvm_is_interrupt_allowed()
+
+Rename kvm_arch_interrupt_allowed() to kvm_is_interrupt_allowed() and
+change its return type to a boolean, as the purpose of the helper is purely
+to check if interrupts are architecturally allowed.  I.e. whether or not
+interrupts are temporarily disallowed due a pending nested VM-Enter is
+irrelevant (and callers are most definitely not supposed to care).
+
+Opportunistically bury the helper in x86.c, as it hasn't been referenced by
+arch-neutral code since commit a1b37100d9e2 ("KVM: Reduce runnability
+interface with arch support code"), and has long since gained _very_
+x86-specific semantics (see above).
+
+Opportunistically add a comment to call out that treating -EBUSY as
+"allowed" is intentional.
+
+For all intents and purposes, no functional change intended (KVM treats
+-EBUSY as "allowed" before and after).
+
+Cc: Yosry Ahmed <yosry@kernel.org>
+Signed-off-by: Sean Christopherson <seanjc@google.com>
+Message-ID: <20260613000329.732085-28-seanjc@google.com>
+Signed-off-by: Paolo Bonzini <pbonzini@redhat.com>
+---
+ arch/x86/include/asm/kvm_host.h |  1 -
+ arch/x86/kvm/x86.c              | 23 +++++++++++++++--------
+ 2 files changed, 15 insertions(+), 9 deletions(-)
+
+diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h
+index 5d8428194286..de3d9541f4fe 100644
+--- a/arch/x86/include/asm/kvm_host.h
++++ b/arch/x86/include/asm/kvm_host.h
+@@ -2337,7 +2337,6 @@ enum {
+ # define kvm_memslots_for_spte_role(kvm, role) __kvm_memslots(kvm, 0)
+ #endif
+ 
+-int kvm_arch_interrupt_allowed(struct kvm_vcpu *vcpu);
+ void kvm_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event);
+ 
+ u64 kvm_scale_tsc(u64 tsc, u64 ratio);
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c
+index 463c714219a6..8dbc0fa302a8 100644
+--- a/arch/x86/kvm/x86.c
++++ b/arch/x86/kvm/x86.c
+@@ -2697,6 +2697,18 @@ static int kvm_vcpu_ioctl_set_lapic(struct kvm_vcpu *vcpu,
+ 	return 0;
+ }
+ 
++static bool kvm_is_interrupt_allowed(struct kvm_vcpu *vcpu)
++{
++	/*
++	 * Note, .interrupt_allowed() returns -EBUSY if interrupts are allowed
++	 * based on CPU state, but can't be immediately delivered due to a
++	 * pending nested VM-Enter.  Treat that case as "allowed", because
++	 * the goal here is just to check if interrupts are architecturally
++	 * allowed, not to check if they can be injected.
++	 */
++	return kvm_x86_call(interrupt_allowed)(vcpu, false);
++}
++
+ static int kvm_cpu_accept_dm_intr(struct kvm_vcpu *vcpu)
+ {
+ 	/*
+@@ -2722,7 +2734,7 @@ static int kvm_vcpu_ready_for_interrupt_injection(struct kvm_vcpu *vcpu)
+ 	 * or KVM_SET_SREGS.  For that to work, we must be at an
+ 	 * instruction boundary and with no events half-injected.
+ 	 */
+-	return (kvm_arch_interrupt_allowed(vcpu) &&
++	return (kvm_is_interrupt_allowed(vcpu) &&
+ 		kvm_cpu_accept_dm_intr(vcpu) &&
+ 		!kvm_event_needs_reinjection(vcpu) &&
+ 		!kvm_is_exception_pending(vcpu));
+@@ -8472,7 +8484,7 @@ bool kvm_vcpu_has_events(struct kvm_vcpu *vcpu)
+ 	if (kvm_test_request(KVM_REQ_UPDATE_PROTECTED_GUEST_STATE, vcpu))
+ 		return true;
+ 
+-	if (kvm_arch_interrupt_allowed(vcpu) && kvm_cpu_has_interrupt(vcpu))
++	if (kvm_is_interrupt_allowed(vcpu) && kvm_cpu_has_interrupt(vcpu))
+ 		return true;
+ 
+ 	if (kvm_hv_has_stimer_pending(vcpu))
+@@ -10308,11 +10320,6 @@ int kvm_arch_vcpu_should_kick(struct kvm_vcpu *vcpu)
+ 	return kvm_vcpu_exiting_guest_mode(vcpu) == IN_GUEST_MODE;
+ }
+ 
+-int kvm_arch_interrupt_allowed(struct kvm_vcpu *vcpu)
+-{
+-	return kvm_x86_call(interrupt_allowed)(vcpu, false);
+-}
+-
+ static inline u32 kvm_async_pf_hash_fn(gfn_t gfn)
+ {
+ 	BUILD_BUG_ON(!is_power_of_2(ASYNC_PF_PER_VCPU));
+@@ -10448,7 +10455,7 @@ bool kvm_can_do_async_pf(struct kvm_vcpu *vcpu)
+ 	 * If interrupts are off we cannot even use an artificial
+ 	 * halt state.
+ 	 */
+-	return kvm_arch_interrupt_allowed(vcpu);
++	return kvm_is_interrupt_allowed(vcpu);
+ }
+ 
+ bool kvm_arch_async_page_not_present(struct kvm_vcpu *vcpu,
+-- 
+2.55.0
+

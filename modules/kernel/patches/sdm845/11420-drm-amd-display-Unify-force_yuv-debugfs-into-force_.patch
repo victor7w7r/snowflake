@@ -1,0 +1,197 @@
+From 664431d20317569b8daba2d4b1a25df64908e33e Mon Sep 17 00:00:00 2001
+From: Ivan Lipski <ivan.lipski@amd.com>
+Date: Tue, 21 Jul 2026 17:49:24 -0400
+Subject: [PATCH 11420/15333] drm/amd/display: Unify force_yuv debugfs into
+ force_yuv_pixel_format
+
+[Why]
+The connector exposed a single force_yuv420_output boolean debugfs and
+carried force_yuv420_output / force_yuv422_output boolean fields to force a
+chroma encoding. This cannot express "force RGB" or "force YCbCr444", and
+diverges from the upstream amdgpu_dm which uses a single
+force_yuv_pixel_format field keyed on enum dc_pixel_encoding.
+
+[How]
+- Replace the two boolean fields with a single uint8_t
+  force_yuv_pixel_format holding an enum dc_pixel_encoding value
+  (PIXEL_ENCODING_UNDEFINED == no override).
+- Replace the force_yuv420_output boolean debugfs with a read/write
+  force_yuv_pixel_format file that takes the encoding directly
+  (1=RGB, 2=YCbCr422, 3=YCbCr444, 4=YCbCr420), validated against
+  PIXEL_ENCODING_COUNT.
+- Convert the existing readers/writers in amdgpu_dm_connector.c to the
+  new field, preserving current behaviour.
+- Add YCbCr444 force support now that the field can express it.
+
+v2: Merge with changed from drm-misc (Alex)
+
+Assisted-by: Copilot:claude-opus-4.8
+Reviewed-by: Jerry Zuo <jerry.zuo@amd.com>
+Signed-off-by: Ivan Lipski <ivan.lipski@amd.com>
+Signed-off-by: Roman Li <roman.li@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h |  2 -
+ .../display/amdgpu_dm/amdgpu_dm_connector.c   | 22 +++----
+ .../amd/display/amdgpu_dm/amdgpu_dm_debugfs.c | 57 +++++++------------
+ 3 files changed, 32 insertions(+), 49 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+index 1ddf5bc88a03..3524931451c8 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+@@ -857,8 +857,6 @@ struct amdgpu_dm_connector {
+ 	struct mutex hpd_lock;
+ 
+ 	bool fake_enable;
+-	bool force_yuv420_output;
+-	bool force_yuv422_output;
+ 	uint8_t force_yuv_pixel_format;
+ 	struct dsc_preferred_settings dsc_settings;
+ 	struct psr_caps psr_caps;
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+index ba41ae10c4cd..c8a1ab8c3b16 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+@@ -147,7 +147,7 @@ STATIC_IFN_KUNIT int dm_encoder_helper_atomic_check(struct drm_encoder *encoder,
+ 		int max_bpc = conn_state->max_requested_bpc;
+ 
+ 		is_y420 = drm_mode_is_420_also(&connector->display_info, adjusted_mode) &&
+-			  aconnector->force_yuv420_output;
++			  aconnector->force_yuv_pixel_format == PIXEL_ENCODING_YCBCR420;
+ 		color_depth = amdgpu_dm_convert_color_depth_from_display_info(connector,
+ 								    is_y420,
+ 								    max_bpc);
+@@ -2314,17 +2314,18 @@ amdgpu_dm_create_validate_stream_for_sink(struct drm_connector *connector,
+ 	 *  - RGB is the mandatory baseline and always available.
+ 	 *  - YCbCr444 is only meaningful for native HDMI sinks.
+ 	 *  - A 420-only mode collapses the mask to YCbCr420 alone.
+-	 *  - The debugfs force_yuv420_output / force_yuv422_output overrides
+-	 *    pin the encoding to a single value when set. An explicit YCbCr420
+-	 *    force is honoured even on modes the sink only lists as RGB/4:4:4
+-	 *    capable (drm_mode_is_420_also() clear), as required for HDMI
+-	 *    compliance testing; dc_validate_stream() still rejects anything
+-	 *    the link genuinely cannot carry. The YCbCr422 force stays gated on
++	 *  - The debugfs force_yuv_pixel_format override pins the encoding to a
++	 *    single dc_pixel_encoding when set (PIXEL_ENCODING_UNDEFINED means
++	 *    "no override"). An explicit YCbCr420 force is honoured even on
++	 *    modes the sink only lists as RGB/4:4:4 capable
++	 *    (drm_mode_is_420_also() clear), as required for HDMI compliance
++	 *    testing; dc_validate_stream() still rejects anything the link
++	 *    genuinely cannot carry. The YCbCr422/YCbCr444 forces stay gated on
+ 	 *    the sink's advertised caps.
+ 	 */
+-	want_420 = (aconnector && aconnector->force_yuv420_output) ||
++	want_420 = (aconnector->force_yuv_pixel_format == PIXEL_ENCODING_YCBCR420) ||
+ 		(drm_state && drm_state->color_format == DRM_CONNECTOR_COLOR_FORMAT_YCBCR420);
+-	want_422 = (aconnector && aconnector->force_yuv422_output) ||
++	want_422 = (aconnector->force_yuv_pixel_format == PIXEL_ENCODING_YCBCR422) ||
+ 		(drm_state && drm_state->color_format == DRM_CONNECTOR_COLOR_FORMAT_YCBCR422);
+ 
+ 	if (drm_mode_is_420_only(info, drm_mode) &&
+@@ -2335,7 +2336,8 @@ amdgpu_dm_create_validate_stream_for_sink(struct drm_connector *connector,
+ 	} else if ((info->color_formats & BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR422)) &&
+ 		   want_422 && is_dp_or_hdmi) {
+ 		encoding_mask = BIT(PIXEL_ENCODING_YCBCR422);
+-	} else if ((drm_state && drm_state->color_format == DRM_CONNECTOR_COLOR_FORMAT_YCBCR444) &&
++	} else if (((aconnector->force_yuv_pixel_format == PIXEL_ENCODING_YCBCR444) ||
++		    (drm_state && drm_state->color_format == DRM_CONNECTOR_COLOR_FORMAT_YCBCR444)) &&
+ 		   (info->color_formats & BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR444)) &&
+ 		   is_dp_or_hdmi) {
+ 		encoding_mask = BIT(PIXEL_ENCODING_YCBCR444);
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_debugfs.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_debugfs.c
+index 830cf8da06b4..c4b2fc690fd7 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_debugfs.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_debugfs.c
+@@ -3199,57 +3199,42 @@ static const struct {
+ };
+ 
+ /*
+- * Force YUV420 output if available from the given mode
++ * Force a specific pixel encoding for the given connector, overriding the
++ * encoding that stream validation would otherwise pick. The value is an
++ * enum dc_pixel_encoding:
++ *
++ *   0 - PIXEL_ENCODING_UNDEFINED (no override, default)
++ *   1 - PIXEL_ENCODING_RGB
++ *   2 - PIXEL_ENCODING_YCBCR422
++ *   3 - PIXEL_ENCODING_YCBCR444
++ *   4 - PIXEL_ENCODING_YCBCR420
+  */
+-static int force_yuv420_output_set(void *data, u64 val)
++static int force_yuv_pixel_format_set(void *data, u64 val)
+ {
+ 	struct amdgpu_dm_connector *connector = data;
+ 
+-	connector->force_yuv420_output = (bool)val;
+-	connector->force_yuv_pixel_format = PIXEL_ENCODING_YCBCR420;
++	if (val >= PIXEL_ENCODING_COUNT)
++		return -EINVAL;
++
++	connector->force_yuv_pixel_format = (uint8_t)val;
+ 
+ 	return 0;
+ }
+ 
+ /*
+- * Check if YUV420 is forced when available from the given mode
++ * Read back the pixel encoding currently forced on the given connector.
+  */
+-static int force_yuv420_output_get(void *data, u64 *val)
++static int force_yuv_pixel_format_get(void *data, u64 *val)
+ {
+ 	struct amdgpu_dm_connector *connector = data;
+ 
+-	*val = connector->force_yuv420_output;
++	*val = connector->force_yuv_pixel_format;
+ 
+ 	return 0;
+ }
+ 
+-DEFINE_DEBUGFS_ATTRIBUTE(force_yuv420_output_fops, force_yuv420_output_get,
+-			 force_yuv420_output_set, "%llu\n");
+-
+-static int force_yuv422_output_set(void *data, u64 val)
+-{
+-      struct amdgpu_dm_connector *connector = data;
+-
+-      connector->force_yuv422_output = (bool)val;
+-      connector->force_yuv_pixel_format = PIXEL_ENCODING_YCBCR422;
+-
+-      return 0;
+-}
+-
+-DEFINE_DEBUGFS_ATTRIBUTE(force_yuv422_output_fops, NULL,
+-                       force_yuv422_output_set, "%llu\n");
+-
+-static int force_yuv444_output_set(void *data, u64 val)
+-{
+-      struct amdgpu_dm_connector *connector = data;
+-
+-      connector->force_yuv_pixel_format = PIXEL_ENCODING_YCBCR444;
+-
+-      return 0;
+-}
+-
+-DEFINE_DEBUGFS_ATTRIBUTE(force_yuv444_output_fops, NULL,
+-                       force_yuv444_output_set, "%llu\n");
++DEFINE_DEBUGFS_ATTRIBUTE(force_yuv_pixel_format_fops, force_yuv_pixel_format_get,
++			 force_yuv_pixel_format_set, "%llu\n");
+ 
+ /*
+  *  Read Replay state
+@@ -3699,9 +3684,7 @@ static const struct {
+ 	char *name;
+ 	const struct file_operations *fops;
+ } connector_debugfs_entries[] = {
+-		{"force_yuv420_output", &force_yuv420_output_fops},
+-		{"force_yuv422_output", &force_yuv422_output_fops},
+-		{"force_yuv444_output", &force_yuv444_output_fops},
++		{"force_yuv_pixel_format", &force_yuv_pixel_format_fops},
+ 		{"trigger_hotplug", &trigger_hotplug_debugfs_fops},
+ 		{"internal_display", &internal_display_fops},
+ 		{"odm_combine_segments", &odm_combine_segments_fops}
+-- 
+2.55.0
+

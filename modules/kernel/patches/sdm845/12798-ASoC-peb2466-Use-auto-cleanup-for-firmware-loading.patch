@@ -1,0 +1,46 @@
+From 38a3855d0c378d3e414ea2eb4fd4e0e099ff95fa Mon Sep 17 00:00:00 2001
+From: Takashi Iwai <tiwai@suse.de>
+Date: Thu, 6 Aug 2026 15:59:44 +0200
+Subject: [PATCH 12798/15333] ASoC: peb2466: Use auto-cleanup for firmware
+ loading
+
+Simplify the code to manage the firmware loading with __free(firmware)
+auto-cleanup.
+
+Only the code refactoring, no functional changes.
+
+Reviewed-by: Herve Codina <herve.codina@bootlin.com>
+Signed-off-by: Takashi Iwai <tiwai@suse.de>
+Link: https://patch.msgid.link/20260806140006.1412298-13-tiwai@suse.de
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/peb2466.c | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/sound/soc/codecs/peb2466.c b/sound/soc/codecs/peb2466.c
+index 5a1ed02abb84..f1ded68c2d75 100644
+--- a/sound/soc/codecs/peb2466.c
++++ b/sound/soc/codecs/peb2466.c
+@@ -1538,17 +1538,14 @@ static int peb2466_fw_parse(struct snd_soc_component *component,
+ 
+ static int peb2466_load_coeffs(struct snd_soc_component *component, const char *fw_name)
+ {
+-	const struct firmware *fw;
++	const struct firmware *fw __free(firmware) = NULL;
+ 	int ret;
+ 
+ 	ret = request_firmware(&fw, fw_name, component->dev);
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = peb2466_fw_parse(component, fw->data, fw->size);
+-	release_firmware(fw);
+-
+-	return ret;
++	return peb2466_fw_parse(component, fw->data, fw->size);
+ }
+ 
+ static int peb2466_component_probe(struct snd_soc_component *component)
+-- 
+2.55.0
+

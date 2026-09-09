@@ -1,0 +1,50 @@
+From 7b51d4c4256cd5f8922f7ad45e79b5fff89c0995 Mon Sep 17 00:00:00 2001
+From: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Date: Thu, 30 Jul 2026 15:28:56 +0300
+Subject: [PATCH 09568/15333] ASoC: SOF: Intel: hda: Power down DSP if it is
+ left enabled in pre_fw_run()
+
+It is expected that the DSP is in power down state when the firmware boot
+is attempted.
+If the DSP for any reason was left powered up then the DSP boot will
+fail since the ROM boot sequence might not be able to run.
+
+Make sure that the DSP is off before proceeding to boot it up.
+
+Signed-off-by: Peter Ujfalusi <peter.ujfalusi@linux.intel.com>
+Reviewed-by: Bard Liao <yung-chuan.liao@linux.intel.com>
+Reviewed-by: Liam Girdwood <liam.r.girdwood@intel.com>
+Link: https://patch.msgid.link/20260730122857.5294-2-peter.ujfalusi@linux.intel.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/sof/intel/hda.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/sound/soc/sof/intel/hda.c b/sound/soc/sof/intel/hda.c
+index dc85903b8d46..007a8e4a2f3d 100644
+--- a/sound/soc/sof/intel/hda.c
++++ b/sound/soc/sof/intel/hda.c
+@@ -421,6 +421,20 @@ static inline void hda_dsp_sdw_process_mic_privacy(struct snd_sof_dev *sdev) { }
+ /* pre fw run operations */
+ int hda_dsp_pre_fw_run(struct snd_sof_dev *sdev)
+ {
++	struct sof_intel_hda_dev *hda = sdev->pdata->hw_pdata;
++	const struct sof_intel_dsp_desc *chip = hda->desc;
++	int ret;
++
++	/* Power down DSP if left enabled to ensure a clean boot state. */
++	if (hda_dsp_core_is_enabled(sdev, chip->host_managed_cores_mask)) {
++		dev_dbg(sdev->dev, "DSP core enabled, power down DSP first\n");
++
++		ret = chip->power_down_dsp(sdev);
++		if (ret < 0)
++			dev_warn(sdev->dev,
++				 "%s: failed to power down already-enabled DSP\n", __func__);
++	}
++
+ 	/* disable clock gating and power gating */
+ 	return hda_dsp_ctrl_clock_power_gating(sdev, false);
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,113 @@
+From 701b7bcad8681b161de791579aeb3de285f9a20f Mon Sep 17 00:00:00 2001
+From: Tejun Heo <tj@kernel.org>
+Date: Mon, 13 Jul 2026 22:18:43 -1000
+Subject: [PATCH 04316/15333] sched_ext: Add the SCX_CAP_ENQ cap
+
+Add SCX_CAP_ENQ, which gates inserting tasks onto a cid's local DSQ. Unlike
+IMMED enqueue, plain enqueues can pile up, so ENQ is the stronger cap and
+implies ENQ_IMMED. Losing ENQ also triggers the reenq scan. The scan tests
+each queued task and the running task against the cap each needs via
+scx_caps_for_task(), so an ENQ-only loss reenqueues plain tasks, evicting a
+running one, while IMMED tasks, which need only ENQ_IMMED, stay put.
+
+Signed-off-by: Tejun Heo <tj@kernel.org>
+Reviewed-by: Andrea Righi <arighi@nvidia.com>
+---
+ kernel/sched/ext/ext.c      |  1 +
+ kernel/sched/ext/internal.h | 14 +++++++++++---
+ kernel/sched/ext/sub.h      | 12 ++++++++++--
+ 3 files changed, 22 insertions(+), 5 deletions(-)
+
+diff --git a/kernel/sched/ext/ext.c b/kernel/sched/ext/ext.c
+index 39b17626c398..90dc3ef4b71f 100644
+--- a/kernel/sched/ext/ext.c
++++ b/kernel/sched/ext/ext.c
+@@ -4963,6 +4963,7 @@ SCX_ATTR(events);
+ #ifdef CONFIG_EXT_SUB_SCHED
+ static const char *scx_cap_names[__SCX_NR_CAPS] = {
+ 	[__SCX_CAP_ENQ_IMMED]	= "enq_immed",
++	[__SCX_CAP_ENQ]		= "enq",
+ };
+ 
+ static ssize_t scx_attr_caps_show(struct kobject *kobj,
+diff --git a/kernel/sched/ext/internal.h b/kernel/sched/ext/internal.h
+index ab1dfad28cb5..86f9db116a8e 100644
+--- a/kernel/sched/ext/internal.h
++++ b/kernel/sched/ext/internal.h
+@@ -1224,8 +1224,8 @@ struct scx_sched_pcpu {
+ 	/*
+ 	 * pshard->caps[cap_bit] is the set of cids the sched holds that one
+ 	 * cap on. ecaps is its transpose: the set of SCX_CAP_* bits the sched
+-	 * holds on this cpu, collected so that the hot-path check is a single
+-	 * read.
++	 * effectively holds on this cpu, with implied caps folded in, so that
++	 * the hot-path check is a single read.
+ 	 *
+ 	 * While pshard->caps[] under pshard->lock is the target configuration,
+ 	 * ecaps is the effective copy owned by the cpu. It is written under the
+@@ -1287,20 +1287,28 @@ struct scx_sched_pnode {
+  * the allocation pattern.
+  *
+  * ENQ_IMMED  insert an IMMED task onto the cid's local DSQ
++ *
++ * ENQ        insert any task onto the cid's local DSQ (implies ENQ_IMMED)
++ *
++ * Implied caps apply to the holder's own use of a cid, not to delegation.
++ * scx_bpf_sub_grant() delegates literally-held caps, so a cap held only through
++ * implication is usable but cannot be re-delegated to a child.
+  */
+ enum scx_cap_flags {
+ 	__SCX_CAP_ENQ_IMMED		= 0,
++	__SCX_CAP_ENQ			= 1,
+ 
+ 	__SCX_NR_CAPS,
+ 	__SCX_CAP_ALL			= BIT_U64(__SCX_NR_CAPS) - 1,
+ 
+ 	SCX_CAP_ENQ_IMMED		= BIT_U64(__SCX_CAP_ENQ_IMMED),
++	SCX_CAP_ENQ			= BIT_U64(__SCX_CAP_ENQ),
+ 
+ 	/* alias for minimal cap to make any use of a cpu */
+ 	SCX_CAP_BASE			= SCX_CAP_ENQ_IMMED,
+ 
+ 	/* caps whose loss strands queued tasks, see scx_process_sync_ecaps() */
+-	SCX_CAPS_REENQ_ON_LOSS		= SCX_CAP_ENQ_IMMED,
++	SCX_CAPS_REENQ_ON_LOSS		= SCX_CAP_ENQ_IMMED | SCX_CAP_ENQ,
+ };
+ 
+ #ifdef CONFIG_EXT_SUB_SCHED
+diff --git a/kernel/sched/ext/sub.h b/kernel/sched/ext/sub.h
+index 3b15a10b8c8f..e531273b8708 100644
+--- a/kernel/sched/ext/sub.h
++++ b/kernel/sched/ext/sub.h
+@@ -115,18 +115,26 @@ static inline u64 scx_caps_for_enq(u64 enq_flags)
+ 	/* a restored task must be put into the local DSQ regardless of caps */
+ 	if (enq_flags & SCX_ENQ_IGNORE_CAPS)
+ 		return 0;
+-	return SCX_CAP_ENQ_IMMED;
++	if (enq_flags & SCX_ENQ_IMMED)
++		return SCX_CAP_ENQ_IMMED;
++	return SCX_CAP_ENQ;
+ }
+ 
+ /* map queued @p to the SCX_CAP_* bit required to stay on its local DSQ */
+ static inline u64 scx_caps_for_task(struct task_struct *p)
+ {
+-	return SCX_CAP_ENQ_IMMED;
++	if (p->scx.flags & SCX_TASK_IMMED)
++		return SCX_CAP_ENQ_IMMED;
++	return SCX_CAP_ENQ;
+ }
+ 
+ /* caps implied by holding @cap */
+ static inline u64 scx_caps_implied(u64 cap)
+ {
++	switch (cap) {
++	case SCX_CAP_ENQ:
++		return SCX_CAP_ENQ_IMMED;
++	}
+ 	return 0;
+ }
+ 
+-- 
+2.55.0
+

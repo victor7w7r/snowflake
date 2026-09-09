@@ -1,0 +1,58 @@
+From 05dc12d664f54cd23dad1e13c2fadbbd73f08450 Mon Sep 17 00:00:00 2001
+From: Magnus Lindholm <linmag7@gmail.com>
+Date: Mon, 6 Jul 2026 18:56:44 +0200
+Subject: [PATCH 05792/15333] alpha: make irqflags helpers operate on IPL state
+
+Alpha interrupt masking is controlled by the PAL IPL value, not by the
+full processor status word.  Make arch_local_save_flags() return the
+current IPL directly, and make arch_local_irq_restore() and
+arch_irqs_disabled_flags() treat their argument as IPL state.
+
+Mask the low IPL bits in the restore and test helpers so callers which
+still pass a saved PS value continue to behave as expected.
+
+This prepares the irqflags helpers for lockdep IRQ-state tracking, where
+the saved flags value is used to determine whether hard IRQs are enabled
+or disabled.
+
+Reviewed-by: Matt Turner <mattst88@gmail.com>
+Tested-by: Matt Turner <mattst88@gmail.com>
+Signed-off-by: Magnus Lindholm <linmag7@gmail.com>
+Link: https://lore.kernel.org/r/20260706170019.2941459-4-linmag7@gmail.com
+Signed-off-by: Magnus Lindholm <linmag7@gmail.com>
+---
+ arch/alpha/include/asm/irqflags.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/arch/alpha/include/asm/irqflags.h b/arch/alpha/include/asm/irqflags.h
+index 9f25d4e0d37e..f207544f52de 100644
+--- a/arch/alpha/include/asm/irqflags.h
++++ b/arch/alpha/include/asm/irqflags.h
+@@ -26,7 +26,7 @@ extern int __min_ipl;
+ 
+ static inline unsigned long arch_local_save_flags(void)
+ {
+-	return rdps();
++	return getipl();
+ }
+ 
+ static inline void arch_local_irq_disable(void)
+@@ -51,13 +51,13 @@ static inline void arch_local_irq_enable(void)
+ static inline void arch_local_irq_restore(unsigned long flags)
+ {
+ 	barrier();
+-	setipl(flags);
++	setipl(flags & 7);
+ 	barrier();
+ }
+ 
+ static inline bool arch_irqs_disabled_flags(unsigned long flags)
+ {
+-	return flags == IPL_MAX;
++	return (flags & 7) == IPL_MAX;
+ }
+ 
+ static inline bool arch_irqs_disabled(void)
+-- 
+2.55.0
+

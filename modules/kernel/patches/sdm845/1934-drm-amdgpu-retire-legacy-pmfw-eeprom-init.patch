@@ -1,0 +1,75 @@
+From fa6478865c9d682dd09cc688f8c0e96f87522011 Mon Sep 17 00:00:00 2001
+From: Ce Sun <cesun102@amd.com>
+Date: Fri, 3 Apr 2026 10:52:01 +0800
+Subject: [PATCH 01934/15333] drm/amdgpu: retire legacy pmfw eeprom init
+
+Remove the legacy pmfw eeprom initialization function,
+as the feature is deprecated and unused
+
+Reviewed-by: Hawking Zhang <Hawking.Zhang@amd.com>
+Signed-off-by: Ce Sun <cesun102@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.c    | 39 -------------------
+ 1 file changed, 39 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.c
+index f5d1bc1142a8..09aa5655e3c1 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ras_eeprom.c
+@@ -1485,42 +1485,6 @@ static int __read_table_ras_info(struct amdgpu_ras_eeprom_control *control)
+ 	return res == RAS_TABLE_V2_1_INFO_SIZE ? 0 : res;
+ }
+ 
+-static int amdgpu_ras_smu_eeprom_init(struct amdgpu_ras_eeprom_control *control)
+-{
+-	struct amdgpu_device *adev = to_amdgpu_device(control);
+-	struct amdgpu_ras_eeprom_table_header *hdr = &control->tbl_hdr;
+-	struct amdgpu_ras *ras = amdgpu_ras_get_context(adev);
+-	uint64_t local_time;
+-	int res;
+-
+-	ras->is_rma = false;
+-
+-	if (!__is_ras_eeprom_supported(adev))
+-		return 0;
+-	mutex_init(&control->ras_tbl_mutex);
+-
+-	res = amdgpu_ras_smu_get_table_version(adev, &(hdr->version));
+-	if (res)
+-		return res;
+-
+-	res = amdgpu_ras_smu_get_badpage_count(adev,
+-								&(control->ras_num_recs), 100);
+-	if (res)
+-		return res;
+-
+-	local_time = (uint64_t)ktime_get_real_seconds();
+-	res = amdgpu_ras_smu_set_timestamp(adev, local_time);
+-	if (res)
+-		return res;
+-
+-	control->ras_max_record_count = 4000;
+-
+-	control->ras_num_mca_recs = 0;
+-	control->ras_num_pa_recs = 0;
+-
+-	return 0;
+-}
+-
+ int amdgpu_ras_eeprom_init(struct amdgpu_ras_eeprom_control *control)
+ {
+ 	struct amdgpu_device *adev = to_amdgpu_device(control);
+@@ -1531,9 +1495,6 @@ int amdgpu_ras_eeprom_init(struct amdgpu_ras_eeprom_control *control)
+ 	uint32_t vram_type = adev->gmc.vram_type;
+ 	int res;
+ 
+-	if (amdgpu_ras_smu_eeprom_supported(adev))
+-		return amdgpu_ras_smu_eeprom_init(control);
+-
+ 	ras->is_rma = false;
+ 
+ 	if (!__is_ras_eeprom_supported(adev))
+-- 
+2.55.0
+

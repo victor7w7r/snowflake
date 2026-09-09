@@ -1,0 +1,241 @@
+From 1b09c13c90ccd908e62f82b309fade358b41cd21 Mon Sep 17 00:00:00 2001
+From: Steffen Eiden <seiden@linux.ibm.com>
+Date: Thu, 2 Jul 2026 10:29:28 +0200
+Subject: [PATCH 13649/15333] KVM: s390: Move s390 kvm code into a subdirectory
+
+Move all the code required to run s390 KVM guests on s390 to a s390
+subdirectory. Move gmap related code into a gmap directory to later
+share gmap code between KVM implementations.
+
+Update S390 VFIO-PCI MAINTAINERS filepath.
+
+No functional change.
+
+Signed-off-by: Steffen Eiden <seiden@linux.ibm.com>
+Reviewed-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+Signed-off-by: Christian Borntraeger <borntraeger@linux.ibm.com>
+---
+ MAINTAINERS                           |  2 +-
+ arch/s390/kvm/Makefile                | 11 +----------
+ arch/s390/kvm/gmap/Makefile           |  5 +++++
+ arch/s390/kvm/{ => gmap}/dat.c        |  0
+ arch/s390/kvm/{ => gmap}/dat.h        |  0
+ arch/s390/kvm/{ => gmap}/faultin.c    |  0
+ arch/s390/kvm/{ => gmap}/faultin.h    |  0
+ arch/s390/kvm/{ => gmap}/gmap.c       |  0
+ arch/s390/kvm/{ => gmap}/gmap.h       |  0
+ arch/s390/kvm/{ => gmap}/trace_gmap.h |  2 +-
+ arch/s390/kvm/s390/Makefile           | 14 ++++++++++++++
+ arch/s390/kvm/{ => s390}/diag.c       |  0
+ arch/s390/kvm/{ => s390}/gaccess.c    |  0
+ arch/s390/kvm/{ => s390}/gaccess.h    |  0
+ arch/s390/kvm/{ => s390}/guestdbg.c   |  0
+ arch/s390/kvm/{ => s390}/intercept.c  |  0
+ arch/s390/kvm/{ => s390}/interrupt.c  |  0
+ arch/s390/kvm/{ => s390}/pci.c        |  0
+ arch/s390/kvm/{ => s390}/pci.h        |  0
+ arch/s390/kvm/{ => s390}/priv.c       |  0
+ arch/s390/kvm/{ => s390}/pv.c         |  0
+ arch/s390/kvm/{ => s390}/s390.c       |  0
+ arch/s390/kvm/{ => s390}/s390.h       |  0
+ arch/s390/kvm/{ => s390}/sigp.c       |  0
+ arch/s390/kvm/{ => s390}/trace-s390.h |  0
+ arch/s390/kvm/{ => s390}/trace.h      |  0
+ arch/s390/kvm/{ => s390}/vsie.c       |  0
+ 27 files changed, 22 insertions(+), 12 deletions(-)
+ create mode 100644 arch/s390/kvm/gmap/Makefile
+ rename arch/s390/kvm/{ => gmap}/dat.c (100%)
+ rename arch/s390/kvm/{ => gmap}/dat.h (100%)
+ rename arch/s390/kvm/{ => gmap}/faultin.c (100%)
+ rename arch/s390/kvm/{ => gmap}/faultin.h (100%)
+ rename arch/s390/kvm/{ => gmap}/gmap.c (100%)
+ rename arch/s390/kvm/{ => gmap}/gmap.h (100%)
+ rename arch/s390/kvm/{ => gmap}/trace_gmap.h (96%)
+ create mode 100644 arch/s390/kvm/s390/Makefile
+ rename arch/s390/kvm/{ => s390}/diag.c (100%)
+ rename arch/s390/kvm/{ => s390}/gaccess.c (100%)
+ rename arch/s390/kvm/{ => s390}/gaccess.h (100%)
+ rename arch/s390/kvm/{ => s390}/guestdbg.c (100%)
+ rename arch/s390/kvm/{ => s390}/intercept.c (100%)
+ rename arch/s390/kvm/{ => s390}/interrupt.c (100%)
+ rename arch/s390/kvm/{ => s390}/pci.c (100%)
+ rename arch/s390/kvm/{ => s390}/pci.h (100%)
+ rename arch/s390/kvm/{ => s390}/priv.c (100%)
+ rename arch/s390/kvm/{ => s390}/pv.c (100%)
+ rename arch/s390/kvm/{ => s390}/s390.c (100%)
+ rename arch/s390/kvm/{ => s390}/s390.h (100%)
+ rename arch/s390/kvm/{ => s390}/sigp.c (100%)
+ rename arch/s390/kvm/{ => s390}/trace-s390.h (100%)
+ rename arch/s390/kvm/{ => s390}/trace.h (100%)
+ rename arch/s390/kvm/{ => s390}/vsie.c (100%)
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 78f3f17f7b44..66fb3d50b580 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -23915,7 +23915,7 @@ L:	linux-s390@vger.kernel.org
+ L:	kvm@vger.kernel.org
+ S:	Supported
+ T:	git git://git.kernel.org/pub/scm/linux/kernel/git/kvms390/linux.git
+-F:	arch/s390/kvm/pci*
++F:	arch/s390/kvm/s390/pci*
+ F:	drivers/vfio/pci/vfio_pci_zdev.c
+ F:	include/uapi/linux/vfio_zdev.h
+ 
+diff --git a/arch/s390/kvm/Makefile b/arch/s390/kvm/Makefile
+index 961de97b8e80..a4e3875b5bdd 100644
+--- a/arch/s390/kvm/Makefile
++++ b/arch/s390/kvm/Makefile
+@@ -3,13 +3,4 @@
+ #
+ # Copyright IBM Corp. 2008
+ 
+-include $(srctree)/virt/kvm/Makefile.kvm
+-
+-ccflags-y := -I$(src)
+-
+-kvm-y += s390.o intercept.o interrupt.o priv.o sigp.o
+-kvm-y += diag.o gaccess.o guestdbg.o vsie.o pv.o
+-kvm-y += dat.o gmap.o faultin.o
+-
+-kvm-$(CONFIG_VFIO_PCI_ZDEV_KVM) += pci.o
+-obj-$(CONFIG_KVM) += kvm.o
++obj-$(CONFIG_KVM) += s390/
+diff --git a/arch/s390/kvm/gmap/Makefile b/arch/s390/kvm/gmap/Makefile
+new file mode 100644
+index 000000000000..3a4f8df11622
+--- /dev/null
++++ b/arch/s390/kvm/gmap/Makefile
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: GPL-2.0
++
++GMAP ?= ../gmap
++
++gmap-y += $(GMAP)/dat.o $(GMAP)/gmap.o $(GMAP)/faultin.o
+diff --git a/arch/s390/kvm/dat.c b/arch/s390/kvm/gmap/dat.c
+similarity index 100%
+rename from arch/s390/kvm/dat.c
+rename to arch/s390/kvm/gmap/dat.c
+diff --git a/arch/s390/kvm/dat.h b/arch/s390/kvm/gmap/dat.h
+similarity index 100%
+rename from arch/s390/kvm/dat.h
+rename to arch/s390/kvm/gmap/dat.h
+diff --git a/arch/s390/kvm/faultin.c b/arch/s390/kvm/gmap/faultin.c
+similarity index 100%
+rename from arch/s390/kvm/faultin.c
+rename to arch/s390/kvm/gmap/faultin.c
+diff --git a/arch/s390/kvm/faultin.h b/arch/s390/kvm/gmap/faultin.h
+similarity index 100%
+rename from arch/s390/kvm/faultin.h
+rename to arch/s390/kvm/gmap/faultin.h
+diff --git a/arch/s390/kvm/gmap.c b/arch/s390/kvm/gmap/gmap.c
+similarity index 100%
+rename from arch/s390/kvm/gmap.c
+rename to arch/s390/kvm/gmap/gmap.c
+diff --git a/arch/s390/kvm/gmap.h b/arch/s390/kvm/gmap/gmap.h
+similarity index 100%
+rename from arch/s390/kvm/gmap.h
+rename to arch/s390/kvm/gmap/gmap.h
+diff --git a/arch/s390/kvm/trace_gmap.h b/arch/s390/kvm/gmap/trace_gmap.h
+similarity index 96%
+rename from arch/s390/kvm/trace_gmap.h
+rename to arch/s390/kvm/gmap/trace_gmap.h
+index a3cad705021b..15ec88bdce55 100644
+--- a/arch/s390/kvm/trace_gmap.h
++++ b/arch/s390/kvm/gmap/trace_gmap.h
+@@ -7,7 +7,7 @@
+ #undef TRACE_SYSTEM
+ #define TRACE_SYSTEM kvm
+ #undef TRACE_INCLUDE_PATH
+-#define TRACE_INCLUDE_PATH .
++#define TRACE_INCLUDE_PATH ../gmap
+ #undef TRACE_INCLUDE_FILE
+ #define TRACE_INCLUDE_FILE trace_gmap
+ 
+diff --git a/arch/s390/kvm/s390/Makefile b/arch/s390/kvm/s390/Makefile
+new file mode 100644
+index 000000000000..762a63826423
+--- /dev/null
++++ b/arch/s390/kvm/s390/Makefile
+@@ -0,0 +1,14 @@
++# SPDX-License-Identifier: GPL-2.0
++
++KVM := ../../../../virt/kvm
++include $(srctree)/virt/kvm/Makefile.kvm
++include $(srctree)/arch/s390/kvm/gmap/Makefile
++
++ccflags-y := -I$(src) -I$(srctree)/arch/s390/kvm/gmap
++
++kvm-y += s390.o intercept.o interrupt.o priv.o sigp.o
++kvm-y += diag.o gaccess.o guestdbg.o vsie.o pv.o
++kvm-y += $(gmap-y)
++
++kvm-$(CONFIG_VFIO_PCI_ZDEV_KVM) += pci.o
++obj-$(CONFIG_KVM) += kvm.o
+diff --git a/arch/s390/kvm/diag.c b/arch/s390/kvm/s390/diag.c
+similarity index 100%
+rename from arch/s390/kvm/diag.c
+rename to arch/s390/kvm/s390/diag.c
+diff --git a/arch/s390/kvm/gaccess.c b/arch/s390/kvm/s390/gaccess.c
+similarity index 100%
+rename from arch/s390/kvm/gaccess.c
+rename to arch/s390/kvm/s390/gaccess.c
+diff --git a/arch/s390/kvm/gaccess.h b/arch/s390/kvm/s390/gaccess.h
+similarity index 100%
+rename from arch/s390/kvm/gaccess.h
+rename to arch/s390/kvm/s390/gaccess.h
+diff --git a/arch/s390/kvm/guestdbg.c b/arch/s390/kvm/s390/guestdbg.c
+similarity index 100%
+rename from arch/s390/kvm/guestdbg.c
+rename to arch/s390/kvm/s390/guestdbg.c
+diff --git a/arch/s390/kvm/intercept.c b/arch/s390/kvm/s390/intercept.c
+similarity index 100%
+rename from arch/s390/kvm/intercept.c
+rename to arch/s390/kvm/s390/intercept.c
+diff --git a/arch/s390/kvm/interrupt.c b/arch/s390/kvm/s390/interrupt.c
+similarity index 100%
+rename from arch/s390/kvm/interrupt.c
+rename to arch/s390/kvm/s390/interrupt.c
+diff --git a/arch/s390/kvm/pci.c b/arch/s390/kvm/s390/pci.c
+similarity index 100%
+rename from arch/s390/kvm/pci.c
+rename to arch/s390/kvm/s390/pci.c
+diff --git a/arch/s390/kvm/pci.h b/arch/s390/kvm/s390/pci.h
+similarity index 100%
+rename from arch/s390/kvm/pci.h
+rename to arch/s390/kvm/s390/pci.h
+diff --git a/arch/s390/kvm/priv.c b/arch/s390/kvm/s390/priv.c
+similarity index 100%
+rename from arch/s390/kvm/priv.c
+rename to arch/s390/kvm/s390/priv.c
+diff --git a/arch/s390/kvm/pv.c b/arch/s390/kvm/s390/pv.c
+similarity index 100%
+rename from arch/s390/kvm/pv.c
+rename to arch/s390/kvm/s390/pv.c
+diff --git a/arch/s390/kvm/s390.c b/arch/s390/kvm/s390/s390.c
+similarity index 100%
+rename from arch/s390/kvm/s390.c
+rename to arch/s390/kvm/s390/s390.c
+diff --git a/arch/s390/kvm/s390.h b/arch/s390/kvm/s390/s390.h
+similarity index 100%
+rename from arch/s390/kvm/s390.h
+rename to arch/s390/kvm/s390/s390.h
+diff --git a/arch/s390/kvm/sigp.c b/arch/s390/kvm/s390/sigp.c
+similarity index 100%
+rename from arch/s390/kvm/sigp.c
+rename to arch/s390/kvm/s390/sigp.c
+diff --git a/arch/s390/kvm/trace-s390.h b/arch/s390/kvm/s390/trace-s390.h
+similarity index 100%
+rename from arch/s390/kvm/trace-s390.h
+rename to arch/s390/kvm/s390/trace-s390.h
+diff --git a/arch/s390/kvm/trace.h b/arch/s390/kvm/s390/trace.h
+similarity index 100%
+rename from arch/s390/kvm/trace.h
+rename to arch/s390/kvm/s390/trace.h
+diff --git a/arch/s390/kvm/vsie.c b/arch/s390/kvm/s390/vsie.c
+similarity index 100%
+rename from arch/s390/kvm/vsie.c
+rename to arch/s390/kvm/s390/vsie.c
+-- 
+2.55.0
+

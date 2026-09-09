@@ -1,0 +1,151 @@
+From 3cbcc099b4d42667ea8c6b10d28f6060c104048c Mon Sep 17 00:00:00 2001
+From: Johannes Thumshirn <johannes.thumshirn@wdc.com>
+Date: Thu, 23 Jul 2026 17:54:26 +0200
+Subject: [PATCH 12023/15333] btrfs: zoned: drop stranded dirty metadata on
+ transaction abort
+
+On a zoned filesystem a freed tree block is not cleared but kept dirty
+and flagged EXTENT_BUFFER_ZONED_ZEROOUT, so a later writeback zeroes it
+out and advances the zone write pointer. A transaction abort turns the
+filesystem read-only before that writeback runs, so these buffers stay
+dirty and stranded ahead of the write pointer where btree_writepages()
+can no longer write them. They survive to the final iput() of the btree
+inode at unmount, which submits the write after the endio workqueues are
+gone, hanging unmount in folio_wait_writeback().
+
+Clear the dirty state of such buffers when cleaning up the aborted
+transaction, where the buffer tree still references all of them.
+
+Assisted-by: LLM (debugging, commit message)
+Reviewed-by: Boris Burkov <boris@bur.io>
+Signed-off-by: Johannes Thumshirn <johannes.thumshirn@wdc.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/disk-io.c   |  1 +
+ fs/btrfs/extent_io.c | 74 ++++++++++++++++++++++++++++++++++----------
+ fs/btrfs/extent_io.h |  1 +
+ 3 files changed, 60 insertions(+), 16 deletions(-)
+
+diff --git a/fs/btrfs/disk-io.c b/fs/btrfs/disk-io.c
+index e7433294906e..6cf147242506 100644
+--- a/fs/btrfs/disk-io.c
++++ b/fs/btrfs/disk-io.c
+@@ -5020,6 +5020,7 @@ static int btrfs_cleanup_transaction(struct btrfs_fs_info *fs_info)
+ 	btrfs_assert_delayed_root_empty(fs_info);
+ 	btrfs_destroy_all_delalloc_inodes(fs_info);
+ 	btrfs_drop_all_logs(fs_info);
++	btrfs_zoned_release_dirty_metadata(fs_info);
+ 	btrfs_free_all_qgroup_pertrans(fs_info);
+ 	mutex_unlock(&fs_info->transaction_kthread_mutex);
+ 
+diff --git a/fs/btrfs/extent_io.c b/fs/btrfs/extent_io.c
+index 585169ad98ba..52da6e544c11 100644
+--- a/fs/btrfs/extent_io.c
++++ b/fs/btrfs/extent_io.c
+@@ -4024,6 +4024,32 @@ void free_extent_buffer_stale(struct extent_buffer *eb)
+ 	release_extent_buffer(eb);
+ }
+ 
++static void clear_extent_buffer_dirty(struct extent_buffer *eb)
++{
++	struct btrfs_fs_info *fs_info = eb->fs_info;
++
++	if (!test_and_clear_bit(EXTENT_BUFFER_DIRTY, &eb->bflags))
++		return;
++
++	buffer_tree_clear_mark(eb, PAGECACHE_TAG_DIRTY);
++	percpu_counter_add_batch(&fs_info->dirty_metadata_bytes, -(s64)eb->len,
++				 fs_info->dirty_metadata_batch);
++
++	for (int i = 0; i < num_extent_folios(eb); i++) {
++		struct folio *folio = eb->folios[i];
++		bool last;
++
++		if (!folio_test_dirty(folio))
++			continue;
++		folio_lock(folio);
++		last = btrfs_meta_folio_clear_and_test_dirty(folio, eb);
++		if (last)
++			btrfs_clear_folio_dirty_tag(folio);
++		folio_unlock(folio);
++	}
++	WARN_ON(refcount_read(&eb->refs) == 0);
++}
++
+ void btrfs_clear_buffer_dirty(struct btrfs_trans_handle *trans,
+ 			      struct extent_buffer *eb)
+ {
+@@ -4048,26 +4074,42 @@ void btrfs_clear_buffer_dirty(struct btrfs_trans_handle *trans,
+ 		return;
+ 	}
+ 
+-	if (!test_and_clear_bit(EXTENT_BUFFER_DIRTY, &eb->bflags))
+-		return;
++	clear_extent_buffer_dirty(eb);
++}
+ 
+-	buffer_tree_clear_mark(eb, PAGECACHE_TAG_DIRTY);
+-	percpu_counter_add_batch(&fs_info->dirty_metadata_bytes, -(s64)eb->len,
+-				 fs_info->dirty_metadata_batch);
++/*
++ * On a zoned filesystem a freed tree block is kept dirty and flagged as
++ * EXTENT_BUFFER_ZONED_ZEROOUT so a later writeback zeroes it out and advances
++ * the zone write pointer. Such buffers still dirty when the filesystem is torn
++ * down can no longer be written back and are stale; if left dirty they hang the
++ * final iput() of the btree inode. Drop their dirty state, and the deferred
++ * zero-out along with it.
++ */
++void btrfs_zoned_release_dirty_metadata(struct btrfs_fs_info *fs_info)
++{
++	struct eb_batch batch;
++	unsigned long index = 0;
+ 
+-	for (int i = 0; i < num_extent_folios(eb); i++) {
+-		struct folio *folio = eb->folios[i];
+-		bool last;
++	if (!btrfs_is_zoned(fs_info))
++		return;
+ 
+-		if (!folio_test_dirty(folio))
+-			continue;
+-		folio_lock(folio);
+-		last = btrfs_meta_folio_clear_and_test_dirty(folio, eb);
+-		if (last)
+-			btrfs_clear_folio_dirty_tag(folio);
+-		folio_unlock(folio);
++	btrfs_zoned_meta_io_lock(fs_info);
++	eb_batch_init(&batch);
++	while (buffer_tree_get_ebs_tag(fs_info, &index, ULONG_MAX,
++				       PAGECACHE_TAG_DIRTY, &batch)) {
++		struct extent_buffer *eb;
++
++		while ((eb = eb_batch_next(&batch)) != NULL) {
++			btrfs_tree_lock(eb);
++			if (test_and_clear_bit(EXTENT_BUFFER_ZONED_ZEROOUT,
++					       &eb->bflags))
++				clear_extent_buffer_dirty(eb);
++			btrfs_tree_unlock(eb);
++		}
++		eb_batch_release(&batch);
++		cond_resched();
+ 	}
+-	WARN_ON(refcount_read(&eb->refs) == 0);
++	btrfs_zoned_meta_io_unlock(fs_info);
+ }
+ 
+ void set_extent_buffer_dirty(struct extent_buffer *eb)
+diff --git a/fs/btrfs/extent_io.h b/fs/btrfs/extent_io.h
+index 869925337699..ad4ffce32702 100644
+--- a/fs/btrfs/extent_io.h
++++ b/fs/btrfs/extent_io.h
+@@ -393,6 +393,7 @@ void extent_clear_unlock_delalloc(struct btrfs_inode *inode, u64 start, u64 end,
+ 				  u32 bits_to_clear, unsigned long page_ops);
+ void btrfs_clear_buffer_dirty(struct btrfs_trans_handle *trans,
+ 			      struct extent_buffer *buf);
++void btrfs_zoned_release_dirty_metadata(struct btrfs_fs_info *fs_info);
+ 
+ static inline void btrfs_clear_folio_dirty_tag(struct folio *folio)
+ {
+-- 
+2.55.0
+

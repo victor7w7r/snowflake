@@ -1,0 +1,33 @@
+From 560fbcf4720b6d671597f271911fb6b60787738e Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Fri, 7 Aug 2026 17:29:31 +0700
+Subject: [PATCH 13560/15333] spi: mtk-nor: Propagate errors from IRQ request
+
+Treat a failure from devm_request_irq() as a probe error instead of
+continuing without an IRQ after only reporting a warning.
+
+Return the error through the existing error path to ensure the driver
+does not continue with an unsuccessfully requested IRQ.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://patch.msgid.link/20260807102932.45785-2-phucduc.bui@gmail.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-mtk-nor.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/spi/spi-mtk-nor.c b/drivers/spi/spi-mtk-nor.c
+index e80d1de03556..63f5139176c8 100644
+--- a/drivers/spi/spi-mtk-nor.c
++++ b/drivers/spi/spi-mtk-nor.c
+@@ -905,6 +905,7 @@ static int mtk_nor_probe(struct platform_device *pdev)
+ 				       pdev->name, sp);
+ 		if (ret < 0) {
+ 			dev_warn(sp->dev, "failed to request IRQ.");
++			goto err_disable_clk;
+ 		} else {
+ 			init_completion(&sp->op_done);
+ 			sp->has_irq = true;
+-- 
+2.55.0
+

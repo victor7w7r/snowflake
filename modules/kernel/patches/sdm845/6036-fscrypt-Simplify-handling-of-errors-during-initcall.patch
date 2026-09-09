@@ -1,0 +1,125 @@
+From 928a1e6ba3201bcc21ecbc680500b0636530532b Mon Sep 17 00:00:00 2001
+From: Eric Biggers <ebiggers@kernel.org>
+Date: Thu, 18 Jun 2026 17:00:30 -0700
+Subject: [PATCH 06036/15333] fscrypt: Simplify handling of errors during
+ initcall
+
+Since CONFIG_FS_ENCRYPTION is a bool, not a tristate, fs/crypto/ can
+only be builtin or absent entirely; it can't be a loadable module.
+Therefore, the error code that gets returned from the fscrypt_init()
+initcall is never used.  If any part of the initcall does fail, which
+should never happen, the kernel will be left in a bad state.
+
+Following the usual convention for builtin code, just panic the kernel
+if any of part of the initcall fails.  This simplifies the code.
+
+This closely mirrors commit e77000ccc531 ("fsverity: simplify handling
+of errors during initcall").
+
+Link: https://patch.msgid.link/20260619000030.166851-1-ebiggers@kernel.org
+Signed-off-by: Eric Biggers <ebiggers@kernel.org>
+---
+ fs/crypto/crypto.c          | 27 ++++-----------------------
+ fs/crypto/fscrypt_private.h |  2 +-
+ fs/crypto/keyring.c         | 18 ++++++++----------
+ 3 files changed, 13 insertions(+), 34 deletions(-)
+
+diff --git a/fs/crypto/crypto.c b/fs/crypto/crypto.c
+index 10097a3251f5..94dd6c89ddcd 100644
+--- a/fs/crypto/crypto.c
++++ b/fs/crypto/crypto.c
+@@ -369,15 +369,8 @@ void fscrypt_msg(const struct inode *inode, const char *level,
+ 	va_end(args);
+ }
+ 
+-/**
+- * fscrypt_init() - Set up for fs encryption.
+- *
+- * Return: 0 on success; -errno on failure
+- */
+ static int __init fscrypt_init(void)
+ {
+-	int err = -ENOMEM;
+-
+ 	/*
+ 	 * Use an unbound workqueue to allow bios to be decrypted in parallel
+ 	 * even when they happen to complete on the same CPU.  This sacrifices
+@@ -390,24 +383,12 @@ static int __init fscrypt_init(void)
+ 						 WQ_UNBOUND | WQ_HIGHPRI,
+ 						 num_online_cpus());
+ 	if (!fscrypt_read_workqueue)
+-		goto fail;
++		panic("failed to allocate fscrypt_read_queue");
+ 
+ 	fscrypt_inode_info_cachep = KMEM_CACHE(fscrypt_inode_info,
+-					       SLAB_RECLAIM_ACCOUNT);
+-	if (!fscrypt_inode_info_cachep)
+-		goto fail_free_queue;
+-
+-	err = fscrypt_init_keyring();
+-	if (err)
+-		goto fail_free_inode_info;
+-
++					       SLAB_RECLAIM_ACCOUNT |
++					       SLAB_PANIC);
++	fscrypt_init_keyring();
+ 	return 0;
+-
+-fail_free_inode_info:
+-	kmem_cache_destroy(fscrypt_inode_info_cachep);
+-fail_free_queue:
+-	destroy_workqueue(fscrypt_read_workqueue);
+-fail:
+-	return err;
+ }
+ late_initcall(fscrypt_init)
+diff --git a/fs/crypto/fscrypt_private.h b/fs/crypto/fscrypt_private.h
+index 45307f7fa540..8234ee542476 100644
+--- a/fs/crypto/fscrypt_private.h
++++ b/fs/crypto/fscrypt_private.h
+@@ -715,7 +715,7 @@ int fscrypt_add_test_dummy_key(struct super_block *sb,
+ int fscrypt_verify_key_added(struct super_block *sb,
+ 			     const u8 identifier[FSCRYPT_KEY_IDENTIFIER_SIZE]);
+ 
+-int __init fscrypt_init_keyring(void);
++void __init fscrypt_init_keyring(void);
+ 
+ /* keysetup.c */
+ 
+diff --git a/fs/crypto/keyring.c b/fs/crypto/keyring.c
+index 16bc348213ca..76e28d1e0064 100644
+--- a/fs/crypto/keyring.c
++++ b/fs/crypto/keyring.c
+@@ -1220,21 +1220,19 @@ int fscrypt_ioctl_get_key_status(struct file *filp, void __user *uarg)
+ }
+ EXPORT_SYMBOL_GPL(fscrypt_ioctl_get_key_status);
+ 
+-int __init fscrypt_init_keyring(void)
++void __init fscrypt_init_keyring(void)
+ {
+ 	int err;
+ 
++	/*
++	 * Note that register_key_type() fails only if a key type with the same
++	 * name already exists, which should never happen here.
++	 */
+ 	err = register_key_type(&key_type_fscrypt_user);
+ 	if (err)
+-		return err;
+-
++		panic("failed to register .fscrypt key type (%d)", err);
+ 	err = register_key_type(&key_type_fscrypt_provisioning);
+ 	if (err)
+-		goto err_unregister_fscrypt_user;
+-
+-	return 0;
+-
+-err_unregister_fscrypt_user:
+-	unregister_key_type(&key_type_fscrypt_user);
+-	return err;
++		panic("failed to register fscrypt-provisioning key type (%d)",
++		      err);
+ }
+-- 
+2.55.0
+

@@ -1,0 +1,69 @@
+From 4fbaf6e6f11238d70c413d1428706bce45432c06 Mon Sep 17 00:00:00 2001
+From: Jisheng Zhang <jszhang@kernel.org>
+Date: Mon, 3 Aug 2026 22:19:47 +0800
+Subject: [PATCH 12073/15333] spi: orion: use modern PM macros
+
+Use the modern PM macros for the suspend and resume functions to be
+automatically dropped by the compiler when CONFIG_PM or
+CONFIG_PM_SLEEP are disabled, without having to use #ifdef guards.
+
+This has the advantage of always compiling these functions in,
+independently of any Kconfig option. Thanks to that, bugs and other
+regressions are subsequently easier to catch.
+
+Signed-off-by: Jisheng Zhang <jszhang@kernel.org>
+Link: https://patch.msgid.link/20260803142003.12857-24-jszhang@kernel.org
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ drivers/spi/spi-orion.c | 12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/spi/spi-orion.c b/drivers/spi/spi-orion.c
+index e5e05512a1fd..26a9f268b2d3 100644
+--- a/drivers/spi/spi-orion.c
++++ b/drivers/spi/spi-orion.c
+@@ -100,10 +100,8 @@ struct orion_spi {
+ 	struct orion_child_options	child[ORION_NUM_CHIPSELECTS];
+ };
+ 
+-#ifdef CONFIG_PM
+ static int orion_spi_runtime_suspend(struct device *dev);
+ static int orion_spi_runtime_resume(struct device *dev);
+-#endif
+ 
+ static inline void __iomem *spi_reg(struct orion_spi *orion_spi, u32 reg)
+ {
+@@ -804,7 +802,6 @@ static void orion_spi_remove(struct platform_device *pdev)
+ 
+ MODULE_ALIAS("platform:" DRIVER_NAME);
+ 
+-#ifdef CONFIG_PM
+ static int orion_spi_runtime_suspend(struct device *dev)
+ {
+ 	struct spi_controller *host = dev_get_drvdata(dev);
+@@ -823,18 +820,17 @@ static int orion_spi_runtime_resume(struct device *dev)
+ 	clk_prepare_enable(spi->axi_clk);
+ 	return clk_prepare_enable(spi->clk);
+ }
+-#endif
+ 
+ static const struct dev_pm_ops orion_spi_pm_ops = {
+-	SET_RUNTIME_PM_OPS(orion_spi_runtime_suspend,
+-			   orion_spi_runtime_resume,
+-			   NULL)
++	RUNTIME_PM_OPS(orion_spi_runtime_suspend,
++		       orion_spi_runtime_resume,
++		       NULL)
+ };
+ 
+ static struct platform_driver orion_spi_driver = {
+ 	.driver = {
+ 		.name	= DRIVER_NAME,
+-		.pm	= &orion_spi_pm_ops,
++		.pm	= pm_ptr(&orion_spi_pm_ops),
+ 		.of_match_table = of_match_ptr(orion_spi_of_match_table),
+ 	},
+ 	.probe		= orion_spi_probe,
+-- 
+2.55.0
+

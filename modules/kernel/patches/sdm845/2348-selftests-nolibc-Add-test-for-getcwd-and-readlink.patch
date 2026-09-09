@@ -1,0 +1,100 @@
+From 4f5777cfbd98c10e71c7fbfe4615dd499fada7b7 Mon Sep 17 00:00:00 2001
+From: Daniel Palmer <daniel@thingy.jp>
+Date: Thu, 2 Jul 2026 17:51:01 +0900
+Subject: [PATCH 02348/15333] selftests/nolibc: Add test for getcwd() and
+ readlink()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add a test that uses both getcwd() and readlink() so that both
+are exercised.
+
+First the happy path is tested by fetching what should be the
+same string via getcwd() and readlink() and checking they match.
+
+Then a few different combinations of bad parameters are passed to
+getcwd() to make sure it returns NULL and sets errno in those
+cases.
+
+Signed-off-by: Daniel Palmer <daniel@thingy.jp>
+Link: https://patch.msgid.link/20260702085101.3304547-4-daniel@thingy.jp
+Signed-off-by: Thomas Weißschuh <linux@weissschuh.net>
+---
+ tools/testing/selftests/nolibc/nolibc-test.c | 53 ++++++++++++++++++++
+ 1 file changed, 53 insertions(+)
+
+diff --git a/tools/testing/selftests/nolibc/nolibc-test.c b/tools/testing/selftests/nolibc/nolibc-test.c
+index c1c1ce43a047..996e8d13508e 100644
+--- a/tools/testing/selftests/nolibc/nolibc-test.c
++++ b/tools/testing/selftests/nolibc/nolibc-test.c
+@@ -854,6 +854,58 @@ static int test_dirent(void)
+ 	return 0;
+ }
+ 
++int test_getcwd(void)
++{
++	char cwd_syscall[PATH_MAX];
++	char cwd_proc[PATH_MAX];
++	ssize_t len;
++
++	/* Read where the link /proc/self/cwd points */
++	len = readlink("/proc/self/cwd", cwd_proc, sizeof(cwd_proc) - 1);
++	if (len <= 0)
++		return __LINE__;
++
++	/* Terminate the string from readlink() */
++	cwd_proc[len] = '\0';
++
++	/* Get the cwd via syscall */
++	if (getcwd(cwd_syscall, sizeof(cwd_syscall)) == NULL)
++		return __LINE__;
++
++	/* Fail if they aren't the same */
++	if (strcmp(cwd_proc, cwd_syscall) != 0)
++		return __LINE__;
++
++	/* Try getcwd() with NULL for the buffer,
++	 * should return NULL and an error in errno.
++	 * Other libc's allow this by allocating a buffer
++	 * internally.
++	 */
++	if (is_nolibc) {
++		errno = 0;
++		if (getcwd(NULL, 0) != NULL || !errno)
++			return __LINE__;
++	}
++
++	/* Try getcwd() with a buffer but make the size 0,
++	 * should return NULL and an error in errno.
++	 */
++	errno = 0;
++	if (getcwd(cwd_syscall, 0) != NULL || !errno)
++		return __LINE__;
++
++	/* Try getcwd() with a buffer but make the size 1,
++	 * should return NULL and an error in errno because
++	 * the string written to the buffer is terminated
++	 * so you need at least 2 bytes even for "/".
++	 */
++	errno = 0;
++	if (getcwd(cwd_syscall, 1) != NULL || !errno)
++		return __LINE__;
++
++	return 0;
++}
++
+ int test_getrandom(void)
+ {
+ 	uint64_t rng = 0;
+@@ -1555,6 +1607,7 @@ int run_syscall(int min, int max)
+ 		CASE_TEST(clock_getres);      EXPECT_SYSZR(1, clock_getres(CLOCK_MONOTONIC, &ts)); break;
+ 		CASE_TEST(clock_gettime);     EXPECT_SYSZR(1, clock_gettime(CLOCK_MONOTONIC, &ts)); break;
+ 		CASE_TEST(clock_settime);     EXPECT_SYSER(1, clock_settime(CLOCK_MONOTONIC, &ts), -1, EINVAL); break;
++		CASE_TEST(getcwd);            EXPECT_SYSZR(proc, test_getcwd()); break;
+ 		CASE_TEST(getpid);            EXPECT_SYSNE(1, getpid(), -1); break;
+ 		CASE_TEST(getppid);           EXPECT_SYSNE(1, getppid(), -1); break;
+ 		CASE_TEST(gettid);            EXPECT_SYSNE(has_gettid, gettid(), -1); break;
+-- 
+2.55.0
+

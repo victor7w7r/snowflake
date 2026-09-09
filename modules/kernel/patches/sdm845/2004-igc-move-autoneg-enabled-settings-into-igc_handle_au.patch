@@ -1,0 +1,124 @@
+From c731361cfef90d110f856a7bab6e496ed94e9a02 Mon Sep 17 00:00:00 2001
+From: Faizal Rahim <faizal.abdul.rahim@linux.intel.com>
+Date: Fri, 8 May 2026 05:47:04 +0800
+Subject: [PATCH 02004/15333] igc: move autoneg-enabled settings into
+ igc_handle_autoneg_enabled()
+
+Move the advertised link modes and flow control configuration from
+igc_ethtool_set_link_ksettings() into igc_handle_autoneg_enabled().
+
+No functional change.
+
+Reviewed-by: Looi Hong Aun <hong.aun.looi@intel.com>
+Reviewed-by: Aleksandr Loktionov <aleksandr.loktionov@intel.com>
+Signed-off-by: Faizal Rahim <faizal.abdul.rahim@linux.intel.com>
+Signed-off-by: Khai Wen Tan <khai.wen.tan@linux.intel.com>
+Reviewed-by: Dima Ruinskiy <dima.ruinskiy@intel.com>
+Reviewed-by: Simon Horman <horms@kernel.org>
+Tested-by: Moriya Kadosh <moriyax.kadosh@intel.com>
+Signed-off-by: Tony Nguyen <anthony.l.nguyen@intel.com>
+---
+ drivers/net/ethernet/intel/igc/igc_ethtool.c | 72 ++++++++++++--------
+ 1 file changed, 44 insertions(+), 28 deletions(-)
+
+diff --git a/drivers/net/ethernet/intel/igc/igc_ethtool.c b/drivers/net/ethernet/intel/igc/igc_ethtool.c
+index fbba3e84673a..7ee84c24dc4e 100644
+--- a/drivers/net/ethernet/intel/igc/igc_ethtool.c
++++ b/drivers/net/ethernet/intel/igc/igc_ethtool.c
+@@ -2032,6 +2032,49 @@ static int igc_ethtool_get_link_ksettings(struct net_device *netdev,
+ 	return 0;
+ }
+ 
++/**
++ * igc_handle_autoneg_enabled - Configure autonegotiation advertisement
++ * @adapter: private driver structure
++ * @cmd: ethtool link ksettings from user
++ *
++ * Records advertised speeds and flow control settings when autoneg
++ * is enabled.
++ */
++static void igc_handle_autoneg_enabled(struct igc_adapter *adapter,
++				       const struct ethtool_link_ksettings *cmd)
++{
++	struct igc_hw *hw = &adapter->hw;
++	u16 advertised = 0;
++
++	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
++						  2500baseT_Full))
++		advertised |= ADVERTISE_2500_FULL;
++
++	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
++						  1000baseT_Full))
++		advertised |= ADVERTISE_1000_FULL;
++
++	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
++						  100baseT_Full))
++		advertised |= ADVERTISE_100_FULL;
++
++	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
++						  100baseT_Half))
++		advertised |= ADVERTISE_100_HALF;
++
++	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
++						  10baseT_Full))
++		advertised |= ADVERTISE_10_FULL;
++
++	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
++						  10baseT_Half))
++		advertised |= ADVERTISE_10_HALF;
++
++	hw->phy.autoneg_advertised = advertised;
++	if (adapter->fc_autoneg)
++		hw->fc.requested_mode = igc_fc_default;
++}
++
+ static int
+ igc_ethtool_set_link_ksettings(struct net_device *netdev,
+ 			       const struct ethtool_link_ksettings *cmd)
+@@ -2039,7 +2082,6 @@ igc_ethtool_set_link_ksettings(struct net_device *netdev,
+ 	struct igc_adapter *adapter = netdev_priv(netdev);
+ 	struct net_device *dev = adapter->netdev;
+ 	struct igc_hw *hw = &adapter->hw;
+-	u16 advertised = 0;
+ 
+ 	/* When adapter in resetting mode, autoneg/speed/duplex
+ 	 * cannot be changed
+@@ -2064,34 +2106,8 @@ igc_ethtool_set_link_ksettings(struct net_device *netdev,
+ 	while (test_and_set_bit(__IGC_RESETTING, &adapter->state))
+ 		usleep_range(1000, 2000);
+ 
+-	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
+-						  2500baseT_Full))
+-		advertised |= ADVERTISE_2500_FULL;
+-
+-	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
+-						  1000baseT_Full))
+-		advertised |= ADVERTISE_1000_FULL;
+-
+-	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
+-						  100baseT_Full))
+-		advertised |= ADVERTISE_100_FULL;
+-
+-	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
+-						  100baseT_Half))
+-		advertised |= ADVERTISE_100_HALF;
+-
+-	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
+-						  10baseT_Full))
+-		advertised |= ADVERTISE_10_FULL;
+-
+-	if (ethtool_link_ksettings_test_link_mode(cmd, advertising,
+-						  10baseT_Half))
+-		advertised |= ADVERTISE_10_HALF;
+-
+ 	if (cmd->base.autoneg == AUTONEG_ENABLE) {
+-		hw->phy.autoneg_advertised = advertised;
+-		if (adapter->fc_autoneg)
+-			hw->fc.requested_mode = igc_fc_default;
++		igc_handle_autoneg_enabled(adapter, cmd);
+ 	} else {
+ 		netdev_info(dev, "Force mode currently not supported\n");
+ 	}
+-- 
+2.55.0
+

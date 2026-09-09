@@ -1,0 +1,128 @@
+From daf43402da0d3a66eda26fefe3473799165bd7b2 Mon Sep 17 00:00:00 2001
+From: Johannes Thumshirn <johannes.thumshirn@wdc.com>
+Date: Mon, 13 Jul 2026 14:42:47 +0200
+Subject: [PATCH 06448/15333] xfs: add xfs_metadir_create_file helper
+
+Factor the metadata inode create/commit/cleanup lifecycle out of
+xfs_metadir_mkdir into a reusable helper that takes an optional callback
+to initialize the new inode, and convert xfs_metadir_mkdir to it.
+
+Signed-off-by: Johannes Thumshirn <johannes.thumshirn@wdc.com>
+Reviewed-by: "Darrick J. Wong" <djwong@kernel.org>
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Carlos Maiolino <cem@kernel.org>
+---
+ fs/xfs/libxfs/xfs_metadir.c | 58 +++++++++++++++++++++++--------------
+ fs/xfs/libxfs/xfs_metadir.h |  6 ++++
+ 2 files changed, 43 insertions(+), 21 deletions(-)
+
+diff --git a/fs/xfs/libxfs/xfs_metadir.c b/fs/xfs/libxfs/xfs_metadir.c
+index 74c4596ee4cf..0d6a153bc9e9 100644
+--- a/fs/xfs/libxfs/xfs_metadir.c
++++ b/fs/xfs/libxfs/xfs_metadir.c
+@@ -438,48 +438,64 @@ xfs_metadir_cancel(
+ 	xfs_metadir_teardown(upd, error);
+ }
+ 
+-/* Create a metadata for the last component of the path. */
+ int
+-xfs_metadir_mkdir(
+-	struct xfs_inode		*dp,
+-	const char			*path,
++xfs_metadir_create_file(
++	struct xfs_metadir_update	*upd,
++	umode_t				mode,
++	xfs_metadir_createfn		create,
++	void				*priv,
+ 	struct xfs_inode		**ipp)
+ {
+-	struct xfs_metadir_update	upd = {
+-		.dp			= dp,
+-		.path			= path,
+-		.metafile_type		= XFS_METAFILE_DIR,
+-	};
+ 	int				error;
+ 
+-	if (xfs_is_shutdown(dp->i_mount))
++	if (xfs_is_shutdown(upd->dp->i_mount))
+ 		return -EIO;
+ 
+-	/* Allocate a transaction to create the last directory. */
+-	error = xfs_metadir_start_create(&upd);
++	error = xfs_metadir_start_create(upd);
+ 	if (error)
+ 		return error;
+ 
+-	/* Create the subdirectory and take our reference. */
+-	error = xfs_metadir_create(&upd, S_IFDIR);
++	error = xfs_metadir_create(upd, mode);
+ 	if (error)
+ 		goto out_cancel;
+ 
+-	error = xfs_metadir_commit(&upd);
++	if (create) {
++		error = create(upd, priv);
++		if (error)
++			goto out_cancel;
++	}
++
++	error = xfs_metadir_commit(upd);
+ 	if (error)
+ 		goto out_irele;
+ 
+-	xfs_finish_inode_setup(upd.ip);
+-	*ipp = upd.ip;
++	xfs_finish_inode_setup(upd->ip);
++	*ipp = upd->ip;
+ 	return 0;
+ 
+ out_cancel:
+-	xfs_metadir_cancel(&upd, error);
++	xfs_metadir_cancel(upd, error);
+ out_irele:
+ 	/* Have to finish setting up the inode to ensure it's deleted. */
+-	if (upd.ip) {
+-		xfs_finish_inode_setup(upd.ip);
+-		xfs_irele(upd.ip);
++	if (upd->ip) {
++		xfs_finish_inode_setup(upd->ip);
++		xfs_irele(upd->ip);
+ 	}
+ 	return error;
+ }
++
++/* Create a metadata for the last component of the path. */
++int
++xfs_metadir_mkdir(
++	struct xfs_inode		*dp,
++	const char			*path,
++	struct xfs_inode		**ipp)
++{
++	struct xfs_metadir_update	upd = {
++		.dp			= dp,
++		.path			= path,
++		.metafile_type		= XFS_METAFILE_DIR,
++	};
++
++	return xfs_metadir_create_file(&upd, S_IFDIR, NULL, NULL, ipp);
++}
+diff --git a/fs/xfs/libxfs/xfs_metadir.h b/fs/xfs/libxfs/xfs_metadir.h
+index bfecac7d3d14..a795a2d0e3fe 100644
+--- a/fs/xfs/libxfs/xfs_metadir.h
++++ b/fs/xfs/libxfs/xfs_metadir.h
+@@ -35,6 +35,12 @@ int xfs_metadir_load(struct xfs_trans *tp, struct xfs_inode *dp,
+ int xfs_metadir_start_create(struct xfs_metadir_update *upd);
+ int xfs_metadir_create(struct xfs_metadir_update *upd, umode_t mode);
+ 
++typedef int (*xfs_metadir_createfn)(struct xfs_metadir_update *upd, void *priv);
++
++int xfs_metadir_create_file(struct xfs_metadir_update *upd, umode_t mode,
++		xfs_metadir_createfn create, void *priv,
++		struct xfs_inode **ipp);
++
+ int xfs_metadir_start_link(struct xfs_metadir_update *upd);
+ int xfs_metadir_link(struct xfs_metadir_update *upd);
+ 
+-- 
+2.55.0
+

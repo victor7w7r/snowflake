@@ -1,0 +1,36 @@
+From 581829501360bda487b93ec7d7eff0da6296f187 Mon Sep 17 00:00:00 2001
+From: Fuad Tabba <fuad.tabba@linux.dev>
+Date: Mon, 6 Jul 2026 11:31:27 +0100
+Subject: [PATCH 04270/15333] KVM: arm64: Drop the unused EL2-side is_created
+ write
+
+init_pkvm_hyp_vm() sets is_created on the EL2-private VM struct, but the
+hypervisor never reads it: pkvm_hyp_vm_is_created() and every other
+consumer operate on the host's struct kvm, a distinct allocation from
+the EL2-private copy. The field is write-only at EL2.
+
+Remove the store; host-side is_created tracking is unaffected.
+
+Reviewed-by: Keir Fraser <keirf@google.com>
+Signed-off-by: Fuad Tabba <fuad.tabba@linux.dev>
+Link: https://patch.msgid.link/20260706103129.706974-2-fuad.tabba@linux.dev
+Signed-off-by: Oliver Upton <oupton@kernel.org>
+---
+ arch/arm64/kvm/hyp/nvhe/pkvm.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/arch/arm64/kvm/hyp/nvhe/pkvm.c b/arch/arm64/kvm/hyp/nvhe/pkvm.c
+index 3b2c4fbc34d8..c54aa5031336 100644
+--- a/arch/arm64/kvm/hyp/nvhe/pkvm.c
++++ b/arch/arm64/kvm/hyp/nvhe/pkvm.c
+@@ -433,7 +433,6 @@ static void init_pkvm_hyp_vm(struct kvm *host_kvm, struct pkvm_hyp_vm *hyp_vm,
+ 	hyp_vm->host_kvm = host_kvm;
+ 	hyp_vm->kvm.created_vcpus = nr_vcpus;
+ 	hyp_vm->kvm.arch.pkvm.is_protected = READ_ONCE(host_kvm->arch.pkvm.is_protected);
+-	hyp_vm->kvm.arch.pkvm.is_created = true;
+ 	hyp_vm->kvm.arch.flags = 0;
+ 	pkvm_init_features_from_host(hyp_vm, host_kvm);
+ 
+-- 
+2.55.0
+

@@ -1,0 +1,33 @@
+From 3f66b272ff4f7afad6ab4ed0b011d6cd944346a3 Mon Sep 17 00:00:00 2001
+From: Filipe Manana <fdmanana@suse.com>
+Date: Wed, 24 Jun 2026 18:13:57 +0100
+Subject: [PATCH 11985/15333] btrfs: defrag: use simple list_del() in
+ defrag_collect_targets()
+
+When freeing the entries from the list there is no need to initialize
+the list member in an entry, since we are immediately freeing it. So use
+simple list_del() instead of list_del_init().
+
+Reviewed-by: Qu Wenruo <wqu@suse.com>
+Signed-off-by: Filipe Manana <fdmanana@suse.com>
+Signed-off-by: David Sterba <dsterba@suse.com>
+---
+ fs/btrfs/defrag.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/btrfs/defrag.c b/fs/btrfs/defrag.c
+index e454b59d6477..7b3f779775a0 100644
+--- a/fs/btrfs/defrag.c
++++ b/fs/btrfs/defrag.c
+@@ -1093,7 +1093,7 @@ static int defrag_collect_targets(struct btrfs_inode *inode,
+ 		struct defrag_target_range *tmp;
+ 
+ 		list_for_each_entry_safe(entry, tmp, target_list, list) {
+-			list_del_init(&entry->list);
++			list_del(&entry->list);
+ 			kfree(entry);
+ 		}
+ 	}
+-- 
+2.55.0
+

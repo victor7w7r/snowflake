@@ -1,0 +1,143 @@
+From d0008553a70a306c10ca2a596f449971d0579d50 Mon Sep 17 00:00:00 2001
+From: Kuniyuki Iwashima <kuniyu@google.com>
+Date: Fri, 3 Jul 2026 00:09:18 +0000
+Subject: [PATCH 03905/15333] net: Call unregister_netdevice_many() per netns.
+
+For per-netns device unregistration, the list passed to
+unregister_netdevice_many() must contain devices from a single
+netns only (once all callers are converted).
+
+Let's move collected devices in the following functions to
+net->dev_unreg_head and let __rtnl_net_unlock() pass them to
+unregister_netdevice_many().
+
+  * default_device_exit_batch()
+  * ops_exit_rtnl_list()
+  * __rtnl_kill_links()
+
+This allows incremental conversion of each driver to support
+per-netns device unregistration without affecting the normal
+kernel where CONFIG_DEBUG_NET_SMALL_RTNL is disabled.
+
+Note that this change unbatches synchronize_rcu() etc in
+unregister_netdevice_many(), but we can later split it into
+multiple stages to batch them again.
+
+Signed-off-by: Kuniyuki Iwashima <kuniyu@google.com>
+Link: https://patch.msgid.link/20260703001009.1572444-8-kuniyu@google.com
+Signed-off-by: Paolo Abeni <pabeni@redhat.com>
+---
+ include/linux/netdevice.h |  6 ++++++
+ net/core/dev.c            | 27 +++++++++++++++++++++++++++
+ net/core/net_namespace.c  |  1 +
+ net/core/rtnetlink.c      |  6 +++++-
+ 4 files changed, 39 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+index 108d8d7ea75b..8db25b79573e 100644
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -3481,6 +3481,7 @@ static inline void unregister_netdevice(struct net_device *dev)
+ void unregister_netdevice_queue_net(struct net *net, struct net_device *dev,
+ 				    struct list_head *head);
+ void unregister_netdevice_many_net(struct net *net);
++void unregister_netdevice_queue_many_net(struct net *net, struct list_head *head);
+ #else
+ static inline void unregister_netdevice_queue_net(struct net *net,
+ 						  struct net_device *dev,
+@@ -3488,6 +3489,11 @@ static inline void unregister_netdevice_queue_net(struct net *net,
+ {
+ 	unregister_netdevice_queue(dev, head);
+ }
++
++static inline void unregister_netdevice_queue_many_net(struct net *net,
++						       struct list_head *head)
++{
++}
+ #endif
+ 
+ int netdev_refcnt_read(const struct net_device *dev);
+diff --git a/net/core/dev.c b/net/core/dev.c
+index 7ec9af75d143..7c21bc0a1e34 100644
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -12557,6 +12557,28 @@ void unregister_netdevice_queue_net(struct net *net, struct net_device *dev,
+ }
+ EXPORT_SYMBOL(unregister_netdevice_queue_net);
+ 
++void unregister_netdevice_queue_many_net(struct net *net, struct list_head *head)
++{
++	struct net_device *dev, *tmp;
++
++	spin_lock(&net->dev_unreg_lock);
++	list_for_each_entry_safe(dev, tmp, head, unreg_list) {
++		/* Once all cross-netns unregister_netdevice_queue() is
++		 * converted to _net() (or for debugging), remove this check.
++		 */
++		if (!net_eq(dev_net(dev), net))
++			continue;
++
++		DEBUG_NET_WARN_ONCE(!net_eq(dev_net(dev), net),
++				    "%s was unregistered from a different netns.\n",
++				    dev->name);
++
++		list_del_init(&dev->unreg_list);
++		list_move_tail(&dev->unreg_list_net, &net->dev_unreg_head);
++	}
++	spin_unlock(&net->dev_unreg_lock);
++}
++
+ static void unregister_netdevice_move_net(struct net *net_old,
+ 					  struct net *net,
+ 					  struct net_device *dev)
+@@ -13190,12 +13212,17 @@ static void __net_exit default_device_exit_batch(struct list_head *net_list)
+ 	__rtnl_net_unlock(&init_net);
+ 
+ 	list_for_each_entry(net, net_list, exit_list) {
++		__rtnl_net_lock(net);
++
+ 		for_each_netdev_reverse(net, dev) {
+ 			if (dev->rtnl_link_ops && dev->rtnl_link_ops->dellink)
+ 				dev->rtnl_link_ops->dellink(dev, &dev_kill_list);
+ 			else
+ 				unregister_netdevice_queue(dev, &dev_kill_list);
+ 		}
++
++		unregister_netdevice_queue_many_net(net, &dev_kill_list);
++		__rtnl_net_unlock(net);
+ 	}
+ 	unregister_netdevice_many(&dev_kill_list);
+ 	rtnl_unlock();
+diff --git a/net/core/net_namespace.c b/net/core/net_namespace.c
+index 578b48cf5318..a91d2b58aadd 100644
+--- a/net/core/net_namespace.c
++++ b/net/core/net_namespace.c
+@@ -181,6 +181,7 @@ static void ops_exit_rtnl_list(const struct list_head *ops_list,
+ 				ops->exit_rtnl(net, &dev_kill_list);
+ 		}
+ 
++		unregister_netdevice_queue_many_net(net, &dev_kill_list);
+ 		__rtnl_net_unlock(net);
+ 	}
+ 
+diff --git a/net/core/rtnetlink.c b/net/core/rtnetlink.c
+index cf2b7697a6e7..31c65a545a10 100644
+--- a/net/core/rtnetlink.c
++++ b/net/core/rtnetlink.c
+@@ -714,8 +714,12 @@ void rtnl_link_unregister(struct rtnl_link_ops *ops)
+ 	down_write(&pernet_ops_rwsem);
+ 	rtnl_lock_unregistering_all();
+ 
+-	for_each_net(net)
++	for_each_net(net) {
++		__rtnl_net_lock(net);
+ 		__rtnl_kill_links(net, ops, &dev_kill_list);
++		unregister_netdevice_queue_many_net(net, &dev_kill_list);
++		__rtnl_net_unlock(net);
++	}
+ 
+ 	unregister_netdevice_many(&dev_kill_list);
+ 
+-- 
+2.55.0
+

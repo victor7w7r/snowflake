@@ -1,0 +1,210 @@
+From 7ae85e64d9e0e647247a732068251afaaa0d0595 Mon Sep 17 00:00:00 2001
+From: Wenjing Liu <wenjing.liu@amd.com>
+Date: Wed, 17 Jun 2026 17:40:53 -0400
+Subject: [PATCH 07901/15333] drm/amd/display: Introduce dc_probe public object
+ model
+
+[Why]
+Performance measurement needs to commit through the same update entry
+point as planes and streams, with DM working against an abstraction of
+what to measure rather than the hardware block that performs it.
+
+[How]
+Add dc_probe.h defining dc_probe_type (the measurable quantity),
+dc_probe_target_state (not measuring / measuring / measured),
+dc_probe_scope (global only, per-stream/plane deferred), and
+dc_probe_state (an inline descriptor with copy semantics, no refcount).
+dc_state carries the committed set as probes[MAX_PROBES] plus
+probe_count. dc_state_update carries dc_probe_updates as the desired
+absolute set that DC diffs against the committed set.
+
+Reviewed-by: Dominik Kaszewski <dominik.kaszewski@amd.com>
+Signed-off-by: Wenjing Liu <wenjing.liu@amd.com>
+Signed-off-by: Wayne Lin <wayne.lin@amd.com>
+Tested-by: Dan Wheeler <daniel.wheeler@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+---
+ .../gpu/drm/amd/display/dc/core/dc_state.c    |  3 +
+ drivers/gpu/drm/amd/display/dc/dc.h           |  9 ++
+ drivers/gpu/drm/amd/display/dc/dc_probe.h     | 97 +++++++++++++++++++
+ .../gpu/drm/amd/display/dc/inc/core_types.h   | 12 +++
+ 4 files changed, 121 insertions(+)
+ create mode 100644 drivers/gpu/drm/amd/display/dc/dc_probe.h
+
+diff --git a/drivers/gpu/drm/amd/display/dc/core/dc_state.c b/drivers/gpu/drm/amd/display/dc/core/dc_state.c
+index 7edeed52cc32..673fd211014f 100644
+--- a/drivers/gpu/drm/amd/display/dc/core/dc_state.c
++++ b/drivers/gpu/drm/amd/display/dc/core/dc_state.c
+@@ -359,6 +359,9 @@ void dc_state_destruct(struct dc_state *state)
+ 	}
+ 	state->phantom_plane_count = 0;
+ 
++	memset(state->probes, 0, sizeof(state->probes));
++	state->probe_count = 0;
++
+ 	state->stream_mask = 0;
+ 	memset(&state->res_ctx, 0, sizeof(state->res_ctx));
+ 	memset(&state->pp_display_cfg, 0, sizeof(state->pp_display_cfg));
+diff --git a/drivers/gpu/drm/amd/display/dc/dc.h b/drivers/gpu/drm/amd/display/dc/dc.h
+index 436277acd034..3e22c1f8d4db 100644
+--- a/drivers/gpu/drm/amd/display/dc/dc.h
++++ b/drivers/gpu/drm/amd/display/dc/dc.h
+@@ -29,6 +29,7 @@
+ #include "dc_types.h"
+ #include "dc_state.h"
+ #include "dc_plane.h"
++#include "dc_probe.h"
+ #include "grph_object_defs.h"
+ #include "logger_types.h"
+ #include "hdcp_msg_types.h"
+@@ -2105,6 +2106,14 @@ struct dc_surface_update {
+ 	struct cm_hist_control *cm_hist_control;
+ };
+ 
++struct dc_state_update {
++	struct dc_stream_state   *stream;
++	struct dc_stream_update  *stream_update;
++	struct dc_surface_update *surface_updates;
++	int                       surface_count;
++	const struct dc_probe_updates *probe_updates;
++};
++
+ struct dc_underflow_debug_data {
+ 	struct dcn_hubbub_reg_state *hubbub_reg_state;
+ 	struct dcn_hubp_reg_state *hubp_reg_state[MAX_PIPES];
+diff --git a/drivers/gpu/drm/amd/display/dc/dc_probe.h b/drivers/gpu/drm/amd/display/dc/dc_probe.h
+new file mode 100644
+index 000000000000..ebf33b162b63
+--- /dev/null
++++ b/drivers/gpu/drm/amd/display/dc/dc_probe.h
+@@ -0,0 +1,97 @@
++// SPDX-License-Identifier: MIT
++//
++// Copyright 2025 Advanced Micro Devices, Inc.
++
++#ifndef _DC_PROBE_H_
++#define _DC_PROBE_H_
++
++#include "os_types.h"
++
++/**
++ * enum dc_probe_type - What DM wants to probe.
++ *
++ * Each value names a measurable quantity as an abstraction. DC resolves it to
++ * whatever HW measurement block fulfills it. DM never selects the HW block.
++ */
++enum dc_probe_type {
++	DC_PROBE_PEAK_MEM_BW = 0,
++	DC_PROBE_AVG_MEM_BW,
++	DC_PROBE_MEM_LATENCY,
++	DC_PROBE_URGENT_RAMP_LATENCY,
++	DC_PROBE_URGENT_ASSERTION_COUNT,
++	DC_PROBE_PREFETCH_DATA_SIZE,
++};
++
++/**
++ * enum dc_probe_target_state - Target lifecycle state DM wants DC to reach.
++ *
++ * DM sets this to describe the final state DC must reach by the end of the
++ * commit. DC performs whatever HW transition sequence is needed.
++ *
++ * @DC_PROBE_NOT_MEASURING: probe inactive, no valid data available.
++ * @DC_PROBE_MEASURING:     probe runs continuously. The latest value can be
++ *   read back at any time and may differ on each read.
++ * @DC_PROBE_MEASURED:      probe performed one shot. The result is latched and
++ *   stays valid until DM transitions back to DC_PROBE_NOT_MEASURING.
++ */
++enum dc_probe_target_state {
++	DC_PROBE_NOT_MEASURING = 0,
++	DC_PROBE_MEASURING,
++	DC_PROBE_MEASURED,
++};
++
++/**
++ * enum dc_probe_scope_type - What the probe is scoped to.
++ * @DC_PROBE_SCOPE_GLOBAL: whole memory subsystem, no stream/plane selector.
++ *
++ * Only GLOBAL is implemented. Per-stream/plane scoping must select targets by
++ * stable id, not object pointer — dc_state copy semantics would dangle a raw
++ * pointer when the absolute-set commit removes or replaces the target.
++ */
++enum dc_probe_scope_type {
++	DC_PROBE_SCOPE_GLOBAL = 0,
++};
++
++/**
++ * struct dc_probe_scope - Selects what a probe measures against.
++ * @type: scope kind, only DC_PROBE_SCOPE_GLOBAL is implemented.
++ */
++struct dc_probe_scope {
++	enum dc_probe_scope_type type;
++};
++
++/**
++ * struct dc_probe_state - DM-authored descriptor of a single probe.
++ *
++ * A plain inline value with copy semantics: no allocation, no refcount. DC
++ * resolves each descriptor to a HW measurement instance and diffs the desired
++ * set against the committed set to plan the transition.
++ *
++ * @type:         what to measure.
++ * @target_state: desired lifecycle state for this probe.
++ * @scope:        what the probe is scoped to (GLOBAL only for now).
++ */
++struct dc_probe_state {
++	enum dc_probe_type         type;
++	enum dc_probe_target_state target_state;
++	struct dc_probe_scope      scope;
++};
++
++#define MAX_PROBES 1
++
++/**
++ * struct dc_probe_updates - Absolute set of probes DM wants active.
++ *
++ * Mirrors the plane/stream absolute-set model: the array is the complete
++ * desired set. DC compares it against the committed set to add, remove, or
++ * transition probes.
++ *
++ * @probes:      desired probe descriptors.
++ * @probe_count: number of valid entries in @probes.
++ */
++struct dc_probe_updates {
++	struct dc_probe_state probes[MAX_PROBES];
++	int                   probe_count;
++};
++
++#endif /* _DC_PROBE_H_ */
+diff --git a/drivers/gpu/drm/amd/display/dc/inc/core_types.h b/drivers/gpu/drm/amd/display/dc/inc/core_types.h
+index cbbc1fb4b3dd..c42626101cd7 100644
+--- a/drivers/gpu/drm/amd/display/dc/inc/core_types.h
++++ b/drivers/gpu/drm/amd/display/dc/inc/core_types.h
+@@ -622,6 +622,7 @@ struct dc_state {
+ 	 * @stream_status: Planes status on a given stream
+ 	 */
+ 	struct dc_stream_status stream_status[MAX_PIPES];
++
+ 	/**
+ 	 * @phantom_streams: Stream state properties for phantoms
+ 	 */
+@@ -645,6 +646,17 @@ struct dc_state {
+ 	 * @stream_count: Total phantom planes in use
+ 	 */
+ 	uint8_t phantom_plane_count;
++
++	/**
++	 * @probes: Committed absolute set of probe descriptors.
++	 */
++	struct dc_probe_state probes[MAX_PROBES];
++
++	/**
++	 * @probe_count: Number of valid entries in @probes.
++	 */
++	int probe_count;
++
+ 	/**
+ 	 * @res_ctx: Persistent state of resources
+ 	 */
+-- 
+2.55.0
+

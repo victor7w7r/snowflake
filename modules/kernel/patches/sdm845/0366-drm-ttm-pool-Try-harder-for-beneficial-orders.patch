@@ -1,0 +1,56 @@
+From dd8dde5745eaf7509d5565d539d0c0bf4148bfe7 Mon Sep 17 00:00:00 2001
+From: Matthew Brost <matthew.brost@intel.com>
+Date: Tue, 16 Jun 2026 19:22:48 -0700
+Subject: [PATCH 00366/15333] drm/ttm/pool: Try harder for beneficial orders
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When a driver specifies a beneficial order, TTM should make a reasonable
+effort to allocate pages at that order.
+
+Use __GFP_RETRY_MAYFAIL instead of __GFP_NORETRY when allocating at the
+beneficial order. This allows reclaim to try harder before falling back to
+smaller orders, at the cost of longer allocation setup time.
+
+That tradeoff is acceptable for beneficial-order allocations: higher-order
+backing pages can improve TLB hit rates and reduce the number of TLB
+invalidations needed when moving memory.
+
+Cc: Christian Koenig <christian.koenig@amd.com>
+Cc: Huang Rui <ray.huang@amd.com>
+Cc: Matthew Auld <matthew.auld@intel.com>
+Cc: Maarten Lankhorst <maarten.lankhorst@linux.intel.com>
+Cc: Maxime Ripard <mripard@kernel.org>
+Cc: Thomas Zimmermann <tzimmermann@suse.de>
+Cc: David Airlie <airlied@gmail.com>
+Cc: Simona Vetter <simona@ffwll.ch>
+Cc: dri-devel@lists.freedesktop.org
+Cc: linux-kernel@vger.kernel.org
+Cc: Thomas Hellström <thomas.hellstrom@linux.intel.com>
+Signed-off-by: Matthew Brost <matthew.brost@intel.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+Link: https://patch.msgid.link/20260617022248.1165101-1-matthew.brost@intel.com
+---
+ drivers/gpu/drm/ttm/ttm_pool.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/gpu/drm/ttm/ttm_pool.c b/drivers/gpu/drm/ttm/ttm_pool.c
+index e76c3a5c67bd..39fdd50b1ee2 100644
+--- a/drivers/gpu/drm/ttm/ttm_pool.c
++++ b/drivers/gpu/drm/ttm/ttm_pool.c
+@@ -168,6 +168,11 @@ static struct page *ttm_pool_alloc_page(struct ttm_pool *pool, gfp_t gfp_flags,
+ 	if (order && beneficial_order && order != beneficial_order)
+ 		gfp_flags &= ~__GFP_RECLAIM;
+ 
++	if (beneficial_order && order == beneficial_order) {
++		gfp_flags &= ~__GFP_NORETRY;
++		gfp_flags |= __GFP_RETRY_MAYFAIL;
++	}
++
+ 	if (!ttm_pool_uses_dma_alloc(pool)) {
+ 		p = alloc_pages_node(pool->nid, gfp_flags, order);
+ 		if (p) {
+-- 
+2.55.0
+

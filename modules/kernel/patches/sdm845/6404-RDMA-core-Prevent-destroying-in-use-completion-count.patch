@@ -1,0 +1,128 @@
+From 45e537bf580d540132bcabd8ae3af483461fa1c1 Mon Sep 17 00:00:00 2001
+From: Michael Margolin <mrgolin@amazon.com>
+Date: Wed, 22 Jul 2026 08:35:59 +0000
+Subject: [PATCH 06404/15333] RDMA/core: Prevent destroying in-use completion
+ counters
+
+Reject comp_cntr destroy while it is attached to any QP. Track
+attachments using an xarray in ib_qp keyed by the attach op_mask.
+Use op bitmask to reject overlapping attaches early.
+
+Reviewed-by: Yonatan Nachum <ynachum@amazon.com>
+Signed-off-by: Michael Margolin <mrgolin@amazon.com>
+Link: https://patch.msgid.link/20260722083603.30334-3-mrgolin@amazon.com
+Signed-off-by: Leon Romanovsky <leon@kernel.org>
+---
+ .../core/uverbs_std_types_comp_cntr.c          |  3 +++
+ drivers/infiniband/core/uverbs_std_types_qp.c  | 18 +++++++++++++++++-
+ drivers/infiniband/core/verbs.c                |  8 ++++++++
+ include/rdma/ib_verbs.h                        |  3 +++
+ 4 files changed, 31 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/infiniband/core/uverbs_std_types_comp_cntr.c b/drivers/infiniband/core/uverbs_std_types_comp_cntr.c
+index 7db3feace2a9..e12aececbb09 100644
+--- a/drivers/infiniband/core/uverbs_std_types_comp_cntr.c
++++ b/drivers/infiniband/core/uverbs_std_types_comp_cntr.c
+@@ -13,6 +13,9 @@ static int uverbs_free_comp_cntr(struct ib_uobject *uobject, enum rdma_remove_re
+ 	struct ib_comp_cntr *cc = uobject->object;
+ 	int ret;
+ 
++	if (atomic_read(&cc->usecnt))
++		return -EBUSY;
++
+ 	ret = cc->device->ops.destroy_comp_cntr(cc);
+ 	if (ret)
+ 		return ret;
+diff --git a/drivers/infiniband/core/uverbs_std_types_qp.c b/drivers/infiniband/core/uverbs_std_types_qp.c
+index 1a32a902bdba..30fc20fb251f 100644
+--- a/drivers/infiniband/core/uverbs_std_types_qp.c
++++ b/drivers/infiniband/core/uverbs_std_types_qp.c
+@@ -403,7 +403,23 @@ static int UVERBS_HANDLER(UVERBS_METHOD_QP_ATTACH_COMP_CNTR)(
+ 	if (!attr.op_mask)
+ 		return -EINVAL;
+ 
+-	return qp->device->ops.qp_attach_comp_cntr(qp, cc, &attr);
++	if (attr.op_mask & qp->comp_cntr_op_mask)
++		return -EBUSY;
++
++	ret = xa_err(xa_store(&qp->comp_cntrs, attr.op_mask, cc, GFP_KERNEL));
++	if (ret)
++		return ret;
++
++	ret = qp->device->ops.qp_attach_comp_cntr(qp, cc, &attr);
++	if (ret) {
++		xa_erase(&qp->comp_cntrs, attr.op_mask);
++		return ret;
++	}
++
++	atomic_inc(&cc->usecnt);
++	qp->comp_cntr_op_mask |= attr.op_mask;
++
++	return 0;
+ }
+ 
+ DECLARE_UVERBS_NAMED_METHOD(
+diff --git a/drivers/infiniband/core/verbs.c b/drivers/infiniband/core/verbs.c
+index f86e6f30b1df..367822efff36 100644
+--- a/drivers/infiniband/core/verbs.c
++++ b/drivers/infiniband/core/verbs.c
+@@ -1300,6 +1300,7 @@ static struct ib_qp *create_qp(struct ib_device *dev, struct ib_pd *pd,
+ 	qp->qp_context = attr->qp_context;
+ 
+ 	spin_lock_init(&qp->mr_lock);
++	xa_init(&qp->comp_cntrs);
+ 	INIT_LIST_HEAD(&qp->rdma_mrs);
+ 	INIT_LIST_HEAD(&qp->sig_mrs);
+ 	init_completion(&qp->srq_completion);
+@@ -1334,6 +1335,7 @@ static struct ib_qp *create_qp(struct ib_device *dev, struct ib_pd *pd,
+ 		qp, uattrs ? uverbs_get_cleared_udata(uattrs) : NULL);
+ err_create:
+ 	rdma_restrack_put(&qp->res);
++	xa_destroy(&qp->comp_cntrs);
+ 	kfree(qp);
+ 	return ERR_PTR(ret);
+ 
+@@ -2151,6 +2153,8 @@ int ib_destroy_qp_user(struct ib_qp *qp, struct ib_udata *udata)
+ 	const struct ib_gid_attr *alt_path_sgid_attr = qp->alt_path_sgid_attr;
+ 	const struct ib_gid_attr *av_sgid_attr = qp->av_sgid_attr;
+ 	struct ib_qp_security *sec;
++	struct ib_comp_cntr *cc;
++	unsigned long index;
+ 	int ret;
+ 
+ 	WARN_ON_ONCE(qp->mrs_used > 0);
+@@ -2184,6 +2188,10 @@ int ib_destroy_qp_user(struct ib_qp *qp, struct ib_udata *udata)
+ 	if (av_sgid_attr)
+ 		rdma_put_gid_attr(av_sgid_attr);
+ 
++	xa_for_each(&qp->comp_cntrs, index, cc)
++		atomic_dec(&cc->usecnt);
++	xa_destroy(&qp->comp_cntrs);
++
+ 	ib_qp_usecnt_dec(qp);
+ 	if (sec)
+ 		ib_destroy_qp_security_end(sec);
+diff --git a/include/rdma/ib_verbs.h b/include/rdma/ib_verbs.h
+index 9a952750f068..84a8904fbad4 100644
+--- a/include/rdma/ib_verbs.h
++++ b/include/rdma/ib_verbs.h
+@@ -1758,6 +1758,7 @@ enum ib_qp_attach_comp_cntr_op {
+ struct ib_comp_cntr {
+ 	struct ib_device *device;
+ 	struct ib_uobject *uobject;
++	atomic_t usecnt;
+ };
+ 
+ enum ib_comp_cntr_entry {
+@@ -1944,6 +1945,8 @@ struct ib_qp {
+ 	struct completion	srq_completion;
+ 	struct ib_xrcd	       *xrcd; /* XRC TGT QPs only */
+ 	struct list_head	xrcd_list;
++	struct xarray		comp_cntrs; /* op_mask -> comp_cntr */
++	u32			comp_cntr_op_mask;
+ 
+ 	/* count times opened, mcast attaches, flow attaches */
+ 	atomic_t		usecnt;
+-- 
+2.55.0
+
