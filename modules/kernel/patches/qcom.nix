@@ -1,12 +1,13 @@
 { inputs, self, ... }:
 {
   kernel.patches = {
-    qcom =
-      { }:
+    qcom = { }: "${self}/modules/kernel/patches/sdm845/sdm845-combined.patch";
+    /*
       "${self}/modules/kernel/patches/sdm845"
       |> builtins.readDir
       |> builtins.attrNames
       |> map (filename: "${filename}.patch");
+    */
 
     qcom-defconfig =
       pkgs:
