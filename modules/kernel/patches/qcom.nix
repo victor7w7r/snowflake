@@ -31,9 +31,10 @@
           "0060-hack-arm64-dts-qcom-sdm845-oneplus-common-add-nodes-.patch"
           "0061-hack-arm64-dts-qcom-sdm845-shift-axolotl-add-nodes-f.patch"
           "0062-END-HACK-series-for-working-qdsp6.patch"
-          "0063-stalled-arm64-dts-qcom-sdm845-xiaomi-beryllium-add-s.patch" # !
+          "0063-stalled-arm64-dts-qcom-sdm845-xiaomi-beryllium-add-s.patch"
           "0065-Enable-DW9714V-camera-focus-coils-on-SHIFT-6MQ.patch"
           "0069-EDITME-cover-title-for-shift6-camera.patch"
+          "0070-arm64-dts-qcom-sdm845-shift-axolotl-Introduce-main-c.patch"
           "0076-EDITME-cover-title-for-axolotl-misc.patch"
           "0086-Add-initial-dual-front-camera-and-rear-flash-support.patch"
           "0089-EDITME-downstream-cameras.patch"
