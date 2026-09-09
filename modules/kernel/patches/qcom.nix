@@ -89,6 +89,7 @@
           "0186-arm64-dts-qcom-sdm845-google-Add-WCD9340-codec-and-m.patch"
           "0187-Pixel-3-display-fixes.patch"
           "0190-Add-modemsmem-for-Google-phones.patch"
+          "0192-soc-qcom-Add-modemsmem-for-Google-phones.patch"
           "0194-EDITME-cover-title-for-ea8074.patch"
         ]
       )
