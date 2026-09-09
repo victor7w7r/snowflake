@@ -67,6 +67,7 @@
         sed -i '/^CONFIG_MTD_/d' config
         sed -i '/^CONFIG_PHONET/d' config
         sed -i '/^CONFIG_PHY_QCOM_USB_HS/d' config
+        sed -i '/^CONFIG_QCOM_Q6V5_MSS/d' config
         sed -i '/^CONFIG_RDS/d' config
         sed -i '/^CONFIG_RXKAD/d' config
         sed -i '/^CONFIG_SCSI_/d' config
