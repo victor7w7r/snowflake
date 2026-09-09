@@ -1,0 +1,27 @@
+#!/run/current-system/sw/bin/bash
+
+set -euo pipefail
+
+REF="cachyos-7.2.4-1"
+SDM845_REF="sdm845/sdm845-next"
+KERNEL_DIR="./linux-full"
+PATCHES_DIR="./sdm845-full"
+
+mkdir -p "$PATCHES_DIR"
+
+[ -d "$KERNEL_DIR" ] || git clone https://github.com/CachyOS/linux.git "$KERNEL_DIR"
+cd "$KERNEL_DIR"
+
+git remote | grep "sdm845" || git remote add sdm845 https://codeberg.org/sdm845/linux.git
+
+git fetch origin --tags && git fetch sdm845 --tags
+git format-patch "$REF..$SDM845_REF" -o "../$PATCHES_DIR"
+
+cd "../$PATCHES_DIR"
+shopt -s nullglob
+patches=(*.patch)
+
+if [ ${#patches[@]} -gt 0 ]; then
+  grep -L "diff --git" "${patches[@]}" | xargs rm -f 2>/dev/null || true
+  patches=(*.patch)
+fi

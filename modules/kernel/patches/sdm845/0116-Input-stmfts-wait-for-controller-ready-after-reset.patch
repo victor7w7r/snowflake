@@ -1,0 +1,105 @@
+From 40fbf9e03eb01e6176594466862e2075fe74b621 Mon Sep 17 00:00:00 2001
+From: David Heidelberg <david@ixit.cz>
+Date: Mon, 7 Sep 2026 00:14:54 +0200
+Subject: [PATCH 116/212] Input: stmfts - wait for controller ready after reset
+
+After releasing the reset line stmfts_reset() sleeps a fixed 50 ms and
+stmfts_power_on() another 50 ms before the first I2C access.  That is
+enough for a warm reset, but when both supplies were really cut during
+system suspend the controller boots from cold and can need longer.  If
+it does, the first read fails, stmfts_resume() returns an error and the
+touchscreen is left powered off with its interrupt disabled.
+
+The controller posts a controller ready event once it has booted, and
+the event parser already completes cmd_done on it.  Enable the interrupt
+right after releasing reset and wait for that event instead of sleeping,
+giving the controller 300 ms, the total budget the vendor driver allows.
+Boards without a reset line keep the old timing.
+
+Usually phones such as Pixel 4a and Xiaomi Mi 8 needs longer delay, so
+without this change touchscreen stops working.
+
+Fixes: 8a1f9de80e45 ("Input: stmfts - add optional reset GPIO support")
+Cc: stable@vger.kernel.org
+Signed-off-by: David Heidelberg <david@ixit.cz>
+---
+ drivers/input/touchscreen/stmfts.c | 34 +++++++++++++++++++++---------
+ 1 file changed, 24 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/input/touchscreen/stmfts.c b/drivers/input/touchscreen/stmfts.c
+index 972687797f82..711e3ad8587a 100644
+--- a/drivers/input/touchscreen/stmfts.c
++++ b/drivers/input/touchscreen/stmfts.c
+@@ -64,6 +64,8 @@
+ #define STMFTS_MASK_KEY_MENU			0x01
+ #define STMFTS_MASK_KEY_BACK			0x02
+ 
++#define STMFTS_RESET_TIMEOUT_MS	300
++
+ #define STMFTS_EVENT_SIZE	8
+ #define STMFTS_STACK_DEPTH	32
+ #define STMFTS_DATA_MAX_SIZE	(STMFTS_EVENT_SIZE * STMFTS_STACK_DEPTH)
+@@ -543,13 +545,20 @@ static int stmfts_read_system_info(struct stmfts_data *sdata)
+ 	return 0;
+ }
+ 
+-static void stmfts_reset(struct stmfts_data *sdata)
++static int stmfts_reset(struct stmfts_data *sdata)
+ {
+ 	gpiod_set_value_cansleep(sdata->reset_gpio, 1);
+ 	msleep(20);
+ 
++	reinit_completion(&sdata->cmd_done);
+ 	gpiod_set_value_cansleep(sdata->reset_gpio, 0);
+-	msleep(50);
++	enable_irq(sdata->client->irq);
++
++	if (!wait_for_completion_timeout(&sdata->cmd_done,
++					 msecs_to_jiffies(STMFTS_RESET_TIMEOUT_MS)))
++		return -ETIMEDOUT;
++
++	return 0;
+ }
+ 
+ static int stmfts_configure(struct stmfts_data *sdata)
+@@ -598,16 +607,21 @@ static int stmfts_power_on(struct stmfts_data *sdata)
+ 	 */
+ 	msleep(20);
+ 
+-	if (sdata->reset_gpio)
+-		stmfts_reset(sdata);
++	if (sdata->reset_gpio) {
++		err = stmfts_reset(sdata);
++		if (err) {
++			dev_err(&sdata->client->dev,
++				"controller not ready after reset: %d\n", err);
++			goto err_disable_irq;
++		}
++	} else {
++		enable_irq(sdata->client->irq);
++		msleep(50);
++	}
+ 
+ 	err = stmfts_read_system_info(sdata);
+ 	if (err)
+-		goto err_disable_regulators;
+-
+-	enable_irq(sdata->client->irq);
+-
+-	msleep(50);
++		goto err_disable_irq;
+ 
+ 	err = stmfts_configure(sdata);
+ 	if (err)
+@@ -623,7 +637,7 @@ static int stmfts_power_on(struct stmfts_data *sdata)
+ 
+ err_disable_irq:
+ 	disable_irq(sdata->client->irq);
+-err_disable_regulators:
++
+ 	regulator_bulk_disable(ARRAY_SIZE(stmfts_supplies), sdata->supplies);
+ 	return err;
+ }
+-- 
+2.55.0
+

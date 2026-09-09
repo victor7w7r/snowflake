@@ -1,0 +1,198 @@
+From 3efc26af13a1ce10be547ce0a64f507098b95164 Mon Sep 17 00:00:00 2001
+From: David Heidelberg <david@ixit.cz>
+Date: Sun, 9 Nov 2025 09:52:01 +0100
+Subject: [PATCH 152/212] media: camss: Add support for C-PHY configuration on
+ Qualcomm platforms
+
+Note: WIP tag added, as not everything from the previous review round has
+been addressed.
+
+># Short summary
+
+This patch series extends the Qualcomm CAMSS (Camera Subsystem),
+including CSID and CSIPHY components, to support C-PHY mode configuration.
+
+
+># Background and motivation
+
+Modern smartphone cameras increasingly rely on MIPI C-PHY rather than
+D-PHY, thanks to its higher data throughput and signal efficiency.
+As a result, many OEMs adopt C-PHY interfaces for main (rear) cameras on
+Qualcomm-based devices.
+
+Until now, mainline Linux lacked C-PHY configuration support for Qualcomm
+chipsets, preventing bring-up of primary camera sensors on several
+Snapdragon platforms. This series closes that gap.
+
+ - Introduces C-PHY configuration support for the CAMSS driver stack,
+   covering both CSID and CSIPHY blocks.
+ - Successfully enables C-PHY operation on the Snapdragon 845 platform.
+ - Tested on OnePlus 6 and 6T phones running mainline Linux,
+   using the Sony IMX519 main camera sensor.
+ - The new configuration allows other chipsets versionsto enable C-PHY by
+   simply adding corresponding sensor driver support and csiphy
+   initialization data, following the example set for sdm845.
+
+With this patch series, mainline Linux gains working C-PHY support for
+Snapdragon 845, paving the way for improved main camera functionality
+across many Qualcomm-based devices. The groundwork also simplifies
+future enablement efforts for additional SoCs and sensors.
+
+Until merged, the series will be also available at:
+  https://codeberg.org/sdm845/linux/commits/branch/b4/qcom-cphy
+
+# Describe the purpose of this series. The information you put here
+# will be used by the project maintainer to make a decision whether
+# your patches should be reviewed, and in what priority order. Please be
+# very detailed and link to any relevant discussions or sites that the
+# maintainer can review to better understand your proposed changes. If you
+# only have a single patch in your series, the contents of the cover
+# letter will be appended to the "under-the-cut" portion of the patch.
+
+# Lines starting with # will be removed from the cover letter. You can
+# use them to add notes or reminders to yourself. If you want to use
+# markdown headers in your cover letter, start the line with ">#".
+
+# You can add trailers to the cover letter. Any email addresses found in
+# these trailers will be added to the addresses specified/generated
+# during the b4 send stage. You can also run "b4 prep --auto-to-cc" to
+# auto-populate the To: and Cc: trailers based on the code being
+# modified.
+
+To: Robert Foss <rfoss@kernel.org>
+To: Todor Tomov <todor.too@gmail.com>
+To: Bryan O'Donoghue <bryan.odonoghue@linaro.org>
+To: Bryan O'Donoghue <bod@kernel.org>
+To: Vladimir Zapolskiy <vladimir.zapolskiy@linaro.org>
+To: Mauro Carvalho Chehab <mchehab@kernel.org>
+To: Luca Weiss <luca.weiss@fairphone.com>
+To: Petr Hodina <phodina@protonmail.com>
+To: Dr. Git <drgitx@gmail.com>
+To: Cory Keitz <ckeitz@amazon.com>
+To: Loic Poulain <loic.poulain@oss.qualcomm.com>
+To: Hans Verkuil <hverkuil@kernel.org>
+To: Nihal Kumar Gupta <nihal.gupta@oss.qualcomm.com>
+Cc: Frank Li <Frank.Li@nxp.com>
+Cc: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Cc: Kieran Bingham <kbingham@kernel.org>
+Cc: Sakari Ailus <sakari.ailus@linux.intel.com>
+Cc: linux-media@vger.kernel.org
+Cc: linux-arm-msm@vger.kernel.org
+Cc: linux-kernel@vger.kernel.org
+Cc: phone-devel@vger.kernel.org
+Signed-off-by: David Heidelberg <david@ixit.cz>
+---
+Changes in v9:
+- EDITME: describe what is new in this series revision.
+- EDITME: use bulletpoints and terse descriptions.
+- Link to v8: https://lore.kernel.org/r/20260610-qcom-cphy-v8-0-cd4387785179@ixit.cz
+
+Changes in v8:
+- Refactor the for cycle in csiphy_is_gen2 same way as
+  csiphy_get_lane_mask(). (Frank)
+- Dropped T-b/R-b/A-b from
+  "media: qcom: camss: Account for C-PHY when calculating link frequency"
+  as I did refactored the commit to not rely on `csiphy_id`. (Wenmeng)
+- csiphy_get_lane_mask calculation fix. (Wenmeng)
+- csiphy_lanes_enable now uses csiphy_get_lane_mask. (Wenmeng)
+- Link to v7: https://lore.kernel.org/r/20260605-qcom-cphy-v7-0-426c37e9008f@ixit.cz
+
+Changes in v7:
+- Move logic out of switch. (Frank)
+- Change csid cphy knob to phy_sel using enum. (Bryan, Frank)
+- Link to v6: https://lore.kernel.org/r/20260603-qcom-cphy-v6-0-e50de0b557a8@ixit.cz
+
+Changes in v6:
+- lanes_enable now uses WARN_ONCE instead of return values. (Sakari)
+- Dropped Kodiak patch until it gets better documented.
+- Document the 3ph C-PHY sdm845 registers a bit.
+- Link to v5: https://lore.kernel.org/r/20260531-qcom-cphy-v5-0-6be0f62b4d65@ixit.cz
+
+Changes in v5:
+- Split first patch enabling C-PHY part into last patch. (Bryan)
+- Fix the camss_get_link_freq crash. (Cory)
+- Dropped patch whitelisting C-PHY, instead use nullptr check. (Bryan)
+- Dropped A-b/R-b from
+ "media: qcom: camss: Initialize lanes after lane configuration is available"
+ and changed Petr to Co-developed by and owned the patch.
+- Link to v4: https://lore.kernel.org/r/20260301-qcom-cphy-v4-0-e53316d2cc65@ixit.cz
+
+Changes in v4:
+- Documented cphy parametr to camss_get_link_freq.
+- Use BIT() macro for lane_mask. (Bryan)
+- Correct lane_mask calculation. (Kieran + me)
+- Removed comment for the D/C-PHY sequences init. (Bryan)
+- Pass &csid->phy for calculate freq. (Bryan)
+- Added missing cphy description to camss_get_link_freq. (kernel test robot)
+- Gen2 v1.1 MIPI CSI-2 CPHY init hex to lowercase.
+- Added back missed commit with improved electrical for sdm845 3ph.
+- NOT addressed yet:
+  - Proliferating special cases in switch statements on a per-SoC basis is verboten.
+  - is it possible to set clock_lane to say 0xff in DT ?
+- Link to v3: https://lore.kernel.org/r/20260117-qcom-cphy-v3-0-8ce76a06f7db@ixit.cz
+
+Changes in v3:
+- Make lanes_enable return sucess or error, since I couldn't move the
+  configuration to the _init.
+- Dropped R-b tags on
+  "media: qcom: camss: Initialize lanes after lane configuration is available"
+  as I changed formatting.
+- Link to v2: https://lore.kernel.org/r/20251204-qcom-cphy-v2-0-6b35ef8b071e@ixit.cz
+
+Changes in v2:
+- This is still WIP patch series, thus I wanted to publish already
+  changed parts to get feedback regarding to the direction of patchset.
+- When switch to using odd bits, zeroed val which was left unitialized in v1.
+- Accidentally missed archs added back in the commit moving lane regs to
+  new location.
+- Remove commit with reverting check for only D-PHY is supported and
+  adjusted the check to also account for C-PHY.
+- Documented link frequency calculation with defines. (Casey)
+- Changed the cphy boolean to phy_cfg enum in the camss/camss-csiphy.
+  (Brian)
+- Added patch for csiphy-3ph enablement for sm7280 from Luca as I'm
+  meanwhile trying to bring up the C-PHY sensor on FairPhone 5.
+- Merged these two commits together
+    csiphy-3ph: Enable sdm845 C-PHY sequence
+    csiphy-3ph: Add Gen2 v1.1 MIPI CSI-2 CPHY init
+  merged R-b.
+- Link to v1: https://lore.kernel.org/r/20251109-qcom-cphy-v1-0-165f7e79b0e1@ixit.cz
+
+--- b4-submit-tracking ---
+# This section is used internally by b4 prep for tracking purposes.
+{
+  "series": {
+    "revision": 9,
+    "change-id": "20251109-qcom-cphy-bb8cbda1c644",
+    "prefixes": [],
+    "history": {
+      "v1": [
+        "20251109-qcom-cphy-v1-0-165f7e79b0e1@ixit.cz"
+      ],
+      "v2": [
+        "20251204-qcom-cphy-v2-0-6b35ef8b071e@ixit.cz"
+      ],
+      "v3": [
+        "20260117-qcom-cphy-v3-0-8ce76a06f7db@ixit.cz"
+      ],
+      "v4": [
+        "20260301-qcom-cphy-v4-0-e53316d2cc65@ixit.cz"
+      ],
+      "v5": [
+        "20260531-qcom-cphy-v5-0-6be0f62b4d65@ixit.cz"
+      ],
+      "v6": [
+        "20260603-qcom-cphy-v6-0-e50de0b557a8@ixit.cz"
+      ],
+      "v7": [
+        "20260605-qcom-cphy-v7-0-426c37e9008f@ixit.cz"
+      ],
+      "v8": [
+        "20260610-qcom-cphy-v8-0-cd4387785179@ixit.cz"
+      ]
+    }
+  }
+}
+-- 
+2.55.0
+

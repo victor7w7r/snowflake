@@ -1,0 +1,139 @@
+From 30743fc0ab0d324378dfb99b1192dba18c5b6b95 Mon Sep 17 00:00:00 2001
+From: David Heidelberg <david@ixit.cz>
+Date: Mon, 24 Aug 2026 19:32:24 +0200
+Subject: [PATCH 076/212] arm64: dts: qcom: sdm845-shift-axolotl: Introduce
+ front camera
+
+Add support for the front S5K3P9SP 16MP camera sensor.
+
+The sensor sits on CCI I2C bus 1 at address 0x2d, receives MCLK2
+(24 MHz) and streams over the CSI2 PHY with four data lanes. Its
+analog supply is switched by GPIO33 and the digital core supply by
+GPIO77; both are fixed regulators fed from VPH_PWR / BOB.
+
+Signed-off-by: David Heidelberg <david@ixit.cz>
+---
+ .../boot/dts/qcom/sdm845-shift-axolotl.dts    | 86 +++++++++++++++++++
+ 1 file changed, 86 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts b/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts
+index 787802129a12..24dfe006401e 100644
+--- a/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts
++++ b/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts
+@@ -176,6 +176,39 @@ camera_rear_aux_dvdd: camera-rear-aux-dvdd-regulator {
+ 		vin-supply = <&vreg_s3a_1p35>;
+ 	};
+ 
++	camera_front_avdd: camera-front-avdd-regulator {
++		compatible = "regulator-fixed";
++
++		regulator-name = "camera_front_avdd";
++		regulator-min-microvolt = <2800000>;
++		regulator-max-microvolt = <2800000>;
++		startup-delay-us = <135>;
++		enable-active-high;
++		gpios = <&tlmm 33 GPIO_ACTIVE_HIGH>;
++
++		pinctrl-0 = <&cam_front_avdd_default_state>;
++		pinctrl-names = "default";
++
++		vin-supply = <&vreg_bob>;
++	};
++
++	/* RP105L121F LDO */
++	camera_front_dvdd: camera-front-dvdd-regulator {
++		compatible = "regulator-fixed";
++
++		regulator-name = "camera_front_dvdd";
++		regulator-min-microvolt = <1050000>;
++		regulator-max-microvolt = <1050000>;
++		startup-delay-us = <135>;
++		enable-active-high;
++		gpios = <&tlmm 77 GPIO_ACTIVE_HIGH>;
++
++		pinctrl-0 = <&cam_front_dvdd_default_state>;
++		pinctrl-names = "default";
++
++		vin-supply = <&vph_pwr>;
++	};
++
+ 	vph_pwr: vph-pwr-regulator {
+ 		compatible = "regulator-fixed";
+ 		regulator-name = "vph_pwr";
+@@ -570,6 +603,15 @@ csiphy1_ep: endpoint {
+ 				remote-endpoint = <&rear_camera_aux_ep>;
+ 			};
+ 		};
++
++		port@2 {
++			reg = <2>;
++			csiphy2_ep: endpoint {
++				bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
++				data-lanes = <0 1 2 3>;
++				remote-endpoint = <&front_camera_ep>;
++			};
++		};
+ 	};
+ };
+ 
+@@ -663,6 +705,36 @@ rear_cam2_actuator: camera-lens@c {
+ 
+ 		vcc-supply = <&cam_rear2_af_2p8>;
+ 	};
++
++	front_camera: camera@2d {
++		compatible = "samsung,s5k3p9sp";
++		reg = <0x2d>;
++
++		vana-supply = <&camera_front_avdd>;
++		vdig-supply = <&camera_front_dvdd>;
++		vio-supply = <&vreg_lvs1a_1p8>;
++
++		clocks = <&clock_camcc CAM_CC_MCLK2_CLK>;
++		clock-names = "mclk";
++		assigned-clocks = <&clock_camcc CAM_CC_MCLK2_CLK>;
++		assigned-clock-rates = <24000000>;
++
++		reset-gpios = <&tlmm 9 GPIO_ACTIVE_LOW>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam_mclk2_default>;
++
++		orientation = <0>;
++		rotation = <90>;
++
++		port {
++			front_camera_ep: endpoint {
++				data-lanes = <1 2 3 4>;
++				link-frequencies = /bits/ 64 <700000000>;
++				remote-endpoint = <&csiphy2_ep>;
++			};
++		};
++	};
+ };
+ 
+ &cdsp_pas {
+@@ -957,6 +1029,20 @@ cam_rear2_af_default_state: cam-rear2-af-default-state {
+ 		bias-disable;
+ 	};
+ 
++	cam_front_avdd_default_state: cam-front-avdd-default-state {
++		pins = "gpio33";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam_front_dvdd_default_state: cam-front-dvdd-default-state {
++		pins = "gpio77";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	sdc2_default_state: sdc2-default-state {
+ 		clk-pins {
+ 			pins = "sdc2_clk";
+-- 
+2.55.0
+
