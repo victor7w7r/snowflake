@@ -37,6 +37,7 @@
           "0070-arm64-dts-qcom-sdm845-shift-axolotl-Introduce-main-c.patch"
           "0076-EDITME-cover-title-for-axolotl-misc.patch"
           "0077-arm64-dts-qcom-sdm845-shift-axolotl-Enable-sound-sub.patch"
+          "0078-stalled-arm64-qcom-sdm845-shift-axolotl-Improve-audi.patch"
           "0086-Add-initial-dual-front-camera-and-rear-flash-support.patch"
           "0089-EDITME-downstream-cameras.patch"
           "0100-power-supply-pmi8998-charger-improvements-and-smb5-s.patch"
