@@ -42,7 +42,7 @@
         QCOM_Q6V5_PAS = setupDenial isDenied yes;
         QCOM_SPMI_ADC5 = setupDenial isDenied yes;
         QCOM_SPMI_VADC = setupDenial isDenied yes;
-        QCOM_SYSMON = setupDenial isDenied module;
+        QCOM_SYSMON = setupDenial isDenied yes;
         POWER_SEQUENCING_QCOM_WCN = setupDenial isDenied yes;
         QUOTA = lib.mkForce (setupDenial isDenied yes);
         REGULATOR_QCOM_LABIBB = setupDenial isDenied yes;

@@ -88,9 +88,12 @@
 
         environment = {
           systemPackages = [ inputs'.vanilla-mobile-nixos.packages.oneplus-sdm845-firmware ];
-          persistence."/nix/persist".users = {
-            "victor7w7r".directories = [ ".cache" ];
-            root.directories = [ ".cache" ];
+          persistence."/nix/persist" = {
+            directories = lib.mkAfter [ "/var/lib/ModemManager" ];
+            users = {
+              "victor7w7r".directories = [ ".cache" ];
+              root.directories = [ ".cache" ];
+            };
           };
           enableAllTerminfo = true;
         };
