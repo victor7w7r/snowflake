@@ -79,6 +79,7 @@
           "0167-arm64-dts-qcom-sdm845-samsung-starqltechn-Update-pan.patch"
           "0168-arm64-dts-qcom-sdm845-google-crosshatch-Add-display-.patch"
           "0169-EDITME-cover-title-for-dipper.patch"
+          "0170-dt-bindings-arm-qcom-Add-Xiaomi-Mi-8.patch"
           "0172-EDITME-cover-title-for-no_init_park.patch"
           "0174-EDITME-cover-title-for-csiphy-sdm845-limits.patch"
           "0176-EDITME-cover-title-for-wcd-dma.patch"
