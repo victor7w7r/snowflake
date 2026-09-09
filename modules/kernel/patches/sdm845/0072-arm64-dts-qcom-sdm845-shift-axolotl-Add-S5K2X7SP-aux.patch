@@ -1,0 +1,114 @@
+From fb22696eb8b4af076b5125d9308dde86da969d2b Mon Sep 17 00:00:00 2001
+From: David Heidelberg <david@ixit.cz>
+Date: Sat, 22 Aug 2026 01:41:39 +0200
+Subject: [PATCH 072/211] arm64: dts: qcom: sdm845-shift-axolotl: Add S5K2X7SP
+ auxiliary rear camera
+
+The SHIFT 6MQ has a second rear camera using a Samsung S5K2X7SP sensor.
+
+  AVDD 2.8V  -> CAM2_AVDD_EN        = GPIO_40 (tlmm 40)
+  DVDD 1.05V -> CAM2_1P05_DVDD_EN   = GPIO_35 (tlmm 35)
+  VIO  1.8V  -> VREG_LVS1A_1P8 (shared, always-on)
+
+Signed-off-by: David Heidelberg <david@ixit.cz>
+---
+ .../boot/dts/qcom/sdm845-shift-axolotl.dts    | 67 ++++++++++++++++++-
+ 1 file changed, 65 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts b/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts
+index f08f19a42535..787802129a12 100644
+--- a/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts
++++ b/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts
+@@ -152,6 +152,30 @@ camera_rear_dvdd: camera-rear-dvdd-regulator {
+ 		vin-supply = <&vreg_s3a_1p35>;
+ 	};
+ 
++	camera_rear_aux_avdd: camera-rear-aux-avdd-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "camera_rear_aux_avdd";
++		regulator-min-microvolt = <2800000>;
++		regulator-max-microvolt = <2800000>;
++		startup-delay-us = <135>;
++		enable-active-high;
++		gpios = <&tlmm 40 GPIO_ACTIVE_HIGH>;
++
++		vin-supply = <&vreg_bob>;
++	};
++
++	camera_rear_aux_dvdd: camera-rear-aux-dvdd-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "camera_rear_aux_dvdd";
++		regulator-min-microvolt = <1050000>;
++		regulator-max-microvolt = <1050000>;
++		startup-delay-us = <135>;
++		enable-active-high;
++		gpios = <&tlmm 35 GPIO_ACTIVE_HIGH>;
++
++		vin-supply = <&vreg_s3a_1p35>;
++	};
++
+ 	vph_pwr: vph-pwr-regulator {
+ 		compatible = "regulator-fixed";
+ 		regulator-name = "vph_pwr";
+@@ -537,6 +561,15 @@ csiphy0_ep: endpoint {
+ 				remote-endpoint = <&rear_camera_ep>;
+ 			};
+ 		};
++
++		port@1 {
++			reg = <1>;
++			csiphy1_ep: endpoint {
++				bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
++				data-lanes = <0 1 2 3>;
++				remote-endpoint = <&rear_camera_aux_ep>;
++			};
++		};
+ 	};
+ };
+ 
+@@ -589,10 +622,40 @@ rear_cam_actuator: camera-lens@c {
+ };
+ 
+ &cci_i2c1 {
+-	/* samsung,s5k2x7sp @ 10 */
++	rear_camera_aux: camera@10 {
++		compatible = "samsung,s5k2x7sp";
++		reg = <0x10>;
++
++		vana-supply = <&camera_rear_aux_avdd>;
++		vdig-supply = <&camera_rear_aux_dvdd>;
++		vio-supply = <&vreg_lvs1a_1p8>;
++
++		clocks = <&clock_camcc CAM_CC_MCLK1_CLK>;
++		clock-names = "mclk";
++		assigned-clocks = <&clock_camcc CAM_CC_MCLK1_CLK>;
++		assigned-clock-rates = <24000000>;
++
++		reset-gpios = <&tlmm 28 GPIO_ACTIVE_LOW>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam_mclk1_default>;
++
++		orientation = <1>;
++		rotation = <270>;
++
++		lens-focus = <&rear_cam2_actuator>;
++
++		port {
++			rear_camera_aux_ep: endpoint {
++				data-lanes = <1 2 3 4>;
++				link-frequencies = /bits/ 64 <1150000000>;
++				remote-endpoint = <&csiphy1_ep>;
++			};
++		};
++	};
+ 
+ 	/* 2nd rear camera actuator */
+-	camera-lens@c {
++	rear_cam2_actuator: camera-lens@c {
+ 		compatible = "dongwoon,dw9714v",
+ 			     "dongwoon,dw9714a",
+ 			     "dongwoon,dw9714";
+-- 
+2.55.0
+

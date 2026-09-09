@@ -1,43 +1,38 @@
-From 826e60b82eee05d06440b861345f695a3680c3a8 Mon Sep 17 00:00:00 2001
+From 27372e232aca9a631aa1d313424bafb3bb521362 Mon Sep 17 00:00:00 2001
 From: David Heidelberg <david@ixit.cz>
-Date: Wed, 15 Apr 2026 18:52:11 +0000
-Subject: [PATCH 068/212] arm64: dts: qcom: sdm845-shift-axolotl: Add actuator
- for main rear camera
+Date: Sat, 22 Aug 2026 06:25:17 +0200
+Subject: [PATCH 068/211] arm64: dts: qcom: sdm845-shift-axolotl: Add actuator
+ for second rear camera
 
-Main rear camera uses Dongwoon DW9714V actuator. Add regulator and
-actuator node.
+The SHIFT 6MQ has a second rear (auxiliary) camera. Its autofocus
+actuator is a Dongwoon DW9714V.
 
-Since the actuator sits on the CCI I2C bus, whose 1.8V side is fed by
-vreg_lvs1a_1p8 and there is no place to describe that, keep it always-on
-for now, until bus-supply exists.
-
-Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
 Signed-off-by: David Heidelberg <david@ixit.cz>
 ---
- .../boot/dts/qcom/sdm845-shift-axolotl.dts    | 50 +++++++++++++++++++
- 1 file changed, 50 insertions(+)
+ .../boot/dts/qcom/sdm845-shift-axolotl.dts    | 39 +++++++++++++++++++
+ 1 file changed, 39 insertions(+)
 
 diff --git a/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts b/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts
-index cbeb97e7488a..aa6492ae4844 100644
+index aa6492ae4844..7dbfe18b33d1 100644
 --- a/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts
 +++ b/arch/arm64/boot/dts/qcom/sdm845-shift-axolotl.dts
-@@ -89,6 +89,24 @@ battery: battery {
- 		voltage-max-design-microvolt = <4400000>;
+@@ -107,6 +107,24 @@ cam_main_af_2p8: regulator-cam-main-af-2p8 {
+ 		vin-supply = <&vreg_bob>;
  	};
  
 +	/* SGM2036-2.8YUDH4G/TR */
-+	cam_main_af_2p8: regulator-cam-main-af-2p8 {
++	cam_rear2_af_2p8: regulator-cam-rear2-af-2p8 {
 +		compatible = "regulator-fixed";
 +
-+		regulator-name = "cam_main_af_2p8";
++		regulator-name = "cam_rear2_af_2p8";
 +		regulator-min-microvolt = <2800000>;
 +		regulator-max-microvolt = <2800000>;
 +		regulator-enable-ramp-delay = <100>;
 +
-+		gpio = <&tlmm 8 GPIO_ACTIVE_HIGH>;
++		gpio = <&tlmm 76 GPIO_ACTIVE_HIGH>;
 +		enable-active-high;
 +
-+		pinctrl-0 = <&cam_main_af_default_state>;
++		pinctrl-0 = <&cam_rear2_af_default_state>;
 +		pinctrl-names = "default";
 +
 +		vin-supply = <&vreg_bob>;
@@ -46,51 +41,33 @@ index cbeb97e7488a..aa6492ae4844 100644
  	vph_pwr: vph-pwr-regulator {
  		compatible = "regulator-fixed";
  		regulator-name = "vph_pwr";
-@@ -411,6 +429,13 @@ vreg_l28a_3p0: ldo28 {
- 		vreg_lvs1a_1p8: lvs1 {
- 			regulator-min-microvolt = <1800000>;
- 			regulator-max-microvolt = <1800000>;
-+
-+			/*
-+			 * Supplies the 1.8V side of the CCI I2C level
-+			 * shifter; keep enabled until a generic
-+			 * bus-supply property exists.
-+			 */
-+			regulator-always-on;
- 		};
- 
- 		vreg_lvs2a_1p8: lvs2 {
-@@ -449,6 +474,24 @@ vreg_s3c_0p6: smps3 {
+@@ -492,6 +510,20 @@ camera-lens@c {
  	};
  };
  
-+&cci {
-+	status = "okay";
-+};
++&cci_i2c1 {
++	/* samsung,s5k2x7sp @ 10 */
 +
-+&cci_i2c0 {
-+	/* sony,imx519 @ 1a */
-+
-+	/* rear camera actuator */
++	/* 2nd rear camera actuator */
 +	camera-lens@c {
 +		compatible = "dongwoon,dw9714v",
 +			     "dongwoon,dw9714a",
 +			     "dongwoon,dw9714";
 +		reg = <0x0c>;
 +
-+		vcc-supply = <&cam_main_af_2p8>;
++		vcc-supply = <&cam_rear2_af_2p8>;
 +	};
 +};
 +
  &cdsp_pas {
  	firmware-name = "qcom/sdm845/SHIFT/axolotl/cdsp.mbn";
  
-@@ -720,6 +763,13 @@ &slpi_pas {
- &tlmm {
- 	gpio-reserved-ranges = <0 4>, <81 4>;
+@@ -770,6 +802,13 @@ cam_main_af_default_state: cam-main-af-default-state {
+ 		bias-disable;
+ 	};
  
-+	cam_main_af_default_state: cam-main-af-default-state {
-+		pins = "gpio8";
++	cam_rear2_af_default_state: cam-rear2-af-default-state {
++		pins = "gpio76";
 +		function = "gpio";
 +		drive-strength = <2>;
 +		bias-disable;

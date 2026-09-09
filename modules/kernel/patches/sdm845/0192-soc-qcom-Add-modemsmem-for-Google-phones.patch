@@ -1,0 +1,173 @@
+From 81508144c71b8e6eef4140c332660c6d8a3d1512 Mon Sep 17 00:00:00 2001
+From: Richard Acayan <mailingradian@gmail.com>
+Date: Fri, 4 Sep 2026 19:31:09 +0200
+Subject: [PATCH 192/211] soc: qcom: Add modemsmem for Google phones
+
+Modems on Google Pixel devices require extra information about the
+SoC to be passed through a vendor-controlled Shared Memory (SMEM)
+channel. This driver provides this information.
+
+Skimming through the device tree overlays, modemsmem seems to be used by
+every Pixel chronologically between the Pixel 3 and Pixel 5a, inclusive.
+
+The modem_flag field is not being initialized yet because the bootloader
+doesn't always add the property in dtb (so it might not be necessary)
+and because there are problems with how the proper value is being
+retrieved in the original downstream driver.
+
+Downstream kernels have this driver in:
+drivers/soc/qcom/modemsmem/modemsmem.c
+
+Assisted-by: LLM
+Signed-off-by: Richard Acayan <mailingradian@gmail.com>
+Co-developed-by: David Heidelberg <david@ixit.cz>
+Signed-off-by: David Heidelberg <david@ixit.cz>
+---
+ drivers/soc/qcom/Kconfig     | 14 ++++++
+ drivers/soc/qcom/Makefile    |  1 +
+ drivers/soc/qcom/modemsmem.c | 98 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 113 insertions(+)
+ create mode 100644 drivers/soc/qcom/modemsmem.c
+
+diff --git a/drivers/soc/qcom/Kconfig b/drivers/soc/qcom/Kconfig
+index 2b524154d9fb..32975f90bd63 100644
+--- a/drivers/soc/qcom/Kconfig
++++ b/drivers/soc/qcom/Kconfig
+@@ -289,6 +289,20 @@ config QCOM_PBS
+ 	  This module provides the APIs to the client drivers that wants to send the
+ 	  PBS trigger event to the PBS RAM.
+ 
++config QCOM_MODEMSMEM
++	tristate "Google Pixel modem SMEM information"
++	depends on ARCH_QCOM || COMPILE_TEST
++	depends on OF
++	depends on QCOM_SMEM
++	help
++	  The modem firmware on Google Pixel 3 through Pixel 5a devices expects
++	  the application processor to publish SoC platform type and revision
++	  in a vendor-defined SMEM item before the modem is started. This
++	  driver fills in that item from the socinfo SMEM data.
++
++	  Say Y or M if you want a working modem on one of those phones.
++	  If unsure, say N.
++
+ endif
+ 
+ # Options selected by other drivers from different subsystems must be outside
+diff --git a/drivers/soc/qcom/Makefile b/drivers/soc/qcom/Makefile
+index 798643be3590..4a04cd6e497d 100644
+--- a/drivers/soc/qcom/Makefile
++++ b/drivers/soc/qcom/Makefile
+@@ -40,4 +40,5 @@ obj-$(CONFIG_QCOM_ICC_BWMON)	+= icc-bwmon.o
+ qcom_ice-objs			+= ice.o
+ obj-$(CONFIG_QCOM_INLINE_CRYPTO_ENGINE)	+= qcom_ice.o
+ obj-$(CONFIG_QCOM_PBS) +=	qcom-pbs.o
++obj-$(CONFIG_QCOM_MODEMSMEM)	+= modemsmem.o
+ obj-$(CONFIG_QCOM_UBWC_CONFIG) += ubwc_config.o
+diff --git a/drivers/soc/qcom/modemsmem.c b/drivers/soc/qcom/modemsmem.c
+new file mode 100644
+index 000000000000..7a733422ff7c
+--- /dev/null
++++ b/drivers/soc/qcom/modemsmem.c
+@@ -0,0 +1,98 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * SoC Information over Shared Memory.
++ *
++ * Copyright 2022-2024, Richard Acayan.
++ */
++
++#include <linux/err.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/soc/qcom/smem.h>
++#include <linux/soc/qcom/socinfo.h>
++
++#define MODEM_SMEM_VERSION 0
++
++#define PLAT_VER_TO_MAJOR_ID(v) (((v) >> 16) & 0xff)
++#define PLAT_VER_TO_MINOR_ID(v) ((v) & 0xff)
++
++struct modem_smem_info {
++	__le32 version;
++	__le32 modem_flag;
++	__le32 major_id;
++	__le32 minor_id;
++	__le32 subtype;
++	__le32 platform;
++	__le32 efs_magic;
++	__le32 ftm_magic;
++};
++
++static int write_socinfo(struct modem_smem_info *target)
++{
++	struct socinfo *socinfo;
++	u32 plat_ver;
++
++	socinfo = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_HW_SW_BUILD_ID, NULL);
++	if (IS_ERR(socinfo))
++		return PTR_ERR(socinfo);
++
++	/* hw_plat_subtype was added in socinfo format 0.6 */
++	if (le32_to_cpu(socinfo->fmt) < SOCINFO_VERSION(0, 6))
++		return -EOPNOTSUPP;
++
++	plat_ver = le32_to_cpu(socinfo->plat_ver);
++
++	target->version = cpu_to_le32(MODEM_SMEM_VERSION);
++	target->major_id = cpu_to_le32(PLAT_VER_TO_MAJOR_ID(plat_ver));
++	target->minor_id = cpu_to_le32(PLAT_VER_TO_MINOR_ID(plat_ver));
++	target->platform = socinfo->hw_plat;
++	target->subtype = socinfo->hw_plat_subtype;
++
++	return 0;
++}
++
++static int modemsmem_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct modem_smem_info *info;
++	u32 smem_id;
++	int ret;
++
++	ret = of_property_read_u32(dev->of_node, "qcom,smem-id", &smem_id);
++	if (ret)
++		return dev_err_probe(dev, ret, "Could not read smem id\n");
++
++	ret = qcom_smem_alloc(QCOM_SMEM_HOST_ANY, smem_id, sizeof(*info));
++	if (ret)
++		return dev_err_probe(dev, ret, "Could not allocate modem smem\n");
++
++	info = qcom_smem_get(QCOM_SMEM_HOST_ANY, smem_id, NULL);
++	if (IS_ERR(info))
++		return dev_err_probe(dev, PTR_ERR(info), "Could not get modem smem\n");
++
++	ret = write_socinfo(info);
++	if (ret)
++		return dev_err_probe(dev, ret, "Could not submit info to modemsmem\n");
++
++	return 0;
++}
++
++static const struct of_device_id modemsmem_of_match[] = {
++	{ .compatible = "google,modemsmem" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, modemsmem_of_match);
++
++static struct platform_driver modemsmem_driver = {
++	.probe = modemsmem_probe,
++	.driver = {
++		.name = "modemsmem",
++		.of_match_table = modemsmem_of_match,
++	},
++};
++module_platform_driver(modemsmem_driver);
++
++MODULE_AUTHOR("Richard Acayan <mailingradian@gmail.com>");
++MODULE_DESCRIPTION("SoC Information over SMEM driver");
++MODULE_LICENSE("GPL");
+-- 
+2.55.0
+

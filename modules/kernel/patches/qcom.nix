@@ -6,6 +6,13 @@
       "${self}/modules/kernel/patches/sdm845"
       |> builtins.readDir
       |> builtins.attrNames
+      |> builtins.filter (
+        item:
+        !builtins.elem item.name [
+          "0004-Xiaomi-Poco-F1-ebbg-display-variant-fixes.patch"
+          "0008-SDM845-DOWNSTREAM-EDITME-cover-title-for-qcom-spmi-s.patch"
+        ]
+      )
       |> map (filename: "${self}/modules/kernel/patches/sdm845/${filename}");
 
     qcom-defconfig =
