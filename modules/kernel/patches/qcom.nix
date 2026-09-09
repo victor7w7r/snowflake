@@ -50,6 +50,7 @@
           "0094-arm64-dts-qcom-sdm845-xiaomi-beryllium-Add-support-f.patch"
           "0095-arm64-dts-qcom-sdm845-google-Wire-the-back-camera.patch"
           "0096-arm64-dts-qcom-sdm845-oneplus-Camera-bringup.patch"
+          "0098-stalled-arm64-dts-qcom-sdm845-xiaomi-beryllium-Add-q.patch"
           "0100-power-supply-pmi8998-charger-improvements-and-smb5-s.patch"
           "0106-xiaomi-perseus-support.patch"
           "0108-EDITME-cover-title-for-rpmsg-qcom-glink.patch"
