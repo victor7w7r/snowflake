@@ -17,7 +17,7 @@
       defconfig = "phone_defconfig";
       src = kernel.lib.kernel-cleaner {
         inherit pkgs;
-        src = inputs.linux-eol;
+        src = inputs.linux-latest;
         arch = "arm64";
         defconfig = "phone_defconfig";
         replaceClass = "${inputs.linux-sdm845}/arch/arm64/boot/dts/qcom";
@@ -34,10 +34,7 @@
         ++ cachyos.latest.std
         ++ (tachyon.common { source = inputs.tachyon-patches-latest; })
         ++ (tachyon.latest { })
-        ++ (bunker.common {
-          isLts = false;
-          isEol = true;
-        })
-        ++ (bunker.latest { isEol = true; });
+        ++ (bunker.common { isLts = false; })
+        ++ (bunker.latest { });
     });
 }
