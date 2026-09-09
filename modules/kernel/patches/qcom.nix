@@ -41,6 +41,7 @@
           "0082-arm64-dts-freescale-Convert-to-new-media-orientation.patch"
           "0083-arm64-dts-qcom-Convert-to-new-media-orientation-defi.patch"
           "0084-arm64-dts-renesas-Convert-to-new-media-orientation-d.patch"
+          "0085-arm64-dts-rockchip-Convert-to-new-media-orientation-.patch"
           "0086-Add-initial-dual-front-camera-and-rear-flash-support.patch"
           "0089-EDITME-downstream-cameras.patch"
           "0100-power-supply-pmi8998-charger-improvements-and-smb5-s.patch"
