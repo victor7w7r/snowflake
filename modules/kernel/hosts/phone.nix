@@ -19,6 +19,7 @@
         inherit pkgs;
         src = inputs.linux-latest;
         arch = "arm64";
+        extraConfig = "${inputs.linux-sdm845}/arch/arm64/configs/sdm845.config";
         defconfig = "phone_defconfig";
         replaceClass = "${inputs.linux-sdm845}/arch/arm64/boot/dts/qcom";
         class = "qcom";

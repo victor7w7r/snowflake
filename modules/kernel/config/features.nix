@@ -54,7 +54,6 @@
         MAXSMP = no;
         MODULE_FORCE_LOAD = no;
         MODULE_FORCE_UNLOAD = no;
-        NULL_TTY = no;
         NUMA = lib.mkForce no;
         PREEMPT_LAZY = lib.mkForce no;
         PROC_MEM_ALWAYS_FORCE = no;

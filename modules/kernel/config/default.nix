@@ -35,6 +35,7 @@
             DW_DMAC_PCI = yes;
             GPIO_ICH = module;
             HID_WACOM = module;
+            NR_CPUS = lib.mkForce (freeform "12");
             MACINTOSH_DRIVERS = lib.mkForce yes;
             MMC = no;
             PINCTRL_CANNONLAKE = lib.mkForce module;
@@ -61,6 +62,7 @@
           {
             CDROM = no;
             NET_VENDOR_BROADCOM = no;
+            NR_CPUS = lib.mkForce (freeform "12");
             R8169 = no;
             SND_USB_AUDIO = module;
             UDF_FS = lib.mkForce no;
@@ -83,6 +85,7 @@
             CDROM = no;
             DW_DMAC = yes;
             NET_VENDOR_BROADCOM = no;
+            NR_CPUS = lib.mkForce (freeform "4");
             R8169 = yes;
             STAGING = lib.mkForce no;
             UDF_FS = lib.mkForce no;
@@ -107,6 +110,7 @@
             DRM_SUN4I = no;
             DRM_SUN8I_MIXER = yes;
             FB_SUN5I_EINK = no;
+            NR_CPUS = lib.mkForce (freeform "4");
             KSM = yes;
             I2C_MV64XXX = lib.mkForce yes;
             I2C_GPIO = lib.mkForce yes;
@@ -117,9 +121,6 @@
             MFD_AXP20X_I2C = yes;
             MFD_AXP20X_RSB = yes;
             MFD_SUN4I_GPADC = lib.mkForce module;
-            MUX_GPIO = lib.mkForce module;
-            PWM_CLK = lib.mkForce module;
-            PWM_DWC = lib.mkForce module;
             R8169 = no;
             REGULATOR_AXP20X = yes;
             SPARD_WLAN_SUPPORT = yes;
@@ -145,6 +146,7 @@
             ARM_SCMI_CPUFREQ = no;
             ARM_SCPI_CPUFREQ = yes;
             CDROM = no;
+            NR_CPUS = lib.mkForce (freeform "8");
             R8169 = yes;
             UDF_FS = lib.mkForce no;
             USB_EHCI_TEGRA = no;
@@ -164,6 +166,7 @@
           {
             CDROM = no;
             HIBERNATION = no;
+            NR_CPUS = lib.mkForce (freeform "8");
             R8169 = no;
             UDF_FS = lib.mkForce no;
             USB_EHCI_TEGRA = no;

@@ -36,7 +36,6 @@
         DRM_ST7586 = no;
         DRM_ST7735R = no;
         DRM_ST7920 = no;
-        DRM_UDL = no;
         DRM_VBOXVIDEO = no;
         DRM_VESADRM = no;
         DRM_VGEM = no;
