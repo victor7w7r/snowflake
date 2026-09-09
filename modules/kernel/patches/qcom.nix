@@ -14,6 +14,7 @@
           "0011-arm64-dts-qcom-pmi8998-Introduce-SPMI-haptics.patch"
           "0012-arm64-dts-qcom-sdm845-oneplus-Add-haptics-support.patch"
           "0016-Qualcomm-3rd-gen-fuel-gauge-support.patch"
+          "0019-arm64-dts-qcom-pmi8998-Add-fuel-gauge.patch"
         ]
       )
       |> map (filename: "${self}/modules/kernel/patches/sdm845/${filename}");
