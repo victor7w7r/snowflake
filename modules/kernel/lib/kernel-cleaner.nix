@@ -101,7 +101,7 @@
         ${pkgs.lib.optionalString (replaceClass != null && class != null) ''
           rm -rf $out/arch/${arch}/boot/dts/${class}
           cp -r ${replaceClass} $out/arch/${arch}/boot/dts/${class}
-          chmod -R $out/arch/${arch}/boot/dts/${class}
+          chmod -R +w $out/arch/${arch}/boot/dts/${class}
         ''}
 
         ${pkgs.lib.optionalString (class != null) ''
