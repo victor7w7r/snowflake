@@ -36,13 +36,14 @@
         QCOM_INLINE_CRYPTO_ENGINE = setupDenial isDenied yes;
         QCOM_IPA = setupDenial isDenied module;
         QCOM_L3_PMU = setupDenial isDenied yes;
-        QCOM_PD_MAPPER = setupDenial isDenied module;
+        QCOM_PD_MAPPER = setupDenial isDenied yes;
         QCOM_STATS = setupDenial isDenied module;
-        QCOM_Q6V5_MSS = setupDenial isDenied module;
-        QCOM_Q6V5_PAS = setupDenial isDenied module;
+        QCOM_Q6V5_MSS = setupDenial isDenied yes;
+        QCOM_Q6V5_PAS = setupDenial isDenied yes;
         QCOM_SPMI_ADC5 = setupDenial isDenied yes;
         QCOM_SPMI_VADC = setupDenial isDenied yes;
         QCOM_SYSMON = setupDenial isDenied module;
+        POWER_SEQUENCING_QCOM_WCN = setupDenial isDenied yes;
         QUOTA = lib.mkForce (setupDenial isDenied yes);
         REGULATOR_QCOM_LABIBB = setupDenial isDenied yes;
         REMOTEPROC = setupDenial isDenied yes;
@@ -52,7 +53,7 @@
         RPMSG_QCOM_GLINK_SMEM = setupDenial isDenied yes;
         TYPEC_QCOM_PMIC = setupDenial isDenied module;
         TYPEC_MUX_FSA4480 = setupDenial isDenied module;
-        USB_ETH = setupDenial isDenied module;
+        USB_ETH = setupDenial isDenied yes;
         USB_ETH_RNDIS = setupDenial isDenied yes;
         USB_G_NCM = setupDenial isDenied module;
         USB_MASS_STORAGE = setupDenial isDenied module;
@@ -87,7 +88,7 @@
         SCSI_UFSHCD = yes;
         SCSI_UFSHCD_PLATFORM = yes;
         SYSFB_SIMPLEFB = yes;
-        USB_F_HID = module;
+        USB_F_HID = yes;
         USB_ULPI_BUS = yes;
         U_SERIAL_CONSOLE = yes;
         VIDEO_CAMERA_LENS = lib.mkForce yes;
