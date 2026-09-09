@@ -24,6 +24,7 @@
           "0043-hack-ASoC-dt-bindings-qcom-q6dsp-add-internal-mi2s-s.patch" # !
           "0044-hack-ASoC-qdsp6-q6dsp-lpass-ports-add-internal-mi2s-.patch" # !
           "0045-hack-ASoC-qdsp6-q6afe-add-internal-mi2s-support.patch" # !
+          "0046-hack-ASoC-qdsp6-q6afe-dai-add-internal-mi2s-support.patch" # !
           "0062-END-HACK-series-for-working-qdsp6.patch"
           "0065-Enable-DW9714V-camera-focus-coils-on-SHIFT-6MQ.patch"
           "0069-EDITME-cover-title-for-shift6-camera.patch"
