@@ -6,7 +6,7 @@
       "${self}/modules/kernel/patches/sdm845"
       |> builtins.readDir
       |> builtins.attrNames
-      |> map (filename: "${filename}.patch");
+      |> map (filename: "${self}/modules/kernel/patches/sdm845/${filename}.patch");
 
     qcom-defconfig =
       pkgs:
