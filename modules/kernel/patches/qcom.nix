@@ -70,6 +70,7 @@
           "0135-EDITME-cover-title-for-synaptics-rmi4-fnsplit.patch"
           "0137-Input-synaptics-rmi4-add-quirks-for-third-party-touc.patch"
           "0144-EDITME-cover-title-for-oneplus-ts-quirk.patch"
+          "0145-arm64-dts-qcom-sdm845-oneplus-Move-touchscreen-y-axi.patch"
           "0147-EDITME-cover-title-for-tfa98xx.patch"
           "0151-media-camss-Add-support-for-C-PHY-configuration-on-Q.patch"
           "0161-Pixel-3-XL-display-panel-support.patch"
