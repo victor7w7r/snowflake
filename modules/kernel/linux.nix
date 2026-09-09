@@ -15,7 +15,6 @@
       patches ? [ ],
       defconfig ? "cachyos_defconfig",
       localVer ? "native",
-      extraConfig ? null,
       structuredExtraConfig ? { },
     }:
     pkgs.buildLinux {
@@ -23,7 +22,6 @@
         src
         structuredExtraConfig
         defconfig
-        extraConfig
         ;
       pname = "linux-v7w7r-${localVer}";
       version = (kernel.lib.version pkgs src localVer).final;
