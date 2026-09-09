@@ -76,6 +76,7 @@
           "0148-arm64-dts-qcom-sdm845-oneplus-fajita-Enable-speaker-.patch"
           "0151-media-camss-Add-support-for-C-PHY-configuration-on-Q.patch"
           "0161-Pixel-3-XL-display-panel-support.patch"
+          "0167-arm64-dts-qcom-sdm845-samsung-starqltechn-Update-pan.patch"
           "0169-EDITME-cover-title-for-dipper.patch"
           "0172-EDITME-cover-title-for-no_init_park.patch"
           "0174-EDITME-cover-title-for-csiphy-sdm845-limits.patch"
