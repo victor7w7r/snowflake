@@ -57,6 +57,7 @@
           "0108-EDITME-cover-title-for-rpmsg-qcom-glink.patch"
           "0110-Add-framebuffer-on-Xiaomi-Poco-F1-and-disable-the-MD.patch"
           "0111-arm64-dts-qcom-sdm845-xiaomi-beryllium-tianma-Disabl.patch"
+          "0112-arm64-dts-qcom-sdm845-google-Enable-fuel-gauge.patch"
           "0114-Input-support-for-STM-FTS5.patch"
           "0119-drm-panel-visionox-rm69299-Split-DSI-commands-out-in.patch"
           "0122-Add-DRM-driver-for-LG-LH609QH1-Panel-with-SiliconWor.patch"
