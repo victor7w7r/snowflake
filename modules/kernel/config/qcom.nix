@@ -38,7 +38,7 @@
         QCOM_L3_PMU = setupDenial isDenied yes;
         QCOM_PD_MAPPER = setupDenial isDenied yes;
         QCOM_STATS = setupDenial isDenied module;
-        QCOM_Q6V5_MSS = setupDenial isDenied yes;
+        QCOM_Q6V5_MSS = setupDenial isDenied module;
         QCOM_Q6V5_PAS = setupDenial isDenied yes;
         QCOM_SPMI_ADC5 = setupDenial isDenied yes;
         QCOM_SPMI_VADC = setupDenial isDenied yes;
