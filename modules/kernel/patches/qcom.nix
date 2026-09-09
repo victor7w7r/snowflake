@@ -18,6 +18,7 @@
           "0024-EDITME-cover-title-for-ath10k-a-msdu.patch"
           "0025-wifi-ath10k-make-in-order-rx-amsdu-buffers-persisten.patch" # !
           "0026-Mainlining-effort-for-TAS255x.patch"
+          "0028-arm64-dts-qcom-sdm845-xiaomi-beryllium-Enable-gpi_dm.patch"
           "0030-HACK-series-for-working-qdsp6.patch"
           "0062-END-HACK-series-for-working-qdsp6.patch"
           "0065-Enable-DW9714V-camera-focus-coils-on-SHIFT-6MQ.patch"
