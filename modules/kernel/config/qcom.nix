@@ -411,7 +411,6 @@
         SM_CAMCC_8650 = no;
         SM_CAMCC_8750 = no;
         SM_CAMCC_MILOS = no;
-        SM_DISPCC_6115 = no;
         SM_DISPCC_6350 = no;
         SM_DISPCC_8250 = no;
         SM_DISPCC_8450 = no;
@@ -425,7 +424,6 @@
         SM_GCC_8150 = no;
         SM_GCC_8250 = no;
         SM_GPUCC_4450 = no;
-        SM_GPUCC_6115 = no;
         SM_GPUCC_6125 = no;
         SM_GPUCC_6350 = no;
         SM_GPUCC_6375 = no;
