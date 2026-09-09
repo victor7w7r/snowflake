@@ -29,6 +29,7 @@
           "0058-hack-arm64-dts-qcom-sdm845-Add-q6voice-APR-service-d.patch"
           "0059-hack-arm64-dts-xiaomi-beryllium-common-Add-nodes-for.patch"
           "0060-hack-arm64-dts-qcom-sdm845-oneplus-common-add-nodes-.patch"
+          "0061-hack-arm64-dts-qcom-sdm845-shift-axolotl-add-nodes-f.patch"
           "0062-END-HACK-series-for-working-qdsp6.patch"
           "0065-Enable-DW9714V-camera-focus-coils-on-SHIFT-6MQ.patch"
           "0069-EDITME-cover-title-for-shift6-camera.patch"
