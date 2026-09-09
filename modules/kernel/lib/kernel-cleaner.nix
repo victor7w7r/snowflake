@@ -72,6 +72,7 @@
         sed -i '/^CONFIG_RDS/d' config
         sed -i '/^CONFIG_RXKAD/d' config
         sed -i '/^CONFIG_SCSI_/d' config
+        sed -i '/^CONFIG_SLIM_QCOM_NGD_CTRL/d' config
         sed -i '/^CONFIG_SND_/d' config
         sed -i '/^CONFIG_SSB/d' config
         sed -i '/^CONFIG_TIPC/d' config
