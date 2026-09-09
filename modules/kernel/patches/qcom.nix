@@ -1,46 +1,16 @@
-{ inputs, ... }:
+{ inputs, self, ... }:
 {
-  flake-file.inputs = {
-    sdm845-config = {
-      url = "https://gitlab.com/sdm845-mainline/linux/-/raw/sdm845-7.1-rc1-r0/arch/arm64/configs/sdm845.config?ref_type=tags";
-      flake = false;
-    };
-    sdm845-misc = {
-      url = "https://gitlab.com/sdm845-mainline/linux/-/raw/sdm845-7.1-rc1-r0/arch/arm64/configs/misc.config?ref_type=tags";
-      flake = false;
-    };
-    sdm845-defconfig = {
-      url = "https://gitlab.com/sdm845-mainline/linux/-/raw/sdm845-7.1-rc1-r0/arch/arm64/configs/defconfig?ref_type=tags";
-      flake = false;
-    };
-  };
-
   kernel.patches = {
     qcom =
       { }:
-      "${inputs.vanilla-mobile-nixos.outPath}/pkgs/linux-kernel/sdm845/kernel-patches"
-      |> (
-        patches:
-        [ "${patches}/../config_fixes.patch" ]
-        ++ (
-          (import patches)
-          |> builtins.filter (
-            item:
-            !builtins.elem item.name [
-            	"0107-arm64-dts-qcom-Introduce-support-for-Xiaomi-Mi-Mix-3"
-             	"0148-dt-bindings-arm-qcom-Add-Xiaomi-Poco-F1-Tianma-varia"
-            ]
-          )
-          |> map (item: "${patches}/${item.name}.patch")
-        )
-      );
+      map (item: "${self}/modules/kernel/patches/sdm845/${item.name}.patch");
+
     qcom-defconfig =
       pkgs:
       (pkgs.runCommand "qcom-defconfig" { } ''
-        cp ${inputs.sdm845-defconfig} defconfig
-        cp ${inputs.sdm845-config} sdm845.config
-        cp ${inputs.sdm845-misc} misc.config
-        cat defconfig sdm845.config misc.config > $out
+        cp ${inputs.linux-sdm845}/arch/arm64/configs/defconfig defconfig
+        cp ${inputs.linux-sdm845}/arch/arm64/configs/sdm845.config sdm845.config
+        cat defconfig sdm845.config > $out
       '');
   };
 }

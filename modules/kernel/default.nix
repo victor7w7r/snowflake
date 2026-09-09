@@ -8,8 +8,7 @@
 
   _module.args = {
     kernel-versions = {
-      latest = "7.2.3";
-      eol = "7.1.8";
+      latest = "7.2.4";
       lts = "6.18.48";
     };
 
@@ -35,13 +34,13 @@
     };
 
     linux-latest = {
-      url = "github:CachyOS/linux/cachyos-${kernel-versions.latest}-2";
+      url = "github:CachyOS/linux/cachyos-${kernel-versions.latest}-1";
       flake = false;
     };
 
-    linux-eol = {
-	    url = "github:CachyOS/linux/cachyos-${kernel-versions.eol}-1";
-	    flake = false;
+    linux-sdm845 = {
+      url = "git+https://codeberg.org/sdm845/linux?ref=sdm845-next";
+      flake = false;
     };
 
     linux-lts = {
