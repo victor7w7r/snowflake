@@ -96,6 +96,7 @@
           "0200-arm64-dts-qcom-sdm845-shift-axolotl-add-wcd934x-MBHC.patch"
           "0206-arm64-dts-qcom-sdm845-google-Add-rear-camera-VCM.patch"
           "0209-arm64-dts-qcom-sdm845-google-Enable-VoiceMMode1-for-.patch"
+          "0210-arm64-dts-qcom-sdm845-xiaomi-dipper-Enable-the-displ.patch"
         ]
       )
       |> map (filename: "${self}/modules/kernel/patches/sdm845/${filename}");
