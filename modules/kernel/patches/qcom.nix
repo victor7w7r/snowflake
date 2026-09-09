@@ -73,6 +73,7 @@
           "0145-arm64-dts-qcom-sdm845-oneplus-Move-touchscreen-y-axi.patch"
           "0146-arm64-dts-qcom-sdm845-oneplus-Specify-touchscreen-in.patch"
           "0147-EDITME-cover-title-for-tfa98xx.patch"
+          "0148-arm64-dts-qcom-sdm845-oneplus-fajita-Enable-speaker-.patch"
           "0151-media-camss-Add-support-for-C-PHY-configuration-on-Q.patch"
           "0161-Pixel-3-XL-display-panel-support.patch"
           "0169-EDITME-cover-title-for-dipper.patch"
