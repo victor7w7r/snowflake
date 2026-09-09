@@ -60,6 +60,7 @@
           "0112-arm64-dts-qcom-sdm845-google-Enable-fuel-gauge.patch"
           "0113-arm64-dts-qcom-sdm845-oneplus-add-rear-camera-actuat.patch"
           "0114-Input-support-for-STM-FTS5.patch"
+          "0118-arm64-dts-qcom-sdm845-google-Add-STM-FTS-touchscreen.patch"
           "0119-drm-panel-visionox-rm69299-Split-DSI-commands-out-in.patch"
           "0122-Add-DRM-driver-for-LG-LH609QH1-Panel-with-SiliconWor.patch"
           "0126-EDITME-cover-title-for-judyln-touchscreen.patch"
