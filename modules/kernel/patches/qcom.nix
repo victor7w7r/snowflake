@@ -85,6 +85,7 @@
           "0174-EDITME-cover-title-for-csiphy-sdm845-limits.patch"
           "0176-EDITME-cover-title-for-wcd-dma.patch"
           "0178-Speakers-for-Pixel-3-3-XL.patch"
+          "0184-arm64-dts-qcom-sdm845-google-Add-basic-audio-support.patch"
           "0187-Pixel-3-display-fixes.patch"
           "0190-Add-modemsmem-for-Google-phones.patch"
           "0194-EDITME-cover-title-for-ea8074.patch"
