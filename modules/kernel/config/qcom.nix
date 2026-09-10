@@ -368,7 +368,6 @@
         QCS_TURING_404 = no;
         QCS_VIDEOCC_615 = no;
         QDU_ECPRICC_1000 = no;
-        QDU_GCC_1000 = no;
         RTC_DRV_HYM8563 = no;
         SAR_GCC_2130P = no;
         SAR_GPUCC_2130P = no;
