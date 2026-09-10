@@ -91,6 +91,7 @@
               "0132-smp-Remove-preempt_disable-from-on_each_cpu_cond_mas.patch"
               "0133-scftorture-Remove-preempt_disable-in-scftorture_invo.patch"
               "0204-mm-vmscan-convert-folio_referenced-to-use-vma_flags_.patch"
+              "0205-mm-vmscan-add-a-helper-to-identify-file-backed-execu.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
