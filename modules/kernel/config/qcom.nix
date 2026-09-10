@@ -201,7 +201,6 @@
         CLK_ELIZA_TCSRCC = no;
         CLK_GFM_LPASS_SM8250 = no;
         CLK_GLYMUR_DISPCC = no;
-        CLK_GLYMUR_GCC = no;
         CLK_GLYMUR_GPUCC = no;
         CLK_GLYMUR_TCSRCC = no;
         CLK_GLYMUR_VIDEOCC = no;
