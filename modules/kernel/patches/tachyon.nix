@@ -1,4 +1,9 @@
-{ inputs, kernel, ... }:
+{
+  inputs,
+  kernel,
+  lib,
+  ...
+}:
 {
   flake-file.inputs =
     "https://git.staropensource.de/StarOpenSource/Linux-Tachyon/archive"
@@ -51,7 +56,9 @@
       ++ kernel.patches.tachyon.common { inherit source; };
 
     latest =
-      { }:
+      {
+        isPhone ? false,
+      }:
       map (patch: "${inputs.tachyon-patches-latest}/patches/${patch}.patch") [
         "0001-dma-buf-sync_file-Speed-up-ioctl-by-omitting-debug-n"
         "0001-kernfs-Avoid-dynamic-memory-allocation-for-small-wri"
@@ -61,9 +68,9 @@
         "0004-sched-fair-Always-update-CPU-capacity-when-load-bala"
         "0004-sched-fair-Compile-out-NUMA-code-entirely-when-NUMA-"
         "0006-sched-fair-Iterate-in-ascending-CPU-order-when-doing"
-        "0050-Revert-ext4-do-not-create-EA-inode-under-buffer-lock"
         "0174-memcg-increase-MEMCG_CHARGE_BATCH-to-127"
-      ];
+      ]
+      ++ lib.optional (!isPhone) "0050-Revert-ext4-do-not-create-EA-inode-under-buffer-lock";
 
     lts =
       { }:

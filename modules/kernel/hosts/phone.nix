@@ -44,7 +44,7 @@
         cachyos.latest.inline
         ++ cachyos.latest.std
         ++ (tachyon.common { source = inputs.tachyon-patches-latest; })
-        ++ (tachyon.latest { })
+        ++ (tachyon.latest { isPhone = true; })
         ++ (bunker.common { isLts = false; })
         ++ (bunker.latest { });
     });
