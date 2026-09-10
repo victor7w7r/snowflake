@@ -82,6 +82,7 @@
               "0090-sched-eevdf-Move-to-a-single-runqueue.patch"
               "0119-list-Mark-some-functions-as-__always_inline.patch"
               "0125-smp-Disable-preemption-explicitly-in-__csd_lock_wait.patch"
+              "0126-smp-Enable-preemption-early-in-smp_call_function_sin.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
