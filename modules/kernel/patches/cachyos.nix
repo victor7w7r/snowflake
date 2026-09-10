@@ -76,6 +76,7 @@
               "0083-sched-fair-Fix-overflow-in-update_tg_cfs_runnable.patch"
               "0085-sched-fair-Add-cgroup_mode-up.patch"
               "0086-sched-fair-Add-cgroup_mode-max.patch"
+              "0087-sched-fair-Add-cgroup_mode-concur.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
