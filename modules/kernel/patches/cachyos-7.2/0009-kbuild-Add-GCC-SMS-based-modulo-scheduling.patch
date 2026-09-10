@@ -1,0 +1,34 @@
+From a6afce98963e9982cbec4b51d3a807226cd02448 Mon Sep 17 00:00:00 2001
+From: Peter Jung <admin@ptr1337.dev>
+Date: Tue, 24 Sep 2024 19:35:31 +0200
+Subject: [PATCH 009/243] kbuild: Add GCC SMS-based modulo scheduling
+
+Perform swing modulo scheduling immediately before the first scheduling pass.
+This pass looks at innermost loops and reorders their instructions by
+overlapping different iterations.
+
+Signed-off-by: Peter Jung <admin@ptr1337.dev>
+Signed-off-by: Eric Naim <dnaim@cachyos.org>
+---
+ Makefile | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index d45645f58637..543115a4b5ca 100644
+--- a/Makefile
++++ b/Makefile
+@@ -937,6 +937,11 @@ KBUILD_CFLAGS += -Os
+ KBUILD_RUSTFLAGS += -Copt-level=s
+ endif
+ 
++# Perform swing modulo scheduling immediately before the first scheduling pass.
++# This pass looks at innermost loops and reorders their instructions by
++# overlapping different iterations.
++KBUILD_CFLAGS += $(call cc-option,-fmodulo-sched -fmodulo-sched-allow-regmoves -fivopts)
++
+ # Always set `debug-assertions` and `overflow-checks` because their default
+ # depends on `opt-level` and `debug-assertions`, respectively.
+ KBUILD_RUSTFLAGS += -Cdebug-assertions=$(if $(CONFIG_RUST_DEBUG_ASSERTIONS),y,n)
+-- 
+2.55.0
+

@@ -1,0 +1,65 @@
+From 03ffa52f41f13addf87f864a7a98dd274c34b7ed Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan@linux.intel.com>
+Date: Thu, 13 Dec 2018 01:00:49 +0000
+Subject: [PATCH 043/243] sched/wait: Do accept() in LIFO order for cache
+ efficiency
+
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
+---
+ include/linux/wait.h            |  1 +
+ kernel/sched/wait.c             | 13 +++++++++++++
+ net/ipv4/inet_connection_sock.c |  2 +-
+ 3 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/wait.h b/include/linux/wait.h
+index dce055e6add3..87b75e452c46 100644
+--- a/include/linux/wait.h
++++ b/include/linux/wait.h
+@@ -1224,6 +1224,7 @@ do {										\
+  */
+ void prepare_to_wait(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
+ bool prepare_to_wait_exclusive(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
++void prepare_to_wait_exclusive_lifo(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
+ long prepare_to_wait_event(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
+ void finish_wait(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
+ long wait_woken(struct wait_queue_entry *wq_entry, unsigned mode, long timeout);
+diff --git a/kernel/sched/wait.c b/kernel/sched/wait.c
+index 20f27e2cf7ae..088ad272f1d0 100644
+--- a/kernel/sched/wait.c
++++ b/kernel/sched/wait.c
+@@ -277,6 +277,19 @@ prepare_to_wait_exclusive(struct wait_queue_head *wq_head, struct wait_queue_ent
+ }
+ EXPORT_SYMBOL(prepare_to_wait_exclusive);
+ 
++void prepare_to_wait_exclusive_lifo(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state)
++{
++	unsigned long flags;
++
++	wq_entry->flags |= WQ_FLAG_EXCLUSIVE;
++	spin_lock_irqsave(&wq_head->lock, flags);
++	if (list_empty(&wq_entry->entry))
++		__add_wait_queue(wq_head, wq_entry);
++	set_current_state(state);
++	spin_unlock_irqrestore(&wq_head->lock, flags);
++}
++EXPORT_SYMBOL(prepare_to_wait_exclusive_lifo);
++
+ void init_wait_entry(struct wait_queue_entry *wq_entry, int flags)
+ {
+ 	wq_entry->flags = flags;
+diff --git a/net/ipv4/inet_connection_sock.c b/net/ipv4/inet_connection_sock.c
+index 56902bba5483..0c5b8d8dd700 100644
+--- a/net/ipv4/inet_connection_sock.c
++++ b/net/ipv4/inet_connection_sock.c
+@@ -619,7 +619,7 @@ static int inet_csk_wait_for_connect(struct sock *sk, long timeo)
+ 	 * having to remove and re-insert us on the wait queue.
+ 	 */
+ 	for (;;) {
+-		prepare_to_wait_exclusive(sk_sleep(sk), &wait,
++		prepare_to_wait_exclusive_lifo(sk_sleep(sk), &wait,
+ 					  TASK_INTERRUPTIBLE);
+ 		release_sock(sk);
+ 		if (reqsk_queue_empty(&icsk->icsk_accept_queue))
+-- 
+2.55.0
+

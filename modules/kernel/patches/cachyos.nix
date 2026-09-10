@@ -2,6 +2,7 @@
   inputs,
   kernel-versions,
   lib,
+  self,
   ...
 }:
 {
@@ -59,6 +60,13 @@
               "0001-acpi-call"
               "0001-handheld"
             ];
+
+        self =
+          "${self}/modules/kernel/patches/cachyos-7.2"
+          |> builtins.readDir
+          |> builtins.attrNames
+          |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
+
       };
 
       lts =

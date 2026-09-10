@@ -22,21 +22,25 @@
       defconfig = "phone_defconfig";
       src = kernel.lib.kernel-cleaner {
         inherit pkgs;
-        src = inputs.linux-latest;
+        src = inputs.linux-sdm845;
         arch = "arm64";
         defconfig = "phone_defconfig";
-        replaceClass = "${inputs.linux-sdm845}/arch/arm64/boot/dts/qcom";
         class = "qcom";
         dtbMake = ''
           dtb-\$(CONFIG_ARCH_QCOM) += sdm845-oneplus-enchilada.dtb
           dtb-\$(CONFIG_ARCH_QCOM) += sdm845-oneplus-fajita.dtb
         '';
-        config = kernel.patches.qcom-defconfig pkgs;
+        config = (
+          pkgs.runCommand "qcom-defconfig" { } ''
+            cp ${inputs.linux-sdm845}/arch/arm64/configs/defconfig defconfig
+            cp ${inputs.linux-sdm845}/arch/arm64/configs/sdm845.config sdm845.config
+            cat defconfig sdm845.config | sed '/CONFIG_LOCALVERSION/d' > $out
+          ''
+        );
       };
       patches =
         with kernel.patches.injector pkgs;
-        (qcom { })
-        ++ [ "${self}/modules/kernel/patches/files/fix-qcom-smbx-init.patch" ]
+        [ "${self}/modules/kernel/patches/files/fix-qcom-smbx-init.patch" ]
         ++ cachyos.latest.std
         ++ (tachyon.common { source = inputs.tachyon-patches-latest; })
         ++ (tachyon.latest { })

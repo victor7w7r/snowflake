@@ -1,0 +1,52 @@
+#!/run/current-system/sw/bin/bash
+
+set -euo pipefail
+
+KERNEL_DIR="../linux"
+PATCHES_DIR="../sdm845"
+
+mkdir -p "$PATCHES_DIR"
+
+PRE_EXTRA_HASHES=(
+	"0b494ae6a582b07c090839b8c62b931d6f4e2848"
+	"13a86292681dfdfe9835f440afc345778c9c1363"
+	"14d3cca9c2ed1ae0d647f109cfdf5d63f3f5be09"
+	"1f33b8208a1978b0c0d6ad60a47fe4bb7a235e58"
+	"3c748a5554f961aac8e9ab1e28b7884b1c525012"
+	"68400191e005f44c432c1b18eeca7f5527323a9f"
+	"a05b67cd45ad09a19f41b2d37255da714512e0ca"
+	"bf69e515b1802b67d91fa014c3ec1fbe217b345b"
+	"bfe9098dc275a319c6b9f6e2417bb60fb8738a4b"
+	"c01b2be3845ffae11a067cf93a7833ca840d7d1c"
+	"c579f18e79599c16168925cb149e1db3f29eea5f"
+	"cb776a03a53429aa59e25a8cbc3d1a48bd11afdb"
+	"d149c8b2c0146a01f1be326ddb1e182b55aee638"
+	"d9537063c0441e70fd9f46490553fce2984c4a76"
+	"e910315ae08a23bc953daed10b1c518abac1df49"
+	"ebf1d03dab9659749d5605656cf92fb6700f33bb"
+	"edc84a9396acf1a0e78c46230dd0bcee1b84ac53"
+	"f78210dd4bea09090b828adc2733cad4b9916306"
+  "784e04110272590a34d7faad656232b7f9aeb1df"
+  "96591d7030a68ecdbb1be793d4b067d2087e0290"
+  "cdba62ff7413330451f0f65345166431a5d6e187"
+  "f3caa0b02455409eec4673ddd8df72d8bcad4e98"
+  "ff09adc612103c10cf1922ea2670a29fcf629536"
+)
+
+PRE_START_NUM=5
+
+[ -d "$KERNEL_DIR" ] || git clone https://codeberg.org/sdm845/linux.git "$KERNEL_DIR"
+cd "$KERNEL_DIR"
+
+#15123
+git format-patch b7a23febf1b410e9cf0956175e232c9d2572c749..HEAD -o "../$PATCHES_DIR"
+
+for HASH in "${PRE_EXTRA_HASHES[@]}"; do
+  git format-patch -1 "$HASH" \
+    --no-cover-letter \
+    --no-binary \
+    --start-number $PRE_START_NUM \
+    -o "../$PATCHES_DIR"
+
+  ((PRE_START_NUM++))
+done

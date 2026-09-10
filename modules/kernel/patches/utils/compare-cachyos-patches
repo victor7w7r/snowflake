@@ -1,0 +1,32 @@
+#!/run/current-system/sw/bin/bash
+
+set -euo pipefail
+
+REF="v7.2"
+CACHYOS_TAG="cachyos-7.2.0-1"
+KERNEL_DIR="../linux-cachyos-full"
+PATCHES_DIR="../cachyos"
+
+mkdir -p "$PATCHES_DIR"
+
+[ -d "$KERNEL_DIR" ] || git clone https://github.com/torvalds/linux.git "$KERNEL_DIR"
+cd "$KERNEL_DIR"
+
+git remote | grep "cachyos" || git remote add cachyos https://github.com/CachyOS/linux.git
+
+git fetch origin tag "$REF" --no-tags
+git fetch cachyos --tags
+
+BASE_COMMIT=$(git rev-parse "${REF}^{commit}")
+TARGET_COMMIT=$(git rev-parse "${CACHYOS_TAG}^{commit}")
+
+git format-patch "${BASE_COMMIT}..${TARGET_COMMIT}" -o "$PATCHES_DIR"
+
+cd "$PATCHES_DIR"
+shopt -s nullglob
+patches=(*.patch)
+
+if [ ${#patches[@]} -gt 0 ]; then
+  grep -L "diff --git" "${patches[@]}" | xargs rm -f 2>/dev/null || true
+  patches=(*.patch)
+fi

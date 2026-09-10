@@ -6,7 +6,6 @@
       config ? null,
       arch ? "x86",
       defconfig ? "cachyos_defconfig",
-      replaceClass ? null,
       class ? null,
       dtbMake ? "",
     }:
@@ -98,12 +97,6 @@
 
         mkdir -p $out && cp -r ${src}/* $out/ && chmod -R +w $out
         cp config $out/arch/${arch}/configs/${defconfig}
-
-        ${pkgs.lib.optionalString (replaceClass != null && class != null) ''
-          rm -rf $out/arch/${arch}/boot/dts/${class}
-          cp -r ${replaceClass} $out/arch/${arch}/boot/dts/${class}
-          chmod -R +w $out/arch/${arch}/boot/dts/${class}
-        ''}
 
         ${pkgs.lib.optionalString (class != null) ''
           DTS_DIR="arch/${arch}/boot/dts"
