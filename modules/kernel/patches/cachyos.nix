@@ -65,6 +65,12 @@
           "${self}/modules/kernel/patches/cachyos-7.2"
           |> builtins.readDir
           |> builtins.attrNames
+          |> builtins.filter (
+            filename:
+            !builtins.elem filename [
+              "0005-mm-swap-Disable-swap-in-readahead.patch"
+            ]
+          )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
 
       };
