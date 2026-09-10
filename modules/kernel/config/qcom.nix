@@ -359,7 +359,6 @@
         QCOM_CLK_RPM = no;
         QCOM_CLK_SMD_RPM = no;
         QCOM_HFPLL = no;
-        QCOM_SMBX = no; # ! ERROR COMPILATION
         QCS_CAMCC_615 = no;
         QCS_DISPCC_615 = no;
         QCS_GCC_404 = no;

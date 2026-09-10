@@ -1,0 +1,35 @@
+From c01b2be3845ffae11a067cf93a7833ca840d7d1c Mon Sep 17 00:00:00 2001
+From: Pan Chuang <panchuang@vivo.com>
+Date: Thu, 9 Jul 2026 11:34:09 +0800
+Subject: [PATCH] power: supply: qcom_smbx: Remove redundant
+ dev_err()/dev_err_probe()
+
+The devm_request_threaded_irq() and devm_request_irq() now automatically
+log detailed error messages on failure. This eliminates the need for
+driver-specific dev_err() and dev_err_probe() calls that previously
+printed generic messages.
+
+Signed-off-by: Pan Chuang <panchuang@vivo.com>
+Link: https://patch.msgid.link/20260709033428.362970-31-panchuang@vivo.com
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/qcom_smbx.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/power/supply/qcom_smbx.c b/drivers/power/supply/qcom_smbx.c
+index bf2e2ccc454a..7bda5cd77a75 100644
+--- a/drivers/power/supply/qcom_smbx.c
++++ b/drivers/power/supply/qcom_smbx.c
+@@ -922,8 +922,7 @@ static int smb_init_irq(struct smb_chip *chip, int *irq, const char *name,
+ 	rc = devm_request_threaded_irq(chip->dev, irqnum, NULL, handler,
+ 				       IRQF_ONESHOT, name, chip);
+ 	if (rc < 0)
+-		return dev_err_probe(chip->dev, rc, "Couldn't request irq %s\n",
+-				     name);
++		return rc;
+ 
+ 	if (irq)
+ 		*irq = irqnum;
+-- 
+2.55.0
+
