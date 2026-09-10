@@ -87,6 +87,7 @@
               "0128-smp-Use-task-local-IPI-cpumask-in-smp_call_function_.patch"
               "0129-smp-Alloc-percpu-csd-data-in-smpcfd_prepare_cpu-only.patch"
               "0130-smp-Enable-preemption-early-in-smp_call_function_man.patch"
+              "0131-smp-Remove-preempt_disable-from-smp_call_function.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
