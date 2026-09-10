@@ -79,6 +79,7 @@
               "0087-sched-fair-Add-cgroup_mode-concur.patch"
               "0088-sched-fair-Add-cgroup_mode-tasks.patch"
               "0089-sched-fair-Change-the-default-cgroup_mode-to-concur.patch"
+              "0090-sched-eevdf-Move-to-a-single-runqueue.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
