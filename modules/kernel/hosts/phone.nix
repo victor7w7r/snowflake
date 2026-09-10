@@ -41,6 +41,7 @@
       patches =
         with kernel.patches.injector pkgs;
         [ "${self}/modules/kernel/patches/files/fix-qcom-smbx-init.patch" ]
+        ++ cachyos.latest.inline
         ++ cachyos.latest.std
         ++ (tachyon.common { source = inputs.tachyon-patches-latest; })
         ++ (tachyon.latest { })

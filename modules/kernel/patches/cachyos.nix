@@ -61,7 +61,7 @@
               "0001-handheld"
             ];
 
-        self =
+        inline =
           "${self}/modules/kernel/patches/cachyos-7.2"
           |> builtins.readDir
           |> builtins.attrNames
