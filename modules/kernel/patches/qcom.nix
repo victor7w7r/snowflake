@@ -11,12 +11,12 @@
         !builtins.elem filename [
           "0004-Xiaomi-Poco-F1-ebbg-display-variant-fixes.patch"
           "0008-SDM845-DOWNSTREAM-EDITME-cover-title-for-qcom-spmi-s.patch"
+          "0010-ntfs-fix-resource-leak-in-ntfs_new_attr_flags.patch"
           "0011-arm64-dts-qcom-pmi8998-Introduce-SPMI-haptics.patch"
           "0012-arm64-dts-qcom-sdm845-oneplus-Add-haptics-support.patch"
           "0016-Qualcomm-3rd-gen-fuel-gauge-support.patch"
           "0019-arm64-dts-qcom-pmi8998-Add-fuel-gauge.patch"
           "0024-EDITME-cover-title-for-ath10k-a-msdu.patch"
-          "0025-ntfs-fix-resource-leak-in-ntfs_new_attr_flags.patch"
           "0026-Mainlining-effort-for-TAS255x.patch"
           "0028-arm64-dts-qcom-sdm845-xiaomi-beryllium-Enable-gpi_dm.patch"
           "0029-arm64-dts-qcom-sdm845-xiaomi-beryllium-common-add-su.patch"
