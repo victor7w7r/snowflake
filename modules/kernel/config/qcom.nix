@@ -70,7 +70,7 @@
         RPMSG_QCOM_GLINK_SMEM = setupDenial isDenied yes;
         SCSI_UFS_BSG = setupDenial isDenied yes;
         SLIMBUS = setupDenial isDenied yes;
-        SLIM_QCOM_NGD_CTRL = setupDenial isDenied yes;
+        SLIM_QCOM_NGD_CTRL = setupDenial isDenied module;
         SM_DISPCC_6115 = setupDenial isDenied yes;
         SM_GPUCC_6115 = setupDenial isDenied yes;
         TCP_CONG_BIC = lib.mkForce (setupDenial isDenied module);
