@@ -89,6 +89,7 @@
               "0130-smp-Enable-preemption-early-in-smp_call_function_man.patch"
               "0131-smp-Remove-preempt_disable-from-smp_call_function.patch"
               "0132-smp-Remove-preempt_disable-from-on_each_cpu_cond_mas.patch"
+              "0133-scftorture-Remove-preempt_disable-in-scftorture_invo.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
