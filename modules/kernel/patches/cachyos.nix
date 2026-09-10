@@ -74,6 +74,7 @@
               "0081-ksm-add-mremap-selftests-for-ksm_rmap_walk.patch"
               "0082-sched-core-Fix-inter-class-wakeup_preempt.patch"
               "0083-sched-fair-Fix-overflow-in-update_tg_cfs_runnable.patch"
+              "0085-sched-fair-Add-cgroup_mode-up.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
