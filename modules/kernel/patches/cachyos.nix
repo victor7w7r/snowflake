@@ -93,6 +93,7 @@
               "0204-mm-vmscan-convert-folio_referenced-to-use-vma_flags_.patch"
               "0205-mm-vmscan-add-a-helper-to-identify-file-backed-execu.patch"
               "0206-mm-mglru-promote-mapped-executable-folios-after-firs.patch"
+              "0235-cgroup-dmem-Add-queries-for-protection-values.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
