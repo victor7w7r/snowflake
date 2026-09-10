@@ -70,6 +70,7 @@
             !builtins.elem filename [
               "0005-mm-swap-Disable-swap-in-readahead.patch"
               "0079-ksm-add-linear_page_index-into-ksm_rmap_item.patch"
+              "0080-ksm-Optimize-rmap_walk_ksm-by-passing-a-suitable-pag.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
