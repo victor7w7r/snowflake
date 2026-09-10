@@ -209,7 +209,6 @@
         CLK_KAANAPALI_GPUCC = no;
         CLK_KAANAPALI_TCSRCC = no;
         CLK_KAANAPALI_VIDEOCC = no;
-        CLK_NORD_GCC = no;
         CLK_NORD_TCSRCC = no;
         CLK_PX30 = no;
         CLK_QCM2290_GPUCC = no;
