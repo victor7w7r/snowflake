@@ -21,11 +21,6 @@
           "0028-arm64-dts-qcom-sdm845-xiaomi-beryllium-Enable-gpi_dm.patch"
           "0029-arm64-dts-qcom-sdm845-xiaomi-beryllium-common-add-su.patch"
           "0030-HACK-series-for-working-qdsp6.patch"
-          #"0043-hack-ASoC-dt-bindings-qcom-q6dsp-add-internal-mi2s-s.patch" # !
-          #"0044-hack-ASoC-qdsp6-q6dsp-lpass-ports-add-internal-mi2s-.patch" # !
-          #"0045-hack-ASoC-qdsp6-q6afe-add-internal-mi2s-support.patch" # !
-          #"0046-hack-ASoC-qdsp6-q6afe-dai-add-internal-mi2s-support.patch" # !
-          #"0047-hack-ASoC-qdsp6-q6routing-add-internal-mi2s-support.patch" # !
           "0058-hack-arm64-dts-qcom-sdm845-Add-q6voice-APR-service-d.patch"
           "0059-hack-arm64-dts-xiaomi-beryllium-common-Add-nodes-for.patch"
           "0060-hack-arm64-dts-qcom-sdm845-oneplus-common-add-nodes-.patch"
