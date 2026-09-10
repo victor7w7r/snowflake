@@ -77,6 +77,7 @@
               "0085-sched-fair-Add-cgroup_mode-up.patch"
               "0086-sched-fair-Add-cgroup_mode-max.patch"
               "0087-sched-fair-Add-cgroup_mode-concur.patch"
+              "0088-sched-fair-Add-cgroup_mode-tasks.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
