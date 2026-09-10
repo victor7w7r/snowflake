@@ -8,7 +8,7 @@
     lib.mkMerge [
       {
         ATH10K = setupDenial isDenied module;
-        ATH10K_DEBUG = setupDenial isDenied no;
+        ATH10K_DEBUG = setupDenial isDenied yes;
         ATH10K_PCI = setupDenial isDenied module;
         ATH10K_SDIO = setupDenial isDenied module;
         ATH10K_SNOC = setupDenial isDenied module;
@@ -49,7 +49,7 @@
         QCOM_FASTRPC = setupDenial isDenied module;
         QCOM_INLINE_CRYPTO_ENGINE = setupDenial isDenied yes;
         QCOM_IPA = setupDenial isDenied module;
-        QCOM_L3_PMU = setupDenial isDenied yes;
+        #QCOM_L3_PMU = setupDenial isDenied yes;
         QCOM_PD_MAPPER = setupDenial isDenied yes;
         QCOM_Q6V5_MSS = setupDenial isDenied module;
         QCOM_Q6V5_PAS = setupDenial isDenied module;
@@ -58,7 +58,7 @@
         QCOM_SPMI_VADC = setupDenial isDenied yes;
         QCOM_STATS = setupDenial isDenied module;
         QCOM_SYSMON = setupDenial isDenied yes;
-        QCOM_WDT = setupDenial isDenied yes;
+        #QCOM_WDT = setupDenial isDenied yes;
         QRTR = setupDenial isDenied yes;
         QUOTA = lib.mkForce (setupDenial isDenied yes);
         REGULATOR_QCOM_LABIBB = setupDenial isDenied yes;
@@ -78,6 +78,7 @@
         TCP_CONG_WESTWOOD = lib.mkForce (setupDenial isDenied yes);
         TYPEC_MUX_FSA4480 = setupDenial isDenied module;
         TYPEC_QCOM_PMIC = setupDenial isDenied module;
+        TYPEC_TCPM = setupDenial isDenied yes;
         UCLAMP_TASK = setupDenial isDenied yes;
         UCLAMP_TASK_GROUP = setupDenial isDenied yes;
         USB_CONFIGFS = setupDenial isDenied yes;
@@ -94,7 +95,6 @@
         V4L_PLATFORM_DRIVERS = setupDenial isDenied yes;
         V4L_MEM2MEM_DRIVERS = setupDenial isDenied yes;
         V4L_TEST_DRIVERS = setupDenial isDenied yes;
-        VIDEO_V4L2 = setupDenial isDenied yes;
         WLAN_VENDOR_ATH = setupDenial isDenied yes;
       }
       (lib.optionalAttrs (!isDenied) {
@@ -107,7 +107,6 @@
         FS_ENCRYPTION_INLINE_CRYPT = yes;
         HIDRAW = yes;
         INPUT_JOYDEV = lib.mkForce yes;
-        INPUT_QCOM_SPMI_HAPTICS = module;
         MODULE_COMPRESS_ZSTD = yes;
         MODULE_DECOMPRESS = yes;
         NLS_ASCII = yes;

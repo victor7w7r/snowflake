@@ -570,7 +570,6 @@
         TYPEC_NVIDIA_ALTMODE = no;
         TYPEC_RT1719 = no;
         TYPEC_STUSB160X = no;
-        TYPEC_TCPM = no;
         TYPEC_TPS6598X = no;
         TYPEC_WUSB3801 = no;
         UCSI_CCG = no;
