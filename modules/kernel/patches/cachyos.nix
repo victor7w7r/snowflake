@@ -88,6 +88,7 @@
               "0129-smp-Alloc-percpu-csd-data-in-smpcfd_prepare_cpu-only.patch"
               "0130-smp-Enable-preemption-early-in-smp_call_function_man.patch"
               "0131-smp-Remove-preempt_disable-from-smp_call_function.patch"
+              "0132-smp-Remove-preempt_disable-from-on_each_cpu_cond_mas.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
