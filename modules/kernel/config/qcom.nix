@@ -385,7 +385,6 @@
         SC_DISPCC_7180 = no;
         SC_DISPCC_7280 = no;
         SC_DISPCC_8280XP = no;
-        SC_GCC_7180 = no;
         SC_GCC_8180X = no;
         SC_GPUCC_7180 = no;
         SC_GPUCC_7280 = no;
