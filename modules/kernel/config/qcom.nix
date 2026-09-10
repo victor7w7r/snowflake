@@ -7,6 +7,12 @@
     }:
     lib.mkMerge [
       {
+
+        /*
+          linux-config> warning: unused option: PWM_QTI_LPG
+          linux-config> warning: unused option: VIDEO_LC898217XC
+        */
+
         ATH10K = setupDenial isDenied module;
         ATH10K_DEBUG = setupDenial isDenied yes;
         ATH10K_PCI = setupDenial isDenied module;
@@ -59,11 +65,9 @@
         QCOM_STATS = setupDenial isDenied module;
         QCOM_SYSMON = setupDenial isDenied yes;
         #QCOM_WDT = setupDenial isDenied yes;
-        QRTR = setupDenial isDenied yes;
         QUOTA = lib.mkForce (setupDenial isDenied yes);
         REGULATOR_QCOM_LABIBB = setupDenial isDenied yes;
         REMOTEPROC = setupDenial isDenied yes;
-        RMI4_CORE = setupDenial isDenied module;
         RMI4_F55 = setupDenial isDenied yes;
         RMNET = setupDenial isDenied module;
         RPMSG_CHAR = setupDenial isDenied yes;
@@ -114,8 +118,10 @@
         PACKET_DIAG = yes;
         PWM = yes;
         PWM_QTI_LPG = module;
+        QRTR = yes;
         REGULATOR_QCOM_REFGEN = yes;
         REMOTEPROC_CDEV = yes;
+        RMI4_CORE = module;
         SCSI_UFSHCD = yes;
         SCSI_UFSHCD_PLATFORM = yes;
         SCSI_UFS_CRYPTO = yes;
