@@ -152,6 +152,7 @@
       PHY_ROCKCHIP_SNPS_PCIE3 = yes;
       PLATFORM_SI4713 = no;
       PM_DOMAINS = yes;
+      QRTR = module;
       RADIO_ADAPTERS = no;
       RADIO_MAXIRADIO = no;
       RADIO_SAA7706H = no;

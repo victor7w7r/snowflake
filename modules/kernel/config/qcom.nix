@@ -118,7 +118,7 @@
         PACKET_DIAG = yes;
         PWM = yes;
         PWM_QTI_LPG = module;
-        QRTR = yes;
+        QRTR = lib.mkForce yes;
         REGULATOR_QCOM_REFGEN = yes;
         REMOTEPROC_CDEV = yes;
         RMI4_CORE = module;

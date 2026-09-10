@@ -109,7 +109,9 @@
             };
             services = {
               resolved.enable = false;
-              journald.extraConfig = "SystemMaxUse=100M";
+              journald.settings.Journal = {
+                SystemMaxUse = "100M";
+              };
               timesyncd.enable = false;
               tailscale = {
                 enable = true;
