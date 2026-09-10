@@ -22,6 +22,7 @@
           "0029-arm64-dts-qcom-sdm845-xiaomi-beryllium-common-add-su.patch"
           "0030-HACK-series-for-working-qdsp6.patch"
           "0031-ASoC-qcom-qdsp6-Remove-unused-Q6AFE_MAX_CLK_ID-defin.patch"
+          "0032-ASoC-dt-bindings-qcom-add-LPASS-LPR-vote-clock-ID.patch"
           #"0043-hack-ASoC-dt-bindings-qcom-q6dsp-add-internal-mi2s-s.patch" # !
           #"0044-hack-ASoC-qdsp6-q6dsp-lpass-ports-add-internal-mi2s-.patch" # !
           #"0045-hack-ASoC-qdsp6-q6afe-add-internal-mi2s-support.patch" # !
