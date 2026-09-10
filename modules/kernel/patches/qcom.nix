@@ -95,11 +95,7 @@
           "0211-arm64-dts-qcom-sdm845-xiaomi-dipper-Add-touchscreen.patch"
         ]
       )
-      |>
-        (map (filename: "${self}/modules/kernel/patches/sdm845/${filename}"))
-        ++ [
-          "${self}/modules/kernel/patches/files/fix-qcom-smbx-init.patch"
-        ];
+      |> map (filename: "${self}/modules/kernel/patches/sdm845/${filename}");
 
     qcom-defconfig =
       pkgs:
