@@ -84,6 +84,7 @@
               "0125-smp-Disable-preemption-explicitly-in-__csd_lock_wait.patch"
               "0126-smp-Enable-preemption-early-in-smp_call_function_sin.patch"
               "0127-smp-Refactor-remote-CPU-selection-in-smp_call_functi.patch"
+              "0128-smp-Use-task-local-IPI-cpumask-in-smp_call_function_.patch"
             ]
           )
           |> map (filename: "${self}/modules/kernel/patches/cachyos-7.2/${filename}");
