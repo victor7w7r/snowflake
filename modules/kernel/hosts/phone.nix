@@ -1,4 +1,9 @@
-{ inputs, kernel, ... }:
+{
+  inputs,
+  kernel,
+  self,
+  ...
+}:
 {
   perSystem =
     { pkgs, ... }: kernel.lib.package-gen pkgs "phone" "aarch64-linux" pkgs.stdenv.hostPlatform.system;
