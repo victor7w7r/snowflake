@@ -91,6 +91,10 @@
         VIDEO_QCOM_VENUS = setupDenial isDenied module;
         VIDEO_S5K2X7SP = setupDenial isDenied module;
         VIDEO_VIVID = setupDenial isDenied module;
+        V4L_PLATFORM_DRIVERS = setupDenial isDenied yes;
+        V4L_MEM2MEM_DRIVERS = setupDenial isDenied yes;
+        V4L_TEST_DRIVERS = setupDenial isDenied yes;
+        VIDEO_V4L2 = setupDenial isDenied yes;
         WLAN_VENDOR_ATH = setupDenial isDenied yes;
       }
       (lib.optionalAttrs (!isDenied) {

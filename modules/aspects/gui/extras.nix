@@ -26,10 +26,11 @@
 
       provides.to-users.homeManager =
         {
+          inputs',
           isPersistent,
+          isPhone,
           isServer,
           isX86,
-          inputs',
           lib,
           pkgs,
           self',

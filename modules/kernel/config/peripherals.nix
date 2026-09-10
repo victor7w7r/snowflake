@@ -388,7 +388,6 @@
         MEDIA_RADIO_SUPPORT = no;
         USB_PWC = no;
         USB_S2255 = no;
-        V4L_TEST_DRIVERS = no;
         VIDEO_ADP1653 = no;
         VIDEO_ADV7170 = no;
         VIDEO_ADV7175 = no;
