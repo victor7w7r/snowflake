@@ -7,7 +7,7 @@ PATCHES_DIR="./sdm845"
 
 mkdir -p "$PATCHES_DIR"
 
-EXTRA_HASHES=(
+PRE_EXTRA_HASHES=(
 	"0b494ae6a582b07c090839b8c62b931d6f4e2848"
 	"14d3cca9c2ed1ae0d647f109cfdf5d63f3f5be09"
 	"68400191e005f44c432c1b18eeca7f5527323a9f"
@@ -24,19 +24,39 @@ EXTRA_HASHES=(
   "ff09adc612103c10cf1922ea2670a29fcf629536"
 )
 
-START_NUM=5
+POST_EXTRA_HASHES=(
+	"3f67f1e9c6c3fbc754c27c95d672b84cba1fc231"
+	"039a7a20647f032e01d94bcf8f11ecfe9e7f6231"
+	"3fa069e34428b24848def5245abde82a1c1dd388"
+	"3377cb1121fed88e2823c1b0209511d11b323b49"
+	"ccd45bce0c615dc73a92ed987765e9d93c4c152d"
+	"ef77ab6a10ec14b75700b3d18caeb9ef06cd0335"
+)
+
+PRE_START_NUM=5
+POST_START_NUM=225
 
 [ -d "$KERNEL_DIR" ] || git clone https://codeberg.org/sdm845/linux.git "$KERNEL_DIR"
 cd "$KERNEL_DIR"
 
 git format-patch b7a23febf1b410e9cf0956175e232c9d2572c749..HEAD -o "../$PATCHES_DIR"
 
-for HASH in "${EXTRA_HASHES[@]}"; do
+for HASH in "${PRE_EXTRA_HASHES[@]}"; do
   git format-patch -1 "$HASH" \
     --no-cover-letter \
     --no-binary \
-    --start-number $START_NUM \
+    --start-number $PRE_START_NUM \
     -o "../$PATCHES_DIR"
 
-  ((START_NUM++))
+  ((PRE_START_NUM++))
+done
+
+for POSTHASH in "${POST_EXTRA_HASHES[@]}"; do
+  git format-patch -1 "$POSTHASH" \
+    --no-cover-letter \
+    --no-binary \
+    --start-number $POST_START_NUM \
+    -o "../$PATCHES_DIR"
+
+  ((POST_START_NUM++))
 done
