@@ -16,7 +16,7 @@
           "0016-Qualcomm-3rd-gen-fuel-gauge-support.patch"
           "0019-arm64-dts-qcom-pmi8998-Add-fuel-gauge.patch"
           "0024-EDITME-cover-title-for-ath10k-a-msdu.patch"
-          "0025-wifi-ath10k-make-in-order-rx-amsdu-buffers-persisten.patch" # !
+          #"0025-wifi-ath10k-make-in-order-rx-amsdu-buffers-persisten.patch" # !
           "0026-Mainlining-effort-for-TAS255x.patch"
           "0028-arm64-dts-qcom-sdm845-xiaomi-beryllium-Enable-gpi_dm.patch"
           "0029-arm64-dts-qcom-sdm845-xiaomi-beryllium-common-add-su.patch"
