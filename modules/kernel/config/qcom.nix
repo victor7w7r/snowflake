@@ -395,7 +395,6 @@
         SC_LPASS_CORECC_7280 = no;
         SC_VIDEOCC_7180 = no;
         SC_VIDEOCC_7280 = no;
-        SDM_GCC_660 = no;
         SDM_GPUCC_660 = no;
         SDM_MMCC_660 = no;
         SDX_GCC_75 = no;
