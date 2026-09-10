@@ -198,7 +198,6 @@
         ARCH_ROCKCHIP = no;
         ARCH_SUNXI = no;
         CLK_ELIZA_DISPCC = no;
-        CLK_ELIZA_GCC = no;
         CLK_ELIZA_TCSRCC = no;
         CLK_GFM_LPASS_SM8250 = no;
         CLK_GLYMUR_DISPCC = no;
