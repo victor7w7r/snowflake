@@ -7,6 +7,7 @@
       arch ? "x86",
       defconfig ? "cachyos_defconfig",
       class ? null,
+      removeLocalVersion ? false,
       dtbMake ? "",
     }:
     pkgs.stdenv.mkDerivation {
@@ -97,6 +98,8 @@
 
         mkdir -p $out && cp -r ${src}/* $out/ && chmod -R +w $out
         cp config $out/arch/${arch}/configs/${defconfig}
+
+        ${pkgs.lib.optionalString removeLocalVersion ''rm $out/localversion-next''}
 
         ${pkgs.lib.optionalString (class != null) ''
           DTS_DIR="arch/${arch}/boot/dts"

@@ -25,6 +25,7 @@
         src = inputs.linux-sdm845;
         arch = "arm64";
         defconfig = "phone_defconfig";
+        removeLocalVersion = true;
         class = "qcom";
         dtbMake = ''
           dtb-\$(CONFIG_ARCH_QCOM) += sdm845-oneplus-enchilada.dtb
