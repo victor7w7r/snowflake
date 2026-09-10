@@ -510,11 +510,7 @@
       flake = false;
     };
     linux-lts = {
-      url = "github:CachyOS/linux/cachyos-6.18.48-2";
-      flake = false;
-    };
-    linux-lts-vanilla = {
-      url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.48.tar.xz";
+      url = "github:CachyOS/linux/cachyos-6.18.50-1";
       flake = false;
     };
     linux-sdm845 = {
