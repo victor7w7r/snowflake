@@ -13,7 +13,7 @@
         environment = {
           persistence."/nix/persist".users."${user.name}" = {
             directories = [ ".config/plasma-mobile" ];
-            files = [ ".config/plasmamobilerc" ];
+            #files = [ ".config/plasmamobilerc" ];
           };
           plasma6.excludePackages = with pkgs.kdePackages; [
           	kcalc
