@@ -22,5 +22,6 @@ cache-stdenv.mkDerivation (attrs: {
     qtsvg
     kdecoration
     qtbase
+    qtmultimedia
   ];
 })
