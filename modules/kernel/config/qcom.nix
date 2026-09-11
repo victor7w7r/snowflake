@@ -38,6 +38,7 @@
         IIO_ST_MAGN_3AXIS = setupDenial isDenied module;
         INPUT_JOYDEV = setupDenial isDenied module;
         INPUT_QCOM_PMI8998_HAPTICS = setupDenial isDenied module;
+        INPUT_QCOM_SPMI_HAPTICS = setupDenial isDenied module;
         INTERCONNECT_QCOM_SM6115 = setupDenial isDenied yes;
         INTERCONNECT_QCOM_SM8250 = setupDenial isDenied yes;
         INTERCONNECT_QCOM_QCM2290 = setupDenial isDenied yes;
@@ -55,7 +56,6 @@
         QCOM_FASTRPC = setupDenial isDenied module;
         QCOM_INLINE_CRYPTO_ENGINE = setupDenial isDenied yes;
         QCOM_IPA = setupDenial isDenied module;
-        #QCOM_L3_PMU = setupDenial isDenied yes;
         QCOM_PD_MAPPER = setupDenial isDenied yes;
         QCOM_Q6V5_MSS = setupDenial isDenied module;
         QCOM_Q6V5_PAS = setupDenial isDenied module;

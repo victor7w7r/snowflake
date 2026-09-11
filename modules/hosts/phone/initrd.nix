@@ -10,12 +10,14 @@
         includeDefaultModules = false;
         availableKernelModules = [ "sd_mod" ];
         kernelModules = [
-          "ath10k_core"
-          "ath10k_snoc"
+          "bq27xxx_battery"
+          "bq27xxx_battery_i2c"
           "dm_mod"
-          "qcom_spmi_haptics"
-          "qcom_q6v5_pas"
+          "rmi_core"
           "rmi_i2c"
+          "qcom_spmi_haptics"
+          "qcom_spmi_rradc"
+          "qcom_smbx"
         ];
 
         systemd = {

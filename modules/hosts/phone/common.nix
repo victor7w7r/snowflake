@@ -64,7 +64,7 @@
         imports = [ inputs.vanilla-mobile-nixos.nixosModules.vanilla-mobile ];
 
         vanilla-mobile = {
-          usb-gadget.enable = lib.mkDefault true;
+          #usb-gadget.enable = lib.mkDefault true;
           powerManagement = {
             enable = lib.mkDefault true;
             sleepInhibitors.enableDefault = lib.mkDefault true;
@@ -149,6 +149,7 @@
 
         systemd = {
           sockets.sshd.socketConfig.FreeBind = lib.mkIf config.services.openssh.startWhenNeeded true;
+          units."systemd-boot-random-seed.service".mask = true;
           package =
             let
               pkg = pkgs.systemd;
