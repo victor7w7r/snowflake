@@ -14,7 +14,7 @@ cache-stdenv.mkDerivation (attrs: {
 
   buildInputs = with pkgs.kdePackages; [
     extra-cmake-modules
-    maui-core
+    #maui-core
     qtdeclarative
     qtsvg
     kdecoration

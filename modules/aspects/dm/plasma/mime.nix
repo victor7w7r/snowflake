@@ -7,7 +7,6 @@
       "x-scheme-handler/http" = [ "zen-beta.desktop" ];
       "x-scheme-handler/chrome" = [ "zen-beta.desktop" ];
       "x-scheme-handler/https" = [ "zen-beta.desktop" ];
-
       "text/javascript" = [ "dev.zed.Zed.desktop" ];
       "text/html" = [ "dev.zed.Zed.desktop" ];
       "text/plain" = [ "dev.zed.Zed.desktop" ];
