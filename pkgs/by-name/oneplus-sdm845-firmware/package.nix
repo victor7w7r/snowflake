@@ -6,7 +6,7 @@ pkgs.stdenvNoCC.mkDerivation {
     (pkgs.fetchpatch {
       name = "0001-oneplus6-set-mount-matrix.patch";
       url = "https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/f1e277695bd09b69ebd49dce8834ae9bd4f60d9c/device/community/firmware-oneplus-sdm845/0001-oneplus6-set-mount-matrix.patch?inline=false";
-      hash = "sha256-kuxEve7dTBH78ojp0AA5RECSnitf8Ns6/DR1ikCLuJo=";
+      hash = "sha256-kuxEve7dTBH78ojp02P5RECSnitf8Ns6/DR1ikCLuJo=";
     })
   ];
 
