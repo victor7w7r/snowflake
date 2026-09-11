@@ -150,7 +150,7 @@
 
         systemd = {
           sockets.sshd.socketConfig.FreeBind = lib.mkIf config.services.openssh.startWhenNeeded true;
-          units."systemd-boot-random-seed.service".mask = true;
+          units."systemd-boot-random-seed.service".enable = false;
           package =
             let
               pkg = pkgs.systemd;
@@ -179,6 +179,7 @@
               '';
             };
           services = {
+          	"systemd-boot-random-seed".enable = false;
             ModemManager.serviceConfig.ExecStart = lib.mkForce [
               ""
               "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"
