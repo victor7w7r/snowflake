@@ -1,6 +1,8 @@
 {
-  den.aspects.plasma.menu.provides.to-users.homeManager.xdg.configFile."menus/applications-kmenuedit.menu".text =
-    ''
+  den.aspects.plasma.menu.provides.to-users.homeManager=
+    { lib, isPhone, ... }:
+    lib.optionalAttrs (!isPhone) {
+      xdgconfigFile."menus/applications-kmenuedit.menu".text = ''
       <!DOCTYPE Menu PUBLIC '-//freedesktop//DTD Menu 1.0//EN' 'http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd'>
       <Menu>
         <Menu>
@@ -1525,4 +1527,5 @@
         </Layout>
       </Menu>
     '';
+  };
 }

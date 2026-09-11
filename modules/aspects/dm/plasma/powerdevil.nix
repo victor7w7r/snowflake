@@ -1,6 +1,6 @@
 {
   den.aspects.plasma.powerdevil.provides.to-users.homeManager =
-    { isMain, ... }:
+    { isMain, isPhone, ... }:
     {
       programs.plasma.powerdevil = {
         general.pausePlayersOnSuspend = true;

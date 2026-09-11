@@ -1,9 +1,9 @@
 {
   den.aspects.plasma.desktop.provides.to-users.homeManager =
-    { lib, ... }:
+    { lib, isPhone, ... }:
     {
       programs.plasma = {
-        desktop.widgets = [
+        desktop.widgets = lib.optionals (!isPhone) [
           {
             config.General = {
               GrainMode = 4;
@@ -62,7 +62,7 @@
           };
         };
         configFile = {
-          kwinrc = {
+          kwinrc = lib.optionalAttrs (!isPhone) {
             Effect-better-blur-dx.BlurDecorations = true;
             Effect-better-blur-dx.BlurDocks = true;
             Effect-better-blur-dx.WindowClasses = "dolphin\nkitty\nzen\nplasmashell";
