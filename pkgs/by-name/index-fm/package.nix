@@ -22,6 +22,7 @@ cache-stdenv.mkDerivation (attrs: {
     kdecoration
     ki18n
     kio
+    mauikit
     qtbase
     qtdeclarative
     qtmultimedia
