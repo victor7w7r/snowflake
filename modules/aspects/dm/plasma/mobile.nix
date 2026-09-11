@@ -23,7 +23,7 @@
               audiotube
               calindori
               elisa
-              index-fm
+              #index-fm
               kalk
               kclock
               koko
