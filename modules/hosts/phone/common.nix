@@ -165,12 +165,30 @@
             "d /readonly/vendor/firmware_mnt/image 0755 root root -"
             "L+ /readonly/vendor/firmware_mnt/image/wlanmdsp.mbn - - - - /lib/firmware/wlanmdsp.mbn"
             "L+ /readonly/vendor/firmware/wlanmdsp.mbn - - - - /lib/firmware/wlanmdsp.mbn"
+            "d /boot 0755 root root -"
+            "L+ /boot/modem_fsg_oem_1 - - - - /dev/disk/by-partlabel/modemst1"
+            "L+ /boot/modem_fsg_oem_2 - - - - /dev/disk/by-partlabel/modemst2"
+            "L+ /boot/modem_fsg       - - - - /dev/disk/by-partlabel/fsg"
+            "L+ /boot/modem_a         - - - - /dev/disk/by-partlabel/modem_a"
+            "L+ /boot/modem_b         - - - - /dev/disk/by-partlabel/modem_b"
             "d /var/lib/tqftpserv 0777 root root -"
           ];
           services = {
             systemd-boot-random-seed.enable = false;
             usb-moded-turn-off-rescue-mode.enable = false;
             iio-sensor-proxy.serviceConfig.TimeoutStopSec = 3;
+            tqftpserv = {
+              after = [ "systemd-tmpfiles-setup.service" ];
+              wants = [ "systemd-tmpfiles-setup.service" ];
+            };
+            hexagonrpcd-sdsp = {
+              after = [ "systemd-tmpfiles-setup.service" ];
+              wants = [ "systemd-tmpfiles-setup.service" ];
+            };
+            rmtfs = {
+	            after = [ "systemd-tmpfiles-setup.service" ];
+	            wants = [ "systemd-tmpfiles-setup.service" ];
+            };
             ModemManager = {
               after = [ "msm-modem-uim-selection.service" ];
               requires = [ "msm-modem-uim-selection.service" ];
