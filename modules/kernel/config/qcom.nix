@@ -120,7 +120,6 @@
         PWM_QTI_LPG = module;
         QRTR = lib.mkForce yes;
         NF_TABLES_INET = yes;
-        NFT_FIB_INET = yes;
         NFT_LIMIT = yes;
         NFT_NAT = yes;
         REGULATOR_QCOM_REFGEN = yes;

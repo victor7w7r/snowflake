@@ -26,10 +26,8 @@
             with pkgs.kdePackages;
             [
               filelight
-
               kbackup
               kcharselect
-              kcolorchooser
               kdegraphics-thumbnailers
               kdenetwork-filesharing
               kdf
@@ -37,22 +35,14 @@
               kget
               kjournald
               kmix
-              kompare
-              kontrast
               krdc
               ksystemlog
               ktorrent
               partitionmanager
               pkgs.ffmpegthumbnailer
               pkgs.graphviz
-              pkgs.heaptrack
-              pkgs.icoextract
-              pkgs.icoutils
-              pkgs.kdiskmark
-              pkgs.krusader
               pkgs.kurve
               pkgs.pinentry-qt
-              pkgs.qpwgraph
               pkgs.qt5.qtgraphicaleffects
               pkgs.qt5.qtquickcontrols2
               pkgs.systemdgenie
@@ -65,21 +55,30 @@
             ]
             ++ (lib.optionals (!isPhone) [
             	kamoso
+             	kompare
               inputs.kwin-effects-better-blur-dx.packages.${pkgs.system}.default
               kcalc
               pkgs.application-title-bar
+              pkgs.icoextract
+              pkgs.icoutils
+              pkgs.heaptrack
               pkgs.kdePackages.isoimagewriter
               pkgs.kdiff3
+              pkgs.kdiskmark
               pkgs.krename
+              pkgs.krusader
               pkgs.krita
               pkgs.okteta
               pkgs.onboard
               pkgs.ulauncher
             ])
             ++ (lib.optionals (!isHandheld && !isPhone) [
+            	kontrast
+             	kcolorchooser
               pkgs.krename
               pkgs.kdePackages.isoimagewriter
               pkgs.ulauncher
+            	pkgs.qpwgraph
             ]);
         };
       };
