@@ -23,5 +23,8 @@ cache-stdenv.mkDerivation (attrs: {
     kdecoration
     qtbase
     qtmultimedia
+    kcoreaddons
+    karchive
+    ki18n
   ];
 })
