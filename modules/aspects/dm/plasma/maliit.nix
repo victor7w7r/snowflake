@@ -5,7 +5,11 @@
       {
         programs.dconf.enable = true;
 
-        environment.systemPackages = [ pkgs.dconf-editor ];
+        environment.systemPackages = with pkgs; [
+          dconf-editor
+          maliit-framework
+          maliit-keyboard
+        ];
       };
 
     provides.to-users.homeManager =

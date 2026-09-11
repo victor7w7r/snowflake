@@ -15,9 +15,10 @@
             files = [ ".config/plasmamobilerc" ];
           };
           systemPackages = with pkgs.kdePackages; [
+          	kalk
+            plasma-dialer
             plasma-mobile
             plasma-nano
-            plasma-dialer
             spacebar
           ];
         };

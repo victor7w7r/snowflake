@@ -12,19 +12,25 @@
     ];
 
     provides.to-users.homeManager =
-      { pkgs, self', ... }:
+      {
+        isPhone,
+        pkgs,
+        self',
+        ...
+      }:
       {
         home.packages = with pkgs; [
-          btrfs-assistant
-          #ddrescueview
           gparted
           qdiskinfo
+          self'.packages.repair-usb-disc-gtk4
+        ]  ++ (lib.optionals (!isPhone) [
+        	 btrfs-assistant
           snapper-gui
           testdisk-qt
+          #ddrescueview
           #woeusb-ng DEP python3.14-wxpython
           #ventoy-full-qt
-          self'.packages.repair-usb-disc-gtk4
-        ];
+        ]);
       };
   };
 }

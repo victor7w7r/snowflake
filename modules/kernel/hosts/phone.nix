@@ -1,4 +1,5 @@
-{  inputs,
+{
+  inputs,
   kernel,
   ...
 }:
@@ -37,13 +38,13 @@
           ''
         );
       };
-     /*patches =
+      patches =
         with kernel.patches.injector pkgs;
         cachyos.latest.inline
         ++ cachyos.latest.std
         ++ (tachyon.common { source = inputs.tachyon-patches-latest; })
         ++ (tachyon.latest { isPhone = true; })
         ++ (bunker.common { isLts = false; })
-        ++ (bunker.latest { });*/
+        ++ (bunker.latest { });
     });
 }

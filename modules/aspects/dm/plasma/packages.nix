@@ -9,6 +9,7 @@
     nixos =
       {
         isHandheld,
+        isPhone,
         lib,
         pkgs,
         ...
@@ -25,9 +26,8 @@
             with pkgs.kdePackages;
             [
               filelight
-              kamoso
+
               kbackup
-              kcalc
               kcharselect
               kcolorchooser
               kdegraphics-thumbnailers
@@ -40,38 +40,43 @@
               kompare
               kontrast
               krdc
-              ktorrent
               ksystemlog
+              ktorrent
               partitionmanager
-              polkit-qt-1
-              qtmultimedia
-              qtstyleplugin-kvantum
-              sddm-kcm
-              sweeper
-              qtquick3d
-              inputs.kwin-effects-better-blur-dx.packages.${pkgs.system}.default
-              pkgs.application-title-bar
               pkgs.ffmpegthumbnailer
               pkgs.graphviz
               pkgs.heaptrack
               pkgs.icoextract
               pkgs.icoutils
-              pkgs.kdiff3
               pkgs.kdiskmark
-              pkgs.krita
               pkgs.krusader
               pkgs.kurve
-              pkgs.maliit-framework
-              pkgs.maliit-keyboard
-              pkgs.okteta
-              pkgs.onboard
               pkgs.pinentry-qt
               pkgs.qpwgraph
               pkgs.qt5.qtgraphicaleffects
               pkgs.qt5.qtquickcontrols2
               pkgs.systemdgenie
+              polkit-qt-1
+              qtmultimedia
+              qtquick3d
+              qtstyleplugin-kvantum
+              sddm-kcm
+              sweeper
             ]
-            ++ (lib.optionals isHandheld [
+            ++ (lib.optionals (!isPhone) [
+            	kamoso
+              inputs.kwin-effects-better-blur-dx.packages.${pkgs.system}.default
+              kcalc
+              pkgs.application-title-bar
+              pkgs.kdePackages.isoimagewriter
+              pkgs.kdiff3
+              pkgs.krename
+              pkgs.krita
+              pkgs.okteta
+              pkgs.onboard
+              pkgs.ulauncher
+            ])
+            ++ (lib.optionals (!isHandheld && !isPhone) [
               pkgs.krename
               pkgs.kdePackages.isoimagewriter
               pkgs.ulauncher
@@ -80,7 +85,12 @@
       };
 
     provides.to-users.homeManager =
-      { pkgs, self', ... }:
+      {
+        isPhone,
+        pkgs,
+        self',
+        ...
+      }:
       {
         home.packages =
           with pkgs;
@@ -89,19 +99,21 @@
             appimage-thumbnailer
             ffmpeg-audio-thumbnailer
             jar-thumbnailer
-            kde-control-station
             kde-thumbnailer-apk
-            kf6-servicemenus-rootactions
-            kmenu
             kzones
             layan
+          ]
+          ++ (lib.optionals (!isPhone) [
+            kf6-servicemenus-rootactions
+            kmenu
+            kde-control-station
             maxwell
             panel-spacer-extended
             plasma-drawer
             sticky-window-snapping
             virtual-desktops-only-on-primary
             wallpaper-effects
-          ];
+          ]);
       };
   };
 }

@@ -46,38 +46,38 @@
               clamtk
               cool-retro-term
               czkawka-full
-              #davinci-resolve
               fclones-gui
+              fzf-open
+              media-downloader
+              mission-center
+              mtr-gui
+              rnote
+              ytdl
+            ]
+            ++ (lib.optionals (!isPhone) [
               inkscape-with-extensions
-              kopia-ui
+              jdownloader
               kid3-kde
+              kopia-ui
               lan-mouse
               legcord
+              linuxthemestore
               lunacy
-              media-downloader
-              meld
-              mission-center
               morphosis
-              mtr-gui
               music-discord-rpc
-              #natron
               rclone-browser
-              rnote
-              seafile-client
               sonic-visualiser
               spotify-qt
               sticky-notes
-              tenacity
-              vlc
-              #davinci-video-converter
-              fzf-open
-              jdownloader
-              linuxthemestore
-              #shutter-encoder
               tahoma2d
+              tenacity
               watchyourlan
-              ytdl
-            ]
+              vlc
+              #davinci-resolve
+              #davinci-video-converter
+              #natron
+              #shutter-encoder
+            ])
             ++ (lib.optionals isX86 [
               cpu-x
               lightworks
