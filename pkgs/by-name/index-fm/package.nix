@@ -10,7 +10,10 @@ cache-stdenv.mkDerivation (attrs: {
     hash = "sha256-5h/HNdXl3O8QBfhoJl8oTJbOxn0Jv0yOO1rlTVIuWsQ=";
   };
 
-  nativeBuildInputs = with pkgs; [ cmake ];
+  nativeBuildInputs = with pkgs; [
+    cmake
+    kdePackages.wrapQtAppsHook
+  ];
 
   buildInputs = with pkgs.kdePackages; [
     extra-cmake-modules
