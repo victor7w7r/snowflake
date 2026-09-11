@@ -15,7 +15,7 @@
           "dm_mod"
           "rmi_core"
           "rmi_i2c"
-          "qcom_spmi_haptics"
+          "qcom-pmi8998-haptics"
           "qcom_spmi_rradc"
           "qcom_smbx"
         ];

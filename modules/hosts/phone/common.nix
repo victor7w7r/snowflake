@@ -56,6 +56,7 @@
       {
         config,
         inputs',
+        self',
         pkgs,
         lib,
         ...
@@ -86,7 +87,7 @@
         powerManagement.cpuFreqGovernor = "schedutil";
 
         environment = {
-          systemPackages = [ inputs'.vanilla-mobile-nixos.packages.oneplus-sdm845-firmware ];
+          systemPackages = [ self'.packages.oneplus-sdm845-firmware ];
           persistence."/nix/persist" = {
             directories = lib.mkAfter [ "/var/lib/ModemManager" ];
             users = {
@@ -142,7 +143,7 @@
 
         hardware = {
           firmwareCompression = lib.mkForce "zstd";
-          firmware = [ inputs'.vanilla-mobile-nixos.packages.oneplus-sdm845-firmware ];
+          firmware = [ self'.packages.oneplus-sdm845-firmware ];
           sensor.iio.enable = true;
           deviceTree.enable = true;
         };
