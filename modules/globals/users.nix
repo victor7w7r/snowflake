@@ -15,15 +15,12 @@
           openssh.authorizedKeys.keys = [
             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINGTZ3iQqtjrClKVnqQ0w9Yn2sUoE9lAAW8ZYhR45nV5 arkano036@gmail.com"
           ];
-        }
-        // (
-          if isPhone then
-            { initialPassword = "123456"; }
-          else
-            {
-              hashedPassword = "$y$j9T$ieUYJ2thSsvR1M37kWe651$yt0z7Ga3..johS8fyA1Y9GaoddW.jfE838xXiFhcus1";
-            }
-        );
+          hashedPassword =
+            if isPhone then
+              "$y$j9T$we5ItV5unuB7IZ2TAHbF1/$dQE6b45eBAyJrzdE65l/nS.ynywSF5ZmaIfExnj4RF3"
+            else
+              "$y$j9T$ieUYJ2thSsvR1M37kWe651$yt0z7Ga3..johS8fyA1Y9GaoddW.jfE838xXiFhcus1";
+        };
     };
 
     default = {

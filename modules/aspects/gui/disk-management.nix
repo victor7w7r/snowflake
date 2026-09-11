@@ -19,18 +19,21 @@
         ...
       }:
       {
-        home.packages = with pkgs; [
-          gparted
-          qdiskinfo
-          self'.packages.repair-usb-disc-gtk4
-        ]  ++ (lib.optionals (!isPhone) [
-        	 btrfs-assistant
-          snapper-gui
-          testdisk-qt
-          #ddrescueview
-          #woeusb-ng DEP python3.14-wxpython
-          #ventoy-full-qt
-        ]);
+        home.packages =
+          with pkgs;
+          [
+            gparted
+            qdiskinfo
+          ]
+          ++ (lib.optionals (!isPhone) [
+            self'.packages.repair-usb-disc-gtk4
+            btrfs-assistant
+            snapper-gui
+            testdisk-qt
+            #ddrescueview
+            #woeusb-ng DEP python3.14-wxpython
+            #ventoy-full-qt
+          ]);
       };
   };
 }

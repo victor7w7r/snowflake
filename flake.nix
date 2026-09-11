@@ -636,7 +636,7 @@
       flake = false;
     };
     oneplus = {
-      url = "gitlab:sdm845-mainline/firmware-oneplus-sdm845/176ca713448c5237a983fb1f158cf3a5c251d775";
+      url = "gitlab:sdm845-mainline/firmware-oneplus-sdm845";
       flake = false;
     };
     osx-kvm = {

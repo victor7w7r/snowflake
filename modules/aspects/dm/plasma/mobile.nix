@@ -15,6 +15,9 @@
             directories = [ ".config/plasma-mobile" ];
             files = [ ".config/plasmamobilerc" ];
           };
+          plasma6.excludePackages = with pkgs.kdePackages; [
+          	kcalc
+          ];
           systemPackages =
             with pkgs.kdePackages;
             with self'.packages;

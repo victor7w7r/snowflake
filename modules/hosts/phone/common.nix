@@ -32,7 +32,6 @@
       gui._
       misc.comm
       misc.fetch
-      pentest._
       #zen._
 
       phone._
