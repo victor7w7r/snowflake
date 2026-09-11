@@ -98,6 +98,8 @@
                 };
               };
 
+              nix.settings.max-jobs = lib.mkDefault 2;
+
               hardware = {
                 firmware = with self'.packages; lib.singleton uwe5622-firmware;
                 deviceTree = {

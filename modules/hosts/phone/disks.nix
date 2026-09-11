@@ -1,11 +1,20 @@
 { disko, inputs, ... }:
 {
   den.aspects.phone.disks.nixos = { pkgs, ... }: {
-    fileSystems."/".autoResize = true;
-    fileSystems."/tmp" = {
-      device = "/nix/tmp";
-      fsType = "none";
-      options = [ "bind" ];
+    fileSystems = {
+      "/tmp" = {
+        device = "/nix/tmp";
+        fsType = "none";
+        options = [ "bind" ];
+      };
+      "/mnt/vendor/persist" = {
+        device = "/dev/disk/by-partlabel/persist";
+        fsType = "ext4";
+        options = [
+          "ro"
+          "nofail"
+        ];
+      };
     };
 
     systemd.tmpfiles.rules = [ "d /nix/tmp 1777 root root -" ];
@@ -28,6 +37,7 @@
             imageName = "nixos-boot";
             imageSize = "300M";
             content = esp.call {
+              mountpoint = "/boot/efi";
               hasDefSectorSize = true;
               entireDisk = true;
             };

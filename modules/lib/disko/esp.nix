@@ -3,13 +3,14 @@
     {
       name ? "EFI",
       size ? "300M",
+      mountpoint ? "/boot",
       hasDefSectorSize ? false,
       entireDisk ? false,
     }:
     {
+      inherit mountpoint;
       type = "filesystem";
       format = "vfat";
-      mountpoint = "/boot";
       extraArgs = [
         "-F32"
         "-n"

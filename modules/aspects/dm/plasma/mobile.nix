@@ -17,6 +17,7 @@
           };
           plasma6.excludePackages = with pkgs.kdePackages; [
           	kcalc
+           	systemsettings
           ];
           systemPackages =
             with pkgs.kdePackages;
@@ -35,6 +36,7 @@
               plasma-dialer
               plasma-mobile
               plasma-phonebook
+              plasma-settings
               plasmatube
               qmlkonsole
               spacebar

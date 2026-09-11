@@ -71,6 +71,11 @@
             sleepInhibitors.enableDefault = lib.mkDefault true;
           };
 
+          alsa-ucm-conf = {
+            enable = true;
+            package = inputs'.vanilla-mobile-nixos.packages.alsa-ucm-conf-sdm845;
+          };
+
           plymouth = {
             mobileTweaks.enable = lib.mkDefault false;
             unl0krSupport.enable = lib.mkDefault false;
@@ -85,6 +90,8 @@
         nixpkgs.config.allowUnfreePackages = [ "oneplus-sdm845-firmware" ];
 
         powerManagement.cpuFreqGovernor = "schedutil";
+
+        nix.settings.max-jobs = lib.mkDefault 2;
 
         environment = {
           systemPackages = [ self'.packages.oneplus-sdm845-firmware ];
@@ -151,48 +158,27 @@
         systemd = {
           sockets.sshd.socketConfig.FreeBind = lib.mkIf config.services.openssh.startWhenNeeded true;
           units."systemd-boot-random-seed.service".enable = false;
-          package =
-            let
-              pkg = pkgs.systemd;
-            in
-            pkgs.symlinkJoin {
-              inherit (pkg)
-                name
-                pname
-                version
-                meta
-                passthru
-                outputs
-                ;
-              paths = [ pkg ];
-              nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
-              postBuild = ''
-                ln -s ${pkg.dev} $dev
-                ln -s ${pkg.debug} $debug
-                ln -s ${pkg.man} $man
-
-                wrapProgram $out/bin/bootctl --set SYSTEMD_RELAX_ESP_CHECKS 1
-
-                rm $out/example/sysctl.d/50-coredump.conf
-                substitute ${pkg}/example/sysctl.d/50-coredump.conf $out/example/sysctl.d/50-coredump.conf \
-                  --replace-fail "${pkg}" "$out"
-              '';
-            };
+          tmpfiles.rules = [
+            "d /readonly/vendor/firmware_mnt/image 0755 root root -"
+            "L+ /readonly/vendor/firmware_mnt/image/wlanmdsp.mbn - - - - /lib/firmware/wlanmdsp.mbn"
+            "L+ /readonly/vendor/firmware/wlanmdsp.mbn - - - - /lib/firmware/wlanmdsp.mbn"
+            "d /var/lib/tqftpserv 0777 root root -"
+          ];
           services = {
-          	"systemd-boot-random-seed".enable = false;
-            ModemManager.serviceConfig.ExecStart = lib.mkForce [
-              ""
-              "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"
-            ];
-            iio-sensor-proxy.serviceConfig.TimeoutStopSec = 3;
+            systemd-boot-random-seed.enable = false;
+            usb-moded-turn-off-rescue-mode.enable = false;
+
+            ModemManager = {
+              after = [ "msm-modem-uim-selection.service" ];
+              requires = [ "msm-modem-uim-selection.service" ];
+              serviceConfig.ExecStart = lib.mkForce [
+                ""
+                "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"
+              ];
+              iio-sensor-proxy.serviceConfig.TimeoutStopSec = 3;
+            };
           };
         };
-        security.pam.services.sshd.allowNullPassword = lib.mkForce true;
       };
   };
-  /*
-    // (lib.optionalAttrs pkgs.stdenv.buildPlatform.isx86_64 {
-    _module.args.pkgs = armPkgs;
-    })
-  */
 }
