@@ -167,7 +167,7 @@
           services = {
             systemd-boot-random-seed.enable = false;
             usb-moded-turn-off-rescue-mode.enable = false;
-
+            iio-sensor-proxy.serviceConfig.TimeoutStopSec = 3;
             ModemManager = {
               after = [ "msm-modem-uim-selection.service" ];
               requires = [ "msm-modem-uim-selection.service" ];
@@ -175,7 +175,6 @@
                 ""
                 "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"
               ];
-              iio-sensor-proxy.serviceConfig.TimeoutStopSec = 3;
             };
           };
         };
