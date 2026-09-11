@@ -17,14 +17,14 @@ cache-stdenv.mkDerivation (attrs: {
 
   buildInputs = with pkgs.kdePackages; [
     extra-cmake-modules
-    #maui-core
-    qtdeclarative
-    qtsvg
-    kdecoration
-    qtbase
-    qtmultimedia
-    kcoreaddons
     karchive
+    kcoreaddons
+    kdecoration
     ki18n
+    kio
+    qtbase
+    qtdeclarative
+    qtmultimedia
+    qtsvg
   ];
 })
