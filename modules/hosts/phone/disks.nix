@@ -1,13 +1,36 @@
 { disko, inputs, ... }:
 {
   den.aspects.phone.disks.nixos = { pkgs, ... }: {
-    fileSystems."/tmp" = {
-      device = "/nix/tmp";
-      fsType = "none";
-      options = [ "bind" ];
+    fileSystems = {
+      "/tmp" = {
+        device = "/nix/tmp";
+        fsType = "none";
+        options = [ "bind" ];
+      };
+      "/mnt/vendor/persist-ro" = {
+        device = "/dev/disk/by-partlabel/persist";
+        fsType = "ext4";
+        options = [
+          "ro"
+          "nosuid"
+          "nodev"
+        ];
+      };
+      "/mnt/vendor/persist" = {
+        fsType = "tmpfs";
+        options = [
+          "nosuid"
+          "nodev"
+          "mode=0755"
+        ];
+      };
+
     };
 
-    systemd.tmpfiles.rules = [ "d /nix/tmp 1777 root root -" ];
+    systemd.tmpfiles.rules = [
+      "d /nix/tmp 1777 root root -"
+      "d /nix/persist/cache 1777 root root -"
+    ];
 
     imports = [ inputs.disko-mobile.nixosModules.disko ];
 

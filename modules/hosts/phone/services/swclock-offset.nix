@@ -2,7 +2,7 @@
   den.aspects.phone.services.swclock-offset.nixos.systemd.services =
     let
       rtc_sys_node = "/sys/class/rtc/rtc0/since_epoch";
-      offset_directory = "/persist/cache/swclock-offset";
+      offset_directory = "/nix/persist/cache/swclock-offset";
       offset_file = "${offset_directory}/offset-storage";
     in
     {
