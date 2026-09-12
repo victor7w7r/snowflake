@@ -1,20 +1,10 @@
 { disko, inputs, ... }:
 {
   den.aspects.phone.disks.nixos = { pkgs, ... }: {
-    fileSystems = {
-      "/tmp" = {
-        device = "/nix/tmp";
-        fsType = "none";
-        options = [ "bind" ];
-      };
-      "/mnt/vendor/persist" = {
-        device = "/dev/disk/by-partlabel/persist";
-        fsType = "ext4";
-        options = [
-          "ro"
-          "nofail"
-        ];
-      };
+    fileSystems."/tmp" = {
+      device = "/nix/tmp";
+      fsType = "none";
+      options = [ "bind" ];
     };
 
     systemd.tmpfiles.rules = [ "d /nix/tmp 1777 root root -" ];

@@ -721,7 +721,7 @@
     };
 
     tqftpserv = {
-      url = "gitlab:linux-msm/tqftpserv";
+      url = "github:linux-msm/tqftpserv";
       flake = false;
     };
 

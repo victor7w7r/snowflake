@@ -26,12 +26,10 @@
     substituters = [
       "https://nix-community.cachix.org"
       "https://cache.nixos.org"
-      "https://vanilla-mobile-nixos.cachix.org"
       "https://cache.xinux.uz"
     ];
     trusted-public-keys = [
       "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-      "vanilla-mobile-nixos.cachix.org-1:nicMQxxTD4n6PM9dCvylqsCOCA6M2C6gybbCKrei8AQ="
       "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
       "cache.xinux.uz:BXCrtqejFjWzWEB9YuGB7X2MV4ttBur1N8BkwQRdH+0="
     ];
@@ -674,7 +672,7 @@
     };
     pyprland.url = "github:hyprland-community/pyprland";
     q6voiced = {
-      url = "gitlab:postmarketOS/q6voiced/736138bfc9f7b455a96679e2d67fd922a8f16464";
+      url = "gitlab:postmarketOS/q6voiced";
       flake = false;
     };
     rbonsai = {
@@ -818,6 +816,10 @@
       url = "github:MunifTanjim/tmux-suspend/1a2f806666e0bfed37535372279fa00d27d50d14";
       flake = false;
     };
+    tqftpserv = {
+      url = "github:linux-msm/tqftpserv";
+      flake = false;
+    };
     treefetch = {
       url = "github:angelofallars/treefetch";
       flake = false;
@@ -842,7 +844,6 @@
       url = "github:armbian/uwe5622";
       flake = false;
     };
-    vanilla-mobile-nixos.url = "github:vanilla-mobile-nixos/vanilla-mobile-nixos";
     virtual-desktops-only-on-primary = {
       url = "github:Ubiquitine/virtual-desktops-only-on-primary";
       flake = false;
