@@ -32,6 +32,7 @@
       #zen._
 
       phone._
+      phone.services._
 
       #android
       bluetooth
