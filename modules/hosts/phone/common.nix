@@ -53,18 +53,6 @@
     nixos =
       { lib, pkgs, ... }:
       {
-        vanilla-mobile = {
-          powerManagement = {
-            enable = lib.mkDefault true;
-            sleepInhibitors.enableDefault = lib.mkDefault true;
-          };
-
-          deviceInfo = {
-            name = "OnePlus 6";
-            manufacturer = "OnePlus";
-          };
-        };
-
         environment = {
           variables.GST_PLUGIN_FEATURE_RANK = "v4l2vp8dec:SECONDARY,v4l2vp8enc:NONE,v4l2vp9dec:SECONDARY,v4l2h264dec:SECONDARY,v4l2h264enc:NONE,v4l2h265dec:SECONDARY,v4l2h265enc:NONE,v4l2mpeg2dec:SECONDARY";
           persistence."/nix/persist" = {
