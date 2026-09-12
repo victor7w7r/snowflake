@@ -721,7 +721,7 @@
     };
 
     tqftpserv = {
-      url = "github:linux-msm/tqftpserv";
+      url = "github:linux-msm/tqftpserv/443c82aadae2862dc7c12af48ac0b900f4bb0fe7";
       flake = false;
     };
 

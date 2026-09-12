@@ -46,7 +46,8 @@
           "clk_ignore_unused"
           "pd_ignore_unused"
           "arm64.nopauth"
-          "console=ttyMSM0,115200n8"
+          "console=tty0"
+          "console=ttyGS0,115200"
           "zram.num_devices=2"
           "firmware_class.path=/extra-firmware"
         ];
@@ -61,6 +62,8 @@
           includeDefaultModules = false;
           availableKernelModules = [ "sd_mod" ];
           kernelModules = [
+          	"ath10k_core"
+            "ath10k_snoc"
             "bq27xxx_battery"
             "bq27xxx_battery_i2c"
             "dm_mod"
