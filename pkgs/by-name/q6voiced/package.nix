@@ -21,8 +21,8 @@ cache-stdenv.mkDerivation {
     ninja
   ];
 
-  configurePhase = ''
-    meson setup build . --prefix=$out
-    cd build
-  '';
+  preConfigure = ''
+      echo "=== Directorio actual: $(pwd) ==="
+      ls -la
+    '';
 }
