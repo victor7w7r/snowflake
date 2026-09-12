@@ -66,7 +66,6 @@
         };
 
         nix.settings.max-jobs = lib.mkDefault 2;
-        nixpkgs.config.allowUnfreePackages = [ "oneplus-sdm845-firmware" ];
         system.nixos.label = "";
 
         hardware = {
@@ -115,12 +114,11 @@
 
           tlp.enable = lib.mkDefault true;
           udev.extraRules = builtins.concatStringsSep "\n" [
-            #''SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}+="-1, 0, 0; 0, 1, 0; 0, 0, -1"''
+            ''SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}+="-1, 0, 0; 0, 1, 0; 0, 0, -1"''
             ''SUBSYSTEM=="uio", ATTR{name}=="rmtfs", SYMLINK+="qcom_rmtfs_uio1"''
             ''SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity"''
             ''SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity ssc-light ssc-compass"''
-            # prevent from getting woken up by volume up / down in Phosh / Gnome Mobile
-            #''SUBSYSTEM=="input", KERNEL=="event*", ENV{GM_WAKEUP_KEY_114}="0", ENV{GM_WAKEUP_KEY_115}="0"''
+            ''SUBSYSTEM=="input", KERNEL=="event*", ENV{GM_WAKEUP_KEY_114}="0", ENV{GM_WAKEUP_KEY_115}="0"''
             # hide android partitions
             #''SUBSYSTEM=="block", KERNEL=="sd[a-f][0-9]*", ENV{UDISKS_IGNORE}="1"''
           ];

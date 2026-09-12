@@ -62,23 +62,14 @@
           includeDefaultModules = false;
           availableKernelModules = [ "sd_mod" ];
           kernelModules = [
-          	"ath10k_core"
+            "ath10k_core"
             "ath10k_snoc"
-            "bq27xxx_battery"
-            "bq27xxx_battery_i2c"
             "dm_mod"
             "rmi_core"
             "rtc_pm8xxx"
             "rmi_i2c"
             "qcom-pmi8998-haptics"
-            "qcom_spmi_rradc"
-            "qcom_smbx"
           ];
-          /*
-            services.udev.rules = ''
-            SUBSYSTEM=="block", ACTION!="remove", ENV{ID_PART_ENTRY_NAME}=="userdata", RUN+="${pkgs.util-linux}/bin/losetup --partscan --find --sector-size 4096 --loop-ref userdata /dev/%k"
-            '';
-          */
         };
       };
     };
