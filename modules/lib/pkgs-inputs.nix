@@ -591,7 +591,7 @@
     };
 
     q6voiced = {
-      url = "gitlab:postmarketOS/q6voiced/736138bfc9f7b455a96679e2d67fd922a8f16464";
+      url = "gitlab:postmarketOS/q6voiced";
       flake = false;
     };
 
@@ -717,6 +717,11 @@
 
     thunar-custom-actions = {
       url = "gitlab:nobodyinperson/thunar-custom-actions";
+      flake = false;
+    };
+
+    tqftpserv = {
+      url = "gitlab:linux-msm/tqftpserv";
       flake = false;
     };
 

@@ -5,13 +5,16 @@
 }:
 cache-stdenv.mkDerivation {
   pname = "q6voiced";
-  version = "unstable-2022-07-08";
+  version = "0.2.1";
   src = inputs.q6voiced;
   buildInputs = with pkgs; [
+    alsa-lib
     dbus
-    tinyalsa
   ];
-  nativeBuildInputs = with pkgs; [ pkg-config ];
-  buildPhase = "cc $(pkg-config --cflags --libs dbus-1) -ltinyalsa -o q6voiced q6voiced.c";
-  installPhase = ''install -m555 -Dt "$out/bin" q6voiced'';
+
+  nativeBuildInputs = with pkgs; [
+    pkg-config
+    meson
+    ninja
+  ];
 }

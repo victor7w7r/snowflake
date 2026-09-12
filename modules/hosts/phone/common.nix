@@ -1,15 +1,12 @@
 {
   den,
   hosts,
-  kernel,
   inputs,
-  self,
   tarball,
   ...
 }:
 {
   flake-file.inputs = {
-    vanilla-mobile-nixos.url = "github:vanilla-mobile-nixos/vanilla-mobile-nixos";
     disko-mobile = {
       url = "github:JuneStepp/disko/mobile";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -53,32 +50,12 @@
     ];
 
     nixos =
+      { lib, pkgs, ... }:
       {
-        config,
-        inputs',
-        self',
-        pkgs,
-        lib,
-        ...
-      }:
-      {
-        imports = [ inputs.vanilla-mobile-nixos.nixosModules.vanilla-mobile ];
-
         vanilla-mobile = {
-          #usb-gadget.enable = lib.mkDefault true;
           powerManagement = {
             enable = lib.mkDefault true;
             sleepInhibitors.enableDefault = lib.mkDefault true;
-          };
-
-          alsa-ucm-conf = {
-            enable = true;
-            package = inputs'.vanilla-mobile-nixos.packages.alsa-ucm-conf-sdm845;
-          };
-
-          plymouth = {
-            mobileTweaks.enable = lib.mkDefault false;
-            unl0krSupport.enable = lib.mkDefault false;
           };
 
           deviceInfo = {
@@ -87,14 +64,8 @@
           };
         };
 
-        nixpkgs.config.allowUnfreePackages = [ "oneplus-sdm845-firmware" ];
-
-        powerManagement.cpuFreqGovernor = "schedutil";
-
-        nix.settings.max-jobs = lib.mkDefault 2;
-
         environment = {
-          systemPackages = [ self'.packages.oneplus-sdm845-firmware ];
+          variables.GST_PLUGIN_FEATURE_RANK = "v4l2vp8dec:SECONDARY,v4l2vp8enc:NONE,v4l2vp9dec:SECONDARY,v4l2h264dec:SECONDARY,v4l2h264enc:NONE,v4l2h265dec:SECONDARY,v4l2h265enc:NONE,v4l2mpeg2dec:SECONDARY";
           persistence."/nix/persist" = {
             directories = lib.mkAfter [ "/var/lib/ModemManager" ];
             users = {
@@ -105,99 +76,64 @@
           enableAllTerminfo = true;
         };
 
-        boot = {
-          kernelPackages =
-            (kernel.hosts.phone pkgs "phone" "aarch64-linux" pkgs.stdenv.hostPlatform.system)
-            .phone-kernelPackages;
-
-          kernelParams = [
-            "console=tty0"
-            "zram.num_devices=2"
-            "firmware_class.path=/extra-firmware"
-          ];
-          blacklistedKernelModules = [ "ipa" ];
-          loader = {
-            efi = {
-              efiSysMountPoint = "/efi";
-              canTouchEfiVariables = false;
-            };
-            systemd-boot = lib.mkForce {
-              enable = true;
-              editor = false;
-              configurationLimit = 20;
-              extraFiles = {
-                "EFI/uefi.efi" = "${self}/assets/sdm845/uefi.img";
-                "EFI/shell.efi" = "${pkgs.edk2-uefi-shell}/shell.efi";
-                "EFI/tools/poweroff.nsh" = pkgs.writeText "poweroff.nsh" "reset -s";
-                "EFI/tools/reboot.nsh" = pkgs.writeText "reboot.nsh" "reset -c";
-              };
-              extraEntries = {
-                "uefi.conf" = ''
-                  title      UEFI
-                  efi        /EFI/uefi.efi
-                '';
-                "poweroff.conf" = ''
-                  title      Apagar (Poweroff)
-                  efi        /EFI/tools/shell.efi
-                  options    -e -noexit /EFI/tools/poweroff.nsh
-                '';
-                "reboot.conf" = ''
-                  title      Reiniciar (Reboot)
-                  efi        /EFI/tools/shell.efi
-                  options    -e -noexit /EFI/tools/reboot.nsh
-                '';
-              };
-            };
-          };
-        };
+        nix.settings.max-jobs = lib.mkDefault 2;
+        nixpkgs.config.allowUnfreePackages = [ "oneplus-sdm845-firmware" ];
+        powerManagement.cpuFreqGovernor = "schedutil";
+        system.nixos.label = "";
 
         hardware = {
-          firmwareCompression = lib.mkForce "zstd";
-          firmware = [ self'.packages.oneplus-sdm845-firmware ];
-          sensor.iio.enable = true;
           deviceTree.enable = true;
+          firmware = lib.mkAfter [
+            (pkgs.runCommand "oneplus-sdm845-firmware" { baseFw = inputs.oneplus; } ''
+              mkdir -p $out/lib/firmware
+              cp -r $baseFw/lib/firmware/* $out/lib/firmware/
+              chmod +w -R $out
+              rm -rf $out/lib/firmware/postmarketos
+              cp -r $baseFw/lib/firmware/postmarketos/* $out/lib/firmware
+              ls -lah $out/lib/firmware/qcom/sdm845
+            '')
+          ];
         };
 
-        systemd = {
-          sockets.sshd.socketConfig.FreeBind = lib.mkIf config.services.openssh.startWhenNeeded true;
-          units."systemd-boot-random-seed.service".enable = false;
-          tmpfiles.rules = [
-            "d /readonly/vendor/firmware_mnt/image 0755 root root -"
-            "L+ /readonly/vendor/firmware_mnt/image/wlanmdsp.mbn - - - - /lib/firmware/wlanmdsp.mbn"
-            "L+ /readonly/vendor/firmware/wlanmdsp.mbn - - - - /lib/firmware/wlanmdsp.mbn"
-            "d /boot 0755 root root -"
-            "L+ /boot/modem_fsg_oem_1 - - - - /dev/disk/by-partlabel/modemst1"
-            "L+ /boot/modem_fsg_oem_2 - - - - /dev/disk/by-partlabel/modemst2"
-            "L+ /boot/modem_fsg       - - - - /dev/disk/by-partlabel/fsg"
-            "L+ /boot/modem_a         - - - - /dev/disk/by-partlabel/modem_a"
-            "L+ /boot/modem_b         - - - - /dev/disk/by-partlabel/modem_b"
-            "d /var/lib/tqftpserv 0777 root root -"
-          ];
-          services = {
-            systemd-boot-random-seed.enable = false;
-            usb-moded-turn-off-rescue-mode.enable = false;
-            iio-sensor-proxy.serviceConfig.TimeoutStopSec = 3;
-            tqftpserv = {
-              after = [ "systemd-tmpfiles-setup.service" ];
-              wants = [ "systemd-tmpfiles-setup.service" ];
-            };
-            hexagonrpcd-sdsp = {
-              after = [ "systemd-tmpfiles-setup.service" ];
-              wants = [ "systemd-tmpfiles-setup.service" ];
-            };
-            rmtfs = {
-	            after = [ "systemd-tmpfiles-setup.service" ];
-	            wants = [ "systemd-tmpfiles-setup.service" ];
-            };
-            ModemManager = {
-              after = [ "msm-modem-uim-selection.service" ];
-              requires = [ "msm-modem-uim-selection.service" ];
-              serviceConfig.ExecStart = lib.mkForce [
-                ""
-                "${pkgs.modemmanager}/bin/ModemManager --test-quick-suspend-resume"
-              ];
-            };
+        systemd.services."sshd-inhibit-sleep@" = {
+          description = "Inhibit sleep when sshd connection is active";
+
+          wantedBy = [ "sshd@.service" ];
+          bindsTo = [ "sshd@.service" ];
+
+          serviceConfig.ExecStart = ''
+            systemd-inhibit --what sleep \
+              --who "sshd-inhibit-sleep@%i.service" \
+              --why "SSH session active" \
+              ${lib.getExe' pkgs.coreutils "sleep"} infinity
+          '';
+        };
+
+        services = {
+          fail2ban.enable = lib.mkForce false;
+          logind.settings = {
+            Login.HandlePowerKey = lib.mkDefault "ignore";
+            Login.HandlePowerKeyLongPress = lib.mkDefault "poweroff";
           };
+
+          getty.autologinUser = "victor7w7r";
+          upower = {
+            enable = true;
+            percentageLow = lib.mkDefault 15;
+            percentageCritical = lib.mkDefault 5;
+            percentageAction = lib.mkDefault 3;
+            criticalPowerAction = "PowerOff";
+          };
+
+          tlp.enable = lib.mkDefault true;
+          udev.extraRules = builtins.concatStringsSep "\n" [
+            ''SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}+="-1, 0, 0; 0, 1, 0; 0, 0, -1"''
+            ''SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity ssc-light ssc-compass"''
+            # prevent from getting woken up by volume up / down in Phosh / Gnome Mobile
+            ''SUBSYSTEM=="input", KERNEL=="event*", ENV{GM_WAKEUP_KEY_114}="0", ENV{GM_WAKEUP_KEY_115}="0"''
+            # hide android partitions
+            ''SUBSYSTEM=="block", KERNEL=="sd[a-f][0-9]*", ENV{UDISKS_IGNORE}="1"''
+          ];
         };
       };
   };
