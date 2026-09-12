@@ -7,6 +7,7 @@ cache-stdenv.mkDerivation {
   pname = "q6voiced";
   version = "0.2.1";
   src = inputs.q6voiced;
+
   buildInputs = with pkgs; [
     alsa-lib
     dbus
@@ -14,7 +15,9 @@ cache-stdenv.mkDerivation {
 
   nativeBuildInputs = with pkgs; [
     pkg-config
-    meson
-    ninja
+  ];
+
+  makeFlags = [
+    "PREFIX=$(out)"
   ];
 }

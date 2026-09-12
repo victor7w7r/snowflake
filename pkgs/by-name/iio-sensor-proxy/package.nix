@@ -13,7 +13,7 @@ cache-stdenv.mkDerivation {
 
   postPatch = ''
     substituteInPlace data/meson.build \
-      --replace 'polkit_policy_directory' "'$out/share/polkit-1/actions'"
+      --replace-fail 'polkit_policy_directory' "'$out/share/polkit-1/actions'"
   '';
 
   doInstallCheck = true;
@@ -26,7 +26,6 @@ cache-stdenv.mkDerivation {
   ];
 
   nativeBuildInputs = with pkgs; [
-    cmake
     glib
     libxml2
     meson
