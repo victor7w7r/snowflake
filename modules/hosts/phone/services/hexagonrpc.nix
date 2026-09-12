@@ -23,7 +23,7 @@
             exec ${pkgs.hexagonrpc}/bin/hexagonrpcd \
               -f /dev/fastrpc-adsp \
               -d adsp \
-              -R ${inputs.oneplus}/usr/share/qcom/sdm845/OnePlus/oneplus6/"
+              -R ${inputs.oneplus}/usr/share/qcom/sdm845/OnePlus/oneplus6/
           ''}";
           Restart = "always";
           RestartSec = 3;
@@ -47,7 +47,7 @@
               -f /dev/fastrpc-adsp \
               -d adsp \
               -s \
-              -R ${inputs.oneplus}/usr/share/qcom/sdm845/OnePlus/oneplus6/"
+              -R ${inputs.oneplus}/usr/share/qcom/sdm845/OnePlus/oneplus6/
           ''}";
           Restart = "always";
           RestartSec = 3;
@@ -71,7 +71,7 @@
               -f /dev/fastrpc-sdsp \
               -d sdsp \
               -s \
-              -R ${inputs.oneplus}/usr/share/qcom/sdm845/OnePlus/oneplus6/"
+              -R ${inputs.oneplus}/usr/share/qcom/sdm845/OnePlus/oneplus6/
           ''}";
           Restart = "always";
           RestartSec = 3;
