@@ -67,7 +67,6 @@
 
         nix.settings.max-jobs = lib.mkDefault 2;
         nixpkgs.config.allowUnfreePackages = [ "oneplus-sdm845-firmware" ];
-        powerManagement.cpuFreqGovernor = "schedutil";
         system.nixos.label = "";
 
         hardware = {

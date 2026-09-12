@@ -4,7 +4,7 @@
   pkgs,
 }:
 cache-stdenv.mkDerivation {
-  pname = "q6voiced";
+	pname = "q6voiced";
   version = "0.2.1";
 
   src = inputs.q6voiced;
@@ -21,5 +21,8 @@ cache-stdenv.mkDerivation {
     ninja
   ];
 
-  configurePhase = "meson setup build --prefix=$out";
+  configurePhase = ''
+    meson setup build . --prefix=$out
+    cd build
+  '';
 }
