@@ -1,4 +1,4 @@
-# DO-NOT-EDIT. This file was auto-generated using github:vic/flake-file.
+# DO-NOT-EDIT. This file was auto-generated using github:denful/flake-file.
 # Use `nix run .#write-flake` to regenerate it.
 {
   outputs = inputs: inputs.flake-parts.lib.mkFlake { inherit inputs; } (inputs.import-tree ./modules);
@@ -442,7 +442,7 @@
     };
     hyprpicker.url = "github:hyprwm/hyprpicker";
     impermanence.url = "github:nix-community/impermanence";
-    import-tree.url = "github:vic/import-tree";
+    import-tree.url = "github:denful/import-tree";
     jar-thumbnailer = {
       url = "github:realmazharhussain/jar-thumbnailer";
       flake = false;
@@ -672,7 +672,7 @@
     };
     pyprland.url = "github:hyprland-community/pyprland";
     q6voiced = {
-      url = "gitlab:postmarketOS/q6voiced";
+      url = "https://gitlab.postmarketos.org/postmarketOS/q6voiced/-/archive/0.3.1/q6voiced-0.3.1.tar.gz";
       flake = false;
     };
     rbonsai = {

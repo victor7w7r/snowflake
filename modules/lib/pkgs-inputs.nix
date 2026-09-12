@@ -591,7 +591,7 @@
     };
 
     q6voiced = {
-      url = "gitlab:postmarketOS/q6voiced";
+      url = "https://gitlab.postmarketos.org/postmarketOS/q6voiced/-/archive/0.3.1/q6voiced-0.3.1.tar.gz";
       flake = false;
     };
 
