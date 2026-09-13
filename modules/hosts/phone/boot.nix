@@ -9,6 +9,18 @@
       };
 
       boot = {
+        specialFileSystems = {
+          "/sys/kernel/config" = {
+            device = "configfs";
+            fsType = "configfs";
+            options = [
+              "nosuid"
+              "noexec"
+              "nodev"
+            ];
+          };
+        };
+
         loader = {
           efi = {
             efiSysMountPoint = "/efi";
@@ -47,7 +59,7 @@
           "pd_ignore_unused"
           "arm64.nopauth"
           "console=tty0"
-          "console=ttyGS0,115200"
+          "console=ttyMSM0,115200"
           "zram.num_devices=2"
           "firmware_class.path=/extra-firmware"
         ];
@@ -69,6 +81,7 @@
             "rtc_pm8xxx"
             "rmi_i2c"
             "qcom-pmi8998-haptics"
+            "g_ffs"
           ];
         };
       };

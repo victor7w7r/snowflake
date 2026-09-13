@@ -11,6 +11,11 @@
       url = "github:JuneStepp/disko/mobile";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    mobile-nixos = {
+      url = "github:mobile-nixos/mobile-nixos";
+      flake = false;
+    };
   };
 
   den.aspects.phone.common = {

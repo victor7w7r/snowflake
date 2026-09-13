@@ -567,6 +567,10 @@
       url = "github:microvm-nix/microvm.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    mobile-nixos = {
+      url = "github:mobile-nixos/mobile-nixos";
+      flake = false;
+    };
     mynav = {
       url = "github:GianlucaP106/mynav";
       flake = false;

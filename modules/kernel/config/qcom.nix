@@ -56,7 +56,6 @@
         QCOM_FASTRPC = setupDenial isDenied module;
         QCOM_INLINE_CRYPTO_ENGINE = setupDenial isDenied yes;
         QCOM_IPA = setupDenial isDenied module;
-        QCOM_PD_MAPPER = setupDenial isDenied yes;
         QCOM_Q6V5_MSS = setupDenial isDenied module;
         QCOM_Q6V5_PAS = setupDenial isDenied module;
         QCOM_SPMI_ADC5 = setupDenial isDenied yes;
@@ -119,6 +118,7 @@
         PWM = yes;
         PWM_QTI_LPG = module;
         QRTR = lib.mkForce yes;
+        QCOM_PD_MAPPER = no;
         NF_TABLES_INET = yes;
         NFT_LIMIT = yes;
         NFT_NAT = yes;

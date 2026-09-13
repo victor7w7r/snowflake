@@ -1,9 +1,11 @@
-{
+{ den, ... }: {
   den.aspects.cli.extras = {
+    includes = [ (den.batteries.unfree [ "anydesk" ]) ];
     nixos =
       { pkgs, ... }:
       {
         environment.systemPackages = with pkgs; [
+          anydesk
           cheat
           cmd-wrapped
           emptty
