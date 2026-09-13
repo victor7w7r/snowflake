@@ -10,8 +10,10 @@
           ];
           persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
             ".cache/mise"
-            ".local/share/mise"
             ".cargo"
+            "fvm"
+            ".local/share/mise"
+            ".npm"
             ".rustup"
           ];
         };
