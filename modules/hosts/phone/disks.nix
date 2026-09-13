@@ -50,7 +50,6 @@
             imageName = "nixos-boot";
             imageSize = "900M";
             content = esp.call {
-              mountpoint = "/efi";
               hasDefSectorSize = true;
               entireDisk = true;
             };

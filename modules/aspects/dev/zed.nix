@@ -54,6 +54,7 @@
               alpinejs-snippets = true;
               astro = true;
               bookmark = true;
+              biome = true;
               cargo-tom = true;
               color-highlight = true;
               comment = true;
@@ -268,14 +269,14 @@
                 };
               };
               oxlint.initialization_options.settings = {
-                configPath = "./.oxlintrc.json";
+                configPath = "./oxlint.config.ts";
                 disableNestedConfig = false;
                 fixKind = "safe_fix";
                 run = "onType";
                 unusedDisableDirectives = "deny";
               };
               oxfmt.initialization_options.settings = {
-                "fmt.configPath" = "./.oxfmtrc.json";
+                "fmt.configPath" = "./oxfmt.config.ts";
                 run = "onSave";
               };
             };
@@ -308,10 +309,20 @@
                   language_servers = [
                     "astro-language-server"
                     "unocss-language-server"
-                  ]
-                  ++ options.langs;
-                }
-                // options.formatOptions;
+                    "tsgo"
+                    "oxlint"
+                    "!eslint"
+                    "!vtsls"
+                    "!biome"
+                    "!typescript-language-server"
+                    "..."
+                  ];
+                  formatter.language_server.name = "biome";
+                  formatOptions = {
+                    format_on_save = "on";
+                    prettier.allowed = false;
+                  };
+                };
                 CSS = {
                   language_servers = [
                     "vscode-css-language-server"
@@ -356,7 +367,6 @@
                 // options.formatOptions;
                 TSX = {
                   language_servers = options.langs;
-
                 }
                 // options.formatOptions;
 

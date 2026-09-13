@@ -22,10 +22,7 @@
         };
 
         loader = {
-          efi = {
-            efiSysMountPoint = "/efi";
-            canTouchEfiVariables = false;
-          };
+          efi.canTouchEfiVariables = false;
           systemd-boot = lib.mkForce {
             enable = true;
             editor = false;
