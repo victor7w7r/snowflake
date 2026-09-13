@@ -48,7 +48,7 @@
             type = "disk";
             device = "/dev/disk/by-partlabel/system_a";
             imageName = "nixos-boot";
-            imageSize = "300M";
+            imageSize = "900M";
             content = esp.call {
               mountpoint = "/efi";
               hasDefSectorSize = true;

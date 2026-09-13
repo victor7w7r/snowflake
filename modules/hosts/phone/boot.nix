@@ -59,7 +59,7 @@
           "pd_ignore_unused"
           "arm64.nopauth"
           "console=tty0"
-          "console=ttyMSM0,115200"
+          "console=ttyGSM0,115200"
           "zram.num_devices=2"
           "firmware_class.path=/extra-firmware"
         ];
