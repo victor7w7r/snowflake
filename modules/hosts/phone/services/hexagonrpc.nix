@@ -1,16 +1,7 @@
 { inputs, ... }: {
-  den.aspects.phone.services.hexagonrpc.nixos = { pkgs, ... }: {
-    users = {
-      groups.fastrpc = { };
-      users.fastrpc = {
-        isSystemUser = true;
-        group = "fastrpc";
-      };
-    };
-
-    services.udev.extraRules = ''SUBSYSTEM=="misc", KERNEL=="fastrpc-*", OWNER="fastrpc", GROUP="fastrpc", MODE="0600"'';
-
-    systemd.services =
+  den.aspects.phone.services.hexagonrpc.nixos =
+    { pkgs, ... }:
+    (
       {
         class ? "sdsp",
         description ? "SDSP",
@@ -37,7 +28,19 @@
           Group = "fastrpc";
         };
       }
-      |> (service-gen: {
+    )
+    |> (service-gen: {
+      users = {
+        groups.fastrpc = { };
+        users.fastrpc = {
+          isSystemUser = true;
+          group = "fastrpc";
+        };
+      };
+
+      services.udev.extraRules = ''SUBSYSTEM=="misc", KERNEL=="fastrpc-*", OWNER="fastrpc", GROUP="fastrpc", MODE="0600"'';
+
+      systemd.services = {
         hexagonrpcd-adsp-sdsp = service-gen { };
         hexagonrpcd-adsp-rootpd = service-gen {
           class = "adsp";
@@ -72,6 +75,6 @@
             '';
           };
         };
-      });
-  };
+      };
+    });
 }
