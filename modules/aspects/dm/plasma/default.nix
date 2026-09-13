@@ -19,17 +19,20 @@
         {
           programs.kde-pim.enable = true;
 
-          environment.persistence."/nix/persist".users."${user.name}" = {
-            directories = [
-              ".local/share/baloo"
-              ".local/share/klipper"
-              ".local/share/krdc"
-              ".local/share/kwalletd"
-            ];
-            files = [
-              ".config/kwalletrc"
-              ".config/kwinoutputconfig.json"
-            ];
+          environment.persistence."/nix/persist" = {
+            directories = [ "/var/lib/fprint" ];
+            users."${user.name}" = {
+              directories = [
+                ".local/share/baloo"
+                ".local/share/klipper"
+                ".local/share/krdc"
+                ".local/share/kwalletd"
+              ];
+              files = [
+                ".config/kwalletrc"
+                ".config/kwinoutputconfig.json"
+              ];
+            };
           };
 
           security.pam.services = {
