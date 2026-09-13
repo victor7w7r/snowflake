@@ -9,7 +9,8 @@
       };
 
       boot = {
-        specialFileSystems = {
+        /*
+          specialFileSystems = {
           "/sys/kernel/config" = {
             device = "configfs";
             fsType = "configfs";
@@ -19,7 +20,8 @@
               "nodev"
             ];
           };
-        };
+          };
+        */
 
         loader = {
           efi.canTouchEfiVariables = false;
