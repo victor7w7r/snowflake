@@ -31,7 +31,24 @@ cache-stdenv.mkDerivation (attrs: {
     gobject-introspection
     kmod
     systemd
-    ssu-sysinfo
+    (cache-stdenv.mkDerivation (finalAttrs: {
+      pname = "ssu-sysinfo";
+      version = "1.5.0";
+
+      src = fetchFromGitHub {
+        owner = "sailfishos";
+        repo = "ssu-sysinfo";
+        tag = finalAttrs.version;
+        hash = "sha256-CGlijeREonFactQlaQVfgL7f+UhtZtgOLfAM6RGLE6k=";
+      };
+
+      makeFlags = [
+        "DESTDIR=$(out)"
+        "_PREFIX="
+      ];
+
+      postInstall = "ldconfig -C temp $out/lib";
+    }))
   ];
 
   configureFlags = [
@@ -51,19 +68,16 @@ cache-stdenv.mkDerivation (attrs: {
     install -Dm644 debian/usb_moded.conf -t $out/share/dbus-1/system.d/
   '';
 
-  passthru.patches =
-    pkgs.runCommand "usb-moded-patches"
-      {
-        version = "0-unstable-2025-04-14";
+  passthru.patches = pkgs.runCommand "usb-moded-patches" {
+    version = "0-unstable-2025-04-14";
 
-        src = pkgs.fetchFromGitLab {
-          domain = "gitlab.postmarketos.org";
-          owner = "postmarketOS";
-          repo = "pmaports";
-          rev = "97d87482ba52b87c2f01827cd64731996d7ffbac";
-          sparseCheckout = [ "temp/usb-moded" ];
-          hash = "sha256-PhPpIzOPG2Puk2WP7aI6t8FX1ivXiAt+pRl70/UrGQg=";
-        };
-      }
-      '' install -D $src/temp/usb-moded/*.patch -t $out'';
+    src = pkgs.fetchFromGitLab {
+      domain = "gitlab.postmarketos.org";
+      owner = "postmarketOS";
+      repo = "pmaports";
+      rev = "97d87482ba52b87c2f01827cd64731996d7ffbac";
+      sparseCheckout = [ "temp/usb-moded" ];
+      hash = "sha256-PhPpIzOPG2Puk2WP7aI6t8FX1ivXiAt+pRl70/UrGQg=";
+    };
+  } "install -D $src/temp/usb-moded/*.patch -t $out";
 })
