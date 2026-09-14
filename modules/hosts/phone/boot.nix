@@ -34,8 +34,8 @@
             configurationLimit = 14;
             extraFiles = {
               "EFI/shell.efi" = "${pkgs.edk2-uefi-shell}/shell.efi";
-              "EFI/tools/poweroff.nsh" = pkgs.writeText "poweroff.nsh" "reset -s";
-              "EFI/tools/reboot.nsh" = pkgs.writeText "reboot.nsh" "reset -c";
+              "EFI/poweroff.nsh" = pkgs.writeText "poweroff.nsh" "reset -s";
+              "EFI/reboot.nsh" = pkgs.writeText "reboot.nsh" "reset -c";
             };
             extraEntries = {
               "poweroff.conf" = ''

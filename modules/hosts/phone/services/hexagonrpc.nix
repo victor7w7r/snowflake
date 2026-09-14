@@ -54,26 +54,26 @@
           command = "-d adsp -s";
         };
 
-        populate-persist-tmpfs = {
+        hexagonrpcd-populate-data = {
           description = "Populate writable /mnt/vendor/persist tmpfs from persist-ro";
-          after = [
-            "mnt-vendor-persist-ro.mount"
-            "mnt-vendor-persist.mount"
-          ];
+          requires = [ "mnt-vendor-persist\x2dro.mount" ];
+          after = [ "mnt-vendor-persist\x2dro.mount" ];
+          before = [ "hexagonrpcd-adsp-sdsp.service" ];
           wantedBy = [ "multi-user.target" ];
-
-          unitConfig.ConditionPathExists = "/dev/disk/by-partlabel/persist";
 
           serviceConfig = {
             Type = "oneshot";
-            ExecStart = pkgs.writeShellScript "populate-persist" ''
-              set -e
-              if [ -d /mnt/vendor/persist-ro/sensors ]; then
-                cp -a /mnt/vendor/persist-ro/* /mnt/vendor/persist/
-                chown -R fastrpc:fastrpc /mnt/vendor/persist/sensors || true
-              fi
-            '';
+            RemainAfterExit = true;
           };
+
+          script = ''
+	          set -e
+
+	          if [ -d /mnt/vendor/persist-ro/sensors ]; then
+	            cp -r /mnt/vendor/persist-ro/sensors /mnt/vendor/persist/sensors
+	            chown -R fastrpc:fastrpc /mnt/vendor/persist/sensors || true
+	          fi
+          '';
         };
       };
     });

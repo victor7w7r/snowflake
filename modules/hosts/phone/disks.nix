@@ -17,11 +17,12 @@
         ];
       };
       "/mnt/vendor/persist" = {
-        fsType = "tmpfs";
+        device = "/nix/persist/vendor/persist";
+        fsType = "none";
         options = [
-          "nosuid"
-          "nodev"
-          "mode=0755"
+          "bind"
+          "X-systemd.automount"
+          "X-systemd.requires=/nix/persist"
         ];
       };
     };
@@ -29,6 +30,7 @@
     systemd.tmpfiles.rules = [
       "d /nix/tmp 1777 root root -"
       "d /nix/persist/cache 1777 root root -"
+      "d /nix/persist/vendor/persist 0755 root root -"
     ];
 
     imports = [ inputs.disko-mobile.nixosModules.disko ];

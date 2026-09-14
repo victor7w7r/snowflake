@@ -56,10 +56,11 @@
           fi
 
           install -Dm644 "${pkgs.edk2-uefi-shell}/shell.efi" "$esp/EFI/shell.efi"
-          install -Dm644 "${pkgs.writeText "poweroff.nsh" "reset -s"}" "$esp/EFI/tools/poweroff.nsh"
-          install -Dm644 "${pkgs.writeText "reboot.nsh" "reset -c"}" "$esp/EFI/tools/reboot.nsh"
+          install -Dm644 "${pkgs.writeText "poweroff.nsh" "reset -s"}" "$esp/EFI/poweroff.nsh"
+          install -Dm644 "${pkgs.writeText "reboot.nsh" "reset -c"}" "$esp/EFI/reboot.nsh"
 
           mkdir -p $esp/loader/entries
+
           cat > $esp/loader/entries/nixos-generation-0.conf <<EOF
             title NixOS
             sort-key nixos
@@ -69,16 +70,17 @@
             options init=$toplevel/init $kernel_params
             ''${efi_dtb:+devicetree $efi_dtb}
           EOF
+
           cat > $esp/loader/entries/poweroff.conf <<EOF
             title Apagar (Poweroff)
            efi /EFI/shell.efi
-            options -e -noexit /EFI/tools/poweroff.nsh
+            options -e -noexit /EFI/poweroff.nsh
           EOF
 
           cat > $esp/loader/entries/reboot.conf <<EOF
             title Reiniciar (Reboot)
             efi /EFI/shell.efi
-            options -e -noexit /EFI/tools/reboot.nsh
+            options -e -noexit /EFI/reboot.nsh
           EOF
 
           cat > $esp/loader/loader.conf <<EOF
