@@ -1,4 +1,4 @@
-{
+{ inputs, ... }: {
   den.aspects.phone.services.usb-gadget.nixos =
     {
       lib,
@@ -60,6 +60,34 @@
       );
 
       systemd.services = {
+        "serial-getty@ttyGS0" = {
+          enable = true;
+          wantedBy = [ "multi-user.target" ];
+          requires = [ "usb-gadget.service" ];
+          after = [ "usb-gadget.service" ];
+        };
+
+        adbd = {
+          description = "adb daemon";
+          wantedBy = [ "multi-user.target" ];
+          requires = [ "usb-gadget.service" ];
+          after = [ "usb-gadget.service" ];
+          serviceConfig = {
+            Restart = "always";
+            ExecStart =
+              "${inputs.mobile-nixos}/overlay"
+              |> (
+                route:
+                pkgs.callPackage "${route}/adbd" {
+                  libhybris = pkgs.callPackage "${route}/libhybris" {
+                    android-headers = pkgs.callPackage "${route}/android-headers" { };
+                  };
+                }
+              )
+              |> (adbd: "${adbd}/bin/adbd");
+          };
+        };
+
         usb-moded = {
           wantedBy = [ "basic.target" ];
           after = [ "usb-gadget.service" ];
@@ -115,22 +143,29 @@
           script = ''
             GADGET="/sys/kernel/config/usb_gadget/g1"
 
-            mkdir $GADGET
+            mkdir -p $GADGET
             echo "0x1d6b" > $GADGET/idVendor
             echo "0x0104" > $GADGET/idProduct
 
-            mkdir $GADGET/strings/0x409
+            mkdir -p $GADGET/strings/0x409
             echo "NixOS" > $GADGET/strings/0x409/manufacturer
             echo "OnePlus 6" > $GADGET/strings/0x409/product
             echo "NixOS" > $GADGET/strings/0x409/serialnumber
 
-            mkdir $GADGET/functions/ncm.usb0
+            mkdir -p $GADGET/functions/ncm.usb0
+            mkdir -p $GADGET/functions/ffs.adb
+            mkdir -p $GADGET/functions/acm.usb0
 
-            mkdir $GADGET/configs/c.1
-            mkdir $GADGET/configs/c.1/strings/0x409
-            echo "USB network" > $GADGET/configs/c.1/strings/0x409/configuration
+            mkdir -p /dev/usb-ffs/adb
+            mount -t functionfs adb /dev/usb-ffs/adb
+
+            mkdir -p $GADGET/configs/c.1
+            mkdir -p $GADGET/configs/c.1/strings/0x409
+            echo "USB Net + ADB + Serial" > $GADGET/configs/c.1/strings/0x409/configuration
 
             ln -s $GADGET/functions/ncm.usb0 $GADGET/configs/c.1/
+            ln -s $GADGET/functions/ffs.adb $GADGET/configs/c.1/
+            ln -s $GADGET/functions/acm.usb0 $GADGET/configs/c.1/
 
             udc=$(ls /sys/class/udc | head -1)
             echo "$udc" > $GADGET/UDC

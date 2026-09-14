@@ -33,6 +33,7 @@
       "d /nix/persist/vendor/persist 0755 root root -"
     ];
 
+    
     imports = [ inputs.disko-mobile.nixosModules.disko ];
 
     disko = {

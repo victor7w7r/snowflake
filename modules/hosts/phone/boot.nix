@@ -9,18 +9,6 @@
       };
 
       boot = {
-        specialFileSystems = {
-          "/sys/kernel/config" = {
-            device = "configfs";
-            fsType = "configfs";
-            options = [
-              "nosuid"
-              "noexec"
-              "nodev"
-            ];
-          };
-        };
-
         loader = {
           efi.canTouchEfiVariables = false;
           systemd-boot = lib.mkForce {
