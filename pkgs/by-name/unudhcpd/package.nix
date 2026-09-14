@@ -15,4 +15,13 @@ cache-stdenv.mkDerivation (attrs: {
     meson
     ninja
   ];
+
+  meta = {
+     description = "Basic DHCP server that only issues 1 IP address";
+     homepage = "https://gitlab.postmarketos.org/postmarketOS/unudhcpd";
+     license = pkgs.lib.licenses.gpl3Plus;
+     maintainers = with pkgs.lib.maintainers; [ junestepp ];
+     platforms = pkgs.lib.platforms.all;
+     mainProgram = "unudhcpd";
+   };
 })
