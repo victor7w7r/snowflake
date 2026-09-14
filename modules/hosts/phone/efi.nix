@@ -1,10 +1,10 @@
 { inputs, ... }:
 {
   perSystem.packages = {
-    phone-enchilada-efiBuild =
-      inputs.self.nixosConfigurations.phone-enchilada.config.system.build.efiBuild;
+    phone-enchilada-efibuild =
+      inputs.self.nixosConfigurations.phone-enchilada.config.system.build.efibuild;
 
-    phone-fajita-efiBuild = inputs.self.nixosConfigurations.phone-fajita.config.system.build.efiBuild;
+    phone-fajita-efibuild = inputs.self.nixosConfigurations.phone-fajita.config.system.build.efibuild;
   };
 
   den.aspects.efi.nixos =
@@ -15,8 +15,8 @@
       ...
     }:
     {
-      system.build.efiBuild = pkgs.stdenvNoCC.mkDerivation {
-        name = "efiBuild";
+      system.build.efibuild = pkgs.stdenvNoCC.mkDerivation {
+        name = "efibuild";
         nativeBuildInputs = with pkgs; [
           gnutar
           zstd
