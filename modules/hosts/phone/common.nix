@@ -19,9 +19,7 @@
   };
 
   den.aspects.phone.common = {
-
     includes = with den.aspects; [
-      (tarball.lib.call { })
       (hosts.lib.zram {
         value = "8G";
         memoryPercent = 100;
