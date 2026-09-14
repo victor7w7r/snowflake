@@ -19,19 +19,26 @@
       #root = { };
       victor7w7r = { };
     };
-    aspects.phone-enchilada = {
-      includes = with den.aspects; [ phone.common ];
-
-      nixos = { lib, ... }: {
-        networking.hostName = "v7w7r-enchilada";
-        hardware.deviceTree.name = "qcom/sdm845-oneplus-enchilada.dtb";
-
-        boot.initrd.kernelModules = lib.mkBefore [
-          "bq27xxx_battery"
-          "bq27xxx_battery_i2c"
-          "qcom_spmi_rradc"
-          "qcom_smbx"
+    aspects = {
+      phone-enchilada = {
+        enchilada-tarball.includes = with den.aspects; [
+          phone.common
+          (tarball.lib.call { })
         ];
+
+        includes = with den.aspects; [ phone.common ];
+
+        nixos = { lib, ... }: {
+          networking.hostName = "v7w7r-enchilada";
+          hardware.deviceTree.name = "qcom/sdm845-oneplus-enchilada.dtb";
+
+          boot.initrd.kernelModules = lib.mkBefore [
+            "bq27xxx_battery"
+            "bq27xxx_battery_i2c"
+            "qcom_spmi_rradc"
+            "qcom_smbx"
+          ];
+        };
       };
     };
   };

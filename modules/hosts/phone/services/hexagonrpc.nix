@@ -1,6 +1,6 @@
 { inputs, ... }: {
   den.aspects.phone.services.hexagonrpc.nixos =
-    { pkgs, ... }:
+    { lib, pkgs, ... }:
     (
       {
         class ? "sdsp",
@@ -38,7 +38,11 @@
         };
       };
 
-      services.udev.extraRules = ''SUBSYSTEM=="misc", KERNEL=="fastrpc-*", OWNER="fastrpc", GROUP="fastrpc", MODE="0600"'';
+      services.udev.extraRules = lib.mkBefore ''
+      	SUBSYSTEM=="misc", KERNEL=="fastrpc-*", OWNER="fastrpc", GROUP="fastrpc", MODE="0600"
+       	SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity"
+      	SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity ssc-light ssc-compass"
+      '';
 
       systemd.services = {
         hexagonrpcd-adsp-sdsp = service-gen { };

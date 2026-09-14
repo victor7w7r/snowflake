@@ -16,6 +16,7 @@
             ".config/legcord"
             ".config/onlyoffice"
             ".config/vlc"
+            ".config/BraveSoftware/Brave-Browser"
             ".local/share/PrismLauncher"
             ".local/share/com.vixalien.sticky"
             ".local/share/jdownloader"
@@ -26,18 +27,23 @@
 
       provides.to-users.homeManager =
         {
-          inputs',
           isPersistent,
           isPhone,
           isServer,
           isX86,
           lib,
           pkgs,
+          config,
           self',
           ...
         }:
         lib.optionalAttrs (isPersistent && !isServer) {
           programs.onlyoffice.enable = isX86;
+          dbus.packages = [ config.programs.chromium.package ];
+          programs.chromium = {
+            enable = true;
+            package = pkgs.brave;
+          };
           home.packages =
             with pkgs;
             with self'.packages;
@@ -81,7 +87,6 @@
             ++ (lib.optionals isX86 [
               cpu-x
               lightworks
-              inputs'.custom-packages.packages.thorium-sse3
               xpipe
             ]);
         };

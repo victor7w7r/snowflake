@@ -442,6 +442,7 @@
       "security.tls.enable_0rtt_data" = false;
       "security.cert_pinning.enforcement_level" = 0;
       "security.ssl.enable_ocsp_stapling" = false;
+      "security.webauth.u2f" = true;
       "services.settings.poll_interval" = 300;
 
       "services.sync.declinedEngines" = "addons,prefs";
@@ -559,6 +560,8 @@
       "widget.use-xdg-desktop-portal.settings" = true;
       "widget.wayland.opaque-region.enabled" = true;
       "widget.wayland.fractional-scale.enabled" = true;
+
+      "xpinstall.signatures.required" = false;
 
       "zen-command-palette.debug-mode" = false;
       "zen-command-palette.dynamic.about-pages" = true;

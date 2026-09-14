@@ -12,11 +12,19 @@
       #root = { };
       victor7w7r = { };
     };
-    aspects.phone-fajita = {
-      includes = with den.aspects; [ phone.common ];
-      nixos = {
-        networking.hostName = "v7w7r-fajita";
-        hardware.deviceTree.name = "qcom/sdm845-oneplus-fajita.dtb";
+    aspects = {
+      phone-fajita = {
+        fajita.includes = with den.aspects; [
+          phone.common
+          (tarball.lib.call { })
+        ];
+
+        includes = with den.aspects; [ phone.common ];
+
+        nixos = {
+          networking.hostName = "v7w7r-fajita";
+          hardware.deviceTree.name = "qcom/sdm845-oneplus-fajita.dtb";
+        };
       };
     };
   };

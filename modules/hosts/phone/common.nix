@@ -19,6 +19,7 @@
   };
 
   den.aspects.phone.common = {
+
     includes = with den.aspects; [
       (tarball.lib.call { })
       (hosts.lib.zram {
@@ -128,12 +129,8 @@
           udev.extraRules = builtins.concatStringsSep "\n" [
             ''ACTION=="remove", GOTO="iio_sensor_proxy_end"''
             ''SUBSYSTEM=="uio", ATTR{name}=="rmtfs", SYMLINK+="qcom_rmtfs_uio1"''
-            ''SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity"''
-            ''SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity ssc-light ssc-compass"''
             ''SUBSYSTEM=="input", KERNEL=="event*", ENV{GM_WAKEUP_KEY_114}="0", ENV{GM_WAKEUP_KEY_115}="0"''
             ''LABEL="iio_sensor_proxy_end"''
-            # hide android partitions
-            #''SUBSYSTEM=="block", KERNEL=="sd[a-f][0-9]*", ENV{UDISKS_IGNORE}="1"''
           ];
         };
       };

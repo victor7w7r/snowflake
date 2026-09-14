@@ -6,6 +6,7 @@
         environment.systemPackages = with pkgs; [
           atool
           brush
+          bunster
           choose
           clolcat
           cryptsetup
