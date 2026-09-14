@@ -26,15 +26,17 @@
           }
         )
         {
-          mode = {
-            name = "developer_mode";
-            module = "none";
-            network = 1;
-            appsync = 1;
-          };
-          options = {
-            sysfs_value = "ncm.usb0";
-            dhcp_server = 0;
+          developer_mode = {
+            mode = {
+              name = "developer_mode";
+              module = "none";
+              network = 1;
+              appsync = 1;
+            };
+            options = {
+              sysfs_value = "ncm.usb0";
+              dhcp_server = 0;
+            };
           };
         }
       )
