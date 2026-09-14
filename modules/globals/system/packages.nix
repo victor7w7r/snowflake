@@ -34,6 +34,11 @@
           tmux
           tre-command
           xz
+          (python3.withPackages (
+            ps: with ps; [
+              requests
+            ]
+          ))
         ];
 
         programs = {

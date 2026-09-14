@@ -7,12 +7,18 @@
       {
         additionalContent ? "",
         additionalBuildInputs ? [ ],
+        enableGenericExtlinux ? true,
       }:
       {
         includes = [ tarball.lib.postscript ];
 
         nixos =
-          { config, pkgs, ... }:
+          {
+            config,
+            lib,
+            pkgs,
+            ...
+          }:
           {
             system.build.kernelFiles = pkgs.stdenvNoCC.mkDerivation {
               name = "kernelFiles";
@@ -60,10 +66,13 @@
                   chmod -R a-w root/store
                   tar --owner=0 --group=0 --numeric-owner -cv -C root . | zstd -T$NIX_BUILD_CORES > $out/store.tar.zst
 
-                  ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
-                    -c ${config.system.build.toplevel} -d firmware/boot
-                  mv firmware/boot ./boot
-                  tar -cv -C boot . | zstd -T$NIX_BUILD_CORES > $out/boot.tar.zst
+                  ${lib.optionalString enableGenericExtlinux ''
+                    ${config.boot.loader.generic-extlinux-compatible.populateCmd} \
+                     -c ${config.system.build.toplevel} -d firmware/boot
+
+                    mv firmware/boot ./boot
+                    tar -cv -C boot . | zstd -T$NIX_BUILD_CORES > $out/boot.tar.zst
+                  ''}
                 '');
             };
           };

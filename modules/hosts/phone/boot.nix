@@ -1,8 +1,5 @@
 { kernel, ... }:
 {
-
-	flake-file.inputs.nixpkgs-boot.url = "github:NixOS/nixpkgs/4473801ae12b45b5e036412d9f4d5cd2417ed928";
-
   den.aspects.phone.boot.nixos =
     { pkgs, lib, ... }:
     {
@@ -12,8 +9,7 @@
       };
 
       boot = {
-        /*
-          specialFileSystems = {
+        specialFileSystems = {
           "/sys/kernel/config" = {
             device = "configfs";
             fsType = "configfs";
@@ -23,8 +19,7 @@
               "nodev"
             ];
           };
-          };
-        */
+        };
 
         loader = {
           efi.canTouchEfiVariables = false;
@@ -82,6 +77,7 @@
             "rmi_core"
             "rtc_pm8xxx"
             "rmi_i2c"
+            "libcomposite"
             "qcom-pmi8998-haptics"
             "g_ffs"
           ];

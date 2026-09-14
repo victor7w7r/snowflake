@@ -16,7 +16,7 @@
       phone-fajita = {
         fajita.includes = with den.aspects; [
           phone.common
-          (tarball.lib.call { })
+          (tarball.lib.call { enableGenericExtlinux = false; })
         ];
 
         includes = with den.aspects; [ phone.common ];

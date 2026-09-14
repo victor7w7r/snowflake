@@ -76,6 +76,7 @@
 
         nix.settings.max-jobs = lib.mkDefault 2;
         system.nixos.label = "";
+        networking.firewall.trustedInterfaces = [ "usb0" ];
 
         hardware = {
           deviceTree.enable = true;

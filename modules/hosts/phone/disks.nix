@@ -61,7 +61,6 @@
             imageName = "nixos-root";
             imageSize = "32G";
             content = f2fs.call {
-              #hasDefSectorSize = true;
               entireDisk = true;
               mountpoint = "/nix";
             };

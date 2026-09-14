@@ -46,6 +46,20 @@
             };
           };
 
+          systemd.tmpfiles.rules =
+            (pkgs.writeShellScript "fprintd-verify-wrapper" ''
+              args=()
+              for arg in "$@"; do
+                if [ "$arg" = "any" ]; then
+                  args+=("right-index-finger")
+                else
+                  args+=("$arg")
+                fi
+              done
+              exec ${pkgs.fprintd}/bin/fprintd-verify "''${args[@]}"
+            '')
+            |> (fprintd-verify: [ "L+ /usr/bin/fprintd-verify - - - - ${fprintd-verify}" ]);
+
           services = {
             fprintd = {
               package = pkgs.fprintd.override { libfprint = self'.packages.libfprint-cs9711; };
