@@ -7,7 +7,7 @@
     phone-fajita-efibuild = inputs.self.nixosConfigurations.phone-fajita.config.system.build.efibuild;
   };
 
-  den.aspects.efi.nixos =
+  den.aspects.phone.efi.nixos =
     {
       config,
       pkgs,
