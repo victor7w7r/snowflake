@@ -6,12 +6,7 @@
 
     phone-enchilada-script =
       inputs.self.nixosConfigurations.phone-enchilada.config.system.build.diskoImagesScript;
-
-    phone-enchilada-boot =
-      inputs.self.nixosConfigurations.phone-enchilada.config.system.build.bootFiles;
-
-    phone-enchilada-initrd =
-      inputs.self.nixosConfigurations.phone-enchilada.config.system.build.initialRamdisk;
+    phone-enchilada-mktarball = inputs.self.nixosConfigurations.phone-enchilada-tarball.config.system.build.tarball;
   };
 
   den = {
@@ -20,12 +15,12 @@
       victor7w7r = { };
     };
     aspects = {
-      phone-enchilada = {
-        enchilada-tarball.includes = with den.aspects; [
-          phone.common
-          (tarball.lib.call { enableGenericExtlinux = false; })
-        ];
+	    phone-enchilada-tarball.includes = with den.aspects; [
+	      phone.common
+	      (tarball.lib.call { enableGenericExtlinux = false; })
+	    ];
 
+      phone-enchilada = {
         includes = with den.aspects; [ phone.common ];
 
         nixos = { lib, ... }: {
