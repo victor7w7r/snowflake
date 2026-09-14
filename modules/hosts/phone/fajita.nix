@@ -6,13 +6,20 @@
     phone-fajita-script =
       inputs.self.nixosConfigurations.phone-fajita.config.system.build.diskoImagesScript;
 
-    phone-fajita-mktarball = inputs.self.nixosConfigurations.phone-fajita-tarball.config.system.build.tarball;
+    phone-fajita-mktarball =
+      inputs.self.nixosConfigurations.phone-fajita-tarball.config.system.build.tarball;
   };
 
   den = {
-    hosts.aarch64-linux.phone-fajita.users = {
-      #root = { };
-      victor7w7r = { };
+    hosts.aarch64-linux = {
+      phone-fajita.users = {
+        #root = { };
+        victor7w7r = { };
+      };
+      phone-fajita-tarball.users = {
+        #root = { };
+        victor7w7r = { };
+      };
     };
     aspects = {
       phone-fajita-tarball.includes = with den.aspects; [
