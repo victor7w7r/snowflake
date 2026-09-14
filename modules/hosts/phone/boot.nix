@@ -1,5 +1,8 @@
 { kernel, ... }:
 {
+
+	flake-file.inputs.nixpkgs-boot.url = "github:NixOS/nixpkgs/4473801ae12b45b5e036412d9f4d5cd2417ed928";
+
   den.aspects.phone.boot.nixos =
     { pkgs, lib, ... }:
     {

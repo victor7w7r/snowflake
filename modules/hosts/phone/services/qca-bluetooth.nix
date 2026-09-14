@@ -13,6 +13,11 @@
           "multi-user.target"
           "bluetooth.service"
         ];
+        serviceConfig = {
+          User = "root";
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
         script = toString (
           pkgs.writeShellScript "qca-bluetooth.sh" ''
             set -x
@@ -37,11 +42,6 @@
             script -qc "btmgmt --timeout 3 -i hci0 public-addr \"$BT_MAC\""
           ''
         );
-        serviceConfig = {
-          User = "root";
-          Type = "oneshot";
-          RemainAfterExit = true;
-        };
       };
     };
 }

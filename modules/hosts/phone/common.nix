@@ -75,6 +75,7 @@
 
         hardware = {
           deviceTree.enable = true;
+          sensor.iio.enable = true;
           firmware = lib.mkAfter [
             (pkgs.runCommand "oneplus-sdm845-firmware" { baseFw = inputs.oneplus; } ''
               mkdir -p $out/lib/firmware
@@ -87,18 +88,21 @@
           ];
         };
 
-        systemd.services."sshd-inhibit-sleep@" = {
-          description = "Inhibit sleep when sshd connection is active";
+        systemd.services = {
+          iio-sensor-proxy.serviceConfig.TimeoutStopSec = 3;
+          "sshd-inhibit-sleep@" = {
+            description = "Inhibit sleep when sshd connection is active";
 
-          wantedBy = [ "sshd@.service" ];
-          bindsTo = [ "sshd@.service" ];
+            wantedBy = [ "sshd@.service" ];
+            bindsTo = [ "sshd@.service" ];
 
-          serviceConfig.ExecStart = ''
-            systemd-inhibit --what sleep \
-              --who "sshd-inhibit-sleep@%i.service" \
-              --why "SSH session active" \
-              ${lib.getExe' pkgs.coreutils "sleep"} infinity
-          '';
+            serviceConfig.ExecStart = ''
+              systemd-inhibit --what sleep \
+                --who "sshd-inhibit-sleep@%i.service" \
+                --why "SSH session active" \
+                ${lib.getExe' pkgs.coreutils "sleep"} infinity
+            '';
+          };
         };
 
         services = {
@@ -119,11 +123,12 @@
 
           tlp.enable = lib.mkDefault true;
           udev.extraRules = builtins.concatStringsSep "\n" [
-            ''SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}+="-1, 0, 0; 0, 1, 0; 0, 0, -1"''
+            ''ACTION=="remove", GOTO="iio_sensor_proxy_end"''
             ''SUBSYSTEM=="uio", ATTR{name}=="rmtfs", SYMLINK+="qcom_rmtfs_uio1"''
             ''SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity"''
             ''SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity ssc-light ssc-compass"''
             ''SUBSYSTEM=="input", KERNEL=="event*", ENV{GM_WAKEUP_KEY_114}="0", ENV{GM_WAKEUP_KEY_115}="0"''
+            ''LABEL="iio_sensor_proxy_end"''
             # hide android partitions
             #''SUBSYSTEM=="block", KERNEL=="sd[a-f][0-9]*", ENV{UDISKS_IGNORE}="1"''
           ];

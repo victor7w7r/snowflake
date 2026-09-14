@@ -24,7 +24,6 @@
           "mode=0755"
         ];
       };
-
     };
 
     systemd.tmpfiles.rules = [
@@ -48,7 +47,7 @@
             type = "disk";
             device = "/dev/disk/by-partlabel/system_a";
             imageName = "nixos-boot";
-            imageSize = "900M";
+            imageSize = "500M";
             content = esp.call {
               hasDefSectorSize = true;
               entireDisk = true;
