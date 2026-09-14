@@ -10,7 +10,7 @@
             pkgs.tqftpserv.overrideAttrs (_: {
               src = inputs.tqftpserv;
             })
-          }/bin/tqftpserv -v";
+          }/bin/tqftpserv";
           Restart = "on-failure";
           RestartSec = "2s";
           User = "root";
