@@ -1,4 +1,9 @@
-{ den, inputs, ... }:
+{
+  den,
+  inputs,
+  tarball,
+  ...
+}:
 {
   perSystem.packages = {
     phone-fajita-toplevel = inputs.self.nixosConfigurations.phone-fajita.config.system.build.toplevel;
