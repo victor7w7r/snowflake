@@ -11,22 +11,26 @@
           isGraphicalLive = host.name == "graphical-live";
           isMain = host.name == "main";
           isMainMac = host.name == "main-mac";
-          isPhoneEnchilada = host.name == "phone-enchilada";
-          isPhoneFajita = host.name == "phone-fajita";
+          isPhoneEnchilada = host.name == "phone-enchilada" || host.name == "phone-enchilada-tarball";
+          isPhoneFajita = host.name == "phone-fajita" || host.name == "phone-fajita-tarball";
 
-          isPiZero = host.name == "pizero";
+          isPiZero = host.name == "pizero" || host.name == "pizero-tarball";
           isServer = host.name == "server";
-          isSuperlab = host.name == "superlab";
+          isSuperlab = host.name == "superlab" || host.name == "superlab-tarball";
         })
       ];
 
     composite-host-guards =
       { host, ... }:
       let
-        isPhone = host.name == "phone-enchilada" || host.name == "phone-fajita";
+        isPhone =
+          host.name == "phone-enchilada"
+          || host.name == "phone-fajita"
+          || host.name == "phone-enchilada-tarball"
+          || host.name == "phone-fajita-tarball";
         isTpm = host.name == "server" || host.name == "handheld";
         isEfi = isTpm || host.name == "main" || host.name == "generic";
-        isGraphicArm = isPhone || host.name == "superlab";
+        isGraphicArm = isPhone || host.name == "superlab" || host.name == "superlab-tarball";
         isGraphic = isEfi || isGraphicArm;
         isLive = host.name == "minimal-live" || host.name == "graphical-live";
         isPersistent = (!isLive);

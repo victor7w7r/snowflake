@@ -159,7 +159,7 @@
             window_decorations = "server";
 
             agent = {
-              button = false;
+              button = true;
               dock = "right";
               sidebar_side = "right";
               favorite_models = [ ];

@@ -504,11 +504,11 @@
       flake = false;
     };
     linux-latest = {
-      url = "github:CachyOS/linux/cachyos-7.2.4-1";
+      url = "github:CachyOS/linux/cachyos-7.2.5-1";
       flake = false;
     };
     linux-lts = {
-      url = "github:CachyOS/linux/cachyos-6.18.50-1";
+      url = "github:CachyOS/linux/cachyos-6.18.51-3";
       flake = false;
     };
     linux-sdm845 = {
