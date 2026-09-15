@@ -108,7 +108,7 @@
         };
 
         services = {
-          displayManager.enable = false;
+          xserver.displayManager.lightdm.enable = false;
           displayManager.gdm.enable = false;
           fail2ban.enable = lib.mkForce false;
           logind.settings = {
