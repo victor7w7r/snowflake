@@ -8,6 +8,7 @@
         additionalContent ? "",
         additionalBuildInputs ? [ ],
         enableGenericExtlinux ? true,
+        dtbpath ? "",
       }:
       {
         includes = [ tarball.lib.postscript ];
@@ -47,11 +48,11 @@
               nativeBuildInputs =
                 with pkgs;
                 [
-                  zstd
-                  rsyncy
-                  gnutar
-                  zstd
                   coreutils
+                  gnutar
+                  rsyncy
+                  zstd
+                  zstd
                 ]
                 ++ additionalBuildInputs;
 
@@ -72,7 +73,7 @@
                     else
                       ''
                         toplevel=${config.system.build.toplevel}
-                        dtbpath=${config.hardware.deviceTree.name}
+                        dtbpath=${dtbpath}
                         kernel_params=$(cat "$toplevel/kernel-params")
                         esp="staging"
 

@@ -28,7 +28,10 @@
     aspects = {
       phone-enchilada-tarball.includes = with den.aspects; [
         phone.common
-        (tarball.lib.call { enableGenericExtlinux = false; })
+        (tarball.lib.call {
+          enableGenericExtlinux = false;
+          dtbpath = "qcom/sdm845-oneplus-enchilada.dtb";
+        })
       ];
 
       phone-enchilada = {

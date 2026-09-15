@@ -29,7 +29,10 @@
     aspects = {
       phone-fajita-tarball.includes = with den.aspects; [
         phone.common
-        (tarball.lib.call { enableGenericExtlinux = false; })
+        (tarball.lib.call {
+          enableGenericExtlinux = false;
+          dtbpath = "qcom/sdm845-oneplus-fajita.dtb";
+        })
       ];
 
       phone-fajita = {
