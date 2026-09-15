@@ -2,7 +2,6 @@
   den,
   hosts,
   inputs,
-  tarball,
   ...
 }:
 {
@@ -109,6 +108,8 @@
         };
 
         services = {
+          displayManager.enable = false;
+          displayManager.gdm.enable = false;
           fail2ban.enable = lib.mkForce false;
           logind.settings = {
             Login.HandlePowerKey = lib.mkDefault "ignore";

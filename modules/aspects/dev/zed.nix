@@ -110,7 +110,7 @@
             buffer_font_family = "JetBrainsMonoNL Nerd Font Mono";
             buffer_font_size = 12;
             buffer_line_height = "standard";
-            code_lens = "on";
+            code_lens = "menu";
             collaboration_panel.button = false;
             colorize_brackets = true;
             cursor_blink = true;

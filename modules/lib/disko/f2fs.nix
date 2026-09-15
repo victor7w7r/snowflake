@@ -59,7 +59,6 @@
         "compress_algorithm=zstd"
         "compress_extension=bin"
         "compress_extension=so"
-        "discard"
       ]);
       extraArgs = [
         "-f"
