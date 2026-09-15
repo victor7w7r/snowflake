@@ -3,7 +3,7 @@
     { user, ... }:
     {
       nixos =
-        { lib, pkgs, ... }:
+        { lib, ... }:
         {
           services = {
             acpid.enable = true;
@@ -16,6 +16,7 @@
             upower.enable = true;
             btrfs.autoScrub.fileSystems = [ "/run/media/games" ];
             fwupd.enable = true;
+            displayManager.sddm.enable = true;
 
             handheld-daemon = {
               enable = true;

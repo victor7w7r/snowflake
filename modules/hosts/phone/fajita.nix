@@ -6,8 +6,8 @@
 }:
 {
 
-  #mount /dev/sdj13 /mnt && rm -rf /mnt/* && tar --zstd -xvf boot-fajita.tar.zst -C /mnt/ --no-same-owner && sync && umount /dev/sdj13
-  #mount -o lazytime,noatime,inline_xattr,inline_data,inline_dentry,flush_merge,checkpoint_merge,gc_merge,atgc,age_extent_cache,compress_chksum,compress_algorithm=zstd,compress_extension=bin,compress_extension=so /dev/sdj17 /mnt && rm -rf /mnt/store/* && tar --zstd -xvf store-fajita.tar.zst -C /mnt/store/ && sync && umount /dev/sdj17
+  #mount /dev/sdi13 /mnt && rm -rf /mnt/* && tar --zstd -xvf boot-fajita.tar.zst -C /mnt/ --no-same-owner && sync && umount /dev/sdi13
+  #mount -o lazytime,noatime,inline_xattr,inline_data,inline_dentry,flush_merge,checkpoint_merge,gc_merge,atgc,age_extent_cache,compress_chksum,compress_algorithm=zstd,compress_extension=bin,compress_extension=so /dev/sdi17 /mnt && rm -rf /mnt/store/* && tar --zstd -xvf store-fajita.tar.zst -C /mnt/store/
 
   perSystem.packages = {
     phone-fajita-toplevel = inputs.self.nixosConfigurations.phone-fajita.config.system.build.toplevel;

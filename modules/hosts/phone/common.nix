@@ -108,8 +108,15 @@
         };
 
         services = {
-          xserver.displayManager.lightdm.enable = false;
-          displayManager.gdm.enable = false;
+          displayManager = {
+            gdm.enable = false;
+            sddm.enable = true;
+            autoLogin = {
+              enable = true;
+              user = "victor7w7r";
+            };
+          };
+
           fail2ban.enable = lib.mkForce false;
           logind.settings = {
             Login.HandlePowerKey = lib.mkDefault "ignore";

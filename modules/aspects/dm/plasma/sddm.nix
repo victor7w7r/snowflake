@@ -10,7 +10,6 @@
       }:
       lib.mkMerge [
         {
-          services.displayManager.sddm.enable = isHandheld || isPhone;
           environment = {
             persistence."/nix/persist" = {
               directories = [ "/var/lib/sddm" ];
@@ -48,10 +47,6 @@
             sddm.settings.General.DisplayServer = "wayland";
             sessionPackages = with pkgs.kdePackages; [ plasma-mobile ];
             defaultSession = "plasma-mobile";
-            autoLogin = {
-              enable = true;
-              user = "victor7w7r";
-            };
           };
         })
 
