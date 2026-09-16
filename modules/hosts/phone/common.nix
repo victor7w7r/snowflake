@@ -78,7 +78,7 @@
         hardware = {
           deviceTree.enable = true;
           sensor.iio.enable = true;
-          firmware = lib.mkAfter [ self'.package.oneplus-firmware ];
+          firmware = lib.mkAfter [ self'.packages.oneplus-firmware ];
         };
 
         systemd.services = {
