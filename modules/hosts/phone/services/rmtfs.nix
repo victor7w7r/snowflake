@@ -1,18 +1,7 @@
 {
   den.aspects.phone.services.rmtfs.nixos =
     { pkgs, ... }:
-    pkgs.rmtfs.overrideAttrs (oldAttrs: {
-      postPatch = (oldAttrs.postPatch or "") + ''
-        substituteInPlace storage.c \
-          --replace-fail '"/boot/modem_fs1"' '"/efs/modem_fs1"' \
-          --replace-fail '"/boot/modem_fs2"' '"/efs/modem_fs2"' \
-          --replace-fail '"/boot/modem_fsc"' '"/efs/modem_fsc"' \
-          --replace-fail '"/boot/modem_fsg"' '"/efs/modem_fsg"' \
-          --replace-fail '"/boot/modem_study"' '"/efs/modem_study"' \
-          --replace-fail '"/boot/modem_tunning"' '"/efs/modem_tunning"' \
-          --replace-fail '"/boot/modem_tng"' '"/efs/modem_tng"'
-      '';
-    })
+    pkgs.rmtfs
     |> (rmtfs: {
       environment.systemPackages = [ rmtfs ];
 

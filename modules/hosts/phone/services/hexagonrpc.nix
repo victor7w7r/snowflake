@@ -13,7 +13,17 @@
         wantedBy = [ "multi-user.target" ];
         before = [ "suspend.target" ];
         conflicts = [ "suspend.target" ];
-        after = [ "network.target" ];
+        after = [
+          "network.target"
+          "rmtfs.service"
+          "tqftpserv.service"
+          "hexagonrpcd-populate-data.service"
+        ];
+        requires = [
+          "rmtfs.service"
+          "tqftpserv.service"
+          "hexagonrpcd-populate-data.service"
+        ];
 
         unitConfig.ConditionPathExists = "/dev/fastrpc-${class}";
 
@@ -60,9 +70,19 @@
 
         hexagonrpcd-populate-data = {
           description = "Populate writable /mnt/vendor/persist tmpfs from persist-ro";
-          requires = [ "mnt-vendor-persist\x2dro.mount" ];
-          after = [ "mnt-vendor-persist\x2dro.mount" ];
-          before = [ "hexagonrpcd-adsp-sdsp.service" ];
+          requires = [
+            "mnt-vendor-persist\x2dro.mount"
+            "mnt-vendor-persist.mount"
+          ];
+          after = [
+            "mnt-vendor-persist\x2dro.mount"
+            "mnt-vendor-persist.mount"
+          ];
+          before = [
+            "hexagonrpcd-adsp-sdsp.service"
+            "hexagonrpcd-adsp-rootpd.service"
+            "hexagonrpcd-adsp-sensorpd.service"
+          ];
           wantedBy = [ "multi-user.target" ];
 
           serviceConfig = {
@@ -71,12 +91,17 @@
           };
 
           script = ''
-	          set -e
+            set -eu
 
-	          if [ -d /mnt/vendor/persist-ro/sensors ]; then
-	            cp -r /mnt/vendor/persist-ro/sensors /mnt/vendor/persist/sensors
-	            chown -R fastrpc:fastrpc /mnt/vendor/persist/sensors || true
-	          fi
+            source=/mnt/vendor/persist-ro/sensors
+            destination=/mnt/vendor/persist/sensors
+            mkdir -p "$destination"
+
+            if [ -d "$source" ]; then
+              cp -a "$source/." "$destination/"
+            fi
+
+            chown -R fastrpc:fastrpc "$destination" || true
           '';
         };
       };

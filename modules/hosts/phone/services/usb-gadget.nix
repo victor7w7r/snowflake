@@ -7,61 +7,9 @@
       ...
     }:
     {
-      environment.etc = {
-        "usb-moded/nixos-settings.ini".source =
-          (pkgs.formats.ini { }).generate "usb-moded-nixos-settings.ini"
-            {
-              network.ip = "172.16.42.1";
-              configfs = {
-                gadget_base_directory = "/sys/kernel/config/usb_gadget/g1";
-                gadget_conf_directory = "configs/c.1";
-              };
-            };
-      }
-      // (lib.mapAttrs'
-        (
-          name: value:
-          lib.nameValuePair "usb-moded/dyn-modes/${name}.ini" {
-            source = (pkgs.formats.ini { }).generate "usb-moded-${name}-mode.ini" value;
-          }
-        )
-        {
-          developer_mode = {
-            mode = {
-              name = "developer_mode";
-              module = "none";
-              network = 1;
-              appsync = 1;
-            };
-            options = {
-              sysfs_value = "ncm.usb0";
-              dhcp_server = 0;
-            };
-          };
-        }
-      )
-      // (lib.mapAttrs'
-        (
-          name: value:
-          lib.nameValuePair "usb-moded/run/${name}.ini" {
-            source = (pkgs.formats.ini { }).generate "usb-moded-${name}-run.ini" value;
-          }
-        )
-        {
-          developer-unudhcpd.info = {
-            systemd = 1;
-            name = "usb-gadget-unudhcpd.service";
-            mode = "developer_mode";
-            post = 1;
-          };
-        }
-      );
+      boot.blacklistedKernelModules = [ "g_ether" ];
 
-      services.dbus.packages = [ self'.packages.usb-moded ];
-
-      systemd = {
-        packages = [ self'.packages.usb-moded ];
-        services = {
+      systemd.services = {
           "serial-getty@ttyGS0" = {
             enable = true;
             wantedBy = [ "multi-user.target" ];
@@ -90,41 +38,6 @@
             };
           };
 
-          usb-moded = {
-            enable = false;
-            wantedBy = [ "basic.target" ];
-            after = [ "usb-gadget.service" ];
-
-            path = [ pkgs.unixtools.ifconfig ];
-
-            environment = {
-              USB_MODED_ARGS = "-r";
-              USB_MODED_HW_ADAPTATION_ARGS = "";
-            };
-          };
-
-          usb-moded-turn-off-rescue-mode = {
-            enable = false;
-            description = "Turn off usb-moded rescue mode";
-
-            wantedBy = [ "graphical.target" ];
-            after = [
-              "graphical.target"
-              "usb-moded.service"
-            ];
-
-            serviceConfig = {
-              Type = "oneshot";
-              RemainAfterExit = true;
-              ExecStart = [
-                "busctl emit /com/nokia/startup/signal com.nokia.startup.signal init_done"
-                ''
-                  -busctl call com.meego.usb_moded /com/meego/usb_moded com.meego.usb_moded \
-                    set_mode s "charging_only"
-                ''
-              ];
-            };
-          };
 
           usb-gadget = {
             unitConfig.DefaultDependencies = false;
@@ -146,6 +59,21 @@
 
             script = ''
               GADGET="/sys/kernel/config/usb_gadget/g1"
+
+              # The initrd may leave g_ether or an old configfs gadget bound.
+              ${pkgs.kmod}/bin/modprobe -r g_ether 2>/dev/null || true
+              if [ -f "$GADGET/UDC" ]; then
+                echo "" > "$GADGET/UDC" 2>/dev/null || true
+              fi
+              umount /dev/usb-ffs/adb 2>/dev/null || true
+              for link in "$GADGET/configs/c.1/"*; do
+                [ -e "$link" ] || continue
+                rm -f "$link"
+              done
+              for entry in "$GADGET/functions/"*; do
+                [ -e "$entry" ] || continue
+                rmdir "$entry" 2>/dev/null || true
+              done
 
               mkdir -p $GADGET
               echo "0x1d6b" > $GADGET/idVendor
@@ -228,6 +156,5 @@
             serviceConfig.ExecStart = "${lib.getExe self'.packages.unudhcpd} -i usb0 -s 172.16.42.1 -c 172.16.42.2";
           };
         };
-      };
     };
 }
