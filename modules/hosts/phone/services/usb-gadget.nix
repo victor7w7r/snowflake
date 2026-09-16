@@ -65,8 +65,8 @@
           "serial-getty@ttyGS0" = {
             enable = true;
             wantedBy = [ "multi-user.target" ];
-            requires = [ "usb-gadget.service" ];
-            after = [ "usb-gadget.service" ];
+            requires = [ "usb-gadget-bind.service" ];
+            after = [ "usb-gadget-bind.service" ];
           };
 
           adbd = {
@@ -91,6 +91,7 @@
           };
 
           usb-moded = {
+            enable = false;
             wantedBy = [ "basic.target" ];
             after = [ "usb-gadget.service" ];
 
@@ -103,6 +104,7 @@
           };
 
           usb-moded-turn-off-rescue-mode = {
+            enable = false;
             description = "Turn off usb-moded rescue mode";
 
             wantedBy = [ "graphical.target" ];
@@ -159,7 +161,9 @@
               mkdir -p $GADGET/functions/acm.usb0
 
               mkdir -p /dev/usb-ffs/adb
-              mount -t functionfs adb /dev/usb-ffs/adb
+              if ! grep -qs " /dev/usb-ffs/adb " /proc/mounts; then
+                mount -t functionfs adb /dev/usb-ffs/adb
+              fi
 
               mkdir -p $GADGET/configs/c.1
               mkdir -p $GADGET/configs/c.1/strings/0x409
@@ -169,12 +173,57 @@
               ln -s $GADGET/functions/ffs.adb $GADGET/configs/c.1/
               ln -s $GADGET/functions/acm.usb0 $GADGET/configs/c.1/
 
-              udc=$(ls /sys/class/udc | head -1)
-              echo "$udc" > $GADGET/UDC
+            '';
+          };
+
+          usb-gadget-bind = {
+            description = "Bind USB gadget after FunctionFS services are ready";
+            wantedBy = [ "multi-user.target" ];
+            requires = [
+              "usb-gadget.service"
+              "adbd.service"
+            ];
+            after = [
+              "usb-gadget.service"
+              "adbd.service"
+            ];
+            before = [
+              "serial-getty@ttyGS0.service"
+              "usb-gadget-unudhcpd.service"
+            ];
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+            };
+            script = ''
+              GADGET="/sys/kernel/config/usb_gadget/g1"
+              udc=""
+              attempts=0
+
+              while [ -z "$udc" ] && [ "$attempts" -lt 30 ]; do
+                udc=$(ls /sys/class/udc | head -n 1)
+                if [ -z "$udc" ]; then
+                  attempts=$((attempts + 1))
+                  sleep 1
+                fi
+              done
+
+              if [ -z "$udc" ]; then
+                echo "No USB device controller found" >&2
+                exit 1
+              fi
+
+              current_udc=$(cat "$GADGET/UDC")
+              if [ "$current_udc" != "$udc" ]; then
+                echo "$udc" > "$GADGET/UDC"
+              fi
             '';
           };
 
           usb-gadget-unudhcpd = {
+            wantedBy = [ "multi-user.target" ];
+            requires = [ "usb-gadget-bind.service" ];
+            after = [ "usb-gadget-bind.service" ];
             description = "DHCP server for USB Gadget";
             serviceConfig.ExecStart = "${lib.getExe self'.packages.unudhcpd} -i usb0 -s 172.16.42.1 -c 172.16.42.2";
           };

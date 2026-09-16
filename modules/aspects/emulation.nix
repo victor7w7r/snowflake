@@ -26,7 +26,7 @@
         registrations = lib.mkMerge [
           (lib.mkIf isX86 {
             aarch64-linux = {
-              interpreter = "${pkgs.pkgsStatic.qemu-user}/bin/qemu-aarch64";
+              interpreter = "${pkgs.qemu-user}/bin/qemu-aarch64";
               matchCredentials = true;
               wrapInterpreterInShell = false;
               preserveArgvZero = false;
@@ -34,7 +34,7 @@
             };
 
             armv7l-linux = {
-              interpreter = "${pkgs.pkgsStatic.qemu-user}/bin/qemu-arm";
+              interpreter = "${pkgs.qemu-user}/bin/qemu-arm";
               magicOrExtension = ''\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x28\x00'';
               mask = ''\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\x00\xff\xfe\xff\xff\xff'';
             };

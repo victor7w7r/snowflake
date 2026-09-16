@@ -136,6 +136,7 @@
           udev.extraRules = builtins.concatStringsSep "\n" [
             ''ACTION=="remove", GOTO="iio_sensor_proxy_end"''
             ''SUBSYSTEM=="uio", ATTR{name}=="rmtfs", SYMLINK+="qcom_rmtfs_uio1"''
+            ''SUBSYSTEM=="iio", ATTR{name}=="*accel*", ENV{ACCEL_MOUNT_MATRIX}="-1, 0, 0; 0, -1, 0; 0, 0, 1"''
             ''SUBSYSTEM=="input", KERNEL=="event*", ENV{GM_WAKEUP_KEY_114}="0", ENV{GM_WAKEUP_KEY_115}="0"''
             ''LABEL="iio_sensor_proxy_end"''
           ];
