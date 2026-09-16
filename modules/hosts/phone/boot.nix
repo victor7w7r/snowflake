@@ -69,6 +69,28 @@
             "qcom-pmi8998-haptics"
             "g_ffs"
           ];
+
+          systemd.storePaths =
+            map
+              (fw: {
+                source = "${config.hardware.firmware}/lib/firmware/${fw}.zst";
+                target = "/extra-firmware/${fw}.zst";
+              })
+              [
+                "qcom/sdm845/OnePlus/enchilada/adsp.mbn"
+                "qcom/sdm845/OnePlus/enchilada/cdsp.mbn"
+                "qcom/sdm845/OnePlus/enchilada/ipa_fws.mbn"
+
+                "qcom/sdm845/OnePlus/enchilada/a630_zap.mbn"
+                "qcom/sdm845/OnePlus/enchilada/slpi.mbn"
+                "ath10k/WCN3990/hw1.0/board-2.bin"
+                "qca/crbtfw21.tlv"
+                "qca/crnv21.bin"
+                "qca/OnePlus/enchilada/crnv21.bin"
+
+                "qcom/a630_sqe.fw"
+                "qcom/a630_gmu.bin"
+              ];
         };
       };
     };

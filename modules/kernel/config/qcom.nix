@@ -106,6 +106,7 @@
         BLK_DEV_RAM_COUNT = freeform "16";
         BLK_DEV_RAM_SIZE = freeform "8192";
         CPU_FREQ_GOV_POWERSAVE = yes;
+        DEVFREQ_THERMAL = yes;
         EFI_ZBOOT = yes;
         FS_ENCRYPTION_INLINE_CRYPT = yes;
         HIDRAW = yes;

@@ -1,9 +1,4 @@
-{
-  den,
-  hosts,
-  inputs,
-  ...
-}:
+{ den, hosts, ... }:
 {
   flake-file.inputs = {
     disko-mobile = {
@@ -54,7 +49,12 @@
     ];
 
     nixos =
-      { lib, pkgs, ... }:
+      {
+        lib,
+        pkgs,
+        self',
+        ...
+      }:
       {
         environment = {
           variables.GST_PLUGIN_FEATURE_RANK = "v4l2vp8dec:SECONDARY,v4l2vp8enc:NONE,v4l2vp9dec:SECONDARY,v4l2h264dec:SECONDARY,v4l2h264enc:NONE,v4l2h265dec:SECONDARY,v4l2h265enc:NONE,v4l2mpeg2dec:SECONDARY";
@@ -78,16 +78,7 @@
         hardware = {
           deviceTree.enable = true;
           sensor.iio.enable = true;
-          firmware = lib.mkAfter [
-            (pkgs.runCommand "oneplus-sdm845-firmware" { baseFw = inputs.oneplus; } ''
-              mkdir -p $out/lib/firmware
-              cp -r $baseFw/lib/firmware/* $out/lib/firmware/
-              chmod +w -R $out
-              rm -rf $out/lib/firmware/postmarketos
-              cp -r $baseFw/lib/firmware/postmarketos/* $out/lib/firmware
-              ls -lah $out/lib/firmware/qcom/sdm845
-            '')
-          ];
+          firmware = lib.mkAfter [ self'.package.oneplus-firmware ];
         };
 
         systemd.services = {
