@@ -1,7 +1,12 @@
 { kernel, ... }:
 {
   den.aspects.phone.boot.nixos =
-    { pkgs, lib, ... }:
+    {
+      config,
+      pkgs,
+      lib,
+      ...
+    }:
     {
       systemd = {
         units."systemd-boot-random-seed.service".enable = false;
@@ -73,8 +78,8 @@
           systemd.storePaths =
             map
               (fw: {
-                source = "${config.hardware.firmware}/lib/firmware/${fw}.zst";
-                target = "/extra-firmware/${fw}.zst";
+                source = "${config.hardware.firmware}/lib/firmware/${fw}";
+                target = "/extra-firmware/${fw}";
               })
               [
                 "qcom/sdm845/OnePlus/enchilada/adsp.mbn"
