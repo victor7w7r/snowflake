@@ -45,6 +45,7 @@
         ++ (tachyon.common { source = inputs.tachyon-patches-latest; })
         ++ (tachyon.latest { isPhone = true; })
         ++ (bunker.common { isLts = false; })
-        ++ (bunker.latest { });
+        ++ (bunker.latest { })
+        ++ [ ../patches/oneplus-wcn3990-no-swctrl.patch ];
     });
 }

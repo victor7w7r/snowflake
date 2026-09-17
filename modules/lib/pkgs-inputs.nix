@@ -325,6 +325,11 @@
       flake = false;
     };
 
+    firmware = {
+      url = "gitlab:kernel-firmware/linux-firmware";
+      flake = false;
+    };
+
     fortune-mod-issa-haiku = {
       url = "http://www.tastyrabbit.net/issa-haiku.tar.gz";
       flake = false;

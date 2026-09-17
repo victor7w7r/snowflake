@@ -82,17 +82,19 @@
                 target = "/extra-firmware/${fw}";
               })
               [
+                "qcom/sdm845/OnePlus/enchilada/a630_zap.mbn"
                 "qcom/sdm845/OnePlus/enchilada/adsp.mbn"
                 "qcom/sdm845/OnePlus/enchilada/cdsp.mbn"
                 "qcom/sdm845/OnePlus/enchilada/ipa_fws.mbn"
-
-                "qcom/sdm845/OnePlus/enchilada/a630_zap.mbn"
+                "qcom/sdm845/OnePlus/enchilada/mba.mbn"
+                "qcom/sdm845/OnePlus/enchilada/modem.mbn"
                 "qcom/sdm845/OnePlus/enchilada/slpi.mbn"
+                "qcom/sdm845/OnePlus/enchilada/venus.mbn"
+                "qcom/sdm845/OnePlus/enchilada/wlanmdsp.mbn"
+                "ath10k/WCN3990/hw1.0/firmware-5.bin"
                 "ath10k/WCN3990/hw1.0/board-2.bin"
                 "qca/crbtfw21.tlv"
-                "qca/crnv21.bin"
                 "qca/OnePlus/enchilada/crnv21.bin"
-
                 "qcom/a630_sqe.fw"
                 "qcom/a630_gmu.bin"
               ];

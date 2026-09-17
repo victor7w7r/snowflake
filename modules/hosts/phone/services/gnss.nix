@@ -3,8 +3,14 @@
     systemd.services.gnss = {
       description = "Qualcomm GNSS Modem Setup";
       wantedBy = [ "default.target" ];
-      after = [ "ModemManager.service" ];
-      requires = [ "ModemManager.service" ];
+      after = [
+        "ModemManager.service"
+        "msm-modem-uim-selection.service"
+      ];
+      requires = [
+        "ModemManager.service"
+        "msm-modem-uim-selection.service"
+      ];
       startLimitIntervalSec = 300;
       startLimitBurst = 10;
       serviceConfig = {

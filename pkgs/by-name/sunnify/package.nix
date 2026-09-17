@@ -6,7 +6,7 @@ stdenvNoCC.mkDerivation (attrs: {
 
   src = pkgs.fetchurl {
     url = "https://github.com/sunnypatell/sunnify-spotify-downloader/releases/download/v2.4.2/Sunnify-Linux";
-    sha256 = "sha256-Mccde2hAASmrS7vKk29wDUwkWr/fVzvAFm5g31yYQ1A=";
+    sha256 = "sha256-gMHszaaQhTz4idM0v0WQLU+yI6QR7uJlDc5hfrQ1qzA=";
   };
 
   dontUnpack = true;
@@ -23,16 +23,16 @@ stdenvNoCC.mkDerivation (attrs: {
     zlib
     fontconfig
     freetype
-    xorg.libX11
-    xorg.libXext
-    xorg.libXrender
-    xorg.libXi
-    xorg.libXrandr
-    xorg.libXcursor
-    xorg.libXdamage
-    xorg.libXcomposite
-    xorg.libXfixes
-    xorg.libxcb
+    libX11
+    libXext
+    libXrender
+    libXi
+    libXrandr
+    libXcursor
+    libXdamage
+    libXcomposite
+    libXfixes
+    libxcb
   ];
 
   installPhase = ''

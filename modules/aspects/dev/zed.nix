@@ -110,7 +110,7 @@
             buffer_font_family = "JetBrainsMonoNL Nerd Font Mono";
             buffer_font_size = 12;
             buffer_line_height = "standard";
-            code_lens = "menu";
+            code_lens = "off";
             collaboration_panel.button = false;
             colorize_brackets = true;
             cursor_blink = true;
@@ -121,7 +121,7 @@
                 ".github/workflows/*.yaml"
               ];
             };
-            hard_tabs = true;
+            hard_tabs = false;
             hover_popover_sticky = false;
             icon_theme = "Material Icon Theme";
             indent_guides = {

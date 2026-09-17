@@ -15,11 +15,15 @@
         conflicts = [ "suspend.target" ];
         after = [
           "network.target"
+          "qrtr-ns.service"
+          "pd-mapper.service"
           "rmtfs.service"
           "tqftpserv.service"
           "hexagonrpcd-populate-data.service"
         ];
         requires = [
+          "qrtr-ns.service"
+          "pd-mapper.service"
           "rmtfs.service"
           "tqftpserv.service"
           "hexagonrpcd-populate-data.service"

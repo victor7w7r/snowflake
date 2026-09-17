@@ -4,6 +4,18 @@
       enable = true;
       before = [ "ModemManager.service" ];
       wantedBy = [ "ModemManager.service" ];
+      requires = [
+        "qrtr-ns.service"
+        "pd-mapper.service"
+        "rmtfs.service"
+        "tqftpserv.service"
+      ];
+      after = [
+        "qrtr-ns.service"
+        "pd-mapper.service"
+        "rmtfs.service"
+        "tqftpserv.service"
+      ];
 
       path = with pkgs; [
         libqmi
@@ -41,7 +53,31 @@
           exit 2
         fi
 
-        QMI_CARDS=$($QMICLI_MODEM --uim-get-card-status)
+        QMI_CARDS=
+        count=0
+        while [ -z "$QMI_CARDS" ] && [ "$count" -lt "45" ]
+        do
+          if QMI_CARDS=$($QMICLI_MODEM --uim-get-card-status 2>/dev/null)
+          then
+            :
+          else
+            QMI_CARDS=
+          fi
+
+          if [ -n "$QMI_CARDS" ]
+          then
+            break
+          fi
+
+          sleep 1
+          count=$((count+1))
+        done
+
+        if [ -z "$QMI_CARDS" ]
+        then
+          echo "UIM service did not return card status after $count seconds."
+          exit 2
+        fi
 
         count=0
         while ! printf "%s" "$QMI_CARDS" | grep -Fq "Card state: 'present'"
@@ -54,7 +90,10 @@
 
           sleep 1
           count=$((count+1))
-          QMI_CARDS=$($QMICLI_MODEM --uim-get-card-status)
+          if ! QMI_CARDS=$($QMICLI_MODEM --uim-get-card-status 2>/dev/null)
+          then
+            QMI_CARDS=
+          fi
         done
         echo "Waited $count seconds for modem to come up"
 

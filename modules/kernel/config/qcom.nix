@@ -119,7 +119,7 @@
         PWM = yes;
         PWM_QTI_LPG = module;
         QRTR = lib.mkForce yes;
-        QCOM_PD_MAPPER = no;
+        QCOM_PD_MAPPER = yes;
         NF_TABLES_INET = yes;
         NFT_LIMIT = yes;
         NFT_NAT = yes;
