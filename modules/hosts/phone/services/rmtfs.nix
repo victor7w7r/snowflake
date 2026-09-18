@@ -17,14 +17,11 @@
         requires = [
           "qrtr-ns.service"
           "pd-mapper.service"
-          "dev-qcom_rmtfs_mem1.device"
         ];
         after = [
           "qrtr-ns.service"
           "pd-mapper.service"
-          "dev-qcom_rmtfs_mem1.device"
         ];
-        unitConfig.ConditionPathExists = "/dev/qcom_rmtfs_mem1";
 
         serviceConfig = {
           ExecStart = "${rmtfs}/bin/rmtfs -r -P -s";

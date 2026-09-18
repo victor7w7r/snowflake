@@ -119,7 +119,8 @@
         PWM = yes;
         PWM_QTI_LPG = module;
         QRTR = lib.mkForce yes;
-        QCOM_PD_MAPPER = yes;
+        # Use the userspace mapper from phone/services/qrtr.nix.
+        QCOM_PD_MAPPER = lib.mkForce no;
         NF_TABLES_INET = yes;
         NFT_LIMIT = yes;
         NFT_NAT = yes;
@@ -177,7 +178,7 @@
         QCOM_LLCC = yes;
         QCOM_LMH = yes;
         QCOM_OCMEM = yes;
-        QCOM_RMTFS_MEM = yes;
+        QCOM_RMTFS_MEM = lib.mkForce yes;
         QCOM_SOCINFO = yes;
         QCOM_SPMI_RRADC = module;
         QCOM_SPMI_TEMP_ALARM = yes;
