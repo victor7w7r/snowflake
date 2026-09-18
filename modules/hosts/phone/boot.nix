@@ -45,11 +45,11 @@
           .phone-kernelPackages;
 
         kernelParams = [
-          "clk_ignore_unused"
-          "pd_ignore_unused"
-          "arm64.nopauth"
+          #"clk_ignore_unused"
+          #"pd_ignore_unused"
           "console=tty0"
-          "console=ttyGSM0,115200"
+          "console=ttyGS0,115200"
+          "console=ttyMSM0,115200"
           "zram.num_devices=2"
           "firmware_class.path=/extra-firmware"
         ];
@@ -64,16 +64,14 @@
           includeDefaultModules = false;
           availableKernelModules = [ "sd_mod" ];
           kernelModules = [
-            "ath10k_core"
-            "ath10k_snoc"
+            #"ath10k_core"
+            #"ath10k_snoc"
             "dm_mod"
+            "fastrpc"
             "g_ffs"
-            "libcomposite"
             "qcom-pmi8998-haptics"
-            "qcom_fastrpc"
             "qcom_q6v5_mss"
             "qcom_q6v5_pas"
-            "qrtr_smd"
             "rmi_core"
             "rmi_i2c"
             "rtc_pm8xxx"

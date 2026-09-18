@@ -1,12 +1,28 @@
 { inputs, pkgs }:
-pkgs.stdenvNoCC.mkDerivation {
+
+pkgs.stdenv.mkDerivation {
   pname = "memavaild";
   version = "latest";
+
   src = inputs.memavaild;
-  propagatedBuildInputs = with pkgs; [ python3 ];
+
+  nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
+  buildInputs = [ pkgs.python3 ];
+
   installPhase = ''
-    PREFIX= DESTDIR=$out SYSTEMDUNITDIR=/lib/systemd/system SYSCONFDIR=/etc make base units
+    mkdir -p $out/bin $out/lib/systemd/system $out/etc
+
+    make base units \
+      DESTDIR=$out \
+      PREFIX= \
+      SYSCONFDIR=/etc \
+      SYSTEMDUNITDIR=/lib/systemd/system
+
     substituteInPlace $out/lib/systemd/system/memavaild.service \
-      --replace "ExecStart=" "ExecStart=$out"
+      --replace-fail "/usr/bin/memavaild" "$out/bin/memavaild" \
+      --replace-fail "/usr/bin/python3" "${pkgs.python3}/bin/python3"
+
+    wrapProgram $out/bin/memavaild \
+      --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.python3 ]}
   '';
 }

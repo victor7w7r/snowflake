@@ -67,6 +67,7 @@
         QUOTA = lib.mkForce (setupDenial isDenied yes);
         REGULATOR_QCOM_LABIBB = setupDenial isDenied yes;
         REMOTEPROC = setupDenial isDenied yes;
+        RESET_QCOM_PDC = setupDenial isDenied yes;
         RMI4_F55 = setupDenial isDenied yes;
         RMNET = setupDenial isDenied module;
         RPMSG_CHAR = setupDenial isDenied yes;
@@ -85,7 +86,7 @@
         UCLAMP_TASK = setupDenial isDenied yes;
         UCLAMP_TASK_GROUP = setupDenial isDenied yes;
         USB_CONFIGFS = setupDenial isDenied yes;
-        USB_ETH = setupDenial isDenied yes;
+        USB_ETH = setupDenial isDenied module;
         USB_ETH_RNDIS = setupDenial isDenied yes;
         USB_F_NCM = setupDenial isDenied yes;
         USB_G_NCM = setupDenial isDenied module;
