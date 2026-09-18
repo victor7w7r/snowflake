@@ -10,7 +10,7 @@ pkgs.stdenv.mkDerivation {
   buildInputs = [ pkgs.python3 ];
 
   installPhase = ''
-    mkdir -p $out/bin $out/lib/systemd/system $out/etc
+    mkdir -p $out/sbin $out/lib/systemd/system $out/etc
 
     make base units \
       DESTDIR=$out \
@@ -19,9 +19,9 @@ pkgs.stdenv.mkDerivation {
       SYSTEMDUNITDIR=/lib/systemd/system
 
     substituteInPlace $out/lib/systemd/system/memavaild.service \
-      --replace-fail "/usr/local/bin/memavaild" "$out/bin/memavaild"
+      --replace-fail "/sbin/memavaild" "$out/sbin/memavaild"
 
-    wrapProgram $out/bin/memavaild \
+    wrapProgram $out/sbin/memavaild \
       --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.python3 ]}
   '';
 }
