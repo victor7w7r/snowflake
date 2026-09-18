@@ -20,6 +20,7 @@
           "rmtfs.service"
           "tqftpserv.service"
           "hexagonrpcd-populate-data.service"
+          "dev-fastrpc-${class}.device"
         ];
         requires = [
           "qrtr-ns.service"
@@ -27,9 +28,8 @@
           "rmtfs.service"
           "tqftpserv.service"
           "hexagonrpcd-populate-data.service"
+          "dev-fastrpc-${class}.device"
         ];
-
-        unitConfig.ConditionPathExists = "/dev/fastrpc-${class}";
 
         serviceConfig = {
           ExecStart = "${pkgs.writeShellScript "start-hexagonrpcd-${class}-${description}" ''
@@ -44,6 +44,8 @@
       }
     )
     |> (service-gen: {
+      environment.pathsToLink = [ "/share/qcom" ];
+
       users = {
         groups.fastrpc = { };
         users.fastrpc = {
@@ -53,9 +55,9 @@
       };
 
       services.udev.extraRules = lib.mkBefore ''
-      	SUBSYSTEM=="misc", KERNEL=="fastrpc-*", OWNER="fastrpc", GROUP="fastrpc", MODE="0600"
-       	SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity"
-      	SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity ssc-light ssc-compass"
+        SUBSYSTEM=="misc", KERNEL=="fastrpc-*", OWNER="fastrpc", GROUP="fastrpc", MODE="0600", TAG+="systemd"
+        SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity"
+        SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity ssc-light ssc-compass"
       '';
 
       systemd.services = {

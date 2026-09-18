@@ -67,12 +67,16 @@
             "ath10k_core"
             "ath10k_snoc"
             "dm_mod"
-            "rmi_core"
-            "rtc_pm8xxx"
-            "rmi_i2c"
+            "g_ffs"
             "libcomposite"
             "qcom-pmi8998-haptics"
-            "g_ffs"
+            "qcom_fastrpc"
+            "qcom_q6v5_mss"
+            "qcom_q6v5_pas"
+            "qrtr_smd"
+            "rmi_core"
+            "rmi_i2c"
+            "rtc_pm8xxx"
           ];
 
           systemd.storePaths =
