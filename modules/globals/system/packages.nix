@@ -17,7 +17,7 @@
           gnutar
           inxi
           lemmeknow
-          #loop
+          loop
           lsof
           hexyl
           mommy
@@ -63,7 +63,6 @@
           with self'.packages;
           [
             #procmux
-            #socktop
             busybox
             fatrace
             fsarchiver
@@ -80,6 +79,7 @@
             s-tui
             self'.packages.open
             self'.packages.progressline
+            socktop
             systemctl-tui
             sysz
             watchexec

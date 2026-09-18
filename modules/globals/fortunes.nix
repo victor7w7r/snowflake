@@ -7,12 +7,12 @@
         paths = with self'.packages; [
           pkgs.fortune
           fortune-anti-jokes
-          fortune-mod-archlinux
           fortune-mod-anarchism
-          fortune-mod-bofh-excuses
+          fortune-mod-archlinux
           fortune-mod-billwurtz
-          fortune-mod-canada-nctr
+          fortune-mod-bofh-excuses
           fortune-mod-calvin
+          fortune-mod-canada-nctr
           fortune-mod-confucius
           fortune-mod-darkknight
           fortune-mod-dhammapada

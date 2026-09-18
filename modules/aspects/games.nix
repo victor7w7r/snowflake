@@ -30,7 +30,7 @@
             astroterm
             cemetery-escape
             chess-tui
-            #cli-of-life
+            cli-of-life
             clidle
             cfonts
             go-life
@@ -71,7 +71,6 @@
             rbonsai
             termsaver
             tuime
-            #tui-slides
             scope-tui
             cointop
             clock-rs

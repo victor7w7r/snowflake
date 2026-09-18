@@ -51,10 +51,6 @@
       url = "github:mihaigalos/aim";
       flake = false;
     };
-    apkinspector = {
-      url = "github:erev0s/apkInspector";
-      flake = false;
-    };
     app-manager = {
       url = "github:ASHWIN990/app-manager";
       flake = false;
@@ -85,10 +81,6 @@
     };
     bestfetch = {
       url = "gitlab:Maxb0tbeep/bestfetch";
-      flake = false;
-    };
-    better-adb-sync = {
-      url = "github:jb2170/better-adb-sync";
       flake = false;
     };
     bollywood = {
@@ -161,10 +153,6 @@
       flake = false;
     };
     copyparty.url = "github:9001/copyparty";
-    corrupter = {
-      url = "github:r00tman/corrupter";
-      flake = false;
-    };
     custom-packages.url = "github:Rishabh5321/custom-packages-flake";
     customfetch = {
       url = "github:Toni500github/customfetch";
@@ -487,20 +475,12 @@
       url = "github:lennart-finke/kyun";
       flake = false;
     };
-    kzones = {
-      url = "github:gerritdevriese/kzones";
-      flake = false;
-    };
     layan-kde = {
       url = "github:vinceliuice/layan-kde";
       flake = false;
     };
     lazysys = {
       url = "github:XhuyZ/lazysys";
-      flake = false;
-    };
-    lifecycler = {
-      url = "github:cxreiff/lifecycler";
       flake = false;
     };
     linux-config = {
@@ -583,10 +563,6 @@
       url = "github:tree-s/ncmatrix";
       flake = false;
     };
-    neo = {
-      url = "github:st3w/neo";
-      flake = false;
-    };
     nimBytesized = {
       url = "gitlab:Maxb0tbeep/bytesized";
       flake = false;
@@ -653,19 +629,7 @@
       url = "github:orangekame3/paclear";
       flake = false;
     };
-    panel-spacer-extended = {
-      url = "github:luisbocanegra/plasma-panel-spacer-extended";
-      flake = false;
-    };
     pkgs-by-name-for-flake-parts.url = "github:drupol/pkgs-by-name-for-flake-parts";
-    pkgtop = {
-      url = "github:orhun/pkgtop";
-      flake = false;
-    };
-    plasma-gamemode = {
-      url = "github:orhun/pkgtop";
-      flake = false;
-    };
     plasma-manager = {
       url = "github:nix-community/plasma-manager";
       inputs = {
@@ -710,10 +674,6 @@
     };
     scrcpy-wrapper = {
       url = "github:Bluemangoo/scrcpy-wrapper";
-      flake = false;
-    };
-    screego = {
-      url = "github:screego/server";
       flake = false;
     };
     sdm845-alsa = {
@@ -834,10 +794,6 @@
     };
     tui-slides = {
       url = "github:Chleba/tui-slides";
-      flake = false;
-    };
-    tuifimanager = {
-      url = "github:GiorgosXou/TUIFIManager";
       flake = false;
     };
     tuime = {

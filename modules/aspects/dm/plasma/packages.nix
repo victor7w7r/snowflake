@@ -33,6 +33,7 @@
               kfind
               kget
               kjournald
+              kmenuedit
               krdc
               ksystemlog
               ktorrent
@@ -99,7 +100,7 @@
             ffmpeg-audio-thumbnailer
             jar-thumbnailer
             kde-thumbnailer-apk
-            kzones
+            kdePackages.kzones
             layan
           ]
           ++ (lib.optionals (!isPhone) [

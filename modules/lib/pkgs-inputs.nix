@@ -10,11 +10,6 @@
       flake = false;
     };
 
-    apkinspector = {
-      url = "github:erev0s/apkInspector";
-      flake = false;
-    };
-
     app-manager = {
       url = "github:ASHWIN990/app-manager";
       flake = false;
@@ -27,11 +22,6 @@
 
     armbian-firmware = {
       url = "github:armbian/firmware";
-      flake = false;
-    };
-
-    autoricer = {
-      url = "github:3rfaan/autoricer";
       flake = false;
     };
 
@@ -60,11 +50,6 @@
       flake = false;
     };
 
-    better-adb-sync = {
-      url = "github:jb2170/better-adb-sync";
-      flake = false;
-    };
-
     bollywood = {
       url = "github:abloch/bollywood";
       flake = false;
@@ -85,10 +70,6 @@
       flake = false;
     };
 
-    cargofetch = {
-      url = "github:arjav0703/cargofetch";
-      flake = false;
-    };
 
     cemetery-escape = {
       url = "github:tom-on-the-internet/cemetery-escape";
@@ -125,11 +106,6 @@
       flake = false;
     };
 
-    corrupter = {
-      url = "github:r00tman/corrupter";
-      flake = false;
-    };
-
     customfetch = {
       url = "github:Toni500github/customfetch";
       flake = false;
@@ -145,10 +121,6 @@
       flake = false;
     };
 
-    dockadvisor = {
-      url = "github:deckrun/dockadvisor";
-      flake = false;
-    };
 
     dockerfilegraph = {
       url = "github:patrickhoefler/dockerfilegraph";
@@ -180,20 +152,12 @@
       flake = false;
     };
 
-    endcord = {
-      url = "github:sparklost/endcord";
-      flake = false;
-    };
 
     envfetch = {
       url = "github:ankddev/envfetch";
       flake = false;
     };
 
-    ext4-crypt = {
-      url = "github:gdelugre/ext4-crypt";
-      flake = false;
-    };
 
     ffmpeg-audio-thumbnailer = {
       url = "github:saltedcoffii/ffmpeg-audio-thumbnailer";
@@ -470,11 +434,6 @@
       flake = false;
     };
 
-    kzones = {
-      url = "github:gerritdevriese/kzones";
-      flake = false;
-    };
-
     layan-kde = {
       url = "github:vinceliuice/layan-kde";
       flake = false;
@@ -482,11 +441,6 @@
 
     lazysys = {
       url = "github:XhuyZ/lazysys";
-      flake = false;
-    };
-
-    lifecycler = {
-      url = "github:cxreiff/lifecycler";
       flake = false;
     };
 
@@ -507,11 +461,6 @@
 
     loop = {
       url = "github:Miserlou/loop";
-      flake = false;
-    };
-
-    lxtui = {
-      url = "github:FoleyBridge-Solutions/lxtui";
       flake = false;
     };
 
@@ -550,11 +499,6 @@
       flake = false;
     };
 
-    neo = {
-      url = "github:st3w/neo";
-      flake = false;
-    };
-
     nitronx = {
       url = "github:UsiFX/OpenNitroN";
       flake = false;
@@ -572,21 +516,6 @@
 
     paclear = {
       url = "github:orangekame3/paclear";
-      flake = false;
-    };
-
-    panel-spacer-extended = {
-      url = "github:luisbocanegra/plasma-panel-spacer-extended";
-      flake = false;
-    };
-
-    pkgtop = {
-      url = "github:orhun/pkgtop";
-      flake = false;
-    };
-
-    plasma-gamemode = {
-      url = "github:orhun/pkgtop";
       flake = false;
     };
 
@@ -625,11 +554,6 @@
       flake = false;
     };
 
-    screego = {
-      url = "github:screego/server";
-      flake = false;
-    };
-
     scrcpy-wrapper = {
       url = "github:Bluemangoo/scrcpy-wrapper";
       flake = false;
@@ -660,10 +584,6 @@
       flake = false;
     };
 
-    spotitube = {
-      url = "github:streambinder/spotitube";
-      flake = false;
-    };
 
     ssh-list = {
       url = "github:akinoiro/ssh-list";
@@ -685,10 +605,6 @@
       flake = false;
     };
 
-    sysfex = {
-      url = "github:mehedirm6244/sysfex";
-      flake = false;
-    };
 
     t2-audio = {
       url = "github:kekrby/t2-better-audio/e46839a28963e2f7d364020518b9dac98236bcae";
@@ -740,23 +656,8 @@
       flake = false;
     };
 
-    tui-slides = {
-      url = "github:Chleba/tui-slides";
-      flake = false;
-    };
-
-    tuifimanager = {
-      url = "github:GiorgosXou/TUIFIManager";
-      flake = false;
-    };
-
     tuime = {
       url = "github:nthnd/tuime";
-      flake = false;
-    };
-
-    updo = {
-      url = "github:Owloops/updo";
       flake = false;
     };
 

@@ -11,4 +11,6 @@ buildGoModule {
     "-w"
   ];
   flags = [ "-trimpath" ];
+
+  postInstall = "mv $out/bin/src $out/bin/lazysys";
 }

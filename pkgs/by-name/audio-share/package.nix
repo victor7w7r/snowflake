@@ -1,4 +1,4 @@
-{ inputs, pkgs }:
+{ pkgs }:
 pkgs.stdenvNoCC.mkDerivation {
   pname = "audio-share";
   version = "latest";

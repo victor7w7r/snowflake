@@ -11,7 +11,7 @@
 
   den.aspects.tools = {
     os =
-      { pkgs, self', ... }:
+      { pkgs, ... }:
       {
         environment.systemPackages = with pkgs; [
           alejandra
@@ -34,8 +34,8 @@
           nix-update
           nvd
           optnix
+          pkgtop
           statix
-          self'.packages.pkgtop
         ];
       };
 

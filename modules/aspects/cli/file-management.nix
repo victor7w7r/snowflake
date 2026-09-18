@@ -19,12 +19,15 @@
       };
 
     nixos =
-      { self', ... }:
+      { pkgs, self', ... }:
       {
-        environment.systemPackages = with self'.packages; [
-          fman
-          #tuifimanager
-        ];
+        environment.systemPackages =
+          with pkgs;
+          with self'.packages;
+          [
+            fman
+            tuifimanager
+          ];
       };
 
     provides.to-users.homeManager.programs = {

@@ -33,7 +33,6 @@
             btrfsd
             chkufsd
             compress
-            ext4-crypt
             repair-usb-disc
             compsize
             httm
@@ -42,6 +41,7 @@
             parted
             tparted
             wipefreespace
+            #udefrag
           ];
       };
   };

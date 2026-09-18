@@ -29,10 +29,10 @@
               oxker
               pods
               podman-tui
-              self'.packages.dockadvisor
               #self'.packages.dockerfilegraph
               #self'.packages.dprs
               #self'.packages.supdock
+              #self'.packages.runlike
             ];
           };
          /* virtualisation.podman = {

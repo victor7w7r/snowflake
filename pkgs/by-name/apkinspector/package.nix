@@ -1,8 +1,0 @@
-{ inputs, python3 }:
-python3.pkgs.buildPythonApplication {
-  pname = "apkInspector";
-  version = "latest";
-  pyproject = true;
-  src = inputs.apkinspector;
-  build-system = with python3.pkgs; [ poetry-core ];
-}

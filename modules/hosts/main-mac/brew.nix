@@ -88,7 +88,6 @@
         brews = [
           "abdfnx/tap/tran"
           "cfoust/taps/cy"
-          "Code-Hex/tap/neo-cowsay"
           "danielgatis/imgcat/imgcat"
           "danvergara/tools/dblab"
           "f1bonacc1/tap/process-compose"

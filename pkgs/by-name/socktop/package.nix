@@ -8,7 +8,7 @@
   pname = "socktop";
   src = inputs.socktop;
   version = "0.1.0";
-  cargoHash = "sha256-usaBZ5xIPYKU4Qca8fI8Bg+XcsDUQNiQDdoohXvtu6w=";
+  cargoHash = "sha256-yYvA9EreZn4P/NOEanLHzA8sO5cF5xUYIQgm6M0IfIw=";
   nativeBuildInputs = with pkgs; [ pkg-config ];
   buildInputs = with pkgs; [ libdrm ];
 })

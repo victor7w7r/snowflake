@@ -84,10 +84,10 @@
       {
         environment.systemPackages = with pkgs; [
           #ariang
-          #self'.packages.screego
+          screego
           curlFull
           doggo
-          goto
+          self'.packages.goto
           gping
           inetutils
           iptables

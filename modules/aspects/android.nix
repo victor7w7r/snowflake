@@ -46,7 +46,9 @@
             adbtuifm
             adebar
             apkinspector
+            (python3.withPackages (ps: with ps; [ apkinspector ]))
             app-manager
+            audiosource
             better-adb-sync
             logcat-color3
             scrcpy-wrapper

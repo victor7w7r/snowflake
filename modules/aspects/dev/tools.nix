@@ -34,7 +34,6 @@
             rainfrog
             shellcheck
             ugm
-            #updo
             xh
           ];
         programs.direnv = {

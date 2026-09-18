@@ -11,7 +11,6 @@
         systemPackages = with pkgs; [
           distrobuilder
           lxcfs
-          self'.packages.lxtui
         ];
         persistence."/nix/persist".directories = lib.mkAfter [
           "/var/lib/incus"

@@ -69,7 +69,6 @@
           wf-recorder
           glib
           rofi-file-browser
-          autoricer
           corrupter
           dunst-timer
           hyprmixer

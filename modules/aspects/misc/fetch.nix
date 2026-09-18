@@ -19,7 +19,6 @@
           with pkgs;
           with self'.packages;
           [
-            cargofetch
             countryfetch
             customfetch
             envfetch
@@ -56,7 +55,6 @@
             kat-oh
             mfetch
             songfetch
-            sysfex
             zeitfetch
             inputs'.batfetch.packages.default
             #inputs'.swiftfetch.packages.swiftfetch

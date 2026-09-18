@@ -9,7 +9,7 @@ cache-stdenv.mkDerivation {
   src = inputs.davinci-video-converter;
   makeFlags = [ "PREFIX=$(out)" ];
 
-  # nativeBuildInputs = with pkgs; [pkg-config ];
+  # nativeBuildInputs = with pkgs; [ pkg-config ];
   postPatch = ''
     substituteInPlace Makefile \
       --replace-fail "/usr/local/bin/" "''$out/bin/"

@@ -2,9 +2,9 @@
 pkgs.stdenvNoCC.mkDerivation {
   pname = "armbian-firmware";
   version = "latest";
-  nativeBuildInputs = [
-    pkgs.findutils
-    pkgs.zstd
+  nativeBuildInputs = with pkgs; [
+    findutils
+    zstd
   ];
   dontBuild = true;
 
