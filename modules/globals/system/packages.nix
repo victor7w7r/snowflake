@@ -17,7 +17,7 @@
           gnutar
           inxi
           lemmeknow
-          loop
+          self'.packages.loop
           lsof
           hexyl
           mommy
