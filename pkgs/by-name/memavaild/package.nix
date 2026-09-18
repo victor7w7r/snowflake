@@ -19,8 +19,7 @@ pkgs.stdenv.mkDerivation {
       SYSTEMDUNITDIR=/lib/systemd/system
 
     substituteInPlace $out/lib/systemd/system/memavaild.service \
-      --replace-fail "/usr/bin/memavaild" "$out/bin/memavaild" \
-      --replace-fail "/usr/bin/python3" "${pkgs.python3}/bin/python3"
+      --replace-fail "/usr/local/bin/memavaild" "$out/bin/memavaild"
 
     wrapProgram $out/bin/memavaild \
       --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.python3 ]}
