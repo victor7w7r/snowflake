@@ -8,8 +8,8 @@
 
   _module.args = {
     kernel-versions = {
-      latest = "7.2.5";
-      lts = "6.18.51";
+      latest = "7.2.6";
+      lts = "6.18.52";
     };
 
     armPkgs = import inputs.nixpkgs { system = "aarch64-linux"; };
@@ -44,7 +44,7 @@
     };
 
     linux-lts = {
-      url = "github:CachyOS/linux/cachyos-${kernel-versions.lts}-3";
+      url = "github:CachyOS/linux/cachyos-${kernel-versions.lts}-1";
       flake = false;
     };
   };

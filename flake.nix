@@ -71,10 +71,6 @@
       url = "gitlab:asus-linux/linux-g14/c95c77b20d794c1c962fcccc9735348bdb7d4e76";
       flake = false;
     };
-    autoricer = {
-      url = "github:3rfaan/autoricer";
-      flake = false;
-    };
     batfetch = {
       url = "github:ashish-kus/batfetch";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -110,10 +106,6 @@
     };
     cachyos-patches-unsync = {
       url = "github:CachyOS/kernel-patches/c1ba300617a12d257b5721572b9bbe28efae182f";
-      flake = false;
-    };
-    cargofetch = {
-      url = "github:arjav0703/cargofetch";
       flake = false;
     };
     catppuccin-refind = {
@@ -177,10 +169,6 @@
       url = "github:imsnif/diskonaut";
       flake = false;
     };
-    dockadvisor = {
-      url = "github:deckrun/dockadvisor";
-      flake = false;
-    };
     dockerfilegraph = {
       url = "github:patrickhoefler/dockerfilegraph";
       flake = false;
@@ -209,16 +197,8 @@
       url = "github:nix-community/emacs-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    endcord = {
-      url = "github:sparklost/endcord";
-      flake = false;
-    };
     envfetch = {
       url = "github:ankddev/envfetch";
-      flake = false;
-    };
-    ext4-crypt = {
-      url = "github:gdelugre/ext4-crypt";
       flake = false;
     };
     ffmpeg-audio-thumbnailer = {
@@ -488,11 +468,11 @@
       flake = false;
     };
     linux-latest = {
-      url = "github:CachyOS/linux/cachyos-7.2.5-1";
+      url = "github:CachyOS/linux/cachyos-7.2.6-1";
       flake = false;
     };
     linux-lts = {
-      url = "github:CachyOS/linux/cachyos-6.18.51-3";
+      url = "github:CachyOS/linux/cachyos-6.18.52-1";
       flake = false;
     };
     linux-sdm845 = {
@@ -513,10 +493,6 @@
     };
     loop = {
       url = "github:Miserlou/loop";
-      flake = false;
-    };
-    lxtui = {
-      url = "github:FoleyBridge-Solutions/lxtui";
       flake = false;
     };
     lyricstify = {
@@ -696,10 +672,6 @@
       url = "github:davidborzek/spofi";
       flake = false;
     };
-    spotitube = {
-      url = "github:streambinder/spotitube";
-      flake = false;
-    };
     ssh-list = {
       url = "github:akinoiro/ssh-list";
       flake = false;
@@ -718,10 +690,6 @@
     };
     sxtetris = {
       url = "github:shixinhuang99/sxtetris";
-      flake = false;
-    };
-    sysfex = {
-      url = "github:mehedirm6244/sysfex";
       flake = false;
     };
     t2-audio = {
@@ -792,16 +760,8 @@
       url = "github:angelofallars/treefetch";
       flake = false;
     };
-    tui-slides = {
-      url = "github:Chleba/tui-slides";
-      flake = false;
-    };
     tuime = {
       url = "github:nthnd/tuime";
-      flake = false;
-    };
-    updo = {
-      url = "github:Owloops/updo";
       flake = false;
     };
     uwe5622 = {
