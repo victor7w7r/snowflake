@@ -75,7 +75,7 @@
         nix.settings.max-jobs = lib.mkDefault 2;
         system.nixos.label = "";
         networking = {
-          wifi.powersave = true;
+          networkmanager.wifi.powersave = true;
           firewall.trustedInterfaces = [
             "rndis0"
             "usb0"
