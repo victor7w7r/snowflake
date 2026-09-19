@@ -4,18 +4,8 @@
       enable = true;
       before = [ "ModemManager.service" ];
       wantedBy = [ "ModemManager.service" ];
-      requires = [
-        "qrtr-ns.service"
-        "pd-mapper.service"
-        "rmtfs.service"
-        "tqftpserv.service"
-      ];
-      after = [
-        "qrtr-ns.service"
-        "pd-mapper.service"
-        "rmtfs.service"
-        "tqftpserv.service"
-      ];
+      requires = [ "rmtfs.service" ];
+      after = [ "rmtfs.service" ];
 
       path = with pkgs; [
         libqmi

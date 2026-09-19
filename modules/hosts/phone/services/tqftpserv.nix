@@ -4,21 +4,8 @@
       tqftpserv = {
         description = "Qualcomm QRTR TFTP services (tqftpserv)";
         wantedBy = [ "multi-user.target" ];
-        requires = [
-          "qrtr-ns.service"
-          "pd-mapper.service"
-          "tqftpserv-populate-data.service"
-        ];
-        after = [
-          "qrtr-ns.service"
-          "pd-mapper.service"
-          "tqftpserv-populate-data.service"
-        ];
-        before = [
-          "network.target"
-          "NetworkManager.service"
-          "ModemManager.service"
-        ];
+        after = [ "tqftpserv-populate-data.service" ];
+        before = [ "network.target" ];
         serviceConfig = {
           ExecStart = "${
             pkgs.tqftpserv.overrideAttrs (_: {
@@ -26,7 +13,7 @@
             })
           }/bin/tqftpserv";
           Restart = "always";
-          RestartSec = "1s";
+          RestartSec = "2s";
           User = "root";
           Group = "root";
         };
@@ -34,8 +21,7 @@
 
       tqftpserv-populate-data = {
         description = "Data filling for tqftpserv";
-        requires = [ "mnt-vendor-persist\x2dro.mount" ];
-        after = [ "mnt-vendor-persist\x2dro.mount" ];
+        after = [ "mnt-vendor-persist.mount" ];
         before = [ "tqftpserv.service" ];
         wantedBy = [ "multi-user.target" ];
 
@@ -49,7 +35,7 @@
         script = ''
           set -eu
 
-          PERSIST_SRC="/mnt/vendor/persist-ro/rfs/msm/mpss"
+          PERSIST_SRC="/mnt/vendor/persist/rfs/msm/mpss"
           TQFTPSERV_TMP="/var/lib/tqftpserv"
 
           if [ -f "$TQFTPSERV_TMP/readwrite_ready" ]; then

@@ -49,7 +49,8 @@
           #"pd_ignore_unused"
           "console=tty0"
           "console=ttyGS0,115200"
-          "console=ttyMSM0,115200"
+          #"console=ttyMSM0,115200"
+          "cma=256M"
           "zram.num_devices=2"
           "firmware_class.path=/extra-firmware"
         ];
@@ -57,6 +58,7 @@
         blacklistedKernelModules = [
           "ipa"
           "qcrypto"
+          "g_ether"
           "rpmsg_wwan_ctrl"
         ];
 
@@ -69,12 +71,14 @@
             "dm_mod"
             "fastrpc"
             "g_ffs"
+            "libcomposite"
             "qcom-pmi8998-haptics"
             "qcom_q6v5_mss"
             "qcom_q6v5_pas"
             "rmi_core"
             "rmi_i2c"
             "rtc_pm8xxx"
+            "usb_f_ncm"
           ];
 
           systemd.storePaths =

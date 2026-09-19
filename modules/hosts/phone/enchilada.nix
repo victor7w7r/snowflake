@@ -8,6 +8,7 @@
 
   #mount /dev/sdi13 /mnt && rm -rf /mnt/* && tar --zstd -xvf boot-enchilada.tar.zst -C /mnt/ --no-same-owner && sync && umount /dev/sdi13
   #mount -o lazytime,noatime,inline_xattr,inline_data,inline_dentry,flush_merge,checkpoint_merge,gc_merge,atgc,age_extent_cache,compress_chksum,compress_algorithm=zstd,compress_extension=bin,compress_extension=so /dev/sdi17 /mnt && rm -rf /mnt/store/* && tar --zstd -xvf store-enchilada.tar.zst -C /mnt/store/
+  #rm -rf /mnt/var && mv /mnt/store/nix-path-registration /mnt/ && mv /mnt/store/var /mnt/var && mv /mnt/store/store/* /mnt/store/ && rm -rf /mnt/store/store
 
   perSystem.packages = {
     phone-enchilada-toplevel =

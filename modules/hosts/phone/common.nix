@@ -57,6 +57,7 @@
       }:
       {
         environment = {
+          pathsToLink = [ "/share/qcom" ];
           variables.GST_PLUGIN_FEATURE_RANK = "v4l2vp8dec:SECONDARY,v4l2vp8enc:NONE,v4l2vp9dec:SECONDARY,v4l2h264dec:SECONDARY,v4l2h264enc:NONE,v4l2h265dec:SECONDARY,v4l2h265enc:NONE,v4l2mpeg2dec:SECONDARY";
           persistence."/nix/persist" = {
             directories = lib.mkAfter [
@@ -73,7 +74,21 @@
 
         nix.settings.max-jobs = lib.mkDefault 2;
         system.nixos.label = "";
-        networking.firewall.trustedInterfaces = [ "usb0" ];
+        networking = {
+          wifi.powersave = true;
+          firewall.trustedInterfaces = [
+            "rndis0"
+            "usb0"
+          ];
+        };
+
+        users = {
+          groups.fastrpc = { };
+          users.fastrpc = {
+            isSystemUser = true;
+            group = "fastrpc";
+          };
+        };
 
         hardware = {
           deviceTree.enable = true;
@@ -81,21 +96,18 @@
           firmware = lib.mkAfter [ self'.packages.oneplus-firmware ];
         };
 
-        systemd.services = {
-          iio-sensor-proxy.serviceConfig.TimeoutStopSec = 3;
-          "sshd-inhibit-sleep@" = {
-            description = "Inhibit sleep when sshd connection is active";
+        systemd.services."sshd-inhibit-sleep@" = {
+          description = "Inhibit sleep when sshd connection is active";
 
-            wantedBy = [ "sshd@.service" ];
-            bindsTo = [ "sshd@.service" ];
+          wantedBy = [ "sshd@.service" ];
+          bindsTo = [ "sshd@.service" ];
 
-            serviceConfig.ExecStart = ''
-              systemd-inhibit --what sleep \
-                --who "sshd-inhibit-sleep@%i.service" \
-                --why "SSH session active" \
-                ${lib.getExe' pkgs.coreutils "sleep"} infinity
-            '';
-          };
+          serviceConfig.ExecStart = ''
+            systemd-inhibit --what sleep \
+              --who "sshd-inhibit-sleep@%i.service" \
+              --why "SSH session active" \
+              ${lib.getExe' pkgs.coreutils "sleep"} infinity
+          '';
         };
 
         services = {
@@ -124,14 +136,15 @@
           };
 
           tlp.enable = lib.mkDefault true;
-          udev.extraRules = builtins.concatStringsSep "\n" [
-            ''ACTION=="remove", GOTO="iio_sensor_proxy_end"''
-            ''SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT}=="1", SUBSYSTEMS=="input", ATTRS{name}=="pmi8998_haptics", TAG+="uaccess", ENV{FEEDBACKD_TYPE}="vibra"''
-            ''SUBSYSTEM=="uio", ATTR{name}=="rmtfs", SYMLINK+="qcom_rmtfs_uio1"''
-            ''SUBSYSTEM=="iio", ATTR{name}=="*accel*", ENV{ACCEL_MOUNT_MATRIX}="-1, 0, 0; 0, -1, 0; 0, 0, 1"''
-            ''SUBSYSTEM=="input", KERNEL=="event*", ENV{GM_WAKEUP_KEY_114}="0", ENV{GM_WAKEUP_KEY_115}="0"''
-            ''LABEL="iio_sensor_proxy_end"''
-          ];
+          udev.extraRules = ''
+            SUBSYSTEM=="input", KERNEL=="event*", ENV{GM_WAKEUP_KEY_114}="0", ENV{GM_WAKEUP_KEY_115}="0"
+            SUBSYSTEM=="devfreq", KERNEL=="5000000.gpu", ATTR{min_freq}="675000000", ATTR{polling_interval}="16"
+            SUBSYSTEM=="misc", KERNEL=="fastrpc-*", OWNER="fastrpc", GROUP="fastrpc", MODE="0600", TAG+="systemd"
+            SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT}=="1", SUBSYSTEMS=="input", ATTRS{name}=="pmi8998_haptics", TAG+="uaccess", ENV{FEEDBACKD_TYPE}="vibra"
+            SUBSYSTEM=="uio", ATTR{name}=="rmtfs", SYMLINK+="qcom_rmtfs_uio1"
+            SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity"
+            SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}+="-1, 0, 0; 0, 1, 0; 0, 0, -1"
+          '';
         };
       };
   };

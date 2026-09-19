@@ -7,22 +7,15 @@
         fsType = "none";
         options = [ "bind" ];
       };
-      "/mnt/vendor/persist-ro" = {
+      "/mnt/vendor/persist" = {
         device = "/dev/disk/by-partlabel/persist";
         fsType = "ext4";
         options = [
           "ro"
           "nosuid"
           "nodev"
-        ];
-      };
-      "/mnt/vendor/persist" = {
-        device = "/nix/persist/vendor/persist";
-        fsType = "none";
-        options = [
-          "bind"
-          "X-systemd.automount"
-          "X-systemd.requires=/nix/persist"
+          "noexec"
+          "nofail"
         ];
       };
     };
@@ -33,7 +26,6 @@
       "d /nix/persist/vendor/persist 0755 root root -"
     ];
 
-    
     imports = [ inputs.disko-mobile.nixosModules.disko ];
 
     disko = {

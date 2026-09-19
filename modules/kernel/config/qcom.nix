@@ -89,7 +89,6 @@
         USB_ETH = setupDenial isDenied module;
         USB_ETH_RNDIS = setupDenial isDenied yes;
         USB_F_NCM = setupDenial isDenied yes;
-        USB_G_NCM = setupDenial isDenied module;
         USB_G_SERIAL = setupDenial isDenied module;
         USB_MASS_STORAGE = setupDenial isDenied module;
         VIDEO_QCOM_CAMSS = setupDenial isDenied module;
@@ -120,7 +119,6 @@
         PWM = yes;
         PWM_QTI_LPG = module;
         QRTR = lib.mkForce yes;
-        # Use the userspace mapper from phone/services/qrtr.nix.
         QCOM_PD_MAPPER = lib.mkForce no;
         NF_TABLES_INET = yes;
         NFT_LIMIT = yes;
@@ -134,6 +132,7 @@
         SYSFB_SIMPLEFB = yes;
         USB_F_HID = yes;
         USB_ULPI_BUS = yes;
+        USB_LIBCOMPOSITE = module;
         U_SERIAL_CONSOLE = yes;
         USB_ANNOUNCE_NEW_DEVICES = yes;
         UEVENT_HELPER = yes;
@@ -483,6 +482,7 @@
         SND_SOC_TAS2559 = no;
         SND_SOC_X1E80100 = no;
         USB_ONBOARD_HUB = no;
+        USB_G_NCM = no;
         TOUCHSCREEN_FTM4 = no;
         TOUCHSCREEN_STM_FTS_DOWNSTREAM = no;
         TOUCHSCREEN_SW49410 = no;

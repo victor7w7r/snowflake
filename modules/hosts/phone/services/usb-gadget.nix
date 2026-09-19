@@ -1,15 +1,22 @@
 { inputs, ... }: {
   den.aspects.phone.services.usb-gadget.nixos =
+    { pkgs, ... }:
     {
-      lib,
-      pkgs,
-      self',
-      ...
-    }:
-    {
-      boot.blacklistedKernelModules = [ "g_ether" ];
+      systemd = {
+        network = {
+          enable = true;
+          "10-usb0" = {
+            matchConfig.Name = "usb0";
+            networkConfig = {
+              Address = "172.16.42.1/24";
+              ConfigureWithoutCarrier = true;
+              IPv6AcceptRA = false;
+            };
+            linkConfig.RequiredForOnline = "no";
+          };
+        };
 
-      systemd.services = {
+        services = {
           "serial-getty@ttyGS0" = {
             enable = true;
             wantedBy = [ "multi-user.target" ];
@@ -38,70 +45,70 @@
             };
           };
 
-
           usb-gadget = {
-            unitConfig.DefaultDependencies = false;
-            requires = [
-              "sys-kernel-config.mount"
-              "modprobe@libcomposite.service"
-            ];
             after = [
               "systemd-modules-load.service"
               "sys-kernel-config.mount"
-              "modprobe@libcomposite.service"
             ];
-            wantedBy = [ "basic.target" ];
+            wantedBy = [ "multi-user.target" ];
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
+              ExecStop = pkgs.writeShellScript "usb-gadget-down" ''
+                G=/sys/kernel/config/usb_gadget/g1
+                [ -d "$G" ] && echo "" > "$G/UDC" || true
+              '';
+              ExecStart = pkgs.writeShellScript "usb-gadget" ''
+                set -eu
+                G=/sys/kernel/config/usb_gadget/g1
+
+                if [ -d "$G" ]; then
+                  echo "" > "$G/UDC" 2>/dev/null || true
+                  for l in "$G"/configs/*/ncm.usb0 "$G"/configs/*/rndis.usb0; do
+                    [ -e "$l" ] && rm -f "$l" || true
+                  done
+                  rmdir "$G"/configs/*/strings/* 2>/dev/null || true
+                  rmdir "$G"/configs/* 2>/dev/null || true
+                  rmdir "$G"/functions/* 2>/dev/null || true
+                  rmdir "$G"/strings/* 2>/dev/null || true
+                  rmdir "$G" || true
+                fi
+
+                mkdir -p $G
+                echo 0x18d1 > "$G/idVendor"
+                echo 0xd001 > "$G/idProduct"
+                echo 0x0200 > "$G/bcdUSB"
+                echo 0x0100 > "$G/bcdDevice"
+
+                mkdir -p "$G/strings/0x409"
+                echo "NixOS" > $G/strings/0x409/manufacturer
+                echo "OnePlus 6" > $G/strings/0x409/product
+                echo "phone-d4g3" > $G/strings/0x409/serialnumber
+
+                mkdir -p "$G/configs/c.1/strings/0x409"
+                echo "USB Net + ADB + Serial" > "$G/configs/c.1/strings/0x409/configuration"
+                echo 250 > "$G/configs/c.1/MaxPower"
+
+                mkdir -p "$G/functions/ncm.usb0"
+                echo "02:22:82:ff:ff:11" > "$G/functions/ncm.usb0/dev_addr"
+                echo "02:22:82:ff:ff:22" > "$G/functions/ncm.usb0/host_addr"
+                ln -s "$G/functions/ncm.usb0" "$G/configs/c.1/ncm.usb0"
+
+                mkdir -p "$G/functions/acm.usb0"
+                ln -s "$G/functions/acm.usb0" "$G/configs/c.1/acm.usb0"
+
+                mkdir -p "$G/functions/ffs.adb"
+                ln -s "$G/functions/ffs.adb" "$G/configs/c.1/ffs.adb"
+
+                mkdir -p /dev/usb-ffs/adb
+                if ! grep -qs " /dev/usb-ffs/adb " /proc/mounts; then
+                  mount -t functionfs adb /dev/usb-ffs/adb
+                fi
+
+                UDC=$(ls /sys/class/udc | head -n1)
+                echo "$UDC" > "$G/UDC" || true
+              '';
             };
-            restartIfChanged = false;
-
-            script = ''
-              GADGET="/sys/kernel/config/usb_gadget/g1"
-
-              # The initrd may leave g_ether or an old configfs gadget bound.
-              ${pkgs.kmod}/bin/modprobe -r g_ether 2>/dev/null || true
-              if [ -f "$GADGET/UDC" ]; then
-                echo "" > "$GADGET/UDC" 2>/dev/null || true
-              fi
-              umount /dev/usb-ffs/adb 2>/dev/null || true
-              for link in "$GADGET/configs/c.1/"*; do
-                [ -e "$link" ] || continue
-                rm -f "$link"
-              done
-              for entry in "$GADGET/functions/"*; do
-                [ -e "$entry" ] || continue
-                rmdir "$entry" 2>/dev/null || true
-              done
-
-              mkdir -p $GADGET
-              echo "0x1d6b" > $GADGET/idVendor
-              echo "0x0104" > $GADGET/idProduct
-
-              mkdir -p $GADGET/strings/0x409
-              echo "NixOS" > $GADGET/strings/0x409/manufacturer
-              echo "OnePlus 6" > $GADGET/strings/0x409/product
-              echo "NixOS" > $GADGET/strings/0x409/serialnumber
-
-              mkdir -p $GADGET/functions/ncm.usb0
-              mkdir -p $GADGET/functions/ffs.adb
-              mkdir -p $GADGET/functions/acm.usb0
-
-              mkdir -p /dev/usb-ffs/adb
-              if ! grep -qs " /dev/usb-ffs/adb " /proc/mounts; then
-                mount -t functionfs adb /dev/usb-ffs/adb
-              fi
-
-              mkdir -p $GADGET/configs/c.1
-              mkdir -p $GADGET/configs/c.1/strings/0x409
-              echo "USB Net + ADB + Serial" > $GADGET/configs/c.1/strings/0x409/configuration
-
-              ln -s $GADGET/functions/ncm.usb0 $GADGET/configs/c.1/
-              ln -s $GADGET/functions/ffs.adb $GADGET/configs/c.1/
-              ln -s $GADGET/functions/acm.usb0 $GADGET/configs/c.1/
-
-            '';
           };
 
           usb-gadget-bind = {
@@ -117,7 +124,6 @@
             ];
             before = [
               "serial-getty@ttyGS0.service"
-              "usb-gadget-unudhcpd.service"
             ];
             serviceConfig = {
               Type = "oneshot";
@@ -147,14 +153,7 @@
               fi
             '';
           };
-
-          usb-gadget-unudhcpd = {
-            wantedBy = [ "multi-user.target" ];
-            requires = [ "usb-gadget-bind.service" ];
-            after = [ "usb-gadget-bind.service" ];
-            description = "DHCP server for USB Gadget";
-            serviceConfig.ExecStart = "${lib.getExe self'.packages.unudhcpd} -i usb0 -s 172.16.42.1 -c 172.16.42.2";
-          };
         };
+      };
     };
 }
