@@ -24,6 +24,7 @@
             "/var/lib/fail2ban"
             "/var/lib/lastlog"
             "/var/lib/nixos"
+            "/var/lib/sbctl"
             "/var/lib/systemd"
             "/var/lib/tailscale"
           ];
@@ -37,26 +38,37 @@
             "/etc/machine-id"
           ];
           users = {
-            "${user.name}".directories = [
-              "Documentos"
-              "Descargas"
-              "Imagenes"
-              "repositories"
-              "scripts"
-              "remote"
-              ".cache/thumbnails"
-              ".config/nix"
-              ".config/freerdp"
-              ".config/Seafile"
-              ".local/bin"
-              ".local/share/cod"
-              ".local/share/Trash"
-              ".local/share/zoxide"
-              ".local/state"
-              ".ssh"
-              ".gnupg"
-              ".ccnet"
-            ];
+            "${user.name}" = {
+              files = [
+                ".zsh_history"
+                ".bash_history"
+              ];
+              directories = [
+                ".cache/antidote"
+                ".cache/nvim"
+                ".cache/thumbnails"
+                ".ccnet"
+                ".config/Seafile"
+                ".config/freerdp"
+                ".config/nix"
+                ".gnupg"
+                ".local/bin"
+                ".local/share/Trash"
+                ".local/share/atuin"
+                ".local/share/cod"
+                ".local/share/zoxide"
+                ".local/state"
+                ".ssh"
+                ".zsh"
+                ".tmux"
+                "Descargas"
+                "Documentos"
+                "Imagenes"
+                "remote"
+                "repositories"
+                "scripts"
+              ];
+            };
             root.directories = [
               ".zsh"
               ".cache/antidote"

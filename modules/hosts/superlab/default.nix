@@ -75,6 +75,7 @@
             #virt
             #libvirt
             #plasma._
+            persistence
             remote
             victor7w7r
             root

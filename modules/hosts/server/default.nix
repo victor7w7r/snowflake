@@ -45,6 +45,7 @@
         firewall
         games
         kitty
+        persistence
         remote
         root
         tools

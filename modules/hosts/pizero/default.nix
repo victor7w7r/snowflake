@@ -62,6 +62,7 @@
             disks
             misc.comm
             misc.fetch
+            persistence
             pentest._
 
             cockpit

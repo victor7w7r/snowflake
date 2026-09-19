@@ -46,6 +46,7 @@
           libvirt
           remote
           root
+          persistence
           plasma._
           victor7w7r
           virt

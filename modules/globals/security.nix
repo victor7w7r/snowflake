@@ -1,29 +1,18 @@
 {
   den.default.nixos =
+    { pkgs, ... }:
     {
-      isPersistent,
-      isTpm,
-      lib,
-      pkgs,
-      ...
-    }:
-    {
-      environment = {
-        persistence = lib.optionalAttrs isPersistent {
-          "/nix/persist".directories = [ (lib.mkIf isTpm "/var/lib/sbctl") ];
-        };
-        systemPackages = with pkgs; [
-          #boxxy
-          age
-          firejail
-          libfido2
-          luksmeta
-          pam_u2f
-          veracrypt
-          yubikey-manager
-          yubikey-personalization
-        ];
-      };
+      environment.systemPackages = with pkgs; [
+        #boxxy
+        age
+        firejail
+        libfido2
+        luksmeta
+        pam_u2f
+        veracrypt
+        yubikey-manager
+        yubikey-personalization
+      ];
 
       programs.yubikey-manager.enable = true;
 

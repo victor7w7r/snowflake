@@ -48,6 +48,7 @@
         gestures
         kitty
         libvirt
+        persistence
         plasma._
         remote
         root

@@ -39,6 +39,7 @@
       games
       #kitty
       #libvirt
+      persistence
       plasma._
       remote
       root

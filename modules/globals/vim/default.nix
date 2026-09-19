@@ -11,18 +11,5 @@
         plugins.lualine.enable = true;
       };
     };
-
-    nixos =
-      {
-        isPersistent,
-        lib,
-        user,
-        ...
-      }:
-      lib.optionalAttrs isPersistent {
-        environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
-          ".cache/nvim"
-        ];
-      };
   };
 }

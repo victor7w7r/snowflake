@@ -1,33 +1,9 @@
 {
   den.default = {
-    nixos =
-      {
-        isPersistent,
-        lib,
-        user,
-        ...
-      }:
-      {
-        programs.zsh.enable = true;
-        environment = lib.mkMerge [
-          {
-            pathsToLink = [ "/share/zsh" ];
-          }
-          (lib.mkIf isPersistent {
-            persistence."/nix/persist".users."${user.name}" = {
-              files = [
-                ".zsh_history"
-                ".bash_history"
-              ];
-              directories = [
-                ".local/share/atuin"
-                ".cache/antidote"
-                ".zsh"
-              ];
-            };
-          })
-        ];
-      };
+    nixos = {
+      programs.zsh.enable = true;
+      environment.pathsToLink = [ "/share/zsh" ];
+    };
 
     provides.to-users.homeManager.programs = {
       intelli-shell.enable = true;

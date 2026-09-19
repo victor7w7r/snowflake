@@ -69,6 +69,7 @@
 
             games
             kitty
+            persistence
             plasma._
             root
             snowflake
