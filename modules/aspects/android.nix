@@ -45,7 +45,6 @@
             #adb-shell
             adbtuifm
             adebar
-            apkinspector
             (python3.withPackages (ps: with ps; [ apkinspector ]))
             app-manager
             audiosource

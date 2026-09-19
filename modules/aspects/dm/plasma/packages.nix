@@ -108,7 +108,7 @@
             kmenu
             kde-control-station
             maxwell
-            panel-spacer-extended
+            plasma-panel-spacer-extended
             plasma-drawer
             sticky-window-snapping
             virtual-desktops-only-on-primary
