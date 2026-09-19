@@ -5,7 +5,7 @@
       systemd = {
         network = {
           enable = true;
-          "10-usb0" = {
+          networks."10-usb0" = {
             matchConfig.Name = "usb0";
             networkConfig = {
               Address = "172.16.42.1/24";
