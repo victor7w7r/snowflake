@@ -27,7 +27,7 @@
       EXT_GROUP_SCHED = yes;
       IKCONFIG = yes;
       KVM = yes;
-      KBUILD_BUILD_TIMESTAMP = freeform self.sourceInfo.lastModifiedDate or "2026-01-01T00:00:00Z";
+      KBUILD_BUILD_TIMESTAMP = freeform (self.sourceInfo.lastModifiedDate or "2026-01-01T00:00:00Z");
       LSM = freeform "landlock,lockdown,yama,integrity,apparmor,bpf";
       LTO_CLANG_THIN = yes;
       NO_HZ = yes;
