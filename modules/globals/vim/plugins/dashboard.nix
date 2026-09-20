@@ -18,6 +18,73 @@
           ":.....::.....::.....::::.....:..:::::.....::.....:::..::..::...:::.....::::.....:::..::.....::.....::..:.....::.....:"
           ""
           "[ victor7w7r ]"
+          ""
+        ];
+        center = [
+          {
+            action = "lua LazyVim.pick()()";
+            desc = " Buscar...";
+            icon = " ";
+            key = "f";
+          }
+          {
+            action = "ene | startinsert";
+            desc = " Nuevo";
+            icon = " ";
+            key = "n";
+          }
+          {
+            action = "lua LazyVim.pick(\"oldfiles\")()";
+            desc = " Archivos recientes";
+            icon = " ";
+            key = "r";
+          }
+          {
+            action = "lua LazyVim.pick(\"live_grep\")()";
+            desc = " Buscar Texto";
+            icon = " ";
+            key = "g";
+          }
+          {
+            action = "lua LazyVim.pick.config_files()()";
+            desc = " Config";
+            icon = " ";
+            key = "c";
+          }
+          {
+            action = "lua require(\"persistence\").load()";
+            desc = " Restaurar Sesión";
+            icon = " ";
+            key = "s";
+          }
+          {
+            action = "LazyExtras";
+            desc = " Lazy Extras";
+            icon = " ";
+            key = "x";
+          }
+          {
+            action = "Lazy";
+            desc = " Lazy";
+            icon = "󰒲 ";
+            key = "l";
+          }
+          {
+            action = "function() vim.api.nvim_input(\"<cmd>qa<cr>\") end";
+            desc = " Salir";
+            icon = " ";
+            key = "q";
+          }
+        ];
+        footer = [
+          ''
+            function()
+              local stats = require("lazy").stats()
+              local ms = (math.floor(stats.startuptime * 100 + 0.5) / 100)
+              return { "⚡ Cargado LazyVim con " ..
+              stats.loaded .. "/" .. stats.count .. " plugins en " .. ms .. "ms" }
+            end
+          ''
         ];
       };
     };

@@ -87,16 +87,11 @@
             }:
             {
               networking.hostName = "v7w7r-radxarock5b";
-              environment.systemPackages = [ pkgs.usb-modeswitch ];
 
               hardware = {
                 firmware = with self'.packages; lib.singleton armbian-firmware;
                 deviceTree.name = "rockchip/rk3588-rock-5b.dtb";
               };
-
-              services.udev.extraRules = ''
-                ATTRS{idVendor}=="2357", ATTRS{idProduct}=="011f", RUN+="${pkgs.usb-modeswitch}/bin/usb_modeswitch -KW -v 2357 -p 011f"
-              '';
 
               systemd.tmpfiles.rules = [
                 "L+ /lib/firmware/rtl_nic - - - - /run/current-system/firmware/rtl_nic"
@@ -105,7 +100,8 @@
 
               boot = {
                 kernelParams = [ "console=ttyS2,1500000n8" ];
-                extraModulePackages = [ config.boot.kernelPackages.rtl8821cu ];
+                blacklistedKernelModules = [ "rtl8xxxu" ];
+                extraModulePackages = [ config.boot.kernelPackages.rtl8192eu ];
                 loader = {
                   grub.enable = false;
                   generic-extlinux-compatible.enable = true;
