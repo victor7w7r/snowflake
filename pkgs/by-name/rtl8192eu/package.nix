@@ -1,9 +1,8 @@
 { pkgs, superlab-kernel }:
 let
-  stdenvClang = pkgs.overrideCC pkgs.stdenv pkgs.llvmPackages_20.clang;
   kdev = "${superlab-kernel.dev}/lib/modules/${superlab-kernel.modDirVersion}/build";
 in
-stdenvClang.mkDerivation {
+superlab-kernel.stdenv.mkDerivation {
   pname = "rtl8192eu";
   version = "${superlab-kernel.modDirVersion}-4.4.1.20250504";
 
@@ -24,9 +23,9 @@ stdenvClang.mkDerivation {
     superlab-kernel.moduleBuildDependencies
     ++ [
       bc
-      clang_20
-      llvm_20
-      lld_20
+      clang
+      llvm
+      lld
     ];
 
   makeFlags = [
@@ -43,7 +42,8 @@ stdenvClang.mkDerivation {
   buildPhase = "make -C ${kdev} M=$(pwd) $makeFlags modules";
 
   installPhase = ''
-    make -C ${kdev} M=$(pwd) $makeFlags INSTALL_MOD_PATH=$out modules_install
+    mkdir -p $out/lib/modules/${superlab-kernel.modDirVersion}/extra
+    find . -name '*.ko' -exec cp {} $out/lib/modules/${superlab-kernel.modDirVersion}/extra/ \;
     find $out -type f -name '*.ko' -exec xz -f {} \;
   '';
 }
