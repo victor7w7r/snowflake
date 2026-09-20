@@ -10,10 +10,10 @@
           android-tools
           gnirehtet
           go-mtpfs
-          qtscrcpy
           payload-dumper-go
-          spytrap-adb
+          qtscrcpy
           scrcpy
+          spytrap-adb
           universal-android-debloater
         ];
       };
@@ -43,20 +43,17 @@
           with self'.packages;
           [
             #adb-shell
+            (python3.withPackages (ps: with ps; [ apkinspector ]))
             adbtuifm
             adebar
-            (python3.withPackages (ps: with ps; [ apkinspector ]))
             app-manager
             audiosource
             better-adb-sync
             logcat-color3
             scrcpy-wrapper
-            simple-mtpfs
             zilch
           ]
-          ++ (lib.optionals isX86 [
-            aya
-          ]);
+          ++ (lib.optionals isX86 [ aya ]);
       };
   };
 }

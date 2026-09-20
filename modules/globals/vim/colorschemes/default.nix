@@ -1,8 +1,8 @@
 {
-   den.aspects.nixvim.colorschemes.nixvim = {
+  den.default.os.programs.nixvim = {
     colorschemes = {
       base16 = {
-        enable = false;
+        enable = true;
         colorscheme = "mountain";
       };
     };

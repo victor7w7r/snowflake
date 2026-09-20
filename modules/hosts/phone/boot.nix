@@ -79,7 +79,37 @@
             "rmi_i2c"
             "rtc_pm8xxx"
             "usb_f_ncm"
+            "vfat"
+            "nls_cp437"
+            "nls_iso8859-1"
           ];
+
+          services.save-journal-on-emergency = {
+            description = "Dump journalctl to EFI partition on emergency";
+
+            wantedBy = [ "emergency.target" ];
+            before = [ "emergency.service" ];
+
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+            };
+
+            script = ''
+              MNT="/tmp/efifs"
+              mkdir -p "$MNT"
+
+              EFI_DEV="dev/disk/by-partlabel/system_a"
+
+              if ${pkgs.util-linux}/bin/mount -t vfat "$EFI_DEV" "$MNT"; then
+                mkdir -p "$MNT/initrd-logs"
+                LOG_FILE="$MNT/initrd-logs/journal-panic-$(date +%s).log"
+                ${pkgs.systemd}/bin/journalctl -b --no-pager > "$LOG_FILE"
+                sync
+                ${pkgs.util-linux}/bin/umount "$MNT"
+              fi
+            '';
+          };
 
           systemd.storePaths =
             map

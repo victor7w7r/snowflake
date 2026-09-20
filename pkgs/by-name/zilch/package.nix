@@ -7,7 +7,7 @@
   inherit pkgs;
   pname = "zilch";
   src = inputs.zilch;
-  cargoHash = "sha256-M3+66AsLgkfpg8sHvx4vWFLKSS9a8soSxjFMDe8ip1o=";
+  cargoHash = "sha256-Q6utN5qdZwEXhky1VdlUvRjgLEbrjKfdNlCIju+h1Dc=";
   nativeBuildInputs = with pkgs; [
     pkg-config
     makeWrapper
