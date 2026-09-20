@@ -22,7 +22,7 @@ stdenvClang.mkDerivation {
 
   nativeBuildInputs =
     with pkgs;
-    kernel.moduleBuildDependencies
+    superlab-kernel.moduleBuildDependencies
     ++ [ pkgs.bc ]
     ++ [
       clang_20
