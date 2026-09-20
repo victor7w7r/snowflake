@@ -2,6 +2,7 @@
   den.aspects.superlab.initrd.nixos = { pkgs, ... }: {
     boot.initrd = {
       kernelModules = [
+        "8821cu"
         "display_connector"
         "dm_crypt"
         "dm_mod"

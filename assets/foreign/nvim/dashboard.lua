@@ -17,7 +17,6 @@ return {
 			logo = string.rep("\n", 1) .. logo .. "\n\n"
 
 			local opts = {
-				theme = "doom",
 				hide = { statusline = false },
 				config = {
 					header = vim.split(logo, "\n"),
