@@ -36,8 +36,9 @@ stdenvClang.mkDerivation {
     "LD=ld.lld"
     "HOSTLD=ld.lld"
     "ARCH=x86_64"
-    "KERNELRELEASE=${superlab-version}"
-    "KSRC=${superlab-kernel.dev}/lib/modules/${superlab-version}/build"
+    "KERNELRELEASE=${superlab-kernel}"
+    "KDIR=${superlab-kernel.dev}/lib/modules/${superlab-kernel}/build"
+    "INSTALL_MOD_PATH=$(out)"
   ];
 
   enableParallelBuilding = true;

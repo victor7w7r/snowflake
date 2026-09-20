@@ -79,7 +79,6 @@
 
           nixos =
             {
-              config,
               lib,
               pkgs,
               self',
