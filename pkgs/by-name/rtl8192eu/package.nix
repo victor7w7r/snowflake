@@ -35,7 +35,7 @@ stdenvClang.mkDerivation {
     "HOSTCC=clang"
     "LD=ld.lld"
     "HOSTLD=ld.lld"
-    "ARCH=x86_64"
+    "ARCH=arm64"
     "KERNELRELEASE=${kernelVersion}"
     "KDIR=${superlab-kernel.dev}/lib/modules/${kernelVersion}/build"
     "KSRC=${superlab-kernel.dev}/lib/modules/${kernelVersion}/build"
@@ -49,7 +49,7 @@ stdenvClang.mkDerivation {
 
   installPhase = ''
     mkdir -p ${modDestDir}
-    find . -name '*.ko' -exec cp --parents {} ${modDestDir} \;
-    find ${modDestDir} -name '*.ko' -exec xz -f {} \;
+    find . -type f -name '*.ko' -exec cp -v {} ${modDestDir}/ \;
+    find ${modDestDir} -type f -name '*.ko' -exec xz -f {} \;
   '';
 }

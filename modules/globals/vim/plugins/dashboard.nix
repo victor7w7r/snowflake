@@ -76,7 +76,8 @@
             key = "q";
           }
         ];
-        footer = [
+        /*
+          footer = [
           ''
             function()
               local stats = require("lazy").stats()
@@ -85,7 +86,8 @@
               stats.loaded .. "/" .. stats.count .. " plugins en " .. ms .. "ms" }
             end
           ''
-        ];
+          ];
+        */
       };
     };
   };
