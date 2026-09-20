@@ -1,11 +1,11 @@
-{ pkgs, kernel }:
+{ pkgs, superlab-kernel }:
 let
-  modDestDir = "$out/lib/modules/${kernel.modDirVersion}/kernel/drivers/net/wireless/realtek/rtl8192eu";
+  modDestDir = "$out/lib/modules/${superlab-kernel.modDirVersion}/kernel/drivers/net/wireless/realtek/rtl8192eu";
   stdenvClang = pkgs.overrideCC pkgs.stdenv pkgs.llvmPackages_20.clang;
 in
 stdenvClang.mkDerivation {
   pname = "rtl8192eu";
-  version = "${kernel.version}-4.4.1.20250504";
+  version = "${superlab-kernel.version}-4.4.1.20250504";
 
   src = pkgs.fetchFromGitHub {
     owner = "Mange";
@@ -27,7 +27,7 @@ stdenvClang.mkDerivation {
     ];
 
   makeFlags = pkgs.kernelModuleMakeFlags ++ [
-    "KSRC=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
+    "KSRC=${superlab-kernel.dev}/lib/modules/${superlab-kernel.modDirVersion}/build"
   ];
 
   enableParallelBuilding = true;
