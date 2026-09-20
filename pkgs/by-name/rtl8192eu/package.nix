@@ -4,7 +4,8 @@
   superlab-version,
 }:
 let
-  modDestDir = "$out/lib/modules/${superlab-version}/kernel/drivers/net/wireless/realtek/rtl8192eu";
+  kernelVersion = superlab-kernel.modDirVersion or superlab-version;
+  modDestDir = "$out/lib/modules/${kernelVersion}/kernel/drivers/net/wireless/realtek/rtl8192eu";
   stdenvClang = pkgs.overrideCC pkgs.stdenv pkgs.llvmPackages_20.clang;
 in
 stdenvClang.mkDerivation {
@@ -21,14 +22,13 @@ stdenvClang.mkDerivation {
   hardeningDisable = [ "pic" ];
 
   nativeBuildInputs =
-    with pkgs;
     superlab-kernel.moduleBuildDependencies
-    ++ [ pkgs.bc ]
-    ++ [
+    ++ (with pkgs; [
+      bc
       clang_20
       llvm_20
       lld_20
-    ];
+    ]);
 
   makeFlags = [
     "CC=clang"
@@ -36,12 +36,16 @@ stdenvClang.mkDerivation {
     "LD=ld.lld"
     "HOSTLD=ld.lld"
     "ARCH=x86_64"
-    "KERNELRELEASE=${superlab-version}"
-    "KDIR=${superlab-kernel.dev}/lib/modules/${superlab-kernel}/build"
+    "KERNELRELEASE=${kernelVersion}"
+    "KDIR=${superlab-kernel.dev}/lib/modules/${kernelVersion}/build"
+    "KSRC=${superlab-kernel.dev}/lib/modules/${kernelVersion}/build"
+    "M=$(PWD)"
     "INSTALL_MOD_PATH=$(out)"
   ];
 
   enableParallelBuilding = true;
+
+  buildPhase = "make -C ${superlab-kernel.dev}/lib/modules/${kernelVersion}/build M=$(pwd) modules";
 
   installPhase = ''
     mkdir -p ${modDestDir}
