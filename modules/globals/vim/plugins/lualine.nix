@@ -3,7 +3,7 @@
     enable = true;
     settings = {
       options = {
-        theme = "catppuccin";
+        theme = "nightfly";
         globalstatus = true;
         disabled_filetypes = [
           "dashboard"

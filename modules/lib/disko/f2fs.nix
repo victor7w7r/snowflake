@@ -40,6 +40,7 @@
     args = {
       name ? "",
       hasDefSectorSize ? false,
+      hasEncrypt ? false,
       highEnd ? true
     }: {
       mountOptions = [
@@ -63,7 +64,17 @@
       extraArgs = [
         "-f"
         "-O"
-        "extra_attr,inode_checksum,compression,flexible_inline_xattr,lost_found,sb_checksum"
+        (lib.concatStringsSep "," (
+            [
+              "extra_attr"
+              "inode_checksum"
+              "flexible_inline_xattr"
+              "lost_found"
+              "sb_checksum"
+            ]
+            ++ (lib.optional highEnd "compression")
+            ++ (lib.optional hasEncrypt "encrypt")
+          ))
         "-l"
         name
       ]

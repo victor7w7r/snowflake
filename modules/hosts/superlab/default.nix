@@ -86,6 +86,7 @@
 
           nixos =
             {
+              config,
               lib,
               pkgs,
               self',
@@ -108,6 +109,7 @@
 
               boot = {
                 kernelParams = [ "console=ttyS2,1500000n8" ];
+                extraModulePackages = [ config.boot.kernelPackages.rtl8821cu ];
                 loader = {
                   grub.enable = false;
                   generic-extlinux-compatible.enable = true;
