@@ -30,7 +30,7 @@
             inherit self;
             superlab-kernel =
               (kernel.hosts.superlab pkgs "superlab" "aarch64-linux" pkgs.stdenv.hostPlatform.system)
-              .superlab-kernelPackages;
+              .superlab-kernel;
             superlab-version = kernel-versions.lts;
             cache-stdenv = pkgs.overrideCC pkgs.stdenv (
               pkgs.ccacheWrapper.override {
