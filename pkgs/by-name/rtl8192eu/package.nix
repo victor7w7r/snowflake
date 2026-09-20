@@ -4,7 +4,7 @@
   superlab-version,
 }:
 let
-  modDestDir = "$out/lib/modules/${superlab-kernel.modDirVersion}/kernel/drivers/net/wireless/realtek/rtl8192eu";
+  modDestDir = "$out/lib/modules/${superlab-version}/kernel/drivers/net/wireless/realtek/rtl8192eu";
   stdenvClang = pkgs.overrideCC pkgs.stdenv pkgs.llvmPackages_20.clang;
 in
 stdenvClang.mkDerivation {
