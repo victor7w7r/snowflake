@@ -1,11 +1,15 @@
-{ pkgs, superlab-kernel }:
+{
+  pkgs,
+  superlab-kernel,
+  superlab-version,
+}:
 let
   modDestDir = "$out/lib/modules/${superlab-kernel.modDirVersion}/kernel/drivers/net/wireless/realtek/rtl8192eu";
   stdenvClang = pkgs.overrideCC pkgs.stdenv pkgs.llvmPackages_20.clang;
 in
 stdenvClang.mkDerivation {
   pname = "rtl8192eu";
-  version = "${superlab-kernel.version}-4.4.1.20250504";
+  version = "${superlab-version}-4.4.1.20250504";
 
   src = pkgs.fetchFromGitHub {
     owner = "Mange";

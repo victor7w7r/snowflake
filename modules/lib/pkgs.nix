@@ -3,6 +3,7 @@
   rustCall,
   den,
   inputs,
+  kernel-versions,
   withSystem,
   self,
   ...
@@ -30,6 +31,7 @@
             superlab-kernel =
               kernel.lib.package-gen pkgs "superlab" "aarch64-linux"
                 pkgs.stdenv.hostPlatform.system;
+            superlab-version = kernel-versions.lts;
             cache-stdenv = pkgs.overrideCC pkgs.stdenv (
               pkgs.ccacheWrapper.override {
                 cc = pkgs.stdenv.cc;

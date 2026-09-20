@@ -68,9 +68,7 @@
             };
           }
         );
-      passthru = {
-        version = (kernel.lib.version pkgs src localVer).final;
-      };
+
       extraMakeFlags = [
         "KCFLAGS=-w"
         "LOCALVERSION=-v7w7r-${localVer}"
