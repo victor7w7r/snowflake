@@ -30,13 +30,13 @@ stdenvClang.mkDerivation {
       lld_20
     ];
 
-  makeFlags =[
+  makeFlags = [
     "CC=clang"
     "HOSTCC=clang"
     "LD=ld.lld"
     "HOSTLD=ld.lld"
     "ARCH=x86_64"
-    "KERNELRELEASE=${superlab-kernel}"
+    "KERNELRELEASE=${superlab-kernel.modDirVersion}"
     "KDIR=${superlab-kernel.dev}/lib/modules/${superlab-kernel}/build"
     "INSTALL_MOD_PATH=$(out)"
   ];

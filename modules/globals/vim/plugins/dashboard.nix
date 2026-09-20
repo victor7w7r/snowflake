@@ -22,7 +22,7 @@
         ];
         center = [
           {
-            action.__raw = "lua LazyVim.pick()()";
+            action = "lua LazyVim.pick()()";
             desc = " Buscar...";
             icon = " ";
             key = "f";
@@ -34,25 +34,25 @@
             key = "n";
           }
           {
-            action.__raw = "lua LazyVim.pick('oldfiles')()";
+            action = "lua LazyVim.pick('oldfiles')()";
             desc = " Archivos recientes";
             icon = " ";
             key = "r";
           }
           {
-            action.__raw = "lua LazyVim.pick('live_grep')()";
+            action = "lua LazyVim.pick('live_grep')()";
             desc = " Buscar Texto";
             icon = " ";
             key = "g";
           }
           {
-            action.__raw = "lua LazyVim.pick.config_files()()";
+            action = "lua LazyVim.pick.config_files()()";
             desc = " Config";
             icon = " ";
             key = "c";
           }
           {
-            action.__raw = "lua require('persistence').load()";
+            action = "lua require('persistence').load()";
             desc = " Restaurar Sesión";
             icon = " ";
             key = "s";
