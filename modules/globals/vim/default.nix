@@ -7,7 +7,6 @@
     programs.nixvim = {
       enable = true;
       nixpkgs.source = inputs.nixpkgs;
-      plugins.lualine.enable = true;
     };
   };
 }

@@ -19,8 +19,6 @@ return {
 				{ "encoding" },
 				{ "filetype",   icon_only = true },
 			},
-			lualine_y = { "progress" },
-			lualine_z = { "location" },
 		},
 	},
 }
