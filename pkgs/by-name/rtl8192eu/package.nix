@@ -1,6 +1,7 @@
 { pkgs, superlab-kernel }:
 let
   stdenvClang = pkgs.overrideCC pkgs.stdenv pkgs.llvmPackages_20.clang;
+  modDestDir = "$out/lib/modules/${superlab-kernel.modDirVersion}/kernel/drivers/net/wireless/realtek/rtl8192eu";
 in
 stdenvClang.mkDerivation {
   pname = "rtl8192eu";
@@ -35,7 +36,14 @@ stdenvClang.mkDerivation {
     "HOSTLD=ld.lld"
     "ARCH=arm64"
     "KERNELRELEASE=${superlab-kernel.modDirVersion}"
-    "KDIR=${superlab-kernel.dev}/lib/modules/${superlab-kernel.modDirVersion}/build"
-    "INSTALL_MOD_PATH=$(out)"
+    "KSRC=${superlab-kernel.dev}/lib/modules/${superlab-kernel.modDirVersion}/build"
   ];
+
+  enableParallelBuilding = true;
+
+  installPhase = ''
+    mkdir -p ${modDestDir}
+    find . -name '*.ko' -exec cp --parents {} ${modDestDir} \;
+    find ${modDestDir} -name '*.ko' -exec xz -f {} \;
+  '';
 }
