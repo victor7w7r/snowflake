@@ -146,6 +146,8 @@
             ARM_SCMI_CPUFREQ = no;
             ARM_SCPI_CPUFREQ = yes;
             CDROM = no;
+            RT2X00 = module;
+            RT2800USB = module;
             NR_CPUS = lib.mkForce (freeform "8");
             R8169 = yes;
             UDF_FS = lib.mkForce no;

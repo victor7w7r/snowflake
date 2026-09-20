@@ -99,8 +99,10 @@
 
               boot = {
                 kernelParams = [ "console=ttyS2,1500000n8" ];
-                blacklistedKernelModules = [ "rtl8xxxu" ];
-                extraModulePackages = [ self'.packages.rtl8192eu ];
+                kernelModules = [
+                  "rt2800"
+                  "rt2800usb"
+                ];
                 loader = {
                   grub.enable = false;
                   generic-extlinux-compatible.enable = true;

@@ -193,6 +193,7 @@
       VIDEO_CADENCE_CSI2TX = no;
       VIDEO_ROCKCHIP_VDEC = no;
       VIDEO_SYNOPSYS_HDMIRX = no;
+      WLAN_VENDOR_RALINK = lib.mkForce yes;
     };
 
     denied = { }: {
