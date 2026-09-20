@@ -30,8 +30,14 @@ stdenvClang.mkDerivation {
       lld_20
     ];
 
-  makeFlags = pkgs.kernelModuleMakeFlags ++ [
-    "KSRC=${superlab-kernel.dev}/lib/modules/${superlab-kernel.modDirVersion}/build"
+  makeFlags =[
+    "CC=clang"
+    "HOSTCC=clang"
+    "LD=ld.lld"
+    "HOSTLD=ld.lld"
+    "ARCH=x86_64"
+    "KERNELRELEASE=${superlab-version}"
+    "KSRC=${superlab-kernel.dev}/lib/modules/${superlab-version}/build"
   ];
 
   enableParallelBuilding = true;
