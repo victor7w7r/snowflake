@@ -36,7 +36,7 @@ stdenvClang.mkDerivation {
     "LD=ld.lld"
     "HOSTLD=ld.lld"
     "ARCH=x86_64"
-    "KERNELRELEASE=${superlab-kernel.modDirVersion}"
+    "KERNELRELEASE=${superlab-version}"
     "KDIR=${superlab-kernel.dev}/lib/modules/${superlab-kernel}/build"
     "INSTALL_MOD_PATH=$(out)"
   ];
