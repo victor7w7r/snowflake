@@ -33,13 +33,6 @@
     aspects = {
       superlab-sdimage.includes = with den.aspects; [
         superlab.common
-        /*
-          (sdcard.lib.call {
-          nextPartSize = "65536";
-          isHDD = false;
-          isEntireDisk = true;
-          })
-        */
       ];
       superlab-tarball.includes = with den.aspects; [
         superlab.common
@@ -104,8 +97,6 @@
                 "L+ /lib/firmware/rtl_nic - - - - /run/current-system/firmware/rtl_nic"
                 "L+ /lib/firmware/arm - - - - /run/current-system/firmware/arm"
               ];
-
-              powerManagement.cpuFreqGovernor = "schedutil";
 
               boot = {
                 kernelParams = [ "console=ttyS2,1500000n8" ];
