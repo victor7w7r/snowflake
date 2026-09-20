@@ -5,7 +5,6 @@
       #theme = "doom";
       hide.statusline = false;
       config = {
-        mru.limit = 10;
         header = [
           ""
           ""
