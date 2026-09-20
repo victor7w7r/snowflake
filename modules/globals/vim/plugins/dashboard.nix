@@ -6,7 +6,7 @@
         theme = "doom";
         hide = {
           statusline = false;
-        }
+        };
         config = {
           header = lib.generators.mkLuaInline ''
             function()
