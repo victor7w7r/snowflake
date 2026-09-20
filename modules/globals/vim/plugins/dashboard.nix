@@ -2,7 +2,7 @@
   den.default.os.programs.nixvim.plugins.dashboard = {
     enable = true;
     settings = {
-      theme = "doom";
+      #theme = "doom";
       hide.statusline = false;
       config = {
         mru.limit = 10;

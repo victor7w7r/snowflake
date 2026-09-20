@@ -101,7 +101,7 @@
               boot = {
                 kernelParams = [ "console=ttyS2,1500000n8" ];
                 blacklistedKernelModules = [ "rtl8xxxu" ];
-                extraModulePackages = [ config.boot.kernelPackages.rtl8192eu ];
+                extraModulePackages = [ self'.packages.rtl8192eu ];
                 loader = {
                   grub.enable = false;
                   generic-extlinux-compatible.enable = true;
