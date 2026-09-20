@@ -7,6 +7,15 @@
     programs.nixvim = {
       enable = true;
       nixpkgs.source = inputs.nixpkgs;
+
+      clipboard = {
+        providers = {
+          wl-copy.enable = true;
+          xsel.enable = true;
+        };
+        register = "unnamedplus";
+      };
+
       opts = {
         relativenumber = false;
         smoothscroll = false;

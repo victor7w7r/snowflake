@@ -36,14 +36,14 @@ stdenvClang.mkDerivation {
     "HOSTLD=ld.lld"
     "ARCH=arm64"
     "KERNELRELEASE=${superlab-kernel.modDirVersion}"
-    "KSRC=${superlab-kernel.dev}/lib/modules/${superlab-kernel.modDirVersion}/build"
   ];
 
   enableParallelBuilding = true;
 
+  buildPhase = "make -C ${kdev} M=$(pwd) $makeFlags modules";
+
   installPhase = ''
-    mkdir -p ${modDestDir}
-    find . -name '*.ko' -exec cp --parents {} ${modDestDir} \;
-    find ${modDestDir} -name '*.ko' -exec xz -f {} \;
+    make -C ${kdev} M=$(pwd) $makeFlags INSTALL_MOD_PATH=$out modules_install
+    find $out -type f -name '*.ko' -exec xz -f {} \;
   '';
 }
