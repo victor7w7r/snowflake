@@ -1,7 +1,7 @@
 { pkgs, superlab-kernel }:
 let
   stdenvClang = pkgs.overrideCC pkgs.stdenv pkgs.llvmPackages_20.clang;
-  modDestDir = "$out/lib/modules/${superlab-kernel.modDirVersion}/kernel/drivers/net/wireless/realtek/rtl8192eu";
+  kdev = "${superlab-kernel.dev}/lib/modules/${superlab-kernel.modDirVersion}/build";
 in
 stdenvClang.mkDerivation {
   pname = "rtl8192eu";
