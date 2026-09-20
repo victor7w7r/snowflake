@@ -84,56 +84,57 @@
             "nls_iso8859-1"
           ];
 
-          services.save-journal-on-emergency = {
-            description = "Dump journalctl to EFI partition on emergency";
+          systemd = {
+            services.save-journal-on-emergency = {
+              description = "Dump journalctl to EFI partition on emergency";
 
-            wantedBy = [ "emergency.target" ];
-            before = [ "emergency.service" ];
+              wantedBy = [ "emergency.target" ];
+              before = [ "emergency.service" ];
 
-            serviceConfig = {
-              Type = "oneshot";
-              RemainAfterExit = true;
+              serviceConfig = {
+                Type = "oneshot";
+                RemainAfterExit = true;
+              };
+
+              script = ''
+                MNT="/tmp/efifs"
+                mkdir -p "$MNT"
+
+                EFI_DEV="dev/disk/by-partlabel/system_a"
+
+                if ${pkgs.util-linux}/bin/mount -t vfat "$EFI_DEV" "$MNT"; then
+                  mkdir -p "$MNT/initrd-logs"
+                  LOG_FILE="$MNT/initrd-logs/journal-panic-$(date +%s).log"
+                  ${pkgs.systemd}/bin/journalctl -b --no-pager > "$LOG_FILE"
+                  sync
+                  ${pkgs.util-linux}/bin/umount "$MNT"
+                fi
+              '';
             };
-
-            script = ''
-              MNT="/tmp/efifs"
-              mkdir -p "$MNT"
-
-              EFI_DEV="dev/disk/by-partlabel/system_a"
-
-              if ${pkgs.util-linux}/bin/mount -t vfat "$EFI_DEV" "$MNT"; then
-                mkdir -p "$MNT/initrd-logs"
-                LOG_FILE="$MNT/initrd-logs/journal-panic-$(date +%s).log"
-                ${pkgs.systemd}/bin/journalctl -b --no-pager > "$LOG_FILE"
-                sync
-                ${pkgs.util-linux}/bin/umount "$MNT"
-              fi
-            '';
+            storePaths =
+              map
+                (fw: {
+                  source = "${config.hardware.firmware}/lib/firmware/${fw}";
+                  target = "/extra-firmware/${fw}";
+                })
+                [
+                  "qcom/sdm845/OnePlus/enchilada/a630_zap.mbn"
+                  "qcom/sdm845/OnePlus/enchilada/adsp.mbn"
+                  "qcom/sdm845/OnePlus/enchilada/cdsp.mbn"
+                  "qcom/sdm845/OnePlus/enchilada/ipa_fws.mbn"
+                  "qcom/sdm845/OnePlus/enchilada/mba.mbn"
+                  "qcom/sdm845/OnePlus/enchilada/modem.mbn"
+                  "qcom/sdm845/OnePlus/enchilada/slpi.mbn"
+                  "qcom/sdm845/OnePlus/enchilada/venus.mbn"
+                  "qcom/sdm845/OnePlus/enchilada/wlanmdsp.mbn"
+                  "ath10k/WCN3990/hw1.0/firmware-5.bin"
+                  "ath10k/WCN3990/hw1.0/board-2.bin"
+                  "qca/crbtfw21.tlv"
+                  "qca/OnePlus/enchilada/crnv21.bin"
+                  "qcom/a630_sqe.fw"
+                  "qcom/a630_gmu.bin"
+                ];
           };
-
-          systemd.storePaths =
-            map
-              (fw: {
-                source = "${config.hardware.firmware}/lib/firmware/${fw}";
-                target = "/extra-firmware/${fw}";
-              })
-              [
-                "qcom/sdm845/OnePlus/enchilada/a630_zap.mbn"
-                "qcom/sdm845/OnePlus/enchilada/adsp.mbn"
-                "qcom/sdm845/OnePlus/enchilada/cdsp.mbn"
-                "qcom/sdm845/OnePlus/enchilada/ipa_fws.mbn"
-                "qcom/sdm845/OnePlus/enchilada/mba.mbn"
-                "qcom/sdm845/OnePlus/enchilada/modem.mbn"
-                "qcom/sdm845/OnePlus/enchilada/slpi.mbn"
-                "qcom/sdm845/OnePlus/enchilada/venus.mbn"
-                "qcom/sdm845/OnePlus/enchilada/wlanmdsp.mbn"
-                "ath10k/WCN3990/hw1.0/firmware-5.bin"
-                "ath10k/WCN3990/hw1.0/board-2.bin"
-                "qca/crbtfw21.tlv"
-                "qca/OnePlus/enchilada/crnv21.bin"
-                "qcom/a630_sqe.fw"
-                "qcom/a630_gmu.bin"
-              ];
         };
       };
     };
