@@ -23,7 +23,7 @@
           '';
           center = [
             {
-              action = "lua LazyVim.pick()()";
+              action = "lua Snacks.dashboard.pick('files')";
               desc = " Buscar...";
               icon = " ";
               key = "f";
@@ -35,13 +35,13 @@
               key = "n";
             }
             {
-              action = "lua LazyVim.pick('oldfiles')()";
+              action = "lua Snacks.dashboard.pick('oldfiles')";
               desc = " Archivos recientes";
               icon = " ";
               key = "r";
             }
             {
-              action = "lua LazyVim.pick('live_grep')()";
+              action = "lua Snacks.dashboard.pick('live_grep')";
               desc = " Buscar Texto";
               icon = " ";
               key = "g";
@@ -56,7 +56,7 @@
               action.__raw = "function() vim.api.nvim_input('<cmd>qa<cr>') end";
               desc = " Salir";
               icon = " ";
-              key = "q";
+              key = "qa";
             }
           ];
 
