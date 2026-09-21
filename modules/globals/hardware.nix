@@ -47,6 +47,11 @@
                   rm -rf "$out"/lib/firmware/intel/iwlwifi
                   rm -rf "$out"/lib/firmware/{ath11k,ath12k,libertas,nvidia,cxgb4,ti-connectivity,cypress,xe}
                   rm -rf "$out"/lib/firmware/{mellanox,mrvl,netronome,dpaa2,qed,bnx2x,liquidio,rtw89,dpaa2,dell,LENOVO}
+
+                  if [ -f "$out/lib/firmware/rt2x00/rt2870.bin" ]; then
+                    cp "$out/lib/firmware/rt2x00/rt2870.bin" "$out/lib/firmware/rt2870.bin"
+                  fi
+
                   find "$out/lib/firmware" -xtype l -print -delete
                 '';
               })

@@ -800,5 +800,9 @@
       url = "github:lavafroth/zilch";
       flake = false;
     };
+    zone-nvim = {
+      url = "github:tamton-aquib/zone.nvim";
+      flake = false;
+    };
   };
 }
