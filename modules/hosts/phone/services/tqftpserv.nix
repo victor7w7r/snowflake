@@ -4,8 +4,11 @@
       tqftpserv = {
         description = "Qualcomm QRTR TFTP services (tqftpserv)";
         wantedBy = [ "multi-user.target" ];
-        after = [ "tqftpserv-populate-data.service" ];
-        before = [ "network.target" ];
+        requires = [ "tqftpserv-populate-data.service" ];
+        after = [
+          "tqftpserv-populate-data.service"
+          "network.target"
+        ];
         serviceConfig = {
           ExecStart = "${
             pkgs.tqftpserv.overrideAttrs (_: {
@@ -23,7 +26,6 @@
         description = "Data filling for tqftpserv";
         after = [ "mnt-vendor-persist.mount" ];
         before = [ "tqftpserv.service" ];
-        wantedBy = [ "multi-user.target" ];
 
         path = with pkgs; [ coreutils ];
 
