@@ -92,6 +92,7 @@
                       src = inputs.firmware;
                       buildPhase = ''
                         mkdir -p $out/lib/firmware
+                        chmod +w -R $out
                         cp -r $src/rt2870.bin $out/lib/firmware/
                       '';
                     }
