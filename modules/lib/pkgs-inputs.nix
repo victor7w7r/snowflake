@@ -70,7 +70,6 @@
       flake = false;
     };
 
-
     cemetery-escape = {
       url = "github:tom-on-the-internet/cemetery-escape";
       flake = false;
@@ -152,12 +151,10 @@
       flake = false;
     };
 
-
     envfetch = {
       url = "github:ankddev/envfetch";
       flake = false;
     };
-
 
     ffmpeg-audio-thumbnailer = {
       url = "github:saltedcoffii/ffmpeg-audio-thumbnailer";

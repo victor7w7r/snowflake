@@ -14,7 +14,7 @@
       ];
 
       extraConfigLua = ''
-        require('early-retirement').setup({})
+        require('zone').setup({})
       '';
     };
   };

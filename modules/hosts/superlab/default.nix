@@ -78,17 +78,25 @@
           ];
 
           nixos =
-            {
-              lib,
-              pkgs,
-              self',
-              ...
-            }:
+            { pkgs, self', ... }:
             {
               networking.hostName = "v7w7r-radxarock5b";
 
               hardware = {
-                firmware = with self'.packages; lib.singleton armbian-firmware;
+                firmware = with self'.packages; [
+                  armbian-firmware
+                  (
+                    pkgs.stdenvNoCC.mkDerivation {
+                      pname = "ralink-firmware";
+                      version = "latest";
+                      src = inputs.firmware;
+                      buildPhase = ''
+                        mkdir -p $out/lib/firmware
+                        cp -r $src/lib/firmware/rt2870.bin $out/lib/firmware/
+                      '';
+                    }
+                  )
+                ];
                 deviceTree.name = "rockchip/rk3588-rock-5b.dtb";
               };
 
