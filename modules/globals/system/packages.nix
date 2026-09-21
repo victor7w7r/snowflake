@@ -25,6 +25,7 @@
           phraze
           progress
           pv
+          ripgrep
           rsyncy
           sshfs
           sd

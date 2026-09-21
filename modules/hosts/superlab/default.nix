@@ -106,10 +106,14 @@
               ];
 
               boot = {
-                kernelParams = [ "console=ttyS2,1500000n8" ];
+                kernelParams = [
+                  "console=ttyS2,1500000n8"
+                  "usbcore.autosuspend=-1"
+                ];
                 extraModprobeConfig = ''
                   options rt2800usb nohwcrypt=1
-                  options rt2x00usb disable_hw_button=1
+                  options rt2x00lib disable_hw_button=1
+                  options usbcore autosuspend=-1
                 '';
                 kernelModules = [
                   "rt2800"
