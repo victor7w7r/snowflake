@@ -107,6 +107,10 @@
 
               boot = {
                 kernelParams = [ "console=ttyS2,1500000n8" ];
+                extraModprobeConfig = ''
+                  options rt2800usb nohwcrypt=1
+                  options rt2x00usb disable_hw_button=1
+                '';
                 kernelModules = [
                   "rt2800"
                   "rt2800usb"

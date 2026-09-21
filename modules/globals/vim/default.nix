@@ -18,8 +18,18 @@
       };
 
       opts = {
+        breakindent = true;
+        ignorecase = true;
+        mouse = "a";
+        number = true;
         relativenumber = false;
+        showmode = false;
+        signcolumn = "yes";
+        smartcase = true;
         smoothscroll = false;
+        timeoutlen = 300;
+        undofile = true;
+        updatetime = 250;
       };
     };
   };
