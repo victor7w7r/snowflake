@@ -16,6 +16,8 @@
       withRuby = false;
       withNodeJs = false;
 
+      plugins.lz-n.enable = true;
+
       extraPackages = with pkgs; [
         fzf
         zoxide

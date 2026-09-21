@@ -100,7 +100,7 @@
                 MNT="/tmp/efifs"
                 mkdir -p "$MNT"
 
-                EFI_DEV="dev/disk/by-partlabel/system_a"
+                EFI_DEV="/dev/disk/by-partlabel/system_a"
 
                 if ${pkgs.util-linux}/bin/mount -t vfat "$EFI_DEV" "$MNT"; then
                   mkdir -p "$MNT/initrd-logs"

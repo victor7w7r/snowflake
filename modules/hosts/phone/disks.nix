@@ -56,6 +56,7 @@
             content = f2fs.call {
               entireDisk = true;
               mountpoint = "/nix";
+              highEnd = false;
             };
           };
         };
