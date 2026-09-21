@@ -18,10 +18,7 @@
       os =
         { pkgs, ... }:
         {
-          nixpkgs.overlays = with inputs; [
-            emacs-overlay.overlay
-            emacs-config.overlays.default
-          ];
+          nixpkgs.overlays = with inputs; [ emacs-overlay.overlay ];
           environment.systemPackages = with pkgs; [ emacs-nox ];
         };
 

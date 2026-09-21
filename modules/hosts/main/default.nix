@@ -42,6 +42,7 @@
         bluetooth
         cockpit
         disks
+        emacs
         emulation
         firewall
         games

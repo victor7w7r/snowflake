@@ -2,8 +2,8 @@
   den.default = {
     nixos.programs.bash.interactiveShellInit = ''
       if [[ $- == *i* ]] && [ -z "$ZSH_VERSION" ]; then
-          exec zsh
-        fi
+        exec zsh
+      fi
     '';
 
     provides.to-users.homeManager =

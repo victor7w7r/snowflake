@@ -2,13 +2,17 @@
   den.default.os = { lib, ... }: {
     programs.nixvim.plugins.dashboard = {
       enable = true;
+      luaConfig.post = ''
+        vim.api.nvim_set_hl(0, "DashboardFooter", {
+          fg = "#bb9af7",
+          italic = true,
+        })
+      '';
       settings = {
         theme = "doom";
-        hide.statusline = false;
         config = {
           header = lib.generators.mkLuaInline ''
              vim.split([[
-
              .oPYo. .oPYo. .pPYo.   .oPYo.                       o   o                 .oPYo.   o              8  o          *
              8  .o8     `8 8        8    8                       8                     8        8              8             *
                  8 .P`8   .oP` 8oPYo.   8      oPYo. .oPYo. .oPYo.  o8P o8 o    o .oPYo.   `Yooo.  o8P o    o .oPYo8 o8 .oPYo. .oPYo.
@@ -19,8 +23,10 @@
 
              [ victor7w7r ]
 
+
              ]], "\n")
           '';
+          vertical_center = true;
           center = [
             {
               action = "lua Snacks.dashboard.pick('files')";
@@ -60,16 +66,24 @@
             }
           ];
 
-          /*
-            footer = lib.generators.mkLuaInline ''
+          footer = lib.generators.mkLuaInline ''
             function()
-              local stats = require("lazy").stats()
-              local ms = (math.floor(stats.startuptime * 100 + 0.5) / 100)
-              return { "⚡ Cargado LazyVim con " ..
-              stats.loaded .. "/" .. stats.count .. " plugins en " .. ms .. "ms" }
+              local stats = require("dashboard.utils").get_package_manager_stats()
+              local quote = vim.fn.systemlist({
+                "zsh",
+                "-fc",
+                "autoload -Uz random-quote random-opts lolquotes bofh && random-quote",
+              })
+              local footer = {
+                "",
+                "",
+                "✦ Neovim cargado con " .. stats.count .. " plugins ✦",
+                "",
+              }
+              vim.list_extend(footer, quote)
+              return footer
             end
-            '';
-          */
+          '';
         };
       };
     };
