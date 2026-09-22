@@ -1,12 +1,37 @@
 {
-  den.default.os = { pkgs, ... }: {
+  den.default.os = {
     programs.nixvim = {
       plugins = {
 
-        indent-blankline.enable = true;
+        indent-blankline = {
+          enable = true;
+          settings = {
+            indent = {
+              smart_indent_cap = true;
+              char = " ";
+            };
+            scope = {
+              enabled = true;
+              char = "│";
+            };
+          };
+        };
+
         illuminate.enable = true;
-        neo-tree.enable = true;
+        neo-tree = {
+          enable = true;
+          settings = {
+            close_if_last_window = true;
+            filesystem = {
+              follow_current_file.enabled = true;
+              filtered_items.visible = true;
+            };
+          };
+        };
         notify.enable = true;
+        noice.enable = true;
+        smear-cursor.enable = true;
+        persistence.enable = true;
         colorizer.enable = true;
         bufferline = {
           enable = true;
@@ -83,18 +108,6 @@
 
         web-devicons.enable = true;
       };
-
-      extraPlugins = with pkgs.vimPlugins; [
-        persistence-nvim
-      ];
-
-      extraConfigLua = ''
-        require("persistence").setup({})
-        vim.keymap.set("n", "<leader>qs", function() require("persistence").load() end, { desc = "Restore Session" })
-        vim.keymap.set("n", "<leader>qS", function() require("persistence").select() end, { desc = "Select Session" })
-        vim.keymap.set("n", "<leader>ql", function() require("persistence").load({ last = true }) end, { desc = "Restore Last Session" })
-        vim.keymap.set("n", "<leader>qd", function() require("persistence").stop() end, { desc = "Don't Save Current Session" })
-      '';
     };
   };
 }

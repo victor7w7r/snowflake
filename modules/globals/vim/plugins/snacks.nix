@@ -4,13 +4,15 @@
     settings = {
       bigfile.enable = true;
       bufdelete.enable = true;
+      explorer = { enabled = true; replace_netrw = true; };
       git.enable = true;
       gitbrowse.enable = true;
       image.enable = true;
       indent.enabled = true;
       input.enabled = true;
       lazygit.enable = true;
-      picker.enable = true;
+      picker = { enabled = true; layout.preset = "telescope"; };
+      quickfile.enabled = true;
       scope.enable = true;
       scroll.enabled = false;
       terminal.enable = true;

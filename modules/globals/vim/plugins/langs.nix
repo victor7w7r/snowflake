@@ -18,6 +18,10 @@
       ];
 
       plugins = {
+        auto-save = {
+          enable = true;
+          settings.enabled = true;
+        };
         treesitter = {
           enable = true;
           settings = {
@@ -51,6 +55,15 @@
           ];
         };
 
+        fidget = {
+          enable = true;
+          settings.progress = {
+            suppress_on_insert = true;
+            ignore_done_already = true;
+            poll_rate = 1;
+          };
+        };
+
         lsp = {
           enable = true;
           servers = {
@@ -73,17 +86,21 @@
             };
             bashls.enable = true;
             cssls.enable = true;
+            dockerls.enable = true;
+            docker_compose_language_service.enable = true;
             #eslint.enable = true;
             html.enable = true;
             jsonls.enable = true;
             marksman.enable = true;
             nixd.enable = true;
+            ts_ls.enable = true;
             rust_analyzer = {
               enable = true;
               installCargo = false;
               installRustc = false;
             };
             sqls.enable = true;
+            yamlls.enable = true;
             #tailwindcss.enable = true;
           };
         };

@@ -19,10 +19,9 @@
       plugins.lz-n.enable = true;
 
       extraPackages = with pkgs; [
-        hyprls
         vscode-langservers-extracted
-        nodePackages.typescript-language-server
-        nodePackages.typescript
+        typescript-language-server
+        typescript
         pyright
         stylua
         shfmt
