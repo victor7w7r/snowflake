@@ -19,11 +19,19 @@
 
     plugins = {
       dbee.enable = true;
+      actions-preview.enable = true;
+      arrow.enable = true;
+      #lsp-progress.enable = true;
       sqlite-lua.enable = true;
       comment.enable = true;
+      dial.enable = true;
+      autoclose.enable = true;
       yanky.enable = true;
       comment-box.enable = true;
       compiler.enable = true;
+      nvim-lightbulb.enable = true;
+      inc-rename.enable = true;
+      navbuddy.enable = true;
       glance = {
         enable = true;
         settings = {
@@ -49,6 +57,8 @@
         ];
       };
 
+      rest.enable = true;
+
       flash = {
         enable = true;
         settings = { };
@@ -61,8 +71,6 @@
 
       package-info = {
         enable = true;
-        enableTelescope = true;
-
         lazyLoad.settings = {
           event = [ "BufRead package.json" ];
         };

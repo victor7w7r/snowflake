@@ -116,7 +116,7 @@
 
               local wrapped_quote = {}
               for _, line in ipairs(quote) do
-                vim.list_extend(wrapped_quote, wrap_line(line, 40))
+                vim.list_extend(wrapped_quote, wrap_line(line, 70))
               end
 
               local footer = {

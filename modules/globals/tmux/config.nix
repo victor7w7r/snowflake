@@ -1,7 +1,7 @@
 { lib, ... }:
 {
   den.default.provides.to-users.homeManager.programs.tmux.extraConfig = lib.mkOrder 200 ''
-    set -ga terminal-overrides ",xterm-256color:Tc,xterm-kitty:cnorm=\E[?12h\E[?25h,kmscon:Tc,vt100:Tc,vt102:Tc"
+    set -ga terminal-overrides ",xterm-256color:Tc,xterm-kitty:cnorm=\e[?12h\e[?25h,kmscon:Tc,vt100:Tc,vt102:Tc"
     set -s copy-command 'wl-copy'
     setw -g alternate-screen on
     setw -g automatic-rename on

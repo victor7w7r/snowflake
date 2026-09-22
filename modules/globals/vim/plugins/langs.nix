@@ -22,6 +22,7 @@
           enable = true;
           settings.enabled = true;
         };
+        crates.enable = true;
         lsp-signature.enable = true;
         treesitter = {
           enable = true;

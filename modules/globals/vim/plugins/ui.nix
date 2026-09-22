@@ -68,6 +68,9 @@
 
         notify.enable = true;
         #noice.enable = true;
+        toggler.enable = true;
+        tiny-glimmer.enable = true;
+        scrollview.enable = true;
         smear-cursor = {
           enable = true;
           settings = {
@@ -149,7 +152,8 @@
         };
         fastaction.enable = true;
         web-devicons.enable = true;
-
+        modicator.enable = true;
+        wilder.enable = true;
         zen-mode = {
           enable = true;
           autoLoad = true;

@@ -91,6 +91,8 @@
               (lib.mkOrder 450 tmux-init)
               (lib.mkOrder 500 kitty)
               (lib.mkOrder 550 ''
+                echo -ne '\e[?12h'
+
                 unsetopt BEEP
                 unsetopt HIST_BEEP
                 unsetopt LIST_BEEP
