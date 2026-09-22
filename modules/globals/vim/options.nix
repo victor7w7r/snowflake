@@ -13,41 +13,72 @@
       register = "unnamedplus";
     };
 
+    performance.byteCompileLua = {
+      enable = true;
+      nvimRuntime = true;
+      configs = true;
+      plugins = true;
+    };
+
     opts = {
+      autoindent = true;
       autowrite = true;
+      autoread = true;
+      backup = false;
+      background = "dark";
       breakindent = true;
-      completeopt = "menu,menuone,noselect";
+      completeopt = [
+        "menuone"
+        "noselect"
+        "noinsert"
+      ];
       conceallevel = 2;
       confirm = true;
       cursorline = true;
+      encoding = "utf-8";
+      errorbells = false;
       expandtab = true;
-      foldmethod = "indent";
+      fileencoding = "utf-8";
+      foldcolumn = "0";
+      foldenable = true;
       foldlevel = 99;
-      grepprg = "rg --vimgrep";
+      foldlevelstart = 99;
+      foldmethod = "indent";
       grepformat = "%f:%l:%c:%m";
-      linebreak = true;
+      grepprg = "rg --vimgrep";
+      guicursor = "n-v-c:block-blinkon200-blinkoff200";
+      hidden = true;
+      hlsearch = true;
       ignorecase = true;
+      incsearch = true;
+      linebreak = true;
       mouse = "a";
+      number = true;
       pumblend = 10;
       pumheight = 10;
-      number = true;
       relativenumber = false;
       ruler = false;
-      showmode = false;
       sessionoptions = "buffers,curdir,tabpages,winsize,help,globals,skiprtp,folds";
+      shiftwidth = 2;
+      showmode = false;
+      showtabline = 0;
       signcolumn = "yes";
       smartcase = true;
-      shiftwidth = 2;
+      smartindent = true;
       smoothscroll = false;
       splitbelow = true;
       splitkeep = "screen";
       splitright = true;
+      swapfile = false;
       tabstop = 2;
       termguicolors = true;
       timeoutlen = 300;
       undofile = true;
       undolevels = 10000;
       updatetime = 250;
+      visualbell = false;
+      wildmenu = true;
+      wildmode = "longest,list,full";
       winborder = "rounded";
       winminwidth = 5;
       wrap = false;

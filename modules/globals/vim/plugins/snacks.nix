@@ -10,7 +10,6 @@
       image.enable = true;
       indent.enabled = true;
       input.enabled = true;
-      lazygit.enable = true;
       picker = { enabled = true; layout.preset = "telescope"; };
       quickfile.enabled = true;
       scope.enable = true;

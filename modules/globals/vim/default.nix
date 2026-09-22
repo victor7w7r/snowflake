@@ -16,7 +16,10 @@
       withRuby = false;
       withNodeJs = false;
 
-      plugins.lz-n.enable = true;
+      plugins = {
+        lz-n.enable = true;
+        lzn-auto-require.enable = true;
+      };
 
       extraPackages = with pkgs; [
         vscode-langservers-extracted

@@ -9,6 +9,11 @@
           nix-repair = "nix-store --verify --check-contents --repair";
           nix-compare = ''test "$(readlink -f /run/current-system)" = "$(readlink -f /nix/var/nix/profiles/system)" && echo "YES" || echo "NO"'';
 
+          nvim = "TERM=xterm-kitty nvim";
+          vim = "TERM=xterm-kitty nvim";
+          vi = "TERM=xterm-kitty nvim";
+          v = "TERM=xterm-kitty nvim";
+
           ssh = "TERM=xterm-256color command ssh";
           _ = "sudo";
           e = "emacs -nw";

@@ -74,13 +74,58 @@
                 "-fc",
                 "autoload -Uz random-quote random-opts lolquotes bofh && random-quote",
               })
+              local function wrap_line(line, width)
+                if line == "" then
+                  return { "" }
+                end
+
+                local wrapped = {}
+                local current = ""
+                for word in line:gmatch("%S+") do
+                  if vim.fn.strdisplaywidth(word) > width then
+                    if current ~= "" then
+                      table.insert(wrapped, current)
+                      current = ""
+                    end
+
+                    for _, char in ipairs(vim.fn.split(word, "\\zs")) do
+                      local candidate = current .. char
+                      if current ~= "" and vim.fn.strdisplaywidth(candidate) > width then
+                        table.insert(wrapped, current)
+                        current = char
+                      else
+                        current = candidate
+                      end
+                    end
+                  else
+                    local candidate = current == "" and word or current .. " " .. word
+                    if current ~= "" and vim.fn.strdisplaywidth(candidate) > width then
+                      table.insert(wrapped, current)
+                      current = word
+                    else
+                      current = candidate
+                    end
+                  end
+                end
+
+                if current ~= "" then
+                  table.insert(wrapped, current)
+                end
+                return wrapped
+              end
+
+              local wrapped_quote = {}
+              for _, line in ipairs(quote) do
+                vim.list_extend(wrapped_quote, wrap_line(line, 40))
+              end
+
               local footer = {
                 "",
                 "",
                 "✦ Neovim cargado con " .. stats.count .. " plugins ✦",
                 "",
               }
-              vim.list_extend(footer, quote)
+              vim.list_extend(footer, wrapped_quote)
               return footer
             end
           '';

@@ -15,7 +15,7 @@
       close_on_child_death = true;
       confirm_os_window_close = 0;
       cursor = "#f5e0dc";
-      cursor_blink_interval = 400;
+      cursor_blink_interval = "0.5";
       cursor_shape = "beam";
       cursor_trail = 0;
       cursor_text_color = "#1e1e2e";
