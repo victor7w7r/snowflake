@@ -1,5 +1,5 @@
 {
-  den.default.os.programs.nixvim.plugin.which-key = {
+  den.default.os.programs.nixvim.plugins.which-key = {
     enable = true;
     settings = {
       preset = "helix";

@@ -1,5 +1,8 @@
 {
   den.default.os.programs.nixvim.plugins = {
+
+    comment.enable = true;
+
     flash = {
       enable = true;
       settings = { };

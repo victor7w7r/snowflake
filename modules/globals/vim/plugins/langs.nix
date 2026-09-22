@@ -88,6 +88,28 @@
           };
         };
 
+        nvim-autopairs = {
+          enable = true;
+          settings = {
+            check_ts = true;
+            enable_check_bracket_line = false;
+            fast_wrap = {
+              enable = true;
+              map = "<M-e>";
+              chars = [
+                "{"
+                "["
+                "("
+                "\""
+                "'"
+                "`"
+              ];
+            };
+          };
+        };
+
+        markdown-preview.enable = true;
+
         conform-nvim = {
           enable = true;
           settings = {

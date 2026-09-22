@@ -19,8 +19,13 @@
       plugins.lz-n.enable = true;
 
       extraPackages = with pkgs; [
-        fzf
-        zoxide
+        hyprls
+        vscode-langservers-extracted
+        nodePackages.typescript-language-server
+        nodePackages.typescript
+        pyright
+        stylua
+        shfmt
       ];
     };
   };

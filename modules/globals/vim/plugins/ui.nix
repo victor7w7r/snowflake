@@ -3,6 +3,11 @@
     programs.nixvim = {
       plugins = {
 
+        indent-blankline.enable = true;
+        illuminate.enable = true;
+        neo-tree.enable = true;
+        notify.enable = true;
+        colorizer.enable = true;
         bufferline = {
           enable = true;
           settings.options = {
@@ -70,6 +75,10 @@
         tmux-navigator = {
           enable = true;
           settings.no_mappings = 1;
+        };
+
+        toggleterm = {
+          enable = true;
         };
 
         web-devicons.enable = true;
