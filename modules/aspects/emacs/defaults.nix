@@ -9,7 +9,7 @@
     { user, ... }:
     {
       nixos.environment.persistence."/nix/persist".users."${user.name}".directories = [
-        ".config/emacs"
+        ".local/share/doom"
         ".cache/doom"
       ];
 
@@ -23,13 +23,21 @@
             doomDir = "${self}/modules/aspects/emacs";
             doomLocalDir = "${config.home.homeDirectory}/.config/emacs";
             extraBinPackages = with pkgs; [
+              black
               cmake
               direnv
               dockfmt
               gcc
               gnumake
+              html-tidy
+              js-beautify
+              libclang
+              libxml2
               nixfmt
+              pipenv
+              poetry
               shfmt
+              stylelint
               wl-clipboard-rs
             ];
             extraPackages =

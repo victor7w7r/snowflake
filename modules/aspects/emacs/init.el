@@ -9,7 +9,7 @@
        :ui
        deft
        doom
-       doom-dashboard
+       dashboard
        doom-quit
        (emoji +unicode +github)
        hl-todo
@@ -17,6 +17,7 @@
        ligatures
        minimap
        modeline
+       nav-flash
        ophints
        (popup +defaults)
        tabs
@@ -34,7 +35,7 @@
        multiple-cursors
        parinfer
        rotate-text
-       ;;snippets
+       snippets
        (whitespace +guess +trim)
        word-wrasp
 
@@ -73,11 +74,9 @@
        :lang
        data
        emacs-lisp
-       (java +lsp +tree-sitter)
        (javascript +lsp +tree-sitter)
        (json +lsp +tree-sitter)
        (kotlin +lsp +tree-sitter)
-       (lua +lsp +tree-sitter)
        (markdown +tree-sitter)
        (nix +lsp +tree-sitter)
        (python +lsp +tree-sitter +poetry +pyright)
