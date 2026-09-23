@@ -464,7 +464,7 @@
       flake = false;
     };
     linux-latest = {
-      url = "github:CachyOS/linux/cachyos-7.2.6-1";
+      url = "github:CachyOS/linux/cachyos-7.2.7-1";
       flake = false;
     };
     linux-lts = {
@@ -794,10 +794,6 @@
     };
     zilch = {
       url = "github:lavafroth/zilch";
-      flake = false;
-    };
-    zone-nvim = {
-      url = "github:tamton-aquib/zone.nvim";
       flake = false;
     };
   };

@@ -1,14 +1,10 @@
-{
-  inputs,
-  kernel-versions,
-  ...
-}:
+{ inputs, kernel-versions, ... }:
 {
   imports = [ (inputs.den.namespace "kernel" true) ];
 
   _module.args = {
     kernel-versions = {
-      latest = "7.2.6";
+      latest = "7.2.7";
       lts = "6.18.52";
     };
 
@@ -22,7 +18,6 @@
       localSystem = "aarch64-linux";
       crossSystem = "x86_64-linux";
     };
-
   };
 
   flake-file.inputs = {
@@ -38,15 +33,9 @@
       flake = false;
     };
 
-    linux-sdm845 = {
-      url = "git+https://codeberg.org/sdm845/linux?ref=sdm845-next";
-      flake = false;
-    };
-
     linux-lts = {
       url = "github:CachyOS/linux/cachyos-${kernel-versions.lts}-1";
       flake = false;
     };
   };
-
 }
