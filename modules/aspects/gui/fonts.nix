@@ -31,6 +31,7 @@
         enableDefaultPackages = true;
         fontDir.enable = true;
         packages = with pkgs; [
+          symbola
           nerd-fonts.jetbrains-mono
           nerd-fonts.ubuntu
         ];

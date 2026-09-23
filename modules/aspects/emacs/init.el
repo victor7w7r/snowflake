@@ -71,7 +71,6 @@
        tty
 
        :lang
-       (dart +flutter +lsp +tree-sitter)
        data
        emacs-lisp
        (java +lsp +tree-sitter)

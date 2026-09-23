@@ -96,5 +96,18 @@
       action = ":help <C-r><C-w><CR>";
       options.desc = "Help for word under cursor";
     }
+    {
+      mode = [
+        "n"
+        "x"
+      ];
+      key = "<leader>cF";
+      action.__raw = ''
+        function()
+          require("conform").format({ formatters = { "injected" }, timeout_ms = 3000 })
+        end
+      '';
+      options.desc = "Format Injected Langs";
+    }
   ];
 }

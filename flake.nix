@@ -193,10 +193,6 @@
       url = "github:darrenburns/elia";
       flake = false;
     };
-    emacs-overlay = {
-      url = "github:nix-community/emacs-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     envfetch = {
       url = "github:ankddev/envfetch";
       flake = false;

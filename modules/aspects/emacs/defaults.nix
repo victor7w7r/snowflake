@@ -1,34 +1,20 @@
-{ inputs, ... }:
+{ inputs, self, ... }:
 {
-  flake-file.inputs = {
-    emacs-overlay = {
-      url = "github:nix-community/emacs-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    nix-doom-emacs-unstraightened = {
-      url = "github:marienz/nix-doom-emacs-unstraightened";
-      inputs.nixpkgs.follows = "";
-    };
+  flake-file.inputs.nix-doom-emacs-unstraightened = {
+    url = "github:marienz/nix-doom-emacs-unstraightened";
+    inputs.nixpkgs.follows = "";
   };
 
   den.aspects.emacs =
     { user, ... }:
     {
-      os =
-        { pkgs, ... }:
-        {
-          nixpkgs.overlays = with inputs; [ emacs-overlay.overlay ];
-          environment.systemPackages = with pkgs; [ emacs-nox ];
-        };
-
       nixos =
         { isPersistent, lib, ... }:
         {
           environment.persistence."/nix/persist".users."${user.name}".directories =
             lib.optionals isPersistent
               [
-                ".local/share/emacs"
+                ".config/emacs"
                 ".cache/doom"
               ];
         };
@@ -38,16 +24,56 @@
         {
           imports = [ inputs.nix-doom-emacs-unstraightened.homeModule ];
           programs.doom-emacs = {
-            enable = false;
+            enable = true;
             emacs = pkgs.emacs-nox;
-            doomDir = ./.;
-            doomLocalDir = "${config.home.homeDirectory}/.local/share/emacs";
-            extraPackages = epkgs: with epkgs; [ melpaPackages.nixos-options ];
+            doomDir = "${self}/modules/aspects/emacs";
+            doomLocalDir = "${config.home.homeDirectory}/.config/emacs";
             extraBinPackages = with pkgs; [
               git
               ripgrep
               fd
             ];
+            extraPackages =
+              epkgs: with epkgs; [
+              /*  annotate
+                auto-rename-tag
+                beacon
+                blackjack
+                bm
+                buffer-move
+                clippy
+                colorful-mode
+                copilot
+                copilot-chat
+                evil-matchit
+                evil-tutor
+                fancy-compilation
+                fireplace
+                gameoflife
+                helm-system-packages
+                hungry-delete
+                klondike
+                mentor
+                move-text
+                multi-vterm
+                mwim
+                nyan-mode
+                pacmacs
+                parrot
+                pkg-info
+                rainbow-delimiters
+                speed-type
+                string-inflection
+                sudoku
+                svelte-mode
+                tagedit
+                tldr
+                toggle-quotes
+                versuri
+                visual-regexp
+                which-key*/
+                treesit-grammars.with-all-grammars
+              ];
           };
         };
     };

@@ -57,6 +57,7 @@
                 ".local/share/atuin"
                 ".local/share/cod"
                 ".local/share/zoxide"
+                ".local/share/nvim"
                 ".local/state"
                 ".ssh"
                 ".zsh"

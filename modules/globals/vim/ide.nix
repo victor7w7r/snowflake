@@ -39,12 +39,41 @@
         };
       };
 
+      nvim-autopairs = {
+        enable = true;
+        settings = {
+          disable_filetype = [
+            "TelescopePrompt"
+            "vim"
+          ];
+          check_ts = true;
+          enable_check_bracket_line = false;
+          fast_wrap = {
+            enable = true;
+            map = "<M-e>";
+            chars = [
+              "{"
+              "["
+              "("
+              "\""
+              "'"
+              "`"
+            ];
+          };
+        };
+      };
+
       undotree = {
         enable = true;
         settings = {
           autoOpenDiff = true;
           focusOnToggle = true;
         };
+      };
+
+      treesj = {
+        enable = true;
+        autoLoad = true;
       };
 
       dropbar = {
