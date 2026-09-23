@@ -69,8 +69,8 @@
         "0004-sched-fair-Compile-out-NUMA-code-entirely-when-NUMA-"
         "0006-sched-fair-Iterate-in-ascending-CPU-order-when-doing"
         "0174-memcg-increase-MEMCG_CHARGE_BATCH-to-127"
-      ]
-      ++ lib.optional (!isPhone) "0050-Revert-ext4-do-not-create-EA-inode-under-buffer-lock";
+      ];
+    #++ lib.optional (!isPhone) "0050-Revert-ext4-do-not-create-EA-inode-under-buffer-lock";
 
     lts =
       { }:

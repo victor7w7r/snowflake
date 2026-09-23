@@ -13,6 +13,12 @@
       register = "unnamedplus";
     };
 
+    diagnostic.settings = {
+      virtual_text = true;
+      severity_sort = true;
+      float.border = "rounded";
+    };
+
     plugins = {
       lz-n.enable = true;
       lzn-auto-require.enable = true;

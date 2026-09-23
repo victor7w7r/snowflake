@@ -7,6 +7,14 @@
       options.desc = "Exit insert mode";
     }
     {
+      mode = "n";
+      key = "<leader>gg";
+      action = "<cmd>LazyGit<CR>";
+      options = {
+        desc = "LazyGit (root dir)";
+      };
+    }
+    {
       key = "<leader>ff";
       mode = [ "n" ];
       action = "<cmd>Telescope find_files<cr>";
