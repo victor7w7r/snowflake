@@ -5,14 +5,6 @@
       markdown_recommended_style = 0;
     };
 
-    clipboard = {
-      providers = {
-        wl-copy.enable = true;
-        xsel.enable = true;
-      };
-      register = "unnamedplus";
-    };
-
     diagnostic.settings = {
       virtual_text = true;
       severity_sort = true;
@@ -22,6 +14,7 @@
     plugins = {
       lz-n.enable = true;
       lzn-auto-require.enable = true;
+      sqlite-lua.enable = true;
     };
 
     performance.byteCompileLua = {

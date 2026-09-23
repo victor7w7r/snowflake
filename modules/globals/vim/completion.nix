@@ -1,10 +1,10 @@
 {
   den.default.os.programs.nixvim.plugins = {
     friendly-snippets.enable = true;
-    #blink-cmp-copilot.enable = true;
+    blink-copilot.enable = true;
+    blink-cmp-copilot.enable = true;
     blink-cmp-dictionary.enable = true;
     blink-cmp-git.enable = true;
-    #blink-copilot.enable = true;
     blink-emoji.enable = true;
     blink-ripgrep.enable = true;
     blink-cmp = {

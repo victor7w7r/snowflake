@@ -5,6 +5,12 @@
       lsp-signature.enable = true;
       markdown-preview.enable = true;
 
+      package-info = {
+        enable = true;
+        lazyLoad.settings.event = [ "BufRead package.json" ];
+        settings.hide_up_to_date = true;
+      };
+
       lsp = {
         enable = true;
         servers = {
@@ -43,8 +49,10 @@
 
       treesitter = {
         enable = true;
-        lazyLoad.enable = true;
-        lazyLoad.settings.event = "BufRead";
+        lazyLoad = {
+          enable = true;
+          settings.event = "BufRead";
+        };
         settings = {
           highlight.enable = true;
           indent.enable = true;
@@ -64,7 +72,6 @@
           javascript
           json
           kotlin
-          lua
           markdown
           markdown_inline
           nix
