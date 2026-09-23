@@ -13,6 +13,11 @@
       register = "unnamedplus";
     };
 
+    plugins = {
+      lz-n.enable = true;
+      lzn-auto-require.enable = true;
+    };
+
     performance.byteCompileLua = {
       enable = true;
       nvimRuntime = true;

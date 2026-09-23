@@ -25,17 +25,17 @@
           imports = [ inputs.nix-doom-emacs-unstraightened.homeModule ];
           programs.doom-emacs = {
             enable = true;
-            emacs = pkgs.emacs-nox;
+            emacs = pkgs.emacs;
             doomDir = "${self}/modules/aspects/emacs";
             doomLocalDir = "${config.home.homeDirectory}/.config/emacs";
             extraBinPackages = with pkgs; [
-              git
-              ripgrep
-              fd
+              cmake
+              direnv
+              dockfmt
             ];
             extraPackages =
               epkgs: with epkgs; [
-              /*  annotate
+                annotate
                 auto-rename-tag
                 beacon
                 blackjack
@@ -71,8 +71,37 @@
                 toggle-quotes
                 versuri
                 visual-regexp
-                which-key*/
-                treesit-grammars.with-all-grammars
+                which-key
+                (treesit-grammars.with-grammars (
+                  gs: with gs; [
+                    tree-sitter-astro
+                    tree-sitter-bash
+                    tree-sitter-css
+                    tree-sitter-dockerfile
+                    tree-sitter-elisp
+                    tree-sitter-git-config
+                    tree-sitter-git-rebase
+                    tree-sitter-gitattributes
+                    tree-sitter-gitcommit
+                    tree-sitter-gitignore
+                    tree-sitter-html
+                    tree-sitter-ini
+                    tree-sitter-javascript
+                    tree-sitter-json
+                    tree-sitter-kotlin
+                    tree-sitter-nix
+                    tree-sitter-rust
+                    tree-sitter-sql
+                    tree-sitter-sshclientconfig
+                    tree-sitter-svelte
+                    tree-sitter-toml
+                    tree-sitter-tsx
+                    tree-sitter-typescript
+                    tree-sitter-vue
+                    tree-sitter-xml
+                    tree-sitter-yaml
+                  ]
+                ))
               ];
           };
         };
