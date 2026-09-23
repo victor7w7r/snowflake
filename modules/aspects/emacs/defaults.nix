@@ -8,16 +8,10 @@
   den.aspects.emacs =
     { user, ... }:
     {
-      nixos =
-        { isPersistent, lib, ... }:
-        {
-          environment.persistence."/nix/persist".users."${user.name}".directories =
-            lib.optionals isPersistent
-              [
-                ".config/emacs"
-                ".cache/doom"
-              ];
-        };
+      nixos.environment.persistence."/nix/persist".users."${user.name}".directories = [
+        ".config/emacs"
+        ".cache/doom"
+      ];
 
       provides.to-users.homeManager =
         { config, pkgs, ... }:
@@ -32,6 +26,11 @@
               cmake
               direnv
               dockfmt
+              gcc
+              gnumake
+              nixfmt
+              shfmt
+              wl-clipboard-rs
             ];
             extraPackages =
               epkgs: with epkgs; [
