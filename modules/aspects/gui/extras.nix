@@ -1,6 +1,4 @@
 {
-  flake-file.inputs.custom-packages.url = "github:Rishabh5321/custom-packages-flake";
-
   den.aspects.gui.extras =
     { user, ... }:
     {

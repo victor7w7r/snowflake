@@ -83,20 +83,7 @@
               networking.hostName = "v7w7r-radxarock5b";
 
               hardware = {
-                firmware = with self'.packages; [
-                  armbian-firmware
-                  (pkgs.stdenvNoCC.mkDerivation {
-                    pname = "ralink-firmware";
-                    version = "latest";
-                    src = inputs.firmware;
-                    dontBuild = true;
-                    installPhase = ''
-                      mkdir -p $out/lib/firmware
-                      chmod +w -R $out
-                      cp $src/rt2870.bin $out/lib/firmware/
-                    '';
-                  })
-                ];
+                firmware = with self'.packages; [ armbian-firmware ];
                 deviceTree.name = "rockchip/rk3588-rock-5b.dtb";
               };
 

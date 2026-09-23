@@ -145,7 +145,6 @@
       flake = false;
     };
     copyparty.url = "github:9001/copyparty";
-    custom-packages.url = "github:Rishabh5321/custom-packages-flake";
     customfetch = {
       url = "github:Toni500github/customfetch";
       flake = false;
@@ -204,10 +203,6 @@
     firefox-addons = {
       url = "gitlab:rycee/nur-expressions?dir=pkgs/firefox-addons";
       inputs.nixpkgs.follows = "nixpkgs";
-    };
-    firmware = {
-      url = "gitlab:kernel-firmware/linux-firmware";
-      flake = false;
     };
     flake-file.url = "github:vic/flake-file";
     flake-parts = {
@@ -469,10 +464,6 @@
     };
     linux-lts = {
       url = "github:CachyOS/linux/cachyos-6.18.52-1";
-      flake = false;
-    };
-    linux-sdm845 = {
-      url = "git+https://codeberg.org/sdm845/linux?ref=sdm845-next";
       flake = false;
     };
     linuxthemestore = {
