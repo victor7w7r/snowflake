@@ -19,7 +19,7 @@
 
           programs.vscode.enable = true;
 
-          programs.zed-editor-extensions = {
+         /* programs.zed-editor-extensions = {
             enable = true;
             packages = [
               (pkgs.buildZedRustExtension {
@@ -36,7 +36,7 @@
                 cargoHash = "sha256-Q4ow55BazZEsW9ohgYu2kYPpPPeGsfW7BLJA4F7E8Zs=";
               })
             ];
-          };
+          };*/
 
           programs.zed-editor = {
             enable = true;
