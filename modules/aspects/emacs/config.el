@@ -16,38 +16,52 @@
 
 (add-to-list '+dashboard-menu-sections
              '("Salir"
-               :icon (nerd-icons-mdicon "nf-md-exit_to_app" :face '+dashboard-menu-title)
-               :key "SPC q Q"
+               :icon (nerd-icons-octicon "nf-oct-sign_out" :face '+dashboard-menu-title)
+               :key "SPC q q"
                :face (:inherit (+dashboard-menu-title bold))
-               :action evil-quit-all-with-error-code))
+               :action evil-quit))
 
 (add-to-list '+dashboard-menu-sections
-             '("Configuración"
-               :icon (nerd-icons-mdicon "nf-md-wrench" :face '+dashboard-menu-title)
-               :key "SPC f P"
+             '("Buscar Texto"
+               :icon (nerd-icons-faicon "nf-fa-rectangle_list" :face '+dashboard-menu-title)
+               :key "SPC s d"
                :face (:inherit (+dashboard-menu-title bold))
-               :action doom/open-private-config))
+               :action +default/search-cwd))
+
+(add-to-list '+dashboard-menu-sections
+             '("Buscar Archivo"
+               :icon (nerd-icons-faicon "nf-fa-search" :face '+dashboard-menu-title)
+               :key "SPC ."
+               :face (:inherit (+dashboard-menu-title bold))
+               :action find-file))
+
+(add-to-list '+dashboard-menu-sections
+             '("Archivos Recientes"
+               :icon (nerd-icons-faicon "nf-fa-copy" :face '+dashboard-menu-title)
+               :key "SPC f r"
+               :face (:inherit (+dashboard-menu-title bold))
+               :action consult-recent-file))
+
+(add-to-list '+dashboard-menu-sections
+             '("Proyectos Recientes"
+               :icon (nerd-icons-octicon "nf-oct-project_symlink" :face '+dashboard-menu-title)
+               :key "SPC p r"
+               :face (:inherit (+dashboard-menu-title bold))
+               :action projectile-recentf))
 
 (add-to-list '+dashboard-menu-sections
              '("Abrir Proyecto"
-               :icon (nerd-icons-octicon "nf-oct-book" :face '+dashboard-menu-title)
+               :icon (nerd-icons-codicon "nf-cod-project" :face '+dashboard-menu-title)
                :key "SPC p p"
                :face (:inherit (+dashboard-menu-title bold))
                :action projectile-switch-project))
 
 (add-to-list '+dashboard-menu-sections
              '("Restaurar Sesión"
-               :icon (nerd-icons-mdicon "nf-md-reload" :face '+dashboard-menu-title)
+               :icon (nerd-icons-wicon "nf-weather-refresh" :face '+dashboard-menu-title)
                :key "SPC q l"
                :face (:inherit (+dashboard-menu-title bold))
                :action doom/quickload-session))
-
-(add-to-list '+dashboard-menu-sections
-             '("Archivos Recientes"
-               :icon (nerd-icons-faicon "nf-fae-file_import" :face '+dashboard-menu-title)
-               :key "SPC f r"
-               :face (:inherit (+dashboard-menu-title bold))
-               :action consult-recent-file))
 
 (add-to-list '+dashboard-menu-sections
              '("Nuevo"
@@ -55,13 +69,6 @@
                :key "SPC b N"
                :face (:inherit (+dashboard-menu-title bold))
                :action +default/new-buffer))
-
-(add-to-list '+dashboard-menu-sections
-             '("Buscar ..."
-               :icon (nerd-icons-octicon "nf-oct-search" :face '+dashboard-menu-title)
-               :key "SPC s d"
-               :face (:inherit (+dashboard-menu-title bold))
-               :action +default/search-cwd))
 
 (assoc-delete-all "Open org-agenda" +dashboard-menu-sections)
 (assoc-delete-all "Jump to bookmark" +dashboard-menu-sections)

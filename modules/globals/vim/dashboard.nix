@@ -23,22 +23,33 @@
 
             [ victor7w7r ]
 
-
             ]], "\n")
           '';
           vertical_center = true;
           center = [
             {
-              action = "lua Snacks.dashboard.pick('files')";
-              desc = " Buscar...";
-              icon = " ";
-              key = "f";
-            }
-            {
               action = "ene | startinsert";
               desc = " Nuevo";
               icon = " ";
               key = "n";
+            }
+            {
+              action = ":Project Session";
+              desc = " Restaurar Sesión";
+              icon = " ";
+              key = "s";
+            }
+            {
+              action = ":Project telescope.nvim Picker";
+              desc = " Abrir Proyecto";
+              icon = " ";
+              key = "p";
+            }
+            {
+              action = ":Project recents";
+              desc = " Proyectos Recientes";
+              icon = " ";
+              key = "o";
             }
             {
               action = "lua Snacks.dashboard.pick('oldfiles')";
@@ -47,22 +58,22 @@
               key = "r";
             }
             {
+              action = "lua Snacks.dashboard.pick('files')";
+              desc = " Buscar Archivo";
+              icon = " ";
+              key = "f";
+            }
+            {
               action = "lua Snacks.dashboard.pick('live_grep')";
               desc = " Buscar Texto";
               icon = " ";
               key = "g";
             }
             {
-              action = "lua require('persistence').load()";
-              desc = " Restaurar Sesión";
-              icon = " ";
-              key = "s";
-            }
-            {
               action.__raw = "function() vim.api.nvim_input('<cmd>qa<cr>') end";
               desc = " Salir";
               icon = " ";
-              key = "qa";
+              key = "q";
             }
           ];
 
