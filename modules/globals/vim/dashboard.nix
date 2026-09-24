@@ -40,7 +40,7 @@
               key = "s";
             }
             {
-              action = ":Project telescope.nvim Picker";
+              action = ":Project telescope";
               desc = " Abrir Proyecto";
               icon = " ";
               key = "p";

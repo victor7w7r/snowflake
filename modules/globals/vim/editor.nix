@@ -39,6 +39,17 @@
 
     illuminate.enable = true;
 
+    mini = {
+      enable = true;
+      modules.map = {
+        window = {
+          side = "right";
+          width = 10;
+          winblend = 15;
+        };
+      };
+    };
+
     persistence = {
       enable = true;
       lazyLoad.settings.event = "BufReadPre";

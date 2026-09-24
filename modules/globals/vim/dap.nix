@@ -124,7 +124,7 @@
     };
 
     dap-disasm.enable = true;
-    dap-lldb.enable = true;
+    #dap-lldb.enable = true;
 
     dap-ui = {
       enable = true;

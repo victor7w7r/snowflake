@@ -1,5 +1,5 @@
 {
-  den.default.os = { pkgs, ... }: {
+  den.default.os = { self', ... }: {
     programs.nixvim.plugins = {
       bullets.enable = true;
       crates.enable = true;
@@ -35,7 +35,7 @@
           jsonls.enable = true;
           kotlin_lsp = {
             enable = true;
-            package = null;
+            package = self'.packages.kotlin-lsp;
           };
           marksman.enable = true;
           oxfmt.enable = true;

@@ -30,9 +30,13 @@
       };
 
       extraPackages = with pkgs; [
+        glab
+        kotlin
+        nixfmt
         pyright
         shfmt
         stylua
+        tree-sitter-cli
         typescript
         typescript-language-server
         vscode-langservers-extracted

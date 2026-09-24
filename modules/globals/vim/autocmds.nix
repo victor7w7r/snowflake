@@ -9,6 +9,7 @@
       nixvim_man_unlisted.clear = true;
       nixvim_json_conceal.clear = true;
       nixvim_auto_create_dir.clear = true;
+      nixvim_project_ui.clear = true;
 
     };
     autoCmd = [
@@ -137,6 +138,26 @@
             end
             local file = vim.uv.fs_realpath(event.match) or event.match
             vim.fn.mkdir(vim.fn.fnamemodify(file, ":p:h"), "p")
+          end
+        '';
+      }
+      {
+        event = "VimEnter";
+        group = "nixvim_project_ui";
+        callback.__raw = ''
+          function()
+            vim.schedule(function()
+              local buf = vim.api.nvim_get_current_buf()
+              if vim.bo[buf].buftype ~= "" or vim.api.nvim_buf_get_name(buf) == "" then
+                return
+              end
+
+              local root, method = require("project").get_project_root(buf)
+              local on_attach = require("project.config").get().on_attach
+              if root and on_attach then
+                on_attach(root, method, buf)
+              end
+            end)
           end
         '';
       }
