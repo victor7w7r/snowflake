@@ -103,95 +103,95 @@
             lualine_z = [ "location" ];
           };
         };
+      };
 
-        modicator.enable = true;
-        notify.enable = true;
-        scrollview.enable = true;
+      modicator.enable = true;
+      notify.enable = true;
+      scrollview.enable = true;
 
-        smear-cursor = {
-          enable = true;
+      smear-cursor = {
+        enable = true;
+      };
+
+      telescope = {
+        enable = true;
+        extensions = {
+          fzf-native.enable = true;
+          ui-select.enable = true;
+          zoxide.enable = true;
+          file-browser.enable = true;
         };
+      };
 
-        telescope = {
-          enable = true;
-          extensions = {
-            fzf-native.enable = true;
-            ui-select.enable = true;
-            zoxide.enable = true;
-            file-browser.enable = true;
+      tiny-glimmer.enable = true;
+
+      tmux-navigator = {
+        enable = true;
+        settings.no_mappings = 1;
+      };
+
+      toggleterm.enable = true;
+
+      yazi = {
+        enable = true;
+        autoLoad = true;
+        settings = {
+          log_level = "debug";
+          open_for_directories = true;
+          enable_mouse_support = true;
+          floating_window_scaling_factor = 1;
+          yazi_floating_window_border = "rounded";
+          yazi_floating_window_winblend = 20;
+        };
+      };
+
+      snacks = {
+        enable = true;
+        settings = {
+          bigfile.enable = true;
+          bufdelete.enable = true;
+          explorer = {
+            enabled = true;
+            replace_netrw = true;
           };
-        };
-
-        tiny-glimmer.enable = true;
-
-        tmux-navigator = {
-          enable = true;
-          settings.no_mappings = 1;
-        };
-
-        toggleterm.enable = true;
-
-        yazi = {
-          enable = true;
-          autoLoad = true;
-          settings = {
-            log_level = "debug";
-            open_for_directories = true;
-            enable_mouse_support = true;
-            floating_window_scaling_factor = 1;
-            yazi_floating_window_border = "rounded";
-            yazi_floating_window_winblend = 20;
+          git.enable = true;
+          gitbrowse.enable = true;
+          image.enable = true;
+          indent.enabled = true;
+          input.enabled = true;
+          picker = {
+            enabled = true;
+            layout.preset = "telescope";
           };
+          quickfile.enabled = true;
+          scope.enable = true;
+          scroll.enabled = false;
+          terminal.enable = true;
         };
+      };
 
-        snacks = {
-          enable = true;
-          settings = {
-            bigfile.enable = true;
-            bufdelete.enable = true;
-            explorer = {
+      web-devicons.enable = true;
+      wilder.enable = true;
+
+      zen-mode = {
+        enable = true;
+        autoLoad = true;
+        settings = {
+          window = {
+            backdrop = 0.95;
+            width = 0.8;
+            height = 1;
+            options.signcolumn = "no";
+          };
+          plugins = {
+            options = {
               enabled = true;
-              replace_netrw = true;
+              ruler = false;
+              showcmd = false;
             };
-            git.enable = true;
-            gitbrowse.enable = true;
-            image.enable = true;
-            indent.enabled = true;
-            input.enabled = true;
-            picker = {
-              enabled = true;
-              layout.preset = "telescope";
-            };
-            quickfile.enabled = true;
-            scope.enable = true;
-            scroll.enabled = false;
-            terminal.enable = true;
-          };
-        };
-
-        web-devicons.enable = true;
-        wilder.enable = true;
-
-        zen-mode = {
-          enable = true;
-          autoLoad = true;
-          settings = {
-            window = {
-              backdrop = 0.95;
-              width = 0.8;
-              height = 1;
-              options.signcolumn = "no";
-            };
-            plugins = {
-              options = {
-                enabled = true;
-                ruler = false;
-                showcmd = false;
-              };
-              twilight.enabled = false;
-              gitsigns.enabled = true;
-              tmux.enabled = false;
-            };
+            twilight.enabled = false;
+            gitsigns.enabled = true;
+            tmux.enabled = false;
           };
         };
       };

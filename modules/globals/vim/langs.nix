@@ -1,9 +1,12 @@
 {
   den.default.os = { pkgs, ... }: {
     programs.nixvim.plugins = {
+      bullets.enable = true;
       crates.enable = true;
       lsp-signature.enable = true;
       markdown-preview.enable = true;
+      hmts.enable = true;
+      typescript-tools.enable = true;
 
       package-info = {
         enable = true;

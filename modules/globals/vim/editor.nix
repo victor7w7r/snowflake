@@ -1,11 +1,17 @@
 {
   den.default.os.programs.nixvim.plugins = {
+    baleia.enable = true;
+    better-escape.enable = true;
     colorizer.enable = true;
+    ccc.enable = true;
+    endec.enable = true;
 
     flash = {
       enable = true;
       settings = { };
     };
+
+    hardtime.enable = true;
 
     image = {
       enable = true;

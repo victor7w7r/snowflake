@@ -1,5 +1,8 @@
 {
   den.default.os.programs.nixvim.plugins = {
+    blame.enable = true;
+    conflict.enable = true;
+
     lazygit = {
       enable = true;
       lazyLoad.settings.cmd = "LazyGit";

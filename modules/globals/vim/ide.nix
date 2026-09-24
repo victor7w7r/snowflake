@@ -1,5 +1,6 @@
 {
   den.default.os.programs.nixvim.plugins = {
+    aerial.enable = true;
     actions-preview.enable = true;
     arrow.enable = true;
     autoclose.enable = true;
@@ -48,6 +49,7 @@
       };
     };
 
+    goto-preview.enable = true;
 
     grug-far = {
       enable = true;
