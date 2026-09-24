@@ -32,7 +32,6 @@
     dropbar = {
       enable = true;
       settings.bar.update_events.buf = [
-        # 'BufModifiedSet' is not available in this Neovim build
         "FileChangedShellPost"
         "TextChanged"
         "ModeChanged"
@@ -85,12 +84,19 @@
 
     neo-tree = {
       enable = true;
+      lazyLoad.settings.cmd = "Neotree";
       settings = {
         enableDiagnostics = true;
         enableGitStatus = true;
         enableModifiedMarkers = true;
         enableRefreshOnWrite = true;
         close_if_last_window = true;
+        default_component_configs.icon = {
+          folder_closed = "󰉋";
+          folder_open = "󰝰";
+          folder_empty = "󰉖";
+          default = "󰈙";
+        };
         filesystem = {
           follow_current_file.enabled = true;
           filtered_items.visible = true;
@@ -129,7 +135,11 @@
       lazyLoad.settings.event = "BufEnter";
     };
 
-    project-nvim.enable = true;
+    project-nvim = {
+      enable = true;
+      enableTelescope = true;
+    };
+
     rest.enable = true;
 
     toggler.enable = true;
@@ -141,6 +151,7 @@
 
     trouble = {
       enable = true;
+      lazyLoad.settings.cmd = "Trouble";
       settings.modes.lsp.win.position = "right";
     };
 

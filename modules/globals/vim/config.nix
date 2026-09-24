@@ -2,6 +2,8 @@
   den.default.os.programs.nixvim = {
     globals = {
       autoformat = true;
+      mapleader = " ";
+      maplocalleader = " ";
       markdown_recommended_style = 0;
     };
 

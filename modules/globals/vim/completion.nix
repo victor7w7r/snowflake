@@ -1,6 +1,5 @@
 {
   den.default.os.programs.nixvim.plugins = {
-    blink-copilot.enable = true;
     blink-cmp-dictionary.enable = true;
     blink-cmp-git.enable = true;
     blink-emoji.enable = true;

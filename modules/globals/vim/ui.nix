@@ -22,45 +22,44 @@
     plugins = {
       bufferline = {
         enable = true;
-        settings.options.__raw = ''
-          {
-            indicator = {
-              style = "none",
-            },
-            style = "none",
-            mode = "buffers",
-            numbers = "none",
-            close_command = "bdelete! %d",
-            right_mouse_command = "bdelete! %d",
-            left_mouse_command = "buffer %d",
-            middle_mouse_command = "bdelete! %d",
-            buffer_close_icon = "x",
-            modified_icon = "",
-            close_icon = "X",
-            left_trunc_marker = "",
-            right_trunc_marker = "",
-            max_name_length = 14,
-            max_prefix_length = 15,
-            truncate_names = false,
-            tab_size = 15,
-            diagnostics = false,
-            show_buffer_icons = false,
-            show_buffer_close_icons = true,
-            show_close_icon = true,
-            show_tab_indicators = false,
-            show_duplicate_prefix = true,
-            persist_buffer_sort = true,
-            separator_style = "none",
-            always_show_bufferline = true,
-            -- enforce_regular_tabs = true,
-          }
-        '';
+        settings = {
+          options = {
+            always_show_bufferline = true;
+            buffer_close_icon = "×";
+            close_command = "bdelete! %d";
+            close_icon = "×";
+            color_icons = true;
+            diagnostics = false;
+
+            indicator.style = "none";
+            left_mouse_command = "buffer %d";
+            max_name_length = 18;
+            max_prefix_length = 15;
+            middle_mouse_command = "bdelete! %d";
+            mode = "buffers";
+            modified_icon = "";
+            numbers = "none";
+            persist_buffer_sort = true;
+            right_mouse_command = "bdelete! %d";
+            show_buffer_close_icons = true;
+            show_buffer_icons = true;
+            show_close_icon = true;
+            show_duplicate_prefix = true;
+            show_tab_indicators = false;
+            tab_size = 15;
+            truncate_names = false;
+          };
+          highlights.buffer_selected = {
+            bold = true;
+            italic = true;
+          };
+        };
       };
 
       lualine = {
         enable = true;
         settings.options = {
-          theme = "nightfly";
+          theme = "palenight";
           globalstatus = true;
           disabled_filetypes = [
             "dashboard"
@@ -113,38 +112,6 @@
         enable = true;
       };
 
-      telescope = {
-        enable = true;
-        extensions = {
-          fzf-native.enable = true;
-          ui-select.enable = true;
-          zoxide.enable = true;
-          file-browser.enable = true;
-        };
-      };
-
-      tiny-glimmer.enable = true;
-
-      tmux-navigator = {
-        enable = true;
-        settings.no_mappings = 1;
-      };
-
-      toggleterm.enable = true;
-
-      yazi = {
-        enable = true;
-        autoLoad = true;
-        settings = {
-          log_level = "debug";
-          open_for_directories = true;
-          enable_mouse_support = true;
-          floating_window_scaling_factor = 1;
-          yazi_floating_window_border = "rounded";
-          yazi_floating_window_winblend = 20;
-        };
-      };
-
       snacks = {
         enable = true;
         settings = {
@@ -170,8 +137,96 @@
         };
       };
 
-      web-devicons.enable = true;
+      telescope = {
+        enable = true;
+        settings.extensions.media_files = {
+          filetypes = [
+            "png"
+            "webp"
+            "jpg"
+            "jpeg"
+          ];
+          find_cmd = "find";
+        };
+
+        extensions = {
+          fzf-native.enable = true;
+          ui-select.enable = true;
+          zoxide.enable = true;
+          file-browser.enable = true;
+        };
+      };
+
+      tiny-glimmer.enable = true;
+
+      tmux-navigator = {
+        enable = true;
+        settings.no_mappings = 1;
+      };
+
+      toggleterm = {
+        enable = true;
+        lazyLoad.settings.cmd = "ToggleTerm";
+      };
+
+      web-devicons = {
+        enable = true;
+        settings = {
+          color_icons = true;
+          default = true;
+          override_by_extension = {
+            nix = {
+              icon = "󱄅";
+              color = "#7EBAE4";
+              name = "Nix";
+            };
+            json = {
+              icon = "󰘦";
+              color = "#F1E05A";
+              name = "Json";
+            };
+            md = {
+              icon = "󰍔";
+              color = "#519ABA";
+              name = "Markdown";
+            };
+            js = {
+              icon = "󰌞";
+              color = "#F1E05A";
+              name = "JavaScript";
+            };
+            ts = {
+              icon = "󰛦";
+              color = "#3178C6";
+              name = "TypeScript";
+            };
+            py = {
+              icon = "󰌠";
+              color = "#FFBC03";
+              name = "Python";
+            };
+            txt = {
+              icon = "󰈙";
+              color = "#6D8086";
+              name = "Text";
+            };
+          };
+        };
+      };
       wilder.enable = true;
+
+      yazi = {
+        enable = true;
+        lazyLoad.settings.cmd = [ "Yazi" ];
+        settings = {
+          log_level = "debug";
+          open_for_directories = true;
+          enable_mouse_support = true;
+          floating_window_scaling_factor = 1;
+          yazi_floating_window_border = "rounded";
+          yazi_floating_window_winblend = 20;
+        };
+      };
 
       zen-mode = {
         enable = true;

@@ -5,7 +5,6 @@
       crates.enable = true;
       lsp-signature.enable = true;
       markdown-preview.enable = true;
-      hmts.enable = true;
       typescript-tools.enable = true;
 
       package-info = {
@@ -19,14 +18,28 @@
         servers = {
           astro.enable = true;
           bashls.enable = true;
+          biome.enable = true;
           cssls.enable = true;
-          dockerls.enable = true;
+          custom_elements_ls = {
+            enable = true;
+            package = null;
+          };
           docker_compose_language_service.enable = true;
+          dockerls.enable = true;
+          emmet_ls.enable = true;
+          html.enable = true;
+          gradle_ls = {
+            enable = true;
+            package = null;
+          };
+          jsonls.enable = true;
+          kotlin_lsp = {
+            enable = true;
+            package = null;
+          };
+          marksman.enable = true;
           oxfmt.enable = true;
           oxlint.enable = true;
-          html.enable = true;
-          jsonls.enable = true;
-          marksman.enable = true;
           nixd = {
             enable = true;
             settings = {
@@ -38,6 +51,7 @@
               };
             };
           };
+          pylsp.enable = true;
           ts_ls.enable = true;
           rust_analyzer = {
             enable = true;
@@ -45,8 +59,19 @@
             installRustc = false;
           };
           sqls.enable = true;
+          stylelint_lsp.enable = true;
+          svelte.enable = true;
+          unocss = {
+            enable = true;
+            package = null;
+          };
+          vue_ls.enable = true;
           yamlls.enable = true;
-          #tailwindcss.enable = true;
+        };
+        keymaps.diagnostic = {
+          "<leader>dl" = "open_float";
+          "[d" = "goto_prev";
+          "]d" = "goto_next";
         };
       };
 
@@ -66,31 +91,33 @@
           bash
           css
           diff
-          html
+          dockerfile
           git_config
           git_rebase
           gitattributes
           gitcommit
           gitignore
+          html
+          html
+          ini
           javascript
           json
           kotlin
           markdown
-          markdown_inline
           nix
           python
           query
           regex
           rust
+          sql
           ssh_config
           svelte
           tsx
           typescript
-          vim
-          vimdoc
           vue
           xml
           yaml
+          zsh
         ];
       };
 
@@ -98,18 +125,18 @@
         enable = true;
         settings = {
           formatters_by_ft = {
-            lua = [ "stylua" ];
             css = [ "oxfmt" ];
             html = [ "oxfmt" ];
             javascript = [ "oxfmt" ];
             javascriptreact = [ "oxfmt" ];
             json = [ "oxfmt" ];
+            lua = [ "stylua" ];
             nix = [ "nixfmt" ];
             rust = [ "rustfmt" ];
+            sh = [ "shfmt" ];
             typescript = [ "oxfmt" ];
             typescriptreact = [ "oxfmt" ];
             vue = [ "oxfmt" ];
-            sh = [ "shfmt" ];
           };
           default_format_opts = {
             timeout_ms = 3000;
