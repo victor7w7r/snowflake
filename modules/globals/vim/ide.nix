@@ -92,7 +92,7 @@
         enableRefreshOnWrite = true;
         close_if_last_window = true;
         window = {
-          width = 34;
+          width = 25;
           position = "left";
         };
         default_component_configs.icon = {
@@ -102,14 +102,16 @@
           default = "󰈙";
         };
         filesystem = {
-          window.mappings = {
-            "gA" = "git_add_all";
-            "ga" = "git_add_file";
-            "gu" = "git_unstage_file";
-          };
-          group_empty_dirs = true;
-          follow_current_file.enabled = true;
-          use_libuv_file_watcher = true;
+          /*
+            window.mappings = {
+              "gA" = "git_add_all";
+              "ga" = "git_add_file";
+              "gu" = "git_unstage_file";
+            };
+            group_empty_dirs = true;
+            follow_current_file.enabled = true;
+            use_libuv_file_watcher = true
+          */
           filtered_items = {
             hide_dotfiles = false;
             hide_by_name = [ ".git" ];

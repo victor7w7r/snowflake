@@ -115,11 +115,15 @@
       flake = false;
     };
 
+    dbee = {
+      url = "github:kndndrj/nvim-dbee";
+      flake = false;
+    };
+
     diskonaut = {
       url = "github:imsnif/diskonaut";
       flake = false;
     };
-
 
     dockerfilegraph = {
       url = "github:patrickhoefler/dockerfilegraph";
@@ -576,7 +580,6 @@
       flake = false;
     };
 
-
     ssh-list = {
       url = "github:akinoiro/ssh-list";
       flake = false;
@@ -596,7 +599,6 @@
       url = "github:shixinhuang99/sxtetris";
       flake = false;
     };
-
 
     t2-audio = {
       url = "github:kekrby/t2-better-audio/e46839a28963e2f7d364020518b9dac98236bcae";

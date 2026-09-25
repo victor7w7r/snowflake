@@ -19,24 +19,26 @@
 
           programs.vscode.enable = true;
 
-         /* programs.zed-editor-extensions = {
-            enable = true;
-            packages = [
-              (pkgs.buildZedRustExtension {
-                name = "zed-mcp-server-github";
-                version = "latest";
+          /*
+            programs.zed-editor-extensions = {
+              enable = true;
+              packages = [
+                (pkgs.buildZedRustExtension {
+                  name = "zed-mcp-server-github";
+                  version = "latest";
 
-                src = pkgs.fetchFromGitHub {
-                  owner = "tastybamboo";
-                  rev = "6fec4f9f923644ee63e471ec31b37ce2593d476c";
-                  repo = "zed-mcp-server-github";
-                  hash = "sha256-qM+vMVPtUmIxlopJQ+OV5I3JM1eGdbMzvv9MmkCeJ1w=";
-                };
+                  src = pkgs.fetchFromGitHub {
+                    owner = "tastybamboo";
+                    rev = "6fec4f9f923644ee63e471ec31b37ce2593d476c";
+                    repo = "zed-mcp-server-github";
+                    hash = "sha256-qM+vMVPtUmIxlopJQ+OV5I3JM1eGdbMzvv9MmkCeJ1w=";
+                  };
 
-                cargoHash = "sha256-Q4ow55BazZEsW9ohgYu2kYPpPPeGsfW7BLJA4F7E8Zs=";
-              })
-            ];
-          };*/
+                  cargoHash = "sha256-Q4ow55BazZEsW9ohgYu2kYPpPPeGsfW7BLJA4F7E8Zs=";
+                })
+              ];
+            };
+          */
 
           programs.zed-editor = {
             enable = true;
