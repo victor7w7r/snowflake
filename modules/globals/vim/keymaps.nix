@@ -7,16 +7,64 @@
       options.desc = "Exit insert mode";
     }
     {
-      action = "<cmd>Neotree toggle<cr>";
-      key = "<leader>fe";
+      action = "<cmd>Neotree toggle<CR>";
+      key = "<leader>ft";
       mode = "n";
-      options.desc = "File browser toggle";
+      options.desc = "Toggle neotree";
+    }
+    {
+      action = "<cmd>ToggleTerm<CR>";
+      key = "<leader>t";
+      mode = "n";
+      options.desc = "Toggle terminal";
     }
     {
       action = "<cmd>LazyGit<CR>";
       key = "<leader>gg";
       mode = "n";
-      options.desc = "LazyGit (root dir)";
+      options.desc = "LazyGit";
+    }
+    {
+      action = "<cmd>lua MiniMap.toggle_focus()<CR>";
+      key = "<Leader>mf";
+      mode = "n";
+      options.desc = "Minimap focus";
+    }
+    {
+      action = "<cmd>lua MiniMap.toggle()<CR>";
+      key = "<Leader>mt";
+      mode = "n";
+      options.desc = "Minimap toggle";
+    }
+    {
+      action = "<cmd>lua MiniMap.refresh()<CR>";
+      key = "<Leader>mr";
+      mode = "n";
+      options.desc = "Minimap refresh";
+    }
+    {
+      action = "<cmd>lua MiniMap.toggle_side()<CR>";
+      key = "<Leader>ms";
+      mode = "n";
+      options.desc = "Minimap toggle side";
+    }
+    {
+      key = "<leader><leader>c";
+      action = "<cmd>Telescope colorscheme<CR>";
+      mode = "n";
+      options.desc = "Colorscheme telescope";
+    }
+    {
+      key = "<leader>cd";
+      mode = "n";
+      action = "<cmd>Telescope commands<CR>";
+      options.desc = "Display telescope";
+    }
+    {
+      action = "<cmd>Telescope buffers<cr>";
+      key = "<leader>bb";
+      mode = "n";
+      options.desc = "Show buffers";
     }
     {
       action = "<cmd>Telescope find_files<cr>";
@@ -29,12 +77,6 @@
       key = "<leader>lg";
       mode = "n";
       options.desc = "Search files by contents";
-    }
-    {
-      action = "<cmd>ToggleTerm<CR>";
-      key = "<leader>t";
-      mode = "n";
-      options.desc = "Toggle terminal";
     }
     {
       action = "<cmd>lua require('Comment.api').toggle.linewise.current()<CR>";
@@ -86,21 +128,6 @@
         "c"
       ];
       options.desc = "Disable accidental F1 help";
-    }
-    {
-      action = ":help<Space>";
-      key = "<leader>h";
-      mode = "n";
-      options = {
-        desc = "Open :help prompt";
-        nowait = true;
-      };
-    }
-    {
-      action = ":help <C-r><C-w><CR>";
-      key = "<leader>H";
-      mode = "n";
-      options.desc = "Help for word under cursor";
     }
     {
       action.__raw = ''

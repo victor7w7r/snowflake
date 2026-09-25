@@ -34,7 +34,7 @@
               key = "n";
             }
             {
-              action = ":Project Session";
+              action = ":Project session";
               desc = " Restaurar Sesión";
               icon = " ";
               key = "s";

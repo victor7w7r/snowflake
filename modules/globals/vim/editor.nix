@@ -11,8 +11,6 @@
       settings = { };
     };
 
-    hardtime.enable = true;
-
     image = {
       enable = true;
       settings = {

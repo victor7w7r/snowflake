@@ -101,3 +101,4 @@
      'face '+dashboard-banner)))
 
 (setq +dashboard-ascii-banner-fn #'main-greet-art)
+(setq display-line-numbers-type 'relative)

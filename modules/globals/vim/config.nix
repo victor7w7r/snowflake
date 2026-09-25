@@ -62,7 +62,7 @@
       number = true;
       pumblend = 10;
       pumheight = 10;
-      relativenumber = false;
+      relativenumber = true;
       ruler = false;
       sessionoptions = "buffers,curdir,tabpages,winsize,help,globals,skiprtp,folds";
       shiftwidth = 2;

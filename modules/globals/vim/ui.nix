@@ -27,7 +27,7 @@
             owner = "xieyonn";
             repo = "spinner.nvim";
             rev = "v1.3.0";
-            hash = "sha256-w5uhTVYRgkVCbJ5wrNAAs8bwSpH+4REAr9gaZrbknH8=";
+            hash = "sha256-1cwH8YXcu2yhqzjaV0TItY1YOXtLG3d+PynZGH8HWNA=";
           };
         })
       ];
@@ -38,20 +38,26 @@
           settings = {
             options = {
               always_show_bufferline = true;
-              buffer_close_icon = "×";
               close_command = "bdelete! %d";
-              close_icon = "×";
               color_icons = true;
-              diagnostics = false;
-
+              diagnostics = "nvim_lsp";
               indicator.style = "none";
               left_mouse_command = "buffer %d";
               max_name_length = 18;
               max_prefix_length = 15;
               middle_mouse_command = "bdelete! %d";
               mode = "buffers";
-              modified_icon = "";
               numbers = "none";
+
+              offsets = [
+                {
+                  filetype = "neo-tree";
+                  text = "File Explorer";
+                  text_align = "center";
+                  separator = false;
+                }
+              ];
+
               persist_buffer_sort = true;
               right_mouse_command = "bdelete! %d";
               show_buffer_close_icons = true;
@@ -68,6 +74,8 @@
             };
           };
         };
+
+        #hardtime.enable = true;
 
         lualine = {
           enable = true;

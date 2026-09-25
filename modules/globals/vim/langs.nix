@@ -1,5 +1,5 @@
 {
-  den.default.os = { self', ... }: {
+  den.default.os = { pkgs, self', ... }: {
     programs.nixvim.plugins = {
       bullets.enable = true;
       crates.enable = true;

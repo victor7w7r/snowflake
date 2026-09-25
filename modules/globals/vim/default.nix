@@ -36,7 +36,7 @@
         pyright
         shfmt
         stylua
-        tree-sitter-cli
+        luajitPackages.tree-sitter-cli
         typescript
         typescript-language-server
         vscode-langservers-extracted
