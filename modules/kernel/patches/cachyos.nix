@@ -117,14 +117,15 @@
             mkdir -p $out
             cp -r ${inputs.cachyos-patches-unsync}/* ./
             chmod -R +w . && find . -type d -empty -delete
-            filterdiff -x "*/security/selinux/selinuxfs.c" "${lib.versions.majorMinor kernel-versions.lts}/misc/0001-hardened.patch" > 0001-hardened-filter.patch
+            filterdiff -x "*/security/selinux/selinuxfs.c" -x "*/fs/stat.c" \
+              "${lib.versions.majorMinor kernel-versions.lts}/misc/0001-hardened.patch" > 0001-hardened-filter.patch
             cat 0001-hardened-filter.patch > "${lib.versions.majorMinor kernel-versions.lts}/misc/0001-hardened.patch"
             rm 0001-hardened-filter.patch && mv ./* $out/
           ''
         |> (
           src:
           map (patch: "${src}/${lib.versions.majorMinor kernel-versions.lts}/${patch}.patch") [
-            "misc/0001-aufs-6.18-merge-v20251208"
+            #"misc/0001-aufs-6.18-merge-v20251208"
             "misc/0001-clang-polly"
             "misc/dkms-clang"
             "misc/nap-governor"

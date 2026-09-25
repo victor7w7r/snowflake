@@ -75,7 +75,15 @@
           };
         };
 
-        #hardtime.enable = true;
+        hardtime = {
+          enable = true;
+          settings = {
+            disabled_keys = { };
+            disable_mouse = false;
+            timeout = 2000;
+            restriction_mode = "hint";
+          };
+        };
 
         lualine = {
           enable = true;

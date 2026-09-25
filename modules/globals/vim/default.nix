@@ -2,7 +2,7 @@
 {
   flake-file.inputs.nixvim.url = "github:nix-community/nixvim";
 
-  den.default.os = { pkgs, ... }: {
+  den.default.os = { pkgs, self', ... }: {
     imports = [ inputs.nixvim.nixosModules.nixvim ];
 
     programs.nixvim = {
@@ -34,6 +34,7 @@
         kotlin
         nixfmt
         pyright
+        self'.packages.dbee
         shfmt
         stylua
         luajitPackages.tree-sitter-cli

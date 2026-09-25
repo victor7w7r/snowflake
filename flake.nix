@@ -67,6 +67,7 @@
       url = "github:armbian/firmware";
       flake = false;
     };
+
     asus = {
       url = "gitlab:asus-linux/linux-g14/c95c77b20d794c1c962fcccc9735348bdb7d4e76";
       flake = false;
@@ -155,6 +156,10 @@
     };
     davinci-video-converter = {
       url = "github:tkmxqrdxddd/davinci-video-converter";
+      flake = false;
+    };
+    dbee = {
+      url = "github:kndndrj/nvim-dbee";
       flake = false;
     };
     den.url = "github:denful/den";

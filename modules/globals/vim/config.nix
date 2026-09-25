@@ -58,6 +58,8 @@
       ignorecase = true;
       incsearch = true;
       linebreak = true;
+      list = true;
+      listchars = "tab:» ,lead:•,trail:•";
       mouse = "a";
       number = true;
       pumblend = 10;
