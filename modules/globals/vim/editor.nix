@@ -14,13 +14,30 @@
       ];
 
       plugins = {
-        autoclose.enable = true;
-        baleia.enable = true;
-        better-escape.enable = true;
+        autoclose = {
+          enable = true;
+          lazyLoad.settings.event = "InsertEnter";
+        };
+
+        baleia = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufNewFile"
+            "BufReadPre"
+          ];
+        };
+
+        better-escape = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "InsertEnter"
+            "TermEnter"
+          ];
+        };
 
         bufferline = {
           enable = true;
-          lazyLoad.settings.event = [ "DeferredUIEnter" ];
+          lazyLoad.settings.event = "DeferredUIEnter";
           settings.options = {
             close_command.__raw = "function(n) Snacks.bufdelete(n) end";
             diagnostics = "nvim_lsp";
@@ -39,13 +56,54 @@
           };
         };
 
-        ccc.enable = true;
-        colorizer.enable = true;
-        comment-box.enable = true;
-        comment.enable = true;
+        ccc = {
+          enable = true;
+          lazyLoad.settings.cmd = [
+            "CccPick"
+            "CccConvert"
+            "CccHighlighterToggle"
+            "CccHighlighterEnable"
+            "CccHighlighterDisable"
+          ];
+        };
+
+        colorizer = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufNewFile"
+            "BufReadPre"
+          ];
+        };
+
+        comment-box = {
+          enable = true;
+          lazyLoad.settings.cmd = [
+            "CBd"
+            "CBccbox"
+            "CBllline"
+            "CBline"
+          ];
+        };
+
+        comment = {
+          enable = true;
+          lazyLoad.settings.keys =
+            map (k: "gb${k}") [
+              ""
+              "c"
+            ]
+            ++ map (k: "gc${k}") [
+              ""
+              "c"
+              "O"
+              "o"
+              "A"
+            ];
+        };
 
         dropbar = {
           enable = true;
+          lazyLoad.settings.event = "BufReadPost";
           settings.bar.update_events.buf = [
             "FileChangedShellPost"
             "TextChanged"
@@ -53,15 +111,22 @@
           ];
         };
 
-        endec.enable = true;
-
         flash = {
           enable = true;
+          lazyLoad.settings.event = "DeferredUIEnter";
           settings = { };
         };
 
         image = {
           enable = true;
+          lazyLoad.settings = {
+            event = [ "BufEnter" ];
+            ft = [
+              "markdown"
+              "org"
+              "norg"
+            ];
+          };
           settings = {
             integrations.neorg.enabled = true;
             editor_only_render_when_focused = true;
@@ -69,9 +134,18 @@
           };
         };
 
-        inc-rename.enable = true;
+        inc-rename = {
+          enable = true;
+          lazyLoad.settings.event = "DeferredUIEnter";
+        };
+
         indent-blankline = {
           enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufWritePost"
+            "BufNewFile"
+          ];
           settings = {
             indent = {
               smart_indent_cap = true;
@@ -84,10 +158,17 @@
           };
         };
 
-        illuminate.enable = true;
+        illuminate = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
+        };
 
         lualine = {
           enable = true;
+          lazyLoad.settings.event = "DeferredUIEnter";
           settings.options = {
             theme = "palenight";
             globalstatus = true;
@@ -141,10 +222,15 @@
           };
         };
 
-        navbuddy.enable = true;
+        navbuddy = {
+          enable = true;
+          lazyLoad.settings.cmd = "LspAttach";
+          settings.lsp.autoAttach = true;
+        };
 
         nvim-autopairs = {
           enable = true;
+          lazyLoad.settings.event = "InsertEnter";
           settings = {
             disable_filetype = [
               "TelescopePrompt"
@@ -169,10 +255,18 @@
 
         nvim-ufo = {
           enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
         };
 
         rainbow-delimiters = {
           enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
           settings = {
             strategy = {
               "".__raw = ''
@@ -205,10 +299,12 @@
         todo-comments = {
           enable = true;
           settings.signs = true;
+          lazyLoad.settings.event = "BufReadPost";
         };
 
         ts-autotag = {
           enable = true;
+          lazyLoad.settings.event = "InsertEnter";
           settings.opts = {
             enable_close = true;
             enable_rename = true;
@@ -219,16 +315,27 @@
 
         undotree = {
           enable = true;
+          lazyLoad.settings.cmd = "UndotreeShow";
           settings = {
             autoOpenDiff = true;
             focusOnToggle = true;
           };
         };
 
-        visual-multi.enable = true;
+        visual-multi = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
+        };
 
         visual-whitespace = {
           enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
           settings = {
             enabled = true;
             lead = true;
@@ -239,7 +346,13 @@
           };
         };
 
-        yanky.enable = true;
+        yanky = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
+        };
       };
 
       extraConfigLua = ''

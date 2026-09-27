@@ -11,6 +11,10 @@
       '';
       settings = {
         theme = "doom";
+        hide = {
+          statusline = true;
+          tabline = true;
+        };
         config = {
           header = lib.generators.mkLuaInline ''
             vim.split([[

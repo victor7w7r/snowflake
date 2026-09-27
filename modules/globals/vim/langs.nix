@@ -68,11 +68,39 @@
       };
 
       plugins = {
-        bullets.enable = true;
-        crates.enable = true;
-        lspconfig.enable = true;
-        lsp-signature.enable = true;
-        markdown-preview.enable = true;
+        bullets = {
+          enable = true;
+          lazyLoad.settings.settings.ft = [
+            "markdown"
+            "txt"
+            "gitcommit"
+          ];
+        };
+        crates = {
+          enable = true;
+          lazyLoad.settings.ft = "rust";
+        };
+
+        lspconfig = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
+        };
+
+        lsp-signature = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
+        };
+
+        markdown-preview = {
+          enable = true;
+          lazyLoad.settings.ft = "markdown";
+        };
         #typescript-tools.enable = true;
 
         package-info = {
@@ -83,10 +111,10 @@
 
         treesitter = {
           enable = true;
-          lazyLoad = {
-            enable = true;
-            settings.event = "BufRead";
-          };
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
           settings = {
             highlight.enable = true;
             indent.enable = true;
@@ -129,7 +157,12 @@
 
         conform-nvim = {
           enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
           settings = {
+            lsp_fallback = true;
             formatters_by_ft = {
               css = [ "oxfmt" ];
               html = [ "oxfmt" ];

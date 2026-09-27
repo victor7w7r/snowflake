@@ -1,6 +1,9 @@
 {
-  den.default.os = { pkgs, ... }: {
+  den.default.os = { lib, pkgs, ... }: {
     programs.nixvim = {
+
+      extraPlugins = [ pkgs.vimPlugins.lualine-lsp-progress ];
+
       colorschemes.tokyonight = {
         enable = true;
         lazyLoad.enable = true;
@@ -21,33 +24,52 @@
         };
       };
 
-      extraPlugins = [ pkgs.vimPlugins.lualine-lsp-progress ];
-
       plugins = {
         hardtime = {
           enable = true;
+          lazyLoad.settings.event = "BufEnter";
           settings = {
-            disabled_keys = { };
+            disabled_keys = {
+              "<Down>" = lib.generators.mkLuaInline "{}";
+              "<Left>" = lib.generators.mkLuaInline "{}";
+              "<Right>" = lib.generators.mkLuaInline "{}";
+              "<Up>" = lib.generators.mkLuaInline "{}";
+            };
             disable_mouse = false;
             timeout = 2000;
             restriction_mode = "hint";
           };
         };
 
-        modicator.enable = true;
-        notify.enable = true;
+        modicator = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufNewFile"
+            "BufReadPre"
+          ];
+        };
 
-        scrollview
+        notify = {
+          enable = true;
+          lazyLoad.settings.event = "DeferredUIEnter";
+        };
 
-
-        .enable = true;
+        scrollview = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufNewFile"
+            "BufReadPost"
+          ];
+        };
 
         smear-cursor = {
           enable = true;
+          lazyLoad.settings.event = "DeferredUIEnter";
         };
 
         snacks = {
           enable = true;
+          lazyLoad.settings.event = "DeferredUIEnter";
           settings = {
             bigfile.enable = true;
             explorer = {
@@ -72,6 +94,7 @@
 
         telescope = {
           enable = true;
+          lazyLoad.settings.cmd = "Telescope";
           settings.extensions.media_files = {
             filetypes = [
               "png"
@@ -90,10 +113,14 @@
           };
         };
 
-        tiny-glimmer.enable = true;
+        tiny-glimmer = {
+          enable = true;
+          lazyLoad.settings.event = "DeferredUIEnter";
+        };
 
         tmux-navigator = {
           enable = true;
+          autoLoad = true;
           settings.no_mappings = 1;
         };
 
@@ -104,17 +131,21 @@
 
         web-devicons = {
           enable = true;
+          lazyLoad.settings.event = "DeferredUIEnter";
           settings = {
             color_icons = true;
             default = true;
           };
         };
 
-        wilder.enable = true;
+        wilder = {
+          enable = true;
+          lazyLoad.settings.cmd = "CmdlineEnter";
+        };
 
         yazi = {
           enable = true;
-          lazyLoad.settings.cmd = [ "Yazi" ];
+          lazyLoad.settings.cmd = "Yazi";
           settings = {
             log_level = "debug";
             open_for_directories = true;
@@ -127,6 +158,7 @@
 
         zen-mode = {
           enable = true;
+          lazyLoad.settings.cmd = "ZenMode";
           settings = {
             window = {
               backdrop = 0.95;

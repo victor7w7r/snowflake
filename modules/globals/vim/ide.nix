@@ -1,18 +1,61 @@
 {
   den.default.os.programs.nixvim.plugins = {
-    aerial.enable = true;
-    actions-preview.enable = true;
-    arrow.enable = true;
+    aerial = {
+      enable = true;
+      lazyLoad.settings.cmd = "AerialToggle";
+    };
+
+    actions-preview = {
+      enable = true;
+      lazyLoad.settings.keys = [
+        {
+          __unkeyed-1 = "<leader>ca";
+          __unkeyed-2.__raw = ''
+            function()
+              require('actions-preview').code_actions()
+            end
+          '';
+          desc = "Code actions preview";
+        }
+      ];
+    };
+
+    arrow = {
+      enable = true;
+      lazyLoad.settings.keys = [
+        {
+          __unkeyed-1 = "<cr>";
+          desc = "Open Arrow Bookmarks";
+        }
+      ];
+    };
 
     auto-save = {
       enable = true;
-      settings.enabled = true;
+      lazyLoad.settings.event = [
+        "InsertLeave"
+        "TextChanged"
+      ];
+      settings = {
+        enabled = true;
+        debounce_delay = 1000;
+        write_all_buffers = false;
+      };
     };
 
-    compiler.enable = true;
+    compiler = {
+      enable = true;
+      lazyLoad.settings.cmd = [
+        "CompilerOpen"
+        "CompilerRedo"
+        "CompilerStop"
+        "CompilerToggleResults"
+      ];
+    };
 
     colorful-menu = {
       enable = true;
+      lazyLoad.settings.event = "InsertEnter";
       settings = {
         ls = {
           lua_ls.arguments_hl = "@comment";
@@ -23,47 +66,38 @@
       };
     };
 
-    dbee.enable = true;
-    dial.enable = true;
-    fastaction.enable = true;
+    dbee = {
+      enable = true;
+      lazyLoad.settings.cmd = "Dbee";
+    };
+
+    dial = {
+      enable = true;
+      lazyLoad.settings.event = "InsertEnter";
+    };
+
+    fastaction = {
+      enable = true;
+      lazyLoad.settings.event = "LspAttach";
+    };
 
     glance = {
       enable = true;
+      lazyLoad.settings.cmd = "Glance";
       settings = {
         border.enable = true;
       };
     };
 
-    goto-preview.enable = true;
+    goto-preview = {
+      enable = true;
+      lazyLoad.settings.event = "LspAttach";
+    };
 
     grug-far = {
       enable = true;
       settings.headerMaxWidth = 80;
-      lazyLoad.settings = {
-        cmd = "GrugFar";
-        keys = [
-          {
-            __unkeyed-1 = "<leader>sr";
-            mode = [
-              "n"
-              "x"
-            ];
-            __unkeyed-2.__raw = ''
-              function()
-                local grug = require("grug-far")
-                local ext = vim.bo.buftype == "" and vim.fn.expand("%:e")
-                grug.open({
-                  transient = true,
-                  prefills = {
-                    filesFilter = ext and ext ~= "" and "*." .. ext or nil,
-                  },
-                })
-              end
-            '';
-            desc = "Search and Replace";
-          }
-        ];
-      };
+      lazyLoad.settings.cmd = "GrugFar";
     };
 
     neo-tree = {
@@ -104,10 +138,14 @@
       };
     };
 
-    nvim-lightbulb.enable = true;
+    nvim-lightbulb = {
+      enable = true;
+      lazyLoad.settings.event = "LspAttach";
+    };
 
     persistence = {
       enable = true;
+      lazyLoad.settings.event = "BufReadPre";
       settings.options = [
         "buffers"
         "curdir"
@@ -119,6 +157,7 @@
     project-nvim = {
       enable = true;
       enableTelescope = true;
+      lazyLoad.settings.event = "DeferredUIEnter";
       settings = {
         patterns = [
           ".git"
@@ -130,16 +169,25 @@
       };
     };
 
-    rest.enable = true;
-    toggler.enable = true;
+    rest = {
+      enable = true;
+      lazyLoad.settings.ft = ["http" "rest"];
+    };
+
+    toggler = {
+      enable = true;
+      lazyLoad.settings.event = "InsertEnter";
+    };
 
     treesj = {
       enable = true;
+      lazyLoad.settings.event = "LspAttach";
       settings.use_default_keymaps = false;
     };
 
     trouble = {
       enable = true;
+      lazyLoad.settings.cmd = "Trouble";
       settings.modes.lsp.win.position = "right";
     };
   };
