@@ -2,6 +2,7 @@
   den.default.os = { lib, ... }: {
     programs.nixvim.plugins.dashboard = {
       enable = true;
+      lazyLoad.settings.enabled.__raw = "function() return vim.fn.argc() == 0 end";
       luaConfig.post = ''
         vim.api.nvim_set_hl(0, "DashboardFooter", {
           fg = "#bb9af7",

@@ -3,6 +3,7 @@
     programs.nixvim = {
       colorschemes.tokyonight = {
         enable = true;
+        lazyLoad.enable = true;
         settings = {
           style = "night";
           transparent = true;
@@ -126,7 +127,6 @@
 
         zen-mode = {
           enable = true;
-          autoLoad = true;
           settings = {
             window = {
               backdrop = 0.95;

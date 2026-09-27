@@ -1,7 +1,17 @@
 {
   den.default.os.programs.nixvim.plugins = {
-    blame.enable = true;
-    conflict.enable = true;
+    blame = {
+      enable = true;
+      lazyLoad.settings.event = "DeferredUIEnter";
+    };
+
+    conflict = {
+      enable = true;
+      lazyLoad.settings.event = [
+        "BufReadPost"
+        "BufNewFile"
+      ];
+    };
 
     lazygit = {
       enable = true;
@@ -63,6 +73,7 @@
 
     gitsigns = {
       enable = true;
+      lazyLoad.settings.event = "DeferredUIEnter";
       settings = {
         signs = {
           add.text = "▎";

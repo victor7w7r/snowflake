@@ -126,10 +126,7 @@
     dap-disasm.enable = true;
     #dap-lldb.enable = true;
 
-    dap-ui = {
-      enable = true;
-      lazyLoad.settings.lazy = true;
-    };
+    dap-ui.enable = true;
 
     dap-virtual-text = {
       enable = true;

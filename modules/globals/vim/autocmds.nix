@@ -10,8 +10,8 @@
       nixvim_json_conceal.clear = true;
       nixvim_auto_create_dir.clear = true;
       nixvim_project_ui.clear = true;
-
     };
+
     autoCmd = [
       {
         event = [

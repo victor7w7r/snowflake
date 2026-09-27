@@ -1,5 +1,5 @@
 {
-  den.default.os = { lib, pkgs, ... }: {
+  den.default.os = { pkgs, ... }: {
     programs.nixvim = {
       extraPlugins = [
         (pkgs.vimUtils.buildVimPlugin {
@@ -20,6 +20,7 @@
 
         bufferline = {
           enable = true;
+          lazyLoad.settings.event = [ "DeferredUIEnter" ];
           settings.options = {
             close_command.__raw = "function(n) Snacks.bufdelete(n) end";
             diagnostics = "nvim_lsp";

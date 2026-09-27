@@ -2,8 +2,18 @@
   den.default.os = { pkgs, ... }: {
     programs.nixvim.plugins = {
       avante = {
-        lazyLoad.settings.event = [ "DeferredUIEnter" ];
         enable = true;
+        lazyLoad.settings.cmd = [
+          "AvanteAsk"
+          "AvanteBuild"
+          "AvanteChat"
+          "AvanteEdit"
+          "AvanteFocus"
+          "AvanteRefresh"
+          "AvanteSwitchProvider"
+          "AvanteShowRepoMap"
+          "AvanteToggle"
+        ];
         settings = {
           provider = "copilot";
           providers.copilot = {
@@ -18,10 +28,20 @@
         };
       };
 
-      blink-cmp-avante.enable = true;
+      blink-cmp-avante = {
+        enable = true;
+        lazyLoad.settings.event = [
+          "InsertEnter"
+          "CmdlineEnter"
+        ];
+      };
 
       copilot-lua = {
         enable = true;
+        lazyLoad.settings = {
+          cmd = "Copilot";
+          event = "InsertEnter";
+        };
         settings = {
           copilot_node_command = "${pkgs.nodejs}/bin/node";
           filetypes = {
