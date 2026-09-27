@@ -1,22 +1,24 @@
 {
   den.default.os.programs.nixvim.plugins =
-    { ... }@args:
-    {
-      enable = true;
-      lazyLoad.settings.event = [
-        "InsertEnter"
-        "CmdlineEnter"
-      ];
-    }
-    // (removeAttrs args [ "enable" ])
+    (
+      { ... }@args:
+      {
+        enable = true;
+        lazyLoad.settings.event = [
+          "InsertEnter"
+          "CmdlineEnter"
+        ];
+      }
+      // (removeAttrs args [ "enable" ])
+    )
     |> (insertPlugin: {
-      blink-cmp-dictionary.enable = insertPlugin { };
-      blink-cmp-git.enable = insertPlugin { };
-      blink-emoji.enable = insertPlugin { };
-      blink-indent.enable = insertPlugin { };
-      blink-ripgrep.enable = insertPlugin { };
-      blink-pairs.enable = insertPlugin { };
-      blink-cmp-words.enable = insertPlugin { };
+      blink-cmp-dictionary = insertPlugin { };
+      blink-cmp-git = insertPlugin { };
+      blink-emoji = insertPlugin { };
+      blink-indent = insertPlugin { };
+      blink-ripgrep = insertPlugin { };
+      blink-pairs = insertPlugin { };
+      blink-cmp-words = insertPlugin { };
       blink-cmp = {
         enable = true;
         setupLspCapabilities = true;
@@ -126,6 +128,6 @@
           };
         };
       };
-      friendly-snippets.enable = insertPlugin { };
+      friendly-snippets = insertPlugin { };
     });
 }
