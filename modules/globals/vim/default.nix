@@ -73,7 +73,8 @@
         errorbells = false;
         expandtab = true;
         fileencoding = "utf-8";
-        foldcolumn = "0";
+        fillchars = "eob: ,fold: ,foldopen:,foldsep: ,foldinner: ,foldclose:";
+        foldcolumn = "1";
         foldenable = true;
         foldlevel = 99;
         foldlevelstart = 99;

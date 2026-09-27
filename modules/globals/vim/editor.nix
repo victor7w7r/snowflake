@@ -201,34 +201,6 @@
 
         snacks.settings.bufdelete.enabled = true;
 
-        statuscol = {
-          enable = false;
-          settings = {
-            relculright = true;
-            ft_ignore = [
-              "dashboard"
-              "neo-tree"
-            ];
-            segments = [
-              {
-                click = "v:lua.ScFa";
-                text = [ (lib.generators.mkLuaInline "require('statuscol.builtin').foldfunc") ];
-              }
-              {
-                click = "v:lua.ScSa";
-                text = [ " %s" ];
-              }
-              {
-                click = "v:lua.ScLa";
-                text = [
-                  (lib.generators.mkLuaInline "require('statuscol.builtin').lnumfunc")
-                  " "
-                ];
-              }
-            ];
-          };
-        };
-
         todo-comments = {
           enable = true;
           settings.signs = true;

@@ -36,6 +36,11 @@
         modicator.enable = true;
         notify.enable = true;
 
+        scrollview
+
+
+        .enable = true;
+
         smear-cursor = {
           enable = true;
         };
@@ -59,7 +64,7 @@
             };
             quickfile.enabled = true;
             scope.enable = true;
-            scroll.enabled = true;
+            scroll.enabled = false;
             terminal.enable = true;
           };
         };
