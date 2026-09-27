@@ -28,9 +28,9 @@
           audio._
           cli._
           dev.ccache
-          dev.zed
-          dev.tools
           dev.mise
+          dev.tools
+          dev.zed
           gui._
           misc._
           pentest._
@@ -39,6 +39,7 @@
           android
           bluetooth
           disks
+          emacs
           emulation
           firewall
           games

@@ -39,7 +39,6 @@
     };
 
     fastaction.enable = true;
-    lsp-progress.enable = true;
 
     glance = {
       enable = true;
@@ -151,6 +150,16 @@
       lazyLoad.settings.event = "BufEnter";
     };
 
+    persistence = {
+      enable = true;
+      settings.options = [
+        "buffers"
+        "curdir"
+        "tabpages"
+        "winsize"
+      ];
+    };
+
     project-nvim = {
       enable = true;
       enableTelescope = true;
@@ -163,9 +172,33 @@
           "lsp"
           "pattern"
         ];
-        patterns = [ ">repositories" ];
+        patterns = [
+          ".git"
+          "package.json"
+          "Cargo.toml"
+          "Makefile"
+        ];
         show_hidden = true;
         tilde = true;
+        silent_chdir = true;
+        /*
+          on_attach.__raw = ''
+          function(dir, method, bufnr, map)
+            vim.cmd('Neotree toggle')
+            vim.cmd('Neominimap Toggle')
+            map('n', '<leader>pS', '<CMD>Project session<CR>', { desc = 'Project Session' })
+            map({
+              n = {
+                ['<leader>pR'] = { '<CMD>Project recents<CR>', { desc = 'Recent Projects' } },
+                ['<leader>pS'] = { '<CMD>Project session<CR>', { desc = 'Project Session' } },
+              },
+              i = {
+                ['<A-p>'] = { '<Esc>:Project<CR>', { desc = 'Project UI' } },
+              }
+            })
+          end
+          '';
+        */
       };
     };
 
@@ -175,6 +208,7 @@
     treesj = {
       enable = true;
       autoLoad = true;
+      settings.use_default_keymaps = false;
     };
 
     trouble = {

@@ -7,6 +7,93 @@
       options.desc = "Exit insert mode";
     }
     {
+      action = "<cmd>quitall<cr><esc>";
+      key = "<leader>qq";
+      mode = "n";
+      options = {
+        desc = "Quit all";
+        silent = true;
+      };
+    }
+    {
+      action = "<cmd>m .+1<cr>==";
+      key = "<A-j>";
+      mode = "n";
+      options.desc = "Move line down";
+    }
+    {
+      action = "<cmd>m .-2<cr>==";
+      key = "<A-k>";
+      mode = "n";
+      options.desc = "Move line up";
+    }
+    {
+      action = "<cmd>m .+1<cr>==";
+      key = "<A-Down>";
+      mode = "n";
+      options.desc = "Move line down";
+    }
+    {
+      action = "<cmd>m .-2<cr>==";
+      key = "<A-Up>";
+      mode = "n";
+      options.desc = "Move line up";
+    }
+    {
+      action = ":m '>+1<cr>gv=gv";
+      key = "<A-j>";
+      mode = "x";
+      options.desc = "Mover selección abajo";
+    }
+    {
+      action = ":m '>+1<cr>gv=gv";
+      key = "<A-Down>";
+      mode = "x";
+      options.desc = "Mover selección abajo";
+    }
+    {
+      action = ":m '<-2<cr>gv=gv";
+      key = "<A-k>";
+      mode = "x";
+      options.desc = "Mover selección arriba";
+    }
+    {
+      action = ":m '<-2<cr>gv=gv";
+      key = "<A-Up>";
+      mode = "x";
+      options.desc = "Mover selección arriba";
+    }
+    {
+      action = ":t '><cr>";
+      key = "<S-A-Down>";
+      mode = "x";
+      options.desc = "Duplicate selected lines down";
+    }
+    {
+      action = ":t '><cr>";
+      key = "<A-S-j>";
+      mode = "x";
+      options.desc = "Duplicate selected lines down";
+    }
+    {
+      action = "<cmd>t .<cr>";
+      key = "<S-A-Down>";
+      mode = "n";
+      options.desc = "Duplicate line down";
+    }
+    {
+      action = "<cmd>t .<cr>";
+      key = "<A-S-j>";
+      mode = "n";
+      options.desc = "Duplicate line down";
+    }
+    {
+      action = "<CMD>vnew<CR>";
+      key = "<leader>sn";
+      mode = "n";
+      options.desc = "Vertical Split";
+    }
+    {
       action = "<cmd>Neotree toggle<CR>";
       key = "<leader>ft";
       mode = "n";
@@ -20,44 +107,74 @@
     }
     {
       action = "<cmd>LazyGit<CR>";
-      key = "<leader>gg";
+      key = "<leader>lg";
       mode = "n";
       options.desc = "LazyGit";
     }
     {
-      action = "<cmd>lua MiniMap.toggle_focus()<CR>";
-      key = "<Leader>mf";
+      action = "<cmd>Neominimap Toggle<CR>";
+      key = "<leader>mt";
       mode = "n";
-      options.desc = "Minimap focus";
+      options.desc = "Neominimap Toggle";
     }
     {
-      action = "<cmd>lua MiniMap.toggle()<CR>";
-      key = "<Leader>mt";
+      action = "<cmd>Neominimap Refresh<CR>";
+      key = "<leader>mr";
       mode = "n";
-      options.desc = "Minimap toggle";
+      options.desc = "Neominimap Refresh";
     }
     {
-      action = "<cmd>lua MiniMap.refresh()<CR>";
-      key = "<Leader>mr";
+      action = "<cmd>Neominimap Focus<CR>";
+      key = "<leader>mf";
       mode = "n";
-      options.desc = "Minimap refresh";
+      options.desc = "Neominimap Focus";
     }
     {
-      action = "<cmd>lua MiniMap.toggle_side()<CR>";
-      key = "<Leader>ms";
-      mode = "n";
-      options.desc = "Minimap toggle side";
+      action.__raw = "function() mc.matchAddCursor(1) end";
+      key = "<leader>n";
+      mode = [
+        "n"
+        "x"
+      ];
+      options.desc = "Add next cursor";
     }
     {
-      key = "<leader><leader>c";
+      action.__raw = "function() mc.matchSkipCursor(1) end";
+      key = "<leader>v";
+      mode = [
+        "n"
+        "x"
+      ];
+      options.desc = "Jump to the other cursor";
+    }
+    {
+      action.__raw = "function() mc.matchAddCursor(-1) end";
+      key = "<leader>N";
+      mode = [
+        "n"
+        "x"
+      ];
+      options.desc = "Add previous cursor";
+    }
+    {
+      action.__raw = "function() mc.matchSkipCursor(-1) end";
+      key = "<leader>V";
+      mode = [
+        "n"
+        "x"
+      ];
+      options.desc = "Jump to the previous cursor";
+    }
+    {
       action = "<cmd>Telescope colorscheme<CR>";
+      key = "<leader><leader>c";
       mode = "n";
       options.desc = "Colorscheme telescope";
     }
     {
+      action = "<cmd>Telescope commands<CR>";
       key = "<leader>cd";
       mode = "n";
-      action = "<cmd>Telescope commands<CR>";
       options.desc = "Display telescope";
     }
     {

@@ -52,6 +52,8 @@
                 colorful-mode
                 copilot
                 copilot-chat
+                emojify
+                emojify-logos
                 evil-matchit
                 evil-tutor
                 fancy-compilation

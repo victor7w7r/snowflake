@@ -21,6 +21,7 @@
       };
 
       extraPlugins = [
+        pkgs.vimPlugins.lualine-lsp-progress
         (pkgs.vimUtils.buildVimPlugin {
           name = "spinner";
           src = pkgs.fetchFromGitHub {
@@ -35,43 +36,21 @@
       plugins = {
         bufferline = {
           enable = true;
-          settings = {
-            options = {
-              always_show_bufferline = true;
-              close_command = "bdelete! %d";
-              color_icons = true;
-              diagnostics = "nvim_lsp";
-              indicator.style = "none";
-              left_mouse_command = "buffer %d";
-              max_name_length = 18;
-              max_prefix_length = 15;
-              middle_mouse_command = "bdelete! %d";
-              mode = "buffers";
-              numbers = "none";
-
-              offsets = [
-                {
-                  filetype = "neo-tree";
-                  text = "File Explorer";
-                  text_align = "center";
-                  separator = false;
-                }
-              ];
-
-              persist_buffer_sort = true;
-              right_mouse_command = "bdelete! %d";
-              show_buffer_close_icons = true;
-              show_buffer_icons = true;
-              show_close_icon = true;
-              show_duplicate_prefix = true;
-              show_tab_indicators = false;
-              tab_size = 15;
-              truncate_names = false;
-            };
-            highlights.buffer_selected = {
-              bold = true;
-              italic = true;
-            };
+          settings.options = {
+            close_command.__raw = "function(n) require('mini.bufremove').delete(n, false) end";
+            diagnostics = "nvim_lsp";
+            middle_mouse_command = "bdelete! %d";
+            right_mouse_command.__raw = "function(n) require('mini.bufremove').delete(n, false) end";
+            tab_size = 15;
+            separator_style = "thin";
+            offsets = [
+              {
+                filetype = "neo-tree";
+                text = "NeoTree";
+                text_align = "center";
+                separator = false;
+              }
+            ];
           };
         };
 
@@ -108,6 +87,12 @@
                   icon = "";
                 }
                 "diff"
+                {
+                  __unkeyed = "project";
+                  format = "name";
+                  no_project = "N/A";
+                  separator = " ";
+                }
               ];
               lualine_c = [
                 {
@@ -118,6 +103,7 @@
                     readonly = "";
                   };
                 }
+                "lsp_progress"
               ];
               lualine_x = [
                 "diagnostics"
@@ -131,6 +117,11 @@
               lualine_z = [ "location" ];
             };
           };
+        };
+
+        mini = {
+          enable = true;
+          modules.bufremove = { };
         };
 
         modicator.enable = true;
@@ -242,6 +233,7 @@
             };
           };
         };
+
         wilder.enable = true;
 
         yazi = {

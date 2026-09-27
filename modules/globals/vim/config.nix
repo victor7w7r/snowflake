@@ -70,6 +70,7 @@
       shiftwidth = 2;
       showmode = false;
       showtabline = 0;
+      sidescrolloff = 36;
       signcolumn = "yes";
       smartcase = true;
       smartindent = true;

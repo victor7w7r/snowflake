@@ -1,4 +1,3 @@
-{ inputs, ... }:
 {
   flake-file.inputs.kwin-effects-better-blur-dx = {
     url = "github:xarblu/kwin-effects-better-blur-dx";
@@ -8,6 +7,7 @@
   den.aspects.plasma.default-packages = {
     nixos =
       {
+        inputs',
         isHandheld,
         isPhone,
         lib,
@@ -50,10 +50,10 @@
               sweeper
             ]
             ++ (lib.optionals (!isPhone) [
-            	kamoso
-            	kbackup
-             	kompare
-              inputs.kwin-effects-better-blur-dx.packages.${pkgs.system}.default
+              kamoso
+              kbackup
+              kompare
+              inputs'.kwin-effects-better-blur-dx.packages.default
               kcalc
               kmix
               pkgs.application-title-bar
@@ -72,9 +72,9 @@
               sddm-kcm
             ])
             ++ (lib.optionals (!isHandheld && !isPhone) [
-            	kontrast
-            	pkgs.qpwgraph
-             	kcolorchooser
+              kontrast
+              pkgs.qpwgraph
+              kcolorchooser
               pkgs.graphviz
               pkgs.kdePackages.isoimagewriter
               pkgs.krename

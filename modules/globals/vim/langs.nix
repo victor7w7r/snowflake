@@ -1,156 +1,148 @@
 {
   den.default.os = { pkgs, self', ... }: {
-    programs.nixvim.plugins = {
-      bullets.enable = true;
-      crates.enable = true;
-      lsp-signature.enable = true;
-      markdown-preview.enable = true;
-      typescript-tools.enable = true;
-
-      package-info = {
-        enable = true;
-        lazyLoad.settings.event = [ "BufRead package.json" ];
-        settings.hide_up_to_date = true;
-      };
-
-      lsp = {
-        enable = true;
-        servers = {
-          astro.enable = true;
-          bashls.enable = true;
-          biome.enable = true;
-          cssls.enable = true;
-          custom_elements_ls = {
-            enable = true;
-            package = null;
-          };
-          docker_compose_language_service.enable = true;
-          dockerls.enable = true;
-          emmet_ls.enable = true;
-          html.enable = true;
-          gradle_ls = {
-            enable = true;
-            package = null;
-          };
-          jsonls.enable = true;
-          kotlin_lsp = {
-            enable = true;
-            package = self'.packages.kotlin-lsp;
-          };
-          marksman.enable = true;
-          oxfmt.enable = true;
-          oxlint.enable = true;
-          nixd = {
-            enable = true;
-            settings = {
-              nixpkgs = {
-                expr = "import <nixpkgs> { }";
-              };
-              formatting = {
-                command = [ "nixfmt" ];
-              };
+    programs.nixvim = {
+      lsp.servers = {
+        astro.enable = true;
+        bashls.enable = true;
+        biome.enable = true;
+        cssls.enable = true;
+        custom_elements_ls = {
+          enable = true;
+          package = null;
+        };
+        docker_compose_language_service.enable = true;
+        dockerls.enable = true;
+        emmet_ls.enable = true;
+        html.enable = true;
+        gradle_ls = {
+          enable = true;
+          package = null;
+        };
+        jsonls.enable = true;
+        kotlin_lsp = {
+          enable = true;
+          package = self'.packages.kotlin-lsp;
+        };
+        marksman.enable = true;
+        oxfmt.enable = true;
+        oxlint.enable = true;
+        nixd = {
+          enable = true;
+          config = {
+            formatting = {
+              command = [ "nixfmt" ];
             };
           };
-          pylsp.enable = true;
-          ts_ls.enable = true;
-          rust_analyzer = {
-            enable = true;
-            installCargo = false;
-            installRustc = false;
-          };
-          sqls.enable = true;
-          stylelint_lsp.enable = true;
-          svelte.enable = true;
-          unocss = {
-            enable = true;
-            package = null;
-          };
-          vue_ls.enable = true;
-          yamlls.enable = true;
         };
-        keymaps.diagnostic = {
-          "<leader>dl" = "open_float";
-          "[d" = "goto_prev";
-          "]d" = "goto_next";
-        };
-      };
-
-      treesitter = {
-        enable = true;
-        lazyLoad = {
+        pylsp.enable = true;
+        ts_ls.enable = true;
+        rust_analyzer = {
           enable = true;
-          settings.event = "BufRead";
+          #installCargo = false;
+          #installRustc = false;
         };
-        settings = {
-          highlight.enable = true;
-          indent.enable = true;
-          folding.enable = true;
+        sqls.enable = true;
+        stylelint_lsp.enable = true;
+        svelte.enable = true;
+        unocss = {
+          enable = true;
+          package = null;
         };
-        grammarPackages = with pkgs.vimPlugins.nvim-treesitter.builtGrammars; [
-          astro
-          bash
-          css
-          diff
-          dockerfile
-          git_config
-          git_rebase
-          gitattributes
-          gitcommit
-          gitignore
-          html
-          html
-          ini
-          javascript
-          json
-          kotlin
-          markdown
-          nix
-          python
-          query
-          regex
-          rust
-          sql
-          ssh_config
-          svelte
-          tsx
-          typescript
-          vue
-          xml
-          yaml
-          zsh
-        ];
+        vue_ls.enable = true;
+        yamlls.enable = true;
       };
 
-      conform-nvim = {
-        enable = true;
-        settings = {
-          formatters_by_ft = {
-            css = [ "oxfmt" ];
-            html = [ "oxfmt" ];
-            javascript = [ "oxfmt" ];
-            javascriptreact = [ "oxfmt" ];
-            json = [ "oxfmt" ];
-            lua = [ "stylua" ];
-            nix = [ "nixfmt" ];
-            rust = [ "rustfmt" ];
-            sh = [ "shfmt" ];
-            typescript = [ "oxfmt" ];
-            typescriptreact = [ "oxfmt" ];
-            vue = [ "oxfmt" ];
+      plugins = {
+        bullets.enable = true;
+        crates.enable = true;
+        lspconfig.enable = true;
+        lsp-signature.enable = true;
+        markdown-preview.enable = true;
+        #typescript-tools.enable = true;
+
+        package-info = {
+          enable = true;
+          lazyLoad.settings.event = [ "BufRead package.json" ];
+          settings.hide_up_to_date = true;
+        };
+
+        treesitter = {
+          enable = true;
+          lazyLoad = {
+            enable = true;
+            settings.event = "BufRead";
           };
-          default_format_opts = {
-            timeout_ms = 3000;
-            lsp_format = "fallback";
+          settings = {
+            highlight.enable = true;
+            indent.enable = true;
+            folding.enable = true;
           };
-          format_on_save = {
-            __raw = ''
-              function(bufnr)
-                if vim.g.autoformat == false or vim.b[bufnr].autoformat == false then
-                  return
+          grammarPackages = with pkgs.vimPlugins.nvim-treesitter.builtGrammars; [
+            astro
+            bash
+            css
+            diff
+            dockerfile
+            git_config
+            git_rebase
+            gitattributes
+            gitcommit
+            gitignore
+            html
+            html
+            ini
+            javascript
+            json
+            kotlin
+            markdown
+            nix
+            python
+            query
+            regex
+            rust
+            sql
+            ssh_config
+            svelte
+            tsx
+            typescript
+            vue
+            xml
+            yaml
+            zsh
+          ];
+        };
+
+        conform-nvim = {
+          enable = true;
+          settings = {
+            formatters_by_ft = {
+              css = [ "oxfmt" ];
+              html = [ "oxfmt" ];
+              javascript = [ "oxfmt" ];
+              javascriptreact = [ "oxfmt" ];
+              json = [ "oxfmt" ];
+              lua = [ "stylua" ];
+              nix = [ "nixfmt" ];
+              rust = [ "rustfmt" ];
+              sh = [ "shfmt" ];
+              typescript = [ "oxfmt" ];
+              typescriptreact = [ "oxfmt" ];
+              vue = [ "oxfmt" ];
+            };
+            default_format_opts = {
+              timeout_ms = 3000;
+              lsp_format = "fallback";
+            };
+            format_on_save = {
+              __raw = ''
+                function(bufnr)
+                  if vim.g.autoformat == false or vim.b[bufnr].autoformat == false then
+                    return
+                  end
+                  return { timeout_ms = 3000, lsp_format = "fallback" }
                 end
-                return { timeout_ms = 3000, lsp_format = "fallback" }
-              end
-            '';
+              '';
+            };
           };
         };
       };

@@ -34,7 +34,7 @@
               key = "n";
             }
             {
-              action = ":Project session";
+              action.__raw = ''function() require('persistence').load({ last = true }) end'';
               desc = " Restaurar Sesión";
               icon = " ";
               key = "s";

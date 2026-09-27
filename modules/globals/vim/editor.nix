@@ -1,6 +1,5 @@
 {
-  den.default.os = { pkgs, ... }: {
-
+  den.default.os = { lib, pkgs, ... }: {
     programs.nixvim = {
       extraPlugins = [
         (pkgs.vimUtils.buildVimPlugin {
@@ -52,11 +51,6 @@
 
         illuminate.enable = true;
 
-        persistence = {
-          enable = true;
-          lazyLoad.settings.event = "BufReadPre";
-        };
-
         rainbow-delimiters = {
           enable = true;
           settings = {
@@ -86,6 +80,34 @@
           };
         };
 
+        statuscol = {
+          enable = true;
+          settings = {
+            relculright = true;
+            ft_ignore = [
+              "dashboard"
+              "neo-tree"
+            ];
+            segments = [
+              {
+                click = "v:lua.ScFa";
+                text = [ (lib.generators.mkLuaInline "require('statuscol.builtin').foldfunc") ];
+              }
+              {
+                click = "v:lua.ScSa";
+                text = [ " %s" ];
+              }
+              {
+                click = "v:lua.ScLa";
+                text = [
+                  (lib.generators.mkLuaInline "require('statuscol.builtin').lnumfunc")
+                  " "
+                ];
+              }
+            ];
+          };
+        };
+
         todo-comments = {
           enable = true;
           settings = {
@@ -100,6 +122,8 @@
             focusOnToggle = true;
           };
         };
+
+        visual-multi.enable = true;
 
         visual-whitespace = {
           enable = true;
@@ -133,19 +157,14 @@
             z_index = 1,
             window_border = "none",
           },
-          diagnostic = {
-            enabled = false,
+          click = {
+            enabled = true,
           },
           git = {
-            enabled = true,
-            mode = "sign",
-            priority = 6,
+            enabled = false,
           },
           search = {
             enabled = false,
-          },
-          treesitter = {
-            enabled = true,
           },
         }
       '';
