@@ -3,15 +3,12 @@
     aerial.enable = true;
     actions-preview.enable = true;
     arrow.enable = true;
-    autoclose.enable = true;
 
     auto-save = {
       enable = true;
       settings.enabled = true;
     };
 
-    comment-box.enable = true;
-    comment.enable = true;
     compiler.enable = true;
 
     colorful-menu = {
@@ -28,16 +25,6 @@
 
     dbee.enable = true;
     dial.enable = true;
-
-    dropbar = {
-      enable = true;
-      settings.bar.update_events.buf = [
-        "FileChangedShellPost"
-        "TextChanged"
-        "ModeChanged"
-      ];
-    };
-
     fastaction.enable = true;
 
     glance = {
@@ -79,8 +66,6 @@
       };
     };
 
-    navbuddy.enable = true;
-
     neo-tree = {
       enable = true;
       lazyLoad.settings.cmd = "Neotree";
@@ -119,36 +104,7 @@
       };
     };
 
-    nvim-autopairs = {
-      enable = true;
-      settings = {
-        disable_filetype = [
-          "TelescopePrompt"
-          "vim"
-        ];
-        check_ts = true;
-        enable_check_bracket_line = false;
-        fast_wrap = {
-          enable = true;
-          map = "<M-e>";
-          chars = [
-            "{"
-            "["
-            "("
-            "\""
-            "'"
-            "`"
-          ];
-        };
-      };
-    };
-
     nvim-lightbulb.enable = true;
-
-    nvim-ufo = {
-      enable = true;
-      lazyLoad.settings.event = "BufEnter";
-    };
 
     persistence = {
       enable = true;
@@ -164,41 +120,13 @@
       enable = true;
       enableTelescope = true;
       settings = {
-        spinner = {
-          enabled = true;
-          kind = "cursor";
-        };
-        detection_methods = [
-          "lsp"
-          "pattern"
-        ];
         patterns = [
           ".git"
-          "package.json"
-          "Cargo.toml"
-          "Makefile"
         ];
+        lsp.enabled = true;
         show_hidden = true;
-        tilde = true;
-        silent_chdir = true;
-        /*
-          on_attach.__raw = ''
-          function(dir, method, bufnr, map)
-            vim.cmd('Neotree toggle')
-            vim.cmd('Neominimap Toggle')
-            map('n', '<leader>pS', '<CMD>Project session<CR>', { desc = 'Project Session' })
-            map({
-              n = {
-                ['<leader>pR'] = { '<CMD>Project recents<CR>', { desc = 'Recent Projects' } },
-                ['<leader>pS'] = { '<CMD>Project session<CR>', { desc = 'Project Session' } },
-              },
-              i = {
-                ['<A-p>'] = { '<Esc>:Project<CR>', { desc = 'Project UI' } },
-              }
-            })
-          end
-          '';
-        */
+        silent_chdir = false;
+        manual_mode = false;
       };
     };
 
@@ -213,18 +141,7 @@
 
     trouble = {
       enable = true;
-      lazyLoad.settings.cmd = "Trouble";
       settings.modes.lsp.win.position = "right";
-    };
-
-    ts-autotag = {
-      enable = true;
-      settings.opts = {
-        enable_close = true;
-        enable_rename = true;
-        enable_close_on_slash = false;
-        per_filetype.html.enable_close = false;
-      };
     };
   };
 }

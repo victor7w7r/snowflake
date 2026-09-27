@@ -14,10 +14,44 @@
       ];
 
       plugins = {
+        autoclose.enable = true;
         baleia.enable = true;
         better-escape.enable = true;
-        colorizer.enable = true;
+
+        bufferline = {
+          enable = true;
+          settings.options = {
+            close_command.__raw = "function(n) Snacks.bufdelete(n) end";
+            diagnostics = "nvim_lsp";
+            middle_mouse_command = "bdelete! %d";
+            right_mouse_command.__raw = "function(n) Snacks.bufdelete(n) end";
+            tab_size = 15;
+            separator_style = "thin";
+            offsets = [
+              {
+                filetype = "neo-tree";
+                text = "NeoTree";
+                text_align = "center";
+                separator = false;
+              }
+            ];
+          };
+        };
+
         ccc.enable = true;
+        colorizer.enable = true;
+        comment-box.enable = true;
+        comment.enable = true;
+
+        dropbar = {
+          enable = true;
+          settings.bar.update_events.buf = [
+            "FileChangedShellPost"
+            "TextChanged"
+            "ModeChanged"
+          ];
+        };
+
         endec.enable = true;
 
         flash = {
@@ -51,6 +85,91 @@
 
         illuminate.enable = true;
 
+        lualine = {
+          enable = true;
+          settings.options = {
+            theme = "palenight";
+            globalstatus = true;
+            disabled_filetypes = [
+              "dashboard"
+              "lazy"
+              "alpha"
+            ];
+            sections = {
+              lualine_a = [
+                {
+                  __unkeyed = "mode";
+                  icon = "";
+                }
+              ];
+              lualine_b = [
+                {
+                  __unkeyed = "branch";
+                  icon = "";
+                }
+                "diff"
+                {
+                  __unkeyed = "project";
+                  format = "name";
+                  no_project = "N/A";
+                  separator = " ";
+                }
+              ];
+              lualine_c = [
+                {
+                  __unkeyed = "filename";
+                  path = 1;
+                  symbols = {
+                    modified = "";
+                    readonly = "";
+                  };
+                }
+                "lsp_progress"
+              ];
+              lualine_x = [
+                "diagnostics"
+                "encoding"
+                {
+                  __unkeyed = "filetype";
+                  icon_only = true;
+                }
+              ];
+              lualine_y = [ "progress" ];
+              lualine_z = [ "location" ];
+            };
+          };
+        };
+
+        navbuddy.enable = true;
+
+        nvim-autopairs = {
+          enable = true;
+          settings = {
+            disable_filetype = [
+              "TelescopePrompt"
+              "vim"
+            ];
+            check_ts = true;
+            enable_check_bracket_line = false;
+            fast_wrap = {
+              enable = true;
+              map = "<M-e>";
+              chars = [
+                "{"
+                "["
+                "("
+                "\""
+                "'"
+                "`"
+              ];
+            };
+          };
+        };
+
+        nvim-ufo = {
+          enable = true;
+        };
+
         rainbow-delimiters = {
           enable = true;
           settings = {
@@ -80,8 +199,10 @@
           };
         };
 
+        snacks.settings.bufdelete.enabled = true;
+
         statuscol = {
-          enable = true;
+          enable = false;
           settings = {
             relculright = true;
             ft_ignore = [
@@ -110,8 +231,16 @@
 
         todo-comments = {
           enable = true;
-          settings = {
-            signs = true;
+          settings.signs = true;
+        };
+
+        ts-autotag = {
+          enable = true;
+          settings.opts = {
+            enable_close = true;
+            enable_rename = true;
+            enable_close_on_slash = false;
+            per_filetype.html.enable_close = false;
           };
         };
 

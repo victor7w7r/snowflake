@@ -1,6 +1,21 @@
 {
   den.default.os = { pkgs, self', ... }: {
     programs.nixvim = {
+
+      extraPackages = with pkgs; [
+        glab
+        kotlin
+        nixfmt
+        pyright
+        #self'.packages.dbee
+        shfmt
+        stylua
+        luajitPackages.tree-sitter-cli
+        typescript
+        typescript-language-server
+        vscode-langservers-extracted
+      ];
+
       lsp.servers = {
         astro.enable = true;
         bashls.enable = true;

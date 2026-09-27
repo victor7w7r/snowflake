@@ -36,7 +36,6 @@
           bluetooth
           dev
           disks
-          emacs
           emulation
           firewall
           games

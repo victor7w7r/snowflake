@@ -104,6 +104,10 @@
           enableZshIntegration = true;
           enableBashIntegration = true;
           globalConfig = {
+            tools = {
+              bun = "1.4.2";
+              node = "24";
+            };
             settings = {
               trusted_config_paths = [ "~/repositories" ];
               node.compile = false;

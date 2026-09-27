@@ -20,40 +20,9 @@
         };
       };
 
-      extraPlugins = [
-        pkgs.vimPlugins.lualine-lsp-progress
-        (pkgs.vimUtils.buildVimPlugin {
-          name = "spinner";
-          src = pkgs.fetchFromGitHub {
-            owner = "xieyonn";
-            repo = "spinner.nvim";
-            rev = "v1.3.0";
-            hash = "sha256-1cwH8YXcu2yhqzjaV0TItY1YOXtLG3d+PynZGH8HWNA=";
-          };
-        })
-      ];
+      extraPlugins = [ pkgs.vimPlugins.lualine-lsp-progress ];
 
       plugins = {
-        bufferline = {
-          enable = true;
-          settings.options = {
-            close_command.__raw = "function(n) require('mini.bufremove').delete(n, false) end";
-            diagnostics = "nvim_lsp";
-            middle_mouse_command = "bdelete! %d";
-            right_mouse_command.__raw = "function(n) require('mini.bufremove').delete(n, false) end";
-            tab_size = 15;
-            separator_style = "thin";
-            offsets = [
-              {
-                filetype = "neo-tree";
-                text = "NeoTree";
-                text_align = "center";
-                separator = false;
-              }
-            ];
-          };
-        };
-
         hardtime = {
           enable = true;
           settings = {
@@ -64,69 +33,8 @@
           };
         };
 
-        lualine = {
-          enable = true;
-          settings.options = {
-            theme = "palenight";
-            globalstatus = true;
-            disabled_filetypes = [
-              "dashboard"
-              "lazy"
-              "alpha"
-            ];
-            sections = {
-              lualine_a = [
-                {
-                  __unkeyed = "mode";
-                  icon = "";
-                }
-              ];
-              lualine_b = [
-                {
-                  __unkeyed = "branch";
-                  icon = "";
-                }
-                "diff"
-                {
-                  __unkeyed = "project";
-                  format = "name";
-                  no_project = "N/A";
-                  separator = " ";
-                }
-              ];
-              lualine_c = [
-                {
-                  __unkeyed = "filename";
-                  path = 1;
-                  symbols = {
-                    modified = "";
-                    readonly = "";
-                  };
-                }
-                "lsp_progress"
-              ];
-              lualine_x = [
-                "diagnostics"
-                "encoding"
-                {
-                  __unkeyed = "filetype";
-                  icon_only = true;
-                }
-              ];
-              lualine_y = [ "progress" ];
-              lualine_z = [ "location" ];
-            };
-          };
-        };
-
-        mini = {
-          enable = true;
-          modules.bufremove = { };
-        };
-
         modicator.enable = true;
         notify.enable = true;
-        scrollview.enable = true;
 
         smear-cursor = {
           enable = true;
@@ -136,7 +44,6 @@
           enable = true;
           settings = {
             bigfile.enable = true;
-            bufdelete.enable = true;
             explorer = {
               enabled = true;
               replace_netrw = true;
@@ -152,7 +59,7 @@
             };
             quickfile.enabled = true;
             scope.enable = true;
-            scroll.enabled = false;
+            scroll.enabled = true;
             terminal.enable = true;
           };
         };
@@ -194,43 +101,6 @@
           settings = {
             color_icons = true;
             default = true;
-            override_by_extension = {
-              nix = {
-                icon = "󱄅";
-                color = "#7EBAE4";
-                name = "Nix";
-              };
-              json = {
-                icon = "󰘦";
-                color = "#F1E05A";
-                name = "Json";
-              };
-              md = {
-                icon = "󰍔";
-                color = "#519ABA";
-                name = "Markdown";
-              };
-              js = {
-                icon = "󰌞";
-                color = "#F1E05A";
-                name = "JavaScript";
-              };
-              ts = {
-                icon = "󰛦";
-                color = "#3178C6";
-                name = "TypeScript";
-              };
-              py = {
-                icon = "󰌠";
-                color = "#FFBC03";
-                name = "Python";
-              };
-              txt = {
-                icon = "󰈙";
-                color = "#6D8086";
-                name = "Text";
-              };
-            };
           };
         };
 
