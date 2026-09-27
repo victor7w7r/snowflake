@@ -51,7 +51,6 @@
 
             audio._
             cli._
-            dev._
             disks
             #gui._
             misc.comm
@@ -61,6 +60,7 @@
 
             #android
             bluetooth
+            dev
             emulation
             firewall
             games
@@ -93,8 +93,8 @@
               ];
 
               boot = {
-                kernelParams = ["usbcore.autosuspend=-1" ];
-                extraModprobeConfig = ''options usbcore autosuspend=-1'';
+                kernelParams = [ "usbcore.autosuspend=-1" ];
+                extraModprobeConfig = "options usbcore autosuspend=-1";
                 loader = {
                   grub.enable = false;
                   generic-extlinux-compatible.enable = true;

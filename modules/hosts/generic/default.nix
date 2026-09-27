@@ -61,7 +61,7 @@
             #generic.disks
 
             cli._
-            dev.mise
+            dev
             gui._
             misc.comm
             misc.fetch

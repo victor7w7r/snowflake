@@ -20,10 +20,6 @@
       })
       audio._
       cli._
-      dev.ccache
-      #dev.zed
-      dev.tools
-      disks
       gui._
       misc.comm
       misc.fetch
@@ -34,6 +30,8 @@
 
       #android
       bluetooth
+      dev
+      disks
       emulation
       firewall
       games

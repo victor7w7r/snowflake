@@ -1,7 +1,7 @@
 { inputs, ... }: {
   flake-file.inputs.nix-zed-extensions.url = "github:SwornSystems/nix-zed-extensions";
 
-  den.aspects.dev.zed =
+  den.aspects.zed =
     { user, ... }:
     {
       nixos = {

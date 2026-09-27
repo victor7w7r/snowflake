@@ -56,16 +56,14 @@
 
             cli._
             containers
-            dev.mise
-            dev.tools
-            dev.ccache
-            disks
-            misc.comm
             misc.fetch
             persistence
             pentest._
 
             cockpit
+            dev
+            disks
+            misc.comm
             emulation
             firewall
             games

@@ -12,7 +12,6 @@
     aspects.graphical-live = {
       includes = with den.aspects; [
         live.common
-        dev.zed
         gui._
 
         emergency

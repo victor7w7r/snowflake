@@ -20,14 +20,12 @@
     aspects.wsl = {
       includes = with den.aspects; [
         cli._
-        dev.mise
-        dev.tools
-        dev.ccache
         gui._
         misc.comm
         misc.fetch
         pentest._
 
+        dev
         emulation
         games
         root

@@ -31,9 +31,6 @@
         server.services._
 
         cli._
-        dev.mise
-        dev.tools
-        dev.ccache
         disks
         gui._
         misc.comm
@@ -41,6 +38,7 @@
         pentest._
 
         cockpit
+        dev
         emulation
         firewall
         games
@@ -52,6 +50,7 @@
         victor7w7r
         virt
         xfce
+        zed
       ];
 
       nixos =

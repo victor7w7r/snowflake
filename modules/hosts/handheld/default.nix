@@ -27,10 +27,6 @@
 
           audio._
           cli._
-          dev.ccache
-          dev.mise
-          dev.tools
-          dev.zed
           gui._
           misc._
           pentest._
@@ -38,6 +34,7 @@
 
           android
           bluetooth
+          dev
           disks
           emacs
           emulation
@@ -53,6 +50,7 @@
           virt
           tools
           waydroid
+          zed
           #xr
         ];
 

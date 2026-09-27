@@ -31,7 +31,6 @@
 
         audio._
         cli._
-        dev._
         gui._
         misc.comm
         misc.fetch
@@ -41,6 +40,7 @@
         android
         bluetooth
         cockpit
+        dev
         disks
         emacs
         emulation
@@ -58,6 +58,7 @@
         tools
         waydroid
         #xr
+        zed
       ];
       nixos =
         {
