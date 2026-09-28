@@ -183,7 +183,8 @@
       dap.listeners.before.event_terminated["dapui_config"] = function() dapui.close({}) end
       dap.listeners.before.event_exited["dapui_config"] = function() dapui.close({}) end
 
-      -- VSCode launch.json with comment stripping (requires plenary)
+      -- VSCode launch.json with
+      stripping (requires plenary)
       do
         local ok_vscode, vscode = pcall(require, "dap.ext.vscode")
         local ok_json, json = pcall(require, "plenary.json")

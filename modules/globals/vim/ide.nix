@@ -141,21 +141,6 @@
       ];
     };
 
-    project-nvim = {
-      enable = true;
-      enableTelescope = true;
-      lazyLoad.settings.event = "DeferredUIEnter";
-      settings = {
-        patterns = [
-          ".git"
-        ];
-        lsp.enabled = true;
-        show_hidden = true;
-        silent_chdir = false;
-        manual_mode = false;
-      };
-    };
-
     rest = {
       enable = true;
       lazyLoad.settings.ft = ["http" "rest"];

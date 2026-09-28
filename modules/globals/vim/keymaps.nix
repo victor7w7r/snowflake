@@ -2,54 +2,6 @@
   den.default.os.programs.nixvim = {
     keymaps = [
       {
-        action = "<cmd>m .+1<cr>==";
-        key = "<A-j>";
-        mode = "n";
-        options.desc = "Move line down";
-      }
-      {
-        action = "<cmd>m .-2<cr>==";
-        key = "<A-k>";
-        mode = "n";
-        options.desc = "Move line up";
-      }
-      {
-        action = "<cmd>m .+1<cr>==";
-        key = "<A-Down>";
-        mode = "n";
-        options.desc = "Move line down";
-      }
-      {
-        action = "<cmd>m .-2<cr>==";
-        key = "<A-Up>";
-        mode = "n";
-        options.desc = "Move line up";
-      }
-      {
-        action = ":m '>+1<cr>gv=gv";
-        key = "<A-j>";
-        mode = "x";
-        options.desc = "Mover selección abajo";
-      }
-      {
-        action = ":m '>+1<cr>gv=gv";
-        key = "<A-Down>";
-        mode = "x";
-        options.desc = "Mover selección abajo";
-      }
-      {
-        action = ":m '<-2<cr>gv=gv";
-        key = "<A-k>";
-        mode = "x";
-        options.desc = "Mover selección arriba";
-      }
-      {
-        action = ":m '<-2<cr>gv=gv";
-        key = "<A-Up>";
-        mode = "x";
-        options.desc = "Mover selección arriba";
-      }
-      {
         action = ":t '><cr>";
         key = "<S-A-Down>";
         mode = "x";
@@ -81,6 +33,18 @@
           desc = "Quit all";
           silent = true;
         };
+      }
+      {
+        action = "<cmd>lua function() Snacks.scratch() end<CR>";
+        key = "<leader>.";
+        mode = "n";
+        options.desc = "Toggle scratch";
+      }
+      {
+        action = "<cmd>lua function() Snacks.scratch.select() end<CR>";
+        key = "<leader>,";
+        mode = "n";
+        options.desc = "Select scratch";
       }
       {
         action = "<CMD>vnew<CR>";
@@ -125,55 +89,19 @@
         options.desc = "Neominimap Focus";
       }
       {
-        action.__raw = "function() mc.matchAddCursor(1) end";
-        key = "<leader>n";
-        mode = [
-          "n"
-          "x"
-        ];
-        options.desc = "Add next cursor";
-      }
-      {
-        action.__raw = "function() mc.matchSkipCursor(1) end";
-        key = "<leader>v";
-        mode = [
-          "n"
-          "x"
-        ];
-        options.desc = "Jump to the other cursor";
-      }
-      {
-        action.__raw = "function() mc.matchAddCursor(-1) end";
-        key = "<leader>N";
-        mode = [
-          "n"
-          "x"
-        ];
-        options.desc = "Add previous cursor";
-      }
-      {
-        action.__raw = "function() mc.matchSkipCursor(-1) end";
-        key = "<leader>V";
-        mode = [
-          "n"
-          "x"
-        ];
-        options.desc = "Jump to the previous cursor";
-      }
-      {
-        action = "<cmd>Telescope colorscheme<CR>";
+        action = "<cmd>lua Snacks.picker.colorschemes()<CR>";
         key = "<leader><leader>c";
         mode = "n";
-        options.desc = "Colorscheme telescope";
+        options.desc = "Colorschemes";
       }
       {
-        action = "<cmd>Telescope commands<CR>";
+        action = "<cmd>lua Snacks.picker.command_historyCR>";
         key = "<leader>cd";
         mode = "n";
-        options.desc = "Display telescope";
+        options.desc = "Commands history";
       }
       {
-        action = "<cmd>Telescope buffers<cr>";
+        action = "<cmd>lua Snacks.picker.buffers()<cr>";
         key = "<leader>bb";
         mode = "n";
         options.desc = "Show buffers";
@@ -197,28 +125,16 @@
         };
       }
       {
-        action = "<cmd>Telescope find_files<cr>";
+        action = "<cmd>lua Snacks.picker.smart()<cr>";
         key = "<leader>ff";
         mode = "n";
         options.desc = "Search files by name";
       }
       {
-        action = "<cmd>Telescope live_grep<cr>";
-        key = "<leader>lg";
+        action = "<cmd>lua Snacks.picker.grep()<cr>";
+        key = "<leader>fg";
         mode = "n";
         options.desc = "Search files by contents";
-      }
-      {
-        action = "<cmd>lua require('Comment.api').toggle.linewise.current()<CR>";
-        key = "<leader>.";
-        mode = "n";
-        options.desc = "Comment line";
-      }
-      {
-        action = "<esc><cmd>lua require('Comment.api').toggle.linewise(vim.fn.visualmode())<CR>";
-        key = "<leader>.";
-        mode = "v";
-        options.desc = "Comment selection";
       }
       {
         action = "<cmd>lua vim.diagnostic.goto_next()<CR>";
@@ -271,6 +187,24 @@
         ];
         key = "<leader>cF";
         options.desc = "Format Injected Langs";
+      }
+      {
+        mode = [
+          "n"
+          "t"
+        ];
+        key = "]]";
+        action = "<cmd>lua Snacks.words.jump(1, true)<CR>";
+        options.desc = "Next word reference";
+      }
+      {
+        mode = [
+          "n"
+          "t"
+        ];
+        key = "[[";
+        action = "<cmd>lua Snacks.words.jump(-1, true)<CR>";
+        options.desc = "Previous word reference";
       }
       {
         key = "<leader>z";

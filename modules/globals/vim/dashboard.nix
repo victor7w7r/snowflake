@@ -1,149 +1,144 @@
 {
   den.default.os = { lib, ... }: {
-    programs.nixvim.plugins.dashboard = {
-      enable = true;
-      lazyLoad.settings.enabled.__raw = "function() return vim.fn.argc() == 0 end";
-      luaConfig.post = ''
-        vim.api.nvim_set_hl(0, "DashboardFooter", {
-          fg = "#bb9af7",
-          italic = true,
-        })
-      '';
-      settings = {
-        theme = "doom";
-        config = {
-          header = lib.generators.mkLuaInline ''
-            vim.split([[
-             .oPYo. .oPYo. .pPYo.   .oPYo.                       o   o                 .oPYo.   o              8  o          *
-             8  .o8     `8 8        8    8                       8                     8        8              8             *
-                8 .P`8   .oP` 8oPYo.   8      oPYo. .oPYo. .oPYo.  o8P o8 o    o .oPYo.   `Yooo.  o8P o    o .oPYo8 o8 .oPYo. .oPYo.
-              8.d` 8    `b. 8`  `8   8      8  `` 8oooo8 .oooo8   8   8 Y.  .P 8oooo8       `8   8  8    8 8    8  8 8    8 Yb..
-                8o`  8     :8 8.  .P   8    8 8     8.     8    8   8   8 `b..d` 8.            8   8  8    8 8    8  8 8    8   `Yb.
-                `YooP` `YooP` `YooP`   `YooP` 8     `Yooo` `YooP8   8   8  `YP`  `Yooo`   `YooP`   8  `YooP` `YooP`  8 `YooP` `YooP.
-            :.....::.....::.....::::.....:..:::::.....::.....:::..::..::...:::.....::::.....:::..::.....::.....::..:.....::.....:
+    programs.nixvim.plugins.snacks.settings.dashboard = {
+      enabled = true;
+      preset = {
+        header = lib.generators.mkLuaInline ''
+          vim.split([[
+           .oPYo. .oPYo. .pPYo.   .oPYo.                       o   o                 .oPYo.   o              8  o          *
+           8  .o8     `8 8        8    8                       8                     8        8              8             *
+              8 .P`8   .oP` 8oPYo.   8      oPYo. .oPYo. .oPYo.  o8P o8 o    o .oPYo.   `Yooo.  o8P o    o .oPYo8 o8 .oPYo. .oPYo.
+            8.d` 8    `b. 8`  `8   8      8  `` 8oooo8 .oooo8   8   8 Y.  .P 8oooo8       `8   8  8    8 8    8  8 8    8 Yb..
+              8o`  8     :8 8.  .P   8    8 8     8.     8    8   8   8 `b..d` 8.            8   8  8    8 8    8  8 8    8   `Yb.
+              `YooP` `YooP` `YooP`   `YooP` 8     `Yooo` `YooP8   8   8  `YP`  `Yooo`   `YooP`   8  `YooP` `YooP`  8 `YooP` `YooP.
+          :.....::.....::.....::::.....:..:::::.....::.....:::..::..::...:::.....::::.....:::..::.....::.....::..:.....::.....:
 
-            [ victor7w7r ]
+          [ victor7w7r ]
 
-            ]], "\n")
-          '';
-          vertical_center = true;
-          center = [
-            {
-              action = "ene | startinsert";
-              desc = " Nuevo";
-              icon = " ";
-              key = "n";
-            }
-            {
-              action.__raw = "function() require('persistence').load({ last = true }) end";
-              desc = " Restaurar Sesión";
-              icon = " ";
-              key = "s";
-            }
-            {
-              action = ":Project telescope";
-              desc = " Abrir Proyecto";
-              icon = " ";
-              key = "p";
-            }
-            {
-              action = ":Project recents";
-              desc = " Proyectos Recientes";
-              icon = " ";
-              key = "o";
-            }
-            {
-              action = "lua Snacks.dashboard.pick('oldfiles')";
-              desc = " Archivos Recientes";
-              icon = " ";
-              key = "r";
-            }
-            {
-              action = "lua Snacks.dashboard.pick('files')";
-              desc = " Buscar Archivo";
-              icon = " ";
-              key = "f";
-            }
-            {
-              action = "lua Snacks.dashboard.pick('live_grep')";
-              desc = " Buscar Texto";
-              icon = " ";
-              key = "g";
-            }
-            {
-              action.__raw = "function() vim.api.nvim_input('<cmd>qa<cr>') end";
-              desc = " Salir";
-              icon = " ";
-              key = "q";
-            }
-          ];
+          ]], "\n")
+        '';
 
-          footer = lib.generators.mkLuaInline ''
-            function()
-              local stats = require("dashboard.utils").get_package_manager_stats()
-              local kaomoji = vim.fn.systemlist({ "zsh", "-fc", "autoload -Uz kaomoji && kaomoji" })[1] or ""
-              local quote = vim.fn.systemlist({
-                "zsh",
-                "-fc",
-                "autoload -Uz random-quote random-opts lolquotes bofh && random-quote",
-              })
-              local function wrap_line(line, width)
-                if line == "" then
-                  return { "" }
-                end
+        keys = [
+          {
+            action = "ene | startinsert";
+            desc = " Nuevo";
+            icon = " ";
+            key = "n";
+          }
+          {
+            action.__raw = "lua require('persistence').load({ last = true })";
+            desc = " Restaurar Sesión";
+            icon = " ";
+            key = "s";
+          }
+          {
+            action = "lua Snacks.picker.projects()";
+            desc = " Proyectos Recientes";
+            icon = " ";
+            key = "o";
+          }
+          {
+            action = "lua Snacks.dashboard.pick('oldfiles')";
+            desc = " Archivos Recientes";
+            icon = " ";
+            key = "r";
+          }
+          {
+            action = "lua Snacks.dashboard.pick('files')";
+            desc = " Buscar Archivo";
+            icon = " ";
+            key = "f";
+          }
+          {
+            action = "lua Snacks.dashboard.pick('live_grep')";
+            desc = " Buscar Texto";
+            icon = " ";
+            key = "g";
+          }
+          {
+            action.__raw = "lua vim.api.nvim_input('<cmd>qa<cr>')";
+            desc = " Salir";
+            icon = " ";
+            key = "q";
+          }
+        ];
+/*
+        footer = lib.generators.mkLuaInline ''
+          function()
+            local stats = require("dashboard.utils").get_package_manager_stats()
+            local kaomoji = vim.fn.systemlist({ "zsh", "-fc", "autoload -Uz kaomoji && kaomoji" })[1] or ""
+            local quote = vim.fn.systemlist({
+              "zsh",
+              "-fc",
+              "autoload -Uz random-quote random-opts lolquotes bofh && random-quote",
+            })
+            local function wrap_line(line, width)
+              if line == "" then
+                return { "" }
+              end
 
-                local wrapped = {}
-                local current = ""
-                for word in line:gmatch("%S+") do
-                  if vim.fn.strdisplaywidth(word) > width then
-                    if current ~= "" then
-                      table.insert(wrapped, current)
-                      current = ""
-                    end
+              local wrapped = {}
+              local current = ""
+              for word in line:gmatch("%S+") do
+                if vim.fn.strdisplaywidth(word) > width then
+                  if current ~= "" then
+                    table.insert(wrapped, current)
+                    current = ""
+                  end
 
-                    for _, char in ipairs(vim.fn.split(word, "\\zs")) do
-                      local candidate = current .. char
-                      if current ~= "" and vim.fn.strdisplaywidth(candidate) > width then
-                        table.insert(wrapped, current)
-                        current = char
-                      else
-                        current = candidate
-                      end
-                    end
-                  else
-                    local candidate = current == "" and word or current .. " " .. word
+                  for _, char in ipairs(vim.fn.split(word, "\\zs")) do
+                    local candidate = current .. char
                     if current ~= "" and vim.fn.strdisplaywidth(candidate) > width then
                       table.insert(wrapped, current)
-                      current = word
+                      current = char
                     else
                       current = candidate
                     end
                   end
+                else
+                  local candidate = current == "" and word or current .. " " .. word
+                  if current ~= "" and vim.fn.strdisplaywidth(candidate) > width then
+                    table.insert(wrapped, current)
+                    current = word
+                  else
+                    current = candidate
+                  end
                 end
-
-                if current ~= "" then
-                  table.insert(wrapped, current)
-                end
-                return wrapped
               end
 
-              local wrapped_quote = {}
-              for _, line in ipairs(quote) do
-                vim.list_extend(wrapped_quote, wrap_line(line, 70))
+              if current ~= "" then
+                table.insert(wrapped, current)
               end
-
-              local footer = {
-                kaomoji,
-                "",
-                "✦ Neovim cargado con " .. stats.count .. " plugins ✦",
-                "",
-              }
-              vim.list_extend(footer, wrapped_quote)
-              return footer
+              return wrapped
             end
-          '';
-        };
+
+            local wrapped_quote = {}
+            for _, line in ipairs(quote) do
+              vim.list_extend(wrapped_quote, wrap_line(line, 70))
+            end
+
+            local footer = {
+              kaomoji,
+              "",
+              "✦ Neovim cargado con " .. stats.count .. " plugins ✦",
+              "",
+            }
+            vim.list_extend(footer, wrapped_quote)
+            return footer
+          end
+          '';*/
       };
+
+      sections = [
+        { section = "header"; }
+        {
+          # icon = " ";
+          # title = "Keymaps";
+          section = "keys";
+          padding = 1;
+          # indent = 2;
+        }
+      ];
     };
   };
 }

@@ -85,22 +85,6 @@
           ];
         };
 
-        comment = {
-          enable = true;
-          lazyLoad.settings.keys =
-            map (k: "gb${k}") [
-              ""
-              "c"
-            ]
-            ++ map (k: "gc${k}") [
-              ""
-              "c"
-              "O"
-              "o"
-              "A"
-            ];
-        };
-
         dropbar = {
           enable = true;
           lazyLoad.settings.event = "BufReadPost";
@@ -156,14 +140,6 @@
               char = "│";
             };
           };
-        };
-
-        illuminate = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufReadPost"
-            "BufNewFile"
-          ];
         };
 
         lualine = {
@@ -222,43 +198,23 @@
           };
         };
 
+        mini = {
+          enable = true;
+          lazyLoad.settings.cmd = "DeferredUIEnter";
+          modules = {
+            comment = {};
+            cursorword = {};
+            move = {};
+            pairs = {};
+            splitjoin = {};
+            surround = {};
+          };
+        };
+
         navbuddy = {
           enable = true;
           lazyLoad.settings.cmd = "LspAttach";
           settings.lsp.autoAttach = true;
-        };
-
-        nvim-autopairs = {
-          enable = true;
-          lazyLoad.settings.event = "InsertEnter";
-          settings = {
-            disable_filetype = [
-              "TelescopePrompt"
-              "vim"
-            ];
-            check_ts = true;
-            enable_check_bracket_line = false;
-            fast_wrap = {
-              enable = true;
-              map = "<M-e>";
-              chars = [
-                "{"
-                "["
-                "("
-                "\""
-                "'"
-                "`"
-              ];
-            };
-          };
-        };
-
-        nvim-surround = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufReadPost"
-            "BufNewFile"
-          ];
         };
 
         nvim-ufo = {
@@ -302,7 +258,14 @@
           };
         };
 
-        snacks.settings.bufdelete.enabled = true;
+        snacks.settings = {
+          bufdelete.enabled = true;
+          bigfile.enabled = true;
+          quickfile.enabled = true;
+          rename.enabled = true;
+          scope.enabled = true;
+          words.enabled = true;
+        };
 
         todo-comments = {
           enable = true;

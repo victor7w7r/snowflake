@@ -71,46 +71,28 @@
           enable = true;
           lazyLoad.settings.event = "DeferredUIEnter";
           settings = {
-            bigfile.enable = true;
-            explorer = {
-              enabled = true;
-              replace_netrw = true;
-            };
-            git.enable = true;
-            gitbrowse.enable = true;
-            image.enable = true;
-            indent.enabled = true;
+            animate.enable = false;
+            debug.enabled = false;
+            dim.enabled = false;
+            explorer.enabled = false;
+            gh.enabled = false;
+            image.enabled = true;
+            indent.enabled = false;
             input.enabled = true;
+            keymap.enabled = false;
+            layout.enabled = false;
+            notify.enabled = false;
+            notifier.enabled = false;
             picker = {
               enabled = true;
               layout.preset = "telescope";
             };
-            quickfile.enabled = true;
-            scope.enable = true;
+            scratch.enabled = true;
             scroll.enabled = false;
-            terminal.enable = true;
+            statuscolumn.enabled = true;
+            terminal.enabled = true;
+            toggle.enabled = true;
             zen.enabled = true;
-          };
-        };
-
-        telescope = {
-          enable = true;
-          lazyLoad.settings.cmd = "Telescope";
-          settings.extensions.media_files = {
-            filetypes = [
-              "png"
-              "webp"
-              "jpg"
-              "jpeg"
-            ];
-            find_cmd = "find";
-          };
-
-          extensions = {
-            fzf-native.enable = true;
-            ui-select.enable = true;
-            zoxide.enable = true;
-            file-browser.enable = true;
           };
         };
 
@@ -151,7 +133,6 @@
             yazi_floating_window_winblend = 20;
           };
         };
-
       };
     };
   };
