@@ -36,6 +36,14 @@
         ];
       };
 
+      blink-copilot = {
+        enable = true;
+        lazyLoad.settings.event = [
+          "InsertEnter"
+          "CmdlineEnter"
+        ];
+      };
+
       copilot-lua = {
         enable = true;
         lazyLoad.settings = {

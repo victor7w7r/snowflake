@@ -56,6 +56,15 @@
           };
         };
 
+        blink-indent = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufWritePost"
+            "BufNewFile"
+          ];
+        };
+
         ccc = {
           enable = true;
           lazyLoad.settings.cmd = [

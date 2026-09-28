@@ -32,6 +32,7 @@
       {
         event = "BufReadPost";
         group = "nixvim_openui";
+        once = true;
         callback.__raw = ''
           function()
             vim.defer_fn(function()

@@ -13,9 +13,7 @@
     )
     |> (insertPlugin: {
       blink-cmp-dictionary = insertPlugin { };
-      blink-cmp-git = insertPlugin { };
       blink-emoji = insertPlugin { };
-      blink-indent = insertPlugin { };
       blink-ripgrep = insertPlugin { };
       blink-pairs = insertPlugin { };
       blink-cmp-words = insertPlugin { };
