@@ -95,7 +95,7 @@
         options.desc = "Toggle neotree";
       }
       {
-        action = "<cmd>ToggleTerm<CR>";
+        action = "<cmd>lua Snacks.terminal()<CR>";
         key = "<leader>tt";
         mode = "n";
         options.desc = "Toggle terminal";
@@ -271,6 +271,18 @@
         ];
         key = "<leader>cF";
         options.desc = "Format Injected Langs";
+      }
+      {
+        key = "<leader>z";
+        mode = [ "n" ];
+        action = "<cmd>lua Snacks.zen()<CR>";
+        options.desc = "Toggle zen mode";
+      }
+      {
+        key = "<leader>Z";
+        mode = [ "n" ];
+        action = "<cmd>lua Snacks.zen.zoom()<CR>";
+        options.desc = "Toggle zoom";
       }
     ];
 

@@ -36,14 +36,17 @@
           };
 
           keymap = {
-            preset = "enter";
-            "<C-y>" = [ "select_and_accept" ];
+            preset = "default";
+            "<CR>" = [
+              "accept"
+              "fallback"
+            ];
             "<Tab>" = [
-              "snippet_forward"
+              "select_next"
               "fallback"
             ];
             "<S-Tab>" = [
-              "snippet_backward"
+              "select_prev"
               "fallback"
             ];
           };
