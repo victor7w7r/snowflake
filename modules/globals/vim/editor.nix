@@ -37,7 +37,7 @@
 
         bufferline = {
           enable = true;
-          lazyLoad.settings.event = "DeferredUIEnter";
+          autoLoad = true;
           settings.options = {
             close_command.__raw = "function(n) Snacks.bufdelete(n) end";
             diagnostics = "nvim_lsp";
@@ -168,7 +168,7 @@
 
         lualine = {
           enable = true;
-          lazyLoad.settings.event = "DeferredUIEnter";
+          autoLoad = true;
           settings.options = {
             theme = "palenight";
             globalstatus = true;
@@ -251,6 +251,14 @@
               ];
             };
           };
+        };
+
+        nvim-surround = {
+          enable = true;
+          lazyLoad.settings.event = [
+            "BufReadPost"
+            "BufNewFile"
+          ];
         };
 
         nvim-ufo = {

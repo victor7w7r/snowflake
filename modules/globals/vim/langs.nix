@@ -2,6 +2,8 @@
   den.default.os = { pkgs, self', ... }: {
     programs.nixvim = {
 
+      extraPlugins = [ pkgs.vimPlugins.vim-dotenv ];
+
       extraPackages = with pkgs; [
         glab
         kotlin
@@ -131,7 +133,6 @@
             gitattributes
             gitcommit
             gitignore
-            html
             html
             ini
             javascript

@@ -73,16 +73,7 @@
             "*" = false;
           };
 
-          panel = {
-            enabled = true;
-
-            auto_refresh = true;
-
-            keymap = {
-              open = "<M-S-i>";
-              refresh = "gr";
-            };
-          };
+          panel.enabled = false;
 
           suggestion = {
             enabled = true;

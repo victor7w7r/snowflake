@@ -53,19 +53,6 @@
       ];
     };
 
-    colorful-menu = {
-      enable = true;
-      lazyLoad.settings.event = "InsertEnter";
-      settings = {
-        ls = {
-          lua_ls.arguments_hl = "@comment";
-          ts_ls.extra_info_hl = "@comment";
-        };
-        fallback_highlight = "@variable";
-        max_width = 60;
-      };
-    };
-
     dbee = {
       enable = true;
       lazyLoad.settings.cmd = "Dbee";
