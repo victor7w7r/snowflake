@@ -69,7 +69,7 @@
 
         snacks = {
           enable = true;
-          lazyLoad.settings.event = "DeferredUIEnter";
+          autoLoad = true;
           settings = {
             animate.enable = false;
             debug.enabled = false;

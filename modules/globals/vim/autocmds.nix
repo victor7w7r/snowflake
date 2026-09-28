@@ -7,6 +7,7 @@
       nixvim_last_loc.clear = true;
       nixvim_close_with_q.clear = true;
       nixvim_man_unlisted.clear = true;
+      nixvim_openui.clear = true;
       nixvim_json_conceal.clear = true;
       nixvim_auto_create_dir.clear = true;
       nixvim_project_ui.clear = true;
@@ -25,6 +26,19 @@
             if vim.o.buftype ~= "nofile" then
               vim.cmd("checktime")
             end
+          end
+        '';
+      }
+      {
+        event = "BufReadPost";
+        group = "nixvim_openui";
+        callback.__raw = ''
+          function()
+            vim.defer_fn(function()
+              vim.cmd("Neotree toggle")
+              vim.cmd("wincmd p")
+              vim.cmd("Neominimap Toggle")
+            end, 100)
           end
         '';
       }

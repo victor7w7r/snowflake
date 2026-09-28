@@ -18,8 +18,8 @@
           enableZshIntegration = true;
         };
         keybindings = {
-          "ctrl+shift+plus" = "change_font_size all +0.5";
-          "ctrl+shift+minus" = "change_font_size all -0.5";
+          "ctrl+shift+plus" = "change_font_size all +0.2";
+          "ctrl+shift+minus" = "change_font_size all -0.2";
         };
         settings = {
           background_blur = 2;

@@ -2,31 +2,31 @@
   den.default.os.programs.nixvim = {
     keymaps = [
       {
-        action = ":t '><cr>";
+        action = ":t '><CR>";
         key = "<S-A-Down>";
         mode = "x";
         options.desc = "Duplicate selected lines down";
       }
       {
-        action = ":t '><cr>";
+        action = ":t '><CR>";
         key = "<A-S-j>";
         mode = "x";
         options.desc = "Duplicate selected lines down";
       }
       {
-        action = "<cmd>t .<cr>";
+        action = "<cmd>t .<CR>";
         key = "<S-A-Down>";
         mode = "n";
         options.desc = "Duplicate line down";
       }
       {
-        action = "<cmd>t .<cr>";
+        action = "<cmd>t .<CR>";
         key = "<A-S-j>";
         mode = "n";
         options.desc = "Duplicate line down";
       }
       {
-        action = "<cmd>quitall<cr><esc>";
+        action = "<cmd>quitall<CR><esc>";
         key = "<leader>qq";
         mode = "n";
         options = {
@@ -35,13 +35,29 @@
         };
       }
       {
-        action = "<cmd>lua function() Snacks.scratch() end<CR>";
+        mode = "n";
+        key = "<leader>qd";
+        action.__raw = ''
+          function()
+            vim.cmd("Neotree close")
+            vim.cmd("Neominimap Toggle")
+            vim.cmd("silent! %bd!")
+            Snacks.dashboard()
+          end
+        '';
+        options = {
+          desc = "Close all buffers and go to dashboard";
+          silent = true;
+        };
+      }
+      {
+        action = "<cmd>lua Snacks.scratch()<CR>";
         key = "<leader>.";
         mode = "n";
         options.desc = "Toggle scratch";
       }
       {
-        action = "<cmd>lua function() Snacks.scratch.select() end<CR>";
+        action = "<cmd>lua Snacks.scratch.select()<CR>";
         key = "<leader>,";
         mode = "n";
         options.desc = "Select scratch";
@@ -65,7 +81,7 @@
         options.desc = "Toggle terminal";
       }
       {
-        action = "<cmd>LazyGit<CR>";
+        action = "<cmd>lua Snacks.lazygit()<CR>";
         key = "<leader>gg";
         mode = "n";
         options.desc = "LazyGit";
@@ -95,30 +111,30 @@
         options.desc = "Colorschemes";
       }
       {
-        action = "<cmd>lua Snacks.picker.command_historyCR>";
+        action = "<cmd>lua Snacks.picker.command_history<CR>";
         key = "<leader>cd";
         mode = "n";
         options.desc = "Commands history";
       }
       {
-        action = "<cmd>lua Snacks.picker.buffers()<cr>";
+        action = "<cmd>lua Snacks.picker.buffers()<CR>";
         key = "<leader>bb";
         mode = "n";
         options.desc = "Show buffers";
       }
       {
-        mode = "n";
-        key = "<leader>bd";
         action = "<cmd>lua Snacks.bufdelete.delete()<CR>";
+        key = "<leader>bd";
+        mode = "n";
         options = {
           desc = "Delete current buffer";
           silent = true;
         };
       }
       {
-        mode = "n";
-        key = "<leader>bD";
         action = "<cmd>lua Snacks.bufdelete.all()<CR>";
+        key = "<leader>bD";
+        mode = "n";
         options = {
           desc = "Delete all buffers";
           silent = true;
@@ -149,13 +165,13 @@
         options.desc = "Go to previous diagnostic";
       }
       {
-        mode = "n";
         action = "<cmd>lua vim.diagnostic.open_float()<CR>";
         key = "<leader>dl";
+        mode = "n";
         options.desc = "Show diagnostic details";
       }
       {
-        action = "<cmd>Trouble diagnostics toggle<cr>";
+        action = "<cmd>Trouble diagnostics toggle<CR>";
         key = "<leader>dt";
         mode = "n";
         options.desc = "Toggle diagnostics list";
@@ -189,33 +205,33 @@
         options.desc = "Format Injected Langs";
       }
       {
+        action = "<cmd>lua Snacks.words.jump(1, true)<CR>";
+        key = "]]";
         mode = [
           "n"
           "t"
         ];
-        key = "]]";
-        action = "<cmd>lua Snacks.words.jump(1, true)<CR>";
         options.desc = "Next word reference";
       }
       {
+        action = "<cmd>lua Snacks.words.jump(-1, true)<CR>";
+        key = "[[";
         mode = [
           "n"
           "t"
         ];
-        key = "[[";
-        action = "<cmd>lua Snacks.words.jump(-1, true)<CR>";
         options.desc = "Previous word reference";
       }
       {
+        action = "<cmd>lua Snacks.zen()<CR>";
         key = "<leader>z";
         mode = [ "n" ];
-        action = "<cmd>lua Snacks.zen()<CR>";
         options.desc = "Toggle zen mode";
       }
       {
+        action = "<cmd>lua Snacks.zen.zoom()<CR>";
         key = "<leader>Z";
         mode = [ "n" ];
-        action = "<cmd>lua Snacks.zen.zoom()<CR>";
         options.desc = "Toggle zoom";
       }
     ];
