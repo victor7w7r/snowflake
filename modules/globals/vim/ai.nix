@@ -1,5 +1,5 @@
 {
-  den.default.os = { pkgs, ... }: {
+  den.default.os = { lib, pkgs, ... }: {
     programs.nixvim.plugins = {
       avante = {
         enable = true;
@@ -42,6 +42,39 @@
           "InsertEnter"
           "CmdlineEnter"
         ];
+      };
+
+      blink-cmp = {
+        settings = {
+          sources = {
+            providers = {
+              avante = {
+                module = "blink-cmp-avante";
+                name = "Avante";
+              };
+              copilot = {
+                async = true;
+                module = "blink-copilot";
+                name = "copilot";
+                score_offset = 100;
+                opts = {
+                  max_completions = 3;
+                  max_attempts = 4;
+                  kind = "Copilot";
+                  debounce = 750;
+                  auto_refresh = {
+                    backward = true;
+                    forward = true;
+                  };
+                };
+              };
+            };
+            default = lib.mkAfter [
+              "avante"
+              "copilot"
+            ];
+          };
+        };
       };
 
       copilot-lua = {
