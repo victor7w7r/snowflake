@@ -3,32 +3,29 @@
     aerial = {
       enable = true;
       lazyLoad.settings.cmd = "AerialToggle";
+      settings = {
+        show_guides = true;
+        layout = {
+          default_direction = "prefer_left";
+          placement = "edge";
+          width = 20;
+        };
+      };
     };
 
     actions-preview = {
       enable = true;
-      lazyLoad.settings.keys = [
-        {
-          __unkeyed-1 = "<leader>ca";
-          __unkeyed-2.__raw = ''
-            function()
-              require('actions-preview').code_actions()
-            end
-          '';
-          desc = "Code actions preview";
-        }
-      ];
+      lazyLoad.settings.event = "LspAttach";
+      settings = {
+        backend = "snacks";
+        diff = {
+          algorithm = "patience";
+          ignore_whitespace = true;
+        };
+      };
     };
 
-    arrow = {
-      enable = true;
-      lazyLoad.settings.keys = [
-        {
-          __unkeyed-1 = "<cr>";
-          desc = "Open Arrow Bookmarks";
-        }
-      ];
-    };
+    arrow.enable = true;
 
     auto-save = {
       enable = true;
@@ -38,8 +35,6 @@
       ];
       settings = {
         enabled = true;
-        debounce_delay = 1000;
-        write_all_buffers = false;
       };
     };
 
@@ -53,27 +48,30 @@
       ];
     };
 
+    telescope = {
+      lazyLoad.settings.event = "BufReadPre";
+      enable = true;
+    };
+
+    overseer = {
+      enable = true;
+      lazyLoad.settings.cmd = [
+        "CompilerOpen"
+        "CompilerRedo"
+        "CompilerStop"
+        "CompilerToggleResults"
+      ];
+      settings.task_list = {
+        direction = "bottom";
+        min_height = 25;
+        max_height = 25;
+        default_detail = 1;
+      };
+    };
+
     dbee = {
       enable = true;
       lazyLoad.settings.cmd = "Dbee";
-    };
-
-    dial = {
-      enable = true;
-      lazyLoad.settings.event = "InsertEnter";
-    };
-
-    fastaction = {
-      enable = true;
-      lazyLoad.settings.event = "LspAttach";
-    };
-
-    glance = {
-      enable = true;
-      lazyLoad.settings.cmd = "Glance";
-      settings = {
-        border.enable = true;
-      };
     };
 
     goto-preview = {
@@ -95,10 +93,14 @@
         enableGitStatus = true;
         enableModifiedMarkers = true;
         enableRefreshOnWrite = true;
-        close_if_last_window = true;
+        closeIfLastWindow = true;
+        buffers.bindToCwd = false;
+        popup_border_style = "rounded";
         window = {
           width = 25;
-          position = "left";
+          height = 15;
+          autoExpandWidth = false;
+          mappings = { "<space>" = "none"; };
         };
         default_component_configs.icon = {
           folder_closed = "󰉋";
@@ -107,27 +109,52 @@
           default = "󰈙";
         };
         filesystem = {
-          /*
-            window.mappings = {
-              "gA" = "git_add_all";
-              "ga" = "git_add_file";
-              "gu" = "git_unstage_file";
-            };
-            group_empty_dirs = true;
-            follow_current_file.enabled = true;
-            use_libuv_file_watcher = true
-          */
+          group_empty_dirs = true;
+          follow_current_file = {
+            enabled = true;
+            leave_dirs_open = false;
+          };
           filtered_items = {
             hide_dotfiles = false;
-            hide_by_name = [ ".git" ];
+            always_show = [
+              "node_modules"
+              "dist"
+              "'[A-Z]*'"
+            ];
+            visible = true;
+          };
+          window.mappings = {
+            "gA" = "git_add_all";
+            "ga" = "git_add_file";
+            "gu" = "git_unstage_file";
           };
         };
       };
     };
 
+    nui = {
+      enable = true;
+      lazyLoad.settings.event = [
+        "BufReadPost"
+        "BufWritePost"
+        "BufNewFile"
+      ];
+    };
+
     nvim-lightbulb = {
       enable = true;
-      lazyLoad.settings.event = "LspAttach";
+      lazyLoad.settings.event = "DeferredUIEnter";
+      settings = {
+        autocmd.enabled = true;
+        virtual_text.enabled = true;
+        number = {
+          enabled = true;
+        };
+        status_text = {
+          enabled = true;
+          text = " 󰌶 ";
+        };
+      };
     };
 
     persistence = {
@@ -141,20 +168,9 @@
       ];
     };
 
-    rest = {
-      enable = true;
-      lazyLoad.settings.ft = ["http" "rest"];
-    };
-
     toggler = {
       enable = true;
       lazyLoad.settings.event = "InsertEnter";
-    };
-
-    treesj = {
-      enable = true;
-      lazyLoad.settings.event = "LspAttach";
-      settings.use_default_keymaps = false;
     };
 
     trouble = {

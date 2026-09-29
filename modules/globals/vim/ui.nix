@@ -41,14 +41,6 @@
           };
         };
 
-        modicator = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufNewFile"
-            "BufReadPre"
-          ];
-        };
-
         notify = {
           enable = true;
           lazyLoad.settings.event = "DeferredUIEnter";
@@ -65,6 +57,15 @@
         smear-cursor = {
           enable = true;
           lazyLoad.settings.event = "DeferredUIEnter";
+          settings = {
+            cursor_color = "#a77ede";
+            cursor_color_insert_mode = "#79bbed";
+            normal_bg = "#282828";
+            trailing_stiffness = 0.3;
+            stiffness = 0.5;
+            damping = 0.67;
+            distance_stop_animating = 0.5;
+          };
         };
 
         snacks = {
@@ -99,26 +100,71 @@
         tiny-glimmer = {
           enable = true;
           lazyLoad.settings.event = "DeferredUIEnter";
-        };
-
-        tmux-navigator = {
-          enable = true;
-          autoLoad = true;
-          settings.no_mappings = 1;
+          settings = {
+            enabled = true;
+            animations = {
+              pulse = {
+                chars_for_max_duration = 10;
+                max_duration = 400;
+                min_duration = 200;
+              };
+              rainbow = {
+                chars_for_max_duration = 10;
+              };
+            };
+            overwrite = {
+              paste = {
+                enabled = true;
+              };
+              yank = {
+                default_animation = "rainbow";
+              };
+            };
+            refresh_interval_ms = 5;
+          };
         };
 
         web-devicons = {
           enable = true;
           lazyLoad.settings.event = "DeferredUIEnter";
-          settings = {
-            color_icons = true;
-            default = true;
-          };
-        };
+          settings.override = {
+            js = {
+              icon = "󰌞";
+              color = "#F7DF1E";
+              name = "Js";
+            };
+            jsx = {
+              icon = "󰌞";
+              color = "#61DAFB";
+              name = "Jsx";
+            };
+            mjs = {
+              icon = "󰌞";
+              color = "#F7DF1E";
+              name = "Mjs";
+            };
+            cjs = {
+              icon = "󰌞";
+              color = "#F7DF1E";
+              name = "Cjs";
+            };
 
-        wilder = {
-          enable = true;
-          lazyLoad.settings.cmd = "CmdlineEnter";
+            ts = {
+              icon = "󰛦";
+              color = "#3178C6";
+              name = "Ts";
+            };
+            tsx = {
+              icon = "󰛦";
+              color = "#61DAFB";
+              name = "Tsx";
+            };
+            "d.ts" = {
+              icon = "󰛦";
+              color = "#2B5B84";
+              name = "Dts";
+            };
+          };
         };
 
         yazi = {

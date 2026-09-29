@@ -64,27 +64,165 @@
       }
       {
         action = "<CMD>vnew<CR>";
-        key = "<leader>sn";
+        key = "<leader>bn";
         mode = "n";
         options.desc = "Vertical Split";
       }
       {
-        action = "<cmd>Neotree toggle<CR>";
-        key = "<leader>tn";
+        action = "<cmd>AerialToggle!<CR>";
+        key = "<leader>a";
         mode = "n";
-        options.desc = "Toggle neotree";
+        options.desc = "Aerial Toggle";
+      }
+      {
+        action = "<cmd>AerialPrev<CR>";
+        key = "{";
+        mode = "n";
+        options.desc = "Aerial Prev";
+      }
+      {
+        action = "<cmd>AerialNext<CR>";
+        key = "}";
+        mode = "n";
+        options.desc = "Aerial Next";
+      }
+      {
+        action.__raw = ''
+          function()
+            return require('grug-far').open({
+              prefills = { search = vim.api.nvim_get_current_line() };
+            })
+          end
+        '';
+        mode = [
+          "n"
+          "v"
+        ];
+        key = "<Leader>sr";
+        options.desc = "GrugFar current line";
+      }
+      {
+        action = "<cmd>GrugFar<CR>";
+        mode = [
+          "n"
+          "v"
+        ];
+        key = "<leader>ss";
+        options.desc = "GrugFar";
+      }
+      {
+        action = ''<cmd>lua require("actions-preview").code_actions()<CR>'';
+        key = "<leader>ca";
+        mode = "n";
+        options.desc = "Actions Preview";
+      }
+      {
+        action = ''<cmd>lua require("nvim-toggler").toggle<CR>'';
+        key = "<leader>cl";
+        mode = "n";
+        options.desc = "Toggle";
+      }
+      {
+        action = "<cmd>CompilerOpen<CR>";
+        key = "<leader>co";
+        mode = "n";
+        options.desc = "Compiler Open";
+      }
+      {
+        action = "<cmd>CompilerRedo<CR>";
+        key = "<leader>cr";
+        mode = "n";
+        options.desc = "Compiler Redo";
+      }
+      {
+        action = "<cmd>Trouble symbols toggle focus=false<CR>";
+        key = "<leader>cn";
+        mode = "n";
+        options.desc = "Trouble symbols";
+      }
+      {
+        action = "<cmd>CompilerStop<CR>";
+        key = "<leader>cs";
+        mode = "n";
+        options.desc = "Compiler Stop";
+      }
+      {
+        action = "<cmd>CompilerToggleResults<CR>";
+        key = "<leader>ctr";
+        mode = "n";
+        options.desc = "Compiler Toggle Results";
+      }
+      {
+        action = "<cmd>Trouble diagnostics toggle<cr>";
+        key = "<leader>xx";
+        mode = "n";
+        options.desc = "Diagnostics (Trouble)";
+      }
+      {
+        action = "<cmd>Trouble diagnostics toggle filter.buf=0<cr>";
+        key = "<leader>xX";
+        mode = "n";
+        options.desc = "Buffer Diagnostics (Trouble)";
       }
       {
         action = "<cmd>lua Snacks.terminal()<CR>";
         key = "<leader>tt";
         mode = "n";
-        options.desc = "Toggle terminal";
+        options.desc = "Toggle Terminal";
       }
       {
         action = "<cmd>lua Snacks.lazygit()<CR>";
         key = "<leader>gg";
         mode = "n";
         options.desc = "LazyGit";
+      }
+      {
+        mode = "n";
+        key = "<leader>gd";
+        action = "<cmd>DiffviewOpen<CR>";
+        options.desc = "Diff view";
+      }
+      {
+        mode = "n";
+        key = "<leader>gD";
+        action = "<cmd>DiffviewClose<CR>";
+        options.desc = "Close diff view";
+      }
+      {
+        mode = "n";
+        key = "<leader>pc";
+        action = "<cmd>lua require('goto-preview').close_all_win()<CR>";
+        options.desc = "Preview Close Wins";
+      }
+      {
+        mode = "n";
+        key = "<leader>pd";
+        action = "<cmd>lua require('goto-preview').goto_preview_definition()<CR>";
+        options.desc = "Preview Definition";
+      }
+      {
+        mode = "n";
+        key = "<leader>pt";
+        action = "<cmd>lua require('goto-preview').goto_preview_type_definition()<CR>";
+        options.desc = "Preview Type Definition";
+      }
+      {
+        mode = "n";
+        key = "<leader>pi";
+        action = "<cmd>lua require('goto-preview').goto_preview_implementation()<CR>";
+        options.desc = "Preview Implementation";
+      }
+      {
+        mode = "n";
+        key = "<leader>pD";
+        action = "<cmd>lua require('goto-preview').goto_preview_declaration()<CR>";
+        options.desc = "Preview Declaration";
+      }
+      {
+        mode = "n";
+        key = "<leader>pr";
+        action = "<cmd>lua require('goto-preview').goto_preview_references()<CR>";
+        options.desc = "Preview Declaration";
       }
       {
         action = "<cmd>Neominimap Toggle<CR>";

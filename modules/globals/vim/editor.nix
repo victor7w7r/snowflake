@@ -155,12 +155,17 @@
           enable = true;
           autoLoad = true;
           settings.options = {
-            theme = "palenight";
+            theme = "tokyonight";
             globalstatus = true;
-            disabled_filetypes = [
+            disabled_filetypes.statusline = [
               "dashboard"
-              "lazy"
               "alpha"
+              "starter"
+            ];
+            extensions = [
+              "neo-tree"
+              "lsp-progress"
+              "trouble"
             ];
             sections = {
               lualine_a = [
@@ -176,10 +181,14 @@
                 }
                 "diff"
                 {
-                  __unkeyed = "project";
-                  format = "name";
-                  no_project = "N/A";
-                  separator = " ";
+                  __unkeyed = "diagnostics";
+                  sources = [ "nvim_diagnostic" ];
+                  symbols = {
+                    error = " ";
+                    warn = " ";
+                    info = " ";
+                    hint = " ";
+                  };
                 }
               ];
               lualine_c = [
@@ -187,22 +196,41 @@
                   __unkeyed = "filename";
                   path = 1;
                   symbols = {
-                    modified = "";
+                    modified = " ●";
                     readonly = "";
+                    unnamed = " No Name";
+                    newfile = " ";
                   };
                 }
                 "lsp_progress"
               ];
               lualine_x = [
-                "diagnostics"
-                "encoding"
                 {
                   __unkeyed = "filetype";
                   icon_only = true;
                 }
+                {
+                  __unkeyed = "encoding";
+                  fmt = ''
+                    function(str)
+                      if str == "utf-8" then return "" end
+                      return str
+                    end
+                  '';
+                }
+                "filesize"
               ];
               lualine_y = [ "progress" ];
-              lualine_z = [ "location" ];
+              lualine_z = [
+                {
+                  __unkeyed = "location";
+                  fmt = ''
+                    function(str)
+                      return " " .. str
+                    end
+                  '';
+                }
+              ];
             };
           };
         };
@@ -211,12 +239,12 @@
           enable = true;
           lazyLoad.settings.cmd = "DeferredUIEnter";
           modules = {
-            comment = {};
-            cursorword = {};
-            move = {};
-            pairs = {};
-            splitjoin = {};
-            surround = {};
+            comment = { };
+            cursorword = { };
+            move = { };
+            pairs = { };
+            splitjoin = { };
+            surround = { };
           };
         };
 

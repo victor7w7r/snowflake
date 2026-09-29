@@ -9,7 +9,7 @@
         kotlin
         nixfmt
         pyright
-        #self'.packages.dbee
+        self'.packages.dbee
         shfmt
         stylua
         luajitPackages.tree-sitter-cli
