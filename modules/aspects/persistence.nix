@@ -50,6 +50,7 @@
                 ".ccnet"
                 ".config/Seafile"
                 ".config/freerdp"
+                ".config/github-copilot"
                 ".config/nix"
                 ".gnupg"
                 ".local/bin"

@@ -4,6 +4,7 @@
     {
       programs.nixvim = {
         extraPlugins = [
+          pkgs.vimPlugins.lualine-lsp-progress
           (pkgs.vimUtils.buildVimPlugin {
             name = "neominimap";
             src = pkgs.fetchFromGitHub {
@@ -279,20 +280,21 @@
                       hint = " ";
                     };
                   }
+
+                  "lsp_progress"
+                ];
+                lualine_x = [
                   {
                     __unkeyed-1 = "lsp_status";
                     icon = "";
                     ignore_lsp = [ "null-ls" ];
                   }
-                ];
-                lualine_x = [
                   {
                     __unkeyed-1 = "filetype";
                     icon_only = true;
                     separator = "";
                   }
                   "filesize"
-
                 ];
                 lualine_y = [
                   {
@@ -328,6 +330,7 @@
               cursorword = { };
               move = { };
               pairs = { };
+              pick = { };
               splitjoin = { };
               surround = { };
             };

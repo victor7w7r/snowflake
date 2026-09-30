@@ -12,6 +12,7 @@
           glab
           luajitPackages.tree-sitter-cli
           self'.packages.dbee
+          sqlite
         ];
 
         extraPlugins = [ pkgs.vimPlugins.vim-dotenv ];

@@ -74,26 +74,6 @@
       lazyLoad.settings.cmd = "Dbee";
     };
 
-    fidget = {
-      enable = true;
-      lazyLoad.settings.event = "LspAttach";
-      settings = {
-        notification.window = {
-          max_width = 50;
-          winblend = 0;
-          border = "rounded";
-        };
-        progress = {
-          ignore_done_already = true;
-          poll_rate = 1;
-          ignore = [
-            "none-ls"
-            "null-ls"
-          ];
-        };
-      };
-    };
-
     goto-preview = {
       enable = true;
       lazyLoad.settings.event = "LspAttach";

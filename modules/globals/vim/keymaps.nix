@@ -1,30 +1,103 @@
 {
   den.default.os.programs.nixvim = {
+    plugins.which-key = {
+      enable = true;
+      lazyLoad.settings.event = "DeferredUIEnter";
+      settings = {
+        preset = "helix";
+        spec =
+          [
+            "n"
+            "x"
+          ]
+          |> (mode: [
+            {
+              __unkeyed-1 = "<leader>b";
+              group = "buffer";
+              mode = [
+                "n"
+                "x"
+              ];
+            }
+            {
+              __unkeyed-1 = "<leader>d";
+              group = "debug";
+              mode = [
+                "n"
+                "x"
+              ];
+            }
+            {
+              __unkeyed-1 = "<leader>f";
+              group = "file/find";
+              mode = [
+                "n"
+                "x"
+              ];
+            }
+            {
+              __unkeyed-1 = "<leader>g";
+              group = "git";
+              mode = [
+                "n"
+                "x"
+              ];
+            }
+            {
+              __unkeyed-1 = "<leader>q";
+              group = "quit/session";
+              mode = [
+                "n"
+                "x"
+              ];
+            }
+            {
+              __unkeyed-1 = "<leader>s";
+              group = "search";
+              mode = [
+                "n"
+                "x"
+              ];
+            }
+            {
+              __unkeyed-1 = "<leader>t";
+              group = "toggle";
+              mode = [
+                "n"
+                "x"
+              ];
+            }
+            {
+              __unkeyed-1 = "<leader>u";
+              group = "ui";
+              mode = [
+                "n"
+                "x"
+              ];
+            }
+            {
+              __unkeyed-1 = "g";
+              group = "goto";
+              mode = [
+                "n"
+                "x"
+              ];
+            }
+            {
+              __unkeyed-1 = "gs";
+              group = "surround";
+              mode = [
+                "n"
+                "x"
+              ];
+            }
+          ]);
+      };
+    };
+
     keymaps = [
-      {
-        action = ":t '><CR>";
-        key = "<S-A-Down>";
-        mode = "x";
-        options.desc = "Duplicate selected lines down";
-      }
-      {
-        action = ":t '><CR>";
-        key = "<A-S-j>";
-        mode = "x";
-        options.desc = "Duplicate selected lines down";
-      }
-      {
-        action = "<cmd>t .<CR>";
-        key = "<S-A-Down>";
-        mode = "n";
-        options.desc = "Duplicate line down";
-      }
-      {
-        action = "<cmd>t .<CR>";
-        key = "<A-S-j>";
-        mode = "n";
-        options.desc = "Duplicate line down";
-      }
+      #Core / UI
+
       {
         action = "<cmd>quitall<CR><esc>";
         key = "<leader>qq";
@@ -100,15 +173,6 @@
         ];
         key = "<Leader>sr";
         options.desc = "GrugFar current line";
-      }
-      {
-        action = "<cmd>GrugFar<CR>";
-        mode = [
-          "n"
-          "v"
-        ];
-        key = "<leader>ss";
-        options.desc = "GrugFar";
       }
       {
         action = "<cmd>GrugFar<CR>";
@@ -874,96 +938,31 @@
           desc = "Eval";
         };
       }
+      #Editor Control
+      {
+        action = ":t '><CR>";
+        key = "<S-A-Down>";
+        mode = "x";
+        options.desc = "Duplicate selected lines down";
+      }
+      {
+        action = ":t '><CR>";
+        key = "<A-S-j>";
+        mode = "x";
+        options.desc = "Duplicate selected lines down";
+      }
+      {
+        action = "<cmd>t .<CR>";
+        key = "<S-A-Down>";
+        mode = "n";
+        options.desc = "Duplicate line down";
+      }
+      {
+        action = "<cmd>t .<CR>";
+        key = "<A-S-j>";
+        mode = "n";
+        options.desc = "Duplicate line down";
+      }
     ];
-
-    plugins.which-key = {
-      enable = true;
-      lazyLoad.settings.event = "DeferredUIEnter";
-      settings = {
-        preset = "helix";
-        spec = [
-          {
-            __unkeyed-1 = "<leader>b";
-            group = "buffer";
-            mode = [
-              "n"
-              "x"
-            ];
-          }
-          {
-            __unkeyed-1 = "<leader>d";
-            group = "debug";
-            mode = [
-              "n"
-              "x"
-            ];
-          }
-          {
-            __unkeyed-1 = "<leader>f";
-            group = "file/find";
-            mode = [
-              "n"
-              "x"
-            ];
-          }
-          {
-            __unkeyed-1 = "<leader>g";
-            group = "git";
-            mode = [
-              "n"
-              "x"
-            ];
-          }
-          {
-            __unkeyed-1 = "<leader>q";
-            group = "quit/session";
-            mode = [
-              "n"
-              "x"
-            ];
-          }
-          {
-            __unkeyed-1 = "<leader>s";
-            group = "search";
-            mode = [
-              "n"
-              "x"
-            ];
-          }
-          {
-            __unkeyed-1 = "<leader>t";
-            group = "toggle";
-            mode = [
-              "n"
-              "x"
-            ];
-          }
-          {
-            __unkeyed-1 = "<leader>u";
-            group = "ui";
-            mode = [
-              "n"
-              "x"
-            ];
-          }
-          {
-            __unkeyed-1 = "g";
-            group = "goto";
-            mode = [
-              "n"
-              "x"
-            ];
-          }
-          {
-            __unkeyed-1 = "gs";
-            group = "surround";
-            mode = [
-              "n"
-              "x"
-            ];
-          }
-        ];
-      };
-    };
   };
 }
