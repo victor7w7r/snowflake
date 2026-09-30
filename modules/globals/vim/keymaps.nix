@@ -111,6 +111,61 @@
         options.desc = "GrugFar";
       }
       {
+        action = "<cmd>GrugFar<CR>";
+        mode = [
+          "n"
+          "v"
+        ];
+        key = "<leader>ss";
+        options.desc = "GrugFar";
+      }
+      {
+        action = ''<cmd>lua require("flash").jump()<CR>'';
+        mode = [
+          "n"
+          "x"
+          "o"
+        ];
+        key = "<leader>sj";
+        options.desc = "Flash Jump";
+      }
+      {
+        action = ''<cmd>lua require("flash").treesitter()<CR>'';
+        mode = [
+          "n"
+          "x"
+          "o"
+        ];
+        key = "<leader>sJ";
+        options.desc = "Flash Treesitter";
+      }
+      {
+        action = ''<cmd>lua require("flash").remote()<CR>'';
+        mode = [
+          "n"
+          "x"
+          "o"
+        ];
+        key = "<leader>sr";
+        options.desc = "Flash Remote";
+      }
+      {
+        action = ''<cmd>lua require("flash").treesitter_search()<CR>'';
+        mode = [
+          "n"
+          "x"
+          "o"
+        ];
+        key = "<leader>sR";
+        options.desc = "Flash Treesitter Search";
+      }
+      {
+        action = ''<cmd>lua require("flash").toggle()<CR>'';
+        mode = [ "n" ];
+        key = "<leader>ts";
+        options.desc = "Flash Toggle";
+      }
+      {
         action = ''<cmd>lua require("actions-preview").code_actions()<CR>'';
         key = "<leader>ca";
         mode = "n";
@@ -190,39 +245,184 @@
       }
       {
         mode = "n";
-        key = "<leader>pc";
+        key = "<leader>oc";
         action = "<cmd>lua require('goto-preview').close_all_win()<CR>";
         options.desc = "Preview Close Wins";
       }
       {
         mode = "n";
-        key = "<leader>pd";
+        key = "<leader>od";
         action = "<cmd>lua require('goto-preview').goto_preview_definition()<CR>";
         options.desc = "Preview Definition";
       }
       {
         mode = "n";
-        key = "<leader>pt";
+        key = "<leader>ot";
         action = "<cmd>lua require('goto-preview').goto_preview_type_definition()<CR>";
         options.desc = "Preview Type Definition";
       }
       {
         mode = "n";
-        key = "<leader>pi";
+        key = "<leader>oi";
         action = "<cmd>lua require('goto-preview').goto_preview_implementation()<CR>";
         options.desc = "Preview Implementation";
       }
       {
         mode = "n";
-        key = "<leader>pD";
+        key = "<leader>oD";
         action = "<cmd>lua require('goto-preview').goto_preview_declaration()<CR>";
         options.desc = "Preview Declaration";
       }
       {
         mode = "n";
-        key = "<leader>pr";
+        key = "<leader>or";
         action = "<cmd>lua require('goto-preview').goto_preview_references()<CR>";
         options.desc = "Preview Declaration";
+      }
+      {
+        action.__raw = ''
+          function()
+            if _G.Snacks ~= nil and _G.Snacks.picker ~= nil then
+              Snacks.picker.yanky()
+            elseif pcall(require, "telescope") then
+              require("telescope").extensions.yank_history.yank_history({})
+            else
+              vim.cmd([[YankyRingHistory]])
+            end
+          end
+        '';
+        key = "<leader>p";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Open Yank History";
+      }
+      {
+        action = "<Plug>(YankyYank)";
+        key = "y";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Yank";
+      }
+      {
+        action = "<Plug>(YankyPutAfter)";
+        key = "p";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Yanky Put after";
+      }
+      {
+        action = "<Plug>(YankyPutBefore)";
+        key = "P";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Put before";
+      }
+      {
+        action = "<Plug>(YankyGPutAfter)";
+        key = "gp";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Yanky Put after selection";
+      }
+      {
+        action = "<Plug>(YankyGPutBefore)";
+        key = "gP";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Yanky Put before selection";
+      }
+      {
+        action = "<Plug>(YankyPreviousEntry)";
+        key = "<C-p>";
+        mode = "n";
+        options.desc = "Cycle yank history back";
+      }
+      {
+        action = "<Plug>(YankyNextEntry)";
+        key = "<C-n>";
+        mode = "n";
+        options.desc = "Cycle yank history forward";
+      }
+      {
+        action = "<Plug>(YankyPutIndentAfterLinewise)";
+        key = "]p";
+        mode = "n";
+        options.desc = "Put indented after (linewise)";
+      }
+      {
+        action = "<Plug>(YankyPutIndentBeforeLinewise)";
+        key = "[p";
+        mode = "n";
+        options.desc = "Put indented before (linewise)";
+      }
+      {
+        action = "<Plug>(YankyPutIndentAfterShiftRight)";
+        key = ">p";
+        mode = "n";
+        options.desc = "Put and indent right";
+      }
+      {
+        action = "<Plug>(YankyPutIndentAfterShiftLeft)";
+        key = "<p";
+        mode = "n";
+        options.desc = "Put and indent left";
+      }
+      {
+        action = "<Plug>(YankyPutIndentBeforeShiftRight)";
+        key = ">P";
+        mode = "n";
+        options.desc = "Put before and indent right";
+      }
+      {
+        action = "<Plug>(YankyPutIndentBeforeShiftLeft)";
+        key = "<P";
+        mode = "n";
+        options.desc = "Put before and indent left";
+      }
+      {
+        action = "<Plug>(YankyPutAfterFilter)";
+        key = "=p";
+        mode = "n";
+        options.desc = "Put after filter";
+      }
+      {
+        action = "<Plug>(YankyPutBeforeFilter)";
+        key = "=P";
+        mode = "n";
+        options.desc = "Put before filter";
+      }
+      {
+        action = "<cmd>Navbuddy<CR>";
+        key = "<leader><F6>";
+        mode = "n";
+        options = {
+          silent = true;
+          desc = "Open up navbuddy";
+        };
+      }
+      {
+        action = "<cmd>UndotreeToggle<CR>";
+        key = "<leader><F7>";
+        mode = "n";
+        options.desc = "UndoTree";
+      }
+      {
+        action = "<cmd>IncRename<CR>";
+        key = "<leader>rn";
+        mode = "n";
+        options.desc = "IncRename";
       }
       {
         action = "<cmd>Neominimap Toggle<CR>";
@@ -232,15 +432,115 @@
       }
       {
         action = "<cmd>Neominimap Refresh<CR>";
-        key = "<leader>mr";
+        key = "<leader>nr";
         mode = "n";
         options.desc = "Neominimap Refresh";
       }
       {
         action = "<cmd>Neominimap Focus<CR>";
-        key = "<leader>mf";
+        key = "<leader>nf";
         mode = "n";
         options.desc = "Neominimap Focus";
+      }
+
+      {
+        action = "<cmd>lua require('multicursor-nvim').matchAddCursor(1)<CR>";
+        key = "<leader>mn";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Multi: Match Next";
+      }
+      {
+        action = "<cmd>lua require('multicursor-nvim').matchAddCursor(-1)<CR>";
+        key = "<leader>mp";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Multi: Match Prev";
+      }
+      {
+        action = "<cmd>lua require('multicursor-nvim').matchSkipCursor(1)<CR>";
+        key = "<leader>ms";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Multi: Match Skip";
+      }
+      {
+        action = "<cmd>lua require('multicursor-nvim').matchAllAddCursors()<CR>";
+        key = "<leader>ma";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Multi: Match All";
+      }
+      {
+        action = "<cmd>lua require('multicursor-nvim').lineAddCursor(-1)<CR>";
+        key = "<leader>m<up>";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Multi: Add Line Above";
+      }
+      {
+        action = "<cmd>lua require('multicursor-nvim').lineAddCursor(1)<CR>";
+        key = "<leader>m<down>";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Multi: Add Line Below";
+      }
+      {
+        action = "<cmd>lua require('multicursor-nvim').handleMouse<CR>";
+        key = "<C-LeftMouse>";
+        mode = "n";
+        options.desc = "Multi: Mouse Add Cursor";
+      }
+      {
+        action = "<cmd>lua require('multicursor-nvim').handleMouseDrag<CR>";
+        key = "<C-LeftDrag>";
+        mode = "n";
+        options.desc = "Multi: Mouse Drag";
+      }
+      {
+        action = "<cmd>lua require('multicursor-nvim').handleMouseRelease<CR>";
+        key = "<C-LeftRelease>";
+        mode = "n";
+        options.desc = "Multi: Mouse Release";
+      }
+      {
+        action = "<cmd>lua require('multicursor-nvim').toggleCursor<CR>";
+        key = "<leader>mt";
+        mode = [
+          "n"
+          "x"
+        ];
+        options.desc = "Multi: Toggle Cursor";
+      }
+      {
+        action = ''<cmd>lua require("ufo").openAllFolds()'';
+        key = "zR";
+        mode = "n";
+        options.desc = "Open all folds";
+      }
+      {
+        action = ''<cmd>lua require("ufo").closeAllFolds()'';
+        key = "zM";
+        mode = "n";
+        options.desc = "Close all folds";
+      }
+      {
+        action = ''<cmd>lua require("ufo").peekFoldedLinesUnderCursor()'';
+        key = "zK";
+        mode = "n";
+        options.desc = "Preview folded lines";
       }
       {
         action = "<cmd>lua Snacks.picker.colorschemes()<CR>";
@@ -277,6 +577,30 @@
           desc = "Delete all buffers";
           silent = true;
         };
+      }
+      {
+        action = "<cmd>CBd<cr>";
+        key = "<leader>uu";
+        mode = "n";
+        options.desc = "Comment";
+      }
+      {
+        action = "<cmd>CBccbox<cr>";
+        key = "<leader>ub";
+        mode = "n";
+        options.desc = "Comment with box";
+      }
+      {
+        action = "<cmd>CBline<cr>";
+        key = "<leader>ul";
+        mode = "n";
+        options.desc = "Comment simple line";
+      }
+      {
+        action = "<cmd>CBllline<cr>";
+        key = "<leader>ut";
+        mode = "n";
+        options.desc = "Comment with line";
       }
       {
         action = "<cmd>lua Snacks.picker.smart()<cr>";

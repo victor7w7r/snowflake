@@ -42,7 +42,7 @@
         cockpit
         dev
         disks
-        emacs
+        #emacs
         emulation
         firewall
         games

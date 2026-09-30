@@ -19,7 +19,6 @@
     flake-file.url = "github:vic/flake-file";
     nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
   };
-
   den.default.includes = [
     den.batteries.inputs'
     den.batteries.self'

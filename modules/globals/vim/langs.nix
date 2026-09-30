@@ -23,17 +23,13 @@
         bashls.enable = true;
         biome.enable = true;
         cssls.enable = true;
-        custom_elements_ls = {
-          enable = true;
-          package = null;
-        };
         docker_compose_language_service.enable = true;
         dockerls.enable = true;
         emmet_ls.enable = true;
         html.enable = true;
         gradle_ls = {
           enable = true;
-          package = null;
+          package = pkgs.vscode-extensions.vscjava.vscode-gradle;
         };
         jsonls.enable = true;
         kotlin_lsp = {
@@ -170,7 +166,6 @@
               javascript = [ "oxfmt" ];
               javascriptreact = [ "oxfmt" ];
               json = [ "oxfmt" ];
-              lua = [ "stylua" ];
               nix = [ "nixfmt" ];
               rust = [ "rustfmt" ];
               sh = [ "shfmt" ];

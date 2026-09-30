@@ -74,6 +74,26 @@
       lazyLoad.settings.cmd = "Dbee";
     };
 
+    fidget = {
+      enable = true;
+      lazyLoad.settings.event = "LspAttach";
+      settings = {
+        notification.window = {
+          max_width = 50;
+          winblend = 0;
+          border = "rounded";
+        };
+        progress = {
+          ignore_done_already = true;
+          poll_rate = 1;
+          ignore = [
+            "none-ls"
+            "null-ls"
+          ];
+        };
+      };
+    };
+
     goto-preview = {
       enable = true;
       lazyLoad.settings.event = "LspAttach";
@@ -100,7 +120,9 @@
           width = 25;
           height = 15;
           autoExpandWidth = false;
-          mappings = { "<space>" = "none"; };
+          mappings = {
+            "<space>" = "none";
+          };
         };
         default_component_configs.icon = {
           folder_closed = "󰉋";
@@ -146,14 +168,8 @@
       lazyLoad.settings.event = "DeferredUIEnter";
       settings = {
         autocmd.enabled = true;
-        virtual_text.enabled = true;
-        number = {
-          enabled = true;
-        };
-        status_text = {
-          enabled = true;
-          text = " 󰌶 ";
-        };
+        virtual_text.enabled = false;
+        number.enabled = true;
       };
     };
 

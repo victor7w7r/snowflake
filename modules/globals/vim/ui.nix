@@ -1,9 +1,6 @@
 {
-  den.default.os = { lib, pkgs, ... }: {
+  den.default.os = { lib, ... }: {
     programs.nixvim = {
-
-      extraPlugins = [ pkgs.vimPlugins.lualine-lsp-progress ];
-
       colorschemes.tokyonight = {
         enable = true;
         lazyLoad.enable = true;
@@ -90,7 +87,7 @@
             };
             scratch.enabled = true;
             scroll.enabled = false;
-            statuscolumn.enabled = true;
+            statuscolumn.enabled = false;
             terminal.enabled = true;
             toggle.enabled = true;
             zen.enabled = true;

@@ -11,15 +11,15 @@
         enable = true;
         font = {
           name = "JetBrainsMono Nerd Font";
-          size = 10;
+          size = 9.3;
         };
         shellIntegration = {
           enableBashIntegration = true;
           enableZshIntegration = true;
         };
         keybindings = {
-          "ctrl+shift+plus" = "change_font_size all +0.2";
-          "ctrl+shift+minus" = "change_font_size all -0.2";
+          "ctrl+shift+plus" = "change_font_size all +0.1";
+          "ctrl+shift+minus" = "change_font_size all -0.1";
         };
         settings = {
           background_blur = 2;

@@ -1,276 +1,371 @@
 {
-  den.default.os = { pkgs, ... }: {
-    programs.nixvim = {
-      extraPlugins = [
-        (pkgs.vimUtils.buildVimPlugin {
-          name = "neominimap";
-          src = pkgs.fetchFromGitHub {
-            owner = "Isrothy";
-            repo = "neominimap.nvim";
-            rev = "0676085d898019f06044923934e38663f5efa290";
-            hash = "sha256-EcV/mdleyopQsJ/t/Whl6Yf/2ORb9rnhHuc2Ue1E1Bw=";
-          };
-        })
-      ];
-
-      plugins = {
-        autoclose = {
-          enable = true;
-          lazyLoad.settings.event = "InsertEnter";
-        };
-
-        baleia = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufNewFile"
-            "BufReadPre"
-          ];
-        };
-
-        better-escape = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "InsertEnter"
-            "TermEnter"
-          ];
-        };
-
-        bufferline = {
-          enable = true;
-          autoLoad = true;
-          settings.options = {
-            close_command.__raw = "function(n) Snacks.bufdelete(n) end";
-            diagnostics = "nvim_lsp";
-            middle_mouse_command = "bdelete! %d";
-            right_mouse_command.__raw = "function(n) Snacks.bufdelete(n) end";
-            tab_size = 15;
-            separator_style = "thin";
-            offsets = [
-              {
-                filetype = "neo-tree";
-                text = "NeoTree";
-                text_align = "center";
-                separator = false;
-              }
-            ];
-          };
-        };
-
-        blink-indent = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufReadPost"
-            "BufWritePost"
-            "BufNewFile"
-          ];
-        };
-
-        ccc = {
-          enable = true;
-          lazyLoad.settings.cmd = [
-            "CccPick"
-            "CccConvert"
-            "CccHighlighterToggle"
-            "CccHighlighterEnable"
-            "CccHighlighterDisable"
-          ];
-        };
-
-        colorizer = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufNewFile"
-            "BufReadPre"
-          ];
-        };
-
-        comment-box = {
-          enable = true;
-          lazyLoad.settings.cmd = [
-            "CBd"
-            "CBccbox"
-            "CBllline"
-            "CBline"
-          ];
-        };
-
-        dropbar = {
-          enable = true;
-          lazyLoad.settings.event = "BufReadPost";
-          settings.bar.update_events.buf = [
-            "FileChangedShellPost"
-            "TextChanged"
-            "ModeChanged"
-          ];
-        };
-
-        flash = {
-          enable = true;
-          lazyLoad.settings.event = "DeferredUIEnter";
-          settings = { };
-        };
-
-        image = {
-          enable = true;
-          lazyLoad.settings = {
-            event = [ "BufEnter" ];
-            ft = [
-              "markdown"
-              "org"
-              "norg"
-            ];
-          };
-          settings = {
-            integrations.neorg.enabled = true;
-            editor_only_render_when_focused = true;
-            tmux_show_only_in_active_window = true;
-          };
-        };
-
-        inc-rename = {
-          enable = true;
-          lazyLoad.settings.event = "DeferredUIEnter";
-        };
-
-        indent-blankline = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufReadPost"
-            "BufWritePost"
-            "BufNewFile"
-          ];
-          settings = {
-            indent = {
-              smart_indent_cap = true;
-              char = " ";
+  den.default.os =
+    { pkgs, ... }:
+    {
+      programs.nixvim = {
+        extraPlugins = [
+          (pkgs.vimUtils.buildVimPlugin {
+            name = "neominimap";
+            src = pkgs.fetchFromGitHub {
+              owner = "Isrothy";
+              repo = "neominimap.nvim";
+              rev = "0676085d898019f06044923934e38663f5efa290";
+              hash = "sha256-EcV/mdleyopQsJ/t/Whl6Yf/2ORb9rnhHuc2Ue1E1Bw=";
             };
-            scope = {
-              enabled = true;
-              char = "│";
-            };
-          };
-        };
+          })
+        ];
 
-        lualine = {
-          enable = true;
-          autoLoad = true;
-          settings.options = {
-            theme = "tokyonight";
-            globalstatus = true;
-            disabled_filetypes.statusline = [
-              "dashboard"
-              "alpha"
-              "starter"
+        extraConfigLua = ''
+          vim.g.neominimap = {
+            auto_enable = false,
+            x_multiplier = 1,
+            y_multiplier = 1,
+            layout = "float",
+            float = {
+              minimap_width = 20,
+              max_minimap_height = 50,
+              margin = {
+                right = 1,
+                top = 0,
+                bottom = 1,
+              },
+              z_index = 1,
+              window_border = "none",
+            },
+            click = {
+              enabled = true,
+            },
+            git = {
+              enabled = false,
+            },
+            search = {
+              enabled = false,
+            },
+          }
+        '';
+
+        plugins = {
+          baleia = {
+            enable = true;
+            lazyLoad.settings.event = [
+              "BufNewFile"
+              "BufReadPre"
             ];
-            extensions = [
-              "neo-tree"
-              "lsp-progress"
-              "trouble"
+          };
+
+          better-escape = {
+            enable = true;
+            lazyLoad.settings.event = [
+              "InsertEnter"
+              "TermEnter"
             ];
-            sections = {
-              lualine_a = [
+          };
+
+          bufferline = {
+            enable = true;
+            autoLoad = true;
+            settings.options = {
+              close_command.__raw = "function(n) Snacks.bufdelete(n) end";
+              diagnostics = "nvim_lsp";
+              left_mouse_command.__raw = "function(n) Snacks.bufdelete(n) end";
+              right_mouse_command.__raw = "function(n) Snacks.bufdelete(n) end";
+              persist_buffer_sort = true;
+              tab_size = 15;
+              offsets = [
                 {
-                  __unkeyed = "mode";
-                  icon = "";
-                }
-              ];
-              lualine_b = [
-                {
-                  __unkeyed = "branch";
-                  icon = "";
-                }
-                "diff"
-                {
-                  __unkeyed = "diagnostics";
-                  sources = [ "nvim_diagnostic" ];
-                  symbols = {
-                    error = " ";
-                    warn = " ";
-                    info = " ";
-                    hint = " ";
-                  };
-                }
-              ];
-              lualine_c = [
-                {
-                  __unkeyed = "filename";
-                  path = 1;
-                  symbols = {
-                    modified = " ●";
-                    readonly = "";
-                    unnamed = " No Name";
-                    newfile = " ";
-                  };
-                }
-                "lsp_progress"
-              ];
-              lualine_x = [
-                {
-                  __unkeyed = "filetype";
-                  icon_only = true;
-                }
-                {
-                  __unkeyed = "encoding";
-                  fmt = ''
-                    function(str)
-                      if str == "utf-8" then return "" end
-                      return str
-                    end
-                  '';
-                }
-                "filesize"
-              ];
-              lualine_y = [ "progress" ];
-              lualine_z = [
-                {
-                  __unkeyed = "location";
-                  fmt = ''
-                    function(str)
-                      return " " .. str
-                    end
-                  '';
+                  filetype = "neo-tree";
+                  text = "NeoTree";
+                  text_align = "center";
+                  separator = false;
                 }
               ];
             };
           };
-        };
 
-        mini = {
-          enable = true;
-          lazyLoad.settings.cmd = "DeferredUIEnter";
-          modules = {
-            comment = { };
-            cursorword = { };
-            move = { };
-            pairs = { };
-            splitjoin = { };
-            surround = { };
+          ccc = {
+            enable = true;
+            lazyLoad.settings.cmd = [
+              "CccPick"
+              "CccConvert"
+              "CccHighlighterToggle"
+              "CccHighlighterEnable"
+              "CccHighlighterDisable"
+            ];
           };
-        };
 
-        navbuddy = {
-          enable = true;
-          lazyLoad.settings.cmd = "LspAttach";
-          settings.lsp.autoAttach = true;
-        };
+          colorizer = {
+            enable = true;
+            lazyLoad.settings.event = [
+              "BufNewFile"
+              "BufReadPre"
+            ];
+          };
 
-        nvim-ufo = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufReadPost"
-            "BufNewFile"
-          ];
-        };
+          comment-box = {
+            enable = true;
+            lazyLoad.settings.cmd = [
+              "CBd"
+              "CBccbox"
+              "CBllline"
+              "CBline"
+            ];
+          };
 
-        rainbow-delimiters = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufReadPost"
-            "BufNewFile"
-          ];
-          settings = {
-            strategy = {
-              "".__raw = ''
+          dropbar = {
+            enable = true;
+            lazyLoad.settings.event = "BufReadPost";
+            settings.bar.update_events.buf = [
+              "FileChangedShellPost"
+              "TextChanged"
+              "ModeChanged"
+            ];
+          };
+
+          flash = {
+            enable = true;
+            lazyLoad.settings.event = "DeferredUIEnter";
+          };
+
+          inc-rename = {
+            enable = true;
+            lazyLoad.settings.event = "DeferredUIEnter";
+          };
+
+          indent-blankline =
+            let
+              colors = [
+                {
+                  name = "Red";
+                  hex = "#E06C75";
+                }
+                {
+                  name = "Yellow";
+                  hex = "#E5C07B";
+                }
+                {
+                  name = "Blue";
+                  hex = "#61AFEF";
+                }
+                {
+                  name = "Orange";
+                  hex = "#D19A66";
+                }
+                {
+                  name = "Green";
+                  hex = "#98C379";
+                }
+                {
+                  name = "Violet";
+                  hex = "#C678DD";
+                }
+                {
+                  name = "Cyan";
+                  hex = "#56B6C2";
+                }
+              ];
+              rainbow = "Rainbow";
+              rainbowNames = map (c: rainbow + c.name) colors;
+              rainbowColors = builtins.listToAttrs (
+                map (c: {
+                  name = rainbow + c.name;
+                  value = c.hex;
+                }) colors
+              );
+            in
+            {
+              enable = true;
+              lazyLoad.settings.event = [
+                "BufReadPost"
+                "BufNewFile"
+              ];
+              settings = {
+                exclude = {
+                  buftypes = [
+                    "terminal"
+                    "quickfix"
+                  ];
+                  filetypes = [
+                    ""
+                    "checkhealth"
+                    "help"
+                    "lspinfo"
+                    "packer"
+                    "TelescopePrompt"
+                    "TelescopeResults"
+                    "yaml"
+                  ];
+                };
+                indent = {
+                  char = "│";
+                  highlight = rainbowNames;
+                };
+                scope = {
+                  enabled = true;
+                  show_end = true;
+                  show_exact_scope = true;
+                  show_start = true;
+                };
+              };
+
+              luaConfig.pre = ''
+                local hooks = require "ibl.hooks"
+                hooks.register(hooks.type.HIGHLIGHT_SETUP, function()
+                  ${builtins.concatStringsSep "\n" (
+                    map (name: ''
+                      vim.api.nvim_set_hl(0, "${name}", { fg = "${rainbowColors.${name}}" })
+                    '') rainbowNames
+                  )}
+                end)
+              '';
+
+            };
+
+          lualine = {
+            enable = true;
+            autoLoad = true;
+            settings = {
+              options = {
+                theme = "tokyonight";
+                globalstatus = true;
+                icons_enabled = true;
+                component_separators = {
+                  left = "";
+                  right = "";
+                };
+                section_separators = {
+                  left = "";
+                  right = "";
+                };
+                disabled_filetypes.statusline = [ "snacks_dashboard" ];
+              };
+              extensions = [
+                "aerial"
+                "avante"
+                "neo-tree"
+                "nvim-dap-ui"
+                "quickfix"
+                "trouble"
+              ];
+              sections = {
+                lualine_a = [
+                  {
+                    __unkeyed-1 = "mode";
+                    icon = "";
+                  }
+                ];
+                lualine_b = [
+                  {
+                    __unkeyed-1 = "branch";
+                    icon = "";
+                  }
+                ];
+                lualine_c = [
+                  {
+                    __unkeyed-1 = "diff";
+                    symbols = {
+                      added = " ";
+                      modified = " ";
+                      removed = " ";
+                    };
+                  }
+                  {
+                    __unkeyed = "diagnostics";
+                    sources = [ "nvim_diagnostic" ];
+                    update_in_insert = true;
+                    symbols = {
+                      error = " ";
+                      warn = " ";
+                      info = " ";
+                      hint = " ";
+                    };
+                  }
+                  {
+                    __unkeyed-1 = "lsp_status";
+                    icon = "";
+                    ignore_lsp = [ "null-ls" ];
+                  }
+                ];
+                lualine_x = [
+                  {
+                    __unkeyed-1 = "filetype";
+                    icon_only = true;
+                    separator = "";
+                  }
+                  "filesize"
+
+                ];
+                lualine_y = [
+                  {
+                    __unkeyed = "fileformat";
+                    icon_only = true;
+                    separator = "";
+                  }
+                  {
+                    __unkeyed = "encoding";
+                    fmt = ''
+                      function(str)
+                        if str == "utf-8" then return "" end
+                        return str
+                      end
+                    '';
+                  }
+                ];
+                lualine_z = [
+                  {
+                    __unkeyed = "progress";
+                    separator = "";
+                  }
+                  "location"
+                ];
+              };
+            };
+          };
+
+          mini = {
+            enable = true;
+            lazyLoad.settings.event = "DeferredUIEnter";
+            modules = {
+              cursorword = { };
+              move = { };
+              pairs = { };
+              splitjoin = { };
+              surround = { };
+            };
+          };
+
+          multicursor = {
+            enable = true;
+            lazyLoad.settings.event = "DeferredUIEnter";
+          };
+
+          navbuddy = {
+            enable = true;
+            lazyLoad.settings.event = [
+              "BufReadPost"
+              "BufNewFile"
+              "BufWritePre"
+            ];
+            settings.lsp.autoAttach = true;
+          };
+
+          nvim-ufo = {
+            enable = true;
+            lazyLoad.settings.event = [
+              "BufReadPost"
+              "BufNewFile"
+              "BufWritePre"
+            ];
+          };
+
+          rainbow-delimiters = {
+            enable = true;
+            lazyLoad.settings.event = [
+              "BufReadPost"
+              "BufNewFile"
+              "BufWritePre"
+            ];
+            settings = {
+              strategy."".__raw = ''
                 function(bufnr)
                   if vim.api.nvim_buf_line_count(bufnr) > 5000 then
                     return nil
@@ -278,119 +373,103 @@
                   return require("rainbow-delimiters").strategy.global
                 end
               '';
+              query = {
+                "" = "rainbow-delimiters";
+                lua = "rainbow-blocks";
+              };
+              highlight = [
+                "RainbowDelimiterRed"
+                "RainbowDelimiterYellow"
+                "RainbowDelimiterBlue"
+                "RainbowDelimiterOrange"
+                "RainbowDelimiterGreen"
+                "RainbowDelimiterViolet"
+                "RainbowDelimiterCyan"
+              ];
             };
-            query = {
-              "" = "rainbow-delimiters";
-              lua = "rainbow-blocks";
-            };
-            highlight = [
-              "RainbowDelimiterRed"
-              "RainbowDelimiterYellow"
-              "RainbowDelimiterBlue"
-              "RainbowDelimiterOrange"
-              "RainbowDelimiterGreen"
-              "RainbowDelimiterViolet"
-              "RainbowDelimiterCyan"
+          };
+
+          snacks.settings = {
+            bufdelete.enabled = true;
+            bigfile.enabled = true;
+            quickfile.enabled = true;
+            rename.enabled = true;
+            scope.enabled = true;
+            words.enabled = true;
+          };
+
+          todo-comments = {
+            enable = true;
+            settings.signs = true;
+            lazyLoad.settings.event = [
+              "BufReadPost"
+              "BufNewFile"
+              "BufWritePre"
             ];
           };
-        };
 
-        snacks.settings = {
-          bufdelete.enabled = true;
-          bigfile.enabled = true;
-          quickfile.enabled = true;
-          rename.enabled = true;
-          scope.enabled = true;
-          words.enabled = true;
-        };
-
-        todo-comments = {
-          enable = true;
-          settings.signs = true;
-          lazyLoad.settings.event = "BufReadPost";
-        };
-
-        ts-autotag = {
-          enable = true;
-          lazyLoad.settings.event = "InsertEnter";
-          settings.opts = {
-            enable_close = true;
-            enable_rename = true;
-            enable_close_on_slash = false;
-            per_filetype.html.enable_close = false;
+          ts-autotag = {
+            enable = true;
+            lazyLoad.settings.ft = [
+              "html"
+              "xml"
+              "vue"
+              "svelte"
+              "astro"
+            ];
+            settings.opts = {
+              enable_close = true;
+              enable_rename = true;
+              enable_close_on_slash = false;
+            };
           };
-        };
 
-        undotree = {
-          enable = true;
-          lazyLoad.settings.cmd = "UndotreeShow";
-          settings = {
-            autoOpenDiff = true;
-            focusOnToggle = true;
+          undotree = {
+            enable = true;
+            lazyLoad.settings.cmd = "UndotreeToggle";
+            settings = {
+              autoOpenDiff = true;
+              focusOnToggle = true;
+              windowLayout = 3;
+              treeNodeShape = "";
+              windowWidth = 50;
+            };
           };
-        };
 
-        visual-multi = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufReadPost"
-            "BufNewFile"
-          ];
-        };
-
-        visual-whitespace = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufReadPost"
-            "BufNewFile"
-          ];
-          settings = {
-            enabled = true;
-            lead = true;
-            nbsp = true;
-            space = true;
-            tab = true;
-            trail = true;
+          visual-whitespace = {
+            enable = true;
+            lazyLoad.settings.event = [
+              "BufReadPost"
+              "BufNewFile"
+            ];
+            settings = {
+              enabled = true;
+              lead = true;
+              nbsp = true;
+              space = true;
+              tab = true;
+              trail = true;
+            };
           };
-        };
 
-        yanky = {
-          enable = true;
-          lazyLoad.settings.event = [
-            "BufReadPost"
-            "BufNewFile"
-          ];
+          yanky = {
+            enable = true;
+            lazyLoad.settings.event = [
+              "BufReadPost"
+              "BufNewFile"
+              "BufWritePre"
+            ];
+            settings = {
+              highlight.timer = 150;
+              preserveCursorPosition.enabled = true;
+              ring = {
+                storage = "sqlite";
+                history_length = 30;
+              };
+              system_clipboard.sync_with_ring = true;
+            };
+          };
         };
       };
-
-      extraConfigLua = ''
-        vim.g.neominimap = {
-          auto_enable = false,
-          x_multiplier = 1,
-          y_multiplier = 1,
-          layout = "float",
-          float = {
-            minimap_width = 20,
-            max_minimap_height = 50,
-            margin = {
-              right = 1,
-              top = 0,
-              bottom = 1,
-            },
-            z_index = 1,
-            window_border = "none",
-          },
-          click = {
-            enabled = true,
-          },
-          git = {
-            enabled = false,
-          },
-          search = {
-            enabled = false,
-          },
-        }
-      '';
     };
-  };
 }

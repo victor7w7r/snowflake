@@ -186,7 +186,7 @@
             pane = 2;
             icon = " ";
             title = "Git Status";
-            cmd = "git --no-pager diff --stat -B -M -C";
+            cmd = "git -C /etc/nixos --no-pager diff --stat -B -M -C";
             height = 10;
             padding = 2;
           }
