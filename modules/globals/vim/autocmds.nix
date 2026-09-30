@@ -1,16 +1,17 @@
 {
   den.default.os.programs.nixvim = {
     autoGroups = {
-      nixvim_checktime.clear = true;
-      nixvim_highlight_yank.clear = true;
-      nixvim_resize_splits.clear = true;
-      nixvim_last_loc.clear = true;
-      nixvim_close_with_q.clear = true;
-      nixvim_man_unlisted.clear = true;
-      nixvim_openui.clear = true;
-      nixvim_json_conceal.clear = true;
       nixvim_auto_create_dir.clear = true;
+      nixvim_checktime.clear = true;
+      nixvim_close_with_q.clear = true;
+      nixvim_highlight_yank.clear = true;
+      nixvim_json_conceal.clear = true;
+      nixvim_last_loc.clear = true;
+      nixvim_lint.clear = true;
+      nixvim_man_unlisted.clear = true;
+      #nixvim_openui.clear = true;
       nixvim_project_ui.clear = true;
+      nixvim_resize_splits.clear = true;
     };
 
     autoCmd = [
@@ -29,7 +30,8 @@
           end
         '';
       }
-      {
+      /*
+        {
         event = "BufReadPost";
         group = "nixvim_openui";
         once = true;
@@ -42,7 +44,8 @@
             end, 100)
           end
         '';
-      }
+        }
+      */
       {
         event = "TextYankPost";
         group = "nixvim_highlight_yank";
@@ -157,22 +160,15 @@
         '';
       }
       {
-        event = "VimEnter";
-        group = "nixvim_project_ui";
+        event = [
+          "BufEnter"
+          "BufWritePost"
+          "InsertLeave"
+        ];
+        group = "nixvim_lint";
         callback.__raw = ''
           function()
-            vim.schedule(function()
-              local buf = vim.api.nvim_get_current_buf()
-              if vim.bo[buf].buftype ~= "" or vim.api.nvim_buf_get_name(buf) == "" then
-                return
-              end
-
-              local root, method = require("project").get_project_root(buf)
-              local on_attach = require("project.config").get().on_attach
-              if root and on_attach then
-                on_attach(root, method, buf)
-              end
-            end)
+            require('lint').try_lint()
           end
         '';
       }
