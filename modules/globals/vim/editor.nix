@@ -68,7 +68,6 @@
             settings.options = {
               close_command.__raw = "function(n) Snacks.bufdelete(n) end";
               diagnostics = "nvim_lsp";
-              left_mouse_command.__raw = "function(n) Snacks.bufdelete(n) end";
               right_mouse_command.__raw = "function(n) Snacks.bufdelete(n) end";
               persist_buffer_sort = true;
               tab_size = 15;
@@ -381,22 +380,6 @@
               windowLayout = 3;
               treeNodeShape = "";
               windowWidth = 50;
-            };
-          };
-
-          visual-whitespace = {
-            enable = true;
-            lazyLoad.settings.event = [
-              "BufReadPost"
-              "BufNewFile"
-            ];
-            settings = {
-              enabled = true;
-              lead = true;
-              nbsp = true;
-              space = true;
-              tab = true;
-              trail = true;
             };
           };
 
