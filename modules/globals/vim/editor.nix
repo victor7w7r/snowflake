@@ -132,94 +132,39 @@
             lazyLoad.settings.event = "DeferredUIEnter";
           };
 
-          indent-blankline =
-            let
-              colors = [
-                {
-                  name = "Red";
-                  hex = "#E06C75";
-                }
-                {
-                  name = "Yellow";
-                  hex = "#E5C07B";
-                }
-                {
-                  name = "Blue";
-                  hex = "#61AFEF";
-                }
-                {
-                  name = "Orange";
-                  hex = "#D19A66";
-                }
-                {
-                  name = "Green";
-                  hex = "#98C379";
-                }
-                {
-                  name = "Violet";
-                  hex = "#C678DD";
-                }
-                {
-                  name = "Cyan";
-                  hex = "#56B6C2";
-                }
-              ];
-              rainbow = "Rainbow";
-              rainbowNames = map (c: rainbow + c.name) colors;
-              rainbowColors = builtins.listToAttrs (
-                map (c: {
-                  name = rainbow + c.name;
-                  value = c.hex;
-                }) colors
-              );
-            in
-            {
-              enable = true;
-              lazyLoad.settings.event = [
-                "BufReadPost"
-                "BufNewFile"
-              ];
-              settings = {
-                exclude = {
-                  buftypes = [
-                    "terminal"
-                    "quickfix"
-                  ];
-                  filetypes = [
-                    ""
-                    "checkhealth"
-                    "help"
-                    "lspinfo"
-                    "packer"
-                    "TelescopePrompt"
-                    "TelescopeResults"
-                    "yaml"
-                  ];
-                };
-                indent = {
-                  char = "│";
-                  highlight = rainbowNames;
-                };
-                scope = {
-                  enabled = true;
-                  show_end = true;
-                  show_exact_scope = true;
-                  show_start = true;
-                };
+          indent-blankline = {
+            enable = true;
+            lazyLoad.settings.event = [
+              "BufReadPost"
+              "BufNewFile"
+            ];
+            settings = {
+              exclude = {
+                buftypes = [
+                  "terminal"
+                  "quickfix"
+                ];
+                filetypes = [
+                  ""
+                  "checkhealth"
+                  "help"
+                  "lspinfo"
+                  "packer"
+                  "TelescopePrompt"
+                  "TelescopeResults"
+                  "yaml"
+                ];
               };
+              indent.char = "│";
 
-              luaConfig.pre = ''
-                local hooks = require "ibl.hooks"
-                hooks.register(hooks.type.HIGHLIGHT_SETUP, function()
-                  ${builtins.concatStringsSep "\n" (
-                    map (name: ''
-                      vim.api.nvim_set_hl(0, "${name}", { fg = "${rainbowColors.${name}}" })
-                    '') rainbowNames
-                  )}
-                end)
-              '';
-
+              scope = {
+                enabled = true;
+                show_end = true;
+                show_exact_scope = true;
+                show_start = true;
+              };
             };
+          };
 
           lualine = {
             enable = true;
