@@ -87,6 +87,7 @@
         ignorecase = true;
         incsearch = true;
         linebreak = true;
+        linespace = 0;
         list = false;
         listchars = "tab:» ,lead:•,trail:•";
         mouse = "a";

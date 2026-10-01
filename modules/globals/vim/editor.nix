@@ -74,7 +74,7 @@
               offsets = [
                 {
                   filetype = "neo-tree";
-                  #text = "NeoTree";
+                  text = "NeoTree";
                   text_align = "center";
                   separator = false;
                 }

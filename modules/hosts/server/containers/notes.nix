@@ -42,7 +42,7 @@
           script = ''
             mkdir -p /opt && cd /opt
             if [ ! -d "appflowy" ]; then
-             ${pkgs.git}/bin/git -C appflowy clone https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial 
+             ${pkgs.git}/bin/git clone https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial ./appflowy
             fi
             cd appflowy
             cp ${config.age.secrets.appflowy-env.path} .env
