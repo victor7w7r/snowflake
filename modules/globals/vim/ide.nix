@@ -99,7 +99,6 @@
 
         sources = [
           "filesystem"
-          "buffers"
           "git_status"
           "document_symbols"
         ];
@@ -111,10 +110,6 @@
             {
               source = "filesystem";
               display_name = " 󰉓 Files";
-            }
-            {
-              source = "buffers";
-              display_name = " 󰈚 Buffers";
             }
             {
               source = "git_status";
