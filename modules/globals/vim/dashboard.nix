@@ -184,14 +184,6 @@
           }
           {
             pane = 2;
-            icon = " ";
-            title = "Git Status";
-            cmd = "git -C /etc/nixos --no-pager diff --stat -B -M -C";
-            height = 10;
-            padding = 2;
-          }
-          {
-            pane = 2;
             text = {
               __unkeyed.__raw = ''
                 (function()

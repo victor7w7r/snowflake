@@ -128,7 +128,7 @@
         };
 
         window = {
-          width = 25;
+          width = 35;
           height = 15;
           autoExpandWidth = false;
           mappings = {

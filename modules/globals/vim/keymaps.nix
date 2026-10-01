@@ -79,7 +79,7 @@
 
         {
           action = "<cmd>quitall<CR><esc>";
-          key = "<leader>qa";
+          key = "<leader>qq";
           mode = "n";
           options.desc = "Quit all";
         }
@@ -92,7 +92,7 @@
               Snacks.dashboard()
             end
           '';
-          key = "<leader>qd";
+          key = "<leader>qa";
           mode = "n";
           options.desc = "Close all buffers and go to dashboard";
         }

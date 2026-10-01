@@ -8,6 +8,7 @@
       nixvim_json_conceal.clear = true;
       nixvim_last_loc.clear = true;
       nixvim_lint.clear = true;
+      nixvim_snacks_rename.clear = true;
       nixvim_man_unlisted.clear = true;
       #nixvim_openui.clear = true;
       nixvim_project_ui.clear = true;
@@ -69,7 +70,7 @@
       {
         event = "User";
         pattern = "NeoTreeSetup";
-        group = "snacks_rename_integration";
+        group = "nixvim_snacks_rename";
         callback.__raw = ''
           function()
             local events = require("neo-tree.events")
