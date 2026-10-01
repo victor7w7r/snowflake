@@ -38,11 +38,11 @@
         ];
 
         nixpkgs.overlays = [
-          (final: prev: {
+          (_: prev: {
             makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; });
             mbrola-voices = prev.mbrola-voices.override { languages = [ "*1" ]; };
             linux-firmware = (
-              prev.linux-firmware.overrideAttrs (o: {
+              prev.linux-firmware.overrideAttrs (_: {
                 postInstall = ''
                   rm -rf "$out"/lib/firmware/intel/iwlwifi
                   rm -rf "$out"/lib/firmware/{ath11k,ath12k,libertas,nvidia,cxgb4,ti-connectivity,cypress,xe}

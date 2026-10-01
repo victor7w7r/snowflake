@@ -86,8 +86,7 @@
                     "preferred://filemanager"
                     "applications:zen-beta.desktop"
                     "applications:kitty.desktop"
-                    #"applications:dev.zed.Zed.desktop"
-                    "applications:obsidian.desktop"
+                    "applications:appflowy.desktop"
                   ];
                 };
               }

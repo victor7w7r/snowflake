@@ -6,6 +6,6 @@
 (rustBuild {
   inherit pkgs;
   pname = "hf";
-  cargoHash = "sha256-eA8HpD/XnYrTFz7ez3g9RndYg0LbjQD1DPitq2EsDCw=";
+  cargoHash = "sha256-PwU7x6vwi3ULMtwX9hS07/4PefpugaR5VKihBvVtQgc=";
   src = inputs.hf;
 })

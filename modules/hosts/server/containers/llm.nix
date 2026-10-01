@@ -35,7 +35,7 @@
         };
       };
 
-      systemd = pkgs: {
+      systemd = _: pkgs: {
         ollama.environment = {
           OLLAMA_INTEL_GPU = "1";
           OLLAMA_ORIGINS = "chrome-extension://*,moz-extension://*";

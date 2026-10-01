@@ -25,7 +25,7 @@
         };
       };
 
-      systemd = pkgs: {
+      systemd = _: pkgs: {
         init-wand = {
           description = "Startup Wand";
           after = [

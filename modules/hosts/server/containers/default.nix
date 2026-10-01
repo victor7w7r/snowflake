@@ -46,7 +46,7 @@
         imports ? [ ],
         services ? config: pkgs: { },
         secrets ? { },
-        systemd ? pkgs: { },
+        systemd ? config: pkgs: { },
         rules ? [ ],
       }:
       {
@@ -133,7 +133,7 @@
                   Type = lib.mkForce "exec";
                 };
               }
-              // (systemd pkgs);
+              // (systemd config pkgs);
             };
           }
           // (lib.optionalAttrs (containers != null) {

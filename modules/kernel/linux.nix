@@ -48,7 +48,10 @@
       };
 
       stdenv =
-        (pkgs.callPackage "${inputs.cachyos-kernel.outPath}/helpers.nix" { }).stdenvLLVM
+        pkgs.extend (_: prev: { llvmPackages = prev.llvmPackages_18; })
+        |> (
+          pkgsLlvm16: (pkgsLlvm16.callPackage "${inputs.cachyos-kernel.outPath}/helpers.nix" { }).stdenvLLVM
+        )
         |> (
           custStdenv:
           custStdenv.override {

@@ -4,7 +4,7 @@
 
   _module.args = {
     kernel-versions = {
-      latest = "7.2.7";
+      latest = "7.2.8";
       lts = "6.18.52";
     };
 

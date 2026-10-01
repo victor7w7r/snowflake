@@ -61,7 +61,7 @@
         };
       };
 
-      systemd = pkgs: {
+      systemd = _: pkgs: {
         funnel = containers.lib.funnel {
           inherit pkgs;
           incoming = "3923";

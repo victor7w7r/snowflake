@@ -1,8 +1,8 @@
 { containers, ... }: {
   den.aspects.server.containers.nixos = {
     networking.firewall.allowedTCPPorts = [
-      5984
-      8003
+      80
+      443
     ];
 
     containers.notes = containers.lib.call {
@@ -11,100 +11,52 @@
 
       forwardPorts = [
         {
-          containerPort = 5984;
-          hostPort = 5984;
+          containerPort = 80;
+          hostPort = 80;
           protocol = "tcp";
         }
         {
           containerPort = 443;
-          hostPort = 8003;
+          hostPort = 443;
           protocol = "tcp";
         }
       ];
 
       bindMounts = {
-        "/var/lib/couchdb" = {
-          hostPath = "/nix/persist/containers/notes/data";
+        "/docker/nginx" = {
+          hostPath = "/nix/persist/containers/notes/nginx";
           isReadOnly = false;
         };
-        "/web/vaults" = {
-          hostPath = "/nix/persist/containers/notes/web/vaults";
-          isReadOnly = false;
-        };
-        "/web/config" = {
-          hostPath = "/nix/persist/containers/notes/web/config";
+        "/var/lib/docker/volumes" = {
+          hostPath = "/nix/persist/containers/notes/volumes";
           isReadOnly = false;
         };
       };
 
-      secrets = {
-        password-db = {
-          file = ../secrets/password-db.age;
-          owner = "couchdb";
-          group = "couchdb";
-          mode = "0400";
+      secrets.appflowy-env.file = ../secrets/appflowy-env.age;
+
+      systemd = config: pkgs: {
+        init-appflowy = {
+          description = "Startup Appflowy";
+          after = [
+            "network.target"
+            "docker.service"
+          ];
+          wantedBy = [ "multi-user.target" ];
+          script = ''
+            mkdir -p /opt && cd /opt
+            if [ ! -d "appflowy" ]; then
+             ${pkgs.git}/bin/git -C appflowy clone https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial 
+            fi
+            cd appflowy
+            cp ${config.age.secrets.password-db.path} .env
+            ${pkgs.docker-compose}/bin/docker-compose up -d
+          '';
         };
-      };
-
-      services = config: _: {
-        couchdb = {
-          enable = true;
-          bindAddress = "0.0.0.0";
-          extraConfig = {
-            couchdb = {
-              single_node = true;
-              max_http_request_size = 4294967296;
-              max_document_size = 50000000;
-            };
-
-            chttpd = {
-              bind_address = "0.0.0.0";
-              port = 5984;
-              require_valid_user = true;
-              max_http_request_size = 4294967296;
-              enable_cors = true;
-            };
-
-            chttpd_auth = {
-              require_valid_user = true;
-              authentication_redirect = "/_utils/session.html";
-            };
-
-            httpd = {
-              WWW-Authenticate = ''Basic realm="couchdb"'';
-              enable_cors = true;
-              bind_address = "0.0.0.0";
-            };
-
-            cors = {
-              origins = "app://obsidian.md, capacitor://localhost, http://localhost";
-              credentials = true;
-              headers = "accept, authorization, content-type, origin, referer";
-              methods = "GET,PUT,POST,HEAD,DELETE";
-              max_age = 3600;
-            };
-
-          };
-          extraConfigFiles = [ config.age.secrets.password-db.path ];
-        };
-      };
-
-      systemd = pkgs: {
         funnel = containers.lib.funnel {
           inherit pkgs;
-          incoming = "8443";
-        };
-      };
-
-      containers = _: {
-        obsidian-web = {
-          image = "docker.io/sytone/obsidian-remote:latest";
-          autoStart = true;
-          extraOptions = [ "--network=host" ];
-          volumes = [
-            "/web/vaults:/vaults"
-            "/web/config:/config"
-          ];
+          incoming = "80";
+          outgoingTcp = "443";
         };
       };
     };

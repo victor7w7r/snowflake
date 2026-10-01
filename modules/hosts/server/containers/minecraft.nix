@@ -88,7 +88,7 @@
         };
       };
 
-      systemd = pkgs: {
+      systemd = _: pkgs: {
         funnel = containers.lib.funnel {
           inherit pkgs;
           outgoingTcp = "443";

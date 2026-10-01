@@ -1,9 +1,4 @@
-{
-  kernel,
-  lib,
-  self,
-  ...
-}:
+{ kernel, lib, ... }:
 {
   kernel.config.features = with lib.kernel; {
     apply =
@@ -22,7 +17,7 @@
       CC_OPTIMIZE_FOR_PERFORMANCE = no;
       CC_OPTIMIZE_FOR_PERFORMANCE_O3 = yes;
       CONNECTOR = yes;
-      DEBUG_INFO_BTF = yes;
+      DEBUG_INFO_BTF = no;
       EXPERT = yes;
       EXT_GROUP_SCHED = yes;
       IKCONFIG = yes;

@@ -142,19 +142,19 @@
           options.desc = "Actions preview";
         }
         {
-          action = ''<cmd>lua require("ufo").openAllFolds()'';
+          action = ''<cmd>lua require("ufo").openAllFolds()<CR>'';
           key = "<leader><F10>";
           mode = "n";
           options.desc = "Open all folds";
         }
         {
-          action = ''<cmd>lua require("ufo").closeAllFolds()'';
+          action = ''<cmd>lua require("ufo").closeAllFolds()<CR>'';
           key = "<leader><F11>";
           mode = "n";
           options.desc = "Close all folds";
         }
         {
-          action = ''<cmd>lua require("ufo").peekFoldedLinesUnderCursor()'';
+          action = ''<cmd>lua require("ufo").peekFoldedLinesUnderCursor()<CR>'';
           key = "<leader><F12>";
           mode = "n";
           options.desc = "Preview folded lines";
@@ -197,6 +197,12 @@
           key = "<leader>b]";
           mode = "n";
           options.desc = "Next buffer";
+        }
+        {
+          action = "<cmd>bdelete<CR>";
+          key = "<leader>bc";
+          mode = "n";
+          options.desc = "Delete split";
         }
         {
           action = "<cmd>vnew<CR>";

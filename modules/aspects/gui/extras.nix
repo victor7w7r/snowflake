@@ -46,6 +46,7 @@
             with pkgs;
             with self'.packages;
             [
+              appflowy
               bleachbit
               clamtk
               cool-retro-term

@@ -2,6 +2,7 @@
 # Use `nix run .#write-flake` to regenerate it.
 {
   outputs = inputs: inputs.flake-parts.lib.mkFlake { inherit inputs; } (inputs.import-tree ./modules);
+
   nixConfig = {
     accept-flake-config = true;
     allow-import-from-derivation = true;
@@ -18,7 +19,6 @@
       "pipe-operators"
       "verified-fetches"
     ];
-
     extra-substituters = [ ];
     extra-trusted-public-keys = [ ];
     lazy-trees = true;
@@ -67,7 +67,6 @@
       url = "github:armbian/firmware";
       flake = false;
     };
-
     asus = {
       url = "gitlab:asus-linux/linux-g14/c95c77b20d794c1c962fcccc9735348bdb7d4e76";
       flake = false;
@@ -120,10 +119,6 @@
     chalk-animation = {
       url = "github:bokub/chalk-animation";
       flake = false;
-    };
-    claude-desktop = {
-      url = "github:k3d3/claude-desktop-linux-flake";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
     cli-of-life = {
       url = "github:gabe565/cli-of-life";
@@ -464,7 +459,7 @@
       flake = false;
     };
     linux-latest = {
-      url = "github:CachyOS/linux/cachyos-7.2.7-1";
+      url = "github:CachyOS/linux/cachyos-7.2.8-1";
       flake = false;
     };
     linux-lts = {
