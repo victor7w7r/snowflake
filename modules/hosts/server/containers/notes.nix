@@ -27,10 +27,6 @@
           hostPath = "/nix/persist/containers/notes/nginx";
           isReadOnly = false;
         };
-        "/var/lib/docker/volumes" = {
-          hostPath = "/nix/persist/containers/notes/volumes";
-          isReadOnly = false;
-        };
       };
 
       secrets.appflowy-env.file = ../secrets/appflowy-env.age;
