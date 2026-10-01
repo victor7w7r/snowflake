@@ -67,6 +67,25 @@
         '';
       }
       {
+        event = "User";
+        pattern = "NeoTreeSetup";
+        group = "snacks_rename_integration";
+        callback.__raw = ''
+          function()
+            local events = require("neo-tree.events")
+            local handler = function(data)
+              Snacks.rename.on_rename_file(data.source, data.destination)
+            end
+
+            require("neo-tree").config.event_handlers = require("neo-tree").config.event_handlers or {}
+            vim.list_extend(require("neo-tree").config.event_handlers, {
+              { event = events.FILE_MOVED, handler = handler },
+              { event = events.FILE_RENAMED, handler = handler },
+            })
+          end
+        '';
+      }
+      {
         event = "BufReadPost";
         group = "nixvim_last_loc";
         callback.__raw = ''

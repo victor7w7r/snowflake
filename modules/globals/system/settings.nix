@@ -11,7 +11,7 @@
     }:
     {
       environment = {
-        enableAllTerminfo = true;
+        enableAllTerminfo = false;
         pathsToLink = [ "/share/applications" ];
         sessionVariables.NIXOS_OZONE_WL = "1";
         variables = {

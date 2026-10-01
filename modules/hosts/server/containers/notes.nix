@@ -49,7 +49,7 @@
              ${pkgs.git}/bin/git -C appflowy clone https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial 
             fi
             cd appflowy
-            cp ${config.age.secrets.password-db.path} .env
+            cp ${config.age.secrets.appflowy-env.path} .env
             ${pkgs.docker-compose}/bin/docker-compose up -d
           '';
         };

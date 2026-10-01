@@ -68,7 +68,7 @@
               root.directories = [ ".cache" ];
             };
           };
-          enableAllTerminfo = true;
+          enableAllTerminfo = false;
         };
 
         nix.settings.max-jobs = lib.mkDefault 2;
