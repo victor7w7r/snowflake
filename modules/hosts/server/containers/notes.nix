@@ -12,12 +12,12 @@
       forwardPorts = [
         {
           containerPort = 80;
-          hostPort = 80;
+          hostPort = 8080;
           protocol = "tcp";
         }
         {
           containerPort = 443;
-          hostPort = 443;
+          hostPort = 8443;
           protocol = "tcp";
         }
       ];
@@ -52,7 +52,6 @@
         funnel = containers.lib.funnel {
           inherit pkgs;
           incoming = "80";
-          outgoingTcp = "443";
         };
       };
     };
