@@ -13,6 +13,8 @@
           environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
             ".config/legcord"
             ".config/onlyoffice"
+            ".config/siyuan"
+            ".config/SiYuan-electron"
             ".config/vlc"
             ".config/BraveSoftware/Brave-Browser"
             ".local/share/PrismLauncher"
@@ -46,8 +48,6 @@
             with pkgs;
             with self'.packages;
             [
-              appflowy
-              bleachbit
               clamtk
               cool-retro-term
               czkawka-full
@@ -57,6 +57,7 @@
               mission-center
               mtr-gui
               rnote
+              siyuan
               ytdl
             ]
             ++ (lib.optionals (!isPhone) [

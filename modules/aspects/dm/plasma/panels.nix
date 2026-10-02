@@ -86,7 +86,7 @@
                     "preferred://filemanager"
                     "applications:zen-beta.desktop"
                     "applications:kitty.desktop"
-                    "applications:appflowy.desktop"
+                    "applications:siyuan.desktop"
                   ];
                 };
               }

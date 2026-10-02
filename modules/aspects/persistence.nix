@@ -55,7 +55,6 @@
                 ".local/bin"
                 ".local/share/atuin"
                 ".local/share/cod"
-                ".local/share/io.appflowy.appflowy"
                 ".local/share/zoxide"
                 ".local/share/nvim"
                 ".local/share/Trash"
@@ -78,6 +77,5 @@
           };
         };
       };
-
   };
 }

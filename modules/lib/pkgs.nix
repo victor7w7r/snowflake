@@ -26,7 +26,7 @@
           allowUnsupportedSystem = false;
         };
         overlays = [
-          (final: _: {
+          (_: __: {
             inherit self;
             superlab-kernel =
               (kernel.hosts.superlab pkgs "superlab" "aarch64-linux" pkgs.stdenv.hostPlatform.system)
