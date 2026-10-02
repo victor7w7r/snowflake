@@ -44,10 +44,7 @@
             PGID = "1000";
             SIYUAN_LANG = "es";
           };
-          exec = [
-            "serve"
-            "--workspace=/data"
-          ];
+          cmd = [ "serve" "--workspace=/data" ];
           volumes = [ "/var/lib/siyuan:/data" ];
         };
       };
