@@ -21,8 +21,6 @@
         };
       };
 
-      #secrets.appflowy-env.file = ../secrets/appflowy-env.age;
-
       rules = [ "d /var/lib/siyuan 0755 1000 1000 -" ];
 
       systemd = _: pkgs: {
@@ -44,7 +42,10 @@
             PGID = "1000";
             SIYUAN_LANG = "es";
           };
-          cmd = [ "serve" "--workspace=/data" ];
+          cmd = [
+            "serve"
+            "--workspace=/data"
+          ];
           volumes = [ "/var/lib/siyuan:/data" ];
         };
       };
