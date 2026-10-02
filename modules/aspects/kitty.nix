@@ -41,7 +41,8 @@
           selection_foreground = "#1e1e2e";
           selection_background = "#f5e0dc";
           remember_window_size = "no";
-
+          "modify_font cell_height" = "-1px";
+          "modify_font baseline" = 1;
           url_color = "#f5e0dc";
           active_border_color = "#b4befe";
           inactive_border_color = "#6c7086";
