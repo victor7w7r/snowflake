@@ -16,7 +16,6 @@
           jump
           sampler
           seadrive-fuse
-          seafile-shared
           viddy
           vtm
           wtfutil

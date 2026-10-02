@@ -33,8 +33,6 @@ in
   "modules/hosts/server/secrets/cloudflare-token.age".publicKeys = keys;
   "modules/hosts/server/secrets/copyparty-pass.age".publicKeys = keys;
   "modules/hosts/server/secrets/appflowy-env.age".publicKeys = keys;
-  "modules/hosts/server/secrets/seafile-db-env.age".publicKeys = keys;
-  "modules/hosts/server/secrets/seafile-env.age".publicKeys = keys;
   "modules/hosts/server/secrets/tailnet.age".publicKeys = keys;
   "modules/hosts/server/secrets/tunnel.age".publicKeys = keys;
 }

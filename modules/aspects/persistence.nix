@@ -48,7 +48,6 @@
                 ".cache/nvim"
                 ".cache/thumbnails"
                 ".ccnet"
-                ".config/Seafile"
                 ".config/freerdp"
                 ".config/github-copilot"
                 ".config/nix"
