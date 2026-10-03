@@ -12,6 +12,62 @@
           ]
           |> (mode: [
             {
+              __unkeyed-1 = "<leader>p";
+              icon = "";
+              inherit mode;
+            }
+            {
+              __unkeyed-1 = "<leader><F3>";
+              icon = "󰒲";
+              inherit mode;
+            }
+            {
+              __unkeyed-1 = "<leader><F4>";
+              icon = "󰒲";
+              inherit mode;
+            }
+            {
+              __unkeyed-1 = "<leader><F5>";
+              icon = "";
+              inherit mode;
+            }
+            {
+              __unkeyed-1 = "<leader><F6>";
+              icon = "";
+              inherit mode;
+            }
+            {
+              __unkeyed-1 = "<leader><F7>";
+              icon = "";
+              inherit mode;
+            }
+            {
+              __unkeyed-1 = "<leader><F8>";
+              icon = "";
+              inherit mode;
+            }
+            {
+              __unkeyed-1 = "<leader><F9>";
+              icon = "󱂬";
+              inherit mode;
+            }
+            {
+              __unkeyed-1 = "<leader><F10>";
+              icon = "";
+              inherit mode;
+            }
+            {
+              __unkeyed-1 = "<leader><F11>";
+              icon = "";
+              inherit mode;
+            }
+            {
+              __unkeyed-1 = "<leader><F12>";
+              icon = "";
+              inherit mode;
+            }
+
+            {
               __unkeyed-1 = "<leader>a";
               group = "ai";
               inherit mode;
@@ -39,6 +95,7 @@
             {
               __unkeyed-1 = "<leader>m";
               group = "multicursor";
+              icon = "󰇀";
               inherit mode;
             }
 
@@ -55,6 +112,7 @@
             {
               __unkeyed-1 = "<leader>v";
               group = "preview";
+              icon = "󱂬";
               inherit mode;
             }
           ]);
@@ -289,10 +347,34 @@
           options.desc = "Search files by name";
         }
         {
+          action = "<cmd>lua Snacks.picker.grep_buffers()<cr>";
+          key = "<leader>fj";
+          mode = "n";
+          options.desc = "Search content in current buffers";
+        }
+        {
+          action = "<cmd>lua Snacks.picker.undo()<cr>";
+          key = "<leader>fu";
+          mode = "n";
+          options.desc = "Undo menu";
+        }
+        {
           action = "<cmd>lua Snacks.picker.grep()<cr>";
           key = "<leader>fg";
           mode = "n";
           options.desc = "Search files by contents";
+        }
+        {
+          action = "<cmd>lua Snacks.picker.search_history()<cr>";
+          key = "<leader>fh";
+          mode = "n";
+          options.desc = "History search";
+        }
+        {
+          action = "<cmd>lua Snacks.picker.lines()<cr>";
+          key = "<leader>fd";
+          mode = "n";
+          options.desc = "Search lines in file";
         }
         {
           action = "<cmd>GrugFar<CR>";

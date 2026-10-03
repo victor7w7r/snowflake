@@ -47,9 +47,12 @@
             enable = true;
             config.settings = {
               cargo = {
-                buildScripts.enable = true;
+                loadOutDirsFromCheck = true;
                 features = "all";
+                buildScripts.enable = false;
               };
+
+              procMacro.enable = true;
 
               diagnostics = {
                 enable = true;
@@ -57,24 +60,20 @@
               };
 
               checkOnSave = true;
-              check = {
-                command = "clippy";
-                features = "all";
-              };
+              check.command = "clippy";
 
               files.excludeDirs = [
                 ".direnv"
                 "target"
                 ".git"
               ];
-              rustc.source = "discover";
             };
           };
           statix.enable = true;
           stylelint_lsp.enable = true;
           svelte.enable = true;
           ts_ls.enable = true;
-          vue_ls.enable = true;
+          #vue_ls.enable = true;
           yamlls.enable = true;
         };
 

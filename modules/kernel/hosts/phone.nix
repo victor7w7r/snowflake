@@ -9,8 +9,8 @@
       domain = "codeberg.org";
       owner = "sdm845";
       repo = "linux";
-      rev = "4bc57c73294418c332c197176c42aa2d528fc641";
-      hash = "sha256-G3vEmki+iELRpoa8Pr+0bZnIUQJgFL2pufoxfxHHXEc=";
+      rev = "949f86c36a31d8619ea1b18ea82d099cd752e86b";
+      hash = "sha256-G3vEmki+iELRpoaAAr+0bZnIUQJgFL2pufoxfxHHXEc=";
     };
 
   kernel.hosts.phone =

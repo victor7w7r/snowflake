@@ -647,6 +647,7 @@
       url = "github:in3rsha/sha256-animation";
       flake = false;
     };
+    siyuan-nix.url = "github:mtul0729/siyuan-nix";
     socktop = {
       url = "github:jasonwitty/socktop";
       flake = false;

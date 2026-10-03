@@ -1,4 +1,6 @@
 {
+  flake-file.inputs.siyuan-nix.url = "github:mtul0729/siyuan-nix";
+
   den.aspects.gui.extras =
     { user, ... }:
     {
@@ -10,6 +12,7 @@
           ...
         }:
         lib.optionalAttrs (isPersistent && !isServer) {
+          #imports = [ inputs.siyuan-nix.nixosModules.default ];
           environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
             ".config/legcord"
             ".config/onlyoffice"
@@ -35,6 +38,7 @@
           pkgs,
           config,
           self',
+          inputs',
           ...
         }:
         lib.optionalAttrs (isPersistent && !isServer) {
@@ -57,7 +61,7 @@
               mission-center
               mtr-gui
               rnote
-              siyuan
+              inputs'.siyuan-nix.packages.siyuan-client
               ytdl
             ]
             ++ (lib.optionals (!isPhone) [
