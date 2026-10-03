@@ -10,7 +10,7 @@
       owner = "sdm845";
       repo = "linux";
       rev = "949f86c36a31d8619ea1b18ea82d099cd752e86b";
-      hash = "sha256-G3vEmki+iELRpoaAAr+0bZnIUQJgFL2pufoxfxHHXEc=";
+      hash = "sha256-S2tNAb0dANRu9oRMYoumDO1u5zAkDXrM/kKwD9dwdnA=";
     };
 
   kernel.hosts.phone =
