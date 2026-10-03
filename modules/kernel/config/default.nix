@@ -114,7 +114,7 @@
             KSM = yes;
             I2C_MV64XXX = lib.mkForce yes;
             I2C_GPIO = lib.mkForce yes;
-            I2C_MUX_GPIO = lib.mkForce yes;
+            I2C_MUX_GPIO = module;
             I2C_MUX_REG = lib.mkForce yes;
             IIO = yes;
             MFD_AXP20X = yes;
