@@ -36,11 +36,11 @@
             click = {
               enabled = true,
             },
-            git = {
-              enabled = false,
-            },
             search = {
-              enabled = false,
+              enabled = true,
+            },
+            mark = {
+              enabled = true,
             },
           }
         '';
