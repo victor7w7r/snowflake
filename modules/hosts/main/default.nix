@@ -39,6 +39,7 @@
 
         android
         bluetooth
+        containers
         cockpit
         dev
         disks
@@ -51,6 +52,7 @@
         libvirt
         persistence
         plasma._
+        podman
         remote
         root
         victor7w7r
