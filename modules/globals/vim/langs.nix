@@ -26,9 +26,19 @@
           dockerls.enable = true;
           emmet_ls.enable = true;
           html.enable = true;
+          kotlin_lsp = {
+            enable = true;
+            package = self'.packages.kotlin-lsp;
+            config = {
+              filetypes = [ "kotlin" ];
+              cmd = [
+                "${self'.packages.kotlin-lsp}/bin/kotlin-lsp"
+                "--stdio"
+              ];
+            };
+          };
           gitlab_ci_ls.enable = true;
           jsonls.enable = true;
-          kotlin_language_server.enable = true;
           marksman.enable = true;
           oxfmt.enable = true;
           oxlint.enable = true;
