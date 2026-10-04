@@ -72,7 +72,7 @@
         };
 
         nix.settings.max-jobs = lib.mkDefault 2;
-        system.nixos.label = "";
+
         networking = {
           networkmanager.wifi.powersave = true;
           firewall.trustedInterfaces = [

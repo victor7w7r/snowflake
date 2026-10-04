@@ -590,6 +590,15 @@
           ];
           options.desc = "Disable accidental F1 help";
         }
+        {
+          action = "<C-d>";
+          key = "<S-Tab>";
+          mode = "i";
+          options = {
+            noremap = true;
+            silent = true;
+          };
+        }
 
         # ============================ AI ============================
 

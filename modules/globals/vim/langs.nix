@@ -16,7 +16,21 @@
           sqlite
         ];
 
-        extraPlugins = [ pkgs.vimPlugins.vim-dotenv ];
+        extraPlugins = [
+          pkgs.vimPlugins.vim-dotenv
+          (pkgs.vimUtils.buildVimPlugin {
+            pname = "kotlin.nvim";
+            version = "1.2.0";
+            doCheck = false;
+
+            src = pkgs.fetchFromGitHub {
+              owner = "AlexandrosAlexiou";
+              repo = "kotlin.nvim";
+              rev = "v1.2.0";
+              hash = "sha256-go+f6zVh284bsFc3X5O4mvPXr8l8OqzStcTJEoGNMGk=";
+            };
+          })
+        ];
 
         lsp.servers = {
           astro.enable = true;
@@ -27,17 +41,6 @@
           dockerls.enable = true;
           emmet_ls.enable = true;
           html.enable = true;
-          kotlin_lsp = lib.optionalAttrs isX86 {
-            enable = true;
-            package = self'.packages.kotlin-lsp;
-            config = {
-              filetypes = [ "kotlin" ];
-              cmd = [
-                "${self'.packages.kotlin-lsp}/bin/kotlin-lsp"
-                "--stdio"
-              ];
-            };
-          };
           gitlab_ci_ls.enable = true;
           jsonls.enable = true;
           marksman.enable = true;
@@ -238,7 +241,7 @@
                 black.command = lib.getExe pkgs.black;
                 dockerfmt.command = lib.getExe pkgs.dockerfmt;
                 isort.command = lib.getExe pkgs.isort;
-                ktlint.command = lib.getExe pkgs.ktlint;
+                #ktlint.command = lib.getExe pkgs.ktlint;
                 nixfmt.command = lib.getExe pkgs.nixfmt;
                 pg_format.command = lib.getExe pkgs.pgformatter;
                 rustfmt.command = lib.getExe pkgs.rustfmt;
@@ -307,6 +310,33 @@
             end
             return "true"
           end
+
+          require("kotlin").setup({
+            inlay_hints = { enabled = false },
+            jvm_args = { "-Xmx4g" },
+            folding = { enabled = false },
+          })
+
+          vim.api.nvim_create_autocmd("FileType", {
+            pattern = "kotlin",
+            callback = function()
+             vim.bo.indentexpr = ""
+             vim.bo.autoindent = true
+             vim.bo.cindent = false
+             vim.bo.smartindent = false
+            end,
+          })
+
+          vim.api.nvim_create_autocmd("BufWritePre", {
+            pattern = "*.kt",
+            callback = function()
+             local clients = vim.lsp.get_clients({ bufnr = 0, name = "kotlin_ls" })
+             if #clients == 0 then return end
+             vim.cmd("KotlinFormat")
+            end,
+          })
+
+          ${lib.optionalString isX86 ''vim.env.KOTLIN_LSP_DIR = "${self'.packages.kotlin-lsp}/share/kotlin-lsp"''}
         '';
       };
     };
