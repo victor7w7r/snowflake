@@ -4,6 +4,7 @@
       lib,
       pkgs,
       self',
+      isX86,
       ...
     }:
     {
@@ -26,7 +27,7 @@
           dockerls.enable = true;
           emmet_ls.enable = true;
           html.enable = true;
-          kotlin_lsp = {
+          kotlin_lsp = lib.optionalAttrs isX86 {
             enable = true;
             package = self'.packages.kotlin-lsp;
             config = {
