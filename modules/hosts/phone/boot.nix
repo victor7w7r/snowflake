@@ -93,6 +93,11 @@
                 wantedBy = [ "emergency.target" ];
                 before = [ "emergency.service" ];
 
+                unitConfig = {
+                  DefaultDependencies = false;
+                  Conflicts = [ "shutdown.target" ];
+                };
+
                 serviceConfig = {
                   Type = "oneshot";
                   StandardOutput = "tty";
@@ -110,6 +115,11 @@
 
                 wantedBy = [ "emergency.target" ];
                 before = [ "emergency.service" ];
+
+                unitConfig = {
+                  DefaultDependencies = false;
+                  Conflicts = [ "shutdown.target" ];
+                };
 
                 serviceConfig = {
                   Type = "oneshot";
