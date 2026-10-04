@@ -79,7 +79,6 @@
               };
 
               path.score_offset = 40;
-
               snippets = {
                 score_offset = 20;
                 opts.use_label_description = true;

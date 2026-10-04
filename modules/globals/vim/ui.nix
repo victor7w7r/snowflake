@@ -43,6 +43,14 @@
           lazyLoad.settings.event = "DeferredUIEnter";
         };
 
+        noice = {
+          enable = true;
+          settings.presets = {
+            long_message_to_split = true;
+            lsp_doc_border = true;
+          };
+        };
+
         scrollview = {
           enable = true;
           lazyLoad.settings.event = [

@@ -94,21 +94,6 @@
 
           lspconfig.enable = true;
 
-          lsp-signature = {
-            enable = true;
-            lazyLoad.settings.event = "InsertEnter";
-            settings = {
-              toggle_key = "<M-x>";
-              transparency = 15;
-              padding = "|";
-              hint_prefix = {
-                above = "↙ ";
-                below = "↖ ";
-                current = "← ";
-              };
-            };
-          };
-
           markdown-preview = {
             enable = true;
             lazyLoad.settings.ft = "markdown";

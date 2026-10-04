@@ -276,7 +276,12 @@
         }
 
         # ============================ TOGGLE ============================
-
+        {
+          action = ":! ";
+          key = "<leader>r";
+          mode = "n";
+          options.desc = "Run command";
+        }
         {
           action = "<cmd>lua Snacks.terminal()<CR>";
           key = "<leader>tt";
@@ -420,7 +425,24 @@
         }
 
         # ============================ CODE / DIAGNOSTICS ============================
-
+        {
+          action = "<cmd>lua vim.lsp.buf.hover()<CR>";
+          key = "<leader>cd";
+          mode = "n";
+          options.desc = "Show lsp definition in floating window";
+        }
+        {
+          action = "<cmd>lua vim.lsp.buf.definition()<CR>";
+          key = "<leader>cD";
+          mode = "n";
+          options.desc = "Load lsp definition in new buffer";
+        }
+        {
+          action = "<cmd>lua vim.diagnostic.open_float()<CR>";
+          key = "<leader>ce";
+          mode = "n";
+          options.desc = "Show lsp diagnostic in floating window";
+        }
         {
           action = "<cmd>Trouble symbols toggle focus=false<CR>";
           key = "<leader>cs";

@@ -85,20 +85,18 @@
           79) echo "PARA VIVIR UNA NOCHE, CON LAS MEJORES P*TAS DE LA ZONA, NO TE LA PUEDES PERDER HIJO DE REMIL, POR QUE SI NO ESTÁS AHÍ, ANDATE A LA CONCHA DE LA LORA" ;;
           80) echo "Yo no konfio ni enmi sombra pq es negra" ;;
           81) echo "LAS TETAS SOLO SON NALGAS CON PEZONES" ;;
-          82) echo "QUE TE PASE EL DIA" ;;
-          83) echo "la paja es sexo light" ;;
-          84) echo "soy una persona EXITOSA por que cada vez que te veo ME EXCITO" ;;
-          85) echo "Dejaron la CocaCola mal tapada y se le fue el gas ... :c" ;;
-          86) echo "Y así, Dios dijo Que.....so JASJAJSAJ QUE CHISTOSO PERO RIETE PUTO" ;;
-          87) echo "Pake tener autoestima si puedo tener un auto encima" ;;
-          88) echo "Soy como un reloj, me adapto a cualquier muñeca" ;;
-          89) echo "Casi conecto el internet" ;;
-          90) echo "Suban la dificultad a los bots :v" ;;
-          91) echo "UN ENEMIGO DEL FORTNITE" ;;
-          92) echo "como tan mushasho" ;;
-          93) echo "es k el sans dijo: EEEEE E E EEE E E E EEEEEE E E E E EE" ;;
-          94) echo "picadura de la cobra gey" ;;
-
+          82) echo "la paja es sexo light" ;;
+          83) echo "soy una persona EXITOSA por que cada vez que te veo ME EXCITO" ;;
+          84) echo "Dejaron la CocaCola mal tapada y se le fue el gas ... :c" ;;
+          85) echo "Y así, Dios dijo Que.....so JASJAJSAJ QUE CHISTOSO PERO RIETE PUTO" ;;
+          86) echo "Pake tener autoestima si puedo tener un auto encima" ;;
+          87) echo "Soy como un reloj, me adapto a cualquier muñeca" ;;
+          88) echo "Casi conecto el internet" ;;
+          89) echo "Suban la dificultad a los bots :v" ;;
+          90) echo "UN ENEMIGO DEL FORTNITE" ;;
+          91) echo "como tan mushasho" ;;
+          92) echo "es k el sans dijo: EEEEE E E EEE E E E EEEEEE E E E E EE" ;;
+          93) echo "picadura de la cobra gey" ;;
         esac
       '';
       random-quote = ''

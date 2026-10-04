@@ -9,6 +9,7 @@
           GPG_TTY = "$(tty)";
           COLORTERM = "truecolor";
           TERMINAL = "kitty";
+          HISTFILE = "/nix/persist/home/victor7w7r/.zsh_history";
           STARSHIP_CACHE = "$HOME/.starship/cache";
           EZA_COLORS = "di=33:ln=35:so=32:pi=33:ex=31:bd=34;46:cd=34;43:su=30;41:sg=30;46:tw=30;42:ow=30;43";
           #LS_COLORS = "$(vivid generate catppuccin-mocha)";
