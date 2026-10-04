@@ -143,8 +143,6 @@
                 "L+ /lib/firmware/wifi_2355b001_1ant.ini - - - - /run/current-system/firmware/wifi_2355b001_1ant.ini"
               ];
 
-              powerManagement.cpuFreqGovernor = "schedutil";
-
               boot = {
                 blacklistedKernelModules = [ "sun8i_ce" ];
                 kernelModules = [

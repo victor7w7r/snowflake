@@ -119,8 +119,6 @@
             "w /sys/block/bcache0/bcache/cache_mode - - - - writethrough"
           ];
 
-          powerManagement.cpuFreqGovernor = "schedutil";
-
           environment = {
             etc."intel-undervolt.conf".text = "power package 8 28 10 2.4";
             persistence."/nix/persist".directories = lib.mkAfter [ "/var/lib/docker" ];
@@ -142,7 +140,7 @@
         };
 
       provides.to-users.homeManager =
-        { config, pkgs, ... }:
+        { config, ... }:
         {
           home.file = {
             "shared".source = config.lib.file.mkOutOfStoreSymlink "/run/media/shared";

@@ -85,31 +85,55 @@
           ];
 
           systemd = {
-            services.save-journal-on-emergency = {
-              description = "Dump journalctl to EFI partition on emergency";
+            services = {
 
-              wantedBy = [ "emergency.target" ];
-              before = [ "emergency.service" ];
+              show-emergency-logs = {
+                description = "Print failed service logs to console on emergency";
 
-              serviceConfig = {
-                Type = "oneshot";
-                RemainAfterExit = true;
+                wantedBy = [ "emergency.target" ];
+                before = [ "emergency.service" ];
+
+                serviceConfig = {
+                  Type = "oneshot";
+                  StandardOutput = "tty";
+                  TTYPath = "/dev/console";
+                };
+
+                script = ''
+                  ${pkgs.systemd}/bin/systemctl --failed --no-legend
+                  ${pkgs.systemd}/bin/journalctl -xb -p 3 --no-pager -n 30
+                '';
               };
 
-              script = ''
-                MNT="/tmp/efifs"
-                mkdir -p "$MNT"
+              save-journal-on-emergency = {
+                description = "Dump journalctl to EFI partition on emergency";
 
-                EFI_DEV="/dev/disk/by-partlabel/system_a"
+                wantedBy = [ "emergency.target" ];
+                before = [ "emergency.service" ];
 
-                if ${pkgs.util-linux}/bin/mount -t vfat "$EFI_DEV" "$MNT"; then
-                  mkdir -p "$MNT/initrd-logs"
-                  LOG_FILE="$MNT/initrd-logs/journal-panic-$(date +%s).log"
-                  ${pkgs.systemd}/bin/journalctl -b --no-pager > "$LOG_FILE"
-                  sync
-                  ${pkgs.util-linux}/bin/umount "$MNT"
-                fi
-              '';
+                serviceConfig = {
+                  Type = "oneshot";
+                  RemainAfterExit = true;
+                };
+
+                script = ''
+                  MNT="/tmp/efifs"
+                  mkdir -p "$MNT"
+
+                  EFI_DEV="/dev/disk/by-partlabel/system_a"
+
+                  if [ -b "$EFI_DEV" ] && ${pkgs.util-linux}/bin/mount -t vfat "$EFI_DEV" "$MNT"; then
+                    mkdir -p "$MNT/initrd-logs"
+                    LOG_FILE="$MNT/initrd-logs/journal-panic-$(date +%s).log"
+                    
+                    # Guardar el journal
+                    ${pkgs.systemd}/bin/journalctl -b --no-pager > "$LOG_FILE"
+                    
+                    sync
+                    ${pkgs.util-linux}/bin/umount "$MNT"
+                  fi  
+                '';
+              };
             };
             storePaths =
               map
