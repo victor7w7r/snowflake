@@ -45,6 +45,26 @@
           jsonls.enable = true;
           marksman.enable = true;
           oxfmt.enable = true;
+          kmp_lsp = {
+            enable = true;
+            package = self'.packages.kmp-lsp;
+            config = {
+              cmd = [ "${self'.packages.kmp-lsp}/bin/kmp-lsp" ];
+              filetypes = [
+                "kotlin"
+                "swift"
+              ];
+              root_markers = [
+                "build.gradle"
+                "build.gradle.kts"
+                "pom.xml"
+                "settings.gradle"
+                "settings.gradle.kts"
+                "Package.swift"
+                ".git"
+              ];
+            };
+          };
           oxlint.enable = true;
           nixd = {
             enable = true;
@@ -289,7 +309,29 @@
             };
             linters = {
               deadnix.cmd = lib.getExe pkgs.deadnix;
-              detekt.cmd = lib.getExe pkgs.detekt;
+              detekt = {
+                args = [
+                  {
+                    __raw = ''
+                      function()
+                        local current_file = vim.api.nvim_buf_get_name(0)
+                        local args = { "--input", current_file }
+
+                        for _, name in ipairs({ "detekt.yml", "detekt-config.yml", "config/detekt/detekt.yml" }) do
+                          local config = vim.fn.findfile(name, ".;")
+                          if config ~= "" then
+                            vim.list_extend(args, { "--config", config })
+                            break
+                          end
+                        end
+
+                        return args
+                      end
+                    '';
+                  }
+                ];
+                cmd = lib.getExe pkgs.detekt;
+              };
               gitlint.cmd = lib.getExe pkgs.gitlint;
               hadolint.cmd = lib.getExe pkgs.hadolint;
               pylint.cmd = lib.getExe pkgs.pylint;
@@ -311,25 +353,18 @@
             return "true"
           end
 
-          require("kotlin").setup({
-            inlay_hints = { enabled = false },
-            jvm_args = { "-Xmx4g" },
-            folding = { enabled = true },
-          })
+          --require("kotlin").setup({
+          --  inlay_hints = { enabled = true },
+          --  jvm_args = { "-Xmx4g" },
+          --  folding = { enabled = true },
+          --  jre_path = os.getenv("JAVA_HOME"),
+          --  jdk_for_symbol_resolution = os.getenv("JDK_FOR_SYMBOL_RESOLUTION") or os.getenv("JAVA_HOME"),
+          --})
 
-          ${lib.optionalString isX86 ''vim.env.KOTLIN_LSP_DIR = "${self'.packages.kotlin-lsp}/share/kotlin-lsp"''}
+          --vim.lsp.enable('kotlin_lsp', false)
+
+          --${lib.optionalString isX86 ''vim.env.KOTLIN_LSP_DIR = "${self'.packages.kotlin-lsp}/share/kotlin-lsp"''}
         '';
       };
     };
 }
-/*
-  vim.api.nvim_create_autocmd("FileType", {
-    pattern = "kotlin",
-    callback = function()
-      vim.bo.indentexpr = ""
-      vim.bo.autoindent = true
-      vim.bo.cindent = false
-      vim.bo.smartindent = false
-    end,
-  })
-*/

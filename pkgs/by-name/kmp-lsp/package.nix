@@ -5,7 +5,7 @@
 }:
 (rustBuild {
   inherit pkgs;
-  cargoHash = "sha256-yo6pKVGMPpaaV5xXco/Kh0IHexWL7RKc1NslNk7qRzc=";
+  cargoHash = "sha256-GGkb8KWc2ZicSOKMErS+a97PT983weioDyE79HRxa4I=";
   pname = "kmp-lsp";
   src = inputs.kmp-lsp;
 })

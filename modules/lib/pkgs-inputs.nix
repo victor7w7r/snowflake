@@ -425,6 +425,11 @@
       flake = false;
     };
 
+    kmp-lsp = {
+      url = "github:Hessesian/kmp-lsp";
+      flake = false;
+    };
+
     kyun = {
       url = "github:lennart-finke/kyun";
       flake = false;

@@ -86,7 +86,6 @@
 
           systemd = {
             services = {
-
               show-emergency-logs = {
                 description = "Print failed service logs to console on emergency";
 

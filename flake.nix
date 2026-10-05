@@ -438,6 +438,10 @@
       url = "github:z3ntu/kde-thumbnailer-apk";
       flake = false;
     };
+    kmp-lsp = {
+      url = "github:Hessesian/kmp-lsp";
+      flake = false;
+    };
     kwin-effects-better-blur-dx = {
       url = "github:xarblu/kwin-effects-better-blur-dx";
       inputs.nixpkgs.follows = "nixpkgs";

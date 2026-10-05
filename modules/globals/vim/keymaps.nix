@@ -283,6 +283,17 @@
           options.desc = "Run command";
         }
         {
+          action.__raw = ''
+            function()
+             vim.cmd("Neominimap Toggle")
+             vim.cmd("Neotree toggle")
+            end
+          '';
+          key = "<leader>ta";
+          mode = "n";
+          options.desc = "Open/Close minimap and neotree";
+        }
+        {
           action = "<cmd>lua Snacks.terminal()<CR>";
           key = "<leader>tt";
           mode = "n";
@@ -298,7 +309,7 @@
           action = "<cmd>Neotree toggle<CR>";
           key = "<leader>tn";
           mode = "n";
-          options.desc = "Neominimap Toggle";
+          options.desc = "Neotree Toggle";
         }
         {
           action = "<cmd>lua Snacks.lazygit()<CR>";
@@ -594,6 +605,15 @@
           action = "<C-d>";
           key = "<S-Tab>";
           mode = "i";
+          options = {
+            noremap = true;
+            silent = true;
+          };
+        }
+        {
+          action = "<gv";
+          key = "<S-Tab>";
+          mode = "v";
           options = {
             noremap = true;
             silent = true;

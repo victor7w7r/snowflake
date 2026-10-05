@@ -48,6 +48,15 @@
             enable = true;
             package = pkgs.brave;
           };
+
+          xdg.configFile."autostart/siyuan.desktop".text = ''
+            [Desktop Entry]
+            Type=Application
+            Name=Siyuan
+            Exec=${inputs'.siyuan-nix.packages.siyuan-client}/bin/siyuan
+            Terminal=false
+          '';
+
           home.packages =
             with pkgs;
             with self'.packages;
