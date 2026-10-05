@@ -86,6 +86,8 @@
               elif commandexist cowsay; then
                 random-quote | cowsay "$(random-opts)" --random
               fi
+
+              export HISTFILE="/nix/persist/home/victor7w7r/.zsh_history"
             '';
           in
           {

@@ -18,16 +18,16 @@
 
         extraPlugins = [
           pkgs.vimPlugins.vim-dotenv
-          (pkgs.vimUtils.buildVimPlugin {
+          (pkgs.vimUtils.buildVimPlugin rec {
             pname = "kotlin.nvim";
-            version = "1.2.0";
+            version = "2.2.0";
             doCheck = false;
 
             src = pkgs.fetchFromGitHub {
               owner = "AlexandrosAlexiou";
-              repo = "kotlin.nvim";
-              rev = "v1.2.0";
-              hash = "sha256-go+f6zVh284bsFc3X5O4mvPXr8l8OqzStcTJEoGNMGk=";
+              repo = pname;
+              rev = "v${version}";
+              hash = "sha256-sWE5RjmKxgUWIx/ignDypeGZKV1uvk9MSn9LuePD/IA=";
             };
           })
         ];
@@ -241,7 +241,7 @@
                 black.command = lib.getExe pkgs.black;
                 dockerfmt.command = lib.getExe pkgs.dockerfmt;
                 isort.command = lib.getExe pkgs.isort;
-                #ktlint.command = lib.getExe pkgs.ktlint;
+                ktlint.command = lib.getExe pkgs.ktlint;
                 nixfmt.command = lib.getExe pkgs.nixfmt;
                 pg_format.command = lib.getExe pkgs.pgformatter;
                 rustfmt.command = lib.getExe pkgs.rustfmt;
@@ -314,26 +314,7 @@
           require("kotlin").setup({
             inlay_hints = { enabled = false },
             jvm_args = { "-Xmx4g" },
-            folding = { enabled = false },
-          })
-
-          vim.api.nvim_create_autocmd("FileType", {
-            pattern = "kotlin",
-            callback = function()
-             vim.bo.indentexpr = ""
-             vim.bo.autoindent = true
-             vim.bo.cindent = false
-             vim.bo.smartindent = false
-            end,
-          })
-
-          vim.api.nvim_create_autocmd("BufWritePre", {
-            pattern = "*.kt",
-            callback = function()
-             local clients = vim.lsp.get_clients({ bufnr = 0, name = "kotlin_ls" })
-             if #clients == 0 then return end
-             vim.cmd("KotlinFormat")
-            end,
+            folding = { enabled = true },
           })
 
           ${lib.optionalString isX86 ''vim.env.KOTLIN_LSP_DIR = "${self'.packages.kotlin-lsp}/share/kotlin-lsp"''}
@@ -341,3 +322,14 @@
       };
     };
 }
+/*
+  vim.api.nvim_create_autocmd("FileType", {
+    pattern = "kotlin",
+    callback = function()
+      vim.bo.indentexpr = ""
+      vim.bo.autoindent = true
+      vim.bo.cindent = false
+      vim.bo.smartindent = false
+    end,
+  })
+*/

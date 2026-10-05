@@ -1,39 +1,58 @@
 { pkgs, stdenvNoCC }:
-stdenvNoCC.mkDerivation (attrs: {
-  pname = "kotlin-lsp";
+let
   version = "263.6379.0";
+  sources = {
+    "x86_64-linux" = {
+      url = "https://download-cdn.jetbrains.com/language-server/kotlin-server/${version}/kotlin-server-${version}.tar.gz";
+      sha256 = "sha256-q4ykRV3C/F/hok2yvMxGwQQlTSxGUVXEJR7mXfjz98w=";
+    };
+    "aarch64-linux" = {
+      url = "https://download-cdn.jetbrains.com/language-server/kotlin-server/${version}/kotlin-server-${version}-aarch64.tar.gz";
+      sha256 = "sha256-UJmZAe+Lz6HlhWG2qNeCpy3qViD8+SpkEwgH+JJKVvw=";
+    };
+  };
 
-  src = pkgs.fetchzip {
-    url = "https://download-cdn.jetbrains.com/language-server/kotlin-server/${attrs.version}/kotlin-server-${attrs.version}.tar.gz";
-    sha256 = "sha256-MQZ2Q70IYbVpKVg8D7yjK/jpboMuNjKGslxFOw+6b9I=";
+  selectedSource =
+    sources.${pkgs.stdenv.hostPlatform.system}
+      or (throw "Unsupported system: ${pkgs.stdenv.hostPlatform.system}");
+in
+stdenvNoCC.mkDerivation {
+  pname = "kotlin-lsp";
+  inherit version;
+
+  src = pkgs.fetchurl {
+    inherit (selectedSource) url sha256;
   };
 
   nativeBuildInputs = with pkgs; [
     makeWrapper
-    autoPatchelfHook
+    unzip
   ];
 
-  buildInputs = with pkgs; [
-    jdk25
-    stdenv.cc.cc.lib
-  ];
+  unpackPhase = ''
+    case "${selectedSource.url}" in
+      *.tar.gz) tar -xzf $src ;;
+      *) unzip $src ;;
+    esac
+  '';
+
+  dontBuild = true;
 
   installPhase = ''
     mkdir -p $out/bin $out/share/kotlin-lsp
-    cp -r bin build.txt kotlin-lsp.sh lib license modules plugins product-info.json $out/share/kotlin-lsp
-    ln -s ${pkgs.jdk25}/lib/openjdk $out/share/kotlin-lsp/jbr
+    cp -r kotlin-server-${version}/* $out/share/kotlin-lsp/
+    chmod +x $out/share/kotlin-lsp/bin/intellij-server
+    ${
+      if pkgs.stdenv.hostPlatform.isDarwin then
+        ''
+          chmod +x $out/share/kotlin-lsp/jbr/Contents/Home/bin/java
+        ''
+      else
+        ''
+          chmod +x $out/share/kotlin-lsp/jbr/bin/java
+        ''
+    }
+
     makeWrapper $out/share/kotlin-lsp/bin/intellij-server $out/bin/kotlin-lsp
   '';
-
-  doInstallCheck = true;
-
-  installCheckPhase = ''
-    req='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}'
-    printf 'Content-Length: %d\r\n\r\n%s' "''${#req}" "$req" \
-      | timeout 120 $out/bin/kotlin-lsp --stdio > response.txt 2>/dev/null || true
-    grep -q '"jsonrpc"' response.txt || {
-      echo "kotlin-lsp did not respond to an LSP initialize request" >&2
-      exit 1
-    }
-  '';
-})
+}

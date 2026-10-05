@@ -383,6 +383,24 @@
             };
           };
 
+          visual-whitespace = {
+            enable = true;
+            lazyLoad.settings.event = [
+              "BufReadPost"
+              "BufNewFile"
+              "BufWritePre"
+            ];
+
+            settings = {
+              enabled = true;
+              lead = true;
+              nbsp = true;
+              space = true;
+              tab = true;
+              trail = true;
+            };
+          };
+
           yanky = {
             enable = true;
             lazyLoad.settings.event = [
@@ -393,10 +411,6 @@
             settings = {
               highlight.timer = 150;
               preserveCursorPosition.enabled = true;
-              ring = {
-                storage = "sqlite";
-                history_length = 30;
-              };
               system_clipboard.sync_with_ring = true;
             };
           };
