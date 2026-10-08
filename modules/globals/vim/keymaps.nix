@@ -363,6 +363,12 @@
           options.desc = "Search files by name";
         }
         {
+          action = "<cmd>lua Snacks.picker.grep()<cr>";
+          key = "<leader>fg";
+          mode = "n";
+          options.desc = "Search files by contents";
+        }
+        {
           action = "<cmd>lua Snacks.picker.grep_buffers()<cr>";
           key = "<leader>fj";
           mode = "n";
@@ -373,12 +379,6 @@
           key = "<leader>fu";
           mode = "n";
           options.desc = "Undo menu";
-        }
-        {
-          action = "<cmd>lua Snacks.picker.grep()<cr>";
-          key = "<leader>fg";
-          mode = "n";
-          options.desc = "Search files by contents";
         }
         {
           action = "<cmd>lua Snacks.picker.search_history()<cr>";
@@ -605,6 +605,15 @@
           action = "<C-d>";
           key = "<S-Tab>";
           mode = "i";
+          options = {
+            noremap = true;
+            silent = true;
+          };
+        }
+        {
+          action = ">gv";
+          key = "<Tab>";
+          mode = "v";
           options = {
             noremap = true;
             silent = true;

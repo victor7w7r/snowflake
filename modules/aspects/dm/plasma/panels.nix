@@ -86,6 +86,7 @@
                     "preferred://filemanager"
                     "applications:zen-beta.desktop"
                     "applications:kitty.desktop"
+                    (lib.mkIf isMain "applications:intellij-idea.desktop")
                   ];
                 };
               }

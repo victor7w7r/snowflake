@@ -46,7 +46,7 @@
           marksman.enable = true;
           oxfmt.enable = true;
           kmp_lsp = {
-            enable = true;
+            enable = false;
             package = self'.packages.kmp-lsp;
             config = {
               cmd = [ "${self'.packages.kmp-lsp}/bin/kmp-lsp" ];
@@ -353,17 +353,20 @@
             return "true"
           end
 
-          --require("kotlin").setup({
-          --  inlay_hints = { enabled = true },
-          --  jvm_args = { "-Xmx4g" },
-          --  folding = { enabled = true },
-          --  jre_path = os.getenv("JAVA_HOME"),
-          --  jdk_for_symbol_resolution = os.getenv("JDK_FOR_SYMBOL_RESOLUTION") or os.getenv("JAVA_HOME"),
-          --})
+          require("kotlin").setup({
+            inlay_hints = { enabled = true },
+            jvm_args = { "-Xmx4g" },
+            root_markers = {
+              "settings.gradle.kts",
+              "settings.gradle",
+              "build.gradle.kts",
+              "build.gradle",
+              "gradlew",
+              ".git",
+            },
+          })
 
-          --vim.lsp.enable('kotlin_lsp', false)
-
-          --${lib.optionalString isX86 ''vim.env.KOTLIN_LSP_DIR = "${self'.packages.kotlin-lsp}/share/kotlin-lsp"''}
+          ${lib.optionalString isX86 ''vim.env.KOTLIN_LSP_DIR = "${self'.packages.kotlin-lsp}/share/kotlin-lsp"''}
         '';
       };
     };

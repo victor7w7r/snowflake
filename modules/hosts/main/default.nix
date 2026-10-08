@@ -39,20 +39,19 @@
 
         android
         bluetooth
-        containers
         cockpit
         dev
         disks
-        #emacs
+        emacs
         emulation
         firewall
+        ide
         games
         gestures
         kitty
         libvirt
         persistence
         plasma._
-        podman
         remote
         root
         victor7w7r

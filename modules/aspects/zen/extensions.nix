@@ -6,48 +6,36 @@
         annotations-restored
         blocktube
         buster-captcha-solver
-        catppuccin-web-file-icons
         clearurls
         change-timezone-time-shift
         cliget
         cookie-quick-manager
-        copy-as-markdown
         dark-mode-website-switcher
         disconnect
-        edit-with-emacs
         enhanced-github
         enhanced-h264ify
         #enhancer-for-youtube
         facebook-container
-        foxytab
         github-file-icons
-        github-issue-link-status
         google-container
         greasemonkey
         hacktools
-        header-editor
-        hover-zoom-plus
         image-max-url
         ipvfoo
         istilldontcareaboutcookies
         link-cleaner
-        livetl
         lovely-forks
         material-icons-for-github
-        multi-account-containers
         musescore-downloader
         no-pdf-download
         octolinker
-        octotree
         one-click-wayback
-        open-in-browser
-        open-in-vlc
         plasma-integration
         protondb-for-steam
         purpleadblock
         refined-github
         return-youtube-dislikes
-        ruffle_rs
+        #ruffle_rs
         search-by-image
         sponsorblock
         #tampermonkey
@@ -55,7 +43,6 @@
         #themesong-for-youtube-music
         ublock-origin
         #video-downloadhelper
-        violentmonkey
         #wappalyzer
         wikipedia-vector-skin
         #youtube-cards
@@ -63,7 +50,6 @@
         youtube-redux
         youtube-shorts-block
         youtube-subscription-groups
-        zen-internet
         zoom-redirector
       ];
       policies.ExtensionSettings = (
