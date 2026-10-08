@@ -295,7 +295,7 @@
               gitcommit = [ "gitlint" ];
               javascript = [ "oxlint" ];
               json = [ "oxlint" ];
-              kotlin = [ "detekt" ];
+              kotlin = [ "ktlint" ];
               nix = [ "deadnix" ];
               python = [ "pylint" ];
               sh = [ "shellcheck" ];
@@ -309,29 +309,6 @@
             };
             linters = {
               deadnix.cmd = lib.getExe pkgs.deadnix;
-              detekt = {
-                args = [
-                  {
-                    __raw = ''
-                      function()
-                        local current_file = vim.api.nvim_buf_get_name(0)
-                        local args = { "--input", current_file }
-
-                        for _, name in ipairs({ "detekt.yml", "detekt-config.yml", "config/detekt/detekt.yml" }) do
-                          local config = vim.fn.findfile(name, ".;")
-                          if config ~= "" then
-                            vim.list_extend(args, { "--config", config })
-                            break
-                          end
-                        end
-
-                        return args
-                      end
-                    '';
-                  }
-                ];
-                cmd = lib.getExe pkgs.detekt;
-              };
               gitlint.cmd = lib.getExe pkgs.gitlint;
               hadolint.cmd = lib.getExe pkgs.hadolint;
               pylint.cmd = lib.getExe pkgs.pylint;

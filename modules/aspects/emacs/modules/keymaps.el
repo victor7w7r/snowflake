@@ -1,4 +1,4 @@
-;;; -*- lexical-binding: t; -*-
+;;; keymaps.el -*- lexical-binding: t; -*-
 
 (move-text-default-bindings)
 

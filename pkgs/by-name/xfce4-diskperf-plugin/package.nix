@@ -8,7 +8,7 @@ cache-stdenv.mkDerivation {
     owner = "panel-plugins";
     repo = "xfce4-diskperf-plugin";
     rev = "master";
-    sha256 = "sha256-b8gEpB6igx2nWK2H2AlHXa1pZkpQL6x8Dlo0NzXjTjk=";
+    sha256 = "sha256-xm3STq4wmfcVuhCt8+r/p7OfMKK3JY3Iy2cztPk2Va0=";
   };
 
   nativeBuildInputs = with pkgs; [

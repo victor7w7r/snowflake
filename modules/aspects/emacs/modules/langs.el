@@ -1,14 +1,12 @@
-;;; -*- lexical-binding: t; -*
+;;; langs.el -*- lexical-binding: t; -*
 
-(setq-default tab-width 2)
-(setq-default indent-tabs-mode t)
+;;
+;;ENV
+(setenv "PATH" (concat (getenv "PATH") ":$HOME/.local/share/mise/shims"))
+(setq exec-path (append exec-path '("~/.local/share/mise/shims")))
 
-(require 'hungry-delete)
-(global-hungry-delete-mode)
-(auto-rename-tag-mode t)
-(global-evil-matchit-mode 1)
-(require 'toggle-quotes)
-
+;;
+;;LSP
 (after! lsp-mode
   (setq lsp-enable-snippet t
         lsp-headerline-breadcrumb-enable t
