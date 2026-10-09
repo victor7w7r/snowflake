@@ -1,20 +1,40 @@
 ;; -*- no-byte-compile: t; -*-
 
+;; AI
 (package! copilot)
-;;(package! astro-ts-mode)
+(package! copilot-chat)
+
+;; Editor
 (package! auto-rename-tag)
+(package! buffer-move)
 (package! colorful-mode)
-(package! fancy-compilation)
+(package! drag-stuff)
+(package! evil-escape)
+(package! evil-matchit)
+(package! evil-tutor)
+(package! hungry-delete)
 (package! rainbow-delimiters)
-(package! svelte-mode)
 (package! string-inflection)
+(package! symbol-overlay)
 (package! tagedit)
 (package! toggle-quotes)
+(package! visual-regexp)
 
-;; Media
-(package! mentor)
-(package! spotify)
-(package! versuri)
+;; IDE
+(package! fancy-compilation)
+(package! super-save)
+
+;; Langs
+;;(package! astro-ts-mode)
+(package! svelte-mode)
+(package! tldr)
+(package! pkg-info)
+
+;; UI
+(package! beacon)
+(package! bm)
+(package! multi-vterm)
+(package! which-key)
 
 ;; Games / Decoration
 (package! 2048-game)
@@ -22,28 +42,7 @@
 (package! clippy)
 (package! fireplace)
 (package! gameoflife)
+(package! klondike)
 (package! pacmacs)
 (package! speed-type)
 (package! sudoku)
-
-;; System
-(package! helm-system-packages)
-(package! pkg-info)
-(package! tldr)
-
-;; UI
-(package! annotate)
-(package! beacon)
-(package! bm)
-(package! buffer-move)
-(package! evil-matchit)
-(package! evil-tutor)
-(package! hungry-delete)
-(package! move-text)
-(package! multi-vterm)
-(package! mwim)
-(package! visual-regexp)
-(package! which-key)
-
-;; Web
-(package! google-this)

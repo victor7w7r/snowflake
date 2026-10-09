@@ -119,6 +119,10 @@
       };
     };
 
+    extraConfigLua = ''
+      vim.keymap.set('n', 'U', '<C-r>', { noremap = true, silent = true })
+    '';
+
     keymaps =
       {
         not-insert = [
@@ -221,13 +225,13 @@
         # ============================ BUFFERS ============================
 
         {
-          action = "<cmd>lua Snacks.picker.buffers()<CR>";
+          action = "<cmd>lua snacks.picker.buffers()<CR>";
           key = "<leader>bb";
           mode = "n";
           options.desc = "Show buffers";
         }
         {
-          action = "<cmd>lua Snacks.bufdelete.delete()<CR>";
+          action = "<cmd>bdelete<CR>";
           key = "<leader>bd";
           mode = "n";
           options.desc = "Delete current buffer";
@@ -297,7 +301,7 @@
           action = "<cmd>lua Snacks.terminal()<CR>";
           key = "<leader>tt";
           mode = "n";
-          options.desc = "Toggle Terminal";
+          options.desc = "Toggle terminal";
         }
         {
           action = "<cmd>Neominimap Toggle<CR>";

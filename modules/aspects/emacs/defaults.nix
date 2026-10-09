@@ -34,6 +34,7 @@
               libclang
               libxml2
               nixfmt
+              nixd
               pipenv
               poetry
               shfmt
@@ -42,7 +43,6 @@
             ];
             extraPackages =
               epkgs: with epkgs; [
-                annotate
                 auto-rename-tag
                 beacon
                 blackjack
@@ -52,33 +52,31 @@
                 colorful-mode
                 copilot
                 copilot-chat
+                drag-stuff
                 emojify
                 emojify-logos
+                evil-escape
                 evil-matchit
                 evil-tutor
                 fancy-compilation
                 fireplace
                 gameoflife
-                helm-system-packages
                 hungry-delete
                 klondike
                 mentor
-                move-text
                 multi-vterm
-                mwim
-                nyan-mode
                 pacmacs
-                parrot
                 pkg-info
                 rainbow-delimiters
                 speed-type
                 string-inflection
                 sudoku
+                super-save
                 svelte-mode
+                symbol-overlay
                 tagedit
                 tldr
                 toggle-quotes
-                versuri
                 visual-regexp
                 which-key
                 (treesit-grammars.with-grammars (

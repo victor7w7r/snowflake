@@ -20,6 +20,14 @@
         lsp-ui-doc-delay 0.1
         lsp-ui-doc-border (face-foreground 'default)))
 
+
+;; Nix
+(after! lsp-nix
+  (setq lsp-nix-nil-formatter ["nixfmt"])
+  (setq lsp-disabled-clients '(nil))
+  (setq lsp-nix-executable "nixd"))
+
+;; Kotlin
 (defun kotlin-setup ()
   (when (and (projectile-project-p)
              (or (projectile-verify-file "build.gradle")

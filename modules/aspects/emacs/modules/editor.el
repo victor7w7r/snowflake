@@ -2,12 +2,27 @@
 
 ;; Editor Utils
 (auto-rename-tag-mode t)
+(drag-stuff-mode t)
 (colorful-mode 1)
 (global-evil-matchit-mode 1)
 (global-hungry-delete-mode)
+(rainbow-delimiters-mode t)
 (require 'hungry-delete)
 (require 'toggle-quotes)
 
+;;
+;; Escape mode
+(setq evil-escape-key-sequence "jj")
+(setq evil-escape-unordered-key-sequence t)
+(setq evil-escape-delay 0.2)
+(evil-escape-mode t)
+
+;;
+;; Symbol Overlay
+(use-package! symbol-overlay
+  :hook (prog-mode . symbol-overlay-mode)
+  :config
+  (setq symbol-overlay-idle-time 0.2))
 
 ;;
 ;; Clipboard
