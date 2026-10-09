@@ -45,27 +45,6 @@
           jsonls.enable = true;
           marksman.enable = true;
           oxfmt.enable = true;
-          kmp_lsp = {
-            enable = false;
-            package = self'.packages.kmp-lsp;
-            config = {
-              cmd = [ "${self'.packages.kmp-lsp}/bin/kmp-lsp" ];
-              filetypes = [
-                "kotlin"
-                "swift"
-              ];
-              root_markers = [
-                "build.gradle"
-                "build.gradle.kts"
-                "pom.xml"
-                "settings.gradle"
-                "settings.gradle.kts"
-                "Package.swift"
-                ".git"
-              ];
-            };
-          };
-          oxlint.enable = true;
           nixd = {
             enable = true;
             package = pkgs.nixd;

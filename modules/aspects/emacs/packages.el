@@ -26,7 +26,11 @@
 
 ;; Langs
 ;;(package! astro-ts-mode)
+(package! flymake-ktlint)
+(package! flymake-shellcheck)
 (package! svelte-mode)
+(package! vue-mode)
+(package! typescript-mode)
 (package! tldr)
 (package! pkg-info)
 

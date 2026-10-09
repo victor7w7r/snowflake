@@ -24,6 +24,7 @@
             doomLocalDir = "${config.home.homeDirectory}/.config/emacs";
             extraBinPackages = with pkgs; [
               black
+              biome
               cmake
               direnv
               dockfmt
@@ -37,13 +38,16 @@
               nixd
               pipenv
               poetry
+              rustfmt
               shfmt
+              shellcheck
               stylelint
               wl-clipboard-rs
             ];
             extraPackages =
               epkgs: with epkgs; [
                 auto-rename-tag
+                astro-ts-mode
                 beacon
                 blackjack
                 bm
@@ -59,6 +63,8 @@
                 evil-matchit
                 evil-tutor
                 fancy-compilation
+                flymake-ktlint
+                flymake-shellcheck
                 fireplace
                 gameoflife
                 hungry-delete
@@ -76,8 +82,10 @@
                 symbol-overlay
                 tagedit
                 tldr
+                typescript-mode
                 toggle-quotes
                 visual-regexp
+                vue-mode
                 which-key
                 (treesit-grammars.with-grammars (
                   gs: with gs; [

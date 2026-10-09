@@ -80,9 +80,8 @@
        (markdown +tree-sitter)
        (nix +lsp +tree-sitter)
        (python +lsp +tree-sitter +poetry +pyright)
-       (rest +jq)
        (rust +lsp +tree-sitter)
-       (sh +powershell +lsp)
+       (sh +lsp)
        (web +lsp +tree-sitter)
        (yaml +tree-sitter)
 

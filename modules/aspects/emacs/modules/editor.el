@@ -12,10 +12,10 @@
 
 ;;
 ;; Escape mode
-(setq evil-escape-key-sequence "jj")
+(evil-escape-mode t)
+(setq evil-escape-key-sequence "jk")
 (setq evil-escape-unordered-key-sequence t)
 (setq evil-escape-delay 0.2)
-(evil-escape-mode t)
 
 ;;
 ;; Symbol Overlay
