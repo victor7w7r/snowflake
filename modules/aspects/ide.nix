@@ -31,7 +31,8 @@
               set yankring
 
               set autoindent
-              set clipboard+=unnamed
+              set clipboard^=ideaput
+              set clipboard+=unnamedplus
               set history=1000
               set hlsearch
               set ideajoin
@@ -47,7 +48,7 @@
               set smartcase
               set visualbell
 
-              nnoremap u :action $redo<cr>
+              nnoremap U :action $Redo<cr>
 
               call whichKey("<leader>qq", "Quit")
               map <leader>qq <Action>(Quit)
@@ -77,7 +78,7 @@
               call whichKey("<leader>bd", "Delete current buffer")
               call whichKey("<leader>bD", "Delete all buffers")
 
-              map<leader>bd <Action>(CloseActiveTab)
+              map<leader>bd <Action>(CloseEditor)
               map<leader>bD <Action>(CloseAllEditors)
 
               call whichKey("<leader>c", "Code")

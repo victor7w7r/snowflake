@@ -112,18 +112,19 @@
 
           environment.systemPackages = with pkgs; [
             bolt
-            picocom
-            tbtools
-            nbd
-            thunderbolt
-            rkdeveloptool
-            sunxi-tools
-            self'.packages.propertree
-            kdePackages.plasma-thunderbolt
-            inputs'.nixpkgs-wine.legacyPackages.wineWow64Packages.staging
             freetype
             gnutls
+            inputs'.nixpkgs-wine.legacyPackages.wineWow64Packages.staging
+            kdePackages.plasma-thunderbolt
             libxcrypt
+            nbd
+            picocom
+            rkdeveloptool
+            self'.packages.propertree
+            sunxi-tools
+            tbtools
+            thunderbolt
+            trailbase
             winetricks
 
             pkgsi686Linux.glibc
