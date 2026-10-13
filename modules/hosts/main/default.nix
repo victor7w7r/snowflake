@@ -121,6 +121,7 @@
             picocom
             rkdeveloptool
             self'.packages.propertree
+            sqlite
             sunxi-tools
             tbtools
             thunderbolt

@@ -198,12 +198,6 @@
           options.desc = "IncRename";
         }
         {
-          action = ''<cmd>lua require("actions-preview").code_actions()<CR>'';
-          key = "<leader><F9>";
-          mode = "n";
-          options.desc = "Actions preview";
-        }
-        {
           action = ''<cmd>lua require("ufo").openAllFolds()<CR>'';
           key = "<leader><F10>";
           mode = "n";
@@ -229,6 +223,12 @@
           key = "<leader>bb";
           mode = "n";
           options.desc = "Show buffers";
+        }
+        {
+          action = "<cmd>bdelete<CR>";
+          key = "<leader>bc";
+          mode = "n";
+          options.desc = "Delete general buffer";
         }
         {
           action = "<cmd>bdelete<CR>";
@@ -495,8 +495,14 @@
           options.desc = "Previous word reference";
         }
         {
-          action = ''<cmd>lua require("nvim-toggler").toggle<CR>'';
+          action = ''<cmd>lua require("actions-preview").code_actions()<CR>'';
           key = "<leader>c.";
+          mode = "n";
+          options.desc = "Actions preview";
+        }
+        {
+          action = ''<cmd>lua require("nvim-toggler").toggle<CR>'';
+          key = "<leader>c,";
           mode = "n";
           options.desc = "Toggle";
         }
