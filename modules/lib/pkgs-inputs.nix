@@ -420,6 +420,11 @@
       flake = false;
     };
 
+    kiview = {
+      url = "https://invent.kde.org/danagost/Kiview/-/archive/master/Kiview-master.tar.gz?ref_type=heads";
+      flake = false;
+    };
+
     kMenu = {
       url = "github:51n7/kMenu";
       flake = false;

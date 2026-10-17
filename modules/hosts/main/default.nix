@@ -6,7 +6,13 @@
   ...
 }:
 {
-  flake-file.inputs.nixpkgs-wine.url = "github:NixOS/nixpkgs/a1945f760a8fe019a4d753808de424dcd4e5b3cf";
+  flake-file.inputs = {
+    nixpkgs-wine.url = "github:NixOS/nixpkgs/a1945f760a8fe019a4d753808de424dcd4e5b3cf";
+    artcraft = {
+      url = "github:devitek/artcraft-nixos";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
   perSystem.packages.main-toplevel =
     inputs.self.nixosConfigurations.main.config.system.build.toplevel;
@@ -70,6 +76,7 @@
           ...
         }:
         {
+
           networking = {
             hostName = "v7w7r-macmini81";
             networkmanager.unmanaged = [ "enp2s0f1u1" ];
@@ -140,10 +147,20 @@
       provides.to-users.homeManager =
         { config, ... }:
         {
+          imports = [ inputs.artcraft.homeManagerModules.default ];
+
           programs.looking-glass-client.enable = true;
           home.file = {
             "shared".source = config.lib.file.mkOutOfStoreSymlink "/run/media/shared";
             "storage".source = config.lib.file.mkOutOfStoreSymlink "/nix/persist/storage";
+          };
+
+          programs.artcraft = {
+            enable = true;
+            apps = [
+              "photocraft"
+              "filmcraft"
+            ];
           };
         };
     };

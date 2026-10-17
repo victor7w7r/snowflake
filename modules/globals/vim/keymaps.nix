@@ -66,7 +66,6 @@
               icon = "";
               inherit mode;
             }
-
             {
               __unkeyed-1 = "<leader>a";
               group = "ai";
@@ -93,12 +92,16 @@
               inherit mode;
             }
             {
+              __unkeyed-1 = "<leader>g";
+              group = "git";
+              inherit mode;
+            }
+            {
               __unkeyed-1 = "<leader>m";
               group = "multicursor";
               icon = "󰇀";
               inherit mode;
             }
-
             {
               __unkeyed-1 = "<leader>q";
               group = "quit/session";
@@ -225,7 +228,7 @@
           options.desc = "Show buffers";
         }
         {
-          action = "<cmd>bdelete<CR>";
+          action = "<cmd>lua Snacks.bufdelete()<CR>";
           key = "<leader>bc";
           mode = "n";
           options.desc = "Delete general buffer";
@@ -235,6 +238,18 @@
           key = "<leader>bd";
           mode = "n";
           options.desc = "Delete current buffer";
+        }
+        {
+          action = "<cmd>Snacks.bufdelete.invisible()<CR>";
+          key = "<leader>bi";
+          mode = "n";
+          options.desc = "Delete all invisible buffers";
+        }
+        {
+          action = "<cmd>Snacks.bufdelete.other()<CR>";
+          key = "<leader>bx";
+          mode = "n";
+          options.desc = "Delete all buffers except the current one";
         }
         {
           action = "<cmd>Neominimap Focus<CR>";
@@ -314,12 +329,6 @@
           key = "<leader>tn";
           mode = "n";
           options.desc = "Neotree Toggle";
-        }
-        {
-          action = "<cmd>lua Snacks.lazygit()<CR>";
-          key = "<leader>tg";
-          mode = "n";
-          options.desc = "LazyGit";
         }
         {
           action = "<cmd>DiffviewOpen<CR>";
@@ -439,7 +448,59 @@
           options.desc = "Flash Toggle";
         }
 
+        # ============================ GIT =======================================
+
+        {
+          action = "<cmd>lua Snacks.picker.git_branches()<CR>";
+          key = "<leader>gb";
+          mode = "n";
+          options.desc = "Git Branches";
+        }
+        {
+          action = "<cmd>lua Snacks.lazygit()<CR>";
+          key = "<leader>gg";
+          mode = "n";
+          options.desc = "LazyGit";
+        }
+        {
+          action = "<cmd>lua Snacks.picker.git_log()<CR>";
+          key = "<leader>gl";
+          mode = "n";
+          options.desc = "Git Log";
+        }
+        {
+          action = "<cmd>lua Snacks.picker.git_log_line()<CR>";
+          key = "<leader>gL";
+          mode = "n";
+          options.desc = "Git Log Line";
+        }
+        {
+          action = "<cmd>lua Snacks.picker.git_status()<CR>";
+          mode = "n";
+          key = "<leader>gs";
+          options.desc = "Git Status";
+        }
+        {
+          action = "<cmd>lua Snacks.picker.git_stash()<CR>";
+          key = "<leader>gS";
+          mode = "n";
+          options.desc = "Git Stash";
+        }
+        {
+          action = "<cmd>lua Snacks.picker.git_diff()<CR>";
+          key = "<leader>gd";
+          mode = "n";
+          options.desc = "Git Diff (Hunks)";
+        }
+        {
+          action = "<cmd>lua Snacks.picker.git_log_file()<CR>";
+          key = "<leader>gf";
+          mode = "n";
+          options.desc = "Git Log File";
+        }
+
         # ============================ CODE / DIAGNOSTICS ============================
+
         {
           action = "<cmd>lua vim.lsp.buf.hover()<CR>";
           key = "<leader>cd";

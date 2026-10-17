@@ -16,6 +16,7 @@
           environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
             ".config/legcord"
             ".config/onlyoffice"
+            ".config/photocraft"
             ".config/siyuan"
             ".config/SiYuan-electron"
             ".config/vlc"

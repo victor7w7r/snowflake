@@ -2,11 +2,11 @@
 
 stdenvNoCC.mkDerivation (attrs: {
   pname = "sunnify";
-  version = "2.4.2";
+  version = "2.5.0";
 
   src = pkgs.fetchurl {
-    url = "https://github.com/sunnypatell/sunnify-spotify-downloader/releases/download/v2.4.2/Sunnify-Linux";
-    sha256 = "sha256-gMHszaaQhTz4idM0v0WQLU+yI6QR7uJlDc5hfrQ1qzA=";
+    url = "https://github.com/sunnypatell/sunnify-spotify-downloader/releases/download/v2.5.0/Sunnify-Linux";
+    sha256 = "sha256-Q2nVyMpG/g3pKyReHRQkOohrnfihLWUdUfgPnyFQk50=";
   };
 
   dontUnpack = true;

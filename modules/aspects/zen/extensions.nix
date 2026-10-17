@@ -39,7 +39,7 @@
         search-by-image
         sponsorblock
         #tampermonkey
-        terms-of-service-didnt-read
+        #terms-of-service-didnt-read
         #themesong-for-youtube-music
         ublock-origin
         #video-downloadhelper

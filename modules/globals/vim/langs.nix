@@ -61,7 +61,11 @@
             config.settings = {
               cargo = {
                 loadOutDirsFromCheck = true;
-                features = "all";
+                features = [
+                  "ffi"
+                  "web"
+                  "wasm32"
+                ];
                 buildScripts.enable = false;
               };
 
@@ -85,7 +89,7 @@
           statix.enable = true;
           stylelint_lsp.enable = true;
           svelte.enable = true;
-          ts_ls.enable = true;
+          #ts_ls.enable = true;
           #vue_ls.enable = true;
           yamlls.enable = true;
         };

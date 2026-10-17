@@ -25,7 +25,6 @@
         [
           "bunker/0008-disable-proc_kcore-by-default"
           "clear/0001-net-dst-reduce-false-sharing-in-dst_entry"
-          "clear/0009-mm-compaction-increase-proactive-compaction-check-in"
           "grapheneos/0001-disable-ldisc_autoload-by-default"
           "grapheneos/0004-disable-memory_hotplug-by-default"
           "xanmod/0003-block-set-rq_affinity-to-force-complete-I-O-on-same-"
@@ -100,7 +99,7 @@
           "cachyos/0017-mm-add-missing-extern-declarations-for-le9-workingse"
           "cachyos/0023-cpuidle-prefer-teo-over-menu-governor"
           #"clear/0010-sched-core-add-branch-hints-based-on-gcov-analysis"
-          "clear/0012-pci-increase-PME-check-interval-to-4-seconds"
+          #"clear/0012-pci-increase-PME-check-interval-to-4-seconds"
           "upstream/0002-time-timecounter-inline-timecounter_cyc2time"
           "upstream/0005-cpuidle-menu-remove-incorrect-unlikely-annotation"
           "upstream/0007-tcp-inline-tcp_filter"

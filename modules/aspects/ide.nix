@@ -2,12 +2,19 @@
   den.aspects.ide =
     { user, ... }:
     {
-      nixos = { lib, ... }: {
-        environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
-          ".config/bruno"
-          ".config/JetBrains"
-          ".local/share/JetBrains"
-        ];
+      nixos = { lib, pkgs, ... }: {
+        environment = {
+          systemPackages = with pkgs; [
+            gcc
+            clang
+          ];
+
+          persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
+            ".config/bruno"
+            ".config/JetBrains"
+            ".local/share/JetBrains"
+          ];
+        };
       };
 
       provides.to-users.homeManager =
