@@ -80,7 +80,6 @@
           nnn = "nnn -e";
           faf = "fastfetch -c $HOME/.config/fastfetch/config.conf";
           bmtop = ''btm $([ "$COLOR_SCHEME" = "light" ] && echo "--color default-light")'';
-          flatupdate = "flatpak update; flatpak remove --unused";
 
           l = "eza --icons --git --classify=auto --color --group-directories-first --sort=extension -a";
           ls = "l";

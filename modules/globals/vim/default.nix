@@ -82,7 +82,7 @@
         foldmethod = "indent";
         grepformat = "%f:%l:%c:%m";
         grepprg = "rg --vimgrep";
-        guicursor = "n-v-c:block-blinkon200-blinkoff200";
+        guicursor = "n-v-c:block,i-ci-ve:ver25,r-cr:hor20";
         hidden = true;
         hlsearch = true;
         ignorecase = true;

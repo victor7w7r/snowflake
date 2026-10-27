@@ -19,12 +19,16 @@ cache-stdenv.mkDerivation {
     [
       kcoreaddons
       ki18n
+      kio
+      kdbusaddons
       kirigami
+      kirigami-addons
       qtbase
       qtdeclarative
+      qtmultimedia
       qtwebengine
     ]
-    ++ lib.optional stdenv.hostPlatform.isLinux kdePackages.qtwayland;
+    ++ pkgs.lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.kdePackages.qtwayland;
 
   strictDeps = true;
 }

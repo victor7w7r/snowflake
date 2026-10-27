@@ -35,9 +35,10 @@
             DW_DMAC_PCI = yes;
             GPIO_ICH = module;
             HID_WACOM = module;
-            NR_CPUS = lib.mkForce (freeform "12");
             MACINTOSH_DRIVERS = lib.mkForce yes;
+            MEDIA_USB_SUPPORT = yes;
             MMC = no;
+            NR_CPUS = lib.mkForce (freeform "12");
             PINCTRL_CANNONLAKE = lib.mkForce module;
             PINCTRL_INTEL_PLATFORM = lib.mkForce module;
             R8169 = no;
@@ -46,6 +47,7 @@
             SND_HDA_INTEL = module;
             SND_SOC_INTEL_AVS = module;
             SND_USB_AUDIO = module;
+            USB_VIDEO_CLASS = module;
             XFS_FS = yes;
           }
         ];

@@ -442,8 +442,16 @@
       url = "github:z3ntu/kde-thumbnailer-apk";
       flake = false;
     };
+    kiview = {
+      url = "https://invent.kde.org/danagost/Kiview/-/archive/master/Kiview-master.tar.gz?ref_type=heads";
+      flake = false;
+    };
     kmp-lsp = {
       url = "github:Hessesian/kmp-lsp";
+      flake = false;
+    };
+    kontainer = {
+      url = "github:DenysMb/Kontainer";
       flake = false;
     };
     kwin-effects-better-blur-dx = {
@@ -559,7 +567,6 @@
       url = "github:marienz/nix-doom-emacs-unstraightened";
       inputs.nixpkgs.follows = "";
     };
-    nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=latest";
     nix-gaming.url = "github:fufexan/nix-gaming";
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
     nix-index-database = {

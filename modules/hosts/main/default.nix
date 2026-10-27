@@ -120,6 +120,7 @@
           environment.systemPackages = with pkgs; [
             bolt
             freetype
+            ffmpeg
             gnutls
             inputs'.nixpkgs-wine.legacyPackages.wineWow64Packages.staging
             kdePackages.plasma-thunderbolt
@@ -147,20 +148,10 @@
       provides.to-users.homeManager =
         { config, ... }:
         {
-          imports = [ inputs.artcraft.homeManagerModules.default ];
-
           programs.looking-glass-client.enable = true;
           home.file = {
             "shared".source = config.lib.file.mkOutOfStoreSymlink "/run/media/shared";
             "storage".source = config.lib.file.mkOutOfStoreSymlink "/nix/persist/storage";
-          };
-
-          programs.artcraft = {
-            enable = true;
-            apps = [
-              "photocraft"
-              "filmcraft"
-            ];
           };
         };
     };

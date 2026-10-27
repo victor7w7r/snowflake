@@ -425,6 +425,11 @@
       flake = false;
     };
 
+    kontainer = {
+      url = "github:DenysMb/Kontainer";
+      flake = false;
+    };
+
     kMenu = {
       url = "github:51n7/kMenu";
       flake = false;

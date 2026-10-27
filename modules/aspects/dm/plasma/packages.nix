@@ -105,8 +105,10 @@
           ]
           ++ (lib.optionals (!isPhone) [
             kf6-servicemenus-rootactions
+            kiview
             kmenu
             kde-control-station
+            kontainer
             maxwell
             plasma-panel-spacer-extended
             plasma-drawer

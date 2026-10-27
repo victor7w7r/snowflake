@@ -1,4 +1,4 @@
-{
+{ inputs, ... }: {
   flake-file.inputs.siyuan-nix.url = "github:mtul0729/siyuan-nix";
 
   den.aspects.gui.extras =
@@ -14,19 +14,30 @@
         lib.optionalAttrs (isPersistent && !isServer) {
           #imports = [ inputs.siyuan-nix.nixosModules.default ];
           environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
+            ".config/BraveSoftware/Brave-Browser"
+            ".config/deckcraft"
+            ".config/effectcraft"
+            ".config/gridcraft"
             ".config/legcord"
-            ".config/onlyoffice"
             ".config/photocraft"
             ".config/siyuan"
             ".config/SiYuan-electron"
+            ".config/vectorcraft"
             ".config/vlc"
-            ".config/BraveSoftware/Brave-Browser"
-            ".local/share/PrismLauncher"
+            ".config/wordcraft"
             ".local/share/com.vixalien.sticky"
+            ".local/share/filmcraft"
             ".local/share/jdownloader"
-            ".local/share/onlyoffice"
+            ".local/share/pdfcraft"
+            ".local/share/PrismLauncher"
             ".local/share/vlc"
           ];
+
+          programs.appimage = {
+            enable = true;
+            binfmt = true;
+          };
+
         };
 
       provides.to-users.homeManager =
@@ -43,12 +54,29 @@
           ...
         }:
         lib.optionalAttrs (isPersistent && !isServer) {
-          programs.onlyoffice.enable = isX86;
           dbus.packages = [ config.programs.chromium.package ];
-          programs.chromium = {
-            enable = true;
-            package = pkgs.brave;
+          programs = {
+            chromium = {
+              enable = true;
+              package = pkgs.brave;
+            };
+
+            artcraft = lib.optionalAttrs (!isPhone) {
+              enable = true;
+              apps = [
+                "deckcraft"
+                "effectcraft"
+                "filmcraft"
+                "gridcraft"
+                "pdfcraft"
+                "photocraft"
+                "vectorcraft"
+                "wordcraft"
+              ];
+            };
+
           };
+          imports = [ inputs.artcraft.homeManagerModules.default ];
 
           xdg.configFile."autostart/siyuan.desktop".text = ''
             [Desktop Entry]
@@ -75,7 +103,6 @@
               ytdl
             ]
             ++ (lib.optionals (!isPhone) [
-              inkscape-with-extensions
               jdownloader
               kid3-kde
               kopia-ui

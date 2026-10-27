@@ -12,9 +12,7 @@
           "--check"
         ];
         network.enable = true;
-        verbose = true;
         systemd = {
-          enable = true;
           emergencyAccess = true;
           users.root.shell = "${pkgs.bashInteractive}/bin/bash";
           contents = {

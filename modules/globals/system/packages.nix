@@ -12,7 +12,7 @@
           cryptsetup
           cod
           file
-          self'.packages.hf
+          #self'.packages.hf
           gnused
           gnutar
           inxi
