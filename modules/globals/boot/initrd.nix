@@ -25,10 +25,7 @@
             DefaultTimeoutAbortSec = "5s";
             DefaultLimitNOFILE = "2048:2097152";
           };
-          initrdBin = with pkgs; [
-            coreutils
-            util-linux
-          ];
+          initrdBin = with pkgs; [ coreutils ];
           storePaths = with pkgs; [
             "${bashInteractive}/bin/bash"
             "${util-linux}/bin/mount"
@@ -47,6 +44,8 @@
             fdisk = "${util-linux}/bin/fdisk";
             file = "${file}/bin/file";
             find = "${findutils}/bin/find";
+            findmnt = "${util-linux}/bin/findmnt";
+            losetup = "${util-linux}/bin/losetup";
             grep = "${gnugrep}/bin/grep";
             htop = "${htop}/bin/htop";
             ip = "${iproute2}/bin/ip";

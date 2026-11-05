@@ -14,10 +14,8 @@
     };
   };
 
-  perSystem.packages = {
-    main-toplevel = inputs.self.nixosConfigurations.main.config.system.build.toplevel;
-    main-zfs = inputs.self.nixosConfigurations.main.config.boot.kernelPackages.zfs_cachyos;
-  };
+  perSystem.packages.main-toplevel =
+    inputs.self.nixosConfigurations.main.config.system.build.toplevel;
 
   den = {
     hosts.x86_64-linux = {
@@ -73,15 +71,11 @@
         {
           config,
           inputs',
-          lib,
           pkgs,
           self',
           ...
         }:
         {
-
-          nixpkgs.overlays = [ inputs.cachyos-kernel.overlays.pinned ];
-
           networking = {
             hostId = "4e1289ab";
             hostName = "v7w7r-macmini81";
@@ -105,14 +99,6 @@
               #"vfio_iommu_type1"
               #"vfio_pci"
             ];
-
-            zfs = {
-              package = pkgs.zfs_unstable;
-              forceImportAll = false;
-              forceImportRoot = true;
-            };
-
-            supportedFilesystems = lib.mkAfter [ "zfs" ];
 
             kernelParams = [
               "ahci.mobile_lpm_policy=2"
@@ -140,8 +126,10 @@
             gnutls
             inputs'.nixpkgs-wine.legacyPackages.wineWow64Packages.staging
             kdePackages.plasma-thunderbolt
+            libfido2
             libxcrypt
             nbd
+            openssl
             picocom
             rkdeveloptool
             self'.packages.propertree
