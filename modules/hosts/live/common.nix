@@ -109,6 +109,7 @@
             enable = true;
             mdadmConf = "MAILADDR root";
           };
+          supportedFilesystems = lib.mkAfter [ "zfs" ];
           postBootCommands = ''
             for o in $(</proc/cmdline); do
               case "$o" in

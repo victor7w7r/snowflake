@@ -34,7 +34,7 @@
         else if pkgs.stdenv.buildPlatform != pkgs.stdenv.hostPlatform && arch == "x86_64-linux" then
           "x86_64"
         else
-          null;
+          pkgs.stdenv.hostPlatform.linuxArch;
 
       kernelPatches = map (file: {
         name = baseNameOf (toString file);
@@ -75,7 +75,8 @@
       extraMakeFlags = [
         "KCFLAGS=-w"
         "LOCALVERSION=-v7w7r-${localVer}"
-        "ARCH=${if arch == "aarch64-linux" then "arm64" else "x86_64"}"
+        #"ARCH=${if arch == "aarch64-linux" then "arm64" else "x86_64"}"
+        "CLANG_TARGET_FLAGS=${if arch == "aarch64-linux" then "aarch64-linux-gnu" else "x86_64-linux-gnu"}"
       ]
       ++ (lib.optional (system != arch) "CROSS_COMPILE=${pkgs.stdenv.hostPlatform.config}-");
     }
@@ -86,6 +87,7 @@
         base
         |> pkgs.linuxPackagesFor
         |> (pkgs.callPackage "${inputs.cachyos-kernel.outPath}/helpers.nix" { }).kernelModuleLLVMOverride;
+
       "${host}-config" = pkgs.runCommand "filtered-config" { } ''
         cp ${base.configfile} .config
         sed -i '/^[[:space:]]*#/d; /^[[:space:]]*$/d' .config

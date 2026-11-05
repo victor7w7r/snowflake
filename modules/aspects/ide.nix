@@ -7,14 +7,19 @@
           systemPackages = with pkgs; [
             gcc
             clang
+            binaryen
           ];
 
+          variables.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
           persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
             ".config/bruno"
             ".config/JetBrains"
+            ".copilot"
+            ".java"
             ".local/share/JetBrains"
           ];
         };
+
       };
 
       provides.to-users.homeManager =
@@ -24,6 +29,7 @@
             packages = with pkgs; [
               bruno
               jetbrains.idea
+              jetbrains.rust-rover
             ];
 
             file.".ideavimrc".text = ''

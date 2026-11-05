@@ -61,11 +61,6 @@
             config.settings = {
               cargo = {
                 loadOutDirsFromCheck = true;
-                features = [
-                  "ffi"
-                  "web"
-                  "wasm32"
-                ];
                 buildScripts.enable = false;
               };
 
@@ -73,6 +68,7 @@
 
               diagnostics = {
                 enable = true;
+                disabled = [ "inactive-code" ];
                 styleLints.enable = true;
               };
 

@@ -582,7 +582,7 @@
         nixpkgs.follows = "nixpkgs";
       };
     };
-    nixpkgs.url = "github:NixOS/nixpkgs/7fd4004d0511991fff3a0524856a9be09e28c5f0";
+    nixpkgs.url = "github:NixOS/nixpkgs/3ec636362e1816bc2f0888fa0fa2c69f1bc9e504";
     nixpkgs-gtk2.url = "github:NixOS/nixpkgs/48199e04590301db3a47603919037df65c828797";
     nixpkgs-qemu9.url = "github:NixOS/nixpkgs/fcb54ddcc974cff59bdfb7c1ac9e080299763d2d";
     nixpkgs-wine.url = "github:NixOS/nixpkgs/a1945f760a8fe019a4d753808de424dcd4e5b3cf";

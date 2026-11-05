@@ -14,8 +14,10 @@
     };
   };
 
-  perSystem.packages.main-toplevel =
-    inputs.self.nixosConfigurations.main.config.system.build.toplevel;
+  perSystem.packages = {
+    main-toplevel = inputs.self.nixosConfigurations.main.config.system.build.toplevel;
+    main-zfs = inputs.self.nixosConfigurations.main.config.boot.kernelPackages.zfs_cachyos;
+  };
 
   den = {
     hosts.x86_64-linux = {
@@ -70,14 +72,18 @@
       nixos =
         {
           config,
-          pkgs,
           inputs',
+          lib,
+          pkgs,
           self',
           ...
         }:
         {
 
+          nixpkgs.overlays = [ inputs.cachyos-kernel.overlays.pinned ];
+
           networking = {
+            hostId = "4e1289ab";
             hostName = "v7w7r-macmini81";
             networkmanager.unmanaged = [ "enp2s0f1u1" ];
           };
@@ -91,6 +97,7 @@
           boot = {
             kernelPackages =
               (kernel.hosts.main pkgs "main" "x86_64-linux" pkgs.stdenv.hostPlatform.system).main-kernelPackages;
+
             kernelModules = [
               #"kvmgt"
               #"mdev"
@@ -98,6 +105,15 @@
               #"vfio_iommu_type1"
               #"vfio_pci"
             ];
+
+            zfs = {
+              package = pkgs.zfs_unstable;
+              forceImportAll = false;
+              forceImportRoot = true;
+            };
+
+            supportedFilesystems = lib.mkAfter [ "zfs" ];
+
             kernelParams = [
               "ahci.mobile_lpm_policy=2"
               "intel_iommu=on"
@@ -112,7 +128,7 @@
               "swiotlb=64M"
               "libahci.ignore_sss=1"
               "pcie_ports=compat"
-              "video=DP-3:1600x900@60e"
+              "video=DP-2:1600x900@60e"
               "resume=${config.boot.resumeDevice}"
             ];
           };

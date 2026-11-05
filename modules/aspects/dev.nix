@@ -24,6 +24,7 @@
               ".local/share/mise"
               ".npm"
               ".rustup"
+              ".gradle"
             ];
           };
 

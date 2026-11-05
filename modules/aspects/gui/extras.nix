@@ -110,7 +110,7 @@
               legcord
               linuxthemestore
               lunacy
-              morphosis
+              #morphosis
               music-discord-rpc
               rclone-browser
               sonic-visualiser

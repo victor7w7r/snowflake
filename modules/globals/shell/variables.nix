@@ -1,6 +1,6 @@
 {
   den.default.provides.to-users.homeManager =
-    { config, ... }:
+    { config, pkgs, ... }:
     {
       programs =
         {
@@ -10,6 +10,7 @@
           COLORTERM = "truecolor";
           TERMINAL = "kitty";
           STARSHIP_CACHE = "$HOME/.starship/cache";
+
           EZA_COLORS = "di=33:ln=35:so=32:pi=33:ex=31:bd=34;46:cd=34;43:su=30;41:sg=30;46:tw=30;42:ow=30;43";
           #LS_COLORS = "$(vivid generate catppuccin-mocha)";
 

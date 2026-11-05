@@ -1,14 +1,14 @@
 { pkgs, stdenvNoCC }:
 let
-  version = "263.6379.0";
+  version = "263.7084.0";
   sources = {
     "x86_64-linux" = {
-      url = "https://download-cdn.jetbrains.com/language-server/kotlin-server/${version}/kotlin-server-${version}.tar.gz";
-      sha256 = "sha256-q4ykRV3C/F/hok2yvMxGwQQlTSxGUVXEJR7mXfjz98w=";
+      url = "https://download.jetbrains.com/language-server/kotlin-server/${version}/kotlin-server-${version}.tar.gz";
+      sha256 = "sha256-rgxLAeF6tzpKUienjqmebcvj5JlgAxWyJ1mk5M3dEd8=";
     };
     "aarch64-linux" = {
-      url = "https://download-cdn.jetbrains.com/language-server/kotlin-server/${version}/kotlin-server-${version}-aarch64.tar.gz";
-      sha256 = "sha256-UJmZAe+Lz6HlhWG2qNeCpy3qViD8+SpkEwgH+JJKVvw=";
+      url = "https://download.jetbrains.com/language-server/kotlin-server/${version}/kotlin-server-${version}-aarch64.tar.gz";
+      sha256 = "sha256-UJmZAe+Lz6HlhWG2qNeCpD3qViD8+SpkEwgH+JJKVvw=";
     };
   };
 
