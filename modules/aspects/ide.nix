@@ -8,6 +8,7 @@
             gcc
             clang
             binaryen
+            upx
           ];
 
           variables.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
@@ -15,6 +16,7 @@
             ".config/bruno"
             ".config/JetBrains"
             ".copilot"
+            "go"
             ".java"
             ".local/share/JetBrains"
           ];
@@ -29,6 +31,7 @@
             packages = with pkgs; [
               bruno
               jetbrains.idea
+              jetbrains.goland
               jetbrains.rust-rover
             ];
 

@@ -42,6 +42,7 @@
           emmet_ls.enable = true;
           html.enable = true;
           gitlab_ci_ls.enable = true;
+          gopls.enable = true;
           jsonls.enable = true;
           marksman.enable = true;
           oxfmt.enable = true;
@@ -161,6 +162,7 @@
               gitattributes
               gitcommit
               gitignore
+              go
               html
               ini
               javascript
@@ -217,6 +219,7 @@
                 dockerfile = [ "dockerfmt" ];
                 dart = [ "dart_format" ];
                 html = [ "oxfmt" ];
+                go = [ "gofmt" ];
                 javascript = [ "oxfmt" ];
                 json = [ "oxfmt" ];
                 kotlin = [ "ktlint" ];
@@ -239,6 +242,7 @@
                 biome.command = lib.getExe pkgs.biome;
                 black.command = lib.getExe pkgs.black;
                 dockerfmt.command = lib.getExe pkgs.dockerfmt;
+                go.command = "${pkgs.go}/bin/gofmt";
                 isort.command = lib.getExe pkgs.isort;
                 ktlint.command = lib.getExe pkgs.ktlint;
                 nixfmt.command = lib.getExe pkgs.nixfmt;
@@ -272,6 +276,7 @@
               css = [ "oxlint" ];
               dockerfile = [ "hadolint" ];
               gitcommit = [ "gitlint" ];
+              go = [ "golangcilint" ];
               javascript = [ "oxlint" ];
               json = [ "oxlint" ];
               kotlin = [ "ktlint" ];
@@ -290,6 +295,7 @@
               deadnix.cmd = lib.getExe pkgs.deadnix;
               gitlint.cmd = lib.getExe pkgs.gitlint;
               hadolint.cmd = lib.getExe pkgs.hadolint;
+              golangcilint.cmd = lib.getExe pkgs.golangci-lint;
               pylint.cmd = lib.getExe pkgs.pylint;
               vale.cmd = lib.getExe pkgs.vale;
               shellcheck.cmd = lib.getExe pkgs.shellcheck;
