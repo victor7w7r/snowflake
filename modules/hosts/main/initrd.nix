@@ -26,37 +26,7 @@
 
         services.udev.packages = [ pkgs.libfido2 ];
 
-        luks.devices =
-          let
-            partlabel = "/dev/disk/by-partlabel";
-            idpart = "/dev/disk/by-id";
-          in
-          {
-            swapcrypt = {
-              device = "${partlabel}/disk-ssd-swapcrypt";
-              crypttabExtraOpts = [ "fido2-device=auto" ];
-              allowDiscards = true;
-            };
-
-            persistcachecrypt = {
-              device = "${partlabel}/disk-ssd-persistcachecrypt";
-              crypttabExtraOpts = [ "fido2-device=auto" ];
-              allowDiscards = true;
-            };
-
-            persist = {
-              device = "${idpart}/ata-WDC_WD5000LPSX-75A6WT0_WX12A21JEEPK";
-              crypttabExtraOpts = [ "fido2-device=auto" ];
-            };
-
-            storage = {
-              device = "${idpart}/ata-ST500LT012-1DG142_S3PMCMHT";
-              crypttabExtraOpts = [ "fido2-device=auto" ];
-            };
-          };
-
         systemd = {
-          /*
             contents = {
               "/etc/zfs-fido/assert_param_1".source = "${self}/assets/secrets/assert_param_1";
               "/etc/zfs-fido/assert_param_2".source = "${self}/assets/secrets/assert_param_2";
@@ -69,9 +39,7 @@
               fido2-token = "${pkgs.libfido2}/bin/fido2-token";
               openssl = "${pkgs.openssl}/bin/openssl";
             };
-          */
           tpm2.enable = false;
-          /*
             services.zfs-fido = {
               after = [ "zfs-import-zroot.service" ];
               requires = [ "zfs-import-zroot.service" ];
@@ -104,8 +72,6 @@
                 exit 1
               '';
             };
-          */
-
         };
       };
     };
