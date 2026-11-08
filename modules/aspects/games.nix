@@ -31,7 +31,7 @@
             cemetery-escape
             chess-tui
             cli-of-life
-            clidle
+            #clidle
             cfonts
             go-life
             nbsdgames

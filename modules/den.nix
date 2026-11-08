@@ -18,7 +18,7 @@
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
     flake-file.url = "github:vic/flake-file";
     #https://flakehub.com/flake/NixOS/nixpkgs?view=releases&offset=650 (14)
-    nixpkgs.url = "github:NixOS/nixpkgs/3ec636362e1816bc2f0888fa0fa2c69f1bc9e504";
+    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
   };
 
   den.default.includes = [

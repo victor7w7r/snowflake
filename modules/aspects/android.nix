@@ -4,7 +4,6 @@
       { pkgs, ... }:
       {
         environment.systemPackages = with pkgs; [
-          adbfs-rootless
           androguard
           android-file-transfer
           android-tools

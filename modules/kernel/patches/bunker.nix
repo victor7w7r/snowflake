@@ -110,7 +110,6 @@
           "upstream/0012-tcp-split-tcp_check_space-in-two-parts"
           "upstream/0015-btf-optimize-type-lookup-with-binary-search"
           "upstream/0016-btf-verify-btf-sorting"
-          "upstream/0019-mount-add-OPEN_TREE_NAMESPACE"
           "xanmod/0015-kbuild-add-sms-based-software-pipelining-flags"
         ];
   };

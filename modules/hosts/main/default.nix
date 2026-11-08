@@ -71,6 +71,7 @@
         {
           config,
           inputs',
+          lib,
           pkgs,
           self',
           ...
@@ -92,16 +93,14 @@
             kernelPackages =
               (kernel.hosts.main pkgs "main" "x86_64-linux" pkgs.stdenv.hostPlatform.system).main-kernelPackages;
 
-            /*
-              zfs = {
-                package = pkgs.zfs_unstable;
-                forceImportAll = false;
-                forceImportRoot = true;
-                requestEncryptionCredentials = false;
-              };
+            zfs = {
+              package = pkgs.zfs_unstable;
+              forceImportAll = false;
+              forceImportRoot = true;
+              requestEncryptionCredentials = false;
+            };
 
-              supportedFilesystems = lib.mkAfter [ "zfs" ];
-            */
+            supportedFilesystems = lib.mkAfter [ "zfs" ];
 
             kernelModules = [
               #"kvmgt"

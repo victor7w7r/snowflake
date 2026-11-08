@@ -9,7 +9,7 @@
       { pkgs, self', ... }:
       {
         home.packages = [
-          inputs.gestures.packages."x86_64-linux".gestures
+          # inputs.gestures.packages."x86_64-linux".gestures
           self'.packages.tablet-map
           pkgs.ydotool
         ];
@@ -26,23 +26,25 @@
             };
             Install.WantedBy = [ "default.target" ];
           };
-          gestures = {
-            Unit = {
-              Description = "Libinput gestures service";
-              Requires = [ "ydotoold.service" ];
-              After = [ "ydotoold.service" ];
-              BindsTo = [ "ydotoold.service" ];
+          /*
+            gestures = {
+              Unit = {
+                Description = "Libinput gestures service";
+                Requires = [ "ydotoold.service" ];
+                After = [ "ydotoold.service" ];
+                BindsTo = [ "ydotoold.service" ];
+              };
+              Service = {
+                ExecStart = "${inputs.gestures.packages."x86_64-linux".gestures}/bin/gestures start";
+                ExecReload = "${inputs.gestures.packages."x86_64-linux".gestures}/bin/gestures reload";
+                Restart = "always";
+                RestartSec = "3s";
+                StandardOutput = "journal";
+                StandardError = "journal";
+              };
+              Install.WantedBy = [ "default.target" ];
             };
-            Service = {
-              ExecStart = "${inputs.gestures.packages."x86_64-linux".gestures}/bin/gestures start";
-              ExecReload = "${inputs.gestures.packages."x86_64-linux".gestures}/bin/gestures reload";
-              Restart = "always";
-              RestartSec = "3s";
-              StandardOutput = "journal";
-              StandardError = "journal";
-            };
-            Install.WantedBy = [ "default.target" ];
-          };
+          */
           tablet-map = {
             Unit = {
               Description = "Tablet Map daemon";

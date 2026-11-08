@@ -5,7 +5,7 @@
       { pkgs, ... }:
       {
         environment.systemPackages = with pkgs; [
-          anydesk
+          #anydesk
           cheat
           cmd-wrapped
           emptty
@@ -15,7 +15,6 @@
           inotify-tools
           jump
           sampler
-          seadrive-fuse
           viddy
           vtm
           wtfutil
