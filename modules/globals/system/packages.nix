@@ -31,7 +31,7 @@
           sd
           sig
           sqlite
-          self'.packages.texoxide
+          #self'.packages.texoxide
           tmux
           tre-command
           xz
@@ -80,7 +80,7 @@
             s-tui
             self'.packages.open
             self'.packages.progressline
-            socktop
+            #socktop
             systemctl-tui
             sysz
             watchexec

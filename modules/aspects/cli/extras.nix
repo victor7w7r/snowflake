@@ -15,7 +15,7 @@
           inotify-tools
           jump
           sampler
-          viddy
+          #viddy
           vtm
           wtfutil
         ];
@@ -33,7 +33,7 @@
         bottom.enable = true;
         navi.enable = true;
         hwatch.enable = true;
-        topgrade.enable = true;
+        #topgrade.enable = true;
         asciinema.enable = true;
         rtorrent.enable = true;
       };

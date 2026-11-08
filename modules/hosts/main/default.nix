@@ -147,7 +147,6 @@
             sunxi-tools
             tbtools
             thunderbolt
-            trailbase
             winetricks
 
             pkgsi686Linux.glibc

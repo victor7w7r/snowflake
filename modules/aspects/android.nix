@@ -50,7 +50,7 @@
             better-adb-sync
             logcat-color3
             scrcpy-wrapper
-            zilch
+            #zilch
           ]
           ++ (lib.optionals isX86 [ aya ]);
       };
