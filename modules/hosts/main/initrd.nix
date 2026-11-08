@@ -41,14 +41,10 @@
           tpm2.enable = false;
           services.zfs-fido = {
             after = [
-              "zfs-import-zmini.service"
-              "zfs-import-zstorage.service"
-              "zfs-import-zssd.service"
+              "zfs-import.target"
             ];
             requires = [
-              "zfs-import-zmini.service"
-              "zfs-import-zstorage.service"
-              "zfs-import-zssd.service"
+              "zfs-import.target"
             ];
 
             before = [ "sysroot.mount" ];
