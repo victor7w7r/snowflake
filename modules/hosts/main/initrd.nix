@@ -40,8 +40,17 @@
           };
           tpm2.enable = false;
           services.zfs-fido = {
-            after = [ "zfs-import-zroot.service" ];
-            requires = [ "zfs-import-zroot.service" ];
+            after = [
+              "zfs-import-zmini.service"
+              "zfs-import-zstorage.service"
+              "zfs-import-zssd.service"
+            ];
+            requires = [
+              "zfs-import-zmini.service"
+              "zfs-import-zstorage.service"
+              "zfs-import-zssd.service"
+            ];
+
             before = [ "sysroot.mount" ];
             requiredBy = [ "sysroot.mount" ];
             unitConfig.DefaultDependencies = false;
@@ -59,9 +68,9 @@
                     export H
                     P=$(openssl enc -d -aes-256-cbc -pbkdf2 -base64 -A -pass env:H -in /etc/zfs-fido/blob_$n 2>/dev/null) || continue
                     [ -n "$P" ] || continue
-                    printf '%s\n' "$key" | zfs load-key zmini/safe/persist
-                    printf '%s\n' "$key" | zfs load-key zmini/safe/swap
-                    printf '%s\n' "$key" | zfs load-key zstorage/safe/storage
+                    printf '%s\n' "$P" | zfs load-key zmini/safe/persist
+                    printf '%s\n' "$P" | zfs load-key zmini/safe/swap
+                    printf '%s\n' "$P" | zfs load-key zstorage/safe/storage
                     exit 0
                   done
                 done
