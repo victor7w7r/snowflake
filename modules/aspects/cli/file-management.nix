@@ -8,7 +8,7 @@
           lf
           #joshuto
           superfile
-          termscp
+          #termscp
           tran
           trash-cli
           walk
