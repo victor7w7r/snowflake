@@ -1,5 +1,15 @@
 {
+  __findFile,
+  ...
+}:
+{
   den.aspects.disks = {
+    includes = [
+      (<den/insecure> [
+        "ventoy-1.1.18"
+      ])
+    ];
+
     os =
       { pkgs, ... }:
       {
@@ -17,6 +27,7 @@
           btrfs-progs
           exfatprogs
           f2fs-tools
+          ventoy
           ntfs2btrfs
         ];
 

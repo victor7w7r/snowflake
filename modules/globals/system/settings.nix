@@ -67,7 +67,7 @@
         speechd.enable = false;
         #envfs.enable = true;
         nohang = lib.optionalAttrs (!hasVisualKeyboard) { enable = true; };
-        scx-loader.enable = isX86;
+        #scx-loader.enable = isX86;
         ananicy = lib.optionalAttrs hasVisualKeyboard {
           enable = false;
           package = pkgs.ananicy-cpp;

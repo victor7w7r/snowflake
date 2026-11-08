@@ -32,34 +32,29 @@
             bcache = {
               device = "/dev/bcache0";
               crypttabExtraOpts = [ "fido2-device=auto" ];
-              preLVM = true;
             };
 
             swapcrypt = {
               device = "${partlabel}/disk-nvme-swapcrypt";
               crypttabExtraOpts = [ "fido2-device=auto" ];
               allowDiscards = true;
-              preLVM = true;
             };
 
             cloudlogcrypt = {
               device = "${partlabel}/disk-nvme-cloudlogcrypt";
               crypttabExtraOpts = [ "fido2-device=auto" ];
-              preLVM = true;
             };
 
             cloudcachecrypt = {
               device = "${partlabel}/disk-nvme-cloudcachecrypt";
               crypttabExtraOpts = [ "fido2-device=auto" ];
               allowDiscards = true;
-              preLVM = true;
             };
 
             persist = {
               device = "${partlabel}/disk-nvme-persist";
               crypttabExtraOpts = [ "fido2-device=auto" ];
               allowDiscards = true;
-              preLVM = true;
             };
           };
       };
