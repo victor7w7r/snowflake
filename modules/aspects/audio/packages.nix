@@ -59,7 +59,7 @@
 
         programs = {
           cava.enable = true;
-          ncspot.enable = true;
+          #ncspot.enable = true;
         };
       };
   };

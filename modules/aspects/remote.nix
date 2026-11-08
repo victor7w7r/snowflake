@@ -24,7 +24,7 @@
 
     provides.to-users.homeManager = {
       services.pbgopy.enable = true;
-      programs.himalaya.enable = true;
+      #vantedfssfprograms.himalaya.enable = true;
     };
   };
 }

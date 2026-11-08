@@ -106,7 +106,7 @@
               jdownloader
               kid3-kde
               kopia-ui
-              lan-mouse
+              #lan-mouse
               legcord
               linuxthemestore
               lunacy

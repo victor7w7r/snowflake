@@ -74,7 +74,7 @@
               loc
               mynav
               posting
-              rainfrog
+              #rainfrog
               shellcheck
               ugm
               xh

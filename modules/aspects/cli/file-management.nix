@@ -6,7 +6,7 @@
         environment.systemPackages = with pkgs; [
           clifm
           lf
-          joshuto
+          #joshuto
           superfile
           termscp
           tran

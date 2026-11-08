@@ -6,7 +6,7 @@
     };
 
     provides.to-users.homeManager.programs = {
-      intelli-shell.enable = true;
+      #intelli-shell.enable = true;
       bash = {
         enable = true;
         enableCompletion = true;
