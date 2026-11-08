@@ -64,9 +64,13 @@
                     export H
                     P=$(openssl enc -d -aes-256-cbc -pbkdf2 -base64 -A -pass env:H -in /etc/zfs-fido/blob_$n 2>/dev/null) || continue
                     [ -n "$P" ] || continue
-                    printf '%s\n' "$P" | zfs load-key zmini/safe/persist
-                    printf '%s\n' "$P" | zfs load-key zmini/safe/swap
-                    printf '%s\n' "$P" | zfs load-key zstorage/safe/storage
+                    printf '%s' "$P" > /tmp/secret.key
+                
+                    zfs load-key zmini/safe/persist
+                    zfs load-key zmini/safe/swap
+                    zfs load-key zstorage/safe/storage
+                
+                    rm -f /tmp/secret.key
                     exit 0
                   done
                 done
