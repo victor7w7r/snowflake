@@ -61,11 +61,13 @@
             |> (fprintd-verify: [ "L+ /usr/bin/fprintd-verify - - - - ${fprintd-verify}" ]);
 
           services = {
-            fprintd = {
-              package = pkgs.fprintd.override { libfprint = self'.packages.libfprint-cs9711; };
-              enable = true;
-            };
-            udev.packages = [ self'.packages.libfprint-cs9711 ];
+            /*
+              fprintd = {
+                package = pkgs.fprintd.override { libfprint = self'.packages.libfprint-cs9711; };
+                enable = true;
+              };
+              udev.packages = [ self'.packages.libfprint-cs9711 ];
+            */
             desktopManager.plasma6 = {
               enable = true;
               enableQt5Integration = true;

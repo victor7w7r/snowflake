@@ -97,6 +97,7 @@
             zfs = {
               package = pkgs.zfs_unstable;
               forceImportAll = true;
+              forceImportRoot = true;
               requestEncryptionCredentials = false;
             };
 
