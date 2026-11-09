@@ -65,6 +65,8 @@
                     P=$(openssl enc -d -aes-256-cbc -pbkdf2 -base64 -A -pass env:H -in /etc/zfs-fido/blob_$n 2>/dev/null) || continue
                     [ -n "$P" ] || continue
                     printf '%s' "$P" > /tmp/secret.key
+
+                    zpool import -f zstorage
                 
                     zfs load-key zmini/safe/persist
                     zfs load-key zmini/safe/swap

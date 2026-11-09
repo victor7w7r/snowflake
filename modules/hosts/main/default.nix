@@ -32,6 +32,7 @@
         (hosts.lib.zram {
           value = "32G";
           memoryPercent = 25;
+          isCryptd = false;
         })
         main._
 
@@ -95,8 +96,7 @@
 
             zfs = {
               package = pkgs.zfs_unstable;
-              forceImportAll = false;
-              forceImportRoot = true;
+              forceImportAll = true;
               requestEncryptionCredentials = false;
             };
 

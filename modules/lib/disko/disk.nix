@@ -54,7 +54,7 @@
           mountpoint = "/";
           mountOptions = [
             "noatime"
-            "x-systemd.device-timeout=0"
+            "x-systemd.device-timeout=20"
           ];
         };
       };

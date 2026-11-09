@@ -94,7 +94,6 @@
         imports = [ inputs.disko.nixosModules.disko ];
         fileSystems = {
           "/nix/persist".neededForBoot = true;
-          # "/etc".neededForBoot = true;
         };
         disko.devices = {
           disk = {

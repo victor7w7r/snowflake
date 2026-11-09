@@ -22,7 +22,8 @@
       {
         mappers ? [ ],
         value ? "4G",
-        memoryPercent ? 50
+        memoryPercent ? 50,
+        isCryptd ? true,
       }:
       {
         nixos =
@@ -37,15 +38,22 @@
             boot.initrd.systemd.services.zram-rootfs = {
               wantedBy = [ "initrd.target" ];
               requiredBy = [
-                "cryptsetup.target"
                 "sysroot.mount"
-              ];
-              before = [
-                "cryptsetup.target"
-                "initrd-fs.target"
-                "sysroot.mount"
-                "systemd-cryptsetup-pre.target"
               ]
+              ++ (if isCryptd then [ "cryptsetup.target" ] else [ "zfs-import.target" ]);
+              before = [
+                "sysroot.mount"
+              ]
+              ++ (
+                if isCryptd then
+                  [
+                    "initrd-fs.target"
+                    "cryptsetup.target"
+                    "systemd-cryptsetup-pre.target"
+                  ]
+                else
+                  [ "zfs-import.target" ]
+              )
               ++ mappers;
               after = [ "systemd-modules-load.service" ];
               unitConfig.DefaultDependencies = false;
