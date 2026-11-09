@@ -44,7 +44,7 @@
             #adb-shell
             (python3.withPackages (ps: with ps; [ apkinspector ]))
             adbtuifm
-            adebar
+            #adebar
             app-manager
             audiosource
             better-adb-sync

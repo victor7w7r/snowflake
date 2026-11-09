@@ -1,9 +1,11 @@
 {
   flake-file.inputs = {
-    adebar = {
-      url = "https://codeberg.org/izzy/Adebar/archive/master.tar.gz";
-      flake = false;
-    };
+    /*
+      adebar = {
+        url = "https://codeberg.org/izzy/Adebar/archive/master.tar.gz";
+        flake = false;
+      };
+    */
 
     aim = {
       url = "github:mihaigalos/aim";

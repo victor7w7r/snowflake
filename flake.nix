@@ -42,10 +42,6 @@
   };
 
   inputs = {
-    adebar = {
-      url = "https://codeberg.org/izzy/Adebar/archive/master.tar.gz";
-      flake = false;
-    };
     agenix.url = "github:ryantm/agenix";
     aim = {
       url = "github:mihaigalos/aim";
