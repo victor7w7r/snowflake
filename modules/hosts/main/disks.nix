@@ -73,12 +73,20 @@
           };
       };
 
-      zssd = zfs.pool {
+      zroot = zfs.pool {
+        isRoot = true;
         mode = "";
         datasets =
-          zfs.preDataset { }
+          zfs.preDataset { name = "local"; }
           // zfs.dataset {
-            pool = "zssd";
+            preDataset = "local";
+            options = {
+              compression = "zstd";
+              "com.sun:auto-snapshot" = "false";
+            };
+          }
+          // zfs.dataset {
+            preDataset = "local";
             name = "store";
             mountpoint = "/nix/store";
             options = {
@@ -108,20 +116,12 @@
             };
             ssd = zfs.entireDisk {
               device = "ata-Dahua_C800_2.5_inch_SATA_256GB_SSD_N9YM01A00A03658";
-              pool = "zssd";
+              pool = "zroot";
             };
           };
 
-          zpool = { inherit zmini zstorage zssd; };
+          zpool = { inherit zmini zstorage zroot; };
 
-          nodev."/" = {
-            fsType = "tmpfs";
-            mountOptions = [
-              "size=8G"
-              "defaults"
-              "mode=755"
-            ];
-          };
         };
       };
 
