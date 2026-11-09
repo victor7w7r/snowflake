@@ -32,7 +32,7 @@
         (hosts.lib.zram {
           value = "32G";
           memoryPercent = 25;
-          isCryptd = false;
+          includeRoot = false;
         })
         main._
 

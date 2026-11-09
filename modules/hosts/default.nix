@@ -23,11 +23,11 @@
         mappers ? [ ],
         value ? "4G",
         memoryPercent ? 50,
-        isCryptd ? true,
+        includeRoot ? true,
       }:
       {
         nixos =
-          { pkgs, ... }:
+          { lib, pkgs, ... }:
           {
             zramSwap = {
               enable = true;
@@ -35,25 +35,20 @@
               inherit memoryPercent;
               priority = 100;
             };
+          }
+          // (lib.optionalAttrs includeRoot {
             boot.initrd.systemd.services.zram-rootfs = {
               wantedBy = [ "initrd.target" ];
               requiredBy = [
+                "cryptsetup.target"
                 "sysroot.mount"
-              ]
-              ++ (if isCryptd then [ "cryptsetup.target" ] else [ "zfs-import.target" ]);
+              ];
               before = [
+                "cryptsetup.target"
+                "initrd-fs.target"
                 "sysroot.mount"
+                "systemd-cryptsetup-pre.target"
               ]
-              ++ (
-                if isCryptd then
-                  [
-                    "initrd-fs.target"
-                    "cryptsetup.target"
-                    "systemd-cryptsetup-pre.target"
-                  ]
-                else
-                  [ "zfs-import.target" ]
-              )
               ++ mappers;
               after = [ "systemd-modules-load.service" ];
               unitConfig.DefaultDependencies = false;
@@ -73,7 +68,7 @@
                 ${pkgs.e2fsprogs}/bin/mkfs.ext4 -m 0 -O "^has_journal,^huge_file,^flex_bg" /dev/zram1
               '';
             };
-          };
+          });
       };
   };
 }

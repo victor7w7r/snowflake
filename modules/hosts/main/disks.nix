@@ -98,7 +98,6 @@
         disko.devices = {
           disk = {
             inherit main;
-            root = disk.root { };
             mini-nvme = zfs.entireDisk {
               device = "ata-Micron_2400_MTFDKBK512QFM_232240F15D36";
               pool = "zmini";
@@ -114,6 +113,15 @@
           };
 
           zpool = { inherit zmini zstorage zssd; };
+
+          nodev."/" = {
+            fsType = "tmpfs";
+            mountOptions = [
+              "size=8G"
+              "defaults"
+              "mode=755"
+            ];
+          };
         };
       };
 
