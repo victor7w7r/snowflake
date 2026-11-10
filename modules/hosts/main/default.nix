@@ -70,7 +70,6 @@
       ];
       nixos =
         {
-          config,
           inputs',
           lib,
           pkgs,
@@ -87,7 +86,6 @@
           systemd.tmpfiles.rules = [
             "w /sys/devices/system/cpu/intel_pstate/no_turbo - - - - 1"
             "w /sys/devices/system/cpu/intel_pstate/max_perf_pct - - - - 80"
-            "w /sys/block/bcache0/bcache/cache_mode - - - - writeback"
           ];
 
           boot = {
@@ -96,7 +94,7 @@
 
             zfs = {
               package = pkgs.zfs_unstable;
-              forceImportAll = true;
+              forceImportAll = false;
               forceImportRoot = true;
               requestEncryptionCredentials = false;
             };
@@ -126,7 +124,7 @@
               "libahci.ignore_sss=1"
               "pcie_ports=compat"
               "video=DP-2:1600x900@60e"
-              "resume=${config.boot.resumeDevice}"
+              #"resume=${config.boot.resumeDevice}"
             ];
           };
 

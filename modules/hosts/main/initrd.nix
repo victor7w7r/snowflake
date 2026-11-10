@@ -1,6 +1,6 @@
 { self, ... }: {
   den.aspects.main.initrd.nixos =
-    { lib, pkgs, ... }:
+    { config, pkgs, ... }:
     {
       boot.initrd = {
 
@@ -22,6 +22,7 @@
           "usb_storage"
           "usbhid"
           "xhci_hcd"
+          "zfs"
         ];
 
         services.udev.packages = [ pkgs.libfido2 ];
@@ -39,48 +40,64 @@
             openssl = "${pkgs.openssl}/bin/openssl";
           };
           tpm2.enable = false;
-          services.zfs-fido = {
-            after = [
-              "zfs-import.target"
-            ];
-            requires = [
-              "zfs-import.target"
-            ];
+          services = {
+            zfs-import-zroot.enable = false;
+            zfs-import-zmini.enable = false;
+            zfs-import-zstorage.enable = false;
 
-            before = [ "sysroot.mount" ];
-            requiredBy = [ "sysroot.mount" ];
-            unitConfig.DefaultDependencies = false;
-            serviceConfig = {
-              Type = "oneshot";
-              RemainAfterExit = true;
-            };
-            script = ''
-              echo "Toca la llave para desbloquear los dispositivos..." > /dev/console
-              for i in $(seq 1 60); do
-                for dev in $(fido2-token -L 2>/dev/null | grep -o '^/dev/hidraw[0-9]*'); do
-                  for n in 1 2; do
-                    H=$(fido2-assert -G -h -i /etc/zfs-fido/assert_param_$n "$dev" 2>/dev/null | tail -n1)
-                    [ -n "$H" ] || continue
-                    export H
-                    P=$(openssl enc -d -aes-256-cbc -pbkdf2 -base64 -A -pass env:H -in /etc/zfs-fido/blob_$n 2>/dev/null) || continue
-                    [ -n "$P" ] || continue
-                    printf '%s' "$P" > /tmp/secret.key
+            zfs-setimport = {
+              wantedBy = [ "initrd.target" ];
+              before = [
+                #"rollback-zfs.service"
+                "initrd-fs.target"
+                "sysroot.mount"
+              ];
+              after = [
+                "systemd-modules-load.service"
+                "systemd-udev-settle.service"
+                "dev-disk-by-id.device"
+              ];
+              wants = [ "systemd-udev-settle.service" ];
+              unitConfig.DefaultDependencies = false;
+              path = [
+                config.boot.zfs.package
+                pkgs.util-linux
+                pkgs.systemd
+                pkgs.coreutils
+              ];
+              serviceConfig = {
+                Type = "oneshot";
+                RemainAfterExit = true;
+              };
+              script = ''
+                echo "Toca la llave para desbloquear los dispositivos..." > /dev/console
+                for i in $(seq 1 60); do
+                  for dev in $(fido2-token -L 2>/dev/null | grep -o '^/dev/hidraw[0-9]*'); do
+                    for n in 1 2; do
+                      H=$(fido2-assert -G -h -i /etc/zfs-fido/assert_param_$n "$dev" 2>/dev/null | tail -n1)
+                      [ -n "$H" ] || continue
+                      export H
+                      P=$(openssl enc -d -aes-256-cbc -pbkdf2 -base64 -A -pass env:H -in /etc/zfs-fido/blob_$n 2>/dev/null) || continue
+                      [ -n "$P" ] || continue
+                      printf '%s' "$P" > /tmp/secret.key
 
-                    zpool import -f zstorage
-                
-                    zfs load-key zmini/safe/persist
-                    zfs load-key zmini/safe/swap
-                    zfs load-key zstorage/safe/storage
-                
-                    rm -f /tmp/secret.key
-                    exit 0
+                      zpool import -f -N -a -d /dev/disk/by-id
+                      zfs rollback -r zroot/local/root@empty
+                  
+                      cat /tmp/secret.key | zfs load-key zmini/safe/persist
+                      cat /tmp/secret.key | zfs load-key zmini/safe/swap
+                      cat /tmp/secret.key | zfs load-key zstorage/safe/storage
+                  
+                      rm -f /tmp/secret.key
+                      exit 0
+                    done
                   done
+                  sleep 1
                 done
-                sleep 1
-              done
-              echo "No se pudo desbloquear ZFS" > /dev/console
-              exit 1
-            '';
+                echo "No se pudo desbloquear ZFS" > /dev/console
+                exit 1
+              '';
+            };
           };
         };
       };

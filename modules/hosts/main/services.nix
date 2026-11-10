@@ -13,6 +13,31 @@
           "https://100.64.0.2:9090"
           "http://100.64.0.2:9090"
         ];
+
+        zfs = {
+          autoScrub = {
+            enable = true;
+            interval = "Sat, 02:00";
+            pools = [
+              "zroot"
+              "zssd"
+              "zmini"
+            ];
+          };
+
+          autoSnapshot = {
+            enable = true;
+            frequent = 4;
+            hourly = 24;
+            daily = 7;
+            weekly = 4;
+            monthly = 12;
+            flags = "-k -p";
+          };
+          trim.enable = true;
+          trim.interval = "weekly";
+        };
+
         #thermald.enable = true;
       };
       systemd = {
