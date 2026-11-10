@@ -123,7 +123,7 @@
               "swiotlb=64M"
               "libahci.ignore_sss=1"
               "pcie_ports=compat"
-              "video=DP-2:1600x900@60e"
+              "video=DP-3:1600x900@60e"
               #"resume=${config.boot.resumeDevice}"
             ];
           };
