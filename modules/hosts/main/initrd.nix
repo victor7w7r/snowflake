@@ -63,6 +63,9 @@
                 config.boot.zfs.package
                 pkgs.util-linux
                 pkgs.systemd
+                pkgs.gnugrep
+                pkgs.openssl
+                pkgs.libfido2
                 pkgs.coreutils
               ];
               serviceConfig = {
