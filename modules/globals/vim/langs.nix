@@ -109,7 +109,7 @@
           lspconfig.enable = true;
 
           markdown-preview = {
-            enable = true;
+            enable = false;
             lazyLoad.settings.ft = "markdown";
             settings = {
               auto_close = 0;
