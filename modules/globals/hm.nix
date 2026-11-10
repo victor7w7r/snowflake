@@ -36,7 +36,7 @@
         { pkgs, ... }:
         {
           home-manager = {
-            backupCommand = "${pkgs.trash-cli}/bin/trash";
+            #backupCommand = "${pkgs.trash-cli}/bin/trash";
             sharedModules = [
               (
                 { ... }:

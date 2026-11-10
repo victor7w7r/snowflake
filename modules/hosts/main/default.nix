@@ -162,7 +162,6 @@
         {
           programs.looking-glass-client.enable = true;
           home.file = {
-            "shared".source = config.lib.file.mkOutOfStoreSymlink "/run/media/shared";
             "storage".source = config.lib.file.mkOutOfStoreSymlink "/nix/persist/storage";
           };
         };
