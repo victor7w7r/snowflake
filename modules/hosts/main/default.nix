@@ -129,7 +129,7 @@
           };
 
           environment = {
-            environment.persistence."/nix/persist".directories = [ "/nix/var/nix" ];
+            persistence."/nix/persist".directories = [ "/nix/var/nix" ];
 
             systemPackages = with pkgs; [
               bolt
