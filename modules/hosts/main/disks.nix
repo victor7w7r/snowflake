@@ -121,7 +121,6 @@
           };
 
           zpool = { inherit zmini zstorage zroot; };
-
         };
       };
 
@@ -141,7 +140,7 @@
             };
           };
 
-          zpool = { inherit zmini zstorage zssd; };
+          zpool = { inherit zmini zstorage zroot; };
         };
       };
     };

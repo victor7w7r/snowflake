@@ -20,7 +20,7 @@
             interval = "Sat, 02:00";
             pools = [
               "zroot"
-              "zssd"
+              "zstorage"
               "zmini"
             ];
           };

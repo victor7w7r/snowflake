@@ -128,33 +128,36 @@
             ];
           };
 
-          environment.systemPackages = with pkgs; [
-            bolt
-            freetype
-            ffmpeg
-            gnutls
-            inputs'.nixpkgs-wine.legacyPackages.wineWow64Packages.staging
-            kdePackages.plasma-thunderbolt
-            libfido2
-            libxcrypt
-            nbd
-            openssl
-            picocom
-            rkdeveloptool
-            self'.packages.propertree
-            sqlite
-            sunxi-tools
-            tbtools
-            thunderbolt
-            winetricks
+          environment = {
+            environment.persistence."/nix/persist".directories = [ "/nix/var/nix" ];
 
-            pkgsi686Linux.glibc
-            pkgsi686Linux.stdenv.cc.cc.lib
-            pkgsi686Linux.gnutls
-            pkgsi686Linux.freetype
-            pkgsi686Linux.libxcrypt
-          ];
+            systemPackages = with pkgs; [
+              bolt
+              freetype
+              ffmpeg
+              gnutls
+              inputs'.nixpkgs-wine.legacyPackages.wineWow64Packages.staging
+              kdePackages.plasma-thunderbolt
+              libfido2
+              libxcrypt
+              nbd
+              openssl
+              picocom
+              rkdeveloptool
+              self'.packages.propertree
+              sqlite
+              sunxi-tools
+              tbtools
+              thunderbolt
+              winetricks
 
+              pkgsi686Linux.glibc
+              pkgsi686Linux.stdenv.cc.cc.lib
+              pkgsi686Linux.gnutls
+              pkgsi686Linux.freetype
+              pkgsi686Linux.libxcrypt
+            ];
+          };
         };
 
       provides.to-users.homeManager =
