@@ -99,27 +99,6 @@
               ];
             };
           };
-          cache-health-check = {
-            serviceConfig = {
-              Type = "oneshot";
-              ExecStart = pkgs.writeShellScript "bcache-check" ''
-                BCACHE_PATH="/sys/block/bcache0/bcache"
-
-                if [ -d "$BCACHE_PATH" ]; then
-                  ERRORS=$(cat "$BCACHE_PATH/io_errors" 2>/dev/null || echo "0")
-                  STATE=$(cat "$BCACHE_PATH/state" 2>/dev/null || echo "")
-
-                  if [ "$ERRORS" -gt 0 ] || [ "$STATE" = "no cache" ]; then
-                    CURRENT_MODE=$(cat "$BCACHE_PATH/cache_mode" | grep -o '\[.*\]' | tr -d '[]')
-                    if [ "$CURRENT_MODE" != "writethrough" ] && [ "$CURRENT_MODE" != "passthrough" ]; then
-                      echo "Errores detectados ($ERRORS) o estado degrado ($STATE). Conmutando bcache a writethrough..."
-                      echo writethrough > "$BCACHE_PATH/cache_mode"
-                    fi
-                  fi
-                fi
-              '';
-            };
-          };
         };
       };
     };
