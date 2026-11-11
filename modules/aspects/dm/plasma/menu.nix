@@ -1,17 +1,18 @@
 { self, ... }: {
   den.aspects.plasma.menu.provides.to-users.homeManager =
     {
-      config,
       lib,
       isPhone,
       ...
     }:
     lib.optionalAttrs (!isPhone) {
       home.activation.kmenuedit-menu = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        f="${config.xdg.configHome}/menus/applications-kmenuedit.menu"
+        conf_dir="$HOME/.config/menus"
+        f="$conf_dir/applications-kmenuedit.menu"
+        mkdir -p "$conf_dir"
+
         if [ ! -e "$f" ]; then
-          $DRY_RUN_CMD mkdir -p "$(dirname "$f")"
-          $DRY_RUN_CMD install -Dm644 ${self}/modules/aspects/dm/plasma/applications-kmenuedit.menu "$f"
+          install -Dm644 ${self}/modules/aspects/dm/plasma/applications-kmenuedit.menu "$f"
         fi
       '';
     };
