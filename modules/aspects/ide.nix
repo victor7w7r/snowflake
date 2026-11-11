@@ -31,8 +31,6 @@
             packages = with pkgs; [
               bruno
               jetbrains.idea
-              jetbrains.goland
-              jetbrains.rust-rover
             ];
 
             file.".ideavimrc".text = ''

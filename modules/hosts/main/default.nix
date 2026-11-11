@@ -46,7 +46,7 @@
 
         android
         bluetooth
-        cockpit
+        #cockpit
         dev
         disks
         #emacs
@@ -54,7 +54,7 @@
         firewall
         ide
         games
-        gestures
+        #gestures
         kitty
         libvirt
         persistence
