@@ -38,6 +38,7 @@
           disks
           emulation
           firewall
+          ide
           games
           kitty
           libvirt

@@ -13,11 +13,11 @@
 
           variables.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
           persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
+            ".cache/JetBrains"
             ".config/bruno"
             ".config/JetBrains"
-            ".copilot"
-            "go"
             ".java"
+            ".jb_run"
             ".local/share/JetBrains"
           ];
         };

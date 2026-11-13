@@ -23,6 +23,7 @@
             directories = [ "/var/lib/fprint" ];
             users."${user.name}" = {
               directories = [
+                ".config/menus"
                 ".local/share/baloo"
                 ".local/share/klipper"
                 ".local/share/krdc"

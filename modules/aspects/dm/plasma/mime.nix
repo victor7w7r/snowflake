@@ -1,7 +1,7 @@
 {
   den.aspects.plasma.mime.provides.to-users.homeManager =
     { lib, isPhone, ... }:
-    lib.optionalAttrs isPhone {
+    lib.optionalAttrs (!isPhone) {
       xdg.mimeApps = {
         enable = true;
         defaultApplications = {

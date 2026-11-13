@@ -70,7 +70,6 @@
             "maccy"
             "mist"
             "mounty"
-            "onlyoffice"
             "onyx"
             "openmtp"
             "parallels-client"

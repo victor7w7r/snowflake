@@ -12,16 +12,15 @@
           ...
         }:
         lib.optionalAttrs (isPersistent && !isServer) {
-          #imports = [ inputs.siyuan-nix.nixosModules.default ];
           environment.persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
-            ".config/BraveSoftware/Brave-Browser"
+            ".config/chromium"
             ".config/deckcraft"
             ".config/effectcraft"
             ".config/gridcraft"
             ".config/legcord"
             ".config/photocraft"
             ".config/siyuan"
-            ".config/SiYuan-electron"
+            ".config/SiYuan-Electron"
             ".config/vectorcraft"
             ".config/vlc"
             ".config/wordcraft"
@@ -37,7 +36,6 @@
             enable = true;
             binfmt = true;
           };
-
         };
 
       provides.to-users.homeManager =
@@ -56,10 +54,7 @@
         lib.optionalAttrs (isPersistent && !isServer) {
           dbus.packages = [ config.programs.chromium.package ];
           programs = {
-            chromium = {
-              enable = true;
-              #package = pkgs.brave;
-            };
+            chromium.enable = true;
 
             artcraft = lib.optionalAttrs (!isPhone) {
               enable = true;
@@ -74,8 +69,8 @@
                 "wordcraft"
               ];
             };
-
           };
+
           imports = [ inputs.artcraft.homeManagerModules.default ];
 
           xdg.configFile."autostart/siyuan.desktop".text = ''
@@ -105,16 +100,12 @@
             ++ (lib.optionals (!isPhone) [
               jdownloader
               kid3-kde
-              kopia-ui
               #lan-mouse
               legcord
               linuxthemestore
-              lunacy
               #morphosis
-              music-discord-rpc
               rclone-browser
               sonic-visualiser
-              spotify-qt
               sticky-notes
               tahoma2d
               tenacity
@@ -122,12 +113,10 @@
               vlc
               #davinci-resolve
               #davinci-video-converter
-              #natron
               #shutter-encoder
             ])
             ++ (lib.optionals isX86 [
               cpu-x
-              lightworks
               xpipe
             ]);
         };

@@ -21,10 +21,12 @@
             persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
               ".cache/mise"
               ".cargo"
+              ".copilot"
+              ".gradle"
               ".local/share/mise"
               ".npm"
               ".rustup"
-              ".gradle"
+              "go"
             ];
           };
 
