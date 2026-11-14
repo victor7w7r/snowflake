@@ -71,6 +71,7 @@
               kernelParams = [
                 "mitigations=off"
                 "nospectre_v1"
+                "amdgpu.dcdebugmask=0x40010"
                 "nospectre_v2"
                 "spec_store_bypass_disable=off"
                 "amdgpu.sg_display=0"

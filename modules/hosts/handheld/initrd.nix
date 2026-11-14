@@ -11,7 +11,6 @@
       "dm_mod"
       "dm_crypt"
       "encrypted_keys"
-      "snd_hda_intel"
       "usbhid"
     ];
 

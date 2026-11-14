@@ -44,6 +44,7 @@
           isPhone,
           isServer,
           isX86,
+          isMain,
           lib,
           pkgs,
           config,
@@ -72,14 +73,6 @@
           };
 
           imports = [ inputs.artcraft.homeManagerModules.default ];
-
-          xdg.configFile."autostart/siyuan.desktop".text = ''
-            [Desktop Entry]
-            Type=Application
-            Name=Siyuan
-            Exec=${inputs'.siyuan-nix.packages.siyuan-client}/bin/siyuan
-            Terminal=false
-          '';
 
           home.packages =
             with pkgs;
@@ -119,6 +112,15 @@
               cpu-x
               xpipe
             ]);
-        };
+        }
+        // (lib.optionalAttrs isMain {
+          xdg.configFile."autostart/siyuan.desktop".text = ''
+            [Desktop Entry]
+            Type=Application
+            Name=Siyuan
+            Exec=${inputs'.siyuan-nix.packages.siyuan-client}/bin/siyuan
+            Terminal=false
+          '';
+        });
     };
 }

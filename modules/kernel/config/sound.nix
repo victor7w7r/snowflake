@@ -69,6 +69,7 @@
           SND_SOC_SOF_AMD_SOUNDWIRE_LINK_BASELINE = setupDenial isDenied module;
           SND_SOC_SOF_AMD_TOPLEVEL = setupDenial isDenied module;
           SND_SOC_SOF_AMD_VANGOGH = setupDenial isDenied module;
+          SND_HDA_CODEC_HDMI_ATI = setupDenial isDenied module;
           SOUNDWIRE_AMD = setupDenial isDenied module;
         };
 
@@ -176,7 +177,7 @@
           SND_HDA_CODEC_CM9825 = no;
           SND_HDA_CODEC_CMEDIA = no;
           SND_HDA_CODEC_CONEXANT = no;
-          SND_HDA_CODEC_HDMI_ATI = no;
+
           SND_HDA_CODEC_HDMI_NVIDIA = no;
           SND_HDA_CODEC_HDMI_NVIDIA_MCP = no;
           SND_HDA_CODEC_HDMI_TEGRA = no;
