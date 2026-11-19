@@ -25,34 +25,36 @@ stdenvNoCC.mkDerivation {
   };
 
   nativeBuildInputs = with pkgs; [
+    autoPatchelfHook
     makeWrapper
-    unzip
   ];
 
-  unpackPhase = ''
-    case "${selectedSource.url}" in
-      *.tar.gz) tar -xzf $src ;;
-      *) unzip $src ;;
-    esac
-  '';
+  buildInputs = with pkgs; [
+    jdk21
+    zlib
+    stdenv.cc.cc.lib
+    libX11
+    libXext
+    libXrender
+    libXi
+    libXtst
+    libXxf86vm
+    libxkbcommon
+    wayland
+    fontconfig
+    freetype
+    alsa-lib
+  ];
 
-  dontBuild = true;
+  dontStrip = true;
 
   installPhase = ''
-    mkdir -p $out/bin $out/share/kotlin-lsp
-    cp -r kotlin-server-${version}/* $out/share/kotlin-lsp/
-    chmod +x $out/share/kotlin-lsp/bin/intellij-server
-    ${
-      if pkgs.stdenv.hostPlatform.isDarwin then
-        ''
-          chmod +x $out/share/kotlin-lsp/jbr/Contents/Home/bin/java
-        ''
-      else
-        ''
-          chmod +x $out/share/kotlin-lsp/jbr/bin/java
-        ''
-    }
-
-    makeWrapper $out/share/kotlin-lsp/bin/intellij-server $out/bin/kotlin-lsp
+    mkdir -p $out/libexec
+    cp -r . $out/libexec/kotlin-lsp
+    install -d $out/bin
+    makeWrapper $out/libexec/kotlin-lsp/bin/intellij-server $out/bin/intellij-server \
+      --set JAVA_HOME ${pkgs.jdk21}/lib/openjdk \
+      --suffix PATH : ${pkgs.jdk21}/bin
+    ln -s intellij-server $out/bin/kotlin-lsp
   '';
 }

@@ -2,27 +2,79 @@
   den.aspects.ide =
     { user, ... }:
     {
-      nixos = { lib, pkgs, ... }: {
-        environment = {
-          systemPackages = with pkgs; [
-            gcc
-            clang
-            binaryen
-            upx
-          ];
+      nixos =
+        {
+          lib,
+          pkgs,
+          options,
+          ...
+        }:
+        {
+          environment = {
+            systemPackages = with pkgs; [
+              binaryen
+              binutils
+              gcc
+              upx
+            ];
 
-          variables.LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-          persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
-            ".cache/JetBrains"
-            ".config/bruno"
-            ".config/JetBrains"
-            ".java"
-            ".jb_run"
-            ".local/share/JetBrains"
-          ];
+            etc."swift/x86_64-unknown-linux-gnu-clang.cfg".text =
+              let
+                glibcLib = lib.getLib pkgs.glibc;
+                gccLib = lib.getLib pkgs.gcc.cc;
+                gccDir = "${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.cc.version}";
+              in
+              ''
+                -Wno-unused-command-line-argument
+                -B${glibcLib}/lib
+                -B${gccDir}
+                -L${glibcLib}/lib
+                -L${gccDir}
+                -L${gccLib}/lib
+              '';
+
+            # TC="$(mise where swift)/usr/bin"; ln -sf /etc/swift/x86_64-unknown-linux-gnu-clang.cfg "$TC/x86_64-unknown-linux-gnu-clang.cfg"
+
+            sessionVariables =
+              (lib.concatStringsSep ":" [
+                "${lib.getLib pkgs.glibc}/lib"
+                "${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.cc.version}"
+                "${lib.getLib pkgs.gcc.cc}/lib"
+              ])
+              |> (linkPaths: {
+                COMPILER_PATH = linkPaths + ":${pkgs.binutils}/bin";
+                LIBRARY_PATH = linkPaths;
+                C_INCLUDE_PATH = "${pkgs.glibc.dev}/include";
+              });
+
+            persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
+              ".cache/JetBrains"
+              ".config/bruno"
+              ".config/JetBrains"
+              ".java"
+              ".jb_run"
+              ".swiftpm"
+              ".local/share/JetBrains"
+            ];
+          };
+
+          systemd.tmpfiles.rules = [ "L+ /usr/include - - - - ${pkgs.glibc.dev}/include" ];
+
+          programs.nix-ld.libraries =
+            options.programs.nix-ld.libraries.default
+            ++ (with pkgs; [
+              curl
+              libedit
+              libxml2
+              libxml2_13
+              ncurses
+              sqlite
+              stdenv.cc.cc
+              stdenv.cc.cc.lib
+              util-linux
+              zlib
+            ]);
         };
-
-      };
 
       provides.to-users.homeManager =
         { pkgs, ... }:

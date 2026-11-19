@@ -118,13 +118,6 @@
         lazyLoad.settings.before.__raw = "function() require('lz.n').trigger_load('nvim-dap') end";
         settings.dapview_register = true;
       };
-
-      dap-lldb = {
-        enable = true;
-        lazyLoad.settings.before.__raw = "function() require('lz.n').trigger_load('nvim-dap') end";
-        settings.codelldb_path = "${pkgs.vscode-extensions.vadimcn.vscode-lldb.adapter}/bin/codelldb";
-      };
-
       dap-ui = {
         enable = true;
 

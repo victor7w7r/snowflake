@@ -87,7 +87,7 @@
           screego
           curlFull
           doggo
-          self'.packages.goto
+          #self'.packages.goto
           gping
           inetutils
           iptables

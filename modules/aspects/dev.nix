@@ -20,13 +20,11 @@
             ];
             persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
               ".cache/mise"
-              ".cargo"
               ".copilot"
+              ".go"
               ".gradle"
               ".local/share/mise"
               ".npm"
-              ".rustup"
-              "go"
             ];
           };
 
@@ -82,7 +80,7 @@
               xh
             ];
           programs.direnv = {
-            enable = false;
+            enable = true;
             enableZshIntegration = true;
             nix-direnv.enable = true;
           };
@@ -106,16 +104,10 @@
           enable = true;
           enableZshIntegration = true;
           enableBashIntegration = true;
-          globalConfig = {
-            tools = {
-              bun = "1.4.2";
-              node = "24";
-            };
-            settings = {
-              trusted_config_paths = [ "~/repositories" ];
-              node.compile = false;
-              npm.bun = true;
-            };
+          globalConfig.settings = {
+            trusted_config_paths = [ "~/repositories" ];
+            node.compile = false;
+            npm.bun = true;
           };
         };
       };

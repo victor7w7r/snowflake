@@ -179,7 +179,8 @@
           end
         '';
       }
-      {
+      /*
+        {
         event = [
           "BufEnter"
           "BufWritePost"
@@ -191,7 +192,8 @@
             require('lint').try_lint()
           end
         '';
-      }
+        }
+      */
     ];
   };
 }

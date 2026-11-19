@@ -14,9 +14,11 @@
       buildInputs ? [ ],
       postInstall ? "",
       installPhase ? "",
+      postPatch ? "",
       cargoHash ? lib.fakeHash,
       version ? "latest",
-    }:
+      ...
+    }@args:
     let
       customRustToolchain =
         (pkgs.extend (import inputs.rust-overlay)).rust-bin.stable.latest.default.override
@@ -31,28 +33,44 @@
         cargo = customRustToolchain;
         rustc = customRustToolchain;
       };
+      extraArgs = removeAttrs args [
+        "pkgs"
+        "pname"
+        "src"
+        "nativeBuildInputs"
+        "buildInputs"
+        "postInstall"
+        "installPhase"
+        "postPatch"
+        "cargoHash"
+        "version"
+      ];
     in
-    customRustPlatform.buildRustPackage {
-      inherit
-        pname
-        postInstall
-        version
-        installPhase
-        cargoHash
-        buildInputs
-        src
-        ;
-      nativeBuildInputs =
-        with pkgs;
-        [
-          sccache
-          clang
-          mold
-        ]
-        ++ nativeBuildInputs;
-      SCCACHE_DIR = "/var/cache/sccache";
-      RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=mold";
-      RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-      doCheck = false;
-    };
+    customRustPlatform.buildRustPackage (
+      extraArgs
+      // {
+        inherit
+          pname
+          postInstall
+          version
+          installPhase
+          postPatch
+          cargoHash
+          buildInputs
+          src
+          ;
+        nativeBuildInputs =
+          with pkgs;
+          [
+            sccache
+            clang
+            mold
+          ]
+          ++ nativeBuildInputs;
+        SCCACHE_DIR = "/var/cache/sccache";
+        RUSTFLAGS = "-C linker=clang -C link-arg=-fuse-ld=mold";
+        RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+        doCheck = false;
+      }
+    );
 }

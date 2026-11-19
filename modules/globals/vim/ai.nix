@@ -38,11 +38,6 @@
           };
         };
 
-        blink-cmp-avante = {
-          enable = true;
-          lazyLoad.settings.event = "InsertEnter";
-        };
-
         blink-copilot = {
           enable = true;
           lazyLoad.settings.event = "InsertEnter";
@@ -50,10 +45,12 @@
 
         blink-cmp.settings.sources = {
           providers = {
-            avante = {
-              module = "blink-cmp-avante";
-              name = "Avante";
-            };
+            /*
+              avante = {
+                module = "blink-cmp-avante";
+                name = "Avante";
+              };
+            */
             copilot = {
               async = true;
               module = "blink-copilot";
@@ -72,7 +69,7 @@
             };
           };
           default = lib.mkAfter [
-            "avante"
+            #"avante"
             "copilot"
           ];
         };

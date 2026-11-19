@@ -1,48 +1,76 @@
+{ inputs, ... }:
 {
   den.default.os =
     {
       lib,
       pkgs,
       self',
-      isX86,
       ...
     }:
     {
       programs.nixvim = {
+
         extraPackages = with pkgs; [
           glab
           luajitPackages.tree-sitter-cli
           self'.packages.dbee
+          golangci-lint
           sqlite
         ];
 
         extraPlugins = [
           pkgs.vimPlugins.vim-dotenv
-          (pkgs.vimUtils.buildVimPlugin rec {
-            pname = "kotlin.nvim";
-            version = "2.2.0";
-            doCheck = false;
-
-            src = pkgs.fetchFromGitHub {
-              owner = "AlexandrosAlexiou";
-              repo = pname;
-              rev = "v${version}";
-              hash = "sha256-sWE5RjmKxgUWIx/ignDypeGZKV1uvk9MSn9LuePD/IA=";
-            };
-          })
         ];
 
         lsp.servers = {
           astro.enable = true;
           bashls.enable = true;
           cssls.enable = true;
-          dartls.enable = true;
           docker_compose_language_service.enable = true;
           dockerls.enable = true;
           emmet_ls.enable = true;
+
+          kmp_lsp = {
+            enable = true;
+            package = self'.packages.kmp-lsp;
+            config = {
+              cmd = [ "kmp-lsp" ];
+              /*
+                capabilities = inputs.nixvim.lib.nixvim.mkRaw ''
+                  require("blink-cmp").get_lsp_capabilities(vim.lsp.protocol.make_client_capabilities())
+                '';
+              */
+              filetypes = [
+                #"kotlin"
+                "java"
+              ];
+              root_markers = [
+                "build.gradle"
+                "build.gradle.kts"
+                "settings.gradle"
+                "settings.gradle.kts"
+                "pom.xml"
+                ".git"
+              ];
+            };
+          };
+          kotlin_lsp = {
+            enable = true;
+            package = self'.packages.kotlin-lsp;
+            config = {
+              cmd = inputs.nixvim.lib.nixvim.mkRaw ''
+                { "intellij-server", "--stdio", "--system-path", vim.fn.stdpath("cache") .. "/kotlin-lsp" }
+              '';
+              /*
+                capabilities = inputs.nixvim.lib.nixvim.mkRaw ''
+                  require("blink-cmp").get_lsp_capabilities(vim.lsp.protocol.make_client_capabilities())
+                '';
+              */
+            };
+          };
           html.enable = true;
-          gitlab_ci_ls.enable = true;
           gopls.enable = true;
+          golangci_lint_ls.enable = true;
           jsonls.enable = true;
           marksman.enable = true;
           oxfmt.enable = true;
@@ -55,35 +83,29 @@
               root_markers = [ ".git" ];
             };
           };
-          postgres_lsp.enable = true;
           pylsp.enable = true;
-          rust_analyzer = {
+          sourcekit = {
             enable = true;
-            config.settings = {
-              cargo = {
-                loadOutDirsFromCheck = true;
-                buildScripts.enable = false;
-              };
-
-              procMacro.enable = true;
-
-              diagnostics = {
-                enable = true;
-                disabled = [ "inactive-code" ];
-                styleLints.enable = true;
-              };
-
-              checkOnSave = true;
-              check.command = "clippy";
-
-              files.excludeDirs = [
-                ".direnv"
-                "target"
+            package = null;
+            config = {
+              cmd = [ "sourcekit-lsp" ];
+              capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = true;
+              filetypes = [ "swift" ];
+              root_markers = [
+                "buildServer.json"
+                "Package.swift"
                 ".git"
               ];
             };
           };
-          statix.enable = true;
+          statix = {
+            enable = true;
+            config.cmd = [
+              "statix"
+              "check"
+              "-s"
+            ];
+          };
           stylelint_lsp.enable = true;
           svelte.enable = true;
           #ts_ls.enable = true;
@@ -99,11 +121,6 @@
               "txt"
               "gitcommit"
             ];
-          };
-
-          crates = {
-            enable = true;
-            lazyLoad.settings.ft = "BufRead Cargo.toml";
           };
 
           lspconfig.enable = true;
@@ -173,10 +190,10 @@
               python
               query
               regex
-              rust
               sql
               ssh_config
               svelte
+              swift
               tsx
               typescript
               vue
@@ -188,7 +205,10 @@
 
           conform-nvim = {
             enable = true;
-            autoInstall.enable = true;
+            autoInstall = {
+              enable = true;
+              enableWarnings = false;
+            };
             lazyLoad.settings.event = [
               "BufReadPost"
               "BufNewFile"
@@ -217,7 +237,6 @@
                 bash = [ "shfmt" ];
                 css = [ "oxfmt" ];
                 dockerfile = [ "dockerfmt" ];
-                dart = [ "dart_format" ];
                 html = [ "oxfmt" ];
                 go = [ "gofmt" ];
                 javascript = [ "oxfmt" ];
@@ -228,9 +247,9 @@
                   "isort"
                   "black"
                 ];
-                rust = [ "rustfmt" ];
                 sh = [ "shfmt" ];
                 sql = [ "pg_format" ];
+                swift = [ "swift_format" ];
                 svelte = [ "oxfmt" ];
                 typescript = [ "oxfmt" ];
                 typescriptreact = [ "oxfmt" ];
@@ -246,8 +265,7 @@
                 isort.command = lib.getExe pkgs.isort;
                 ktlint.command = lib.getExe pkgs.ktlint;
                 nixfmt.command = lib.getExe pkgs.nixfmt;
-                pg_format.command = lib.getExe pkgs.pgformatter;
-                rustfmt.command = lib.getExe pkgs.rustfmt;
+                swift_format.command = lib.getExe pkgs.swift-format;
                 shfmt.command = lib.getExe pkgs.shfmt;
                 yamlfmt = {
                   command = lib.getExe pkgs.yamlfmt;
@@ -285,6 +303,7 @@
               sh = [ "shellcheck" ];
               sqlfluff = [ "sqlfluff" ];
               svelte = [ "oxlint" ];
+              #swift = [ "swiftlint" ];
               text = [ "vale" ];
               typescript = [ "oxlint" ];
               typescriptreact = [ "oxlint" ];
@@ -295,41 +314,15 @@
               deadnix.cmd = lib.getExe pkgs.deadnix;
               gitlint.cmd = lib.getExe pkgs.gitlint;
               hadolint.cmd = lib.getExe pkgs.hadolint;
-              golangcilint.cmd = lib.getExe pkgs.golangci-lint;
               pylint.cmd = lib.getExe pkgs.pylint;
               vale.cmd = lib.getExe pkgs.vale;
               shellcheck.cmd = lib.getExe pkgs.shellcheck;
+              # swiftlint.cmd = lib.getExe pkgs.swiftlint;
               sqlfluff.cmd = lib.getExe pkgs.sqlfluff;
               yamllint.cmd = lib.getExe pkgs.yamllint;
             };
           };
         };
-
-        extraConfigLuaPost = ''
-          require("lint").linters.oxlint.cmd = function()
-            local root = vim.fs.root(0, { "oxlint.config.ts" })
-            local bin = root and (root .. "/node_modules/.bin/oxlint")
-            if bin and vim.uv.fs_stat(bin) then
-              return bin
-            end
-            return "true"
-          end
-
-          require("kotlin").setup({
-            inlay_hints = { enabled = true },
-            jvm_args = { "-Xmx4g" },
-            root_markers = {
-              "settings.gradle.kts",
-              "settings.gradle",
-              "build.gradle.kts",
-              "build.gradle",
-              "gradlew",
-              ".git",
-            },
-          })
-
-          ${lib.optionalString isX86 ''vim.env.KOTLIN_LSP_DIR = "${self'.packages.kotlin-lsp}/share/kotlin-lsp"''}
-        '';
       };
     };
 }
