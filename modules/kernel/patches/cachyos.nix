@@ -125,7 +125,7 @@
             mkdir -p $out
             cp -r ${inputs.cachyos-patches-unsync}/* ./
             chmod -R +w . && find . -type d -empty -delete
-            filterdiff -x "*/security/selinux/selinuxfs.c" -x "*/fs/stat.c" -x "*/mm/mmap.c" \
+            filterdiff -x "*/security/selinux/selinuxfs.c" -x "*/fs/stat.c" -x "*/mm/mmap.c" -x "*/mm/mm_init.c" \
               "${lib.versions.majorMinor kernel-versions.lts}/misc/0001-hardened.patch" > 0001-hardened-filter.patch
             cat 0001-hardened-filter.patch > "${lib.versions.majorMinor kernel-versions.lts}/misc/0001-hardened.patch"
             rm 0001-hardened-filter.patch && mv ./* $out/
