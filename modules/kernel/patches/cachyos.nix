@@ -60,7 +60,7 @@
             }
             ''
               cp ${inputs.cachyos-patches}/${lib.versions.majorMinor kernel-versions.latest}/misc/0001-handheld.patch .
-              filterdiff -x "*/drivers/gpu/drm/amd/display/dc/hwss/dcn32/dcn32_hwseq.c" \
+              filterdiff -x "*/drivers/gpu/drm/amd/display/dc/hwss/dcn32/dcn32_hwseq.c" -x "*/drivers/bluetooth/btrtl.c" \
                 ./0001-handheld.patch > 0001-handheld-filter.patch
               cat 0001-handheld-filter.patch > $out
             ''
