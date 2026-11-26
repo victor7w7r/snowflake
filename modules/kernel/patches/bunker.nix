@@ -101,7 +101,7 @@
           #"clear/0010-sched-core-add-branch-hints-based-on-gcov-analysis"
           #"clear/0012-pci-increase-PME-check-interval-to-4-seconds"
           "upstream/0002-time-timecounter-inline-timecounter_cyc2time"
-          "upstream/0005-cpuidle-menu-remove-incorrect-unlikely-annotation"
+          #"upstream/0005-cpuidle-menu-remove-incorrect-unlikely-annotation"
           "upstream/0007-tcp-inline-tcp_filter"
           "upstream/0008-ipv6-optimize-fl6_update_dst"
           "upstream/0009-net_sched-sch_fq-rework-fq_gc-to-avoid-stack-canary"

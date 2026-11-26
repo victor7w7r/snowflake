@@ -4,8 +4,8 @@
 
   _module.args = {
     kernel-versions = {
-      latest = "7.3.1";
-      lts = "6.18.60";
+      latest = "7.3.6";
+      lts = "6.18.65";
     };
 
     armPkgs = import inputs.nixpkgs { system = "aarch64-linux"; };

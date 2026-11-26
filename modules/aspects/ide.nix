@@ -14,6 +14,8 @@
             systemPackages = with pkgs; [
               binaryen
               binutils
+              libxml2
+              zlib
               gcc
               upx
             ];
@@ -34,12 +36,24 @@
               '';
 
             # TC="$(mise where swift)/usr/bin"; ln -sf /etc/swift/x86_64-unknown-linux-gnu-clang.cfg "$TC/x86_64-unknown-linux-gnu-clang.cfg"
+            # ln -s $(which ld) ~/.local/share/mise/installs/swift/6.4.3/usr/bin/ld
 
             sessionVariables =
               (lib.concatStringsSep ":" [
                 "${lib.getLib pkgs.glibc}/lib"
                 "${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.cc.version}"
                 "${lib.getLib pkgs.gcc.cc}/lib"
+                (lib.makeLibraryPath (
+                  with pkgs;
+                  [
+                    (libxml2.override {
+                      enableShared = true;
+                      enableStatic = true;
+                    })
+                    zlib.static
+                    xz
+                  ]
+                ))
               ])
               |> (linkPaths: {
                 COMPILER_PATH = linkPaths + ":${pkgs.binutils}/bin";
@@ -53,12 +67,15 @@
               ".config/JetBrains"
               ".java"
               ".jb_run"
-              ".swiftpm"
               ".local/share/JetBrains"
+              ".swiftpm"
             ];
           };
 
-          systemd.tmpfiles.rules = [ "L+ /usr/include - - - - ${pkgs.glibc.dev}/include" ];
+          systemd.tmpfiles.rules = [
+            "L+ /usr/include - - - - ${pkgs.glibc.dev}/include"
+            "L+ /usr/bin/touch - - - - ${pkgs.coreutils}/bin/touch"
+          ];
 
           programs.nix-ld.libraries =
             options.programs.nix-ld.libraries.default

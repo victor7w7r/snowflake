@@ -471,11 +471,11 @@
       flake = false;
     };
     linux-latest = {
-      url = "github:CachyOS/linux/cachyos-7.3.1-1";
+      url = "github:CachyOS/linux/cachyos-7.3.6-1";
       flake = false;
     };
     linux-lts = {
-      url = "github:CachyOS/linux/cachyos-6.18.60-1";
+      url = "github:CachyOS/linux/cachyos-6.18.65-1";
       flake = false;
     };
     linuxthemestore = {
