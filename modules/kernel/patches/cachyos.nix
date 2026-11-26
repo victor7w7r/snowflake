@@ -51,15 +51,23 @@
               #"dkms-clang"
             ];
         handheld =
-          map
-            (
-              patch:
-              "${inputs.cachyos-patches}/${lib.versions.majorMinor kernel-versions.latest}/misc/${patch}.patch"
-            )
-            [
-              "0001-acpi-call"
-              "0001-handheld"
-            ];
+          pkgs.runCommand "cachyos-patches-lts-diff"
+            {
+              nativeBuildInputs = with pkgs; [
+                findutils
+                patchutils
+              ];
+            }
+            ''
+              cp ${inputs.cachyos-patches}/${lib.versions.majorMinor kernel-versions.latest}/misc/0001-handheld.patch" .
+              filterdiff -x "*/drivers/gpu/drm/amd/display/dc/hwss/dcn32/dcn32_hwseq.c" \
+                ./0001-handheld.patch > 0001-handheld-filter.patch
+              cat 0001-handheld-filter.patch > $out
+            ''
+          |> (src: [
+            src
+            "${inputs.cachyos-patches}/${lib.versions.majorMinor kernel-versions.latest}/misc/0001-acpi-call.patch"
+          ]);
 
         inline =
           "${self}/modules/kernel/patches/cachyos-7.2"
