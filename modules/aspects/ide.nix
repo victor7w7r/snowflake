@@ -12,53 +12,21 @@
         {
           environment = {
             systemPackages = with pkgs; [
-              binaryen
               binutils
               libxml2
               zlib
               gcc
-              upx
             ];
-
-            etc."swift/x86_64-unknown-linux-gnu-clang.cfg".text =
-              let
-                glibcLib = lib.getLib pkgs.glibc;
-                gccLib = lib.getLib pkgs.gcc.cc;
-                gccDir = "${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.cc.version}";
-              in
-              ''
-                -Wno-unused-command-line-argument
-                -B${glibcLib}/lib
-                -B${gccDir}
-                -L${glibcLib}/lib
-                -L${gccDir}
-                -L${gccLib}/lib
-              '';
-
-            # TC="$(mise where swift)/usr/bin"; ln -sf /etc/swift/x86_64-unknown-linux-gnu-clang.cfg "$TC/x86_64-unknown-linux-gnu-clang.cfg"
-            # ln -s $(which ld) ~/.local/share/mise/installs/swift/6.4.3/usr/bin/ld
 
             sessionVariables =
               (lib.concatStringsSep ":" [
                 "${lib.getLib pkgs.glibc}/lib"
                 "${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.cc.version}"
                 "${lib.getLib pkgs.gcc.cc}/lib"
-                (lib.makeLibraryPath (
-                  with pkgs;
-                  [
-                    (libxml2.override {
-                      enableShared = true;
-                      enableStatic = true;
-                    })
-                    zlib.static
-                    xz
-                  ]
-                ))
               ])
               |> (linkPaths: {
                 COMPILER_PATH = linkPaths + ":${pkgs.binutils}/bin";
                 LIBRARY_PATH = linkPaths;
-                C_INCLUDE_PATH = "${pkgs.glibc.dev}/include";
               });
 
             persistence."/nix/persist".users."${user.name}".directories = lib.mkAfter [
@@ -74,7 +42,6 @@
 
           systemd.tmpfiles.rules = [
             "L+ /usr/include - - - - ${pkgs.glibc.dev}/include"
-            "L+ /usr/bin/touch - - - - ${pkgs.coreutils}/bin/touch"
           ];
 
           programs.nix-ld.libraries =
