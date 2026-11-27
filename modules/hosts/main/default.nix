@@ -45,6 +45,7 @@
         zen._
 
         android
+        containers
         bluetooth
         #cockpit
         dev
@@ -59,6 +60,7 @@
         libvirt
         persistence
         plasma._
+        podman
         remote
         root
         victor7w7r

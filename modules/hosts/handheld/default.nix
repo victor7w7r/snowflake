@@ -33,6 +33,7 @@
           zen._
 
           android
+          containers
           bluetooth
           dev
           disks
@@ -45,6 +46,7 @@
           remote
           root
           persistence
+          podman
           plasma._
           victor7w7r
           virt
